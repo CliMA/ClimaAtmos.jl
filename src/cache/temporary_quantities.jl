@@ -50,6 +50,12 @@ function temporary_quantities(Y, atmos)
             typeof(UVW(FT(0), FT(0), FT(0)) * UVW(FT(0), FT(0), FT(0))'),
             face_space,
         ), # ᶠstrain_rate
+        ᶜtemp_C3 = Fields.Field(C3{FT}, center_space),
+        ᶜtemp_C3_2 = Fields.Field(C3{FT}, center_space),
+        ᶠtemp_C3 = Fields.Field(C3{FT}, face_space),
+        ᶠtemp_C3_2 = Fields.Field(C3{FT}, face_space),
+        ᶜtemp_C12 = Fields.Field(C12{FT}, center_space),
+        ᶠtemp_C12 = Fields.Field(C12{FT}, face_space),
         # TODO: Remove this hack
         sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
         # Implicit solver cache:

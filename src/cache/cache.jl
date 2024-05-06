@@ -267,6 +267,78 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         net_energy_flux_sfc,
         conservation_check,
         output_dir,
+        env_thermo_quad = SGSQuadrature(FT),
+        precomputed_quantities(Y, atmos)...,
+        temporary_quantities(atmos, spaces.center_space, spaces.face_space)...,
+        hyperdiffusion_cache(Y, atmos, do_dss)...,
+    )
+    set_precomputed_quantities!(Y, default_cache, FT(0))
+    default_cache.is_init[] = false
+    return default_cache
+end
+
+
+# TODO: flip order so that NamedTuple() is fallback.
+function additional_cache(
+    Y,
+    default_cache,
+    parsed_args,
+    params,
+    atmos,
+    dt,
+    initial_condition,
+)
+    (; precip_model, forcing_type, radiation_mode, turbconv_model) = atmos
+
+    idealized_insolation = parsed_args["idealized_insolation"]
+    @assert idealized_insolation in (true, false)
+    idealized_clouds = parsed_args["idealized_clouds"]
+    @assert idealized_clouds in (true, false)
+
+    radiation_cache = if radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+        radiation_model_cache(
+            Y,
+            default_cache,
+            params,
+            radiation_mode;
+            idealized_insolation,
+            idealized_clouds,
+            data_loader = rrtmgp_data_loader,
+        )
+    else
+        radiation_model_cache(Y, params, radiation_mode)
+    end
+
+    return merge(
+        rayleigh_sponge_cache(atmos.rayleigh_sponge, Y),
+        viscous_sponge_cache(atmos.viscous_sponge, Y),
+        smagorinsky_lilly_cache(atmos.smagorinsky_lilly, Y),
+        precipitation_cache(Y, precip_model),
+        subsidence_cache(Y, atmos.subsidence),
+        large_scale_advection_cache(Y, atmos.ls_adv),
+        edmf_coriolis_cache(Y, atmos.edmf_coriolis),
+        forcing_cache(Y, forcing_type),
+        radiation_cache,
+        non_orographic_gravity_wave_cache(
+            atmos.non_orographic_gravity_wave,
+            atmos.model_config,
+            Y,
+        ),
+        orographic_gravity_wave_cache(
+            atmos.orographic_gravity_wave,
+            Y,
+            CAP.planet_radius(params),
+        ),
+        edmfx_nh_pressure_cache(Y, atmos.turbconv_model),
+        (; Δt = dt),
+        turbconv_cache(
+            Y,
+            turbconv_model,
+            atmos,
+            params,
+            parsed_args,
+            initial_condition,
+        ),
     )
 
     return AtmosCache{map(typeof, args)...}(args...)

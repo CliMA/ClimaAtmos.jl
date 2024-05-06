@@ -106,6 +106,7 @@ include(
     joinpath("prognostic_equations", "vertical_diffusion_boundary_layer.jl"),
 )
 include(joinpath("parameterized_tendencies", "sponge", "rayleigh_sponge.jl"))
+include(joinpath("parameterized_tendencies", "smagorinsky_lilly.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
 include(joinpath("prognostic_equations", "advection.jl"))
 

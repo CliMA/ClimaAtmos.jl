@@ -95,6 +95,7 @@ function get_atmos(config::AtmosConfig, params)
         surface_model = get_surface_model(parsed_args),
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
         numerics = get_numerics(parsed_args),
+        smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args, FT),
     )
     @assert !@any_reltype(atmos, (UnionAll, DataType))
 

@@ -2,9 +2,397 @@ import ArgParse
 
 function argparse_settings()
     s = ArgParse.ArgParseSettings()
-    ArgParse.@add_arg_table! s begin
-        "--config_file"
-        help = "A yaml file used to set model configurations"
+    ArgParse.@add_arg_table s begin
+        "--FLOAT_TYPE"
+        help = "Float type"
+        arg_type = String
+        default = "Float32"
+        "--t_end"
+        help = "Simulation end time. Examples: [`1200days`, `40secs`]"
+        arg_type = String
+        default = "10days"
+        "--dt"
+        help = "Simulation time step. Examples: [`10secs`, `1hours`]"
+        arg_type = String
+        default = "600secs"
+        "--dt_save_to_sol"
+        help = "Time between saving solution. Examples: [`10days`, `1hours`, `Inf` (do not save)]"
+        arg_type = String
+        default = "1days"
+        "--dt_save_to_disk"
+        help = "Time between saving to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
+        arg_type = String
+        default = "Inf"
+        "--dt_save_restart"
+        help = "Time between saving restart files to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
+        arg_type = String
+        default = "Inf"
+        "--dt_rad"
+        help = "Time between calling radiation callback for sphere configurations"
+        arg_type = String
+        default = "6hours"
+        "--config"
+        help = "Spatial configuration [`sphere` (default), `column`, `box`, `plane`]"
+        arg_type = String
+        default = "sphere"
+        "--initial_condition"
+        help = "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `AgnesiHProfile`, `ScharProfile`, `RisingThermalBubbleProfile`]"
+        arg_type = String
+        default = "DecayingProfile"
+        "--moist"
+        help = "Moisture model [`dry` (default), `equil`, `non_equil`]"
+        arg_type = String
+        default = "dry"
+        "--precip_model"
+        help = "Precipitation model [`nothing` (default), `0M`]"
+        arg_type = String
+        "--forcing"
+        help = "Forcing [`nothing` (default), `held_suarez`]"
+        arg_type = String
+        "--subsidence"
+        help = "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`]"
+        arg_type = String
+        "--ls_adv"
+        help = "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"
+        arg_type = String
+        "--edmf_coriolis"
+        help = "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
+        arg_type = String
+        "--edmfx_adv_test"
+        help = "EDMFX advection test switches off all velocity tendencies in GM and turbconc [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
+        "--edmfx_entr_detr"
+        help = "If set to true, it switches on EDMFX entrainment/detrainment closure.  [`true`, `false` (default)]"
+        arg_type = Bool
+        default = false
+        "--entr_coeff"
+        help = "Entrainment coefficient"
+        arg_type = Float64
+        default = Float64(1.0)
+        "--detr_coeff"
+        help = "Detrainment coefficient"
+        arg_type = Float64
+        default = Float64(0.001)
+        "--edmfx_sgs_flux"
+        help = "If set to true, it switches on EDMFX SGS flux.  [`true`, `false` (default)]"
+        arg_type = Bool
+        default = false
+        "--edmfx_nh_pressure"
+        help = "If set to true, it switches on EDMFX pressure drag closure.  [`true`, `false` (default)]"
+        arg_type = Bool
+        default = false
+        "--vert_diff"
+        help = "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`)]"
+        arg_type = String
+        default = "false"
+        "--prognostic_surface"
+        help = "Determines if surface temperature is prognostic [`false` (default), , `true`, `PrognosticSurfaceTemperature`, `PrescribedSurfaceTemperature`]"
+        arg_type = String
+        default = "false"
+        "--surface_setup"
+        help = "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
+        arg_type = String
+        default = "DefaultExchangeCoefficients"
+        "--surface_thermo_state_type"
+        help = "Surface thermo state type [`GCMSurfaceThermoState` (default), `PrescribedThermoState`]"
+        arg_type = String
+        default = "GCMSurfaceThermoState"
+        "--surface_temperature"
+        help = "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric']"
+        arg_type = String
+        default = "ZonallySymmetric"
+        "--C_E"
+        help = "Bulk transfer coefficient"
+        arg_type = Float64
+        default = Float64(0.0044)
+        "--turbconv"
+        help = "Turbulence convection scheme [`nothing` (default), `edmf`]"
+        arg_type = String
+        "--turbconv_case"
+        help = "The case run by Turbulence convection scheme [`Bomex` (default), `Bomex`, `DYCOMS_RF01`, `TRMM_LBA`, `GABLS`]"
+        arg_type = String
+        "--prognostic_tke"
+        help = "Whether the turbulence convection scheme uses prognostic or prescribed TKE [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
+        "--hyperdiff"
+        help = "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
+        arg_type = String
+        default = "ClimaHyperdiffusion"
+        "--idealized_insolation"
+        help = "Use idealized insolation in radiation model [`false`, `true` (default)]"
+        arg_type = Bool
+        default = true
+        "--idealized_h2o"
+        help = "Use idealized H2O in radiation model [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
+        "--idealized_clouds"
+        help = "Use idealized clouds in radiation model [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
+        "--rad"
+        help = "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`]"
+        arg_type = String
+        "--energy_name"
+        help = "Energy variable name [`rhoe` (default), `rhotheta`]"
+        arg_type = String
+        default = "rhoe"
+        "--perturb_initstate"
+        help = "Add a perturbation to the initial condition [`false`, `true` (default)]"
+        arg_type = Bool
+        default = true
+        "--discrete_hydrostatic_balance"
+        help = "Set the initial state to discrete hydrostatic balance"
+        arg_type = Bool
+        default = false
+        "--energy_upwinding"
+        help = "Energy upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+        arg_type = Symbol
+        default = :none
+        "--tracer_upwinding"
+        help = "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+        arg_type = Symbol
+        default = :none
+        "--density_upwinding"
+        help = "Denisity upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+        arg_type = Symbol
+        default = :none
+        "--edmfx_upwinding"
+        help = "EDMFX upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+        arg_type = Symbol
+        default = :none # TODO: change to :first_order (or higher?)
+        "--ode_algo"
+        help = "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, `ODE.Euler`, `ODE.IMEXEuler`, `ODE.Rosenbrock23`, etc.]"
+        arg_type = String
+        default = "ARS343"
+        "--max_newton_iters"
+        help = "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)"
+        arg_type = Int
+        default = 1
+        "--use_newton_rtol"
+        help = "Whether to check if the current iteration of Newton's method has an error within a relative tolerance, instead of always taking the maximum number of iterations (only for ClimaTimeSteppers.jl)"
+        arg_type = Bool
+        default = false
+        "--newton_rtol"
+        help = "Relative tolerance of Newton's method (only for ClimaTimeSteppers.jl; only used when `use_newton_rtol` is `true`)"
+        arg_type = Float64
+        default = Float64(1e-5)
+        "--use_krylov_method"
+        help = "Whether to use a Krylov method to solve the linear system in Newton's method (only for ClimaTimeSteppers.jl)"
+        arg_type = Bool
+        default = false
+        "--krylov_rtol"
+        help = "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
+        arg_type = Float64
+        default = Float64(0.1)
+        "--use_dynamic_krylov_rtol"
+        help = "Whether to use Eisenstat-Walker forcing instead of a constant relative tolerance in the Krylov method (only for ClimaTimeSteppers.jl)"
+        arg_type = Bool
+        default = false
+        "--eisenstat_walker_forcing_alpha"
+        help = "Value of alpha to use for Eisenstat-Walker forcing (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` and `use_dynamic_krylov_rtol` are `true`)"
+        arg_type = Float64
+        default = Float64(2)
+        "--jvp_step_adjustment"
+        help = "Amount by which the step size of the forward difference approximation of the Jacobian-vector product in the Krylov method should be scaled (only used if `use_krylov_method` is `true`)"
+        arg_type = Float64
+        default = Float64(1)
+        "--split_ode"
+        help = "Use split of ODE problem. Examples: [`true` (implicit, default), `false` (explicit)]"
+        arg_type = Bool
+        default = true
+        "--regression_test"
+        help = "(Bool) perform regression test"
+        arg_type = Bool
+        default = false
+        "--output_dir"
+        help = "Output directory"
+        arg_type = String
+        "--job_id"
+        help = "Uniquely identifying string for a particular job"
+        arg_type = String
+        "--reference_job_id"
+        help = "Identifier of job to use as the \"reference\" solution in the quicklook plot; the current job's results get compared to the results of the quicklook job on the main branch (only used if `debugging_tc` is `true`)"
+        arg_type = String
+        "--trunc_stack_traces"
+        help = "Set to `true` to truncate printing of ClimaCore `Field`s"
+        arg_type = Bool
+        default = true
+        "--fps"
+        help = "Frames per second for animations"
+        arg_type = Int
+        default = 5
+        "--post_process"
+        help = "Post process [`true` (default), `false`]"
+        arg_type = Bool
+        default = true
+        "--h_elem"
+        help = "number of elements per edge on a cubed sphere"
+        arg_type = Int
+        default = 6
+        "--x_elem"
+        help = "number of horizontal elements in the x-direction"
+        arg_type = Int
+        default = 6
+        "--y_elem"
+        help = "number of horizontal elements in the y-direction"
+        arg_type = Int
+        default = 6
+        "--z_elem"
+        help = "number of vertical elements"
+        arg_type = Int
+        default = 10
+        "--nh_poly"
+        help = "Horizontal polynomial degree. Note: The number of quadrature points in 1D within each horizontal element is then Nq = <--nh_poly> + 1"
+        arg_type = Int
+        default = 3
+        "--bubble"
+        help = "Enable bubble correction for more accurate surface areas"
+        arg_type = Bool
+        default = true
+        "--x_max"
+        help = "Model domain size, x direction. Default: 300km"
+        arg_type = Float64
+        default = Float64(300e3)
+        "--y_max"
+        help = "Model domain size, y direction. Default: 300km"
+        arg_type = Float64
+        default = Float64(300e3)
+        "--z_max"
+        help = "Model top height. Default: 30km"
+        arg_type = Float64
+        default = Float64(30e3)
+        "--z_stretch"
+        help = "Stretch grid in z-direction. [`true` (default), `false`]"
+        arg_type = Bool
+        default = true
+        "--dz_bottom"
+        help = "Model bottom grid depth. Default: 500m"
+        arg_type = Float64
+        default = Float64(500)
+        "--dz_top"
+        help = "Model top grid depth. Default: 5000m"
+        arg_type = Float64
+        default = Float64(5000)
+        "--kappa_4"
+        help = "Hyperdiffusion parameter"
+        arg_type = Float64
+        default = Float64(2e17)
+        "--divergence_damping_factor"
+        help = "Divergence damping factor"
+        arg_type = Float64
+        default = Float64(1)
+        "--rayleigh_sponge"
+        help = "Rayleigh sponge [`true`, `false` (default)]"
+        arg_type = Bool
+        default = false
+        "--smagorinsky_lilly"
+        help = "Smagorinsmagsky lilly [`true`, `false` (default)]"
+        arg_type = Bool
+        default = false
+        "--c_smag"
+        help = "Smagorinsky coeff [0.12, 0.2, 0.21]"
+        arg_type = Float64
+        default = Float64(0.2)
+        "--viscous_sponge"
+        help = "Viscous sponge [`true`, `false` (default)]"
+        arg_type = Bool
+        default = false
+        "--zd_rayleigh"
+        help = "Rayleigh sponge height"
+        arg_type = Float64
+        default = Float64(15e3)
+        "--alpha_rayleigh_uh"
+        help = "Rayleigh sponge coefficient for horizontal velocity"
+        arg_type = Float64
+        default = Float64(1e-4)
+        "--alpha_rayleigh_w"
+        help = "Rayleigh sponge coefficient for vertical velocity"
+        arg_type = Float64
+        default = Float64(1)
+        "--zd_viscous"
+        help = "Viscous sponge height"
+        arg_type = Float64
+        default = Float64(15e3)
+        "--kappa_2_sponge"
+        help = "Viscous sponge coefficient"
+        arg_type = Float64
+        default = Float64(1e6)
+        "--start_date"
+        help = "Start date of the simulation"
+        arg_type = String
+        default = "19790101"
+        "--topography"
+        help = "Define the surface elevation profile [`NoWarp`,`Earth`,`DCMIP200`,`Agnesi`]"
+        arg_type = String
+        default = "NoWarp"
+        "--topo_smoothing"
+        help = "Choose whether to order-2 smoothing on the LGL mesh"
+        arg_type = Bool
+        default = false
+        "--smoothing_order"
+        help = "Define the surface smoothing kernel factor (integer) [`3 (default)`]"
+        arg_type = Int
+        default = 3
+        "--apply_limiter"
+        help = "Apply a horizontal limiter to every tracer [`true` (default), `false`]"
+        arg_type = Bool
+        default = true
+        "--imex_edmf_turbconv"
+        help = "Whether to split EDMF's `compute_turbconv_tendencies!` into implicit and explicit components"
+        arg_type = Bool
+        default = false
+        "--imex_edmf_gm"
+        help = "Whether to split EDMF's `compute_gm_tendencies!` into implicit and explicit components"
+        arg_type = Bool
+        default = false
+        "--debugging_tc"
+        help = "Save most of the tc aux state to HDF5 file [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
+        "--test_edmf_consistency"
+        help = "Test edmf equation consistency [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
+        "--test_dycore_consistency"
+        help = "Test dycore consistency [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
+        "--use_reference_state"
+        help = "Subtract a reference state from the dycore equations [`false`, `true` (default)]"
+        arg_type = Bool
+        default = true
+        "--check_conservation"
+        help = "Check conservation of mass and energy [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
+        "--non_orographic_gravity_wave"
+        help = "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
+        "--orographic_gravity_wave"
+        help = "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`]"
+        arg_type = String
+        "--device"
+        help = "Device type to use [`auto` (default) `CPUSingleThreaded`, `CPUMultiThreaded`, `CUDADevice`]"
+        arg_type = String
+        default = "auto"
+        "--perf_summary"
+        help = "Flag for collecting performance summary information"
+        arg_type = Bool
+        default = false
+        "--perf_mode"
+        help = "A flag for analyzing performance [`PerfStandard` (default), `PerfExperimental`]"
+        arg_type = String
+        default = "PerfStandard"
+        "--target_job"
+        help = "An (optional) job to target for analyzing performance"
+        arg_type = String
+        "--toml"
+        help = "A toml file used to override model parameters and configurations. In the case of conflicts, CLI arguments take priority over the toml"
+>>>>>>> origin/llubecke_smag
         arg_type = String
     end
     return s
