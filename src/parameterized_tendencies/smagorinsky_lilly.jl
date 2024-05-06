@@ -80,6 +80,8 @@ function l(Yₜ, Y, p, t, sl::SmagorinskyLilly)
         @. ᶜρχₜ += divₕ(Y.c.ρ * ᶜD * gradₕ(ᶜχ)) 
     end
 
+    any(isnan, Yₜ) && error("Found NaN in horizontal sgs tendency")
+
 end
 
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::SmagorinskyLilly) 
@@ -142,4 +144,6 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
         @. ᶜρχₜ[colidx] -= ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜD[colidx]) * ᶠgradᵥ(ᶜχ[colidx])))
     end
     
+    any(isnan, Yₜ) && error("Found NaN in vertical sgs tendency")
+
 end
