@@ -1,5 +1,5 @@
 #####
-##### Smagorinsky Lily Diffusion
+##### Smagorinsky Lilly Diffusion
 #####
 
 import ClimaCore.Fields as Fields
@@ -8,9 +8,9 @@ import LinearAlgebra as la
 import ClimaCore: Geometry
 
 smagorinsky_lilly_cache(::Nothing, Y) = NamedTuple()
-function smagorinsky_lilly_cache(sl::SmagorinskyLily, Y)
+function smagorinsky_lilly_cache(sl::SmagorinskyLilly, Y)
     # Cs is the Smagorinsky coefficient, ^cJ is the volume of the cell. ^cD is 
-    # calculated from the Smagorinsky-Lily model for eddy viscosity as described
+    # calculated from the Smagorinsky-Lilly model for eddy viscosity as described
     # in (Sridhar et al. 2022).
 
     # D = v/Pr, where v = (Cs * cbrt(J))^2 * sqrt(2*Sij*Sij). The cube root of the
@@ -46,7 +46,7 @@ horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 
 
-function l(Yₜ, Y, p, t, sl::SmagorinskyLily) 
+function l(Yₜ, Y, p, t, sl::SmagorinskyLilly) 
     if !(hasproperty(p, :ᶜspecific))
         throw(ErrorException("p does not have the property ᶜspecific."))
     end
@@ -82,7 +82,7 @@ function l(Yₜ, Y, p, t, sl::SmagorinskyLily)
 
 end
 
-function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::SmagorinskyLily) 
+function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::SmagorinskyLilly) 
     if !(hasproperty(p, :ᶜspecific))
         throw(ErrorException("p does not have the property ᶜspecific."))
     end
