@@ -26,8 +26,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
     horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lilly)
-    
-
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
         rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx, p.atmos.rayleigh_sponge)
