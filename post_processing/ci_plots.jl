@@ -848,22 +848,8 @@ function make_plots(
     simdirs = SimDir.(output_paths)
 
     reduction = "average"
-    short_names_3D = [
-        "ta",
-        "thetaa",
-        "rhoa",
-        "ua",
-        "va",
-        "wa",
-        "hur",
-        "hus",
-        "clw",
-        "cli",
-        "rsd",
-        "rsu",
-        "rld",
-        "rlu",
-    ]
+    short_names_3D =
+        ["ta", "thetaa", "rhoa", "ua", "va", "wa", "hur", "hus", "clw", "cli"]
     available_periods = ClimaAnalysis.available_periods(
         simdirs[1];
         short_name = short_names_3D[1],
@@ -876,7 +862,18 @@ function make_plots(
     elseif "12h" in available_periods
         period = "12h"
     end
-    short_names_2D = ["hfes", "evspsbl", "ts"]
+    short_names_2D = [
+        "rsdt",
+        "rsds",
+        "rsut",
+        "rsus",
+        "rlds",
+        "rlut",
+        "rlus",
+        "hfes",
+        "evspsbl",
+        "ts",
+    ]
     vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
         get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon
     end
@@ -915,8 +912,18 @@ function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
 
     reduction = "average"
-    short_names_3D = ["ua", "ta", "hus", "rsd", "rsu", "rld", "rlu"]
-    short_names_2D = ["hfes", "evspsbl"]
+    short_names_3D = ["ua", "ta", "hus"]
+    short_names_2D = [
+        "rsdt",
+        "rsds",
+        "rsut",
+        "rsus",
+        "rlds",
+        "rlut",
+        "rlus",
+        "hfes",
+        "evspsbl",
+    ]
     available_periods = ClimaAnalysis.available_periods(
         simdirs[1];
         short_name = short_names_3D[1],
@@ -959,22 +966,19 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
 
     reduction = "average"
-    short_names_3D = [
-        "ua",
-        "ta",
-        "hus",
-        "rsd",
-        "rsu",
-        "rld",
-        "rlu",
-        "husra",
-        "hussn",
-        "hur",
-        "cl",
-        "cli",
-        "clw",
+    short_names_3D =
+        ["ua", "ta", "hus", "husra", "hussn", "hur", "cl", "cli", "clw"]
+    short_names_2D = [
+        "rsdt",
+        "rsds",
+        "rsut",
+        "rsus",
+        "rlds",
+        "rlut",
+        "rlus",
+        "hfes",
+        "evspsbl",
     ]
-    short_names_2D = ["hfes", "evspsbl"]
     available_periods = ClimaAnalysis.available_periods(
         simdirs[1];
         short_name = short_names_3D[1],
