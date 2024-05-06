@@ -45,7 +45,7 @@ steps:
       - label: ":computer: hydrostatic balance (ρe_tot)"
         command:
           - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
@@ -55,7 +55,7 @@ steps:
       - label: ":computer: dry baroclinic wave"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
@@ -65,7 +65,7 @@ steps:
       - label: ":computer: baroclinic wave equilmoist"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
@@ -75,7 +75,7 @@ steps:
       - label: ":computer: dry held-suarez"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
@@ -85,7 +85,7 @@ steps:
       - label: ":computer: held-suarez, equilmoist"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
@@ -95,7 +95,7 @@ steps:
       - label: ":computer: aquaplanet equilmoist gray radiation + 0M microphysics"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M"
@@ -106,7 +106,7 @@ steps:
       - label: ":computer: aquaplanet equilmoist clearsky radiation + diagnostic edmf diffusion only + 0M microphysics"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
@@ -116,7 +116,7 @@ steps:
       - label: ":computer: aquaplanet equilmoist clearsky radiation + time-varying insolation + 0M microphysics + slab ocean"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
@@ -126,7 +126,7 @@ steps:
       - label: ":computer: held-suarez equilmoist + deep-atmosphere eqns"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
           JOB_NAME: "longrun_hs_rhoe_equil_55km_nz63_0M_deepatmos"
@@ -137,7 +137,7 @@ steps:
       - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
@@ -147,7 +147,7 @@ steps:
       - label: ":computer: aquaplanet equilmoist clearsky radiation + diagnostic edmf + 0M microphysics"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
@@ -157,7 +157,7 @@ steps:
       - label: ":computer: aquaplanet equilmoist allsky radiation + diagnostic edmf + 0M microphysics"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
@@ -167,7 +167,7 @@ steps:
       - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics + earth topography"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
@@ -177,7 +177,7 @@ steps:
       - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics + earth topography (SLEVE)"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 6:00:00
@@ -187,7 +187,7 @@ steps:
       - label: ":umbrella: aquaplanet equilmoist clearsky radiation + 1M microphysics"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 6:00:00
@@ -201,7 +201,7 @@ steps:
       - label: ":computer: aquaplanet dyamond"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
@@ -215,7 +215,7 @@ steps:
       - label: ":computer: amip target diagnostic edmf"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$$BUILDKITE_JOB_ID/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00

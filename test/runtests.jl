@@ -13,7 +13,6 @@ using Test
 @safetestset "Utilities" begin @time include("utilities.jl") end
 @safetestset "Parameter tests" begin @time include("parameters/parameter_tests.jl") end
 @safetestset "Coupler Compatibility" begin @time include("coupler_compatibility.jl") end
-@safetestset "Configuration tests" begin @time include("config.jl") end
 @safetestset "surface albedo tests" begin @time include("surface_albedo.jl") end
 @safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
 @safetestset "Sponge interface tests" begin @time include("parameterized_tendencies/sponge/rayleigh_sponge.jl") end

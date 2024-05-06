@@ -479,21 +479,23 @@ function get_sim_info(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
 
-    job_id = if haskey(ENV, "BUILDKITE")
+    job_id = if haskey(ENV, "BUILDKITE_JOB_ID")
         ENV["BUILDKITE_JOB_ID"]
-    elseif isnothing(parsed_args["job_id"])
+    elseif !isnothing(parsed_args["job_id"])
         parsed_args["job_id"]
     else
-        job_id_from_config(parsed_args)
+        get_config_id(config.config_file, parsed_args)
     end
-    default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
-    out_dir = parsed_args["output_dir"]
-    base_output_dir = isnothing(out_dir) ? default_output : out_dir
+    base_output_dir = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
 
     output_dir = OutputPathGenerator.generate_output_path(
         base_output_dir;
         context = config.comms_ctx,
     )
+    mkpath(output_dir)
+    open(joinpath(output_dir, "job_id.txt"), "w") do io
+        println(io, job_id)
+    end
 
     sim = (;
         output_dir,
@@ -509,6 +511,7 @@ function get_sim_info(config::AtmosConfig)
         dt = parsed_args["dt"],
         t_end = parsed_args["t_end"],
         floor_n_steps = n_steps,
+        output_dir = output_dir,
     )
 
     return sim
@@ -597,6 +600,7 @@ end
 function get_simulation(config::AtmosConfig)
     params = create_parameter_set(config)
     atmos = get_atmos(config, params)
+    config_id = get_config_id(config.config_file, config.parsed_args)
 
     sim_info = get_sim_info(config)
     job_id = sim_info.job_id
@@ -604,10 +608,10 @@ function get_simulation(config::AtmosConfig)
 
     CP.log_parameter_information(
         config.toml_dict,
-        joinpath(output_dir, "$(job_id)_parameters.toml"),
+        joinpath(output_dir, "$(config_id)_parameters.toml"),
         strict = true,
     )
-    YAML.write_file(joinpath(output_dir, "$job_id.yml"), config.parsed_args)
+    YAML.write_file(joinpath(output_dir, "$config_id.yml"), config.parsed_args)
 
     if sim_info.restart
         s = @timed_str begin
@@ -719,6 +723,7 @@ function get_simulation(config::AtmosConfig)
 
     return AtmosSimulation(
         job_id,
+        config_id,
         output_dir,
         sim_info.start_date,
         sim_info.t_end,

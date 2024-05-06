@@ -43,7 +43,7 @@ for i in "${!resolutions[@]}"; do
         mkdir -p "$parent_folder/$folder_name"
         filepath="$parent_folder/$folder_name/$filename"
 
-        echo "job_id: sphere_held_suarez_${resolution}_res_rhoe_${nprocs}" > "$filepath"
+        echo "config_name: sphere_held_suarez_${resolution}_res_rhoe_${nprocs}" > "$filepath"
         echo "forcing: held_suarez" >> "$filepath"
         echo "FLOAT_TYPE: $FT" >> "$filepath"
         echo "tracer_upwinding: none" >> "$filepath"
@@ -108,7 +108,7 @@ EOM
 
 for nprocs in ${proc_counts[@]}; do
 
-    job_id="sphere_held_suarez_${res}_res_rhoe_$nprocs"
+    config_name="sphere_held_suarez_${res}_res_rhoe_$nprocs"
     folder_name="${res}_res_${FT}"
     config_file="$parent_folder/$folder_name/${res}_res_${FT}_${nprocs}.yml"
     command="julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $config_file"
@@ -119,7 +119,7 @@ else
     rank_env_var="OMPI_COMM_WORLD_RANK"
 fi
 if [[ "$profiling" == "enable" ]]; then
-    command="nsys profile --sample=none --trace=nvtx,mpi --mpi-impl=$mpi_impl --output=${job_id}/rank-%q{$rank_env_var} $command"
+    command="nsys profile --sample=none --trace=nvtx,mpi --mpi-impl=$mpi_impl --output=${BUILDKITE_JOB_ID}/output_active/rank-%q{$rank_env_var} $command"
     cpus_per_proc=2
 else
     cpus_per_proc=1
@@ -149,14 +149,14 @@ fi
 
 cat << EOM
     - label: "$nprocs"
-      key: "$job_id"
+      key: "$config_name"
       command:
         - "$launcher $command"
-        - "find ${job_id} -iname '*.nsys-rep' -printf '%f\\\\n' | sort -V | jq --raw-input --slurp 'split(\"\n\") | .[0:-1] | {files: .} + {\"extension\": \"nsys-view\", \"version\": \"1.0\"}' > ${job_id}/${job_id}.nsys-view"
-        - "find ${job_id} -iname '*.nsys-*' | sort -V | tar cvzf ${job_id}-nsys.tar.gz -T -"
+        - "find ${config_name} -iname '*.nsys-rep' -printf '%f\\\\n' | sort -V | jq --raw-input --slurp 'split(\"\n\") | .[0:-1] | {files: .} + {\"extension\": \"nsys-view\", \"version\": \"1.0\"}' > ${config_name}/${config_name}.nsys-view"
+        - "find ${config_name} -iname '*.nsys-*' | sort -V | tar cvzf ${config_name}-nsys.tar.gz -T -"
       artifact_paths:
-        - "${job_id}/scaling_data_${nprocs}_processes.jld2"
-        - "${job_id}-nsys.tar.gz"
+        - "${BUILDKITE_JOB_ID}/output_active/scaling_data_${nprocs}_processes.jld2"
+        - "${BUILDKITE_JOB_ID}/output_active/${config_name}-nsys.tar.gz"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
       agents:

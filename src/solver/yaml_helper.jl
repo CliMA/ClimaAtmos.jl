@@ -31,18 +31,20 @@ function default_config_dict(
 end
 
 """
-    config_from_target_job(target_job)
+    config_from_target_config(target_config)
 
-Given a job id string, returns the configuration for that job.
+Given a job id string, returns a NamedTuple of the
+configuration for that job and the filename where
+it was found.
 Does not include the default configuration dictionary.
 """
-function config_from_target_job(target_job)
-    for (job_id, config) in configs_per_job_id()
-        if job_id == target_job
-            return config
+function config_from_target_config(target_config)
+    for (config_id, nt) in configs_per_config_id()
+        if config_id == target_config
+            return nt # (;config, config_file)
         end
     end
-    error("Could not find job with id $target_job")
+    error("Could not find config with id $target_config")
 end
 
 """
@@ -111,14 +113,14 @@ function non_default_config_entries(config, defaults = default_config_dict())
 end
 
 """
-    configs_per_job_id(directory)
+    configs_per_config_id(directory)
 
 Walks a directory and reads all of the yaml files that are used to configure the driver,
 then parses them into a vector of dictionaries. Does not include the default configuration.
 To filter only configurations with a certain key/value pair,
 use the `filter_name` keyword argument with a Pair.
 """
-function configs_per_job_id(
+function configs_per_config_id(
     directory::AbstractString = joinpath(
         dirname(@__FILE__),
         "..",
@@ -134,27 +136,44 @@ function configs_per_job_id(
             !endswith(file, ".yml") && continue
             occursin("default_configs", file) && continue
             config = YAML.load_file(file)
-            cmds[config["job_id"]] = config
+            name = config_id_from_config_file(file)
+            cmds[name] = (; config, config_file = file)
         end
     end
     if !isnothing(filter_name)
         (key, value) = filter_name
-        filter!(cmds) do (job_id, dict)
-            get(dict, key, "") == value
+        filter!(cmds) do (config_id, nt)
+            get(nt.config, key, "") == value
         end
     end
     return cmds
 end
 
-"""
-    job_id_from_config(config)
+function config_id_from_config_file(config_file::String)
+    @assert isfile(config_file)
+    return first(splitext(basename(config_file)))
+end
 
-Returns a unique name (`String`) given
-`config`, the Dict containing the model configuration
+get_config_id(
+    config_file::String,
+    parsed_args,
+    defaults = default_config_dict(),
+) = config_id_from_config_file(config_file)
+
 """
-function job_id_from_config(config, defaults = default_config_dict())
+    get_config_id(config_file, parsed_args)
+
+Returns a name (`String`) given
+ - `config_file`, the filename of the config file.
+ - `parsed_args`, the Dict containing the model configuration
+"""
+function get_config_id(
+    config_file::Nothing,
+    parsed_args,
+    defaults = default_config_dict(),
+)
     # Use only keys from the default ArgParseSettings
-    _config = deepcopy(config)
+    _config = deepcopy(parsed_args)
     s = ""
     warn = false
     for k in keys(_config)
@@ -178,5 +197,5 @@ function job_id_from_config(config, defaults = default_config_dict())
     s = replace(s, "/" => "_")
     s = strip(s, '_')
     warn && @warn "Truncated job ID:$s may not be unique due to use of Real"
-    return s
+    return String(s)
 end

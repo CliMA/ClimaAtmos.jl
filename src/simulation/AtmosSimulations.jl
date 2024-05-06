@@ -1,12 +1,7 @@
-struct AtmosSimulation{
-    FT <: AbstractFloat,
-    S1 <: AbstractString,
-    S2 <: AbstractString,
-    OW,
-    OD,
-}
-    job_id::S1
-    output_dir::S2
+struct AtmosSimulation{FT <: AbstractFloat, OW, OD}
+    job_id::String
+    config_id::String
+    output_dir::String
     start_date::DateTime
     t_end::FT
     output_writers::OW
@@ -22,6 +17,7 @@ function Base.show(io::IO, sim::AtmosSimulation)
     return print(
         io,
         "Simulation $(sim.job_id)\n",
+        "├── Config: $(sim.config_id)\n",
         "├── Running on: $(device_type)\n",
         "├── Output folder: $(sim.output_dir)\n",
         "├── Start date: $(sim.start_date)\n",

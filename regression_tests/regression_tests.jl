@@ -4,19 +4,19 @@ import ClimaCore.Fields as Fields
 include(joinpath(@__DIR__, "compute_mse.jl"))
 
 function perform_regression_tests(
-    job_id::String,
+    config_id::String,
     Y_last::Fields.FieldVector,
     all_best_mse::AbstractDict,
     output_dir::String,
 )
     # This is helpful for starting up new tables
     @info "Job-specific MSE table format:"
-    println("all_best_mse[\"$job_id\"] = OrderedCollections.OrderedDict()")
+    println("all_best_mse[\"$config_id\"] = OrderedCollections.OrderedDict()")
     for prop_chain in Fields.property_chains(Y_last)
-        println("all_best_mse[\"$job_id\"][$prop_chain] = 0.0")
+        println("all_best_mse[\"$config_id\"][$prop_chain] = 0.0")
     end
     # Extract best mse for this job:
-    best_mse = all_best_mse[job_id]
+    best_mse = all_best_mse[config_id]
 
     ds_filename_computed = joinpath(output_dir, "prog_state.nc")
 
@@ -32,7 +32,7 @@ function perform_regression_tests(
 
     export_nc(Y_last; nc_filename = ds_filename_computed, varname)
     computed_mse = regression_test(;
-        job_id,
+        config_id,
         reference_mse = best_mse,
         ds_filename_computed,
         varname,

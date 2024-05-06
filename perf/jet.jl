@@ -3,7 +3,7 @@
 julia --project=perf
 import ClimaAtmos as CA
 using Revise; include(joinpath(pkgdir(CA), "perf", "common.jl"))
-config = TargetJobConfig("gpu_prognostic_edmfx_aquaplanet")
+config = TargetConfig("gpu_prognostic_edmfx_aquaplanet")
 
 include(joinpath(pkgdir(CA), "perf", "jet.jl"))
 =#

@@ -44,7 +44,7 @@ steps:
         command:
           - mkdir -p target_gpu_implicit_baroclinic_wave
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=target_gpu_implicit_baroclinic_wave/output_active/report
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=${BUILDKITE_JOB_ID}/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
@@ -58,7 +58,7 @@ steps:
         command:
           - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=${BUILDKITE_JOB_ID}/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M.yml
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
@@ -73,7 +73,7 @@ steps:
           - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/report-%q{PMI_RANK}
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=${BUILDKITE_JOB_ID}/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M_4process.yml
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
@@ -89,7 +89,7 @@ steps:
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            nsys profile --trace=osrt,nvtx,cuda,mpi,ucx --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
+            nsys profile --trace=osrt,nvtx,cuda,mpi,ucx --output=${BUILDKITE_JOB_ID}/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
@@ -107,7 +107,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ss_1process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_ss_1process/output_active/report
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=${BUILDKITE_JOB_ID}/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_1process.yml
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
@@ -237,7 +237,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_diagedmf
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_diagedmf/output_active/report
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=${BUILDKITE_JOB_ID}/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_diagedmf.yml
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
@@ -255,7 +255,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_progedmf
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_progedmf/output_active/report
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=${BUILDKITE_JOB_ID}/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_progedmf.yml
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"

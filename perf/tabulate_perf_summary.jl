@@ -19,37 +19,37 @@ end
 #=
 Performance summaries are structured as follows:
 
-summaries[path|commit][job_id][func][metric]
+summaries[path|commit][config_id][func][metric]
 
 all metrics can be found in `get_summary`.
 =#
 
 ca_dir = joinpath(dirname(@__DIR__))
 
-get_job_ids(buildkite_path; filter_name = nothing) =
-    keys(configs_per_job_id(buildkite_path, filter_name))
+get_config_ids(buildkite_path; filter_name = nothing) =
+    keys(configs_per_config_id(buildkite_path, filter_name))
 
 function combine_PRs_performance_benchmarks(path)
-    job_ids = get_job_ids(
+    config_ids = get_config_ids(
         joinpath(ca_dir, "config");
         filter_name = ("perf_summary" => true),
     )
     # Combine summaries into one dict
     summaries = OrderedCollections.OrderedDict()
-    for job_id in job_ids
-        file = joinpath(path, "perf_benchmark_$job_id.json")
+    for config_id in config_ids
+        file = joinpath(path, "perf_benchmark_$config_id.json")
         @debug "collecting file `$file`"
         isfile(file) || continue
         jfile = JSON.parsefile(file; dicttype = OrderedCollections.OrderedDict)
-        summaries[job_id] = jfile
+        summaries[config_id] = jfile
     end
     # Save to be moved into main
     open(joinpath(path, "perf_benchmarks.json"), "w") do io
         JSON.print(io, summaries)
     end
     # Clean up individual benchmarks
-    for job_id in job_ids
-        file = joinpath(ca_dir, "perf_benchmark_$job_id.json")
+    for config_id in config_ids
+        file = joinpath(ca_dir, "perf_benchmark_$config_id.json")
         rm(file; force = true)
     end
     return summaries
@@ -87,8 +87,8 @@ summaries["This PR"] = combine_PRs_performance_benchmarks(ca_dir)
 
 # If function names have changed, then this will break, so lets
 # gracefully handle this case and throw a warning later.
-get_metric(summaries, commit, job_id, func, metric, has_func) =
-    has_func[func * commit] ? summaries[commit][job_id][func][metric] : "NA"
+get_metric(summaries, commit, config_id, func, metric, has_func) =
+    has_func[func * commit] ? summaries[commit][config_id][func][metric] : "NA"
 
 function metric_name(metric)
     metric_name_map =
@@ -114,14 +114,14 @@ compute_percent_change(this_PR::String, main::String) =
 
 import PrettyTables
 
-function tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
+function tabulate_summaries(summaries, config_id, metric_tup, funcs, has_func)
     metric = first(metric_tup)
     metric_val = last(metric_tup)
     commits = collect(keys(summaries))
 
     data_history = map(commits) do commit
         map(funcs) do func
-            get_metric(summaries, commit, job_id, func, metric, has_func)
+            get_metric(summaries, commit, config_id, func, metric, has_func)
         end
     end
 
@@ -130,14 +130,21 @@ function tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
             get_metric(
                 summaries,
                 commits[end - 1],
-                job_id,
+                config_id,
                 func,
                 metric_val,
                 has_func,
             )
         end
         this_PR = map(funcs) do func
-            get_metric(summaries, commits[end], job_id, func, metric_val, has_func)
+            get_metric(
+                summaries,
+                commits[end],
+                config_id,
+                func,
+                metric_val,
+                has_func,
+            )
         end
         percent_change = compute_percent_change.(this_PR, main)
     else
@@ -200,15 +207,16 @@ funcs = [
 
 function compute_has_func(summaries, funcs)
     has_func = OrderedCollections.OrderedDict()
-    for job_id in collect(keys(summaries["This PR"]))
+    for config_id in collect(keys(summaries["This PR"]))
         for commit in collect(keys(summaries))
             for func in funcs
-                has_func[func * commit] = if haskey(summaries[commit], job_id)
-                    haskey(summaries[commit][job_id], func)
-                else
-                    @warn "Key $job_id not found for commit $commit and func $func."
-                    false
-                end
+                has_func[func * commit] =
+                    if haskey(summaries[commit], config_id)
+                        haskey(summaries[commit][config_id], func)
+                    else
+                        @warn "Key $config_id not found for commit $commit and func $func."
+                        false
+                    end
             end
         end
     end
@@ -237,9 +245,9 @@ end
 
 has_func = compute_has_func(summaries, funcs)
 
-for job_id in collect(keys(summaries["This PR"]))
-    @info "##################################### Perf summary for job `$job_id`"
+for config_id in collect(keys(summaries["This PR"]))
+    @info "##################################### Perf summary for config `$config_id`"
     for metric_tup in metric_tups
-        tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
+        tabulate_summaries(summaries, config_id, metric_tup, funcs, has_func)
     end
 end

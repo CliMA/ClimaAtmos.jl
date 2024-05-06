@@ -46,7 +46,7 @@ steps:
       # - label: ":computer: lim ARS zalesak baroclinic wave (ρe_tot) equilmoist high resolution"
       #   command:
       #     - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-      #   artifact_paths: "$$JOB_NAME/output_active/*"
+      #   artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
       #   agents:
       #     slurm_ntasks: 32
       #     slurm_mem_per_cpu: 32GB

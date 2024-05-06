@@ -1,5 +1,17 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import YAML
+import ArgParse
+
+function parse_commandline()
+    s = ArgParse.ArgParseSettings()
+    ArgParse.@add_arg_table! s begin
+        "--target_config"
+        help = "Target job configuration [e.g., ``]"
+        arg_type = String
+    end
+    parsed_args = ArgParse.parse_args(ARGS, s)
+    return (s, parsed_args)
+end
 
 """
     AtmosCoveragePerfConfig()
@@ -18,12 +30,14 @@ function AtmosCoveragePerfConfig(config_dict = Dict())
 end
 
 """
-    TargetJobConfig(target_job)
+    TargetConfig(target_config)
 
 Creates a full model configuration from the given target job.
 """
-TargetJobConfig(target_job) =
-    CA.AtmosConfig(CA.config_from_target_job(target_job))
+function TargetConfig(target_config)
+    (; config, config_file) = CA.config_from_target_config(target_config)
+    CA.AtmosConfig(config; config_file)
+end
 
 
 """

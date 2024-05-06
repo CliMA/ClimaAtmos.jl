@@ -2,16 +2,16 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
+using Test
+using ClimaComms
 
 include("common.jl")
-
-length(ARGS) != 1 && error("Usage: benchmark.jl <config_file>")
-config_file = ARGS[1]
-config_dict = YAML.load_file(config_file)
-config = AtmosCoveragePerfConfig(config_dict)
+(s, parsed_args) = parse_commandline()
+config = TargetConfig(parsed_args["target_config"])
+device = ClimaComms.device(config.comms_ctx)
 
 simulation = CA.get_simulation(config)
-(; integrator) = simulation
+(; integrator, job_id, config_id) = simulation
 
 (; parsed_args) = config
 
@@ -41,9 +41,6 @@ trials["set_precomputed_quantities!"] = get_trial(CA.set_precomputed_quantities!
 trials["step!"] = get_trial(SciMLBase.step!, (integrator, ), "step!");
 #! format: on
 
-using Test
-using ClimaComms
-
 table_summary = OrderedCollections.OrderedDict()
 for k in keys(trials)
     table_summary[k] = get_summary(trials[k])
@@ -53,8 +50,7 @@ tabulate_summary(table_summary)
 are_boundschecks_forced = Base.JLOptions().check_bounds == 1
 # Benchmark allocation tests
 @testset "Benchmark allocation tests" begin
-    if ClimaComms.device(config.comms_ctx) isa ClimaComms.CPUSingleThreaded &&
-       !are_boundschecks_forced
+    if device isa ClimaComms.CPUSingleThreaded && !are_boundschecks_forced
         @test trials["Wfact"].memory == 0
         @test trials["linsolve"].memory == 0
         @test trials["implicit_tendency!"].memory == 0
@@ -74,9 +70,9 @@ end
 if get(ENV, "BUILDKITE", "") == "true"
     # Export table_summary
     import JSON
-    job_id = parsed_args["job_id"]
+    config_id = CA.get_config_id(config.config_file, config.parsed_args)
     path = pkgdir(CA)
-    open(joinpath(path, "perf_benchmark_$job_id.json"), "w") do io
+    open(joinpath(path, "perf_benchmark_$config_id.json"), "w") do io
         JSON.print(io, table_summary)
     end
 end

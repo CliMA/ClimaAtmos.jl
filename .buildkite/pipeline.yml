@@ -206,8 +206,6 @@ steps:
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist.yml
 
           julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_baroclinic_wave_rhoe_equilmoist
-          --out_dir sphere_baroclinic_wave_rhoe_equilmoist/output_active
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
@@ -218,8 +216,6 @@ steps:
           --config_file $CONFIG_PATH/deep_sphere_baroclinic_wave_rhoe_equilmoist.yml
 
           julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id deep_sphere_baroclinic_wave_rhoe_equilmoist
-          --out_dir deep_sphere_baroclinic_wave_rhoe_equilmoist/output_active
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
@@ -271,8 +267,6 @@ steps:
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_hightop_sponge.yml
 
           julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
-          --out_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge/output_active
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
@@ -302,8 +296,6 @@ steps:
           --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.yml
 
           julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
-          --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric/output_active
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -444,8 +436,7 @@ steps:
       # TODO: we should somehow decouple this unit test from the perf env / scripts
       - label: ":computer: checkbounds"
         command: >
-          julia --color=yes --check-bounds=yes --project=perf perf/benchmark.jl
-          $PERF_CONFIG_PATH/checkbounds.yml
+          julia --color=yes --check-bounds=yes --project=perf perf/benchmark.jl --target_config=sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -539,8 +530,6 @@ steps:
           --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
 
           julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id diagnostic_edmfx_aquaplanet
-          --out_dir diagnostic_edmfx_aquaplanet/output_active
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -694,7 +683,7 @@ steps:
         command:
           - mkdir -p target_gpu_implicit_baroclinic_wave
           - >
-            nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/output_active/report
+            nsys profile --trace=nvtx,cuda --output=${BUILDKITE_JOB_ID}/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
@@ -705,7 +694,7 @@ steps:
       - label: "GPU: GPU dry baroclinic wave - 4 gpus"
         key: "target_gpu_implicit_baroclinic_wave_4process"
         command:
-            # nsys profile --trace=nvtx,cuda,mpi --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
+            # nsys profile --trace=nvtx,cuda,mpi --output=${BUILDKITE_JOB_ID}/output_active/report-%q{PMI_RANK}
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
@@ -723,7 +712,7 @@ steps:
       - label: "GPU: GPU moist Held-Suarez"
         command:
           - >
-            nsys profile --trace=nvtx,cuda --output=central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
+            nsys profile --trace=nvtx,cuda --output=${BUILDKITE_JOB_ID}/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $CONFIG_PATH/central_gpu_hs_rhoe_equil_55km_nz63_0M.yml
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
@@ -734,7 +723,7 @@ steps:
       - label: "GPU: GPU moist Held-Suarez cloud diagnostics per stage"
         command:
           - >
-            nsys profile --trace=nvtx,cuda --output=central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
+            nsys profile --trace=nvtx,cuda --output=${BUILDKITE_JOB_ID}/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $CONFIG_PATH/central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M.yml
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
@@ -746,7 +735,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond
           - >
-            nsys profile --trace=nvtx,cuda --output=gpu_aquaplanet_dyamond/output_active/report
+            nsys profile --trace=nvtx,cuda --output=${BUILDKITE_JOB_ID}/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${CONFIG_PATH}/gpu_aquaplanet_dyamond.yml
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
@@ -778,8 +767,7 @@ steps:
         key: "gpu_implicit_barowave_wrt_h_elem"
         command: >
 
-          julia --color=yes --project=examples perf/benchmark_dump.jl
-          --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_wrt_h_elem.yml
+          julia --color=yes --project=examples perf/benchmark_dump.jl --target_config=sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
@@ -787,8 +775,7 @@ steps:
       - label: "Perf: GPU implicit baro wave"
         command: >
 
-          julia --color=yes --project=examples perf/benchmark_step.jl
-          --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave.yml
+          julia --color=yes --project=examples perf/benchmark_step.jl --target_config=sphere_baroclinic_wave_rhoe
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
@@ -796,8 +783,7 @@ steps:
       - label: "Perf: GPU implicit baro wave moist"
         command: >
 
-          julia --color=yes --project=examples perf/benchmark_step.jl
-          --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_moist.yml
+          julia --color=yes --project=examples perf/benchmark_step.jl --target_config=sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 16G
@@ -805,8 +791,7 @@ steps:
 
       - label: "Perf: CPU implicit baro wave"
         command: >
-          julia --color=yes --project=examples perf/benchmark_step.jl
-          --config_file $PERF_CONFIG_PATH/cpu_implicit_barowave.yml
+          julia --color=yes --project=examples perf/benchmark_step.jl --target_config=sphere_baroclinic_wave_rhoe
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
   - group: "Performance"
@@ -815,104 +800,78 @@ steps:
       # Benchmarks
       - label: ":computer: Benchmark: perf target (default)"
         command: >
-          julia --color=yes --project=perf perf/benchmark.jl
-          $PERF_CONFIG_PATH/bm_perf_target.yml
+          julia --color=yes --project=perf perf/benchmark.jl --target_config=sphere_baroclinic_wave_rhoe
         agents:
           slurm_mem: 24GB
 
       - label: ":computer: Benchmark: perf target (Threaded)"
         command: >
-          julia --color=yes --threads 8 --project=perf perf/benchmark.jl
-          $PERF_CONFIG_PATH/bm_perf_target_threaded.yml
+          julia --color=yes --threads 8 --project=perf perf/benchmark.jl --target_config=sphere_baroclinic_wave_rhoe
         agents:
           slurm_mem: 24GB
           slurm_cpus_per_task: 8
 
       - label: ":fire: Flame graph: perf target (default)"
         command: >
-          julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target.yml
-        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
-        agents:
-          slurm_mem: 24GB
-
-      - label: ":fire: Flame graph: perf target (with tracers)"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target_tracers.yml
+          julia --color=yes --project=perf perf/flame.jl --target_config=sphere_baroclinic_wave_rhoe
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 24GB
 
       - label: ":fire: Flame graph: perf target (diagnostic edmfx)"
         command: >
-          julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target_diagnostic_edmfx.yml
+          julia --color=yes --project=perf perf/flame.jl --target_config=diagnostic_edmfx_aquaplanet
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 24GB
 
       - label: ":fire: Flame graph: perf target (prognostic edmfx aquaplanet)"
         command: >
-          julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target_prognostic_edmfx_aquaplanet.yml
+          julia --color=yes --project=perf perf/flame.jl --target_config=gpu_prognostic_edmfx_aquaplanet
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 48GB
 
       - label: ":fire: Flame graph: perf target (barowave jfnk)"
         command: >
-          julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.yml
+          julia --color=yes --project=perf perf/flame.jl --target_config=sphere_baroclinic_wave_rhoe_equilmoist_expvdiff
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 40GB
 
       - label: ":fire: Flame graph: perf target (frierson diffusion)"
         command: >
-          julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target_frierson.yml
+          julia --color=yes --project=perf perf/flame.jl --target_config=gpu_aquaplanet_dyamond_ss_1process
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 48GB
 
-      - label: ":fire: Flame graph: perf target (Threaded)"
-        command: >
-          julia --threads 8 --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target_threaded.yml
-        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
-        agents:
-          slurm_cpus_per_task: 8
-          slurm_mem: 24GB
+      # - label: ":fire: Flame graph: perf target (Threaded)"
+      #   command: >
+      #     julia --threads 8 --color=yes --project=perf perf/flame.jl --target_config=sphere_baroclinic_wave_rhoe
+      #   artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
+      #   agents:
+      #     slurm_cpus_per_task: 8
+      #     slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: perf target (Callbacks)"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target_callbacks.yml
-        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
-        agents:
-          slurm_mem: 24GB
+      # - label: ":fire: Flame graph: perf target (Callbacks)"
+      #   command: >
+      #     julia --color=yes --project=perf perf/flame.jl
+      #     $PERF_CONFIG_PATH/flame_perf_target_callbacks.yml
+      #   artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
+      #   agents:
+      #     slurm_mem: 24GB
 
       - label: ":fire: Flame graph: gravity wave"
         command: >
-          julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_gw.yml
-        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
-        agents:
-          slurm_mem: 24GB
-
-      - label: ":fire: Flame graph: perf target (diagnostics)"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_diagnostics.yml
+          julia --color=yes --project=perf perf/flame.jl --target_config=single_column_nonorographic_gravity_wave
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 24GB
 
       - label: ":fire: Flame graph: gpu job"
         command: >
-          julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_gpu_implicit_barowave_moist.yml
+          julia --color=yes --project=perf perf/flame.jl --target_config=sphere_baroclinic_wave_rhoe
         artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 48GB
@@ -922,8 +881,7 @@ steps:
       # Inference
       - label: ":rocket: JET n-failures (inference)"
         command: >
-          julia --color=yes --project=perf perf/jet_test_nfailures.jl
-          $PERF_CONFIG_PATH/jet_n_failures.yml
+          julia --color=yes --project=perf perf/jet_test_nfailures.jl --target_config=sphere_baroclinic_wave_rhoe
         agents:
           slurm_mem: 24GB
 

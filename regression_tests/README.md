@@ -41,7 +41,7 @@ To update the mse tables:
 
 To add a new regression test:
 
- - Set the command-line `regression_test` to true, and add `julia --color=yes --project=examples regression_tests/test_mse.jl --job_id [job_id] --out_dir [job_id]` as a separate command for the new (or existing) job
+ - Set the command-line `regression_test` to true, and add `julia --color=yes --project=examples regression_tests/test_mse.jl --test_id [test_id] --out_dir [test_id]` as a separate command for the new (or existing) job
  - Copy the `all_best_mse` dict template from the job's log
  - Paste the `all_best_mse` dict template into `regression_test/mse_tables.jl`
 
@@ -67,10 +67,10 @@ We cannot (easily) compare the output with a reference if we change the spatial 
 
 ## A detailed procedure of how regression tests are performed
 
-Regression tests are performed at the end of `examples/hybrid/driver.jl`, after a simulation completes, and relies on a unique job id (`job_id`). Here is an outline of the regression test procedure:
+Regression tests are performed at the end of `examples/hybrid/driver.jl`, after a simulation completes, and relies on a unique job id (`test_id`). Here is an outline of the regression test procedure:
 
- 0) Run a simulation, with a particular `job_id`, to the final time.
- 1) Load a dictionary, `all_best_mse`, of previous "best" mean-squared errors from `mse_tables.jl` and extract the mean squared errors for the given `job_id` (store in job-specific dictionary, `best_mse`).
+ 0) Run a simulation, with a particular `test_id`, to the final time.
+ 1) Load a dictionary, `all_best_mse`, of previous "best" mean-squared errors from `mse_tables.jl` and extract the mean squared errors for the given `test_id` (store in job-specific dictionary, `best_mse`).
  2) Export the solution (a `FieldVector`) at the final simulation time to an `NCDataset` file.
  3) Compute the errors between the exported solution and the exported solution from the reference `NCDataset` file (which is saved in a dedicated folder on the Caltech Central cluster) and save into a dictionary, called `computed_mse`.
  4) Export this dictionary (`computed_mse`) to the output folder

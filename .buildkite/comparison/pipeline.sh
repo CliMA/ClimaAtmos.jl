@@ -66,27 +66,27 @@ for nprocs in ${process_counts[@]}; do
     nnodes=$(( (nprocs+max_procs_per_node-1) /max_procs_per_node )) # ceiling divide
     procs_per_node=$(( nprocs/nnodes ))
 
-    job_id="comparison_sphere_held_suarez_${res}_res_rhoe_$nprocs"
+    config_name="comparison_sphere_held_suarez_${res}_res_rhoe_$nprocs"
 
 if [[ "$res" == "low" ]]; then
-    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --FLOAT_TYPE $FT --tracer_upwinding none --t_end 10days --dt 400secs --z_elem 10 --h_elem 4"
+    command="julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --FLOAT_TYPE $FT --tracer_upwinding none --t_end 10days --dt 400secs --z_elem 10 --h_elem 4"
 else
-    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --FLOAT_TYPE $FT --tracer_upwinding none --t_end 1days --dt 50secs --z_elem 45 --h_elem 24"
+    command="julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --FLOAT_TYPE $FT --tracer_upwinding none --t_end 1days --dt 50secs --z_elem 45 --h_elem 24"
 fi
 
 if [[ "$profiling" == "enable" ]]; then
-    command="nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=${job_id}/report.%q{NPROCS}.%q{PMI_RANK} $command"
+    command="nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=${BUILDKITE_JOB_ID}/output_active/report.%q{NPROCS}.%q{PMI_RANK} $command"
 fi
 
 cat << EOM
     - label: ":computer: MPI Held-Suarez $res resolution test(ρe_tot) - ($nprocs) process"
-      key: $job_id
+      key: $config_name
       command:
         - module load cuda/11.3 nsight-systems/2023.3.1
         - mpiexec $command
       artifact_paths:
-        - "$job_id/scaling_data_${nprocs}_processes.jld2"
-        - "$job_id/report.*.nsys-rep"
+        - "${BUILDKITE_JOB_ID}/output_active/scaling_data_${nprocs}_processes.jld2"
+        - "${BUILDKITE_JOB_ID}/output_active/report.*.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
         NPROCS: $nprocs

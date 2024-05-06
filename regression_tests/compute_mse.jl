@@ -7,7 +7,7 @@ include("self_reference_or_path.jl")
 
 """
     regression_test(;
-        job_id,
+        config_id,
         reference_mse,
         ds_filename_computed,
         ds_filename_reference = nothing,
@@ -24,7 +24,12 @@ via `varname`.
 If running on buildkite, we get `ds_filename_reference`
 from the latest merged dataset on Caltech central.
 """
-function regression_test(; job_id, reference_mse, ds_filename_computed, varname)
+function regression_test(;
+    config_id,
+    reference_mse,
+    ds_filename_computed,
+    varname,
+)
     local ds_filename_reference
 
     if haskey(ENV, "BUILDKITE_COMMIT")
@@ -81,7 +86,7 @@ function regression_test(; job_id, reference_mse, ds_filename_computed, varname)
     local computed_mse
     try
         computed_mse = NCRegressionTests.compute_mse(;
-            job_name = string(job_id),
+            job_name = string(config_id),
             reference_mse = reference_mse,
             ds_filename_computed = ds_filename_computed,
             ds_filename_reference = ds_filename_reference,

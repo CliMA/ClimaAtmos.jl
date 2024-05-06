@@ -60,7 +60,7 @@ results for simulations that have crashed.
 function solve_atmos!(simulation)
     (; integrator, output_writers) = simulation
     (; tspan) = integrator.sol.prob
-    @info "Running" job_id = simulation.job_id output_dir =
+    @info "Running" job_id = simulation.job_id config_id = simulation.config_id output_dir =
         simulation.output_dir tspan
     comms_ctx = ClimaComms.context(axes(integrator.u.c))
     SciMLBase.step!(integrator)

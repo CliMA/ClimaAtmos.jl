@@ -22,11 +22,11 @@ function print_repl_script(config)
     println(ib)
 end
 
-configs = configs_per_job_id()
+configs = configs_per_config_id()
 @assert length(configs) > 0
 
-for (job_id, config) in configs
-    println("### Buildkite job `$job_id`")
-    print_repl_script(config)
+for (config_id, nt) in configs
+    println("### Buildkite config `$config_id`")
+    print_repl_script(nt.config)
     println()
 end

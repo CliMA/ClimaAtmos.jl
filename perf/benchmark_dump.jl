@@ -7,11 +7,17 @@ using CairoMakie
 using PrettyTables
 import YAML
 
-# Need to generate config_dict here to override `h_elem` in the loop below
-parsed_args = CA.parse_commandline(CA.argparse_settings())
-config_dict = YAML.load_file(parsed_args["config_file"])
-output_dir = joinpath(config_dict["job_id"])
+include("common.jl")
+(s, parsed_args) = parse_commandline()
+config = TargetConfig(parsed_args["target_config"])
+config.parsed_args["dt"] = "1secs";
+@warn "dt was set to 1secs for stability. Please ignore reported SYPD."
+sim = CA.get_sim_info(config)
+device = ClimaComms.device(config.comms_ctx)
 
+# Need to generate config_dict here to override `h_elem` in the loop below
+config_dict = YAML.load_file(config.config_file)
+output_dir = joinpath(sim.job_id, "active_output")
 steptimes = []
 # Iterate through varying number of horizontal elements
 for h_elem in 8:8:40
