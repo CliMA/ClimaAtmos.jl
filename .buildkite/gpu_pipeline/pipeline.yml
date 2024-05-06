@@ -47,7 +47,7 @@ steps:
             nsys profile --trace=nvtx,mpi,cuda,osrt --output=target_gpu_implicit_baroclinic_wave/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
-        artifact_paths: "target_gpu_implicit_baroclinic_wave/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_cpus_per_task: 4
@@ -61,7 +61,7 @@ steps:
             nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M.yml
-        artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_cpus_per_task: 4
@@ -76,7 +76,7 @@ steps:
             nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M_4process.yml
-        artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -92,7 +92,7 @@ steps:
             nsys profile --trace=osrt,nvtx,cuda,mpi,ucx --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
-        artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -110,7 +110,7 @@ steps:
             nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_ss_1process/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_1process.yml
-        artifact_paths: "gpu_aquaplanet_dyamond_ss_1process/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -126,7 +126,7 @@ steps:
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_2process.yml
-        artifact_paths: "gpu_aquaplanet_dyamond_ss_2process/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -142,7 +142,7 @@ steps:
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_4process.yml
-        artifact_paths: "gpu_aquaplanet_dyamond_ss_4process/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -158,7 +158,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ss
           - >
             julia --color=yes --project=examples post_processing/plot_gpu_strong_scaling.jl gpu_aquaplanet_dyamond_ss
-        artifact_paths: "gpu_aquaplanet_dyamond_ss/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_cpus_per_task: 1
           slurm_ntasks: 1
@@ -174,7 +174,7 @@ steps:
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_1process.yml
-        artifact_paths: "gpu_aquaplanet_dyamond_ws_1process/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -190,7 +190,7 @@ steps:
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_2process.yml
-        artifact_paths: "gpu_aquaplanet_dyamond_ws_2process/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -206,7 +206,7 @@ steps:
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_4process.yml
-        artifact_paths: "gpu_aquaplanet_dyamond_ws_4process/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -222,7 +222,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ws
           - >
             julia --color=yes --project=examples post_processing/plot_gpu_weak_scaling.jl gpu_aquaplanet_dyamond_ws
-        artifact_paths: "gpu_aquaplanet_dyamond_ws/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_cpus_per_task: 1
           slurm_ntasks: 1
@@ -240,7 +240,7 @@ steps:
             nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_diagedmf/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_diagedmf.yml
-        artifact_paths: "gpu_aquaplanet_diagedmf/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -258,7 +258,7 @@ steps:
             nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_progedmf/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_progedmf.yml
-        artifact_paths: "gpu_aquaplanet_progedmf/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4

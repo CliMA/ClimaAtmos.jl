@@ -8,7 +8,6 @@ dz_top: 3000.0
 h_elem: 16
 z_elem: 63
 z_max: 55000.0
-job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth_sleve"
 moist: "equil"
 precip_model: "0M"
 rayleigh_sponge: true

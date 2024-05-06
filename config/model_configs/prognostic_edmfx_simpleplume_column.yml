@@ -1,4 +1,3 @@
-job_id: "prognostic_edmfx_simpleplume_column"
 initial_condition: "SimplePlume"
 surface_setup: "SimplePlume"
 turbconv: "prognostic_edmfx"

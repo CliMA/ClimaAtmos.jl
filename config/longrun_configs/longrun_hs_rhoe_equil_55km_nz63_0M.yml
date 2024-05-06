@@ -11,5 +11,4 @@ moist: "equil"
 precip_model: "0M"
 rayleigh_sponge: true
 forcing: "held_suarez"
-job_id: "longrun_hs_rhoe_equil_55km_nz63_0M"
 toml: [toml/longrun_hs_rhoe_equil_55km_nz63_0M.toml]

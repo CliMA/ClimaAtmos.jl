@@ -64,25 +64,25 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_gray.yml
-        artifact_paths: "single_column_radiative_equilibrium_gray/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: single column radiative equilibrium clearsky"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky.yml
-        artifact_paths: "single_column_radiative_equilibrium_clearsky/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: single column radiative equilibrium clearsky prognostic surface temperature"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky_prognostic_surface_temp.yml
-        artifact_paths: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: single column radiative equilibrium allsky idealized clouds varying insolation"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_allsky_idealized_clouds.yml
-        artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
   - group: "Precipitation"
     steps:
@@ -90,40 +90,40 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_precipitation_test.yml
-        artifact_paths: "single_column_precipitation_test/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
   - group: "Gravity wave"
     steps:
 
       - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
         command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_3d/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: non-orographic gravity wave parameterization test with MiMA output"
         command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_mima/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: non-orographic gravity wave parameterization unit test single column"
         command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_single_column/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: orographic gravity wave parameterization unit test for base flux calculation"
         command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_baseflux.jl"
-        artifact_paths: "orographic_gravity_wave_test_baseflux/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: orographic gravity wave parameterization unit test for 3d calculation"
         command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_3d.jl"
-        artifact_paths: "orographic_gravity_wave_test_3d/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: single column non-orographic gravity wave parameterization"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
-        artifact_paths: "single_column_nonorographic_gravity_wave/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
   - group: "Column Examples"
     steps:
@@ -132,7 +132,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
-        artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
   - group: "Box Examples"
     steps:
@@ -141,13 +141,13 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/box_hydrostatic_balance_rhoe.yml
-        artifact_paths: "box_hydrostatic_balance_rhoe/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: 3D density current"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/box_density_current_test.yml
-        artifact_paths: "box_density_current_test/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
   - group: "Plane Examples"
     steps:
@@ -155,31 +155,31 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/plane_agnesi_mountain_test_uniform.yml
-        artifact_paths: "plane_agnesi_mountain_test_uniform/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: Agnesi linear hydrostatic mountain experiment (stretched)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/plane_agnesi_mountain_test_stretched.yml
-        artifact_paths: "plane_agnesi_mountain_test_stretched/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: Schar mountain experiment (uniform grid)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/plane_schar_mountain_test_uniform.yml
-        artifact_paths: "plane_schar_mountain_test_uniform/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: Schar mountain experiment (stretched grid)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/plane_schar_mountain_test_stretched.yml
-        artifact_paths: "plane_schar_mountain_test_stretched/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: Density current experiment"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/plane_density_current_test.yml
-        artifact_paths: "plane_density_current_test/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
 
   - group: "Sphere Examples (Dycore)"
@@ -189,7 +189,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_hydrostatic_balance_rhoe_ft64.yml
-        artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -198,7 +198,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe.yml
-        artifact_paths: "sphere_baroclinic_wave_rhoe/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist"
         command: >
@@ -208,7 +208,7 @@ steps:
           julia --color=yes --project=examples regression_tests/test_mse.jl
           --job_id sphere_baroclinic_wave_rhoe_equilmoist
           --out_dir sphere_baroclinic_wave_rhoe_equilmoist/output_active
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
@@ -220,7 +220,7 @@ steps:
           julia --color=yes --project=examples regression_tests/test_mse.jl
           --job_id deep_sphere_baroclinic_wave_rhoe_equilmoist
           --out_dir deep_sphere_baroclinic_wave_rhoe_equilmoist/output_active
-        artifact_paths: "deep_sphere_baroclinic_wave_rhoe_equilmoist/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
@@ -228,26 +228,26 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_cldiag.yml
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_cldiag/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist explicit vertdiff"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.yml
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_expvdiff/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist implicit vertdiff"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_impvdiff.yml
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_impvdiff/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       # Add this back when we figure out what to do with SSP and zalesak
       # - label: ":computer: SSP zalesak tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
       #   command: >
       #     julia --color=yes --project=examples examples/hybrid/driver.jl
       #     --config_file $CONFIG_PATH/$$JOB_NAME.yml
-      #   artifact_paths: "$$JOB_NAME/output_active/*"
+      #   artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
       #   agents:
       #     slurm_mem: 64GB
       #   env:
@@ -256,14 +256,14 @@ steps:
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist check conservation float64"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64.yml
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: held suarez (ρe) hightop"
         key: sphere_held_suarez_rhoe_hightop
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_hightop.yml
-        artifact_paths: "sphere_held_suarez_rhoe_hightop/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: no lim ARS held suarez (ρe) equilmoist hightop sponge"
         command: >
@@ -273,7 +273,7 @@ steps:
           julia --color=yes --project=examples regression_tests/test_mse.jl
           --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
           --out_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge/output_active
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
@@ -284,7 +284,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.yml
-        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -292,7 +292,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_nonequilmoist_allsky_gw_res.yml
-        artifact_paths: "sphere_aquaplanet_rhoe_nonequilmoist_allsky_gw_res/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -304,7 +304,7 @@ steps:
           julia --color=yes --project=examples regression_tests/test_mse.jl
           --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
           --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric/output_active
-        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
@@ -313,7 +313,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean.yml
-        artifact_paths: "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -324,19 +324,19 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_topography_dcmip_rs.yml
-        artifact_paths: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: held suarez (ρe) topography (dcmip)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_topography_dcmip.yml
-        artifact_paths: "sphere_held_suarez_rhoe_topography_dcmip/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: held suarez (ρe) equilmoist topography (dcmip)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_topography_dcmip.yml
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_topography_dcmip/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -344,13 +344,13 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200.yml
-        artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
       - label: ":computer: Diagnostic Earth surface elevation spectra"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth.yml
-        artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
   - group: "MPI Examples"
     steps:
@@ -360,7 +360,7 @@ steps:
         command: >
           srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/mpi_make_restart.yml
-        artifact_paths: "mpi_make_restart/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
@@ -375,7 +375,7 @@ steps:
 
           srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/restart_mpi_baroclinic_wave_rhoe.yml
-        artifact_paths: "restart_mpi_baroclinic_wave_rhoe/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
@@ -390,7 +390,7 @@ steps:
         command: >
           srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky.yml
-        artifact_paths: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
@@ -402,7 +402,7 @@ steps:
         command: >
           srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/prep_remap.yml
-        artifact_paths: "prep_remap/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
@@ -417,7 +417,7 @@ steps:
 
           julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
           --data_dir prep_remap/output_active --out_dir remap_pipeline_output
-        artifact_paths: "remap_pipeline_output/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
   - group: "Configs"
     steps:
@@ -426,7 +426,7 @@ steps:
         command: >
           julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/test_io.yml
-        artifact_paths: "test_io/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_cpus_per_task: 8
 
@@ -434,7 +434,7 @@ steps:
         command: >
           srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/test_mpi_io.yml
-        artifact_paths: "test_mpi_io/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
@@ -446,7 +446,7 @@ steps:
         command: >
           julia --color=yes --check-bounds=yes --project=perf perf/benchmark.jl
           $PERF_CONFIG_PATH/checkbounds.yml
-        artifact_paths: "checkbounds/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -457,7 +457,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_test_box.yml
-        artifact_paths: "diagnostic_edmfx_test_box/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -465,7 +465,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_gabls_box.yml
-        artifact_paths: "diagnostic_edmfx_gabls_box/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -473,7 +473,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_box.yml
-        artifact_paths: "diagnostic_edmfx_bomex_box/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -481,7 +481,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_stretched_box.yml
-        artifact_paths: "diagnostic_edmfx_bomex_stretched_box/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -489,7 +489,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_explicit_box.yml
-        artifact_paths: "diagnostic_edmfx_dycoms_rf01_explicit_box/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -497,7 +497,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_box.yml
-        artifact_paths: "diagnostic_edmfx_dycoms_rf01_box/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -505,7 +505,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_rico_box.yml
-        artifact_paths: "diagnostic_edmfx_rico_box/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -513,7 +513,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box.yml
-        artifact_paths: "diagnostic_edmfx_trmm_box/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -521,7 +521,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_stretched_box.yml
-        artifact_paths: "diagnostic_edmfx_trmm_stretched_box/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -529,7 +529,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box_0M.yml
-        artifact_paths: "diagnostic_edmfx_trmm_box_0M/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -541,7 +541,7 @@ steps:
           julia --color=yes --project=examples regression_tests/test_mse.jl
           --job_id diagnostic_edmfx_aquaplanet
           --out_dir diagnostic_edmfx_aquaplanet/output_active
-        artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
@@ -553,7 +553,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_column.yml
-        artifact_paths: "prognostic_edmfx_adv_test_column/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
         agents:
           slurm_mem: 20GB
@@ -562,7 +562,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_simpleplume_column.yml
-        artifact_paths: "prognostic_edmfx_simpleplume_column/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -570,7 +570,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column.yml
-        artifact_paths: "prognostic_edmfx_gabls_column/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -578,7 +578,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_explicit_column.yml
-        artifact_paths: "prognostic_edmfx_bomex_explicit_column/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -586,7 +586,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_column.yml
-        artifact_paths: "prognostic_edmfx_bomex_fixtke_column/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -594,7 +594,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_stretched_column.yml
-        artifact_paths: "prognostic_edmfx_bomex_stretched_column/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -602,7 +602,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
-        artifact_paths: "prognostic_edmfx_bomex_column/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -610,7 +610,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf01_column.yml
-        artifact_paths: "prognostic_edmfx_dycoms_rf01_column/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -618,7 +618,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
-        artifact_paths: "prognostic_edmfx_rico_column/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -626,7 +626,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
-        artifact_paths: "prognostic_edmfx_trmm_column/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -634,7 +634,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_0M.yml
-        artifact_paths: "prognostic_edmfx_trmm_column_0M/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
       
@@ -642,7 +642,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_gcmdriven_column.yml
-        artifact_paths: "prognostic_edmfx_gcmdriven_column/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -650,7 +650,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
-        artifact_paths: "prognostic_edmfx_bomex_box/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -658,7 +658,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
-        artifact_paths: "prognostic_edmfx_aquaplanet/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -670,7 +670,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/gpu_baroclinic_wave_rhoe.yml
-        artifact_paths: "gpu_implicit_barowave_ref/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 16G
           slurm_gpus: 1
@@ -697,7 +697,7 @@ steps:
             nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
-        artifact_paths: "target_gpu_implicit_baroclinic_wave/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_mem: 32G
@@ -711,7 +711,7 @@ steps:
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave_4process.yml
-        artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
@@ -726,7 +726,7 @@ steps:
             nsys profile --trace=nvtx,cuda --output=central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $CONFIG_PATH/central_gpu_hs_rhoe_equil_55km_nz63_0M.yml
-        artifact_paths: "central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
@@ -737,7 +737,7 @@ steps:
             nsys profile --trace=nvtx,cuda --output=central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $CONFIG_PATH/central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M.yml
-        artifact_paths: "central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
@@ -749,7 +749,7 @@ steps:
             nsys profile --trace=nvtx,cuda --output=gpu_aquaplanet_dyamond/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${CONFIG_PATH}/gpu_aquaplanet_dyamond.yml
-        artifact_paths: "gpu_aquaplanet_dyamond/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
 
@@ -757,7 +757,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/gpu_diagnostic_edmfx_aquaplanet.yml
-        artifact_paths: "gpu_diagnostic_edmfx_aquaplanet/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_mem: 20G
@@ -766,7 +766,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/gpu_prognostic_edmfx_aquaplanet.yml
-        artifact_paths: "gpu_prognostic_edmfx_aquaplanet/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_mem: 20G
@@ -780,7 +780,7 @@ steps:
 
           julia --color=yes --project=examples perf/benchmark_dump.jl
           --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_wrt_h_elem.yml
-        artifact_paths: "gpu_implicit_barowave_wrt_h_elem/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
 
@@ -789,7 +789,7 @@ steps:
 
           julia --color=yes --project=examples perf/benchmark_step.jl
           --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave.yml
-        artifact_paths: "gpu_implicit_barowave/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_gpus: 1
 
@@ -798,7 +798,7 @@ steps:
 
           julia --color=yes --project=examples perf/benchmark_step.jl
           --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_moist.yml
-        artifact_paths: "gpu_implicit_barowave_moist/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 16G
           slurm_gpus: 1
@@ -807,7 +807,7 @@ steps:
         command: >
           julia --color=yes --project=examples perf/benchmark_step.jl
           --config_file $PERF_CONFIG_PATH/cpu_implicit_barowave.yml
-        artifact_paths: "cpu_implicit_barowave/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
   - group: "Performance"
     steps:
@@ -832,7 +832,7 @@ steps:
         command: >
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_perf_target.yml
-        artifact_paths: "flame_perf_target/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 24GB
 
@@ -840,7 +840,7 @@ steps:
         command: >
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_perf_target_tracers.yml
-        artifact_paths: "flame_perf_target_tracers/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 24GB
 
@@ -848,7 +848,7 @@ steps:
         command: >
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_perf_target_diagnostic_edmfx.yml
-        artifact_paths: "flame_perf_target_diagnostic_edmfx/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 24GB
 
@@ -856,7 +856,7 @@ steps:
         command: >
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_perf_target_prognostic_edmfx_aquaplanet.yml
-        artifact_paths: "flame_perf_target_prognostic_edmfx_aquaplanet/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 48GB
 
@@ -864,7 +864,7 @@ steps:
         command: >
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.yml
-        artifact_paths: "flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 40GB
 
@@ -872,7 +872,7 @@ steps:
         command: >
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_perf_target_frierson.yml
-        artifact_paths: "flame_perf_target_frierson/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 48GB
 
@@ -880,7 +880,7 @@ steps:
         command: >
           julia --threads 8 --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_perf_target_threaded.yml
-        artifact_paths: "flame_perf_target_threaded/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_cpus_per_task: 8
           slurm_mem: 24GB
@@ -889,7 +889,7 @@ steps:
         command: >
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_perf_target_callbacks.yml
-        artifact_paths: "flame_perf_target_callbacks/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 24GB
 
@@ -897,7 +897,7 @@ steps:
         command: >
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_perf_gw.yml
-        artifact_paths: "flame_perf_gw/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 24GB
 
@@ -905,7 +905,7 @@ steps:
         command: >
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_perf_diagnostics.yml
-        artifact_paths: "flame_perf_diagnostics/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 24GB
 
@@ -913,7 +913,7 @@ steps:
         command: >
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_gpu_implicit_barowave_moist.yml
-        artifact_paths: "flame_gpu_implicit_barowave_moist/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 48GB
           slurm_gpus: 1
@@ -931,7 +931,7 @@ steps:
       - label: ":mag::rocket: Invalidations"
         command: >
           julia --color=yes --project=perf perf/invalidations.jl
-        artifact_paths: "invalidations/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_mem: 24GB
 
@@ -950,8 +950,7 @@ steps:
   - label: ":chart_with_downwards_trend: build history"
     command:
       - build_history main
-    artifact_paths:
-      - "build_history.html"
+    artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
 
   - wait
 

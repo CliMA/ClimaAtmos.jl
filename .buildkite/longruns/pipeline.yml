@@ -57,7 +57,7 @@ steps:
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist high resolution centered diff"
         command:
           - "srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml"
-        artifact_paths: "$$JOB_NAME/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_ntasks: 32
           slurm_nodes: 2
@@ -68,7 +68,7 @@ steps:
       - label: ":computer: aquaplanet equilmoist clearsky radiation + prognostic edmf diffusion only + 0M microphysics"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_ntasks: 64
           slurm_nodes: 4
@@ -84,7 +84,7 @@ steps:
       - label: ":computer: low resolution aquaplanet equilmoist clearsky radiation + time-varying insolation + slab ocean"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/output_active/*"
+        artifact_paths: "${BUILDKITE_JOB_ID}/output_active/*"
         agents:
           slurm_ntasks: 8
           slurm_mem_per_cpu: 16GB

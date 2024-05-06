@@ -12,7 +12,6 @@ To start the model with a custom configuration, run:
 ### Example
 Below is the default Bomex configuration:
 ```
-job_id: "prognostic_edmfx_bomex_box"
 initial_condition: "Bomex"
 subsidence: "Bomex"
 edmf_coriolis: "Bomex"

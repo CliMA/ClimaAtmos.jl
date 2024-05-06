@@ -19,5 +19,4 @@ rayleigh_sponge: true
 dt: "100secs"
 t_end: "12hours"
 prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "OC1", "OC2", "SO4", "SOA", "SSLT01", "SSLT02", "SSLT03", "SSLT04"]
-job_id: "gpu_aquaplanet_dyamond"
 toml: [toml/longrun_aquaplanet_dyamond.toml]

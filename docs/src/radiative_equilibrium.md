@@ -25,7 +25,6 @@ dt: "3hours"
 dt_save_to_sol: "30hours" 
 dt_save_state_to_disk: "100days" 
 prognostic_surface: "true" 
-job_id: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp"
 ```
 
 Then run the simulation with the following command:

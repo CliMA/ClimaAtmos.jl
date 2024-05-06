@@ -1,6 +1,5 @@
 dt_save_state_to_disk: "3hours"
 dt_save_to_sol: "Inf"
-job_id: gpu_diagnostic_edmfx_aquaplanet
 surface_setup: DefaultMoninObukhov
 rad: clearsky
 turbconv: diagnostic_edmfx

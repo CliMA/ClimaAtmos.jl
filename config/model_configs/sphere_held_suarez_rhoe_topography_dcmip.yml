@@ -7,4 +7,3 @@ t_end: "3days"
 forcing: "held_suarez"
 dt: "200secs"
 viscous_sponge: true
-job_id: "sphere_held_suarez_rhoe_topography_dcmip"

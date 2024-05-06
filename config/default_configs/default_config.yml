@@ -196,9 +196,6 @@ perf_summary:
 viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false
-job_id:
-  help: "Uniquely identifying string for a particular job"
-  value: ~
 tracer_upwinding:
   help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
   value: none

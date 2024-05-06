@@ -479,10 +479,12 @@ function get_sim_info(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
 
-    job_id = if isnothing(parsed_args["job_id"])
-        job_id_from_config(parsed_args)
-    else
+    job_id = if haskey(ENV, "BUILDKITE")
+        ENV["BUILDKITE_JOB_ID"]
+    elseif isnothing(parsed_args["job_id"])
         parsed_args["job_id"]
+    else
+        job_id_from_config(parsed_args)
     end
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
     out_dir = parsed_args["output_dir"]

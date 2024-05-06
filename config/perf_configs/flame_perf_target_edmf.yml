@@ -1,8 +1,0 @@
-rad: ~
-apply_limiter: false
-dt_save_state_to_disk: "10secs"
-precip_model: ~
-turbconv: "edmf"
-FLOAT_TYPE: "Float64"
-job_id: "flame_perf_target_edmf"
-z_stretch: false
