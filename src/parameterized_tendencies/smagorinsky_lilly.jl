@@ -7,8 +7,8 @@ import ClimaCore.Operators as Operators
 import LinearAlgebra as la
 import ClimaCore: Geometry
 
-smagorinsky_lilly_cache(::Nothing, Y) = NamedTuple()
-function smagorinsky_lilly_cache(sl::SmagorinskyLilly, Y)
+smagorinsky_lilly_cache(Y, ::Nothing) = (;)
+function smagorinsky_lilly_cache(Y, sl::SmagorinskyLilly)
     # Cs is the Smagorinsky coefficient, ^cJ is the volume of the cell. ^cD is 
     # calculated from the Smagorinsky-Lilly model for eddy viscosity as described
     # in (Sridhar et al. 2022).
@@ -53,6 +53,7 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
 
     (; Cs) = sl
     (; v_t, ᶜD) = p
+    @show "here"
 
     # momentum balance adjustment
     @. Yₜ.c.uₕ -=
@@ -123,6 +124,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
 
         @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ_ρe_tot(-(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜD[colidx]) * ᶠgradᵥ(ᶜh_tot[colidx])))
     end
+    @show "here"
 
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
