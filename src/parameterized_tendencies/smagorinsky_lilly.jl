@@ -36,7 +36,7 @@ function smagorinsky_lilly_cache(sl::SmagorinskyLilly, Y)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶜD = ᶜtemp_scalar_2
     v_t = ᶜtemp_scalar_3
-    @. v_t = ((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
+    @. v_t = FT(50)#((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
     Pr = 1/3
     @. ᶜD = (1/Pr)*v_t
     return (; v_t, ᶜD)
@@ -46,7 +46,7 @@ horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 
 
-function l(Yₜ, Y, p, t, sl::SmagorinskyLilly) 
+function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLilly) 
     if !(hasproperty(p, :ᶜspecific))
         throw(ErrorException("p does not have the property ᶜspecific."))
     end
