@@ -475,6 +475,14 @@ thermo_state_type(::EquilMoistModel, ::Type{FT}) where {FT} = TD.PhaseEquil{FT}
 thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
     TD.PhaseNonEquil{FT}
 
+# TODO: move to ClimaComms
+context_short_name(ctx::ClimaComms.SingletonCommsContext) = "1_proc"
+context_short_name(ctx::ClimaComms.MPICommsContext) = "mpi_$(ClimaComms.nprocs(ctx))"
+device_short_name(dev::ClimaComms.CUDADevice) = "gpu"
+device_short_name(dev::ClimaComms.CPUSingleThreaded) = "cpu"
+device_short_name(dev::ClimaComms.CPUMultiThreaded) = "threaded_cpu_$(Threads.nthreads())"
+resource_short_name(ctx::ClimaComms.AbstractCommsContext) = join(context_short_name(ctx), device_short_name(ctx), "_")
+
 function get_sim_info(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
