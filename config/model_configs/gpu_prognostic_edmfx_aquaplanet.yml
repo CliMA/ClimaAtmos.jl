@@ -1,4 +1,3 @@
-job_id: gpu_prognostic_edmfx_aquaplanet
 surface_setup: DefaultMoninObukhov 
 rad: clearsky
 turbconv: prognostic_edmfx 

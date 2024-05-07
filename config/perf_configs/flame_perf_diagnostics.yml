@@ -8,4 +8,3 @@ diagnostics:
   - reduction_time: "max"
     short_name: "ta"
     period: "1secs"
-job_id: "flame_perf_diagnostics"

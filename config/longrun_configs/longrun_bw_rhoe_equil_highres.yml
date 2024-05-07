@@ -6,7 +6,6 @@ t_end: "100days"
 dz_bottom: 30.0
 h_elem: 16
 precip_model: "0M"
-job_id: "longrun_bw_rhoe_equil_highres"
 moist: "equil"
 diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke]

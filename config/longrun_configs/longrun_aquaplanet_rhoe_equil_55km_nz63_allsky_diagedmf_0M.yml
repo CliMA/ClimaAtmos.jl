@@ -23,5 +23,4 @@ rayleigh_sponge: true
 dt_save_state_to_disk: "10days"
 dt: "100secs"
 t_end: "60days"
-job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M"
 toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M.toml]
