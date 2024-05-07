@@ -445,7 +445,7 @@ steps:
       - label: ":computer: checkbounds"
         command: >
           julia --color=yes --check-bounds=yes --project=perf perf/benchmark.jl
-          $PERF_CONFIG_PATH/checkbounds.yml
+          --config_file $PERF_CONFIG_PATH/checkbounds.yml
         artifact_paths: "checkbounds/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -816,14 +816,14 @@ steps:
       - label: ":computer: Benchmark: perf target (default)"
         command: >
           julia --color=yes --project=perf perf/benchmark.jl
-          $PERF_CONFIG_PATH/bm_perf_target.yml
+          --config_file $PERF_CONFIG_PATH/bm_perf_target.yml
         agents:
           slurm_mem: 24GB
 
       - label: ":computer: Benchmark: perf target (gpu)"
         command: >
           julia --color=yes --project=perf perf/benchmark.jl
-          $PERF_CONFIG_PATH/bm_perf_target.yml
+          --config_file $PERF_CONFIG_PATH/bm_perf_target.yml
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
@@ -831,7 +831,7 @@ steps:
       - label: ":computer: Benchmark: perf target (Threaded)"
         command: >
           julia --color=yes --threads 8 --project=perf perf/benchmark.jl
-          $PERF_CONFIG_PATH/bm_perf_target_threaded.yml
+          --config_file $PERF_CONFIG_PATH/bm_perf_target_threaded.yml
         agents:
           slurm_mem: 24GB
           slurm_cpus_per_task: 8
@@ -839,7 +839,7 @@ steps:
       - label: ":fire: Flame graph: perf target (default)"
         command: >
           julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target.yml
+          --config_file $PERF_CONFIG_PATH/flame_perf_target.yml
         artifact_paths: "flame_perf_target/*"
         agents:
           slurm_mem: 24GB
@@ -847,7 +847,7 @@ steps:
       - label: ":fire: Flame graph: perf target (with tracers)"
         command: >
           julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target_tracers.yml
+          --config_file $PERF_CONFIG_PATH/flame_perf_target_tracers.yml
         artifact_paths: "flame_perf_target_tracers/*"
         agents:
           slurm_mem: 24GB
@@ -855,7 +855,7 @@ steps:
       - label: ":fire: Flame graph: perf target (diagnostic edmfx)"
         command: >
           julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target_diagnostic_edmfx.yml
+          --config_file $PERF_CONFIG_PATH/flame_perf_target_diagnostic_edmfx.yml
         artifact_paths: "flame_perf_target_diagnostic_edmfx/*"
         agents:
           slurm_mem: 24GB
@@ -863,7 +863,7 @@ steps:
       - label: ":fire: Flame graph: perf target (prognostic edmfx aquaplanet)"
         command: >
           julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target_prognostic_edmfx_aquaplanet.yml
+          --config_file $PERF_CONFIG_PATH/flame_perf_target_prognostic_edmfx_aquaplanet.yml
         artifact_paths: "flame_perf_target_prognostic_edmfx_aquaplanet/*"
         agents:
           slurm_mem: 48GB
@@ -871,7 +871,7 @@ steps:
       - label: ":fire: Flame graph: perf target (barowave jfnk)"
         command: >
           julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.yml
+          --config_file $PERF_CONFIG_PATH/flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.yml
         artifact_paths: "flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff/*"
         agents:
           slurm_mem: 40GB
@@ -879,7 +879,7 @@ steps:
       - label: ":fire: Flame graph: perf target (frierson diffusion)"
         command: >
           julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target_frierson.yml
+          --config_file $PERF_CONFIG_PATH/flame_perf_target_frierson.yml
         artifact_paths: "flame_perf_target_frierson/*"
         agents:
           slurm_mem: 48GB
@@ -887,7 +887,7 @@ steps:
       - label: ":fire: Flame graph: perf target (Threaded)"
         command: >
           julia --threads 8 --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target_threaded.yml
+          --config_file $PERF_CONFIG_PATH/flame_perf_target_threaded.yml
         artifact_paths: "flame_perf_target_threaded/*"
         agents:
           slurm_cpus_per_task: 8
@@ -896,7 +896,7 @@ steps:
       - label: ":fire: Flame graph: perf target (Callbacks)"
         command: >
           julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target_callbacks.yml
+          --config_file $PERF_CONFIG_PATH/flame_perf_target_callbacks.yml
         artifact_paths: "flame_perf_target_callbacks/*"
         agents:
           slurm_mem: 24GB
@@ -904,7 +904,7 @@ steps:
       - label: ":fire: Flame graph: gravity wave"
         command: >
           julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_gw.yml
+          --config_file $PERF_CONFIG_PATH/flame_perf_gw.yml
         artifact_paths: "flame_perf_gw/*"
         agents:
           slurm_mem: 24GB
@@ -912,7 +912,7 @@ steps:
       - label: ":fire: Flame graph: perf target (diagnostics)"
         command: >
           julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_diagnostics.yml
+          --config_file $PERF_CONFIG_PATH/flame_perf_diagnostics.yml
         artifact_paths: "flame_perf_diagnostics/*"
         agents:
           slurm_mem: 24GB
@@ -920,7 +920,7 @@ steps:
       - label: ":fire: Flame graph: gpu job"
         command: >
           julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_gpu_implicit_barowave_moist.yml
+          --config_file $PERF_CONFIG_PATH/flame_gpu_implicit_barowave_moist.yml
         artifact_paths: "flame_gpu_implicit_barowave_moist/*"
         agents:
           slurm_mem: 48GB
@@ -931,7 +931,7 @@ steps:
       - label: ":rocket: JET n-failures (inference)"
         command: >
           julia --color=yes --project=perf perf/jet_test_nfailures.jl
-          $PERF_CONFIG_PATH/jet_n_failures.yml
+          --config_file $PERF_CONFIG_PATH/jet_n_failures.yml
         agents:
           slurm_mem: 24GB
 

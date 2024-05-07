@@ -17,7 +17,7 @@ Random.seed!(1234)
 import ClimaAtmos as CA
 import ClimaComms
 
-config = CA.AtmosConfig()
+config = CA.AtmosConfig(CA.parse_commandline()["config_file"])
 
 simulation = CA.get_simulation(config)
 (; integrator) = simulation;

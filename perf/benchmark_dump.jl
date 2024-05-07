@@ -9,8 +9,10 @@ import YAML
 
 # Need to generate config_dict here to override `h_elem` in the loop below
 parsed_args = CA.parse_commandline(CA.argparse_settings())
-config_dict = YAML.load_file(parsed_args["config_file"])
-output_dir = joinpath(config_dict["job_id"])
+config_file = parsed_args["config_file"]
+config_dict = YAML.load_file(config_file)
+config_id = CA.config_id_from_config_file(config_file)
+output_dir = config_id
 
 steptimes = []
 # Iterate through varying number of horizontal elements

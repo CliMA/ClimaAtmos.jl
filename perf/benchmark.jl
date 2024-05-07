@@ -11,10 +11,8 @@ using ClimaComms
 import SciMLBase
 import ClimaTimeSteppers as CTS
 
-length(ARGS) != 1 && error("Usage: benchmark.jl <config_file>")
-config_file = ARGS[1]
-config_dict = YAML.load_file(config_file)
-config = AtmosCoveragePerfConfig(config_dict);
+config = CA.AtmosConfig(CA.parse_commandline()["config_file"])
+config_id = CA.config_id_from_config_file(config.config_file)
 
 simulation = CA.get_simulation(config);
 (; integrator) = simulation;
@@ -47,9 +45,8 @@ end
 if get(ENV, "BUILDKITE", "") == "true"
     # Export table_summary
     import JSON
-    job_id = parsed_args["job_id"]
     path = pkgdir(CA)
-    open(joinpath(path, "perf_benchmark_$job_id.json"), "w") do io
+    open(joinpath(path, "perf_benchmark_$config_id.json"), "w") do io
         JSON.print(io, table_summary)
     end
 end

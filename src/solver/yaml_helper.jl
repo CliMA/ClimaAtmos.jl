@@ -5,14 +5,17 @@ const config_path = joinpath(dirname(@__FILE__), "..", "..", "config")
 const default_config_file =
     joinpath(config_path, "default_configs", "default_config.yml")
 
+strip_help_message(v::Dict) = v["value"]
+strip_help_message(v) = v
 strip_help_messages(d) =
-    Dict(map(k -> Pair(k, d[k]["value"]), collect(keys(d))))
+    Dict(map(k -> Pair(k, strip_help_message(d[k])), collect(keys(d)))...)
 
 """
     default_config_dict()
     default_config_dict(config_file)
 
-Loads the default configuration from files into a Dict for use in AtmosConfig().
+Loads the default configuration from files
+into a Dict for use in AtmosConfig.
 """
 function default_config_dict(config_file = default_config_file)
     config = YAML.load_file(config_file)

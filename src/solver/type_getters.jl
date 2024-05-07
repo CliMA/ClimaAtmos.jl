@@ -483,19 +483,25 @@ device_short_name(dev::ClimaComms.CUDADevice) = "gpu"
 device_short_name(dev::ClimaComms.CPUSingleThreaded) = "cpu"
 device_short_name(dev::ClimaComms.CPUMultiThreaded) =
     "threaded_cpu_$(Threads.nthreads())"
-resource_short_name(ctx::ClimaComms.AbstractCommsContext) =
-    join(context_short_name(ctx), device_short_name(ctx), "_")
+resource_short_name(ctx::ClimaComms.AbstractCommsContext) = join(
+    (context_short_name(ctx), device_short_name(ClimaComms.device(ctx))),
+    "_",
+)
+
+get_job_id(config::AtmosConfig) = join(
+    (
+        config_id_from_config_file(config.config_file),
+        resource_short_name(config.comms_ctx),
+    ),
+    "_",
+)
 
 function get_sim_info(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
     context = config.comms_ctx
 
-    job_id = join(
-        config_id_from_config_file(config.config_file),
-        resource_short_name(context),
-        "_",
-    )
+    job_id = get_job_id(config)
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
     out_dir = parsed_args["output_dir"]
     base_output_dir = isnothing(out_dir) ? default_output : out_dir
@@ -609,6 +615,7 @@ function get_simulation(config::AtmosConfig)
     sim_info = get_sim_info(config)
     job_id = sim_info.job_id
     output_dir = sim_info.output_dir
+    @info "Simulation info" job_id = job_id output_dir = output_dir
 
     CP.log_parameter_information(
         config.toml_dict,

@@ -5,11 +5,9 @@ import ClimaAtmos as CA
 
 include("common.jl")
 
-length(ARGS) != 1 && error("Usage: flame.jl <config_file>")
-config_file = ARGS[1]
-config_dict = YAML.load_file(config_file)
-config = AtmosCoveragePerfConfig(config_dict)
-job_id = config.parsed_args["job_id"]
+config = CA.AtmosConfig(CA.parse_commandline()["config_file"])
+config_id = CA.config_id_from_config_file(config.config_file)
+device = ClimaComms.device(config.comms_ctx)
 simulation = CA.get_simulation(config)
 (; integrator) = simulation
 
@@ -21,7 +19,7 @@ SciMLBase.step!(integrator) # compile first
 SciMLBase.step!(integrator) # compile print_walltime_estimate, which skips the first step to avoid timing compilation
 CA.call_all_callbacks!(integrator) # compile callbacks
 import Profile, ProfileCanvas
-output_dir = job_id
+output_dir = config_id
 mkpath(output_dir)
 
 @info "collect profile"
@@ -60,12 +58,12 @@ max_allocs_for_full_sampling = 10e6
 
 # For jobs that we don't track, we set an expected_allocs of
 # max_allocs_for_full_sampling, which leads to a sampling rate of 1
-expected_allocs = get(allocs_limit, job_id, max_allocs_for_full_sampling)
+expected_allocs = get(allocs_limit, config_id, max_allocs_for_full_sampling)
 sampling_rate = expected_allocs <= max_allocs_for_full_sampling ? 1 : 0.01
 
 # Some jobs are problematic (the ones with Krylov mostly)
 # https://github.com/pfitzseb/ProfileCanvas.jl/issues/34
-if job_id in (
+if config_id in (
     "flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff",
     "flame_perf_target_frierson",
 )
@@ -88,9 +86,9 @@ using Test
 # Threaded/gpu allocations are not deterministic, so let's add a buffer
 # TODO: remove buffer, and threaded tests, when
 #       threaded/unthreaded functions are unified
-buffer = if any(x -> occursin(x, job_id), ("threaded",))
+buffer = if device isa ClimaComms.CPUMultiThreaded
     1.8
-elseif any(x -> occursin(x, job_id), ("gpu",))
+elseif device isa ClimaComms.CUDADevice
     5
 else
     1.1
@@ -100,22 +98,22 @@ end
 ## old allocation profiler (TODO: remove this)
 allocs = @allocated SciMLBase.step!(integrator)
 @timev SciMLBase.step!(integrator)
-@info "`allocs ($job_id)`: $(allocs)"
+@info "`allocs ($config_id)`: $(allocs)"
 
-if allocs < allocs_limit[job_id] * buffer
-    @info "TODO: lower `allocs_limit[$job_id]` to: $(allocs)"
+if allocs < allocs_limit[config_id] * buffer
+    @info "TODO: lower `allocs_limit[$config_id]` to: $(allocs)"
 end
-Δallocs = allocs / allocs_limit[job_id]
+Δallocs = allocs / allocs_limit[config_id]
 @info "Allocation change (allocs/allocs_limit): $Δallocs"
 
 # https://github.com/CliMA/ClimaAtmos.jl/issues/827
 @testset "Allocations limit" begin
-    if occursin("gpu", job_id) # https://github.com/CliMA/ClimaAtmos.jl/issues/2831
-        @test allocs ≤ allocs_limit[job_id] * buffer
+    if device isa ClimaComms.CUDADevice # https://github.com/CliMA/ClimaAtmos.jl/issues/2831
+        @test allocs ≤ allocs_limit[config_id] * buffer
     else
-        @test 0.25 * allocs_limit[job_id] * buffer <=
+        @test 0.25 * allocs_limit[config_id] * buffer <=
               allocs ≤
-              allocs_limit[job_id] * buffer
+              allocs_limit[config_id] * buffer
     end
 end
 

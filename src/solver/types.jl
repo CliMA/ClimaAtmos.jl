@@ -487,6 +487,7 @@ function AtmosConfig(
     config_file::String = default_config_file;
     comms_ctx = nothing,
 )
+    @info "Loading yaml file $config_file"
     config₀ = YAML.load_file(config_file)
     config = strip_help_messages(config₀)
     return AtmosConfig(config; comms_ctx, config_file)

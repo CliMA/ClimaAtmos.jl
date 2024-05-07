@@ -9,7 +9,7 @@ import Random
 Random.seed!(1234)
 
 if !(@isdefined config)
-    config = CA.AtmosConfig()
+    config = CA.AtmosConfig(CA.parse_commandline()["config_file"])
 end
 simulation = CA.get_simulation(config)
 (; integrator) = simulation
@@ -37,8 +37,9 @@ import Base.Filesystem: rm
 import OrderedCollections
 include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
 
-ref_job_id = config.parsed_args["reference_job_id"]
-reference_job_id = isnothing(ref_job_id) ? simulation.job_id : ref_job_id
+config_id = CA.config_id_from_config_file(config.config_file)
+ref_config_id = config.parsed_args["reference_config_id"]
+reference_config_id = isnothing(ref_config_id) ? config_id : ref_config_id
 
 if sol_res.ret_code == :simulation_crashed
     error(
@@ -94,14 +95,14 @@ if config.parsed_args["regression_test"]
         ),
     )
     @testset "Test regression table entries" begin
-        mse_keys = sort(collect(keys(all_best_mse[simulation.job_id])))
+        mse_keys = sort(collect(keys(all_best_mse[config_id])))
         pcs = collect(Fields.property_chains(sol.u[end]))
         for prop_chain in mse_keys
             @test prop_chain in pcs
         end
     end
     perform_regression_tests(
-        simulation.job_id,
+        config_id,
         sol.u[end],
         all_best_mse,
         simulation.output_dir,
@@ -244,9 +245,9 @@ if ClimaComms.iamroot(config.comms_ctx)
     @info "Plotting"
     path = self_reference_or_path() # __build__ path (not job path)
     if path == :self_reference
-        make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
+        make_plots(Val(Symbol(reference_config_id)), simulation.output_dir)
     else
-        main_job_path = joinpath(path, reference_job_id)
+        main_job_path = joinpath(path, reference_config_id)
         nc_dir = joinpath(main_job_path, "nc_files")
         if ispath(nc_dir)
             @info "nc_dir exists"
@@ -270,7 +271,7 @@ if ClimaComms.iamroot(config.comms_ctx)
         else
             [simulation.output_dir, nc_dir]
         end
-        make_plots(Val(Symbol(reference_job_id)), paths)
+        make_plots(Val(Symbol(reference_config_id)), paths)
     end
     @info "Plotting done"
 
