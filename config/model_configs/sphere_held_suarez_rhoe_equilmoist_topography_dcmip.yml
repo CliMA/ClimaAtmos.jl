@@ -1,4 +1,3 @@
-dt_save_state_to_disk: "2days"
 rayleigh_sponge: true
 topo_smoothing: true
 dt: "200secs"
@@ -10,6 +9,3 @@ precip_model: "0M"
 topography: "DCMIP200"
 job_id: "sphere_held_suarez_rhoe_equilmoist_topography_dcmip"
 moist: "equil"
-diagnostics:
-  - short_name: [cl, cli, clw, ta, hus, hur, lmix]
-    period: 3hours
