@@ -1,33 +1,22 @@
 import YAML
 
+const config_path = joinpath(dirname(@__FILE__), "..", "..", "config")
+
+const default_config_file =
+    joinpath(config_path, "default_configs", "default_config.yml")
+
+strip_help_messages(d) =
+    Dict(map(k -> Pair(k, d[k]["value"]), collect(keys(d))))
+
 """
     default_config_dict()
-    default_config_dict(config_path)
+    default_config_dict(config_file)
 
 Loads the default configuration from files into a Dict for use in AtmosConfig().
 """
-function default_config_dict(
-    config_path = joinpath(
-        dirname(@__FILE__),
-        "..",
-        "..",
-        "config",
-        "default_configs",
-    ),
-)
-    default_config_file = joinpath(config_path, "default_config.yml")
-    config = YAML.load_file(default_config_file)
-    edmf_config_file = joinpath(config_path, "default_edmf_config.yml")
-    edmf_config = YAML.load_file(edmf_config_file)
-    # Combine base config with EDMF config - Don't allow duplicate entries.
-    !isempty(intersect(keys(config), keys(edmf_config))) &&
-        error("Duplicate keys in default config and EDMF config.")
-    merge!(config, edmf_config)
-    # Strip out help messages
-    for (k, v) in config
-        config[k] = v["value"]
-    end
-    return config
+function default_config_dict(config_file = default_config_file)
+    config = YAML.load_file(config_file)
+    return strip_help_messages(config)
 end
 
 """
@@ -119,12 +108,7 @@ To filter only configurations with a certain key/value pair,
 use the `filter_name` keyword argument with a Pair.
 """
 function configs_per_config_id(
-    directory::AbstractString = joinpath(
-        dirname(@__FILE__),
-        "..",
-        "..",
-        "config",
-    ),
+    directory::AbstractString = config_path,
     filter_name = nothing,
 )
     cmds = Dict()
@@ -149,7 +133,7 @@ end
 
 function is_unique_basename(file, bname = first(splitext(basename(file))))
     is_unique = true
-    for (root, _, files) in walkdir(first(splitpath(file)))
+    for (root, _, files) in walkdir(config_path)
         for f in files
             file = joinpath(root, f)
             if basename(f) == bname

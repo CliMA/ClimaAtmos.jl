@@ -483,34 +483,18 @@ Base.eltype(::AtmosConfig{FT}) where {FT} = FT
 Helper function for the AtmosConfig constructor. Reads a YAML file into a Dict
 and passes it to the AtmosConfig constructor.
 """
-function AtmosConfig(config_file::String; comms_ctx = nothing)
-    config = YAML.load_file(config_file)
+function AtmosConfig(
+    config_file::String = default_config_file;
+    comms_ctx = nothing,
+)
+    config₀ = YAML.load_file(config_file)
+    config = strip_help_messages(config₀)
     return AtmosConfig(config; comms_ctx, config_file)
 end
 
 """
-    AtmosConfig(; comms_ctx = nothing)
-Helper function for the AtmosConfig constructor.
-Reads the `config_file` from the command line into a Dict
-and passes it to the AtmosConfig constructor.
-"""
-function AtmosConfig(; comms_ctx = nothing)
-    parsed_args = parse_commandline(argparse_settings())
-    config_file = parsed_args["config_file"]
-    if config_file isa String
-        return AtmosConfig(config_file; comms_ctx)
-    elseif config_file isa Nothing
-        return AtmosConfig(config_file; comms_ctx, config_file)
-    else
-        error("`config_file` must be a Nothing or a String.")
-    end
-end
-
-AtmosConfig(config::Nothing; comms_ctx = nothing, config_file) =
-    AtmosConfig(Dict(); comms_ctx, config_file)
-
-"""
     AtmosConfig(config::Dict; comms_ctx = nothing)
+
 Constructs the AtmosConfig from the Dict passed in. This Dict overrides all of
 the default configurations set in `default_config_dict()`.
 """

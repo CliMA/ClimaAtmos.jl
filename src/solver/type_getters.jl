@@ -477,29 +477,31 @@ thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
 
 # TODO: move to ClimaComms
 context_short_name(ctx::ClimaComms.SingletonCommsContext) = "1_proc"
-context_short_name(ctx::ClimaComms.MPICommsContext) = "mpi_$(ClimaComms.nprocs(ctx))"
+context_short_name(ctx::ClimaComms.MPICommsContext) =
+    "mpi_$(ClimaComms.nprocs(ctx))"
 device_short_name(dev::ClimaComms.CUDADevice) = "gpu"
 device_short_name(dev::ClimaComms.CPUSingleThreaded) = "cpu"
-device_short_name(dev::ClimaComms.CPUMultiThreaded) = "threaded_cpu_$(Threads.nthreads())"
-resource_short_name(ctx::ClimaComms.AbstractCommsContext) = join(context_short_name(ctx), device_short_name(ctx), "_")
+device_short_name(dev::ClimaComms.CPUMultiThreaded) =
+    "threaded_cpu_$(Threads.nthreads())"
+resource_short_name(ctx::ClimaComms.AbstractCommsContext) =
+    join(context_short_name(ctx), device_short_name(ctx), "_")
 
 function get_sim_info(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
+    context = config.comms_ctx
 
-    job_id = if isnothing(parsed_args["job_id"])
-        job_id_from_config(parsed_args)
-    else
-        parsed_args["job_id"]
-    end
+    job_id = join(
+        config_id_from_config_file(config.config_file),
+        resource_short_name(context),
+        "_",
+    )
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
     out_dir = parsed_args["output_dir"]
     base_output_dir = isnothing(out_dir) ? default_output : out_dir
 
-    output_dir = OutputPathGenerator.generate_output_path(
-        base_output_dir;
-        context = config.comms_ctx,
-    )
+    output_dir =
+        OutputPathGenerator.generate_output_path(base_output_dir; context)
 
     sim = (;
         output_dir,
