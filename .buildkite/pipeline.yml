@@ -325,6 +325,13 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_topography_dcmip_rs.yml
         artifact_paths: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs/output_active/*"
+      
+      - label: ":computer: baroclinic wave (ρe) topography (hughes2023)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_hughes2023.yml
+        artifact_paths: "sphere_baroclinic_wave_rhoe_hughes2023/output_active/*"
+
 
       - label: ":computer: held suarez (ρe) topography (dcmip)"
         command: >
