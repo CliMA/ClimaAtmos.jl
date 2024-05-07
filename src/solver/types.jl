@@ -468,10 +468,11 @@ function (cb::AtmosCallback)(integrator)
 end
 n_measured_calls(cb::AtmosCallback) = cb.n_measured_calls[]
 
-struct AtmosConfig{FT, TD, PA, C}
+struct AtmosConfig{FT, TD, PA, C, CF}
     toml_dict::TD
     parsed_args::PA
     comms_ctx::C
+    config_file::CF
 end
 
 Base.eltype(::AtmosConfig{FT}) where {FT} = FT
@@ -484,7 +485,7 @@ and passes it to the AtmosConfig constructor.
 """
 function AtmosConfig(config_file::String; comms_ctx = nothing)
     config = YAML.load_file(config_file)
-    return AtmosConfig(config; comms_ctx)
+    return AtmosConfig(config; comms_ctx, config_file)
 end
 
 """
@@ -495,17 +496,25 @@ and passes it to the AtmosConfig constructor.
 """
 function AtmosConfig(; comms_ctx = nothing)
     parsed_args = parse_commandline(argparse_settings())
-    return AtmosConfig(parsed_args["config_file"]; comms_ctx)
+    config_file = parsed_args["config_file"]
+    if config_file isa String
+        return AtmosConfig(config_file; comms_ctx)
+    elseif config_file isa Nothing
+        return AtmosConfig(config_file; comms_ctx, config_file)
+    else
+        error("`config_file` must be a Nothing or a String.")
+    end
 end
 
-AtmosConfig(::Nothing; comms_ctx = nothing) = AtmosConfig(Dict(); comms_ctx)
+AtmosConfig(config::Nothing; comms_ctx = nothing, config_file) =
+    AtmosConfig(Dict(); comms_ctx, config_file)
 
 """
     AtmosConfig(config::Dict; comms_ctx = nothing)
 Constructs the AtmosConfig from the Dict passed in. This Dict overrides all of
 the default configurations set in `default_config_dict()`.
 """
-function AtmosConfig(config::Dict; comms_ctx = nothing)
+function AtmosConfig(config::Dict; comms_ctx = nothing, config_file = nothing)
     config = override_default_config(config)
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     toml_dict = CP.create_toml_dict(
@@ -523,5 +532,11 @@ function AtmosConfig(config::Dict; comms_ctx = nothing)
     C = typeof(comms_ctx)
     TD = typeof(toml_dict)
     PA = typeof(config)
-    return AtmosConfig{FT, TD, PA, C}(toml_dict, config, comms_ctx)
+    CF = typeof(config_file)
+    return AtmosConfig{FT, TD, PA, C, CF}(
+        toml_dict,
+        config,
+        comms_ctx,
+        config_file,
+    )
 end
