@@ -42,6 +42,15 @@ struct AtmosSolveResults{S, RT, WT}
     walltime::WT
 end
 
+function Base.show(io::IO, sim::AtmosSolveResults)
+    return print(
+        io,
+        "Simulation completed\n",
+        "├── Return code: $(sim.ret_code)\n",
+        "└── Walltime: $(sim.walltime) seconds",
+    )
+end
+
 """
     solve_atmos!(integrator)
 
