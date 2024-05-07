@@ -635,7 +635,6 @@ end
 
 function make_plots(
     ::Val{:sphere_baroclinic_wave_rhoe_topography_dcmip_rs},
-    ::Val{:sphere_baroclinic_wave_rhoe_hughes2023},
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -670,6 +669,7 @@ end
 function make_plots(
     ::Val{:sphere_baroclinic_wave_rhoe_equilmoist},
     ::Val{:sphere_baroclinic_wave_rhoe_equilmoist_deepatmos},
+    ::Val{:sphere_baroclinic_wave_rhoe_hughes2023},
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
