@@ -245,3 +245,26 @@ function (::SimplePlume)(params)
     parameterization = MoninObukhov(; z0, fluxes, ustar)
     return SurfaceState(; parameterization, T, p, q_vap)
 end
+
+struct GCMDriven
+    external_forcing_file::String
+end
+function (surface_setup::GCMDriven)(params)
+    FT = eltype(params)
+    (; external_forcing_file) = surface_setup
+    imin = 100
+    T, lhf, shf = FT.(gcm_surface_conditions(external_forcing_file, imin))
+    z0 = FT(1e-4)  # zrough
+    parameterization = MoninObukhov(; z0, fluxes = HeatFluxes(; lhf, shf))
+    return SurfaceState(; parameterization, T)
+end
+
+function gcm_surface_conditions(external_forcing_file, imin)
+    NC.NCDataset(external_forcing_file) do ds
+        (
+            mean(gcm_driven_timeseries(ds, "surface_temperature")[imin:end]),
+            mean(gcm_driven_timeseries(ds, "lhf_surface_mean")[imin:end]),
+            mean(gcm_driven_timeseries(ds, "shf_surface_mean")[imin:end]),
+        )
+    end
+end

@@ -1261,16 +1261,17 @@ end
 
 The `InitialCondition` from a provided GCM forcing file, with data type `DType`.
 """
-struct GCMDriven{DType} <: InitialCondition
+struct GCMDriven <: InitialCondition
     external_forcing_file::String
 end
 
 function (initial_condition::GCMDriven)(params)
+    (; external_forcing_file) = initial_condition
     thermo_params = CAP.thermodynamics_params(params)
 
     # Read forcing file
-    z_gcm = gcm_z(initial_condition)
-    vars = gcm_initial_conditions(initial_condition)
+    z_gcm = gcm_z(external_forcing_file)
+    vars = gcm_initial_conditions(external_forcing_file)
     θ, u, v, q_tot, ρ₀ = map(vars) do value
         Dierckx.Spline1D(z_gcm, value; k = 1)
     end
@@ -1295,21 +1296,21 @@ function (initial_condition::GCMDriven)(params)
 end
 
 # function gcm_z(external_forcing_file, FT::DataType)
-function gcm_z(ic::GCMDriven{FT}) where {FT}
-    NC.NCDataset(ic.external_forcing_file) do ds
-        gcm_driven_reference(FT, ds, "z")[:]
+function gcm_z(external_forcing_file)
+    NC.NCDataset(external_forcing_file) do ds
+        gcm_driven_reference(ds, "z")[:]
     end
 end
 
 # function gcm_initial_conditions(external_forcing_file, FT)
-function gcm_initial_conditions(ic::GCMDriven{FT}) where {FT}
-    NC.NCDataset(ic.external_forcing_file) do ds
+function gcm_initial_conditions(external_forcing_file)
+    NC.NCDataset(external_forcing_file) do ds
         (  # TODO: Cast to CuVector for GPU compatibility
-            gcm_driven_profile(FT, ds, "thetali_mean")[:, 1],  # 1 is initial time index
-            gcm_driven_profile(FT, ds, "u_mean")[:, 1],
-            gcm_driven_profile(FT, ds, "v_mean")[:, 1],
-            gcm_driven_profile(FT, ds, "qt_mean")[:, 1],
-            gcm_driven_reference(FT, ds, "rho0")[:],
+            gcm_driven_profile(ds, "thetali_mean")[:, 1],  # 1 is initial time index
+            gcm_driven_profile(ds, "u_mean")[:, 1],
+            gcm_driven_profile(ds, "v_mean")[:, 1],
+            gcm_driven_profile(ds, "qt_mean")[:, 1],
+            gcm_driven_reference(ds, "rho0")[:],
         )
     end
 end

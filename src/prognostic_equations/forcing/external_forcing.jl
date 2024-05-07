@@ -13,14 +13,30 @@ function interp_vertical_prof(x, xp, fp)
     return spl(vec(x))
 end
 
+"""
+Calculate height-dependent scalar relaxation timescale following from eqn. 11, Shen et al., 2022.
+"""
+function compute_gcm_driven_scalar_inv_τ(z::FT) where {FT}
+
+    # TODO add to ClimaParameters
+    τᵣ = FT(24.0 * 3600.0)
+    zᵢ = FT(3000.0)
+    zᵣ = FT(3500.0)
+    if z < zᵢ
+        return FT(0)
+    elseif zᵢ <= z <= zᵣ
+        cos_arg = pi * ((z - zᵢ) / (zᵣ - zᵢ))
+        return (FT(0.5) / τᵣ) * (1 - cos(cos_arg))
+    elseif z > zᵣ
+        return (1 / τᵣ)
+    end
+end
+
 external_forcing_cache(Y, atmos::AtmosModel) =
     external_forcing_cache(Y, atmos.external_forcing)
 
 external_forcing_cache(Y, external_forcing::Nothing) = (;)
-function external_forcing_cache(
-    Y,
-    external_forcing::GCMForcing{DType},
-) where {DType}
+function external_forcing_cache(Y, external_forcing::GCMForcing)
     FT = Spaces.undertype(axes(Y.c))
     ᶜdTdt_fluc = similar(Y.c, FT)
     ᶜdqtdt_fluc = similar(Y.c, FT)
@@ -31,11 +47,11 @@ function external_forcing_cache(
     ᶜqt_nudge = similar(Y.c, FT)
     ᶜu_nudge = similar(Y.c, FT)
     ᶜv_nudge = similar(Y.c, FT)
-    ᶜτ_wind = similar(Y.c, FT)
-    ᶜτ_scalar = similar(Y.c, FT)
+    ᶜinv_τ_wind = similar(Y.c, FT)
+    ᶜinv_τ_scalar = similar(Y.c, FT)
     ᶜls_subsidence = similar(Y.c, FT)
 
-    external_forcing_file = external_forcing.external_forcing_file
+    (; external_forcing_file) = external_forcing
     imin = 100  # TODO: move into `GCMForcing` (and `parsed_args`)
 
     NC.Dataset(external_forcing_file, "r") do ds
@@ -43,7 +59,7 @@ function external_forcing_cache(
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_les,
-                gcm_driven_profile_tmean(DType, ds, varname; imin),  # TODO: time-varying tendencies
+                gcm_driven_profile_tmean(ds, varname; imin),  # TODO: time-varying tendencies
             )
         end
 
@@ -51,11 +67,11 @@ function external_forcing_cache(
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_les,
-                gcm_driven_profile(DType, ds, varname)[:, 1],
+                gcm_driven_profile(ds, varname)[:, 1],
             )
         end
 
-        zc_les = gcm_driven_reference(DType, ds, "z")[:]
+        zc_les = gcm_driven_reference(ds, "z")[:]
         Fields.bycolumn(axes(Y.c)) do colidx
 
             zc_gcm = Fields.coordinate_field(Y.c).z[colidx]
@@ -72,10 +88,8 @@ function external_forcing_cache(
             setnudgevar!(ᶜu_nudge, "u_mean", colidx, zc_gcm, zc_les)
             setnudgevar!(ᶜv_nudge, "v_mean", colidx, zc_gcm, zc_les)
 
-            # TODO: make it a function of z for scalar (call function above)
-            hr = 3600
-            parent(ᶜτ_wind[colidx]) .= 6hr
-            parent(ᶜτ_scalar[colidx]) .= 24hr
+            @. ᶜinv_τ_wind[colidx] = 1 / (6 * 3600)
+            @. ᶜinv_τ_scalar[colidx] = compute_gcm_driven_scalar_inv_τ(zc_gcm)
         end
     end
 
@@ -89,8 +103,8 @@ function external_forcing_cache(
         ᶜqt_nudge,
         ᶜu_nudge,
         ᶜv_nudge,
-        ᶜτ_wind,
-        ᶜτ_scalar,
+        ᶜinv_τ_wind,
+        ᶜinv_τ_scalar,
         ᶜls_subsidence,
     )
 end
@@ -112,23 +126,24 @@ function external_forcing_tendency!(Yₜ, Y, p, t, colidx, ::GCMForcing)
         ᶜu_nudge,
         ᶜv_nudge,
         ᶜls_subsidence,
-        ᶜτ_wind,
-        ᶜτ_scalar,
+        ᶜinv_τ_wind,
+        ᶜinv_τ_scalar,
     ) = p.external_forcing
 
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜuₕ_nudge = p.scratch.ᶜtemp_C12
     @. ᶜuₕ_nudge[colidx] =
         C12(Geometry.UVVector(ᶜu_nudge[colidx], ᶜv_nudge[colidx]), ᶜlg[colidx])
-    @. Yₜ.c.uₕ[colidx] -= (Y.c.uₕ[colidx] - ᶜuₕ_nudge[colidx]) / ᶜτ_wind[colidx]
+    @. Yₜ.c.uₕ[colidx] -=
+        (Y.c.uₕ[colidx] - ᶜuₕ_nudge[colidx]) * ᶜinv_τ_wind[colidx]
 
     ᶜdTdt_nudging = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
     @. ᶜdTdt_nudging[colidx] =
-        -(TD.air_temperature(thermo_params, ᶜts[colidx]) - ᶜT_nudge[colidx]) /
-        ᶜτ_scalar[colidx]
+        -(TD.air_temperature(thermo_params, ᶜts[colidx]) - ᶜT_nudge[colidx]) *
+        ᶜinv_τ_scalar[colidx]
     @. ᶜdqtdt_nudging[colidx] =
-        -(ᶜspecific.q_tot[colidx] - ᶜqt_nudge[colidx]) / ᶜτ_scalar[colidx]
+        -(ᶜspecific.q_tot[colidx] - ᶜqt_nudge[colidx]) * ᶜinv_τ_scalar[colidx]
 
     ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_sum = p.scratch.ᶜtemp_scalar_2
