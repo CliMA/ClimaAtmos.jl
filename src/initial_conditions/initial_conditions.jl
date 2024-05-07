@@ -494,7 +494,7 @@ function hughes2023_baroclinic_wave_values(z, ϕ, λ, params, perturb, deep_atmo
     # Angles in degrees
     ϕ₁ = FT(45)
     ϕ₂ = FT(45)
-    λ_min = minimum(λ)
+    λ_min = FT(-180)
     λ₁ = FT(72)
     λ₂ = FT(140)
     λₘ = FT(7)
@@ -506,13 +506,15 @@ function hughes2023_baroclinic_wave_values(z, ϕ, λ, params, perturb, deep_atmo
     l₁ = λ - λ₁
     l₂ = λ - λ₂
 
+    z_top = FT(30000)
+
     ∂l₁λ∂λ = d₁ < FT(π) ? FT(1) : FT(-1)
-    ∂l₂λ∂λ = d₂ < FT(π) ? FT(-1) : FT(-1)
-    zₛ₁ = @. exp(-(((ϕ - ϕ₁) / d)^6 + (l₁ / c)^2))
-    zₛ₂ = @. exp(-(((ϕ - ϕ₂) / d)^6 + (l₂ / c)^2))
+    ∂l₂λ∂λ = d₂ < FT(π) ? FT(1) : FT(-1)
+    zₛ₁ = exp(-(((ϕ - ϕ₁) / d)^6 + (l₁ / c)^2))
+    zₛ₂ = exp(-(((ϕ - ϕ₂) / d)^6 + (l₂ / c)^2))
     w = -u/(R+z)/cosd(ϕ) * (2*h₀) * (1-(z/z_top)) * ((∂l₁λ∂λ) * (l₁/c^2) * zₛ₁
                                                     +(∂l₂λ∂λ) * (l₂/c^2) * zₛ₂)
-    return (; T_v, p, u, v, w)
+    return (; p, T_v, u, v, w)
 end
 
 function deep_atmos_baroclinic_wave_values(z, ϕ, λ, params, perturb)
@@ -618,6 +620,31 @@ function moist_baroclinic_wave_values(z, ϕ, λ, params, perturb, deep_atmospher
     return (; T, p, q_tot, u, v)
 end
 
+function hughes_moist_baroclinic_wave_values(z, ϕ, λ, params, perturb, deep_atmosphere)
+    FT = eltype(params)
+    MSLP = CAP.MSLP(params)
+
+    # Constants from paper
+    p_w = FT(3.4e4)
+    p_t = FT(1e4)
+    q_t = FT(1e-12)
+    q_0 = FT(0.018)
+    ϕ_w = FT(40)
+    ε = FT(0.608)
+
+    (; p, T_v, u, v, w) =
+            hughes2023_baroclinic_wave_values(z, ϕ, λ, params, perturb, deep_atmosphere)
+
+    q_tot =
+        (p <= p_t) ? q_t : q_0 * exp(-(ϕ / ϕ_w)^4) * exp(-((p - MSLP) / p_w)^2)
+    T = T_v / (1 + ε * q_tot) # This is the formula used in the paper.
+
+    # This is the actual formula, which would be consistent with TD:
+    # T = T_v * (1 + q_tot) / (1 + q_tot * CAP.molmass_ratio(params))
+
+    return (; T, p, q_tot, u, v, w)
+end
+
 """
     DryBaroclinicWave(; perturb = true, deep_atmosphere = false)
 
@@ -673,7 +700,7 @@ function (initial_condition::MoistHughes2023BaroclinicWave)(params)
     function local_state(local_geometry)
         thermo_params = CAP.thermodynamics_params(params)
         (; z, lat, long) = local_geometry.coordinates
-        (; p, T, q_tot, u, v, w) = hughes2023_baroclinic_wave_values(
+        (; T, p, q_tot, u, v, w) = hughes_moist_baroclinic_wave_values(
             z,
             lat,
             long,
@@ -685,7 +712,7 @@ function (initial_condition::MoistHughes2023BaroclinicWave)(params)
             params,
             geometry = local_geometry,
             thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
-            velocity = Geometry.UVWVector(u, v, w),
+            velocity = Geometry.UVVector(u, v),
         )
     end
     return local_state

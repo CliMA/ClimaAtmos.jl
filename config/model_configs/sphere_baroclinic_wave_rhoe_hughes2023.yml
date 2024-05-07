@@ -3,6 +3,7 @@ initial_condition: "MoistHughes2023BaroclinicWave"
 topography: "Hughes2023"
 topo_smoothing: false
 dt: "400secs"
+moist: "equil"
 t_end: "10days"
 job_id: "sphere_baroclinic_wave_rhoe_hughes2023"
 diagnostics:
