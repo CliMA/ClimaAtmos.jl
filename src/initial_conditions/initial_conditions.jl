@@ -506,7 +506,7 @@ function hughes2023_baroclinic_wave_values(z, ϕ, λ, params, perturb, deep_atmo
     l₁ = λ - λ₁
     l₂ = λ - λ₂
 
-    z_top = FT(30000)
+    z_top = FT(55000)
 
     ∂l₁λ∂λ = d₁ < FT(π) ? FT(1) : FT(-1)
     ∂l₂λ∂λ = d₂ < FT(π) ? FT(1) : FT(-1)
