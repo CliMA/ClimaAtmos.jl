@@ -37,7 +37,7 @@ Given a job id string, returns the configuration for that job.
 Does not include the default configuration dictionary.
 """
 function config_from_target_job(target_job)
-    for (job_id, config) in configs_per_job_id()
+    for (job_id, config) in configs_per_config_id()
         if job_id == target_job
             return config
         end
@@ -111,14 +111,14 @@ function non_default_config_entries(config, defaults = default_config_dict())
 end
 
 """
-    configs_per_job_id(directory)
+    configs_per_config_id(directory)
 
 Walks a directory and reads all of the yaml files that are used to configure the driver,
 then parses them into a vector of dictionaries. Does not include the default configuration.
 To filter only configurations with a certain key/value pair,
 use the `filter_name` keyword argument with a Pair.
 """
-function configs_per_job_id(
+function configs_per_config_id(
     directory::AbstractString = joinpath(
         dirname(@__FILE__),
         "..",
@@ -134,16 +134,40 @@ function configs_per_job_id(
             !endswith(file, ".yml") && continue
             occursin("default_configs", file) && continue
             config = YAML.load_file(file)
-            cmds[config["job_id"]] = config
+            name = config_id_from_config_file(file)
+            cmds[name] = (; config, config_file = file)
         end
     end
     if !isnothing(filter_name)
         (key, value) = filter_name
-        filter!(cmds) do (job_id, dict)
-            get(dict, key, "") == value
+        filter!(cmds) do (config_id, nt)
+            get(nt.config, key, "") == value
         end
     end
     return cmds
+end
+
+function is_unique_basename(file, bname = first(splitext(basename(file))))
+    is_unique = true
+    for (root, _, files) in walkdir(first(splitpath(file)))
+        for f in files
+            file = joinpath(root, f)
+            if basename(f) == bname
+                is_unique = false
+            end
+        end
+    end
+    return is_unique
+end
+
+function config_id_from_config_file(config_file::String)
+    @assert isfile(config_file)
+    bname = first(splitext(basename(config_file)))
+    if is_unique_basename(config_file, bname)
+        return bname
+    else
+        return replace(config_file, path_sep => "_")
+    end
 end
 
 """

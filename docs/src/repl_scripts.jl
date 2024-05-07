@@ -22,7 +22,7 @@ function print_repl_script(config)
     println(ib)
 end
 
-configs = configs_per_job_id()
+configs = configs_per_config_id()
 @assert length(configs) > 0
 
 for (job_id, config) in configs
