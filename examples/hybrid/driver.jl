@@ -9,7 +9,8 @@ import Random
 Random.seed!(1234)
 
 if !(@isdefined config)
-    config = CA.AtmosConfig()
+    (; config_file, job_id) = CA.commandline_kwargs()
+    config = CA.AtmosConfig(config_file; job_id)
 end
 simulation = CA.get_simulation(config)
 (; integrator) = simulation
@@ -274,9 +275,12 @@ if ClimaComms.iamroot(config.comms_ctx)
     end
     @info "Plotting done"
 
-    function symlink_to_fullpath(path)
-        return joinpath(dirname(path), readlink(path))
-    end
+    # TODO: Use readlink again once
+    # https://github.com/CliMA/ClimaUtilities.jl/issues/56 is fixed.
+    symlink_to_fullpath(path) = path
+    # function symlink_to_fullpath(path)
+    #     return joinpath(dirname(path), readlink(path))
+    # end
 
     @info "Creating tarballs"
     # These NC files are used by our reproducibility tests,

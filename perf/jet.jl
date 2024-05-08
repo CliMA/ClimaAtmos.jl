@@ -16,8 +16,8 @@ import ClimaAtmos as CA
 include("common.jl")
 
 if !(@isdefined config)
-    config_dict = Dict("z_elem" => 63, "dt" => "10secs", "t_end" => "3600secs")
-    config = AtmosCoveragePerfConfig(config_dict)
+    (; config_file, job_id) = CA.commandline_kwargs()
+    config = CA.AtmosConfig(config_file; job_id)
 end
 
 import JET

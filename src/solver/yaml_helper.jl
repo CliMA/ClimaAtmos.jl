@@ -1,33 +1,24 @@
 import YAML
 
+const config_path = joinpath(dirname(@__FILE__), "..", "..", "config")
+
+const default_config_file =
+    joinpath(config_path, "default_configs", "default_config.yml")
+
+strip_help_message(v::Dict) = v["value"]
+strip_help_message(v) = v
+strip_help_messages(d) =
+    Dict(map(k -> Pair(k, strip_help_message(d[k])), collect(keys(d)))...)
+
 """
     default_config_dict()
     default_config_dict(config_path)
 
 Loads the default configuration from files into a Dict for use in AtmosConfig().
 """
-function default_config_dict(
-    config_path = joinpath(
-        dirname(@__FILE__),
-        "..",
-        "..",
-        "config",
-        "default_configs",
-    ),
-)
-    default_config_file = joinpath(config_path, "default_config.yml")
-    config = YAML.load_file(default_config_file)
-    edmf_config_file = joinpath(config_path, "default_edmf_config.yml")
-    edmf_config = YAML.load_file(edmf_config_file)
-    # Combine base config with EDMF config - Don't allow duplicate entries.
-    !isempty(intersect(keys(config), keys(edmf_config))) &&
-        error("Duplicate keys in default config and EDMF config.")
-    merge!(config, edmf_config)
-    # Strip out help messages
-    for (k, v) in config
-        config[k] = v["value"]
-    end
-    return config
+function default_config_dict(config_file = default_config_file)
+    config = YAML.load_file(config_file)
+    return strip_help_messages(config)
 end
 
 """
@@ -37,13 +28,15 @@ Given a job id string, returns the configuration for that job.
 Does not include the default configuration dictionary.
 """
 function config_from_target_job(target_job)
-    for (job_id, config) in configs_per_job_id()
+    for (job_id, config) in configs_per_config_id()
         if job_id == target_job
             return config
         end
     end
     error("Could not find job with id $target_job")
 end
+
+ContainerType(T) = Union{Tuple{<:T, Vararg{T}}, Vector{<:T}}
 
 """
     override_default_config(override_config)
@@ -54,10 +47,10 @@ default configuration overridden by the given dicts or parsed YAML files.
 override_default_config(config_files::AbstractString) =
     override_default_config(YAML.load_file(config_files))
 
-override_default_config(config_files::Vector{<:AbstractString}) =
+override_default_config(config_files::ContainerType(AbstractString)) =
     override_default_config(YAML.load_file.(config_files))
 
-override_default_config(config_dicts::Vector{<:AbstractDict}) =
+override_default_config(config_dicts::ContainerType(AbstractDict)) =
     override_default_config(merge(config_dicts...))
 
 function override_default_config(::Nothing)
@@ -111,20 +104,15 @@ function non_default_config_entries(config, defaults = default_config_dict())
 end
 
 """
-    configs_per_job_id(directory)
+    configs_per_config_id(directory)
 
 Walks a directory and reads all of the yaml files that are used to configure the driver,
 then parses them into a vector of dictionaries. Does not include the default configuration.
 To filter only configurations with a certain key/value pair,
 use the `filter_name` keyword argument with a Pair.
 """
-function configs_per_job_id(
-    directory::AbstractString = joinpath(
-        dirname(@__FILE__),
-        "..",
-        "..",
-        "config",
-    ),
+function configs_per_config_id(
+    directory::AbstractString = config_path,
     filter_name = nothing,
 )
     cmds = Dict()
@@ -134,49 +122,42 @@ function configs_per_job_id(
             !endswith(file, ".yml") && continue
             occursin("default_configs", file) && continue
             config = YAML.load_file(file)
-            cmds[config["job_id"]] = config
+            name = config_id_from_config_file(file)
+            cmds[name] = (; config, config_file = file)
         end
     end
     if !isnothing(filter_name)
         (key, value) = filter_name
-        filter!(cmds) do (job_id, dict)
-            get(dict, key, "") == value
+        filter!(cmds) do (config_id, nt)
+            get(nt.config, key, "") == value
         end
     end
     return cmds
 end
 
-"""
-    job_id_from_config(config)
-
-Returns a unique name (`String`) given
-`config`, the Dict containing the model configuration
-"""
-function job_id_from_config(config, defaults = default_config_dict())
-    # Use only keys from the default ArgParseSettings
-    _config = deepcopy(config)
-    s = ""
-    warn = false
-    for k in keys(_config)
-        # Skip defaults to alleviate verbose names
-        !haskey(defaults, k) && continue
-        defaults[k] == _config[k] && continue
-
-        if _config[k] isa String
-            # We don't need keys if the value is a string
-            # (alleviate verbose names)
-            s *= _config[k]
-        elseif _config[k] isa Int
-            s *= k * "_" * string(_config[k])
-        elseif _config[k] isa AbstractFloat
-            warn = true
-        else
-            s *= k * "_" * string(_config[k])
+function is_unique_basename(file, bname = first(splitext(basename(file))))
+    is_unique = true
+    for (root, _, files) in walkdir(config_path)
+        for f in files
+            file = joinpath(root, f)
+            if basename(f) == bname
+                is_unique = false
+            end
         end
-        s *= "_"
     end
-    s = replace(s, "/" => "_")
-    s = strip(s, '_')
-    warn && @warn "Truncated job ID:$s may not be unique due to use of Real"
-    return s
+    return is_unique
 end
+
+function config_id_from_config_file(config_file::String)
+    @assert isfile(config_file)
+    bname = first(splitext(basename(config_file)))
+    if is_unique_basename(config_file, bname)
+        return bname
+    else
+        return replace(config_file, path_sep => "_")
+    end
+end
+
+# Can we do better?
+config_id_from_config_files(config_files::Union{Tuple, Vector}) =
+    join(map(x -> config_id_from_config_file(x), config_files), "_")

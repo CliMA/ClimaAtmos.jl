@@ -26,11 +26,11 @@ all metrics can be found in `get_summary`.
 
 ca_dir = joinpath(dirname(@__DIR__))
 
-get_job_ids(buildkite_path; filter_name = nothing) =
-    keys(configs_per_job_id(buildkite_path, filter_name))
+get_config_ids(buildkite_path; filter_name = nothing) =
+    keys(configs_per_config_id(buildkite_path, filter_name))
 
 function combine_PRs_performance_benchmarks(path)
-    job_ids = get_job_ids(
+    job_ids = get_config_ids(
         joinpath(ca_dir, "config");
         filter_name = ("perf_summary" => true),
     )
