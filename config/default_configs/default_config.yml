@@ -233,6 +233,12 @@ check_precipitation:
 ls_adv:
   help: "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"
   value: ~
+external_forcing:
+  help: "External forcing for single column experiments [`nothing` (default), `GCM`]"
+  value: ~
+external_forcing_file:
+  help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions [`nothing` (default), `path/to/file`]"
+  value: ~
 fps:
   help: "Frames per second for animations"
   value: 5
@@ -265,7 +271,7 @@ output_default_diagnostics:
   value: true
 netcdf_output_at_levels:
   help: "Do not perform any vertical interpolation in the output NetCDF files. Instead, interpolate horizontally and output the level. "
-  value: false
+  value: true
 netcdf_interpolation_num_points:
   help: "Override the number of interpolation point for the NetCDF output. This configuration has to be a list of integers, e.g. [180, 90, 10]."
   value: ~
@@ -276,7 +282,7 @@ log_progress:
   help: "Log simulation progress, including wall-time estimates"
   value: true
 deep_atmosphere:
-  help: "Do not assume that the atmosphere is shallow, where the vertical columns are cylindrical"
+  help: "If true, use deep atmosphere equations and metric terms, otherwise assume columns are cylindrical (shallow atmosphere) [`true`, `false` (default)]"
   value: false
 restart_file:
   help: "Path to HDF5 file to use as simulation starting point"
@@ -284,3 +290,7 @@ restart_file:
 prescribed_aerosols:
   help: "Which aerosols to add. List of keys from the data file (e.g., CB1, CB2)."
   value: []
+# TODO: remove once https://github.com/CliMA/ClimaAtmos.jl/issues/2873 is closed
+call_cloud_diagnostics_per_stage:
+  help: "A temporary Bool for calling cloud diagnostics every stage"
+  value: false

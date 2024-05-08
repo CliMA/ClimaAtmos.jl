@@ -219,9 +219,27 @@ add_diagnostic_variable!(
     units = "%",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(cache.precomputed.ᶜcloud_fraction) .* 100
+            return copy(cache.precomputed.cloud_diagnostics_tuple.cf) .* 100
         else
-            out .= cache.precomputed.ᶜcloud_fraction .* 100
+            out .= cache.precomputed.cloud_diagnostics_tuple.cf .* 100
+        end
+    end,
+)
+
+###
+# Total kinetic energy
+###
+add_diagnostic_variable!(
+    short_name = "ke",
+    long_name = "Total Kinetic Energy",
+    standard_name = "total_kinetic_energy",
+    units = "m^2 s^-2",
+    comments = "The kinetic energy on cell centers",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.precomputed.ᶜK)
+        else
+            out .= cache.precomputed.ᶜK
         end
     end,
 )
@@ -242,6 +260,38 @@ add_diagnostic_variable!(
             return copy(cache.precomputed.ᶜmixing_length)
         else
             out .= cache.precomputed.ᶜmixing_length
+        end
+    end,
+)
+
+###
+# Buoyancy gradient (3d)
+###
+add_diagnostic_variable!(
+    short_name = "bgrad",
+    long_name = "Linearized Buoyancy Gradient",
+    units = "s^-2",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.precomputed.ᶜlinear_buoygrad)
+        else
+            out .= cache.precomputed.ᶜlinear_buoygrad
+        end
+    end,
+)
+
+###
+# Strain rate magnitude (3d)
+###
+add_diagnostic_variable!(
+    short_name = "strain",
+    long_name = "String Rate Magnitude",
+    units = "s^-2",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.precomputed.ᶜstrain_rate_norm)
+        else
+            out .= cache.precomputed.ᶜstrain_rate_norm
         end
     end,
 )
@@ -326,13 +376,9 @@ function compute_clw!(
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.liquid_specific_humidity.(
-            thermo_params,
-            cache.precomputed.ᶜts,
-        )
+        return copy(cache.precomputed.cloud_diagnostics_tuple.q_liq)
     else
-        out .=
-            TD.liquid_specific_humidity.(thermo_params, cache.precomputed.ᶜts)
+        out .= cache.precomputed.cloud_diagnostics_tuple.q_liq
     end
 end
 
@@ -366,9 +412,9 @@ function compute_cli!(
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts)
+        return copy(cache.precomputed.cloud_diagnostics_tuple.q_ice)
     else
-        out .= TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts)
+        out .= cache.precomputed.cloud_diagnostics_tuple.q_ice
     end
 end
 

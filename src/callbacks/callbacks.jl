@@ -8,7 +8,6 @@ import ClimaCore as CC
 import ClimaCore.Spaces
 import SciMLBase
 import .Parameters as CAP
-import DiffEqCallbacks as DECB
 import ClimaCore: InputOutput
 using Dates
 using Insolation: instantaneous_zenith_angle
@@ -58,7 +57,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    (; ᶜts, ᶜcloud_fraction, sfc_conditions) = p.precomputed
+    (; ᶜts, cloud_diagnostics_tuple, sfc_conditions) = p.precomputed
     (; params) = p
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p.radiation
     (; ᶠradiation_flux, radiation_model) = p.radiation
@@ -142,16 +141,12 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         # RRTMGP needs lwp and iwp in g/m^2
         kg_to_g_factor = 1000
         @. ᶜlwp =
-            kg_to_g_factor *
-            Y.c.ρ *
-            TD.liquid_specific_humidity(thermo_params, ᶜts) *
-            ᶜΔz / max(ᶜcloud_fraction, eps(FT))
+            kg_to_g_factor * Y.c.ρ * cloud_diagnostics_tuple.q_liq * ᶜΔz /
+            max(cloud_diagnostics_tuple.cf, eps(FT))
         @. ᶜiwp =
-            kg_to_g_factor *
-            Y.c.ρ *
-            TD.ice_specific_humidity(thermo_params, ᶜts) *
-            ᶜΔz / max(ᶜcloud_fraction, eps(FT))
-        @. ᶜfrac = ᶜcloud_fraction
+            kg_to_g_factor * Y.c.ρ * cloud_diagnostics_tuple.q_ice * ᶜΔz /
+            max(cloud_diagnostics_tuple.cf, eps(FT))
+        @. ᶜfrac = cloud_diagnostics_tuple.cf
     end
 
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)

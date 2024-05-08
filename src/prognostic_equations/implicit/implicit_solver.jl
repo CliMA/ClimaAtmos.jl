@@ -429,6 +429,9 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
                 p.precomputed.ᶜρʲs,
                 p.precomputed.ᶠu³ʲs,
                 p.precomputed.ᶜtsʲs,
+                p.precomputed.bdmr_l,
+                p.precomputed.bdmr_r,
+                p.precomputed.bdmr,
             ) : (;)
         )...,
         p.core.ᶜΦ,
@@ -662,10 +665,11 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
             ᶜρa⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? p.ᶜρa⁰ : ᶜρ
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
-            dissipation_rate(tke⁰, mixing_length) =
+            @inline dissipation_rate(tke⁰, mixing_length) =
                 tke⁰ >= 0 ? c_d * sqrt(tke⁰) / max(mixing_length, 1) : 1 / dt
-            ∂dissipation_rate_∂tke⁰(tke⁰, mixing_length) =
-                tke⁰ > 0 ? c_d / (2 * max(mixing_length, 1) * sqrt(tke⁰)) : 0
+            @inline ∂dissipation_rate_∂tke⁰(tke⁰, mixing_length) =
+                tke⁰ > 0 ? c_d / (2 * max(mixing_length, 1) * sqrt(tke⁰)) :
+                typeof(tke⁰)(0)
 
             ᶜdissipation_matrix_diagonal = p.ᶜtemp_scalar
             @. ᶜdissipation_matrix_diagonal[colidx] =
@@ -723,6 +727,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     if p.atmos.turbconv_model isa PrognosticEDMFX
         if use_derivative(sgs_advection_flag)
             (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs) = p
+            (; bdmr_l, bdmr_r, bdmr) = p
             is_third_order = edmfx_upwinding == Val(:third_order)
             ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
             ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
@@ -883,12 +888,19 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
             ᶜu₃ʲ = ᶜtemp_C3
             @. ᶜu₃ʲ[colidx] = ᶜinterp(Y.f.sgsʲs.:(1).u₃[colidx])
+
+            @. bdmr_l[colidx] =
+                convert(BidiagonalMatrixRow{FT}, ᶜleft_bias_matrix())
+            @. bdmr_r[colidx] =
+                convert(BidiagonalMatrixRow{FT}, ᶜright_bias_matrix())
+            @. bdmr[colidx] = ifelse(
+                ᶜu₃ʲ[colidx].components.data.:1 > 0,
+                bdmr_l[colidx],
+                bdmr_r[colidx],
+            )
+
             @. ᶠtridiagonal_matrix_c3[colidx] =
-                -(ᶠgradᵥ_matrix()) ⋅ ifelse(
-                    ᶜu₃ʲ[colidx].components.data.:1 > 0,
-                    convert(BidiagonalMatrixRow{FT}, ᶜleft_bias_matrix()),
-                    convert(BidiagonalMatrixRow{FT}, ᶜright_bias_matrix()),
-                )
+                -(ᶠgradᵥ_matrix()) ⋅ bdmr[colidx]
             if p.atmos.rayleigh_sponge isa RayleighSponge
                 @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ[colidx] =
                     dtγ * (

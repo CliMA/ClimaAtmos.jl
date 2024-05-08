@@ -15,6 +15,7 @@ include(joinpath("utils", "utilities.jl"))
 include(joinpath("utils", "debug_utils.jl"))
 include(joinpath("topography", "topography.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
+include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
 
 include(
     joinpath("parameterized_tendencies", "radiation", "radiation_utilities.jl"),
@@ -43,7 +44,7 @@ include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
 
 include(joinpath("prognostic_equations", "pressure_work.jl"))
 include(joinpath("prognostic_equations", "zero_velocity.jl"))
-include(joinpath("prognostic_equations", "zero_gridscale_tendency.jl"))
+include(joinpath("prognostic_equations", "zero_tendency.jl"))
 
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))
@@ -51,6 +52,7 @@ include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))
 include(joinpath("prognostic_equations", "remaining_tendency.jl"))
 include(joinpath("prognostic_equations", "forcing", "large_scale_advection.jl")) # TODO: should this be in tendencies/?
 include(joinpath("prognostic_equations", "forcing", "subsidence.jl"))
+include(joinpath("prognostic_equations", "forcing", "external_forcing.jl"))
 
 include(joinpath("prognostic_equations", "surface_temp.jl"))
 
@@ -89,6 +91,9 @@ include(joinpath("prognostic_equations", "edmfx_boundary_condition.jl"))
 include(joinpath("prognostic_equations", "edmfx_precipitation.jl"))
 include(
     joinpath("parameterized_tendencies", "microphysics", "precipitation.jl"),
+)
+include(
+    joinpath("parameterized_tendencies", "microphysics", "cloud_condensate.jl"),
 )
 include(
     joinpath(

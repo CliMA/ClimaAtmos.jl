@@ -2,9 +2,6 @@
 ##### EDMF entrainment detrainment
 #####
 
-# return a harmonic mean of (a, 1-a)
-hm_limiter(a) = 2 * a * (1 - a)
-
 """
    Return entrainment rate [1/s].
 
@@ -25,7 +22,6 @@ function entrainment(
     z_sfc::FT,
     ᶜp::FT,
     ᶜρ::FT,
-    buoy_flux_surface::FT,
     ᶜaʲ::FT,
     ᶜwʲ::FT,
     ᶜRHʲ::FT,
@@ -33,6 +29,7 @@ function entrainment(
     ᶜw⁰::FT,
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
+    ᶜtke⁰::FT,
     ::NoEntrainment,
 ) where {FT}
     return FT(0)
@@ -44,7 +41,6 @@ function entrainment(
     z_sfc::FT,
     ᶜp::FT,
     ᶜρ::FT,
-    buoy_flux_surface::FT,
     ᶜaʲ::FT,
     ᶜwʲ::FT,
     ᶜRHʲ::FT,
@@ -52,30 +48,29 @@ function entrainment(
     ᶜw⁰::FT,
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
+    ᶜtke⁰::FT,
     ::PiGroupsEntrainment,
 ) where {FT}
     if ᶜaʲ <= FT(0)
         return FT(0)
     else
         g = CAP.grav(params)
-
-        # pressure scale height (height where pressure drops by 1/e)
         ref_H = ᶜp / (ᶜρ * g)
-        # convective velocity
-        w_star = get_wstar(buoy_flux_surface)
 
         # non-dimensional pi-groups
-        # TODO - using Π₁ blows things up
-        Π₁ =
-            (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) /
-            ((ᶜwʲ - ᶜw⁰)^2 + w_star^2 + eps(FT))
+        Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
+        Π₂ = max(ᶜtke⁰, 0) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
         Π₃ = sqrt(ᶜaʲ)
         Π₄ = ᶜRHʲ - ᶜRH⁰
-        Π₆ = (ᶜz - z_sfc) / ref_H
+        Π₅ = (ᶜz - z_sfc) / ref_H
+        # Π₁, Π₂ are unbounded, so clip values that blow up
+        Π₁ = min(max(Π₁, -1), 1)
+        Π₂ = min(max(Π₂, -1), 1)
         entr =
-            abs(ᶜwʲ) / (ᶜz - z_sfc) * (
-                -4.013288 - 0.000968 * Π₁ + 0.356974 * Π₃ - 0.403124 * Π₄ +
-                1.503261 * Π₆
+            abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) * (
+                -0.32332 + 4.79372 * Π₁ + 3.98108 * Π₂ - 21.64173 * Π₃ +
+                18.395 * Π₄ +
+                1.12799 * Π₅
             )
 
         return entr
@@ -88,7 +83,6 @@ function entrainment(
     z_sfc::FT,
     ᶜp::FT,
     ᶜρ::FT,
-    buoy_flux_surface::FT,
     ᶜaʲ::FT,
     ᶜwʲ::FT,
     ᶜRHʲ::FT,
@@ -96,6 +90,7 @@ function entrainment(
     ᶜw⁰::FT,
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
+    ᶜtke⁰::FT,
     ::GeneralizedEntrainment,
 ) where {FT}
     turbconv_params = CAP.turbconv_params(params)
@@ -109,7 +104,9 @@ function entrainment(
         min_area_limiter_scale *
         exp(-min_area_limiter_power * (max(ᶜaʲ, 0) - a_min))
     entr =
-        entr_inv_tau + entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc) + min_area_limiter
+        entr_inv_tau +
+        entr_coeff * abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) +
+        min_area_limiter
 
     return entr
 end
@@ -134,7 +131,6 @@ function detrainment(
     z_sfc::FT,
     ᶜp::FT,
     ᶜρ::FT,
-    buoy_flux_surface::FT,
     ᶜρaʲ::FT,
     ᶜaʲ::FT,
     ᶜwʲ::FT,
@@ -146,6 +142,7 @@ function detrainment(
     ᶜentr::FT,
     ᶜvert_div::FT,
     ᶜmassflux_vert_div::FT,
+    ᶜtke⁰::FT,
     ::NoDetrainment,
 ) where {FT}
     return FT(0)
@@ -157,7 +154,6 @@ function detrainment(
     z_sfc::FT,
     ᶜp::FT,
     ᶜρ::FT,
-    buoy_flux_surface::FT,
     ᶜρaʲ::FT,
     ᶜaʲ::FT,
     ᶜwʲ::FT,
@@ -169,6 +165,7 @@ function detrainment(
     ᶜentr::FT,
     ᶜvert_div::FT,
     ᶜmassflux_vert_div::FT,
+    ᶜtke⁰::FT,
     ::PiGroupsDetrainment,
 ) where {FT}
 
@@ -176,27 +173,21 @@ function detrainment(
         return FT(0)
     else
         g = CAP.grav(params)
-        turbconv_params = CAP.turbconv_params(params)
-        ᶜaʲ_max = CAP.max_area(turbconv_params)
-
-        max_area_limiter = FT(0.1) * exp(-10 * (ᶜaʲ_max - ᶜaʲ))
-        # pressure scale height (height where pressure drops by 1/e)
         ref_H = ᶜp / (ᶜρ * g)
-        # convective velocity
-        w_star = get_wstar(buoy_flux_surface)
 
         # non-dimensional pi-groups
-        # TODO - using Π₁ blows things up
-        Π₁ =
-            (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) /
-            ((ᶜwʲ - ᶜw⁰)^2 + w_star^2 + eps(FT))
+        Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
+        Π₂ = max(ᶜtke⁰, 0) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
         Π₃ = sqrt(ᶜaʲ)
         Π₄ = ᶜRHʲ - ᶜRH⁰
-        Π₆ = (ᶜz - z_sfc) / ref_H
+        Π₅ = (ᶜz - z_sfc) / ref_H
+        # Π₁, Π₂ are unbounded, so clip values that blow up
+        Π₁ = min(max(Π₁, -1), 1)
+        Π₂ = min(max(Π₂, -1), 1)
         detr =
-            abs(ᶜwʲ) * (
-                3.535208 + 0.598496 * Π₁ + 1.583348 * Π₃ + 0.046275 * Π₄ -
-                0.344836 * Π₆ + max_area_limiter
+            -min(ᶜmassflux_vert_div, 0) / ᶜρaʲ * (
+                0.3410 - 0.56153 * Π₁ - 0.53411 * Π₂ + 6.01925 * Π₃ -
+                1.47516 * Π₄ - 3.85788 * Π₅
             )
         return detr
     end
@@ -208,7 +199,6 @@ function detrainment(
     z_sfc::FT,
     ᶜp::FT,
     ᶜρ::FT,
-    buoy_flux_surface::FT,
     ᶜρaʲ::FT,
     ᶜaʲ::FT,
     ᶜwʲ::FT,
@@ -220,6 +210,7 @@ function detrainment(
     ᶜentr::FT,
     ᶜvert_div::FT,
     ᶜmassflux_vert_div::FT,
+    ᶜtke⁰::FT,
     ::GeneralizedDetrainment,
 ) where {FT}
     turbconv_params = CAP.turbconv_params(params)
@@ -258,7 +249,6 @@ function detrainment(
     z_sfc::FT,
     ᶜp::FT,
     ᶜρ::FT,
-    buoy_flux_surface::FT,
     ᶜρaʲ::FT,
     ᶜaʲ::FT,
     ᶜwʲ::FT,

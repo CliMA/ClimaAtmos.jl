@@ -2,7 +2,7 @@ import ArgParse
 
 function argparse_settings()
     s = ArgParse.ArgParseSettings()
-    ArgParse.@add_arg_table s begin
+    ArgParse.@add_arg_table! s begin
         "--config_file"
         help = "A yaml file used to set model configurations"
         arg_type = String

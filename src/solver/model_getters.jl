@@ -300,6 +300,17 @@ function get_forcing_type(parsed_args)
     end
 end
 
+struct CallCloudDiagnosticsPerStage end
+function get_call_cloud_diagnostics_per_stage(parsed_args)
+    ccdps = parsed_args["call_cloud_diagnostics_per_stage"]
+    @assert ccdps in (nothing, true, false)
+    return if ccdps in (nothing, false)
+        nothing
+    elseif ccdps == true
+        CallCloudDiagnosticsPerStage()
+    end
+end
+
 function get_subsidence_model(parsed_args, radiation_mode, FT)
     subsidence = parsed_args["subsidence"]
     subsidence == nothing && return nothing
@@ -354,6 +365,17 @@ function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
     end
 
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
+end
+
+function get_external_forcing_model(parsed_args)
+    external_forcing = parsed_args["external_forcing"]
+    @assert external_forcing in (nothing, "GCM")
+    return if isnothing(external_forcing)
+        nothing
+    elseif external_forcing == "GCM"
+        DType = Float64  # TODO: Read from `parsed_args`
+        GCMForcing{DType}(parsed_args["external_forcing_file"])
+    end
 end
 
 function get_edmf_coriolis(parsed_args, ::Type{FT}) where {FT}
@@ -448,4 +470,16 @@ end
 function get_tracers(parsed_args)
     aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
     return (; aerosol_names)
+end
+
+function get_tendency_model(parsed_args)
+    zero_tendency_name = parsed_args["zero_tendency"]
+    @assert zero_tendency_name in (nothing, "grid_scale", "subgrid_scale")
+    return if zero_tendency_name == "grid_scale"
+        NoGridScaleTendency()
+    elseif zero_tendency_name == "subgrid_scale"
+        NoSubgridScaleTendency()
+    elseif isnothing(zero_tendency_name)
+        UseAllTendency()
+    end
 end

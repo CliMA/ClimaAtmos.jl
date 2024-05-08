@@ -1,12 +1,10 @@
 using CairoMakie
 using JLD2
 
+include("plot_gpu_scaling_utils.jl")
+
 job_id = "gpu_aquaplanet_dyamond_ss"
 output_dir = "./"
-
-secs_per_hour = 60 * 60
-secs_per_day = 60 * 60 * 24
-days_per_year = 8760 / 24
 
 t_int_days = 12 / 24 # simulation integration time in days
 h_elem = 30
@@ -16,38 +14,14 @@ nlevels = z_elem + 1
 t_int = string(t_int_days) * " days"
 
 # read ClimaAtmos scaling data
-I, FT = Int, Float64
-nprocs_clima_atmos = I[]
-ncols_per_process = I[]
-walltime_clima_atmos = FT[]
-for foldername in readdir(output_dir)
-    if occursin(job_id, foldername) && occursin("_ss_", foldername)
-        nprocs_string = split(split(foldername, "_ss_")[end], "process")[1]
-        dict = load(
-            joinpath(
-                output_dir,
-                foldername,
-                "scaling_data_$(nprocs_string)_processes.jld2",
-            ),
-        )
-        push!(nprocs_clima_atmos, I(dict["nprocs"]))
-        push!(ncols_per_process, I(dict["ncols_per_process"]))
-        push!(walltime_clima_atmos, FT(dict["walltime"]))
-    end
-end
+(;
+    nprocs_clima_atmos,
+    ncols_per_process,
+    walltime_clima_atmos,
+    sypd_clima_atmos,
+    gpu_hours_clima_atmos,
+) = get_jld2data(output_dir, job_id, t_int_days, "_ss_")
 
-order = sortperm(nprocs_clima_atmos)
-nprocs_clima_atmos, ncols_per_process, walltime_clima_atmos =
-    nprocs_clima_atmos[order],
-    ncols_per_process[order],
-    walltime_clima_atmos[order]
-
-# simulated years per day
-sypd_clima_atmos =
-    (secs_per_day ./ walltime_clima_atmos) * t_int_days ./ days_per_year
-# GPU hours
-gpu_hours_clima_atmos =
-    nprocs_clima_atmos .* walltime_clima_atmos / secs_per_hour
 # scaling efficiency
 single_proc_time_clima_atmos = walltime_clima_atmos[1] * nprocs_clima_atmos[1]
 scaling_efficiency_clima_atmos =

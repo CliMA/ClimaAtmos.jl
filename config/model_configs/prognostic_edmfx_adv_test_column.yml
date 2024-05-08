@@ -1,14 +1,11 @@
-job_id: "prognostic_edmfx_adv_test_box"
+job_id: "prognostic_edmfx_adv_test_column"
 initial_condition: "MoistAdiabaticProfileEDMFX"
 advection_test: true
 turbconv: "prognostic_edmfx"
 ode_algo: "SSP33ShuOsher"
 edmfx_upwinding: "first_order"
-config: "box"
+config: "column"
 moist: "equil"
-hyperdiff: "true"
-x_max: 1e8
-y_max: 1e8
 z_max: 5.5e4
 x_elem: 2
 y_elem: 2
@@ -19,9 +16,8 @@ dt: "10secs"
 t_end: "3600secs"
 dt_save_state_to_disk: "100secs"
 FLOAT_TYPE: "Float64"
-toml: [toml/prognostic_edmfx_box_advection.toml]
-netcdf_output_at_levels: true
-netcdf_interpolation_num_points: [8, 8, 63]
+toml: [toml/prognostic_edmfx_advection.toml]
+netcdf_interpolation_num_points: [2, 2, 63]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
     period: 10mins

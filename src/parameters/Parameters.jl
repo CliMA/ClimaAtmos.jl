@@ -44,12 +44,22 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT} <: ATCP
     max_area_limiter_power::FT
 end
 
-Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, WP, SFP, TCP} <:
-                   ACAP
+Base.@kwdef struct ClimaAtmosParameters{
+    FT,
+    TP,
+    RP,
+    IP,
+    MPC,
+    MPP,
+    WP,
+    SFP,
+    TCP,
+} <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
     insolation_params::IP
-    microphysics_params::MPP
+    microphysics_cloud_params::MPC
+    microphysics_precipitation_params::MPP
     water_params::WP
     surface_fluxes_params::SFP
     turbconv_params::TCP

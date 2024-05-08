@@ -3,12 +3,25 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
+- Move config files for gpu jobs on ci to config/model_configs/. 
+  PR [#2948](https://github.com/CliMA/ClimaAtmos.jl/pull/2948).
 
+v0.23.0
+-------
 - ![][badge-✨feature/enhancement]![][badge-💥breaking]. Use
   [ClimaUtilities](https://github.com/CliMA/ClimaUtilities.jl) for
   `TimeVaryingInputs` to read in prescribed aerosol mass concentrations. This PR
   is considered breaking because it changes `AtmosCache` adding a new field,
   `tracers`. PR [#2815](https://github.com/CliMA/ClimaAtmos.jl/pull/2815).
+
+- ![][badge-✨feature/enhancement]![][badge-💥breaking]. Use
+    [ClimaUtilities](https://github.com/CliMA/ClimaUtilities.jl) for
+    `OutputPathGenerator` to handle where the output of a simulation should be
+    saved. Previously, the output was saved to a folder named `$job_id`. Now, it
+    is saved to `$job_id/output-active`, where `output-active` is a link that
+    points to `$job_id/output-XXXX`, with `XXXX` a counter that increases ever
+    time a simulation is run with this output directory. PR
+    [#2606](https://github.com/CliMA/ClimaAtmos.jl/pull/2606).
 
 v0.22.1
 -------

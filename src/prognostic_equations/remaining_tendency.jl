@@ -35,6 +35,14 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.atmos.edmf_coriolis)
         large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.atmos.ls_adv)
         vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, p.atmos.smagorinsky_lilly)
+        external_forcing_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            colidx,
+            p.atmos.external_forcing,
+        )
 
         if p.atmos.sgs_adv_mode == Explicit()
             edmfx_sgs_vertical_advection_tendency!(
@@ -77,16 +85,10 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             p.atmos.turbconv_model,
         )
         edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
-        edmfx_velocity_relaxation_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            colidx,
-            p.atmos.turbconv_model,
-        )
+        edmfx_filter_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
         edmfx_tke_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
-        # TODO - add the 1-moment precipitation microphysics here
+        # Non-equilibrium cloud formation
+        cloud_condensate_tendency!(Yₜ, p, colidx, p.atmos.moisture_model)
         edmfx_precipitation_tendency!(
             Yₜ,
             Y,
@@ -96,7 +98,15 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             p.atmos.turbconv_model,
             p.atmos.precip_model,
         )
-        precipitation_tendency!(Yₜ, Y, p, t, colidx, p.atmos.precip_model)
+        precipitation_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            colidx,
+            p.atmos.precip_model,
+            p.atmos.turbconv_model,
+        )
 
         # NOTE: All ρa tendencies should be applied before calling this function
         pressure_work_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
@@ -105,9 +115,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         # please DO NOT add additional velocity tendencies after this function
         zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
 
-        # NOTE: This will zero out all grid-scale tendencies in the simple edmfx test
-        # please DO NOT add additional grid-scale tendencies after this function
-        zero_gridscale_tendency!(Yₜ, Y, p, t, colidx)
     end
     # TODO: make bycolumn-able
     non_orographic_gravity_wave_tendency!(
@@ -124,4 +131,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         t,
         p.atmos.orographic_gravity_wave,
     )
+    # NOTE: This will zero out all tendencies
+    # please DO NOT add additional tendencies after this function
+    zero_tendency!(Yₜ, Y, p, t, p.atmos.tendency_model, p.atmos.turbconv_model)
 end

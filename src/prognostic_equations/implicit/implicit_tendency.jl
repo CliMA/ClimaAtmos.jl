@@ -45,10 +45,10 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
         # please DO NOT add additional velocity tendencies after this function
         zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
 
-        # NOTE: This will zero out all grid-scale tendencies in the simple edmfx test
-        # please DO NOT add additional grid-scale tendencies after this function
-        zero_gridscale_tendency!(Yₜ, Y, p, t, colidx)
     end
+    # NOTE: This will zero out all tendencies
+    # please DO NOT add additional tendencies after this function
+    zero_tendency!(Yₜ, Y, p, t, p.atmos.tendency_model, p.atmos.turbconv_model)
     return nothing
 end
 

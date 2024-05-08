@@ -1,37 +1,31 @@
-job_id: "prognostic_edmfx_gabls_box"
-initial_condition: GABLS
-edmf_coriolis: GABLS
-surface_setup: GABLS
+job_id: "prognostic_edmfx_bomex_fixtke_column"
+initial_condition: "Bomex"
+subsidence: "Bomex"
+edmf_coriolis: "Bomex"
+ls_adv: "Bomex"
+surface_setup: "Bomex"
 turbconv: "prognostic_edmfx"
-implicit_diffusion: true
-implicit_sgs_advection: true
-approximate_linear_solve_iters: 2
-max_newton_iters_ode: 3
-edmfx_upwinding: "first_order"
+edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
-edmfx_velocity_relaxation: true
-prognostic_tke: true
+edmfx_filter: true
+prognostic_tke: false
 moist: "equil"
-config: "box"
-hyperdiff: "true"
-x_max: 1e8
-y_max: 1e8
-z_max: 400
+config: "column"
+z_max: 3e3
 x_elem: 2
 y_elem: 2
-z_elem: 8
+z_elem: 60
 z_stretch: false
-dt: "60secs"
-t_end: "9hours"
-dt_save_state_to_disk: "30mins"
 perturb_initstate: false
-toml: [toml/prognostic_edmfx_box.toml]
-netcdf_output_at_levels: true
-netcdf_interpolation_num_points: [8, 8, 8]
+dt: "5secs"
+t_end: "6hours"
+dt_save_state_to_disk: "10mins"
+toml: [toml/prognostic_edmfx_bomex.toml]
+netcdf_interpolation_num_points: [2, 2, 60]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
     period: 10mins

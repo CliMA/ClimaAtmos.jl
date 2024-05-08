@@ -77,6 +77,7 @@ const T2 = 290
         p.precipitation,
         p.subsidence,
         p.large_scale_advection,
+        p.external_forcing,
         p.edmf_coriolis,
         p.forcing,
         p.non_orographic_gravity_wave,

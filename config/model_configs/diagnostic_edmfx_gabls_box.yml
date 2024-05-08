@@ -26,7 +26,6 @@ dt: 200secs
 t_end: 9hours
 dt_save_state_to_disk: 10mins
 toml: [toml/diagnostic_edmfx_box.toml]
-netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [8, 8, 8]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]

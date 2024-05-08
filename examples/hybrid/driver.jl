@@ -27,7 +27,6 @@ import Thermodynamics as TD
 import ClimaComms
 using SciMLBase
 using PrettyTables
-import DiffEqCallbacks as DECB
 using JLD2
 using NCDatasets
 using ClimaTimeSteppers
@@ -140,10 +139,14 @@ if config.parsed_args["check_conservation"]
             energy_radiation_input,
         ) / energy_total
     @info "    Net energy change: $energy_net"
-    @test (energy_net / energy_total) ≈ 0 atol = sqrt(eps(FT))
+    if CA.has_no_source_or_sink(config.parsed_args)
+        @test (energy_net / energy_total) ≈ 0 atol = 50 * eps(FT)
+    else
+        @test (energy_net / energy_total) ≈ 0 atol = sqrt(eps(FT))
+    end
 
-    if p.atmos.moisture_model isa CA.DryModel
-        # density
+    if CA.has_no_source_or_sink(config.parsed_args)
+        # mass
         @test sum(sol.u[1].c.ρ) ≈ sum(sol.u[end].c.ρ) rtol = 50 * eps(FT)
     else
         if sfc isa CA.PrognosticSurfaceTemperature
@@ -183,6 +186,7 @@ if config.parsed_args["check_precipitation"]
             sol.t[end],
             colidx,
             sol.prob.p.atmos.precip_model,
+            sol.prob.p.atmos.turbconv_model,
         )
 
         @. Yₜ_ρqₚ[colidx] = -Yₜ.c.ρq_rai[colidx] - Yₜ.c.ρq_sno[colidx]
@@ -219,9 +223,16 @@ if config.parsed_args["check_precipitation"]
         )
 
         # cloud fraction diagnostics
-        @assert !any(isnan, sol.prob.p.precomputed.ᶜcloud_fraction[colidx])
-        @test minimum(sol.prob.p.precomputed.ᶜcloud_fraction[colidx]) >= FT(0)
-        @test maximum(sol.prob.p.precomputed.ᶜcloud_fraction[colidx]) <= FT(1)
+        @assert !any(
+            isnan,
+            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
+        )
+        @test minimum(
+            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
+        ) >= FT(0)
+        @test maximum(
+            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
+        ) <= FT(1)
     end
 end
 
@@ -263,6 +274,10 @@ if ClimaComms.iamroot(config.comms_ctx)
     end
     @info "Plotting done"
 
+    function symlink_to_fullpath(path)
+        return joinpath(dirname(path), readlink(path))
+    end
+
     @info "Creating tarballs"
     # These NC files are used by our reproducibility tests,
     # and need to be found later when comparing against the
@@ -271,12 +286,12 @@ if ClimaComms.iamroot(config.comms_ctx)
     # reproducibility test folder.
     Tar.create(
         f -> endswith(f, ".nc"),
-        simulation.output_dir,
+        symlink_to_fullpath(simulation.output_dir),
         joinpath(simulation.output_dir, "nc_files.tar"),
     )
     Tar.create(
         f -> endswith(f, r"hdf5|h5"),
-        simulation.output_dir,
+        symlink_to_fullpath(simulation.output_dir),
         joinpath(simulation.output_dir, "hdf5_files.tar"),
     )
 

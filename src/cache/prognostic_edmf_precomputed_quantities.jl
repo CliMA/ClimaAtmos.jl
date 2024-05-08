@@ -1,6 +1,7 @@
 #####
 ##### Precomputed quantities
 #####
+import NVTX
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
 
@@ -9,7 +10,12 @@ import ClimaCore: Spaces, Fields
 
 Updates the edmf environment precomputed quantities stored in `p` for edmfx.
 """
-function set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
+    Y,
+    p,
+    ᶠuₕ³,
+    t,
+)
     @assert !(p.atmos.moisture_model isa DryModel)
 
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -49,7 +55,12 @@ end
 Updates the draft thermo state and boundary conditions
 precomputed quantities stored in `p` for edmfx.
 """
-function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(
+    Y,
+    p,
+    ᶠuₕ³,
+    t,
+)
     (; moisture_model, turbconv_model) = p.atmos
     #EDMFX BCs only support total energy as state variable
     @assert !(moisture_model isa DryModel)
@@ -59,6 +70,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
 
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
+    turbconv_params = CAP.turbconv_params(params)
 
     (; ᶜΦ,) = p.core
     (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK) = p.precomputed
@@ -85,7 +97,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
 
         # We need field_values everywhere because we are mixing
         # information from surface and first interior inside the
-        # sgs_h/q_tot_first_interior_bc call.
+        # sgs_scalar_first_interior_bc call.
         ᶜz_int_val =
             Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
         z_sfc_val = Fields.field_values(
@@ -105,13 +117,18 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         )
 
         # Based on boundary conditions for updrafts we overwrite
-        # the first interior point for EDMFX ᶜh_totʲ...
+        # the first interior point for EDMFX ᶜmseʲ...
+        ᶜaʲ_int_val = p.scratch.temp_data_level
+        # TODO: replace this with the actual surface area fraction when 
+        # using prognostic surface area
+        @. ᶜaʲ_int_val = FT(turbconv_params.surface_area)
         ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
         ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
         ᶜmseʲ_int_val = Fields.field_values(Fields.level(ᶜmseʲ, 1))
         @. ᶜmseʲ_int_val = sgs_scalar_first_interior_bc(
             ᶜz_int_val - z_sfc_val,
             ᶜρ_int_val,
+            ᶜaʲ_int_val,
             ᶜh_tot_int_val - ᶜK_int_val,
             buoyancy_flux_val,
             ρ_flux_h_tot_val,
@@ -126,6 +143,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         @. ᶜq_totʲ_int_val = sgs_scalar_first_interior_bc(
             ᶜz_int_val - z_sfc_val,
             ᶜρ_int_val,
+            ᶜaʲ_int_val,
             ᶜq_tot_int_val,
             buoyancy_flux_val,
             ρ_flux_q_tot_val,
@@ -147,7 +165,6 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         sgsʲs_ρa_int_val =
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
 
-        turbconv_params = CAP.turbconv_params(params)
         @. sgsʲs_ρ_int_val = TD.air_density(thermo_params, ᶜtsʲ_int_val)
         @. sgsʲs_ρa_int_val =
             $(FT(turbconv_params.surface_area)) *
@@ -161,21 +178,25 @@ end
 
 Updates the precomputed quantities stored in `p` for edmfx closures.
 """
-function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
+    Y,
+    p,
+    t,
+)
 
-    (; moisture_model, turbconv_model, precip_model) = p.atmos
+    (; moisture_model, turbconv_model) = p.atmos
     @assert !(moisture_model isa DryModel)
 
     (; params) = p
     (; dt) = p
     thermo_params = CAP.thermodynamics_params(params)
-    microphys_params = CAP.microphysics_params(params)
 
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜρ⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
     (;
+        ᶜmixing_length_tuple,
         ᶜmixing_length,
         ᶜlinear_buoygrad,
         ᶜstrain_rate_norm,
@@ -184,8 +205,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         ρatke_flux,
     ) = p.precomputed
     (; ᶜuʲs, ᶜtsʲs, ᶠu³ʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
-    (; ᶜS_q_totʲs, ᶜS_q_tot⁰) = p.precomputed
-    (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
+    (; ustar, obukhov_length) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
@@ -202,7 +222,6 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             z_sfc,
             ᶜp,
             Y.c.ρ,
-            buoyancy_flux,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
@@ -210,6 +229,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             get_physical_w(ᶜu, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
             FT(0),
+            max(ᶜtke⁰, 0),
             p.atmos.edmfx_entr_model,
         )
         @. ᶜentrʲs.:($$j) = limit_entrainment(
@@ -226,7 +246,6 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             z_sfc,
             ᶜp,
             Y.c.ρ,
-            buoyancy_flux,
             Y.c.sgsʲs.:($$j).ρa,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
@@ -238,6 +257,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             ᶜentrʲs.:($$j),
             ᶜvert_div,
             ᶜmassflux_vert_div,
+            ᶜtke⁰,
             p.atmos.edmfx_detr_model,
         )
         @. ᶜdetrʲs.:($$j) = limit_detrainment(
@@ -245,42 +265,24 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             dt,
         )
-        # precipitation
-        @. ᶜS_q_totʲs.:($$j) = q_tot_precipitation_sources(
-            precip_model,
-            thermo_params,
-            microphys_params,
-            dt,
-            Y.c.sgsʲs.:($$j).q_tot,
-            ᶜtsʲs.:($$j),
-        )
     end
 
-    # TODO add the 1-moment microphysics option here
-    @. ᶜS_q_tot⁰ = q_tot_precipitation_sources(
-        precip_model,
-        thermo_params,
-        microphys_params,
-        dt,
-        ᶜq_tot⁰,
-        ᶜts⁰,
-    )
-
+    (; ᶜgradᵥ_θ_virt⁰, ᶜgradᵥ_q_tot⁰, ᶜgradᵥ_θ_liq_ice⁰) = p.precomputed
     # First order approximation: Use environmental mean fields.
+    @. ᶜgradᵥ_θ_virt⁰ = ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts⁰)))       # ∂θv∂z_unsat
+    @. ᶜgradᵥ_q_tot⁰ = ᶜgradᵥ(ᶠinterp(ᶜq_tot⁰))                                        # ∂qt∂z_sat
+    @. ᶜgradᵥ_θ_liq_ice⁰ =
+        ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰)))                    # ∂θl∂z_sat
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
         thermo_params,
         moisture_model,
-        EnvBuoyGradVars(
-            ᶜts⁰,
-            projected_vector_buoy_grad_vars(
-                C3,
-                ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts⁰))),    # ∂θv∂z_unsat
-                ᶜgradᵥ(ᶠinterp(ᶜq_tot⁰)),                                    # ∂qt∂z_sat
-                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰))), # ∂θl∂z_sat
-                ᶜlg,
-            ),
-        ),
+        ᶜts⁰,
+        C3,
+        ᶜgradᵥ_θ_virt⁰,
+        ᶜgradᵥ_q_tot⁰,
+        ᶜgradᵥ_θ_liq_ice⁰,
+        ᶜlg,
     )
 
     # TODO: Currently the shear production only includes vertical gradients
@@ -307,7 +309,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
     end
 
     sfc_tke = Fields.level(ᶜtke⁰, 1)
-    @. ᶜmixing_length = mixing_length(
+    @. ᶜmixing_length_tuple = mixing_length(
         p.params,
         ustar,
         ᶜz,
@@ -321,6 +323,8 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         ᶜprandtl_nvec,
         ᶜtke_exch,
     )
+
+    @. ᶜmixing_length = ᶜmixing_length_tuple.master
 
     turbconv_params = CAP.turbconv_params(params)
     c_m = CAP.tke_ed_coeff(turbconv_params)
@@ -345,5 +349,116 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         sfc_local_geometry_values,
     )
 
+    return nothing
+end
+
+"""
+    set_prognostic_edmf_precomputed_quantities_precipitation!(Y, p, precip_model)
+
+Updates the precomputed quantities stored in `p` for edmfx precipitation sources.
+"""
+function set_prognostic_edmf_precomputed_quantities_precipitation!(
+    Y,
+    p,
+    ::NoPrecipitation,
+)
+    return nothing
+end
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
+    Y,
+    p,
+    ::Microphysics0Moment,
+)
+    @assert !(p.atmos.moisture_model isa DryModel)
+
+    (; params, dt) = p
+    thp = CAP.thermodynamics_params(params)
+    cmp = CAP.microphysics_precipitation_params(params)
+    (; ᶜts⁰, ᶜq_tot⁰, ᶜtsʲs, ᶜSqₜᵖʲs, ᶜSqₜᵖ⁰) = p.precomputed
+
+    # Sources from the updrafts
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    for j in 1:n
+        @. ᶜSqₜᵖʲs.:($$j) = q_tot_precipitation_sources(
+            Microphysics0Moment(),
+            thp,
+            cmp,
+            dt,
+            Y.c.sgsʲs.:($$j).q_tot,
+            ᶜtsʲs.:($$j),
+        )
+    end
+    # sources from the environment
+    @. ᶜSqₜᵖ⁰ = q_tot_precipitation_sources(
+        Microphysics0Moment(),
+        thp,
+        cmp,
+        dt,
+        ᶜq_tot⁰,
+        ᶜts⁰,
+    )
+    return nothing
+end
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
+    Y,
+    p,
+    ::Microphysics1Moment,
+)
+    @assert !(p.atmos.moisture_model isa DryModel)
+
+    (; params, dt) = p
+    (; ᶜΦ,) = p.core
+    thp = CAP.thermodynamics_params(params)
+    cmp = CAP.microphysics_precipitation_params(params)
+
+    (; ᶜSeₜᵖʲs, ᶜSqₜᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
+    (; ᶜSeₜᵖ⁰, ᶜSqₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρ⁰, ᶜts⁰) = p.precomputed
+    (; ᶜqᵣ, ᶜqₛ) = p.precomputed
+
+    # TODO - can I re-use them between js and env?
+    ᶜSᵖ = p.scratch.ᶜtemp_scalar
+    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+
+    Fields.bycolumn(axes(Y.c.ρ)) do colidx
+        # Sources from the updrafts
+        for j in 1:n
+            compute_precipitation_sources!(
+                ᶜSᵖ[colidx],
+                ᶜSᵖ_snow[colidx],
+                ᶜSqₜᵖʲs.:($j)[colidx],
+                ᶜSqᵣᵖʲs.:($j)[colidx],
+                ᶜSqₛᵖʲs.:($j)[colidx],
+                ᶜSeₜᵖʲs.:($j)[colidx],
+                ᶜρʲs.:($j)[colidx],
+                ᶜqᵣ[colidx],
+                ᶜqₛ[colidx],
+                ᶜtsʲs.:($j)[colidx],
+                ᶜΦ[colidx],
+                dt,
+                cmp,
+                thp,
+            )
+        end
+
+        # Sources from the environment
+        compute_precipitation_sources!(
+            ᶜSᵖ[colidx],
+            ᶜSᵖ_snow[colidx],
+            ᶜSqₜᵖ⁰[colidx],
+            ᶜSqᵣᵖ⁰[colidx],
+            ᶜSqₛᵖ⁰[colidx],
+            ᶜSeₜᵖ⁰[colidx],
+            ᶜρ⁰[colidx],
+            ᶜqᵣ[colidx],
+            ᶜqₛ[colidx],
+            ᶜts⁰[colidx],
+            ᶜΦ[colidx],
+            dt,
+            cmp,
+            thp,
+        )
+    end
     return nothing
 end

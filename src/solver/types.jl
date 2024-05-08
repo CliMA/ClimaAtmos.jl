@@ -119,6 +119,10 @@ struct LargeScaleAdvection{PT, PQ}
     prof_dTdt::PT # Set large-scale cooling
     prof_dqtdt::PQ # Set large-scale drying
 end
+# maybe need to <: AbstractForcing
+struct GCMForcing{FT}
+    external_forcing_file::String
+end
 
 struct EDMFCoriolis{U, V, FT}
     prof_ug::U
@@ -154,6 +158,12 @@ end
 Base.eltype(::EnvBuoyGradVars{FT}) where {FT} = FT
 Base.broadcastable(x::EnvBuoyGradVars) = tuple(x)
 
+struct MixingLength{FT}
+    master::FT
+    wall::FT
+    tke::FT
+    buoy::FT
+end
 
 abstract type AbstractEDMF end
 
@@ -232,6 +242,11 @@ quad_type(::SGSQuadrature{N}) where {N} = N #TODO - this seems wrong?
 abstract type AbstractSurfaceThermoState end
 struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
 
+abstract type AbstractTendencyModel end
+struct UseAllTendency <: AbstractTendencyModel end
+struct NoGridScaleTendency <: AbstractTendencyModel end
+struct NoSubgridScaleTendency <: AbstractTendencyModel end
+
 # Define broadcasting for types
 Base.broadcastable(x::AbstractSurfaceThermoState) = tuple(x)
 Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
@@ -242,6 +257,7 @@ Base.broadcastable(x::DiagnosticEDMFX) = tuple(x)
 Base.broadcastable(x::AbstractEntrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractDetrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractSGSamplingType) = tuple(x)
+Base.broadcastable(x::AbstractTendencyModel) = tuple(x)
 
 Base.@kwdef struct RadiationDYCOMS_RF01{FT}
     "Large-scale divergence"
@@ -326,13 +342,15 @@ Base.@kwdef struct AtmosModel{
     MM,
     PM,
     CM,
+    CCDPS,
     F,
     S,
     RM,
     LA,
+    EXTFORCING,
     EC,
     AT,
-    GT,
+    TM,
     EEM,
     EDM,
     ESMF,
@@ -359,19 +377,21 @@ Base.@kwdef struct AtmosModel{
     moisture_model::MM = nothing
     precip_model::PM = nothing
     cloud_model::CM = nothing
+    call_cloud_diagnostics_per_stage::CCDPS = nothing
     forcing_type::F = nothing
     subsidence::S = nothing
     radiation_mode::RM = nothing
     ls_adv::LA = nothing
+    external_forcing::EXTFORCING = nothing
     edmf_coriolis::EC = nothing
     advection_test::AT = nothing
-    gs_tendency::GT = nothing
+    tendency_model::TM = nothing
     edmfx_entr_model::EEM = nothing
     edmfx_detr_model::EDM = nothing
     edmfx_sgs_mass_flux::ESMF = nothing
     edmfx_sgs_diffusive_flux::ESDF = nothing
     edmfx_nh_pressure::ENP = nothing
-    edmfx_velocity_relaxation::EVR = nothing
+    edmfx_filter::EVR = nothing
     turbconv_model::TCM = nothing
     non_orographic_gravity_wave::NOGW = nothing
     orographic_gravity_wave::OGW = nothing

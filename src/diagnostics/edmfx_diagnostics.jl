@@ -883,14 +883,14 @@ add_diagnostic_variable!(
 )
 
 ###
-# Buoyancy gradient (3d)
+# Environment Wall Constrained Mixing Length (3d)
 ###
-compute_bgrad!(out, state, cache, time) =
-    compute_bgrad!(out, state, cache, time, cache.atmos.turbconv_model)
-compute_bgrad!(_, _, _, _, turbconv_model::T) where {T} =
-    error_diagnostic_variable("bgrad", turbconv_model)
+compute_lmixw!(out, state, cache, time) =
+    compute_lmixw!(out, state, cache, time, cache.atmos.turbconv_model)
+compute_lmixw!(_, _, _, _, turbconv_model::T) where {T} =
+    error_diagnostic_variable("lmixw", turbconv_model)
 
-function compute_bgrad!(
+function compute_lmixw!(
     out,
     state,
     cache,
@@ -898,28 +898,28 @@ function compute_bgrad!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
-        return copy(cache.precomputed.ᶜlinear_buoygrad)
+        return copy(cache.precomputed.ᶜmixing_length_tuple.wall)
     else
-        out .= cache.precomputed.ᶜlinear_buoygrad
+        out .= cache.precomputed.ᶜmixing_length_tuple.wall
     end
 end
 
 add_diagnostic_variable!(
-    short_name = "bgrad",
-    long_name = "Linearized Buoyancy Gradient",
-    units = "s^-2",
-    compute! = compute_bgrad!,
+    short_name = "lmixw",
+    long_name = "Environment Wall Constrained Mixing Length",
+    units = "m",
+    compute! = compute_lmixw!,
 )
 
 ###
-# Strain rate magnitude (3d)
+# Environment TKE Balanced Mixing Length (3d)
 ###
-compute_strain!(out, state, cache, time) =
-    compute_strain!(out, state, cache, time, cache.atmos.turbconv_model)
-compute_strain!(_, _, _, _, turbconv_model::T) where {T} =
-    error_diagnostic_variable("strain", turbconv_model)
+compute_lmixtke!(out, state, cache, time) =
+    compute_lmixtke!(out, state, cache, time, cache.atmos.turbconv_model)
+compute_lmixtke!(_, _, _, _, turbconv_model::T) where {T} =
+    error_diagnostic_variable("lmixtke", turbconv_model)
 
-function compute_strain!(
+function compute_lmixtke!(
     out,
     state,
     cache,
@@ -927,17 +927,46 @@ function compute_strain!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
-        return copy(cache.precomputed.ᶜstrain_rate_norm)
+        return copy(cache.precomputed.ᶜmixing_length_tuple.tke)
     else
-        out .= cache.precomputed.ᶜstrain_rate_norm
+        out .= cache.precomputed.ᶜmixing_length_tuple.tke
     end
 end
 
 add_diagnostic_variable!(
-    short_name = "strain",
-    long_name = "String Rate Magnitude",
-    units = "s^-2",
-    compute! = compute_strain!,
+    short_name = "lmixtke",
+    long_name = "Environment TKE Balanced Mixing Length",
+    units = "m",
+    compute! = compute_lmixtke!,
+)
+
+###
+# Environment Stability Mixing Length (3d)
+###
+compute_lmixb!(out, state, cache, time) =
+    compute_lmixb!(out, state, cache, time, cache.atmos.turbconv_model)
+compute_lmixb!(_, _, _, _, turbconv_model::T) where {T} =
+    error_diagnostic_variable("lmixb", turbconv_model)
+
+function compute_lmixb!(
+    out,
+    state,
+    cache,
+    time,
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
+)
+    if isnothing(out)
+        return copy(cache.precomputed.ᶜmixing_length_tuple.buoy)
+    else
+        out .= cache.precomputed.ᶜmixing_length_tuple.buoy
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "lmixb",
+    long_name = "Environment Static Stability Mixing Length",
+    units = "m",
+    compute! = compute_lmixb!,
 )
 
 ###

@@ -15,7 +15,7 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil
 apply_limiter: false
-precip_model: "0M"
+precip_model: "1M"
 override_τ_precip: false
 config: box
 hyperdiff: "true"
@@ -32,10 +32,11 @@ t_end: 6hours
 dt_save_state_to_disk: 10mins
 FLOAT_TYPE: "Float64"
 toml: [toml/diagnostic_edmfx_trmm_box.toml]
-netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [8, 8, 30]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
     period: 10mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
+    period: 10mins
+  - short_name: [husra, hussn]
     period: 10mins

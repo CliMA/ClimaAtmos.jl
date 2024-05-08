@@ -34,6 +34,36 @@ The dispatch on EnvBuoyGradVars type is performed at the EnvBuoyGradVars constru
 used here are consistent for both mean fields and conditional fields obtained from assumed distributions
 over the conserved thermodynamic variables.
 """
+function buoyancy_gradients end
+
+function buoyancy_gradients(
+    ebgc::AbstractEnvBuoyGradClosure,
+    thermo_params,
+    moisture_model,
+    ts,
+    ::Type{C3},
+    ∂θv∂z_unsat,
+    ∂qt∂z_sat,
+    ∂θl∂z_sat,
+    ᶜlg,
+) where {C3}
+    return buoyancy_gradients(
+        ebgc,
+        thermo_params,
+        moisture_model,
+        EnvBuoyGradVars(
+            ts,
+            projected_vector_buoy_grad_vars(
+                C3,
+                ∂θv∂z_unsat,
+                ∂qt∂z_sat,
+                ∂θl∂z_sat,
+                ᶜlg,
+            ),
+        ),
+    )
+end
+
 function buoyancy_gradients(
     ebgc::AbstractEnvBuoyGradClosure,
     thermo_params,

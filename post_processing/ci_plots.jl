@@ -42,7 +42,7 @@ import CairoMakie
 import CairoMakie.Makie
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
-import ClimaAnalysis: SimDir, slice_time, slice
+import ClimaAnalysis: SimDir, slice
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
@@ -280,13 +280,57 @@ function make_plots_generic(
 end
 
 """
-    make_spectra_generic
+    compute_spectrum(var)
 
-Use ClimaCoreSpectra to compute and plot spectra for the given `vars`.
-
-Extra arguments are passed to `ClimaAnalysis.slice`
-
+Compute the spectrum associated to the given variable. Returns a ClimaAnalysis.OutputVar.
 """
+function compute_spectrum(var; mass_weight = nothing)
+    # power_spectrum_2d seems to work only when the two dimensions have precisely one
+    # twice as many points as the other
+    dim1, dim2, dim3 = var.index2dim[1:3]
+
+    len1 = length(var.dims[dim1])
+    len2 = length(var.dims[dim2])
+
+    len1 == 2len2 || error("Cannot take this spectrum ($len1 != 2 $len2)")
+
+    (dim1 == "lon" || dim1 == "long") ||
+        error("First dimension has to be longitude (found $dim1)")
+    dim2 == "lat" || error("Second dimension has to be latitude (found $dim2)")
+    dim3 == "z" || error("Third dimension has to be altitude (found $dim3)")
+
+    FT = eltype(var.data)
+    mass_weight =
+        isnothing(mass_weight) ? ones(FT, length(var.dims[dim3])) : mass_weight
+    spectrum_data, wave_numbers, _spherical, mesh_info =
+        power_spectrum_2d(FT, var.data, mass_weight)
+
+    power_spectrum =
+        dropdims(sum(spectrum_data, dims = 1), dims = 1)[begin:(end - 1), :]
+
+    w_numbers = collect(0:1:(mesh_info.num_spherical - 1))
+
+    dims = Dict("Spherical Wavenumber" => w_numbers, dim3 => var.dims[dim3])
+
+    dim_attributes = Dict(
+        "Spherical Wavenumber" => Dict("units" => ""),
+        dim3 => var.dim_attributes[dim3],
+    )
+
+    attributes = Dict(
+        "short_name" => "log_spectrum_" * var.attributes["short_name"],
+        "long_name" => "Spectrum of " * var.attributes["long_name"],
+        "units" => "",
+    )
+
+    return ClimaAnalysis.OutputVar(
+        attributes,
+        dims,
+        dim_attributes,
+        log.(power_spectrum),
+    )
+end
+
 function make_spectra_generic(
     output_path,
     vars,
@@ -307,7 +351,7 @@ function make_spectra_generic(
             dim1, dim2 = var.index2dim[1:2]
 
             length(var.dims[dim1]) == 2 * length(var.dims[dim2]) ||
-                error("Cannot take a this spectrum")
+                error("Cannot take this spectrum")
 
             FT = eltype(var.data)
             mass_weight = ones(FT, 1)
@@ -315,30 +359,27 @@ function make_spectra_generic(
                 power_spectrum_2d(FT, var.data, mass_weight)
 
             # From ClimaCoreSpectra/examples
-            X = collect(0:1:(mesh_info.num_fourier))
             Y = collect(0:1:(mesh_info.num_spherical))
             Z = spectrum_data[:, :, 1]
 
-            dims = Dict("num_fourier" => X, "num_spherical" => Y)
-            dim_attributes = Dict(
-                "num_fourier" => Dict("units" => ""),
-                "num_spherical" => Dict("units" => ""),
-            )
+            dims = Dict("Spherical Wavenumber" => Y)
+            dim_attributes =
+                Dict("Spherical Wavenumber" => Dict("units" => ""))
 
             attributes = Dict(
-                "short_name" => "log fft_" * var.attributes["short_name"],
+                "short_name" =>
+                    "log_spectrum_" * var.attributes["short_name"],
                 "long_name" => "Spectrum of " * var.attributes["long_name"],
                 "units" => "",
             )
-            path = nothing
 
             return ClimaAnalysis.OutputVar(
                 attributes,
                 dims,
                 dim_attributes,
                 log.(Z),
-                path,
             )
+
         end |> collect
 
     make_plots_generic(output_path, spectra, args...; output_name, kwargs...)
@@ -509,7 +550,11 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
     short_names = ["thetaa"]
-    vars = map_comparison(get, simdirs, short_names)
+    period = "10s"
+    reduction = "inst"
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        return get(simdir; short_name, reduction, period)
+    end
     make_plots_generic(output_paths, vars, y = 0.0, time = LAST_SNAP)
 end
 
@@ -566,15 +611,27 @@ function make_plots(
     )
 end
 
-DryBaroWavePlots = Union{Val{:sphere_baroclinic_wave_rhoe}}
+DryBaroWavePlots = Union{
+    Val{:sphere_baroclinic_wave_rhoe},
+    Val{:sphere_baroclinic_wave_rhoe_deepatmos},
+}
 
 function make_plots(::DryBaroWavePlots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
+    short_names_spectra = ["ke"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return get(simdir; short_name, reduction)
+        return slice(get(simdir; short_name, reduction), time = 10days)
     end
-    make_plots_generic(output_paths, vars, z = 1500, time = LAST_SNAP)
+    vars_spectra =
+        map_comparison(simdirs, short_names_spectra) do simdir, short_name
+            compute_spectrum(
+                slice(get(simdir; short_name, reduction), time = 10days),
+            )
+        end
+    vars = vcat(vars..., vars_spectra...)
+
+    make_plots_generic(output_paths, vars, z = 1500)
 end
 
 function make_plots(
@@ -595,14 +652,24 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
+    short_names_spectra = ["ke"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return get(simdir; short_name, reduction)
+        return slice(get(simdir; short_name, reduction), time = 10days)
     end
-    make_plots_generic(output_paths, vars, z = 1500, time = 10days)
+    vars_spectra =
+        map_comparison(simdirs, short_names_spectra) do simdir, short_name
+            compute_spectrum(
+                slice(get(simdir; short_name, reduction), time = 10days),
+            )
+        end
+    vars = vcat(vars..., vars_spectra...)
+
+    make_plots_generic(output_paths, vars, z = 1500)
 end
 
 function make_plots(
     ::Val{:sphere_baroclinic_wave_rhoe_equilmoist},
+    ::Val{:sphere_baroclinic_wave_rhoe_equilmoist_deepatmos},
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -643,10 +710,18 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
+    short_names_spectra = ["ke"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return get(simdir; short_name, reduction)
+        return slice(get(simdir; short_name, reduction), time = 10days)
     end
-    make_plots_generic(output_paths, vars, z = 1500, time = 10days)
+    vars_spectra =
+        map_comparison(simdirs, short_names_spectra) do simdir, short_name
+            compute_spectrum(
+                slice(get(simdir; short_name, reduction), time = 10days),
+            )
+        end
+    vars = vcat(vars..., vars_spectra...)
+    make_plots_generic(output_paths, vars, z = 1500)
 end
 
 DryHeldSuarezPlots = Union{
@@ -774,22 +849,8 @@ function make_plots(
     simdirs = SimDir.(output_paths)
 
     reduction = "average"
-    short_names_3D = [
-        "ta",
-        "thetaa",
-        "rhoa",
-        "ua",
-        "va",
-        "wa",
-        "hur",
-        "hus",
-        "clw",
-        "cli",
-        "rsd",
-        "rsu",
-        "rld",
-        "rlu",
-    ]
+    short_names_3D =
+        ["ta", "thetaa", "rhoa", "ua", "va", "wa", "hur", "hus", "clw", "cli"]
     available_periods = ClimaAnalysis.available_periods(
         simdirs[1];
         short_name = short_names_3D[1],
@@ -802,7 +863,18 @@ function make_plots(
     elseif "12h" in available_periods
         period = "12h"
     end
-    short_names_2D = ["hfes", "evspsbl", "ts"]
+    short_names_2D = [
+        "rsdt",
+        "rsds",
+        "rsut",
+        "rsus",
+        "rlds",
+        "rlut",
+        "rlus",
+        "hfes",
+        "evspsbl",
+        "ts",
+    ]
     vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
         get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon
     end
@@ -825,11 +897,13 @@ end
 
 AquaplanetPlots = Union{
     Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
+    Val{:sphere_aquaplanet_rhoe_nonequilmoist_allsky_gw_res},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_diffonly_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M},
+    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_progedmf_diffonly_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth},
     Val{:longrun_aquaplanet_rhoe_equil_highres_allsky_ft32},
     Val{:longrun_aquaplanet_dyamond},
@@ -839,8 +913,18 @@ function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
 
     reduction = "average"
-    short_names_3D = ["ua", "ta", "hus", "rsd", "rsu", "rld", "rlu"]
-    short_names_2D = ["hfes", "evspsbl"]
+    short_names_3D = ["ua", "ta", "hus"]
+    short_names_2D = [
+        "rsdt",
+        "rsds",
+        "rsut",
+        "rsus",
+        "rlds",
+        "rlut",
+        "rlus",
+        "hfes",
+        "evspsbl",
+    ]
     available_periods = ClimaAnalysis.available_periods(
         simdirs[1];
         short_name = short_names_3D[1],
@@ -883,22 +967,19 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
 
     reduction = "average"
-    short_names_3D = [
-        "ua",
-        "ta",
-        "hus",
-        "rsd",
-        "rsu",
-        "rld",
-        "rlu",
-        "husra",
-        "hussn",
-        "hur",
-        "cl",
-        "cli",
-        "clw",
+    short_names_3D =
+        ["ua", "ta", "hus", "husra", "hussn", "hur", "cl", "cli", "clw"]
+    short_names_2D = [
+        "rsdt",
+        "rsds",
+        "rsut",
+        "rsus",
+        "rlds",
+        "rlut",
+        "rlus",
+        "hfes",
+        "evspsbl",
     ]
-    short_names_2D = ["hfes", "evspsbl"]
     available_periods = ClimaAnalysis.available_periods(
         simdirs[1];
         short_name = short_names_3D[1],
@@ -936,21 +1017,29 @@ EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_bomex_box},
     Val{:diagnostic_edmfx_bomex_stretched_box},
     Val{:diagnostic_edmfx_dycoms_rf01_box},
+    Val{:diagnostic_edmfx_trmm_box_0M},
+    Val{:diagnostic_edmfx_dycoms_rf01_explicit_box},
+    Val{:prognostic_edmfx_adv_test_column},
+    Val{:prognostic_edmfx_gabls_column},
+    Val{:prognostic_edmfx_bomex_fixtke_column},
+    Val{:prognostic_edmfx_bomex_column},
+    Val{:prognostic_edmfx_gcmdriven_column},
+    Val{:prognostic_edmfx_bomex_stretched_column},
+    Val{:prognostic_edmfx_bomex_explicit_column},
+    Val{:prognostic_edmfx_dycoms_rf01_column},
+    Val{:prognostic_edmfx_trmm_column_0M},
+    Val{:prognostic_edmfx_simpleplume_column},
+    Val{:prognostic_edmfx_bomex_box},
+}
+
+EDMFBoxPlotsWithPrecip = Union{
+    Val{:prognostic_edmfx_rico_column},
+    Val{:prognostic_edmfx_trmm_column},
     Val{:diagnostic_edmfx_rico_box},
     Val{:diagnostic_edmfx_trmm_box},
     Val{:diagnostic_edmfx_trmm_stretched_box},
-    Val{:diagnostic_edmfx_dycoms_rf01_explicit_box},
-    Val{:prognostic_edmfx_adv_test_box},
-    Val{:prognostic_edmfx_gabls_box},
-    Val{:prognostic_edmfx_bomex_fixtke_box},
-    Val{:prognostic_edmfx_bomex_box},
-    Val{:prognostic_edmfx_bomex_column},
-    Val{:prognostic_edmfx_bomex_stretched_box},
-    Val{:prognostic_edmfx_dycoms_rf01_box},
-    Val{:prognostic_edmfx_rico_column},
-    Val{:prognostic_edmfx_trmm_column},
-    Val{:prognostic_edmfx_simpleplume_column},
 }
+
 
 """
     plot_edmf_vert_profile!(grid_loc, var_group)
@@ -1025,8 +1114,13 @@ function pair_edmf_names(short_names)
     return grouped_vars
 end
 
-function make_plots(::EDMFBoxPlots, output_paths::Vector{<:AbstractString})
+function make_plots(
+    sim_type::Union{EDMFBoxPlots, EDMFBoxPlotsWithPrecip},
+    output_paths::Vector{<:AbstractString},
+)
     simdirs = SimDir.(output_paths)
+
+    precip_names = sim_type isa EDMFBoxPlotsWithPrecip ? ("husra", "hussn") : ()
 
     short_names = [
         "ua",
@@ -1050,9 +1144,20 @@ function make_plots(::EDMFBoxPlots, output_paths::Vector{<:AbstractString})
         "clwup",
         "cli",
         "cliup",
+        precip_names...,
     ]
     reduction = "inst"
-    period = "30m"
+
+    available_periods = ClimaAnalysis.available_periods(
+        simdirs[1];
+        short_name = short_names[1],
+        reduction,
+    )
+    if "10m" in available_periods
+        period = "10m"
+    elseif "30m" in available_periods
+        period = "30m"
+    end
 
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =
@@ -1098,6 +1203,7 @@ function make_plots(::EDMFSpherePlots, output_paths::Vector{<:AbstractString})
 
     short_names =
         ["ua", "wa", "waup", "thetaa", "ta", "taup", "haup", "tke", "arup"]
+
     reduction = "average"
     period = "1h"
     latitudes = [0.0, 30.0, 60.0, 90.0]

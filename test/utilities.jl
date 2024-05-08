@@ -3,111 +3,7 @@ using Random
 Random.seed!(1234)
 import ClimaAtmos as CA
 
-### BoilerPlate Code
-using ClimaComms
-using IntervalSets
-
-import ClimaCore:
-    ClimaCore,
-    Domains,
-    Geometry,
-    Grids,
-    Fields,
-    Operators,
-    Meshes,
-    Spaces,
-    Quadratures,
-    Topologies,
-    Hypsography
-
-
-FT = Float32
-
-function get_cartesian_spaces(; FT = Float32)
-    xlim = (FT(0), FT(π))
-    zlim = (FT(0), FT(π))
-    helem = 5
-    velem = 10
-    npoly = 5
-    ndims = 3
-    stretch = Meshes.Uniform()
-    device = ClimaComms.CPUSingleThreaded()
-    comms_context = ClimaComms.SingletonCommsContext(device)
-    # Horizontal Grid Construction
-    quad = Quadratures.GLL{npoly + 1}()
-    horzdomain = Domains.RectangleDomain(
-        Geometry.XPoint{FT}(xlim[1]) .. Geometry.XPoint{FT}(xlim[2]),
-        Geometry.YPoint{FT}(xlim[1]) .. Geometry.YPoint{FT}(xlim[2]),
-        x1periodic = true,
-        x2periodic = true,
-    )
-    # Assume same number of elems (helem) in (x,y) directions
-    horzmesh = Meshes.RectilinearMesh(horzdomain, helem, helem)
-    horz_topology = Topologies.Topology2D(
-        comms_context,
-        horzmesh,
-        Topologies.spacefillingcurve(horzmesh),
-    )
-    h_space =
-        Spaces.SpectralElementSpace2D(horz_topology, quad, enable_bubble = true)
-
-    horz_grid = Spaces.grid(h_space)
-
-    # Vertical Grid Construction
-    vertdomain = Domains.IntervalDomain(
-        Geometry.ZPoint{FT}(zlim[1]),
-        Geometry.ZPoint{FT}(zlim[2]);
-        boundary_names = (:bottom, :top),
-    )
-    vertmesh = Meshes.IntervalMesh(vertdomain, stretch, nelems = velem)
-    vert_face_space = Spaces.FaceFiniteDifferenceSpace(vertmesh)
-    vert_topology = Topologies.IntervalTopology(
-        ClimaComms.SingletonCommsContext(device),
-        vertmesh,
-    )
-    vert_grid = Grids.FiniteDifferenceGrid(vert_topology)
-    ArrayType = ClimaComms.array_type(device)
-    grid = Grids.ExtrudedFiniteDifferenceGrid(horz_grid, vert_grid)
-    cent_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
-    face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
-    return (helem = helem, cent_space = cent_space, face_space = face_space)
-end
-
-function get_coords(cent_space, face_space)
-    ccoords = Fields.coordinate_field(cent_space)
-    fcoords = Fields.coordinate_field(face_space)
-    return ccoords, fcoords
-end
-
-function taylor_green_ic(coords)
-    u = @. sin(coords.x) * cos(coords.y) * cos(coords.z)
-    v = @. -cos(coords.x) * sin(coords.y) * cos(coords.z)
-    #TODO: If a w field is introduced include it here. 
-    return u, v, u .* 0
-end
-
-function get_test_functions(cent_space, face_space)
-    ccoords, fcoords = get_coords(cent_space, face_space)
-    FT = eltype(ccoords)
-    Q = zero.(ccoords.x)
-    # Exact velocity profiles
-    u, v, w = taylor_green_ic(ccoords)
-    ᶠu, ᶠv, ᶠw = taylor_green_ic(fcoords)
-    (; x, y, z) = ccoords
-    UVW = Geometry.UVWVector
-    # Assemble (Cartesian) velocity
-    ᶜu = @. UVW(Geometry.UVector(u)) +
-       UVW(Geometry.VVector(v)) +
-       UVW(Geometry.WVector(w))
-    ᶠu = @. UVW(Geometry.UVector(ᶠu)) +
-       UVW(Geometry.VVector(ᶠv)) +
-       UVW(Geometry.WVector(ᶠw))
-    # Get covariant components
-    uₕ = @. Geometry.Covariant12Vector(ᶜu)
-    uᵥ = @. Geometry.Covariant3Vector(ᶠu)
-    return uₕ, uᵥ
-end
-
+include("test_helpers.jl")
 
 @testset "sort_hdf5_files" begin
     day_sec(t) =
@@ -133,6 +29,8 @@ end
 end
 
 @testset "kinetic_energy (c.f. analytical function)" begin
+    # Test kinetic energy function for staggered grids
+    # given an analytical expression for the velocity profiles
     (; cent_space, face_space) = get_cartesian_spaces()
     ccoords, fcoords = get_coords(cent_space, face_space)
     uₕ, uᵥ = get_test_functions(cent_space, face_space)
@@ -157,6 +55,7 @@ end
     # Test compute_strain_rate_face
     (; helem, cent_space, face_space) = get_cartesian_spaces()
     ccoords, fcoords = get_coords(cent_space, face_space)
+    FT = eltype(ccoords.x)
     UVW = Geometry.UVWVector
     C123 = Geometry.Covariant123Vector
     # Alloc scratch space
@@ -184,10 +83,6 @@ end
        UVW(Geometry.WVector(ᶠw))
     CA.compute_strain_rate_center!(ᶜϵ, Geometry.Covariant123Vector.(ᶠu))
     CA.compute_strain_rate_face!(ᶠϵ, Geometry.Covariant123Vector.(ᶜu))
-    # Check by component, verify symmetry.
-    # Strain rate functions only compute vertical derivatives right now.
-    # Thus, terms in horizontal derivatives must be zero. 
-    # FIXME: (This needs to be updated if a 3d operator is introduced.
 
     # Center valued strain rate
     @test ᶜϵ.components.data.:1 == ᶜϵ.components.data.:1 .* FT(0)
@@ -269,7 +164,90 @@ end
     @test Fields.field_values(
         CA.g³³_field(Fields.coordinate_field(cent_space).x),
     ) == lg_g³³
-    @test maximum(abs.(lg_g³³ .- CA.g³³.(lg_gⁱʲ).components.data.:1)) == FT(0)
-    @test maximum(abs.(CA.g³ʰ.(lg_gⁱʲ).components.data.:1)) == FT(0)
-    @test maximum(abs.(CA.g³ʰ.(lg_gⁱʲ).components.data.:2)) == FT(0)
+    @test maximum(abs.(lg_g³³ .- CA.g³³.(lg_gⁱʲ).components.data.:1)) == 0
+    @test maximum(abs.(CA.g³ʰ.(lg_gⁱʲ).components.data.:1)) == 0
+    @test maximum(abs.(CA.g³ʰ.(lg_gⁱʲ).components.data.:2)) == 0
+end
+
+@testset "interval domain" begin
+    # Interval Spaces
+    (; zlim, velem) = get_cartesian_spaces()
+    line_mesh = CA.periodic_line_mesh(; x_max = zlim[2], x_elem = velem)
+    @test line_mesh isa Meshes.IntervalMesh
+    @test Geometry.XPoint(zlim[1]) == Meshes.domain(line_mesh).coord_min
+    @test Geometry.XPoint(zlim[2]) == Meshes.domain(line_mesh).coord_max
+    @test velem == Meshes.nelements(line_mesh)
+end
+
+@testset "periodic rectangle meshes (spectral elements)" begin
+    # Interval Spaces
+    (; xlim, zlim, velem, helem, npoly) = get_cartesian_spaces()
+    rectangle_mesh = CA.periodic_rectangle_mesh(;
+        x_max = xlim[2],
+        y_max = xlim[2],
+        x_elem = helem,
+        y_elem = helem,
+    )
+    @test rectangle_mesh isa Meshes.RectilinearMesh
+    @test Meshes.domain(rectangle_mesh) isa Meshes.RectangleDomain
+    @test Meshes.nelements(rectangle_mesh) == helem^2
+    @test Meshes.element_horizontal_length_scale(rectangle_mesh) ==
+          eltype(xlim)(π / npoly)
+    @test Meshes.elements(rectangle_mesh) == CartesianIndices((helem, helem))
+end
+
+@testset "make horizontal spaces" begin
+
+    (; xlim, zlim, velem, helem, npoly, quad) = get_cartesian_spaces()
+    device = ClimaComms.CPUSingleThreaded()
+    comms_ctx = ClimaComms.context(device)
+    FT = eltype(xlim)
+    # 1D Space
+    line_mesh = CA.periodic_line_mesh(; x_max = zlim[2], x_elem = velem)
+    @test line_mesh isa Meshes.AbstractMesh1D
+    horz_plane_space =
+        CA.make_horizontal_space(line_mesh, quad, comms_ctx, true)
+    @test Spaces.column(horz_plane_space, 1, 1) isa Spaces.PointSpace
+
+    # 2D Space
+    rectangle_mesh = CA.periodic_rectangle_mesh(;
+        x_max = xlim[2],
+        y_max = xlim[2],
+        x_elem = helem,
+        y_elem = helem,
+    )
+    @test rectangle_mesh isa Meshes.AbstractMesh2D
+    horz_plane_space =
+        CA.make_horizontal_space(rectangle_mesh, quad, comms_ctx, true)
+    @test Spaces.nlevels(horz_plane_space) == 1
+    @test Spaces.node_horizontal_length_scale(horz_plane_space) ==
+          FT(π / npoly / 5)
+    @test Spaces.column(horz_plane_space, 1, 1, 1) isa Spaces.PointSpace
+end
+
+@testset "make hybrid spaces" begin
+    (; cent_space, face_space, xlim, zlim, velem, helem, npoly, quad) =
+        get_cartesian_spaces()
+    device = ClimaComms.CPUSingleThreaded()
+    comms_ctx = ClimaComms.context(device)
+    z_stretch = Meshes.Uniform()
+    rectangle_mesh = CA.periodic_rectangle_mesh(;
+        x_max = xlim[2],
+        y_max = xlim[2],
+        x_elem = helem,
+        y_elem = helem,
+    )
+    horz_plane_space =
+        CA.make_horizontal_space(rectangle_mesh, quad, comms_ctx, true)
+    test_cent_space, test_face_space = CA.make_hybrid_spaces(
+        horz_plane_space,
+        zlim[2],
+        velem,
+        z_stretch;
+        surface_warp = nothing,
+        topo_smoothing = false,
+        deep = false,
+    )
+    @test test_cent_space == cent_space
+    @test test_face_space == face_space
 end

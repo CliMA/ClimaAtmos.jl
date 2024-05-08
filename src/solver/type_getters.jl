@@ -3,13 +3,15 @@ using Dates: DateTime, @dateformat_str
 using Dierckx
 using Interpolations
 import NCDatasets
+import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
 import LinearAlgebra
 import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
-import DiffEqCallbacks as DECB
+
+import ClimaDiagnostics
 
 function get_atmos(config::AtmosConfig, params)
     (; turbconv_params) = params
@@ -20,14 +22,13 @@ function get_atmos(config::AtmosConfig, params)
     cloud_model = get_cloud_model(parsed_args)
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
+    call_cloud_diagnostics_per_stage =
+        get_call_cloud_diagnostics_per_stage(parsed_args)
 
     diffuse_momentum = !(forcing_type isa HeldSuarezForcing)
 
     advection_test = parsed_args["advection_test"]
     @assert advection_test in (false, true)
-
-    gs_tendency = parsed_args["gs_tendency"]
-    @assert gs_tendency in (false, true)
 
     edmfx_entr_model = get_entrainment_model(parsed_args)
     edmfx_detr_model = get_detrainment_model(parsed_args)
@@ -41,8 +42,8 @@ function get_atmos(config::AtmosConfig, params)
     edmfx_nh_pressure = parsed_args["edmfx_nh_pressure"]
     @assert edmfx_nh_pressure in (false, true)
 
-    edmfx_velocity_relaxation = parsed_args["edmfx_velocity_relaxation"]
-    @assert edmfx_velocity_relaxation in (false, true)
+    edmfx_filter = parsed_args["edmfx_filter"]
+    @assert edmfx_filter in (false, true)
 
     implicit_diffusion = parsed_args["implicit_diffusion"]
     @assert implicit_diffusion in (true, false)
@@ -60,18 +61,20 @@ function get_atmos(config::AtmosConfig, params)
         radiation_mode,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
+        external_forcing = get_external_forcing_model(parsed_args),
         edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
         advection_test,
-        gs_tendency,
+        tendency_model = get_tendency_model(parsed_args),
         edmfx_entr_model,
         edmfx_detr_model,
         edmfx_sgs_mass_flux,
         edmfx_sgs_diffusive_flux,
         edmfx_nh_pressure,
-        edmfx_velocity_relaxation,
+        edmfx_filter,
         precip_model,
         cloud_model,
         forcing_type,
+        call_cloud_diagnostics_per_stage,
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
             parsed_args,
@@ -315,10 +318,14 @@ function get_initial_condition(parsed_args)
     if parsed_args["initial_condition"] in [
         "DryBaroclinicWave",
         "MoistBaroclinicWave",
-        "DecayingProfile",
         "MoistBaroclinicWaveWithEDMF",
-        "MoistAdiabaticProfileEDMFX",
     ]
+        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
+            parsed_args["perturb_initstate"],
+            parsed_args["deep_atmosphere"],
+        )
+    elseif parsed_args["initial_condition"] in
+           ["DecayingProfile", "MoistAdiabaticProfileEDMFX"]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
             parsed_args["perturb_initstate"],
         )
@@ -348,6 +355,9 @@ function get_initial_condition(parsed_args)
         "PrecipitatingColumn",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
+    elseif parsed_args["initial_condition"] == "GCM"
+        @assert parsed_args["prognostic_tke"] == true
+        return ICs.GCMDriven(parsed_args["external_forcing_file"])
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
@@ -356,6 +366,9 @@ function get_initial_condition(parsed_args)
 end
 
 function get_surface_setup(parsed_args)
+    parsed_args["surface_setup"] == "GCM" &&
+        return SurfaceConditions.GCMDriven(parsed_args["external_forcing_file"])
+
     return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
 end
 
@@ -474,8 +487,12 @@ function get_sim_info(config::AtmosConfig)
     end
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
     out_dir = parsed_args["output_dir"]
-    output_dir = isnothing(out_dir) ? default_output : out_dir
-    mkpath(output_dir)
+    base_output_dir = isnothing(out_dir) ? default_output : out_dir
+
+    output_dir = OutputPathGenerator.generate_output_path(
+        base_output_dir;
+        context = config.comms_ctx,
+    )
 
     sim = (;
         output_dir,
@@ -648,53 +665,19 @@ function get_simulation(config::AtmosConfig)
 
     # Initialize diagnostics
     s = @timed_str begin
-        diagnostics, writers =
-            get_diagnostics(config.parsed_args, atmos, Spaces.axes(Y.c))
+        scheduled_diagnostics, writers = get_diagnostics(
+            config.parsed_args,
+            atmos,
+            Y,
+            p,
+            t_start,
+            sim_info.dt,
+        )
     end
     @info "initializing diagnostics: $s"
 
-    length(diagnostics) > 0 && @info "Computing diagnostics:"
-
-    # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
-    # ensuring that there is consistency in the timestep and the periods and translating
-    # those periods that depended on the timestep
-    diagnostics_iterations =
-        [CAD.ScheduledDiagnosticIterations(d, sim_info.dt) for d in diagnostics]
-
-    # For diagnostics that perform reductions, the storage is used for the values computed
-    # at each call. Reductions also save the accumulated value in diagnostic_accumulators.
-    diagnostic_storage = Dict()
-    diagnostic_accumulators = Dict()
-    diagnostic_counters = Dict()
-
-    s = @timed_str begin
-        diagnostics_functions = CAD.get_callbacks_from_diagnostics(
-            diagnostics_iterations,
-            diagnostic_storage,
-            diagnostic_accumulators,
-            diagnostic_counters,
-            output_dir,
-        )
-    end
-    @info "Prepared diagnostic callbacks: $s"
-
-    # It would be nice to just pass the callbacks to the integrator. However, this leads to
-    # a significant increase in compile time for reasons that are not known. For this
-    # reason, we only add one callback to the integrator, and this function takes care of
-    # executing the other callbacks. This single function is orchestrate_diagnostics
-
-    orchestrate_diagnostics(integrator) =
-        CAD.orchestrate_diagnostics(integrator, diagnostics_functions)
-
-    diagnostic_callbacks =
-        call_every_n_steps(orchestrate_diagnostics, skip_first = true)
-
-    # The generic constructor for SciMLBase.CallbackSet has to split callbacks into discrete
-    # and continuous. This is not hard, but can introduce significant latency. However, all
-    # the callbacks in ClimaAtmos are discrete_callbacks, so we directly pass this
-    # information to the constructor
     continuous_callbacks = tuple()
-    discrete_callbacks = (callback..., diagnostic_callbacks)
+    discrete_callbacks = callback
 
     s = @timed_str begin
         all_callbacks =
@@ -702,11 +685,8 @@ function get_simulation(config::AtmosConfig)
     end
     @info "Prepared SciMLBase.CallbackSet callbacks: $s"
     steps_cycle_non_diag = n_steps_per_cycle_per_cb(all_callbacks, sim_info.dt)
-    steps_cycle_diag =
-        n_steps_per_cycle_per_cb_diagnostic(diagnostics_functions)
-    steps_cycle = lcm([steps_cycle_non_diag..., steps_cycle_diag...])
+    steps_cycle = lcm(steps_cycle_non_diag)
     @info "n_steps_per_cycle_per_cb (non diagnostics): $steps_cycle_non_diag"
-    @info "n_steps_per_cycle_per_cb_diagnostic: $steps_cycle_diag"
     @info "n_steps_per_cycle (non diagnostics): $steps_cycle"
 
     tspan = (t_start, sim_info.t_end)
@@ -725,20 +705,16 @@ function get_simulation(config::AtmosConfig)
         integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
     end
     @info "init integrator: $s"
-    reset_graceful_exit(output_dir)
 
-    s = @timed_str init_diagnostics!(
-        diagnostics_iterations,
-        diagnostic_storage,
-        diagnostic_accumulators,
-        diagnostic_counters,
-        output_dir,
-        Y,
-        p,
-        t_start;
-        warn_allocations = config.parsed_args["warn_allocations_diagnostics"],
-    )
-    @info "Init diagnostics: $s"
+    s = @timed_str begin
+        integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
+            integrator,
+            scheduled_diagnostics,
+        )
+    end
+    @info "Added diagnostics: $s"
+
+    reset_graceful_exit(output_dir)
 
     return AtmosSimulation(
         job_id,

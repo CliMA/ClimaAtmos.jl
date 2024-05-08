@@ -7,5 +7,5 @@ z_elem: 45
 dt: "400secs"
 job_id: "longrun_bw_rhoe_highres"
 diagnostics:
-  - short_name: [pfull, wa, va, rv]
+  - short_name: [pfull, wa, va, rv, ke]
     period: 1days
