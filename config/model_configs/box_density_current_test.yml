@@ -1,22 +1,20 @@
-
 job_id: "box_density_current_test"
 dt_save_state_to_disk: "10secs"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
 z_elem: 45
 dt: "0.1secs"
-t_end: "900.0secs"
+t_end: "0.1secs"
 discrete_hydrostatic_balance: true
 y_max: 6400.0
 y_elem: 5
 z_stretch: false
 x_elem: 45
 config: "box"
-vorticity_hyperdiffusion_coefficient: 0.1
-scalar_hyperdiffusion_coefficient: 0.1
+hyperdiff: "true"
 z_max: 6400.0
 smagorinsky_lilly: true
 c_smag: 0.25
 diagnostics:
-  - short_name: [thetaa, wa, ua, ta, va, hfes, rhoa, rv, ha, kvis]
+  - short_name: [thetaa, wa, ua, ta, va, hfes, rhoa, rv, ha]
     period: 10secs

@@ -17,15 +17,29 @@ function smagorinsky_lilly_cache(Y, sl::SmagorinskyLilly)
     # volume is the average length of the sides of the cell.
     (; Cs) = sl
     FT = eltype(Y)
+    h_space = Spaces.horizontal_space(axes(Y.c))
+    Δ_filter = Spaces.node_horizontal_length_scale(h_space)
+
+    ᶜtemp_scalar = similar(Y.c.ρ, FT)
     ᶜtemp_scalar_2 = similar(Y.c.ρ, FT)
     ᶜtemp_scalar_3 = similar(Y.c.ρ, FT)
+    ᶠtemp_C123 = similar(Y.f, C123{FT})
+    ᶜtemp_CT3 = similar(Y.c, CT3{FT})
+
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜshear² = ᶜtemp_scalar
+    ᶠu = ᶠtemp_C123
+    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(Y.f.u₃)
+    ct3_unit = ᶜtemp_CT3
+    @. ct3_unit = CT3(Geometry.WVector(FT(1)), ᶜlg)
+    @. ᶜshear² = norm_sqr(adjoint(CA.ᶜgradᵥ(ᶠu)) * ct3_unit)
+
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶜD = ᶜtemp_scalar_2
-    νₜ = ᶜtemp_scalar_3
-    @. νₜ *= FT(0)
-    @. ᶜD *= FT(0)
-    Δ_filter = @. cbrt(ᶜJ)
-    return (; νₜ, ᶜD, Δ_filter)
+    v_t = ᶜtemp_scalar_3
+    Pr = 1/3
+    @. ᶜD = (1/Pr)*v_t
+    return (; v_t, ᶜD, Δ_filter)
 end
 
 horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
@@ -37,13 +51,14 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     end
 
     (; Cs) = sl
-    (; νₜ, ᶜD, Δ_filter) = p.smagorinsky_lilly
+    (; v_t, ᶜD, Δ_filter) = p.smagorinsky_lilly
     (; ᶜu, ᶠu³) = p.precomputed 
 
     # Operators
-    FT = eltype(νₜ)
+    FT = eltype(v_t)
     wdivₕ = Operators.WeakDivergence()
-    hgrad = Operators.Gradient()
+    hgrad = Operators.WeakGradient()
+    ᶜJ = Fields.local_geometry_field(Y.c).J 
 
     ᶜS  = p.scratch.ᶜtemp_strain
     ᶠS  = p.scratch.ᶠtemp_strain
@@ -51,8 +66,8 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
     
     localu = @. Geometry.UVWVector(ᶜu)
-    ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(ᶠu³)
-    co_ᶠu = @. Geometry.Covariant123Vector(ᶠinterp(Y.c.uₕ)) + Geometry.Covariant123Vector(ᶠu³)
+    ᶠu = @. Geometry.UVWVector(ᶠwinterp(ᶜJ * Y.c.ρ, Y.c.uₕ)) + Geometry.UVWVector(Y.f.u₃)
+    co_ᶠu = @. Geometry.Covariant123Vector(ᶠu)
 
     c1 = @. Geometry.UVWVector(hgrad(localu.components.data.:1))
     c2 = @. Geometry.UVWVector(hgrad(localu.components.data.:2))
@@ -77,19 +92,26 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     @. ᶠS.components.data.:6 = t3.components.data.:2
     CA.compute_strain_rate_face!(ᶠϵ, ᶜu)
     @. ᶠS = 1/2 * (ᶠS + adjoint(ᶠS)) + ᶠϵ
+    any(isnan, ᶠS) && error("Found NaN in horizontal ᶠS")
 
-    Spaces.weighted_dss!(ᶜS)
-    Spaces.weighted_dss!(ᶠS)
-    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶜS))
-    ᶠνₜ = @. ᶠinterp(ᶜνₜ)
-    ᶜD = @. FT(3) * ᶜνₜ
-
-    @. νₜ = ᶜνₜ
-
-    ᶠρ = @. ᶠinterp(Y.c.ρ)
+    ᶜv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶜS))
+    ᶠv_t = @. ᶠinterp(ᶜv_t)
+    ᶜD = @. FT(3) * ᶜv_t
     
-    @. Yₜ.c.uₕ -= @. C12(wdivₕ(Y.c.ρ * ᶜνₜ * ᶜS)) / Y.c.ρ
-    @. Yₜ.f.u₃ -= @. C3(wdivₕ(ᶠρ * ᶠνₜ * ᶠS)) / ᶠρ
+
+    @. v_t = ᶜv_t
+    any(isnan, ᶜv_t) && error("Found NaN in horizontal ᶜv_t")
+
+    ᶠρ = @. ᶠwinterp(ᶜJ, Y.c.ρ)
+    any(isnan, ᶠρ) && error("Found NaN in horizontal ᶠρ")
+    
+    any(isnan, ᶜS) && error("Found NaN in horizontal ᶜS")
+    #@. Yₜ.c.uₕ += @. C12(wdivₕ(Y.c.ρ * ᶜv_t * ᶜS)) / Y.c.ρ
+    @. Yₜ.c.uₕ += @. C12(wdivₕ(ᶜv_t * ᶜS))
+    
+    #@. Yₜ.f.u₃ += @. C3(wdivₕ(ᶠρ * ᶠv_t * ᶠS)) / ᶠρ
+    @. Yₜ.f.u₃ += @. C3(wdivₕ(ᶠv_t * ᶠS))
+    any(isnan, Yₜ) && error("Found NaN in horizontal Yₜ") 
 
     # energy adjustment
     (; ᶜspecific) = p.precomputed
@@ -114,39 +136,24 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
     if !(hasproperty(p.precomputed, :ᶜspecific))
         throw(ErrorException("p does not have the property ᶜspecific."))
     end
-
     (; Cs) = sl
-    (; νₜ, ᶜD, Δ_filter) = p.smagorinsky_lilly
-    (; ᶜspecific, sfc_conditions) = p.precomputed
-    (; ᶜu, ᶠu³) = p.precomputed 
-    ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
-    
-    wdivₕ = Operators.WeakDivergence()
-    hgrad = Operators.Gradient()
-    
-    ρ_flux_χ = p.scratch.ᶜtemp_scalar
-
-    FT = eltype(Y)
-    
-    ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
-    
-    (; Cs) = sl
-    (; νₜ, ᶜD, Δ_filter) = p.smagorinsky_lilly
-    (; ᶜu, ᶠu³) = p.precomputed 
+    (; v_t, ᶜD, Δ_filter) = p.smagorinsky_lilly
+    (; ᶜu, ᶠu³, sfc_conditions, ᶜspecific) = p.precomputed 
 
     # Operators
-    FT = eltype(νₜ)
+    FT = eltype(v_t)
     wdivₕ = Operators.WeakDivergence()
-    hgrad = Operators.Gradient()
-    
+    hgrad = Operators.WeakGradient()
+    ᶜJ = Fields.local_geometry_field(Y.c).J 
+
     ᶜS  = p.scratch.ᶜtemp_strain
     ᶠS  = p.scratch.ᶠtemp_strain
     ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
     ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
     
     localu = @. Geometry.UVWVector(ᶜu)
-    ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(ᶠu³)
-    co_ᶠu = @. Geometry.Covariant123Vector(ᶠinterp(Y.c.uₕ)) + Geometry.Covariant123Vector(ᶠu³)
+    ᶠu = @. Geometry.UVWVector(ᶠwinterp(ᶜJ * Y.c.ρ, Y.c.uₕ)) + Geometry.UVWVector(Y.f.u₃)
+    co_ᶠu = @. Geometry.Covariant123Vector(ᶠu)
 
     c1 = @. Geometry.UVWVector(hgrad(localu.components.data.:1))
     c2 = @. Geometry.UVWVector(hgrad(localu.components.data.:2))
@@ -172,45 +179,61 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
     CA.compute_strain_rate_face!(ᶠϵ, ᶜu)
     @. ᶠS = 1/2 * (ᶠS + adjoint(ᶠS)) + ᶠϵ
 
-    Spaces.weighted_dss!(ᶜS)
-    Spaces.weighted_dss!(ᶠS)
-    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶜS))
-    #ᶠνₜ = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS))
-    ᶠνₜ = @. ᶠinterp(ᶜνₜ)
-    ᶜD = @. FT(3) * ᶜνₜ
+    ᶜv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶜS))
+    ᶠv_t = @. ᶠinterp(ᶜv_t)
+    ᶜD = @. FT(3) * ᶜv_t
+    @. v_t = ᶜv_t
+    ᶜD = @. FT(3) * ᶜv_t
     
     # Smagorinsky Computations ####
     ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
         top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
         bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
     )
+    #@. Yₜ.c.uₕ[colidx] -= C12(
+    #    ᶜdivᵥ(
+    #        -2 *
+    #        ᶠinterp(Y.c.ρ[colidx]) *
+    #        ᶠv_t[colidx] *
+    #        ᶠS[colidx],
+    #    ) / Y.c.ρ[colidx],
+    #)
     @. Yₜ.c.uₕ[colidx] -= C12(
         ᶜdivᵥ(
             -2 *
-            ᶠinterp(Y.c.ρ[colidx]) *
-            ᶠνₜ[colidx] *
-            ᶠϵ[colidx],
-        ) / Y.c.ρ[colidx],
+            ᶠv_t[colidx] *
+            ᶠS[colidx],
+        ) 
     )
-    @. Yₜ.c.uₕ[colidx] -=
-        ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
+
+    #@. Yₜ.c.uₕ[colidx] -=
+    #    ᶜdivᵥ_uₕ((-FT(0) * ᶠgradᵥ(Y.c.uₕ[colidx])))
 
     ᶜdivᵥ_u3 = Operators.DivergenceC2F(
         top = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))),
         bottom = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))), 
     )
+    
+    #@. Yₜ.f.u₃[colidx] -= C3(
+    #    ᶠinterp(ᶜdivᵥ(
+    #        -2 *
+    #        ᶠinterp(Y.c.ρ[colidx]) *
+    #        ᶠv_t[colidx] *
+    #        ᶠS[colidx],
+    #    ) / Y.c.ρ[colidx]),
+    #)
+    #
+    
     @. Yₜ.f.u₃[colidx] -= C3(
         ᶠinterp(ᶜdivᵥ(
             -2 *
-	    ᶠinterp(Y.c.ρ[colidx]) *
-            ᶠνₜ[colidx] *
-            ᶠϵ[colidx],
-        ) / Y.c.ρ[colidx]),
-    )
+            ᶠv_t[colidx] *
+            ᶠS[colidx],),
+               )
+       )
     
     if :ρe_tot in propertynames(Yₜ.c)
         (; ᶜh_tot) = p.precomputed
-        
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(sfc_conditions.ρ_flux_h_tot[colidx]), 
@@ -234,11 +257,10 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(ρ_flux_χ[colidx]), 
         )
-
         # The code below adjusts the tendency by -div(\rho * d_qtot), where
         # d_qtot = -(D * grad(qtot)). The two negatives cancel out, so we have a +=
-
         @. ᶜρχₜ[colidx] -= ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜD[colidx]) * ᶠgradᵥ(ᶜχ[colidx])))
     end
-    
+    any(isnan, Yₜ) && error("Found NaN in horizontal sgs tendency")
+
 end
