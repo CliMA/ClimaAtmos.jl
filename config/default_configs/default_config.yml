@@ -196,9 +196,6 @@ perf_summary:
 viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false
-job_id:
-  help: "Uniquely identifying string for a particular job"
-  value: ~
 tracer_upwinding:
   help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
   value: none
@@ -290,3 +287,46 @@ prescribed_aerosols:
 call_cloud_diagnostics_per_stage:
   help: "A temporary Bool for calling cloud diagnostics every stage"
   value: false
+# EDMF configuration
+turbconv:
+  help: "Turbulence convection scheme [`nothing` (default), 'prognostic_edmfx', 'diagnostic_edmfx']"
+  value: ~
+advection_test:
+  help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"
+  value: false
+zero_tendency:
+  help: "Turns off tendencies [`nothing` (default), `grid_scale`, `subgrid_scale`]"
+  value: ~
+implicit_sgs_advection:
+  help: "Whether to treat the subgrid-scale vertical advection tendency implicitly [`false` (default), `true`]"
+  value: false
+edmf_coriolis:
+  help: "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
+  value: ~
+edmfx_filter:
+  help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
+  value: false
+edmfx_nh_pressure:
+  help: "If set to true, it switches on EDMFX pressure drag closure.  [`true`, `false` (default)]"
+  value: false
+edmfx_entr_model:
+  help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`, `GeneralizedHarmonics`]"
+  value: ~
+edmfx_detr_model:
+  help: "EDMFX detrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`, `GeneralizedHarmonics`]"
+  value: ~
+edmfx_upwinding:
+  help: "EDMFX upwinding mode [`none` (default), `first_order`, `third_order`]"
+  value: none
+edmfx_sgsflux_upwinding:
+  help: "EDMFX SGS mass flux upwinding mode [`none` (default), `first_order`, `third_order`]"
+  value: none
+edmfx_sgs_mass_flux:
+  help: "If set to true, it switches on EDMFX SGS mass flux.  [`true`, `false` (default)]"
+  value: false
+edmfx_sgs_diffusive_flux:
+  help: "If set to true, it switches on EDMFX SGS diffusive flux.  [`true`, `false` (default)]"
+  value: false
+updraft_number:
+  help: "Sets the number of updrafts for the EDMF scheme"
+  value: 1

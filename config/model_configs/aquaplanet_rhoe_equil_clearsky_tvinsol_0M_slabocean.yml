@@ -13,4 +13,3 @@ dt_rad: "1hours"
 prognostic_surface: "PrognosticSurfaceTemperature"
 check_conservation: true
 bubble: false
-job_id: "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean"

@@ -468,45 +468,103 @@ function (cb::AtmosCallback)(integrator)
 end
 n_measured_calls(cb::AtmosCallback) = cb.n_measured_calls[]
 
-struct AtmosConfig{FT, TD, PA, C}
+struct AtmosConfig{FT, TD, PA, C, CF}
     toml_dict::TD
     parsed_args::PA
     comms_ctx::C
+    config_files::CF
+    job_id::String
 end
 
 Base.eltype(::AtmosConfig{FT}) where {FT} = FT
 
+TupleOrVector(T) = Union{Tuple{<:T, Vararg{T}}, Vector{<:T}}
+
+# Use short, relative paths, if possible.
+function normrelpath(file)
+    rfile = normpath(relpath(file, dirname(config_path)))
+    return if isfile(rfile) && samefile(rfile, file)
+        rfile
+    else
+        file
+    end
+end
+
+function maybe_add_default(config_files, default_config_file)
+    return if any(x -> samefile(x, default_config_file), config_files)
+        config_files
+    else
+        (default_config_file, config_files...)
+    end
+end
+
 """
-    AtmosConfig(config_file::String)
+    AtmosConfig(
+        config_file::String = default_config_file;
+        job_id = config_id_from_config_file(config_file),
+        comms_ctx = nothing,
+    )
+    AtmosConfig(
+        config_files::Union{NTuple{<:Any, String} ,Vector{String}};
+        job_id = config_id_from_config_files(config_files),
+        comms_ctx = nothing,
+    )
 
 Helper function for the AtmosConfig constructor. Reads a YAML file into a Dict
 and passes it to the AtmosConfig constructor.
 """
-function AtmosConfig(config_file::String; comms_ctx = nothing)
-    config = YAML.load_file(config_file)
-    return AtmosConfig(config; comms_ctx)
+AtmosConfig(
+    config_file::String = default_config_file;
+    job_id = config_id_from_config_file(config_file),
+    comms_ctx = nothing,
+) = AtmosConfig((config_file,); job_id, comms_ctx)
+
+function AtmosConfig(
+    config_files::TupleOrVector(String);
+    job_id = config_id_from_config_files(config_files),
+    comms_ctx = nothing,
+)
+
+    all_config_files =
+        normrelpath.(maybe_add_default(config_files, default_config_file))
+
+    configs = map(all_config_files) do config_file
+        @info "Loading yaml file $config_file"
+        strip_help_messages(YAML.load_file(config_file))
+    end
+    return AtmosConfig(
+        configs;
+        comms_ctx,
+        config_files = all_config_files,
+        job_id,
+    )
 end
 
 """
-    AtmosConfig(; comms_ctx = nothing)
-Helper function for the AtmosConfig constructor.
-Reads the `config_file` from the command line into a Dict
-and passes it to the AtmosConfig constructor.
-"""
-function AtmosConfig(; comms_ctx = nothing)
-    parsed_args = parse_commandline(argparse_settings())
-    return AtmosConfig(parsed_args["config_file"]; comms_ctx)
-end
+    AtmosConfig(
+        configs::Union{NTuple{<:Any, Dict} ,Vector{Dict}};
+        comms_ctx = nothing,
+        config_files,
+        job_id
+    )
 
-AtmosConfig(::Nothing; comms_ctx = nothing) = AtmosConfig(Dict(); comms_ctx)
-
-"""
-    AtmosConfig(config::Dict; comms_ctx = nothing)
-Constructs the AtmosConfig from the Dict passed in. This Dict overrides all of
+Constructs the AtmosConfig from the Dicts passed in. This Dict overrides all of
 the default configurations set in `default_config_dict()`.
 """
-function AtmosConfig(config::Dict; comms_ctx = nothing)
-    config = override_default_config(config)
+AtmosConfig(configs::AbstractDict; kwargs...) =
+    AtmosConfig((configs,); kwargs...)
+function AtmosConfig(
+    configs::TupleOrVector(AbstractDict);
+    comms_ctx = nothing,
+    config_files = [default_config_file],
+    job_id = "",
+)
+    config_files = map(x -> normrelpath(x), config_files)
+
+    # using config_files = [default_config_file] as a default
+    # relies on the fact that override_default_config uses
+    # default_config_file.
+    config = override_default_config(configs)
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     toml_dict = CP.create_toml_dict(
         FT;
@@ -520,8 +578,27 @@ function AtmosConfig(config::Dict; comms_ctx = nothing)
         @info "Running ClimaCore in unthreaded mode."
     end
 
+    isempty(job_id) &&
+        @warn "`job_id` is empty and likely not passed to AtmosConfig."
+
+    @info "Making AtmosConfig with config files: $(sprint(config_summary, config_files))"
+
     C = typeof(comms_ctx)
     TD = typeof(toml_dict)
     PA = typeof(config)
-    return AtmosConfig{FT, TD, PA, C}(toml_dict, config, comms_ctx)
+    CF = typeof(config_files)
+    return AtmosConfig{FT, TD, PA, C, CF}(
+        toml_dict,
+        config,
+        comms_ctx,
+        config_files,
+        job_id,
+    )
+end
+
+function config_summary(io::IO, config_files)
+    print(io, '\n')
+    for x in config_files
+        println(io, "   $x")
+    end
 end

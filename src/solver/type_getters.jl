@@ -479,19 +479,19 @@ function get_sim_info(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
 
-    job_id = if isnothing(parsed_args["job_id"])
-        job_id_from_config(parsed_args)
-    else
-        parsed_args["job_id"]
-    end
+    (; job_id) = config
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
     out_dir = parsed_args["output_dir"]
     base_output_dir = isnothing(out_dir) ? default_output : out_dir
 
-    output_dir = OutputPathGenerator.generate_output_path(
-        base_output_dir;
-        context = config.comms_ctx,
-    )
+    output_dir = joinpath(base_output_dir, "output_active")
+    mkpath(output_dir)
+    # TODO: Put this back in once
+    # https://github.com/CliMA/ClimaUtilities.jl/issues/56 is fixed.
+    # output_dir = OutputPathGenerator.generate_output_path(
+    #     base_output_dir;
+    #     context = config.comms_ctx,
+    # )
 
     sim = (;
         output_dir,
@@ -599,6 +599,7 @@ function get_simulation(config::AtmosConfig)
     sim_info = get_sim_info(config)
     job_id = sim_info.job_id
     output_dir = sim_info.output_dir
+    @info "Simulation info" job_id output_dir
 
     CP.log_parameter_information(
         config.toml_dict,

@@ -8,15 +8,19 @@ using PrettyTables
 import YAML
 
 # Need to generate config_dict here to override `h_elem` in the loop below
-parsed_args = CA.parse_commandline(CA.argparse_settings())
-config_dict = YAML.load_file(parsed_args["config_file"])
-output_dir = joinpath(config_dict["job_id"])
+include("common.jl")
+(; config_file, job_id) = CA.commandline_kwargs()
+config_files = (default_perf_config_file, config_file)
+config_dict = CA.AtmosConfig(config_files; job_id).parsed_args
+output_dir = job_id
+mkpath(output_dir)
 
 steptimes = []
 # Iterate through varying number of horizontal elements
 for h_elem in 8:8:40
     config_dict["h_elem"] = h_elem
-    config = CA.AtmosConfig(config_dict)
+    config =
+        CA.AtmosConfig(config_dict; config_files, job_id = "$(job_id)_$h_elem")
     simulation = CA.get_simulation(config)
     (; integrator) = simulation
     Y₀ = deepcopy(integrator.u)
@@ -29,11 +33,9 @@ for h_elem in 8:8:40
     comms_ctx = ClimaComms.context(integrator.u.c)
     device = ClimaComms.device(comms_ctx)
     e = ClimaComms.@elapsed device begin
-        s = CA.@timed_str begin
-            CA.benchmark_step!(integrator, Y₀, n_steps) # run
-        end
+        CA.benchmark_step!(integrator, Y₀, n_steps) # run
     end
-    @info "Ran step! $n_steps times in $s, ($(CA.prettytime(e/n_steps*1e9)) per step)"
+    @info "Ran step! $n_steps times at $(CA.prettytime(e/n_steps*1e9)) per step"
     steptime = e / n_steps * 1e9
     push!(steptimes, (h_elem, steptime))
 end

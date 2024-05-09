@@ -4,4 +4,3 @@ t_end: "1mins"
 z_elem: 25
 dt: "1secs"
 dt_save_to_sol: "Inf"
-job_id: "gpu_implicit_barowave"

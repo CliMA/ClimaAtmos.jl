@@ -122,7 +122,8 @@ Then, to run interactively:
 import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
-config = CA.AtmosCoveragePerfConfig();
+(; config_file, job_id) = CA.commandline_kwargs();
+config = CA.AtmosConfig(config_file; job_id);
 simulation = CA.get_simulation(config);
 (; integrator) = simulation
 Y₀ = deepcopy(integrator.u);
