@@ -10,7 +10,7 @@ config: "box"
 hyperdiff: "true" 
 implicit_diffusion: false
 ode_algo: "SSP33ShuOsher"
-precip_model: "0M"
+precip_model: "1M"
 vorticity_hyperdiffusion_coefficient: 0
 scalar_hyperdiffusion_coefficient: 0
 smagorinsky_lilly: true
