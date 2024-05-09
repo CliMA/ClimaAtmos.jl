@@ -58,20 +58,10 @@ function subsidence_tendency!(Yₜ, Y, p, t, colidx, ::Subsidence)
     ρq_tot_toa = toa(Y.c.ρq_tot[colidx])
     ρ_toa = toa(Y.c.ρ[colidx])
     @. ᶜq_tot_gm_toa = ρq_tot_toa / ρ_toa
-    top = Operators.SetValue(ᶜMSE_gm_toa)
-    RBe = Operators.RightBiasedC2F(top)
-    top = Operators.SetValue(ᶜq_tot_gm_toa)
-    RBq = Operators.RightBiasedC2F(top)
-
-    ᶠitp₁ = Operators.InterpolateC2F()
-    ᶠitp₂ = Operators.InterpolateC2F()
-    
-    ## RBe operator keyword is an issue
-    ## RightBiasedC2F Operator results in breakage on GPU!
-    #@. ᶜ∇MSE_gm = ∇c(wvec(RBe(ᶜh_tot - ᶜK)))
-    @. ᶜ∇MSE_gm = ∇c(wvec(ᶠitp₁(ᶜh_tot - ᶜK)))
-    #@. ᶜ∇q_tot_gm = ∇c(wvec(RBq(Y.c.ρq_tot[colidx] / Y.c.ρ[colidx])))
-    @. ᶜ∇q_tot_gm = ∇c(wvec(ᶠitp₂(Y.c.ρq_tot[colidx] / Y.c.ρ[colidx])))
+    RBe = Operators.RightBiasedC2F(; top = Operators.SetValue(ᶜMSE_gm_toa))
+    RBq = Operators.RightBiasedC2F(; top = Operators.SetValue(ᶜq_tot_gm_toa))
+    @. ᶜ∇MSE_gm = ∇c(wvec(RBe(ᶜh_tot - ᶜK)))
+    @. ᶜ∇q_tot_gm = ∇c(wvec(RBq(Y.c.ρq_tot[colidx] / Y.c.ρ[colidx])))
 
     if moisture_model isa NonEquilMoistModel
         # TODO: fix for non-equilibrium case:

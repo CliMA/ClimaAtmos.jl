@@ -1,3 +1,4 @@
+device: "CPUSingleThreaded"
 job_id: "les_bomex_box"
 initial_condition: "Bomex" 
 edmf_coriolis: "Bomex"
@@ -21,8 +22,8 @@ x_elem: 7
 y_elem: 7
 z_elem: 20 
 z_stretch: false
-dt: "0.005secs" 
-t_end: "0.005secs" 
+dt: "0.05secs" 
+t_end: "10secs" 
 dt_save_state_to_disk: "10mins"
 restart_file: "restart/bomex/day0.0.hdf5"
 netcdf_interpolation_num_points: [40, 40, 80]

@@ -24,7 +24,6 @@ end
 
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
-    horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lilly)
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
 
     # Vertical tendencies
@@ -34,7 +33,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         subsidence_tendency!(Yₜ, Y, p, t, colidx, p.atmos.subsidence)
         edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.atmos.edmf_coriolis)
         large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.atmos.ls_adv)
-        vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, p.atmos.smagorinsky_lilly)
         external_forcing_tendency!(
             Yₜ,
             Y,
@@ -116,6 +114,10 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
 
     end
+    # Other SGS tendencies
+    horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lilly)
+    vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lilly)
+
     # TODO: make bycolumn-able
     non_orographic_gravity_wave_tendency!(
         Yₜ,

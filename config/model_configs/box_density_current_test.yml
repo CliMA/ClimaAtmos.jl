@@ -4,7 +4,7 @@ initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
 z_elem: 45
 dt: "0.1secs"
-t_end: "0.1secs"
+t_end: "500secs"
 discrete_hydrostatic_balance: true
 y_max: 6400.0
 y_elem: 5
