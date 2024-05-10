@@ -1,3 +1,4 @@
+device: "CPUSingleThreaded"
 job_id: "les_dycoms_box"
 initial_condition: DYCOMS_RF01 
 edmf_coriolis: DYCOMS_RF01
@@ -19,7 +20,7 @@ y_elem: 15
 z_elem: 75 
 z_stretch: false
 dt: "0.05secs"
-t_end: "0.05secs"
+t_end: "4hours"
 dt_save_state_to_disk: 10mins
 restart_file: "restart/dycoms/Micro1M_day0.0_prod.hdf5"
 netcdf_interpolation_num_points: [30,30,75]
