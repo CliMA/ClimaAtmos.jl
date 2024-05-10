@@ -35,7 +35,7 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     (; Cs) = sl
     (; v_t, Δ_filter) = p.smagorinsky_lilly
     (; ᶜu, ᶠu³) = p.precomputed 
-    
+
     # Operators
     FT = eltype(v_t)
     ᶜJ = Fields.local_geometry_field(Y.c).J 
@@ -47,24 +47,6 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     
     localu = @. Geometry.UVWVector(ᶜu)
     localfu = @. Geometry.UVWVector(ᶠinterp(ᶜu))
-    any(isnan, localu) && error("Found NaN in horizontal localu")
-    any(isnan, localfu) && error("Found NaN in horizontal localfu")
-
-    c1 = @. Geometry.UVWVector(gradₕ(localu.components.data.:1))
-    c2 = @. Geometry.UVWVector(gradₕ(localu.components.data.:2))
-    c3 = @. Geometry.UVWVector(gradₕ(localu.components.data.:3))
-    @. ᶜS.components.data.:1 = c1.components.data.:1
-    @. ᶜS.components.data.:2 = c2.components.data.:1
-    @. ᶜS.components.data.:3 = c3.components.data.:1
-    @. ᶜS.components.data.:4 = c1.components.data.:2
-    @. ᶜS.components.data.:5 = c2.components.data.:2
-    @. ᶜS.components.data.:6 = c3.components.data.:2
-    @. ᶜS.components.data.:7 = zero(c3.components.data.:2)
-    @. ᶜS.components.data.:8 = zero(c3.components.data.:2)
-    @. ᶜS.components.data.:9 = zero(c3.components.data.:2)
-    CA.compute_strain_rate_center!(ᶜϵ, Geometry.Covariant123Vector.(localfu))
-    @. ᶜS = (ᶜS + adjoint(ᶜS)) + ᶜϵ
-    any(isnan, ᶜS) && error("Found NaN in horizontal ᶜS")
 
     t1 = @. Geometry.UVWVector(gradₕ(localfu.components.data.:1))
     t2 = @. Geometry.UVWVector(gradₕ(localfu.components.data.:2))
@@ -80,23 +62,19 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     @. ᶠS.components.data.:9 = zero(t3.components.data.:2)
     CA.compute_strain_rate_face!(ᶠϵ, Geometry.Covariant123Vector.(localu))
     @. ᶠS = (ᶠS + adjoint(ᶠS)) + ᶠϵ
-    any(isnan, ᶠS) && error("Found NaN in horizontal ᶠS")
+    @. ᶜS = ᶜinterp(ᶠS)
 
     ᶜv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶜS))
     ᶠv_t = @. ᶠinterp(ᶜv_t)
     ᶜD = @. FT(3) * ᶜv_t
 
     @. v_t = ᶜv_t
-    any(isnan, ᶜv_t) && error("Found NaN in horizontal ᶜv_t")
 
     ᶠρ = @. ᶠwinterp(ᶜJ, Y.c.ρ)
-    any(isnan, ᶠρ) && error("Found NaN in horizontal ᶠρ")
     
-    any(isnan, ᶜS) && error("Found NaN in horizontal ᶜS")
     @. Yₜ.c.uₕ += C12(wdivₕ(Y.c.ρ * ᶜv_t * ᶜS)) / Y.c.ρ
     
     @. Yₜ.f.u₃ += C3(wdivₕ(ᶠρ * ᶠv_t * ᶠS)) / ᶠρ
-    any(isnan, Yₜ) && error("Found NaN in horizontal Yₜ") 
 
     # energy adjustment
     (; ᶜspecific) = p.precomputed
@@ -105,7 +83,6 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
        (; ᶜh_tot) = p.precomputed
         @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD * gradₕ(ᶜh_tot)) 
     end
-    any(isnan, Yₜ) && error("Found NaN in horizontal Yₜ") 
 
     # q_tot and other tracer adjustment (moisture affects mass terms 
     # as well)
@@ -114,7 +91,6 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
         @. ᶜρχₜ += wdivₕ(Y.c.ρ * ᶜD * gradₕ(ᶜχ)) 
         @. Yₜ.c.ρ += wdivₕ(Y.c.ρ * ᶜD * gradₕ(ᶜχ)) 
     end
-    any(isnan, Yₜ) && error("Found NaN in horizontal Yₜ") 
 
 end
 
@@ -138,20 +114,20 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     localu = @. Geometry.UVWVector(ᶜu)
     ᶠu = @. Geometry.UVWVector(ᶠwinterp(ᶜJ * Y.c.ρ, Y.c.uₕ)) + Geometry.UVWVector(Y.f.u₃)
 
-    c1 = @. Geometry.UVWVector(gradₕ(localu.components.data.:1))
-    c2 = @. Geometry.UVWVector(gradₕ(localu.components.data.:2))
-    c3 = @. Geometry.UVWVector(gradₕ(localu.components.data.:3))
-    @. ᶜS.components.data.:1 = c1.components.data.:1
-    @. ᶜS.components.data.:2 = c2.components.data.:1
-    @. ᶜS.components.data.:3 = c3.components.data.:1
-    @. ᶜS.components.data.:4 = c1.components.data.:2
-    @. ᶜS.components.data.:5 = c2.components.data.:2
-    @. ᶜS.components.data.:6 = c3.components.data.:2
-    @. ᶜS.components.data.:7 = zero(c3.components.data.:2)
-    @. ᶜS.components.data.:8 = zero(c3.components.data.:2)
-    @. ᶜS.components.data.:9 = zero(c3.components.data.:2)
-    CA.compute_strain_rate_center!(ᶜϵ, Geometry.Covariant123Vector.(ᶠu))
-    @. ᶜS = (ᶜS + adjoint(ᶜS)) + ᶜϵ
+    # c1 = @. Geometry.UVWVector(gradₕ(localu.components.data.:1))
+    # c2 = @. Geometry.UVWVector(gradₕ(localu.components.data.:2))
+    # c3 = @. Geometry.UVWVector(gradₕ(localu.components.data.:3))
+    # @. ᶜS.components.data.:1 = c1.components.data.:1
+    # @. ᶜS.components.data.:2 = c2.components.data.:1
+    # @. ᶜS.components.data.:3 = c3.components.data.:1
+    # @. ᶜS.components.data.:4 = c1.components.data.:2
+    # @. ᶜS.components.data.:5 = c2.components.data.:2
+    # @. ᶜS.components.data.:6 = c3.components.data.:2
+    # @. ᶜS.components.data.:7 = zero(c3.components.data.:2)
+    # @. ᶜS.components.data.:8 = zero(c3.components.data.:2)
+    # @. ᶜS.components.data.:9 = zero(c3.components.data.:2)
+    # CA.compute_strain_rate_center!(ᶜϵ, Geometry.Covariant123Vector.(ᶠu))
+    # @. ᶜS = (ᶜS + adjoint(ᶜS)) + ᶜϵ
 
     t1 = @. Geometry.UVWVector(gradₕ(ᶠu.components.data.:1))
     t2 = @. Geometry.UVWVector(gradₕ(ᶠu.components.data.:2))
@@ -167,6 +143,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     @. ᶠS.components.data.:9 = zero(t3.components.data.:2)
     CA.compute_strain_rate_face!(ᶠϵ, ᶜu)
     @. ᶠS = (ᶠS + adjoint(ᶠS)) + ᶠϵ
+    @. ᶜS = ᶜinterp(ᶠS)
 
     ᶜv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶜS))
     ᶠv_t = @. ᶠinterp(ᶜv_t)
@@ -181,17 +158,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
             ᶠS,
         ) / Y.c.ρ,
     )
-    any(isnan, Yₜ) && error("Found NaN in vertical sgs tendency after uh")
     
-     #apply boundary condition for momentum flux
-    ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
-        top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
-        bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ),
-    )
-    @. Yₜ.c.uₕ +=
-     C12(ᶜdivᵥ_uₕ((FT(0) * ᶠgradᵥ(Y.c.uₕ))) / Y.c.ρ)
-
-     any(isnan, Yₜ) && error("Found NaN in vertical sgs tendency after uh bc")
     ᶜdivᵥ_u3 = Operators.DivergenceC2F(
         top = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))),
         bottom = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))), 
@@ -205,8 +172,6 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
             ᶠS,
         ) / Y.c.ρ),
     )
-
-    any(isnan, Yₜ) && error("Found NaN in vertical sgs tendency after u3")
     
     if :ρe_tot in propertynames(Yₜ.c)
         (; ᶜh_tot) = p.precomputed
@@ -220,7 +185,6 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
 					ᶠgradᵥ(ᶜh_tot))
 				  )
     end
-    any(isnan, Yₜ) && error("Found NaN in vertical sgs tendency after etot")
 
     ρ_flux_χ = zero(p.scratch.sfc_temp_C3)
     for (ᶜρχₜ, ᶜχ, χ_name) in CA.matching_subfields(Yₜ.c, ᶜspecific)
@@ -234,10 +198,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(ρ_flux_χ), 
         )
-        # The code below adjusts the tendency by -div(\rho * d_qtot), where
-        # d_qtot = -(D * grad(qtot)). The two negatives cancel out, so we have a +=
         @. ᶜρχₜ -= ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜD) * ᶠgradᵥ(ᶜχ)))
         @. Yₜ.c.ρ -= ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜD) * ᶠgradᵥ(ᶜχ)))
     end
-    any(isnan, Yₜ) && error("Found NaN in vertical sgs tendency after qtot")
 end

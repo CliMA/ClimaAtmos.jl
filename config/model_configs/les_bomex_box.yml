@@ -1,4 +1,3 @@
-device: "CPUSingleThreaded"
 job_id: "les_bomex_box"
 initial_condition: "Bomex" 
 edmf_coriolis: "Bomex"
@@ -15,17 +14,17 @@ vorticity_hyperdiffusion_coefficient: 0
 scalar_hyperdiffusion_coefficient: 0
 smagorinsky_lilly: true
 c_smag: 0.20
-x_max: 2e3
-y_max: 2e3 
-z_max: 2e3 
-x_elem: 7
-y_elem: 7
-z_elem: 20 
+x_max: 6.4e3
+y_max: 6.4e3 
+z_max: 3.0e3 
+x_elem: 14
+y_elem: 14
+z_elem: 40 
 z_stretch: false
-dt: "0.05secs" 
-t_end: "10secs" 
+dt: "0.1secs" 
+t_end: "0.1secs" 
 dt_save_state_to_disk: "10mins"
-restart_file: "restart/bomex/day0.0.hdf5"
+restart_file: "restart/bomex/Micro1M_day0.0_Prod.hdf5"
 netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]

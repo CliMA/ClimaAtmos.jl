@@ -1,26 +1,28 @@
-device: "CPUSingleThreaded"
 job_id: "les_dycoms_box"
-edmf_coriolis: DYCOMS_RF01
 initial_condition: DYCOMS_RF01 
+edmf_coriolis: DYCOMS_RF01
 subsidence: DYCOMS 
-rad: DYCOMS_RF01 
+rad: DYCOMS_RF01
 surface_setup: DYCOMS_RF01
 moist: equil
 config: box 
-hyperdiff: "true" 
-vorticity_hyperdiffusion_coefficient: 0.1
-scalar_hyperdiffusion_coefficient: 0.1
-x_max: 1e3
-y_max: 1e3 
-x_elem: 10 
-y_elem: 10
-z_elem: 20 
-z_max: 1500 
+hyperdiff: "false"
+vorticity_hyperdiffusion_coefficient: 0.0
+scalar_hyperdiffusion_coefficient: 0.0
+ode_algo: "SSP33ShuOsher"
+precip_model: "1M"
+x_max: 3e3
+y_max: 3e3 
+z_max: 1.5e3
+x_elem: 15 
+y_elem: 15
+z_elem: 75 
 z_stretch: false
 dt: "0.05secs"
 t_end: "0.05secs"
 dt_save_state_to_disk: 10mins
-netcdf_interpolation_num_points: [10,10, 20]
+restart_file: "restart/dycoms/Micro1M_day0.0_prod.hdf5"
+netcdf_interpolation_num_points: [30,30,75]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
     period: 10mins

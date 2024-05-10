@@ -8,7 +8,7 @@ env:
   OPENBLAS_NUM_THREADS: 1
   JULIA_NVTX_CALLBACKS: gc
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
-  CONFIG_PATH: "config/longrun_configs"
+  CONFIG_PATH: "config/model_configs"
   SLURM_KILL_BAD_EXIT: 1
   JULIA_NVTX_CALLBACKS: gc
 
@@ -38,34 +38,11 @@ steps:
 
   - wait
 
-  - group: "Targeted AMIP resolution long runs"
+  - group: "Targeted les runs"
 
     steps:
 
-      # TODO: uncomment when zalesak works
-      # - label: ":computer: lim ARS zalesak baroclinic wave (ρe_tot) equilmoist high resolution"
-      #   command:
-      #     - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-      #   artifact_paths: "$$JOB_NAME/output_active/*"
-      #   agents:
-      #     slurm_ntasks: 32
-      #     slurm_mem_per_cpu: 32GB
-      #     slurm_time: 24:00:00
-      #   env:
-      #     JOB_NAME: "longrun_zalesak_tracer_energy_bw_rhoe_equil_highres"
-
-      - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist high resolution centered diff"
-        command:
-          - "srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml"
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_ntasks: 32
-          slurm_nodes: 2
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_ssp_bw_rhoe_equil_highres"
-      
-      - label: ":computer: aquaplanet equilmoist clearsky radiation + prognostic edmf diffusion only + 0M microphysics"
+      - label: ":computer: multi-cpu les test"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
         artifact_paths: "$$JOB_NAME/output_active/*"
@@ -75,19 +52,4 @@ steps:
           slurm_mem_per_cpu: 16GB
           slurm_time: 24:00:00
         env:
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_progedmf_diffonly_0M"
-
-  - group: "Low resolution long runs"
-
-    steps:
-
-      - label: ":computer: low resolution aquaplanet equilmoist clearsky radiation + time-varying insolation + slab ocean"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_ntasks: 8
-          slurm_mem_per_cpu: 16GB
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean"
+          JOB_NAME: "les_dycoms_box"
