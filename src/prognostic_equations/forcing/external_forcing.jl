@@ -163,14 +163,23 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
     @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt_sum
 
     ## subsidence -->
-    tom(f) = Spaces.level(f, Spaces.nlevels(axes(f)))  # get value at top of the model
-    wvec = Geometry.WVector
-    RBh = Operators.RightBiasedC2F(; top = Operators.SetValue(tom(ᶜh_tot)))
-    RBq = Operators.RightBiasedC2F(;
-        top = Operators.SetValue(tom(ᶜspecific.q_tot)),
+    ᶠls_subsidence³ = p.scratch.ᶠtemp_CT3
+    @. ᶠls_subsidence³ =
+        ᶠinterp(ᶜls_subsidence * CT3(unit_basis_vector_data(CT3, ᶜlg)))
+    subsidence!(
+        Yₜ.c.ρe_tot,
+        Y.c.ρ,
+        ᶠls_subsidence³,
+        ᶜh_tot,
+        Val{:first_order}(),
     )
-    @. Yₜ.c.ρe_tot -= Y.c.ρ * ᶜls_subsidence * ᶜdivᵥ(wvec(RBh(ᶜh_tot)))  # ρ⋅w⋅∇h_tot
-    @. Yₜ.c.ρq_tot -= Y.c.ρ * ᶜls_subsidence * ᶜdivᵥ(wvec(RBq(ᶜspecific.q_tot)))  # ρ⋅w⋅∇q_tot
+    subsidence!(
+        Yₜ.c.ρq_tot,
+        Y.c.ρ,
+        ᶠls_subsidence³,
+        ᶜspecific.q_tot,
+        Val{:first_order}(),
+    )
     # <-- subsidence
 
     return nothing
