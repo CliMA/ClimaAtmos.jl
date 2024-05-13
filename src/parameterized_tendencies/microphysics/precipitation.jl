@@ -147,9 +147,11 @@ function precipitation_tendency!(
     compute_precipitation_cache!(Y, p, precip_model, turbconv_model)
 
     # Add the source terms to the tendencies
-    @. Yₜ.c.ρq_tot += ᶜS_ρq_tot
-    @. Yₜ.c.ρ += ᶜS_ρq_tot
-    @. Yₜ.c.ρe_tot += ᶜS_ρe_tot
+    @fused_direct begin
+        @. Yₜ.c.ρq_tot += ᶜS_ρq_tot
+        @. Yₜ.c.ρ += ᶜS_ρq_tot
+        @. Yₜ.c.ρe_tot += ᶜS_ρe_tot
+    end
 
     # update total column energy source for surface energy balance
     Operators.column_integral_definite!(
@@ -159,9 +161,11 @@ function precipitation_tendency!(
     # update precip in cache for coupler's use
     # 3d rain and snow
     T_freeze = TD.Parameters.T_freeze(thermo_params)
-    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
-    @. ᶜ3d_rain = ifelse(ᶜT >= T_freeze, ᶜS_ρq_tot, 0)
-    @. ᶜ3d_snow = ifelse(ᶜT < T_freeze, ᶜS_ρq_tot, 0)
+    @fused_direct begin
+        @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
+        @. ᶜ3d_rain = ifelse(ᶜT >= T_freeze, ᶜS_ρq_tot, 0)
+        @. ᶜ3d_snow = ifelse(ᶜT < T_freeze, ᶜS_ρq_tot, 0)
+    end
     Operators.column_integral_definite!(col_integrated_rain, ᶜ3d_rain)
     Operators.column_integral_definite!(col_integrated_snow, ᶜ3d_snow)
     return nothing
@@ -289,11 +293,13 @@ function precipitation_tendency!(
     (; ᶜSqₜᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜSeₜᵖ) = p.precipitation
 
     # Update grid mean tendencies
-    @. Yₜ.c.ρ += Y.c.ρ * ᶜSqₜᵖ
-    @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜSqₜᵖ
-    @. Yₜ.c.ρe_tot += Y.c.ρ * ᶜSeₜᵖ
-    @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜSqᵣᵖ
-    @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜSqₛᵖ
+    @fused_direct begin
+        @. Yₜ.c.ρ += Y.c.ρ * ᶜSqₜᵖ
+        @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜSqₜᵖ
+        @. Yₜ.c.ρe_tot += Y.c.ρ * ᶜSeₜᵖ
+        @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜSqᵣᵖ
+        @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜSqₛᵖ
+    end
 
     return nothing
 end
@@ -318,20 +324,24 @@ function precipitation_tendency!(
 
     # Update from environment precipitation sources
     # and the grid mean precipitation sinks
-    @. Yₜ.c.ρ += Y.c.ρ * (ᶜSqₜᵖ⁰ + ᶜSqₜᵖ)
-    @. Yₜ.c.ρq_tot += Y.c.ρ * (ᶜSqₜᵖ⁰ + ᶜSqₜᵖ)
-    @. Yₜ.c.ρe_tot += Y.c.ρ * (ᶜSeₜᵖ⁰ + ᶜSeₜᵖ)
-    @. Yₜ.c.ρq_rai += Y.c.ρ * (ᶜSqᵣᵖ⁰ + ᶜSqᵣᵖ)
-    @. Yₜ.c.ρq_sno += Y.c.ρ * (ᶜSqₛᵖ⁰ + ᶜSqₛᵖ)
+    @fused_direct begin
+        @. Yₜ.c.ρ += Y.c.ρ * (ᶜSqₜᵖ⁰ + ᶜSqₜᵖ)
+        @. Yₜ.c.ρq_tot += Y.c.ρ * (ᶜSqₜᵖ⁰ + ᶜSqₜᵖ)
+        @. Yₜ.c.ρe_tot += Y.c.ρ * (ᶜSeₜᵖ⁰ + ᶜSeₜᵖ)
+        @. Yₜ.c.ρq_rai += Y.c.ρ * (ᶜSqᵣᵖ⁰ + ᶜSqᵣᵖ)
+        @. Yₜ.c.ρq_sno += Y.c.ρ * (ᶜSqₛᵖ⁰ + ᶜSqₛᵖ)
+    end
 
     # Update from the updraft precipitation sources
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
-        @. Yₜ.c.ρ += ᶜρaʲs.:($$j) * ᶜSqₜᵖʲs.:($$j)
-        @. Yₜ.c.ρq_tot += ᶜρaʲs.:($$j) * ᶜSqₜᵖʲs.:($$j)
-        @. Yₜ.c.ρe_tot += ᶜρaʲs.:($$j) * ᶜSeₜᵖʲs.:($$j)
-        @. Yₜ.c.ρq_rai += ᶜρaʲs.:($$j) * ᶜSqᵣᵖʲs.:($$j)
-        @. Yₜ.c.ρq_sno += ᶜρaʲs.:($$j) * ᶜSqₛᵖʲs.:($$j)
+        @fused_direct begin
+            @. Yₜ.c.ρ += ᶜρaʲs.:($$j) * ᶜSqₜᵖʲs.:($$j)
+            @. Yₜ.c.ρq_tot += ᶜρaʲs.:($$j) * ᶜSqₜᵖʲs.:($$j)
+            @. Yₜ.c.ρe_tot += ᶜρaʲs.:($$j) * ᶜSeₜᵖʲs.:($$j)
+            @. Yₜ.c.ρq_rai += ᶜρaʲs.:($$j) * ᶜSqᵣᵖʲs.:($$j)
+            @. Yₜ.c.ρq_sno += ᶜρaʲs.:($$j) * ᶜSqₛᵖʲs.:($$j)
+        end
     end
 end
 function precipitation_tendency!(
@@ -353,19 +363,23 @@ function precipitation_tendency!(
 
     # Update from environment precipitation sources
     # and the grid mean precipitation sinks
-    @. Yₜ.c.ρ += ᶜρa⁰ * ᶜSqₜᵖ⁰ + Y.c.ρ * ᶜSqₜᵖ
-    @. Yₜ.c.ρq_tot += ᶜρa⁰ * ᶜSqₜᵖ⁰ + Y.c.ρ * ᶜSqₜᵖ
-    @. Yₜ.c.ρe_tot += ᶜρa⁰ * ᶜSeₜᵖ⁰ + Y.c.ρ * ᶜSeₜᵖ
-    @. Yₜ.c.ρq_rai += ᶜρa⁰ * ᶜSqᵣᵖ⁰ + Y.c.ρ * ᶜSqᵣᵖ
-    @. Yₜ.c.ρq_sno += ᶜρa⁰ * ᶜSqₛᵖ⁰ + Y.c.ρ * ᶜSqₛᵖ
+    @fused_direct begin
+        @. Yₜ.c.ρ += ᶜρa⁰ * ᶜSqₜᵖ⁰ + Y.c.ρ * ᶜSqₜᵖ
+        @. Yₜ.c.ρq_tot += ᶜρa⁰ * ᶜSqₜᵖ⁰ + Y.c.ρ * ᶜSqₜᵖ
+        @. Yₜ.c.ρe_tot += ᶜρa⁰ * ᶜSeₜᵖ⁰ + Y.c.ρ * ᶜSeₜᵖ
+        @. Yₜ.c.ρq_rai += ᶜρa⁰ * ᶜSqᵣᵖ⁰ + Y.c.ρ * ᶜSqᵣᵖ
+        @. Yₜ.c.ρq_sno += ᶜρa⁰ * ᶜSqₛᵖ⁰ + Y.c.ρ * ᶜSqₛᵖ
+    end
 
     # Update from the updraft precipitation sources
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
-        @. Yₜ.c.ρ += Y.c.sgsʲs.:($$j).ρa * ᶜSqₜᵖʲs.:($$j)
-        @. Yₜ.c.ρq_tot += Y.c.sgsʲs.:($$j).ρa * ᶜSqₜᵖʲs.:($$j)
-        @. Yₜ.c.ρe_tot += Y.c.sgsʲs.:($$j).ρa * ᶜSeₜᵖʲs.:($$j)
-        @. Yₜ.c.ρq_rai += Y.c.sgsʲs.:($$j).ρa * ᶜSqᵣᵖʲs.:($$j)
-        @. Yₜ.c.ρq_sno += Y.c.sgsʲs.:($$j).ρa * ᶜSqₛᵖʲs.:($$j)
+        @fused_direct begin
+            @. Yₜ.c.ρ += Y.c.sgsʲs.:($$j).ρa * ᶜSqₜᵖʲs.:($$j)
+            @. Yₜ.c.ρq_tot += Y.c.sgsʲs.:($$j).ρa * ᶜSqₜᵖʲs.:($$j)
+            @. Yₜ.c.ρe_tot += Y.c.sgsʲs.:($$j).ρa * ᶜSeₜᵖʲs.:($$j)
+            @. Yₜ.c.ρq_rai += Y.c.sgsʲs.:($$j).ρa * ᶜSqᵣᵖʲs.:($$j)
+            @. Yₜ.c.ρq_sno += Y.c.sgsʲs.:($$j).ρa * ᶜSqₛᵖʲs.:($$j)
+        end
     end
 end
