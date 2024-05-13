@@ -266,16 +266,9 @@ function detrainment(
     return detr
 end
 
-edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
+edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
-function edmfx_entr_detr_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    colidx,
-    turbconv_model::PrognosticEDMFX,
-)
+function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜentrʲs, ᶜdetrʲs) = p.precomputed
@@ -283,21 +276,17 @@ function edmfx_entr_detr_tendency!(
 
     for j in 1:n
 
-        @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] +=
-            Y.c.sgsʲs.:($$j).ρa[colidx] *
-            (ᶜentrʲs.:($$j)[colidx] - ᶜdetrʲs.:($$j)[colidx])
+        @. Yₜ.c.sgsʲs.:($$j).ρa +=
+            Y.c.sgsʲs.:($$j).ρa * (ᶜentrʲs.:($$j) - ᶜdetrʲs.:($$j))
 
-        @. Yₜ.c.sgsʲs.:($$j).mse[colidx] +=
-            ᶜentrʲs.:($$j)[colidx] *
-            (ᶜmse⁰[colidx] - Y.c.sgsʲs.:($$j).mse[colidx])
+        @. Yₜ.c.sgsʲs.:($$j).mse +=
+            ᶜentrʲs.:($$j) * (ᶜmse⁰ - Y.c.sgsʲs.:($$j).mse)
 
-        @. Yₜ.c.sgsʲs.:($$j).q_tot[colidx] +=
-            ᶜentrʲs.:($$j)[colidx] *
-            (ᶜq_tot⁰[colidx] - Y.c.sgsʲs.:($$j).q_tot[colidx])
+        @. Yₜ.c.sgsʲs.:($$j).q_tot +=
+            ᶜentrʲs.:($$j) * (ᶜq_tot⁰ - Y.c.sgsʲs.:($$j).q_tot)
 
-        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] +=
-            ᶠinterp(ᶜentrʲs.:($$j)[colidx]) *
-            (ᶠu₃⁰[colidx] - Y.f.sgsʲs.:($$j).u₃[colidx])
+        @. Yₜ.f.sgsʲs.:($$j).u₃ +=
+            ᶠinterp(ᶜentrʲs.:($$j)) * (ᶠu₃⁰ - Y.f.sgsʲs.:($$j).u₃)
     end
     return nothing
 end

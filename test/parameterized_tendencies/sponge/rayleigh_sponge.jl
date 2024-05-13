@@ -22,9 +22,7 @@ include("../../test_helpers.jl")
     (; ᶜβ_rayleigh_uₕ) = CA.rayleigh_sponge_cache(Y, rs)
     @test ᶜβ_rayleigh_uₕ == @. sin(FT(π) / 2 * z / zmax)^2
     test_cache = (; rayleigh_sponge = (; ᶜβ_rayleigh_uₕ = ᶜβ_rayleigh_uₕ))
-    CC.Fields.bycolumn(axes(Y.c)) do colidx
-        CA.rayleigh_sponge_tendency!(ᶜYₜ, Y, test_cache, FT(0), colidx, rs)
-    end
+    CA.rayleigh_sponge_tendency!(ᶜYₜ, Y, test_cache, FT(0), rs)
     # Test that only required tendencies are affected
     for (var_name) in filter(x -> (x != :uₕ), propertynames(Y.c))
         @test ᶜYₜ.c.:($var_name) == zeros(axes(Y.c))

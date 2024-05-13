@@ -7,45 +7,34 @@ import ClimaCore: Fields, Geometry
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
-    Fields.bycolumn(axes(Y.c)) do colidx
-        implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
-        if p.atmos.sgs_adv_mode == Implicit()
-            edmfx_sgs_vertical_advection_tendency!(
-                Yₜ,
-                Y,
-                p,
-                t,
-                colidx,
-                p.atmos.turbconv_model,
-            )
-        end
-
-        if p.atmos.diff_mode == Implicit()
-            vertical_diffusion_boundary_layer_tendency!(
-                Yₜ,
-                Y,
-                p,
-                t,
-                colidx,
-                p.atmos.vert_diff,
-            )
-            edmfx_sgs_diffusive_flux_tendency!(
-                Yₜ,
-                Y,
-                p,
-                t,
-                colidx,
-                p.atmos.turbconv_model,
-            )
-        end
-        # NOTE: All ρa tendencies should be applied before calling this function
-        pressure_work_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
-
-        # NOTE: This will zero out all monmentum tendencies in the edmfx advection test
-        # please DO NOT add additional velocity tendencies after this function
-        zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
-
+    implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+    if p.atmos.sgs_adv_mode == Implicit()
+        edmfx_sgs_vertical_advection_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.turbconv_model,
+        )
     end
+
+    if p.atmos.diff_mode == Implicit()
+        vertical_diffusion_boundary_layer_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.vert_diff,
+        )
+        edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    end
+    # NOTE: All ρa tendencies should be applied before calling this function
+    pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+
+    # NOTE: This will zero out all monmentum tendencies in the edmfx advection test
+    # please DO NOT add additional velocity tendencies after this function
+    zero_velocity_tendency!(Yₜ, Y, p, t)
+
     # NOTE: This will zero out all tendencies
     # please DO NOT add additional tendencies after this function
     zero_tendency!(Yₜ, Y, p, t, p.atmos.tendency_model, p.atmos.turbconv_model)
@@ -133,7 +122,7 @@ vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:first_order}) =
 vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
 
-function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
+function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; moisture_model, turbconv_model, rayleigh_sponge, precip_model) = p.atmos
     (; dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
@@ -141,26 +130,17 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p.core
     (; ᶜh_tot, ᶜspecific, ᶠu³, ᶜp) = p.precomputed
 
-    @. Yₜ.c.ρ[colidx] -=
-        ᶜdivᵥ(ᶠwinterp(ᶜJ[colidx], Y.c.ρ[colidx]) * ᶠu³[colidx])
+    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠu³)
 
     # Central advection of active tracers (e_tot and q_tot)
-    vertical_transport!(
-        Yₜ.c.ρe_tot[colidx],
-        ᶜJ[colidx],
-        Y.c.ρ[colidx],
-        ᶠu³[colidx],
-        ᶜh_tot[colidx],
-        dt,
-        Val(:none),
-    )
+    vertical_transport!(Yₜ.c.ρe_tot, ᶜJ, Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     if !(moisture_model isa DryModel)
         vertical_transport!(
-            Yₜ.c.ρq_tot[colidx],
-            ᶜJ[colidx],
-            Y.c.ρ[colidx],
-            ᶠu³[colidx],
-            ᶜspecific.q_tot[colidx],
+            Yₜ.c.ρq_tot,
+            ᶜJ,
+            Y.c.ρ,
+            ᶠu³,
+            ᶜspecific.q_tot,
             dt,
             Val(:none),
         )
@@ -173,31 +153,28 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         # using downward biasing and free outflow bottom boundary condition
 
         ᶠlg = Fields.local_geometry_field(Y.f)
-        @. Yₜ.c.ρq_rai[colidx] -= ᶜprecipdivᵥ(
-            CT3(unit_basis_vector_data(CT3, ᶠlg[colidx])) *
-            ᶠwinterp(ᶜJ[colidx], Y.c.ρ[colidx]) *
-            ᶠright_bias(-p.precomputed.ᶜwᵣ[colidx] * ᶜspecific.q_rai[colidx]),
+        @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
+            CT3(unit_basis_vector_data(CT3, ᶠlg)) *
+            ᶠwinterp(ᶜJ, Y.c.ρ) *
+            ᶠright_bias(-p.precomputed.ᶜwᵣ * ᶜspecific.q_rai),
         )
-        @. Yₜ.c.ρq_sno[colidx] -= ᶜprecipdivᵥ(
-            CT3(unit_basis_vector_data(CT3, ᶠlg[colidx])) *
-            ᶠwinterp(ᶜJ[colidx], Y.c.ρ[colidx]) *
-            ᶠright_bias(-p.precomputed.ᶜwₛ[colidx] * ᶜspecific.q_sno[colidx]),
+        @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
+            CT3(unit_basis_vector_data(CT3, ᶠlg)) *
+            ᶠwinterp(ᶜJ, Y.c.ρ) *
+            ᶠright_bias(-p.precomputed.ᶜwₛ * ᶜspecific.q_sno),
         )
     end
 
-    @. Yₜ.f.u₃[colidx] +=
-        -(
-            ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
-            ᶠinterp(Y.c.ρ[colidx] - ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
-        ) / ᶠinterp(Y.c.ρ[colidx])
+    @. Yₜ.f.u₃ +=
+        -(ᶠgradᵥ(ᶜp - ᶜp_ref) + ᶠinterp(Y.c.ρ - ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) /
+        ᶠinterp(Y.c.ρ)
 
     if rayleigh_sponge isa RayleighSponge
         (; ᶠβ_rayleigh_w) = p.rayleigh_sponge
-        @. Yₜ.f.u₃[colidx] -= ᶠβ_rayleigh_w[colidx] * Y.f.u₃[colidx]
+        @. Yₜ.f.u₃ -= ᶠβ_rayleigh_w * Y.f.u₃
         if turbconv_model isa PrognosticEDMFX
             for j in 1:n
-                @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
-                    ᶠβ_rayleigh_w[colidx] * Y.f.sgsʲs.:($$j).u₃[colidx]
+                @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠβ_rayleigh_w * Y.f.sgsʲs.:($$j).u₃
             end
         end
     end
