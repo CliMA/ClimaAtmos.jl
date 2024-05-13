@@ -6,7 +6,7 @@ implicit_diffusion: false
 moist: "equil"
 precip_model: "1M"
 config: "box"
-hyperdiff: "true"
+hyperdiff: "false"
 x_max: 1e3
 y_max: 1e3
 z_max: 500
