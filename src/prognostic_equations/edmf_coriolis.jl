@@ -17,18 +17,11 @@ function edmf_coriolis_cache(Y, edmf_coriolis::EDMFCoriolis)
     return (; ᶜuₕ_g = similar(Y.c.uₕ), ᶜf_coriolis)
 end
 
-edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
-function edmf_coriolis_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    colidx,
-    edmf_coriolis::EDMFCoriolis,
-)
+edmf_coriolis_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+function edmf_coriolis_tendency!(Yₜ, Y, p, t, edmf_coriolis::EDMFCoriolis)
     (; prof_ug, prof_vg) = edmf_coriolis
-    ᶜf_coriolis = p.edmf_coriolis.ᶜf_coriolis[colidx]
-    ᶜuₕ_g = p.edmf_coriolis.ᶜuₕ_g[colidx]
+    ᶜf_coriolis = p.edmf_coriolis.ᶜf_coriolis
+    ᶜuₕ_g = p.edmf_coriolis.ᶜuₕ_g
     z = Fields.coordinate_field(axes(ᶜuₕ_g)).z
     @. ᶜuₕ_g =
         Geometry.Covariant12Vector(Geometry.UVVector(prof_ug(z), prof_vg(z)))
@@ -36,8 +29,7 @@ function edmf_coriolis_tendency!(
     # Coriolis
     C123 = Geometry.Covariant123Vector
     C12 = Geometry.Contravariant12Vector
-    @. Yₜ.c.uₕ[colidx] -=
-        ᶜf_coriolis × (C12(C123(Y.c.uₕ[colidx])) - C12(C123(ᶜuₕ_g)))
+    @. Yₜ.c.uₕ -= ᶜf_coriolis × (C12(C123(Y.c.uₕ)) - C12(C123(ᶜuₕ_g)))
 
     return nothing
 end
