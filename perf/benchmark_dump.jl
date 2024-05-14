@@ -10,8 +10,9 @@ import YAML
 # Need to generate config_dict here to override `h_elem` in the loop below
 include("common.jl")
 (; config_file, job_id) = CA.commandline_kwargs()
-config_files = (default_perf_config_file, config_file)
-config_dict = CA.AtmosConfig(config_files; job_id).parsed_args
+config = CA.AtmosConfig(config_file; job_id)
+config_dict = config.parsed_args
+(; config_files) = config
 output_dir = job_id
 mkpath(output_dir)
 

@@ -845,7 +845,7 @@ steps:
           slurm_gpus: 1
           slurm_mem: 20G
 
-  - group: "GPU Performance"
+  - group: "Benchmarks"
     steps:
 
       - label: "Perf: GPU implicit baro wave wrt h_elem"
@@ -887,9 +887,6 @@ steps:
           --job_id cpu_implicit_barowave
         artifact_paths: "cpu_implicit_barowave/output_active/*"
 
-  - group: "Performance"
-    steps:
-
       # Benchmarks
       - label: ":computer: Benchmark: perf target (default)"
         command: >
@@ -916,6 +913,9 @@ steps:
         agents:
           slurm_mem: 24GB
           slurm_cpus_per_task: 8
+
+  - group: "Flame graphs"
+    steps:
 
       - label: ":fire: Flame graph: perf target (default)"
         command: >
@@ -1018,6 +1018,9 @@ steps:
           slurm_mem: 48GB
           slurm_gpus: 1
           gres: "gpu:p100:1"
+
+  - group: "Inference/Invalidations"
+    steps:
 
       # Inference
       - label: ":rocket: JET n-failures (inference)"

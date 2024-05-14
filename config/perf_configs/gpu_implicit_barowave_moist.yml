@@ -1,3 +1,11 @@
+surface_setup: "DefaultExchangeCoefficients"
+vert_diff: "true"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+forcing: "held_suarez"
+rad: "allskywithclear"
+warn_allocations_diagnostics: true
+log_progress: false
 apply_limiter: false
 precip_model: "0M"
 h_elem: 12

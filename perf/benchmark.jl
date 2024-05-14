@@ -12,7 +12,7 @@ import SciMLBase
 import ClimaTimeSteppers as CTS
 
 (; config_file, job_id) = CA.commandline_kwargs()
-config = CA.AtmosConfig((default_perf_config_file, config_file); job_id)
+config = CA.AtmosConfig(config_file; job_id)
 
 simulation = CA.get_simulation(config);
 (; integrator) = simulation;

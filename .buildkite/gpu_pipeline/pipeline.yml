@@ -12,6 +12,7 @@ env:
   SLURM_KILL_BAD_EXIT: 1
   SLURM_GRES_FLAGS: "allow-task-sharing"
   GPU_CONFIG_PATH: "config/gpu_configs/"
+  MODEL_CONFIG_PATH: "config/model_configs/"
   CLIMAATMOS_GC_NSTEPS: 10
 
 steps:
@@ -249,7 +250,7 @@ steps:
           - >
             nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_diagedmf/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_diagedmf.yml
+            --config_file ${MODEL_CONFIG_PATH}aquaplanet_diagedmf.yml
             --job_id gpu_aquaplanet_diagedmf
         artifact_paths: "gpu_aquaplanet_diagedmf/output_active/*"
         agents:
@@ -258,6 +259,15 @@ steps:
           slurm_ntasks: 1
           slurm_mem: 32G
           slurm_exclusive:
+
+      - label: "gpu_aquaplanet_diagedmf_benchmark"
+        command: >
+          julia --color=yes --project=perf perf/benchmark.jl
+          --config_file ${MODEL_CONFIG_PATH}aquaplanet_diagedmf.yml
+          --job_id gpu_aquaplanet_diagedmf_benchmark
+        artifact_paths: "gpu_aquaplanet_diagedmf_benchmark/output_active/*"
+        agents:
+          slurm_gpus: 1
 
   - group: "Prognostic EDMF GPU"
     steps:
@@ -268,7 +278,7 @@ steps:
           - >
             nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_progedmf/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_progedmf.yml
+            --config_file ${MODEL_CONFIG_PATH}aquaplanet_progedmf.yml
             --job_id gpu_aquaplanet_progedmf
         artifact_paths: "gpu_aquaplanet_progedmf/output_active/*"
         agents:
@@ -277,3 +287,12 @@ steps:
           slurm_ntasks: 1
           slurm_mem: 32G
           slurm_exclusive:
+
+      - label: "gpu_aquaplanet_progedmf_benchmark"
+        command: >
+          julia --color=yes --project=perf perf/benchmark.jl
+          --config_file ${MODEL_CONFIG_PATH}aquaplanet_progedmf.yml
+          --job_id gpu_aquaplanet_progedmf_benchmark
+        artifact_paths: "gpu_aquaplanet_progedmf_benchmark/output_active/*"
+        agents:
+          slurm_gpus: 1

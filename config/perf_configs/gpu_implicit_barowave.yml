@@ -1,3 +1,15 @@
+moist: "equil"
+apply_limiter: true
+surface_setup: "DefaultExchangeCoefficients"
+t_end: "10secs"
+vert_diff: "true"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+forcing: "held_suarez"
+precip_model: "0M"
+rad: "allskywithclear"
+warn_allocations_diagnostics: true
+log_progress: false
 h_elem: 12
 initial_condition: "DryBaroclinicWave"
 t_end: "1mins"

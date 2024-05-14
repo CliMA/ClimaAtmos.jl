@@ -4,7 +4,7 @@ import ClimaAtmos as CA
 
 include("common.jl")
 (; config_file, job_id) = CA.commandline_kwargs()
-config = CA.AtmosConfig((default_perf_config_file, config_file); job_id)
+config = CA.AtmosConfig(config_file; job_id)
 
 # To revive, define `args_integrator(::AtmosConfig)` and use that here
 simulation = CA.get_simulation(config)
