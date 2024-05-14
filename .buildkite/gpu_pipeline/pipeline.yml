@@ -25,6 +25,12 @@ steps:
       - julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'
       - julia --project=examples -e 'using Pkg; Pkg.status()'
 
+      - echo "--- Instantiate perf"
+      - julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'
+      - julia --project=perf -e 'using Pkg; Pkg.precompile()'
+      - julia --project=perf -e 'using CUDA; CUDA.precompile_runtime()'
+      - julia --project=perf -e 'using Pkg; Pkg.status()'
+
       - echo "--- Download artifacts"
       - julia --project=examples artifacts/download_artifacts.jl
 
