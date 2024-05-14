@@ -9,14 +9,6 @@ Creates a full model configuration from the given target job.
 TargetJobConfig(target_job) =
     CA.AtmosConfig(CA.config_from_target_job(target_job))
 
-const default_perf_config_file = joinpath(
-    dirname(@__FILE__),
-    "..",
-    "config",
-    "default_configs",
-    "default_perf.yml",
-)
-
 import ClimaTimeSteppers as CTS
 get_W(i::CTS.DistributedODEIntegrator) = i.cache.newtons_method_cache.j
 get_W(i) = i.cache.W
