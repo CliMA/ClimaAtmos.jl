@@ -251,3 +251,13 @@ end
     @test test_cent_space == cent_space
     @test test_face_space == face_space
 end
+
+@testset "macro expand FT" begin
+    # Test macro expansion of FT
+    @test typeof(CA.@convert_scalars Float64 1 + 2.0 + 3.0f0 * π + sin(pi)) ==
+          Float64
+    @test typeof(CA.@convert_scalars Float32 1 + 2.0 + 3.0f0 * π + sin(pi)) ==
+          Float32
+    FT = Float32
+    @test typeof(CA.@convert_scalars FT 3.0 + 1) == Float32
+end

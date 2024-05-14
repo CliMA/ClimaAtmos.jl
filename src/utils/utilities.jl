@@ -404,3 +404,42 @@ function gaussian_smooth(arr::AbstractArray, sigma::Int = 1)
 
     return smoothed_arr
 end
+
+
+"""
+    macro convert_scalars(FT_expr, expr)
+
+The `convert_scalars` macro is used to convert scalar values in an expression to a specified type.
+
+## Arguments
+- `FT_expr`: A function or expression that specifies the type to which the scalar values should be converted.
+- `expr`: The expression in which scalar values need to be converted.
+
+## Returns
+The macro returns the modified expression with scalar values converted to the specified type.
+
+## Example
+```julia
+FT = Float32
+@convert_scalars FT 1 + 2.0 + 3.0f0 * π + sin(pi)
+# expands to: FT(1) + FT(2.0) + FT(3.0f0) * FT(π) + sin(FT(pi))
+```
+"""
+macro convert_scalars(FT_expr, expr)
+
+    # Helper function to process expressions
+    function process_expr(expr, FT_expr)
+        if isa(expr, Number) || expr in (:π, :pi)
+            return esc(:($FT_expr($expr)))
+        elseif expr isa Expr
+            return Expr(
+                expr.head,
+                map(e -> process_expr(e, FT_expr), expr.args)...,
+            )
+        else
+            return expr
+        end
+    end
+
+    return process_expr(expr, FT_expr)
+end
