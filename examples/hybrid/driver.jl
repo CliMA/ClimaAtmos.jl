@@ -9,7 +9,8 @@ import Random
 Random.seed!(1234)
 
 if !(@isdefined config)
-    config = CA.AtmosConfig()
+    (; config_file, job_id) = CA.commandline_kwargs()
+    config = CA.AtmosConfig(config_file; job_id)
 end
 simulation = CA.get_simulation(config)
 (; integrator) = simulation
@@ -178,62 +179,43 @@ if config.parsed_args["check_precipitation"]
     Yₜ_ρqₜ = similar(Yₜ.c.ρq_rai)
 
 
-    ClimaCore.Fields.bycolumn(axes(sol.u[end].c.ρ)) do colidx
-        CA.precipitation_tendency!(
-            Yₜ,
-            sol.u[end],
-            sol.prob.p,
-            sol.t[end],
-            colidx,
-            sol.prob.p.atmos.precip_model,
-            sol.prob.p.atmos.turbconv_model,
-        )
+    CA.precipitation_tendency!(
+        Yₜ,
+        sol.u[end],
+        sol.prob.p,
+        sol.t[end],
+        sol.prob.p.atmos.precip_model,
+        sol.prob.p.atmos.turbconv_model,
+    )
+    @. Yₜ_ρqₚ = -Yₜ.c.ρq_rai - Yₜ.c.ρq_sno
+    @. Yₜ_ρqₜ = Yₜ.c.ρq_tot
+    @. Yₜ_ρ = Yₜ.c.ρ
 
-        @. Yₜ_ρqₚ[colidx] = -Yₜ.c.ρq_rai[colidx] - Yₜ.c.ρq_sno[colidx]
-        @. Yₜ_ρqₜ[colidx] = Yₜ.c.ρq_tot[colidx]
-        @. Yₜ_ρ[colidx] = Yₜ.c.ρ[colidx]
+    # no nans
+    @assert !any(isnan, Yₜ.c.ρ)
+    @assert !any(isnan, Yₜ.c.ρq_tot)
+    @assert !any(isnan, Yₜ.c.ρe_tot)
+    @assert !any(isnan, Yₜ.c.ρq_rai)
+    @assert !any(isnan, Yₜ.c.ρq_sno)
+    @assert !any(isnan, sol.prob.p.precomputed.ᶜwᵣ)
+    @assert !any(isnan, sol.prob.p.precomputed.ᶜwₛ)
 
-        # no nans
-        @assert !any(isnan, Yₜ.c.ρ[colidx])
-        @assert !any(isnan, Yₜ.c.ρq_tot[colidx])
-        @assert !any(isnan, Yₜ.c.ρe_tot[colidx])
-        @assert !any(isnan, Yₜ.c.ρq_rai[colidx])
-        @assert !any(isnan, Yₜ.c.ρq_sno[colidx])
-        @assert !any(isnan, sol.prob.p.precomputed.ᶜwᵣ[colidx])
-        @assert !any(isnan, sol.prob.p.precomputed.ᶜwₛ[colidx])
+    # treminal velocity is positive
+    @test minimum(sol.prob.p.precomputed.ᶜwᵣ) >= FT(0)
+    @test minimum(sol.prob.p.precomputed.ᶜwₛ) >= FT(0)
 
-        # treminal velocity is positive
-        @test minimum(sol.prob.p.precomputed.ᶜwᵣ[colidx]) >= FT(0)
-        @test minimum(sol.prob.p.precomputed.ᶜwₛ[colidx]) >= FT(0)
+    # checking for water budget conservation
+    # in the presence of precipitation sinks
+    # (This test only works without surface flux of q_tot)
+    @test all(ClimaCore.isapprox(Yₜ_ρqₜ, Yₜ_ρqₚ, rtol = 1e2 * eps(FT)))
 
-        # checking for water budget conservation
-        # in the presence of precipitation sinks
-        # (This test only works without surface flux of q_tot)
-        @test all(
-            ClimaCore.isapprox(
-                Yₜ_ρqₜ[colidx],
-                Yₜ_ρqₚ[colidx],
-                rtol = 1e2 * eps(FT),
-            ),
-        )
+    # mass budget consistency
+    @test all(ClimaCore.isapprox(Yₜ_ρ, Yₜ_ρqₜ, rtol = eps(FT)))
 
-        # mass budget consistency
-        @test all(
-            ClimaCore.isapprox(Yₜ_ρ[colidx], Yₜ_ρqₜ[colidx], rtol = eps(FT)),
-        )
-
-        # cloud fraction diagnostics
-        @assert !any(
-            isnan,
-            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
-        )
-        @test minimum(
-            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
-        ) >= FT(0)
-        @test maximum(
-            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
-        ) <= FT(1)
-    end
+    # cloud fraction diagnostics
+    @assert !any(isnan, sol.prob.p.precomputed.cloud_diagnostics_tuple.cf)
+    @test minimum(sol.prob.p.precomputed.cloud_diagnostics_tuple.cf) >= FT(0)
+    @test maximum(sol.prob.p.precomputed.cloud_diagnostics_tuple.cf) <= FT(1)
 end
 
 # Visualize the solution
@@ -274,9 +256,12 @@ if ClimaComms.iamroot(config.comms_ctx)
     end
     @info "Plotting done"
 
-    function symlink_to_fullpath(path)
-        return joinpath(dirname(path), readlink(path))
-    end
+    # TODO: Use readlink again once
+    # https://github.com/CliMA/ClimaUtilities.jl/issues/56 is fixed.
+    symlink_to_fullpath(path) = path
+    # function symlink_to_fullpath(path)
+    #     return joinpath(dirname(path), readlink(path))
+    # end
 
     @info "Creating tarballs"
     # These NC files are used by our reproducibility tests,

@@ -3,7 +3,6 @@ initial_condition: "DryBaroclinicWave"
 deep_atmosphere: true
 dt: "400secs"
 t_end: "10days"
-job_id: "sphere_baroclinic_wave_rhoe"
 diagnostics:
   - short_name: [pfull, ua, wa, va, rv, ta, ke]
     period: 1days

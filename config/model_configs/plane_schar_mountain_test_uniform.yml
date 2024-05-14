@@ -14,7 +14,6 @@ vorticity_hyperdiffusion_coefficient: 0.5
 scalar_hyperdiffusion_coefficient: 0.5
 z_max: 25000.0
 topography: "Schar"
-job_id: "plane_schar_mountain_test_uniform"
 toml: [toml/plane_schar_mountain_test_uniform.toml]
 diagnostics:
   - short_name: wa

@@ -43,31 +43,13 @@ include("../../test_helpers.jl")
         @test var_name ∈ propertynames(precip_cache)
     end
     turbconv_model = nothing # Extend to other turbulence convection models
-    CC.Fields.bycolumn(axes(Y.c)) do colidx
-        CA.compute_precipitation_cache!(
-            Y,
-            p,
-            colidx,
-            precip_model,
-            turbconv_model,
-        )
-    end
+    CA.compute_precipitation_cache!(Y, p, precip_model, turbconv_model)
     @test maximum(abs.(p.precipitation.ᶜS_ρq_tot)) <= sqrt(eps(FT))
 
     # Test that tendencies result in correct water-mass budget,
     # and that the tendency modification corresponds exactly to the
     # cached source term.
-    CC.Fields.bycolumn(axes(Y.c)) do colidx
-        CA.precipitation_tendency!(
-            ᶜYₜ,
-            Y,
-            p,
-            FT(0),
-            colidx,
-            precip_model,
-            turbconv_model,
-        )
-    end
+    CA.precipitation_tendency!(ᶜYₜ, Y, p, FT(0), precip_model, turbconv_model)
     @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
     @test ᶜYₜ.c.ρ == p.precipitation.ᶜS_ρq_tot
 
@@ -94,17 +76,7 @@ include("../../test_helpers.jl")
     @test CA.qₚ(FT(10), FT(2)) == FT(5)
     @test CA.qₚ(FT(-10), FT(2)) == FT(0)
     @test CA.limit(FT(10), FT(2), 5) == FT(1)
-    CC.Fields.bycolumn(axes(Y.c)) do colidx
-        CA.precipitation_tendency!(
-            ᶜYₜ,
-            Y,
-            p,
-            FT(0),
-            colidx,
-            precip_model,
-            turbconv_model,
-        )
-    end
+    CA.precipitation_tendency!(ᶜYₜ, Y, p, FT(0), precip_model, turbconv_model)
     @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
     @test ᶜYₜ.c.ρ == Y.c.ρ .* p.precipitation.ᶜSqₜᵖ
 end

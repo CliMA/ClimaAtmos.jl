@@ -12,7 +12,7 @@ forcing_cache(Y, atmos::AtmosModel) = forcing_cache(Y, atmos.forcing_type)
 #####
 
 forcing_cache(Y, forcing_type::Nothing) = (;)
-forcing_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
+forcing_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 #####
 ##### Held-Suarez forcing
@@ -45,7 +45,7 @@ function held_suarez_ΔT_y_T_equator(
     return ΔT_y, T_equator
 end
 
-function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
+function forcing_tendency!(Yₜ, Y, p, t, ::HeldSuarezForcing)
     (; params) = p
     (; ᶜp, sfc_conditions) = p.precomputed
     (; ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ) = p.forcing
@@ -67,39 +67,33 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
     k_s = 1 / (4 * day)
     k_f = 1 / day
 
-    z_surface =
-        Fields.level(Fields.coordinate_field(Y.f).z[colidx], Fields.half)
+    z_surface = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
 
     ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, p.atmos.moisture_model)
 
-    @. ᶜσ[colidx] =
-        ᶜp[colidx] / (
+    @. ᶜσ =
+        ᶜp / (
             MSLP * exp(
                 -grav * z_surface / R_d /
-                TD.air_temperature(thermo_params, sfc_conditions.ts[colidx]),
+                TD.air_temperature(thermo_params, sfc_conditions.ts),
             )
         )
 
-    @. ᶜheight_factor[colidx] = max(0, (ᶜσ[colidx] - σ_b) / (1 - σ_b))
-    @. ᶜΔρT[colidx] =
-        (
-            k_a +
-            (k_s - k_a) * ᶜheight_factor[colidx] * abs2(abs2(cos(ᶜφ[colidx])))
-        ) *
-        Y.c.ρ[colidx] *
+    @. ᶜheight_factor = max(0, (ᶜσ - σ_b) / (1 - σ_b))
+    @. ᶜΔρT =
+        (k_a + (k_s - k_a) * ᶜheight_factor * abs2(abs2(cos(ᶜφ)))) *
+        Y.c.ρ *
         ( # ᶜT - ᶜT_equil
-            ᶜp[colidx] / (Y.c.ρ[colidx] * R_d) - max(
+            ᶜp / (Y.c.ρ * R_d) - max(
                 T_min,
                 (
-                    T_equator - ΔT_y * abs2(sin(ᶜφ[colidx])) -
-                    Δθ_z *
-                    log(ᶜp[colidx] / p_ref_theta) *
-                    abs2(cos(ᶜφ[colidx]))
-                ) * fast_pow(ᶜp[colidx] / p_ref_theta, κ_d),
+                    T_equator - ΔT_y * abs2(sin(ᶜφ)) -
+                    Δθ_z * log(ᶜp / p_ref_theta) * abs2(cos(ᶜφ))
+                ) * fast_pow(ᶜp / p_ref_theta, κ_d),
             )
         )
 
-    @. Yₜ.c.uₕ[colidx] -= (k_f * ᶜheight_factor[colidx]) * Y.c.uₕ[colidx]
-    @. Yₜ.c.ρe_tot[colidx] -= ᶜΔρT[colidx] * cv_d
+    @. Yₜ.c.uₕ -= (k_f * ᶜheight_factor) * Y.c.uₕ
+    @. Yₜ.c.ρe_tot -= ᶜΔρT * cv_d
     return nothing
 end

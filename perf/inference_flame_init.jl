@@ -1,7 +1,11 @@
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
-config = CA.AtmosCoveragePerfConfig()
+
+include("common.jl")
+(; config_file, job_id) = CA.commandline_kwargs()
+config = CA.AtmosConfig(config_file; job_id)
+
 # To revive, define `args_integrator(::AtmosConfig)` and use that here
 simulation = CA.get_simulation(config)
 (; integrator) = simulation

@@ -15,7 +15,6 @@ config: "box"
 vorticity_hyperdiffusion_coefficient: 0.6
 scalar_hyperdiffusion_coefficient: 0.6
 z_max: 6400.0
-job_id: "box_density_current_test"
 diagnostics:
   - short_name: thetaa
     period: 10secs

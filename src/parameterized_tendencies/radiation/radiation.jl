@@ -22,7 +22,7 @@ radiation_model_cache(Y, atmos::AtmosModel, args...) =
 #####
 
 radiation_model_cache(Y, radiation_mode::Nothing; args...) = (;)
-radiation_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
+radiation_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 #####
 ##### RRTMGP Radiation
@@ -225,9 +225,9 @@ function radiation_model_cache(
     )
 end
 
-function radiation_tendency!(Yₜ, Y, p, t, colidx, ::RRTMGPI.AbstractRRTMGPMode)
+function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     (; ᶠradiation_flux) = p.radiation
-    @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
+    @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
     return nothing
 end
 
@@ -248,14 +248,7 @@ function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS_RF01)
         net_energy_flux_sfc = [Geometry.WVector(FT(0))],
     )
 end
-function radiation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    colidx,
-    radiation_mode::RadiationDYCOMS_RF01,
-)
+function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS_RF01)
     @assert !(p.atmos.moisture_model isa DryModel)
 
     (; params) = p
@@ -269,16 +262,16 @@ function radiation_tendency!(
     ᶠz = Fields.coordinate_field(Y.f).z
 
     # TODO: According to the paper, we should replace liquid_specific_humidity
-    # with TD.mixing_ratios(thermo_params, ᶜts[colidx]).liq, but this wouldn't
+    # with TD.mixing_ratios(thermo_params, ᶜts).liq, but this wouldn't
     # match the original code from TurbulenceConvection.
-    @. ᶜκρq[colidx] =
+    @. ᶜκρq =
         radiation_mode.kappa *
-        Y.c.ρ[colidx] *
-        TD.liquid_specific_humidity(thermo_params, ᶜts[colidx])
+        Y.c.ρ *
+        TD.liquid_specific_humidity(thermo_params, ᶜts)
 
-    Operators.column_integral_definite!(∫_0_∞_κρq[colidx], ᶜκρq[colidx])
+    Operators.column_integral_definite!(∫_0_∞_κρq, ᶜκρq)
 
-    Operators.column_integral_indefinite!(ᶠ∫_0_z_κρq[colidx], ᶜκρq[colidx])
+    Operators.column_integral_indefinite!(ᶠ∫_0_z_κρq, ᶜκρq)
 
     # Find the values of (z, ρ, q_tot) at the q_tot = 0.008 isoline, i.e., at
     # the level whose value of q_tot is closest to 0.008.
@@ -286,10 +279,10 @@ function radiation_tendency!(
         (z, ρ, q_tot) -> (; z, ρ, q_tot),
         (nt1, nt2) ->
             abs(nt1.q_tot - FT(0.008)) < abs(nt2.q_tot - FT(0.008)) ? nt1 : nt2,
-        isoline_z_ρ_q[colidx],
-        ᶜz[colidx],
-        Y.c.ρ[colidx],
-        ᶜspecific.q_tot[colidx],
+        isoline_z_ρ_q,
+        ᶜz,
+        Y.c.ρ,
+        ᶜspecific.q_tot,
     )
 
     zi = isoline_z_ρ_q.z
@@ -299,24 +292,21 @@ function radiation_tendency!(
     # clips the third term to 0 below zi, and we should also replace cp_d with
     # cp_m, but this wouldn't match the original code from TurbulenceConvection.
     # Note: ∫_0_z_κρq - ∫_0_∞_κρq = -∫_z_∞_κρq
-    @. ᶠradiation_flux[colidx] = Geometry.WVector(
-        radiation_mode.F0 * exp(ᶠ∫_0_z_κρq[colidx] - ∫_0_∞_κρq[colidx]) +
-        radiation_mode.F1 * exp(-(ᶠ∫_0_z_κρq[colidx])) +
+    @. ᶠradiation_flux = Geometry.WVector(
+        radiation_mode.F0 * exp(ᶠ∫_0_z_κρq - ∫_0_∞_κρq) +
+        radiation_mode.F1 * exp(-(ᶠ∫_0_z_κρq)) +
         ifelse(
-            ᶠz[colidx] > zi[colidx],
-            ρi[colidx] *
+            ᶠz > zi,
+            ρi *
             cp_d *
             radiation_mode.divergence *
             radiation_mode.alpha_z *
-            (
-                cbrt(ᶠz[colidx] - zi[colidx])^4 / 4 +
-                zi[colidx] * cbrt(ᶠz[colidx] - zi[colidx])
-            ),
+            (cbrt(ᶠz - zi)^4 / 4 + zi * cbrt(ᶠz - zi)),
             FT(0),
         ),
     )
 
-    @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
+    @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
 
     return nothing
 end
@@ -334,24 +324,17 @@ function radiation_model_cache(Y, radiation_mode::RadiationTRMM_LBA)
     )
 end
 
-function radiation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    colidx,
-    radiation_mode::RadiationTRMM_LBA,
-)
+function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
     # TODO: get working (need to add cache / function)
     rad = radiation_mode.rad_profile
     thermo_params = CAP.thermodynamics_params(params)
-    ᶜdTdt_rad = p.radiation.ᶜdTdt_rad[colidx]
-    ᶜρ = Y.c.ρ[colidx]
-    ᶜts_gm = p.precomputed.ᶜts[colidx]
+    ᶜdTdt_rad = p.radiation.ᶜdTdt_rad
+    ᶜρ = Y.c.ρ
+    ᶜts_gm = p.precomputed.ᶜts
     zc = Fields.coordinate_field(axes(ᶜρ)).z
     @. ᶜdTdt_rad = rad(FT(t), zc)
-    @. Yₜ.c.ρe_tot[colidx] += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad
+    @. Yₜ.c.ρe_tot += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad
     return nothing
 end

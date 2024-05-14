@@ -17,9 +17,12 @@ include(
 include("../gw_plotutils.jl")
 
 comms_ctx = ClimaComms.SingletonCommsContext()
-test_args = ClimaAtmos.cli_defaults(CA.argparse_settings())
-config_dict = Dict("topo_smoothing" => false, "mesh_warp_type" => "Linear")
-parsed_args = CA.AtmosConfig(config_dict).parsed_args
+(; config_file, job_id) = CA.commandline_kwargs()
+config = CA.AtmosConfig(config_file; job_id, comms_ctx)
+
+config.parsed_args["topo_smoothing"] = false;
+config.parsed_args["mesh_warp_type"] = "Linear";
+(; parsed_args) = config
 
 # load gfdl data
 include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))

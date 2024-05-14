@@ -5,10 +5,8 @@ import ClimaAtmos as CA
 
 include("common.jl")
 
-length(ARGS) != 1 && error("Usage: jet_test_nfailures.jl <config_file>")
-config_file = ARGS[1]
-config_dict = YAML.load_file(config_file)
-config = AtmosCoveragePerfConfig(config_dict)
+(; config_file, job_id) = CA.commandline_kwargs()
+config = CA.AtmosConfig(config_file; job_id)
 
 simulation = CA.get_simulation(config)
 (; integrator) = simulation

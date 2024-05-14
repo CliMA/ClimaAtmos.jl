@@ -25,9 +25,7 @@ function make_table_from_config_file(config_file, title)
 end
 default_configs = joinpath(ca_dir, "config", "default_configs")
 default_config_file = joinpath(default_configs, "default_config.yml")
-edmf_config_file = joinpath(default_configs, "default_edmf_config.yml")
 
 make_table_from_config_file(default_config_file, "Default configuration")
-make_table_from_config_file(edmf_config_file, "EDMF configuration")
 
 nothing

@@ -6,4 +6,3 @@ perturb_initstate: false
 discrete_hydrostatic_balance: true
 t_end: "800days"
 dt_save_state_to_disk: "10days"
-job_id: "longrun_sphere_hydrostatic_balance_rhoe"

@@ -2,15 +2,14 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
+import ClimaComms
 
 include("common.jl")
 
-length(ARGS) != 1 && error("Usage: flame.jl <config_file>")
-config_file = ARGS[1]
-config_dict = YAML.load_file(config_file)
-config = AtmosCoveragePerfConfig(config_dict)
-job_id = config.parsed_args["job_id"]
+(; config_file, job_id) = CA.commandline_kwargs()
+config = CA.AtmosConfig(config_file; job_id)
 simulation = CA.get_simulation(config)
+device = ClimaComms.device(config.comms_ctx)
 (; integrator) = simulation
 
 # The callbacks flame graph is very expensive, so only do 2 steps.
@@ -88,9 +87,9 @@ using Test
 # Threaded/gpu allocations are not deterministic, so let's add a buffer
 # TODO: remove buffer, and threaded tests, when
 #       threaded/unthreaded functions are unified
-buffer = if any(x -> occursin(x, job_id), ("threaded",))
+buffer = if device isa ClimaComms.CPUMultiThreaded
     1.8
-elseif any(x -> occursin(x, job_id), ("gpu",))
+elseif device isa ClimaComms.CUDADevice
     5
 else
     1.1
@@ -110,7 +109,7 @@ end
 
 # https://github.com/CliMA/ClimaAtmos.jl/issues/827
 @testset "Allocations limit" begin
-    if occursin("gpu", job_id) # https://github.com/CliMA/ClimaAtmos.jl/issues/2831
+    if device isa ClimaComms.CUDADevice # https://github.com/CliMA/ClimaAtmos.jl/issues/2831
         @test allocs ≤ allocs_limit[job_id] * buffer
     else
         @test 0.25 * allocs_limit[job_id] * buffer <=
@@ -119,7 +118,6 @@ end
     end
 end
 
-import ClimaComms
 if config.comms_ctx isa ClimaComms.SingletonCommsContext && !isinteractive()
     include(joinpath(pkgdir(CA), "perf", "jet_report_nfailures.jl"))
 end

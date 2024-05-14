@@ -1,4 +1,3 @@
-job_id: "test_env"
 vert_diff: "true"
 surface_setup: "DefaultExchangeCoefficients"
 moist: "equil"

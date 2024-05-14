@@ -6,7 +6,6 @@ dt_save_state_to_disk: "6hours"
 initial_condition: "MoistBaroclinicWave"
 dt: "20secs"
 t_end: "6hours"
-job_id: "sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"
 moist: "equil"
 toml: [toml/sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.toml]
 diagnostics:

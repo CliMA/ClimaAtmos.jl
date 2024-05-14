@@ -1,3 +1,13 @@
+apply_limiter: true
+surface_setup: "DefaultExchangeCoefficients"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+h_elem: 12
+forcing: "held_suarez"
+dt_save_to_sol: "Inf"
+rad: "allskywithclear"
+warn_allocations_diagnostics: true
+log_progress: false
 use_krylov_method: true
 use_dynamic_krylov_rtol: false
 krylov_rtol: 0.99
@@ -9,5 +19,4 @@ dt_save_state_to_disk: "12hours"
 initial_condition: "MoistBaroclinicWave"
 dt: "40secs"
 t_end: "12hours"
-job_id: "flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"
 moist: "equil"

@@ -45,7 +45,7 @@ steps:
       # TODO: uncomment when zalesak works
       # - label: ":computer: lim ARS zalesak baroclinic wave (ρe_tot) equilmoist high resolution"
       #   command:
-      #     - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+      #     - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
       #   artifact_paths: "$$JOB_NAME/output_active/*"
       #   agents:
       #     slurm_ntasks: 32
@@ -56,7 +56,7 @@ steps:
 
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist high resolution centered diff"
         command:
-          - "srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml"
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_ntasks: 32
@@ -67,7 +67,7 @@ steps:
       
       - label: ":computer: aquaplanet equilmoist clearsky radiation + prognostic edmf diffusion only + 0M microphysics"
         command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_ntasks: 64
@@ -83,7 +83,7 @@ steps:
 
       - label: ":computer: low resolution aquaplanet equilmoist clearsky radiation + time-varying insolation + slab ocean"
         command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_ntasks: 8

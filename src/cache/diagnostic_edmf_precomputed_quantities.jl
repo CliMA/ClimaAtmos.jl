@@ -1008,24 +1008,22 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
-    Fields.bycolumn(axes(Y.c.ρ)) do colidx
-        # Environment precipitation sources (to be applied to grid mean)
-        compute_precipitation_sources!(
-            ᶜSᵖ[colidx],
-            ᶜSᵖ_snow[colidx],
-            ᶜSqₜᵖ⁰[colidx],
-            ᶜSqᵣᵖ⁰[colidx],
-            ᶜSqₛᵖ⁰[colidx],
-            ᶜSeₜᵖ⁰[colidx],
-            Y.c.ρ[colidx],
-            ᶜqᵣ[colidx],
-            ᶜqₛ[colidx],
-            ᶜts[colidx],
-            p.core.ᶜΦ[colidx],
-            p.dt,
-            microphys_params,
-            thermo_params,
-        )
-    end
+    # Environment precipitation sources (to be applied to grid mean)
+    compute_precipitation_sources!(
+        ᶜSᵖ,
+        ᶜSᵖ_snow,
+        ᶜSqₜᵖ⁰,
+        ᶜSqᵣᵖ⁰,
+        ᶜSqₛᵖ⁰,
+        ᶜSeₜᵖ⁰,
+        Y.c.ρ,
+        ᶜqᵣ,
+        ᶜqₛ,
+        ᶜts,
+        p.core.ᶜΦ,
+        p.dt,
+        microphys_params,
+        thermo_params,
+    )
     return nothing
 end

@@ -22,9 +22,7 @@ include("../../test_helpers.jl")
     (; ᶜβ_rayleigh_uₕ) = CA.viscous_sponge_cache(Y, rs)
     @test ᶜβ_rayleigh_uₕ == @. sin(FT(π) / 2 * z / zmax)^2
     test_cache = (; viscous_sponge = (; ᶜβ_rayleigh_uₕ = ᶜβ_rayleigh_uₕ))
-    CC.Fields.bycolumn(axes(Y.c)) do colidx
-        CA.viscous_sponge_tendency!(ᶜYₜ, Y, test_cache, FT(0), colidx, rs)
-    end
+    CA.viscous_sponge_tendency!(ᶜYₜ, Y, test_cache, FT(0), rs)
     @test ᶜYₜ.c.uₕ.components.data.:1 == -1 .* (ᶜβ_rayleigh_uₕ)
     @test ᶜYₜ.c.uₕ.components.data.:2 == -1 .* (ᶜβ_rayleigh_uₕ)
 end
