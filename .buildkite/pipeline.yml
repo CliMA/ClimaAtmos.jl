@@ -848,7 +848,7 @@ steps:
   - group: "Benchmarks"
     steps:
 
-      - label: "Perf: GPU implicit baro wave wrt h_elem"
+      - label: ":computer: Benchmark: GPU implicit baro wave wrt h_elem"
         key: "gpu_implicit_barowave_wrt_h_elem"
         command: >
 
@@ -859,7 +859,7 @@ steps:
         agents:
           slurm_gpus: 1
 
-      - label: "Perf: GPU implicit baro wave"
+      - label: ":computer: Benchmark: GPU implicit baro wave"
         command: >
 
           julia --color=yes --project=examples perf/benchmark_step.jl
@@ -869,7 +869,7 @@ steps:
         agents:
           slurm_gpus: 1
 
-      - label: "Perf: GPU implicit baro wave moist"
+      - label: ":computer: Benchmark: GPU implicit baro wave moist"
         command: >
 
           julia --color=yes --project=examples perf/benchmark_step.jl
@@ -880,7 +880,7 @@ steps:
           slurm_mem: 16G
           slurm_gpus: 1
 
-      - label: "Perf: CPU implicit baro wave"
+      - label: ":computer: Benchmark: CPU implicit baro wave"
         command: >
           julia --color=yes --project=examples perf/benchmark_step.jl
           --config_file $PERF_CONFIG_PATH/cpu_implicit_barowave.yml
@@ -888,7 +888,7 @@ steps:
         artifact_paths: "cpu_implicit_barowave/output_active/*"
 
       # Benchmarks
-      - label: ":computer: Benchmark: perf target (default)"
+      - label: ":computer: Benchmark: CPU perf target (default)"
         command: >
           julia --color=yes --project=perf perf/benchmark.jl
           --config_file $PERF_CONFIG_PATH/bm_perf_target.yml
@@ -896,7 +896,7 @@ steps:
         agents:
           slurm_mem: 24GB
 
-      - label: ":computer: Benchmark: perf target (gpu)"
+      - label: ":computer: Benchmark: GPU perf target"
         command: >
           julia --color=yes --project=perf perf/benchmark.jl
           --config_file $PERF_CONFIG_PATH/bm_perf_target.yml
@@ -905,7 +905,7 @@ steps:
           slurm_mem: 24GB
           slurm_gpus: 1
 
-      - label: ":computer: Benchmark: perf target (Threaded)"
+      - label: ":computer: Benchmark: CPU perf target (Threaded)"
         command: >
           julia --color=yes --threads 8 --project=perf perf/benchmark.jl
           --config_file $PERF_CONFIG_PATH/bm_perf_target_threaded.yml
@@ -913,6 +913,24 @@ steps:
         agents:
           slurm_mem: 24GB
           slurm_cpus_per_task: 8
+
+      - label: ":computer: Benchmark: GPU diag edmf"
+        command: >
+          julia --color=yes --project=perf perf/benchmark.jl
+          --config_file ${CONFIG_PATH}/aquaplanet_progedmf.yml
+          --job_id bm_diag_edmf_gpu
+        agents:
+          slurm_mem: 24GB
+          slurm_gpus: 1
+
+      - label: ":computer: Benchmark: GPU prog edmf"
+        command: >
+          julia --color=yes --project=perf perf/benchmark.jl
+          --config_file ${CONFIG_PATH}/aquaplanet_progedmf.yml
+          --job_id bm_prog_edmf_gpu
+        agents:
+          slurm_mem: 24GB
+          slurm_gpus: 1
 
   - group: "Flame graphs"
     steps:
