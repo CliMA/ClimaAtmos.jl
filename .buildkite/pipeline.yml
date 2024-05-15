@@ -29,12 +29,14 @@ steps:
       - "julia --project -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Instantiate examples"
+      - "julia --project=examples -e 'using Pkg; Pkg.develop(;path=\".\"); Pkg.add(url = \"https://github.com/CLiMA/ClimaTimeSteppers.jl\", rev = \"gb/rosenbrock\");'"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Instantiate perf"
+      - "julia --project=perf -e 'using Pkg; Pkg.develop(;path=\".\"); Pkg.add(url = \"https://github.com/CLiMA/ClimaTimeSteppers.jl\", rev = \"gb/rosenbrock\");'"
       - "julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=perf -e 'using Pkg; Pkg.status()'"
