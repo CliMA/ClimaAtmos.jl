@@ -372,7 +372,7 @@ NVTX.@annotate function ldiv!(
 )
     MatrixFields.field_matrix_solve!(A.solver, x, A.matrix, b)
     if A.transform_flag
-        @. x *= A.dtγ_ref[]
+        @. x *= -A.dtγ_ref[]
     end
 end
 
