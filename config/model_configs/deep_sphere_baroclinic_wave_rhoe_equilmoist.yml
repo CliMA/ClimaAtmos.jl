@@ -7,5 +7,5 @@ t_end: "10days"
 deep_atmosphere: true
 moist: "equil"
 diagnostics:
-  - short_name: [pfull, wa, va, rv, hus]
+  - short_name: [pfull, wa, va, rv, hus, ke]
     period: 1days
