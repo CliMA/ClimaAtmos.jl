@@ -17,11 +17,11 @@ function viscous_sponge_cache(Y, viscous_sponge::ViscousSponge)
     FT = Spaces.undertype(axes(Y.c))
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
-    ᶜαₘ = @. ifelse(ᶜz > zd, κ₂, FT(0))
-    ᶠαₘ = @. ifelse(ᶠz > zd, κ₂, FT(0))
+    ᶜαₘ = @. ifelse(ᶜz > zd, κ₂, $(FT(0)))
+    ᶠαₘ = @. ifelse(ᶠz > zd, κ₂, $(FT(0)))
     zmax = maximum(ᶠz)
-    ᶜβ_viscous = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd) / (zmax - zd))^2
-    ᶠβ_viscous = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd) / (zmax - zd))^2
+    ᶜβ_viscous = @. ᶜαₘ * sin($(FT(π)) / 2 * (ᶜz - zd) / (zmax - zd))^2
+    ᶠβ_viscous = @. ᶠαₘ * sin($(FT(π)) / 2 * (ᶠz - zd) / (zmax - zd))^2
     return (; ᶜβ_viscous, ᶠβ_viscous)
 end
 
