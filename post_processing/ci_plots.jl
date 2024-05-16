@@ -666,9 +666,13 @@ function make_plots(
     make_plots_generic(output_paths, vars, z = 1500)
 end
 
+MoistBaroWavePlots = Union{
+    Val{:sphere_baroclinic_wave_rhoe_equilmoist},
+    Val{:sphere_baroclinic_wave_rhoe_equilmoist_deepatmos},
+}
+
 function make_plots(
-    ::Val{:sphere_baroclinic_wave_rhoe_equilmoist},
-    ::Val{:sphere_baroclinic_wave_rhoe_equilmoist_deepatmos},
+    ::MoistBaroWavePlots,
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
