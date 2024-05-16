@@ -3,6 +3,7 @@ dt_save_state_to_disk: "2days"
 regression_test: true
 initial_condition: "MoistBaroclinicWave"
 dt: "450secs"
+t_end: "10days"
 deep_atmosphere: true
 moist: "equil"
 diagnostics:
