@@ -171,6 +171,16 @@ steps:
         artifact_paths: "rcemipii_box_diagnostic_edmfx/output_active/*"
         soft_fail: true
 
+      - label: ":genie: LES ISDAC in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/les_isdac_box.yml
+          --job_id les_isdac_box
+        artifact_paths: "les_isdac_box/*"
+        agents:
+          slurm_mem: 16G
+          slurm_gpus: 1
+
   - group: "Plane Examples"
     steps:
       - label: ":computer: Agnesi linear hydrostatic mountain experiment (uniform)"
