@@ -21,4 +21,4 @@ toml:
 orographic_gravity_wave: "raw_topo"
 idealized_insolation: false
 non_orographic_gravity_wave: true
-z_max: 45000.0
+z_max: 55000.0

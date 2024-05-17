@@ -692,24 +692,6 @@ function make_plots(
     make_plots_generic(output_paths, vars, z = 1500)
 end
 
-
-function make_plots(
-    ::Val{:sphere_baroclinic_wave_rhoe_equilmoist_expvdiff},
-    output_paths::Vector{<:AbstractString},
-)
-    simdirs = SimDir.(output_paths)
-    short_names, reduction = ["ta", "hus"], "average"
-    vars = map_comparison(simdirs, short_names) do simdir, short_name
-        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
-    end
-    make_plots_generic(
-        output_paths,
-        vars,
-        time = LAST_SNAP,
-        more_kwargs = YLINEARSCALE,
-    )
-end
-
 LongMoistBaroWavePlots = Union{
     Val{:longrun_bw_rhoe_equil_highres},
     Val{:longrun_zalesak_tracer_energy_bw_rhoe_equil_highres},
@@ -762,7 +744,6 @@ function make_plots(
 end
 
 MoistHeldSuarezPlots = Union{
-    Val{:sphere_baroclinic_wave_rhoe_equilmoist_impvdiff},
     Val{:sphere_held_suarez_rhoe_equilmoist_hightop_sponge},
     Val{:longrun_hs_rhoe_equil_55km_nz63_0M},
     Val{:longrun_hs_rhoe_equil_55km_nz63_0M_deepatmos},
@@ -910,7 +891,7 @@ end
 
 AquaplanetPlots = Union{
     Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
-    Val{:sphere_aquaplanet_rhoe_nonequilmoist_allsky_gw_res},
+    Val{:sphere_aquaplanet_rhoe_nonequilmoist_allsky},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_diffonly_0M},

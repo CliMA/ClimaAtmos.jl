@@ -5,4 +5,4 @@ forcing: "held_suarez"
 dt: "400secs"
 z_elem: 25
 deep_atmosphere: true
-z_max: 45000.0
+z_max: 55000.0
