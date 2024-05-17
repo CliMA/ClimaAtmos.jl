@@ -119,6 +119,8 @@ struct GCMForcing{FT}
     external_forcing_file::String
 end
 
+struct ISDACForcing end
+
 struct EDMFCoriolis{U, V, FT}
     prof_ug::U
     prof_vg::V
@@ -262,6 +264,13 @@ Base.@kwdef struct RadiationDYCOMS_RF01{FT}
     F0::FT = 70.0
     F1::FT = 22.0
 end
+
+Base.@kwdef struct RadiationISDAC{FT}
+    F₀::FT = 72  # W/m²
+    F₁::FT = 15  # W/m²
+    κ::FT = 170  # m²/kg
+end
+
 import AtmosphericProfilesLibrary as APL
 
 struct RadiationTRMM_LBA{R}
