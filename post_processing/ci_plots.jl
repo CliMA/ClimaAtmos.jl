@@ -666,18 +666,32 @@ function make_plots(
     make_plots_generic(output_paths, vars, z = 1500)
 end
 
+MoistBaroWavePlots = Union{
+    Val{:sphere_baroclinic_wave_rhoe_equilmoist},
+    Val{:sphere_baroclinic_wave_rhoe_equilmoist_deepatmos},
+}
+
 function make_plots(
-    ::Val{:sphere_baroclinic_wave_rhoe_equilmoist},
-    ::Val{:sphere_baroclinic_wave_rhoe_equilmoist_deepatmos},
+    ::MoistBaroWavePlots,
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
+    short_names_spectra = ["ke"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return get(simdir; short_name, reduction)
+        return slice(get(simdir; short_name, reduction), time = 10days)
     end
-    make_plots_generic(output_paths, vars, z = 1500, time = LAST_SNAP)
+    vars_spectra =
+        map_comparison(simdirs, short_names_spectra) do simdir, short_name
+            compute_spectrum(
+                slice(get(simdir; short_name, reduction), time = 10days),
+            )
+        end
+    vars = vcat(vars..., vars_spectra...)
+
+    make_plots_generic(output_paths, vars, z = 1500)
 end
+
 
 function make_plots(
     ::Val{:sphere_baroclinic_wave_rhoe_equilmoist_expvdiff},
