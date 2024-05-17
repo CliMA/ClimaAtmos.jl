@@ -17,4 +17,4 @@ dt: 100secs
 t_end: 12hours
 dt_save_state_to_disk: 12hours
 regression_test: true
-toml: [toml/diagnostic_edmfx_trmm_box.toml]
+toml: [toml/diagnostic_edmfx_0M.toml]

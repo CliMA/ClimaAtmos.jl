@@ -629,12 +629,12 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX Bomex in a column (explicit)"
+      - label: ":genie: Prognostic EDMFX Bomex in a column (pi group)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_explicit_column.yml
-          --job_id prognostic_edmfx_bomex_explicit_column
-        artifact_paths: "prognostic_edmfx_bomex_explicit_column/output_active/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_pigroup_column.yml
+          --job_id prognostic_edmfx_bomex_pigroup_column
+        artifact_paths: "prognostic_edmfx_bomex_pigroup_column/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -662,6 +662,15 @@ steps:
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
           --job_id prognostic_edmfx_bomex_column
         artifact_paths: "prognostic_edmfx_bomex_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+      
+      - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
+          --job_id prognostic_edmfx_bomex_column_implicit
+        artifact_paths: "prognostic_edmfx_bomex_column_implicit/output_active/*"
         agents:
           slurm_mem: 20GB
 

@@ -5,9 +5,8 @@ rad: DYCOMS_RF01
 surface_setup: DYCOMS_RF01
 turbconv: prognostic_edmfx
 implicit_diffusion: true
-implicit_sgs_advection: true
+implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
-max_newton_iters_ode: 3
 edmfx_upwinding: first_order
 edmfx_sgsflux_upwinding: first_order
 edmfx_entr_model: "Generalized"
@@ -25,10 +24,10 @@ x_elem: 2
 y_elem: 2
 z_elem: 30
 z_stretch: false
-dt: 40secs
+dt: 10secs
 t_end: 4hours
 dt_save_state_to_disk: 10mins
-toml: [toml/prognostic_edmfx_dycoms_rf01.toml]
+toml: [toml/prognostic_edmfx.toml]
 netcdf_interpolation_num_points: [2, 2, 30]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
