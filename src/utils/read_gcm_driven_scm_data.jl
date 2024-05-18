@@ -3,18 +3,19 @@ import NCDatasets as NC
 import StatsBase: mean
 
 """
-    gcm_driven_profile_tmean(ds, varname; imin = 100)
+    gcm_driven_profile_tmean(ds, varname; imin = 793)
 
 Extract time-averaged data (`imin:end`) for `varname` from the "profile" group in the GCM-driven dataset `ds`
 
-Returns a 1D ("z",) `Vector{FT}` of the time-averaged data.
+Returns a 1D ("z",) `Vector{FT}` of the time-averaged data. Default initial time corresponds to 5.5 days, such
+that average is computed for final 12 hours. 
 
 !!! note
 
     This method currently assumes the underlying data is `Float64`. 
     If this is not the case, "garbage" data may be returned with no warning.
 """
-function gcm_driven_profile_tmean(ds, varname; imin = 100)
+function gcm_driven_profile_tmean(ds, varname; imin = 793)
     vec(mean(gcm_driven_profile(ds, varname)[:, imin:end]; dims = 2))
 end
 
