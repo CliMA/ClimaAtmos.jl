@@ -6,6 +6,7 @@ turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
 edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
@@ -16,16 +17,16 @@ edmfx_filter: true
 prognostic_tke: true
 moist: "equil"
 config: "column"
-z_max: 40e3
+z_max: 4e3
 z_elem: 60
 z_stretch: true
 dz_bottom: 30
 dz_top: 3000
 perturb_initstate: false
 dt: "10secs"
-t_end: "6hours"
-dt_save_state_to_disk: "6hours"
+t_end: "72hours"
 call_cloud_diagnostics_per_stage : true
+dt_save_to_disk: "10mins"
 toml: [toml/prognostic_edmfx_bomex.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]

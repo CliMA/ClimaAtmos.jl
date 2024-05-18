@@ -7,7 +7,8 @@ import StatsBase: mean
 
 Extract time-averaged data for `varname` from the "profile" group in the GCM-driven dataset `ds`
 
-Returns a 1D ("z",) `Vector{FT}` of the time-averaged data.
+Returns a 1D ("z",) `Vector{FT}` of the time-averaged data. Default initial time corresponds to 5.5 days, such
+that average is computed for final 12 hours. 
 
 !!! note
 
