@@ -1,0 +1,43 @@
+[EDMF_surface_area]
+prior = "constrained_gaussian(EDMF_surface_area, 0.1, 0.03, 0, Inf)"
+type = "float"
+
+[entr_inv_tau]
+prior = "constrained_gaussian(entr_inv_tau, 0.002, 0.001, 0, Inf)"
+type = "float"
+
+[detr_buoy_coeff]
+prior = "constrained_gaussian(detr_buoy_coeff, 0.12, 0.02, 0, Inf)"
+type = "float"
+
+[detr_vertdiv_coeff]
+prior = "constrained_gaussian(detr_vertdiv_coeff, 0.6, 0.1, 0, Inf)"
+type = "float"
+
+[mixing_length_eddy_viscosity_coefficient]
+prior = "constrained_gaussian(mixing_length_eddy_viscosity_coefficient, 0.14, 0.07, 0, Inf)"
+type = "float"
+
+[mixing_length_diss_coeff]
+prior = "constrained_gaussian(mixing_length_diss_coeff, 0.22, 0.1, 0, Inf)"
+type = "float"
+
+[mixing_length_tke_surf_scale]
+prior = "constrained_gaussian(mixing_length_tke_surf_scale, 3.75, 1.5, 0, Inf)"
+type = "float"
+
+[mixing_length_static_stab_coeff]
+prior = "constrained_gaussian(mixing_length_static_stab_coeff, 0.4, 0.15, 0, Inf)"
+type = "float"
+
+[mixing_length_Prandtl_number_0]
+prior = "constrained_gaussian(mixing_length_Prandtl_number_0, 0.74, 0.2, 0, Inf)"
+type = "float"
+
+[pressure_normalmode_buoy_coeff1]
+prior = "constrained_gaussian(pressure_normalmode_buoy_coeff1, 0.12, 0.06, 0, Inf)"
+type = "float"
+
+[pressure_normalmode_drag_coeff]
+prior = "constrained_gaussian(pressure_normalmode_drag_coeff, 20.0, 10.0, 0, Inf)"
+type = "float"
