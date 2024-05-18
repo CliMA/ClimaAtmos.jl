@@ -1,4 +1,7 @@
-160
+161
+
+# 161: 
+# - Change domain top to 55 km in simulations with high top
 
 # 160: 
 # - Introduces initial conditions for the baroclinic-wave
