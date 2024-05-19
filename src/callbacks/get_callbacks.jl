@@ -34,11 +34,15 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, t_start, dt)
         num_netcdf_points = (180, 90, 50)
     end
 
+    z_sampling_method =
+        parsed_args["netcdf_output_at_levels"] ? CAD.LevelsMethod() :
+        CAD.FakePressureLevelsMethod()
+
     netcdf_writer = CAD.NetCDFWriter(
         axes(Y.c),
         p.output_dir,
-        num_points = num_netcdf_points,
-        disable_vertical_interpolation = parsed_args["netcdf_output_at_levels"],
+        num_points = num_netcdf_points;
+        z_sampling_method,
     )
     writers = (hdf5_writer, netcdf_writer)
 
