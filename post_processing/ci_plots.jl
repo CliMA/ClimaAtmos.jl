@@ -833,7 +833,6 @@ end
 function make_plots(
     ::Union{
         Val{:aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
-        Val{:longrun_aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
         Val{
             :longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean,
         },
@@ -894,7 +893,6 @@ AquaplanetPlots = Union{
     Val{:sphere_aquaplanet_rhoe_nonequilmoist_allsky},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M},
-    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_diffonly_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_progedmf_diffonly_0M},
