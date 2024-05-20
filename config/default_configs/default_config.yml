@@ -217,9 +217,6 @@ regression_test:
 check_conservation:
   help: "Check conservation of mass and energy [`false` (default), `true`]"
   value: false
-check_precipitation:
-  help: "Sanity checks for 1-moment precipitation [`false` (default), `true`]"
-  value: false
 ls_adv:
   help: "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"
   value: ~

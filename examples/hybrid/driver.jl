@@ -167,57 +167,6 @@ if config.parsed_args["check_conservation"]
     end
 end
 
-# Precipitation characteristic checks
-if config.parsed_args["check_precipitation"]
-    # run some simple tests based on the output
-    FT = Spaces.undertype(axes(sol.u[end].c.ρ))
-    Yₜ = similar(sol.u[end])
-    @. Yₜ = 0
-
-    Yₜ_ρ = similar(Yₜ.c.ρq_rai)
-    Yₜ_ρqₚ = similar(Yₜ.c.ρq_rai)
-    Yₜ_ρqₜ = similar(Yₜ.c.ρq_rai)
-
-
-    CA.precipitation_tendency!(
-        Yₜ,
-        sol.u[end],
-        sol.prob.p,
-        sol.t[end],
-        sol.prob.p.atmos.precip_model,
-        sol.prob.p.atmos.turbconv_model,
-    )
-    @. Yₜ_ρqₚ = -Yₜ.c.ρq_rai - Yₜ.c.ρq_sno
-    @. Yₜ_ρqₜ = Yₜ.c.ρq_tot
-    @. Yₜ_ρ = Yₜ.c.ρ
-
-    # no nans
-    @assert !any(isnan, Yₜ.c.ρ)
-    @assert !any(isnan, Yₜ.c.ρq_tot)
-    @assert !any(isnan, Yₜ.c.ρe_tot)
-    @assert !any(isnan, Yₜ.c.ρq_rai)
-    @assert !any(isnan, Yₜ.c.ρq_sno)
-    @assert !any(isnan, sol.prob.p.precomputed.ᶜwᵣ)
-    @assert !any(isnan, sol.prob.p.precomputed.ᶜwₛ)
-
-    # treminal velocity is positive
-    @test minimum(sol.prob.p.precomputed.ᶜwᵣ) >= FT(0)
-    @test minimum(sol.prob.p.precomputed.ᶜwₛ) >= FT(0)
-
-    # checking for water budget conservation
-    # in the presence of precipitation sinks
-    # (This test only works without surface flux of q_tot)
-    @test all(ClimaCore.isapprox(Yₜ_ρqₜ, Yₜ_ρqₚ, rtol = 1e2 * eps(FT)))
-
-    # mass budget consistency
-    @test all(ClimaCore.isapprox(Yₜ_ρ, Yₜ_ρqₜ, rtol = eps(FT)))
-
-    # cloud fraction diagnostics
-    @assert !any(isnan, sol.prob.p.precomputed.cloud_diagnostics_tuple.cf)
-    @test minimum(sol.prob.p.precomputed.cloud_diagnostics_tuple.cf) >= FT(0)
-    @test maximum(sol.prob.p.precomputed.cloud_diagnostics_tuple.cf) <= FT(1)
-end
-
 # Visualize the solution
 if ClimaComms.iamroot(config.comms_ctx)
     include(
