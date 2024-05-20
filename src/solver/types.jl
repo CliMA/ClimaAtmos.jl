@@ -272,15 +272,7 @@ struct RadiationTRMM_LBA{R}
     end
 end
 
-# TODO: remove AbstractPerformanceMode and all subtypes
-# This is temporarily needed to investigate performance of
-# our handling of tracers.
-abstract type AbstractPerformanceMode end
-struct PerfExperimental <: AbstractPerformanceMode end
-struct PerfStandard <: AbstractPerformanceMode end
 struct TestDycoreConsistency end
-
-Base.broadcastable(x::AbstractPerformanceMode) = tuple(x)
 
 abstract type AbstractTimesteppingMode end
 struct Explicit <: AbstractTimesteppingMode end
@@ -333,7 +325,6 @@ end
 
 Base.@kwdef struct AtmosModel{
     MC,
-    PEM,
     MM,
     PM,
     CM,
@@ -367,7 +358,6 @@ Base.@kwdef struct AtmosModel{
     NUM,
 }
     model_config::MC = nothing
-    perf_mode::PEM = nothing
     moisture_model::MM = nothing
     precip_model::PM = nothing
     cloud_model::CM = nothing

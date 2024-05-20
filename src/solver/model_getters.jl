@@ -196,14 +196,6 @@ function get_orographic_gravity_wave_model(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function get_perf_mode(parsed_args)
-    return if parsed_args["perf_mode"] == "PerfExperimental"
-        PerfExperimental()
-    else
-        PerfStandard()
-    end
-end
-
 function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     idealized_h2o = parsed_args["idealized_h2o"]
     @assert idealized_h2o in (true, false)
