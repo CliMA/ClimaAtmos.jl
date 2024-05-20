@@ -4,7 +4,6 @@ approximate_linear_solve_iters: 2
 h_elem: 12
 forcing: "held_suarez"
 dt_save_to_sol: "Inf"
-warn_allocations_diagnostics: true
 log_progress: false
 surface_setup: DefaultExchangeCoefficients
 rad: gray
