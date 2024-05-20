@@ -166,6 +166,17 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
             ),
         )
     end
+    check_nan_every = parsed_args["check_nan_every"]
+    if check_nan_every > 0
+        @info "Checking NaNs in the state every $(check_nan_every) steps"
+        callbacks = (
+            callbacks...,
+            call_every_n_steps(
+                (integrator) -> check_nans(integrator),
+                check_nan_every,
+            ),
+        )
+    end
     callbacks = (
         callbacks...,
         call_every_n_steps(
