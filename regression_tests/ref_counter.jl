@@ -1,13 +1,16 @@
-161
+162
 
-# 161: 
+# 162:
+# - Changed the order of operations in surface conditions calculation.
+
+# 161:
 # - Change domain top to 55 km in simulations with high top
 
-# 160: 
+# 160:
 # - Introduces initial conditions for the baroclinic-wave
 #   test case in a deep-atmosphere configuration. Modifies
-#   existing config to use `deep_atmosphere` mode. 
-#
+#   existing config to use `deep_atmosphere` mode.
+
 # 159:
 # - Changed the boundary condition of edmf updraft properties
 #   to be dependent on the surface area
