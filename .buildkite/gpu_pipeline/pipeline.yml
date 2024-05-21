@@ -4,6 +4,7 @@ agents:
   modules: julia/1.10.0 cuda/julia-pref openmpi/4.1.5-mpitrampoline nsight-systems/2024.2.1
 
 env:
+  JULIA_CUDA_MEMORY_POOL: none
   JULIA_MPI_HAS_CUDA: "true"
   JULIA_NVTX_CALLBACKS: gc
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
@@ -11,6 +12,7 @@ env:
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
   SLURM_KILL_BAD_EXIT: 1
   SLURM_GRES_FLAGS: "allow-task-sharing"
+  SLURM_GPU_BIND: none
   GPU_CONFIG_PATH: "config/gpu_configs"
   CLIMAATMOS_GC_NSTEPS: 10
 
