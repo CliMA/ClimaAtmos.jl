@@ -6,7 +6,6 @@ h_elem: 12
 forcing: "held_suarez"
 dt_save_to_sol: "Inf"
 rad: "allskywithclear"
-warn_allocations_diagnostics: true
 log_progress: false
 use_krylov_method: true
 use_dynamic_krylov_rtol: false

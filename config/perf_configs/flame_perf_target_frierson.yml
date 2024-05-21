@@ -6,7 +6,6 @@ h_elem: 12
 forcing: "held_suarez"
 dt_save_to_sol: "Inf"
 rad: "allskywithclear"
-warn_allocations_diagnostics: true
 log_progress: false
 vert_diff: "FriersonDiffusion"
 pproximate_linear_solve_iters: 2
