@@ -93,7 +93,6 @@ function make_hybrid_spaces(
         boundary_names = (:bottom, :top),
     )
     z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
-    @info "z heights" z_mesh.faces
     device = ClimaComms.device(h_space)
     z_topology = Topologies.IntervalTopology(
         ClimaComms.SingletonCommsContext(device),
