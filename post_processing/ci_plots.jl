@@ -280,14 +280,27 @@ function make_plots_generic(
 end
 
 """
-    compute_spectrum(var)
+    compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
 
 Compute the spectrum associated to the given variable. Returns a ClimaAnalysis.OutputVar.
+
+This function is slow because a bunch of work is done over and over (in ClimaCoreSpectra).
+
+It is advisable to window the OutputVar to a narrow set of times before passing it to this
+function.
+
+With this function, you can also take time-averages of spectra.
 """
-function compute_spectrum(var; mass_weight = nothing)
+function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
     # power_spectrum_2d seems to work only when the two dimensions have precisely one
     # twice as many points as the other
-    dim1, dim2, dim3 = var.index2dim[1:3]
+    if "time" in keys(var.dims)
+        time, dim1, dim2, dim3 = var.index2dim[1:4]
+        times = var.dims[time]
+    else
+        dim1, dim2, dim3 = var.index2dim[1:3]
+        times = []
+    end
 
     len1 = length(var.dims[dim1])
     len2 = length(var.dims[dim2])
@@ -300,22 +313,49 @@ function compute_spectrum(var; mass_weight = nothing)
     dim3 == "z" || error("Third dimension has to be altitude (found $dim3)")
 
     FT = eltype(var.data)
+
     mass_weight =
         isnothing(mass_weight) ? ones(FT, length(var.dims[dim3])) : mass_weight
-    spectrum_data, wave_numbers, _spherical, mesh_info =
-        power_spectrum_2d(FT, var.data, mass_weight)
 
-    power_spectrum =
-        dropdims(sum(spectrum_data, dims = 1), dims = 1)[begin:(end - 1), :]
+    # Number of spherical wave numbers, excluding the first and the last
+    # This number was reverse-engineered from ClimaCoreSpectra
+    num_output = Int((floor((2 * len1 - 1) / 3) + 1) / 2 - 1)
 
-    w_numbers = collect(0:1:(mesh_info.num_spherical - 1))
+    mesh_info = nothing
 
-    dims = Dict("Spherical Wavenumber" => w_numbers, dim3 => var.dims[dim3])
+    if !isempty(times)
+        output_spectrum =
+            zeros((length(times), num_output, length(var.dims[dim3])))
+        dims = Dict(time => times)
+        dim_attributes = Dict(time => var.dim_attributes[time])
+        for index in 1:length(times)
+            spectrum_data, _wave_numbers, _spherical, mesh_info =
+                power_spectrum_2d(FT, var.data[index, :, :, :], mass_weight)
+            output_spectrum[index, :, :] .=
+                dropdims(sum(spectrum_data, dims = 1), dims = 1)[
+                    (begin + 1):(end - 1),
+                    :,
+                ]
+        end
+    else
+        dims = Dict{String, Vector{FT}}()
+        dim_attributes = Dict{String, Dict{String, String}}()
+        output_spectrum = zeros((num_output, length(var.dims[dim3])))
+        spectrum_data, _wave_numbers, _spherical, mesh_info =
+            power_spectrum_2d(FT, var.data[:, :, :], mass_weight)
+        output_spectrum[:, :] .=
+            dropdims(sum(spectrum_data, dims = 1), dims = 1)[
+                (begin + 1):(end - 1),
+                :,
+            ]
+    end
 
-    dim_attributes = Dict(
-        "Spherical Wavenumber" => Dict("units" => ""),
-        dim3 => var.dim_attributes[dim3],
-    )
+    w_numbers = collect(1:1:(mesh_info.num_spherical - 1))
+
+    dims["Log10 Spherical Wavenumber"] = log10.(w_numbers)
+    dims[dim3] = var.dims[dim3]
+    dim_attributes["Log10 Spherical Wavenumber"] = Dict("units" => "")
+    dim_attributes[dim3] = var.dim_attributes[dim3]
 
     attributes = Dict(
         "short_name" => "log_spectrum_" * var.attributes["short_name"],
@@ -327,64 +367,9 @@ function compute_spectrum(var; mass_weight = nothing)
         attributes,
         dims,
         dim_attributes,
-        log.(power_spectrum),
+        log10.(output_spectrum),
     )
 end
-
-function make_spectra_generic(
-    output_path,
-    vars,
-    args...;
-    slicing_kwargs = ca_kwargs(),
-    output_name = "spectra",
-    kwargs...,
-)
-    sliced_vars = [slice(var; slicing_kwargs...) for var in vars]
-
-    any([length(var.dims) != 2 for var in sliced_vars]) && error("Only 2D spectra are supported")
-
-    # Prepare ClimaAnalysis.OutputVar
-    spectra =
-        map(sliced_vars) do var
-            # power_spectrum_2d seems to work only when the two dimensions have precisely one
-            # twice as many points as the other
-            dim1, dim2 = var.index2dim[1:2]
-
-            length(var.dims[dim1]) == 2 * length(var.dims[dim2]) ||
-                error("Cannot take this spectrum")
-
-            FT = eltype(var.data)
-            mass_weight = ones(FT, 1)
-            spectrum_data, wave_numbers, spherical, mesh_info =
-                power_spectrum_2d(FT, var.data, mass_weight)
-
-            # From ClimaCoreSpectra/examples
-            Y = collect(0:1:(mesh_info.num_spherical))
-            Z = spectrum_data[:, :, 1]
-
-            dims = Dict("Spherical Wavenumber" => Y)
-            dim_attributes =
-                Dict("Spherical Wavenumber" => Dict("units" => ""))
-
-            attributes = Dict(
-                "short_name" =>
-                    "log_spectrum_" * var.attributes["short_name"],
-                "long_name" => "Spectrum of " * var.attributes["long_name"],
-                "units" => "",
-            )
-
-            return ClimaAnalysis.OutputVar(
-                attributes,
-                dims,
-                dim_attributes,
-                log.(Z),
-            )
-
-        end |> collect
-
-    make_plots_generic(output_path, spectra, args...; output_name, kwargs...)
-end
-
 
 """
     map_comparison(func, simdirs, args)
@@ -683,9 +668,13 @@ function make_plots(
     end
     vars_spectra =
         map_comparison(simdirs, short_names_spectra) do simdir, short_name
-            compute_spectrum(
-                slice(get(simdir; short_name, reduction), time = 10days),
+            windowed_var = ClimaAnalysis.window(
+                get(simdir; short_name, reduction),
+                "time",
+                left = 9days,
+                right = 10days,
             )
+            return ClimaAnalysis.average_time(compute_spectrum(windowed_var))
         end
     vars = vcat(vars..., vars_spectra...)
 
