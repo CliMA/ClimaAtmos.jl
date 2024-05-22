@@ -162,11 +162,13 @@ function compute_precipitation_sources!(
     mp,
     thp,
 )
-    FT = eltype(Sqₜᵖ)
-    @. Sqₜᵖ = FT(0)
-    @. Sqᵣᵖ = FT(0)
-    @. Sqₛᵖ = FT(0)
-    @. Seₜᵖ = FT(0)
+    FT = eltype(thp)
+    # @. Sqₜᵖ = FT(0) should work after fixing
+    # https://github.com/CliMA/ClimaCore.jl/issues/1786
+    @. Sqₜᵖ = ρ * FT(0)
+    @. Sqᵣᵖ = ρ * FT(0)
+    @. Sqₛᵖ = ρ * FT(0)
+    @. Seₜᵖ = ρ * FT(0)
 
     #! format: off
     # rain autoconversion: q_liq -> q_rain
