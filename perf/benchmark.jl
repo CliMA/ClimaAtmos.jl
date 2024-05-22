@@ -19,7 +19,7 @@ simulation = CA.get_simulation(config);
 (; parsed_args) = config;
 
 device = ClimaComms.device(config.comms_ctx)
-(; table_summary, trials) = CTS.benchmark_step(integrator, device)
+(; table_summary, trials) = CTS.benchmark_step(integrator, device; crop = true)
 
 SciMLBase.step!(integrator) # compile first
 
