@@ -19,7 +19,22 @@ simulation = CA.get_simulation(config);
 (; parsed_args) = config;
 
 device = ClimaComms.device(config.comms_ctx)
-(; table_summary, trials) = CTS.benchmark_step(integrator, device)
+(; table_summary, trials) = CTS.benchmark_step(
+    integrator,
+    device;
+    crop = true,
+    only = [
+        "Wfact",
+        "ldiv!",
+        "T_imp!",
+        "T_exp_T_lim!",
+        # "lim!",
+        "dss!",
+        "post_explicit!",
+        "post_implicit!",
+        "step!",
+    ],
+)
 
 SciMLBase.step!(integrator) # compile first
 
