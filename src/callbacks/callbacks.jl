@@ -368,3 +368,8 @@ function reset_graceful_exit(output_dir)
     ispath(output_dir) || mkpath(output_dir)
     open(io -> print(io, 0), file, "w")
 end
+
+function check_nans(integrator)
+    any(isnan, parent(integrator.u)) && error("Found NaN")
+    return nothing
+end

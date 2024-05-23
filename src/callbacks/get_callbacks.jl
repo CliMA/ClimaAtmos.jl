@@ -34,11 +34,15 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, t_start, dt)
         num_netcdf_points = (180, 90, 50)
     end
 
+    z_sampling_method =
+        parsed_args["netcdf_output_at_levels"] ? CAD.LevelsMethod() :
+        CAD.FakePressureLevelsMethod()
+
     netcdf_writer = CAD.NetCDFWriter(
         axes(Y.c),
         p.output_dir,
-        num_points = num_netcdf_points,
-        disable_vertical_interpolation = parsed_args["netcdf_output_at_levels"],
+        num_points = num_netcdf_points;
+        z_sampling_method,
     )
     writers = (hdf5_writer, netcdf_writer)
 
@@ -163,6 +167,17 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
             call_every_n_steps(
                 (integrator) -> print_walltime_estimate(integrator);
                 skip_first = true,
+            ),
+        )
+    end
+    check_nan_every = parsed_args["check_nan_every"]
+    if check_nan_every > 0
+        @info "Checking NaNs in the state every $(check_nan_every) steps"
+        callbacks = (
+            callbacks...,
+            call_every_n_steps(
+                (integrator) -> check_nans(integrator),
+                check_nan_every,
             ),
         )
     end

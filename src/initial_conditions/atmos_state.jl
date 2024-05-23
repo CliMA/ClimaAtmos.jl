@@ -59,7 +59,7 @@ grid_scale_center_variables(ls, atmos_model) = (;
     uₕ = C12(ls.velocity, ls.geometry),
     energy_variables(ls)...,
     moisture_variables(ls, atmos_model.moisture_model)...,
-    precip_variables(ls, atmos_model.precip_model, atmos_model.perf_mode)...,
+    precip_variables(ls, atmos_model.precip_model)...,
 )
 
 energy_variables(ls) = (;
@@ -116,15 +116,12 @@ moisture_variables(ls, ::NonEquilMoistModel) = (;
     ρq_ice = ls.ρ * TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state),
 )
 
-# TODO: Remove perf_mode. Currently, adding tracers hurts performance.
-precip_variables(ls, ::NoPrecipitation, ::PerfStandard) = (;)
-precip_variables(ls, ::Microphysics0Moment, ::PerfStandard) = (;)
-precip_variables(ls, ::Microphysics1Moment, ::PerfStandard) = (;
+precip_variables(ls, ::NoPrecipitation) = (;)
+precip_variables(ls, ::Microphysics0Moment) = (;)
+precip_variables(ls, ::Microphysics1Moment) = (;
     ρq_rai = ls.ρ * ls.precip_state.q_rai,
     ρq_sno = ls.ρ * ls.precip_state.q_sno,
 )
-precip_variables(ls, _, ::PerfExperimental) =
-    (; ρq_rai = zero(eltype(ls)), ρq_sno = zero(eltype(ls)))
 
 # We can use paper-based cases for LES type configurations (no TKE)
 # or SGS type configurations (initial TKE needed), so we do not need to assert

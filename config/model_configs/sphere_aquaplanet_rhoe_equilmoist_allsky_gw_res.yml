@@ -1,5 +1,5 @@
 z_elem: 25
-z_max: 45000.0
+z_max: 55000.0
 dz_bottom: 300.0
 dt: "400secs"
 t_end: "24hours"

@@ -103,7 +103,7 @@ function solve_atmos!(simulation)
         maxrss_str = prettymemory(maxrss())
         @info "Memory currently used (after solve!) by the process (RSS): $maxrss_str"
 
-        foreach(close, output_writers)
+        isnothing(output_writers) || foreach(close, output_writers)
     end
 end
 

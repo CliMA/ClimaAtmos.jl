@@ -4,10 +4,6 @@ edmf_coriolis: "Bomex"
 ls_adv: "Bomex"
 surface_setup: "Bomex"
 turbconv: "prognostic_edmfx"
-implicit_diffusion: false
-implicit_sgs_advection: false
-approximate_linear_solve_iters: 2
-max_newton_iters_ode: 3
 edmfx_upwinding: first_order
 edmfx_entr_model: "PiGroups"
 edmfx_detr_model: "PiGroups"
@@ -23,10 +19,10 @@ z_max: 3e3
 z_elem: 60
 z_stretch: false
 perturb_initstate: false
-dt: "1secs"
+dt: "5secs"
 t_end: "6hours"
 dt_save_to_disk: "10mins"
-toml: [toml/prognostic_edmfx_bomex_explicit.toml]
+toml: [toml/prognostic_edmfx_bomex_pigroup.toml]
 netcdf_interpolation_num_points: [2, 2, 60]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]

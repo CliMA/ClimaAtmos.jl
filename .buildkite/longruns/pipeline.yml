@@ -38,7 +38,7 @@ steps:
 
   - wait
 
-  - group: "Targeted AMIP resolution long runs"
+  - group: "Experimental long runs"
 
     steps:
 
@@ -64,30 +64,3 @@ steps:
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_ssp_bw_rhoe_equil_highres"
-      
-      - label: ":computer: aquaplanet equilmoist clearsky radiation + prognostic edmf diffusion only + 0M microphysics"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_ntasks: 64
-          slurm_nodes: 4
-          slurm_mem_per_cpu: 16GB
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_progedmf_diffonly_0M"
-
-  - group: "Low resolution long runs"
-
-    steps:
-
-      - label: ":computer: low resolution aquaplanet equilmoist clearsky radiation + time-varying insolation + slab ocean"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_ntasks: 8
-          slurm_mem_per_cpu: 16GB
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean"

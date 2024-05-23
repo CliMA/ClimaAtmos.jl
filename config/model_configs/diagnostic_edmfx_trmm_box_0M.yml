@@ -28,7 +28,7 @@ dt: 200secs
 t_end: 6hours
 dt_save_state_to_disk: 10mins
 FLOAT_TYPE: "Float64"
-toml: [toml/diagnostic_edmfx_trmm_box_0M.toml]
+toml: [toml/diagnostic_edmfx_0M.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [8, 8, 82]
 diagnostics:

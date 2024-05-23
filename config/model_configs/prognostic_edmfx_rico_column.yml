@@ -4,9 +4,8 @@ ls_adv: "Rico"
 surface_setup: "Rico"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
-implicit_sgs_advection: true
-approximate_linear_solve_iters: 4
-max_newton_iters_ode: 3
+implicit_sgs_advection: false
+approximate_linear_solve_iters: 2
 edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
@@ -24,7 +23,7 @@ y_elem: 2
 z_elem: 100
 z_stretch: false
 perturb_initstate: false
-dt: "50secs"
+dt: "10secs"
 t_end: "6hours"
 dt_save_state_to_disk: "10mins"
 toml: [toml/prognostic_edmfx.toml]

@@ -38,12 +38,10 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 
 allocs_limit = Dict()
 allocs_limit["flame_perf_target"] = 1_160_723
-allocs_limit["flame_perf_target_tracers"] = 1_184_407
+allocs_limit["flame_perf_target_tracers"] = 1_247_360
 allocs_limit["flame_perf_target_edmfx"] = 1_383_200
 allocs_limit["flame_perf_diagnostics"] = 21_359_336
 allocs_limit["flame_perf_target_diagnostic_edmfx"] = 1_936_480
-allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
-    4_018_252_656
 allocs_limit["flame_perf_target_frierson"] = 4_015_547_056
 allocs_limit["flame_perf_target_threaded"] = 2_298_355
 allocs_limit["flame_perf_target_callbacks"] = 1_285_460
@@ -64,10 +62,7 @@ sampling_rate = expected_allocs <= max_allocs_for_full_sampling ? 1 : 0.01
 
 # Some jobs are problematic (the ones with Krylov mostly)
 # https://github.com/pfitzseb/ProfileCanvas.jl/issues/34
-if job_id in (
-    "flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff",
-    "flame_perf_target_frierson",
-)
+if job_id in ("flame_perf_target_frierson",)
     sampling_rate = 0.001
 end
 

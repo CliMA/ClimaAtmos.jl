@@ -57,7 +57,6 @@ function get_atmos(config::AtmosConfig, params)
     atmos = AtmosModel(;
         moisture_model,
         model_config,
-        perf_mode = get_perf_mode(parsed_args),
         radiation_mode,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
@@ -672,17 +671,21 @@ function get_simulation(config::AtmosConfig)
     @info "get_callbacks: $s"
 
     # Initialize diagnostics
-    s = @timed_str begin
-        scheduled_diagnostics, writers = get_diagnostics(
-            config.parsed_args,
-            atmos,
-            Y,
-            p,
-            t_start,
-            sim_info.dt,
-        )
+    if config.parsed_args["enable_diagnostics"]
+        s = @timed_str begin
+            scheduled_diagnostics, writers = get_diagnostics(
+                config.parsed_args,
+                atmos,
+                Y,
+                p,
+                t_start,
+                sim_info.dt,
+            )
+        end
+        @info "initializing diagnostics: $s"
+    else
+        writers = nothing
     end
-    @info "initializing diagnostics: $s"
 
     continuous_callbacks = tuple()
     discrete_callbacks = callback
@@ -714,13 +717,15 @@ function get_simulation(config::AtmosConfig)
     end
     @info "init integrator: $s"
 
-    s = @timed_str begin
-        integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
-            integrator,
-            scheduled_diagnostics,
-        )
+    if config.parsed_args["enable_diagnostics"]
+        s = @timed_str begin
+            integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
+                integrator,
+                scheduled_diagnostics,
+            )
+        end
+        @info "Added diagnostics: $s"
     end
-    @info "Added diagnostics: $s"
 
     reset_graceful_exit(output_dir)
 

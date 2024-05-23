@@ -73,10 +73,41 @@ include("../../test_helpers.jl")
     for var_name in test_varnames
         @test var_name ∈ propertynames(precip_cache)
     end
+
+    # test helper functions
     @test CA.qₚ(FT(10), FT(2)) == FT(5)
     @test CA.qₚ(FT(-10), FT(2)) == FT(0)
     @test CA.limit(FT(10), FT(2), 5) == FT(1)
+
+    # compute source terms based on the last model state
     CA.precipitation_tendency!(ᶜYₜ, Y, p, FT(0), precip_model, turbconv_model)
+
+    # check for nans
+    @assert !any(isnan, ᶜYₜ.c.ρ)
+    @assert !any(isnan, ᶜYₜ.c.ρq_tot)
+    @assert !any(isnan, ᶜYₜ.c.ρe_tot)
+    @assert !any(isnan, ᶜYₜ.c.ρq_rai)
+    @assert !any(isnan, ᶜYₜ.c.ρq_sno)
+    @assert !any(isnan, p.precomputed.ᶜwᵣ)
+    @assert !any(isnan, p.precomputed.ᶜwₛ)
+
+    # test water budget
     @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
     @test ᶜYₜ.c.ρ == Y.c.ρ .* p.precipitation.ᶜSqₜᵖ
+    @test all(
+        isapprox(
+            .-p.precipitation.ᶜSqₛᵖ .- p.precipitation.ᶜSqᵣᵖ,
+            p.precipitation.ᶜSqᵣᵖ,
+            atol = eps(FT),
+        ),
+    )
+
+    # test if terminal velocity is positive
+    @test minimum(p.precomputed.ᶜwᵣ) >= FT(0)
+    @test minimum(p.precomputed.ᶜwₛ) >= FT(0)
+
+    # test if cloud fraction diagnostics make sense
+    @assert !any(isnan, p.precomputed.cloud_diagnostics_tuple.cf)
+    @test minimum(p.precomputed.cloud_diagnostics_tuple.cf) >= FT(0)
+    @test maximum(p.precomputed.cloud_diagnostics_tuple.cf) <= FT(1)
 end
