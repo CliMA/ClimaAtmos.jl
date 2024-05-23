@@ -45,17 +45,18 @@ import ..compute_gm_mixing_length!
 include(joinpath("..", "utils", "abbreviations.jl"))
 
 import ClimaDiagnostics:
-    DiagnosticVariable,
-    ScheduledDiagnostic,
-    average_pre_output_hook!,
-    DiagnosticsCallback
+    DiagnosticVariable, ScheduledDiagnostic, average_pre_output_hook!
 
 import ClimaDiagnostics.DiagnosticVariables: descriptive_short_name
 
 import ClimaDiagnostics.Schedules: EveryStepSchedule, EveryDtSchedule
 
-
-import ClimaDiagnostics.Writers: HDF5Writer, NetCDFWriter, write_field!
+import ClimaDiagnostics.Writers:
+    HDF5Writer,
+    NetCDFWriter,
+    write_field!,
+    LevelsMethod,
+    FakePressureLevelsMethod
 
 include("diagnostic.jl")
 
