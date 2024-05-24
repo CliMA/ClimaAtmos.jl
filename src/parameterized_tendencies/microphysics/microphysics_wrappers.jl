@@ -161,103 +161,115 @@ function compute_precipitation_sources!(
     thp,
 )
     FT = eltype(Sqₜᵖ)
-    @. Sqₜᵖ = FT(0)
-    @. Sqᵣᵖ = FT(0)
-    @. Sqₛᵖ = FT(0)
-    @. Seₜᵖ = FT(0)
+    @fused_direct begin
+        @. Sqₜᵖ = FT(0)
+        @. Sqᵣᵖ = FT(0)
+        @. Sqₛᵖ = FT(0)
+        @. Seₜᵖ = FT(0)
 
-    #! format: off
-    # rain autoconversion: q_liq -> q_rain
-    @. Sᵖ = min(
-        limit(qₗ(thp, ts), dt, 5),
-        CM1.conv_q_liq_to_q_rai(mp.pr.acnv1M, qₗ(thp, ts), true),
-    )
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqᵣᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+        #! format: off
+        # rain autoconversion: q_liq -> q_rain
+        @. Sᵖ = min(
+            limit(qₗ(thp, ts), dt, 5),
+            CM1.conv_q_liq_to_q_rai(mp.pr.acnv1M, qₗ(thp, ts), true),
+        )
+        @. Sqₜᵖ -= Sᵖ
+        @. Sqᵣᵖ += Sᵖ
+        @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+    end
 
-    # snow autoconversion assuming no supersaturation: q_ice -> q_snow
-    @. Sᵖ = min(
-        limit(qᵢ(thp, ts), dt, 5),
-        CM1.conv_q_ice_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ(thp, ts), true),
-    )
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+    @fused_direct begin
+        # snow autoconversion assuming no supersaturation: q_ice -> q_snow
+        @. Sᵖ = min(
+            limit(qᵢ(thp, ts), dt, 5),
+            CM1.conv_q_ice_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ(thp, ts), true),
+        )
+        @. Sqₜᵖ -= Sᵖ
+        @. Sqₛᵖ += Sᵖ
+        @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
 
-    # accretion: q_liq + q_rain -> q_rain
-    @. Sᵖ = min(
-        limit(qₗ(thp, ts), dt, 5),
-        CM1.accretion(mp.cl, mp.pr, mp.tv.rain, mp.ce, qₗ(thp, ts), qᵣ, ρ),
-    )
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqᵣᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+        # accretion: q_liq + q_rain -> q_rain
+        @. Sᵖ = min(
+            limit(qₗ(thp, ts), dt, 5),
+            CM1.accretion(mp.cl, mp.pr, mp.tv.rain, mp.ce, qₗ(thp, ts), qᵣ, ρ),
+        )
+        @. Sqₜᵖ -= Sᵖ
+        @. Sqᵣᵖ += Sᵖ
+        @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+    end
 
-    # accretion: q_ice + q_snow -> q_snow
-    @. Sᵖ = min(
-        limit(qᵢ(thp, ts), dt, 5),
-        CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ(thp, ts), qₛ, ρ),
-    )
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+    @fused_direct begin
+        # accretion: q_ice + q_snow -> q_snow
+        @. Sᵖ = min(
+            limit(qᵢ(thp, ts), dt, 5),
+            CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ(thp, ts), qₛ, ρ),
+        )
+        @. Sqₜᵖ -= Sᵖ
+        @. Sqₛᵖ += Sᵖ
+        @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
 
-    # accretion: q_liq + q_sno -> q_sno or q_rai
-    # sink of cloud water via accretion cloud water + snow
-    @. Sᵖ = min(
-        limit(qₗ(thp, ts), dt, 5),
-        CM1.accretion(mp.cl, mp.ps, mp.tv.snow, mp.ce, qₗ(thp, ts), qₛ, ρ),
-    )
+        # accretion: q_liq + q_sno -> q_sno or q_rai
+        # sink of cloud water via accretion cloud water + snow
+        @. Sᵖ = min(
+            limit(qₗ(thp, ts), dt, 5),
+            CM1.accretion(mp.cl, mp.ps, mp.tv.snow, mp.ce, qₗ(thp, ts), qₛ, ρ),
+        )
+    end
     # if T < T_freeze cloud droplets freeze to become snow
     # else the snow melts and both cloud water and snow become rain
     α(thp, ts) = TD.Parameters.cv_l(thp) / Lf(thp, ts) * (Tₐ(thp, ts) - mp.ps.T_freeze)
-    @. Sᵖ_snow = ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
-        Sᵖ,
-        FT(-1) * min(Sᵖ * α(thp, ts), limit(qₛ, dt, 5)),
-    )
-    @. Sqₛᵖ += Sᵖ_snow
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqᵣᵖ += ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ - Sᵖ_snow)
-    @. Seₜᵖ -= ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
-        Sᵖ * (Iᵢ(thp, ts) + Φ),
-        Sᵖ * (Iₗ(thp, ts) + Φ) - Sᵖ_snow * (Iₗ(thp, ts) - Iᵢ(thp, ts)),
-    )
+    @fused_direct begin
+        @. Sᵖ_snow = ifelse(
+            Tₐ(thp, ts) < mp.ps.T_freeze,
+            Sᵖ,
+            FT(-1) * min(Sᵖ * α(thp, ts), limit(qₛ, dt, 5)),
+        )
+        @. Sqₛᵖ += Sᵖ_snow
+        @. Sqₜᵖ -= Sᵖ
+        @. Sqᵣᵖ += ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ - Sᵖ_snow)
+        @. Seₜᵖ -= ifelse(
+            Tₐ(thp, ts) < mp.ps.T_freeze,
+            Sᵖ * (Iᵢ(thp, ts) + Φ),
+            Sᵖ * (Iₗ(thp, ts) + Φ) - Sᵖ_snow * (Iₗ(thp, ts) - Iᵢ(thp, ts)),
+        )
+    end
 
-    # accretion: q_ice + q_rai -> q_sno
-    @. Sᵖ = min(
-        limit(qᵢ(thp, ts), dt, 5),
-        CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ(thp, ts), qᵣ, ρ),
-    )
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
-    # sink of rain via accretion cloud ice - rain
-    @. Sᵖ = min(
-        limit(qᵣ, dt, 5),
-        CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ(thp, ts), qᵣ, ρ),
-    )
-    @. Sqᵣᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
-    @. Seₜᵖ += Sᵖ * Lf(thp, ts)
-
-    # accretion: q_rai + q_sno -> q_rai or q_sno
-    @. Sᵖ = ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
-        min(
+    @fused_direct begin
+        # accretion: q_ice + q_rai -> q_sno
+        @. Sᵖ = min(
+            limit(qᵢ(thp, ts), dt, 5),
+            CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ(thp, ts), qᵣ, ρ),
+        )
+        @. Sqₜᵖ -= Sᵖ
+        @. Sqₛᵖ += Sᵖ
+        @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+        # sink of rain via accretion cloud ice - rain
+        @. Sᵖ = min(
             limit(qᵣ, dt, 5),
-            CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ, qᵣ, ρ),
-        ),
-        -min(
-            limit(qₛ, dt, 5),
-            CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qᵣ, qₛ, ρ),
-        ),
-    )
-    @. Sqₛᵖ += Sᵖ
-    @. Sqᵣᵖ -= Sᵖ
-    @. Seₜᵖ += Sᵖ * Lf(thp, ts)
+            CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ(thp, ts), qᵣ, ρ),
+        )
+        @. Sqᵣᵖ -= Sᵖ
+        @. Sqₛᵖ += Sᵖ
+        @. Seₜᵖ += Sᵖ * Lf(thp, ts)
+    end
+
+    @fused_direct begin
+        # accretion: q_rai + q_sno -> q_rai or q_sno
+        @. Sᵖ = ifelse(
+            Tₐ(thp, ts) < mp.ps.T_freeze,
+            min(
+                limit(qᵣ, dt, 5),
+                CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ, qᵣ, ρ),
+            ),
+            -min(
+                limit(qₛ, dt, 5),
+                CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qᵣ, qₛ, ρ),
+            ),
+        )
+        @. Sqₛᵖ += Sᵖ
+        @. Sqᵣᵖ -= Sᵖ
+        @. Seₜᵖ += Sᵖ * Lf(thp, ts)
+    end
     #! format: on
 end
 
@@ -299,32 +311,36 @@ function compute_precipitation_sinks!(
 
     #! format: off
     # evaporation: q_rai -> q_vap
-    @. Sᵖ = -min(
-        limit(qᵣ, dt, 5),
-        -CM1.evaporation_sublimation(rps..., PP(thp, ts), qᵣ, ρ, Tₐ(thp, ts)),
-    )
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqᵣᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+    @fused_direct begin
+        @. Sᵖ = -min(
+            limit(qᵣ, dt, 5),
+            -CM1.evaporation_sublimation(rps..., PP(thp, ts), qᵣ, ρ, Tₐ(thp, ts)),
+        )
+        @. Sqₜᵖ -= Sᵖ
+        @. Sqᵣᵖ += Sᵖ
+        @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
 
-    # melting: q_sno -> q_rai
-    @. Sᵖ = min(
-        limit(qₛ, dt, 5),
-        CM1.snow_melt(sps..., qₛ, ρ, Tₐ(thp, ts)),
-    )
-    @. Sqᵣᵖ += Sᵖ
-    @. Sqₛᵖ -= Sᵖ
-    @. Seₜᵖ -= Sᵖ * Lf(thp, ts)
+        # melting: q_sno -> q_rai
+        @. Sᵖ = min(
+            limit(qₛ, dt, 5),
+            CM1.snow_melt(sps..., qₛ, ρ, Tₐ(thp, ts)),
+        )
+    end
+    @fused_direct begin
+        @. Sqᵣᵖ += Sᵖ
+        @. Sqₛᵖ -= Sᵖ
+        @. Seₜᵖ -= Sᵖ * Lf(thp, ts)
 
-    # deposition/sublimation: q_vap <-> q_sno
-    @. Sᵖ = CM1.evaporation_sublimation(sps..., PP(thp, ts), qₛ, ρ, Tₐ(thp, ts))
-    @. Sᵖ = ifelse(
-        Sᵖ > FT(0),
-        min(limit(qᵥ(thp, ts), dt, 5), Sᵖ),
-        -min(limit(qₛ, dt, 5), FT(-1) * Sᵖ),
-    )
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+        # deposition/sublimation: q_vap <-> q_sno
+        @. Sᵖ = CM1.evaporation_sublimation(sps..., PP(thp, ts), qₛ, ρ, Tₐ(thp, ts))
+        @. Sᵖ = ifelse(
+            Sᵖ > FT(0),
+            min(limit(qᵥ(thp, ts), dt, 5), Sᵖ),
+            -min(limit(qₛ, dt, 5), FT(-1) * Sᵖ),
+        )
+        @. Sqₜᵖ -= Sᵖ
+        @. Sqₛᵖ += Sᵖ
+        @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+    end
     #! format: on
 end
