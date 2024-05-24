@@ -1,5 +1,7 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import Random
+import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 Random.seed!(1234)
 import ClimaAtmos as CA
 

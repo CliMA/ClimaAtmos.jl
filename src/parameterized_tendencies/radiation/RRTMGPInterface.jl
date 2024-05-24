@@ -1140,7 +1140,7 @@ end
 update_concentrations!(::GrayRadiation, model) = nothing
 
 update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_gas!(
-    model.solver.context,
+    ClimaComms.device(model.solver.context),
     model.solver.as.p_lev,
     AS.getview_col_dry(model.solver.as),
     model.params,

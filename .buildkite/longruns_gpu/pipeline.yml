@@ -22,13 +22,13 @@ steps:
     key: "init_gpu_env"
     command:
       - echo "--- Instantiate examples"
-      - julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'
-      - julia --project=examples -e 'using Pkg; Pkg.precompile()'
-      - julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'
-      - julia --project=examples -e 'using Pkg; Pkg.status()'
+      - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'
+      - julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'
+      - julia --project=.buildkite -e 'using CUDA; CUDA.precompile_runtime()'
+      - julia --project=.buildkite -e 'using Pkg; Pkg.status()'
 
       - echo "--- Download artifacts"
-      - julia --project=examples artifacts/download_artifacts.jl
+      - julia --project=.buildkite artifacts/download_artifacts.jl
 
     agents:
       slurm_gpus: 1
@@ -51,6 +51,7 @@ steps:
           slurm_time: 12:00:00
         env:
           JOB_NAME: "longrun_sphere_hydrostatic_balance_rhoe"
+          CLIMACOMMS_DEVICE: "CUDA"
 
       - label: ":computer: dry baroclinic wave"
         command:
@@ -61,6 +62,7 @@ steps:
           slurm_time: 12:00:00
         env:
           JOB_NAME: "longrun_bw_rhoe_highres"
+          CLIMACOMMS_DEVICE: "CUDA"
 
       - label: ":computer: baroclinic wave equilmoist"
         command:
@@ -71,6 +73,7 @@ steps:
           slurm_time: 12:00:00
         env:
           JOB_NAME: "longrun_bw_rhoe_equil_highres"
+          CLIMACOMMS_DEVICE: "CUDA"
 
       - label: ":computer: dry held-suarez"
         command:
@@ -81,6 +84,7 @@ steps:
           slurm_time: 12:00:00
         env:
           JOB_NAME: "longrun_hs_rhoe_dry_55km_nz63"
+          CLIMACOMMS_DEVICE: "CUDA"
 
       - label: ":computer: held-suarez, equilmoist"
         command:
@@ -91,13 +95,14 @@ steps:
           slurm_time: 12:00:00
         env:
           JOB_NAME: "longrun_hs_rhoe_equil_55km_nz63_0M"
-      
+          CLIMACOMMS_DEVICE: "CUDA"
+
       - label: ":computer: held-suarez equilmoist + deep-atmosphere eqns"
         command:
           - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         env:
-          CLIMACORE_DISTRIBUTED: "MPI"
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_hs_rhoe_equil_55km_nz63_0M_deepatmos"
         agents:
           slurm_gpus: 1
@@ -111,7 +116,7 @@ steps:
           - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         env:
-          CLIMACORE_DISTRIBUTED: "MPI"
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M"
         agents:
           slurm_gpus: 1
@@ -125,6 +130,7 @@ steps:
           slurm_gpus: 1
           slurm_time: 12:00:00
         env:
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M"
 
       - label: ":computer: aquaplanet equilmoist clearsky radiation + diagnostic edmf + 0M microphysics"
@@ -135,6 +141,7 @@ steps:
           slurm_gpus: 1
           slurm_time: 12:00:00
         env:
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M"
 
       - label: ":computer: aquaplanet equilmoist allsky radiation + diagnostic edmf + 0M microphysics"
@@ -145,6 +152,7 @@ steps:
           slurm_gpus: 1
           slurm_time: 12:00:00
         env:
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M"
 
         - label: ":computer: aquaplanet equilmoist clearsky radiation + prognostic edmf diffusion only + 0M microphysics"
@@ -155,6 +163,7 @@ steps:
           slurm_gpus: 1
           slurm_time: 12:00:00
         env:
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_progedmf_diffonly_0M"
 
       - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics + earth topography"
@@ -165,6 +174,7 @@ steps:
           slurm_gpus: 1
           slurm_time: 12:00:00
         env:
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth"
 
       - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics + earth topography (SLEVE)"
@@ -175,6 +185,7 @@ steps:
           slurm_gpus: 1
           slurm_time: 6:00:00
         env:
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth_sleve"
 
       - label: ":umbrella: aquaplanet equilmoist clearsky radiation + 1M microphysics"
@@ -185,6 +196,7 @@ steps:
           slurm_gpus: 1
           slurm_time: 6:00:00
         env:
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_clearsky_1M"
 
       - label: ":computer: aquaplanet equilmoist clearsky radiation + time-varying insolation + 0M microphysics + slab ocean"
@@ -195,6 +207,7 @@ steps:
           slurm_gpus: 1
           slurm_time: 12:00:00
         env:
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean"
 
   - group: "DYAMOND"
@@ -209,6 +222,7 @@ steps:
           slurm_gpus: 1
           slurm_time: 12:00:00
         env:
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_dyamond"
 
   - group: "atmos-only coupler runs"
@@ -223,4 +237,5 @@ steps:
           slurm_gpus: 1
           slurm_time: 12:00:00
         env:
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "amip_target_diagedmf"

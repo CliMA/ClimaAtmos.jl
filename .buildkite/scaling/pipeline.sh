@@ -83,9 +83,9 @@ steps:
     key: "init_cpu_env"
     command:
       - echo "--- Instantiate"
-      - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project=examples -e 'using Pkg; Pkg.status()'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.status()'"
     agents:
       slurm_cpus_per_task: 8
     env:
@@ -158,7 +158,7 @@ cat << EOM
         - "${job_id}/scaling_data_${nprocs}_processes.jld2"
         - "${job_id}-nsys.tar.gz"
       env:
-        CLIMACORE_DISTRIBUTED: "MPI"
+        CLIMACOMMS_CONTEXT: "MPI"
       agents:
         slurm_time: $time
 EOM

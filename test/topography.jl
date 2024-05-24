@@ -1,4 +1,6 @@
 using Test
+using ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 using Random
 import ClimaAtmos as CA
 Random.seed!(1234)

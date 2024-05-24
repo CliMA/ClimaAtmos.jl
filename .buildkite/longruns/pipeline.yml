@@ -24,11 +24,11 @@ steps:
       - "julia --project -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Instantiate"
-      - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'"
-      - "julia --project=examples -e 'using Pkg; Pkg.status()'"
-      - "julia --project=examples artifacts/download_artifacts.jl"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=.buildkite -e 'using CUDA; CUDA.precompile_runtime()'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.status()'"
+      - "julia --project=.buildkite artifacts/download_artifacts.jl"
 
     agents:
       slurm_cpus_per_task: 8
