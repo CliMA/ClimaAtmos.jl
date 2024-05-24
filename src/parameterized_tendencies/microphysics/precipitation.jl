@@ -184,11 +184,13 @@ end
 function compute_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     FT = Spaces.undertype(axes(Y.c))
     (; dt) = p
-    (; ᶜts, ᶜqᵣ, ᶜqₛ) = p.precomputed
+    (; ᶜts, ᶜqᵣ, ᶜqₛ, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
     (; ᶜSqₜᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜSeₜᵖ) = p.precipitation
+
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+    ᶜ∇T = p.scratch.ᶜtemp_CT123
 
     # get thermodynamics and 1-moment microphysics params
     (; params) = p
@@ -230,7 +232,10 @@ function compute_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         cmp,
         thp,
     )
+    # first term of eq 36 from Raymond 2013
+    compute_precipitation_heating!(ᶜSeₜᵖ, ᶜwᵣ, ᶜwₛ, ᶜu, ᶜqᵣ, ᶜqₛ, ᶜts, ᶜ∇T, thp)
 end
+
 function compute_precipitation_cache!(
     Y,
     p,
@@ -239,12 +244,13 @@ function compute_precipitation_cache!(
 )
     FT = Spaces.undertype(axes(Y.c))
     (; dt) = p
-    (; ᶜts, ᶜqᵣ, ᶜqₛ) = p.precomputed
+    (; ᶜts, ᶜqᵣ, ᶜqₛ, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
     # Grid mean precipitation sinks
     (; ᶜSqₜᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜSeₜᵖ) = p.precipitation
     # additional scratch storage
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
+    ᶜ∇T = p.scratch.ᶜtemp_CT123
 
     # get thermodynamics and 1-moment microphysics params
     (; params) = p
@@ -273,6 +279,8 @@ function compute_precipitation_cache!(
         cmp,
         thp,
     )
+    # first term of eq 36 from Raymond 2013
+    compute_precipitation_heating!(ᶜSeₜᵖ, ᶜwᵣ, ᶜwₛ, ᶜu, ᶜqᵣ, ᶜqₛ, ᶜts, ᶜ∇T, thp)
 end
 
 function precipitation_tendency!(
