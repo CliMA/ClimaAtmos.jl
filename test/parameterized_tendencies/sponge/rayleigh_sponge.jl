@@ -9,7 +9,10 @@ include("../../test_helpers.jl")
 @testset begin
     "Rayleigh-sponge functions"
     ### Boilerplate default integrator objects
-    config = CA.AtmosConfig(Dict("initial_condition" => "DryBaroclinicWave"))
+    config = CA.AtmosConfig(
+        Dict("initial_condition" => "DryBaroclinicWave");
+        job_id = "sponge1",
+    )
     (; Y) = generate_test_simulation(config)
     zmax = maximum(CC.Fields.coordinate_field(Y.f).z)
     z = CC.Fields.coordinate_field(Y.c).z

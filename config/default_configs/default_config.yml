@@ -123,6 +123,9 @@ t_end:
 output_dir:
   help: "Output directory"
   value: ~
+output_dir_style:
+  help: "What to do when `output_dir` already exists. With `RemovePreexisting`, `output_dir` is overwritten with a new one. With `ActiveLink`, `output_dir` is treated as a base folder and numbered subfolders are created inside. A new subfolder is created every time a simulation is run, with `output_dir/output_active` pointing to the most recent results. Check out ClimaUtilities.OutputPathGenerator for more information. [`ActiveLink` (default), `RemovePreexisting`]"
+  value: "ActiveLink"
 device:
   help: "Device type to use [`auto` (default) `CPUSingleThreaded`, `CPUMultiThreaded`, `CUDADevice`]"
   value: "auto"
