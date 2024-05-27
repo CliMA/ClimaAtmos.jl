@@ -26,8 +26,8 @@ edmfx_sgs_diffusive_flux: true
 rayleigh_sponge: true
 dt_save_state_to_disk: "30days"
 dt: "20secs"
-t_end: "180days"
-restart_file: "/net/sampo/data1/zhaoyi/climaatmos/longrun_155/longrun_aquaplanet_equil_helem12_allsky_progedmf_0M_asym/output_active/day120.0.hdf5"
+t_end: "270days"
+restart_file: "/net/sampo/data1/zhaoyi/climaatmos/longrun_157/longrun_aquaplanet_equil_helem12_allsky_progedmf_0M_asym/output_active/day180.0.hdf5"
 toml: [toml/longrun_aquaplanet_equil_helem12_clearsky_progedmf_0M.toml]
 netcdf_output_at_levels: true
 diagnostics:
