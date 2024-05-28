@@ -19,7 +19,7 @@ topo_smoothing: true
 mesh_warp_type: "SLEVE"
 topography: "Earth"
 surface_setup: "DefaultMoninObukhov"
-vert_diff: "FriersonDiffusion"
+vert_diff: "VerticalDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth_sleve.toml]
