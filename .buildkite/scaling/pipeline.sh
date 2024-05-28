@@ -66,7 +66,7 @@ done
 cat << 'EOM'
 agents:
   queue: new-central
-  modules: climacommon/2024_02_27
+  modules: climacommon/2024_05_27
   # This constraint is set for consistent architectures across nodes
   slurm_constraint: icelake
 
