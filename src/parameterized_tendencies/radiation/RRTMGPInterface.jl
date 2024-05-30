@@ -76,18 +76,21 @@ array2data(
     array::AbstractArray{T, 1},
     ::DataLayouts.IJFH{<:Any, Nij},
 ) where {T, Nij} = DataLayouts.IJFH{T, Nij}(reshape(array, Nij, Nij, 1, :))
-array2data(array::AbstractArray{T, 2}, ::DataLayouts.VF) where {T} =
-    DataLayouts.VF{T}(reshape(array, size(array, 1), 1))
 array2data(
     array::AbstractArray{T, 2},
-    ::DataLayouts.VIFH{<:Any, Ni},
-) where {T, Ni} =
-    DataLayouts.VIFH{T, Ni}(reshape(array, size(array, 1), Ni, 1, :))
+    ::DataLayouts.VF{<:Any, Nv},
+) where {T, Nv} = DataLayouts.VF{T, Nv}(reshape(array, size(array, 1), 1))
 array2data(
     array::AbstractArray{T, 2},
-    ::DataLayouts.VIJFH{<:Any, Nij},
-) where {T, Nij} =
-    DataLayouts.VIJFH{T, Nij}(reshape(array, size(array, 1), Nij, Nij, 1, :))
+    ::DataLayouts.VIFH{<:Any, Nv, Ni},
+) where {T, Nv, Ni} =
+    DataLayouts.VIFH{T, Nv, Ni}(reshape(array, size(array, 1), Ni, 1, :))
+array2data(
+    array::AbstractArray{T, 2},
+    ::DataLayouts.VIJFH{<:Any, Nv, Nij},
+) where {T, Nv, Nij} = DataLayouts.VIJFH{T, Nv, Nij}(
+    reshape(array, size(array, 1), Nij, Nij, 1, :),
+)
 
 abstract type AbstractRRTMGPMode end
 struct GrayRadiation <: AbstractRRTMGPMode
