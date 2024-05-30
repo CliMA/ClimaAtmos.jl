@@ -38,7 +38,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     # NOTE: This will zero out all tendencies
     # please DO NOT add additional tendencies after this function
     zero_tendency!(Yₜ, Y, p, t, p.atmos.tendency_model, p.atmos.turbconv_model)
-    #Spaces.weighted_dss!(Yₜ.c => p.ghost_buffer.c, Yₜ.f => p.ghost_buffer.f)
+    Spaces.weighted_dss!(Yₜ.c => p.ghost_buffer.c, Yₜ.f => p.ghost_buffer.f)
     return nothing
 end
 
@@ -178,11 +178,6 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠβ_rayleigh_w * Y.f.sgsʲs.:($$j).u₃
             end
         end
-    end
-    if viscous_sponge isa ViscousSponge
-#        (; ᶜβ_viscous, ᶠβ_viscous) = p.viscous_sponge
-#        @. Yₜ.f.u₃.components.data.:1 +=
-#            ᶠβ_viscous * wdivₕ(gradₕ(Y.f.u₃.components.data.:1))
     end
     return nothing
 end
