@@ -55,9 +55,9 @@ function radiation_model_cache(
 
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
-        latitude = RRTMGPI.field2array(bottom_coords.lat)
+        latitude = Fields.field2array(bottom_coords.lat)
     else
-        latitude = RRTMGPI.field2array(zero(bottom_coords.z)) # flat space is on Equator
+        latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
     local radiation_model
     orbital_data = Insolation.OrbitalData()
@@ -96,7 +96,7 @@ function radiation_model_cache(
                 ᶜvolume_mixing_ratio_o3_field = @. FT(pressure2ozone(ᶜp))
             end
             center_volume_mixing_ratio_o3 =
-                RRTMGPI.field2array(ᶜvolume_mixing_ratio_o3_field)
+                Fields.field2array(ᶜvolume_mixing_ratio_o3_field)
 
             # the first value for each global mean volume mixing ratio is the
             # present-day value
@@ -150,13 +150,13 @@ function radiation_model_cache(
                     @. ᶜis_top_cloud = ᶜz > 4e3 && ᶜz < 5e3
                     kwargs = (;
                         kwargs...,
-                        center_cloud_liquid_water_path = RRTMGPI.field2array(
+                        center_cloud_liquid_water_path = Fields.field2array(
                             @. ifelse(ᶜis_bottom_cloud, FT(0.002) * ᶜΔz, FT(0))
                         ),
-                        center_cloud_ice_water_path = RRTMGPI.field2array(
+                        center_cloud_ice_water_path = Fields.field2array(
                             @. ifelse(ᶜis_top_cloud, FT(0.001) * ᶜΔz, FT(0))
                         ),
-                        center_cloud_fraction = RRTMGPI.field2array(
+                        center_cloud_fraction = Fields.field2array(
                             @. ifelse(
                                 ᶜis_bottom_cloud | ᶜis_top_cloud,
                                 FT(1),
@@ -179,8 +179,8 @@ function radiation_model_cache(
            RRTMGPI.requires_z(bottom_extrapolation)
             kwargs = (;
                 kwargs...,
-                center_z = RRTMGPI.field2array(Fields.coordinate_field(Y.c).z),
-                face_z = RRTMGPI.field2array(Fields.coordinate_field(Y.f).z),
+                center_z = Fields.field2array(Fields.coordinate_field(Y.c).z),
+                face_z = Fields.field2array(Fields.coordinate_field(Y.f).z),
             )
         end
 
