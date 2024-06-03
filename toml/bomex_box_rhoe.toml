@@ -1,3 +1,5 @@
 [C_E]
 value = 0.044
 
+[zd_rayleigh]
+value = 3250.0

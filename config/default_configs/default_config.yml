@@ -138,7 +138,7 @@ vert_diff:
   value: "false"
 hyperdiff:
   help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
-  value: "ClimaHyperdiffusion"
+  value: "CAM_SE"
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: true
@@ -196,6 +196,13 @@ perf_summary:
 viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false
+smagorinsky_lilly:
+  value: false
+c_smag: 
+  value: 0.2
+job_id:
+  help: "Uniquely identifying string for a particular job"
+  value: ~
 tracer_upwinding:
   help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
   value: none

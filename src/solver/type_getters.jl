@@ -89,6 +89,7 @@ function get_atmos(config::AtmosConfig, params)
         diff_mode = implicit_diffusion ? Implicit() : Explicit(),
         sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
+        smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args, params, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         surface_model = get_surface_model(parsed_args),
@@ -379,6 +380,7 @@ is_imex_CTS_algo_type(alg_or_tableau) =
 is_implicit_type(alg_or_tableau) = is_imex_CTS_algo_type(alg_or_tableau)
 
 is_imex_CTS_algo(::CTS.IMEXAlgorithm) = true
+is_imex_CTS_algo(::CTS.RosenbrockAlgorithm) = true
 is_imex_CTS_algo(::SciMLBase.AbstractODEAlgorithm) = false
 
 is_implicit(ode_algo) = is_imex_CTS_algo(ode_algo)
@@ -429,6 +431,13 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
     ode_name = parsed_args["ode_algo"]
     alg_or_tableau = getproperty(CTS, Symbol(ode_name))
     @info "Using ODE config: `$alg_or_tableau`"
+    if ode_name == "SSPKnoth"
+        return CTS.RosenbrockAlgorithm(CTS.tableau(CTS.SSPKnoth()))
+    end
+
+    if ode_name == "SSPKnoth"
+        return CTS.RosenbrockAlgorithm(CTS.tableau(CTS.SSPKnoth(), FT))
+    end
 
     if is_explicit_CTS_algo_type(alg_or_tableau)
         return CTS.ExplicitAlgorithm(alg_or_tableau())
