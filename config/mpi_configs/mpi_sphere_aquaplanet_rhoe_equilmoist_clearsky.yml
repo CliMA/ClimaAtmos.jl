@@ -3,7 +3,14 @@ surface_setup: "DefaultExchangeCoefficients"
 moist: "equil"
 rad: "clearsky"
 precip_model: "0M"
-dt: "400secs"
+ode_algo: "SSPKnoth"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+dt: "300secs"
+hyperdiffusion: "ClimaHyperdiffusion"
+vorticity_hyperdiffusion_coefficient: 0.5
+divergence_damping: 5.0
+scalar_hyperdiffusion_coefficient: 2.5
 t_end: "4days"
 # Test HDF5 writer with MPI as well
 diagnostics:
