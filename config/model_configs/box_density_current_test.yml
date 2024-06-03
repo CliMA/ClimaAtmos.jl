@@ -1,16 +1,22 @@
+job_id: "box_density_current_test"
 dt_save_state_to_disk: "10secs"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
 z_elem: 45
-dt: "0.1secs"
-t_end: "10.0secs"
+dt: "0.3secs"
+t_end: "1000secs"
 discrete_hydrostatic_balance: true
-y_max: 6400.0
-y_elem: 15
+hyperdiff: "false"
+y_max: 51200.0
+y_elem: 45
 z_stretch: false
 x_elem: 45
 config: "box"
+hyperdiff: "true"
 z_max: 6400.0
+smagorinsky_lilly: true
+c_smag: 0.25
+netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
-  - short_name: thetaa
-    period: 10secs
+  - short_name: [thetaa, wa, ua, ta, va, hfes, rhoa, rv, ha]
+    period: 30secs
