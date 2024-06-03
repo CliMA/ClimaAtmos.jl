@@ -145,6 +145,15 @@ vert_diff:
 hyperdiff:
   help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
   value: "CAM_SE"
+smagorinsky_lilly:
+  help: "Smagorinsky-Lilly diffusive closure [`false` (default), `true`]"
+  value: false
+c_smag: 
+  help: "Smagorinsky coefficient"
+  value: 0.2
+prandtl_turbulent_neutral:
+  help: "Turbulent Prandtl number for neutral stratification"
+  value: 0.333
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: true
