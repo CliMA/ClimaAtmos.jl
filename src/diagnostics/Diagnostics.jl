@@ -37,6 +37,7 @@ import ..VerticalDiffusion
 import ..FriersonDiffusion
 
 # turbconv_model
+import ..SmagorinskyLilly
 import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 
