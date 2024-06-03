@@ -85,9 +85,13 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    
+    horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lilly)
+    vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lilly)
 
     # NOTE: This will zero out all momentum tendencies in the edmfx advection test
     # please DO NOT add additional velocity tendencies after this function
+    # Other SGS tendencies
     zero_velocity_tendency!(Yₜ, Y, p, t)
 
     # TODO: make bycolumn-able

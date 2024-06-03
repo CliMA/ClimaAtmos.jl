@@ -142,6 +142,10 @@ vert_diff:
 hyperdiff:
   help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
   value: "CAM_SE"
+smagorinsky_lilly:
+  value: false
+c_smag: 
+  value: 0.2
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: true
