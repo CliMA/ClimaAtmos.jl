@@ -286,18 +286,20 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
 
     # Find the values of (z, ρ, q_tot) at the q_tot = 0.008 isoline, i.e., at
     # the level whose value of q_tot is closest to 0.008.
-    Operators.column_mapreduce!(
-        (z, ρ, q_tot) -> (; z, ρ, q_tot),
-        (nt1, nt2) ->
-            abs(nt1.q_tot - FT(0.008)) < abs(nt2.q_tot - FT(0.008)) ? nt1 : nt2,
-        isoline_z_ρ_q,
-        ᶜz,
-        Y.c.ρ,
-        ᶜspecific.q_tot,
-    )
+    #Operators.column_mapreduce!(
+    #    (z, ρ, q_tot) -> (; z, ρ, q_tot),
+    #    (nt1, nt2) ->
+    #        abs(nt1.q_tot - FT(0.008)) < abs(nt2.q_tot - FT(0.008)) ? nt1 : nt2,
+    #    isoline_z_ρ_q,
+    #    ᶜz,
+    #    Y.c.ρ,
+    #    ᶜspecific.q_tot,
+    #)
 
-    zi = isoline_z_ρ_q.z
-    ρi = isoline_z_ρ_q.ρ
+    zi = FT(800);
+    ρi = FT(1.13);
+    #zi = isoline_z_ρ_q.z
+    #ρi = isoline_z_ρ_q.ρ
 
     # TODO: According to the paper, we should remove the ifelse condition that
     # clips the third term to 0 below zi, and we should also replace cp_d with
