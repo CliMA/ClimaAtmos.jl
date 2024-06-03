@@ -42,7 +42,7 @@ import CairoMakie
 import CairoMakie.Makie
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
-import ClimaAnalysis: SimDir, slice, read_var
+import ClimaAnalysis: SimDir, slice, read_var, average_x, average_y, window, average_time
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
@@ -577,6 +577,7 @@ end
 
 function make_plots(
     ::Val{:box_density_current_test},
+    ::Val{:box_rising_thermal_test},
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -1056,6 +1057,117 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
     )
 end
 
+LESBoxPlots= Union{
+    Val{:les_rico_box},
+    Val{:les_dycoms_box},
+    Val{:les_bomex_box},
+    Val{:les_gabls_box},
+}
+
+"""
+    plot_les_vert_profile!(grid_loc, var_group)
+
+Helper function for `make_plots_generic`. Takes a list of variables and plots
+them on the same axis.
+"""
+function plot_les_vert_profile!(grid_loc, var_group)
+    z = var_group[1].dims["z"]
+    units = var_group[1].attributes["units"]
+    ax = CairoMakie.Axis(
+        grid_loc[1, 1],
+        ylabel = "z [$(var_group[1].dim_attributes["z"]["units"])]",
+        xlabel = "$(short_name(var_group[1])) [$units]",
+        title = parse_var_attributes(var_group[1]),
+    )
+
+    for var in var_group
+        CairoMakie.lines!(ax, var.data, z, label = short_name(var))
+    end
+    length(var_group) > 1 && Makie.axislegend(ax)
+end
+
+function make_plots(
+    sim_type::Union{LESBoxPlots},
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+
+    reduction = "inst"
+    short_names = [
+        "wa",
+        "ua",
+        "va",
+        "ta",
+        "thetaa",
+        "ha",
+        "hus",
+        "hur",
+        "cl",
+        "clw",
+        "cli",
+    ]
+    available_periods = ClimaAnalysis.available_periods(
+        simdirs[1];
+        short_name = short_names[1],
+        reduction,
+    )
+    if "5m" in available_periods
+        period = "5m"
+    elseif "10m" in available_periods
+        period = "10m"
+    elseif "30m" in available_periods
+        period = "30m"
+    elseif "1h" in available_periods
+        period = "1h"
+    end
+
+    # Window average from instantaneous snapshots?
+    function horizontal_average(var)
+        return average_x(average_y(var))
+    end
+    function windowed_reduction(var)
+        hours = 3600.0
+        window_end = last(var.dims["time"])
+        window_start = window_end - 2hours
+        var_window = window(var, "time"; left=window_start, right=window_end)
+        var_reduced = horizontal_average(average_time(var_window))
+        return var_reduced
+    end
+    
+    var_groups_xyt_reduced =
+        map_comparison(simdirs, short_names) do simdir, short_name
+            return [
+                get(simdir; short_name, reduction, period) |> windowed_reduction
+            ]
+        end
+    
+    var_groups_xy_reduced =
+        map_comparison(simdirs, short_names) do simdir, short_name
+            return [
+                get(simdir; short_name, reduction, period) |> horizontal_average
+            ]
+        end
+    
+    tmp_file = make_plots_generic(
+        output_paths,
+        var_groups_xyt_reduced,
+        output_name = "tmp";
+        plot_fn = plot_les_vert_profile!,
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+
+    make_plots_generic(
+        output_paths,
+        vcat(var_groups_xy_reduced...),
+        plot_fn = plot_parsed_attribute_title!,
+        summary_files = [tmp_file],
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+end
+
+
 EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_gabls_box},
     Val{:diagnostic_edmfx_bomex_box},
@@ -1086,7 +1198,6 @@ EDMFBoxPlotsWithPrecip = Union{
     Val{:diagnostic_edmfx_trmm_box},
     Val{:diagnostic_edmfx_trmm_stretched_box},
 }
-
 
 """
     plot_edmf_vert_profile!(grid_loc, var_group)

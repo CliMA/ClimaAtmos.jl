@@ -1,0 +1,36 @@
+job_id: "les_bomex_box"
+initial_condition: "Bomex" 
+edmf_coriolis: "Bomex"
+subsidence: "Bomex" 
+ls_adv: "Bomex" 
+surface_setup: "Bomex"
+moist: "equil"
+config: "box" 
+hyperdiff: "false" 
+implicit_diffusion: false
+precip_model: "0M"
+dt_cloud_fraction: "10mins"
+ode_algo: "SSPKnoth"
+smagorinsky_lilly: true
+c_smag: 0.18
+x_max: 3.2e3
+y_max: 3.2e3 
+z_max: 4.5e3
+x_elem: 8
+y_elem: 8
+z_elem: 100
+z_stretch: false
+dt: "0.10secs" 
+output_default_diagnostics: false
+t_end: "21600secs" 
+dt_save_state_to_disk: "30mins"
+rayleigh_sponge: true
+toml: [toml/bomex_box_rhoe.toml]
+restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/bomex/Micro0M_day0.0_Prod.hdf5"
+netcdf_interpolation_num_points: [40, 40, 80]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, hfes]
+    period: 10mins
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, hfes]
+    reduction: average
+    period: 60mins
