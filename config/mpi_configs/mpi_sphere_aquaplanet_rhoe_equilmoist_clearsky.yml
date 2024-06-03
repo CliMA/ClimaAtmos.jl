@@ -8,9 +8,9 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 dt: "400secs"
 hyperdiffusion: "ClimaHyperdiffusion"
-vorticity_hyperdiffusion_coefficient: 0.5
+vorticity_hyperdiffusion_coefficient: 1.0
 divergence_damping: 5.0
-scalar_hyperdiffusion_coefficient: 2.5
+scalar_hyperdiffusion_coefficient: 5.0
 t_end: "4days"
 # Test HDF5 writer with MPI as well
 diagnostics:
