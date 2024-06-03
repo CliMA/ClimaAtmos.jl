@@ -6,7 +6,7 @@ precip_model: "0M"
 ode_algo: "SSPKnoth"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-dt: "300secs"
+dt: "400secs"
 hyperdiffusion: "ClimaHyperdiffusion"
 vorticity_hyperdiffusion_coefficient: 0.5
 divergence_damping: 5.0
