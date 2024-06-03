@@ -6,9 +6,6 @@ initial_condition: "DryBaroclinicWave"
 t_end: "6days"
 use_reference_state: false
 hyperdiffusion: "ClimaHyperdiffusion"
-vorticity_hyperdiffusion_coefficient: 1.0
-divergence_damping: 5.0
-scalar_hyperdiffusion_coefficient: 5.0
 dt: "200secs"
 netcdf_output_at_levels: false
 diagnostics:
