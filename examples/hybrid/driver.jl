@@ -10,6 +10,8 @@ import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
 
+import ClimaComms
+
 if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()
     config = CA.AtmosConfig(config_file; job_id)
@@ -27,7 +29,6 @@ import ClimaAtmos.InitialConditions as ICs
 using Statistics: mean
 import ClimaAtmos.Parameters as CAP
 import Thermodynamics as TD
-import ClimaComms
 using SciMLBase
 using PrettyTables
 using JLD2
