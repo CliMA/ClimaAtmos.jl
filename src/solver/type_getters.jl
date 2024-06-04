@@ -483,14 +483,21 @@ function get_sim_info(config::AtmosConfig)
     out_dir = parsed_args["output_dir"]
     base_output_dir = isnothing(out_dir) ? default_output : out_dir
 
-    output_dir = joinpath(base_output_dir, "output_active")
-    mkpath(output_dir)
-    # TODO: Put this back in once
-    # https://github.com/CliMA/ClimaUtilities.jl/issues/56 is fixed.
-    # output_dir = OutputPathGenerator.generate_output_path(
-    #     base_output_dir;
-    #     context = config.comms_ctx,
-    # )
+    allowed_dir_styles = Dict(
+        "activelink" => OutputPathGenerator.ActiveLinkStyle(),
+        "removepreexisting" => OutputPathGenerator.RemovePreexistingStyle(),
+    )
+
+    requested_style = parsed_args["output_dir_style"]
+
+    haskey(allowed_dir_styles, lowercase(requested_style)) ||
+        error("output_dir_style $(requested_style) not available")
+
+    output_dir = OutputPathGenerator.generate_output_path(
+        base_output_dir;
+        context = config.comms_ctx,
+        style = allowed_dir_styles[lowercase(requested_style)],
+    )
 
     sim = (;
         output_dir,

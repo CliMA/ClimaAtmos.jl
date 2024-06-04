@@ -205,12 +205,11 @@ if ClimaComms.iamroot(config.comms_ctx)
     end
     @info "Plotting done"
 
-    # TODO: Use readlink again once
-    # https://github.com/CliMA/ClimaUtilities.jl/issues/56 is fixed.
-    symlink_to_fullpath(path) = path
-    # function symlink_to_fullpath(path)
-    #     return joinpath(dirname(path), readlink(path))
-    # end
+    if islink(simulation.output_dir)
+        symlink_to_fullpath(path) = joinpath(dirname(path), readlink(path))
+    else
+        symlink_to_fullpath(path) = path
+    end
 
     @info "Creating tarballs"
     # These NC files are used by our reproducibility tests,

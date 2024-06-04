@@ -16,7 +16,8 @@ default_args = CA.cli_defaults(CA.argparse_settings())
         "dt_save_state_to_disk" => "str",
         "bubble" => true,
     )
-    parsed_args = CA.AtmosConfig(config_dict).parsed_args
+    parsed_args =
+        CA.AtmosConfig(config_dict, job_id = "paremter_tests1").parsed_args
     @test parsed_args["krylov_rtol"] isa FT
     @test parsed_args["newton_rtol"] isa FT
     @test parsed_args["max_newton_iters_ode"] isa Int
@@ -27,9 +28,10 @@ end
 
 @testset "Test all parameter tomls in toml/" begin
     toml_path = joinpath(pkgdir(CA), "toml")
-    for toml in readdir(toml_path)
+    for (index, toml) in enumerate(readdir(toml_path))
         config_dict = Dict("toml" => [joinpath(toml_path, toml)])
-        config = CA.AtmosConfig(config_dict)
+        config =
+            CA.AtmosConfig(config_dict, job_id = "paremter_tests$(index + 1)")
         # Ensure that there are no errors
         @test CA.create_parameter_set(config) isa
               CA.Parameters.ClimaAtmosParameters

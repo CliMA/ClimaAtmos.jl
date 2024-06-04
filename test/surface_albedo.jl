@@ -7,7 +7,7 @@ Random.seed!(1234)
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 
 @testset "set_surface_albedo!" begin
-    config = ClimaAtmos.AtmosConfig()
+    config = ClimaAtmos.AtmosConfig(; job_id = "surface_albedo1")
     FT = Float32
 
     # test set_surface_albedo!(Y, p, t, α_type::ConstantAlbedo)

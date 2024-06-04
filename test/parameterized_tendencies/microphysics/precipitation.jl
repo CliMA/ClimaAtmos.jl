@@ -20,6 +20,7 @@ include("../../test_helpers.jl")
             "config" => "column",
             "output_default_diagnostics" => false,
         ),
+        job_id = "precipitation1",
     )
     (; Y, p, params) = generate_test_simulation(config)
 
@@ -63,6 +64,7 @@ include("../../test_helpers.jl")
             "config" => "column",
             "output_default_diagnostics" => false,
         ),
+        job_id = "precipitation2",
     )
     (; Y, p, params) = generate_test_simulation(config)
     precip_model = CA.Microphysics1Moment()
