@@ -328,7 +328,7 @@ version = "0.5.2"
 deps = ["Adapt", "ArgParse", "ArtifactWrappers", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Colors", "Dates", "Dierckx", "DiffEqBase", "Distributions", "DocStringExtensions", "FastGaussQuadrature", "Insolation", "Interpolations", "IntervalSets", "Krylov", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "Pkg", "Printf", "RRTMGP", "Random", "RootSolvers", "SciMLBase", "StaticArrays", "Statistics", "StatsBase", "SurfaceFluxes", "Thermodynamics", "YAML"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
-version = "0.24.1"
+version = "0.24.2"
 
 [[deps.ClimaComms]]
 deps = ["CUDA", "MPI"]
@@ -338,9 +338,9 @@ version = "0.5.8"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "6923b1dcf3ac0a855e4c67d7bff2fcb40e06b87f"
+git-tree-sha1 = "112ac9c71a8f5026b56f8373220de87e5ba706f6"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.14.6"
+version = "0.14.7"
 weakdeps = ["CUDA", "Krylov"]
 
     [deps.ClimaCore.extensions]
@@ -391,9 +391,9 @@ version = "0.10.7"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "bf1a1044b75ccea2a4eeaa48bab4f77d8f9286a9"
+git-tree-sha1 = "0424a41fcd86042faebe4b772a5bfa009250509b"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
-version = "0.7.30"
+version = "0.7.31"
 weakdeps = ["BenchmarkTools", "CUDA", "OrderedCollections", "PrettyTables", "StatsBase"]
 
     [deps.ClimaTimeSteppers.extensions]
@@ -557,9 +557,9 @@ version = "4.1.1"
 
 [[deps.Cthulhu]]
 deps = ["CodeTracking", "FoldingTrees", "InteractiveUtils", "JuliaSyntax", "PrecompileTools", "Preferences", "REPL", "TypedSyntax", "UUIDs", "Unicode", "WidthLimitedIO"]
-git-tree-sha1 = "fb8efb0716125b9faa8b760531d499bfafee18cb"
+git-tree-sha1 = "8aaad53d42ad8155345a796ef551a2046f93a4ab"
 uuid = "f68482b8-f384-11e8-15f7-abe071a5a75f"
-version = "2.12.5"
+version = "2.12.6"
 
 [[deps.CubedSphere]]
 deps = ["Elliptic", "FFTW", "Printf", "ProgressBars", "SpecialFunctions", "TaylorSeries", "Test"]
@@ -955,9 +955,9 @@ version = "0.1.3"
 
 [[deps.Functors]]
 deps = ["LinearAlgebra"]
-git-tree-sha1 = "d3e63d9fa13f8eaa2f06f64949e2afc593ff52c2"
+git-tree-sha1 = "8a66c07630d6428eaab3506a0eabfcf4a9edea05"
 uuid = "d9f16b24-f501-4c13-a1f2-28368ffc5196"
-version = "0.4.10"
+version = "0.4.11"
 
 [[deps.Future]]
 deps = ["Random"]
@@ -2070,9 +2070,9 @@ version = "1.3.4"
 
 [[deps.RecursiveArrayTools]]
 deps = ["Adapt", "ArrayInterface", "DocStringExtensions", "GPUArraysCore", "IteratorInterfaceExtensions", "LinearAlgebra", "RecipesBase", "SparseArrays", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables"]
-git-tree-sha1 = "23a2f876de8c1f1fda6345b289cd7a3641fd0340"
+git-tree-sha1 = "2cea01606a852c2431ded77293eb533b511b19e6"
 uuid = "731186ca-8d62-57ce-b412-fbd966d074cd"
-version = "3.21.0"
+version = "3.22.0"
 
     [deps.RecursiveArrayTools.extensions]
     RecursiveArrayToolsFastBroadcastExt = "FastBroadcast"
