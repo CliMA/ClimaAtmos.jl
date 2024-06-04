@@ -138,7 +138,7 @@ vert_diff:
   value: "false"
 hyperdiff:
   help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
-  value: "ClimaHyperdiffusion"
+  value: "CAM_SE"
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: true
