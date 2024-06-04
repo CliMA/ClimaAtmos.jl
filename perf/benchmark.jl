@@ -22,7 +22,8 @@ device = ClimaComms.device(config.comms_ctx)
 (; table_summary, trials) = CTS.benchmark_step(
     integrator,
     device;
-    crop = true,
+    crop = false,
+    hcrop = 168,
     only = [
         "Wfact",
         "ldiv!",
