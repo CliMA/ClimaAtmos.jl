@@ -66,6 +66,16 @@ steps:
         env:
           JOB_NAME: "longrun_bw_rhoe_highres"
 
+      - label: ":computer: dry baroclinic wave high res"
+        command:
+          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+        artifact_paths: "$$JOB_NAME/output_active/*"
+        agents:
+          slurm_gpus: 1
+          slurm_time: 12:00:00
+        env:
+          JOB_NAME: "longrun_bw_rhoe_veryhighres"
+
       - label: ":computer: baroclinic wave equilmoist"
         command:
           - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
@@ -77,6 +87,16 @@ steps:
           slurm_time: 12:00:00
         env:
           JOB_NAME: "longrun_bw_rhoe_equil_highres"
+
+      - label: ":computer: baroclinic wave equilmoist high res"
+        command:
+          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+        artifact_paths: "$$JOB_NAME/output_active/*"
+        agents:
+          slurm_gpus: 1
+          slurm_time: 12:00:00
+        env:
+          JOB_NAME: "longrun_bw_rhoe_equil_veryhighres"
 
       - label: ":computer: dry held-suarez"
         command:

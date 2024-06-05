@@ -638,6 +638,8 @@ end
 DryBaroWavePlots = Union{
     Val{:sphere_baroclinic_wave_rhoe},
     Val{:sphere_baroclinic_wave_rhoe_deepatmos},
+    Val{:longrun_bw_rhoe_highres},
+    Val{:longrun_bw_rhoe_veryhighres},
 }
 
 function make_plots(::DryBaroWavePlots, output_paths::Vector{<:AbstractString})
@@ -677,36 +679,6 @@ function make_plots(
         return get(simdir; short_name, reduction)
     end
     make_plots_generic(output_paths, vars, z_reference = 1500, time = LAST_SNAP)
-end
-
-function make_plots(
-    ::Val{:longrun_bw_rhoe_highres},
-    output_paths::Vector{<:AbstractString},
-)
-    simdirs = SimDir.(output_paths)
-    short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
-    short_names_spectra = ["ke"]
-    vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return slice(get(simdir; short_name, reduction), time = 10days)
-    end
-    vars_spectra =
-        map_comparison(simdirs, short_names_spectra) do simdir, short_name
-            slice(
-                compute_spectrum(
-                    slice(get(simdir; short_name, reduction), time = 10days),
-                ),
-                z = 1500,
-            )
-        end
-
-    tmp_file =
-        make_plots_generic(output_paths, vars, z = 1500, output_name = "tmp")
-    make_plots_generic(
-        output_paths,
-        vars_spectra;
-        summary_files = [tmp_file],
-        plot_fn = plot_spectrum_with_line!,
-    )
 end
 
 MoistBaroWavePlots = Union{
@@ -750,6 +722,7 @@ end
 
 LongMoistBaroWavePlots = Union{
     Val{:longrun_bw_rhoe_equil_highres},
+    Val{:longrun_bw_rhoe_equil_veryhighres},
     Val{:longrun_zalesak_tracer_energy_bw_rhoe_equil_highres},
     Val{:longrun_ssp_bw_rhoe_equil_highres},
     Val{:longrun_bw_rhoe_equil_highres_topography_earth},
