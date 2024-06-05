@@ -371,14 +371,13 @@ function get_surface_setup(parsed_args)
 end
 
 is_explicit_CTS_algo_type(alg_or_tableau) =
-    alg_or_tableau <: CTS.ERKAlgorithmName
+    alg_or_tableau <: CTS.RKAlgorithmName
 
-is_imex_CTS_algo_type(alg_or_tableau) =
-    alg_or_tableau <: CTS.IMEXARKAlgorithmName
+is_imex_CTS_algo_type(alg_or_tableau) = alg_or_tableau <: CTS.ARKAlgorithmName
 
 is_implicit_type(alg_or_tableau) = is_imex_CTS_algo_type(alg_or_tableau)
 
-is_imex_CTS_algo(::CTS.IMEXAlgorithm) = true
+is_imex_CTS_algo(::CTS.ARKAlgorithm) = true
 is_imex_CTS_algo(::SciMLBase.AbstractODEAlgorithm) = false
 
 is_implicit(ode_algo) = is_imex_CTS_algo(ode_algo)
@@ -431,7 +430,7 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
     @info "Using ODE config: `$alg_or_tableau`"
 
     if is_explicit_CTS_algo_type(alg_or_tableau)
-        return CTS.ExplicitAlgorithm(alg_or_tableau())
+        return CTS.RKAlgorithm(alg_or_tableau())
     elseif !is_implicit_type(alg_or_tableau)
         return alg_or_tableau()
     elseif is_imex_CTS_algo_type(alg_or_tableau)
@@ -463,7 +462,7 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
                 nothing
             end,
         )
-        return CTS.IMEXAlgorithm(alg_or_tableau(), newtons_method)
+        return CTS.ARKAlgorithm(alg_or_tableau(), newtons_method)
     else
         return alg_or_tableau(; linsolve = linsolve!)
     end
@@ -536,8 +535,8 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
                     # Can we just pass implicit_tendency! and jac_prototype etc.?
                     lim! = limiters_func!,
                     dss!,
-                    post_explicit! = set_precomputed_quantities!,
-                    post_implicit! = set_precomputed_quantities!,
+                    pre_newton_iteration! = set_precomputed_quantities!, # TODO: set_implicit_precomputed_quantities!
+                    post_stage! = set_precomputed_quantities!,
                 )
             else
                 SciMLBase.SplitFunction(implicit_func, remaining_tendency!)
