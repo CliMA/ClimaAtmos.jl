@@ -47,6 +47,8 @@ steps:
       #   command:
       #     - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
       #   artifact_paths: "$$JOB_NAME/output_active/*"
+      #   env:
+      #     CLIMACOMMS_CONTEXT: "MPI"
       #   agents:
       #     slurm_ntasks: 32
       #     slurm_mem_per_cpu: 32GB
@@ -58,6 +60,8 @@ steps:
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
+        env:
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_ntasks: 32
           slurm_nodes: 2
@@ -69,6 +73,8 @@ steps:
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
+        env:
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_ntasks: 64
           slurm_nodes: 4
