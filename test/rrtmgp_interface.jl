@@ -1,4 +1,6 @@
 using Test
+import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 using Random
 Random.seed!(1234)
 import ClimaAtmos as CA
@@ -10,7 +12,7 @@ param_dict = CP.create_toml_dict(Float64)
 params = RRTMGPParameters(param_dict)
 
 ### RRTMGP Interface Tests
-# Includes tests for functions defined within the RRTMGPInterface.jl file. 
+# Includes tests for functions defined within the RRTMGPInterface.jl file.
 # Assesses that interp / extrap functions are correctly defined.
 
 using Statistics

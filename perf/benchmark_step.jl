@@ -12,6 +12,8 @@ include(joinpath("perf", "benchmark_step.jl"));
 ```
 =#
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
+import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA

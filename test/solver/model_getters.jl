@@ -1,3 +1,5 @@
+using ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 
 @testset "Model config" begin

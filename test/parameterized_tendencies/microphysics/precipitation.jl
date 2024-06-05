@@ -1,4 +1,5 @@
-
+using ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import SurfaceFluxes as SF
 import ClimaAtmos.Parameters as CAP
