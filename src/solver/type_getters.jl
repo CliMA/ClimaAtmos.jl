@@ -378,6 +378,7 @@ is_imex_CTS_algo_type(alg_or_tableau) =
 is_implicit_type(alg_or_tableau) = is_imex_CTS_algo_type(alg_or_tableau)
 
 is_imex_CTS_algo(::CTS.IMEXAlgorithm) = true
+is_imex_CTS_algo(::CTS.RosenbrockAlgorithm) = true
 is_imex_CTS_algo(::SciMLBase.AbstractODEAlgorithm) = false
 
 is_implicit(ode_algo) = is_imex_CTS_algo(ode_algo)
@@ -428,6 +429,9 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
     ode_name = parsed_args["ode_algo"]
     alg_or_tableau = getproperty(CTS, Symbol(ode_name))
     @info "Using ODE config: `$alg_or_tableau`"
+    if ode_name == "SSPKnoth"
+        return CTS.RosenbrockAlgorithm(CTS.tableau(CTS.SSPKnoth()))
+    end
 
     if is_explicit_CTS_algo_type(alg_or_tableau)
         return CTS.ExplicitAlgorithm(alg_or_tableau())
