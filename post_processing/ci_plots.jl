@@ -429,6 +429,46 @@ function map_comparison(func, simdirs, args)
     return vcat([[func(simdir, arg) for simdir in simdirs] for arg in args]...)
 end
 
+"""
+    plot_spectrum_with_line!(grid_loc, spectrum; exponent = -3.0)
+
+Plots the given spectrum alongside a line that identifies a power law.
+
+Assumes 1D spectrum.
+"""
+function plot_spectrum_with_line!(grid_loc, spectrum; exponent = -3.0)
+    ndims(spectrum.data) == 1 || error("Can only work with 1D spectrum")
+    viz.plot!(grid_loc, spectrum)
+
+    dim_name = spectrum.index2dim[begin]
+
+    ax = CairoMakie.current_axis()
+
+    # Ignore below wavenumber of 10
+    spectrum_10 = ClimaAnalysis.window(spectrum, dim_name; left = log10(10))
+
+    # Add reference line
+    wavenumbers = spectrum_10.dims[dim_name]
+    max_spectrum_10 = maximum(spectrum_10.data)
+    wavenumber_at_max = wavenumbers[argmax(spectrum_10.data)]
+
+    # Increase the intercept by 20 percent so that it hovers over the spectrum
+    intercept = 1.2 * (max_spectrum_10 - exponent * wavenumber_at_max)
+    reference_line(k) = exponent * k + intercept
+
+    color = :orange
+    CairoMakie.lines!(ax, wavenumbers, reference_line.(wavenumbers); color)
+    CairoMakie.text!(
+        ax,
+        wavenumber_at_max,
+        reference_line(wavenumber_at_max),
+        text = "k^$exponent";
+        color,
+    )
+
+    return nothing
+end
+
 ColumnPlots = Union{
     Val{:single_column_hydrostatic_balance_ft64},
     Val{:single_column_radiative_equilibrium_gray},
@@ -609,13 +649,22 @@ function make_plots(::DryBaroWavePlots, output_paths::Vector{<:AbstractString})
     end
     vars_spectra =
         map_comparison(simdirs, short_names_spectra) do simdir, short_name
-            compute_spectrum(
-                slice(get(simdir; short_name, reduction), time = 10days),
+            slice(
+                compute_spectrum(
+                    slice(get(simdir; short_name, reduction), time = 10days),
+                ),
+                z = 1500,
             )
         end
-    vars = vcat(vars..., vars_spectra...)
 
-    make_plots_generic(output_paths, vars, z = 1500)
+    tmp_file =
+        make_plots_generic(output_paths, vars, z = 1500, output_name = "tmp")
+    make_plots_generic(
+        output_paths,
+        vars_spectra;
+        summary_files = [tmp_file],
+        plot_fn = plot_spectrum_with_line!,
+    )
 end
 
 function make_plots(
@@ -642,13 +691,22 @@ function make_plots(
     end
     vars_spectra =
         map_comparison(simdirs, short_names_spectra) do simdir, short_name
-            compute_spectrum(
-                slice(get(simdir; short_name, reduction), time = 10days),
+            slice(
+                compute_spectrum(
+                    slice(get(simdir; short_name, reduction), time = 10days),
+                ),
+                z = 1500,
             )
         end
-    vars = vcat(vars..., vars_spectra...)
 
-    make_plots_generic(output_paths, vars, z = 1500)
+    tmp_file =
+        make_plots_generic(output_paths, vars, z = 1500, output_name = "tmp")
+    make_plots_generic(
+        output_paths,
+        vars_spectra;
+        summary_files = [tmp_file],
+        plot_fn = plot_spectrum_with_line!,
+    )
 end
 
 MoistBaroWavePlots = Union{
@@ -662,7 +720,7 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
-    short_names_spectra = ["ke"]
+    short_names_spectra = ["ke", "hus"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
         return slice(get(simdir; short_name, reduction), time = 10days)
     end
@@ -674,11 +732,20 @@ function make_plots(
                 left = 9days,
                 right = 10days,
             )
-            return ClimaAnalysis.average_time(compute_spectrum(windowed_var))
+            return slice(
+                ClimaAnalysis.average_time(compute_spectrum(windowed_var)),
+                z = 1500,
+            )
         end
-    vars = vcat(vars..., vars_spectra...)
 
-    make_plots_generic(output_paths, vars, z = 1500)
+    tmp_file =
+        make_plots_generic(output_paths, vars, z = 1500, output_name = "tmp")
+    make_plots_generic(
+        output_paths,
+        vars_spectra;
+        summary_files = [tmp_file],
+        plot_fn = plot_spectrum_with_line!,
+    )
 end
 
 LongMoistBaroWavePlots = Union{
@@ -694,18 +761,28 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
-    short_names_spectra = ["ke"]
+    short_names_spectra = ["ke", "hus"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
         return slice(get(simdir; short_name, reduction), time = 10days)
     end
     vars_spectra =
         map_comparison(simdirs, short_names_spectra) do simdir, short_name
-            compute_spectrum(
-                slice(get(simdir; short_name, reduction), time = 10days),
+            slice(
+                compute_spectrum(
+                    slice(get(simdir; short_name, reduction), time = 10days),
+                ),
+                z = 1500,
             )
         end
-    vars = vcat(vars..., vars_spectra...)
-    make_plots_generic(output_paths, vars, z = 1500)
+
+    tmp_file =
+        make_plots_generic(output_paths, vars, z = 1500, output_name = "tmp")
+    make_plots_generic(
+        output_paths,
+        vars_spectra;
+        summary_files = [tmp_file],
+        plot_fn = plot_spectrum_with_line!,
+    )
 end
 
 DryHeldSuarezPlots = Union{
