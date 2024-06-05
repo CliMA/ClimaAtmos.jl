@@ -4,6 +4,12 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+v0.24.2
+-------
+
+- ![][badge-🔥behavioralΔ] Fixed incorrect surface fluxes for uh. PR [#3064]
+  (https://github.com/CliMA/ClimaAtmos.jl/pull/3064).
+
 v0.24.1
 -------
 
