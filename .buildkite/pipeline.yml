@@ -29,12 +29,14 @@ steps:
       - "julia --project -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Instantiate examples"
+      - "julia --project=examples -e 'using Pkg; Pkg.develop(;path=\".\"); Pkg.add(url = \"https://github.com/CLiMA/ClimaTimeSteppers.jl\", rev = \"gb/rosenbrock\");'"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Instantiate perf"
+      - "julia --project=perf -e 'using Pkg; Pkg.develop(;path=\".\"); Pkg.add(url = \"https://github.com/CLiMA/ClimaTimeSteppers.jl\", rev = \"gb/rosenbrock\");'"
       - "julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=perf -e 'using Pkg; Pkg.status()'"
@@ -334,6 +336,13 @@ steps:
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_topography_dcmip_rs.yml
           --job_id sphere_baroclinic_wave_rhoe_topography_dcmip_rs
         artifact_paths: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs/output_active/*"
+      
+      - label: ":computer: baroclinic wave (ρe) topography (hughes2023)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_hughes2023.yml
+        artifact_paths: "sphere_baroclinic_wave_rhoe_hughes2023/output_active/*"
+
 
       - label: ":computer: held suarez (ρe) topography (dcmip)"
         command: >

@@ -1,9 +1,10 @@
+
 initial_condition: "SimplePlume"
 surface_setup: "SimplePlume"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: true
-approximate_linear_solve_iters: 2
+approximate_linear_solve_iters: 4
 max_newton_iters_ode: 3
 zero_tendency: "grid_scale"
 edmfx_upwinding: first_order

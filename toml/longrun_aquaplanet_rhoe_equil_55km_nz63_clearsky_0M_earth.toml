@@ -2,7 +2,7 @@
 value = 3.0
 
 [zd_rayleigh]
-value = 35000.0
+value = 25000.0
 
 [alpha_rayleigh_uh]
 value = 0.0
