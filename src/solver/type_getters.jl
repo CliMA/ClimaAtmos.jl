@@ -435,7 +435,7 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
     alg_or_tableau = getproperty(CTS, Symbol(ode_name))
     @info "Using ODE config: `$alg_or_tableau`"
     if ode_name == "SSPKnoth"
-        return CTS.RosenbrockAlgorithm(CTS.tableau(CTS.SSPKnoth(), FT))
+        return CTS.RosenbrockAlgorithm(CTS.tableau(CTS.SSPKnoth()))
     end
 
     if is_explicit_CTS_algo_type(alg_or_tableau)
