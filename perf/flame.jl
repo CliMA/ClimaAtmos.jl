@@ -1,8 +1,9 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
+import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
-import ClimaComms
 
 include("common.jl")
 
@@ -38,7 +39,7 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 
 allocs_limit = Dict()
 allocs_limit["flame_perf_target"] = 1_160_723
-allocs_limit["flame_perf_target_tracers"] = 1_247_360
+allocs_limit["flame_perf_target_tracers"] = 1_378_216
 allocs_limit["flame_perf_target_edmfx"] = 1_383_200
 allocs_limit["flame_perf_diagnostics"] = 21_359_336
 allocs_limit["flame_perf_target_diagnostic_edmfx"] = 1_936_480

@@ -1,5 +1,7 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import Random
+import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 Random.seed!(1234)
 import ClimaAtmos as CA
 
@@ -22,7 +24,8 @@ device = ClimaComms.device(config.comms_ctx)
 (; table_summary, trials) = CTS.benchmark_step(
     integrator,
     device;
-    crop = true,
+    crop = false,
+    hcrop = 168,
     only = [
         "Wfact",
         "ldiv!",

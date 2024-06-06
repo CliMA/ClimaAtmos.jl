@@ -1,4 +1,5 @@
-
+using ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import SurfaceFluxes as SF
 import ClimaAtmos.Parameters as CAP
@@ -20,6 +21,7 @@ include("../../test_helpers.jl")
             "config" => "column",
             "output_default_diagnostics" => false,
         ),
+        job_id = "precipitation1",
     )
     (; Y, p, params) = generate_test_simulation(config)
 
@@ -63,6 +65,7 @@ include("../../test_helpers.jl")
             "config" => "column",
             "output_default_diagnostics" => false,
         ),
+        job_id = "precipitation2",
     )
     (; Y, p, params) = generate_test_simulation(config)
     precip_model = CA.Microphysics1Moment()

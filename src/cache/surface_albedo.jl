@@ -85,19 +85,19 @@ function set_surface_albedo!(
     surface_albedo .=
         f_direct.(
             λ,
-            RRTMGPI.array2field(μ, axes(surface_albedo)),
+            Fields.array2field(μ, axes(surface_albedo)),
             norm.(Fields.level(Y.c.uₕ, 1)),
         )
-    direct_sw_surface_albedo .= RRTMGPI.field2array(surface_albedo)'
+    direct_sw_surface_albedo .= Fields.field2array(surface_albedo)'
 
     f_diffuse = surface_albedo_diffuse(α_model)
     surface_albedo .=
         f_diffuse.(
             λ,
-            RRTMGPI.array2field(μ, axes(surface_albedo)),
+            Fields.array2field(μ, axes(surface_albedo)),
             norm.(Fields.level(Y.c.uₕ, 1)),
         )
-    diffuse_sw_surface_albedo .= RRTMGPI.field2array(surface_albedo)'
+    diffuse_sw_surface_albedo .= Fields.field2array(surface_albedo)'
 end
 
 """

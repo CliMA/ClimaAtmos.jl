@@ -418,7 +418,7 @@ vector_from_component(f₁, L::Geometry.LocalGeometry) =
 function tensor_from_components(f₁₃, f₂₃, L, n₃ = surface_normal(L))
     xz = CT12(CT1(unit_basis_vector_data(CT1, L)), L)
     yz = CT12(CT2(unit_basis_vector_data(CT2, L)), L)
-    f = C12(f₁₃ * xz + f₂₃ * xz, L)
+    f = C12(f₁₃ * xz + f₂₃ * yz, L)
     return n₃ ⊗ f
 end
 

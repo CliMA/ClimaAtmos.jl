@@ -4,6 +4,8 @@
 # so we force abbreviated stacktraces even in non-interactive runs.
 # (See also Base.type_limited_string_from_context())
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
+import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
@@ -205,12 +207,11 @@ if ClimaComms.iamroot(config.comms_ctx)
     end
     @info "Plotting done"
 
-    # TODO: Use readlink again once
-    # https://github.com/CliMA/ClimaUtilities.jl/issues/56 is fixed.
-    symlink_to_fullpath(path) = path
-    # function symlink_to_fullpath(path)
-    #     return joinpath(dirname(path), readlink(path))
-    # end
+    if islink(simulation.output_dir)
+        symlink_to_fullpath(path) = joinpath(dirname(path), readlink(path))
+    else
+        symlink_to_fullpath(path) = path
+    end
 
     @info "Creating tarballs"
     # These NC files are used by our reproducibility tests,

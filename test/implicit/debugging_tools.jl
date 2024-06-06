@@ -1,4 +1,6 @@
 using ForwardDiff: Dual
+using ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 using ClimaCore: Spaces, Fields, Operators, MatrixFields
 
 # TODO: Turn this into a unit test for the implicit solver once the code is more
