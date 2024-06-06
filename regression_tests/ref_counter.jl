@@ -1,4 +1,7 @@
-163
+164
+
+# 164:
+# - Changed approximation for erf in calculation of some boundary conditions for EDMF.
 
 # 163:
 # - Fixed bug introduced in 162
