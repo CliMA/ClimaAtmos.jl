@@ -4,7 +4,6 @@ topo_smoothing: true
 initial_condition: "MoistBaroclinicWave"
 dt: "450secs"
 t_end: "450secs"
-use_reference_state: false
 ode_algo: "SSP333"
 precip_model: "0M"
 topography: "DCMIP200"
