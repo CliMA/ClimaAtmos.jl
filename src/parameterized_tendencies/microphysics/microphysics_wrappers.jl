@@ -16,6 +16,8 @@ const qᵥ = TD.vapor_specific_humidity
 qₜ(thp, ts) = TD.PhasePartition(thp, ts).tot
 qₗ(thp, ts) = TD.PhasePartition(thp, ts).liq
 qᵢ(thp, ts) = TD.PhasePartition(thp, ts).ice
+cᵥₗ(thp) = TD.Parameters.cv_l(thp)
+cᵥᵢ(thp) = TD.Parameters.cv_i(thp)
 
 # helper function to limit the tendency
 function limit(q::FT, dt::FT, n::Int) where {FT}
@@ -211,7 +213,7 @@ function compute_precipitation_sources!(
     )
     # if T < T_freeze cloud droplets freeze to become snow
     # else the snow melts and both cloud water and snow become rain
-    α(thp, ts) = TD.Parameters.cv_l(thp) / Lf(thp, ts) * (Tₐ(thp, ts) - mp.ps.T_freeze)
+    α(thp, ts) = cᵥₗ(thp) / Lf(thp, ts) * (Tₐ(thp, ts) - mp.ps.T_freeze)
     @. Sᵖ_snow = ifelse(
         Tₐ(thp, ts) < mp.ps.T_freeze,
         Sᵖ,
@@ -261,6 +263,44 @@ function compute_precipitation_sources!(
     #! format: on
 end
 
+"""
+    compute_precipitation_heating(Seₜᵖ, ᶜwᵣ, ᶜwₛ, ᶜu, qᵣ, qₛ, ᶜts, thp)
+
+ - Seₜᵖ - cached storage for precipitation energy source terms
+ - ᶜwᵣ, ᶜwₛ - rain and snow terminal velocities
+ - ᶜu - air velocity
+ - qᵣ, qₛ - precipitation (rain and snow) specific humidities
+ - ᶜts - thermodynamic state (see td package for details)
+ - ᶜ∇T - cached temporary variable to store temperature gradient
+ - thp - structs with thermodynamic and microphysics parameters
+
+ Augments the energy source terms with heat exchange between air
+ and precipitating species, following eq. 36 from Raymond 2013
+ doi:10.1002/jame.20050 and assuming that precipitation has the same
+ temperature as the surrounding air.
+"""
+function compute_precipitation_heating!(
+    ᶜSeₜᵖ,
+    ᶜwᵣ,
+    ᶜwₛ,
+    ᶜu,
+    ᶜqᵣ,
+    ᶜqₛ,
+    ᶜts,
+    ᶜ∇T,
+    thp,
+)
+    # TODO - at some point we want to switch to assuming that precipitation
+    # is at wet bulb temperature
+
+    # compute full temperature gradient
+    @. ᶜ∇T = CT123(ᶜgradᵥ(ᶠinterp(Tₐ(thp, ᶜts))))
+    @. ᶜ∇T += CT123(gradₕ(Tₐ(thp, ᶜts)))
+    # dot product with effective velocity of precipitation
+    # (times q and specific heat)
+    @. ᶜSeₜᵖ -= dot(ᶜ∇T, (ᶜu - C123(Geometry.WVector(ᶜwᵣ)))) * cᵥₗ(thp) * ᶜqᵣ
+    @. ᶜSeₜᵖ -= dot(ᶜ∇T, (ᶜu - C123(Geometry.WVector(ᶜwₛ)))) * cᵥᵢ(thp) * ᶜqₛ
+end
 """
     compute_precipitation_sinks!(Sᵖ, Sqₜᵖ, Sqᵣᵖ, Sqₛᵖ, Seₜᵖ, ρ, qᵣ, qₛ, ts, Φ, dt, mp, thp)
 
