@@ -211,9 +211,6 @@ non_orographic_gravity_wave:
 nh_poly:
   help: "Horizontal polynomial degree. Note: The number of quadrature points in 1D within each horizontal element is then Nq = <--nh_poly> + 1"
   value: 3
-use_reference_state:
-  help: "Subtract a reference state from the dycore equations [`false`, `true` (default)]"
-  value: true
 regression_test:
   help: "(Bool) perform regression test"
   value: false

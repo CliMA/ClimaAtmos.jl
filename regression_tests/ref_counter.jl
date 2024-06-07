@@ -1,4 +1,7 @@
-164
+165
+
+# 165:
+# - Removed reference state for the dycore
 
 # 164:
 # - Changed approximation for erf in calculation of some boundary conditions for EDMF.

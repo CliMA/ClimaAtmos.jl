@@ -8,7 +8,6 @@ t_end: "14400.0secs"
 dz_top: 1000.0
 x_elem: 80
 dz_bottom: 200.0
-use_reference_state: false
 config: "plane"
 hyperdiff: "false"
 z_max: 25000.0

@@ -8,7 +8,6 @@ t_end: "14400.0secs"
 dz_top: 1000.0
 x_elem: 100
 dz_bottom: 200.0
-use_reference_state: false
 ode_algo: "SSP33ShuOsher"
 config: "plane"
 vorticity_hyperdiffusion_coefficient: 0.5

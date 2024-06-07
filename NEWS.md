@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
+- ![][badge-💥breaking] Remove reference state from the dycore and the
+relevant config. PR [#3074](https://github.com/CliMA/ClimaAtmos.jl/pull/3074).
 
 - Make prognostic and diagnostic EDMF work with 1-moment microphysics on GPU
   PR [#3070](https://github.com/CliMA/ClimaAtmos.jl/pull/3070)

@@ -122,7 +122,6 @@ function get_numerics(parsed_args)
         edmfx_sgsflux_upwinding,
         limiter,
         test_dycore_consistency = test_dycore,
-        use_reference_state = parsed_args["use_reference_state"],
     )
     @info "numerics $(summary(numerics))"
 

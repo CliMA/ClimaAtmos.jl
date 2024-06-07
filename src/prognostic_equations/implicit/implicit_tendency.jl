@@ -127,7 +127,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    (; ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p.core
+    (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜh_tot, ᶜspecific, ᶠu³, ᶜp) = p.precomputed
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠu³)
@@ -165,9 +165,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         )
     end
 
-    @. Yₜ.f.u₃ +=
-        -(ᶠgradᵥ(ᶜp - ᶜp_ref) + ᶠinterp(Y.c.ρ - ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) /
-        ᶠinterp(Y.c.ρ)
+    @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜp) / ᶠinterp(Y.c.ρ) + ᶠgradᵥ_ᶜΦ
 
     if rayleigh_sponge isa RayleighSponge
         (; ᶠβ_rayleigh_w) = p.rayleigh_sponge
