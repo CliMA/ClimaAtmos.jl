@@ -4,6 +4,11 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+- Make prognostic and diagnostic EDMF work with 1-moment microphysics on GPU
+  PR [#3070](https://github.com/CliMA/ClimaAtmos.jl/pull/3070)
+- Add precipitation heating terms for 1-moment microphysics
+  PR [#3050](https://github.com/CliMA/ClimaAtmos.jl/pull/3050)
+
 v0.24.2
 -------
 
