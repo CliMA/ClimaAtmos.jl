@@ -1,0 +1,33 @@
+initial_condition: TRMM_LBA
+rad: TRMM_LBA
+surface_setup: TRMM_LBA
+turbconv: diagnostic_edmfx
+implicit_diffusion: false
+approximate_linear_solve_iters: 2
+prognostic_tke: true
+edmfx_upwinding: first_order
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+moist: equil
+apply_limiter: false
+precip_model: "0M"
+override_τ_precip: false
+config: column
+z_elem: 82
+z_max: 16400
+z_stretch: false
+dt: 10secs
+t_end: 6hours
+dt_save_state_to_disk: 10mins
+FLOAT_TYPE: "Float64"
+toml: [toml/diagnostic_edmfx_0M.toml]
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [8, 8, 82]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
+    period: 10mins
