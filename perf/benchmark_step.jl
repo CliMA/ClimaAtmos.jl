@@ -33,8 +33,9 @@ CA.benchmark_step!(integrator, Y₀); # compile first
 n_steps = 10
 comms_ctx = ClimaComms.context(integrator.u.c)
 device = ClimaComms.device(comms_ctx)
-e = ClimaComms.@elapsed device begin
-    s = CA.@timed_str begin
+local e
+s = CA.@timed_str begin
+    e = ClimaComms.elapsed(device) do
         CA.benchmark_step!(integrator, Y₀, n_steps) # run
     end
 end
