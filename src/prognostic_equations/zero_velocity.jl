@@ -8,11 +8,11 @@ function zero_velocity_tendency!(Yₜ, Y, p, t)
         FT = eltype(Y)
         n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
-        @. Yₜ.c.uₕ = C12(FT(0), FT(0))
-        @. Yₜ.f.u₃ = Geometry.Covariant3Vector(FT(0))
+        @. Yₜ.c.uₕ *= 0
+        @. Yₜ.f.u₃ *= 0
         if p.atmos.turbconv_model isa PrognosticEDMFX
             for j in 1:n
-                @. Yₜ.f.sgsʲs.:($$j).u₃ = Geometry.Covariant3Vector(FT(0))
+                @. Yₜ.f.sgsʲs.:($$j).u₃ *= 0
             end
         end
     end
