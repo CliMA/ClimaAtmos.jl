@@ -39,7 +39,12 @@ function radiation_model_cache(
 )
     context = ClimaComms.context(axes(Y.c))
     device = context.device
-    (; idealized_h2o, idealized_insolation, idealized_clouds) = radiation_mode
+    (;
+        idealized_h2o,
+        idealized_insolation,
+        idealized_clouds,
+        add_isothermal_boundary_layer,
+    ) = radiation_mode
     FT = Spaces.undertype(axes(Y.c))
     DA = ClimaComms.array_type(device){FT}
     rrtmgp_params = CAP.rrtmgp_params(params)
@@ -202,7 +207,7 @@ function radiation_model_cache(
             radiation_mode,
             interpolation,
             bottom_extrapolation,
-            add_isothermal_boundary_layer = true,
+            add_isothermal_boundary_layer,
             center_pressure = NaN, # initialized in callback
             center_temperature = NaN, # initialized in callback
             surface_temperature = NaN, # initialized in callback
