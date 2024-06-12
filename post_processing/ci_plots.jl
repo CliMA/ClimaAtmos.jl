@@ -42,7 +42,7 @@ import CairoMakie
 import CairoMakie.Makie
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
-import ClimaAnalysis: SimDir, slice
+import ClimaAnalysis: SimDir, slice, read_var
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
@@ -515,7 +515,6 @@ function make_plots(
     ::Val{:single_column_precipitation_test},
     output_paths::Vector{<:AbstractString},
 )
-
     simdirs = SimDir.(output_paths)
 
     # TODO: Move this plotting code into the same framework as the other ones
@@ -563,6 +562,14 @@ function make_plots(
             )
         end
     end
+
+    # surface_precipitation
+    surface_precip = read_var(simdir.variable_paths["pr"]["inst"]["10s"])
+    viz.line_plot1D!(
+        fig,
+        slice(surface_precip, x = 0.0, y = 0.0);
+        p_loc = [3, 1:3],
+    )
 
     file_path = joinpath(output_paths[1], "summary.pdf")
     CairoMakie.save(file_path, fig)
@@ -822,7 +829,7 @@ function make_plots(
     simdirs = SimDir.(output_paths)
 
     short_names_3D, reduction = ["ua", "ta", "hus"], "average"
-    short_names_2D = ["hfes", "evspsbl"]
+    short_names_2D = ["hfes", "evspsbl", "pr"]
     vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
         get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
     end
@@ -861,6 +868,7 @@ function make_plots(
         "rlus",
         "hfes",
         "evspsbl",
+        "pr",
     ]
     available_periods = ClimaAnalysis.available_periods(
         simdirs[1];
@@ -935,6 +943,7 @@ function make_plots(
         "hfes",
         "evspsbl",
         "ts",
+        "pr",
     ]
     vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
         get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon
@@ -984,6 +993,7 @@ function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
         "rlus",
         "hfes",
         "evspsbl",
+        "pr",
     ]
     available_periods = ClimaAnalysis.available_periods(
         simdirs[1];
@@ -1041,6 +1051,7 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
         "rlus",
         "hfes",
         "evspsbl",
+        "pr",
     ]
     available_periods = ClimaAnalysis.available_periods(
         simdirs[1];

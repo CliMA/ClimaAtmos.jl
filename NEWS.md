@@ -4,6 +4,13 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+
+v0.26.0
+-------
+- ![][badge-💥breaking] Add precipitation fluxes to 1M microphysics output.
+  Rename col_integrated_rain (and snow) to surface_rain_flux (and snow)
+  PR [#3084](https://github.com/CliMA/ClimaAtmos.jl/pull/3084).
+
 v0.25.0
 -------
 - ![][badge-💥breaking] Remove reference state from the dycore and the
