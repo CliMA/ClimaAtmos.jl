@@ -102,7 +102,7 @@ If `t_end >= 120 year` take monthly means.
 One month is defined as 30 days.
 """
 function frequency_averages(t_start::Real, t_end::Real)
-    if t_end > 120 * 86400
+    if t_end >= 90 * 86400
         return monthly_averages
     elseif t_end >= 30 * 86400
         return tendaily_averages
