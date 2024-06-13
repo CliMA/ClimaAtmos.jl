@@ -105,6 +105,9 @@ idealized_clouds:
 idealized_insolation:
   help: "Use idealized insolation in radiation model [`false`, `true` (default)]"
   value: true
+add_isothermal_boundary_layer:
+  help: "Add an isothermal boundary layer above the domain top for radiation [`false`, `true` (default)]"
+  value: true
 dt_cloud_fraction:
   help: "Time between calling cloud fraction update"
   value: "3hours"
