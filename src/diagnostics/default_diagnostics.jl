@@ -15,8 +15,8 @@ The logic is as follows:
 
 If `t_end < 1 day` take hourly means,
 if `t_end < 30 days` take daily means,
-if `t_end < 120 days` take means over ten days,
-If `t_end >= 120 year` take monthly means.
+if `t_end < 90 days` take means over ten days,
+If `t_end >= 90 year` take monthly means.
 
 One month is defined as 30 days.
 """
@@ -96,8 +96,8 @@ Return the correct averaging function depending on the total simulation time.
 
 If `t_end < 1 day` take hourly means,
 if `t_end < 30 days` take daily means,
-if `t_end < 120 days` take means over ten days,
-If `t_end >= 120 year` take monthly means.
+if `t_end < 90 days` take means over ten days,
+If `t_end >= 90 year` take monthly means.
 
 One month is defined as 30 days.
 """
@@ -124,7 +124,7 @@ function core_default_diagnostics(output_writer, t_start, t_end)
 
     average_func = frequency_averages(t_start, t_end)
 
-    if t_end > 120 * 86400
+    if t_end >= 90 * 86400
         min_func = monthly_min
         max_func = monthly_max
     elseif t_end >= 30 * 86400
