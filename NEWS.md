@@ -3,9 +3,11 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
+
+v0.25.0
+-------
 - ![][badge-💥breaking] Remove reference state from the dycore and the
 relevant config. PR [#3074](https://github.com/CliMA/ClimaAtmos.jl/pull/3074).
-
 - Make prognostic and diagnostic EDMF work with 1-moment microphysics on GPU
   PR [#3070](https://github.com/CliMA/ClimaAtmos.jl/pull/3070)
 - Add precipitation heating terms for 1-moment microphysics
@@ -13,7 +15,6 @@ relevant config. PR [#3074](https://github.com/CliMA/ClimaAtmos.jl/pull/3074).
 
 v0.24.2
 -------
-
 - ![][badge-🔥behavioralΔ] Fixed incorrect surface fluxes for uh. PR [#3064]
   (https://github.com/CliMA/ClimaAtmos.jl/pull/3064).
 
