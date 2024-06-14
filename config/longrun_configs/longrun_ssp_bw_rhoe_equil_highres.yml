@@ -3,7 +3,7 @@ initial_condition: "MoistBaroclinicWave"
 approximate_linear_solve_iters: 2
 z_elem: 45
 dt: "150secs"
-t_end: "100days"
+t_end: "120days"
 dz_bottom: 30.0
 h_elem: 16
 ode_algo: "SSP333"

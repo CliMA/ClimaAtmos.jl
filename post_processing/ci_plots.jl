@@ -915,7 +915,9 @@ function make_plots(
         short_name = short_names_3D[1],
         reduction,
     )
-    if "10d" in available_periods
+    if "30d" in available_periods
+        period = "30d"
+    elseif "10d" in available_periods
         period = "10d"
     elseif "1d" in available_periods
         period = "1d"
@@ -988,7 +990,9 @@ function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
         short_name = short_names_3D[1],
         reduction,
     )
-    if "10d" in available_periods
+    if "30d" in available_periods
+        period = "30d"
+    elseif "10d" in available_periods
         period = "10d"
     elseif "1d" in available_periods
         period = "1d"
@@ -1043,7 +1047,9 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
         short_name = short_names_3D[1],
         reduction,
     )
-    if "10d" in available_periods
+    if "30d" in available_periods
+        period = "30d"
+    elseif "10d" in available_periods
         period = "10d"
     elseif "1d" in available_periods
         period = "1d"

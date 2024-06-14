@@ -3,7 +3,7 @@ z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
 dt: "200secs"
-t_end: "100days"
+t_end: "120days"
 initial_condition: "DryBaroclinicWave"
 dt_save_state_to_disk: "10days"
 diagnostics:
