@@ -2,7 +2,7 @@ dt_save_state_to_disk: "10days"
 dt: "100secs"
 rad: "clearsky"
 dt_rad: "6hours"
-t_end: "200days"
+t_end: "180days"
 dz_bottom: 30.0
 dz_top: 3000.0
 h_elem: 16
