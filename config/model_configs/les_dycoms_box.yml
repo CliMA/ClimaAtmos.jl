@@ -8,8 +8,8 @@ surface_setup: DYCOMS_RF01
 moist: "equil"
 config: box 
 hyperdiff: "true"
-vorticity_hyperdiffusion_coefficient: 0.01
-scalar_hyperdiffusion_coefficient: 0.01
+vorticity_hyperdiffusion_coefficient: 0.2
+scalar_hyperdiffusion_coefficient: 0.2
 ode_algo: "SSPKnoth"
 precip_model: "0M"
 x_max: 500.0
@@ -20,11 +20,13 @@ y_elem: 5
 z_elem: 150
 z_stretch: false
 smagorinsky_lilly: true
-c_smag: 0.20
-dt: "0.05secs"
+c_smag: 0.18
+dt: "0.025secs"
 t_end: "14400secs"
 dt_save_state_to_disk: "30mins"
 restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/dycoms/test_restart.hdf5"
+#restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/dycoms/day0.5400.hdf5"
+#restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/dycoms/day0.10800.hdf5"
 rayleigh_sponge: true
 toml: [toml/dycoms_box_rhoe.toml]
 netcdf_interpolation_num_points: [30,30,75]
@@ -32,5 +34,5 @@ diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, kvis, hfes]
     period: 10mins
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, kvis, hfes]
-    reduction: "average"
+    reduction_time: "average"
     period: 60mins

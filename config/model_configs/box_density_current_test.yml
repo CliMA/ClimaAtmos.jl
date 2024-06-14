@@ -16,6 +16,7 @@ hyperdiff: "true"
 z_max: 6400.0
 smagorinsky_lilly: true
 c_smag: 0.25
+netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
   - short_name: [thetaa, wa, ua, ta, va, hfes, rhoa, rv, ha]
     period: 30secs

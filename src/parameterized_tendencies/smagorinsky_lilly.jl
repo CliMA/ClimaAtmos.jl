@@ -4,8 +4,8 @@
 
 import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
-import LinearAlgebra as la
 import ClimaCore: Geometry
+import ClimaCore.Utilities: half
 
 smagorinsky_lilly_cache(Y, atmos::AtmosModel) =
     smagorinsky_lilly_cache(Y, atmos.smagorinsky_lilly)
@@ -13,8 +13,6 @@ smagorinsky_lilly_cache(Y, atmos::AtmosModel) =
 smagorinsky_lilly_cache(Y, ::Nothing) = (;)
 
 function smagorinsky_lilly_cache(Y, sl::SmagorinskyLilly)
-    # D = v/Pr, where v = (Cs * cbrt(J))^2 * sqrt(2*Sij*Sij). The cube root of the
-    # volume is the average length of the sides of the cell.
     (; Cs) = sl
     FT = eltype(Y)
     h_space = Spaces.horizontal_space(axes(Y.c))
@@ -49,24 +47,23 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     ᶠfb  = p.scratch.ᶠtemp_scalar
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
-
+    
     localu = @. Geometry.UVWVector(ᶜu)
-    ᶠu = @. Geometry.UVWVector(ᶠwinterp(ᶜJ * Y.c.ρ, Y.c.uₕ)) + Geometry.UVWVector(Y.f.u₃)
+    ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(Y.f.u₃)
     @. ᶠS = Geometry.project(Geometry.UVWAxis(), gradₕ(ᶠu))
     @. ᶜS = Geometry.project(Geometry.UVWAxis(), gradₕ(localu))
-    CA.compute_strain_rate_face!(ᶠϵ, Geometry.Covariant123Vector.(localu))
     CA.compute_strain_rate_center!(ᶜϵ, Geometry.Covariant123Vector.(ᶠu))
+    CA.compute_strain_rate_face!(ᶠϵ, Geometry.Covariant123Vector.(localu))
     @. ᶠS = (ᶠS + adjoint(ᶠS)) + ᶠϵ
     @. ᶜS = (ᶜS + adjoint(ᶜS)) + ᶜϵ
 
-    (; sfc_conditions, ᶜts) = p.precomputed
+    (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶠts_sfc = sfc_conditions.ts
-    #θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
-    #@. ᶠfb = (max(FT(0), 1 - 3*(grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1) / CA.norm_sqr(ᶠS)))^(1/4)
+    θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
+    @. ᶠfb = (max(FT(0), 1 - 3*(grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/4)
 
     ᶠρ = @. ᶠwinterp(ᶜJ, Y.c.ρ)
-    ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) #* ᶠfb
+    ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) * ᶠfb
     ᶜv_t = @. ᶜinterp(ᶠv_t)
     ᶜD = @. FT(3) * ᶜv_t
 
@@ -120,22 +117,21 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     grav = FT(9.81)
 
     localu = @. Geometry.UVWVector(ᶜu)
-    ᶠu = @. Geometry.UVWVector(ᶠwinterp(ᶜJ * Y.c.ρ, Y.c.uₕ)) + Geometry.UVWVector(Y.f.u₃)
+    ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(Y.f.u₃)
     @. ᶠS = Geometry.project(Geometry.UVWAxis(), gradₕ(ᶠu))
     @. ᶜS = Geometry.project(Geometry.UVWAxis(), gradₕ(localu))
-    CA.compute_strain_rate_face!(ᶠϵ, ᶜu)
     CA.compute_strain_rate_center!(ᶜϵ, Geometry.Covariant123Vector.(ᶠu))
+    CA.compute_strain_rate_face!(ᶠϵ, Geometry.Covariant123Vector.(localu))
     @. ᶠS = (ᶠS + adjoint(ᶠS)) + ᶠϵ
     @. ᶜS = (ᶜS + adjoint(ᶜS)) + ᶜϵ
     
-    (; sfc_conditions, ᶜts) = p.precomputed
-    ᶠts_sfc = sfc_conditions.ts
+    (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    #θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
-    #@. ᶠfb = (max(FT(0), 1 - 3*(grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1) / CA.norm_sqr(ᶠS)))^(1/4)
+    θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
+    @. ᶠfb = (max(FT(0), 1 - 3*(grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/4)
 
     ᶠρ = @. ᶠwinterp(ᶜJ, Y.c.ρ)
-    ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) #* ᶠfb
+    ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) * ᶠfb
     ᶜv_t = @. ᶜinterp(ᶠv_t)
     ᶜD = @. FT(3) * ᶜv_t
     
@@ -147,7 +143,6 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
             ᶠS,
         ) / Y.c.ρ,
     )
-
     # apply boundary condition for momentum flux
     ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
         top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
@@ -163,8 +158,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
             ᶠS,
         ) / Y.c.ρ),
     )
-    
-    # BC verified ✓
+
     (; ᶜh_tot) = p.precomputed
     ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
         top = Operators.SetValue(C3(FT(0))),
@@ -176,7 +170,6 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     				ᶠgradᵥ(ᶜh_tot))
     			  )
     
-
     ρ_flux_χ = zero(p.scratch.sfc_temp_C3)
     for (ᶜρχₜ, ᶜχ, χ_name) in CA.matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
