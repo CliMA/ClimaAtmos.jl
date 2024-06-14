@@ -1,4 +1,7 @@
-166
+167
+
+# 167:
+# - Removed the filter for radiative fluxes when zenith angle is close to 90 degrees
 
 # 166:
 # - Move to SSPKnoth
