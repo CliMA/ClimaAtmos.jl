@@ -51,8 +51,8 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::PrognosticSurfaceTemperatur
         sfc_turb_w_flux = p.precomputed.sfc_conditions.ρ_flux_q_tot
 
         # precipitation
-        P_liq = p.precipitation.col_integrated_rain
-        P_snow = p.precipitation.col_integrated_snow
+        P_liq = p.precipitation.surface_rain_flux
+        P_snow = p.precipitation.surface_snow_flux
 
         @. Yₜ.sfc.water -=
             P_liq +
