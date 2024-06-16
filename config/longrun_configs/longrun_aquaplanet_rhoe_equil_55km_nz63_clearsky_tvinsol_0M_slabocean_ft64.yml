@@ -1,3 +1,4 @@
+FLOAT_TYPE: "Float64"
 dt_save_state_to_disk: "10days"
 dt: "150secs"
 t_end: "120days"
@@ -14,7 +15,6 @@ vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 rad: "clearsky"
-add_isothermal_boundary_layer: false
 idealized_insolation: false
 dt_rad: "1hours"
 albedo_model: "RegressionFunctionAlbedo"
