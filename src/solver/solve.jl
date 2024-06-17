@@ -21,12 +21,12 @@ walltime_in_days(es::EfficiencyStats) = es.walltime * (1 / (24 * 3600)) #=second
 
 function timed_solve!(integrator)
     device = ClimaComms.device(integrator.u.c)
-    walltime = ClimaComms.@elapsed device begin
-        s = @timed_str begin
+    local sol
+    @time "solve!:" begin
+        walltime = ClimaComms.elapsed(device) do
             sol = SciMLBase.solve!(integrator)
         end
     end
-    @info "solve!: $s"
     (; tspan) = integrator.sol.prob
     es = EfficiencyStats(tspan, walltime)
     @info "sypd: $(simulated_years_per_day(es))"

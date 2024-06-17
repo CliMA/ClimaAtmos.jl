@@ -53,7 +53,7 @@ struct AtmosCache{
     """ClimaAtmosParameters that have to be used"""
     params::CAP
 
-    """Variables that are used generally, such as ᶜρ_ref, ᶜΦ"""
+    """Variables that are used generally, such as ᶜΦ"""
     core::COR
 
     """Used by update_surface_conditions! in set_precomputed_quantities! and coupler"""
@@ -125,17 +125,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     ᶜΦ = grav .* ᶜcoord.z
     ᶠΦ = grav .* ᶠcoord.z
 
-    if atmos.numerics.use_reference_state
-        R_d = FT(CAP.R_d(params))
-        MSLP = FT(CAP.MSLP(params))
-        T_ref = FT(255)
-        ᶜρ_ref = @. MSLP * exp(-grav * ᶜcoord.z / (R_d * T_ref)) / (R_d * T_ref)
-        ᶜp_ref = @. ᶜρ_ref * R_d * T_ref
-    else
-        ᶜρ_ref = zero(ᶜΦ)
-        ᶜp_ref = zero(ᶜΦ)
-    end
-
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
         Ω = CAP.Omega(params)
         global_geom = Spaces.global_geometry(axes(ᶜcoord))
@@ -194,8 +183,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
         ᶜgradᵥ_ᶠΦ = ᶜgradᵥ.(ᶠΦ),
-        ᶜρ_ref,
-        ᶜp_ref,
         ᶜT = similar(Y.c, FT),
         ᶜf³,
         ᶠf¹²,

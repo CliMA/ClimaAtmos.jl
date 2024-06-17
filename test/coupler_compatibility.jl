@@ -1,4 +1,6 @@
 using Test
+import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Thermodynamics as TD
 import SurfaceFluxes as SF
 import StaticArrays as SA

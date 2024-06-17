@@ -1,36 +1,36 @@
-initial_condition: "Bomex" 
-subsidence: "Bomex" 
-edmf_coriolis: "Bomex" 
-ls_adv: "Bomex" 
+initial_condition: "Bomex"
+subsidence: "Bomex"
+edmf_coriolis: "Bomex"
+ls_adv: "Bomex"
 surface_setup: "Bomex"
-turbconv: "diagnostic_edmfx" 
+turbconv: "diagnostic_edmfx"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 prognostic_tke: true
-edmfx_upwinding: "first_order" 
-edmfx_entr_model: "Generalized" 
-edmfx_detr_model: "Generalized" 
-edmfx_nh_pressure: true 
+edmfx_upwinding: "first_order"
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: "equil"
-config: "box" 
-hyperdiff: "true" 
-x_max: 1e8 
-y_max: 1e8 
-x_elem: 2 
-y_elem: 2 
-z_elem: 30 
-z_max: 3e3 
+config: "box"
+hyperdiff: "true"
+x_max: 1e8
+y_max: 1e8
+x_elem: 2
+y_elem: 2
+z_elem: 30
+z_max: 3e3
 dz_bottom: 50.0
 dz_top: 200.0
-dt: "200secs" 
-t_end: "6hours" 
+dt: "200secs"
+t_end: "6hours"
 dt_save_state_to_disk: "10mins"
 toml: [toml/diagnostic_edmfx.toml]
 netcdf_interpolation_num_points: [8, 8, 30]
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
     period: 10mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
     period: 10mins

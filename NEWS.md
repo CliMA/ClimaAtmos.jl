@@ -4,6 +4,27 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+
+v0.26.0
+-------
+- ![][badge-💥breaking] Add precipitation fluxes to 1M microphysics output.
+  Rename col_integrated_rain (and snow) to surface_rain_flux (and snow)
+  PR [#3084](https://github.com/CliMA/ClimaAtmos.jl/pull/3084).
+
+v0.25.0
+-------
+- ![][badge-💥breaking] Remove reference state from the dycore and the
+relevant config. PR [#3074](https://github.com/CliMA/ClimaAtmos.jl/pull/3074).
+- Make prognostic and diagnostic EDMF work with 1-moment microphysics on GPU
+  PR [#3070](https://github.com/CliMA/ClimaAtmos.jl/pull/3070)
+- Add precipitation heating terms for 1-moment microphysics
+  PR [#3050](https://github.com/CliMA/ClimaAtmos.jl/pull/3050)
+
+v0.24.2
+-------
+- ![][badge-🔥behavioralΔ] Fixed incorrect surface fluxes for uh. PR [#3064]
+  (https://github.com/CliMA/ClimaAtmos.jl/pull/3064).
+
 v0.24.1
 -------
 

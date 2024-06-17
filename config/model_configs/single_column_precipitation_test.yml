@@ -18,3 +18,5 @@ toml: [toml/single_column_precipitation_test.toml]
 diagnostics:
   - short_name: [hus, clw, cli, husra, hussn, ta, wa]
     period: 500secs
+  - short_name: [pr, ]
+    period: 10secs

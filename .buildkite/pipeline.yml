@@ -308,7 +308,7 @@ steps:
         agents:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
-      
+
       - label: ":computer: aquaplanet (ρe_tot) nonequilmoist allsky radiation monin_obukhov varying insolation high top 1-moment"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -378,7 +378,7 @@ steps:
           --job_id mpi_make_restart
         artifact_paths: "mpi_make_restart/output_active/*"
         env:
-          CLIMACORE_DISTRIBUTED: "MPI"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
@@ -394,7 +394,7 @@ steps:
           --job_id restart_mpi_baroclinic_wave_rhoe
         artifact_paths: "restart_mpi_baroclinic_wave_rhoe/output_active/*"
         env:
-          CLIMACORE_DISTRIBUTED: "MPI"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
@@ -410,7 +410,7 @@ steps:
           --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky
         artifact_paths: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky/output_active/*"
         env:
-          CLIMACORE_DISTRIBUTED: "MPI"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_ntasks: 2
           slurm_mem: 16GB
@@ -423,7 +423,7 @@ steps:
           --job_id prep_remap
         artifact_paths: "prep_remap/output_active/*"
         env:
-          CLIMACORE_DISTRIBUTED: "MPI"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
@@ -457,7 +457,7 @@ steps:
           --job_id test_mpi_io
         artifact_paths: "test_mpi_io/output_active/*"
         env:
-          CLIMACORE_DISTRIBUTED: "MPI"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
@@ -645,7 +645,7 @@ steps:
         artifact_paths: "prognostic_edmfx_bomex_column/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -690,7 +690,7 @@ steps:
         artifact_paths: "prognostic_edmfx_trmm_column_0M/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":genie: Prognostic EDMFX GCM driven in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -728,6 +728,8 @@ steps:
           --config_file $CONFIG_PATH/gpu_baroclinic_wave_rhoe.yml
           --job_id gpu_baroclinic_wave_rhoe
         artifact_paths: "gpu_implicit_barowave_ref/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_mem: 16G
           slurm_gpus: 1
@@ -756,6 +758,8 @@ steps:
             --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
             --job_id target_gpu_implicit_baroclinic_wave
         artifact_paths: "target_gpu_implicit_baroclinic_wave/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
           slurm_mem: 32G
@@ -772,7 +776,8 @@ steps:
             --job_id target_gpu_implicit_baroclinic_wave_4process
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
         env:
-          CLIMACORE_DISTRIBUTED: "MPI"
+          CLIMACOMMS_CONTEXT: "MPI"
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -787,6 +792,8 @@ steps:
             --config_file $CONFIG_PATH/central_gpu_hs_rhoe_equil_55km_nz63_0M.yml
             --job_id central_gpu_hs_rhoe_equil_55km_nz63_0M
         artifact_paths: "central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
@@ -799,6 +806,8 @@ steps:
             --config_file $CONFIG_PATH/central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M.yml
             --job_id central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M
         artifact_paths: "central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
@@ -812,6 +821,8 @@ steps:
             --config_file ${CONFIG_PATH}/gpu_aquaplanet_dyamond.yml
             --job_id gpu_aquaplanet_dyamond
         artifact_paths: "gpu_aquaplanet_dyamond/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
 
@@ -821,6 +832,8 @@ steps:
           --config_file $CONFIG_PATH/gpu_diagnostic_edmfx_aquaplanet.yml
           --job_id gpu_diagnostic_edmfx_aquaplanet
         artifact_paths: "gpu_diagnostic_edmfx_aquaplanet/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
           slurm_mem: 20G
@@ -831,6 +844,8 @@ steps:
           --config_file $CONFIG_PATH/gpu_prognostic_edmfx_aquaplanet.yml
           --job_id gpu_prognostic_edmfx_aquaplanet
         artifact_paths: "gpu_prognostic_edmfx_aquaplanet/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
           slurm_mem: 20G
@@ -846,6 +861,8 @@ steps:
           --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_wrt_h_elem.yml
           --job_id gpu_implicit_barowave_wrt_h_elem
         artifact_paths: "gpu_implicit_barowave_wrt_h_elem/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
 
@@ -856,6 +873,8 @@ steps:
           --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave.yml
           --job_id gpu_implicit_barowave
         artifact_paths: "gpu_implicit_barowave/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
 
@@ -866,6 +885,8 @@ steps:
           --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_moist.yml
           --job_id gpu_implicit_barowave_moist
         artifact_paths: "gpu_implicit_barowave_moist/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_mem: 16G
           slurm_gpus: 1
@@ -891,6 +912,8 @@ steps:
           julia --color=yes --project=perf perf/benchmark.jl
           --config_file $PERF_CONFIG_PATH/bm_perf_target.yml
           --job_id bm_perf_target_gpu
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
@@ -909,6 +932,8 @@ steps:
           julia --color=yes --project=perf perf/benchmark.jl
           --config_file ${CONFIG_PATH}/aquaplanet_progedmf.yml
           --job_id bm_diag_edmf_gpu
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
@@ -918,6 +943,8 @@ steps:
           julia --color=yes --project=perf perf/benchmark.jl
           --config_file ${CONFIG_PATH}/aquaplanet_progedmf.yml
           --job_id bm_prog_edmf_gpu
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
@@ -1013,6 +1040,8 @@ steps:
           --config_file $PERF_CONFIG_PATH/flame_gpu_implicit_barowave_moist.yml
           --job_id flame_gpu_implicit_barowave_moist
         artifact_paths: "flame_gpu_implicit_barowave_moist/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_mem: 48GB
           slurm_gpus: 1

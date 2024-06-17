@@ -158,7 +158,7 @@ cat << EOM
         - "${job_id}/scaling_data_${nprocs}_processes.jld2"
         - "${job_id}-nsys.tar.gz"
       env:
-        CLIMACORE_DISTRIBUTED: "MPI"
+        CLIMACOMMS_CONTEXT: "MPI"
       agents:
         slurm_time: $time
 EOM

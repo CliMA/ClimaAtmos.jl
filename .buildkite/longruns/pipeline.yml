@@ -47,6 +47,8 @@ steps:
       #   command:
       #     - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
       #   artifact_paths: "$$JOB_NAME/output_active/*"
+      #   env:
+      #     CLIMACOMMS_CONTEXT: "MPI"
       #   agents:
       #     slurm_ntasks: 32
       #     slurm_mem_per_cpu: 32GB
@@ -63,8 +65,9 @@ steps:
           slurm_nodes: 2
           slurm_time: 24:00:00
         env:
+          CLIMACOMMS_CONTEXT: "MPI"
           JOB_NAME: "longrun_ssp_bw_rhoe_equil_highres"
-      
+
       - label: ":computer: aquaplanet equilmoist clearsky radiation + prognostic edmf diffusion only + 0M microphysics"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
@@ -74,4 +77,5 @@ steps:
           slurm_nodes: 4
           slurm_time: 24:00:00
         env:
+          CLIMACOMMS_CONTEXT: "MPI"
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_progedmf_diffonly_0M"

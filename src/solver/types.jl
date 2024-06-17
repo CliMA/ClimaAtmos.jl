@@ -297,9 +297,6 @@ Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM}
     test_dycore_consistency::DYCORE
 
     limiter::LIM
-
-    """Whether to subtract the reference state from the evolved state"""
-    use_reference_state::Bool
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 

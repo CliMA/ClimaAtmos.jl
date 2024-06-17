@@ -202,7 +202,6 @@ function radiation_model_cache(
             radiation_mode,
             interpolation,
             bottom_extrapolation,
-            add_isothermal_boundary_layer = true,
             center_pressure = NaN, # initialized in callback
             center_temperature = NaN, # initialized in callback
             surface_temperature = NaN, # initialized in callback

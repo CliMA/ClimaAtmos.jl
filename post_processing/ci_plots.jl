@@ -42,7 +42,7 @@ import CairoMakie
 import CairoMakie.Makie
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
-import ClimaAnalysis: SimDir, slice
+import ClimaAnalysis: SimDir, slice, read_var
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
@@ -429,6 +429,46 @@ function map_comparison(func, simdirs, args)
     return vcat([[func(simdir, arg) for simdir in simdirs] for arg in args]...)
 end
 
+"""
+    plot_spectrum_with_line!(grid_loc, spectrum; exponent = -3.0)
+
+Plots the given spectrum alongside a line that identifies a power law.
+
+Assumes 1D spectrum.
+"""
+function plot_spectrum_with_line!(grid_loc, spectrum; exponent = -3.0)
+    ndims(spectrum.data) == 1 || error("Can only work with 1D spectrum")
+    viz.plot!(grid_loc, spectrum)
+
+    dim_name = spectrum.index2dim[begin]
+
+    ax = CairoMakie.current_axis()
+
+    # Ignore below wavenumber of 10
+    spectrum_10 = ClimaAnalysis.window(spectrum, dim_name; left = log10(10))
+
+    # Add reference line
+    wavenumbers = spectrum_10.dims[dim_name]
+    max_spectrum_10 = maximum(spectrum_10.data)
+    wavenumber_at_max = wavenumbers[argmax(spectrum_10.data)]
+
+    # Increase the intercept by 20 percent so that it hovers over the spectrum
+    intercept = 1.2 * (max_spectrum_10 - exponent * wavenumber_at_max)
+    reference_line(k) = exponent * k + intercept
+
+    color = :orange
+    CairoMakie.lines!(ax, wavenumbers, reference_line.(wavenumbers); color)
+    CairoMakie.text!(
+        ax,
+        wavenumber_at_max,
+        reference_line(wavenumber_at_max),
+        text = "k^$exponent";
+        color,
+    )
+
+    return nothing
+end
+
 ColumnPlots = Union{
     Val{:single_column_hydrostatic_balance_ft64},
     Val{:single_column_radiative_equilibrium_gray},
@@ -475,7 +515,6 @@ function make_plots(
     ::Val{:single_column_precipitation_test},
     output_paths::Vector{<:AbstractString},
 )
-
     simdirs = SimDir.(output_paths)
 
     # TODO: Move this plotting code into the same framework as the other ones
@@ -523,6 +562,14 @@ function make_plots(
             )
         end
     end
+
+    # surface_precipitation
+    surface_precip = read_var(simdir.variable_paths["pr"]["inst"]["10s"])
+    viz.line_plot1D!(
+        fig,
+        slice(surface_precip, x = 0.0, y = 0.0);
+        p_loc = [3, 1:3],
+    )
 
     file_path = joinpath(output_paths[1], "summary.pdf")
     CairoMakie.save(file_path, fig)
@@ -610,13 +657,22 @@ function make_plots(::DryBaroWavePlots, output_paths::Vector{<:AbstractString})
     end
     vars_spectra =
         map_comparison(simdirs, short_names_spectra) do simdir, short_name
-            compute_spectrum(
-                slice(get(simdir; short_name, reduction), time = 10days),
+            slice(
+                compute_spectrum(
+                    slice(get(simdir; short_name, reduction), time = 10days),
+                ),
+                z = 1500,
             )
         end
-    vars = vcat(vars..., vars_spectra...)
 
-    make_plots_generic(output_paths, vars, z = 1500)
+    tmp_file =
+        make_plots_generic(output_paths, vars, z = 1500, output_name = "tmp")
+    make_plots_generic(
+        output_paths,
+        vars_spectra;
+        summary_files = [tmp_file],
+        plot_fn = plot_spectrum_with_line!,
+    )
 end
 
 function make_plots(
@@ -643,13 +699,22 @@ function make_plots(
     end
     vars_spectra =
         map_comparison(simdirs, short_names_spectra) do simdir, short_name
-            compute_spectrum(
-                slice(get(simdir; short_name, reduction), time = 10days),
+            slice(
+                compute_spectrum(
+                    slice(get(simdir; short_name, reduction), time = 10days),
+                ),
+                z = 1500,
             )
         end
-    vars = vcat(vars..., vars_spectra...)
 
-    make_plots_generic(output_paths, vars, z = 1500)
+    tmp_file =
+        make_plots_generic(output_paths, vars, z = 1500, output_name = "tmp")
+    make_plots_generic(
+        output_paths,
+        vars_spectra;
+        summary_files = [tmp_file],
+        plot_fn = plot_spectrum_with_line!,
+    )
 end
 
 MoistBaroWavePlots = Union{
@@ -663,7 +728,7 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
-    short_names_spectra = ["ke"]
+    short_names_spectra = ["ke", "hus"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
         return slice(get(simdir; short_name, reduction), time = 10days)
     end
@@ -675,11 +740,20 @@ function make_plots(
                 left = 9days,
                 right = 10days,
             )
-            return ClimaAnalysis.average_time(compute_spectrum(windowed_var))
+            return slice(
+                ClimaAnalysis.average_time(compute_spectrum(windowed_var)),
+                z = 1500,
+            )
         end
-    vars = vcat(vars..., vars_spectra...)
 
-    make_plots_generic(output_paths, vars, z = 1500)
+    tmp_file =
+        make_plots_generic(output_paths, vars, z = 1500, output_name = "tmp")
+    make_plots_generic(
+        output_paths,
+        vars_spectra;
+        summary_files = [tmp_file],
+        plot_fn = plot_spectrum_with_line!,
+    )
 end
 
 LongMoistBaroWavePlots = Union{
@@ -695,18 +769,28 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
-    short_names_spectra = ["ke"]
+    short_names_spectra = ["ke", "hus"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
         return slice(get(simdir; short_name, reduction), time = 10days)
     end
     vars_spectra =
         map_comparison(simdirs, short_names_spectra) do simdir, short_name
-            compute_spectrum(
-                slice(get(simdir; short_name, reduction), time = 10days),
+            slice(
+                compute_spectrum(
+                    slice(get(simdir; short_name, reduction), time = 10days),
+                ),
+                z = 1500,
             )
         end
-    vars = vcat(vars..., vars_spectra...)
-    make_plots_generic(output_paths, vars, z = 1500)
+
+    tmp_file =
+        make_plots_generic(output_paths, vars, z = 1500, output_name = "tmp")
+    make_plots_generic(
+        output_paths,
+        vars_spectra;
+        summary_files = [tmp_file],
+        plot_fn = plot_spectrum_with_line!,
+    )
 end
 
 DryHeldSuarezPlots = Union{
@@ -746,7 +830,7 @@ function make_plots(
     simdirs = SimDir.(output_paths)
 
     short_names_3D, reduction = ["ua", "ta", "hus"], "average"
-    short_names_2D = ["hfes", "evspsbl"]
+    short_names_2D = ["hfes", "evspsbl", "pr"]
     vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
         get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
     end
@@ -785,6 +869,7 @@ function make_plots(
         "rlus",
         "hfes",
         "evspsbl",
+        "pr",
     ]
     available_periods = ClimaAnalysis.available_periods(
         simdirs[1];
@@ -839,7 +924,9 @@ function make_plots(
         short_name = short_names_3D[1],
         reduction,
     )
-    if "10d" in available_periods
+    if "30d" in available_periods
+        period = "30d"
+    elseif "10d" in available_periods
         period = "10d"
     elseif "1d" in available_periods
         period = "1d"
@@ -857,6 +944,7 @@ function make_plots(
         "hfes",
         "evspsbl",
         "ts",
+        "pr",
     ]
     vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
         get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon
@@ -906,13 +994,16 @@ function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
         "rlus",
         "hfes",
         "evspsbl",
+        "pr",
     ]
     available_periods = ClimaAnalysis.available_periods(
         simdirs[1];
         short_name = short_names_3D[1],
         reduction,
     )
-    if "10d" in available_periods
+    if "30d" in available_periods
+        period = "30d"
+    elseif "10d" in available_periods
         period = "10d"
     elseif "1d" in available_periods
         period = "1d"
@@ -961,13 +1052,16 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
         "rlus",
         "hfes",
         "evspsbl",
+        "pr",
     ]
     available_periods = ClimaAnalysis.available_periods(
         simdirs[1];
         short_name = short_names_3D[1],
         reduction,
     )
-    if "10d" in available_periods
+    if "30d" in available_periods
+        period = "30d"
+    elseif "10d" in available_periods
         period = "10d"
     elseif "1d" in available_periods
         period = "1d"

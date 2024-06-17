@@ -1,4 +1,5 @@
-
+using ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import SurfaceFluxes as SF
 import ClimaAtmos.Parameters as CAP
@@ -37,8 +38,8 @@ include("../../test_helpers.jl")
         :ᶜS_ρq_tot,
         :ᶜ3d_rain,
         :ᶜ3d_snow,
-        :col_integrated_rain,
-        :col_integrated_snow,
+        :surface_rain_flux,
+        :surface_snow_flux,
     )
     for var_name in test_varnames
         @test var_name ∈ propertynames(precip_cache)
@@ -71,7 +72,8 @@ include("../../test_helpers.jl")
     (; turbconv_model) = p.atmos
     precip_cache = CA.precipitation_cache(Y, precip_model)
     ᶜYₜ = Y .* FT(0)
-    test_varnames = (:ᶜSqₜᵖ, :ᶜSqᵣᵖ, :ᶜSqₛᵖ, :ᶜSeₜᵖ)
+    test_varnames =
+        (:ᶜSqₜᵖ, :ᶜSqᵣᵖ, :ᶜSqₛᵖ, :ᶜSeₜᵖ, :surface_rain_flux, :surface_snow_flux)
     for var_name in test_varnames
         @test var_name ∈ propertynames(precip_cache)
     end

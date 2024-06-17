@@ -1,5 +1,4 @@
 ### BoilerPlate Code
-using ClimaComms
 using IntervalSets
 
 import ClimaCore:
@@ -16,8 +15,8 @@ import ClimaCore:
     Hypsography
 
 ### Unit Test Helpers
-# If wrappers for general operations are required in unit tests 
-# (e.g. construct spaces, construct simulations from configs, 
+# If wrappers for general operations are required in unit tests
+# (e.g. construct spaces, construct simulations from configs,
 # specialised test functions with multiple uses, define them here.)
 
 function generate_test_simulation(config)

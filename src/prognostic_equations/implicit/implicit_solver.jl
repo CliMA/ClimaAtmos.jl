@@ -436,8 +436,6 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         )...,
         p.core.ᶜΦ,
         p.core.ᶠgradᵥ_ᶜΦ,
-        p.core.ᶜρ_ref,
-        p.core.ᶜp_ref,
         p.scratch.ᶜtemp_scalar,
         p.scratch.ᶜtemp_C3,
         p.scratch.ᶠtemp_CT3,
@@ -469,7 +467,7 @@ end
 
 function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     (; matrix, diffusion_flag, sgs_advection_flag, topography_flag) = A
-    (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p
+    (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ) = p
     (;
         ᶜtemp_C3,
         ∂ᶜK_∂ᶜuₕ,
@@ -553,10 +551,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         dtγ * (
             ᶠp_grad_matrix ⋅
             DiagonalMatrixRow(ᶜkappa_m * (T_tri * cv_d - ᶜK - ᶜΦ)) +
-            DiagonalMatrixRow(
-                (ᶠgradᵥ(ᶜp - ᶜp_ref) - ᶠinterp(ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) /
-                abs2(ᶠinterp(ᶜρ)),
-            ) ⋅ ᶠinterp_matrix()
+            DiagonalMatrixRow(ᶠgradᵥ(ᶜp) / abs2(ᶠinterp(ᶜρ))) ⋅
+            ᶠinterp_matrix()
         )
     @. ∂ᶠu₃_err_∂ᶜρe_tot = dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m)
     if MatrixFields.has_field(Y, @name(c.ρq_tot))

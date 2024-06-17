@@ -1,7 +1,13 @@
-163
+165
+
+# 165:
+# - Removed reference state for the dycore
+
+# 164:
+# - Changed approximation for erf in calculation of some boundary conditions for EDMF.
 
 # 163:
-# - Moved to SSPKnoth
+# - Fixed bug introduced in 162
 
 # 162:
 # - Changed the order of operations in surface conditions calculation.
@@ -19,13 +25,13 @@
 #   to be dependent on the surface area
 
 # 158:
-#  - Switched back the precipitation threshold definition in the
+#  - Switched back the precipitation threshold defintion in the
 #    0-moment scheme to specific humidity
 
 # 157:
 #  - For the grid mean precipitation tendency in the 0-moment scheme:
 #     - added limiting by q_tot/dt
-#     - switched the precipitation threshold definition
+#     - switched the precipitation threshold defintion
 #       from specific humidity based to supersaturation based
 
 # 156:

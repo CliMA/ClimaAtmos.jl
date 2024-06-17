@@ -16,21 +16,25 @@ struct GrayRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
     idealized_insolation::Bool
     idealized_clouds::Bool
+    add_isothermal_boundary_layer::Bool
 end
 struct ClearSkyRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
     idealized_insolation::Bool
     idealized_clouds::Bool
+    add_isothermal_boundary_layer::Bool
 end
 struct AllSkyRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
     idealized_insolation::Bool
     idealized_clouds::Bool
+    add_isothermal_boundary_layer::Bool
 end
 struct AllSkyRadiationWithClearSkyDiagnostics <: AbstractRRTMGPMode
     idealized_h2o::Bool
     idealized_insolation::Bool
     idealized_clouds::Bool
+    add_isothermal_boundary_layer::Bool
 end
 
 """
@@ -240,7 +244,6 @@ struct RRTMGPModel{R, I, B, L, P, S, V}
     interpolation::I
     bottom_extrapolation::B
     implied_values::Symbol
-    add_isothermal_boundary_layer::Bool
     disable_longwave::Bool
     disable_shortwave::Bool
     lookups::L
@@ -332,10 +335,6 @@ array.
   represent the volume mixing ratio of each well-mixed gas (i.e., a gas that is
   not water vapor or ozone), instead of using an array that represents a
   spatially varying volume mixing ratio
-- `add_isothermal_boundary_layer`: whether to add an isothermal boundary layer
-  above the domain and extension (the pressure at the top of this layer is
-  the minimum pressure supported by RRTMGP, while the temperature and volume
-  mixing ratios in this layer are the same as in the layer below it)
 - `max_threads`: the maximum number of GPU threads to use for `update_fluxes!`
 - `center_pressure` and/or `face_pressure`: air pressure in Pa on cell centers
   and on cell faces (either one or both of these must be specified)
@@ -416,7 +415,6 @@ function RRTMGPModel(
     use_one_scalar_mode::Bool = false,
     use_pade_cloud_optics_mode::Bool = false,
     use_global_means_for_well_mixed_gases::Bool = false,
-    add_isothermal_boundary_layer::Bool = false,
     max_threads::Int = 256,
     kwargs...,
 )
@@ -493,7 +491,10 @@ function RRTMGPModel(
     lookups = NamedTuple()
     views = []
 
-    nlay = domain_nlay + extension_nlay + Int(add_isothermal_boundary_layer)
+    nlay =
+        domain_nlay +
+        extension_nlay +
+        Int(radiation_mode.add_isothermal_boundary_layer)
     op_symbol = use_one_scalar_mode ? :OneScalar : :TwoStream
     t = (views, domain_nlay, extension_nlay)
 
@@ -834,7 +835,6 @@ function RRTMGPModel(
         interpolation,
         bottom_extrapolation,
         implied_values,
-        add_isothermal_boundary_layer,
         disable_longwave,
         disable_shortwave,
         lookups,
@@ -954,7 +954,8 @@ cell faces in the extension.
 """
 NVTX.@annotate function update_fluxes!(model)
     model.implied_values != :none && update_implied_values!(model)
-    model.add_isothermal_boundary_layer && update_boundary_layer!(model)
+    model.radiation_mode.add_isothermal_boundary_layer &&
+        update_boundary_layer!(model)
     clip_values!(model)
     update_concentrations!(model.radiation_mode, model)
     !model.disable_longwave && update_lw_fluxes!(model.radiation_mode, model)
@@ -974,7 +975,8 @@ function update_implied_values!(model)
     (; p_lev, t_lev, t_sfc) = model.solver.as
     p_lay = AS.getview_p_lay(model.solver.as)
     t_lay = AS.getview_t_lay(model.solver.as)
-    nlay = size(p_lay, 1) - Int(model.add_isothermal_boundary_layer)
+    nlay =
+        size(p_lay, 1) - Int(model.radiation_mode.add_isothermal_boundary_layer)
     if requires_z(model.interpolation) || requires_z(model.bottom_extrapolation)
         z_lay = parent(model.center_z)
         z_lev = parent(model.face_z)
@@ -1008,6 +1010,13 @@ update_views(f, mode, outs, ins, others, out_range, in_range1, in_range2) = f(
     others...,
 )
 
+"""
+    update_boundary_layer!(model)
+    
+Adds an isothermal boundary layer above the domain and extension (the pressure at the top of this layer 
+is the minimum pressure supported by RRTMGP, while the temperature and volume mixing ratios in this layer 
+are the same as in the layer below it)
+"""
 function update_boundary_layer!(model)
     as = model.solver.as
     p_min = get_p_min(model)
@@ -1062,7 +1071,7 @@ end
 update_concentrations!(::GrayRadiation, model) = nothing
 
 update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_gas!(
-    model.solver.context,
+    ClimaComms.device(model.solver.context),
     model.solver.as.p_lev,
     AS.getview_col_dry(model.solver.as),
     model.params,
