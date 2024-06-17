@@ -2181,10 +2181,10 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
-deps = ["Adapt", "Artifacts", "ClimaComms", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
-git-tree-sha1 = "99c20537c2df9010863e7ee641a2ecb214898b0f"
+deps = ["Adapt", "Artifacts", "ClimaComms", "DocStringExtensions", "Random"]
+git-tree-sha1 = "f68548d7d1b314c8a9dcae14601e66115a363624"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.14.0"
+version = "0.15.0"
 weakdeps = ["CUDA", "ClimaParams"]
 
     [deps.RRTMGP.extensions]

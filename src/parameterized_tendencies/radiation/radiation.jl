@@ -61,7 +61,13 @@ function radiation_model_cache(
     end
     local radiation_model
     orbital_data = Insolation.OrbitalData()
-    data_loader(joinpath("atmos_state", "clearsky_as.nc")) do input_data
+    file_name = joinpath(
+        "examples",
+        "rfmip-clear-sky",
+        "inputs",
+        "multiple_input4MIPs_radiation_RFMIP_UColorado-RFMIP-1-2_none.nc",
+    )
+    data_loader(file_name) do input_data
         if radiation_mode isa RRTMGPI.GrayRadiation
             kwargs = (;
                 lapse_rate = 3.5,
