@@ -4,14 +4,15 @@ agents:
   modules: julia/1.10.0 cuda/julia-pref openmpi/4.1.5-mpitrampoline nsight-systems/2024.2.1
 
 env:
+  JULIA_CUDA_MEMORY_POOL: none
   JULIA_MPI_HAS_CUDA: "true"
   JULIA_NVTX_CALLBACKS: gc
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
   OPENBLAS_NUM_THREADS: 1
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
   SLURM_KILL_BAD_EXIT: 1
-  SLURM_GRES_FLAGS: "allow-task-sharing"
-  CONFIG_PATH: "config/model_configs/"
+  SLURM_GPU_BIND: none # https://github.com/open-mpi/ompi/issues/11949#issuecomment-1737712291
+  CONFIG_PATH: "config/longrun_configs"
   CLIMAATMOS_GC_NSTEPS: 10
 
 timeout_in_minutes: 1440
@@ -39,18 +40,16 @@ steps:
 
   - wait
 
-  - group: "test les"
+  - group: "test LES"
     steps:
 
-      - label: ":computer: dycoms"
+      - label: ":computer: amip target diagnostic edmf"
         command:
-          - julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
-          slurm_ntasks: 4
-          slurm_exclusive:
+          slurm_gpus: 1
+          slurm_time: 12:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "les_dycoms_box"
+          JOB_NAME: "amip_target_diagedmf"
