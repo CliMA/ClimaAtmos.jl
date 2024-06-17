@@ -22,7 +22,6 @@ steps:
     key: "init_gpu_env"
     command:
       - echo "--- Instantiate examples"
-      - julia --project=examples -e 'using Pkg; Pkg.develop(;path=".");'
       - julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'
       - julia --project=examples -e 'using Pkg; Pkg.precompile()'
       - julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'
