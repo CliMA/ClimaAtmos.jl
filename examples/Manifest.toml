@@ -1951,8 +1951,8 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "Artifacts", "ClimaComms", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
-git-tree-sha1 = "725ef43560fc9752bdec0db9e8d7aee105ad9c7d"
-repo-rev = "zs/v0.14.0_limittau"
+git-tree-sha1 = "91c0bfaccad8885dc5895023611468b5a053cb72"
+repo-rev = "zs/v0.14.0_checknan"
 repo-url = "https://github.com/CliMA/RRTMGP.jl.git"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
 version = "0.14.0"
