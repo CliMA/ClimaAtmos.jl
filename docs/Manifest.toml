@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.3"
+julia_version = "1.10.4"
 manifest_format = "2.0"
 project_hash = "64afcb8dacf7a673d0068ba1a72602801e8d529a"
 
@@ -354,20 +354,18 @@ version = "0.7.32"
 
 [[deps.ClimaUtilities]]
 deps = ["Artifacts", "Dates"]
-git-tree-sha1 = "af4af7e14e02861c1a13c9ee0efade4c863fab9a"
+git-tree-sha1 = "9641bc5261562817fad2472f85325d8ae3047ac8"
 uuid = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
-version = "0.1.8"
+version = "0.1.9"
 
     [deps.ClimaUtilities.extensions]
-    CUDAUtilsExt = ["ClimaCore", "CUDA"]
-    DataHandlingExt = ["ClimaCore", "NCDatasets"]
-    InterpolationsRegridderExt = ["Interpolations", "ClimaCore"]
-    MPIUtilsExt = "ClimaComms"
-    NCFileReaderExt = "NCDatasets"
-    SpaceVaryingInputsExt = ["ClimaCore", "NCDatasets"]
-    TempestRegridderExt = "ClimaCoreTempestRemap"
-    TimeVaryingInputs0DExt = "ClimaCore"
-    TimeVaryingInputsExt = ["ClimaCore", "NCDatasets"]
+    ClimaUtilitiesClimaCommsCUDAExt = ["ClimaComms", "CUDA"]
+    ClimaUtilitiesClimaCommsExt = "ClimaComms"
+    ClimaUtilitiesClimaCoreExt = "ClimaCore"
+    ClimaUtilitiesClimaCoreInterpolationsExt = ["ClimaCore", "Interpolations"]
+    ClimaUtilitiesClimaCoreNCDatasetsExt = ["ClimaCore", "NCDatasets"]
+    ClimaUtilitiesClimaCoreTempestRemapExt = "ClimaCoreTempestRemap"
+    ClimaUtilitiesNCDatasetsExt = "NCDatasets"
 
     [deps.ClimaUtilities.weakdeps]
     Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
