@@ -337,11 +337,11 @@ weakdeps = ["CUDA", "MPI"]
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "a31680a7fab30d3cd8032bec08ab42905c486a28"
+git-tree-sha1 = "b33a77643089296298004178f041845c78cd2dd4"
 repo-rev = "as/covar-deriv"
 repo-url = "/home/asridhar/Codes/ClimaCore.jl"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.14.7"
+version = "0.14.9"
 weakdeps = ["CUDA", "Krylov"]
 
     [deps.ClimaCore.extensions]
