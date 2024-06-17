@@ -1,4 +1,7 @@
-165
+166
+
+# 166:
+# - Move to SSPKnoth
 
 # 165:
 # - Removed reference state for the dycore
@@ -25,13 +28,13 @@
 #   to be dependent on the surface area
 
 # 158:
-#  - Switched back the precipitation threshold defintion in the
+#  - Switched back the precipitation threshold definition in the
 #    0-moment scheme to specific humidity
 
 # 157:
 #  - For the grid mean precipitation tendency in the 0-moment scheme:
 #     - added limiting by q_tot/dt
-#     - switched the precipitation threshold defintion
+#     - switched the precipitation threshold definition
 #       from specific humidity based to supersaturation based
 
 # 156:

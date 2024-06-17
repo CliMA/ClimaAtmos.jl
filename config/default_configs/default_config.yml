@@ -79,7 +79,7 @@ max_newton_iters_ode:
   value: 1
 ode_algo:
   help: "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, etc.]"
-  value: "ARS343"
+  value: "SSPKnoth"
 krylov_rtol:
   help: "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
   value: 0.1
@@ -141,7 +141,7 @@ vert_diff:
   value: "false"
 hyperdiff:
   help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
-  value: "ClimaHyperdiffusion"
+  value: "CAM_SE"
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: true
