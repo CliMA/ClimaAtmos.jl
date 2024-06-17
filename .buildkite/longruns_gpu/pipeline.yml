@@ -53,4 +53,5 @@ steps:
           slurm_ntasks: 4
           slurm_exclusive:
         env:
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "les_dycoms_box"
