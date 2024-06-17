@@ -18,8 +18,8 @@ env:
 timeout_in_minutes: 1440
 
 steps:
+
   - label: "init :GPU:"
-    key: "init_gpu_env"
     command:
       - echo "--- Instantiate examples"
       - "julia --project=examples -e 'using Pkg; Pkg.develop(;path=\".\"); Pkg.add(url = \"https://github.com/CLiMA/ClimaTimeSteppers.jl\", rev = \"main");'"
