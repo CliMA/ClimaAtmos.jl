@@ -60,3 +60,41 @@ steps:
           slurm_mem: 32G
           slurm_time: 8:00:00
           slurm_exclusive:
+      
+      - label: "bomex: 2 GPUs"
+        command:
+          - >
+            srun --cpu-bind=threads --cpus-per-task=4
+            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+            --config_file config/model_configs/les_bomex_box.yml
+            --job_id bomex
+        artifact_paths: "bomex/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
+        agents:
+          slurm_gpus_per_task: 1
+          slurm_cpus_per_task: 4
+          slurm_ntasks: 2
+          slurm_mem: 16G
+          slurm_time: 8:00:00
+          slurm_exclusive:
+      
+      - label: "rico: 2 GPUs"
+        command:
+          - >
+            srun --cpu-bind=threads --cpus-per-task=4
+            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+            --config_file config/model_configs/les_rico_box.yml
+            --job_id rico
+        artifact_paths: "rico/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
+        agents:
+          slurm_gpus_per_task: 1
+          slurm_cpus_per_task: 4
+          slurm_ntasks: 2
+          slurm_mem: 16G
+          slurm_time: 8:00:00
+          slurm_exclusive:
