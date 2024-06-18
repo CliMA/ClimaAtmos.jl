@@ -1157,28 +1157,14 @@ end
 
 function update_net_fluxes!(_, model)
     FT = eltype(model.face_flux)
-    model.face_flux .=
-        ifelse.(
-            model.cos_zenith' .<= sqrt(eps(FT)),
-            model.face_lw_flux,
-            model.face_lw_flux .+ model.face_sw_flux,
-        )
+    model.face_flux .= model.face_lw_flux .+ model.face_sw_flux
 
 end
 function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
     FT = eltype(model.face_flux)
     model.face_clear_flux .=
-        ifelse.(
-            model.cos_zenith' .<= sqrt(eps(FT)),
-            model.face_clear_lw_flux,
-            model.face_clear_lw_flux .+ model.face_clear_sw_flux,
-        )
-    model.face_flux .=
-        ifelse.(
-            model.cos_zenith' .<= sqrt(eps(FT)),
-            model.face_lw_flux,
-            model.face_lw_flux .+ model.face_sw_flux,
-        )
+        model.face_clear_lw_flux .+ model.face_clear_sw_flux
+    model.face_flux .= model.face_lw_flux .+ model.face_sw_flux
 end
 
 end # end module
