@@ -14,7 +14,6 @@ edmfx_sgs_diffusive_flux: true
 moist: equil
 call_cloud_diagnostics_per_stage: true
 config: box
-hyperdiff: "true"
 x_max: 1e8
 y_max: 1e8
 x_elem: 2

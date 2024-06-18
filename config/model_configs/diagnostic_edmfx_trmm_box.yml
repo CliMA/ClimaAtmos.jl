@@ -16,7 +16,6 @@ call_cloud_diagnostics_per_stage: true
 apply_limiter: false
 precip_model: "1M"
 config: box
-hyperdiff: "true"
 x_max: 1e8
 y_max: 1e8
 x_elem: 2
