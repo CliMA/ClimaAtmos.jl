@@ -58,7 +58,7 @@ steps:
           slurm_cpus_per_task: 4
           slurm_ntasks: 2
           slurm_mem: 16G
-          slurm_time: 8:00:00
+          slurm_time: 6:00:00
       
       - label: "bomex: 2 GPUs"
         command:
@@ -76,7 +76,7 @@ steps:
           slurm_cpus_per_task: 4
           slurm_ntasks: 2
           slurm_mem: 16G
-          slurm_time: 8:00:00
+          slurm_time: 6:00:00
       
       - label: "rico: 2 GPUs"
         command:
@@ -94,4 +94,4 @@ steps:
           slurm_cpus_per_task: 4
           slurm_ntasks: 2
           slurm_mem: 16G
-          slurm_time: 8:00:00
+          slurm_time: 6:00:00
