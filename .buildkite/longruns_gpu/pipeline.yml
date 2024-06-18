@@ -59,7 +59,6 @@ steps:
           slurm_ntasks: 2
           slurm_mem: 16G
           slurm_time: 8:00:00
-          slurm_exclusive:
       
       - label: "bomex: 2 GPUs"
         command:
@@ -78,7 +77,6 @@ steps:
           slurm_ntasks: 2
           slurm_mem: 16G
           slurm_time: 8:00:00
-          slurm_exclusive:
       
       - label: "rico: 2 GPUs"
         command:
@@ -97,4 +95,3 @@ steps:
           slurm_ntasks: 2
           slurm_mem: 16G
           slurm_time: 8:00:00
-          slurm_exclusive:
