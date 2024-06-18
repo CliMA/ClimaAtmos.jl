@@ -60,7 +60,7 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
-    @. ᶠfb = (max(FT(0), 1 - 3*(grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/4)
+    @. ᶠfb = (max(FT(0), 1 - 3*(grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/2)
 
     ᶠρ = @. ᶠwinterp(ᶜJ, Y.c.ρ)
     ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) * ᶠfb
@@ -128,7 +128,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
-    @. ᶠfb = (max(FT(0), 1 - 3*(grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/4)
+    @. ᶠfb = (max(FT(0), 1 - 3*(grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/2)
 
     ᶠρ = @. ᶠwinterp(ᶜJ, Y.c.ρ)
     ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) * ᶠfb

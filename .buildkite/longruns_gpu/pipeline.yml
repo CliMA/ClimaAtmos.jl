@@ -1,4 +1,4 @@
-agents:
+gents:
   queue: clima
   slurm_mem: 8G
   modules: julia/1.10.0 cuda/julia-pref openmpi/4.1.5-mpitrampoline nsight-systems/2024.2.1
