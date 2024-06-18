@@ -14,6 +14,7 @@ edmfx_filter: true
 prognostic_tke: true
 cloud_model: "grid_scale"
 moist: "equil"
+call_cloud_diagnostics_per_stage: true
 config: "column"
 z_max: 3e3
 z_elem: 60
