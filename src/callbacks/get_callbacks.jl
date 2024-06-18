@@ -43,6 +43,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, t_start, dt)
         p.output_dir,
         num_points = num_netcdf_points;
         z_sampling_method,
+        sync_schedule = CAD.EveryStepSchedule(),
     )
     writers = (hdf5_writer, netcdf_writer)
 
