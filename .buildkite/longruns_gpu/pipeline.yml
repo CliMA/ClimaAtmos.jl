@@ -72,6 +72,7 @@ steps:
           slurm_gpus: 1
           slurm_time: 12:00:00
         env:
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_bw_rhoe_veryhighres"
 
       - label: ":computer: baroclinic wave equilmoist"
@@ -93,6 +94,7 @@ steps:
           slurm_gpus: 1
           slurm_time: 12:00:00
         env:
+          CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_bw_rhoe_equil_veryhighres"
 
       - label: ":computer: dry held-suarez"
