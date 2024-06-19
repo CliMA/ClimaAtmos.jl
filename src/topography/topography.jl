@@ -23,6 +23,39 @@ function topography_dcmip200(coords)
     return zₛ
 end
 
+"""
+    topography_hughes2023(λ,ϕ)
+λ = longitude (degrees)
+ϕ = latitude (degrees)
+Returns the surface elevation profile used in the baroclinic wave
+test problem defined by Hughes and Jablonowski (2023).
+"""
+function topography_hughes2023(coords)
+    λ, ϕ = coords.long, coords.lat
+    FT = eltype(λ)
+    h₀ = FT(2e3)
+    # Angles in degrees
+    ϕ₁ = FT(45)
+    ϕ₂ = FT(45)
+    λ_min = minimum(λ)
+    λ₁ = FT(72)
+    λ₂ = FT(140)
+    λₘ = FT(7)
+    ϕₘ = FT(40)
+    d = ϕₘ / 2 * (-log(0.1))^(-1 / 6)
+    c = λₘ / 2 * (-log(0.1))^(-1 / 2)
+    d₁ = @. (λ - λ_min) - λ₁
+    d₂ = @. (λ - λ_min) - λ₂
+    l₁ = @. λ - λ₁
+    l₂ = @. λ - λ₂
+    zₛ = @. FT(
+        h₀ * (
+            exp(-(((ϕ - ϕ₁) / d)^6 + (l₁ / c)^2)) +
+            exp(-(((ϕ - ϕ₂) / d)^6 + (l₂ / c)^2))
+        ),
+    )
+end
+
 function generate_topography_warp(earth_spline)
     function topography_earth(coords)
         λ, Φ = coords.long, coords.lat
