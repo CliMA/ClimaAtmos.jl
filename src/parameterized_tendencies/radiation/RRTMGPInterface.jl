@@ -239,7 +239,7 @@ function extrap!(
     @. p = p⁺ * (T / T⁺)^(cₚ / R)
 end
 
-struct RRTMGPModel{R, I, B, L, P, S, V}
+struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V}
     radiation_mode::R
     interpolation::I
     bottom_extrapolation::B
@@ -248,9 +248,10 @@ struct RRTMGPModel{R, I, B, L, P, S, V}
     disable_shortwave::Bool
     lookups::L
     params::P
-    max_threads::Int
-    solver::S
-    views::V # user-friendly views into the solver
+    lw_solver::LWS
+    sw_solver::SWS
+    as::AS  # Atmospheric state
+    views::V  # user-friendly views into the solver
 end
 
 function Base.getproperty(model::RRTMGPModel, s::Symbol)
@@ -335,7 +336,6 @@ array.
   represent the volume mixing ratio of each well-mixed gas (i.e., a gas that is
   not water vapor or ozone), instead of using an array that represents a
   spatially varying volume mixing ratio
-- `max_threads`: the maximum number of GPU threads to use for `update_fluxes!`
 - `center_pressure` and/or `face_pressure`: air pressure in Pa on cell centers
   and on cell faces (either one or both of these must be specified)
 - `center_temperature` and/or `face_temperature`: air temperature in K on cell
@@ -415,7 +415,6 @@ function RRTMGPModel(
     use_one_scalar_mode::Bool = false,
     use_pade_cloud_optics_mode::Bool = false,
     use_global_means_for_well_mixed_gases::Bool = false,
-    max_threads::Int = 256,
     kwargs...,
 )
     device = ClimaComms.device(context)
@@ -505,7 +504,7 @@ function RRTMGPModel(
             nbnd_lw = 1
         else
             local lookup_lw, idx_gases
-            data_loader(joinpath("lookup_tables", "clearsky_lw.nc")) do ds
+            data_loader("rrtmgp-gas-lw-g256.nc") do ds
                 lookup_lw, idx_gases = RRTMGP.LookUpTables.LookUpLW(ds, FT, DA)
             end
             lookups = (; lookups..., lookup_lw, idx_gases)
@@ -515,7 +514,7 @@ function RRTMGPModel(
 
             if !(radiation_mode isa ClearSkyRadiation)
                 local lookup_lw_cld
-                data_loader(joinpath("lookup_tables", "cloudysky_lw.nc")) do ds
+                data_loader(joinpath("rrtmgp-clouds-lw.nc")) do ds
                     lookup_lw_cld =
                         use_pade_cloud_optics_mode ?
                         RRTMGP.LookUpTables.PadeCld(ds, FT, DA) :
@@ -566,7 +565,7 @@ function RRTMGPModel(
             nbnd_sw = 1
         else
             local lookup_sw, idx_gases
-            data_loader(joinpath("lookup_tables", "clearsky_sw.nc")) do ds
+            data_loader("rrtmgp-gas-sw-g224.nc") do ds
                 lookup_sw, idx_gases = RRTMGP.LookUpTables.LookUpSW(ds, FT, DA)
             end
             lookups = (; lookups..., lookup_sw, idx_gases)
@@ -576,7 +575,7 @@ function RRTMGPModel(
 
             if !(radiation_mode isa ClearSkyRadiation)
                 local lookup_sw_cld
-                data_loader(joinpath("lookup_tables", "cloudysky_sw.nc")) do ds
+                data_loader(joinpath("rrtmgp-clouds-sw.nc")) do ds
                     lookup_sw_cld =
                         use_pade_cloud_optics_mode ?
                         RRTMGP.LookUpTables.PadeCld(ds, FT, DA) :
@@ -799,21 +798,40 @@ function RRTMGPModel(
         )
     end
 
-    op_type =
-        use_one_scalar_mode ? RRTMGP.Optics.OneScalar : RRTMGP.Optics.TwoStream
-    solver = RRTMGP.RTE.Solver(
-        context,
-        as,
-        op_type(FT, ncol, nlay, DA),
-        src_lw,
-        src_sw,
-        bcs_lw,
-        bcs_sw,
-        fluxb_lw,
-        fluxb_sw,
-        flux_lw,
-        flux_sw,
-    )
+    if use_one_scalar_mode
+        op = RRTMGP.Optics.OneScalar(FT, ncol, nlay, DA)
+        sw_solver =
+            RRTMGP.RTE.NoScatSWRTE(context, op, bcs_sw, fluxb_sw, flux_sw)
+        ad = RRTMGP.AngularDiscretizations.AngularDiscretization(FT, DA, 1)
+        lw_solver = RRTMGP.RTE.NoScatLWRTE(
+            context,
+            op,
+            src_lw,
+            bcs_lw,
+            fluxb_lw,
+            flux_lw,
+            ad,
+        )
+    else
+        op = RRTMGP.Optics.TwoStream(FT, ncol, nlay, DA)
+        sw_solver = RRTMGP.RTE.TwoStreamSWRTE(
+            context,
+            op,
+            src_sw,
+            bcs_sw,
+            fluxb_sw,
+            flux_sw,
+        )
+        lw_solver = RRTMGP.RTE.TwoStreamLWRTE(
+            context,
+            op,
+            src_lw,
+            bcs_lw,
+            fluxb_lw,
+            flux_lw,
+        )
+    end
+
 
     if requires_z(interpolation) || requires_z(bottom_extrapolation)
         z_lay = DA{FT}(undef, nlay, ncol)
@@ -839,8 +857,9 @@ function RRTMGPModel(
         disable_shortwave,
         lookups,
         params,
-        max_threads,
-        solver,
+        lw_solver,
+        sw_solver,
+        as,
         NamedTuple(views),
     )
 end
@@ -965,16 +984,16 @@ NVTX.@annotate function update_fluxes!(model)
     return model.face_flux
 end
 
-get_p_min(model) = get_p_min(model.solver.as, model.lookups)
+get_p_min(model) = get_p_min(model.as, model.lookups)
 get_p_min(as::RRTMGP.AtmosphericStates.GrayAtmosphericState, lookups) =
     zero(eltype(as.p_lay))
 get_p_min(as::RRTMGP.AtmosphericStates.AtmosphericState, lookups) =
     lookups[1].p_ref_min
 
 function update_implied_values!(model)
-    (; p_lev, t_lev, t_sfc) = model.solver.as
-    p_lay = AS.getview_p_lay(model.solver.as)
-    t_lay = AS.getview_t_lay(model.solver.as)
+    (; p_lev, t_lev, t_sfc) = model.as
+    p_lay = AS.getview_p_lay(model.as)
+    t_lay = AS.getview_t_lay(model.as)
     nlay =
         size(p_lay, 1) - Int(model.radiation_mode.add_isothermal_boundary_layer)
     if requires_z(model.interpolation) || requires_z(model.bottom_extrapolation)
@@ -1018,12 +1037,12 @@ is the minimum pressure supported by RRTMGP, while the temperature and volume mi
 are the same as in the layer below it)
 """
 function update_boundary_layer!(model)
-    as = model.solver.as
+    as = model.as
     p_min = get_p_min(model)
-    @views AS.getview_p_lay(model.solver.as)[end, :] .=
+    @views AS.getview_p_lay(model.as)[end, :] .=
         (as.p_lev[end - 1, :] .+ p_min) ./ 2
     @views as.p_lev[end, :] .= p_min
-    @views AS.getview_t_lay(model.solver.as)[end, :] .= as.t_lev[end - 1, :]
+    @views AS.getview_t_lay(model.as)[end, :] .= as.t_lev[end - 1, :]
     @views as.t_lev[end, :] .= as.t_lev[end - 1, :]
     update_boundary_layer_vmr!(model.radiation_mode, as)
     update_boundary_layer_cloud!(model.radiation_mode, as)
@@ -1058,10 +1077,10 @@ function update_boundary_layer_cloud!(cloud_state)
 end
 
 function clip_values!(model)
-    (; p_lev) = model.solver.as
-    p_lay = AS.getview_p_lay(model.solver.as)
+    (; p_lev) = model.as
+    p_lay = AS.getview_p_lay(model.as)
     if !(model.radiation_mode isa GrayRadiation)
-        (; vmr_h2o) = model.solver.as.vmr
+        (; vmr_h2o) = model.as.vmr
         @. vmr_h2o = max(vmr_h2o, 0)
     end
     p_min = get_p_min(model)
@@ -1071,30 +1090,29 @@ end
 update_concentrations!(::GrayRadiation, model) = nothing
 
 update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_gas!(
-    ClimaComms.device(model.solver.context),
-    model.solver.as.p_lev,
-    AS.getview_col_dry(model.solver.as),
+    ClimaComms.device(model.sw_solver.context),
+    model.as.p_lev,
+    AS.getview_col_dry(model.as),
     model.params,
-    get_vmr_h2o(model.solver.as.vmr, model.lookups.idx_gases),
-    model.solver.as.lat,
-    model.max_threads,
+    get_vmr_h2o(model.as.vmr, model.lookups.idx_gases),
+    model.as.lat,
 )
 get_vmr_h2o(vmr::RRTMGP.Vmrs.VmrGM, idx_gases) = vmr.vmr_h2o
 get_vmr_h2o(vmr::RRTMGP.Vmrs.Vmr, idx_gases) =
     view(vmr.vmr, idx_gases["h2o"], :, :)
 
 NVTX.@annotate update_lw_fluxes!(::GrayRadiation, model) =
-    RRTMGP.RTESolver.solve_lw!(model.solver, model.max_threads)
+    RRTMGP.RTESolver.solve_lw!(model.lw_solver, model.as)
 NVTX.@annotate update_lw_fluxes!(::ClearSkyRadiation, model) =
     RRTMGP.RTESolver.solve_lw!(
-        model.solver,
-        model.max_threads,
+        model.lw_solver,
+        model.as,
         model.lookups.lookup_lw,
     )
 NVTX.@annotate update_lw_fluxes!(::AllSkyRadiation, model) =
     RRTMGP.RTESolver.solve_lw!(
-        model.solver,
-        model.max_threads,
+        model.lw_solver,
+        model.as,
         model.lookups.lookup_lw,
         model.lookups.lookup_lw_cld,
     )
@@ -1103,33 +1121,33 @@ NVTX.@annotate function update_lw_fluxes!(
     model,
 )
     RRTMGP.RTESolver.solve_lw!(
-        model.solver,
-        model.max_threads,
+        model.lw_solver,
+        model.as,
         model.lookups.lookup_lw,
     )
     parent(model.face_clear_lw_flux_up) .= parent(model.face_lw_flux_up)
     parent(model.face_clear_lw_flux_dn) .= parent(model.face_lw_flux_dn)
     parent(model.face_clear_lw_flux) .= parent(model.face_lw_flux)
     RRTMGP.RTESolver.solve_lw!(
-        model.solver,
-        model.max_threads,
+        model.lw_solver,
+        model.as,
         model.lookups.lookup_lw,
         model.lookups.lookup_lw_cld,
     )
 end
 
 NVTX.@annotate update_sw_fluxes!(::GrayRadiation, model) =
-    RRTMGP.RTESolver.solve_sw!(model.solver, model.max_threads)
+    RRTMGP.RTESolver.solve_sw!(model.sw_solver, model.as)
 NVTX.@annotate update_sw_fluxes!(::ClearSkyRadiation, model) =
     RRTMGP.RTESolver.solve_sw!(
-        model.solver,
-        model.max_threads,
+        model.sw_solver,
+        model.as,
         model.lookups.lookup_sw,
     )
 NVTX.@annotate update_sw_fluxes!(::AllSkyRadiation, model) =
     RRTMGP.RTESolver.solve_sw!(
-        model.solver,
-        model.max_threads,
+        model.sw_solver,
+        model.as,
         model.lookups.lookup_sw,
         model.lookups.lookup_sw_cld,
     )
@@ -1138,8 +1156,8 @@ NVTX.@annotate function update_sw_fluxes!(
     model,
 )
     RRTMGP.RTESolver.solve_sw!(
-        model.solver,
-        model.max_threads,
+        model.sw_solver,
+        model.as,
         model.lookups.lookup_sw,
     )
     parent(model.face_clear_sw_flux_up) .= parent(model.face_sw_flux_up)
@@ -1148,8 +1166,8 @@ NVTX.@annotate function update_sw_fluxes!(
         parent(model.face_sw_direct_flux_dn)
     parent(model.face_clear_sw_flux) .= parent(model.face_sw_flux)
     RRTMGP.RTESolver.solve_sw!(
-        model.solver,
-        model.max_threads,
+        model.sw_solver,
+        model.as,
         model.lookups.lookup_sw,
         model.lookups.lookup_sw_cld,
     )
