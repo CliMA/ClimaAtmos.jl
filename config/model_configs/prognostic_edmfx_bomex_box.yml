@@ -17,8 +17,8 @@ edmfx_nh_pressure: true
 edmfx_filter: true
 prognostic_tke: true
 moist: "equil"
+call_cloud_diagnostics_per_stage: true
 config: "box"
-hyperdiff: "true"
 x_max: 1e8
 y_max: 1e8
 z_max: 3e3
@@ -39,3 +39,4 @@ diagnostics:
     period: 10mins
   - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
     period: 10mins
+ode_algo: ARS343

@@ -151,12 +151,14 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         # is done with other passive tracers in the explicit tendency.
         # Here we add the advection with precipitation terminal velocity
         # using downward biasing and free outflow bottom boundary condition
-        (; ᶜqᵣ, ᶜqₛ, ᶜwᵣ, ᶜwₛ) = p.precomputed
+        (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
-            ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(Geometry.WVector(-(ᶜwᵣ)) * ᶜqᵣ),
+            ᶠwinterp(ᶜJ, Y.c.ρ) *
+            ᶠright_bias(Geometry.WVector(-(ᶜwᵣ)) * ᶜspecific.q_rai),
         )
         @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
-            ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(Geometry.WVector(-(ᶜwₛ)) * ᶜqₛ),
+            ᶠwinterp(ᶜJ, Y.c.ρ) *
+            ᶠright_bias(Geometry.WVector(-(ᶜwₛ)) * ᶜspecific.q_sno),
         )
     end
 

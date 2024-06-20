@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.0"
+julia_version = "1.10.4"
 manifest_format = "2.0"
 project_hash = "d95e2ede05eb683ad8fc21789282919021c2aa3d"
 
@@ -307,9 +307,9 @@ weakdeps = ["SparseArrays"]
 
 [[deps.ClimaAnalysis]]
 deps = ["NCDatasets", "OrderedCollections", "Statistics"]
-git-tree-sha1 = "af5e012e13bc9609f712dea0434cb4ce2b3e709e"
+git-tree-sha1 = "c2e1c0d5c30a2519a4282988037b255dbc9aee00"
 uuid = "29b5916a-a76c-4e73-9657-3c8fd22e65e6"
-version = "0.5.2"
+version = "0.5.3"
 
     [deps.ClimaAnalysis.extensions]
     CairoMakieExt = "CairoMakie"
@@ -393,8 +393,6 @@ version = "0.10.7"
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
 git-tree-sha1 = "d996079d35a7724ead861a3392b1df364f158a22"
-repo-rev = "main"
-repo-url = "https://github.com/CliMA/ClimaTimeSteppers.jl.git"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
 version = "0.7.32"
 
@@ -410,21 +408,19 @@ version = "0.7.32"
 
 [[deps.ClimaUtilities]]
 deps = ["Artifacts", "Dates"]
-git-tree-sha1 = "af4af7e14e02861c1a13c9ee0efade4c863fab9a"
+git-tree-sha1 = "9641bc5261562817fad2472f85325d8ae3047ac8"
 uuid = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
-version = "0.1.8"
+version = "0.1.9"
 weakdeps = ["Adapt", "CUDA", "ClimaComms", "ClimaCore", "ClimaCoreTempestRemap", "Interpolations", "NCDatasets"]
 
     [deps.ClimaUtilities.extensions]
-    CUDAUtilsExt = ["ClimaCore", "CUDA"]
-    DataHandlingExt = ["ClimaCore", "NCDatasets"]
-    InterpolationsRegridderExt = ["Interpolations", "ClimaCore"]
-    MPIUtilsExt = "ClimaComms"
-    NCFileReaderExt = "NCDatasets"
-    SpaceVaryingInputsExt = ["ClimaCore", "NCDatasets"]
-    TempestRegridderExt = "ClimaCoreTempestRemap"
-    TimeVaryingInputs0DExt = "ClimaCore"
-    TimeVaryingInputsExt = ["ClimaCore", "NCDatasets"]
+    ClimaUtilitiesClimaCommsCUDAExt = ["ClimaComms", "CUDA"]
+    ClimaUtilitiesClimaCommsExt = "ClimaComms"
+    ClimaUtilitiesClimaCoreExt = "ClimaCore"
+    ClimaUtilitiesClimaCoreInterpolationsExt = ["ClimaCore", "Interpolations"]
+    ClimaUtilitiesClimaCoreNCDatasetsExt = ["ClimaCore", "NCDatasets"]
+    ClimaUtilitiesClimaCoreTempestRemapExt = "ClimaCoreTempestRemap"
+    ClimaUtilitiesNCDatasetsExt = "NCDatasets"
 
 [[deps.CloseOpenIntervals]]
 deps = ["Static", "StaticArrayInterface"]
@@ -622,9 +618,9 @@ version = "0.1.0+0"
 
 [[deps.DiffEqBase]]
 deps = ["ArrayInterface", "ConcreteStructs", "DataStructures", "DocStringExtensions", "EnumX", "EnzymeCore", "FastBroadcast", "FastClosures", "ForwardDiff", "FunctionWrappers", "FunctionWrappersWrappers", "LinearAlgebra", "Logging", "Markdown", "MuladdMacro", "Parameters", "PreallocationTools", "PrecompileTools", "Printf", "RecursiveArrayTools", "Reexport", "SciMLBase", "SciMLOperators", "Setfield", "SparseArrays", "Static", "StaticArraysCore", "Statistics", "Tricks", "TruncatedStacktraces"]
-git-tree-sha1 = "37d49a1f8eedfe68b7622075ff3ebe3dd0e8f327"
+git-tree-sha1 = "2c6b7bf16fd850c551a765e313e7522ba455cbfd"
 uuid = "2b5f629d-d688-5b77-993f-72d75c75574e"
-version = "6.151.2"
+version = "6.151.4"
 
     [deps.DiffEqBase.extensions]
     DiffEqBaseCUDAExt = "CUDA"
@@ -1170,9 +1166,9 @@ version = "1.4.0"
 
 [[deps.Insolation]]
 deps = ["Artifacts", "Dates", "DelimitedFiles", "Interpolations"]
-git-tree-sha1 = "1a2a8e1f202523619225fb54adf458b9345cee9b"
+git-tree-sha1 = "16912df0f91cf8bb100a4fe0730b7befab55f0d0"
 uuid = "e98cc03f-d57e-4e3c-b70c-8d51efe9e0d8"
-version = "0.9.2"
+version = "0.9.3"
 weakdeps = ["ClimaParams"]
 
     [deps.Insolation.extensions]
@@ -1255,9 +1251,9 @@ version = "1.0.0"
 
 [[deps.JET]]
 deps = ["CodeTracking", "InteractiveUtils", "JuliaInterpreter", "LoweredCodeUtils", "MacroTools", "Pkg", "PrecompileTools", "Preferences", "Test"]
-git-tree-sha1 = "bfac8da286c7a14e9b4201756ee80ae88200e6a6"
+git-tree-sha1 = "254e8329253599df89d2e9b3d28089e5483439ce"
 uuid = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
-version = "0.9.2"
+version = "0.9.3"
 
     [deps.JET.extensions]
     ReviseExt = "Revise"
@@ -2111,10 +2107,10 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
-deps = ["Adapt", "Artifacts", "ClimaComms", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
-git-tree-sha1 = "99c20537c2df9010863e7ee641a2ecb214898b0f"
+deps = ["Adapt", "Artifacts", "ClimaComms", "DocStringExtensions", "Random"]
+git-tree-sha1 = "f68548d7d1b314c8a9dcae14601e66115a363624"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.14.0"
+version = "0.15.0"
 weakdeps = ["CUDA", "ClimaParams"]
 
     [deps.RRTMGP.extensions]
@@ -2257,9 +2253,9 @@ version = "0.6.42"
 
 [[deps.SciMLBase]]
 deps = ["ADTypes", "Accessors", "ArrayInterface", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "PrecompileTools", "Preferences", "Printf", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "SciMLStructures", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables"]
-git-tree-sha1 = "03e56d028b9825e087cf8bd8a1fa44af5d270ddf"
+git-tree-sha1 = "7a6c5c8c38d2e37f45d4686c3598c20c1aebf48e"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "2.41.2"
+version = "2.41.3"
 
     [deps.SciMLBase.extensions]
     SciMLBaseChainRulesCoreExt = "ChainRulesCore"
@@ -2700,6 +2696,12 @@ version = "0.1.4"
 git-tree-sha1 = "c2d0db3ef09f1942d08ea455a9e252594be5f3b6"
 uuid = "4004b06d-e244-455f-a6ce-a5f9919cc534"
 version = "1.0.1"
+
+[[deps.VectorInterface]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "7aff7d62bffad9bba9928eb6ab55226b32a351eb"
+uuid = "409d34a3-91d5-4945-b6ec-7529ddf182d8"
+version = "0.4.6"
 
 [[deps.VectorizationBase]]
 deps = ["ArrayInterface", "CPUSummary", "HostCPUFeatures", "IfElse", "LayoutPointers", "Libdl", "LinearAlgebra", "SIMDTypes", "Static", "StaticArrayInterface"]

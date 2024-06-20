@@ -1,6 +1,5 @@
 dt_save_state_to_disk: "10secs"
 x_max: 10000.0
-hyperdiff: "true"
 z_elem: 45
 dt: "1secs"
 t_end: "100secs"
@@ -18,3 +17,4 @@ diagnostics:
     period: 10mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
     period: 10mins
+ode_algo: ARS343

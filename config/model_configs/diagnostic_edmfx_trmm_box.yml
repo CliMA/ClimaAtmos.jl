@@ -12,10 +12,10 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil
+call_cloud_diagnostics_per_stage: true
 apply_limiter: false
 precip_model: "1M"
 config: box
-hyperdiff: "true"
 x_max: 1e8
 y_max: 1e8
 x_elem: 2
@@ -36,3 +36,4 @@ diagnostics:
     period: 10mins
   - short_name: [husra, hussn]
     period: 10mins
+ode_algo: ARS343
