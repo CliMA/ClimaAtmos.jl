@@ -154,10 +154,25 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, t_start, dt)
         @info "$writer_str: $diags_outputs"
     end
 
-    function WhenRSUTIsNaN(integrator)
+    # function WhenRSUTIsNaN(integrator)
+    #     nlevels = Spaces.nlevels(axes(integrator.u.c))
+    #     return any(
+    #         isnan,
+    #         parent(
+    #             Fields.level(
+    #                 Fields.array2field(
+    #                     integrator.p.radiation.radiation_model.face_sw_flux_up,
+    #                     axes(integrator.u.f),
+    #                 ),
+    #                 nlevels + half,
+    #             ),
+    #         ),
+    #     )
+    # end
+
+    function WhenRSUTIsLarge(integrator)
         nlevels = Spaces.nlevels(axes(integrator.u.c))
-        return any(
-            isnan,
+        return maximum(
             parent(
                 Fields.level(
                     Fields.array2field(
@@ -167,7 +182,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, t_start, dt)
                     nlevels + half,
                 ),
             ),
-        )
+        ) > 300
     end
 
     short_names_debug = ["ta", "hus", "wa"]
@@ -176,8 +191,8 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, t_start, dt)
         debug_diagnostics = [
             CAD.ScheduledDiagnostic(
                 variable = CAD.get_diagnostic_variable(short_name),
-                compute_schedule_func = WhenRSUTIsNaN,
-                output_schedule_func = WhenRSUTIsNaN,
+                compute_schedule_func = WhenRSUTIsLarge,
+                output_schedule_func = WhenRSUTIsLarge,
                 output_writer = netcdf_writer,
             ) for short_name in short_names_debug
         ]
