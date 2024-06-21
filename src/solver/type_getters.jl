@@ -348,6 +348,7 @@ function get_initial_condition(parsed_args)
         "AgnesiHProfile",
         "DryDensityCurrentProfile",
         "RisingThermalBubbleProfile",
+        "MoistBuoyantBubbleProfile",
         "ScharProfile",
         "PrecipitatingColumn",
     ]
