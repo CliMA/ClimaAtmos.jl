@@ -314,7 +314,7 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
         z_r = FT(250)
         r_c = FT(1)
         θ_b = FT(300)
-        θ_c = FT(0.5)
+        θ_c = FT(1)
         cp_d = CAP.cp_d(params)
         cv_d = CAP.cv_d(params)
         p_0 = CAP.p_ref_theta(params)
@@ -366,13 +366,13 @@ function (initial_condition::MoistBuoyantBubbleProfile)(params)
         thermo_params = CAP.thermodynamics_params(params)
         ndims = length(propertynames(local_geometry.coordinates))
         (; x, z) = local_geometry.coordinates
-        x_c = FT(10e3)
-        x_r = FT(2e3)
-        z_c = FT(2e3)
-        z_r = FT(2e3)
+        x_c = FT(5e3)
+        x_r = FT(250)
+        z_c = FT(350)
+        z_r = FT(250)
         r_c = FT(1)
         θ_b = FT(300)
-        θ_c = FT(2)
+        θ_c = FT(0.5)
         cp_d = CAP.cp_d(params)
         cv_d = CAP.cv_d(params)
         p_0 = CAP.p_ref_theta(params)
@@ -384,26 +384,23 @@ function (initial_condition::MoistBuoyantBubbleProfile)(params)
         r² += ((x - x_c) / x_r)^2 + ((z - z_c) / z_r)^2
         if ndims == 3
             (; y) = local_geometry.coordinates
-            y_c = FT(10e3)
-            y_r = FT(2e3)
+            y_c = FT(500)
+            y_r = FT(250)
             r² += ((y - y_c) / y_r)^2
         end
         θ_p =
             sqrt(r²) < r_c ? θ_c * (FT(1) + cospi(sqrt(r²) / r_c)) :
             FT(0) # potential temperature perturbation
         θ = θ_b + θ_p # potential temperature
-        q_tot = FT(0.0196); # constant moisture
+        q_tot = FT(0.0196) # constant moisture
         cp_m = TD.cp_m(thermo_params, TD.PhasePartition(q_tot))
         R_m = TD.gas_constant_air(thermo_params, TD.PhasePartition(q_tot))
         π_exn = FT(1) - grav * z / cp_m / θ # exner function
-        T = π_exn * θ # temperature
         p = p_0 * π_exn^(cp_m / R_m) # pressure
-        ρ = p / R_m / T # density
-
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T,q_tot),
+            thermo_state = TD.PhaseEquil_pθq(thermo_params, p, θ,q_tot),
         )
     end
     return local_state
