@@ -67,7 +67,7 @@ function vertical_diffusion_boundary_layer_tendency!(
         @. ᶜρχₜ_diffusion =
             ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜχ)))
         @. ᶜρχₜ -= ᶜρχₜ_diffusion
-        if !(χ_name in (:q_rai, :q_sno))
+        if !(χ_name in (:q_rai, :q_sno, :n_rai))
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
         end
     end

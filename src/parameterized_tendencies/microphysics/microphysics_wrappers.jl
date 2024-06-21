@@ -264,6 +264,74 @@ function compute_precipitation_sources!(
     @. Seₜᵖ += Sᵖ * Lf(thp, ts)
     #! format: on
 end
+function compute_precipitation_sources2M!(
+    Sᵖ,
+    Sqₜᵖ,
+    Sqᵣᵖ,
+    SNᵣᵖ,
+    SNₗᵖ,
+    Seₜᵖ,
+    ρ,
+    qᵣ,
+    Nᵣ,
+    Nₗ,
+    ts,
+    Φ,
+    dt,
+    mp,
+    thp,
+)
+    FT = eltype(thp)
+    # @. Sqₜᵖ = FT(0) should work after fixing
+    # https://github.com/CliMA/ClimaCore.jl/issues/1786
+    @. Sqₜᵖ = ρ * FT(0)
+    @. Sqᵣᵖ = ρ * FT(0)
+    @. SNᵣᵖ = ρ * FT(0)
+    @. SNₗᵖ = ρ * FT(0)
+    @. Seₜᵖ = ρ * FT(0)
+
+    #! format: off
+    # rain autoconversion: q_liq -> q_rain
+    @. Sᵖ = min(
+        limit(qₗ(thp, ts), dt, 5),
+        CM1.conv_q_liq_to_q_rai(mp.pr.acnv1M, qₗ(thp, ts), true),
+    )
+    @. Sqₜᵖ -= Sᵖ
+    @. Sqᵣᵖ += Sᵖ
+    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+
+    #TODO - add sources
+    #    # autoconversion liquid to rain (mass)
+    #    @. S₁ = limit(q_liq, dt, CM2.autoconversion(sb2006.acnv, q_liq, q_rai, ρ, N_liq).dq_rai_dt)
+    #    @. aux.precip_sources += to_sources(-S₁, -S₁, S₁, 0, 0, 0)
+
+    #    # autoconversion liquid to rain (number)
+    #    @. S₂ = limit(N_liq, dt, CM2.autoconversion(sb2006.acnv, q_liq, q_rai, ρ, N_liq).dN_rai_dt, 2)
+    #    @. aux.precip_sources += to_sources(0, 0, 0, 0, -2 * S₂, S₂)
+    #    # liquid self_collection
+    #    @. S₁ = -limit(N_liq, dt, -CM2.liquid_self_collection(sb2006.acnv, q_liq, ρ, -2 * S₂))
+    #    @. aux.precip_sources += to_sources(0, 0, 0, 0, S₁, 0)
+
+    #    # rain self_collection
+    #    @. S₁ = CM2.rain_self_collection(sb2006.pdf_r, sb2006.self, q_rai, ρ, N_rai)
+    #    @. aux.precip_sources += to_sources(0, 0, 0, 0, 0, -limit(N_rai, dt, -S₁))
+    #    # rain breakup
+    #    @. aux.precip_sources += to_sources(
+    #        0,
+    #        0,
+    #        0,
+    #        0,
+    #        0,
+    #        limit(N_rai, dt, CM2.rain_breakup(sb2006.pdf_r, sb2006.brek, q_rai, ρ, N_rai, S₁)),
+    #    )
+
+    #    # accretion cloud water + rain
+    #    @. S₁ = limit(q_liq, dt, CM2.accretion(sb2006, q_liq, q_rai, ρ, N_liq).dq_rai_dt)
+    #    @. S₂ = -limit(N_liq, dt, -CM2.accretion(sb2006, q_liq, q_rai, ρ, N_liq).dN_liq_dt)
+    #    @. aux.precip_sources += to_sources(-S₁, -S₁, S₁, 0, S₂, 0)
+
+
+end
 
 """
     compute_precipitation_heating(Seₜᵖ, ᶜwᵣ, ᶜwₛ, ᶜu, qᵣ, qₛ, ᶜts, thp)
@@ -303,6 +371,23 @@ function compute_precipitation_heating!(
     @. ᶜSeₜᵖ -= dot(ᶜ∇T, (ᶜu - C123(Geometry.WVector(ᶜwᵣ)))) * cᵥₗ(thp) * ᶜqᵣ
     @. ᶜSeₜᵖ -= dot(ᶜ∇T, (ᶜu - C123(Geometry.WVector(ᶜwₛ)))) * cᵥᵢ(thp) * ᶜqₛ
 end
+function compute_precipitation_heating!(
+    ᶜSeₜᵖ,
+    ᶜwᵣ,
+    ᶜu,
+    ᶜqᵣ,
+    ᶜts,
+    ᶜ∇T,
+    thp,
+)
+    # compute full temperature gradient
+    @. ᶜ∇T = CT123(ᶜgradᵥ(ᶠinterp(Tₐ(thp, ᶜts))))
+    @. ᶜ∇T += CT123(gradₕ(Tₐ(thp, ᶜts)))
+    # dot product with effective velocity of precipitation
+    # (times q and specific heat)
+    @. ᶜSeₜᵖ -= dot(ᶜ∇T, (ᶜu - C123(Geometry.WVector(ᶜwᵣ)))) * cᵥₗ(thp) * ᶜqᵣ
+end
+
 """
     compute_precipitation_sinks!(Sᵖ, Sqₜᵖ, Sqᵣᵖ, Sqₛᵖ, Seₜᵖ, ρ, qᵣ, qₛ, ts, Φ, dt, mp, thp)
 
@@ -368,5 +453,59 @@ function compute_precipitation_sinks!(
     @. Sqₜᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ
     @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+    #! format: on
+end
+
+"""
+    compute_precipitation_sinks2M!(Sᵖ, Sqₜᵖ, Sqᵣᵖ, Snᵣᵖ, Seₜᵖ, ρ, qᵣ, Nᵣ, ts, Φ, dt, mp, thp)
+
+ - Sᵖ - a temporary containter to help compute precipitation source terms
+ - Sqₜᵖ, Sqᵣᵖ, Snᵣᵖ, Seₜᵖ - cached storage for precipitation source terms
+ - ρ - air density
+ - qᵣ - rain specific humidity [kg/kg]
+ - Nᵣ - rain number concentration [1/m3]
+ - ts - thermodynamic state (see td package for details)
+ - Φ - geopotential
+ - dt - model time step
+ - thp, cmp - structs with thermodynamic and microphysics parameters
+
+Returns the q and N source terms due to precipitation sinks from the 2-moment scheme.
+The specific humidity source terms are defined as defined as Δmᵣ / (m_dry + m_tot)
+Also returns the total energy source term due to the microphysics processes.
+"""
+function compute_precipitation_sinks2M!(
+    Sᵖ,
+    Sqₜᵖ,
+    Sqᵣᵖ,
+    SNᵣᵖ,
+    Seₜᵖ,
+    ρ,
+    qᵣ,
+    Nᵣ
+    ts,
+    Φ,
+    dt,
+    mp,
+    thp,
+)
+    FT = eltype(Sqₜᵖ)
+    rps = (mp.sb2006, mp.aps, thp)
+
+    #! format: off
+    # evaporation: q_rai -> q_vap  (mass)
+    @. Sᵖ = -min(
+        limit(qᵣ, dt, 5),
+        -CM2.rain_evaporation(rps..., PP(thp, ts), qᵣ, ρ, Nᵣ, Tₐ(thp.ts)).evap_rate_1,
+    )
+    @. Sqₜᵖ -= Sᵖ
+    @. Sqᵣᵖ += Sᵖ
+    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+
+    # evaporation: q_rai -> q_vap  (mass)
+    @. Sᵖ = -min(
+        limit(Nᵣ, dt, 5),
+        -CM2.rain_evaporation(rps..., PP(thp, ts), qᵣ, ρ, Nᵣ, Tₐ(thp.ts)).evap_rate_0,
+    )
+    @. SNᵣᵖ += Sᵖ
     #! format: on
 end
