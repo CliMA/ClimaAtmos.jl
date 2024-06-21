@@ -1,0 +1,12 @@
+prior: prior.toml
+ensemble_size: 10
+n_iterations: 5
+observations: obs_mean.jld2
+noise: obs_noise_cov.jld2
+output_dir: output/gcm_driven_scm
+y_var_names: [thetaa, hus, clw]
+dims : 180 # num vertical levels x num variables 
+y_t_start_sec : 475200.0 # 5.5 days (LES length = 6 days)
+y_t_end_sec : 518400.0 # 6.0 days 
+g_t_start_sec : 216000.0 # 2.5 days(SCM length = 3 days)
+g_t_end_sec : 259200.0 # 3 days
