@@ -255,7 +255,9 @@ function (surface_setup::GCMDriven)(params)
     imin = 100
     T, lhf, shf = FT.(gcm_surface_conditions(external_forcing_file, imin))
     z0 = FT(1e-4)  # zrough
-    parameterization = MoninObukhov(; z0, fluxes = HeatFluxes(; lhf, shf))
+    ustar = FT(0.28)
+    parameterization =
+        MoninObukhov(; z0, fluxes = HeatFluxes(; shf, lhf), ustar)
     return SurfaceState(; parameterization, T)
 end
 
