@@ -138,9 +138,9 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.AtmosphericProfilesLibrary]]
 deps = ["Dierckx", "LinearAlgebra"]
-git-tree-sha1 = "c6be1ce28b7870a60400c51c75dc1b08d6a8dd73"
+git-tree-sha1 = "5c63ec6a9d190d2c10bb2045a8ccbe3a45cf7b88"
 uuid = "86bc3604-9858-485a-bdbe-831ec50de11d"
-version = "0.1.4"
+version = "0.1.5"
 
 [[deps.Atomix]]
 deps = ["UnsafeAtomics"]
@@ -323,7 +323,7 @@ version = "0.5.3"
 deps = ["Adapt", "ArgParse", "ArtifactWrappers", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Colors", "Dates", "Dierckx", "DiffEqBase", "DocStringExtensions", "FastGaussQuadrature", "Insolation", "Interpolations", "IntervalSets", "Krylov", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "Pkg", "Printf", "RRTMGP", "Random", "RootSolvers", "SciMLBase", "StaticArrays", "Statistics", "StatsBase", "SurfaceFluxes", "Thermodynamics", "YAML"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
-version = "0.26.1"
+version = "0.26.2"
 
 [[deps.ClimaComms]]
 git-tree-sha1 = "2ca8c9ca6131a7be8ca262e6db79bc7aa94ab597"
@@ -764,9 +764,9 @@ uuid = "4e289a0a-7415-4d19-859d-a7e5c4648b56"
 version = "1.0.4"
 
 [[deps.EnzymeCore]]
-git-tree-sha1 = "88bc63137eb033acc3afe1b9875717889c718c46"
+git-tree-sha1 = "3a3177ba05b4763234819060fb6c2e1613379ca6"
 uuid = "f151be2c-9106-41f4-ab19-57ee4f262869"
-version = "0.7.5"
+version = "0.7.6"
 weakdeps = ["Adapt"]
 
     [deps.EnzymeCore.extensions]
@@ -1255,9 +1255,9 @@ version = "1.0.0"
 
 [[deps.JET]]
 deps = ["CodeTracking", "InteractiveUtils", "JuliaInterpreter", "LoweredCodeUtils", "MacroTools", "Pkg", "PrecompileTools", "Preferences", "Test"]
-git-tree-sha1 = "254e8329253599df89d2e9b3d28089e5483439ce"
+git-tree-sha1 = "57c326b8a110b6c7104a41f8978dc41ec0d42b4d"
 uuid = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
-version = "0.9.3"
+version = "0.9.4"
 
     [deps.JET.extensions]
     ReviseExt = "Revise"
