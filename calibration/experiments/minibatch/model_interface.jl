@@ -5,13 +5,19 @@ import ClimaComms
 using ClimaUtilities.ClimaArtifacts
 import ClimaCalibrate:
     set_up_forward_model, run_forward_model, path_to_ensemble_member
+import EnsembleKalmanProcesses as EKP
+using JLD2
 
-get_forcing_file(i)
-# Varying: cfsite, month, forcing model type
-# "/groups/esm/zhaoyi/GCMForcedLES/cfsite/07/HadGEM2-A/amip/Output.cfsite23_HadGEM2-A_amip_2004-2008.07.4x/stats/Stats.cfsite23_HadGEM2-A_amip_2004-2008.07.nc"
+include("get_les_metadata.jl")
 
-const config_dict = YAML.load_file(joinpath(@__DIR__, "experiment_config.yml"))
-const output_dir = config_dict["output_dir"]
+const experiment_config_dict = YAML.load_file(joinpath(@__DIR__, "experiment_config.yml"))
+const output_dir = experiment_config_dict["output_dir"]
+const num_les_cases = experiment_config_dict["num_les_cases"]
+
+
+function get_forcing_file(i, ref_paths)
+    return ref_paths[i]
+end
 
 """
     set_up_forward_model(member, iteration, experiment_dir::AbstractString)
@@ -35,11 +41,14 @@ function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
         config_dict["toml"] = [parameter_path]
     end
     config_dict["output_default_diagnostics"] = false
+
+    # ref_paths = get_all_les_paths()[1:num_les_cases]
+    ref_paths = get_les_calibration_library()
     atmos_configs = map(EKP.get_current_minibatch(eki)) do i
         config = deepcopy(config_dict)
-        config["external_forcing_file"] = get_forcing_file(i)
-        config["output_dir"] = config["output_dir"] * "_$i"
-        CA.AtmosConfig.(config)
+        config["external_forcing_file"] = get_forcing_file(i, ref_paths)
+        config["output_dir"] = joinpath(member_path, "config_$i")
+        CA.AtmosConfig(config)
     end
     return atmos_configs
 end
@@ -50,7 +59,7 @@ end
 Run the atmosphere model with the given an AtmosConfig object.
 Currently only has basic error handling.
 """
-function run_forward_model(atmos_configs::Vector{CA.AtmosConfig})
+function run_forward_model(atmos_configs)#::Vector{CA.AtmosConfig})
     for atmos_config in atmos_configs
         simulation = CA.get_simulation(atmos_config)
         sol_res = CA.solve_atmos!(simulation)
