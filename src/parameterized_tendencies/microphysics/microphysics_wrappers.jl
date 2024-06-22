@@ -305,6 +305,28 @@ function compute_precipitation_sources2M!(
     #    @. S₁ = limit(q_liq, dt, CM2.autoconversion(sb2006.acnv, q_liq, q_rai, ρ, N_liq).dq_rai_dt)
     #    @. aux.precip_sources += to_sources(-S₁, -S₁, S₁, 0, 0, 0)
 
+
+
+    # TODO - only do activation at cloud base
+    #FT = eltype(q_tot)
+    #S_Nl::FT = FT(0)
+
+    #q = TD.PhasePartition(q_tot, q_liq, q_ice)
+    #S::FT = TD.supersaturation(thermo_params, q, ρ, T, TD.Liquid())
+
+    #(; r_dry, std_dry, κ) = kid_params
+    #w = ρw / ρ
+
+    #aerosol_distribution =
+    #    CMAM.AerosolDistribution((CMAM.Mode_κ(r_dry, std_dry, N_aer, (FT(1),), (FT(1),), (FT(0),), (κ,)),))
+    #N_act = CMAA.total_N_activated(activation_params, aerosol_distribution, air_params, thermo_params, T, p, w, q)
+
+    ## Convert the total activated number to tendency
+    #S_Nl = ifelse(S < 0 || isnan(N_act), FT(0), max(FT(0), N_act - N_liq) / dt)
+
+
+
+
     #    # autoconversion liquid to rain (number)
     #    @. S₂ = limit(N_liq, dt, CM2.autoconversion(sb2006.acnv, q_liq, q_rai, ρ, N_liq).dN_rai_dt, 2)
     #    @. aux.precip_sources += to_sources(0, 0, 0, 0, -2 * S₂, S₂)
@@ -501,7 +523,7 @@ function compute_precipitation_sinks2M!(
     @. Sqᵣᵖ += Sᵖ
     @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
 
-    # evaporation: q_rai -> q_vap  (mass)
+    # evaporation: q_rai -> q_vap  (number)
     @. Sᵖ = -min(
         limit(Nᵣ, dt, 5),
         -CM2.rain_evaporation(rps..., PP(thp, ts), qᵣ, ρ, Nᵣ, Tₐ(thp.ts)).evap_rate_0,
