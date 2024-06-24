@@ -26,5 +26,5 @@ edmfx_sgs_diffusive_flux: true
 rayleigh_sponge: true
 dt_save_state_to_disk: "10days"
 dt: "100secs"
-t_end: "30days"
+t_end: "120days"
 toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_progedmf_0M.toml]
