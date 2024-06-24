@@ -11,7 +11,6 @@ const Iₗ = TD.internal_energy_liquid
 const Iᵢ = TD.internal_energy_ice
 const Lf = TD.latent_heat_fusion
 const Tₐ = TD.air_temperature
-const PP = TD.PhasePartition
 const qᵥ = TD.vapor_specific_humidity
 qₜ(thp, ts) = TD.PhasePartition(thp, ts).tot
 qₗ(thp, ts) = TD.PhasePartition(thp, ts).liq
@@ -266,6 +265,7 @@ function compute_precipitation_sources!(
 end
 function compute_precipitation_sources2M!(
     Sᵖ,
+    N_act,
     Sqₜᵖ,
     Sqᵣᵖ,
     SNᵣᵖ,
@@ -277,6 +277,8 @@ function compute_precipitation_sources2M!(
     Nₗ,
     ts,
     Φ,
+    p,
+    w,
     dt,
     mp,
     thp,
@@ -291,68 +293,76 @@ function compute_precipitation_sources2M!(
     @. Seₜᵖ = ρ * FT(0)
 
     #! format: off
-    # rain autoconversion: q_liq -> q_rain
+
+    # TODO - only do activation at cloud base
+    @. Sᵖ = TD.supersaturation(thp, PP(thp, ts), ρ, Tₐ(thp, ts), TD.Liquid())
+    # TODO - pass in background aerosol as parameters
+    r_dry = FT(0.1 * 1e-6)
+    std_dry = FT(1.1)
+    κ = FT(1.2)
+    N_aer = FT(1000 * 1e6)
+    @. N_act = CMAA.total_N_activated(
+        activation_params,
+        CMAM.AerosolDistribution(
+            (CMAM.Mode_κ(r_dry, std_dry, N_aer, (FT(1),), (FT(1),), (FT(0),), (κ,)),)
+        )
+        mp.aps,
+        thp,
+        Tₐ(thp, ts),
+        p,
+        w,
+        PP(thp, ts),
+    )
+    # Convert the total activated number to tendency
+    @. SNₗᵖ = ifelse(Sᵖ < 0 || isnan(N_act), FT(0), max(FT(0), N_act - Nₗ) / dt)
+
+    # autoconversion liquid to rain (mass)
     @. Sᵖ = min(
         limit(qₗ(thp, ts), dt, 5),
-        CM1.conv_q_liq_to_q_rai(mp.pr.acnv1M, qₗ(thp, ts), true),
+        CM2.autoconversion(mp.sb2006.acnv, qₗ(thp, ts), qᵣ, ρ, Nₗ).dq_rai_dt,
     )
     @. Sqₜᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
     @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
 
-    #TODO - add sources
-    #    # autoconversion liquid to rain (mass)
-    #    @. S₁ = limit(q_liq, dt, CM2.autoconversion(sb2006.acnv, q_liq, q_rai, ρ, N_liq).dq_rai_dt)
-    #    @. aux.precip_sources += to_sources(-S₁, -S₁, S₁, 0, 0, 0)
+    # autoconversion liquid to rain (number)
+    @. Sᵖ = min(
+        limit(Nₗ, dt,  5),
+        CM2.autoconversion(mp.sb2006.acnv, qₗ(thp, ts), qᵣ, ρ, Nₗ).dN_rai_dt,
+    )
+    @. SNₗᵖ -= 2 * Sᵖ
+    @. SNᵣᵖ += Sᵖ
+    # liquid self_collection
+    @. SNₗᵖ -= min(
+        limit(Nₗ, dt, 5),
+        -CM2.liquid_self_collection(mp.sb2006.acnv, qₗ, ρ, -2 * Sᵖ),
+    )
 
+    # rain self_collection
+    @. Sᵖ = -min(
+        limit(Nᵣ, dt, 5),
+        -CM2.rain_self_collection(mp.sb2006.pdf_r, mp.sb2006.self, qᵣ, ρ, Nᵣ),
+    )
+    @. SNᵣᵖ += Sᵖ
+    # rain breakup
+    @. SNᵣᵖ += min(
+        limit(Nᵣ, dt, 5),
+        CM2.rain_breakup(mp.sb2006.pdf_r, mp.sb2006.brek, qᵣ, ρ, Nᵣ, Sᵖ),
+    )
 
-
-    # TODO - only do activation at cloud base
-    #FT = eltype(q_tot)
-    #S_Nl::FT = FT(0)
-
-    #q = TD.PhasePartition(q_tot, q_liq, q_ice)
-    #S::FT = TD.supersaturation(thermo_params, q, ρ, T, TD.Liquid())
-
-    #(; r_dry, std_dry, κ) = kid_params
-    #w = ρw / ρ
-
-    #aerosol_distribution =
-    #    CMAM.AerosolDistribution((CMAM.Mode_κ(r_dry, std_dry, N_aer, (FT(1),), (FT(1),), (FT(0),), (κ,)),))
-    #N_act = CMAA.total_N_activated(activation_params, aerosol_distribution, air_params, thermo_params, T, p, w, q)
-
-    ## Convert the total activated number to tendency
-    #S_Nl = ifelse(S < 0 || isnan(N_act), FT(0), max(FT(0), N_act - N_liq) / dt)
-
-
-
-
-    #    # autoconversion liquid to rain (number)
-    #    @. S₂ = limit(N_liq, dt, CM2.autoconversion(sb2006.acnv, q_liq, q_rai, ρ, N_liq).dN_rai_dt, 2)
-    #    @. aux.precip_sources += to_sources(0, 0, 0, 0, -2 * S₂, S₂)
-    #    # liquid self_collection
-    #    @. S₁ = -limit(N_liq, dt, -CM2.liquid_self_collection(sb2006.acnv, q_liq, ρ, -2 * S₂))
-    #    @. aux.precip_sources += to_sources(0, 0, 0, 0, S₁, 0)
-
-    #    # rain self_collection
-    #    @. S₁ = CM2.rain_self_collection(sb2006.pdf_r, sb2006.self, q_rai, ρ, N_rai)
-    #    @. aux.precip_sources += to_sources(0, 0, 0, 0, 0, -limit(N_rai, dt, -S₁))
-    #    # rain breakup
-    #    @. aux.precip_sources += to_sources(
-    #        0,
-    #        0,
-    #        0,
-    #        0,
-    #        0,
-    #        limit(N_rai, dt, CM2.rain_breakup(sb2006.pdf_r, sb2006.brek, q_rai, ρ, N_rai, S₁)),
-    #    )
-
-    #    # accretion cloud water + rain
-    #    @. S₁ = limit(q_liq, dt, CM2.accretion(sb2006, q_liq, q_rai, ρ, N_liq).dq_rai_dt)
-    #    @. S₂ = -limit(N_liq, dt, -CM2.accretion(sb2006, q_liq, q_rai, ρ, N_liq).dN_liq_dt)
-    #    @. aux.precip_sources += to_sources(-S₁, -S₁, S₁, 0, S₂, 0)
-
-
+    # accretion cloud water + rain
+    @. Sᵖ = min(
+        limit(qₗ(thp, ts), dt, 5),
+        CM2.accretion(mp.sb2006, qₗ(thp, ts), qᵣ, ρ, Nₗ).dq_rai_dt
+    )
+    @. Sqₜᵖ -= Sᵖ
+    @. Sqᵣᵖ += Sᵖ
+    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+    @. Sᵖ = -min(
+        limit(Nₗ, dt, 5),
+        -CM2.accretion(mp.sb2006, qₗ(thp, ts), qᵣ, ρ, Nₗ).dN_liq_dt,
+    )
+    @. SNₗᵖ += Sᵖ
 end
 
 """
@@ -517,7 +527,7 @@ function compute_precipitation_sinks2M!(
     # evaporation: q_rai -> q_vap  (mass)
     @. Sᵖ = -min(
         limit(qᵣ, dt, 5),
-        -CM2.rain_evaporation(rps..., PP(thp, ts), qᵣ, ρ, Nᵣ, Tₐ(thp.ts)).evap_rate_1,
+        -CM2.rain_evaporation(rps..., PP(thp, ts), qᵣ, ρ, Nᵣ, Tₐ(thp, ts)).evap_rate_1,
     )
     @. Sqₜᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
@@ -526,7 +536,7 @@ function compute_precipitation_sinks2M!(
     # evaporation: q_rai -> q_vap  (number)
     @. Sᵖ = -min(
         limit(Nᵣ, dt, 5),
-        -CM2.rain_evaporation(rps..., PP(thp, ts), qᵣ, ρ, Nᵣ, Tₐ(thp.ts)).evap_rate_0,
+        -CM2.rain_evaporation(rps..., PP(thp, ts), qᵣ, ρ, Nᵣ, Tₐ(thp, ts)).evap_rate_0,
     )
     @. SNᵣᵖ += Sᵖ
     #! format: on
