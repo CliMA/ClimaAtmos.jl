@@ -15,6 +15,7 @@ struct Microphysics1Moment <: AbstractPrecipitationModel end
 abstract type AbstractCloudModel end
 struct GridScaleCloud <: AbstractCloudModel end
 struct QuadratureCloud <: AbstractCloudModel end
+struct DiagnosticEDMFCloud <: AbstractCloudModel end
 
 abstract type AbstractModelConfig end
 struct SingleColumnModel <: AbstractModelConfig end
