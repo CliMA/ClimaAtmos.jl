@@ -213,7 +213,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         "gray",
         "allsky",
         "allskywithclear",
-        "DYCOMS_RF01",
+        "DYCOMS",
         "TRMM_LBA",
     )
     return if radiation_name == "clearsky"
@@ -244,8 +244,8 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
             idealized_clouds,
             add_isothermal_boundary_layer,
         )
-    elseif radiation_name == "DYCOMS_RF01"
-        RadiationDYCOMS_RF01{FT}()
+    elseif radiation_name == "DYCOMS"
+        RadiationDYCOMS{FT}()
     elseif radiation_name == "TRMM_LBA"
         RadiationTRMM_LBA(FT)
     else
@@ -311,7 +311,7 @@ function get_subsidence_model(parsed_args, radiation_mode, FT)
     elseif subsidence == "Rico"
         APL.Rico_subsidence(FT)
     elseif subsidence == "DYCOMS"
-        @assert radiation_mode isa RadiationDYCOMS_RF01
+        @assert radiation_mode isa RadiationDYCOMS
         z -> -z * radiation_mode.divergence
     else
         error("Uncaught case")
