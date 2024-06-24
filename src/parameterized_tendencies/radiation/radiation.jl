@@ -112,6 +112,7 @@ function radiation_model_cache(
             kwargs = (;
                 use_global_means_for_well_mixed_gases = true,
                 center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
+                center_relative_humidity = NaN, # initialized in callback
                 center_volume_mixing_ratio_o3,
                 volume_mixing_ratio_co2 = input_vmr("carbon_dioxide_GM"),
                 volume_mixing_ratio_n2o = input_vmr("nitrous_oxide_GM"),
