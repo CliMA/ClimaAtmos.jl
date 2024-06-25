@@ -18,7 +18,8 @@ function update_surface_conditions!(Y, p, t)
     (; ᶜts, ᶜu, sfc_conditions) = p.precomputed
     (; params, sfc_setup, atmos) = p
     thermo_params = CAP.thermodynamics_params(params)
-    surface_params = CAP.surface_fluxes_params(params)
+    surface_fluxes_params = CAP.surface_fluxes_params(params)
+    surface_temp_params = CAP.surface_temp_params(params)
     int_ts_values = Fields.field_values(Fields.level(ᶜts, 1))
     int_u_values = Fields.field_values(Fields.level(ᶜu, 1))
     int_z_values =
@@ -36,7 +37,8 @@ function update_surface_conditions!(Y, p, t)
         projected_vector_data(CT2, int_u_values, int_local_geometry_values),
         int_z_values,
         thermo_params,
-        surface_params,
+        surface_fluxes_params,
+        surface_temp_params,
         atmos,
         sfc_temp_var,
         t,
@@ -136,7 +138,8 @@ ifelsenothing(x::Nothing, default) = default
         interior_v,
         interior_z,
         thermo_params,
-        surface_params,
+        surface_fluxes_params,
+        surface_temp_params,
         atmos,
         sfc_prognostic_temp,
         t,
@@ -153,7 +156,8 @@ function surface_state_to_conditions(
     interior_v,
     interior_z,
     thermo_params,
-    surface_params,
+    surface_fluxes_params,
+    surface_temp_params,
     atmos,
     sfc_prognostic_temp,
     t,
@@ -168,14 +172,12 @@ function surface_state_to_conditions(
         error("surface q_vap cannot be specified when using a DryModel")
 
     T = if isnothing(sfc_prognostic_temp)
-        if isnothing(surf_state.T) && (
-            coordinates isa Geometry.LatLongZPoint ||
-            coordinates isa Geometry.LatLongPoint
-        )
-            surface_temperature(atmos.sfc_temperature, coordinates)
-        elseif isnothing(surf_state.T)
-            # Assume that the latitude is 0.
-            FT(300)
+        if isnothing(surf_state.T)
+            surface_temperature(
+                atmos.sfc_temperature,
+                coordinates,
+                surface_temp_params,
+            )
         else
             surf_state.T
         end
@@ -283,7 +285,7 @@ function surface_state_to_conditions(
             end
             if isnothing(surf_state.gustiness)
                 buoyancy_flux = SF.compute_buoyancy_flux(
-                    surface_params,
+                    surface_fluxes_params,
                     shf,
                     lhf,
                     interior_ts,
@@ -326,7 +328,7 @@ function surface_state_to_conditions(
     end
 
     return atmos_surface_conditions(
-        SF.surface_conditions(surface_params, inputs),
+        SF.surface_conditions(surface_fluxes_params, inputs),
         ts,
         surface_local_geometry,
         atmos,
@@ -334,14 +336,59 @@ function surface_state_to_conditions(
     )
 end
 
-function surface_temperature(::ZonallySymmetricSST, coordinates)
+#Sphere SST distribution from Wing et al. (2023) https://gmd.copernicus.org/preprints/gmd-2023-235/
+function surface_temperature(
+    ::RCEMIPIISST,
+    coordinates::Union{Geometry.LatLongZPoint, Geometry.LatLongPoint},
+    surface_temp_params,
+)
+    (; lat) = coordinates
+    (; SST_mean, SST_delta, SST_wavelength_latitude) = surface_temp_params
+    FT = eltype(lat)
+    T = SST_mean + SST_delta / 2 * cosd(360 * lat / SST_wavelength_latitude)
+    return T
+end
+
+#Box SST distribution from Wing et al. (2023) https://gmd.copernicus.org/preprints/gmd-2023-235/
+function surface_temperature(
+    ::RCEMIPIISST,
+    coordinates::Union{Geometry.XZPoint, Geometry.XYZPoint},
+    surface_temp_params,
+)
+    (; x) = coordinates
+    (; SST_mean, SST_delta, SST_wavelength) = surface_temp_params
+    FT = eltype(x)
+    T = SST_mean - SST_delta / 2 * cos(2 * FT(pi) * x / SST_wavelength)
+    return T
+end
+
+#For non-RCEMIPII box models with prescribed surface temp, assume that the latitude is 0.
+function surface_temperature(
+    ::Union{ZonallySymmetricSST, ZonallyAsymmetricSST},
+    coordinates::Union{Geometry.XZPoint, Geometry.XYZPoint},
+    surface_temp_params,
+)
+    (; x) = coordinates
+    FT = eltype(x)
+    return FT(300)
+end
+
+function surface_temperature(
+    ::ZonallySymmetricSST,
+    coordinates::Geometry.LatLongZPoint,
+    surface_temp_params,
+)
     (; lat, z) = coordinates
     FT = eltype(lat)
     T = FT(271) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2)) - FT(6.5e-3) * z
     return T
 end
 
-function surface_temperature(::ZonallyAsymmetricSST, coordinates)
+function surface_temperature(
+    ::ZonallyAsymmetricSST,
+    coordinates::Geometry.LatLongZPoint,
+    surface_temp_params,
+)
     (; lat, long, z) = coordinates
     FT = eltype(lat)
     #Assume a surface temperature that varies with both longitude and latitude, Neale and Hoskins, 2021

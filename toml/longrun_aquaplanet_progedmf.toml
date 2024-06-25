@@ -1,0 +1,44 @@
+[zd_rayleigh]
+value = 35000.0
+
+[precipitation_timescale]
+value = 600
+
+[EDMF_surface_area]
+value = 0
+
+[EDMF_min_area]
+value = 1.0e-5
+
+[EDMF_max_area]
+value = 0.7
+
+[entr_inv_tau]
+value = 0.0002
+
+[entr_coeff]
+value = 0.2
+
+[min_area_limiter_scale]
+value = 0
+
+[min_area_limiter_power]
+value = 100
+
+[detr_inv_tau]
+value = 0
+
+[detr_coeff]
+value = 0
+
+[detr_buoy_coeff]
+value = 0
+
+[detr_vertdiv_coeff]
+value = 0
+
+[detr_massflux_vertdiv_coeff]
+value = 1
+
+[pressure_normalmode_drag_coeff]
+value = 40.0

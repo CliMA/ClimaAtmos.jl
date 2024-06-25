@@ -10,7 +10,7 @@ import .Parameters as CAP
 import RRTMGP
 import .RRTMGPInterface as RRTMGPI
 
-using Dierckx: Spline1D
+import Interpolations
 using StatsBase: mean
 
 
@@ -32,26 +32,28 @@ function radiation_model_cache(
     Y,
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
     params,
-    ᶜp; # Used for ozone
+    ᶜp, # Used for ozone
+    aerosol_names;
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
     data_loader = rrtmgp_data_loader,
 )
     context = ClimaComms.context(axes(Y.c))
     device = context.device
-    (; idealized_h2o, idealized_insolation, idealized_clouds) = radiation_mode
+    if !(radiation_mode isa RRTMGPI.GrayRadiation)
+        (; aerosol_radiation) = radiation_mode
+        if aerosol_radiation && !(any(
+            x -> x in aerosol_names,
+            ["DST01", "SSLT01", "SO4", "CB1", "CB2", "OC1", "OC2"],
+        ))
+            error(
+                "Need at least one aerosol type when aerosol radiation is turned on",
+            )
+        end
+    end
     FT = Spaces.undertype(axes(Y.c))
     DA = ClimaComms.array_type(device){FT}
     rrtmgp_params = CAP.rrtmgp_params(params)
-    if idealized_h2o && radiation_mode isa RRTMGPI.GrayRadiation
-        error("idealized_h2o can't be used with $radiation_mode")
-    end
-    if idealized_clouds && (
-        radiation_mode isa RRTMGPI.GrayRadiation ||
-        radiation_mode isa RRTMGPI.ClearSkyRadiation
-    )
-        error("idealized_clouds can't be used with $radiation_mode")
-    end
 
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
@@ -59,7 +61,7 @@ function radiation_model_cache(
     else
         latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
-    local radiation_model
+    local rrtmgp_model
     orbital_data = Insolation.OrbitalData()
     file_name = joinpath(
         "examples",
@@ -89,9 +91,13 @@ function radiation_model_cache(
                 vec(mean(reshape(input_data["ozone"][:, :, 1], n, :); dims = 2))
 
             # interpolate the ozone concentrations to our initial pressures
-            pressure2ozone = Spline1D(
-                input_center_pressure,
-                input_center_volume_mixing_ratio_o3,
+            pressure2ozone = Intp.extrapolate(
+                Intp.interpolate(
+                    (input_center_pressure,),
+                    input_center_volume_mixing_ratio_o3,
+                    Intp.Gridded(Intp.Linear()),
+                ),
+                Intp.Flat(),
             )
             if device isa ClimaComms.CUDADevice
                 fv = Fields.field_values(ᶜp)
@@ -141,8 +147,8 @@ function radiation_model_cache(
                     ice_roughness = 2,
                 )
                 ᶜz = Fields.coordinate_field(Y.c).z
-                ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
-                if idealized_clouds # icy cloud on top and wet cloud on bottom
+                ᶜΔz = Fields.Δz_field(Y.c)
+                if radiation_mode.idealized_clouds # icy cloud on top and wet cloud on bottom
                     # TODO: can we avoid using DataLayouts with this?
                     #     `ᶜis_bottom_cloud = similar(ᶜz, Bool)`
                     ᶜis_bottom_cloud = Fields.Field(
@@ -180,6 +186,15 @@ function radiation_model_cache(
                     )
                 end
             end
+
+            if aerosol_radiation
+                kwargs = (;
+                    kwargs...,
+                    center_aerosol_type = 0, # initialized in callback
+                    center_aerosol_radius = 0.2, # assuming fixed aerosol radius
+                    center_aerosol_column_mass_density = NaN, # initialized in callback
+                )
+            end
         end
 
         if RRTMGPI.requires_z(interpolation) ||
@@ -191,16 +206,9 @@ function radiation_model_cache(
             )
         end
 
-        if idealized_insolation # perpetual equinox with no diurnal cycle
-            cos_zenith = cos(FT(π) / 3)
-            weighted_irradiance =
-                @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
-                   (4 * cos_zenith)
-        else
-            cos_zenith = weighted_irradiance = NaN # initialized in callback
-        end
+        cos_zenith = weighted_irradiance = NaN # initialized in callback
 
-        radiation_model = RRTMGPI.RRTMGPModel(
+        rrtmgp_model = RRTMGPI.RRTMGPModel(
             rrtmgp_params,
             data_loader,
             context;
@@ -221,11 +229,8 @@ function radiation_model_cache(
         )
     end
     return (;
-        idealized_insolation,
         orbital_data,
-        idealized_h2o,
-        idealized_clouds,
-        radiation_model,
+        rrtmgp_model,
         insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT}),
         ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
     )

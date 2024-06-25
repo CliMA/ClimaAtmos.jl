@@ -1,0 +1,6 @@
+[atmos_held_suarez_obs]
+git-tree-sha1 = "d93ff2958e12d6bba6e8343bfa73554390df52e4"
+
+    [[atmos_held_suarez_obs.download]]
+    sha256 = "f5d63df2bab849632bd2fcd5a4e3165465d1898e1a5fbee6e5fe07f5b3e57fc3"
+    url = "https://caltech.box.com/shared/static/sbn6afsgn2xzxi5n0ffs928otstshjvi.gz"

@@ -102,12 +102,15 @@ dt_rad:
 idealized_clouds:
   help: "Use idealized clouds in radiation model [`false` (default), `true`]"
   value: false
-idealized_insolation:
-  help: "Use idealized insolation in radiation model [`false`, `true` (default)]"
-  value: true
+insolation:
+  help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`]"
+  value: "idealized"
 add_isothermal_boundary_layer:
   help: "Add an isothermal boundary layer above the domain top for radiation [`false`, `true` (default)]"
   value: true
+aerosol_radiation:
+  help: "Use aerosols in radiation [`false` (default)]"
+  value: false
 dt_cloud_fraction:
   help: "Time between calling cloud fraction update"
   value: "3hours"
@@ -138,7 +141,7 @@ reference_job_id:
   value: ~
 vert_diff:
   help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `FriersonDiffusion`]"
-  value: "false"
+  value: false
 hyperdiff:
   help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
   value: "CAM_SE"
@@ -147,7 +150,7 @@ bubble:
   value: true
 start_date:
   help: "Start date of the simulation"
-  value: "20050117"  # Where the current aerosol data begins
+  value: "20100101"
 forcing:
   help: "Forcing [`nothing` (default), `held_suarez`]"
   value: ~
@@ -173,7 +176,7 @@ surface_setup:
   help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
   value: "DefaultExchangeCoefficients"
 surface_temperature:
-  help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric']"
+  help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric', 'RCEMIPII']"
   value: "ZonallySymmetric"
 initial_condition:
   help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `AgnesiHProfile`, `ScharProfile`, `RisingThermalBubbleProfile`]"
@@ -229,9 +232,6 @@ external_forcing:
 external_forcing_file:
   help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions [`nothing` (default), `path/to/file`]"
   value: ~
-fps:
-  help: "Frames per second for animations"
-  value: 5
 subsidence:
   help: "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`]"
   value: ~
@@ -243,7 +243,7 @@ prognostic_tke:
   value: false
 prognostic_surface:
   help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `PrognosticSurfaceTemperature`, `PrescribedSurfaceTemperature`]"
-  value: "false"
+  value: false
 albedo_model:
   help: "Variable surface albedo [`ConstantAlbedo` (default), `RegressionFunctionAlbedo`, `CouplerAlbedo`]"
   value: "ConstantAlbedo"

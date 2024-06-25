@@ -41,6 +41,18 @@ function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
     CAP.TurbulenceConvectionParameters{FT}(; parameters...)
 end
 
+function SurfaceTemperatureParameters(toml_dict::CP.AbstractTOMLDict)
+    name_map = (;
+        :SST_mean => :SST_mean,
+        :SST_delta => :SST_delta,
+        :SST_wavelength => :SST_wavelength,
+        :SST_wavelength_latitude => :SST_wavelength_latitude,
+    )
+    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    FT = CP.float_type(toml_dict)
+    CAP.SurfaceTemperatureParameters{FT}(; parameters...)
+end
+
 function create_parameter_set(config::AtmosConfig)
     (; toml_dict, parsed_args) = config
     FT = CP.float_type(toml_dict)
@@ -63,6 +75,9 @@ function create_parameter_set(config::AtmosConfig)
     surface_fluxes_params =
         SF.Parameters.SurfaceFluxesParameters(toml_dict, UF.BusingerParams)
     SFP = typeof(surface_fluxes_params)
+
+    surface_temp_params = SurfaceTemperatureParameters(toml_dict)
+    STP = typeof(surface_temp_params)
 
     moisture_model = parsed_args["moist"]
     microphysics_cloud_params = if moisture_model == "nonequil"
@@ -96,6 +111,12 @@ function create_parameter_set(config::AtmosConfig)
                 ce = CM.Parameters.CollisionEff(toml_dict),
                 tv = CM.Parameters.Blk1MVelType(toml_dict),
                 aps = CM.Parameters.AirProperties(toml_dict),
+                var = CM.Parameters.VarTimescaleAcnv(toml_dict),
+                Ndp = CP.get_parameter_values(
+                    toml_dict,
+                    "prescribed_cloud_droplet_number_concentration",
+                    "ClimaAtmos",
+                ).prescribed_cloud_droplet_number_concentration,
             )
         else
             error("Invalid precip_model $(precip_model)")
@@ -128,7 +149,7 @@ function create_parameter_set(config::AtmosConfig)
         :optics_lookup_temperature_max => :optics_lookup_temperature_max,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-    return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPC, MPP, WP, SFP, TCP}(;
+    return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPC, MPP, WP, SFP, TCP, STP}(;
         parameters...,
         thermodynamics_params,
         rrtmgp_params,
@@ -138,5 +159,6 @@ function create_parameter_set(config::AtmosConfig)
         water_params,
         surface_fluxes_params,
         turbconv_params,
+        surface_temp_params,
     )
 end

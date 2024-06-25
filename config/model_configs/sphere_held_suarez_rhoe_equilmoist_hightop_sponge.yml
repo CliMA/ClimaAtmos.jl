@@ -4,7 +4,7 @@ dt: "450secs"
 z_elem: 25
 t_end: "4days"
 dz_bottom: 300.0
-vert_diff: "true"
+vert_diff: true
 forcing: "held_suarez"
 z_max: 55000.0
 precip_model: "0M"

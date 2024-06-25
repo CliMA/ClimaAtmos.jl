@@ -61,7 +61,7 @@ steps:
           slurm_time: 12:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_bw_rhoe_highres"
+          JOB_NAME: "longrun_dry_baroclinic_wave"
 
       - label: ":computer: dry baroclinic wave high res"
         command:
@@ -72,7 +72,7 @@ steps:
           slurm_time: 12:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_bw_rhoe_veryhighres"
+          JOB_NAME: "longrun_dry_baroclinic_wave_he60"
 
       - label: ":computer: baroclinic wave equilmoist"
         command:
@@ -83,7 +83,7 @@ steps:
           slurm_time: 12:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_bw_rhoe_equil_highres"
+          JOB_NAME: "longrun_moist_baroclinic_wave"
 
       - label: ":computer: baroclinic wave equilmoist high res"
         command:
@@ -94,7 +94,7 @@ steps:
           slurm_time: 12:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_bw_rhoe_equil_veryhighres"
+          JOB_NAME: "longrun_moist_baroclinic_wave_he60"
 
       - label: ":computer: dry held-suarez"
         command:
@@ -105,7 +105,7 @@ steps:
           slurm_time: 12:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_hs_rhoe_dry_55km_nz63"
+          JOB_NAME: "longrun_dry_held_suarez"
 
       - label: ":computer: held-suarez, equilmoist"
         command:
@@ -116,16 +116,15 @@ steps:
           slurm_time: 12:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_hs_rhoe_equil_55km_nz63_0M"
+          JOB_NAME: "longrun_moist_held_suarez"
 
       - label: ":computer: held-suarez equilmoist + deep-atmosphere eqns"
         command:
           - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         env:
-          CLIMACOMMS_CONTEXT: "MPI"
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_hs_rhoe_equil_55km_nz63_0M_deepatmos"
+          JOB_NAME: "longrun_moist_held_suarez_deepatmos"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
@@ -133,39 +132,16 @@ steps:
   - group: "helem 16 aquaplanet"
     steps:
 
-      - label: ":computer: aquaplanet equilmoist gray radiation + 0M microphysics"
-        command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        env:
-          CLIMACOMMS_CONTEXT: "MPI"
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 12:00:00
-
-      - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics"
+      - label: ":computer: aquaplanet equilmoist allsky radiation + 0M microphysics"
         command:
           - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_time: 12:00:00
+          slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M"
-
-      - label: ":computer: aquaplanet equilmoist clearsky radiation + diagnostic edmf + 0M microphysics"
-        command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 12:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M"
+          JOB_NAME: "longrun_aquaplanet_allsky_0M"
 
       - label: ":computer: aquaplanet equilmoist allsky radiation + diagnostic edmf + 0M microphysics"
         command:
@@ -173,65 +149,54 @@ steps:
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_time: 12:00:00
+          slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M"
+          JOB_NAME: "longrun_aquaplanet_allsky_diagedmf_0M"
       
-      - label: ":computer: aquaplanet equilmoist clearsky radiation + prognostic edmf diffusion only + 0M microphysics"
+      - label: ":computer: aquaplanet equilmoist allsky radiation + prognostic edmf diffusion only + 0M microphysics"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_time: 12:00:00
+          slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_progedmf_diffonly_0M"
+          JOB_NAME: "longrun_aquaplanet_allsky_progedmf_diffonly_0M"
 
-      - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics + earth topography"
+      - label: ":computer: aquaplanet equilmoist allsky radiation + 0M microphysics + earth topography"
         command:
           - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_time: 12:00:00
+          slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth"
+          JOB_NAME: "longrun_aquaplanet_allsky_0M_earth"
 
-      - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics + earth topography (SLEVE)"
+      - label: ":umbrella: aquaplanet equilmoist allsky radiation + 1M microphysics"
         command:
           - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_time: 6:00:00
+          slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth_sleve"
+          JOB_NAME: "longrun_aquaplanet_allsky_1M"
 
-      - label: ":umbrella: aquaplanet equilmoist clearsky radiation + 1M microphysics"
+      - label: ":computer: aquaplanet equilmoist allsky radiation + time-varying insolation + 0M microphysics + slab ocean"
         command:
           - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_time: 6:00:00
+          slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_clearsky_1M"
-
-      - label: ":computer: aquaplanet equilmoist clearsky radiation + time-varying insolation + 0M microphysics + slab ocean"
-        command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 12:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean"
+          JOB_NAME: "longrun_aquaplanet_allsky_tvinsol_0M_slabocean"
 
   - group: "DYAMOND"
 
@@ -243,7 +208,7 @@ steps:
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_time: 12:00:00
+          slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_dyamond"
@@ -258,7 +223,25 @@ steps:
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_time: 12:00:00
+          slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "amip_target_diagedmf"
+
+  # - group: "Experimental long runs"
+
+  #   steps:
+
+  #     TODO: uncomment when zalesak works
+  #     - label: ":computer: lim ARS zalesak baroclinic wave (ρe_tot) equilmoist high resolution"
+  #       command:
+  #         - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+  #       artifact_paths: "$$JOB_NAME/output_active/*"
+  #       env:
+  #         CLIMACOMMS_CONTEXT: "MPI"
+  #       agents:
+  #         slurm_ntasks: 32
+  #         slurm_mem_per_cpu: 32GB
+  #         slurm_time: 24:00:00
+  #       env:
+  #         JOB_NAME: "longrun_zalesak_tracer_energy_bw_rhoe_equil_highres"

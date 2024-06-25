@@ -12,8 +12,12 @@ const ACAP = AbstractClimaAtmosParameters
 abstract type AbstractTurbulenceConvectionParameters end
 const ATCP = AbstractTurbulenceConvectionParameters
 
+abstract type AbstractSurfaceTemperatureParameters end
+const ASTP = AbstractSurfaceTemperatureParameters
+
 Base.broadcastable(param_set::ACAP) = tuple(param_set)
 Base.broadcastable(param_set::ATCP) = tuple(param_set)
+Base.broadcastable(param_set::ASTP) = tuple(param_set)
 
 Base.@kwdef struct TurbulenceConvectionParameters{FT} <: ATCP
     surface_area::FT
@@ -44,6 +48,13 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT} <: ATCP
     max_area_limiter_power::FT
 end
 
+Base.@kwdef struct SurfaceTemperatureParameters{FT} <: ASTP
+    SST_mean::FT
+    SST_delta::FT
+    SST_wavelength::FT
+    SST_wavelength_latitude::FT
+end
+
 Base.@kwdef struct ClimaAtmosParameters{
     FT,
     TP,
@@ -54,6 +65,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     WP,
     SFP,
     TCP,
+    STP,
 } <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
@@ -63,6 +75,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     water_params::WP
     surface_fluxes_params::SFP
     turbconv_params::TCP
+    surface_temp_params::STP
     Omega::FT
     f_plane_coriolis_frequency::FT
     planet_radius::FT

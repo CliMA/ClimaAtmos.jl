@@ -1,0 +1,25 @@
+dt_save_state_to_disk: 12hours
+dt_save_to_sol: 12hours
+h_elem: 30
+z_max: 55000.0
+z_elem: 63
+dz_bottom: 30.0
+dz_top: 3000.0
+moist: equil
+precip_model: 1M
+rad: allskywithclear
+idealized_insolation: false
+dt_rad: 1hours
+vert_diff: FriersonDiffusion
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+dt_cloud_fraction: 1hours
+surface_setup: DefaultMoninObukhov
+rayleigh_sponge: true
+dt: 90secs
+t_end: 1days
+toml: [toml/longrun_aquaplanet.toml]
+output_default_diagnostics: false
+diagnostics:
+  - short_name: ["pfull", "wa", "va", "rv", "ke"]
+    period: "12hours"

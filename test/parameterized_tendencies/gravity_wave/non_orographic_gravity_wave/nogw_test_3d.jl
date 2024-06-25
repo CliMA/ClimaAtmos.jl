@@ -122,6 +122,8 @@ center_u_zonalave = mean(center_u, dims = 1)[1, :, :, :]
 center_bf_zonalave = mean(center_bf, dims = 1)[1, :, :, :]
 center_ρ_zonalave = mean(center_ρ, dims = 1)[1, :, :, :]
 
+B0 = similar(params.gw_c)
+
 # Jan
 month = Dates.month.(time)
 
@@ -140,6 +142,7 @@ for j in 1:length(lat)
         params.gw_source_ampl,
         params.gw_Bw,
         params.gw_Bn,
+        B0,
         params.gw_cw,
         params.gw_cn,
         params.gw_flag,

@@ -1,7 +1,7 @@
 agents:
   queue: clima
   slurm_mem: 8G
-  modules: julia/1.10.0 cuda/julia-pref openmpi/4.1.5-mpitrampoline nsight-systems/2024.2.1
+  modules: julia/1.10.0 cuda/julia-pref openmpi/4.1.5-mpitrampoline nsight-systems/2024.4.1
 
 env:
   JULIA_MPI_HAS_CUDA: "true"
@@ -122,6 +122,26 @@ steps:
 
   - group: "DYAMOND GPU strong scaling"
     steps:
+
+      - label: "gpu_aquaplanet_dyamond with diagnostics - strong scaling - 1 GPU"
+        command:
+          - mkdir -p gpu_aquaplanet_dyamond_diag_1process
+          - >
+            srun --cpu-bind=threads --cpus-per-task=4
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_diag_1process/output_active/report julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_diag_1process.yml
+            --job_id gpu_aquaplanet_dyamond_diag_1process
+        artifact_paths: "gpu_aquaplanet_dyamond_diag_1process/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
+        agents:
+          slurm_gpus_per_task: 1
+          slurm_cpus_per_task: 4
+          slurm_ntasks: 1
+          slurm_mem: 32G
+          slurm_time: 8:00:00
+          slurm_exclusive:
 
       - label: "gpu_aquaplanet_dyamond - strong scaling - 1 GPU"
         command:

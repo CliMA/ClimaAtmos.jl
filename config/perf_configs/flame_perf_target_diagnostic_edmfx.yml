@@ -4,7 +4,7 @@ z_elem: 25
 dt: "1secs"
 surface_setup: "DefaultExchangeCoefficients"
 t_end: "10secs"
-vert_diff: "true"
+vert_diff: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 h_elem: 12
@@ -14,11 +14,11 @@ dt_save_to_sol: "Inf"
 rad: "allskywithclear"
 log_progress: false
 dt_save_state_to_disk: "600secs"
-vert_diff: "false"
+vert_diff: false
 turbconv: "diagnostic_edmfx"
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
 edmfx_upwinding: "first_order"
 prognostic_tke: true
-edmfx_sgs_flux: true
+

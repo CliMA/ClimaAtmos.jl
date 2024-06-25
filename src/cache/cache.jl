@@ -206,7 +206,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
 
     radiation_args =
         atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
-        (params, precomputed.ᶜp) : ()
+        (params, precomputed.ᶜp, aerosol_names) : ()
 
     hyperdiff = hyperdiffusion_cache(Y, atmos)
     rayleigh_sponge = rayleigh_sponge_cache(Y, atmos)
@@ -214,7 +214,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     precipitation = precipitation_cache(Y, atmos)
     subsidence = subsidence_cache(Y, atmos)
     large_scale_advection = large_scale_advection_cache(Y, atmos)
-    external_forcing = external_forcing_cache(Y, atmos)
+    external_forcing = external_forcing_cache(Y, atmos, params)
     edmf_coriolis = edmf_coriolis_cache(Y, atmos)
     forcing = forcing_cache(Y, atmos)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)

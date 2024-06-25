@@ -39,7 +39,10 @@ struct ColumnInterpolatableField{F, D}
     function ColumnInterpolatableField(f::Fields.ColumnField)
         zdata = vec(parent(Fields.Fields.coordinate_field(f).z))
         fdata = vec(parent(f))
-        data = Dierckx.Spline1D(zdata, fdata; k = 1)
+        data = Intp.extrapolate(
+            Intp.interpolate((zdata,), fdata, Intp.Gridded(Intp.Linear())),
+            Intp.Flat(),
+        )
         return new{typeof(f), typeof(data)}(f, data)
     end
 end
@@ -710,7 +713,10 @@ end
 ## EDMF Test Cases
 ##
 # TODO: Get rid of this
-const FunctionOrSpline = Union{Dierckx.Spline1D, Function}
+import AtmosphericProfilesLibrary as APL
+
+const FunctionOrSpline =
+    Union{Function, APL.AbstractProfile, Intp.Extrapolation}
 
 """
     hydrostatic_pressure_profile(; thermo_params, p_0, [T, θ, q_tot, z_max])
@@ -1060,7 +1066,14 @@ function (initial_condition::TRMM_LBA)(params)
         q_v_sat = p_v_sat * (1 / molmass_ratio) / denominator
         return q_v_sat * measured_RH(z) / 100
     end
-    q_tot = Dierckx.Spline1D(measured_z_values, measured_q_tot_values; k = 1)
+    q_tot = Intp.extrapolate(
+        Intp.interpolate(
+            (measured_z_values,),
+            measured_q_tot_values,
+            Intp.Gridded(Intp.Linear()),
+        ),
+        Intp.Flat(),
+    )
 
     p = hydrostatic_pressure_profile(; thermo_params, p_0, T, q_tot)
     u = APL.TRMM_LBA_u(FT)
@@ -1141,10 +1154,15 @@ function (initial_condition::GCMDriven)(params)
     thermo_params = CAP.thermodynamics_params(params)
 
     # Read forcing file
-    z_gcm = gcm_z(external_forcing_file)
+    z_gcm = NC.NCDataset(external_forcing_file) do ds
+        vec(gcm_height(ds.group["site23"]))
+    end
     vars = gcm_initial_conditions(external_forcing_file)
-    θ, u, v, q_tot, ρ₀ = map(vars) do value
-        Dierckx.Spline1D(z_gcm, value; k = 1)
+    T, u, v, q_tot, ρ₀ = map(vars) do value
+        Intp.extrapolate(
+            Intp.interpolate((z_gcm,), value, Intp.Gridded(Intp.Linear())),
+            Intp.Flat(),
+        )
     end
 
     function local_state(local_geometry)
@@ -1153,10 +1171,10 @@ function (initial_condition::GCMDriven)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = ts = TD.PhaseEquil_ρθq(
+            thermo_state = ts = TD.PhaseEquil_ρTq(
                 thermo_params,
                 FT(ρ₀(z)),
-                FT(θ(z)),
+                FT(T(z)),
                 FT(q_tot(z)),
             ),
             velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
@@ -1166,22 +1184,15 @@ function (initial_condition::GCMDriven)(params)
     return local_state
 end
 
-# function gcm_z(external_forcing_file, FT::DataType)
-function gcm_z(external_forcing_file)
-    NC.NCDataset(external_forcing_file) do ds
-        gcm_driven_reference(ds, "z")[:]
-    end
-end
-
 # function gcm_initial_conditions(external_forcing_file, FT)
 function gcm_initial_conditions(external_forcing_file)
     NC.NCDataset(external_forcing_file) do ds
         (  # TODO: Cast to CuVector for GPU compatibility
-            gcm_driven_profile(ds, "thetali_mean")[:, 1],  # 1 is initial time index
-            gcm_driven_profile(ds, "u_mean")[:, 1],
-            gcm_driven_profile(ds, "v_mean")[:, 1],
-            gcm_driven_profile(ds, "qt_mean")[:, 1],
-            gcm_driven_reference(ds, "rho0")[:],
+            gcm_driven_profile_tmean(ds.group["site23"], "ta"),
+            gcm_driven_profile_tmean(ds.group["site23"], "ua"),
+            gcm_driven_profile_tmean(ds.group["site23"], "va"),
+            gcm_driven_profile_tmean(ds.group["site23"], "hus"),
+            vec(mean(1 ./ ds.group["site23"]["alpha"][:, :], dims = 2)), # convert alpha to rho using rho=1/alpha, take average profile
         )
     end
 end

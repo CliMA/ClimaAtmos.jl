@@ -142,9 +142,14 @@ function (::ARM_SGP)(params)
     thermo_params = CAP.thermodynamics_params(params)
     ts = TD.PhaseNonEquil_pθq(thermo_params, p, θ, TD.PhasePartition(q_vap))
     T = TD.air_temperature(thermo_params, ts)
-    shf = FT.(Dierckx.Spline1D(t_data, shf_data; k = 1))
-    lhf = FT.(Dierckx.Spline1D(t_data, lhf_data; k = 1))
-    # TODO: Replace Dierckx with a type-stable interpolation and remove the FT.
+    shf = Intp.extrapolate(
+        Intp.interpolate((t_data,), shf_data, Intp.Gridded(Intp.Linear())),
+        Intp.Flat(),
+    )
+    lhf = Intp.extrapolate(
+        Intp.interpolate(t_data, lhf_data, Intp.Gridded(Intp.Linear())),
+        Intp.Flat(),
+    )
     function surface_state(surface_coordinates, interior_z, t)
         fluxes = HeatFluxes(; shf = shf(t), lhf = lhf(t))
         parameterization = MoninObukhov(; z0, fluxes, ustar)
@@ -252,8 +257,7 @@ end
 function (surface_setup::GCMDriven)(params)
     FT = eltype(params)
     (; external_forcing_file) = surface_setup
-    imin = 100
-    T, lhf, shf = FT.(gcm_surface_conditions(external_forcing_file, imin))
+    T, lhf, shf = FT.(gcm_surface_conditions(external_forcing_file))
     z0 = FT(1e-4)  # zrough
     ustar = FT(0.28)
     parameterization =
@@ -261,12 +265,12 @@ function (surface_setup::GCMDriven)(params)
     return SurfaceState(; parameterization, T)
 end
 
-function gcm_surface_conditions(external_forcing_file, imin)
+function gcm_surface_conditions(external_forcing_file)
     NC.NCDataset(external_forcing_file) do ds
         (
-            mean(gcm_driven_timeseries(ds, "surface_temperature")[imin:end]),
-            mean(gcm_driven_timeseries(ds, "lhf_surface_mean")[imin:end]),
-            mean(gcm_driven_timeseries(ds, "shf_surface_mean")[imin:end]),
+            mean(gcm_driven_timeseries(ds.group["site23"], "ts")),
+            mean(gcm_driven_timeseries(ds.group["site23"], "hfls")),
+            mean(gcm_driven_timeseries(ds.group["site23"], "hfss")),
         )
     end
 end

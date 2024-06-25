@@ -1,0 +1,15 @@
+dt: 2000secs
+t_end: 30days
+config: column
+h_elem: 1
+insolation: timevarying
+job_id: calibration_end_to_end_test
+output_dir: output/calibration_end_to_end_test
+output_default_diagnostics: false
+dt_rad: 6hours
+rad: clearsky
+diagnostics:
+  - reduction_time: average
+    short_name: rsut
+    period: 30days
+    writer: nc

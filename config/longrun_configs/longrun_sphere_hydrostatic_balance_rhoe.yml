@@ -1,6 +1,6 @@
 dt_save_state_to_disk: "10days"
-dt: "150secs"
-t_end: "300days"
+dt: "90secs"
+t_end: "360days"
 h_elem: 30
 z_elem: 63
 dz_bottom: 30.0
@@ -8,3 +8,4 @@ dz_top: 3000.0
 z_max: 55000.0
 perturb_initstate: false
 discrete_hydrostatic_balance: true
+toml: [toml/longrun_aquaplanet.toml]

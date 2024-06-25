@@ -1,6 +1,6 @@
 t_end: "1days"
 config: "box"
-hyperdiff: "false"
+hyperdiff: false
 dt: "20secs"
 perturb_initstate: false
 diagnostics:

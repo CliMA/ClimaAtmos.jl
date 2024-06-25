@@ -8,7 +8,7 @@ dz_top: 3000.0
 moist: "equil"
 precip_model: "1M"
 rad: "allskywithclear"
-idealized_insolation: false
+insolation: "timevarying"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 vert_diff: "FriersonDiffusion"
@@ -16,7 +16,8 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 surface_setup: "DefaultMoninObukhov"
 rayleigh_sponge: true
-dt: "100secs"
+dt: "90secs"
 t_end: "8hours"
+aerosol_radiation: true
 prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "OC1", "OC2", "SO4", "SOA", "SSLT01", "SSLT02", "SSLT03", "SSLT04"]
-toml: [toml/longrun_aquaplanet_dyamond.toml]
+toml: [toml/longrun_aquaplanet.toml]

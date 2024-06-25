@@ -1,4 +1,4 @@
-vert_diff: "true"
+vert_diff: true
 surface_setup: "DefaultExchangeCoefficients"
 moist: "equil"
 rad: "allskywithclear"

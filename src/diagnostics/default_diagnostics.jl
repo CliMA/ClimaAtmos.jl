@@ -174,19 +174,6 @@ end
 # Precipitation model #
 #######################
 function default_diagnostics(
-    ::Microphysics0Moment,
-    t_start,
-    t_end;
-    output_writer,
-)
-    precip_diagnostics = ["pr"]
-
-    average_func = frequency_averages(t_start, t_end)
-
-    return [average_func(precip_diagnostics...; output_writer, t_start)...]
-end
-
-function default_diagnostics(
     ::Microphysics1Moment,
     t_start,
     t_end;

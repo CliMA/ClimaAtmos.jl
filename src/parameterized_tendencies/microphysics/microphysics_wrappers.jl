@@ -3,6 +3,7 @@
 import Thermodynamics as TD
 import CloudMicrophysics.Microphysics0M as CM0
 import CloudMicrophysics.Microphysics1M as CM1
+import CloudMicrophysics.Microphysics2M as CM2
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
 import CloudMicrophysics.Parameters as CMP
 
@@ -172,10 +173,12 @@ function compute_precipitation_sources!(
 
     #! format: off
     # rain autoconversion: q_liq -> q_rain
-    @. Sᵖ = min(
-        limit(qₗ(thp, ts), dt, 5),
+    @. Sᵖ = ifelse(
+        mp.Ndp <= 0,
         CM1.conv_q_liq_to_q_rai(mp.pr.acnv1M, qₗ(thp, ts), true),
+        CM2.conv_q_liq_to_q_rai(mp.var, qₗ(thp, ts), ρ, mp.Ndp),
     )
+    @. Sᵖ = min(limit(qₗ(thp, ts), dt, 5), Sᵖ)
     @. Sqₜᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
     @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)

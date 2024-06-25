@@ -10,6 +10,11 @@ strip_help_message(v) = v
 strip_help_messages(d) =
     Dict(map(k -> Pair(k, strip_help_message(d[k])), collect(keys(d)))...)
 
+function load_yaml_file(f)
+    filesize(f) == 0 && error("File $f is empty or missing.")
+    return YAML.load_file(f)
+end
+
 """
     default_config_dict()
     default_config_dict(config_path)
@@ -17,7 +22,7 @@ strip_help_messages(d) =
 Loads the default configuration from files into a Dict for use in AtmosConfig().
 """
 function default_config_dict(config_file = default_config_file)
-    config = YAML.load_file(config_file)
+    config = load_yaml_file(config_file)
     return strip_help_messages(config)
 end
 
@@ -45,10 +50,10 @@ Takes in a Dict, vector of Dicts or filepaths and returns a Dict with the
 default configuration overridden by the given dicts or parsed YAML files.
 """
 override_default_config(config_files::AbstractString) =
-    override_default_config(YAML.load_file(config_files))
+    override_default_config(load_yaml_file(config_files))
 
 override_default_config(config_files::ContainerType(AbstractString)) =
-    override_default_config(YAML.load_file.(config_files))
+    override_default_config(load_yaml_file.(config_files))
 
 override_default_config(config_dicts::ContainerType(AbstractDict)) =
     override_default_config(merge(config_dicts...))
@@ -67,15 +72,24 @@ function override_default_config(config_dict::AbstractDict;)
         v = config_dict[k]
 
         # Attempt to convert user value `v` to the same type as
-        # the default. If that fails, throw an informative error.
+        # the default. If that fails, throw an informative warning.
         config[k] = try
-            isnothing(default_config[k]) ? v : default_type(v)
-        catch err
-            user_entry_type = typeof(v)
-            msg = """Configuration entry "$(k)" = $v has type $(user_entry_type),
-                     but must have type $default_type."""
-            throw(ArgumentError(msg))
+            isnothing(default_config[k]) ? v : convert(default_type, v)
+        catch e
+            # A failed conversion should result in a MethodError
+            e isa MethodError || rethrow(e)
+            @warn """Failed to convert `config_dict["$k"] = $v` to default type $default_type, keeping original value"""
+            v
         end
+    end
+
+    excluded_keys = ("diagnostics", "job_id")
+    unused_keys = filter(
+        k -> !haskey(default_config, k) && !(k in excluded_keys),
+        keys(config_dict),
+    )
+    if !isempty(unused_keys)
+        @warn "The configuration passed to ClimaAtmos contains unused keys: $(join(unused_keys, ", "))"
     end
 
     # The "diagnostics" entry is a more complex type that doesn't fit the schema described in
@@ -121,7 +135,7 @@ function configs_per_config_id(
             file = joinpath(root, f)
             !endswith(file, ".yml") && continue
             occursin("default_configs", file) && continue
-            config = YAML.load_file(file)
+            config = load_yaml_file(file)
             name = config_id_from_config_file(file)
             cmds[name] = (; config, config_file = file)
         end

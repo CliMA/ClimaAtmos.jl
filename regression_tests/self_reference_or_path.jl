@@ -13,6 +13,17 @@ function sorted_dataset_folder(; dir = pwd())
     return sorted_paths
 end
 
+function ref_counters_per_path(paths)
+    ref_counters_in_path = Vector{Int}(undef, length(paths))
+    ref_counters_in_path .= -1
+    for (i, path) in enumerate(paths)
+        ref_counter_file = joinpath(path, "ref_counter.jl")
+        !isfile(ref_counter_file) && continue
+        ref_counters_in_path[i] = parse(Int, first(readlines(ref_counter_file)))
+    end
+    return ref_counters_in_path
+end
+
 function self_reference_or_path()
     if get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci"
         return :self_reference
@@ -36,24 +47,17 @@ function self_reference_or_path()
     @assert isfile(ref_counter_file_PR)
     ref_counter_PR = parse(Int, first(readlines(ref_counter_file_PR)))
 
-    ref_counters_main = Vector{Int}(undef, length(sorted_paths))
-    ref_counters_main .= -1
-    for (i, path) in enumerate(sorted_paths)
-        ref_counter_file_main = joinpath(path, "ref_counter.jl")
-        !isfile(ref_counter_file_main) && continue
-        ref_counters_main[i] =
-            parse(Int, first(readlines(ref_counter_file_main)))
-    end
-    i_oldest_reference = findfirst(ref_counters_main) do ref_counter_main
+    ref_counters_main = ref_counters_per_path(sorted_paths)
+    i_largest_reference = findfirst(ref_counters_main) do ref_counter_main
         ref_counter_main == ref_counter_PR
     end
-    if i_oldest_reference == nothing
+    if i_largest_reference == nothing
         @warn "`ref_counter.jl` not found on main, assuming self-reference"
         @info "Please review output results before merging."
         return :self_reference
     end
-    # Oldest reference path:
-    path = sorted_paths[i_oldest_reference]
+    # Largest ref-counter reference path:
+    path = sorted_paths[i_largest_reference]
     ref_counter_file_main = joinpath(path, "ref_counter.jl")
 
     @info "Files on main:" # for debugging

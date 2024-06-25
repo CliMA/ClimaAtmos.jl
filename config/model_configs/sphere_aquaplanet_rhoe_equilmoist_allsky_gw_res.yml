@@ -10,14 +10,15 @@ approximate_linear_solve_iters: 2
 moist: "equil"
 precip_model: "1M"
 rad: "allskywithclear"
-idealized_insolation: false
+aerosol_radiation: true
+insolation: "timevarying"
 rayleigh_sponge: true
 non_orographic_gravity_wave: true
 orographic_gravity_wave: "gfdl_restart"
 surface_setup: "DefaultMoninObukhov"
-prescribed_aerosols: ["CB1", "CB2"]
+prescribed_aerosols: ["CB1", "CB2", "SO4"]
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml]
 diagnostics:
-  - short_name: [edt, evu]
+  - short_name: [edt, evu, mmrso4, mmrbcpo, mmrbcpi]
     reduction_time: average
     period: "1days"

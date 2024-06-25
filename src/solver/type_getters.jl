@@ -1,6 +1,5 @@
 using Adapt
 using Dates: DateTime, @dateformat_str
-using Dierckx
 using Interpolations
 import NCDatasets
 import ClimaUtilities.OutputPathGenerator
@@ -91,6 +90,7 @@ function get_atmos(config::AtmosConfig, params)
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
+        insolation = get_insolation_form(parsed_args),
         surface_model = get_surface_model(parsed_args),
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
         numerics = get_numerics(parsed_args),

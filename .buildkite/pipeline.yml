@@ -39,6 +39,11 @@ steps:
       - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=perf -e 'using Pkg; Pkg.status()'"
 
+      - echo "--- Instantiate calibration/test"
+      - "julia --project=calibration/test -e 'using Pkg; Pkg.develop(;path=\".\"); Pkg.instantiate(;verbose=true)'"
+      - "julia --project=calibration/test -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=calibration/test -e 'using Pkg; Pkg.status()'"
+
       - echo "--- Download artifacts"
       - "julia --project=examples artifacts/download_artifacts.jl"
 
@@ -102,34 +107,34 @@ steps:
 
       - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
         command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_3d/output_active/*"
+        artifact_paths: "nonorographic_gravity_wave_test_3d/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: non-orographic gravity wave parameterization test with MiMA output"
         command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_mima/output_active/*"
+        artifact_paths: "nonorographic_gravity_wave_test_mima/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: non-orographic gravity wave parameterization unit test single column"
         command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_single_column/output_active/*"
+        artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
 
       - label: ":computer: orographic gravity wave parameterization unit test for base flux calculation"
         command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_baseflux.jl"
-        artifact_paths: "orographic_gravity_wave_test_baseflux/output_active/*"
+        artifact_paths: "orographic_gravity_wave_test_baseflux/*"
 
       - label: ":computer: orographic gravity wave parameterization unit test for 3d calculation"
         command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_3d.jl"
-        artifact_paths: "orographic_gravity_wave_test_3d/output_active/*"
+        artifact_paths: "orographic_gravity_wave_test_3d/*"
 
       - label: ":computer: single column non-orographic gravity wave parameterization"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
           --job_id single_column_nonorographic_gravity_wave
-        artifact_paths: "single_column_nonorographic_gravity_wave/output_active/*"
+        artifact_paths: "single_column_nonorographic_gravity_wave/*"
 
   - group: "Column Examples"
     steps:
@@ -158,6 +163,14 @@ steps:
           --job_id box_density_current_test
         artifact_paths: "box_density_current_test/output_active/*"
 
+      - label: ":computer: Box (ρe_tot) rcemipii with diagnostic edmf"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/rcemipii_box_diagnostic_edmfx.yml
+          --job_id rcemipii_box_diagnostic_edmfx
+        artifact_paths: "rcemipii_box_diagnostic_edmfx/output_active/*"
+        soft_fail: true
+
   - group: "Plane Examples"
     steps:
       - label: ":computer: Agnesi linear hydrostatic mountain experiment (uniform)"
@@ -174,20 +187,6 @@ steps:
           --job_id plane_agnesi_mountain_test_stretched
         artifact_paths: "plane_agnesi_mountain_test_stretched/output_active/*"
 
-      - label: ":computer: Schar mountain experiment (uniform grid)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_schar_mountain_test_uniform.yml
-          --job_id plane_schar_mountain_test_uniform
-        artifact_paths: "plane_schar_mountain_test_uniform/output_active/*"
-
-      - label: ":computer: Schar mountain experiment (stretched grid)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_schar_mountain_test_stretched.yml
-          --job_id plane_schar_mountain_test_stretched
-        artifact_paths: "plane_schar_mountain_test_stretched/output_active/*"
-
       - label: ":computer: Density current experiment"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -195,6 +194,27 @@ steps:
           --job_id plane_density_current_test
         artifact_paths: "plane_density_current_test/output_active/*"
 
+
+  - group: "Conservation check"
+    steps:
+
+      - label: ":computer: baroclinic wave check conservation"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation.yml
+          --job_id sphere_baroclinic_wave_conservation
+        artifact_paths: "sphere_baroclinic_wave_conservation/output_active/*"
+
+      - label: ":computer: baroclinic wave check conservation float64"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_ft64.yml
+          --job_id sphere_baroclinic_wave_conservation_ft64
+        artifact_paths: "sphere_baroclinic_wave_conservation_ft64/output_active/*"
+      
+      - label: ":computer: baroclinic wave check conservation with sources"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_source.yml
+          --job_id sphere_baroclinic_wave_conservation_source
+        artifact_paths: "sphere_baroclinic_wave_conservation_source/output_active/*"
 
   - group: "Sphere Examples (Dycore)"
     steps:
@@ -216,7 +236,7 @@ steps:
           --job_id sphere_baroclinic_wave_rhoe
         artifact_paths: "sphere_baroclinic_wave_rhoe/output_active/*"
 
-      - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist"
+      - label: ":computer: no lim baroclinic wave (ρe) equilmoist"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist.yml
@@ -229,7 +249,7 @@ steps:
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist (deep sphere)"
+      - label: ":computer: no lim baroclinic wave (ρe) equilmoist (deep sphere)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/deep_sphere_baroclinic_wave_rhoe_equilmoist.yml
@@ -254,12 +274,6 @@ steps:
       #   env:
       #     JOB_NAME: "sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"
 
-      - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist check conservation float64"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64.yml
-          --job_id sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64/output_active/*"
-
       - label: ":computer: held suarez (ρe) hightop"
         key: sphere_held_suarez_rhoe_hightop
         command: >
@@ -268,7 +282,7 @@ steps:
           --job_id sphere_held_suarez_rhoe_hightop
         artifact_paths: "sphere_held_suarez_rhoe_hightop/output_active/*"
 
-      - label: ":computer: no lim ARS held suarez (ρe) equilmoist hightop sponge"
+      - label: ":computer: no lim held suarez (ρe) equilmoist hightop sponge"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_hightop_sponge.yml
@@ -322,6 +336,15 @@ steps:
           --config_file $CONFIG_PATH/aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean.yml
           --job_id aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean
         artifact_paths: "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean/output_active/*"
+        agents:
+          slurm_mem: 20GB
+      
+      - label: ":computer: aquaplanet (ρe_tot) rcemipii with diagnostic edmf"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/rcemipii_sphere_diagnostic_edmfx.yml
+          --job_id rcemipii_sphere_diagnostic_edmfx
+        artifact_paths: "rcemipii_sphere_diagnostic_edmfx/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -401,7 +424,7 @@ steps:
         #retry:
         #  automatic: true
 
-      - label: ":computer: MPI no lim ARS aquaplanet (ρe) equilmoist clearsky radiation"
+      - label: ":computer: MPI no lim aquaplanet (ρe) equilmoist clearsky radiation"
         command: >
           srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky.yml
@@ -439,27 +462,6 @@ steps:
   - group: "Configs"
     steps:
 
-      - label: ":computer: Test IO"
-        command: >
-          julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/test_io.yml
-          --job_id test_io
-        artifact_paths: "test_io/output_active/*"
-        agents:
-          slurm_cpus_per_task: 8
-
-      - label: ":computer: MPI io test"
-        command: >
-          srun julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/test_mpi_io.yml
-          --job_id test_mpi_io
-        artifact_paths: "test_mpi_io/output_active/*"
-        env:
-          CLIMACOMMS_CONTEXT: "MPI"
-        agents:
-          slurm_ntasks: 2
-          slurm_mem: 16G
-
       # TODO: we should somehow decouple this unit test from the perf env / scripts
       - label: ":computer: checkbounds"
         command: >
@@ -469,6 +471,14 @@ steps:
         artifact_paths: "checkbounds/output_active/*"
         agents:
           slurm_mem: 20GB
+
+  - group: "Calibration"
+    steps:
+      - label: "Calibration interface unit tests"
+        command: julia --project=calibration/test calibration/test/interface.jl
+      - label: "end to end test"
+        command: julia --project=calibration/test calibration/test/e2e_test.jl
+        artifact_paths: "calibration_end_to_end_test/*"
 
   - group: "Diagnostic EDMFX"
     steps:
@@ -706,6 +716,7 @@ steps:
         artifact_paths: "prognostic_edmfx_gcmdriven_column/output_active/*"
         agents:
           slurm_mem: 20GB
+        soft_fail: true
 
       - label: ":genie: Prognostic EDMFX Bomex in a box"
         command: >
