@@ -108,15 +108,15 @@ end
 end
 
 # Run calibration
-CAL.initialize(experiment_config)
-julia_eki = minimal_eki_test(test_eki)
+julia_eki = CAL.calibrate(CAL.JuliaBackend, experiment_config)
+minimal_eki_test(julia_eki)
 
 @testset "Julia-only comparison calibration" begin
     minimal_eki_test(julia_eki)
 end
 
-@testset "Compare $backend output to CAL.JuliaBackend" begin
-    for (uu, slurm_uu) in zip(EKP.get_u(julia_eki), EKP.get_u(slurm_eki))
+@testset "Compare $backend output to JuliaBackend" begin
+    for (uu, slurm_uu) in zip(EKP.get_u(julia_eki), EKP.get_u(test_eki))
         @test uu ≈ slurm_uu rtol = 0.02
     end
 end

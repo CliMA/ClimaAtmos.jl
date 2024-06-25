@@ -11,6 +11,7 @@ import ClimaCalibrate:
 
 """
     set_up_forward_model(member, iteration, experiment_dir::AbstractString)
+    set_up_forward_model(member, iteration, ::ExperimentConfig)
     set_up_forward_model(member, iteration, config_dict::AbstractDict)
 
 Return an AtmosConfig object for the given member and iteration.
