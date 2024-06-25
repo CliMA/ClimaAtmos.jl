@@ -1,0 +1,5 @@
+prior_path: prior.toml
+ensemble_size: 10
+n_iterations: 3
+observations: obs_mean.jld2
+noise: obs_noise_cov.jld2
