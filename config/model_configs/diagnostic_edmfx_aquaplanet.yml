@@ -11,6 +11,7 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil
+cloud_model: diagnostic_edmfx
 precip_model: 0M
 override_τ_precip: false
 dt: 100secs

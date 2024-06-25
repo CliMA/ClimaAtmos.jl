@@ -4,6 +4,7 @@ z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
 moist: "equil"
+cloud_model: diagnostic_edmfx
 precip_model: "0M"
 override_τ_precip: false
 rad: "allskywithclear"
@@ -23,5 +24,5 @@ edmfx_sgs_diffusive_flux: true
 rayleigh_sponge: true
 dt_save_state_to_disk: "10days"
 dt: "100secs"
-t_end: "60days"
+t_end: "120days"
 toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M.toml]
