@@ -122,7 +122,6 @@ function get_numerics(parsed_args)
         edmfx_sgsflux_upwinding,
         limiter,
         test_dycore_consistency = test_dycore,
-        use_reference_state = parsed_args["use_reference_state"],
     )
     @info "numerics $(summary(numerics))"
 
@@ -379,6 +378,7 @@ is_imex_CTS_algo_type(alg_or_tableau) =
 is_implicit_type(alg_or_tableau) = is_imex_CTS_algo_type(alg_or_tableau)
 
 is_imex_CTS_algo(::CTS.IMEXAlgorithm) = true
+is_imex_CTS_algo(::CTS.RosenbrockAlgorithm) = true
 is_imex_CTS_algo(::SciMLBase.AbstractODEAlgorithm) = false
 
 is_implicit(ode_algo) = is_imex_CTS_algo(ode_algo)
@@ -429,6 +429,9 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
     ode_name = parsed_args["ode_algo"]
     alg_or_tableau = getproperty(CTS, Symbol(ode_name))
     @info "Using ODE config: `$alg_or_tableau`"
+    if ode_name == "SSPKnoth"
+        return CTS.RosenbrockAlgorithm(CTS.tableau(CTS.SSPKnoth()))
+    end
 
     if is_explicit_CTS_algo_type(alg_or_tableau)
         return CTS.ExplicitAlgorithm(alg_or_tableau())
@@ -483,14 +486,21 @@ function get_sim_info(config::AtmosConfig)
     out_dir = parsed_args["output_dir"]
     base_output_dir = isnothing(out_dir) ? default_output : out_dir
 
-    output_dir = joinpath(base_output_dir, "output_active")
-    mkpath(output_dir)
-    # TODO: Put this back in once
-    # https://github.com/CliMA/ClimaUtilities.jl/issues/56 is fixed.
-    # output_dir = OutputPathGenerator.generate_output_path(
-    #     base_output_dir;
-    #     context = config.comms_ctx,
-    # )
+    allowed_dir_styles = Dict(
+        "activelink" => OutputPathGenerator.ActiveLinkStyle(),
+        "removepreexisting" => OutputPathGenerator.RemovePreexistingStyle(),
+    )
+
+    requested_style = parsed_args["output_dir_style"]
+
+    haskey(allowed_dir_styles, lowercase(requested_style)) ||
+        error("output_dir_style $(requested_style) not available")
+
+    output_dir = OutputPathGenerator.generate_output_path(
+        base_output_dir;
+        context = config.comms_ctx,
+        style = allowed_dir_styles[lowercase(requested_style)],
+    )
 
     sim = (;
         output_dir,

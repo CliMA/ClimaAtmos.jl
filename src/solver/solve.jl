@@ -21,12 +21,12 @@ walltime_in_days(es::EfficiencyStats) = es.walltime * (1 / (24 * 3600)) #=second
 
 function timed_solve!(integrator)
     device = ClimaComms.device(integrator.u.c)
-    walltime = ClimaComms.@elapsed device begin
-        s = @timed_str begin
+    local sol
+    @time "solve!:" begin
+        walltime = ClimaComms.elapsed(device) do
             sol = SciMLBase.solve!(integrator)
         end
     end
-    @info "solve!: $s"
     (; tspan) = integrator.sol.prob
     es = EfficiencyStats(tspan, walltime)
     @info "sypd: $(simulated_years_per_day(es))"
@@ -195,4 +195,68 @@ function precompile_callbacks(integrator)
     B = Base.precompile(call_all_callbacks!, (typeof(integrator),))
     @assert B
     return nothing
+end
+
+
+check_conservation(simulation::AtmosSimulation) =
+    check_conservation(simulation.integrator.sol)
+check_conservation(integrator::CTS.DistributedODEIntegrator) =
+    check_conservation(integrator.sol)
+check_conservation(atmos_sol::AtmosSolveResults) =
+    check_conservation(atmos_sol.sol)
+
+"""
+    check_conservation(sol)
+    check_conservation(simulation)
+    check_conservation(integrator)
+
+Return:
+- `energy_conservation = energy_net / energy_total`
+- `mass_conservation = (mass(t_end) - mass(t_0)) / mass(t_0)`
+- `water_conservation = (water_atmos + water_surface) / water_total`
+
+"""
+function check_conservation(sol)
+    # energy
+    energy_total = sum(sol.u[end].c.ρe_tot)
+    energy_atmos_change = sum(sol.u[end].c.ρe_tot) - sum(sol.u[1].c.ρe_tot)
+    p = sol.prob.p
+    sfc = p.atmos.surface_model
+    if sfc isa PrognosticSurfaceTemperature
+        sfc_cρh = sfc.ρ_ocean * sfc.cp_ocean * sfc.depth_ocean
+        energy_total +=
+            horizontal_integral_at_boundary(sol.u[end].sfc.T .* sfc_cρh)
+        energy_surface_change =
+            horizontal_integral_at_boundary(
+                sol.u[end].sfc.T .- sol.u[1].sfc.T,
+            ) * sfc_cρh
+    else
+        energy_surface_change = -p.net_energy_flux_sfc[][]
+    end
+    energy_radiation_input = -p.net_energy_flux_toa[][]
+
+    energy_conservation =
+        abs(
+            energy_atmos_change + energy_surface_change -
+            energy_radiation_input,
+        ) / energy_total
+
+    mass_conservation =
+        (sum(sol.u[end].c.ρ) - sum(sol.u[1].c.ρ)) / sum(sol.u[1].c.ρ)
+
+    water_conservation = zero(Spaces.undertype(axes(sol.u[end].c.ρ)))
+
+    if sfc isa PrognosticSurfaceTemperature
+        # water
+        water_total = sum(sol.u[end].c.ρq_tot)
+        water_atmos_change = sum(sol.u[end].c.ρq_tot) - sum(sol.u[1].c.ρq_tot)
+        water_surface_change = horizontal_integral_at_boundary(
+            sol.u[end].sfc.water .- sol.u[1].sfc.water,
+        )
+
+        water_conservation =
+            abs(water_atmos_change + water_surface_change) / water_total
+    end
+
+    return (; energy_conservation, mass_conservation, water_conservation)
 end

@@ -111,6 +111,49 @@ function entrainment(
     return entr
 end
 
+function detrainment(
+    params,
+    z_prev_level::FT,
+    z_sfc_halflevel,
+    p_prev_level,
+    ρ_prev_level,
+    ρaʲ_prev_level,
+    tsʲ_prev_level,
+    ρʲ_prev_level,
+    u³ʲ_prev_halflevel,
+    local_geometry_prev_halflevel,
+    u³_prev_halflevel,
+    ts_prev_level,
+    ᶜbuoy⁰,
+    entrʲ_prev_level,
+    vert_div_level,
+    ᶜmassflux_vert_div, # mass flux divergence is not implemented for diagnostic edmf
+    tke_prev_level,
+    edmfx_detr_model,
+) where {FT}
+    thermo_params = CAP.thermodynamics_params(params)
+    detrainment(
+        params,
+        z_prev_level,
+        z_sfc_halflevel,
+        p_prev_level,
+        ρ_prev_level,
+        ρaʲ_prev_level,
+        draft_area(ρaʲ_prev_level, ρʲ_prev_level),
+        get_physical_w(u³ʲ_prev_halflevel, local_geometry_prev_halflevel),
+        TD.relative_humidity(thermo_params, tsʲ_prev_level),
+        ᶜphysical_buoyancy(params, ρ_prev_level, ρʲ_prev_level),
+        get_physical_w(u³_prev_halflevel, local_geometry_prev_halflevel),
+        TD.relative_humidity(thermo_params, ts_prev_level),
+        FT(0),
+        entrʲ_prev_level,
+        vert_div_level,
+        FT(0), # mass flux divergence is not implemented for diagnostic edmf
+        tke_prev_level,
+        edmfx_detr_model,
+    )
+end
+
 """
    Return detrainment rate [1/s].
 

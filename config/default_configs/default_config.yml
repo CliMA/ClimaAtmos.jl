@@ -79,7 +79,7 @@ max_newton_iters_ode:
   value: 1
 ode_algo:
   help: "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, etc.]"
-  value: "ARS343"
+  value: "SSPKnoth"
 krylov_rtol:
   help: "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
   value: 0.1
@@ -105,6 +105,9 @@ idealized_clouds:
 idealized_insolation:
   help: "Use idealized insolation in radiation model [`false`, `true` (default)]"
   value: true
+add_isothermal_boundary_layer:
+  help: "Add an isothermal boundary layer above the domain top for radiation [`false`, `true` (default)]"
+  value: true
 dt_cloud_fraction:
   help: "Time between calling cloud fraction update"
   value: "3hours"
@@ -123,6 +126,9 @@ t_end:
 output_dir:
   help: "Output directory"
   value: ~
+output_dir_style:
+  help: "What to do when `output_dir` already exists. With `RemovePreexisting`, `output_dir` is overwritten with a new one. With `ActiveLink`, `output_dir` is treated as a base folder and numbered subfolders are created inside. A new subfolder is created every time a simulation is run, with `output_dir/output_active` pointing to the most recent results. Check out ClimaUtilities.OutputPathGenerator for more information. [`ActiveLink` (default), `RemovePreexisting`]"
+  value: "ActiveLink"
 device:
   help: "Device type to use [`auto` (default) `CPUSingleThreaded`, `CPUMultiThreaded`, `CUDADevice`]"
   value: "auto"
@@ -135,7 +141,7 @@ vert_diff:
   value: "false"
 hyperdiff:
   help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
-  value: "ClimaHyperdiffusion"
+  value: "CAM_SE"
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: true
@@ -185,7 +191,7 @@ precip_model:
   help: "Precipitation model [`nothing` (default), `0M`]"
   value: ~
 cloud_model:
-  help: "Cloud model [`grid_scale`, `quadrature` (default)]"
+  help: "Cloud model [`grid_scale`, `quadrature` (default), `diagnostic_edmfx`]"
   value: "quadrature"
 perf_summary:
   help: "Flag for collecting performance summary information"
@@ -208,9 +214,6 @@ non_orographic_gravity_wave:
 nh_poly:
   help: "Horizontal polynomial degree. Note: The number of quadrature points in 1D within each horizontal element is then Nq = <--nh_poly> + 1"
   value: 3
-use_reference_state:
-  help: "Subtract a reference state from the dycore equations [`false`, `true` (default)]"
-  value: true
 regression_test:
   help: "(Bool) perform regression test"
   value: false

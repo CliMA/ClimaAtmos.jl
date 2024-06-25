@@ -1,33 +1,34 @@
-initial_condition: DYCOMS_RF01 
-subsidence: DYCOMS 
-edmf_coriolis: DYCOMS_RF01 
-rad: DYCOMS_RF01 
+initial_condition: DYCOMS_RF01
+subsidence: DYCOMS
+edmf_coriolis: DYCOMS_RF01
+rad: DYCOMS
 surface_setup: DYCOMS_RF01
-turbconv: diagnostic_edmfx 
+turbconv: diagnostic_edmfx
 prognostic_tke: true
-edmfx_upwinding: first_order 
-edmfx_entr_model: "Generalized" 
-edmfx_detr_model: "Generalized" 
-edmfx_nh_pressure: true 
+edmfx_upwinding: first_order
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil
-config: box 
-hyperdiff: "true" 
-x_max: 1e8 
-y_max: 1e8 
-x_elem: 2 
-y_elem: 2 
-z_elem: 30 
-z_max: 1500 
+call_cloud_diagnostics_per_stage: true
+config: box
+x_max: 1e8
+y_max: 1e8
+x_elem: 2
+y_elem: 2
+z_elem: 30
+z_max: 1500
 z_stretch: false
-dt: 20secs 
-t_end: 4hours 
+dt: 20secs
+t_end: 4hours
 dt_save_state_to_disk: 10mins
 toml: [toml/diagnostic_edmfx.toml]
 netcdf_interpolation_num_points: [8, 8, 30]
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
     period: 10mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
     period: 10mins
+ode_algo: ARS343

@@ -55,13 +55,19 @@ function radiation_model_cache(
 
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
-        latitude = RRTMGPI.field2array(bottom_coords.lat)
+        latitude = Fields.field2array(bottom_coords.lat)
     else
-        latitude = RRTMGPI.field2array(zero(bottom_coords.z)) # flat space is on Equator
+        latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
     local radiation_model
     orbital_data = Insolation.OrbitalData()
-    data_loader(joinpath("atmos_state", "clearsky_as.nc")) do input_data
+    file_name = joinpath(
+        "examples",
+        "rfmip-clear-sky",
+        "inputs",
+        "multiple_input4MIPs_radiation_RFMIP_UColorado-RFMIP-1-2_none.nc",
+    )
+    data_loader(file_name) do input_data
         if radiation_mode isa RRTMGPI.GrayRadiation
             kwargs = (;
                 lapse_rate = 3.5,
@@ -96,7 +102,7 @@ function radiation_model_cache(
                 ᶜvolume_mixing_ratio_o3_field = @. FT(pressure2ozone(ᶜp))
             end
             center_volume_mixing_ratio_o3 =
-                RRTMGPI.field2array(ᶜvolume_mixing_ratio_o3_field)
+                Fields.field2array(ᶜvolume_mixing_ratio_o3_field)
 
             # the first value for each global mean volume mixing ratio is the
             # present-day value
@@ -106,6 +112,7 @@ function radiation_model_cache(
             kwargs = (;
                 use_global_means_for_well_mixed_gases = true,
                 center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
+                center_relative_humidity = NaN, # initialized in callback
                 center_volume_mixing_ratio_o3,
                 volume_mixing_ratio_co2 = input_vmr("carbon_dioxide_GM"),
                 volume_mixing_ratio_n2o = input_vmr("nitrous_oxide_GM"),
@@ -150,13 +157,13 @@ function radiation_model_cache(
                     @. ᶜis_top_cloud = ᶜz > 4e3 && ᶜz < 5e3
                     kwargs = (;
                         kwargs...,
-                        center_cloud_liquid_water_path = RRTMGPI.field2array(
+                        center_cloud_liquid_water_path = Fields.field2array(
                             @. ifelse(ᶜis_bottom_cloud, FT(0.002) * ᶜΔz, FT(0))
                         ),
-                        center_cloud_ice_water_path = RRTMGPI.field2array(
+                        center_cloud_ice_water_path = Fields.field2array(
                             @. ifelse(ᶜis_top_cloud, FT(0.001) * ᶜΔz, FT(0))
                         ),
-                        center_cloud_fraction = RRTMGPI.field2array(
+                        center_cloud_fraction = Fields.field2array(
                             @. ifelse(
                                 ᶜis_bottom_cloud | ᶜis_top_cloud,
                                 FT(1),
@@ -179,8 +186,8 @@ function radiation_model_cache(
            RRTMGPI.requires_z(bottom_extrapolation)
             kwargs = (;
                 kwargs...,
-                center_z = RRTMGPI.field2array(Fields.coordinate_field(Y.c).z),
-                face_z = RRTMGPI.field2array(Fields.coordinate_field(Y.f).z),
+                center_z = Fields.field2array(Fields.coordinate_field(Y.c).z),
+                face_z = Fields.field2array(Fields.coordinate_field(Y.f).z),
             )
         end
 
@@ -202,7 +209,6 @@ function radiation_model_cache(
             radiation_mode,
             interpolation,
             bottom_extrapolation,
-            add_isothermal_boundary_layer = true,
             center_pressure = NaN, # initialized in callback
             center_temperature = NaN, # initialized in callback
             surface_temperature = NaN, # initialized in callback
@@ -232,10 +238,10 @@ function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
 end
 
 #####
-##### DYCOMS_RF01 radiation
+##### DYCOMS_RF01 and DYCOMS_RF02 radiation
 #####
 
-function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS_RF01)
+function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS)
     FT = Spaces.undertype(axes(Y.c))
     NT = NamedTuple{(:z, :ρ, :q_tot), NTuple{3, FT}}
     return (;
@@ -248,7 +254,7 @@ function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS_RF01)
         net_energy_flux_sfc = [Geometry.WVector(FT(0))],
     )
 end
-function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS_RF01)
+function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     @assert !(p.atmos.moisture_model isa DryModel)
 
     (; params) = p

@@ -1,7 +1,7 @@
 agents:
   queue: new-central
   slurm_mem_per_cpu: 8G
-  modules: climacommon/2024_04_30
+  modules: climacommon/2024_05_27
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -47,20 +47,11 @@ steps:
       #   command:
       #     - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
       #   artifact_paths: "$$JOB_NAME/output_active/*"
+      #   env:
+      #     CLIMACOMMS_CONTEXT: "MPI"
       #   agents:
       #     slurm_ntasks: 32
       #     slurm_mem_per_cpu: 32GB
       #     slurm_time: 24:00:00
       #   env:
       #     JOB_NAME: "longrun_zalesak_tracer_energy_bw_rhoe_equil_highres"
-
-      - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist high resolution centered diff"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_ntasks: 32
-          slurm_nodes: 2
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_ssp_bw_rhoe_equil_highres"

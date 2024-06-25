@@ -15,6 +15,7 @@ struct Microphysics1Moment <: AbstractPrecipitationModel end
 abstract type AbstractCloudModel end
 struct GridScaleCloud <: AbstractCloudModel end
 struct QuadratureCloud <: AbstractCloudModel end
+struct DiagnosticEDMFCloud <: AbstractCloudModel end
 
 abstract type AbstractModelConfig end
 struct SingleColumnModel <: AbstractModelConfig end
@@ -254,7 +255,7 @@ Base.broadcastable(x::AbstractDetrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractSGSamplingType) = tuple(x)
 Base.broadcastable(x::AbstractTendencyModel) = tuple(x)
 
-Base.@kwdef struct RadiationDYCOMS_RF01{FT}
+Base.@kwdef struct RadiationDYCOMS{FT}
     "Large-scale divergence"
     divergence::FT = 3.75e-6
     alpha_z::FT = 1.0
@@ -292,9 +293,6 @@ Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM}
     test_dycore_consistency::DYCORE
 
     limiter::LIM
-
-    """Whether to subtract the reference state from the evolved state"""
-    use_reference_state::Bool
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 

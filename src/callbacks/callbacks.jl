@@ -70,19 +70,27 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     FT = Spaces.undertype(axes(Y.c))
     thermo_params = CAP.thermodynamics_params(params)
+    T_min = CAP.optics_lookup_temperature_min(params)
+    T_max = CAP.optics_lookup_temperature_max(params)
 
     sfc_ts = sfc_conditions.ts
     sfc_T =
-        RRTMGPI.array2field(radiation_model.surface_temperature, axes(sfc_ts))
+        Fields.array2field(radiation_model.surface_temperature, axes(sfc_ts))
     @. sfc_T = TD.air_temperature(thermo_params, sfc_ts)
 
-    ᶜp = RRTMGPI.array2field(radiation_model.center_pressure, axes(Y.c))
-    ᶜT = RRTMGPI.array2field(radiation_model.center_temperature, axes(Y.c))
+    ᶜp = Fields.array2field(radiation_model.center_pressure, axes(Y.c))
+    ᶜT = Fields.array2field(radiation_model.center_temperature, axes(Y.c))
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
-    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
+    # TODO: move this to RRTMGP
+    @. ᶜT =
+        min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
 
     if !(radiation_model.radiation_mode isa RRTMGPI.GrayRadiation)
-        ᶜvmr_h2o = RRTMGPI.array2field(
+        ᶜrh = Fields.array2field(
+            radiation_model.center_relative_humidity,
+            axes(Y.c),
+        )
+        ᶜvmr_h2o = Fields.array2field(
             radiation_model.center_volume_mixing_ratio_h2o,
             axes(Y.c),
         )
@@ -94,6 +102,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             if t < t_increasing_humidity
                 max_relative_humidity *= t / t_increasing_humidity
             end
+            @. ᶜrh = max_relative_humidity
 
             # temporarily store ᶜq_tot in ᶜvmr_h2o
             ᶜq_tot = ᶜvmr_h2o
@@ -114,6 +123,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 thermo_params,
                 TD.PhasePartition(thermo_params, ᶜts),
             )
+            @. ᶜrh = TD.relative_humidity(thermo_params, ᶜts)
         end
     end
 
@@ -126,18 +136,16 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         radiation_model.radiation_mode isa RRTMGPI.ClearSkyRadiation
     )
         ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
-        ᶜlwp = RRTMGPI.array2field(
+        ᶜlwp = Fields.array2field(
             radiation_model.center_cloud_liquid_water_path,
             axes(Y.c),
         )
-        ᶜiwp = RRTMGPI.array2field(
+        ᶜiwp = Fields.array2field(
             radiation_model.center_cloud_ice_water_path,
             axes(Y.c),
         )
-        ᶜfrac = RRTMGPI.array2field(
-            radiation_model.center_cloud_fraction,
-            axes(Y.c),
-        )
+        ᶜfrac =
+            Fields.array2field(radiation_model.center_cloud_fraction, axes(Y.c))
         # RRTMGP needs lwp and iwp in g/m^2
         kg_to_g_factor = 1000
         @. ᶜlwp =
@@ -152,7 +160,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
     RRTMGPI.update_fluxes!(radiation_model)
-    RRTMGPI.field2array(ᶠradiation_flux) .= radiation_model.face_flux
+    Fields.field2array(ᶠradiation_flux) .= radiation_model.face_flux
     return nothing
 end
 
@@ -179,8 +187,8 @@ function set_insolation_variables!(Y, p, t)
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
         cos_zenith =
-            RRTMGPI.array2field(radiation_model.cos_zenith, axes(bottom_coords))
-        weighted_irradiance = RRTMGPI.array2field(
+            Fields.array2field(radiation_model.cos_zenith, axes(bottom_coords))
+        weighted_irradiance = Fields.array2field(
             radiation_model.weighted_irradiance,
             axes(bottom_coords),
         )

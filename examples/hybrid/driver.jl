@@ -4,6 +4,8 @@
 # so we force abbreviated stacktraces even in non-interactive runs.
 # (See also Base.type_limited_string_from_context())
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
+import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
@@ -114,55 +116,24 @@ end
 
 # Conservation checks
 if config.parsed_args["check_conservation"]
-    @info "Checking conservation"
     FT = Spaces.undertype(axes(sol.u[end].c.ρ))
+    @info "Checking conservation"
+    (; energy_conservation, mass_conservation, water_conservation) =
+        CA.check_conservation(sol)
 
-    # energy
-    energy_total = sum(sol.u[end].c.ρe_tot)
-    energy_atmos_change = sum(sol.u[end].c.ρe_tot) - sum(sol.u[1].c.ρe_tot)
+    @info "    Net energy change / total energy: $energy_conservation"
+    @info "    Net mass change / total mass: $mass_conservation"
+
     sfc = p.atmos.surface_model
-    if sfc isa CA.PrognosticSurfaceTemperature
-        sfc_cρh = sfc.ρ_ocean * sfc.cp_ocean * sfc.depth_ocean
-        energy_total +=
-            CA.horizontal_integral_at_boundary(sol.u[end].sfc.T .* sfc_cρh)
-        energy_surface_change =
-            CA.horizontal_integral_at_boundary(
-                sol.u[end].sfc.T .- sol.u[1].sfc.T,
-            ) * sfc_cρh
-    else
-        energy_surface_change = -p.net_energy_flux_sfc[][]
-    end
-    energy_radiation_input = -p.net_energy_flux_toa[][]
-
-    energy_net =
-        abs(
-            energy_atmos_change + energy_surface_change -
-            energy_radiation_input,
-        ) / energy_total
-    @info "    Net energy change: $energy_net"
-    if CA.has_no_source_or_sink(config.parsed_args)
-        @test (energy_net / energy_total) ≈ 0 atol = 50 * eps(FT)
-    else
-        @test (energy_net / energy_total) ≈ 0 atol = sqrt(eps(FT))
-    end
 
     if CA.has_no_source_or_sink(config.parsed_args)
-        # mass
-        @test sum(sol.u[1].c.ρ) ≈ sum(sol.u[end].c.ρ) rtol = 50 * eps(FT)
+        @test energy_conservation ≈ 0 atol = 50 * eps(FT)
+        @test mass_conservation ≈ 0 atol = 50 * eps(FT)
     else
+        @test energy_conservation ≈ 0 atol = sqrt(eps(FT))
         if sfc isa CA.PrognosticSurfaceTemperature
-            # water
-            water_total = sum(sol.u[end].c.ρq_tot)
-            water_atmos_change =
-                sum(sol.u[end].c.ρq_tot) - sum(sol.u[1].c.ρq_tot)
-            water_surface_change = CA.horizontal_integral_at_boundary(
-                sol.u[end].sfc.water .- sol.u[1].sfc.water,
-            )
-
-            water_net =
-                abs(water_atmos_change + water_surface_change) / water_total
-            @info "    Net water change: $water_net"
-            @test water_net ≈ 0 atol = 100 * sqrt(eps(FT))
+            @info "    Net water change: $water_conservation"
+            @test water_conservation ≈ 0 atol = 100 * sqrt(eps(FT))
         end
     end
 end
@@ -205,12 +176,11 @@ if ClimaComms.iamroot(config.comms_ctx)
     end
     @info "Plotting done"
 
-    # TODO: Use readlink again once
-    # https://github.com/CliMA/ClimaUtilities.jl/issues/56 is fixed.
-    symlink_to_fullpath(path) = path
-    # function symlink_to_fullpath(path)
-    #     return joinpath(dirname(path), readlink(path))
-    # end
+    if islink(simulation.output_dir)
+        symlink_to_fullpath(path) = joinpath(dirname(path), readlink(path))
+    else
+        symlink_to_fullpath(path) = path
+    end
 
     @info "Creating tarballs"
     # These NC files are used by our reproducibility tests,

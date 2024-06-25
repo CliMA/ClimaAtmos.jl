@@ -1,4 +1,6 @@
 using Test
+import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 using Random
 Random.seed!(1234)
 import ClimaAtmos as CA
@@ -10,7 +12,7 @@ param_dict = CP.create_toml_dict(Float64)
 params = RRTMGPParameters(param_dict)
 
 ### RRTMGP Interface Tests
-# Includes tests for functions defined within the RRTMGPInterface.jl file. 
+# Includes tests for functions defined within the RRTMGPInterface.jl file.
 # Assesses that interp / extrap functions are correctly defined.
 
 using Statistics
@@ -23,10 +25,10 @@ include("test_helpers.jl")
     idx = size(parent(test_field)) # IJFH layout
     npts = idx[1] * idx[2] * idx[4]
     @assert test_field isa Fields.Field
-    test_array = RRTMGPI.field2array(test_field)
+    test_array = Fields.field2array(test_field)
     @test test_array isa Array
     @test length(test_array) == npts
-    new_field = RRTMGPI.array2field(test_array, bubble_space)
+    new_field = Fields.array2field(test_array, bubble_space)
     @test new_field == test_field
     @test size(parent(new_field)) == idx
 end

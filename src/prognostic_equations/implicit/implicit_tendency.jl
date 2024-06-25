@@ -127,7 +127,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    (; ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p.core
+    (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜh_tot, ᶜspecific, ᶠu³, ᶜp) = p.precomputed
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠu³)
@@ -151,23 +151,18 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         # is done with other passive tracers in the explicit tendency.
         # Here we add the advection with precipitation terminal velocity
         # using downward biasing and free outflow bottom boundary condition
-
-        ᶠlg = Fields.local_geometry_field(Y.f)
+        (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
-            CT3(unit_basis_vector_data(CT3, ᶠlg)) *
             ᶠwinterp(ᶜJ, Y.c.ρ) *
-            ᶠright_bias(-p.precomputed.ᶜwᵣ * ᶜspecific.q_rai),
+            ᶠright_bias(Geometry.WVector(-(ᶜwᵣ)) * ᶜspecific.q_rai),
         )
         @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
-            CT3(unit_basis_vector_data(CT3, ᶠlg)) *
             ᶠwinterp(ᶜJ, Y.c.ρ) *
-            ᶠright_bias(-p.precomputed.ᶜwₛ * ᶜspecific.q_sno),
+            ᶠright_bias(Geometry.WVector(-(ᶜwₛ)) * ᶜspecific.q_sno),
         )
     end
 
-    @. Yₜ.f.u₃ +=
-        -(ᶠgradᵥ(ᶜp - ᶜp_ref) + ᶠinterp(Y.c.ρ - ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) /
-        ᶠinterp(Y.c.ρ)
+    @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜp) / ᶠinterp(Y.c.ρ) + ᶠgradᵥ_ᶜΦ
 
     if rayleigh_sponge isa RayleighSponge
         (; ᶠβ_rayleigh_w) = p.rayleigh_sponge

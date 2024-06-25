@@ -56,6 +56,8 @@ steps:
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
             --job_id target_gpu_implicit_baroclinic_wave
         artifact_paths: "target_gpu_implicit_baroclinic_wave/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
           slurm_cpus_per_task: 4
@@ -71,6 +73,8 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M.yml
             --job_id gpu_hs_rhoe_equil_55km_nz63_0M
         artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
           slurm_cpus_per_task: 4
@@ -87,6 +91,9 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M_4process.yml
             --job_id gpu_hs_rhoe_equil_55km_nz63_0M_4process
         artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -104,6 +111,9 @@ steps:
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
             --job_id target_gpu_implicit_baroclinic_wave_4process
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -123,6 +133,9 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_1process.yml
             --job_id gpu_aquaplanet_dyamond_ss_1process
         artifact_paths: "gpu_aquaplanet_dyamond_ss_1process/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -140,6 +153,9 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_2process.yml
             --job_id gpu_aquaplanet_dyamond_ss_2process
         artifact_paths: "gpu_aquaplanet_dyamond_ss_2process/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -157,6 +173,9 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_4process.yml
             --job_id gpu_aquaplanet_dyamond_ss_4process
         artifact_paths: "gpu_aquaplanet_dyamond_ss_4process/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -173,6 +192,8 @@ steps:
           - >
             julia --color=yes --project=examples post_processing/plot_gpu_strong_scaling.jl gpu_aquaplanet_dyamond_ss
         artifact_paths: "gpu_aquaplanet_dyamond_ss/*"
+        env:
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_cpus_per_task: 1
           slurm_ntasks: 1
@@ -190,6 +211,9 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_1process.yml
             --job_id gpu_aquaplanet_dyamond_ws_1process
         artifact_paths: "gpu_aquaplanet_dyamond_ws_1process/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -207,6 +231,9 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_2process.yml
             --job_id gpu_aquaplanet_dyamond_ws_2process
         artifact_paths: "gpu_aquaplanet_dyamond_ws_2process/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -224,6 +251,9 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_4process.yml
             --job_id gpu_aquaplanet_dyamond_ws_4process
         artifact_paths: "gpu_aquaplanet_dyamond_ws_4process/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -240,6 +270,9 @@ steps:
           - >
             julia --color=yes --project=examples post_processing/plot_gpu_weak_scaling.jl gpu_aquaplanet_dyamond_ws
         artifact_paths: "gpu_aquaplanet_dyamond_ws/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_cpus_per_task: 1
           slurm_ntasks: 1
@@ -259,6 +292,9 @@ steps:
             --config_file ${MODEL_CONFIG_PATH}aquaplanet_diagedmf.yml
             --job_id gpu_aquaplanet_diagedmf
         artifact_paths: "gpu_aquaplanet_diagedmf/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -272,6 +308,8 @@ steps:
           --config_file ${MODEL_CONFIG_PATH}aquaplanet_diagedmf.yml
           --job_id gpu_aquaplanet_diagedmf_benchmark
         artifact_paths: "gpu_aquaplanet_diagedmf_benchmark/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
 
@@ -287,6 +325,9 @@ steps:
             --config_file ${MODEL_CONFIG_PATH}aquaplanet_progedmf.yml
             --job_id gpu_aquaplanet_progedmf
         artifact_paths: "gpu_aquaplanet_progedmf/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          CLIMACOMMS_CONTEXT: "MPI"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -300,5 +341,7 @@ steps:
           --config_file ${MODEL_CONFIG_PATH}aquaplanet_progedmf.yml
           --job_id gpu_aquaplanet_progedmf_benchmark
         artifact_paths: "gpu_aquaplanet_progedmf_benchmark/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1

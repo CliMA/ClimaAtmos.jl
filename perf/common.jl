@@ -10,7 +10,9 @@ TargetJobConfig(target_job) =
     CA.AtmosConfig(CA.config_from_target_job(target_job))
 
 import ClimaTimeSteppers as CTS
-get_W(i::CTS.DistributedODEIntegrator) = i.cache.newtons_method_cache.j
+get_W(i::CTS.DistributedODEIntegrator) =
+    hasproperty(i.cache, :W) ? i.cache.W : i.cache.newtons_method_cache.j
+get_W(i::CTS.RosenbrockAlgorithm) = i.cache.W
 get_W(i) = i.cache.W
 f_args(i, f::CTS.ForwardEulerODEFunction) = (copy(i.u), i.u, i.p, i.t, i.dt)
 f_args(i, f) = (similar(i.u), i.u, i.p, i.t)
