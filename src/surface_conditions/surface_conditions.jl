@@ -334,6 +334,14 @@ function surface_state_to_conditions(
     )
 end
 
+#Sphere SST distribution from Wing et al. (2023) https://gmd.copernicus.org/preprints/gmd-2023-235/
+function surface_temperature(::RCEMIPIISphereSST, coordinates)
+    (; lat) = coordinates
+    FT = eltype(lat)
+    T = FT(300) + FT(1.25) / 2 * cosd(360 * lat / 54)
+    return T
+end
+
 function surface_temperature(::ZonallySymmetricSST, coordinates)
     (; lat, z) = coordinates
     FT = eltype(lat)
