@@ -1083,6 +1083,7 @@ EDMFBoxPlots = Union{
 }
 
 EDMFBoxPlotsWithPrecip = Union{
+    Val{:diagnostic_edmfx_dycoms_rf02_box},
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_trmm_column},
     Val{:diagnostic_edmfx_rico_box},

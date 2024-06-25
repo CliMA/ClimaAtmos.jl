@@ -191,7 +191,7 @@ precip_model:
   help: "Precipitation model [`nothing` (default), `0M`]"
   value: ~
 cloud_model:
-  help: "Cloud model [`grid_scale`, `quadrature` (default)]"
+  help: "Cloud model [`grid_scale`, `quadrature` (default), `diagnostic_edmfx`]"
   value: "quadrature"
 perf_summary:
   help: "Flag for collecting performance summary information"

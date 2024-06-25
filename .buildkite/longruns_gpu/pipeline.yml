@@ -13,6 +13,7 @@ env:
   SLURM_GRES_FLAGS: "allow-task-sharing"
   GPU_CONFIG_PATH: "config/gpu_configs/"
   MODEL_CONFIG_PATH: "config/model_configs/"
+  CONFIG_PATH: "config/longrun_configs"
   CLIMAATMOS_GC_NSTEPS: 10
 
 timeout_in_minutes: 1440
@@ -49,7 +50,7 @@ steps:
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file config/model_configs/les_dycoms_box.yml
             --job_id dycoms
-        artifact_paths: "dycoms_4gpu/output_active/*"
+        artifact_paths: "dycoms/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           CLIMACOMMS_CONTEXT: "MPI"

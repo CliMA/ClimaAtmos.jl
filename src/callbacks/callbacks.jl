@@ -70,6 +70,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     FT = Spaces.undertype(axes(Y.c))
     thermo_params = CAP.thermodynamics_params(params)
+    T_min = CAP.optics_lookup_temperature_min(params)
+    T_max = CAP.optics_lookup_temperature_max(params)
 
     sfc_ts = sfc_conditions.ts
     sfc_T =
@@ -79,9 +81,15 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     ᶜp = Fields.array2field(radiation_model.center_pressure, axes(Y.c))
     ᶜT = Fields.array2field(radiation_model.center_temperature, axes(Y.c))
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
-    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
+    # TODO: move this to RRTMGP
+    @. ᶜT =
+        min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
 
     if !(radiation_model.radiation_mode isa RRTMGPI.GrayRadiation)
+        ᶜrh = Fields.array2field(
+            radiation_model.center_relative_humidity,
+            axes(Y.c),
+        )
         ᶜvmr_h2o = Fields.array2field(
             radiation_model.center_volume_mixing_ratio_h2o,
             axes(Y.c),
@@ -94,6 +102,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             if t < t_increasing_humidity
                 max_relative_humidity *= t / t_increasing_humidity
             end
+            @. ᶜrh = max_relative_humidity
 
             # temporarily store ᶜq_tot in ᶜvmr_h2o
             ᶜq_tot = ᶜvmr_h2o
@@ -114,6 +123,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 thermo_params,
                 TD.PhasePartition(thermo_params, ᶜts),
             )
+            @. ᶜrh = TD.relative_humidity(thermo_params, ᶜts)
         end
     end
 

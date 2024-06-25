@@ -5,9 +5,9 @@ manifest_format = "2.0"
 project_hash = "64afcb8dacf7a673d0068ba1a72602801e8d529a"
 
 [[deps.ADTypes]]
-git-tree-sha1 = "fc02d55798c1af91123d07915a990fbb9a10d146"
+git-tree-sha1 = "2314e58e823f0fd6ee02dbbecb997370f501dd4a"
 uuid = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
-version = "1.3.0"
+version = "1.5.0"
 weakdeps = ["ChainRulesCore", "EnzymeCore"]
 
     [deps.ADTypes.extensions]
@@ -143,9 +143,9 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.AtmosphericProfilesLibrary]]
 deps = ["Dierckx", "LinearAlgebra"]
-git-tree-sha1 = "c6be1ce28b7870a60400c51c75dc1b08d6a8dd73"
+git-tree-sha1 = "5c63ec6a9d190d2c10bb2045a8ccbe3a45cf7b88"
 uuid = "86bc3604-9858-485a-bdbe-831ec50de11d"
-version = "0.1.4"
+version = "0.1.5"
 
 [[deps.Atomix]]
 deps = ["UnsafeAtomics"]
@@ -295,12 +295,12 @@ weakdeps = ["SparseArrays"]
 deps = ["Adapt", "ArgParse", "ArtifactWrappers", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Colors", "Dates", "Dierckx", "DiffEqBase", "DocStringExtensions", "FastGaussQuadrature", "Insolation", "Interpolations", "IntervalSets", "Krylov", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "Pkg", "Printf", "RRTMGP", "Random", "RootSolvers", "SciMLBase", "StaticArrays", "Statistics", "StatsBase", "SurfaceFluxes", "Thermodynamics", "YAML"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
-version = "0.26.0"
+version = "0.26.2"
 
 [[deps.ClimaComms]]
-git-tree-sha1 = "d76590e99fa942e07f1e992a4d4a5e25121a26d6"
+git-tree-sha1 = "2ca8c9ca6131a7be8ca262e6db79bc7aa94ab597"
 uuid = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
-version = "0.6.2"
+version = "0.6.3"
 
     [deps.ClimaComms.extensions]
     ClimaCommsCUDAExt = "CUDA"
@@ -332,9 +332,9 @@ version = "0.2.2"
 
 [[deps.ClimaParams]]
 deps = ["DocStringExtensions", "TOML", "Test"]
-git-tree-sha1 = "8da1dc4aa297847cf74c51168cab1995e5631eeb"
+git-tree-sha1 = "0b5afc75bd3aa7c30d76c2d33b8361f961e86237"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "0.10.7"
+version = "0.10.8"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
@@ -720,9 +720,9 @@ uuid = "4e289a0a-7415-4d19-859d-a7e5c4648b56"
 version = "1.0.4"
 
 [[deps.EnzymeCore]]
-git-tree-sha1 = "88bc63137eb033acc3afe1b9875717889c718c46"
+git-tree-sha1 = "3a3177ba05b4763234819060fb6c2e1613379ca6"
 uuid = "f151be2c-9106-41f4-ab19-57ee4f262869"
-version = "0.7.5"
+version = "0.7.6"
 weakdeps = ["Adapt"]
 
     [deps.EnzymeCore.extensions]
@@ -1249,9 +1249,9 @@ version = "0.6.0"
 
 [[deps.KernelAbstractions]]
 deps = ["Adapt", "Atomix", "InteractiveUtils", "LinearAlgebra", "MacroTools", "PrecompileTools", "Requires", "SparseArrays", "StaticArrays", "UUIDs", "UnsafeAtomics", "UnsafeAtomicsLLVM"]
-git-tree-sha1 = "8e5a339882cc401688d79b811d923a38ba77d50a"
+git-tree-sha1 = "b8fcefe4418e4a7a2c3aaac883fecddd8efbe286"
 uuid = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
-version = "0.9.20"
+version = "0.9.21"
 weakdeps = ["EnzymeCore"]
 
     [deps.KernelAbstractions.extensions]
@@ -1967,9 +1967,9 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "Artifacts", "ClimaComms", "DocStringExtensions", "Random"]
-git-tree-sha1 = "f68548d7d1b314c8a9dcae14601e66115a363624"
+git-tree-sha1 = "866d94b4cf46fe3a0ffd35d1414a3a4181c9db08"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.15.0"
+version = "0.17.0"
 
     [deps.RRTMGP.extensions]
     CreateParametersExt = "ClimaParams"
@@ -2006,9 +2006,9 @@ version = "1.3.4"
 
 [[deps.RecursiveArrayTools]]
 deps = ["Adapt", "ArrayInterface", "DocStringExtensions", "GPUArraysCore", "IteratorInterfaceExtensions", "LinearAlgebra", "RecipesBase", "SparseArrays", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables"]
-git-tree-sha1 = "980aabbeac7aee70d0e452a72b0c68b5b266cc7b"
+git-tree-sha1 = "3400ce27995422fb88ffcd3af9945565aad947f0"
 uuid = "731186ca-8d62-57ce-b412-fbd966d074cd"
-version = "3.24.0"
+version = "3.23.1"
 
     [deps.RecursiveArrayTools.extensions]
     RecursiveArrayToolsFastBroadcastExt = "FastBroadcast"
@@ -2397,9 +2397,9 @@ weakdeps = ["ClimaParams"]
 
 [[deps.SymbolicIndexingInterface]]
 deps = ["Accessors", "ArrayInterface", "RuntimeGeneratedFunctions", "StaticArraysCore"]
-git-tree-sha1 = "2d1b8941f58d0c878b3c71d9b17188a2eb649a8b"
+git-tree-sha1 = "a5f6f138b740c9d93d76f0feddd3092e6ef002b7"
 uuid = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
-version = "0.3.24"
+version = "0.3.22"
 
 [[deps.TOML]]
 deps = ["Dates"]

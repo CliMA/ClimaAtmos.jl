@@ -1,7 +1,7 @@
 name = "ClimaAtmos"
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 authors = ["Climate Modeling Alliance"]
-version = "0.26.0"
+version = "0.26.2"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -72,7 +72,7 @@ NCDatasets = "0.14.2"
 NVTX = "0.3"
 Pkg = "1.8"
 Printf = "1"
-RRTMGP = "0.15"
+RRTMGP = "0.17"
 Random = "1"
 RootSolvers = "0.2, 0.3, 0.4"
 SciMLBase = "1, 2"

@@ -112,6 +112,7 @@ function radiation_model_cache(
             kwargs = (;
                 use_global_means_for_well_mixed_gases = true,
                 center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
+                center_relative_humidity = NaN, # initialized in callback
                 center_volume_mixing_ratio_o3,
                 volume_mixing_ratio_co2 = input_vmr("carbon_dioxide_GM"),
                 volume_mixing_ratio_n2o = input_vmr("nitrous_oxide_GM"),
@@ -237,10 +238,10 @@ function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
 end
 
 #####
-##### DYCOMS_RF01 radiation
+##### DYCOMS_RF01 and DYCOMS_RF02 radiation
 #####
 
-function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS_RF01)
+function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS)
     FT = Spaces.undertype(axes(Y.c))
     NT = NamedTuple{(:z, :ρ, :q_tot), NTuple{3, FT}}
     return (;
@@ -253,7 +254,7 @@ function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS_RF01)
         net_energy_flux_sfc = [Geometry.WVector(FT(0))],
     )
 end
-function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS_RF01)
+function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     @assert !(p.atmos.moisture_model isa DryModel)
 
     (; params) = p

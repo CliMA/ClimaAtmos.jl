@@ -124,6 +124,8 @@ function create_parameter_set(config::AtmosConfig)
         :held_suarez_minimum_temperature => :T_min_hs,
         :ocean_surface_albedo => :idealized_ocean_albedo,
         :water_refractive_index => :water_refractive_index,
+        :optics_lookup_temperature_min => :optics_lookup_temperature_min,
+        :optics_lookup_temperature_max => :optics_lookup_temperature_max,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPC, MPP, WP, SFP, TCP}(;

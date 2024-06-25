@@ -3,6 +3,16 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
+
+v0.26.2
+-------
+- Limit temperature input to RRTMGP within the lookup table range.
+  PR [#3124](https://github.com/CliMA/ClimaAtmos.jl/pull/3124)
+  
+v0.26.1
+-------
+- Updated RRTMGP compat from 0.15 to 0.16
+  PR [#3114](https://github.com/CliMA/ClimaAtmos.jl/pull/3114)
 - ![][badge-🔥behavioralΔ] Removed the filter for shortwave radiative fluxes. 
   PR [#3099](https://github.com/CliMA/ClimaAtmos.jl/pull/3099).
 
