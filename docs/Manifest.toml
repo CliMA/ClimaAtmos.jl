@@ -5,9 +5,9 @@ manifest_format = "2.0"
 project_hash = "64afcb8dacf7a673d0068ba1a72602801e8d529a"
 
 [[deps.ADTypes]]
-git-tree-sha1 = "fa0822e5baee6e23081c2685ae27265dabee23d8"
+git-tree-sha1 = "2314e58e823f0fd6ee02dbbecb997370f501dd4a"
 uuid = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
-version = "1.4.0"
+version = "1.5.0"
 weakdeps = ["ChainRulesCore", "EnzymeCore"]
 
     [deps.ADTypes.extensions]
@@ -1249,9 +1249,9 @@ version = "0.6.0"
 
 [[deps.KernelAbstractions]]
 deps = ["Adapt", "Atomix", "InteractiveUtils", "LinearAlgebra", "MacroTools", "PrecompileTools", "Requires", "SparseArrays", "StaticArrays", "UUIDs", "UnsafeAtomics", "UnsafeAtomicsLLVM"]
-git-tree-sha1 = "8e5a339882cc401688d79b811d923a38ba77d50a"
+git-tree-sha1 = "b8fcefe4418e4a7a2c3aaac883fecddd8efbe286"
 uuid = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
-version = "0.9.20"
+version = "0.9.21"
 weakdeps = ["EnzymeCore"]
 
     [deps.KernelAbstractions.extensions]
@@ -1967,9 +1967,9 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "Artifacts", "ClimaComms", "DocStringExtensions", "Random"]
-git-tree-sha1 = "9a507a71e305f4b15e9d9f9c65e1752f6e20bcc4"
+git-tree-sha1 = "866d94b4cf46fe3a0ffd35d1414a3a4181c9db08"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.16.0"
+version = "0.17.0"
 
     [deps.RRTMGP.extensions]
     CreateParametersExt = "ClimaParams"
