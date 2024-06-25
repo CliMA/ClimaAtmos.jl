@@ -22,7 +22,7 @@ z_max: 3e3
 z_elem: 60 
 z_stretch: false
 perturb_initstate: false
-dt: "50secs"
+dt: "25secs"
 t_end: "48hours"
 dt_save_state_to_disk: "600mins"
 toml: [../SingleColumn/configs/perfect_prog_bomex.toml]
