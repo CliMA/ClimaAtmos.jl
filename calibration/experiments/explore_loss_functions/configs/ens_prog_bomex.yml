@@ -1,0 +1,40 @@
+initial_condition: "Bomex"
+subsidence: "Bomex"
+edmf_coriolis: "Bomex"
+ls_adv: "Bomex"
+surface_setup: "Bomex"
+turbconv: "prognostic_edmfx"
+implicit_diffusion: true
+implicit_sgs_advection: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 3
+edmfx_upwinding: first_order
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_velocity_relaxation: true
+prognostic_tke: true
+moist: "equil"
+config: "column"
+z_max: 3e3
+z_elem: 60 
+z_stretch: false
+perturb_initstate: false
+dt: "50secs"
+# t_end: "48hours"
+dt_save_state_to_disk: "Inf"
+t_end: "24hours"
+restart_file: day0.72000.hdf5
+
+toml: [../SingleColumn/configs/ens_prog_bomex.toml]
+netcdf_interpolation_num_points: [2, 2, 60]
+log_progress: false
+
+output_default_diagnostics: false
+diagnostics:
+  - reduction: average
+    short_name: [ts, ta, ua, va, wa, hur, hus, cl, clw, entr, detr]
+    period: 10mins
+    # use ta and hus

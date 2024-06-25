@@ -1,0 +1,6 @@
+["equator_pole_temperature_gradient_wet"]
+prior = "Parameterized(Normal(4.779568,0.31223328))"
+constraint = "[bounded_below(0)]"
+# EKP.ParameterDistributions.constrained_gaussian("name", 125, 40, 0, Inf)
+type = "float"
+alias = "ΔT_y_wet"
