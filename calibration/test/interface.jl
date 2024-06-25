@@ -1,15 +1,8 @@
-#= Tests for ensuring that the calibration/model interface sets AtmosConfig correctly.
-To run: julia --project=test
-```
-import Pkg; Pkg.add(url="https://github.com/CliMA/ClimaCalibrate.jl.git")
-include("test/calibration_interface.jl")
-```
-=#
+# Tests for ensuring that the calibration/model interface sets the AtmosConfig correctly.
 import ClimaAtmos as CA
 import ClimaCalibrate
 using Test
 
-experiment_dir = dirname(Base.active_project())
 include(joinpath(pkgdir(CA), "calibration", "model_interface.jl"))
 
 member = 1

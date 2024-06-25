@@ -28,7 +28,6 @@ docs/site/
 # environment.
 /Manifest.toml
 test/Manifest.toml
-calibration/experiments/sphere_held_suarez_rhoe_equilmoist/Manifest.toml
 
 # ignore vscode artifacts
 *.vscode

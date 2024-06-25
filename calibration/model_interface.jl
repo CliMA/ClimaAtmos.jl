@@ -4,7 +4,10 @@ import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 using ClimaUtilities.ClimaArtifacts
 import ClimaCalibrate:
-    set_up_forward_model, run_forward_model, path_to_ensemble_member
+    set_up_forward_model,
+    run_forward_model,
+    path_to_ensemble_member,
+    ExperimentConfig
 
 """
     set_up_forward_model(member, iteration, experiment_dir::AbstractString)
@@ -15,6 +18,13 @@ Return an AtmosConfig object for the given member and iteration.
 Turns off default diagnostics and sets the TOML parameter file to the member's path.
 This assumes that the  config dictionary has an `output_dir` key.
 """
+function set_up_forward_model(member, iteration, ::ExperimentConfig)
+    # Assume experiment_dir is project dir
+    experiment_dir = dirname(Base.active_project())
+    config_dict = YAML.load_file(joinpath(experiment_dir, "model_config.yml"))
+    set_up_forward_model(member, iteration, config_dict::AbstractDict)
+end
+
 function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
     config_dict = YAML.load_file(joinpath(experiment_dir, "model_config.yml"))
     set_up_forward_model(member, iteration, config_dict::AbstractDict)
