@@ -30,3 +30,4 @@ dt: "100secs"
 t_end: "120days"
 toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M.toml]
 netcdf_output_at_levels: true
+vert_diff: "false"
