@@ -40,6 +40,9 @@ function radiation_model_cache(
     context = ClimaComms.context(axes(Y.c))
     device = context.device
     (; idealized_h2o, idealized_insolation, idealized_clouds) = radiation_mode
+    if !(radiation_mode isa RRTMGPI.GrayRadiation)
+        (; aerosol_radiation) = radiation_mode
+    end
     FT = Spaces.undertype(axes(Y.c))
     DA = ClimaComms.array_type(device){FT}
     rrtmgp_params = CAP.rrtmgp_params(params)
@@ -179,6 +182,15 @@ function radiation_model_cache(
                         center_cloud_fraction = NaN, # initialized in callback
                     )
                 end
+            end
+
+            if aerosol_radiation
+                kwargs = (;
+                    kwargs...,
+                    center_aerosol_type = 3, # assuming only sulfate
+                    center_aerosol_radius = 0.2, # assuming fixed aerosol radius
+                    center_aerosol_column_mass_density = NaN, # initialized in callback
+                )
             end
         end
 

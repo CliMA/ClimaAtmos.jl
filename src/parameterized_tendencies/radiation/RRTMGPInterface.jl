@@ -23,18 +23,21 @@ struct ClearSkyRadiation <: AbstractRRTMGPMode
     idealized_insolation::Bool
     idealized_clouds::Bool
     add_isothermal_boundary_layer::Bool
+    aerosol_radiation::Bool
 end
 struct AllSkyRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
     idealized_insolation::Bool
     idealized_clouds::Bool
     add_isothermal_boundary_layer::Bool
+    aerosol_radiation::Bool
 end
 struct AllSkyRadiationWithClearSkyDiagnostics <: AbstractRRTMGPMode
     idealized_h2o::Bool
     idealized_insolation::Bool
     idealized_clouds::Bool
     add_isothermal_boundary_layer::Bool
+    aerosol_radiation::Bool
 end
 
 """
@@ -787,6 +790,25 @@ function RRTMGPModel(
             )
         end
 
+        if radiation_mode.aerosol_radiation
+            aero_type = DA{FT}(undef, nlay, ncol)
+            name = "center_aerosol_type"
+            set_and_save!(aero_type, name, t..., dict)
+            aero_size = DA{FT}(undef, nlay, ncol)
+            name = "center_aerosol_radius"
+            set_and_save!(aero_size, name, t..., dict)
+            aero_mass = DA{FT}(undef, nlay, ncol)
+            name = "center_aerosol_column_mass_density"
+            set_and_save!(aero_mass, name, t..., dict)
+            aerosol_state = RRTMGP.AtmosphericStates.AerosolState(
+                aero_type,
+                aero_size,
+                aero_mass,
+            )
+        else
+            aerosol_state = nothing
+        end
+
         as = RRTMGP.AtmosphericStates.AtmosphericState(
             lon,
             lat,
@@ -797,7 +819,7 @@ function RRTMGPModel(
             t_sfc,
             vmr,
             cloud_state,
-            nothing,
+            aerosol_state,
         )
     end
 

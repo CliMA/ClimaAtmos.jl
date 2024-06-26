@@ -61,6 +61,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     (; params) = p
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p.radiation
     (; ᶠradiation_flux, radiation_model) = p.radiation
+    (; radiation_mode) = p.atmos
 
     # If we have prescribed aerosols, we need to update them
     for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
@@ -85,7 +86,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     @. ᶜT =
         min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
 
-    if !(radiation_model.radiation_mode isa RRTMGPI.GrayRadiation)
+    if !(radiation_mode isa RRTMGPI.GrayRadiation)
         ᶜrh = Fields.array2field(
             radiation_model.center_relative_humidity,
             axes(Y.c),
@@ -132,8 +133,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     end
 
     if !idealized_clouds && !(
-        radiation_model.radiation_mode isa RRTMGPI.GrayRadiation ||
-        radiation_model.radiation_mode isa RRTMGPI.ClearSkyRadiation
+        radiation_mode isa RRTMGPI.GrayRadiation ||
+        radiation_mode isa RRTMGPI.ClearSkyRadiation
     )
         ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
         ᶜlwp = Fields.array2field(
@@ -155,6 +156,17 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             kg_to_g_factor * Y.c.ρ * cloud_diagnostics_tuple.q_ice * ᶜΔz /
             max(cloud_diagnostics_tuple.cf, eps(FT))
         @. ᶜfrac = cloud_diagnostics_tuple.cf
+    end
+
+    if !(radiation_mode isa RRTMGPI.GrayRadiation)
+        if radiation_mode.aerosol_radiation
+            ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
+            ᶜaero_conc = Fields.array2field(
+                radiation_model.center_aerosol_column_mass_density,
+                axes(Y.c),
+            )
+            @. ᶜaero_conc = p.tracers.prescribed_aerosol_fields.:SO4 * ᶜΔz
+        end
     end
 
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
