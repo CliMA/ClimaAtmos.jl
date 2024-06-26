@@ -102,9 +102,9 @@ dt_rad:
 idealized_clouds:
   help: "Use idealized clouds in radiation model [`false` (default), `true`]"
   value: false
-idealized_insolation:
-  help: "Use idealized insolation in radiation model [`false`, `true` (default)]"
-  value: true
+insolation:
+  help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`]"
+  value: "idealized"
 add_isothermal_boundary_layer:
   help: "Add an isothermal boundary layer above the domain top for radiation [`false`, `true` (default)]"
   value: true

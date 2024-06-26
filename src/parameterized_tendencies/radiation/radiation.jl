@@ -40,7 +40,7 @@ function radiation_model_cache(
 )
     context = ClimaComms.context(axes(Y.c))
     device = context.device
-    (; idealized_h2o, idealized_insolation, idealized_clouds) = radiation_mode
+    (; idealized_h2o, idealized_clouds) = radiation_mode
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         (; aerosol_radiation) = radiation_mode
         if aerosol_radiation && !("SO4" in aerosol_names)
@@ -207,14 +207,7 @@ function radiation_model_cache(
             )
         end
 
-        if idealized_insolation # perpetual equinox with no diurnal cycle
-            cos_zenith = cos(FT(π) / 3)
-            weighted_irradiance =
-                @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
-                   (4 * cos_zenith)
-        else
-            cos_zenith = weighted_irradiance = NaN # initialized in callback
-        end
+        cos_zenith = weighted_irradiance = NaN # initialized in callback
 
         radiation_model = RRTMGPI.RRTMGPModel(
             rrtmgp_params,
@@ -237,7 +230,6 @@ function radiation_model_cache(
         )
     end
     return (;
-        idealized_insolation,
         orbital_data,
         idealized_h2o,
         idealized_clouds,

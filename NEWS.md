@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
+- ![][badge-💥breaking] Change the "idealized_insolation" argument to "insolation", 
+  and add RCEMIP insolation. PR [#3150](https://github.com/CliMA/ClimaAtmos.jl/pull/3150)
 
 v0.26.3
 -------

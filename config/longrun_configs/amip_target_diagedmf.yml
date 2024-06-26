@@ -12,7 +12,7 @@ override_τ_precip: false
 rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
-idealized_insolation: false
+insolation: "timevarying"
 surface_setup: "DefaultMoninObukhov"
 turbconv: "diagnostic_edmfx"
 ode_algo: ARS343

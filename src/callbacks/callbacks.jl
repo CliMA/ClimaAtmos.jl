@@ -59,7 +59,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     (; ᶜts, cloud_diagnostics_tuple, sfc_conditions) = p.precomputed
     (; params) = p
-    (; idealized_insolation, idealized_h2o, idealized_clouds) = p.radiation
+    (; idealized_h2o, idealized_clouds) = p.radiation
     (; ᶠradiation_flux, radiation_model) = p.radiation
     (; radiation_mode) = p.atmos
 
@@ -128,8 +128,9 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         end
     end
 
-    if !idealized_insolation && !(p.atmos.surface_albedo isa CouplerAlbedo)
-        set_insolation_variables!(Y, p, t)
+    if p.atmos.insolation isa IdealizedInsolation ||
+       !(p.atmos.surface_albedo isa CouplerAlbedo)
+        set_insolation_variables!(Y, p, t, p.atmos.insolation)
     end
 
     if !idealized_clouds && !(
@@ -176,8 +177,33 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     return nothing
 end
 
-function set_insolation_variables!(Y, p, t)
+#Uniform insolation, magnitudes from Wing et al. (2018)
+#Note that the TOA downward shortwave fluxes won't be the same as the values in the paper if add_isothermal_boundary_layer is true
+function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
+    FT = Spaces.undertype(axes(Y.c))
+    (; radiation_model) = p.radiation
+    radiation_model.cos_zenith .= cosd(FT(42.05))
+    radiation_model.weighted_irradiance .= FT(551.58)
+end
 
+function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
+    FT = Spaces.undertype(axes(Y.c))
+    bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
+    if eltype(bottom_coords) <: Geometry.LatLongZPoint
+        latitude = Fields.field2array(bottom_coords.lat)
+    else
+        latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
+    end
+    (; radiation_model) = p.radiation
+    # perpetual equinox with no diurnal cycle
+    radiation_model.cos_zenith .= cos(FT(π) / 3)
+    weighted_irradiance =
+        @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
+           (4 * cos(FT(π) / 3))
+    radiation_model.weighted_irradiance .= weighted_irradiance
+end
+
+function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
     FT = Spaces.undertype(axes(Y.c))
     params = p.params
     insolation_params = CAP.insolation_params(params)
