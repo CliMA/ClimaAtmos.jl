@@ -11,7 +11,6 @@ rad: "allskywithclear"
 dt_rad: "6hours"
 surface_setup: "DefaultMoninObukhov"
 turbconv: "diagnostic_edmfx"
-ode_algo: ARS343
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 prognostic_tke: true
