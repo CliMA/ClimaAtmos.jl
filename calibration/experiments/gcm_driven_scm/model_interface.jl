@@ -13,6 +13,7 @@ include("get_les_metadata.jl")
 const experiment_config_dict = YAML.load_file(joinpath(@__DIR__, "experiment_config.yml"))
 const output_dir = experiment_config_dict["output_dir"]
 const num_les_cases = experiment_config_dict["num_les_cases"]
+const model_config = experiment_config_dict["model_config"]
 
 
 function get_forcing_file(i, ref_paths)
@@ -29,7 +30,7 @@ Turns off default diagnostics and sets the TOML parameter file to the member's p
 This assumes that the  config dictionary has an `output_dir` key.
 """
 function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
-    config_dict = YAML.load_file(joinpath(experiment_dir, "model_config.yml"))
+    config_dict = YAML.load_file(joinpath(experiment_dir, model_config))
     iter_path = CAL.path_to_iteration(output_dir, iteration)
     eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
     member_path = path_to_ensemble_member(output_dir, iteration, member)

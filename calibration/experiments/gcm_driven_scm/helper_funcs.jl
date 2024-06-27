@@ -11,6 +11,8 @@ const OptVec{T} = Union{Nothing, Vector{T}}
 "Optional real"
 const OptReal = Union{Real, Nothing}
 
+"Optional real"
+const OptDict = Union{Nothing, Dict}
 
 CLIMADIAGNOSTICS_LES_NAME_MAP =
     Dict("thetaa" => "theta_mean", "hus" => "qt_mean", "clw" => "ql_mean")
@@ -307,6 +309,7 @@ function normalize_profile(
     y_names,
     prof_dof::IT,
     prof_indices::OptVec{Bool} = nothing;
+    norm_factors_dict = nothing,
     z_score_norm::Bool = true,
 ) where {FT <: Real, IT <: Integer}
     y_ = deepcopy(y)
@@ -320,11 +323,17 @@ function normalize_profile(
 
         if z_score_norm
             y_i = y_[loc_start:loc_end]
-            y_μ, y_σ = mean(y_i), std(y_i)
+
+            if !isnothing(norm_factors_dict)
+                norm_i = norm_factors_dict[y_names[i]]
+                y_μ, y_σ = norm_i
+            else
+                y_μ, y_σ = mean(y_i), std(y_i)
+            end
             y_[loc_start:loc_end] = (y_i .- y_μ) ./ y_σ
             norm_vec[i, :] = [y_μ, y_σ]
         else
-            y_[loc_start:loc_end] = y_[loc_start:loc_end] #./ sqrt(norm_vec[i])
+            y_[loc_start:loc_end] = y_[loc_start:loc_end]
         end
         loc_start = loc_end + 1
     end
@@ -499,17 +508,17 @@ function get_obs(
     ti::FT = 5.5 * 3600 * 24,
     tf::FT = 6.0 * 3600 * 24,
     model_error::OptVec{FT} = nothing,
-    pooled_var_dict::Union{Dict, Nothing} = nothing,
+    norm_factors_dict = nothing,
     z_score_norm = true, 
     Σ_const::FT = nothing,
 ) where {FT <: Real}
 
     # map to CA names to LES names 
     y_names = [CLIMADIAGNOSTICS_LES_NAME_MAP[var_i] for var_i in y_names]
-    if !isnothing(pooled_var_dict)
-        pooled_var_dict = Dict(
+    if !isnothing(norm_factors_dict)
+        norm_factors_dict = Dict(
             CLIMADIAGNOSTICS_LES_NAME_MAP[var_i] => value for
-            (var_i, value) in pooled_var_dict
+            (var_i, value) in norm_factors_dict
         )
     end
 
@@ -523,11 +532,11 @@ function get_obs(
         prof_ind = true,
     )
     # normalize
-    y, norm_vec = normalize_profile(y, y_names, length(z_scm), prof_indices, z_score_norm = z_score_norm)
+    y, norm_vec = normalize_profile(y, y_names, length(z_scm), prof_indices, norm_factors_dict = norm_factors_dict, z_score_norm = z_score_norm)
 
 
     if !isnothing(Σ_const)
-        Σ = Diagonal(Σ_const * ones(length(y)))
+        Σ = collect(Diagonal(Σ_const * ones(length(y))))
     else
         # time covariance
         Σ, pool_var = get_time_covariance(

@@ -26,7 +26,7 @@ t_end: "72hours"
 dt_save_to_disk: "10mins"
 call_cloud_diagnostics_per_stage : true
 output_dir: output/gcm_driven_scm
-toml: [scm_tomls/prognostic_edmfx_bomex.toml]
+toml: [scm_tomls/prognostic_edmfx.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 # output_default_diagnostics: false

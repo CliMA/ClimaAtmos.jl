@@ -11,48 +11,64 @@ using YAML
 
 include("helper_funcs.jl")
 include("observation_map.jl")
+include("get_les_metadata.jl")
 
 
 config_dict = YAML.load_file("experiment_config.yml")
-model_config_dict = YAML.load_file("model_config.yml")
+const model_config = config_dict["model_config"]
+model_config_dict = YAML.load_file(model_config)
+
+const output_dir = config_dict["output_dir"]
+
+
+ref_paths = get_les_calibration_library()
+
+
+function get_iters_with_config(config_i::Int)
+    config_i_dir = "config_$config_i"
+    iters_with_config = []
+    for iter in 0:config_dict["n_iterations"]
+        for m in 1:config_dict["ensemble_size"]
+            member_path =
+                TOMLInterface.path_to_ensemble_member(output_dir, iter, m)
+
+            if isdir(member_path)
+                dirs = filter(entry -> isdir(joinpath(member_path, entry)), readdir(member_path))
+
+                if (config_i_dir in dirs) & ~(iter in iters_with_config)
+                    push!(iters_with_config, iter)
+                end
+
+            else
+                @show "Iteration not reached: $iter"
+            end
+
+        end
+    end
+    return iters_with_config
+end
 
 
 function ensemble_data(
-    iteration;
+    iteration,
+    config_i::Int,
+    ;
     var_name = "hus",
     reduction = "inst",
     output_dir = nothing,
 )
 
-    # if !isnothing(output_dir)
-    #     output_dir = output_dir
-    #     (; ensemble_size,) = config
-    # else
-    #     (; ensemble_size, output_dir) = config
-    # end
-    # dims = 60 # num vertical levels x num variables 
-
-
-    # G_ensemble = Array{Float64}(undef, dims..., ensemble_size)
     G_ensemble = Array{Float64}(
         undef,
         60,
         config_dict["ensemble_size"],
     )
 
-    # f = JLD2.jldopen("norm_vec_obs.jld2", "r+")
-    # norm_vec_obs = f["norm_vec_obs"][:]
-
-    f_diagnostics = JLD2.jldopen(
-        joinpath(config_dict["output_dir"], "norm_vec_obs.jld2"),
-        "r+",
-    )
-
     for m in 1:config_dict["ensemble_size"]
-        member_path =
-            TOMLInterface.path_to_ensemble_member(output_dir, iteration, m)
-        simdir = SimDir(joinpath(member_path, "output_active"))
+
         try
+            member_path = TOMLInterface.path_to_ensemble_member(output_dir, iteration, m)
+            simdir = SimDir(joinpath(member_path, "config_$config_i", "output_active"))
             G_ensemble[:, m] .=
                 get_var_data(simdir,
                 var_name; 
@@ -101,80 +117,77 @@ end
 
 
 
-# get eki object 
-output_dir = joinpath("output", "gcm_driven_scm")
-
 
 cal_vars = ["thetaa", "hus", "clw"]
 
-var_names = ("thetaa", "hus", "clw", "arup", "entr", "detr", "waup") #wa")
+var_names = ("thetaa", "hus", "clw", "arup", "entr", "detr", "waup", "tke") #wa")
 # var_name = "arup"
 reduction = "inst"
 
-iteration = 0
 
+# config_i = 14
+config_i = 19
 
 atmos_config = CA.AtmosConfig(model_config_dict)
-experiment_config_dict = YAML.load_file("experiment_config.yml")
 
 # get/store LES obs and norm factors 
 zc_model = get_z_grid(atmos_config)
 
-# zc_model = collect(33.333333:66.666666:4000.0)
+iterations = get_iters_with_config(config_i)
 
-f = JLD2.jldopen("norm_vec_obs.jld2", "r+")
-norm_vec_obs = f["norm_vec_obs"][:]
+for iteration in iterations 
+    @show "Iter: $iteration"
+    for var_name in var_names
 
-for var_name in var_names
-
-    data = ensemble_data(
-        iteration;
-        var_name = var_name,
-        reduction = reduction,
-        output_dir = output_dir,
-    )
-    eki_filepath = joinpath(
-        ClimaCalibrate.path_to_iteration(output_dir, iteration),
-        "eki_file.jld2",
-    )
-    eki = JLD2.load_object(eki_filepath)
-    prior_path = joinpath("./prior.toml")
-    prior = ClimaCalibrate.get_prior(prior_path)
-
-    plot(legend = false)  # Initialize an empty plot
-    for i in 1:size(data, 2)
-
-        y_var = data[:, i]
-
-        plot!(y_var, zc_model)  # Append each column to the plot
-    end
-    if in(var_name, cal_vars)
-        # y_truth = eki.obs_mean * sqrt(norm_vec_obs[1])
-        y_truth, Σ_obs, norm_vec_obs = get_obs(
-            model_config_dict["external_forcing_file"],
-            [var_name],
-            zc_model;
-            ti = experiment_config_dict["y_t_start_sec"],
-            tf = experiment_config_dict["y_t_end_sec"],
-            Σ_const = 0.05,
-            z_score_norm = false, 
+        data = ensemble_data(
+            iteration,
+            config_i;
+            var_name = var_name,
+            reduction = reduction,
+            output_dir = output_dir,
         )
-        plot!(y_truth, zc_model, color = :black, label = "LES")
+        eki_filepath = joinpath(
+            ClimaCalibrate.path_to_iteration(output_dir, iteration),
+            "eki_file.jld2",
+        )
+        eki = JLD2.load_object(eki_filepath)
+        prior_path = joinpath("./prior.toml")
+        prior = ClimaCalibrate.get_prior(prior_path)
+
+        plot(legend = false)  # Initialize an empty plot
+        for i in 1:size(data, 2)
+
+            y_var = data[:, i]
+
+            plot!(y_var, zc_model)  # Append each column to the plot
+        end
+        if in(var_name, cal_vars)
+            # y_truth = eki.obs_mean * sqrt(norm_vec_obs[1])
+            y_truth, Σ_obs, norm_vec_obs = get_obs(
+                ref_paths[config_i],
+                [var_name],
+                zc_model;
+                ti = config_dict["y_t_start_sec"],
+                tf = config_dict["y_t_end_sec"],
+                Σ_const = 0.05,
+                z_score_norm = false, 
+            )
+            plot!(y_truth, zc_model, color = :black, label = "LES")
+        end
+
+        plot!(
+            xlabel = var_name,
+            ylabel = "Height (z)",
+            title = "Matrix Columns vs. Height",
+        )
+
+        plot_rel_dir = joinpath(output_dir, "plots", "ensemble_plots", "config_$(config_i)")
+        if !isdir(plot_rel_dir)
+            mkpath(plot_rel_dir)
+        end
+
+        savefig(
+            joinpath(plot_rel_dir ,"ensemble_plot_$(var_name)_i_$(iteration).png"),
+        )
     end
-
-    plot!(
-        xlabel = var_name,
-        ylabel = "Height (z)",
-        title = "Matrix Columns vs. Height",
-    )
-
-    plot_rel_dir = joinpath(output_dir, "plots", "ensemble_plots")
-    if !isdir(plot_rel_dir)
-        mkpath(plot_rel_dir)
-    end
-
-    savefig(
-        joinpath(plot_rel_dir, "ensemble_plot_$(var_name)_i_$(iteration).png"),
-    )
-
 end

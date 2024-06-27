@@ -26,7 +26,7 @@ dt_save_state_to_disk: "10mins"
 toml: [scm_tomls/diagnostic_edmfx.toml]
 netcdf_interpolation_num_points: [2, 2, 60]
 netcdf_output_at_levels: true
-output_dir: output/minibatch
+output_dir: output/gcm_driven_scm
 diagnostics:
   # - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
   #   period: 10mins

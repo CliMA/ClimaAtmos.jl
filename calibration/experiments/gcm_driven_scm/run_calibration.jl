@@ -1,50 +1,130 @@
-import ClimaCalibrate:
-    calibrate, ExperimentConfig, CaltechHPC, get_prior, kwargs
+import ClimaCalibrate as CAL
 import ClimaAtmos as CA
 import EnsembleKalmanProcesses as EKP
+import YAML
+
+# import ClimaCalibrate:
+#     calibrate, ExperimentConfig, CaltechHPC, get_prior, kwargs
 import YAML
 import JLD2
 using LinearAlgebra
 
 include("helper_funcs.jl")
 include("observation_map.jl")
+include("get_les_metadata.jl")
+
+experiment_dir = dirname(Base.active_project())
+const model_interface = joinpath(experiment_dir, "model_interface.jl")
+const experiment_config = YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
+const n_iterations = experiment_config["n_iterations"]
+const ensemble_size = experiment_config["ensemble_size"]
+const output_dir = experiment_config["output_dir"]
+const model_config = experiment_config["model_config"]
+const prior = CAL.get_prior(joinpath(experiment_dir, "prior.toml"))
+
+# include(model_interface)
+
+#= TODO:
+1. Fix dimensions for obs map
+2. 
+=#
 
 # load configs and directories 
-experiment_dir = dirname(Base.active_project())
-model_config_dict = YAML.load_file("model_config.yml")
+
+model_config_dict = YAML.load_file(model_config)
 atmos_config = CA.AtmosConfig(model_config_dict)
-experiment_config_dict = YAML.load_file("experiment_config.yml")
+
 
 # get/store LES obs and norm factors 
 zc_model = get_z_grid(atmos_config)
-y_obs, Σ_obs, norm_vec_obs = get_obs(
-    model_config_dict["external_forcing_file"],
-    experiment_config_dict["y_var_names"],
-    zc_model;
-    ti = experiment_config_dict["y_t_start_sec"],
-    tf = experiment_config_dict["y_t_end_sec"],
-    Σ_const = 0.05,
-)
+
+norm_factors_dict = Dict("thetaa"=> [306.172, 8.07383], 
+                            "hus"=> [0.0063752, 0.00471147], 
+                            "clw"=> [2.67537e-6, 4.44155e-6])
 
 
-if !isdir(experiment_config_dict["output_dir"])
-    mkpath(experiment_config_dict["output_dir"])
+
+
+if !isdir(output_dir)
+    mkpath(output_dir)
 end
 
 JLD2.jldsave(
-    joinpath(experiment_config_dict["output_dir"], "norm_vec_obs.jld2");
-    norm_vec_obs = norm_vec_obs,
+    joinpath(output_dir, "norm_factors.jld2");
+    norm_factors_dict = norm_factors_dict,
 )
-JLD2.save_object("obs_mean.jld2", y_obs)
-JLD2.save_object("obs_noise_cov.jld2", Σ_obs)
 
 
-# define slurm kwargs and start calibration
-slurm_kwargs = kwargs(time = 90, mem = "16G")
-eki = calibrate(
-    CaltechHPC,
-    experiment_dir;
-    slurm_kwargs,
-    verbose = true,
-    scheduler = EKP.DefaultScheduler(0.5),
-)
+# ref_paths = get_all_les_paths()[1:experiment_config["num_les_cases"]]
+
+# les_library = get_shallow_LES_library()
+# # AMIP4K data: July, NE Pacific
+# cfsite_numbers = (17, 18, 19, 22, 23)
+# les_kwargs = (forcing_model = "HadGEM2-A", month = 7, experiment = "amip")
+# ref_paths = [get_cfsite_les_dir(cfsite_number; les_kwargs...) for cfsite_number in cfsite_numbers]
+
+
+ref_paths = get_les_calibration_library()
+
+
+obs_vec = []
+for ref_path in ref_paths
+
+    y_obs, Σ_obs, norm_vec_obs = get_obs(
+        ref_path,
+        experiment_config["y_var_names"],
+        zc_model;
+        ti = experiment_config["y_t_start_sec"],
+        tf = experiment_config["y_t_end_sec"],
+        norm_factors_dict = norm_factors_dict,
+        Σ_const = 0.05,
+    )
+
+    push!(obs_vec, EKP.Observation(Dict("samples" => y_obs, "covariances" => Σ_obs, "names" => split(ref_path, "/")[end])))
+end
+
+series_names = [ref_paths[i] for i in 1:length(ref_paths)]
+
+# minibatcher
+rfs_minibatcher = EKP.RandomFixedSizeMinibatcher(experiment_config["batch_size"])
+observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
+
+
+# ExperimentConfig is created from a YAML file within the experiment_dir
+@info "Initializing calibration" n_iterations ensemble_size output_dir
+CAL.initialize(ensemble_size, observations, prior, output_dir; scheduler = EKP.DefaultScheduler(0.5))
+
+eki = nothing
+slurm_kwargs = CAL.kwargs(time = 30, mem = "16G")
+module_load_str = CAL.module_load_string(CAL.CaltechHPCBackend)
+for iter in 0:(n_iterations - 1)
+    @info "Iteration $iter"
+    jobids = map(1:ensemble_size) do member
+        @info "Running ensemble member $member"
+        CAL.sbatch_model_run(
+            iter,
+            member,
+            output_dir,
+            experiment_dir,
+            model_interface,
+            module_load_str;
+            slurm_kwargs,
+        )
+    end
+
+    statuses = CAL.wait_for_jobs(
+        jobids,
+        output_dir,
+        iter,
+        experiment_dir,
+        model_interface,
+        module_load_str;
+        slurm_kwargs,
+        verbose = true,
+    )
+    CAL.report_iteration_status(statuses, output_dir, iter)
+    @info "Completed iteration $iter, updating ensemble"
+    G_ensemble = CAL.observation_map(iter)
+    CAL.save_G_ensemble(output_dir, iter, G_ensemble)
+    eki = CAL.update_ensemble(output_dir, iter, prior)
+end
