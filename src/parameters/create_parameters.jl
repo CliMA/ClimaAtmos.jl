@@ -97,6 +97,12 @@ function create_parameter_set(config::AtmosConfig)
                 tv = CM.Parameters.Blk1MVelType(toml_dict),
                 aps = CM.Parameters.AirProperties(toml_dict),
             )
+        elseif precip_model == "2M"
+            (;
+                SB2006 = CM.Parameters.SB2006(toml_dict),
+                SB2006Vel = CM.Parameters.SB2006VelType(toml_dict),
+                aps = CM.Parameters.AirProperties(toml_dict),
+            )
         else
             error("Invalid precip_model $(precip_model)")
         end
