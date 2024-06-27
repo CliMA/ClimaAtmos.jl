@@ -16,7 +16,7 @@ function smagorinsky_lilly_cache(Y, sl::SmagorinskyLilly)
     (; Cs) = sl
     FT = eltype(Y)
     h_space = Spaces.horizontal_space(axes(Y.c))
-    Δ_filter = Spaces.node_horizontal_length_scale(h_space)
+    Δ_filter = Fields.Δz_field(axes(Y.f))
     ᶜtemp_scalar_3 = zero(Fields.Field(Float32, axes(Y.c.ρ)))
     v_t = ᶜtemp_scalar_3
     return (; v_t, Δ_filter)
