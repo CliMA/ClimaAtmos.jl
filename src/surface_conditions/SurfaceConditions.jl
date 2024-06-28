@@ -6,6 +6,7 @@ import ..DryModel
 import ..ZonallyAsymmetricSST
 import ..ZonallySymmetricSST
 import ..RCEMIPIISphereSST
+import ..RCEMIPIIPlaneSST
 import ..PrognosticSurfaceTemperature
 import ..PrescribedSurfaceTemperature
 import ..gcm_driven_timeseries

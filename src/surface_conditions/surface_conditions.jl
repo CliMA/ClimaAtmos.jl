@@ -170,7 +170,8 @@ function surface_state_to_conditions(
     T = if isnothing(sfc_prognostic_temp)
         if isnothing(surf_state.T) && (
             coordinates isa Geometry.LatLongZPoint ||
-            coordinates isa Geometry.LatLongPoint
+            coordinates isa Geometry.LatLongPoint ||
+            atmos.sfc_temperature isa RCEMIPIIPlaneSST
         )
             surface_temperature(atmos.sfc_temperature, coordinates)
         elseif isnothing(surf_state.T)
@@ -339,6 +340,14 @@ function surface_temperature(::RCEMIPIISphereSST, coordinates)
     (; lat) = coordinates
     FT = eltype(lat)
     T = FT(300) + FT(1.25) / 2 * cosd(360 * lat / 54)
+    return T
+end
+
+#Plane SST distribution from Wing et al. (2023) https://gmd.copernicus.org/preprints/gmd-2023-235/
+function surface_temperature(::RCEMIPIIPlaneSST, coordinates)
+    (; x) = coordinates
+    FT = eltype(x)
+    T = FT(300) + FT(1.25) / 2 * cos(2 * FT(pi) * x / 6000)
     return T
 end
 
