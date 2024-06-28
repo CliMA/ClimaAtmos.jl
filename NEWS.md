@@ -4,6 +4,17 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+v0.26.3
+-------
+- Add ClimaCoupler downstream test.
+  PR [#3152](https://github.com/CliMA/ClimaAtmos.jl/pull/3152)
+- Add an option to use aerosol radiation. This is not fully working yet. 
+  PR [#3147](https://github.com/CliMA/ClimaAtmos.jl/pull/3147)
+- Update to RRTMGP v0.17.0.
+  PR [#3131](https://github.com/CliMA/ClimaAtmos.jl/pull/3131)
+- Add diagnostic edmf cloud scheme.
+  PR [#3126](https://github.com/CliMA/ClimaAtmos.jl/pull/3126)
+
 v0.26.2
 -------
 - Limit temperature input to RRTMGP within the lookup table range.
