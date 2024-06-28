@@ -941,6 +941,7 @@ end
 AquaplanetPlots = Union{
     Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
     Val{:sphere_aquaplanet_rhoe_nonequilmoist_allsky},
+    Val{:rcemipii_sphere_diagnostic_edmfx},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M},
@@ -1082,6 +1083,7 @@ EDMFBoxPlots = Union{
 }
 
 EDMFBoxPlotsWithPrecip = Union{
+    Val{:diagnostic_edmfx_dycoms_rf02_box},
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_trmm_column},
     Val{:diagnostic_edmfx_rico_box},

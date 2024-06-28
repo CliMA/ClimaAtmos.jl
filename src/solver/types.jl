@@ -15,6 +15,7 @@ struct Microphysics1Moment <: AbstractPrecipitationModel end
 abstract type AbstractCloudModel end
 struct GridScaleCloud <: AbstractCloudModel end
 struct QuadratureCloud <: AbstractCloudModel end
+struct DiagnosticEDMFCloud <: AbstractCloudModel end
 
 abstract type AbstractModelConfig end
 struct SingleColumnModel <: AbstractModelConfig end
@@ -25,6 +26,7 @@ struct PlaneModel <: AbstractModelConfig end
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct ZonallyAsymmetricSST <: AbstractSST end
+struct RCEMIPIISphereSST <: AbstractSST end
 
 abstract type AbstractSurfaceTemperature end
 struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end
@@ -254,7 +256,7 @@ Base.broadcastable(x::AbstractDetrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractSGSamplingType) = tuple(x)
 Base.broadcastable(x::AbstractTendencyModel) = tuple(x)
 
-Base.@kwdef struct RadiationDYCOMS_RF01{FT}
+Base.@kwdef struct RadiationDYCOMS{FT}
     "Large-scale divergence"
     divergence::FT = 3.75e-6
     alpha_z::FT = 1.0

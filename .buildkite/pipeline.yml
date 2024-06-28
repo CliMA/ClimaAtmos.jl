@@ -324,6 +324,15 @@ steps:
         artifact_paths: "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean/output_active/*"
         agents:
           slurm_mem: 20GB
+      
+      - label: ":computer: aquaplanet (ρe_tot) rcemipii with diagnostic edmf"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/rcemipii_sphere_diagnostic_edmfx.yml
+          --job_id rcemipii_sphere_diagnostic_edmfx
+        artifact_paths: "rcemipii_sphere_diagnostic_edmfx/output_active/*"
+        agents:
+          slurm_mem: 20GB
 
   - group: "Sphere Examples (Topography)"
     steps:
@@ -524,6 +533,15 @@ steps:
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_box.yml
           --job_id diagnostic_edmfx_dycoms_rf01_box
         artifact_paths: "diagnostic_edmfx_dycoms_rf01_box/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":umbrella: Diagnostic EDMFX DYCOMS_RF02 in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf02_box.yml
+          --job_id diagnostic_edmfx_dycoms_rf02_box
+        artifact_paths: "diagnostic_edmfx_dycoms_rf02_box/output_active/*"
         agents:
           slurm_mem: 20GB
 

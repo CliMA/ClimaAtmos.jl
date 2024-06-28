@@ -1,5 +1,6 @@
 surface_setup: DefaultMoninObukhov
-rad: clearsky
+surface_temperature: RCEMIPIISphere
+rad: allskywithclear
 turbconv: diagnostic_edmfx
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
@@ -11,12 +12,10 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil
-cloud_model: diagnostic_edmfx
 precip_model: 0M
 override_τ_precip: false
 dt: 100secs
 t_end: 12hours
 dt_save_state_to_disk: 12hours
-regression_test: true
 toml: [toml/diagnostic_edmfx_0M.toml]
 ode_algo: ARS343

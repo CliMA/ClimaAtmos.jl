@@ -5,9 +5,9 @@ manifest_format = "2.0"
 project_hash = "7a92cac99b6b02f9ad635d89d8820baa11d445e7"
 
 [[deps.ADTypes]]
-git-tree-sha1 = "fa0822e5baee6e23081c2685ae27265dabee23d8"
+git-tree-sha1 = "2314e58e823f0fd6ee02dbbecb997370f501dd4a"
 uuid = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
-version = "1.4.0"
+version = "1.5.0"
 weakdeps = ["ChainRulesCore", "EnzymeCore"]
 
     [deps.ADTypes.extensions]
@@ -138,9 +138,9 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.AtmosphericProfilesLibrary]]
 deps = ["Dierckx", "LinearAlgebra"]
-git-tree-sha1 = "c6be1ce28b7870a60400c51c75dc1b08d6a8dd73"
+git-tree-sha1 = "5c63ec6a9d190d2c10bb2045a8ccbe3a45cf7b88"
 uuid = "86bc3604-9858-485a-bdbe-831ec50de11d"
-version = "0.1.4"
+version = "0.1.5"
 
 [[deps.Atomix]]
 deps = ["UnsafeAtomics"]
@@ -334,7 +334,7 @@ version = "0.5.3"
 deps = ["Adapt", "ArgParse", "ArtifactWrappers", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Colors", "Dates", "Dierckx", "DiffEqBase", "DocStringExtensions", "FastGaussQuadrature", "Insolation", "Interpolations", "IntervalSets", "Krylov", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "Pkg", "Printf", "RRTMGP", "Random", "RootSolvers", "SciMLBase", "StaticArrays", "Statistics", "StatsBase", "SurfaceFluxes", "Thermodynamics", "YAML"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
-version = "0.26.1"
+version = "0.26.2"
 
 [[deps.ClimaComms]]
 git-tree-sha1 = "2ca8c9ca6131a7be8ca262e6db79bc7aa94ab597"
@@ -395,9 +395,9 @@ version = "0.2.2"
 
 [[deps.ClimaParams]]
 deps = ["DocStringExtensions", "TOML", "Test"]
-git-tree-sha1 = "8da1dc4aa297847cf74c51168cab1995e5631eeb"
+git-tree-sha1 = "0b5afc75bd3aa7c30d76c2d33b8361f961e86237"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "0.10.7"
+version = "0.10.8"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
@@ -787,9 +787,9 @@ uuid = "4e289a0a-7415-4d19-859d-a7e5c4648b56"
 version = "1.0.4"
 
 [[deps.EnzymeCore]]
-git-tree-sha1 = "88bc63137eb033acc3afe1b9875717889c718c46"
+git-tree-sha1 = "3a3177ba05b4763234819060fb6c2e1613379ca6"
 uuid = "f151be2c-9106-41f4-ab19-57ee4f262869"
-version = "0.7.5"
+version = "0.7.6"
 weakdeps = ["Adapt"]
 
     [deps.EnzymeCore.extensions]
@@ -1355,9 +1355,9 @@ version = "0.6.0"
 
 [[deps.KernelAbstractions]]
 deps = ["Adapt", "Atomix", "InteractiveUtils", "LinearAlgebra", "MacroTools", "PrecompileTools", "Requires", "SparseArrays", "StaticArrays", "UUIDs", "UnsafeAtomics", "UnsafeAtomicsLLVM"]
-git-tree-sha1 = "8e5a339882cc401688d79b811d923a38ba77d50a"
+git-tree-sha1 = "b8fcefe4418e4a7a2c3aaac883fecddd8efbe286"
 uuid = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
-version = "0.9.20"
+version = "0.9.21"
 weakdeps = ["EnzymeCore"]
 
     [deps.KernelAbstractions.extensions]
@@ -1665,9 +1665,9 @@ version = "2024.1.0+0"
 
 [[deps.MPI]]
 deps = ["Distributed", "DocStringExtensions", "Libdl", "MPICH_jll", "MPIPreferences", "MPItrampoline_jll", "MicrosoftMPI_jll", "OpenMPI_jll", "PkgVersion", "PrecompileTools", "Requires", "Serialization", "Sockets"]
-git-tree-sha1 = "4e3136db3735924f96632a5b40a5979f1f53fa07"
+git-tree-sha1 = "14cef41baf5b675b192b02a22c710f725ab333a7"
 uuid = "da04e1cc-30fd-572f-bb4f-1f8673147195"
-version = "0.20.19"
+version = "0.20.20"
 
     [deps.MPI.extensions]
     AMDGPUExt = "AMDGPU"
@@ -2188,9 +2188,9 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "Artifacts", "ClimaComms", "DocStringExtensions", "Random"]
-git-tree-sha1 = "9a507a71e305f4b15e9d9f9c65e1752f6e20bcc4"
+git-tree-sha1 = "866d94b4cf46fe3a0ffd35d1414a3a4181c9db08"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.16.0"
+version = "0.17.0"
 weakdeps = ["CUDA", "ClimaParams"]
 
     [deps.RRTMGP.extensions]

@@ -705,12 +705,14 @@ function RRTMGPModel(
             otp,
         )
     else
-        layerdata = DA{FT}(undef, 3, nlay, ncol)
+        layerdata = DA{FT}(undef, 4, nlay, ncol)
         p_lay = view(layerdata, 2, :, :)
         t_lay = view(layerdata, 3, :, :)
+        rh_lay = view(layerdata, 4, :, :)
         if implied_values != :center
             set_and_save!(p_lay, "center_pressure", t..., dict)
             set_and_save!(t_lay, "center_temperature", t..., dict)
+            set_and_save!(rh_lay, "center_relative_humidity", t..., dict)
         end
         vmr_str = "volume_mixing_ratio_"
         gas_names = filter(
@@ -795,6 +797,7 @@ function RRTMGPModel(
             t_sfc,
             vmr,
             cloud_state,
+            nothing,
         )
     end
 
