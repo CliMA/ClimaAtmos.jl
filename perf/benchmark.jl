@@ -25,6 +25,8 @@ device = ClimaComms.device(config.comms_ctx)
     integrator,
     device;
     crop = false,
+    trace = true,
+    with_cu_prof = :profile,
     hcrop = 168,
     only = [
         "Wfact",
