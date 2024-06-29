@@ -14,27 +14,23 @@ using NVTX
 abstract type AbstractRRTMGPMode end
 struct GrayRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
-    idealized_insolation::Bool
     idealized_clouds::Bool
     add_isothermal_boundary_layer::Bool
 end
 struct ClearSkyRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
-    idealized_insolation::Bool
     idealized_clouds::Bool
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
 end
 struct AllSkyRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
-    idealized_insolation::Bool
     idealized_clouds::Bool
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
 end
 struct AllSkyRadiationWithClearSkyDiagnostics <: AbstractRRTMGPMode
     idealized_h2o::Bool
-    idealized_insolation::Bool
     idealized_clouds::Bool
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool

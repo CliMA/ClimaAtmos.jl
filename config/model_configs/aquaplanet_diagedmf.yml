@@ -9,7 +9,7 @@ dz_top: 3000.0
 moist: equil 
 surface_setup: DefaultMoninObukhov 
 rad: allskywithclear
-idealized_insolation: false
+insolation: "timevarying"
 dt_rad: 1hours
 dt_cloud_fraction: 1hours
 turbconv: diagnostic_edmfx 

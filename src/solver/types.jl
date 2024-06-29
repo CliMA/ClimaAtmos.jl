@@ -28,6 +28,11 @@ struct ZonallySymmetricSST <: AbstractSST end
 struct ZonallyAsymmetricSST <: AbstractSST end
 struct RCEMIPIISphereSST <: AbstractSST end
 
+abstract type AbstractInsolation end
+struct IdealizedInsolation <: AbstractInsolation end
+struct TimeVaryingInsolation <: AbstractInsolation end
+struct RCEMIPIIInsolation <: AbstractInsolation end
+
 abstract type AbstractSurfaceTemperature end
 struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end
 Base.@kwdef struct PrognosticSurfaceTemperature{FT} <:
@@ -352,6 +357,7 @@ Base.@kwdef struct AtmosModel{
     VS,
     RS,
     ST,
+    IN,
     SM,
     SA,
     NUM,
@@ -385,6 +391,7 @@ Base.@kwdef struct AtmosModel{
     viscous_sponge::VS = nothing
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
+    insolation::IN = nothing
     surface_model::SM = nothing
     surface_albedo::SA = nothing
     numerics::NUM = nothing

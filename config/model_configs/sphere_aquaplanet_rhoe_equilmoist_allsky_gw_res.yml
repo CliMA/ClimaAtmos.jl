@@ -11,7 +11,7 @@ moist: "equil"
 precip_model: "1M"
 rad: "allskywithclear"
 aerosol_radiation: true
-idealized_insolation: false
+insolation: "timevarying"
 rayleigh_sponge: true
 non_orographic_gravity_wave: true
 orographic_gravity_wave: "gfdl_restart"

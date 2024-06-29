@@ -47,6 +47,18 @@ function get_sfc_temperature_form(parsed_args)
     end
 end
 
+function get_insolation_form(parsed_args)
+    insolation = parsed_args["insolation"]
+    @assert insolation in ("idealized", "timevarying", "rcemipii")
+    return if insolation == "idealized"
+        IdealizedInsolation()
+    elseif insolation == "timevarying"
+        TimeVaryingInsolation()
+    elseif insolation == "rcemipii"
+        RCEMIPIIInsolation()
+    end
+end
+
 function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     hyperdiff_name = parsed_args["hyperdiff"]
     if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
@@ -202,8 +214,6 @@ end
 function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     idealized_h2o = parsed_args["idealized_h2o"]
     @assert idealized_h2o in (true, false)
-    idealized_insolation = parsed_args["idealized_insolation"]
-    @assert idealized_insolation in (true, false)
     idealized_clouds = parsed_args["idealized_clouds"]
     @assert idealized_clouds in (true, false)
     add_isothermal_boundary_layer = parsed_args["add_isothermal_boundary_layer"]
@@ -224,7 +234,6 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     return if radiation_name == "clearsky"
         RRTMGPI.ClearSkyRadiation(
             idealized_h2o,
-            idealized_insolation,
             idealized_clouds,
             add_isothermal_boundary_layer,
             aerosol_radiation,
@@ -232,14 +241,12 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     elseif radiation_name == "gray"
         RRTMGPI.GrayRadiation(
             idealized_h2o,
-            idealized_insolation,
             idealized_clouds,
             add_isothermal_boundary_layer,
         )
     elseif radiation_name == "allsky"
         RRTMGPI.AllSkyRadiation(
             idealized_h2o,
-            idealized_insolation,
             idealized_clouds,
             add_isothermal_boundary_layer,
             aerosol_radiation,
@@ -247,7 +254,6 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     elseif radiation_name == "allskywithclear"
         RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(
             idealized_h2o,
-            idealized_insolation,
             idealized_clouds,
             add_isothermal_boundary_layer,
             aerosol_radiation,
