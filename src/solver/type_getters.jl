@@ -92,6 +92,7 @@ function get_atmos(config::AtmosConfig, params)
         smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args, params, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
+        insolation = get_insolation_form(parsed_args),
         surface_model = get_surface_model(parsed_args),
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
         numerics = get_numerics(parsed_args),

@@ -18,6 +18,6 @@ rayleigh_sponge: true
 toml:
   - "toml/flame_perf_gw.toml"
 orographic_gravity_wave: "raw_topo"
-idealized_insolation: false
+insolation: "timevarying"
 non_orographic_gravity_wave: true
 z_max: 55000.0

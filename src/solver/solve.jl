@@ -218,14 +218,14 @@ Return:
 """
 function check_conservation(sol)
     # energy
-    energy_total = sum(sol.u[end].c.ρe_tot)
+    energy_total = sum(sol.u[1].c.ρe_tot)
     energy_atmos_change = sum(sol.u[end].c.ρe_tot) - sum(sol.u[1].c.ρe_tot)
     p = sol.prob.p
     sfc = p.atmos.surface_model
     if sfc isa PrognosticSurfaceTemperature
         sfc_cρh = sfc.ρ_ocean * sfc.cp_ocean * sfc.depth_ocean
         energy_total +=
-            horizontal_integral_at_boundary(sol.u[end].sfc.T .* sfc_cρh)
+            horizontal_integral_at_boundary(sol.u[1].sfc.T .* sfc_cρh)
         energy_surface_change =
             horizontal_integral_at_boundary(
                 sol.u[end].sfc.T .- sol.u[1].sfc.T,
@@ -253,6 +253,10 @@ function check_conservation(sol)
         water_surface_change = horizontal_integral_at_boundary(
             sol.u[end].sfc.water .- sol.u[1].sfc.water,
         )
+
+        mass_conservation =
+            (sum(sol.u[end].c.ρ) - sum(sol.u[1].c.ρ) + water_surface_change) /
+            sum(sol.u[1].c.ρ)
 
         water_conservation =
             abs(water_atmos_change + water_surface_change) / water_total

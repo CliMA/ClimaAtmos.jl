@@ -26,6 +26,12 @@ struct PlaneModel <: AbstractModelConfig end
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct ZonallyAsymmetricSST <: AbstractSST end
+struct RCEMIPIISphereSST <: AbstractSST end
+
+abstract type AbstractInsolation end
+struct IdealizedInsolation <: AbstractInsolation end
+struct TimeVaryingInsolation <: AbstractInsolation end
+struct RCEMIPIIInsolation <: AbstractInsolation end
 
 abstract type AbstractSurfaceTemperature end
 struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end
@@ -357,6 +363,7 @@ Base.@kwdef struct AtmosModel{
     SL, 
     RS,
     ST,
+    IN,
     SM,
     SA,
     NUM,
@@ -391,6 +398,7 @@ Base.@kwdef struct AtmosModel{
     smagorinsky_lilly::SL = nothing
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
+    insolation::IN = nothing
     surface_model::SM = nothing
     surface_albedo::SA = nothing
     numerics::NUM = nothing
