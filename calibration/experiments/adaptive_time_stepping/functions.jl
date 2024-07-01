@@ -36,7 +36,7 @@ end
 function H(dir::String, short_name, iteration, member, noise)
     simdir = ClimaCalibrate.path_to_ensemble_member(dir, iteration, member)
 
-    H_perf(simdir, short_name, noise = noise, cutoff=1, output_cov=false)
+    H_perf(simdir, short_name, noise = noise, cutoff=40, output_cov=false)
 end
 
 # run simulations 
@@ -60,7 +60,7 @@ end
 
 function calibrate(n_iters, ens_size, obs_mean, obs_cov, prior, scheduler, job_id, short_name, noise)
     # initialize the calibration by setting up the members of the first iteration
-    ClimaCalibrate.initialize(ens_size, obs_mean, obs_cov, prior, "output/$job_id"; scheduler=scheduler)
+    ClimaCalibrate.initialize(ens_size, obs_mean, obs_cov, prior, "output/$job_id"; scheduler=scheduler, verbose=true)
     println("Calibration Initialized...")
     # run the calibration
     for iteration in 0:n_iters
@@ -92,7 +92,7 @@ function calibrate(n_iters, ens_size, obs_mean, obs_cov, prior, scheduler, job_i
         # if !isnothing(terminated)
         #     break
         # end
-        println(terminated)
+        #println(terminated)
     end
 end
 
@@ -119,29 +119,36 @@ function get_results(job_id; nvars = 2, n_iters = n_iters)
     ar 
 end
 
+function get_dt(job_id; nvars=2, n_iters = n_iters)
+    eki_obj = load_object(joinpath(ClimaCalibrate.path_to_iteration("output/$job_id", n_iters+1), "eki_file.jld2"))
+    # load parameters
+    return cumsum(eki_obj.Δt)
+end
+
 function plot_2param(job_id, n_iters=n_iters, ens_size=ens_size)
     println(job_id, n_iters, ens_size)
     ar = get_results(job_id; nvars=2, n_iters = n_iters)
+    times = get_dt(job_id; nvars=2, n_iters = n_iters)
     println("Plotting...")
     f = Figure(size = (1000, 500))
 
     ax1 = Axis(f[1,1],
         title = "Entrainment Coefficient Calibration",
-        xlabel = "Iteration",
+        xlabel = "Sudo-time",
         ylabel = "Entrainment Coefficient")
 
     hlines!(ax1, .3, color = :blue, label="True Entrainment Rate")
 
     ax2 = Axis(f[1,2],
         title = "Eddy Viscosity Calibration",
-        xlabel = "Iteration",
+        xlabel = "Sudo-time",
         ylabel = "Eddy Viscosity")
 
     hlines!(ax2, .14, color = :blue, label="True Eddy Viscosity")
 
     for i in 1:ens_size
-        lines!(ax1, 0:n_iters, ar[1][i, :], color = (:red, 0.3))
-        lines!(ax2, 0:n_iters, ar[2][i, :], color = (:red, 0.3))
+        lines!(ax1, times, ar[1][i, :], color = (:red, 0.3))
+        lines!(ax2, times, ar[2][i, :], color = (:red, 0.3))
     end
     println("Saving plot...")
     # save in two locations to ensure no overwriting
