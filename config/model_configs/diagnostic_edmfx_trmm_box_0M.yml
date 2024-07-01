@@ -36,4 +36,3 @@ diagnostics:
     period: 10mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
     period: 10mins
-ode_algo: ARS343

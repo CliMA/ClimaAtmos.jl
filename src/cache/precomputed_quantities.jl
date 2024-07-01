@@ -444,6 +444,10 @@ function instead of recomputing the value yourself. Otherwise, it will be
 difficult to ensure that the duplicated computations are consistent.
 """
 NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
+    if use_prognostic_tke(p.atmos.turbconv_model)
+        @. Y.c.sgs⁰.ρatke = ifelse(Y.c.sgs⁰.ρatke >= 0, Y.c.sgs⁰.ρatke, 0)
+    end
+
     (; moisture_model, turbconv_model, vert_diff, precip_model, cloud_model) =
         p.atmos
     (; call_cloud_diagnostics_per_stage) = p.atmos
