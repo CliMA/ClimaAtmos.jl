@@ -24,7 +24,7 @@ y_elem: 2
 z_elem: 100
 z_max: 4e3
 z_stretch: false
-dt: 100secs
+dt: 60secs
 t_end: 8hours
 dt_save_state_to_disk: 10mins
 toml: [toml/diagnostic_edmfx.toml]
@@ -36,4 +36,3 @@ diagnostics:
     period: 10mins
   - short_name: [husra, hussn]
     period: 10mins
-ode_algo: ARS343
