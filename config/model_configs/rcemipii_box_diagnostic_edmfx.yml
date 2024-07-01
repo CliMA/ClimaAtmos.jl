@@ -16,7 +16,7 @@ moist: equil
 precip_model: 0M
 override_τ_precip: false
 dt: 100secs
-t_end: 12hours
+dt_rad: "1hours"
+t_end: 600secs
 dt_save_state_to_disk: 12hours
 toml: [toml/diagnostic_edmfx_0M.toml]
-ode_algo: ARS343
