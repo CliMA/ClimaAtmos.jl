@@ -64,6 +64,27 @@ function (::GABLS)(params)
     return surface_state
 end
 
+struct BuoyancyDrivenBubble end
+function (::BuoyancyDrivenBubble)(params)
+    FT = eltype(params)
+    p = FT(1e5)
+    q_vap = FT(0.020)
+    z0 = FT(0.1)
+    θ_flux = FT(5e-3)
+    q_flux = FT(1e-4)
+    fluxes = θAndQFluxes(; θ_flux, q_flux)
+    parameterization = MoninObukhov(; z0, fluxes)
+    function surface_state(surface_coordinates, interior_z, t) 
+        SurfaceState(;
+            parameterization,
+            T = 300 + 2 * (sin(π*surface_coordinates.x/1000))^2,
+            p,
+            q_vap,
+        )
+    end
+    return surface_state
+end
+
 # TODO: The paper only specifies that T = 299.88. Where did all of these values
 # come from?
 struct GateIII end

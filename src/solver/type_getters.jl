@@ -89,6 +89,7 @@ function get_atmos(config::AtmosConfig, params)
         diff_mode = implicit_diffusion ? Implicit() : Explicit(),
         sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
+        smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args, params, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         insolation = get_insolation_form(parsed_args),
@@ -432,6 +433,10 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
     @info "Using ODE config: `$alg_or_tableau`"
     if ode_name == "SSPKnoth"
         return CTS.RosenbrockAlgorithm(CTS.tableau(CTS.SSPKnoth()))
+    end
+
+    if ode_name == "SSPKnoth"
+        return CTS.RosenbrockAlgorithm(CTS.tableau(CTS.SSPKnoth(), FT))
     end
 
     if is_explicit_CTS_algo_type(alg_or_tableau)
