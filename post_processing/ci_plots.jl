@@ -1080,6 +1080,7 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_simpleplume_column},
     Val{:prognostic_edmfx_gcmdriven_column},
     Val{:prognostic_edmfx_bomex_box},
+    Val{:rcemipii_box_diagnostic_edmfx},
 }
 
 EDMFBoxPlotsWithPrecip = Union{
