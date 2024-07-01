@@ -5,8 +5,9 @@ import ..Parameters as CAP
 import ..DryModel
 import ..ZonallyAsymmetricSST
 import ..ZonallySymmetricSST
-import ..RCEMIPIISphereSST
-import ..RCEMIPIIPlaneSST
+import ..RCEMIPIISST
+import ..SphericalModel
+import ..BoxModel
 import ..PrognosticSurfaceTemperature
 import ..PrescribedSurfaceTemperature
 import ..gcm_driven_timeseries

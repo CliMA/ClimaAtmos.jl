@@ -26,8 +26,7 @@ struct PlaneModel <: AbstractModelConfig end
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct ZonallyAsymmetricSST <: AbstractSST end
-struct RCEMIPIISphereSST <: AbstractSST end
-struct RCEMIPIIPlaneSST <: AbstractSST end
+struct RCEMIPIISST <: AbstractSST end
 
 abstract type AbstractSurfaceTemperature end
 struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end

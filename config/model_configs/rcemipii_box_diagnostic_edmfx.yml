@@ -1,5 +1,5 @@
 surface_setup: DefaultMoninObukhov
-surface_temperature: RCEMIPIIPlane
+surface_temperature: RCEMIPII
 config: box
 rad: allskywithclear
 turbconv: diagnostic_edmfx
