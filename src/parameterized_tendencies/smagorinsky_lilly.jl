@@ -31,13 +31,14 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     end
 
     (; Cs) = sl
+    (; params) = p
     (; v_t, Δ_filter) = p.smagorinsky_lilly
     (; ᶜu, ᶠu³) = p.precomputed 
     (;ᶜΦ) = p.core
 
     # Operators
     FT = eltype(v_t)
-    grav = FT(9.81)
+    grav = CAP.grav(params)
     ᶜJ = Fields.local_geometry_field(Y.c).J 
 
     ᶜS  = zero(p.scratch.ᶜtemp_strain)
@@ -60,7 +61,8 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
-    @. ᶠfb = (max(FT(0), 1 - 3*(grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/2)
+    @. ᶠfb = (max(FT(0), 
+                  1 - 3*(grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/2)
 
     ᶠρ = @. ᶠwinterp(ᶜJ, Y.c.ρ)
     ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) * ᶠfb
@@ -70,7 +72,6 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     @. v_t = ᶜv_t
 
     @. Yₜ.c.uₕ += C12(wdivₕ(Y.c.ρ * ᶜv_t * ᶜS)) / Y.c.ρ
-    
     @. Yₜ.f.u₃ += C3(wdivₕ(ᶠρ * ᶠv_t * ᶠS)) / ᶠρ
 
     # energy adjustment
@@ -95,6 +96,8 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     if !(hasproperty(p.precomputed, :ᶜspecific))
         throw(ErrorException("p does not have the property ᶜspecific."))
     end
+    
+    (; params) = p
     (; Cs) = sl
     (; v_t, Δ_filter) = p.smagorinsky_lilly
     (; ᶜu, ᶠu³, sfc_conditions, ᶜspecific) = p.precomputed 
@@ -114,7 +117,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     ᶠz = Fields.coordinate_field(Y.f).z
 
     ᶠfb  = p.scratch.ᶠtemp_scalar
-    grav = FT(9.81)
+    grav = CAP.grav(params)
 
     localu = @. Geometry.UVWVector(ᶜu)
     ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(Y.f.u₃)
