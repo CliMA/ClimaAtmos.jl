@@ -52,14 +52,13 @@ function external_forcing_cache(Y, external_forcing::GCMForcing)
     ᶜls_subsidence = similar(Y.c, FT)
 
     (; external_forcing_file) = external_forcing
-    imin = 100  # TODO: move into `GCMForcing` (and `parsed_args`)
 
     NC.Dataset(external_forcing_file, "r") do ds
         function setvar!(cc_field, varname, colidx, zc_gcm, zc_les)
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_les,
-                gcm_driven_profile_tmean(ds, varname; imin),  # TODO: time-varying tendencies
+                gcm_driven_profile_tmean(ds, varname),  # TODO: time-varying tendencies
             )
         end
 
@@ -181,6 +180,12 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
         Val{:first_order}(),
     )
     # <-- subsidence
+    # needed to address top boundary condition for forcings. Otherwise upper portion of domain is anomalously cold
+    ρe_tot_top = Fields.level(Yₜ.c.ρe_tot, Spaces.nlevels(axes(Y.c)))
+    @. ρe_tot_top = 0.0
+
+    ρq_tot_top = Fields.level(Yₜ.c.ρq_tot, Spaces.nlevels(axes(Y.c)))
+    @. ρq_tot_top = 0.0
 
     return nothing
 end

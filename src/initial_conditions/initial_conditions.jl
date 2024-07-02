@@ -1177,7 +1177,7 @@ end
 function gcm_initial_conditions(external_forcing_file)
     NC.NCDataset(external_forcing_file) do ds
         (  # TODO: Cast to CuVector for GPU compatibility
-            gcm_driven_profile(ds, "thetali_mean")[:, 1],  # 1 is initial time index
+            gcm_driven_profile(ds, "thetali_mean")[:, 1], # 1 is initial time index
             gcm_driven_profile(ds, "u_mean")[:, 1],
             gcm_driven_profile(ds, "v_mean")[:, 1],
             gcm_driven_profile(ds, "qt_mean")[:, 1],
