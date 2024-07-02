@@ -168,14 +168,8 @@ function surface_state_to_conditions(
         error("surface q_vap cannot be specified when using a DryModel")
 
     T = if isnothing(sfc_prognostic_temp)
-        if isnothing(surf_state.T) && (
-            coordinates isa Geometry.LatLongZPoint ||
-            coordinates isa Geometry.LatLongPoint
-        )
+        if isnothing(surf_state.T)
             surface_temperature(atmos.sfc_temperature, coordinates)
-        elseif isnothing(surf_state.T)
-            # Assume that the latitude is 0.
-            FT(300)
         else
             surf_state.T
         end
@@ -335,21 +329,51 @@ function surface_state_to_conditions(
 end
 
 #Sphere SST distribution from Wing et al. (2023) https://gmd.copernicus.org/preprints/gmd-2023-235/
-function surface_temperature(::RCEMIPIISphereSST, coordinates)
+function surface_temperature(
+    ::RCEMIPIISST,
+    coordinates::Union{Geometry.LatLongZPoint, Geometry.LatLongPoint},
+)
     (; lat) = coordinates
     FT = eltype(lat)
     T = FT(300) + FT(1.25) / 2 * cosd(360 * lat / 54)
     return T
 end
 
-function surface_temperature(::ZonallySymmetricSST, coordinates)
+#Plane SST distribution from Wing et al. (2023) https://gmd.copernicus.org/preprints/gmd-2023-235/
+function surface_temperature(
+    ::RCEMIPIISST,
+    coordinates::Union{Geometry.XZPoint, Geometry.XYZPoint},
+)
+    (; x) = coordinates
+    FT = eltype(x)
+    T = FT(300) + FT(1.25) / 2 * cos(2 * FT(pi) * x / 6000)
+    return T
+end
+
+#For non-RCEMIPII box models with prescribed surface temp, assume that the latitude is 0.
+function surface_temperature(
+    ::Union{ZonallySymmetricSST, ZonallyAsymmetricSST},
+    coordinates::Union{Geometry.XZPoint, Geometry.XYZPoint},
+)
+    (; x) = coordinates
+    FT = eltype(x)
+    return FT(300)
+end
+
+function surface_temperature(
+    ::ZonallySymmetricSST,
+    coordinates::Geometry.LatLongZPoint,
+)
     (; lat, z) = coordinates
     FT = eltype(lat)
     T = FT(271) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2)) - FT(6.5e-3) * z
     return T
 end
 
-function surface_temperature(::ZonallyAsymmetricSST, coordinates)
+function surface_temperature(
+    ::ZonallyAsymmetricSST,
+    coordinates::Geometry.LatLongZPoint,
+)
     (; lat, long, z) = coordinates
     FT = eltype(lat)
     #Assume a surface temperature that varies with both longitude and latitude, Neale and Hoskins, 2021

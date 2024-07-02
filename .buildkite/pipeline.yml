@@ -158,6 +158,14 @@ steps:
           --job_id box_density_current_test
         artifact_paths: "box_density_current_test/output_active/*"
 
+      - label: ":computer: Box (ρe_tot) rcemipii with diagnostic edmf"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/rcemipii_box_diagnostic_edmfx.yml
+          --job_id rcemipii_box_diagnostic_edmfx
+        artifact_paths: "rcemipii_box_diagnostic_edmfx/output_active/*"
+        soft_fail: true
+
   - group: "Plane Examples"
     steps:
       - label: ":computer: Agnesi linear hydrostatic mountain experiment (uniform)"
