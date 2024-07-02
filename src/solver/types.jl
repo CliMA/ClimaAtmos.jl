@@ -176,11 +176,10 @@ PrognosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
     PrognosticEDMFX{N, TKE, FT}(a_half)
 
 struct DiagnosticEDMFX{N, TKE, FT} <: AbstractEDMF
-    a_int::FT # area fraction of the first interior cell above the surface
     a_half::FT # WARNING: this should never be used outside of divide_by_ρa
 end
-DiagnosticEDMFX{N, TKE}(a_int::FT, a_half::FT) where {N, TKE, FT} =
-    DiagnosticEDMFX{N, TKE, FT}(a_int, a_half)
+DiagnosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
+    DiagnosticEDMFX{N, TKE, FT}(a_half)
 
 n_mass_flux_subdomains(::PrognosticEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N

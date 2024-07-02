@@ -252,14 +252,13 @@ end
 function (surface_setup::GCMDriven)(params)
     FT = eltype(params)
     (; external_forcing_file) = surface_setup
-    imin = 100
-    T, lhf, shf = FT.(gcm_surface_conditions(external_forcing_file, imin))
+    T, lhf, shf = FT.(gcm_surface_conditions(external_forcing_file))
     z0 = FT(1e-4)  # zrough
     parameterization = MoninObukhov(; z0, fluxes = HeatFluxes(; lhf, shf))
     return SurfaceState(; parameterization, T)
 end
 
-function gcm_surface_conditions(external_forcing_file, imin)
+function gcm_surface_conditions(external_forcing_file; imin = 793)
     NC.NCDataset(external_forcing_file) do ds
         (
             mean(gcm_driven_timeseries(ds, "surface_temperature")[imin:end]),
