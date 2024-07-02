@@ -43,6 +43,8 @@ test/Manifest.toml
 *.hdf5
 *.h5
 *.g
+*.lock
+*.loc
 
 # misc
 .DS_Store
