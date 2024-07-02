@@ -1080,6 +1080,7 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_simpleplume_column},
     Val{:prognostic_edmfx_gcmdriven_column},
     Val{:prognostic_edmfx_bomex_box},
+    Val{:rcemipii_box_diagnostic_edmfx},
 }
 
 EDMFBoxPlotsWithPrecip = Union{
@@ -1204,7 +1205,9 @@ function make_plots(
         short_name = short_names[1],
         reduction,
     )
-    if "10m" in available_periods
+    if "5m" in available_periods
+        period = "5m"
+    elseif "10m" in available_periods
         period = "10m"
     elseif "30m" in available_periods
         period = "30m"
