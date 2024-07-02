@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
+- ![][badge-💥breaking] Change "radiation_model" in the radiation cache to "rrtmgp_model".
+  PR [#3167](https://github.com/CliMA/ClimaAtmos.jl/pull/3167)
 - ![][badge-💥breaking] Change the "idealized_insolation" argument to "insolation", 
   and add RCEMIP insolation. PR [#3150](https://github.com/CliMA/ClimaAtmos.jl/pull/3150)
 
