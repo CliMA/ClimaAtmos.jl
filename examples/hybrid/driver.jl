@@ -123,17 +123,19 @@ if config.parsed_args["check_conservation"]
 
     @info "    Net energy change / total energy: $energy_conservation"
     @info "    Net mass change / total mass: $mass_conservation"
+    @info "    Net water change / total water: $water_conservation"
 
     sfc = p.atmos.surface_model
 
     if CA.has_no_source_or_sink(config.parsed_args)
         @test energy_conservation ≈ 0 atol = 50 * eps(FT)
         @test mass_conservation ≈ 0 atol = 50 * eps(FT)
+        @test water_conservation ≈ 0 atol = 50 * eps(FT)
     else
         @test energy_conservation ≈ 0 atol = sqrt(eps(FT))
+        @test mass_conservation ≈ 0 atol = sqrt(eps(FT))
         if sfc isa CA.PrognosticSurfaceTemperature
-            @info "    Net water change: $water_conservation"
-            @test water_conservation ≈ 0 atol = 100 * sqrt(eps(FT))
+            @test water_conservation ≈ 0 atol = sqrt(eps(FT))
         end
     end
 end
