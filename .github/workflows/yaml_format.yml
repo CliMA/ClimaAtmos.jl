@@ -1,0 +1,36 @@
+name: Format YAML
+
+on:
+  pull_request:
+  push:
+    branches:
+      - '!main'  # excludes main
+  merge_group:
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21.x'
+    - name: Install dependencies
+      run: |
+        go install github.com/google/yamlfmt/cmd/yamlfmt@latest
+    - name: Format YAML files
+      run: yamlfmt config
+    - name: Check for changes after formatting
+      run: |
+        git diff --exit-code  # Check for changes after formatting
+      id: check_changes
+    - name: Add formatting changes, push
+      if: steps.check_changes.outputs == 1
+      run: |
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "GitHub Actions"
+        git add .
+        git commit -m "Automatic YAML formatting"
+        git push origin ${{ github.head_ref }}
