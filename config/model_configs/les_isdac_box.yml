@@ -21,7 +21,7 @@ y_elem: 64
 z_elem: 200
 z_stretch: false
 dt: "0.1secs" 
-t_end: "1hour" 
+t_end: "1hours" 
 dt_save_state_to_disk: "10mins"
 # restart_file: "restart/isdac/day0.0.hdf5"
 netcdf_interpolation_num_points: [64, 64, 200]
