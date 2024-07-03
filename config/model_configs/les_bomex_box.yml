@@ -22,7 +22,7 @@ x_elem: 8
 y_elem: 8
 z_elem: 100
 z_stretch: false
-dt: "0.15secs" 
+dt: "0.10secs" 
 output_default_diagnostics: false
 t_end: "21600secs" 
 dt_save_state_to_disk: "30mins"
