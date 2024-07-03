@@ -19,6 +19,7 @@ function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
         :mixing_length_Ri_crit => :Ri_crit,
         :detr_coeff => :detr_coeff,
         :EDMF_surface_area => :surface_area,
+        :entr_param_vec => :entr_param_vec,
         :minimum_updraft_top => :min_updraft_top,
         :mixing_length_eddy_viscosity_coefficient => :tke_ed_coeff,
         :mixing_length_smin_ub => :smin_ub,

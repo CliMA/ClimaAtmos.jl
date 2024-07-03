@@ -57,6 +57,8 @@ function entrainment(
         g = CAP.grav(params)
         ref_H = ᶜp / (ᶜρ * g)
 
+        entr_param_vec = CAP.entr_param_vec(params)
+
         # non-dimensional pi-groups
         Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
         Π₂ = max(ᶜtke⁰, 0) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
@@ -66,11 +68,11 @@ function entrainment(
         # Π₁, Π₂ are unbounded, so clip values that blow up
         Π₁ = min(max(Π₁, -1), 1)
         Π₂ = min(max(Π₂, -1), 1)
+
         entr =
             abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) * (
-                -0.32332 + 4.79372 * Π₁ + 3.98108 * Π₂ - 21.64173 * Π₃ +
-                18.395 * Π₄ +
-                1.12799 * Π₅
+                entr_param_vec[1] * Π₁ + entr_param_vec[2] * Π₂ + entr_param_vec[3] * Π₃ +
+                entr_param_vec[4] * Π₄ + entr_param_vec[5] * Π₅ + entr_param_vec[6]
             )
 
         return entr
@@ -218,6 +220,8 @@ function detrainment(
         g = CAP.grav(params)
         ref_H = ᶜp / (ᶜρ * g)
 
+        entr_param_vec = CAP.entr_param_vec(params)
+
         # non-dimensional pi-groups
         Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
         Π₂ = max(ᶜtke⁰, 0) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
@@ -229,8 +233,8 @@ function detrainment(
         Π₂ = min(max(Π₂, -1), 1)
         detr =
             -min(ᶜmassflux_vert_div, 0) / ᶜρaʲ * (
-                0.3410 - 0.56153 * Π₁ - 0.53411 * Π₂ + 6.01925 * Π₃ -
-                1.47516 * Π₄ - 3.85788 * Π₅
+                entr_param_vec[7] * Π₁ + entr_param_vec[8] * Π₂ + entr_param_vec[9] * Π₃ +
+                entr_param_vec[10] * Π₄ + entr_param_vec[11] * Π₅ + entr_param_vec[12]
             )
         return detr
     end
