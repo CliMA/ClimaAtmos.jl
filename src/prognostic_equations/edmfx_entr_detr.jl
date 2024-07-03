@@ -57,6 +57,8 @@ function entrainment(
         g = CAP.grav(params)
         ref_H = ᶜp / (ᶜρ * g)
 
+        entr_param_vec = CAP.entr_param_vec(params)
+
         # non-dimensional pi-groups
         Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
         Π₂ = max(ᶜtke⁰, 0) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
@@ -66,14 +68,18 @@ function entrainment(
         # Π₁, Π₂ are unbounded, so clip values that blow up
         Π₁ = min(max(Π₁, -1), 1)
         Π₂ = min(max(Π₂, -1), 1)
+
         entr =
             abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) * (
-                -0.32332 + 4.79372 * Π₁ + 3.98108 * Π₂ - 21.64173 * Π₃ +
-                18.395 * Π₄ +
-                1.12799 * Π₅
+                entr_param_vec[1] * abs(Π₁) +
+                entr_param_vec[2] * abs(Π₂) +
+                entr_param_vec[3] * abs(Π₃) +
+                entr_param_vec[4] * abs(Π₄) +
+                entr_param_vec[5] * abs(Π₅) +
+                entr_param_vec[6]
             )
 
-        return entr
+        return max(entr, 0)
     end
 end
 
@@ -108,7 +114,7 @@ function entrainment(
         entr_coeff * abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) +
         min_area_limiter
 
-    return entr
+    return max(entr, 0)
 end
 
 function detrainment(
@@ -218,6 +224,8 @@ function detrainment(
         g = CAP.grav(params)
         ref_H = ᶜp / (ᶜρ * g)
 
+        entr_param_vec = CAP.entr_param_vec(params)
+
         # non-dimensional pi-groups
         Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
         Π₂ = max(ᶜtke⁰, 0) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
@@ -229,10 +237,14 @@ function detrainment(
         Π₂ = min(max(Π₂, -1), 1)
         detr =
             -min(ᶜmassflux_vert_div, 0) / ᶜρaʲ * (
-                0.3410 - 0.56153 * Π₁ - 0.53411 * Π₂ + 6.01925 * Π₃ -
-                1.47516 * Π₄ - 3.85788 * Π₅
+                entr_param_vec[7] * abs(Π₁) +
+                entr_param_vec[8] * abs(Π₂) +
+                entr_param_vec[9] * abs(Π₃) +
+                entr_param_vec[10] * abs(Π₄) +
+                entr_param_vec[11] * abs(Π₅) +
+                entr_param_vec[12]
             )
-        return detr
+        return max(detr, 0)
     end
 end
 
@@ -283,7 +295,7 @@ function detrainment(
             max_area_limiter
     end
 
-    return detr
+    return max(detr, 0)
 end
 
 function detrainment(
@@ -306,7 +318,15 @@ function detrainment(
     ::ConstantAreaDetrainment,
 ) where {FT}
     detr = ᶜentr - ᶜvert_div
-    return detr
+    return max(detr, 0)
+end
+
+function turbulent_entrainment(params, ᶜaʲ::FT) where {FT}
+    turb_entr_param_vec = CAP.turb_entr_param_vec(params)
+    return max(
+        turb_entr_param_vec[1] * exp(-turb_entr_param_vec[2] * ᶜaʲ),
+        FT(0),
+    )
 end
 
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
@@ -314,7 +334,7 @@ edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; ᶜentrʲs, ᶜdetrʲs) = p.precomputed
+    (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
     (; ᶜq_tot⁰, ᶜmse⁰, ᶠu₃⁰) = p.precomputed
 
     for j in 1:n
@@ -323,24 +343,41 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
             Y.c.sgsʲs.:($$j).ρa * (ᶜentrʲs.:($$j) - ᶜdetrʲs.:($$j))
 
         @. Yₜ.c.sgsʲs.:($$j).mse +=
-            ᶜentrʲs.:($$j) * (ᶜmse⁰ - Y.c.sgsʲs.:($$j).mse)
+            (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
+            (ᶜmse⁰ - Y.c.sgsʲs.:($$j).mse)
 
         @. Yₜ.c.sgsʲs.:($$j).q_tot +=
-            ᶜentrʲs.:($$j) * (ᶜq_tot⁰ - Y.c.sgsʲs.:($$j).q_tot)
+            (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
+            (ᶜq_tot⁰ - Y.c.sgsʲs.:($$j).q_tot)
 
         @. Yₜ.f.sgsʲs.:($$j).u₃ +=
-            ᶠinterp(ᶜentrʲs.:($$j)) * (ᶠu₃⁰ - Y.f.sgsʲs.:($$j).u₃)
+            (ᶠinterp(ᶜentrʲs.:($$j)) .+ ᶠinterp(ᶜturb_entrʲs.:($$j))) *
+            (ᶠu₃⁰ - Y.f.sgsʲs.:($$j).u₃)
     end
     return nothing
 end
 
+# limit entrainment and detrainment rates for prognostic EDMF
+# limit rates approximately below the inverse timescale 1/dt
 limit_entrainment(entr::FT, a, dt) where {FT} = max(
     min(entr, FT(0.9) * (1 - a) / max(a, eps(FT)) / dt, FT(0.9) * 1 / dt),
     0,
 )
-limit_entrainment(entr::FT, a, w, dz) where {FT} =
-    max(min(entr, FT(0.9) * w / dz), 0)
 limit_detrainment(detr::FT, a, dt) where {FT} =
     max(min(detr, FT(0.9) * 1 / dt), 0)
+
+function limit_turb_entrainment(dyn_entr::FT, turb_entr::FT, dt) where {FT}
+    return min((FT(0.9) * 1 / dt) - dyn_entr, turb_entr)
+end
+
+# limit entrainment and detrainment rates for diagnostic EDMF
+# limit rates approximately below the inverse timescale w/dz
+limit_entrainment(entr::FT, a, w, dz) where {FT} =
+    max(min(entr, FT(0.9) * w / dz), 0)
+
 limit_detrainment(detr::FT, a, w, dz) where {FT} =
     max(min(detr, FT(0.9) * w / dz), 0)
+
+function limit_turb_entrainment(dyn_entr::FT, turb_entr::FT, w, dz) where {FT}
+    return min((FT(0.9) * w / dz) - dyn_entr, turb_entr)
+end
