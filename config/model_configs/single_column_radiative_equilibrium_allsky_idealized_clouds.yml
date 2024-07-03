@@ -9,7 +9,7 @@ dz_top: 10000.0
 idealized_clouds: true
 dz_bottom: 100.0
 config: "column"
-idealized_insolation: false
+insolation: "timevarying"
 z_max: 70000.0
 dt_save_to_sol: "30hours"
 rad: "allskywithclear"

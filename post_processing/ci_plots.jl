@@ -941,6 +941,7 @@ end
 AquaplanetPlots = Union{
     Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
     Val{:sphere_aquaplanet_rhoe_nonequilmoist_allsky},
+    Val{:rcemipii_sphere_diagnostic_edmfx},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M},
@@ -1079,9 +1080,11 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_simpleplume_column},
     Val{:prognostic_edmfx_gcmdriven_column},
     Val{:prognostic_edmfx_bomex_box},
+    Val{:rcemipii_box_diagnostic_edmfx},
 }
 
 EDMFBoxPlotsWithPrecip = Union{
+    Val{:diagnostic_edmfx_dycoms_rf02_box},
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_trmm_column},
     Val{:diagnostic_edmfx_rico_box},
@@ -1203,7 +1206,9 @@ function make_plots(
         short_name = short_names[1],
         reduction,
     )
-    if "10m" in available_periods
+    if "5m" in available_periods
+        period = "5m"
+    elseif "10m" in available_periods
         period = "10m"
     elseif "30m" in available_periods
         period = "30m"

@@ -24,7 +24,6 @@ end
 
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
-    surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
 
     # Vertical tendencies
     rayleigh_sponge_tendency!(Yₜ, Y, p, t, p.atmos.rayleigh_sponge)
@@ -79,6 +78,10 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         p.atmos.precip_model,
         p.atmos.turbconv_model,
     )
+
+    # NOTE: Precipitation tendencies should be applied before calling this function,
+    # because precipitation cache is used in this function
+    surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)

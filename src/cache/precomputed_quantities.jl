@@ -358,7 +358,6 @@ function eddy_diffusivity_coefficient(
     end
 end
 
-### Frierson (2006) diffusion
 function compute_boundary_layer_height!(
     h_boundary_layer,
     f_b::FT,
@@ -367,21 +366,20 @@ function compute_boundary_layer_height!(
     Ri_c::FT,
     Ri_a,
 ) where {FT}
-    Fields.bycolumn(axes(Ri_local)) do colidx
-        @inbounds for il in 1:Spaces.nlevels(axes(Ri_local[colidx]))
-            h_boundary_layer[colidx] .=
-                ifelse.(
-                    Fields.Field(
-                        Fields.field_values(Fields.level(Ri_local[colidx], il)),
-                        axes(h_boundary_layer[colidx]),
-                    ) .< Ri_c,
-                    Fields.Field(
-                        Fields.field_values(Fields.level(dz[colidx], il)),
-                        axes(h_boundary_layer[colidx]),
-                    ),
-                    h_boundary_layer[colidx],
-                )
-        end
+    nlevels = Spaces.nlevels(Spaces.axes(Ri_local))
+    for level in 1:nlevels
+        h_boundary_layer .=
+            ifelse.(
+                Fields.Field(
+                    Fields.field_values(Fields.level(Ri_local, level)),
+                    axes(h_boundary_layer),
+                ) .< Ri_c,
+                Fields.Field(
+                    Fields.field_values(Fields.level(dz, level)),
+                    axes(h_boundary_layer),
+                ),
+                h_boundary_layer,
+            )
     end
 end
 
@@ -392,7 +390,8 @@ function compute_bulk_richardson_number(
     grav,
     z::FT,
 ) where {FT}
-    return (grav * z) * (θ_v - θ_v_a) / (θ_v_a * (norm_ua)^2 + FT(1))
+    # TODO Gustiness from params
+    return (grav * z) * (θ_v - θ_v_a) / (θ_v_a * (norm_ua)^2 + FT(10))
 end
 function compute_exchange_coefficient(Ri_a, Ri_c, zₐ, z₀, κ::FT) where {FT}
     # Equations (12), (13), (14)
@@ -551,7 +550,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         FT = Spaces.undertype(axes(ᶜK_h))
         z₀ = FT(1e-5)
         Ri_c = FT(1.0)
-        f_b = FT(0.10)
+        f_b = FT(0.1)
 
         # Prepare scratch vars
         ᶠρK_E = p.scratch.ᶠtemp_scalar

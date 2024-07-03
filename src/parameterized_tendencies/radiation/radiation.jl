@@ -32,14 +32,21 @@ function radiation_model_cache(
     Y,
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
     params,
-    ᶜp; # Used for ozone
+    ᶜp, # Used for ozone
+    aerosol_names;
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
     data_loader = rrtmgp_data_loader,
 )
     context = ClimaComms.context(axes(Y.c))
     device = context.device
-    (; idealized_h2o, idealized_insolation, idealized_clouds) = radiation_mode
+    (; idealized_h2o, idealized_clouds) = radiation_mode
+    if !(radiation_mode isa RRTMGPI.GrayRadiation)
+        (; aerosol_radiation) = radiation_mode
+        if aerosol_radiation && !("SO4" in aerosol_names)
+            error("Aerosol radiation is turned on but SO4 is not provided")
+        end
+    end
     FT = Spaces.undertype(axes(Y.c))
     DA = ClimaComms.array_type(device){FT}
     rrtmgp_params = CAP.rrtmgp_params(params)
@@ -112,6 +119,7 @@ function radiation_model_cache(
             kwargs = (;
                 use_global_means_for_well_mixed_gases = true,
                 center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
+                center_relative_humidity = NaN, # initialized in callback
                 center_volume_mixing_ratio_o3,
                 volume_mixing_ratio_co2 = input_vmr("carbon_dioxide_GM"),
                 volume_mixing_ratio_n2o = input_vmr("nitrous_oxide_GM"),
@@ -179,6 +187,15 @@ function radiation_model_cache(
                     )
                 end
             end
+
+            if aerosol_radiation
+                kwargs = (;
+                    kwargs...,
+                    center_aerosol_type = 3, # assuming only sulfate
+                    center_aerosol_radius = 0.2, # assuming fixed aerosol radius
+                    center_aerosol_column_mass_density = NaN, # initialized in callback
+                )
+            end
         end
 
         if RRTMGPI.requires_z(interpolation) ||
@@ -190,14 +207,7 @@ function radiation_model_cache(
             )
         end
 
-        if idealized_insolation # perpetual equinox with no diurnal cycle
-            cos_zenith = cos(FT(π) / 3)
-            weighted_irradiance =
-                @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
-                   (4 * cos_zenith)
-        else
-            cos_zenith = weighted_irradiance = NaN # initialized in callback
-        end
+        cos_zenith = weighted_irradiance = NaN # initialized in callback
 
         radiation_model = RRTMGPI.RRTMGPModel(
             rrtmgp_params,
@@ -220,7 +230,6 @@ function radiation_model_cache(
         )
     end
     return (;
-        idealized_insolation,
         orbital_data,
         idealized_h2o,
         idealized_clouds,
@@ -237,10 +246,10 @@ function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
 end
 
 #####
-##### DYCOMS_RF01 radiation
+##### DYCOMS_RF01 and DYCOMS_RF02 radiation
 #####
 
-function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS_RF01)
+function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS)
     FT = Spaces.undertype(axes(Y.c))
     NT = NamedTuple{(:z, :ρ, :q_tot), NTuple{3, FT}}
     return (;
@@ -253,7 +262,7 @@ function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS_RF01)
         net_energy_flux_sfc = [Geometry.WVector(FT(0))],
     )
 end
-function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS_RF01)
+function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     @assert !(p.atmos.moisture_model isa DryModel)
 
     (; params) = p

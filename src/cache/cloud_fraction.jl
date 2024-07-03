@@ -66,7 +66,7 @@ NVTX.@annotate function set_cloud_fraction!(
 
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜts, ᶜp, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
+    (; ᶜts, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
     (; turbconv_model) = p.atmos
     if isnothing(turbconv_model)
         if p.atmos.call_cloud_diagnostics_per_stage isa
@@ -93,6 +93,53 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜmixing_length,
         thermo_params,
     )
+end
+NVTX.@annotate function set_cloud_fraction!(
+    Y,
+    p,
+    ::Union{EquilMoistModel, NonEquilMoistModel},
+    ::DiagnosticEDMFCloud,
+)
+    (; SG_quad, params) = p
+
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜts, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
+    (; ᶜρaʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
+    (; turbconv_model) = p.atmos
+
+    # TODO - we should make this default when using diagnostic edmf
+    @assert turbconv_model isa DiagnosticEDMFX
+
+    # environment
+    coeff = FT(2.1) # TODO - move to parameters
+    @. cloud_diagnostics_tuple = quad_loop(
+        SG_quad,
+        ᶜts,
+        Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot),
+        Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice),
+        coeff,
+        ᶜmixing_length,
+        thermo_params,
+    )
+    # updrafts
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    for j in 1:n
+        @. cloud_diagnostics_tuple += NamedTuple{(:cf, :q_liq, :q_ice)}(
+            tuple(
+                ifelse(
+                    TD.has_condensate(thermo_params, ᶜtsʲs.:($$j)),
+                    draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)),
+                    0,
+                ),
+                draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)) *
+                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).liq,
+                draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)) *
+                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).ice,
+            ),
+        )
+    end
 end
 
 """

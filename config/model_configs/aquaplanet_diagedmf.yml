@@ -9,7 +9,7 @@ dz_top: 3000.0
 moist: equil 
 surface_setup: DefaultMoninObukhov 
 rad: allskywithclear
-idealized_insolation: false
+insolation: "timevarying"
 dt_rad: 1hours
 dt_cloud_fraction: 1hours
 turbconv: diagnostic_edmfx 
@@ -22,6 +22,7 @@ edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true 
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
+cloud_model: diagnostic_edmfx
 precip_model: 0M
 dt: 100secs 
 t_end: 12hours 

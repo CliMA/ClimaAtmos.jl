@@ -14,27 +14,26 @@ using NVTX
 abstract type AbstractRRTMGPMode end
 struct GrayRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
-    idealized_insolation::Bool
     idealized_clouds::Bool
     add_isothermal_boundary_layer::Bool
 end
 struct ClearSkyRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
-    idealized_insolation::Bool
     idealized_clouds::Bool
     add_isothermal_boundary_layer::Bool
+    aerosol_radiation::Bool
 end
 struct AllSkyRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
-    idealized_insolation::Bool
     idealized_clouds::Bool
     add_isothermal_boundary_layer::Bool
+    aerosol_radiation::Bool
 end
 struct AllSkyRadiationWithClearSkyDiagnostics <: AbstractRRTMGPMode
     idealized_h2o::Bool
-    idealized_insolation::Bool
     idealized_clouds::Bool
     add_isothermal_boundary_layer::Bool
+    aerosol_radiation::Bool
 end
 
 """
@@ -522,6 +521,16 @@ function RRTMGPModel(
                 end
                 lookups = (; lookups..., lookup_lw_cld)
             end
+            if radiation_mode.aerosol_radiation
+                local lookup_lw_aero
+                data_loader(joinpath("rrtmgp-aerosols-merra-lw.nc")) do ds
+                    lookup_lw_aero =
+                        RRTMGP.LookUpTables.LookUpAerosolMerra(ds, FT, DA)
+                end
+            else
+                lookup_lw_aero = nothing
+            end
+            lookups = (; lookups..., lookup_lw_aero)
         end
 
         src_lw = RRTMGP.Sources.source_func_longwave(
@@ -583,6 +592,17 @@ function RRTMGPModel(
                 end
                 lookups = (; lookups..., lookup_sw_cld)
             end
+
+            if radiation_mode.aerosol_radiation
+                local lookup_sw_aero
+                data_loader(joinpath("rrtmgp-aerosols-merra-sw.nc")) do ds
+                    lookup_sw_aero =
+                        RRTMGP.LookUpTables.LookUpAerosolMerra(ds, FT, DA)
+                end
+            else
+                lookup_sw_aero = nothing
+            end
+            lookups = (; lookups..., lookup_sw_aero)
         end
 
         src_sw =
@@ -705,12 +725,14 @@ function RRTMGPModel(
             otp,
         )
     else
-        layerdata = DA{FT}(undef, 3, nlay, ncol)
+        layerdata = DA{FT}(undef, 4, nlay, ncol)
         p_lay = view(layerdata, 2, :, :)
         t_lay = view(layerdata, 3, :, :)
+        rh_lay = view(layerdata, 4, :, :)
         if implied_values != :center
             set_and_save!(p_lay, "center_pressure", t..., dict)
             set_and_save!(t_lay, "center_temperature", t..., dict)
+            set_and_save!(rh_lay, "center_relative_humidity", t..., dict)
         end
         vmr_str = "volume_mixing_ratio_"
         gas_names = filter(
@@ -785,6 +807,25 @@ function RRTMGPModel(
             )
         end
 
+        if radiation_mode.aerosol_radiation
+            aero_type = DA{Int}(undef, nlay, ncol)
+            name = "center_aerosol_type"
+            set_and_save!(aero_type, name, t..., dict)
+            aero_size = DA{FT}(undef, nlay, ncol)
+            name = "center_aerosol_radius"
+            set_and_save!(aero_size, name, t..., dict)
+            aero_mass = DA{FT}(undef, nlay, ncol)
+            name = "center_aerosol_column_mass_density"
+            set_and_save!(aero_mass, name, t..., dict)
+            aerosol_state = RRTMGP.AtmosphericStates.AerosolState(
+                aero_type,
+                aero_size,
+                aero_mass,
+            )
+        else
+            aerosol_state = nothing
+        end
+
         as = RRTMGP.AtmosphericStates.AtmosphericState(
             lon,
             lat,
@@ -795,6 +836,7 @@ function RRTMGPModel(
             t_sfc,
             vmr,
             cloud_state,
+            aerosol_state,
         )
     end
 
@@ -1108,6 +1150,8 @@ NVTX.@annotate update_lw_fluxes!(::ClearSkyRadiation, model) =
         model.lw_solver,
         model.as,
         model.lookups.lookup_lw,
+        nothing,
+        model.lookups.lookup_lw_aero,
     )
 NVTX.@annotate update_lw_fluxes!(::AllSkyRadiation, model) =
     RRTMGP.RTESolver.solve_lw!(
@@ -1115,6 +1159,7 @@ NVTX.@annotate update_lw_fluxes!(::AllSkyRadiation, model) =
         model.as,
         model.lookups.lookup_lw,
         model.lookups.lookup_lw_cld,
+        model.lookups.lookup_lw_aero,
     )
 NVTX.@annotate function update_lw_fluxes!(
     ::AllSkyRadiationWithClearSkyDiagnostics,
@@ -1124,6 +1169,8 @@ NVTX.@annotate function update_lw_fluxes!(
         model.lw_solver,
         model.as,
         model.lookups.lookup_lw,
+        nothing,
+        model.lookups.lookup_lw_aero,
     )
     parent(model.face_clear_lw_flux_up) .= parent(model.face_lw_flux_up)
     parent(model.face_clear_lw_flux_dn) .= parent(model.face_lw_flux_dn)
@@ -1133,6 +1180,7 @@ NVTX.@annotate function update_lw_fluxes!(
         model.as,
         model.lookups.lookup_lw,
         model.lookups.lookup_lw_cld,
+        model.lookups.lookup_lw_aero,
     )
 end
 
@@ -1143,6 +1191,8 @@ NVTX.@annotate update_sw_fluxes!(::ClearSkyRadiation, model) =
         model.sw_solver,
         model.as,
         model.lookups.lookup_sw,
+        nothing,
+        model.lookups.lookup_sw_aero,
     )
 NVTX.@annotate update_sw_fluxes!(::AllSkyRadiation, model) =
     RRTMGP.RTESolver.solve_sw!(
@@ -1150,6 +1200,7 @@ NVTX.@annotate update_sw_fluxes!(::AllSkyRadiation, model) =
         model.as,
         model.lookups.lookup_sw,
         model.lookups.lookup_sw_cld,
+        model.lookups.lookup_sw_aero,
     )
 NVTX.@annotate function update_sw_fluxes!(
     ::AllSkyRadiationWithClearSkyDiagnostics,
@@ -1159,6 +1210,8 @@ NVTX.@annotate function update_sw_fluxes!(
         model.sw_solver,
         model.as,
         model.lookups.lookup_sw,
+        nothing,
+        model.lookups.lookup_sw_aero,
     )
     parent(model.face_clear_sw_flux_up) .= parent(model.face_sw_flux_up)
     parent(model.face_clear_sw_flux_dn) .= parent(model.face_sw_flux_dn)
@@ -1170,6 +1223,7 @@ NVTX.@annotate function update_sw_fluxes!(
         model.as,
         model.lookups.lookup_sw,
         model.lookups.lookup_sw_cld,
+        model.lookups.lookup_sw_aero,
     )
 end
 

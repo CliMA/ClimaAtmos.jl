@@ -9,7 +9,7 @@ dz_top: 3000.0
 moist: "equil"
 precip_model: "1M"
 rad: "allskywithclear"
-idealized_insolation: false
+insolation: "timevarying"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 vert_diff: "FriersonDiffusion"

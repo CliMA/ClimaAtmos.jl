@@ -14,7 +14,7 @@ vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 rad: "clearsky"
-idealized_insolation: false
+insolation: "timevarying"
 dt_rad: "1hours"
 albedo_model: "RegressionFunctionAlbedo"
 prognostic_surface: "PrognosticSurfaceTemperature"

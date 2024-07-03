@@ -426,7 +426,7 @@ function deep_atmos_baroclinic_wave_values(z, ϕ, λ, params, perturb)
     Ω = CAP.Omega(params)
     R = CAP.planet_radius(params)
 
-    # Constants from paper (See Table 1. in Ullrich et al (2014)) 
+    # Constants from paper (See Table 1. in Ullrich et al (2014))
     k = 3         # Power for temperature field
     T_e = FT(310) # Surface temperature at the equator
     T_p = FT(240) # Surface temperature at the pole
@@ -942,7 +942,9 @@ end
 The `InitialCondition` described in [Ackerman2009](@cite), but with a
 hydrostatically balanced pressure profile.
 """
-struct DYCOMS_RF02 <: InitialCondition end
+Base.@kwdef struct DYCOMS_RF02 <: InitialCondition
+    prognostic_tke::Bool = false
+end
 
 for IC in (:Dycoms_RF01, :Dycoms_RF02)
     IC_Type = Symbol(uppercase(string(IC)))
@@ -1175,7 +1177,7 @@ end
 function gcm_initial_conditions(external_forcing_file)
     NC.NCDataset(external_forcing_file) do ds
         (  # TODO: Cast to CuVector for GPU compatibility
-            gcm_driven_profile(ds, "thetali_mean")[:, 1],  # 1 is initial time index
+            gcm_driven_profile(ds, "thetali_mean")[:, 1], # 1 is initial time index
             gcm_driven_profile(ds, "u_mean")[:, 1],
             gcm_driven_profile(ds, "v_mean")[:, 1],
             gcm_driven_profile(ds, "qt_mean")[:, 1],

@@ -15,6 +15,7 @@ struct Microphysics1Moment <: AbstractPrecipitationModel end
 abstract type AbstractCloudModel end
 struct GridScaleCloud <: AbstractCloudModel end
 struct QuadratureCloud <: AbstractCloudModel end
+struct DiagnosticEDMFCloud <: AbstractCloudModel end
 
 abstract type AbstractModelConfig end
 struct SingleColumnModel <: AbstractModelConfig end
@@ -25,6 +26,12 @@ struct PlaneModel <: AbstractModelConfig end
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct ZonallyAsymmetricSST <: AbstractSST end
+struct RCEMIPIISST <: AbstractSST end
+
+abstract type AbstractInsolation end
+struct IdealizedInsolation <: AbstractInsolation end
+struct TimeVaryingInsolation <: AbstractInsolation end
+struct RCEMIPIIInsolation <: AbstractInsolation end
 
 abstract type AbstractSurfaceTemperature end
 struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end
@@ -171,11 +178,10 @@ PrognosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
     PrognosticEDMFX{N, TKE, FT}(a_half)
 
 struct DiagnosticEDMFX{N, TKE, FT} <: AbstractEDMF
-    a_int::FT # area fraction of the first interior cell above the surface
     a_half::FT # WARNING: this should never be used outside of divide_by_ρa
 end
-DiagnosticEDMFX{N, TKE}(a_int::FT, a_half::FT) where {N, TKE, FT} =
-    DiagnosticEDMFX{N, TKE, FT}(a_int, a_half)
+DiagnosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
+    DiagnosticEDMFX{N, TKE, FT}(a_half)
 
 n_mass_flux_subdomains(::PrognosticEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N
@@ -256,7 +262,7 @@ Base.broadcastable(x::AbstractDetrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractSGSamplingType) = tuple(x)
 Base.broadcastable(x::AbstractTendencyModel) = tuple(x)
 
-Base.@kwdef struct RadiationDYCOMS_RF01{FT}
+Base.@kwdef struct RadiationDYCOMS{FT}
     "Large-scale divergence"
     divergence::FT = 3.75e-6
     alpha_z::FT = 1.0
@@ -359,6 +365,7 @@ Base.@kwdef struct AtmosModel{
     VS,
     RS,
     ST,
+    IN,
     SM,
     SA,
     NUM,
@@ -392,6 +399,7 @@ Base.@kwdef struct AtmosModel{
     viscous_sponge::VS = nothing
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
+    insolation::IN = nothing
     surface_model::SM = nothing
     surface_albedo::SA = nothing
     numerics::NUM = nothing

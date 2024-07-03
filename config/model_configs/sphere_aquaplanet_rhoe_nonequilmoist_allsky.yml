@@ -10,7 +10,7 @@ approximate_linear_solve_iters: 2
 moist: "nonequil"
 precip_model: "nothing"
 rad: "allskywithclear"
-idealized_insolation: false
+insolation: "timevarying"
 rayleigh_sponge: true
 surface_setup: "DefaultMoninObukhov"
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml]

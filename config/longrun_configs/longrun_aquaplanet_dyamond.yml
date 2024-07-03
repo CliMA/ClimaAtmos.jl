@@ -7,7 +7,7 @@ moist: "equil"
 precip_model: "0M" 
 cloud_model: "grid_scale"
 rad: "allskywithclear" 
-idealized_insolation: false
+insolation: "timevarying"
 dt_rad: "1hours"
 vert_diff: "true" 
 surface_setup: "DefaultMoninObukhov" 

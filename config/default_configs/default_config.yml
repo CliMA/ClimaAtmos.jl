@@ -102,12 +102,15 @@ dt_rad:
 idealized_clouds:
   help: "Use idealized clouds in radiation model [`false` (default), `true`]"
   value: false
-idealized_insolation:
-  help: "Use idealized insolation in radiation model [`false`, `true` (default)]"
-  value: true
+insolation:
+  help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`]"
+  value: "idealized"
 add_isothermal_boundary_layer:
   help: "Add an isothermal boundary layer above the domain top for radiation [`false`, `true` (default)]"
   value: true
+aerosol_radiation:
+  help: "Use aerosols in radiation [`false` (default)]"
+  value: false
 dt_cloud_fraction:
   help: "Time between calling cloud fraction update"
   value: "3hours"
@@ -173,7 +176,7 @@ surface_setup:
   help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
   value: "DefaultExchangeCoefficients"
 surface_temperature:
-  help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric']"
+  help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric', 'RCEMIPII']"
   value: "ZonallySymmetric"
 initial_condition:
   help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `AgnesiHProfile`, `ScharProfile`, `RisingThermalBubbleProfile`]"
@@ -191,7 +194,7 @@ precip_model:
   help: "Precipitation model [`nothing` (default), `0M`]"
   value: ~
 cloud_model:
-  help: "Cloud model [`grid_scale`, `quadrature` (default)]"
+  help: "Cloud model [`grid_scale`, `quadrature` (default), `diagnostic_edmfx`]"
   value: "quadrature"
 perf_summary:
   help: "Flag for collecting performance summary information"
