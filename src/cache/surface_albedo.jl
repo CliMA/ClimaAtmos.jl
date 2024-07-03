@@ -56,7 +56,7 @@ Set the surface albedo to a constant value.
 function set_surface_albedo!(Y, p, t, α_model::ConstantAlbedo{FT}) where {FT}
 
     (; direct_sw_surface_albedo, diffuse_sw_surface_albedo) =
-        p.radiation.radiation_model
+        p.radiation.rrtmgp_model
 
     @. direct_sw_surface_albedo = α_model.α
     @. diffuse_sw_surface_albedo = α_model.α
@@ -75,7 +75,7 @@ function set_surface_albedo!(
 ) where {FT}
 
     (; direct_sw_surface_albedo, diffuse_sw_surface_albedo, cos_zenith) =
-        p.radiation.radiation_model
+        p.radiation.rrtmgp_model
 
     λ = FT(0) # spectral wavelength (not used for now)
     μ = cos_zenith

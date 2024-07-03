@@ -18,10 +18,8 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
     (; u, p, t) = simulation.integrator
     ClimaAtmos.set_surface_albedo!(u, p, t, p.atmos.surface_albedo)
 
-    @test all(p.radiation.radiation_model.direct_sw_surface_albedo .== FT(0.38))
-    @test all(
-        p.radiation.radiation_model.diffuse_sw_surface_albedo .== FT(0.38),
-    )
+    @test all(p.radiation.rrtmgp_model.direct_sw_surface_albedo .== FT(0.38))
+    @test all(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo .== FT(0.38))
 
     # test set_surface_albedo!(Y, p, t, α_type::RegressionFunctionAlbedo)
     config.parsed_args["rad"] = "clearsky"
@@ -32,8 +30,8 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
     ClimaAtmos.set_surface_albedo!(u, p, t, p.atmos.surface_albedo)
 
     # test that the albedo is initiated (not NaN) - precise values are checked in the testset below
-    @test !isnan(sum(p.radiation.radiation_model.direct_sw_surface_albedo))
-    @test !isnan(sum(p.radiation.radiation_model.diffuse_sw_surface_albedo))
+    @test !isnan(sum(p.radiation.rrtmgp_model.direct_sw_surface_albedo))
+    @test !isnan(sum(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo))
 
     # test set_surface_albedo!(Y, p, t, α_type::CouplerAlbedo)
     config.parsed_args["rad"] = "clearsky"
@@ -44,8 +42,8 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
     ClimaAtmos.set_surface_albedo!(u, p, t, p.atmos.surface_albedo)
 
     # test that the albedo is not initiated by atmos (includes NaNs)
-    @test isnan(sum(p.radiation.radiation_model.direct_sw_surface_albedo))
-    @test isnan(sum(p.radiation.radiation_model.diffuse_sw_surface_albedo))
+    @test isnan(sum(p.radiation.rrtmgp_model.direct_sw_surface_albedo))
+    @test isnan(sum(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo))
 
 end
 

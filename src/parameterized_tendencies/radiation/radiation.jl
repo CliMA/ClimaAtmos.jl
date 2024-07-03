@@ -66,7 +66,7 @@ function radiation_model_cache(
     else
         latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
-    local radiation_model
+    local rrtmgp_model
     orbital_data = Insolation.OrbitalData()
     file_name = joinpath(
         "examples",
@@ -209,7 +209,7 @@ function radiation_model_cache(
 
         cos_zenith = weighted_irradiance = NaN # initialized in callback
 
-        radiation_model = RRTMGPI.RRTMGPModel(
+        rrtmgp_model = RRTMGPI.RRTMGPModel(
             rrtmgp_params,
             data_loader,
             context;
@@ -233,7 +233,7 @@ function radiation_model_cache(
         orbital_data,
         idealized_h2o,
         idealized_clouds,
-        radiation_model,
+        rrtmgp_model,
         insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT}),
         ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
     )
