@@ -8,7 +8,7 @@ moist: "equil"
 config: "box" 
 hyperdiff: "true" 
 implicit_diffusion: false
-precip_model: "1M"
+precip_model: "0M"
 vorticity_hyperdiffusion_coefficient: 0.2
 scalar_hyperdiffusion_coefficient: 0.2
 dt_cloud_fraction: "10mins"
@@ -28,11 +28,11 @@ t_end: "21600secs"
 dt_save_state_to_disk: "30mins"
 rayleigh_sponge: true
 toml: [toml/bomex_box_rhoe.toml]
-restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/bomex/Micro1M_day0.0_Prod.hdf5"
+restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/bomex/Micro0M_day0.0_Prod.hdf5"
 netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, kvis, hfes]
     period: 10mins
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, kvis, hfes]
-    reduction: "average"
+    reduction: average
     period: 60mins

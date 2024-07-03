@@ -34,5 +34,5 @@ diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, kvis, hfes]
     period: 10mins
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, kvis, hfes]
-    reduction_time: "average"
+    reduction_time: average
     period: 60mins
