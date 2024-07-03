@@ -1088,6 +1088,7 @@ function update_boundary_layer!(model)
     @views as.t_lev[end, :] .= as.t_lev[end - 1, :]
     update_boundary_layer_vmr!(model.radiation_mode, as)
     update_boundary_layer_cloud!(model.radiation_mode, as)
+    update_boundary_layer_aerosol!(model.radiation_mode, as)
 end
 update_boundary_layer_vmr!(::GrayRadiation, as) = nothing
 update_boundary_layer_vmr!(radiation_mode, as) =
@@ -1116,6 +1117,21 @@ function update_boundary_layer_cloud!(cloud_state)
     @views cloud_state.cld_path_ice[end, :] .=
         cloud_state.cld_path_ice[end - 1, :]
     @views cloud_state.cld_frac[end, :] .= cloud_state.cld_frac[end - 1, :]
+end
+
+update_boundary_layer_aerosol!(::GrayRadiation, _) = nothing
+update_boundary_layer_aerosol!(::AbstractRRTMGPMode, as) =
+    update_boundary_layer_aerosol!(as.aerosol_state)
+update_boundary_layer_aerosol!(::Nothing) = nothing
+function update_boundary_layer_aerosol!(
+    aerosol_state::RRTMGP.AtmosphericStates.AerosolState,
+)
+    @views aerosol_state.aero_type[end, :] .=
+        aerosol_state.aero_type[end - 1, :]
+    @views aerosol_state.aero_size[end, :] .=
+        aerosol_state.aero_size[end - 1, :]
+    @views aerosol_state.aero_mass[end, :] .=
+        aerosol_state.aero_mass[end - 1, :]
 end
 
 function clip_values!(model)
