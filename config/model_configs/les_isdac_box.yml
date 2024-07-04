@@ -16,9 +16,9 @@ c_smag: 0.20
 x_max: 3.2e3
 y_max: 3.2e3 
 z_max: 2e3
-x_elem: 64
-y_elem: 64
-z_elem: 200
+x_elem: 16
+y_elem: 16
+z_elem: 100
 z_stretch: false
 dt: "0.1secs" 
 t_end: "1hours" 
@@ -28,4 +28,4 @@ netcdf_interpolation_num_points: [64, 64, 200]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
     reduction: average
-    period: 1mins
+    period: 10mins
