@@ -231,6 +231,7 @@ end
 # ISDAC external forcing (i.e. nudging)
 external_forcing_cache(Y, external_forcing::ISDACForcing) = (;)  # Don't need to cache anything
 function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
+    FT = Spaces.undertype(axes(Y.c))
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜspecific, ᶜts, ᶜh_tot, ᶜp) = p.precomputed
