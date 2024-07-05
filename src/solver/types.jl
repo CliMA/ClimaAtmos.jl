@@ -525,7 +525,7 @@ function AtmosConfig(
 
     configs = map(all_config_files) do config_file
         @info "Loading yaml file $config_file"
-        strip_help_messages(YAML.load_file(config_file))
+        strip_help_messages(load_yaml_file(config_file))
     end
     return AtmosConfig(
         configs;

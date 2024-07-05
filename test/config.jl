@@ -10,7 +10,7 @@ function extract_job_ids(folder_path)
     for (root, _, files) in walkdir(folder_path)
         for file in files
             filepath = joinpath(root, file)
-            data = YAML.load_file(filepath)
+            data = CA.load_yaml_file(filepath)
             if haskey(data, "job_id")
                 job_id_dict[filepath] = data["job_id"]
             end
@@ -33,3 +33,7 @@ end
 repeated_job_ids = filter(kv -> length(kv[2]) > 1, value_to_keys)
 
 @test isempty(repeated_job_ids)
+
+file, io = mktemp()
+config_err = ErrorException("File $(CA.normrelpath(file)) is empty or missing.")
+@test_throws config_err CA.AtmosConfig(file)
