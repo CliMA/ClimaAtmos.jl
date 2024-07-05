@@ -20,7 +20,7 @@ import Statistics: var
 experiment_dir = dirname(Base.active_project())
 config_dict = YAML.load_file(joinpath(experiment_dir, "model_config.yml"))
 config_dict["t_end"] = "1000days"
-config_dict["dt_save_state_to_disk"] = "50days"
+config_dict["dt_save_state_to_disk"] = "300days"
 output_dir = joinpath(experiment_dir, "generate_observations")
 config_dict["output_dir"] = output_dir
 config = CA.AtmosConfig(config_dict)

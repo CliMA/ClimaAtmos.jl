@@ -1,5 +1,5 @@
-dt: "150secs"
-t_end: "300days"
+dt: "120secs"
+t_end: "600days"
 h_elem: 16
 z_elem: 63
 dz_bottom: 30.0
@@ -16,6 +16,7 @@ rad: "clearsky"
 dt_rad: "6hours"
 output_dir: "output/aquaplanet_rhoe_equil_precip_toa"
 toml: [calibration/experiments/aquaplanet_rhoe_equil_precip_toa/parameters.toml]
+restart_file: calibration/experiments/aquaplanet_rhoe_equil_precip_toa/day300.0.hdf5
 override_τ_precip: false
 diagnostics:
   - reduction_time: average
