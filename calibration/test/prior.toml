@@ -1,0 +1,3 @@
+[astronomical_unit]
+prior = "constrained_gaussian(astronomical_unit, 200_000, 100597870000, -Inf, Inf)"
+type = "float"
