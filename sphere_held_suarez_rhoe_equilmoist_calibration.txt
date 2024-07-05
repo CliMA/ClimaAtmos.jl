@@ -1,0 +1,52 @@
+┌ Info: Initializing calibration
+│   n_iterations = 2
+│   ensemble_size = 10
+└   output_dir = "output/sphere_held_suarez_rhoe_equilmoist"
+[ Info: Iteration 0
+[ Info: Running ensemble member 1
+[ Info: Running ensemble member 2
+[ Info: Running ensemble member 3
+[ Info: Running ensemble member 4
+[ Info: Running ensemble member 5
+[ Info: Running ensemble member 6
+[ Info: Running ensemble member 7
+[ Info: Running ensemble member 8
+[ Info: Running ensemble member 9
+[ Info: Running ensemble member 10
+[ Info: Ensemble member 3 complete
+[ Info: Ensemble member 4 complete
+[ Info: Ensemble member 10 complete
+[ Info: Ensemble member 6 complete
+[ Info: Ensemble member 8 complete
+[ Info: Ensemble member 9 complete
+[ Info: Ensemble member 7 complete
+[ Info: Ensemble member 2 complete
+[ Info: Ensemble member 1 complete
+[ Info: Ensemble member 5 complete
+[ Info: Completed iteration 0, updating ensemble
+[ Info: Iteration 1
+[ Info: Running ensemble member 1
+[ Info: Running ensemble member 2
+[ Info: Running ensemble member 3
+[ Info: Running ensemble member 4
+[ Info: Running ensemble member 5
+[ Info: Running ensemble member 6
+[ Info: Running ensemble member 7
+[ Info: Running ensemble member 8
+[ Info: Running ensemble member 9
+[ Info: Running ensemble member 10
+[ Info: Ensemble member 3 complete
+[ Info: Ensemble member 2 complete
+[ Info: Ensemble member 9 complete
+[ Info: Ensemble member 7 complete
+[ Info: Ensemble member 10 complete
+[ Info: Ensemble member 8 complete
+[ Info: Ensemble member 4 complete
+[ Info: Ensemble member 6 complete
+[ Info: Ensemble member 1 complete
+[ Info: Ensemble member 5 complete
+[ Info: Completed iteration 1, updating ensemble
+┌ Warning: Found `resolution` in the theme when creating a `Scene`. The `resolution` keyword for `Scene`s and `Figure`s has been deprecated. Use `Figure(; size = ...` or `Scene(; size = ...)` instead, which better reflects that this is a unitless size and not a pixel resolution. The key could also come from `set_theme!` calls or related theming functions.
+└ @ Makie ~/.julia/packages/Makie/qMluh/src/scenes.jl:227
+┌ Warning: Found `resolution` in the theme when creating a `Scene`. The `resolution` keyword for `Scene`s and `Figure`s has been deprecated. Use `Figure(; size = ...` or `Scene(; size = ...)` instead, which better reflects that this is a unitless size and not a pixel resolution. The key could also come from `set_theme!` calls or related theming functions.
+└ @ Makie ~/.julia/packages/Makie/qMluh/src/scenes.jl:227

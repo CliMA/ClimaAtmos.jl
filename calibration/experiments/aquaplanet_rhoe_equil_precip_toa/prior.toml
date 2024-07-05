@@ -1,0 +1,7 @@
+[precipitation_timescale]
+prior = constrained_gaussian(name, 200, 200, 120, 1000)
+type = "float"
+
+[ocean_surface_albedo]
+prior = constrained_gaussian(name, 0.5, 0.3, 0, 1)
+type = "float"
