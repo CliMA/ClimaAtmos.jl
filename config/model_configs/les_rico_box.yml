@@ -25,13 +25,13 @@ z_max: 6e3
 z_stretch: false
 dt: "0.2secs"
 t_end: 8hours
-#restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/rico/Micro1M_day0.0_Prod.hdf5"
-restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/rico/day0.3783.hdf5"
+restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/rico/day0.0.hdf5"
 toml: [toml/rico_box.toml]
 dt_save_state_to_disk: 10mins
 netcdf_interpolation_num_points: [20, 20, 100]
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, kvis, hfes]
     period: 10mins
-  - short_name: [husra, hussn]
-    period: 10mins
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, kvis, hfes]
+    reduction_time: average
+    period: 60mins
