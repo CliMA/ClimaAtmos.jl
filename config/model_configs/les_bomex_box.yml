@@ -24,7 +24,7 @@ z_elem: 100
 z_stretch: false
 dt: "0.10secs" 
 output_default_diagnostics: false
-t_end: "21600secs" 
+t_end: "36000secs" 
 dt_save_state_to_disk: "30mins"
 rayleigh_sponge: true
 toml: [toml/bomex_box_rhoe.toml]
