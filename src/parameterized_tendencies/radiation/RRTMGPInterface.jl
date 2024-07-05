@@ -1086,6 +1086,10 @@ function update_boundary_layer!(model)
     @views as.p_lev[end, :] .= p_min
     @views AS.getview_t_lay(model.as)[end, :] .= as.t_lev[end - 1, :]
     @views as.t_lev[end, :] .= as.t_lev[end - 1, :]
+    if !(model.radiation_mode isa GrayRadiation)
+        @views AS.getview_rel_hum(model.as)[end, :] .=
+            AS.getview_rel_hum(model.as)[end - 1, :]
+    end
     update_boundary_layer_vmr!(model.radiation_mode, as)
     update_boundary_layer_cloud!(model.radiation_mode, as)
     update_boundary_layer_aerosol!(model.radiation_mode, as)
