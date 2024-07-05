@@ -24,6 +24,7 @@ steps:
     command:
       - echo "--- Instantiate examples"
       - julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'
+      - "julia --project=examples -e 'using Pkg; Pkg.develop(;path=\".\"); Pkg.add(url = \"https://github.com/CLiMA/ClimaCore.jl\", rev = \"as/covar-deriv\");'"
       - julia --project=examples -e 'using Pkg; Pkg.precompile()'
       - julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'
       - julia --project=examples -e 'using Pkg; Pkg.status()'
