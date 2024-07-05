@@ -148,7 +148,7 @@ function radiation_model_cache(
                     ice_roughness = 2,
                 )
                 ᶜz = Fields.coordinate_field(Y.c).z
-                ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
+                ᶜΔz = Fields.Δz_field(Y.c)
                 if idealized_clouds # icy cloud on top and wet cloud on bottom
                     # TODO: can we avoid using DataLayouts with this?
                     #     `ᶜis_bottom_cloud = similar(ᶜz, Bool)`
