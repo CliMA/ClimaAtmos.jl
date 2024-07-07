@@ -134,7 +134,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         radiation_mode isa RRTMGPI.GrayRadiation ||
         radiation_mode isa RRTMGPI.ClearSkyRadiation
     )
-        ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
+        ᶜΔz = Fields.Δz_field(Y.c)
         ᶜlwp = Fields.array2field(
             rrtmgp_model.center_cloud_liquid_water_path,
             axes(Y.c),
@@ -158,7 +158,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         if radiation_mode.aerosol_radiation
-            ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
+            ᶜΔz = Fields.Δz_field(Y.c)
             ᶜaero_conc = Fields.array2field(
                 rrtmgp_model.center_aerosol_column_mass_density,
                 axes(Y.c),
