@@ -710,7 +710,9 @@ end
 ## EDMF Test Cases
 ##
 # TODO: Get rid of this
-const FunctionOrSpline = Union{Dierckx.Spline1D, Function}
+import AtmosphericProfilesLibrary as APL
+
+const FunctionOrSpline = Union{Dierckx.Spline1D, Function, APL.AbstractProfile}
 
 """
     hydrostatic_pressure_profile(; thermo_params, p_0, [T, θ, q_tot, z_max])
