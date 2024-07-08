@@ -64,9 +64,11 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     (; radiation_mode) = p.atmos
 
     # If we have prescribed aerosols, we need to update them
-    for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
-        field = getfield(p.tracers.prescribed_aerosol_fields, key)
-        evaluate!(field, tv, t)
+    if !isempty(p.tracers)
+        for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
+            field = getproperty(p.tracers.prescribed_aerosols_field, key)
+            evaluate!(field, tv, t)
+        end
     end
 
     FT = Spaces.undertype(axes(Y.c))
@@ -159,11 +161,15 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         if radiation_mode.aerosol_radiation
             ᶜΔz = Fields.Δz_field(Y.c)
+            ᶜaero_type =
+                Fields.array2field(rrtmgp_model.center_aerosol_type, axes(Y.c))
+            @. ᶜaero_type =
+                set_aerosol_type(p.tracers.prescribed_aerosols_field)
             ᶜaero_conc = Fields.array2field(
                 rrtmgp_model.center_aerosol_column_mass_density,
                 axes(Y.c),
             )
-            @. ᶜaero_conc = p.tracers.prescribed_aerosol_fields.:SO4 * ᶜΔz
+            @. ᶜaero_conc = maximum(p.tracers.prescribed_aerosols_field) * ᶜΔz
         end
     end
 
@@ -245,6 +251,21 @@ function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
             irradiance * (au / last(insolation_tuple))^2
     end
 end
+
+function set_aerosol_type(;
+    DST01 = 0,
+    SSLT01 = 0,
+    SO4 = 0,
+    CB1 = 0,
+    CB2 = 0,
+    OC1 = 0,
+    OC2 = 0,
+    _...,
+)
+    _, index = findmax((DST01, SSLT01, SO4, CB1, CB2, OC1, OC2))
+    return index
+end
+set_aerosol_type(NT) = set_aerosol_type(; NT...)
 
 NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
