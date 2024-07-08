@@ -10,6 +10,11 @@ strip_help_message(v) = v
 strip_help_messages(d) =
     Dict(map(k -> Pair(k, strip_help_message(d[k])), collect(keys(d)))...)
 
+function load_yaml_file(f)
+    filesize(f) == 0 && error("File $f is empty or missing.")
+    return YAML.load_file(f)
+end
+
 """
     default_config_dict()
     default_config_dict(config_path)
@@ -17,7 +22,7 @@ strip_help_messages(d) =
 Loads the default configuration from files into a Dict for use in AtmosConfig().
 """
 function default_config_dict(config_file = default_config_file)
-    config = YAML.load_file(config_file)
+    config = load_yaml_file(config_file)
     return strip_help_messages(config)
 end
 
@@ -45,10 +50,10 @@ Takes in a Dict, vector of Dicts or filepaths and returns a Dict with the
 default configuration overridden by the given dicts or parsed YAML files.
 """
 override_default_config(config_files::AbstractString) =
-    override_default_config(YAML.load_file(config_files))
+    override_default_config(load_yaml_file(config_files))
 
 override_default_config(config_files::ContainerType(AbstractString)) =
-    override_default_config(YAML.load_file.(config_files))
+    override_default_config(load_yaml_file.(config_files))
 
 override_default_config(config_dicts::ContainerType(AbstractDict)) =
     override_default_config(merge(config_dicts...))
@@ -121,7 +126,7 @@ function configs_per_config_id(
             file = joinpath(root, f)
             !endswith(file, ".yml") && continue
             occursin("default_configs", file) && continue
-            config = YAML.load_file(file)
+            config = load_yaml_file(file)
             name = config_id_from_config_file(file)
             cmds[name] = (; config, config_file = file)
         end
