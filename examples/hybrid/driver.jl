@@ -10,6 +10,10 @@ import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
 
+include("fix_asymmetric_metric_tensor.jl")
+include("fix_1d_spectral_space_on_gpu.jl")
+include("disable_topography_dss.jl")
+
 if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()
     config = CA.AtmosConfig(config_file; job_id)
@@ -22,9 +26,10 @@ sol_res = CA.solve_atmos!(simulation)
 (; p) = integrator
 
 import ClimaCore
-import ClimaCore: Topologies, Quadratures, Spaces
+import ClimaCore: Topologies, Quadratures, Spaces, Fields
 import ClimaAtmos.InitialConditions as ICs
 using Statistics: mean
+import LinearAlgebra: norm_sqr
 import ClimaAtmos.Parameters as CAP
 import Thermodynamics as TD
 import ClimaComms
@@ -113,6 +118,39 @@ end
 
 @info "Callback verification, n_expected_calls: $(CA.n_expected_calls(integrator))"
 @info "Callback verification, n_measured_calls: $(CA.n_measured_calls(integrator))"
+
+if config.parsed_args["analytic_check"]
+    @info "Comparing final state against predicted steady-state solution"
+
+    Y_end = integrator.sol.u[end]
+    (; predicted_steady_state, params) = integrator.p
+    @assert !isnothing(predicted_steady_state)
+
+    FT = eltype(Y_end)
+    (; zd_rayleigh) = params
+
+    ᶜuₕ_error_squared =
+        norm_sqr.(Y_end.c.uₕ .- CA.C12.(predicted_steady_state.ᶜu))
+    ᶠu₃_error_squared =
+        norm_sqr.(Y_end.f.u₃ .- CA.C3.(predicted_steady_state.ᶠu))
+
+    ᶜsponge_mask = FT.(Fields.coordinate_field(Y_end.c).z .< zd_rayleigh)
+    ᶠsponge_mask = FT.(Fields.coordinate_field(Y_end.f).z .< zd_rayleigh)
+    uₕ_rmse = sqrt(sum(ᶜuₕ_error_squared .* ᶜsponge_mask) / sum(ᶜsponge_mask))
+    u₃_rmse = sqrt(sum(ᶠu₃_error_squared .* ᶠsponge_mask) / sum(ᶠsponge_mask))
+
+    uₕ_rmse_by_level = map(1:5) do level
+        sqrt(mean(Fields.level(ᶜuₕ_error_squared, level)))
+    end
+    u₃_rmse_by_level = map(1:5) do level
+        sqrt(mean(Fields.level(ᶠu₃_error_squared, level - Fields.half)))
+    end
+
+    @info "    RMSE of uₕ below sponge layer: $uₕ_rmse"
+    @info "    RMSE of u₃ below sponge layer: $u₃_rmse"
+    @info "    RMSE of uₕ on first 5 levels: $uₕ_rmse_by_level"
+    @info "    RMSE of u₃ on first 5 levels: $u₃_rmse_by_level"
+end
 
 # Conservation checks
 if config.parsed_args["check_conservation"]

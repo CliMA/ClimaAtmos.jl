@@ -55,6 +55,9 @@ topo_smoothing:
 smoothing_order:
   help: "Define the surface smoothing kernel factor (integer) [`3 (default)`]"
   value: 3
+max_topography_height:
+  help: "The maximum height in meters for certain choices of `topography` [`25.0 (default)`]"
+  value: 25.0
 # ODE
 use_newton_rtol:
   help: "Whether to check if the current iteration of Newton's method has an error within a relative tolerance, instead of always taking the maximum number of iterations (only for ClimaTimeSteppers.jl)"
@@ -154,6 +157,9 @@ start_date:
 forcing:
   help: "Forcing [`nothing` (default), `held_suarez`]"
   value: ~
+analytic_check:
+  help: "Test final state against analytic reference, if one is available [`false` (default), `true`]"
+  value: false
 test_dycore_consistency:
   help: "Test dycore consistency [`false` (default), `true`]"
   value: false

@@ -1,3 +1,5 @@
 [alpha_rayleigh_w]
 value = 0.1
 
+[zd_rayleigh]
+value = 21000

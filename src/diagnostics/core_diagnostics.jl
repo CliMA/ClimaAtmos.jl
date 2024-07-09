@@ -733,3 +733,160 @@ add_diagnostic_variable!(
     comments = "Elevation of the horizontal coordinates",
     compute! = compute_orog!,
 )
+
+###
+# Analytic Steady-State Approximations
+###
+
+add_diagnostic_variable!(
+    short_name = "uapredicted",
+    long_name = "Predicted Eastward Wind",
+    standard_name = "predicted_eastward_wind",
+    units = "m s^-1",
+    comments = "Predicted value of eastward (zonal) wind component",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            u_component.(cache.predicted_steady_state.ᶜu)
+        else
+            out .= u_component.(cache.predicted_steady_state.ᶜu)
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "vapredicted",
+    long_name = "Predicted Northward Wind",
+    standard_name = "predicted_northward_wind",
+    units = "m s^-1",
+    comments = "Predicted value of northward (meridional) wind component",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            v_component.(cache.predicted_steady_state.ᶜu)
+        else
+            out .= v_component.(cache.predicted_steady_state.ᶜu)
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "wapredicted",
+    long_name = "Predicted Upward Air Velocity",
+    standard_name = "predicted_upward_air_velocity",
+    units = "m s^-1",
+    comments = "Predicted value of vertical wind component",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            w_component.(cache.predicted_steady_state.ᶜu)
+        else
+            out .= w_component.(cache.predicted_steady_state.ᶜu)
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "uaerror",
+    long_name = "Error of Eastward Wind",
+    standard_name = "error_eastward_wind",
+    units = "m s^-1",
+    comments = "Error of eastward (zonal) wind component against predicted value",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            u_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
+            u_component.(cache.predicted_steady_state.ᶜu)
+        else
+            out .=
+                u_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
+                u_component.(cache.predicted_steady_state.ᶜu)
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "vaerror",
+    long_name = "Error of Northward Wind",
+    standard_name = "error_northward_wind",
+    units = "m s^-1",
+    comments = "Error of northward (meridional) wind component against predicted value",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            v_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
+            v_component.(cache.predicted_steady_state.ᶜu)
+        else
+            out .=
+                v_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
+                v_component.(cache.predicted_steady_state.ᶜu)
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "waerror",
+    long_name = "Error of Upward Air Velocity",
+    standard_name = "error_upward_air_velocity",
+    units = "m s^-1",
+    comments = "Error of vertical wind component against predicted value",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            w_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
+            w_component.(cache.predicted_steady_state.ᶜu)
+        else
+            out .=
+                w_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
+                w_component.(cache.predicted_steady_state.ᶜu)
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "c1error",
+    long_name = "Error of First Covariant Wind Component",
+    standard_name = "error_covariant1_wind",
+    units = "m^2 s^-1",
+    comments = "Error of first covariant wind component against predicted value",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            state.c.uₕ.components.data.:1 .-
+            C12.(cache.predicted_steady_state.ᶜu).components.data.:1
+        else
+            out .=
+                state.c.uₕ.components.data.:1 .-
+                C12.(cache.predicted_steady_state.ᶜu).components.data.:1
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "c2error",
+    long_name = "Error of Second Covariant Wind Component",
+    standard_name = "error_covariant2_wind",
+    units = "m^2 s^-1",
+    comments = "Error of second covariant wind component against predicted value",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            state.c.uₕ.components.data.:2 .-
+            C12.(cache.predicted_steady_state.ᶜu).components.data.:2
+        else
+            out .=
+                state.c.uₕ.components.data.:2 .-
+                C12.(cache.predicted_steady_state.ᶜu).components.data.:2
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "c3error",
+    long_name = "Error of Third Covariant Wind Component",
+    standard_name = "error_covariant3_wind",
+    units = "m^2 s^-1",
+    comments = "Error of third covariant wind component against predicted value",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            state.f.u₃.components.data.:1 .-
+            C3.(cache.predicted_steady_state.ᶠu).components.data.:1
+        else
+            out .=
+                state.f.u₃.components.data.:1 .-
+                C3.(cache.predicted_steady_state.ᶠu).components.data.:1
+        end
+    end,
+)

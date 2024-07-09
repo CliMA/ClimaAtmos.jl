@@ -193,6 +193,33 @@ steps:
           --job_id plane_density_current_test
         artifact_paths: "plane_density_current_test/output_active/*"
 
+      - label: ":computer: Analytic No Topography Test (2D)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_test.yml
+          --job_id plane_analytic_no_topography_test
+        artifact_paths: "plane_analytic_no_topography_test/output_active/*"
+
+      - label: ":computer: Analytic No Topography Test (2D, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_float32_test.yml
+          --job_id plane_analytic_no_topography_float32_test
+        artifact_paths: "plane_analytic_no_topography_float32_test/output_active/*"
+
+      - label: ":computer: Analytic Cosine Hills Test (2D)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_test.yml
+          --job_id plane_analytic_cosine_hills_test
+        artifact_paths: "plane_analytic_cosine_hills_test/output_active/*"
+
+      - label: ":computer: Analytic Cosine Hills Test (2D, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_float32_test.yml
+          --job_id plane_analytic_cosine_hills_float32_test
+        artifact_paths: "plane_analytic_cosine_hills_float32_test/output_active/*"
 
   - group: "Conservation check"
     steps:
@@ -866,6 +893,391 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_mem: 20G
+
+      - label: "GPU: Analytic No Topography Test (2D, Long Duration)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_long_test.yml
+          --job_id gpu_plane_analytic_no_topography_long_test
+        artifact_paths: "gpu_plane_analytic_no_topography_long_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (2D, Long Duration, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_long_float32_test.yml
+          --job_id gpu_plane_analytic_no_topography_long_float32_test
+        artifact_paths: "gpu_plane_analytic_no_topography_long_float32_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (2D, Long Duration, No Hyperdiff)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_no_hyperdiff_long_test.yml
+          --job_id gpu_plane_analytic_no_topography_no_hyperdiff_long_test
+        artifact_paths: "gpu_plane_analytic_no_topography_no_hyperdiff_long_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (2D, Long Duration, No Hyperdiff, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_no_hyperdiff_long_float32_test.yml
+          --job_id gpu_plane_analytic_no_topography_no_hyperdiff_long_float32_test
+        artifact_paths: "gpu_plane_analytic_no_topography_no_hyperdiff_long_float32_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (2D, Long Duration, Discrete Balance)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_discrete_balance_long_test.yml
+          --job_id gpu_plane_analytic_no_topography_discrete_balance_long_test
+        artifact_paths: "gpu_plane_analytic_no_topography_discrete_balance_long_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (2D, Long Duration, Discrete Balance, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_discrete_balance_long_float32_test.yml
+          --job_id gpu_plane_analytic_no_topography_discrete_balance_long_float32_test
+        artifact_paths: "gpu_plane_analytic_no_topography_discrete_balance_long_float32_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (Extruded 2D)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/extruded_plane_analytic_no_topography_test.yml
+          --job_id gpu_extruded_plane_analytic_no_topography_test
+        artifact_paths: "gpu_extruded_plane_analytic_no_topography_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (3D)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/box_analytic_no_topography_test.yml
+          --job_id gpu_box_analytic_no_topography_test
+        artifact_paths: "gpu_box_analytic_no_topography_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (3D, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/box_analytic_no_topography_float32_test.yml
+          --job_id gpu_box_analytic_no_topography_float32_test
+        artifact_paths: "gpu_box_analytic_no_topography_float32_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_long_test.yml
+          --job_id gpu_plane_analytic_cosine_hills_long_test
+        artifact_paths: "gpu_plane_analytic_cosine_hills_long_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_long_float32_test.yml
+          --job_id gpu_plane_analytic_cosine_hills_long_float32_test
+        artifact_paths: "gpu_plane_analytic_cosine_hills_long_float32_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Stronger Sponge)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_strong_sponge_long_test.yml
+          --job_id gpu_plane_analytic_cosine_hills_strong_sponge_long_test
+        artifact_paths: "gpu_plane_analytic_cosine_hills_strong_sponge_long_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Weaker Sponge)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_weak_sponge_long_test.yml
+          --job_id gpu_plane_analytic_cosine_hills_weak_sponge_long_test
+        artifact_paths: "gpu_plane_analytic_cosine_hills_weak_sponge_long_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Higher Domain Top)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_high_top_long_test.yml
+          --job_id gpu_plane_analytic_cosine_hills_high_top_long_test
+        artifact_paths: "gpu_plane_analytic_cosine_hills_high_top_long_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Higher Domain Top, Higher Sponge)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_high_top_high_sponge_long_test.yml
+          --job_id gpu_plane_analytic_cosine_hills_high_top_high_sponge_long_test
+        artifact_paths: "gpu_plane_analytic_cosine_hills_high_top_high_sponge_long_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Cosine Hills Test (Extruded 2D)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/extruded_plane_analytic_cosine_hills_test.yml
+          --job_id gpu_extruded_plane_analytic_cosine_hills_test
+        artifact_paths: "gpu_extruded_plane_analytic_cosine_hills_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Cosine Hills Test (3D)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/box_analytic_cosine_hills_test.yml
+          --job_id gpu_box_analytic_cosine_hills_test
+        artifact_paths: "gpu_box_analytic_cosine_hills_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Cosine Hills Test (3D, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/box_analytic_cosine_hills_float32_test.yml
+          --job_id gpu_box_analytic_cosine_hills_float32_test
+        artifact_paths: "gpu_box_analytic_cosine_hills_float32_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Agnesi Mountain Test (2D)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_agnesi_mountain_test.yml
+          --job_id gpu_plane_analytic_agnesi_mountain_test
+        artifact_paths: "gpu_plane_analytic_agnesi_mountain_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Huge Schar Mountain Test (2D)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_huge_schar_mountain_test.yml
+          --job_id gpu_plane_analytic_huge_schar_mountain_test
+        artifact_paths: "gpu_plane_analytic_huge_schar_mountain_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Big Schar Mountain Test (2D)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_big_schar_mountain_test.yml
+          --job_id gpu_plane_analytic_big_schar_mountain_test
+        artifact_paths: "gpu_plane_analytic_big_schar_mountain_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Schar Mountain Test (2D)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_test.yml
+          --job_id gpu_plane_analytic_schar_mountain_test
+        artifact_paths: "gpu_plane_analytic_schar_mountain_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Small Schar Mountain Test (2D)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_small_schar_mountain_test.yml
+          --job_id gpu_plane_analytic_small_schar_mountain_test
+        artifact_paths: "gpu_plane_analytic_small_schar_mountain_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Tiny Schar Mountain Test (2D)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_tiny_schar_mountain_test.yml
+          --job_id gpu_plane_analytic_tiny_schar_mountain_test
+        artifact_paths: "gpu_plane_analytic_tiny_schar_mountain_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Teeny Tiny Schar Mountain Test (2D)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_teeny_tiny_schar_mountain_test.yml
+          --job_id gpu_plane_analytic_teeny_tiny_schar_mountain_test
+        artifact_paths: "gpu_plane_analytic_teeny_tiny_schar_mountain_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Schar Mountain Test (2D, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_float32_test.yml
+          --job_id gpu_plane_analytic_schar_mountain_float32_test
+        artifact_paths: "gpu_plane_analytic_schar_mountain_float32_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Tiny Schar Mountain Test (2D, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_tiny_schar_mountain_float32_test.yml
+          --job_id gpu_plane_analytic_tiny_schar_mountain_float32_test
+        artifact_paths: "gpu_plane_analytic_tiny_schar_mountain_float32_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Schar Mountain Test (2D, No Hyperdiff)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_no_hyperdiff_test.yml
+          --job_id gpu_plane_analytic_schar_mountain_no_hyperdiff_test
+        artifact_paths: "gpu_plane_analytic_schar_mountain_no_hyperdiff_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Schar Mountain Test (2D, No Hyperdiff, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_no_hyperdiff_float32_test.yml
+          --job_id gpu_plane_analytic_schar_mountain_no_hyperdiff_float32_test
+        artifact_paths: "gpu_plane_analytic_schar_mountain_no_hyperdiff_float32_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Schar Mountain Test (2D, Stretched Grid)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_stretched_grid_test.yml
+          --job_id gpu_plane_analytic_schar_mountain_stretched_grid_test
+        artifact_paths: "gpu_plane_analytic_schar_mountain_stretched_grid_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Schar Mountain Test (2D, Higher Horizontal Resolution)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_horz_res_test.yml
+          --job_id gpu_plane_analytic_schar_mountain_high_horz_res_test
+        artifact_paths: "gpu_plane_analytic_schar_mountain_high_horz_res_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Schar Mountain Test (2D, Higher Vertical Resolution)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_vert_res_test.yml
+          --job_id gpu_plane_analytic_schar_mountain_high_vert_res_test
+        artifact_paths: "gpu_plane_analytic_schar_mountain_high_vert_res_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Schar Mountain Test (2D, Higher Domain Top)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_top_test.yml
+          --job_id gpu_plane_analytic_schar_mountain_high_top_test
+        artifact_paths: "gpu_plane_analytic_schar_mountain_high_top_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Schar Mountain Test (2D, Higher Domain Top, Higher Sponge)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_top_high_sponge_test.yml
+          --job_id gpu_plane_analytic_schar_mountain_high_top_high_sponge_test
+        artifact_paths: "gpu_plane_analytic_schar_mountain_high_top_high_sponge_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic Schar Mountain Test (2D, Higher Domain Top, Weaker and Higher Sponge)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_top_weak_high_sponge_test.yml
+          --job_id gpu_plane_analytic_schar_mountain_high_top_weak_high_sponge_test
+        artifact_paths: "gpu_plane_analytic_schar_mountain_high_top_weak_high_sponge_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
 
   - group: "Benchmarks"
     steps:

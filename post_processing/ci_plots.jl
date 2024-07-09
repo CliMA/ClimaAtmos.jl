@@ -42,13 +42,15 @@ import CairoMakie
 import CairoMakie.Makie
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
-import ClimaAnalysis: SimDir, slice, read_var
+import ClimaAnalysis: SimDir, slice, window, read_var
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
 
 using Poppler_jll: pdfunite
 import Base.Filesystem
+import LinearAlgebra: norm
+import StaticArrays: SVector
 
 const days = 86400
 
@@ -277,6 +279,90 @@ function make_plots_generic(
     # Cleanup
     Filesystem.rm.(summary_files, force = true)
     return output_file
+end
+
+# TODO: Move the following to ClimaAnalysis.
+import Interpolations
+linear_interpolation(ranges, values) = Interpolations.linear_interpolation(
+    ranges,
+    values;
+    extrapolation_bc = Interpolations.Line(),
+)
+function plot_streamlines!(place, var)
+    length(var.dims) == 2 || error("Can only plot 2D variables")
+
+    dim1_name, dim2_name = var.index2dim
+    dim1 = var.dims[dim1_name]
+    dim2 = var.dims[dim2_name]
+    dim1_units = var.dim_attributes[dim1_name]["units"]
+    dim2_units = var.dim_attributes[dim2_name]["units"]
+
+    var_units = var.attributes["units"]
+    var_name = var.attributes["short_name"]
+
+    CairoMakie.Axis(
+        place[1, 1];
+        title = var.attributes["long_name"],
+        xlabel = "$dim1_name [$dim1_units]",
+        ylabel = "$dim2_name [$dim2_units]",
+        xgridvisible = false,
+        ygridvisible = false,
+        limits = (extrema(dim1), extrema(dim2)),
+    )
+
+    u_spline = linear_interpolation((dim1, dim2), first.(var.data))
+    w_spline = linear_interpolation((dim1, dim2), last.(var.data))
+    spline = point -> Makie.Point2f(u_spline(point...), w_spline(point...))
+    plot = CairoMakie.streamplot!(
+        spline,
+        dim1,
+        dim2;
+        stepsize = 0.4,
+        maxsteps = 60000,
+        gridsize = (100, 20),
+        arrow_size = 7,
+        rasterize = 10,
+    )
+
+    CairoMakie.Colorbar(place[1, 2], plot; label = "$var_name [$var_units]")
+end
+function plot_contours!(place, var)
+    length(var.dims) == 2 || error("Can only plot 2D variables")
+
+    dim1_name, dim2_name = var.index2dim
+    dim1 = var.dims[dim1_name]
+    dim2 = var.dims[dim2_name]
+    dim1_units = var.dim_attributes[dim1_name]["units"]
+    dim2_units = var.dim_attributes[dim2_name]["units"]
+
+    var_name = var.attributes["short_name"]
+    var_units = var.attributes["units"]
+
+    CairoMakie.Axis(
+        place[1, 1];
+        title = var.attributes["long_name"],
+        xlabel = "$dim1_name [$dim1_units]",
+        ylabel = "$dim2_name [$dim2_units]",
+        limits = (extrema(dim1), extrema(dim2)),
+    )
+
+    n_levels = 21
+    var_mean = round(mean(var.data))
+    var_delta = maximum(value -> abs(value - var_mean), var.data)
+    levels = range(var_mean - var_delta, var_mean + var_delta, n_levels + 1)
+
+    spectral_colors = Makie.to_colormap(:Spectral)
+    plot_kwargs = (;
+        levels,
+        colormap = setindex!(spectral_colors, Makie.RGBA(1, 1, 1, 0), 6),
+        extendhigh = spectral_colors[11],
+        extendlow = spectral_colors[1],
+    )
+    plot = CairoMakie.contourf!(dim1, dim2, var.data; plot_kwargs...)
+
+    if var_delta / abs(var_mean) > 1e-7
+        CairoMakie.Colorbar(place[1, 2], plot; label = "$var_name [$var_units]")
+    end # Colorbar's LineAxis throws an error when var_delta ≪ abs(var_mean).
 end
 
 """
@@ -587,6 +673,219 @@ function make_plots(
         return get(simdir; short_name, reduction, period)
     end
     make_plots_generic(output_paths, vars, y = 0.0, time = LAST_SNAP)
+end
+
+rms(var; dims) = sqrt.(mean(x -> x^2, var; dims))
+function level_rms(var)
+    reduced_var = ClimaAnalysis.Var._reduce_over(rms, "x", var)
+    if haskey(var.dims, "y")
+        reduced_var = ClimaAnalysis.Var._reduce_over(rms, "y", reduced_var)
+    end
+    if haskey(var.attributes, "long_name")
+        long_name = reduced_var.attributes["long_name"]
+        reduced_var.attributes["long_name"] =
+            "RMS " * long_name * " averaged over levels"
+    end
+    return reduced_var
+end
+function column_rms(var)
+    reduced_var = ClimaAnalysis.Var._reduce_over(rms, "z_reference", var)
+    if haskey(var.attributes, "long_name")
+        long_name = reduced_var.attributes["long_name"]
+        reduced_var.attributes["long_name"] =
+            "RMS " * long_name * " averaged over columns"
+    end
+    return reduced_var
+end
+
+const AnalyticMountainTest = Union{
+    Val{:gpu_plane_analytic_agnesi_mountain_test},
+    Val{:gpu_plane_analytic_huge_schar_mountain_test},
+    Val{:gpu_plane_analytic_big_schar_mountain_test},
+    Val{:gpu_plane_analytic_schar_mountain_test},
+    Val{:gpu_plane_analytic_small_schar_mountain_test},
+    Val{:gpu_plane_analytic_tiny_schar_mountain_test},
+    Val{:gpu_plane_analytic_teeny_tiny_schar_mountain_test},
+    Val{:gpu_plane_analytic_schar_mountain_float32_test},
+    Val{:gpu_plane_analytic_tiny_schar_mountain_float32_test},
+    Val{:gpu_plane_analytic_schar_mountain_no_hyperdiff_test},
+    Val{:gpu_plane_analytic_schar_mountain_no_hyperdiff_float32_test},
+    Val{:gpu_plane_analytic_schar_mountain_stretched_grid_test},
+    Val{:gpu_plane_analytic_schar_mountain_high_horz_res_test},
+    Val{:gpu_plane_analytic_schar_mountain_high_vert_res_test},
+    Val{:gpu_plane_analytic_schar_mountain_high_top_test},
+    Val{:gpu_plane_analytic_schar_mountain_high_top_high_sponge_test},
+    Val{:gpu_plane_analytic_schar_mountain_high_top_weak_high_sponge_test},
+}
+const AnalyticTopographyTest = Union{
+    Val{:plane_analytic_no_topography_test},
+    Val{:plane_analytic_no_topography_float32_test},
+    Val{:gpu_plane_analytic_no_topography_long_test},
+    Val{:gpu_plane_analytic_no_topography_long_float32_test},
+    Val{:gpu_plane_analytic_no_topography_no_hyperdiff_long_test},
+    Val{:gpu_plane_analytic_no_topography_no_hyperdiff_long_float32_test},
+    Val{:gpu_plane_analytic_no_topography_discrete_balance_long_test},
+    Val{:gpu_plane_analytic_no_topography_discrete_balance_long_float32_test},
+    Val{:gpu_extruded_plane_analytic_no_topography_test},
+    Val{:gpu_box_analytic_no_topography_test},
+    Val{:gpu_box_analytic_no_topography_float32_test},
+    Val{:plane_analytic_cosine_hills_test},
+    Val{:plane_analytic_cosine_hills_float32_test},
+    Val{:gpu_plane_analytic_cosine_hills_long_test},
+    Val{:gpu_plane_analytic_cosine_hills_long_float32_test},
+    Val{:gpu_plane_analytic_cosine_hills_strong_sponge_long_test},
+    Val{:gpu_plane_analytic_cosine_hills_weak_sponge_long_test},
+    Val{:gpu_plane_analytic_cosine_hills_high_top_long_test},
+    Val{:gpu_plane_analytic_cosine_hills_high_top_high_sponge_long_test},
+    Val{:gpu_extruded_plane_analytic_cosine_hills_test},
+    Val{:gpu_box_analytic_cosine_hills_test},
+    Val{:gpu_box_analytic_cosine_hills_float32_test},
+    AnalyticMountainTest,
+}
+
+function make_plots(
+    val::AnalyticTopographyTest,
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+
+    is_mountain_test = val isa AnalyticMountainTest
+    is_3d = val in (
+        Val(:gpu_extruded_plane_analytic_no_topography_test),
+        Val(:gpu_box_analytic_no_topography_test),
+        Val(:gpu_box_analytic_no_topography_float32_test),
+        Val(:gpu_extruded_plane_analytic_cosine_hills_test),
+        Val(:gpu_box_analytic_cosine_hills_test),
+        Val(:gpu_box_analytic_cosine_hills_float32_test),
+    )
+
+    z_bounds = (; left = 0, right = 13e3) # The Rayleigh sponge starts at 13 km.
+
+    error_short_name_pairs = [["uaerror", "waerror"], ["c1error", "c3error"]]
+    rms_error_vars = Iterators.flatmap(error_short_name_pairs) do short_names
+        Iterators.flatmap((level_rms, column_rms)) do rms_func
+            Iterators.flatmap(short_names) do short_name
+                Iterators.map(simdirs) do simdir
+                    data = get(simdir; short_name)
+                    data = window(data, "z_reference"; z_bounds...)
+                    data = slice(data; time = Inf)
+                    rms_func(data)
+                end
+            end
+        end
+    end
+    orog_vars = map(simdirs) do simdir
+        slice(get(simdir; short_name = "orog"); time = Inf)
+    end
+    make_plots_generic(
+        output_paths,
+        [rms_error_vars..., orog_vars...],
+        output_name = "final_rms_errors",
+    )
+
+    all_short_names = [
+        "ua",
+        "wa",
+        "uaerror",
+        "waerror",
+        "c1error",
+        "c3error",
+        "uapredicted",
+        "wapredicted",
+    ]
+    slice_summary_vars = Iterators.flatmap(all_short_names) do short_name
+        hours_to_plot =
+            endswith(short_name, "predicted") ? (Inf,) : (1, 2, 24, Inf)
+        Iterators.flatmap(hours_to_plot) do n_hours
+            Iterators.map(simdirs) do simdir
+                data = get(simdir; short_name)
+                data = window(data, "z_reference"; z_bounds...)
+                data = slice(data; time = n_hours * 60 * 60)
+                is_3d ? slice(data; y = 0) : data
+            end
+        end
+    end
+    make_plots_generic(
+        output_paths,
+        collect(slice_summary_vars);
+        plot_fn = plot_contours!,
+        output_name = "slice_summary",
+    )
+
+    if is_mountain_test
+        vertical_data_short_names = ["wa", "wapredicted", "waerror", "c3error"]
+        mountain_closeup_vars =
+            Iterators.flatmap(vertical_data_short_names) do short_name
+                Iterators.map(simdirs) do simdir
+                    data = get(simdir; short_name)
+                    data = window(data, "z_reference"; z_bounds...)
+                    data = window(data, "x"; left = 35e3, right = 65e3)
+                    data = slice(data; time = Inf)
+                    is_3d ? slice(data; y = 0) : data
+                end
+            end
+        make_plots_generic(
+            output_paths,
+            collect(mountain_closeup_vars);
+            plot_fn = plot_contours!,
+            output_name = "final_mountain_closeup",
+        )
+    end
+
+    # collected_vars = collect(slice_summary_vars)
+    # (; dims, dim_attributes, dim2index, index2dim) = collected_vars[1]
+    # u_data = collected_vars[4].data
+    # w_data = collected_vars[8].data
+    # predicted_u_data = collected_vars[9].data
+    # predicted_w_data = collected_vars[10].data
+
+    # FT = eltype(predicted_u_data)
+    # background_velocity = SVector(CA.background_u(FT), FT(0))
+    # perturbation_data = @. SVector(u_data, w_data) - (background_velocity,)
+    # predicted_perturbation_data =
+    #     @. SVector(predicted_u_data, predicted_w_data) - (background_velocity,)
+
+    # # Rescale the predicted perturbations so that their range no less than the
+    # # background air speed. Apply the same scaling to the actual perturbations.
+    # background_speed = norm(background_velocity)
+    # predicted_perturbation_range =
+    #     -(reverse(extrema(norm, predicted_perturbation_data))...)
+    # s = max(1, round(Int, background_speed / predicted_perturbation_range))
+    # uw_data = @. s * perturbation_data + (background_velocity,)
+    # predicted_uw_data =
+    #     @. s * predicted_perturbation_data + (background_velocity,)
+
+    # uw_var = ClimaAnalysis.OutputVar(
+    #     Dict{String, String}(
+    #         "units" => "m s^-1",
+    #         "short_name" => "ū + $s u′",
+    #         "long_name" => "Air Speed with $(s)x Perturbations, Instantaneous",
+    #     ),
+    #     dims,
+    #     dim_attributes,
+    #     uw_data,
+    #     dim2index,
+    #     index2dim,
+    # )
+    # predicted_uw_var = ClimaAnalysis.OutputVar(
+    #     Dict{String, String}(
+    #         "units" => "m s^-1",
+    #         "short_name" => "predicted ū + $s u′",
+    #         "long_name" => "Predicted Air Speed with $(s)x Perturbations, Instantaneous",
+    #     ),
+    #     dims,
+    #     dim_attributes,
+    #     predicted_uw_data,
+    #     dim2index,
+    #     index2dim,
+    # )
+
+    # make_plots_generic(
+    #     output_paths,
+    #     [uw_var, predicted_uw_var];
+    #     plot_fn = plot_streamlines!,
+    #     output_name = "streamlines_24h",
+    # )
 end
 
 MountainPlots = Union{

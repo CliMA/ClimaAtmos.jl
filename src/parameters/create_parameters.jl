@@ -62,7 +62,7 @@ function create_parameter_set(config::AtmosConfig)
     TCP = typeof(turbconv_params)
 
     thermodynamics_params = ThermodynamicsParameters(toml_dict)
-    TP = typeof(thermodynamics_params)
+    TDP = typeof(thermodynamics_params)
 
     rrtmgp_params = RRTMGPParameters(toml_dict)
     RP = typeof(rrtmgp_params)
@@ -79,6 +79,16 @@ function create_parameter_set(config::AtmosConfig)
 
     surface_temp_params = SurfaceTemperatureParameters(toml_dict)
     STP = typeof(surface_temp_params)
+
+    topography_params = if parsed_args["topography"] != "NoWarp"
+        (;
+            h_max = FT(parsed_args["max_topography_height"]),
+            z_top = FT(parsed_args["z_max"]),
+        )
+    else
+        nothing
+    end
+    TP = typeof(topography_params)
 
     moisture_model = parsed_args["moist"]
     microphysics_cloud_params = if moisture_model == "nonequil"
@@ -150,7 +160,19 @@ function create_parameter_set(config::AtmosConfig)
         :optics_lookup_temperature_max => :optics_lookup_temperature_max,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-    return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPC, MPP, WP, SFP, TCP, STP}(;
+    return CAP.ClimaAtmosParameters{
+        FT,
+        TDP,
+        RP,
+        IP,
+        MPC,
+        MPP,
+        WP,
+        SFP,
+        TCP,
+        STP,
+        TP,
+    }(;
         parameters...,
         thermodynamics_params,
         rrtmgp_params,
@@ -161,5 +183,6 @@ function create_parameter_set(config::AtmosConfig)
         surface_fluxes_params,
         turbconv_params,
         surface_temp_params,
+        topography_params,
     )
 end

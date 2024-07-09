@@ -58,7 +58,7 @@ end
 
 Base.@kwdef struct ClimaAtmosParameters{
     FT,
-    TP,
+    TDP,
     RP,
     IP,
     MPC,
@@ -67,8 +67,9 @@ Base.@kwdef struct ClimaAtmosParameters{
     SFP,
     TCP,
     STP,
+    TP,
 } <: ACAP
-    thermodynamics_params::TP
+    thermodynamics_params::TDP
     rrtmgp_params::RP
     insolation_params::IP
     microphysics_cloud_params::MPC
@@ -77,6 +78,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     surface_fluxes_params::SFP
     turbconv_params::TCP
     surface_temp_params::STP
+    topography_params::TP
     Omega::FT
     f_plane_coriolis_frequency::FT
     planet_radius::FT

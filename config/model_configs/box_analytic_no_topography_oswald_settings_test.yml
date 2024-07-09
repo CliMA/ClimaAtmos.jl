@@ -1,0 +1,23 @@
+config: "box"
+FLOAT_TYPE: "Float32"
+initial_condition: "ConstantBuoyancyFrequencyProfile"
+topography: "Cosine2D"
+x_max: 300e3
+y_max: 200e3
+z_max: 13e3
+x_elem: 3
+y_elem: 2
+z_elem: 31
+z_stretch: false
+nh_poly: 3
+max_topography_height: 0
+dt: "60secs"
+t_end: "3days"
+hyperdiff: true
+rayleigh_sponge: false
+toml: [toml/analytic_topography_test.toml]
+analytic_check: true
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [orog, ua, wa, uapredicted, wapredicted, uaerror, waerror, c1error, c3error]
+    period: 1hours

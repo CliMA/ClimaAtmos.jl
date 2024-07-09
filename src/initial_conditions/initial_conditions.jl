@@ -122,6 +122,28 @@ function (initial_condition::IsothermalProfile)(params)
 end
 
 """
+    ConstantBuoyancyFrequencyProfile()
+
+An `InitialCondition` with a constant Brunt-Vaisala frequency of 0.01 Hz, a
+surface temperature of 288 K, an eastward wind velocity of 10 m/s, and a
+hydrostatically balanced pressure profile.
+"""
+struct ConstantBuoyancyFrequencyProfile <: InitialCondition end
+function (::ConstantBuoyancyFrequencyProfile)(params)
+    function local_state(local_geometry)
+        FT = eltype(params)
+        coord = local_geometry.coordinates
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = initial_thermo_state(params, coord),
+            velocity = Geometry.UVector(background_u(FT)),
+        )
+    end
+    return local_state
+end
+
+"""
     DecayingProfile(; perturb = true)
 
 An `InitialCondition` with a decaying temperature profile, and with an optional
