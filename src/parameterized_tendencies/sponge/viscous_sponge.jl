@@ -28,14 +28,14 @@ end
 function viscous_sponge_tendency!(Yₜ, Y, p, t, ::ViscousSponge)
     (; ᶜβ_viscous, ᶠβ_viscous) = p.viscous_sponge
     (; ᶜh_tot, ᶜspecific) = p.precomputed
-    ᶜuₕ = Y.c.uₕ
-    @. Yₜ.c.uₕ +=
-        ᶜβ_viscous * (
-            wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(
-                Geometry.Covariant12Axis(),
-                wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))),
-            )
-        )
+    point_type = eltype(Fields.coordinate_field(Y.c))
+
+    if point_type <: Geometry.Abstract3DPoint
+        @. Yₜ.c.uₕ -= ᶜβ_viscous * C12(wcurlₕ(C3(curlₕ(Y.c.uₕ))))
+    end
+    @. Yₜ.c.uₕ += ᶜβ_viscous * C12(wgradₕ(divₕ(Y.c.uₕ)))
+    # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
+
     @. Yₜ.f.u₃.components.data.:1 +=
         ᶠβ_viscous * wdivₕ(gradₕ(Y.f.u₃.components.data.:1))
 

@@ -139,13 +139,25 @@ function get_spaces(parsed_args, params, comms_ctx)
     bubble = parsed_args["bubble"]
     deep = parsed_args["deep_atmosphere"]
 
-    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
+    @assert topography in (
+        "NoWarp",
+        "DCMIP200",
+        "Earth",
+        "Agnesi",
+        "Schar",
+        "Cosine2D",
+        "Cosine3D",
+    )
     if topography == "DCMIP200"
         warp_function = topography_dcmip200
     elseif topography == "Agnesi"
         warp_function = topography_agnesi
     elseif topography == "Schar"
         warp_function = topography_schar
+    elseif topography == "Cosine2D"
+        warp_function = topography_cosine_2d
+    elseif topography == "Cosine3D"
+        warp_function = topography_cosine_3d
     elseif topography == "NoWarp"
         warp_function = nothing
     elseif topography == "Earth"
@@ -194,6 +206,7 @@ function get_spaces(parsed_args, params, comms_ctx)
                 z_max,
                 z_elem,
                 z_stretch;
+                params,
                 parsed_args = parsed_args,
                 surface_warp = warp_function,
                 deep,
@@ -248,6 +261,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             z_max,
             z_elem,
             z_stretch;
+            params,
             parsed_args,
             surface_warp = warp_function,
             deep,
@@ -272,6 +286,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             z_max,
             z_elem,
             z_stretch;
+            params,
             parsed_args,
             surface_warp = warp_function,
             deep,
@@ -345,6 +360,7 @@ function get_initial_condition(parsed_args)
         )
     elseif parsed_args["initial_condition"] in [
         "IsothermalProfile",
+        "ConstantBuoyancyFrequencyProfile",
         "AgnesiHProfile",
         "DryDensityCurrentProfile",
         "RisingThermalBubbleProfile",
@@ -367,6 +383,31 @@ function get_surface_setup(parsed_args)
         return SurfaceConditions.GCMDriven(parsed_args["external_forcing_file"])
 
     return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
+end
+
+function get_predicted_steady_state(params, Y, parsed_args)
+    parsed_args["analytic_check"] || return nothing
+    @assert parsed_args["initial_condition"] ==
+            "ConstantBuoyancyFrequencyProfile"
+    topography = parsed_args["topography"]
+    predicted_velocity = if topography == "Agnesi"
+        predicted_velocity_agnesi
+    elseif topography == "Schar"
+        predicted_velocity_schar
+    elseif topography == "Cosine2D"
+        predicted_velocity_cosine_2d
+    elseif topography == "Cosine3D"
+        predicted_velocity_cosine_3d
+    else
+        error("Analytic solution for `topography = $topography` is not defined")
+    end
+    @info "Computing linearized approximation of steady-state solution"
+    s = @timed_str begin
+        ᶜu = predicted_velocity.(params, Fields.coordinate_field(Y.c))
+        ᶠu = predicted_velocity.(params, Fields.coordinate_field(Y.f))
+    end
+    @info "Steady-state approximation completed: $s"
+    return (; ᶜu, ᶠu)
 end
 
 is_explicit_CTS_algo_type(alg_or_tableau) =
@@ -643,6 +684,8 @@ function get_simulation(config::AtmosConfig)
         @info "Allocating Y: $s"
     end
 
+    predicted_steady_state =
+        get_predicted_steady_state(params, Y, config.parsed_args)
     tracers = get_tracers(config.parsed_args)
 
     s = @timed_str begin
@@ -653,6 +696,7 @@ function get_simulation(config::AtmosConfig)
             surface_setup,
             sim_info,
             tracers.aerosol_names,
+            predicted_steady_state,
         )
     end
     @info "Allocating cache (p): $s"

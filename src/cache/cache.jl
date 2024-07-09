@@ -28,6 +28,7 @@ struct AtmosCache{
     TRAC,
     NETFLUXTOA,
     NETFLUXSFC,
+    PSS,
     CONSCHECK,
     OD,
 }
@@ -94,6 +95,9 @@ struct AtmosCache{
     net_energy_flux_toa::NETFLUXTOA
     net_energy_flux_sfc::NETFLUXSFC
 
+    """Components of the predicted steady-state solution, if one is available"""
+    predicted_steady_state::PSS
+
     """Conservation check for prognostic surface temperature"""
     conservation_check::CONSCHECK
 
@@ -113,7 +117,15 @@ end
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
-function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
+function build_cache(
+    Y,
+    atmos,
+    params,
+    surface_setup,
+    sim_info,
+    aerosol_names,
+    predicted_steady_state,
+)
     (; dt, t_end, start_date, output_dir) = sim_info
     FT = eltype(params)
 
@@ -252,6 +264,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         tracers,
         net_energy_flux_toa,
         net_energy_flux_sfc,
+        predicted_steady_state,
         conservation_check,
         output_dir,
     )

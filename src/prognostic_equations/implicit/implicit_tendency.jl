@@ -162,7 +162,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         )
     end
 
-    @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜp) / ᶠinterp(Y.c.ρ) + ᶠgradᵥ_ᶜΦ
+    # @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜp) / ᶠinterp(Y.c.ρ) + ᶠgradᵥ_ᶜΦ
+    @. Yₜ.f.u₃ -= ᶠinterp(ᶜp / Y.c.ρ) * ᶠgradᵥ(log(ᶜp)) + ᶠgradᵥ_ᶜΦ
 
     if rayleigh_sponge isa RayleighSponge
         (; ᶠβ_rayleigh_w) = p.rayleigh_sponge

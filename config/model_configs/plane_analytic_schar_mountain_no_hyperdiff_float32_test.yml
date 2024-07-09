@@ -1,0 +1,19 @@
+config: "plane"
+FLOAT_TYPE: "Float32"
+initial_condition: "ConstantBuoyancyFrequencyProfile"
+topography: "Schar"
+x_max: 100e3
+z_max: 21e3
+x_elem: 100
+z_elem: 100
+z_stretch: false
+dt: "0.2secs"
+t_end: "2days"
+hyperdiff: false
+rayleigh_sponge: true
+toml: [toml/analytic_topography_test.toml]
+analytic_check: true
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [orog, ua, wa, uapredicted, wapredicted, uaerror, waerror, c1error, c3error]
+    period: 1hours

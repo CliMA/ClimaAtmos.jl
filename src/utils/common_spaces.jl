@@ -79,6 +79,7 @@ function make_hybrid_spaces(
     z_max,
     z_elem,
     z_stretch;
+    params = nothing,
     surface_warp = nothing,
     topo_smoothing = false,
     deep = false,
@@ -104,7 +105,7 @@ function make_hybrid_spaces(
         hypsography = Hypsography.Flat()
     else
         topo_smoothing = parsed_args["topo_smoothing"]
-        z_surface = surface_warp(Fields.coordinate_field(h_space))
+        z_surface = surface_warp.(params, Fields.coordinate_field(h_space))
         if topo_smoothing
             Hypsography.diffuse_surface_elevation!(z_surface)
         end
