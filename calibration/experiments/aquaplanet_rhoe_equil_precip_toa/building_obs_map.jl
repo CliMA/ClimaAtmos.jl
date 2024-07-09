@@ -12,7 +12,6 @@ output_dir = joinpath(
 )
 simdir = SimDir(output_dir)
 
-
 vars = ("rlut", "rsut", "pr")
 for short_name in vars
     f = CairoMakie.Figure()

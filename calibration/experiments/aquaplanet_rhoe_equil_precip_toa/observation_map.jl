@@ -2,7 +2,7 @@ import ClimaCalibrate: observation_map, path_to_ensemble_member
 import ClimaAnalysis: SimDir, get, slice, average_lat, average_lon
 
 function observation_map(iteration)
-    ensemble_size = 10
+    ensemble_size = 12
     output_dir = joinpath("output", "aquaplanet_rhoe_equil_precip_toa")
     single_member_dims = (3,)
     G_ensemble = Array{Float64}(undef, single_member_dims..., ensemble_size)
@@ -23,19 +23,30 @@ end
 
 const meters = 1.0
 const days = 86400.0
+const time = 360days
+const period = "60d"
 # Cut off first 120 day to get equilibrium, take second level slice
 function process_member_data(simdir::SimDir)
     isempty(simdir) && return NaN
 
-    observations = Vector{Float64}(undef, 3)
-    noise = Matrix{Float64}(undef, 3, 1)
+    observations = Vector{Float64}(undef, 47)
+    noise = zeros(Float64, 47, 47)
 
-    short_names = ("rsut", "rlut", "pr")
-    for (i, short_name) in enumerate(short_names)
-        output_var = average_lat(average_lon(get(simdir; short_name, period)))
-        observations[i] = slice(output_var, time = 360days).data[1]
-        noise[i] = var(output_var.data)
+    rlut = average_lat(average_lon(get(simdir; short_name = "rlut", period)))
+    rsut = average_lat(average_lon(get(simdir; short_name = "rsut", period)))
+    observations[1] = slice(rlut, time = 360days).data[1]
+    observations[2] = slice(rsut, time = 360days).data[1]
+
+    pr = average_lon(get(simdir; short_name = "pr", period))
+    southern_hemisphere_pr = window(pr, "lat", left = -100, right = 0)
+    observations[3:47] .= slice(southern_hemisphere_pr, time = 360days).data
+
+    noise[1,1] = var(rlut.data)
+    noise[2,2] = var(rsut.data)
+
+    southern_hemisphere_pr_variance = var(southern_hemisphere_pr.data,dims=1)
+    foreach(3:47) do i
+        noise[i,i] = southern_hemisphere_pr_variance[i-2]
     end
-
     return observations
 end

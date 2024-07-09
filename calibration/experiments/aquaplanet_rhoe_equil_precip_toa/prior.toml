@@ -1,7 +1,7 @@
 [precipitation_timescale]
-prior = "constrained_gaussian(precipitation_timescale, 300, 140, 120, 1000)"
+prior = "constrained_gaussian(precipitation_timescale, 600, 300, 120, 2000)"
 type = "float"
 
-[ocean_surface_albedo]
-prior = "constrained_gaussian(ocean_surface_albedo, 0.45, 0.2, 0, 1)"
-type = "float"
+# [ocean_surface_albedo]
+# prior = "constrained_gaussian(ocean_surface_albedo, 0.45, 0.2, 0, 1)"
+# type = "float"

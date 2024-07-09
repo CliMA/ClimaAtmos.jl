@@ -19,7 +19,7 @@ import Statistics: var
 
 experiment_dir = dirname(Base.active_project())
 config_dict = YAML.load_file(joinpath(experiment_dir, "model_config.yml"))
-config_dict["t_end"] = "1000days"
+config_dict["t_end"] = "900days"
 config_dict["dt_save_state_to_disk"] = "300days"
 output_dir = joinpath(experiment_dir, "generate_observations")
 config_dict["output_dir"] = output_dir
@@ -32,13 +32,13 @@ short_names = ("rlut", "rsut", "pr")
 period = "60d"
 
 observations = Vector{Float64}(undef, 3)
-noise = Matrix{Float64}(undef, 3, 1)
+noise = Matrix{Float64}(undef, 3, 3)
 const days = 86400.0
 
 for (i, short_name) in enumerate(short_names)
     output_var = average_lat(average_lon(get(simdir; short_name, period)))
     observations[i] = slice(output_var, time = 360days).data[1]
-    noise[i] = var(output_var.data)
+    noise[i,i] = var(output_var.data)
 end
 
 JLD2.save_object(joinpath(experiment_dir, "obs_noise_cov.jld2"), noise)
