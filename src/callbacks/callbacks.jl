@@ -262,10 +262,9 @@ function set_aerosol_type(;
     OC2 = 0,
     _...,
 )
-    _, index = findmax((DST01, SSLT01, SO4, CB1, CB2, OC1, OC2))
-    return index
+    return argmax(n -> (DST01, SSLT01, SO4, CB1, CB2, OC1, OC2)[n], 1:7)
 end
-set_aerosol_type(NT) = set_aerosol_type(; NT...)
+set_aerosol_type(nt) = set_aerosol_type(; nt...)
 
 NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
