@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
+- Allow different aerosol types for radiation.
+  PR [#3180](https://github.com/CliMA/ClimaAtmos.jl/pull/3180)
 
 v0.27.0
 -------

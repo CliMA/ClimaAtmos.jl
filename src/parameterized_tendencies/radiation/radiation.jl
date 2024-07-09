@@ -43,8 +43,13 @@ function radiation_model_cache(
     (; idealized_h2o, idealized_clouds) = radiation_mode
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         (; aerosol_radiation) = radiation_mode
-        if aerosol_radiation && !("SO4" in aerosol_names)
-            error("Aerosol radiation is turned on but SO4 is not provided")
+        if aerosol_radiation && !(any(
+            x -> x in aerosol_names,
+            ["DST01", "SSLT01", "SO4", "CB1", "CB2", "OC1", "OC2"],
+        ))
+            error(
+                "Need at least one aerosol type when aerosol radiation is turned on",
+            )
         end
     end
     FT = Spaces.undertype(axes(Y.c))
@@ -191,7 +196,7 @@ function radiation_model_cache(
             if aerosol_radiation
                 kwargs = (;
                     kwargs...,
-                    center_aerosol_type = 3, # assuming only sulfate
+                    center_aerosol_type = 0, # initialized in callback
                     center_aerosol_radius = 0.2, # assuming fixed aerosol radius
                     center_aerosol_column_mass_density = NaN, # initialized in callback
                 )
