@@ -96,6 +96,12 @@ function create_parameter_set(config::AtmosConfig)
                 ce = CM.Parameters.CollisionEff(toml_dict),
                 tv = CM.Parameters.Blk1MVelType(toml_dict),
                 aps = CM.Parameters.AirProperties(toml_dict),
+                var = CM.Parameters.VarTimescaleAcnv(toml_dict),
+                Ndp = CP.get_parameter_values(
+                    toml_dict,
+                    "prescribed_cloud_droplet_number_concentration",
+                    "ClimaAtmos",
+                ).prescribed_cloud_droplet_number_concentration,
             )
         else
             error("Invalid precip_model $(precip_model)")
