@@ -1,10 +1,11 @@
 import ClimaCalibrate: observation_map, path_to_ensemble_member
-import ClimaAnalysis: SimDir, get, slice, average_lat, average_lon
+import ClimaAnalysis: SimDir, get, slice, average_lat, average_lon, window
+import Statistics: var
 
 function observation_map(iteration)
     ensemble_size = 12
     output_dir = joinpath("output", "aquaplanet_rhoe_equil_precip_toa")
-    single_member_dims = (3,)
+    single_member_dims = (47,)
     G_ensemble = Array{Float64}(undef, single_member_dims..., ensemble_size)
 
     for m in 1:ensemble_size
