@@ -39,7 +39,10 @@ struct ColumnInterpolatableField{F, D}
     function ColumnInterpolatableField(f::Fields.ColumnField)
         zdata = vec(parent(Fields.Fields.coordinate_field(f).z))
         fdata = vec(parent(f))
-        data = Dierckx.Spline1D(zdata, fdata; k = 1)
+        data = Intp.extrapolate(
+            Intp.interpolate((zdata,), fdata, Intp.Gridded(Intp.Linear())),
+            Intp.Flat(),
+        )
         return new{typeof(f), typeof(data)}(f, data)
     end
 end
@@ -712,7 +715,8 @@ end
 # TODO: Get rid of this
 import AtmosphericProfilesLibrary as APL
 
-const FunctionOrSpline = Union{Dierckx.Spline1D, Function, APL.AbstractProfile}
+const FunctionOrSpline =
+    Union{Function, APL.AbstractProfile, Intp.Extrapolation}
 
 """
     hydrostatic_pressure_profile(; thermo_params, p_0, [T, θ, q_tot, z_max])
@@ -1062,7 +1066,14 @@ function (initial_condition::TRMM_LBA)(params)
         q_v_sat = p_v_sat * (1 / molmass_ratio) / denominator
         return q_v_sat * measured_RH(z) / 100
     end
-    q_tot = Dierckx.Spline1D(measured_z_values, measured_q_tot_values; k = 1)
+    q_tot = Intp.extrapolate(
+        Intp.interpolate(
+            (measured_z_values,),
+            measured_q_tot_values,
+            Intp.Gridded(Intp.Linear()),
+        ),
+        Intp.Flat(),
+    )
 
     p = hydrostatic_pressure_profile(; thermo_params, p_0, T, q_tot)
     u = APL.TRMM_LBA_u(FT)
@@ -1146,7 +1157,10 @@ function (initial_condition::GCMDriven)(params)
     z_gcm = gcm_z(external_forcing_file)
     vars = gcm_initial_conditions(external_forcing_file)
     θ, u, v, q_tot, ρ₀ = map(vars) do value
-        Dierckx.Spline1D(z_gcm, value; k = 1)
+        Intp.extrapolate(
+            Intp.interpolate((z_gcm,), value, Intp.Gridded(Intp.Linear())),
+            Intp.Flat(),
+        )
     end
 
     function local_state(local_geometry)

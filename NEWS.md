@@ -5,12 +5,15 @@ Main
 -------
 - Allow different aerosol types for radiation.
   PR [#3180](https://github.com/CliMA/ClimaAtmos.jl/pull/3180)
+- ![][badge-🔥behavioralΔ] Switch from `Dierckz` to `Interpolations`. `Interpolations`
+  is type-stable and GPU compatible. The order of interpolation has decreased to first.
+  PR [#3169](https://github.com/CliMA/ClimaAtmos.jl/pull/3169)
 
 v0.27.0
 -------
-- ![][badge-💥breaking] Change "radiation_model" in the radiation cache to "rrtmgp_model".
+- ![][badge-💥breaking] Change `radiation_model` in the radiation cache to `rrtmgp_model`.
   PR [#3167](https://github.com/CliMA/ClimaAtmos.jl/pull/3167)
-- ![][badge-💥breaking] Change the "idealized_insolation" argument to "insolation", 
+- ![][badge-💥breaking] Change the `idealized_insolation` argument to `insolation`,
   and add RCEMIP insolation. PR [#3150](https://github.com/CliMA/ClimaAtmos.jl/pull/3150)
 - Add lookup table for aerosols
   PR [#3156](https://github.com/CliMA/ClimaAtmos.jl/pull/3156)
@@ -19,7 +22,7 @@ v0.26.3
 -------
 - Add ClimaCoupler downstream test.
   PR [#3152](https://github.com/CliMA/ClimaAtmos.jl/pull/3152)
-- Add an option to use aerosol radiation. This is not fully working yet. 
+- Add an option to use aerosol radiation. This is not fully working yet.
   PR [#3147](https://github.com/CliMA/ClimaAtmos.jl/pull/3147)
 - Update to RRTMGP v0.17.0.
   PR [#3131](https://github.com/CliMA/ClimaAtmos.jl/pull/3131)
@@ -30,12 +33,12 @@ v0.26.2
 -------
 - Limit temperature input to RRTMGP within the lookup table range.
   PR [#3124](https://github.com/CliMA/ClimaAtmos.jl/pull/3124)
-  
+
 v0.26.1
 -------
 - Updated RRTMGP compat from 0.15 to 0.16
   PR [#3114](https://github.com/CliMA/ClimaAtmos.jl/pull/3114)
-- ![][badge-🔥behavioralΔ] Removed the filter for shortwave radiative fluxes. 
+- ![][badge-🔥behavioralΔ] Removed the filter for shortwave radiative fluxes.
   PR [#3099](https://github.com/CliMA/ClimaAtmos.jl/pull/3099).
 
 v0.26.0

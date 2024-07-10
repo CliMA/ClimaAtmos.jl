@@ -142,9 +142,14 @@ function (::ARM_SGP)(params)
     thermo_params = CAP.thermodynamics_params(params)
     ts = TD.PhaseNonEquil_pθq(thermo_params, p, θ, TD.PhasePartition(q_vap))
     T = TD.air_temperature(thermo_params, ts)
-    shf = FT.(Dierckx.Spline1D(t_data, shf_data; k = 1))
-    lhf = FT.(Dierckx.Spline1D(t_data, lhf_data; k = 1))
-    # TODO: Replace Dierckx with a type-stable interpolation and remove the FT.
+    shf = Intp.extrapolate(
+        Intp.interpolate((t_data,), shf_data, Intp.Gridded(Intp.Linear())),
+        Intp.Flat(),
+    )
+    lhf = Intp.extrapolate(
+        Intp.interpolate(t_data, lhf_data, Intp.Gridded(Intp.Linear())),
+        Intp.Flat(),
+    )
     function surface_state(surface_coordinates, interior_z, t)
         fluxes = HeatFluxes(; shf = shf(t), lhf = lhf(t))
         parameterization = MoninObukhov(; z0, fluxes, ustar)
