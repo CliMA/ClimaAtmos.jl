@@ -123,7 +123,6 @@ steps:
           - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         env:
-          CLIMACOMMS_CONTEXT: "MPI"
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_hs_rhoe_equil_55km_nz63_0M_deepatmos"
         agents:
@@ -138,7 +137,6 @@ steps:
           - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         env:
-          CLIMACOMMS_CONTEXT: "MPI"
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M"
         agents:
