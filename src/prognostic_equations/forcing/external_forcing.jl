@@ -6,10 +6,13 @@ import Thermodynamics as TD
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import NCDatasets as NC
-import Dierckx
+import Interpolations as Intp
 
 function interp_vertical_prof(x, xp, fp)
-    spl = Dierckx.Spline1D(xp, fp; k = 1)
+    spl = Intp.extrapolate(
+        Intp.interpolate((xp,), fp, Intp.Gridded(Intp.Linear())),
+        Intp.Flat(),
+    )
     return spl(vec(x))
 end
 

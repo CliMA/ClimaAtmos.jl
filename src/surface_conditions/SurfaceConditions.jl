@@ -20,7 +20,7 @@ import ClimaCore.Geometry: ⊗
 import SurfaceFluxes as SF
 import Thermodynamics as TD
 
-import Dierckx
+import Interpolations
 import StaticArrays as SA
 import Statistics: mean
 import NCDatasets as NC

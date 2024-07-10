@@ -10,7 +10,7 @@ import .Parameters as CAP
 import RRTMGP
 import .RRTMGPInterface as RRTMGPI
 
-using Dierckx: Spline1D
+import Interpolations
 using StatsBase: mean
 
 
@@ -101,9 +101,13 @@ function radiation_model_cache(
                 vec(mean(reshape(input_data["ozone"][:, :, 1], n, :); dims = 2))
 
             # interpolate the ozone concentrations to our initial pressures
-            pressure2ozone = Spline1D(
-                input_center_pressure,
-                input_center_volume_mixing_ratio_o3,
+            pressure2ozone = Intp.extrapolate(
+                Intp.interpolate(
+                    (input_center_pressure,),
+                    input_center_volume_mixing_ratio_o3,
+                    Intp.Gridded(Intp.Linear()),
+                ),
+                Intp.Flat(),
             )
             if device isa ClimaComms.CUDADevice
                 fv = Fields.field_values(ᶜp)

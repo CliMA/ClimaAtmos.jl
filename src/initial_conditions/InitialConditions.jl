@@ -26,7 +26,7 @@ import ..Parameters as CAP
 import Thermodynamics as TD
 import AtmosphericProfilesLibrary as APL
 import SciMLBase
-import Dierckx
+import Interpolations as Intp
 import NCDatasets as NC
 
 include("local_state.jl")
