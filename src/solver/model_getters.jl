@@ -231,18 +231,13 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         "DYCOMS",
         "TRMM_LBA",
     )
-    return if radiation_name == "clearsky"
+    return if radiation_name == "gray"
+        RRTMGPI.GrayRadiation(add_isothermal_boundary_layer)
+    elseif radiation_name == "clearsky"
         RRTMGPI.ClearSkyRadiation(
             idealized_h2o,
-            idealized_clouds,
             add_isothermal_boundary_layer,
             aerosol_radiation,
-        )
-    elseif radiation_name == "gray"
-        RRTMGPI.GrayRadiation(
-            idealized_h2o,
-            idealized_clouds,
-            add_isothermal_boundary_layer,
         )
     elseif radiation_name == "allsky"
         RRTMGPI.AllSkyRadiation(

@@ -40,7 +40,6 @@ function radiation_model_cache(
 )
     context = ClimaComms.context(axes(Y.c))
     device = context.device
-    (; idealized_h2o, idealized_clouds) = radiation_mode
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         (; aerosol_radiation) = radiation_mode
         if aerosol_radiation && !(any(
@@ -55,15 +54,6 @@ function radiation_model_cache(
     FT = Spaces.undertype(axes(Y.c))
     DA = ClimaComms.array_type(device){FT}
     rrtmgp_params = CAP.rrtmgp_params(params)
-    if idealized_h2o && radiation_mode isa RRTMGPI.GrayRadiation
-        error("idealized_h2o can't be used with $radiation_mode")
-    end
-    if idealized_clouds && (
-        radiation_mode isa RRTMGPI.GrayRadiation ||
-        radiation_mode isa RRTMGPI.ClearSkyRadiation
-    )
-        error("idealized_clouds can't be used with $radiation_mode")
-    end
 
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
@@ -158,7 +148,7 @@ function radiation_model_cache(
                 )
                 ᶜz = Fields.coordinate_field(Y.c).z
                 ᶜΔz = Fields.Δz_field(Y.c)
-                if idealized_clouds # icy cloud on top and wet cloud on bottom
+                if radiation_mode.idealized_clouds # icy cloud on top and wet cloud on bottom
                     # TODO: can we avoid using DataLayouts with this?
                     #     `ᶜis_bottom_cloud = similar(ᶜz, Bool)`
                     ᶜis_bottom_cloud = Fields.Field(
@@ -240,8 +230,6 @@ function radiation_model_cache(
     end
     return (;
         orbital_data,
-        idealized_h2o,
-        idealized_clouds,
         rrtmgp_model,
         insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT}),
         ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),

@@ -59,7 +59,6 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     (; ᶜts, cloud_diagnostics_tuple, sfc_conditions) = p.precomputed
     (; params) = p
-    (; idealized_h2o, idealized_clouds) = p.radiation
     (; ᶠradiation_flux, rrtmgp_model) = p.radiation
     (; radiation_mode) = p.atmos
 
@@ -94,7 +93,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             rrtmgp_model.center_volume_mixing_ratio_h2o,
             axes(Y.c),
         )
-        if idealized_h2o
+        if radiation_mode.idealized_h2o
             # slowly increase the relative humidity from 0 to 0.6 to account for
             # the fact that we have a very unrealistic initial condition
             max_relative_humidity = FT(0.6)
@@ -132,30 +131,32 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         set_insolation_variables!(Y, p, t, p.atmos.insolation)
     end
 
-    if !idealized_clouds && !(
-        radiation_mode isa RRTMGPI.GrayRadiation ||
-        radiation_mode isa RRTMGPI.ClearSkyRadiation
-    )
-        ᶜΔz = Fields.Δz_field(Y.c)
-        ᶜlwp = Fields.array2field(
-            rrtmgp_model.center_cloud_liquid_water_path,
-            axes(Y.c),
-        )
-        ᶜiwp = Fields.array2field(
-            rrtmgp_model.center_cloud_ice_water_path,
-            axes(Y.c),
-        )
-        ᶜfrac =
-            Fields.array2field(rrtmgp_model.center_cloud_fraction, axes(Y.c))
-        # RRTMGP needs lwp and iwp in g/m^2
-        kg_to_g_factor = 1000
-        @. ᶜlwp =
-            kg_to_g_factor * Y.c.ρ * cloud_diagnostics_tuple.q_liq * ᶜΔz /
-            max(cloud_diagnostics_tuple.cf, eps(FT))
-        @. ᶜiwp =
-            kg_to_g_factor * Y.c.ρ * cloud_diagnostics_tuple.q_ice * ᶜΔz /
-            max(cloud_diagnostics_tuple.cf, eps(FT))
-        @. ᶜfrac = cloud_diagnostics_tuple.cf
+    if radiation_mode isa RRTMGPI.AllSkyRadiation ||
+       radiation_mode isa RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
+        if !radiation_mode.idealized_clouds
+            ᶜΔz = Fields.Δz_field(Y.c)
+            ᶜlwp = Fields.array2field(
+                rrtmgp_model.center_cloud_liquid_water_path,
+                axes(Y.c),
+            )
+            ᶜiwp = Fields.array2field(
+                rrtmgp_model.center_cloud_ice_water_path,
+                axes(Y.c),
+            )
+            ᶜfrac = Fields.array2field(
+                rrtmgp_model.center_cloud_fraction,
+                axes(Y.c),
+            )
+            # RRTMGP needs lwp and iwp in g/m^2
+            kg_to_g_factor = 1000
+            @. ᶜlwp =
+                kg_to_g_factor * Y.c.ρ * cloud_diagnostics_tuple.q_liq * ᶜΔz /
+                max(cloud_diagnostics_tuple.cf, eps(FT))
+            @. ᶜiwp =
+                kg_to_g_factor * Y.c.ρ * cloud_diagnostics_tuple.q_ice * ᶜΔz /
+                max(cloud_diagnostics_tuple.cf, eps(FT))
+            @. ᶜfrac = cloud_diagnostics_tuple.cf
+        end
     end
 
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
