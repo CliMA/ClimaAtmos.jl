@@ -209,6 +209,27 @@ steps:
         artifact_paths: "plane_density_current_test/output_active/*"
 
 
+  - group: "Conservation check"
+    steps:
+
+      - label: ":computer: baroclinic wave check conservation"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation.yml
+          --job_id sphere_baroclinic_wave_conservation
+        artifact_paths: "sphere_baroclinic_wave_conservation/output_active/*"
+
+      - label: ":computer: baroclinic wave check conservation float64"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_ft64.yml
+          --job_id sphere_baroclinic_wave_conservation_ft64
+        artifact_paths: "sphere_baroclinic_wave_conservation_ft64/output_active/*"
+      
+      - label: ":computer: baroclinic wave check conservation with sources"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_source.yml
+          --job_id sphere_baroclinic_wave_conservation_source
+        artifact_paths: "sphere_baroclinic_wave_conservation_source/output_active/*"
+
   - group: "Sphere Examples (Dycore)"
     steps:
 
@@ -266,12 +287,6 @@ steps:
       #     slurm_mem: 64GB
       #   env:
       #     JOB_NAME: "sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"
-
-      - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist check conservation float64"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64.yml
-          --job_id sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64/output_active/*"
 
       - label: ":computer: held suarez (ρe) hightop"
         key: sphere_held_suarez_rhoe_hightop
