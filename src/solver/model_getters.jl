@@ -76,6 +76,9 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
         #    https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2017MS001257
         #    for equation A18 and A19
         # Need to scale by (1.1e5 / (sqrt(4 * pi / 6) * 6.371e6 / (3*30)) )^3  ≈ 1.238
+        @info "Using CAM_SE hyperdiffusion. vorticity_hyperdiffusion_coefficient, \
+               scalar_hyperdiffusion_coefficient and divergence_damping_factor in the config \
+               will be ignored."
         ν₄_vorticity_coeff = FT(0.150 * 1.238)
         ν₄_scalar_coeff = FT(0.751 * 1.238)
         divergence_damping_factor = FT(5)
