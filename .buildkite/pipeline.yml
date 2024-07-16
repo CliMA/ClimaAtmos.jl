@@ -250,7 +250,7 @@ steps:
           --job_id sphere_baroclinic_wave_rhoe
         artifact_paths: "sphere_baroclinic_wave_rhoe/output_active/*"
 
-      - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist"
+      - label: ":computer: no lim baroclinic wave (ρe) equilmoist"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist.yml
@@ -263,7 +263,7 @@ steps:
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist (deep sphere)"
+      - label: ":computer: no lim baroclinic wave (ρe) equilmoist (deep sphere)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/deep_sphere_baroclinic_wave_rhoe_equilmoist.yml
@@ -296,7 +296,7 @@ steps:
           --job_id sphere_held_suarez_rhoe_hightop
         artifact_paths: "sphere_held_suarez_rhoe_hightop/output_active/*"
 
-      - label: ":computer: no lim ARS held suarez (ρe) equilmoist hightop sponge"
+      - label: ":computer: no lim held suarez (ρe) equilmoist hightop sponge"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_hightop_sponge.yml
@@ -438,7 +438,7 @@ steps:
         #retry:
         #  automatic: true
 
-      - label: ":computer: MPI no lim ARS aquaplanet (ρe) equilmoist clearsky radiation"
+      - label: ":computer: MPI no lim aquaplanet (ρe) equilmoist clearsky radiation"
         command: >
           srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky.yml
@@ -475,27 +475,6 @@ steps:
 
   - group: "Configs"
     steps:
-
-      - label: ":computer: Test IO"
-        command: >
-          julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/test_io.yml
-          --job_id test_io
-        artifact_paths: "test_io/output_active/*"
-        agents:
-          slurm_cpus_per_task: 8
-
-      - label: ":computer: MPI io test"
-        command: >
-          srun julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/test_mpi_io.yml
-          --job_id test_mpi_io
-        artifact_paths: "test_mpi_io/output_active/*"
-        env:
-          CLIMACOMMS_CONTEXT: "MPI"
-        agents:
-          slurm_ntasks: 2
-          slurm_mem: 16G
 
       # TODO: we should somehow decouple this unit test from the perf env / scripts
       - label: ":computer: checkbounds"
