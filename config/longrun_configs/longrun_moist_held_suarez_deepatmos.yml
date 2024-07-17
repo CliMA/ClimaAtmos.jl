@@ -4,7 +4,7 @@ z_max: 55000.0
 dz_bottom: 30.0
 dz_top: 3000.0
 dt: "100secs"
-t_end: "300days"
+t_end: "360days"
 deep_atmosphere: true
 moist: "equil"
 precip_model: "0M"

@@ -3,8 +3,8 @@ z_elem: 63
 z_max: 55000.0
 dz_bottom: 30.0
 dz_top: 3000.0
-dt: "200secs"
-t_end: "300days"
+dt: "100secs"
+t_end: "360days"
 forcing: "held_suarez"
 rayleigh_sponge: true
 dt_save_state_to_disk: "10days"
