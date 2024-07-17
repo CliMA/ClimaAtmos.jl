@@ -14,4 +14,4 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 rad: "clearsky"
 dt_rad: "6hours"
-toml: [toml/longrun_aquaplanet_dyamond.toml]
+toml: [toml/longrun_aquaplanet.toml]

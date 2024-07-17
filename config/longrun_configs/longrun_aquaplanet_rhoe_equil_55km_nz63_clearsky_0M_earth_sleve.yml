@@ -11,9 +11,6 @@ z_max: 55000.0
 moist: "equil"
 precip_model: "0M"
 rayleigh_sponge: true
-vorticity_hyperdiffusion_coefficient: 3.0
-divergence_damping_factor: 1.0
-scalar_hyperdiffusion_coefficient: 3.0
 smoothing_order: 2
 topo_smoothing: true
 mesh_warp_type: "SLEVE"
@@ -22,4 +19,4 @@ surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth_sleve.toml]
+toml: [toml/longrun_aquaplanet.toml]

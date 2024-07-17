@@ -8,4 +8,4 @@ t_end: "300days"
 forcing: "held_suarez"
 rayleigh_sponge: true
 dt_save_state_to_disk: "10days"
-toml: [toml/longrun_hs_rhoe_dry_55km_nz63.toml]
+toml: [toml/longrun_aquaplanet.toml]

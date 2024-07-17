@@ -8,8 +8,6 @@ discrete_hydrostatic_balance: true
 z_stretch: false
 x_elem: 80
 config: "plane"
-vorticity_hyperdiffusion_coefficient: 0.6
-scalar_hyperdiffusion_coefficient: 0.6
 z_max: 6400.0
 diagnostics:
   - short_name: thetaa

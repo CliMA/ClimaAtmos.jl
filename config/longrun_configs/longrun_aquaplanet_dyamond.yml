@@ -9,10 +9,10 @@ cloud_model: "grid_scale"
 rad: "allskywithclear" 
 insolation: "timevarying"
 dt_rad: "1hours"
-vert_diff: "true" 
+vert_diff: "FriersonDiffusion" 
 surface_setup: "DefaultMoninObukhov" 
 rayleigh_sponge: true
 dt_save_state_to_disk: "10days"
 dt: "50secs" 
 t_end: "10days"
-toml: [toml/longrun_aquaplanet_dyamond.toml]
+toml: [toml/longrun_aquaplanet.toml]

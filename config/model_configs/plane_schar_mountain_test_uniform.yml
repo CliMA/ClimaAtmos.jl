@@ -9,8 +9,6 @@ z_stretch: false
 x_elem: 100
 ode_algo: "SSP33ShuOsher"
 config: "plane"
-vorticity_hyperdiffusion_coefficient: 0.5
-scalar_hyperdiffusion_coefficient: 0.5
 z_max: 25000.0
 topography: "Schar"
 toml: [toml/plane_schar_mountain_test_uniform.toml]

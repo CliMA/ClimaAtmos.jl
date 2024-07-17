@@ -12,4 +12,4 @@ vert_diff: "true"
 rayleigh_sponge: true
 forcing: "held_suarez"
 dt_save_state_to_disk: "10days"
-toml: [toml/longrun_hs_rhoe_equil_55km_nz63_0M.toml]
+toml: [toml/longrun_aquaplanet.toml]
