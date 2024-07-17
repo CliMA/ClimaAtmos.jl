@@ -83,6 +83,11 @@ function override_default_config(config_dict::AbstractDict;)
         end
     end
 
+    unused_keys = filter(k -> !haskey(default_config, k), keys(config_dict))
+    if !isempty(unused_keys)
+        @warn "The configuration passed to ClimaAtmos contains unused keys: $(join(unused_keys, ", "))"
+    end
+
     # The "diagnostics" entry is a more complex type that doesn't fit the schema described in
     # the previous lines. So, we manually add it.
     if haskey(config_dict, "diagnostics")
