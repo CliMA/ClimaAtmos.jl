@@ -20,4 +20,4 @@ dt: "100secs"
 t_end: "8hours"
 aerosol_radiation: true
 prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "OC1", "OC2", "SO4", "SOA", "SSLT01", "SSLT02", "SSLT03", "SSLT04"]
-toml: [toml/longrun_aquaplanet_dyamond.toml]
+toml: [toml/longrun_aquaplanet.toml]

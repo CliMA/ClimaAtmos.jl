@@ -8,3 +8,4 @@ dz_top: 3000.0
 z_max: 55000.0
 perturb_initstate: false
 discrete_hydrostatic_balance: true
+toml: [toml/longrun_aquaplanet.toml]
