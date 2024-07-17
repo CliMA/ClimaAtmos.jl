@@ -205,7 +205,7 @@ function non_orographic_gravity_wave_tendency!(
         # source level: the index of the level that is closest to the source height
 
         Operators.column_mapreduce!(
-            reduce_fun1,
+            min_distance_reduce,
             source_level_z,
             ᶜz,
             ᶜlevel,
@@ -214,14 +214,14 @@ function non_orographic_gravity_wave_tendency!(
         end
         source_level = source_level_z.:2
 
-        Operators.column_mapreduce!(sign, +, damp_level, ᶜz)
+        fill!(damp_level, Spaces.nlevels(axes(ᶜz)))
 
     elseif model_config isa SphericalModel
         (; ᶜp) = p.precomputed
         # source level: the index of the highest level whose pressure is higher than source pressure
 
         Operators.column_mapreduce!(
-            reduce_fun2,
+            positive_selector_reduce,
             source_level_z,
             ᶜp,
             ᶜlevel,
@@ -234,7 +234,7 @@ function non_orographic_gravity_wave_tendency!(
         # damp level: the index of the lowest level whose pressure is lower than the damp pressure
 
         Operators.column_mapreduce!(
-            reduce_fun3,
+            negative_selector_reduce,
             damp_level_z,
             ᶜp,
             ᶜlevel,
@@ -447,6 +447,6 @@ function calc_intermitency(ρ_source_level, source_ampl, nk, Bsum)
     return (source_ampl / ρ_source_level / nk) / Bsum
 end
 
-@inline reduce_fun1(a, b) = ifelse(a[1] < b[1], a, b)
-@inline reduce_fun2(a, b) = ifelse(b[1] < 0, a, b)
-@inline reduce_fun3(a, b) = ifelse(a[1] > 0, b, a)
+@inline min_distance_reduce(a, b) = ifelse(a[1] < b[1], a, b)
+@inline positive_selector_reduce(a, b) = ifelse(b[1] <= 0, a, b)
+@inline negative_selector_reduce(a, b) = ifelse(a[1] >= 0, b, a)
