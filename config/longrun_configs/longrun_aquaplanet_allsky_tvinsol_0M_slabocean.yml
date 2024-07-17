@@ -1,6 +1,6 @@
 dt_save_state_to_disk: "10days"
-dt: "120secs"
-t_end: "300days"
+dt: "150secs"
+t_end: "360days"
 h_elem: 16
 z_elem: 63
 dz_bottom: 30.0
@@ -13,6 +13,11 @@ surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-rad: "clearsky"
-dt_rad: "6hours"
+rad: "allskywithclear"
+insolation: "timevarying"
+dt_rad: "1hours"
+albedo_model: "RegressionFunctionAlbedo"
+prognostic_surface: "PrognosticSurfaceTemperature"
+check_conservation: true
+bubble: false
 toml: [toml/longrun_aquaplanet.toml]
