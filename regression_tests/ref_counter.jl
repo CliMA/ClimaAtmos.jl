@@ -1,6 +1,9 @@
-169
+170
 
 #=
+170:
+- Moved precomputed quantities update of SSPKnoth from beginning of each timestep to end of previous timestep
+
 169:
 - Moved from Dierckx to Interpolations
 
