@@ -1,8 +1,8 @@
 dt_save_state_to_disk: "10days"
-dt: "100secs"
-rad: "clearsky"
+dt: "120secs"
+rad: "allskywithclear"
 dt_rad: "6hours"
-t_end: "180days"
+t_end: "360days"
 dz_bottom: 30.0
 dz_top: 3000.0
 h_elem: 16
@@ -11,9 +11,7 @@ z_max: 55000.0
 moist: "equil"
 precip_model: "0M"
 rayleigh_sponge: true
-smoothing_order: 2
 topo_smoothing: true
-mesh_warp_type: "SLEVE"
 topography: "Earth"
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"

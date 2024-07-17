@@ -645,8 +645,8 @@ end
 DryBaroWavePlots = Union{
     Val{:sphere_baroclinic_wave_rhoe},
     Val{:sphere_baroclinic_wave_rhoe_deepatmos},
-    Val{:longrun_bw_rhoe_highres},
-    Val{:longrun_bw_rhoe_veryhighres},
+    Val{:longrun_dry_baroclinic_wave},
+    Val{:longrun_dry_baroclinic_wave_he60},
 }
 
 function make_plots(::DryBaroWavePlots, output_paths::Vector{<:AbstractString})
@@ -728,11 +728,8 @@ function make_plots(
 end
 
 LongMoistBaroWavePlots = Union{
-    Val{:longrun_bw_rhoe_equil_highres},
-    Val{:longrun_bw_rhoe_equil_veryhighres},
-    Val{:longrun_zalesak_tracer_energy_bw_rhoe_equil_highres},
-    Val{:longrun_ssp_bw_rhoe_equil_highres},
-    Val{:longrun_bw_rhoe_equil_highres_topography_earth},
+    Val{:longrun_moist_baroclinic_wave},
+    Val{:longrun_moist_baroclinic_wave_he60},
 }
 
 function make_plots(
@@ -768,7 +765,7 @@ end
 DryHeldSuarezPlots = Union{
     Val{:sphere_held_suarez_rhoe_hightop},
     Val{:longrun_sphere_hydrostatic_balance_rhoe},
-    Val{:longrun_hs_rhoe_dry_55km_nz63},
+    Val{:longrun_dry_held_suarez},
 }
 
 function make_plots(
@@ -791,8 +788,8 @@ end
 
 MoistHeldSuarezPlots = Union{
     Val{:sphere_held_suarez_rhoe_equilmoist_hightop_sponge},
-    Val{:longrun_hs_rhoe_equil_55km_nz63_0M},
-    Val{:longrun_hs_rhoe_equil_55km_nz63_0M_deepatmos},
+    Val{:longrun_moist_held_suarez},
+    Val{:longrun_moist_held_suarez_deepatmos},
 }
 
 function make_plots(
@@ -942,14 +939,12 @@ AquaplanetPlots = Union{
     Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
     Val{:sphere_aquaplanet_rhoe_nonequilmoist_allsky},
     Val{:rcemipii_sphere_diagnostic_edmfx},
-    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M},
-    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M},
-    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M},
-    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M},
-    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_progedmf_diffonly_0M},
-    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth},
-    Val{:longrun_aquaplanet_rhoe_equil_highres_allsky_ft32},
+    Val{:longrun_aquaplanet_allsky_0M},
+    Val{:longrun_aquaplanet_allsky_diagedmf_0M},
+    Val{:longrun_aquaplanet_allsky_progedmf_diffonly_0M},
+    Val{:longrun_aquaplanet_allsky_0M_earth},
     Val{:longrun_aquaplanet_dyamond},
+    Val{:amip_target_diagedmf},
 }
 
 function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
