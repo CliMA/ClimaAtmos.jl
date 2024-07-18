@@ -141,7 +141,7 @@ reference_job_id:
   value: ~
 vert_diff:
   help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `FriersonDiffusion`]"
-  value: "false"
+  value: false
 hyperdiff:
   help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
   value: "CAM_SE"
@@ -232,9 +232,6 @@ external_forcing:
 external_forcing_file:
   help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions [`nothing` (default), `path/to/file`]"
   value: ~
-fps:
-  help: "Frames per second for animations"
-  value: 5
 subsidence:
   help: "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`]"
   value: ~
@@ -246,7 +243,7 @@ prognostic_tke:
   value: false
 prognostic_surface:
   help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `PrognosticSurfaceTemperature`, `PrescribedSurfaceTemperature`]"
-  value: "false"
+  value: false
 albedo_model:
   help: "Variable surface albedo [`ConstantAlbedo` (default), `RegressionFunctionAlbedo`, `CouplerAlbedo`]"
   value: "ConstantAlbedo"

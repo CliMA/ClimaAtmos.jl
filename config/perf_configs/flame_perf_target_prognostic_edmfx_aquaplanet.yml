@@ -7,7 +7,7 @@ dt_save_to_sol: "Inf"
 log_progress: false
 surface_setup: DefaultExchangeCoefficients
 rad: gray
-vert_diff: "false"
+vert_diff: false
 turbconv: prognostic_edmfx 
 implicit_diffusion: true
 implicit_sgs_advection: true

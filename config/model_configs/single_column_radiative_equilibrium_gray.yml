@@ -1,6 +1,6 @@
 dt_save_state_to_disk: "100days"
 initial_condition: "IsothermalProfile"
-hyperdiff: "false"
+hyperdiff: false
 z_elem: 70
 dt: "3hours"
 t_end: "654days"
