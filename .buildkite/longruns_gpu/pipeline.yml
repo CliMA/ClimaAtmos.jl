@@ -61,7 +61,7 @@ steps:
           slurm_time: 12:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_dry_baroclinic_wave
+          JOB_NAME: "longrun_dry_baroclinic_wave"
 
       - label: ":computer: dry baroclinic wave high res"
         command:
