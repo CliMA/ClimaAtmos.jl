@@ -9,7 +9,6 @@ y_max: 6400.0
 y_elem: 15
 z_stretch: false
 x_elem: 45
-ode_algo: "SSP33ShuOsher"
 config: "box"
 z_max: 6400.0
 diagnostics:
