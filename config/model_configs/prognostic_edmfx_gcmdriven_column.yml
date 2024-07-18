@@ -23,7 +23,7 @@ z_stretch: false
 perturb_initstate: false
 dt: "10secs"
 t_end: "6hours"
-dt_save_to_disk: "10mins"
+dt_save_state_to_disk: "10mins"
 toml: [toml/prognostic_edmfx_bomex.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]

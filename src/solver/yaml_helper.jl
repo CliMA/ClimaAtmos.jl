@@ -83,7 +83,11 @@ function override_default_config(config_dict::AbstractDict;)
         end
     end
 
-    unused_keys = filter(k -> !haskey(default_config, k), keys(config_dict))
+    excluded_keys = Set(["diagnostics"])
+    unused_keys = filter(
+        k -> !haskey(default_config, k) && !(k in excluded_keys),
+        keys(config_dict),
+    )
     if !isempty(unused_keys)
         @warn "The configuration passed to ClimaAtmos contains unused keys: $(join(unused_keys, ", "))"
     end
