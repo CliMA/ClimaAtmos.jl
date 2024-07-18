@@ -5,6 +5,7 @@
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
+import ClimaCore.Operators as Operators
 
 non_orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
     non_orographic_gravity_wave_cache(
@@ -27,12 +28,18 @@ function non_orographic_gravity_wave_cache(
 
     nc = Int(floor(FT(2 * cmax / dc + 1)))
     c = [FT((n - 1) * dc - cmax) for n in 1:nc]
-
+    source_level_z = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT})
+    ᶜlevel = similar(Y.c.ρ, FT)
+    for i in 1:Spaces.nlevels(axes(Y.c.ρ))
+        fill!(Fields.level(ᶜlevel, i), i)
+    end
+    damp_level_z = similar(source_level_z)
     return (;
         gw_source_height = source_height,
         gw_source_ampl = Bt_0 .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_Bw = Bw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_Bn = Bn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
+        gw_B0 = similar(c),
         gw_c = c,
         gw_cw = cw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_cn = cn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
@@ -41,6 +48,15 @@ function non_orographic_gravity_wave_cache(
         gw_nk = Int(nk),
         ᶜbuoyancy_frequency = similar(Y.c.ρ),
         ᶜdTdz = similar(Y.c.ρ),
+        source_level_z,
+        damp_level_z,
+        source_level = similar(Fields.level(Y.c.ρ, 1)),
+        damp_level = similar(Fields.level(Y.c.ρ, 1)),
+        ᶜlevel,
+        u_phy = similar(Y.c.ρ),
+        v_phy = similar(Y.c.ρ),
+        uforcing = similar(Y.c.ρ),
+        vforcing = similar(Y.c.ρ),
     )
 end
 
@@ -65,6 +81,13 @@ function non_orographic_gravity_wave_cache(
     gw_flag = @. ifelse(dϕ_s <= lat <= dϕ_n, FT(0), FT(1))
     gw_Bw = ones(FT, axes(lat)) .* Bw
     gw_cn = ones(FT, axes(lat)) .* cn
+
+    source_level_z = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT})
+    ᶜlevel = similar(Y.c.ρ, FT)
+    for i in 1:Spaces.nlevels(axes(Y.c.ρ))
+        fill!(Fields.level(ᶜlevel, i), i)
+    end
+    damp_level_z = similar(source_level_z)
 
     # This is GFDL source specs -> a smooth function
     # source_ampl = @. Bt_0 +
@@ -94,6 +117,7 @@ function non_orographic_gravity_wave_cache(
         gw_source_ampl = source_ampl,
         gw_Bw = gw_Bw,
         gw_Bn = gw_Bn,
+        gw_B0 = similar(c),
         gw_c = c,
         gw_cw = gw_cw,
         gw_cn = gw_cn,
@@ -102,6 +126,15 @@ function non_orographic_gravity_wave_cache(
         gw_nk = Int(nk),
         ᶜbuoyancy_frequency = similar(Y.c.ρ),
         ᶜdTdz = similar(Y.c.ρ),
+        source_level_z,
+        damp_level_z,
+        source_level = similar(Fields.level(Y.c.ρ, 1)),
+        damp_level = similar(Fields.level(Y.c.ρ, 1)),
+        ᶜlevel,
+        u_phy = similar(Y.c.ρ),
+        v_phy = similar(Y.c.ρ),
+        uforcing = similar(Y.c.ρ),
+        vforcing = similar(Y.c.ρ),
     )
 end
 
@@ -116,12 +149,25 @@ function non_orographic_gravity_wave_tendency!(
     (; ᶜT,) = p.core
     (; ᶜts) = p.precomputed
     (; params) = p
-    (; ᶜdTdz, ᶜbuoyancy_frequency) = p.non_orographic_gravity_wave
+    (;
+        ᶜdTdz,
+        ᶜbuoyancy_frequency,
+        source_level,
+        source_level_z,
+        damp_level,
+        damp_level_z,
+        u_phy,
+        v_phy,
+        uforcing,
+        vforcing,
+        ᶜlevel,
+    ) = p.non_orographic_gravity_wave
     (; model_config) = p.atmos
     (;
         gw_source_ampl,
         gw_Bw,
         gw_Bn,
+        gw_B0,
         gw_c,
         gw_cw,
         gw_cn,
@@ -145,10 +191,10 @@ function non_orographic_gravity_wave_tendency!(
     # compute buoyancy frequency
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
 
-    parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
+    ᶜdTdz .= Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
 
-    ᶜbuoyancy_frequency =
-        @. (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts))
+    @. ᶜbuoyancy_frequency =
+        (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts))
     ᶜbuoyancy_frequency = @. ifelse(
         ᶜbuoyancy_frequency < FT(2.5e-5),
         FT(sqrt(2.5e-5)),
@@ -157,56 +203,65 @@ function non_orographic_gravity_wave_tendency!(
 
     if model_config isa SingleColumnModel
         # source level: the index of the level that is closest to the source height
-        source_level = similar(Fields.level(Y.c.ρ, 1))
-        Fields.bycolumn(axes(ᶜρ)) do colidx
-            parent(source_level[colidx]) .=
-                argmin(abs.(parent(ᶜz[colidx]) .- gw_source_height))[1]
+
+        Operators.column_mapreduce!(
+            min_distance_reduce,
+            source_level_z,
+            ᶜz,
+            ᶜlevel,
+        ) do z, level
+            (abs.(z .- gw_source_height), level)
         end
-        # damp level: for now we only deposit to top level for column setup
-        damp_level = similar(Fields.level(Y.c.ρ, 1))
-        Fields.bycolumn(axes(ᶜρ)) do colidx
-            parent(damp_level[colidx]) .= length(parent(ᶜz[colidx]))
-        end
+        source_level = source_level_z.:2
+
+        fill!(damp_level, Spaces.nlevels(axes(ᶜz)))
+
     elseif model_config isa SphericalModel
         (; ᶜp) = p.precomputed
         # source level: the index of the highest level whose pressure is higher than source pressure
-        source_level = similar(Fields.level(Y.c.ρ, 1))
-        Fields.bycolumn(axes(ᶜρ)) do colidx
-            parent(source_level[colidx]) .=
-                findlast(parent(ᶜp[colidx]) .> gw_source_pressure)[1]
+
+        Operators.column_mapreduce!(
+            positive_selector_reduce,
+            source_level_z,
+            ᶜp,
+            ᶜlevel,
+        ) do p, level
+            (p .- gw_source_pressure, level)
         end
+        source_level = source_level_z.:2
+
+
         # damp level: the index of the lowest level whose pressure is lower than the damp pressure
-        damp_level = similar(Fields.level(Y.c.ρ, 1))
-        Fields.bycolumn(axes(ᶜρ)) do colidx
-            if sum(parent(ᶜp[colidx]) .< gw_damp_pressure) == 0
-                parent(damp_level[colidx]) .= length(parent(ᶜz[colidx]))
-            else
-                parent(damp_level[colidx]) .=
-                    findfirst(parent(ᶜp[colidx]) .< gw_damp_pressure)[1]
-            end
+
+        Operators.column_mapreduce!(
+            negative_selector_reduce,
+            damp_level_z,
+            ᶜp,
+            ᶜlevel,
+        ) do p, level
+            (p .- gw_damp_pressure, level)
         end
+        damp_level = damp_level_z.:2
+
     end
 
     # prepare physical uv input variables for gravity_wave_forcing()
     u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
-    # a place holder to store physical forcing on uv
-    uforcing = ones(axes(u_phy))
-    vforcing = ones(axes(u_phy))
-
     # GW parameterization applied bycolume
     Fields.bycolumn(axes(ᶜρ)) do colidx
         parent(uforcing[colidx]) .= non_orographic_gravity_wave_forcing(
-            copy(vec(parent(u_phy[colidx]))),
-            copy(vec(parent(ᶜbuoyancy_frequency[colidx]))),
-            copy(vec(parent(ᶜρ[colidx]))),
-            copy(vec(parent(ᶜz[colidx]))),
+            vec(parent(u_phy[colidx])),
+            vec(parent(ᶜbuoyancy_frequency[colidx])),
+            vec(parent(ᶜρ[colidx])),
+            vec(parent(ᶜz[colidx])),
             Int(parent(source_level[colidx])[1]),
             Int(parent(damp_level[colidx])[1]),
             parent(gw_source_ampl[colidx])[1],
             parent(gw_Bw[colidx])[1],
             parent(gw_Bn[colidx])[1],
+            gw_B0,
             parent(gw_cw[colidx])[1],
             parent(gw_cn[colidx])[1],
             parent(gw_flag[colidx])[1],
@@ -216,15 +271,16 @@ function non_orographic_gravity_wave_tendency!(
         )
 
         parent(vforcing[colidx]) .= non_orographic_gravity_wave_forcing(
-            copy(vec(parent(v_phy[colidx]))),
-            copy(vec(parent(ᶜbuoyancy_frequency[colidx]))),
-            copy(vec(parent(ᶜρ[colidx]))),
-            copy(vec(parent(ᶜz[colidx]))),
+            vec(parent(v_phy[colidx])),
+            vec(parent(ᶜbuoyancy_frequency[colidx])),
+            vec(parent(ᶜρ[colidx])),
+            vec(parent(ᶜz[colidx])),
             Int(parent(source_level[colidx])[1]),
             Int(parent(damp_level[colidx])[1]),
             parent(gw_source_ampl[colidx])[1],
             parent(gw_Bw)[1],
             parent(gw_Bn)[1],
+            gw_B0,
             parent(gw_cw)[1],
             parent(gw_cn)[1],
             parent(gw_flag)[1],
@@ -242,15 +298,16 @@ function non_orographic_gravity_wave_tendency!(
 end
 
 function non_orographic_gravity_wave_forcing(
-    ᶜu,
-    ᶜbf,
-    ᶜρ,
-    ᶜz,
+    old_ᶜu,
+    old_ᶜbf,
+    old_ᶜρ,
+    old_ᶜz,
     source_level,
     damp_level,
     source_ampl,
     Bw,
     Bn,
+    B0,
     cw,
     cn,
     flag,
@@ -258,17 +315,18 @@ function non_orographic_gravity_wave_forcing(
     c0,
     nk,
 )
-    FT = eltype(ᶜz)
+    FT = eltype(old_ᶜz)
     # add an extra layer above model top so that forcing between the very top
     # model layer and the upper boundary can be calculated
-    append!(ᶜu, FT(2) * ᶜu[end] - ᶜu[end - 1])
-    append!(ᶜρ, ᶜρ[end] * ᶜρ[end] / ᶜρ[end - 1])
-    append!(ᶜbf, ᶜbf[end])
-    append!(ᶜz, FT(2) * ᶜz[end] - ᶜz[end - 1])
+    ᶜu = vcat(old_ᶜu, FT(2) * old_ᶜu[end] - old_ᶜu[end - 1])
+    ᶜρ = vcat(old_ᶜρ, old_ᶜρ[end] * old_ᶜρ[end] / old_ᶜρ[end - 1])
+    ᶜbf = vcat(old_ᶜbf, old_ᶜbf[end])
+    ᶜz = vcat(old_ᶜz, FT(2) * old_ᶜz[end] - old_ᶜz[end - 1])
 
     # wave spectra and the source amplitude
     nc = length(c)
     c_hat0 = c .- ᶜu[source_level] # c0mu0
+
     Bw_exp = @. exp(-log(2.0) * ((c * flag + c_hat0 * (1 - flag) - c0) / cw)^2)
     Bn_exp = @. exp(-log(2.0) * ((c * flag + c_hat0 * (1 - flag) - c0) / cn)^2)
     B0 = @. sign(c_hat0) * (Bw * Bw_exp + Bn * Bn_exp)
@@ -388,3 +446,7 @@ end
 function calc_intermitency(ρ_source_level, source_ampl, nk, Bsum)
     return (source_ampl / ρ_source_level / nk) / Bsum
 end
+
+@inline min_distance_reduce(a, b) = ifelse(a[1] < b[1], a, b)
+@inline positive_selector_reduce(a, b) = ifelse(b[1] <= 0, a, b)
+@inline negative_selector_reduce(a, b) = ifelse(a[1] >= 0, b, a)

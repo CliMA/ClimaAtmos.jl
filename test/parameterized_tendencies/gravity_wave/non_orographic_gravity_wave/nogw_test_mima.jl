@@ -125,7 +125,7 @@ bf = @. ifelse(bf < 2.5e-5, sqrt(2.5e-5), sqrt(abs(bf)))
 
 # compute u/v forcings from convective gravity waves
 params = non_orographic_gravity_wave(lat, FT)
-
+B0 = similar(params.gw_c)
 # nogw forcing
 
 kmax = length(pfull) - 1
@@ -156,6 +156,7 @@ for i in 1:length(lon)
                 params.gw_source_ampl[j],
                 params.gw_Bw,
                 params.gw_Bn[j],
+                B0,
                 params.gw_cw[j],
                 params.gw_cn,
                 params.gw_flag[j],
@@ -190,6 +191,7 @@ for i in 1:length(lon)
                 params.gw_source_ampl[j],
                 params.gw_Bw,
                 params.gw_Bn[j],
+                B0,
                 params.gw_cw[j],
                 params.gw_cn,
                 params.gw_flag[j],

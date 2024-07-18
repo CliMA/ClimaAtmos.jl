@@ -129,6 +129,8 @@ ENV["GKSwstype"] = "nul"
 output_dir = "nonorographic_gravity_wave_test_single_column"
 mkpath(output_dir)
 
+B0 = similar(params.gw_c)
+
 # Jan
 Jan_u = mean(center_u_mean[:, month .== 1], dims = 2)[:, 1]
 Jan_bf = mean(center_bf_mean[:, month .== 1], dims = 2)[:, 1]
@@ -137,12 +139,13 @@ Jan_uforcing = CA.non_orographic_gravity_wave_forcing(
     Jan_u,
     Jan_bf,
     Jan_ρ,
-    copy(center_z),
+    center_z,
     source_level,
     damp_level,
     params.gw_source_ampl,
     params.gw_Bw,
     params.gw_Bn,
+    B0,
     params.gw_cw,
     params.gw_cn,
     params.gw_flag,
@@ -167,12 +170,13 @@ April_uforcing = CA.non_orographic_gravity_wave_forcing(
     April_u,
     April_bf,
     April_ρ,
-    copy(center_z),
+    center_z,
     source_level,
     damp_level,
     params.gw_source_ampl,
     params.gw_Bw,
     params.gw_Bn,
+    B0,
     params.gw_cw,
     params.gw_cn,
     params.gw_flag,
@@ -197,12 +201,13 @@ July_uforcing = CA.non_orographic_gravity_wave_forcing(
     July_u,
     July_bf,
     July_ρ,
-    copy(center_z),
+    center_z,
     source_level,
     damp_level,
     params.gw_source_ampl,
     params.gw_Bw,
     params.gw_Bn,
+    B0,
     params.gw_cw,
     params.gw_cn,
     params.gw_flag,
@@ -227,12 +232,13 @@ Oct_uforcing = CA.non_orographic_gravity_wave_forcing(
     Oct_u,
     Oct_bf,
     Oct_ρ,
-    copy(center_z),
+    center_z,
     source_level,
     damp_level,
     params.gw_source_ampl,
     params.gw_Bw,
     params.gw_Bn,
+    B0,
     params.gw_cw,
     params.gw_cn,
     params.gw_flag,
