@@ -2,6 +2,6 @@ dt_save_state_to_disk: "400secs"
 initial_condition: "IsothermalProfile"
 t_end: "1500secs"
 config: "column"
-hyperdiff: "false"
+hyperdiff: false
 dt: "400secs"
 non_orographic_gravity_wave: true

@@ -6,6 +6,6 @@ surface_setup: DefaultMoninObukhov
 prognostic_surface: "PrognosticSurfaceTemperature"
 rad: "clearsky"
 precip_model: "0M"
-vert_diff: "true"
+vert_diff: true
 dt_save_state_to_disk: "5days"
 check_conservation: true

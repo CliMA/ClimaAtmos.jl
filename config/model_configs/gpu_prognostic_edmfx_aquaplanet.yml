@@ -17,7 +17,7 @@ moist: equil
 precip_model: 1M
 dt: 10secs
 t_end: 1hours
-dt_save_to_disk: 600secs
+dt_save_state_to_disk: 600secs
 toml: [toml/prognostic_edmfx.toml]
 output_default_diagnostics: false
 diagnostics:

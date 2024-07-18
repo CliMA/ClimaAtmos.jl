@@ -1,5 +1,5 @@
 surface_setup: "DefaultExchangeCoefficients"
-vert_diff: "true"
+vert_diff: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 forcing: "held_suarez"

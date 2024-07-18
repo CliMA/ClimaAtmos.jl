@@ -8,7 +8,7 @@ t_end: "360days"
 deep_atmosphere: true
 moist: "equil"
 precip_model: "0M"
-vert_diff: "true"
+vert_diff: true
 rayleigh_sponge: true
 forcing: "held_suarez"
 dt_save_state_to_disk: "10days"
