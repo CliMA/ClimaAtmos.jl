@@ -187,20 +187,6 @@ steps:
           --job_id plane_agnesi_mountain_test_stretched
         artifact_paths: "plane_agnesi_mountain_test_stretched/output_active/*"
 
-      - label: ":computer: Schar mountain experiment (uniform grid)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_schar_mountain_test_uniform.yml
-          --job_id plane_schar_mountain_test_uniform
-        artifact_paths: "plane_schar_mountain_test_uniform/output_active/*"
-
-      - label: ":computer: Schar mountain experiment (stretched grid)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_schar_mountain_test_stretched.yml
-          --job_id plane_schar_mountain_test_stretched
-        artifact_paths: "plane_schar_mountain_test_stretched/output_active/*"
-
       - label: ":computer: Density current experiment"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
