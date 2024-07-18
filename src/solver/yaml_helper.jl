@@ -72,14 +72,14 @@ function override_default_config(config_dict::AbstractDict;)
         v = config_dict[k]
 
         # Attempt to convert user value `v` to the same type as
-        # the default. If that fails, throw an informative error.
+        # the default. If that fails, throw an informative warning.
         config[k] = try
-            isnothing(default_config[k]) ? v : default_type(v)
-        catch err
-            user_entry_type = typeof(v)
-            msg = """Configuration entry "$(k)" = $v has type $(user_entry_type),
-                     but must have type $default_type."""
-            throw(ArgumentError(msg))
+            isnothing(default_config[k]) ? v : convert(default_type, v)
+        catch e
+            # A failed conversion should result in a MethodError
+            e isa MethodError || rethrow(e)
+            @warn """Failed to convert `config_dict["$k"] = $v` to default type $default_type, keeping original value"""
+            v
         end
     end
 
