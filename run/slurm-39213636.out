@@ -1,0 +1,1016 @@
+Precompiling project...
+[32m  ✓ [39m[90mMPIPreferences[39m
+[32m  ✓ [39m[90mCUDA_Runtime_jll[39m
+[32m  ✓ [39m[90mOpenMPI_jll[39m
+[32m  ✓ [39m[90mMPICH_jll[39m
+[32m  ✓ [39m[90mMPItrampoline_jll[39m
+[32m  ✓ [39m[90mHDF5_jll[39m
+[32m  ✓ [39m[90mNetCDF_jll[39m
+[32m  ✓ [39m[90mTempestRemap_jll[39m
+[32m  ✓ [39mMPI
+[32m  ✓ [39mNCDatasets
+[32m  ✓ [39mClimaAnalysis
+[32m  ✓ [39mNCRegressionTests
+[32m  ✓ [39m[90mHDF5[39m
+[32m  ✓ [39m[90mHDF5 → MPIExt[39m
+[32m  ✓ [39mCUDA
+[32m  ✓ [39m[90mMPI → CUDAExt[39m
+[32m  ✓ [39m[90mArrayInterface → ArrayInterfaceCUDAExt[39m
+[32m  ✓ [39m[90mCUDA → SpecialFunctionsExt[39m
+[32m  ✓ [39m[90mDiffEqBase → DiffEqBaseMPIExt[39m
+[32m  ✓ [39m[90mCUDA → ChainRulesCoreExt[39m
+[32m  ✓ [39mClimaComms
+[32m  ✓ [39m[90mClimaAnalysis → CairoMakieExt[39m
+[32m  ✓ [39mRRTMGP
+[32m  ✓ [39mClimaTimeSteppers
+[32m  ✓ [39mClimaCore
+[32m  ✓ [39m[90mClimaCore → KrylovExt[39m
+[32m  ✓ [39mClimaCorePlots
+[32m  ✓ [39mClimaCoreSpectra
+[32m  ✓ [39mClimaCoreVTK
+[32m  ✓ [39mClimaCoreTempestRemap
+[32m  ✓ [39mClimaAtmos
+[32m  ✓ [39mClimaCoreMakie
+  32 dependencies successfully precompiled in 142 seconds. 452 already precompiled.
+Status `/central/home/jschmitt/ClimaAtmos.jl/examples/Project.toml`
+  [c7e460c6] ArgParse v1.1.4
+  [a14bc488] ArtifactWrappers v0.2.0
+  [86bc3604] AtmosphericProfilesLibrary v0.1.4
+  [8e7c35d0] BlockArrays v0.16.39
+  [6eacf6c3] CLIMAParameters v0.7.26
+  [052768ef] CUDA v5.1.2
+  [13f3f980] CairoMakie v0.11.5
+  [29b5916a] ClimaAnalysis v0.2.1
+  [b2c96348] ClimaAtmos v0.19.0 `..`
+  [3a4d1b5c] ClimaComms v0.5.6
+  [d414da3d] ClimaCore v0.11.7
+  [908f55d8] ClimaCoreMakie v0.4.2
+  [cf7c7e5a] ClimaCorePlots v0.2.6
+  [c2caaa1d] ClimaCoreSpectra v0.1.1
+  [d934ef94] ClimaCoreTempestRemap v0.3.12
+  [c8b6d40d] ClimaCoreVTK v0.7.3
+  [595c0a79] ClimaTimeSteppers v0.7.15
+  [6a9e3e04] CloudMicrophysics v0.15.1
+  [5ae59095] Colors v0.12.10
+  [39dd38d3] Dierckx v0.5.3
+⌃ [2b5f629d] DiffEqBase v6.145.6
+  [459566f4] DiffEqCallbacks v2.36.1
+  [ffbed154] DocStringExtensions v0.9.3
+⌃ [442a2c76] FastGaussQuadrature v1.0.1
+  [f6369f11] ForwardDiff v0.10.36
+  [c27321d9] Glob v1.3.1
+  [6a3955dd] ImageFiltering v0.7.8
+  [e98cc03f] Insolation v0.8.2
+  [a98d9a8b] Interpolations v0.15.1
+  [8197267c] IntervalSets v0.7.8
+⌅ [c3a54625] JET v0.8.21
+  [033835bb] JLD2 v0.4.43
+  [682c06a0] JSON v0.21.4
+  [ba0b0d4f] Krylov v0.9.5
+  [da04e1cc] MPI v0.20.19
+  [85f8d34a] NCDatasets v0.14.0
+  [1789bc09] NCRegressionTests v0.2.3
+  [5da4648a] NVTX v0.3.4
+  [bac558e1] OrderedCollections v1.6.3
+  [91a5bcdd] Plots v1.39.0
+  [e409e4f3] PoissonRandom v0.4.4
+  [08abe8d2] PrettyTables v2.3.1
+  [33c8b6b6] ProgressLogging v0.1.4
+⌃ [1fd47b50] QuadGK v2.9.3
+  [a01a1ee8] RRTMGP v0.10.0
+  [7181ea78] RootSolvers v0.4.1
+⌃ [0bca4576] SciMLBase v2.15.2
+  [90137ffa] StaticArrays v1.9.1
+  [2913bbd2] StatsBase v0.34.2
+  [49b00bb7] SurfaceFluxes v0.8.1
+  [b60c26fb] Thermodynamics v0.11.2
+  [ddb6d928] YAML v0.4.9
+  [9c32591e] Poppler_jll v23.12.0+0
+  [ade2ca70] Dates
+  [37e2e46d] LinearAlgebra
+  [56ddb016] Logging
+  [44cfe95a] Pkg v1.9.2
+  [de0858da] Printf
+  [9abbd945] Profile
+  [9a3f8284] Random
+  [10745b16] Statistics v1.9.0
+  [fa267f1f] TOML v1.0.3
+  [a4e569a6] Tar v1.10.0
+  [8dfed614] Test
+Info Packages marked with ⌃ and ⌅ have new versions available. Those with ⌃ may be upgradable, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated`
+[ Info: Running on CPUSingleThreaded.
+┌ Info: Setting up distributed ClimaAtmos run
+└   nprocs = 8
+[ Info: Running ClimaCore in unthreaded mode.
+┌ Info: numerics 
+│            `energy_upwinding`::`Val{:none}`
+│            `tracer_upwinding`::`Val{:none}`
+│            `precip_upwinding`::`Val{:none}`
+│           `density_upwinding`::`Val{:none}`
+│             `edmfx_upwinding`::`Val{:none}`
+│     `edmfx_sgsflux_upwinding`::`Val{:none}`
+│     `test_dycore_consistency`::`Nothing`
+│                     `limiter`::`Nothing`
+└         `use_reference_state`::`Bool`
+┌ Info: AtmosModel: 
+│ 
+│                    `model_config`::`ClimaAtmos.SphericalModel`
+│                       `perf_mode`::`ClimaAtmos.PerfStandard`
+│                  `moisture_model`::`ClimaAtmos.DryModel`
+│                    `precip_model`::`ClimaAtmos.NoPrecipitation`
+│                     `cloud_model`::`ClimaAtmos.QuadratureCloud`
+│                    `forcing_type`::`Nothing`
+│                      `subsidence`::`Nothing`
+│                  `radiation_mode`::`Nothing`
+│                          `ls_adv`::`Nothing`
+│                   `edmf_coriolis`::`Nothing`
+│                `edmfx_entr_model`::`ClimaAtmos.NoEntrainment`
+│                `edmfx_detr_model`::`ClimaAtmos.NoDetrainment`
+│                  `turbconv_model`::`Nothing`
+│     `non_orographic_gravity_wave`::`Nothing`
+│         `orographic_gravity_wave`::`Nothing`
+│                       `hyperdiff`::`ClimaAtmos.ClimaHyperdiffusion{Float32}`
+│                       `vert_diff`::`Nothing`
+│                       `diff_mode`::`ClimaAtmos.Explicit`
+│                  `viscous_sponge`::`Nothing`
+│                 `rayleigh_sponge`::`Nothing`
+│                 `sfc_temperature`::`ClimaAtmos.ZonallySymmetricSST`
+│                   `surface_model`::`ClimaAtmos.PrescribedSurfaceTemperature`
+└                        `numerics`::`ClimaAtmos.AtmosNumerics{Val{:none}, Val{:none}, Val{:none}, Val{:none}, Val{:none}, Val{:none}, Nothing, Nothing}`
+┌ Info: Time info:
+│   dt = "400secs"
+│   t_end = "10days"
+└   floor_n_steps = 2160
+┌ Info: Topography
+└   topography = "NoWarp"
+┌ Info: z heights
+│   z_mesh.faces =
+│    11-element Vector{ClimaCore.Geometry.ZPoint{Float32}}:
+│     ZPoint(0.0)
+│     ZPoint(499.99905)
+│     ZPoint(1648.3628)
+│     ZPoint(3446.1985)
+│     ⋮
+│     ZPoint(20350.482)
+│     ZPoint(25000.0)
+└     ZPoint(30000.0)
+┌ Info: Resolution stats: 
+│   Nq = 4
+│   h_elem = 6
+│   z_elem = 10
+│   ncols = 432
+└   ndofs_total = 4320
+[ Info: Allocating Y: 3.013 s (8174839 allocations: 533.25 MiB)
+[ Info: Allocating cache (p): 16.287 s (49614538 allocations: 2.65 GiB)
+[ Info: Using ODE config: `ClimaTimeSteppers.ARS343`
+[ Info: ode_configuration: 683.222 ms (941401 allocations: 61.86 MiB)
+[ Info: get_callbacks: 313.547 ms (189774 allocations: 12.29 MiB)
+[ Info: initializing diagnostics: 3.913 s (6015157 allocations: 328.57 MiB)
+[ Info: Computing diagnostics:
+[ Info: HDF5Writer: Any[]
+[ Info: NetCDFWriter: ["orog_inst", "ts_1d_average", "ta_1d_average", "thetaa_1d_average", "ha_1d_average", "pfull_1d_average", "rhoa_1d_average", "ua_1d_average", "va_1d_average", "wa_1d_average", "hfes_1d_average", "ts_1d_max", "ts_1d_min"]
+[ Info: Prepared diagnostic callbacks: 1.119 s (1696694 allocations: 112.09 MiB)
+[ Info: Prepared SciMLBase.CallbackSet callbacks: 16.981 ms (1602 allocations: 109.23 KiB)
+[ Info: n_steps_per_cycle_per_cb (non diagnostics): [1, 1, 432, 1000, 27, 1]
+[ Info: n_steps_per_cycle_per_cb_diagnostic: [1, 216, 1, 216, 1, 216, 1, 216, 1, 216, 1, 216, 1, 216, 1, 216, 1, 216, 1, 216, 1, 216, 1, 216]
+[ Info: n_steps_per_cycle (non diagnostics): 54000
+[ Info: Define ode function: 711.247 ms (483135 allocations: 22.59 MiB)
+[ Info: dt_save_to_sol: 86400.0, length(saveat): 1
+[ Info: Saving state to HDF5 file on day 0 second 0
+[ Info: init integrator: 17.281 s (33065461 allocations: 1.86 GiB)
+[ Info: Init diagnostics: 8.898 s (21149732 allocations: 1.37 GiB)
+┌ Info: Running
+│   job_id = "sphere_baroclinic_wave_rhoe"
+│   output_dir = "/central/groups/esm/jschmitt/climaatmos/test/"
+└   tspan = (0.0f0, 864000.0f0)
+[ Info: Progress: Completed first step
+┌ Info: Progress
+│   simulation_time = "20 minutes"
+│   n_steps_completed = 3
+│   wall_time_per_step = "28 milliseconds, 569 microseconds"
+│   wall_time_total = "1 minute, 1 second"
+│   wall_time_remaining = "1 minute, 1 second"
+│   wall_time_spent = "85 milliseconds, 708 microseconds"
+│   percent_complete = "0.1%"
+│   sypd = 38.359
+│   date_now = 2024-01-15T15:58:05.279
+└   estimated_finish_date = 2024-01-15T15:59:06.873
+┌ Info: Progress
+│   simulation_time = "33 minutes, 20 seconds"
+│   n_steps_completed = 5
+│   wall_time_per_step = "111 milliseconds, 990 microseconds"
+│   wall_time_total = "4 minutes, 1 second"
+│   wall_time_remaining = "4 minutes, 1 second"
+│   wall_time_spent = "559 milliseconds, 951 microseconds"
+│   percent_complete = "0.2%"
+│   sypd = 9.786
+│   date_now = 2024-01-15T15:58:05.480
+└   estimated_finish_date = 2024-01-15T16:02:06.819
+┌ Info: Progress
+│   simulation_time = "1 hour"
+│   n_steps_completed = 9
+│   wall_time_per_step = "73 milliseconds, 517 microseconds"
+│   wall_time_total = "2 minutes, 38 seconds"
+│   wall_time_remaining = "2 minutes, 38 seconds"
+│   wall_time_spent = "661 milliseconds, 655 microseconds"
+│   percent_complete = "0.4%"
+│   sypd = 14.907
+│   date_now = 2024-01-15T15:58:05.611
+└   estimated_finish_date = 2024-01-15T16:00:43.746
+┌ Info: Progress
+│   simulation_time = "1 hour, 53 minutes"
+│   n_steps_completed = 17
+│   wall_time_per_step = "52 milliseconds, 601 microseconds"
+│   wall_time_total = "1 minute, 53 seconds"
+│   wall_time_remaining = "1 minute, 52 seconds"
+│   wall_time_spent = "894 milliseconds, 232 microseconds"
+│   percent_complete = "0.8%"
+│   sypd = 20.834
+│   date_now = 2024-01-15T15:58:05.826
+└   estimated_finish_date = 2024-01-15T15:59:58.550
+┌ Info: Progress
+│   simulation_time = "3 hours, 40 minutes"
+│   n_steps_completed = 33
+│   wall_time_per_step = "46 milliseconds, 564 microseconds"
+│   wall_time_total = "1 minute, 40 seconds"
+│   wall_time_remaining = "1 minute, 39 seconds"
+│   wall_time_spent = "1 second, 536 milliseconds"
+│   percent_complete = "1.5%"
+│   sypd = 23.535
+│   date_now = 2024-01-15T15:58:06.457
+└   estimated_finish_date = 2024-01-15T15:59:45.499
+┌ Info: Progress
+│   simulation_time = "7 hours, 13 minutes"
+│   n_steps_completed = 65
+│   wall_time_per_step = "36 milliseconds, 136 microseconds"
+│   wall_time_total = "1 minute, 18 seconds"
+│   wall_time_remaining = "1 minute, 15 seconds"
+│   wall_time_spent = "2 seconds, 348 milliseconds"
+│   percent_complete = "3.0%"
+│   sypd = 30.326
+│   date_now = 2024-01-15T15:58:07.269
+└   estimated_finish_date = 2024-01-15T15:59:22.975
+┌ Info: Progress
+│   simulation_time = "14 hours, 20 minutes"
+│   n_steps_completed = 129
+│   wall_time_per_step = "30 milliseconds, 829 microseconds"
+│   wall_time_total = "1 minute, 6 seconds"
+│   wall_time_remaining = "1 minute, 2 seconds"
+│   wall_time_spent = "3 seconds, 977 milliseconds"
+│   percent_complete = "6.0%"
+│   sypd = 35.547
+│   date_now = 2024-01-15T15:58:08.897
+└   estimated_finish_date = 2024-01-15T15:59:11.511
+┌ Info: Progress
+│   simulation_time = "1 day, 4 hours"
+│   n_steps_completed = 257
+│   wall_time_per_step = "43 milliseconds, 670 microseconds"
+│   wall_time_total = "1 minute, 34 seconds"
+│   wall_time_remaining = "1 minute, 23 seconds"
+│   wall_time_spent = "11 seconds, 223 milliseconds"
+│   percent_complete = "11.9%"
+│   sypd = 25.094
+│   date_now = 2024-01-15T15:58:16.182
+└   estimated_finish_date = 2024-01-15T15:59:39.287
+┌ Info: Progress
+│   simulation_time = "1 day, 18 hours"
+│   n_steps_completed = 385
+│   wall_time_per_step = "37 milliseconds, 730 microseconds"
+│   wall_time_total = "1 minute, 21 seconds"
+│   wall_time_remaining = "1 minute, 6 seconds"
+│   wall_time_spent = "14 seconds, 526 milliseconds"
+│   percent_complete = "17.8%"
+│   sypd = 29.045
+│   date_now = 2024-01-15T15:58:19.447
+└   estimated_finish_date = 2024-01-15T15:59:26.418
+[ Info: Saving state to HDF5 file on day 2 second 0
+┌ Info: Progress
+│   simulation_time = "2 days, 9 hours"
+│   n_steps_completed = 513
+│   wall_time_per_step = "36 milliseconds, 177 microseconds"
+│   wall_time_total = "1 minute, 18 seconds"
+│   wall_time_remaining = "59 seconds, 584 milliseconds"
+│   wall_time_spent = "18 seconds, 559 milliseconds"
+│   percent_complete = "23.8%"
+│   sypd = 30.292
+│   date_now = 2024-01-15T15:58:23.479
+└   estimated_finish_date = 2024-01-15T15:59:23.063
+┌ Info: Progress
+│   simulation_time = "2 days, 23 hours"
+│   n_steps_completed = 641
+│   wall_time_per_step = "34 milliseconds, 89 microseconds"
+│   wall_time_total = "1 minute, 13 seconds"
+│   wall_time_remaining = "51 seconds, 782 milliseconds"
+│   wall_time_spent = "21 seconds, 851 milliseconds"
+│   percent_complete = "29.7%"
+│   sypd = 32.147
+│   date_now = 2024-01-15T15:58:26.772
+└   estimated_finish_date = 2024-01-15T15:59:18.554
+┌ Info: Progress
+│   simulation_time = "3 days, 13 hours"
+│   n_steps_completed = 769
+│   wall_time_per_step = "33 milliseconds, 95 microseconds"
+│   wall_time_total = "1 minute, 11 seconds"
+│   wall_time_remaining = "46 seconds, 35 milliseconds"
+│   wall_time_spent = "25 seconds, 450 milliseconds"
+│   percent_complete = "35.6%"
+│   sypd = 33.113
+│   date_now = 2024-01-15T15:58:30.371
+└   estimated_finish_date = 2024-01-15T15:59:16.405
+[ Info: Saving state to HDF5 file on day 4 second 0
+┌ Info: Progress
+│   simulation_time = "4 days, 3 hours"
+│   n_steps_completed = 897
+│   wall_time_per_step = "32 milliseconds, 504 microseconds"
+│   wall_time_total = "1 minute, 10 seconds"
+│   wall_time_remaining = "41 seconds, 53 milliseconds"
+│   wall_time_spent = "29 seconds, 156 milliseconds"
+│   percent_complete = "41.5%"
+│   sypd = 33.715
+│   date_now = 2024-01-15T15:58:34.077
+└   estimated_finish_date = 2024-01-15T15:59:15.130
+┌ Info: Progress
+│   simulation_time = "4 days, 17 hours"
+│   n_steps_completed = 1025
+│   wall_time_per_step = "31 milliseconds, 792 microseconds"
+│   wall_time_total = "1 minute, 8 seconds"
+│   wall_time_remaining = "36 seconds, 84 milliseconds"
+│   wall_time_spent = "32 seconds, 587 milliseconds"
+│   percent_complete = "47.5%"
+│   sypd = 34.47
+│   date_now = 2024-01-15T15:58:37.507
+└   estimated_finish_date = 2024-01-15T15:59:13.591
+┌ Info: Progress
+│   simulation_time = "5 days, 8 hours"
+│   n_steps_completed = 1153
+│   wall_time_per_step = "31 milliseconds, 358 microseconds"
+│   wall_time_total = "1 minute, 7 seconds"
+│   wall_time_remaining = "31 seconds, 577 milliseconds"
+│   wall_time_spent = "36 seconds, 156 milliseconds"
+│   percent_complete = "53.4%"
+│   sypd = 34.947
+│   date_now = 2024-01-15T15:58:41.077
+└   estimated_finish_date = 2024-01-15T15:59:12.653
+┌ Info: Progress
+│   simulation_time = "5 days, 22 hours"
+│   n_steps_completed = 1281
+│   wall_time_per_step = "30 milliseconds, 765 microseconds"
+│   wall_time_total = "1 minute, 6 seconds"
+│   wall_time_remaining = "27 seconds, 42 milliseconds"
+│   wall_time_spent = "39 seconds, 410 milliseconds"
+│   percent_complete = "59.3%"
+│   sypd = 35.621
+│   date_now = 2024-01-15T15:58:44.330
+└   estimated_finish_date = 2024-01-15T15:59:11.372
+[ Info: Saving state to HDF5 file on day 6 second 0
+┌ Info: Progress
+│   simulation_time = "6 days, 12 hours"
+│   n_steps_completed = 1409
+│   wall_time_per_step = "30 milliseconds, 573 microseconds"
+│   wall_time_total = "1 minute, 6 seconds"
+│   wall_time_remaining = "22 seconds, 960 milliseconds"
+│   wall_time_spent = "43 seconds, 77 milliseconds"
+│   percent_complete = "65.2%"
+│   sypd = 35.845
+│   date_now = 2024-01-15T15:58:47.998
+└   estimated_finish_date = 2024-01-15T15:59:10.958
+┌ Info: Progress
+│   simulation_time = "1 week, 2 hours"
+│   n_steps_completed = 1537
+│   wall_time_per_step = "30 milliseconds, 346 microseconds"
+│   wall_time_total = "1 minute, 5 seconds"
+│   wall_time_remaining = "18 seconds, 905 milliseconds"
+│   wall_time_spent = "46 seconds, 642 milliseconds"
+│   percent_complete = "71.2%"
+│   sypd = 36.113
+│   date_now = 2024-01-15T15:58:51.614
+└   estimated_finish_date = 2024-01-15T15:59:10.519
+┌ Info: Progress
+│   simulation_time = "1 week, 17 hours"
+│   n_steps_completed = 1665
+│   wall_time_per_step = "30 milliseconds, 11 microseconds"
+│   wall_time_total = "1 minute, 4 seconds"
+│   wall_time_remaining = "14 seconds, 855 milliseconds"
+│   wall_time_spent = "49 seconds, 969 milliseconds"
+│   percent_complete = "77.1%"
+│   sypd = 36.516
+│   date_now = 2024-01-15T15:58:54.889
+└   estimated_finish_date = 2024-01-15T15:59:09.744
+[ Info: Saving state to HDF5 file on day 8 second 0
+┌ Info: Progress
+│   simulation_time = "1 week, 1 day"
+│   n_steps_completed = 1793
+│   wall_time_per_step = "29 milliseconds, 863 microseconds"
+│   wall_time_total = "1 minute, 4 seconds"
+│   wall_time_remaining = "10 seconds, 959 milliseconds"
+│   wall_time_spent = "53 seconds, 545 milliseconds"
+│   percent_complete = "83.0%"
+│   sypd = 36.697
+│   date_now = 2024-01-15T15:58:58.466
+└   estimated_finish_date = 2024-01-15T15:59:09.425
+┌ Info: Progress
+│   simulation_time = "1 week, 1 day"
+│   n_steps_completed = 1921
+│   wall_time_per_step = "29 milliseconds, 582 microseconds"
+│   wall_time_total = "1 minute, 3 seconds"
+│   wall_time_remaining = "7 seconds, 70 milliseconds"
+│   wall_time_spent = "56 seconds, 828 milliseconds"
+│   percent_complete = "88.9%"
+│   sypd = 37.045
+│   date_now = 2024-01-15T15:59:01.749
+└   estimated_finish_date = 2024-01-15T15:59:08.819
+┌ Info: Progress
+│   simulation_time = "1 week, 2 days"
+│   n_steps_completed = 2049
+│   wall_time_per_step = "29 milliseconds, 560 microseconds"
+│   wall_time_total = "1 minute, 3 seconds"
+│   wall_time_remaining = "3 seconds, 281 milliseconds"
+│   wall_time_spent = "1 minute, 569 milliseconds"
+│   percent_complete = "94.9%"
+│   sypd = 37.073
+│   date_now = 2024-01-15T15:59:05.490
+└   estimated_finish_date = 2024-01-15T15:59:08.771
+[ Info: Saving state to HDF5 file on day 10 second 0
+[ Info: solve!: 63.719 s (7941325 allocations: 799.61 MiB)
+[ Info: sypd: 37.14942955284046
+[ Info: Memory currently used (after solve!) by the process (RSS): 4.34 GiB
+[ Info: Plotting
+ERROR: LoadError: Reduction inst not available for pfull. Available: Set(Any["average"])
+Stacktrace:
+  [1] error(s::String)
+    @ Base ./error.jl:35
+  [2] available_periods(simdir::SimDir{Dict{Any, Any}, Dict{Any, Any}}; short_name::String, reduction::String)
+    @ ClimaAnalysis ~/.julia/packages/ClimaAnalysis/1TjtS/src/SimDir.jl:99
+  [3] available_periods
+    @ ~/.julia/packages/ClimaAnalysis/1TjtS/src/SimDir.jl:93 [inlined]
+  [4] get(simdir::SimDir{Dict{Any, Any}, Dict{Any, Any}}; short_name::String, reduction::String, period::Nothing)
+    @ ClimaAnalysis ~/.julia/packages/ClimaAnalysis/1TjtS/src/SimDir.jl:147
+  [5] get
+    @ ~/.julia/packages/ClimaAnalysis/1TjtS/src/SimDir.jl:133 [inlined]
+  [6] #20
+    @ ./none:0 [inlined]
+  [7] iterate
+    @ ./generator.jl:47 [inlined]
+  [8] collect(itr::Base.Generator{Vector{String}, var"#20#21"{SimDir{Dict{Any, Any}, Dict{Any, Any}}}})
+    @ Base ./array.jl:782
+  [9] make_plots(#unused#::Val{:sphere_baroclinic_wave_rhoe}, simulation_path::String)
+    @ Main ~/ClimaAtmos.jl/post_processing/ci_plots.jl:257
+ [10] top-level scope
+    @ ~/ClimaAtmos.jl/examples/hybrid/driver.jl:57
+in expression starting at /home/jschmitt/ClimaAtmos.jl/examples/hybrid/driver.jl:55
+srun: error: hpc-91-16: task 0: Exited with exit code 1
+srun: launch/slurm: _step_signal: Terminating StepId=39213636.0
+slurmstepd: error: *** STEP 39213636.0 ON hpc-91-16 CANCELLED AT 2024-01-15T15:59:46 ***
+
+[173814] signal (15): Terminated
+in expression starting at /home/jschmitt/ClimaAtmos.jl/examples/hybrid/driver.jl:103
+
+[173813] signal (15): Terminated
+in expression starting at /home/jschmitt/ClimaAtmos.jl/examples/hybrid/driver.jl:103
+
+[173816] signal (15): Terminated
+in expression starting at /home/jschmitt/ClimaAtmos.jl/examples/hybrid/driver.jl:103
+
+[173818] signal (15): Terminated
+in expression starting at /home/jschmitt/ClimaAtmos.jl/examples/hybrid/driver.jl:103
+
+[173815] signal (15): Terminated
+in expression starting at /home/jschmitt/ClimaAtmos.jl/examples/hybrid/driver.jl:103
+
+[173817] signal (15): Terminated
+in expression starting at /home/jschmitt/ClimaAtmos.jl/examples/hybrid/driver.jl:103
+
+[173819] signal (15): Terminated
+in expression starting at /home/jschmitt/ClimaAtmos.jl/examples/hybrid/driver.jl:103
+ml_matches at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:3440
+ijl_matching_methods at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2153
+ml_matches at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:3440
+ijl_matching_methods at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2153
+jl_egal_ at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1412 [inlined]
+ml_matches at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:3441
+ijl_matching_methods at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2153
+compare_svec at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/builtins.c:69
+jl_is_concrete_type at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1444 [inlined]
+obviously_disjoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:364
+obviously_disjoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:424
+obviously_disjoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:362 [inlined]
+ijl_type_morespecific at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:4094
+obviously_disjoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:362 [inlined]
+ijl_type_morespecific at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:4094
+check_datatype_parameters at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jltypes.c:1430
+inst_datatype_inner at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jltypes.c:1624
+jl_egal__unboxed_ at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1402 [inlined]
+jl_egal_ at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1415 [inlined]
+ml_matches at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:3441
+ijl_matching_methods at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2153
+ml_matches at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:3449
+ijl_matching_methods at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2153
+ml_matches at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:3449
+ijl_matching_methods at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2153
+inst_type_w_ at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jltypes.c:2000
+jl_substitute_var at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jltypes.c:1222 [inlined]
+check_datatype_parameters at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jltypes.c:1441
+inst_datatype_inner at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jltypes.c:1624
+inst_type_w_ at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jltypes.c:2000
+inst_type_w_ at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jltypes.c:1938
+ijl_instantiate_unionall at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jltypes.c:1216
+rename_unionall at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:510
+intersect_unionall_ at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2705
+intersect_unionall at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2782
+intersect at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:3232
+intersect_unionall_ at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2720
+intersect_unionall at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2765
+intersect at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:3206
+intersect_unionall_ at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2720
+intersect_unionall at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2782
+intersect at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:3206
+intersect_invariant at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2974
+intersect at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:3252
+intersect_union at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2217
+intersect at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:3196
+intersect_union at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2217
+intersect at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:3189
+intersect_tuple at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2905 [inlined]
+intersect at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:3246
+intersect_unionall_ at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2716
+intersect_unionall at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2765
+intersect at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:3232
+intersect_unionall_ at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2716
+intersect_unionall at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2765
+intersect at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:3232
+intersect_unionall_ at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2720
+intersect_unionall at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2765
+intersect at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:3206
+intersect_unionall_ at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2720
+intersect_unionall at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:2765
+intersect at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:3206
+intersect_all at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:3332
+jl_type_intersection_env_s at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/subtype.c:3550
+jl_type_intersection2 at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:1813
+ml_matches at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:3460
+ijl_matching_methods at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2153
+_methods_by_ftype at ./reflection.jl:952 [inlined]
+_findall at ./compiler/methodtable.jl:107 [inlined]
+#findall#275 at ./compiler/methodtable.jl:76 [inlined]
+findall at ./compiler/methodtable.jl:75 [inlined]
+#findall#277 at ./compiler/methodtable.jl:123
+_methods_by_ftype at ./reflection.jl:952 [inlined]
+_findall at ./compiler/methodtable.jl:107 [inlined]
+#findall#275 at ./compiler/methodtable.jl:76 [inlined]
+findall at ./compiler/methodtable.jl:75 [inlined]
+#findall#277 at ./compiler/methodtable.jl:123
+_methods_by_ftype at ./reflection.jl:952 [inlined]
+_findall at ./compiler/methodtable.jl:107 [inlined]
+#findall#275 at ./compiler/methodtable.jl:76 [inlined]
+findall at ./compiler/methodtable.jl:75 [inlined]
+#findall#277 at ./compiler/methodtable.jl:123
+_methods_by_ftype at ./reflection.jl:952 [inlined]
+_findall at ./compiler/methodtable.jl:107 [inlined]
+#findall#275 at ./compiler/methodtable.jl:76 [inlined]
+findall at ./compiler/methodtable.jl:75 [inlined]
+#findall#277 at ./compiler/methodtable.jl:123
+_methods_by_ftype at ./reflection.jl:952 [inlined]
+_findall at ./compiler/methodtable.jl:107 [inlined]
+#findall#275 at ./compiler/methodtable.jl:76 [inlined]
+findall at ./compiler/methodtable.jl:75 [inlined]
+#findall#277 at ./compiler/methodtable.jl:123
+_methods_by_ftype at ./reflection.jl:952 [inlined]
+_findall at ./compiler/methodtable.jl:107 [inlined]
+#findall#275 at ./compiler/methodtable.jl:76 [inlined]
+findall at ./compiler/methodtable.jl:75 [inlined]
+#findall#277 at ./compiler/methodtable.jl:123
+findall at ./compiler/methodtable.jl:114 [inlined]
+find_matching_methods at ./compiler/abstractinterpretation.jl:336
+findall at ./compiler/methodtable.jl:114 [inlined]
+find_matching_methods at ./compiler/abstractinterpretation.jl:336
+findall at ./compiler/methodtable.jl:114 [inlined]
+findall at ./compiler/methodtable.jl:114 [inlined]
+find_matching_methods at ./compiler/abstractinterpretation.jl:336
+find_matching_methods at ./compiler/abstractinterpretation.jl:336
+findall at ./compiler/methodtable.jl:114 [inlined]
+find_matching_methods at ./compiler/abstractinterpretation.jl:336
+findall at ./compiler/methodtable.jl:114 [inlined]
+find_matching_methods at ./compiler/abstractinterpretation.jl:336
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:80
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:80
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:80
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:80
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:80
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:80
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+_methods_by_ftype at ./reflection.jl:952 [inlined]
+_findall at ./compiler/methodtable.jl:107 [inlined]
+#findall#275 at ./compiler/methodtable.jl:76 [inlined]
+findall at ./compiler/methodtable.jl:75 [inlined]
+#findall#277 at ./compiler/methodtable.jl:123
+abstract_apply at ./compiler/abstractinterpretation.jl:1566
+abstract_apply at ./compiler/abstractinterpretation.jl:1566
+abstract_apply at ./compiler/abstractinterpretation.jl:1566
+abstract_apply at ./compiler/abstractinterpretation.jl:1566
+abstract_apply at ./compiler/abstractinterpretation.jl:1566
+abstract_apply at ./compiler/abstractinterpretation.jl:1566
+findall at ./compiler/methodtable.jl:114 [inlined]
+find_matching_methods at ./compiler/abstractinterpretation.jl:336
+abstract_call_known at ./compiler/abstractinterpretation.jl:1855
+abstract_call_known at ./compiler/abstractinterpretation.jl:1855
+abstract_call_known at ./compiler/abstractinterpretation.jl:1855
+abstract_call_known at ./compiler/abstractinterpretation.jl:1855
+abstract_call_known at ./compiler/abstractinterpretation.jl:1855
+abstract_call_known at ./compiler/abstractinterpretation.jl:1855
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:80
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+abstract_apply at ./compiler/abstractinterpretation.jl:1566
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+abstract_call_known at ./compiler/abstractinterpretation.jl:1855
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+_typeinf at ./compiler/typeinfer.jl:246
+_typeinf at ./compiler/typeinfer.jl:246
+_typeinf at ./compiler/typeinfer.jl:246
+_typeinf at ./compiler/typeinfer.jl:246
+_typeinf at ./compiler/typeinfer.jl:246
+_typeinf at ./compiler/typeinfer.jl:246
+typeinf at ./compiler/typeinfer.jl:216
+typeinf at ./compiler/typeinfer.jl:216
+typeinf at ./compiler/typeinfer.jl:216
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+typeinf at ./compiler/typeinfer.jl:216
+typeinf at ./compiler/typeinfer.jl:216
+typeinf at ./compiler/typeinfer.jl:216
+typeinf_edge at ./compiler/typeinfer.jl:932
+typeinf_edge at ./compiler/typeinfer.jl:932
+typeinf_edge at ./compiler/typeinfer.jl:932
+typeinf_edge at ./compiler/typeinfer.jl:932
+typeinf_edge at ./compiler/typeinfer.jl:932
+typeinf_edge at ./compiler/typeinfer.jl:932
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+abstract_call_method at ./compiler/abstractinterpretation.jl:611
+abstract_call_method at ./compiler/abstractinterpretation.jl:611
+abstract_call_method at ./compiler/abstractinterpretation.jl:611
+abstract_call_method at ./compiler/abstractinterpretation.jl:611
+abstract_call_method at ./compiler/abstractinterpretation.jl:611
+abstract_call_method at ./compiler/abstractinterpretation.jl:611
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:152
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:152
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:152
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:152
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:152
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:152
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+_typeinf at ./compiler/typeinfer.jl:246
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+typeinf at ./compiler/typeinfer.jl:216
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+typeinf_edge at ./compiler/typeinfer.jl:932
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+abstract_call_method at ./compiler/abstractinterpretation.jl:611
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+abstract_call_gf_by_type at ./compiler/abstractinterpretation.jl:152
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+_typeinf at ./compiler/typeinfer.jl:246
+_typeinf at ./compiler/typeinfer.jl:246
+abstract_call_known at ./compiler/abstractinterpretation.jl:1949
+_typeinf at ./compiler/typeinfer.jl:246
+_typeinf at ./compiler/typeinfer.jl:246
+_typeinf at ./compiler/typeinfer.jl:246
+_typeinf at ./compiler/typeinfer.jl:246
+typeinf at ./compiler/typeinfer.jl:216
+typeinf at ./compiler/typeinfer.jl:216
+typeinf at ./compiler/typeinfer.jl:216
+abstract_call at ./compiler/abstractinterpretation.jl:2020
+typeinf at ./compiler/typeinfer.jl:216
+typeinf at ./compiler/typeinfer.jl:216
+typeinf at ./compiler/typeinfer.jl:216
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1099
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1099
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1099
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1099
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1099
+abstract_call at ./compiler/abstractinterpretation.jl:1999
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1099
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1086
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1086
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1086
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1086
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1086
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1086
+abstract_eval_statement_expr at ./compiler/abstractinterpretation.jl:2183
+jfptr_typeinf_ext_toplevel_15030.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+jl_type_infer at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:320
+jfptr_typeinf_ext_toplevel_15030.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+jl_type_infer at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:320
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:901
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:901
+jfptr_typeinf_ext_toplevel_15030.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+jl_type_infer at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:320
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:856
+ijl_toplevel_eval_in at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:971
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:856
+ijl_toplevel_eval_in at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:971
+jfptr_typeinf_ext_toplevel_15030.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+jl_type_infer at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:320
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:901
+jfptr_typeinf_ext_toplevel_15030.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+jl_type_infer at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:320
+jfptr_typeinf_ext_toplevel_15030.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+jl_type_infer at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:320
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:856
+ijl_toplevel_eval_in at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:971
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:901
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:901
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:856
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:901
+ijl_toplevel_eval_in at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:971
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:856
+abstract_eval_statement at ./compiler/abstractinterpretation.jl:2396
+ijl_toplevel_eval_in at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:971
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:856
+ijl_toplevel_eval_in at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:971
+eval at ./boot.jl:370 [inlined]
+include_string at ./loading.jl:1903
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+eval at ./boot.jl:370 [inlined]
+include_string at ./loading.jl:1903
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+eval at ./boot.jl:370 [inlined]
+include_string at ./loading.jl:1903
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+eval at ./boot.jl:370 [inlined]
+include_string at ./loading.jl:1903
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+eval at ./boot.jl:370 [inlined]
+include_string at ./loading.jl:1903
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+eval at ./boot.jl:370 [inlined]
+include_string at ./loading.jl:1903
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+abstract_eval_basic_statement at ./compiler/abstractinterpretation.jl:2658
+_include at ./loading.jl:1963
+_include at ./loading.jl:1963
+_include at ./loading.jl:1963
+_include at ./loading.jl:1963
+_include at ./loading.jl:1963
+_include at ./loading.jl:1963
+typeinf_local at ./compiler/abstractinterpretation.jl:2867
+include at ./Base.jl:457
+include at ./Base.jl:457
+include at ./Base.jl:457
+include at ./Base.jl:457
+include at ./Base.jl:457
+include at ./Base.jl:457
+typeinf_nocycle at ./compiler/abstractinterpretation.jl:2955
+jfptr_include_40628.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jfptr_include_40628.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jfptr_include_40628.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jfptr_include_40628.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jfptr_include_40628.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jfptr_include_40628.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+_typeinf at ./compiler/typeinfer.jl:246
+exec_options at ./client.jl:307
+exec_options at ./client.jl:307
+exec_options at ./client.jl:307
+exec_options at ./client.jl:307
+exec_options at ./client.jl:307
+exec_options at ./client.jl:307
+_start at ./client.jl:522
+_start at ./client.jl:522
+typeinf at ./compiler/typeinfer.jl:216
+_start at ./client.jl:522
+_start at ./client.jl:522
+_start at ./client.jl:522
+_start at ./client.jl:522
+jfptr__start_49509.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jfptr__start_49509.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+true_main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:573
+jl_repl_entrypoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:717
+main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/cli/loader_exe.c:59
+__libc_start_main at /lib64/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8)
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+true_main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:573
+unknown function (ip: (nil))
+Allocations: 430768156 (Pool: 430464798; Big: 303358); GC: 253
+jl_repl_entrypoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:717
+main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/cli/loader_exe.c:59
+__libc_start_main at /lib64/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8)
+unknown function (ip: (nil))
+Allocations: 430758838 (Pool: 430455473; Big: 303365); GC: 246
+jfptr__start_49509.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1099
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+true_main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:573
+jl_repl_entrypoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:717
+main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/cli/loader_exe.c:59
+__libc_start_main at /lib64/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8)
+unknown function (ip: (nil))
+Allocations: 430767982 (Pool: 430464620; Big: 303362); GC: 245
+jfptr__start_49509.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jfptr__start_49509.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jfptr__start_49509.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+true_main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:573
+jl_repl_entrypoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:717
+main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/cli/loader_exe.c:59
+__libc_start_main at /lib64/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8)
+unknown function (ip: (nil))
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+true_main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:573
+jl_repl_entrypoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:717
+Allocations: 430753564 (Pool: 430450177; Big: 303387); GC: 252
+main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/cli/loader_exe.c:59
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+true_main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:573
+__libc_start_main at /lib64/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8)
+jl_repl_entrypoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:717
+unknown function (ip: (nil))
+Allocations: 430756221 (Pool: 430452858; Big: 303363); GC: 244
+main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/cli/loader_exe.c:59
+__libc_start_main at /lib64/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8)
+unknown function (ip: (nil))
+Allocations: 430758184 (Pool: 430454824; Big: 303360); GC: 246
+typeinf_ext_toplevel at ./compiler/typeinfer.jl:1086
+jfptr_typeinf_ext_toplevel_15030.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+jl_type_infer at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:320
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:901
+jl_toplevel_eval_flex at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:856
+ijl_toplevel_eval_in at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/toplevel.c:971
+eval at ./boot.jl:370 [inlined]
+include_string at ./loading.jl:1903
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+_include at ./loading.jl:1963
+include at ./Base.jl:457
+jfptr_include_40628.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+exec_options at ./client.jl:307
+_start at ./client.jl:522
+jfptr__start_49509.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+true_main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:573
+jl_repl_entrypoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:717
+main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/cli/loader_exe.c:59
+__libc_start_main at /lib64/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8)
+unknown function (ip: (nil))
+Allocations: 430755805 (Pool: 430452413; Big: 303392); GC: 241
+srun: error: hpc-91-16: tasks 3,6: Terminated
+srun: error: hpc-91-16: tasks 1-2,4-5,7: Terminated
+srun: Force Terminated StepId=39213636.0

@@ -1,0 +1,340 @@
+  No Changes to `/central/home/jschmitt/ClimaAtmos.jlexamples/Project.toml`
+  No Changes to `/central/home/jschmitt/ClimaAtmos.jlexamples/Manifest.toml`
+Status `/central/home/jschmitt/ClimaAtmos.jlexamples/Project.toml` (empty project)
+ERROR: SystemError: opening file "/home/jschmitt/ClimaAtmos.jlexamples/hybrid/driver.jl": No such file or directory
+Stacktrace:
+ERROR: SystemError: opening file "/home/jschmitt/ClimaAtmos.jlexamples/hybrid/driver.jl": No such file or directory
+Stacktrace:
+ERROR: SystemError: opening file "/home/jschmitt/ClimaAtmos.jlexamples/hybrid/driver.jl": No such file or directory
+Stacktrace:
+  [1] systemerror(p::String, errno::Int32; extrainfo::Nothing)
+    @ Base ./error.jl:176
+  [2] #systemerror#82
+    @ ./error.jl:175 [inlined]
+  [3] systemerror
+    @ ./error.jl:175 [inlined]
+  [4] open(fname::String; lock::Bool, read::Nothing, write::Nothing, create::Nothing, truncate::Nothing, append::Nothing)
+    @ Base ./iostream.jl:293
+  [5] open
+    @ ./iostream.jl:275 [inlined]
+  [1] systemerror(p::String, errno::Int32; extrainfo::Nothing)
+    @ Base ./error.jl:176
+  [2] #systemerror#82
+    @ ./error.jl:175 [inlined]
+  [3] systemerror
+    @ ./error.jl:175 [inlined]
+  [4] open(fname::String; lock::Bool, read::Nothing, write::Nothing, create::Nothing, truncate::Nothing, append::Nothing)
+    @ Base ./iostream.jl:293
+  [5] open
+    @ ./iostream.jl:275 [inlined]
+  [1] systemerror(p::String, errno::Int32; extrainfo::Nothing)
+    @ Base ./error.jl:176
+  [2] #systemerror#82
+    @ ./error.jl:175 [inlined]
+  [3] systemerror
+    @ ./error.jl:175 [inlined]
+  [4] open(fname::String; lock::Bool, read::Nothing, write::Nothing, create::Nothing, truncate::Nothing, append::Nothing)
+    @ Base ./iostream.jl:293
+  [5] open
+    @ ./iostream.jl:275 [inlined]
+  [6] open(f::Base.var"#418#419"{String}, args::String; kwargs::Base.Pairs{Symbol, Union{}, Tuple{}, NamedTuple{(), Tuple{}}})
+    @ Base ./io.jl:393
+  [7] open
+    @ ./io.jl:392 [inlined]
+  [8] read
+    @ ./io.jl:473 [inlined]
+  [9] _include(mapexpr::Function, mod::Module, _path::String)
+    @ Base ./loading.jl:1959
+ [10] include(mod::Module, _path::String)
+    @ Base ./Base.jl:457
+ [11] exec_options(opts::Base.JLOptions)
+    @ Base ./client.jl:307
+ [12] _start()
+    @ Base ./client.jl:522
+  [6] open(f::Base.var"#418#419"{String}, args::String; kwargs::Base.Pairs{Symbol, Union{}, Tuple{}, NamedTuple{(), Tuple{}}})
+    @ Base ./io.jl:393
+  [7] open
+    @ ./io.jl:392 [inlined]
+  [8] read
+    @ ./io.jl:473 [inlined]
+  [9] _include(mapexpr::Function, mod::Module, _path::String)
+    @ Base ./loading.jl:1959
+ [10] include(mod::Module, _path::String)
+    @ Base ./Base.jl:457
+ [11] exec_options(opts::Base.JLOptions)
+    @ Base ./client.jl:307
+ [12] _start()
+  [6] open(f::Base.var"#418#419"{String}, args::String; kwargs::Base.Pairs{Symbol, Union{}, Tuple{}, NamedTuple{(), Tuple{}}})
+    @ Base ./client.jl:522
+    @ Base ./io.jl:393
+  [7] open
+    @ ./io.jl:392 [inlined]
+  [8] read
+    @ ./io.jl:473 [inlined]
+  [9] _include(mapexpr::Function, mod::Module, _path::String)
+    @ Base ./loading.jl:1959
+ [10] include(mod::Module, _path::String)
+    @ Base ./Base.jl:457
+ [11] exec_options(opts::Base.JLOptions)
+    @ Base ./client.jl:307
+ [12] _start()
+    @ Base ./client.jl:522
+srun: error: hpc-91-16: tasks 0-2: Exited with exit code 1
+srun: launch/slurm: _step_signal: Terminating StepId=39213634.0
+slurmstepd: error: *** STEP 39213634.0 ON hpc-91-16 CANCELLED AT 2024-01-15T15:50:37 ***
+ERROR: 
+[171092] signal (15): Terminated
+in expression starting at none:0
+ERROR: 
+[171090] signal (15): Terminated
+in expression starting at none:0
+ERROR: 
+[171093] signal (15): Terminated
+in expression starting at none:0
+ERROR: 
+[171094] signal (15): Terminated
+in expression starting at none:0
+ERROR: 
+[171091] signal (15): Terminated
+in expression starting at none:0
+_ZN4llvm12LoopInfoBaseINS_10BasicBlockENS_4LoopEE13releaseMemoryEv at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm21BranchProbabilityInfo9calculateERKNS_8FunctionERKNS_8LoopInfoEPKNS_17TargetLibraryInfoEPNS_13DominatorTreeEPNS_17PostDominatorTreeE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm13PMDataManager8freePassEPNS_4PassENS_9StringRefENS_19PassDebuggingStringE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm13PMDataManager16removeDeadPassesEPNS_4PassENS_9StringRefENS_19PassDebuggingStringE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm32BranchProbabilityInfoWrapperPass13runOnFunctionERNS_8FunctionE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm13FPPassManager11runOnModuleERNS_6ModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm13FPPassManager11runOnModuleERNS_6ModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZZL35AttemptToFoldSymbolOffsetDifferencePKN4llvm11MCAssemblerEPKNS_11MCAsmLayoutEPKNS_8DenseMapIPKNS_9MCSectionEmNS_12DenseMapInfoIS9_vEENS_6detail12DenseMapPairIS9_mEEEEbRPKNS_15MCSymbolRefExprESL_RlENKUlvE_clEv at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZL31combineInstructionsOverFunctionRN4llvm8FunctionERNS_19InstructionWorklistEPNS_9AAResultsERNS_15AssumptionCacheERNS_17TargetLibraryInfoERNS_19TargetTransformInfoERNS_13DominatorTreeERNS_25OptimizationRemarkEmitterEPNS_18BlockFrequencyInfoEPNS_18ProfileSummaryInfoEjPNS_8LoopInfoE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm16InstCombinerImpl44reassociateShiftAmtsOfTwoSameDirectionShiftsEPNS_14BinaryOperatorERKNS_13SimplifyQueryEb at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+unknown function (ip: (nil))
+Allocations: 608552 (Pool: 607796; Big: 756); GC: 1
+_ZN4llvm24InstructionCombiningPass13runOnFunctionERNS_8FunctionE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm13FPPassManager11runOnModuleERNS_6ModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+operator() at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1152
+withModuleDo<(anonymous namespace)::OptimizerT::operator()(llvm::orc::ThreadSafeModule, llvm::orc::MaterializationResponsibility&)::<lambda(llvm::Module&)> > at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/usr/include/llvm/ExecutionEngine/Orc/ThreadSafeModule.h:136 [inlined]
+operator() at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1117 [inlined]
+CallImpl<(anonymous namespace)::OptimizerT> at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/usr/include/llvm/ADT/FunctionExtras.h:222
+_ZN4llvm3orc16IRTransformLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EENS0_16ThreadSafeModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+emit at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:631
+_ZN4llvm3orc31BasicIRLayerMaterializationUnit11materializeESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc19MaterializationTask3runEv at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+operator() at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1152
+withModuleDo<(anonymous namespace)::OptimizerT::operator()(llvm::orc::ThreadSafeModule, llvm::orc::MaterializationResponsibility&)::<lambda(llvm::Module&)> > at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/usr/include/llvm/ExecutionEngine/Orc/ThreadSafeModule.h:136 [inlined]
+operator() at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1117 [inlined]
+CallImpl<(anonymous namespace)::OptimizerT> at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/usr/include/llvm/ADT/FunctionExtras.h:222
+_ZN4llvm3orc16IRTransformLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EENS0_16ThreadSafeModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+emit at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:631
+_ZN4llvm3orc31BasicIRLayerMaterializationUnit11materializeESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc19MaterializationTask3runEv at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZL19EvaluateSymbolicAddPKN4llvm11MCAssemblerEPKNS_11MCAsmLayoutEPKNS_8DenseMapIPKNS_9MCSectionEmNS_12DenseMapInfoIS9_vEENS_6detail12DenseMapPairIS9_mEEEEbRKNS_7MCValueEPKNS_15MCSymbolRefExprESN_lRSI_ at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZNK4llvm6MCExpr25evaluateAsRelocatableImplERNS_7MCValueEPKNS_11MCAssemblerEPKNS_11MCAsmLayoutEPKNS_7MCFixupEPKNS_8DenseMapIPKNS_9MCSectionEmNS_12DenseMapInfoISF_vEENS_6detail12DenseMapPairISF_mEEEEb at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZNK4llvm6MCExpr21evaluateKnownAbsoluteERlRKNS_11MCAsmLayoutE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm11MCAssembler18relaxDwarfLineAddrERNS_11MCAsmLayoutERNS_23MCDwarfLineAddrFragmentE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm11MCAssembler6layoutERNS_11MCAsmLayoutE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm11MCAssembler6FinishEv at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm13MCELFStreamer10finishImplEv at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm10MCStreamer6FinishENS_5SMLocE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm10AsmPrinter14doFinalizationERNS_6ModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm13FPPassManager14doFinalizationERNS_6ModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc14SimpleCompilerclERNS_6ModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+operator() at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1152
+withModuleDo<(anonymous namespace)::OptimizerT::operator()(llvm::orc::ThreadSafeModule, llvm::orc::MaterializationResponsibility&)::<lambda(llvm::Module&)> > at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/usr/include/llvm/ExecutionEngine/Orc/ThreadSafeModule.h:136 [inlined]
+operator() at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1117 [inlined]
+CallImpl<(anonymous namespace)::OptimizerT> at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/usr/include/llvm/ADT/FunctionExtras.h:222
+_ZN4llvm3orc16IRTransformLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EENS0_16ThreadSafeModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+emit at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:631
+_ZN4llvm3orc31BasicIRLayerMaterializationUnit11materializeESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc19MaterializationTask3runEv at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm6detail18UniqueFunctionBaseIvJSt10unique_ptrINS_3orc4TaskESt14default_deleteIS4_EEEE8CallImplIPFvS7_EEEvPvRS7_ at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession22dispatchOutstandingMUsEv at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession17OL_completeLookupESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EESt10shared_ptrINS0_23AsynchronousSymbolQueryEESt8functionIFvRKNS_8DenseMapIPNS0_8JITDylibENS_8DenseSetINS0_15SymbolStringPtrENS_12DenseMapInfoISF_vEEEENSG_ISD_vEENS_6detail12DenseMapPairISD_SI_EEEEEE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm6detail18UniqueFunctionBaseIvJSt10unique_ptrINS_3orc4TaskESt14default_deleteIS4_EEEE8CallImplIPFvS7_EEEvPvRS7_ at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession22dispatchOutstandingMUsEv at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession17OL_completeLookupESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EESt10shared_ptrINS0_23AsynchronousSymbolQueryEESt8functionIFvRKNS_8DenseMapIPNS0_8JITDylibENS_8DenseSetINS0_15SymbolStringPtrENS_12DenseMapInfoISF_vEEEENSG_ISD_vEENS_6detail12DenseMapPairISD_SI_EEEEEE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+operator() at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1206
+_ZN4llvm3orc14IRCompileLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EENS0_16ThreadSafeModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16IRTransformLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EENS0_16ThreadSafeModuleE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+emit at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:631
+_ZN4llvm3orc31BasicIRLayerMaterializationUnit11materializeESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc19MaterializationTask3runEv at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm6detail18UniqueFunctionBaseIvJSt10unique_ptrINS_3orc4TaskESt14default_deleteIS4_EEEE8CallImplIPFvS7_EEEvPvRS7_ at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession22dispatchOutstandingMUsEv at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession17OL_completeLookupESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EESt10shared_ptrINS0_23AsynchronousSymbolQueryEESt8functionIFvRKNS_8DenseMapIPNS0_8JITDylibENS_8DenseSetINS0_15SymbolStringPtrENS_12DenseMapInfoISF_vEEEENSG_ISD_vEENS_6detail12DenseMapPairISD_SI_EEEEEE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc25InProgressFullLookupState8completeESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession19OL_applyQueryPhase1ESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EENS_5ErrorE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupENS0_10LookupKindERKSt6vectorISt4pairIPNS0_8JITDylibENS0_19JITDylibLookupFlagsEESaIS8_EENS0_15SymbolLookupSetENS0_11SymbolStateENS_15unique_functionIFvNS_8ExpectedINS_8DenseMapINS0_15SymbolStringPtrENS_18JITEvaluatedSymbolENS_12DenseMapInfoISI_vEENS_6detail12DenseMapPairISI_SJ_EEEEEEEEESt8functionIFvRKNSH_IS6_NS_8DenseSetISI_SL_EENSK_IS6_vEENSN_IS6_SV_EEEEEE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupERKSt6vectorISt4pairIPNS0_8JITDylibENS0_19JITDylibLookupFlagsEESaIS7_EERKNS0_15SymbolLookupSetENS0_10LookupKindENS0_11SymbolStateESt8functionIFvRKNS_8DenseMapIS5_NS_8DenseSetINS0_15SymbolStringPtrENS_12DenseMapInfoISK_vEEEENSL_IS5_vEENS_6detail12DenseMapPairIS5_SN_EEEEEE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupERKSt6vectorISt4pairIPNS0_8JITDylibENS0_19JITDylibLookupFlagsEESaIS7_EENS0_15SymbolStringPtrENS0_11SymbolStateE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupENS_8ArrayRefIPNS0_8JITDylibEEENS0_15SymbolStringPtrENS0_11SymbolStateE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupENS_8ArrayRefIPNS0_8JITDylibEEENS_9StringRefENS0_11SymbolStateE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+addModule at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1420
+jl_add_to_ee at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1815
+_ZN4llvm3orc25InProgressFullLookupState8completeESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession19OL_applyQueryPhase1ESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EENS_5ErrorE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupENS0_10LookupKindERKSt6vectorISt4pairIPNS0_8JITDylibENS0_19JITDylibLookupFlagsEESaIS8_EENS0_15SymbolLookupSetENS0_11SymbolStateENS_15unique_functionIFvNS_8ExpectedINS_8DenseMapINS0_15SymbolStringPtrENS_18JITEvaluatedSymbolENS_12DenseMapInfoISI_vEENS_6detail12DenseMapPairISI_SJ_EEEEEEEEESt8functionIFvRKNSH_IS6_NS_8DenseSetISI_SL_EENSK_IS6_vEENSN_IS6_SV_EEEEEE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_jl_compile_codeinst at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:241
+jl_generate_fptr_impl at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:460
+_ZN4llvm3orc16ExecutionSession6lookupERKSt6vectorISt4pairIPNS0_8JITDylibENS0_19JITDylibLookupFlagsEESaIS7_EERKNS0_15SymbolLookupSetENS0_10LookupKindENS0_11SymbolStateESt8functionIFvRKNS_8DenseMapIS5_NS_8DenseSetINS0_15SymbolStringPtrENS_12DenseMapInfoISK_vEEEENSL_IS5_vEENS_6detail12DenseMapPairIS5_SN_EEEEEE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+jl_compile_method_internal at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2348 [inlined]
+jl_compile_method_internal at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2237
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2750 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+_ZN4llvm3orc16ExecutionSession6lookupERKSt6vectorISt4pairIPNS0_8JITDylibENS0_19JITDylibLookupFlagsEESaIS7_EENS0_15SymbolStringPtrENS0_11SymbolStateE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+show_exception_stack at ./errorshow.jl:895
+_ZN4llvm3orc16ExecutionSession6lookupENS_8ArrayRefIPNS0_8JITDylibEEENS0_15SymbolStringPtrENS0_11SymbolStateE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+display_error at ./client.jl:111
+unknown function (ip: 0x7fe4e2000bc6)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+_ZN4llvm3orc16ExecutionSession6lookupENS_8ArrayRefIPNS0_8JITDylibEEENS_9StringRefENS0_11SymbolStateE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+addModule at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1420
+jl_add_to_ee at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1815
+_jl_compile_codeinst at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:241
+jl_generate_fptr_impl at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:460
+jl_compile_method_internal at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2348 [inlined]
+jl_compile_method_internal at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2237
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2750 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+show_exception_stack at ./errorshow.jl:895
+display_error at ./client.jl:111
+unknown function (ip: 0x7f7357970bc6)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+_ZN4llvm6detail18UniqueFunctionBaseIvJSt10unique_ptrINS_3orc4TaskESt14default_deleteIS4_EEEE8CallImplIPFvS7_EEEvPvRS7_ at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession22dispatchOutstandingMUsEv at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession17OL_completeLookupESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EESt10shared_ptrINS0_23AsynchronousSymbolQueryEESt8functionIFvRKNS_8DenseMapIPNS0_8JITDylibENS_8DenseSetINS0_15SymbolStringPtrENS_12DenseMapInfoISF_vEEEENSG_ISD_vEENS_6detail12DenseMapPairISD_SI_EEEEEE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc25InProgressFullLookupState8completeESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession19OL_applyQueryPhase1ESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EENS_5ErrorE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupENS0_10LookupKindERKSt6vectorISt4pairIPNS0_8JITDylibENS0_19JITDylibLookupFlagsEESaIS8_EENS0_15SymbolLookupSetENS0_11SymbolStateENS_15unique_functionIFvNS_8ExpectedINS_8DenseMapINS0_15SymbolStringPtrENS_18JITEvaluatedSymbolENS_12DenseMapInfoISI_vEENS_6detail12DenseMapPairISI_SJ_EEEEEEEEESt8functionIFvRKNSH_IS6_NS_8DenseSetISI_SL_EENSK_IS6_vEENSN_IS6_SV_EEEEEE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupERKSt6vectorISt4pairIPNS0_8JITDylibENS0_19JITDylibLookupFlagsEESaIS7_EERKNS0_15SymbolLookupSetENS0_10LookupKindENS0_11SymbolStateESt8functionIFvRKNS_8DenseMapIS5_NS_8DenseSetINS0_15SymbolStringPtrENS_12DenseMapInfoISK_vEEEENSL_IS5_vEENS_6detail12DenseMapPairIS5_SN_EEEEEE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupERKSt6vectorISt4pairIPNS0_8JITDylibENS0_19JITDylibLookupFlagsEESaIS7_EENS0_15SymbolStringPtrENS0_11SymbolStateE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupENS_8ArrayRefIPNS0_8JITDylibEEENS0_15SymbolStringPtrENS0_11SymbolStateE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupENS_8ArrayRefIPNS0_8JITDylibEEENS_9StringRefENS0_11SymbolStateE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+addModule at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1420
+jl_add_to_ee at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1815
+_jl_compile_codeinst at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:241
+jl_generate_fptr_impl at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:460
+jl_compile_method_internal at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2348 [inlined]
+jl_compile_method_internal at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2237
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2750 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+show_exception_stack at ./errorshow.jl:895
+display_error at ./client.jl:111
+unknown function (ip: 0x7fcfcc4b0bc6)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+_ZN4llvm3orc25InProgressFullLookupState8completeESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession19OL_applyQueryPhase1ESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EENS_5ErrorE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupENS0_10LookupKindERKSt6vectorISt4pairIPNS0_8JITDylibENS0_19JITDylibLookupFlagsEESaIS8_EENS0_15SymbolLookupSetENS0_11SymbolStateENS_15unique_functionIFvNS_8ExpectedINS_8DenseMapINS0_15SymbolStringPtrENS_18JITEvaluatedSymbolENS_12DenseMapInfoISI_vEENS_6detail12DenseMapPairISI_SJ_EEEEEEEEESt8functionIFvRKNSH_IS6_NS_8DenseSetISI_SL_EENSK_IS6_vEENSN_IS6_SV_EEEEEE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupERKSt6vectorISt4pairIPNS0_8JITDylibENS0_19JITDylibLookupFlagsEESaIS7_EERKNS0_15SymbolLookupSetENS0_10LookupKindENS0_11SymbolStateESt8functionIFvRKNS_8DenseMapIS5_NS_8DenseSetINS0_15SymbolStringPtrENS_12DenseMapInfoISK_vEEEENSL_IS5_vEENS_6detail12DenseMapPairIS5_SN_EEEEEE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupERKSt6vectorISt4pairIPNS0_8JITDylibENS0_19JITDylibLookupFlagsEESaIS7_EENS0_15SymbolStringPtrENS0_11SymbolStateE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupENS_8ArrayRefIPNS0_8JITDylibEEENS0_15SymbolStringPtrENS0_11SymbolStateE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+_ZN4llvm3orc16ExecutionSession6lookupENS_8ArrayRefIPNS0_8JITDylibEEENS_9StringRefENS0_11SymbolStateE at /central/software/julia/1.9.4/lib/julia/libLLVM-14jl.so (unknown line)
+addModule at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1420
+jl_add_to_ee at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:1815
+_jl_compile_codeinst at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:241
+jl_generate_fptr_impl at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jitlayers.cpp:460
+jl_compile_method_internal at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2348 [inlined]
+jl_compile_method_internal at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2237
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2750 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+show_exception_stack at ./errorshow.jl:895
+display_error at ./client.jl:111
+unknown function (ip: 0x7f577eb3fbc6)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+display_error at ./client.jl:114
+display_error at ./client.jl:114
+display_error at ./client.jl:114
+display_error at ./client.jl:114
+jfptr_display_error_40975.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jfptr_display_error_40975.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jfptr_display_error_40975.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jfptr_display_error_40975.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+jl_f__call_latest at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/builtins.c:774
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+jl_f__call_latest at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/builtins.c:774
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+jl_f__call_latest at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/builtins.c:774
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+jl_f__call_latest at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/builtins.c:774
+#invokelatest#2 at ./essentials.jl:819 [inlined]
+invokelatest at ./essentials.jl:816 [inlined]
+exec_options at ./client.jl:310
+#invokelatest#2 at ./essentials.jl:819 [inlined]
+invokelatest at ./essentials.jl:816 [inlined]
+exec_options at ./client.jl:310
+#invokelatest#2 at ./essentials.jl:819 [inlined]
+invokelatest at ./essentials.jl:816 [inlined]
+exec_options at ./client.jl:310
+#invokelatest#2 at ./essentials.jl:819 [inlined]
+invokelatest at ./essentials.jl:816 [inlined]
+exec_options at ./client.jl:310
+srun: error: hpc-91-16: task 3: Terminated
+_start at ./client.jl:522
+_start at ./client.jl:522
+_start at ./client.jl:522
+_start at ./client.jl:522
+jfptr__start_49509.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+true_main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:573
+jl_repl_entrypoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:717
+main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/cli/loader_exe.c:59
+__libc_start_main at /lib64/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8)
+unknown function (ip: (nil))
+Allocations: 608550 (Pool: 607796; Big: 754); GC: 1
+jfptr__start_49509.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+true_main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:573
+jl_repl_entrypoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:717
+main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/cli/loader_exe.c:59
+__libc_start_main at /lib64/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8)
+unknown function (ip: (nil))
+Allocations: 608550 (Pool: 607796; Big: 754); GC: 1
+jfptr__start_49509.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jfptr__start_49509.clone_1 at /central/software/julia/1.9.4/lib/julia/sys.so (unknown line)
+_jl_invoke at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2758 [inlined]
+ijl_apply_generic at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/gf.c:2940
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+true_main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:573
+jl_repl_entrypoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:717
+main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/cli/loader_exe.c:59
+__libc_start_main at /lib64/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8)
+unknown function (ip: (nil))
+Allocations: 608550 (Pool: 607797; Big: 753); GC: 1
+jl_apply at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/julia.h:1880 [inlined]
+true_main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:573
+jl_repl_entrypoint at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/src/jlapi.c:717
+main at /cache/build/builder-amdci4-4/julialang/julia-release-1-dot-9/cli/loader_exe.c:59
+__libc_start_main at /lib64/libc.so.6 (unknown line)
+unknown function (ip: 0x4010b8)
+unknown function (ip: (nil))
+Allocations: 608551 (Pool: 607797; Big: 754); GC: 1
+srun: error: hpc-91-16: tasks 4-7: Terminated
+srun: Force Terminated StepId=39213634.0
