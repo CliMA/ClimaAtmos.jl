@@ -17,6 +17,6 @@ approximate_linear_solve_iters: 2
 dt_cloud_fraction: 1hours
 surface_setup: DefaultMoninObukhov
 rayleigh_sponge: true
-dt: 100secs
+dt: "90secs"
 t_end: 12hours
 toml: [toml/longrun_aquaplanet.toml]
