@@ -48,12 +48,12 @@ plot_2param(simulation_id)
 
 
 if false
-    ens_size = 15
-    n_iters = 6
+    ens_size = 10
+    n_iters = 3
     noise = "window"
     id = ["ta", "hus", "clw", "wa", "hur", "cl"]
     simulation_id = "adpt_" * join(id,"_")* "_" * string(noise)
-    obs_mean, obs_cov = H_perf("output/prognostic_edmfx_bomex_column", id, noise=noise)
+    obs_mean, obs_cov = H_perf("output/prognostic_edmfx_bomex_column", id, noise=noise, output_cov=true)
     @assert isposdef(obs_cov) # make sure positive definite or calibration will not work
     calibrate(n_iters, ens_size, obs_mean, obs_cov, prior, scheduler, simulation_id, id, noise)
     plot_2param(simulation_id)

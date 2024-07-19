@@ -21,7 +21,7 @@ function H_perf(dir::String, short_names; noise = 0.01, obs_length = 40, cutoff=
             #obs_cov = cov(obs_dat)
             # ensure positive definiteness
             #if !isposdef(obs_cov)
-            obs_cov = obs_cov + (abs(minimum(eigvals(obs_cov)))+maximum(diag(obs_cov))*.001) .* I
+            #obs_cov = obs_cov + (abs(minimum(eigvals(obs_cov)))+maximum(diag(obs_cov))*.001) .* I
             #end
             push!(covs, obs_cov)
         end
@@ -29,7 +29,8 @@ function H_perf(dir::String, short_names; noise = 0.01, obs_length = 40, cutoff=
     end
     if output_cov 
         #obs_cov = Matrix(I, length(means), length(means))
-        obs_covs = Matrix(BlockDiagonal(covs))
+        obs_covs = Matrix(BlockDiagonal(covs)) 
+        obs_covs = obs_covs + (abs(minimum(eigvals(obs_covs))) + maximum(diag(obs_covs))*1e-8) .* I
         return means, obs_covs
     else
         return means
