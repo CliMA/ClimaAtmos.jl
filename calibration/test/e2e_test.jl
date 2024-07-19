@@ -17,14 +17,15 @@ import Statistics: var, mean
 using Test
 
 # Paths and setup
-experiment_dir = joinpath(pkgdir(CA), "calibration", "test")
-model_interface = joinpath(pkgdir(CA), "calibration", "model_interface.jl")
+const experiment_dir = joinpath(pkgdir(CA), "calibration", "test")
+const model_interface =
+    joinpath(pkgdir(CA), "calibration", "model_interface.jl")
+const output_dir = joinpath("output", "calibration_end_to_end_test")
 include(model_interface)
 
 # Observation map
 function CAL.observation_map(iteration)
     ensemble_size = 10
-    output_dir = "calibration_end_to_end_test"
     single_member_dims = (1,)
     G_ensemble = Array{Float64}(undef, single_member_dims..., ensemble_size)
 
@@ -67,7 +68,6 @@ noise = 0.1 * I
 n_iterations = 3
 ensemble_size = 10
 prior = CAL.get_prior(joinpath(experiment_dir, "prior.toml"))
-output_dir = "calibration_end_to_end_test"
 experiment_config = CAL.ExperimentConfig(;
     n_iterations,
     ensemble_size,
@@ -94,7 +94,7 @@ if !(@isdefined backend)
 end
 @info "Running calibration E2E test" backend
 if backend <: CAL.SlurmBackend
-    slurm_kwargs = CAL.kwargs(time = 10)
+    slurm_kwargs = CAL.kwargs(time = 15)
     test_eki = CAL.calibrate(
         backend,
         experiment_config;
