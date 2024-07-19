@@ -46,7 +46,6 @@ function run_forward_model(atmos_config::CA.AtmosConfig)
     simulation = CA.get_simulation(atmos_config)
     sol_res = CA.solve_atmos!(simulation)
     if sol_res.ret_code == :simulation_crashed
-        !isnothing(sol_res.sol) && sol_res.sol .= NaN
         error(
             "The ClimaAtmos simulation has crashed. See the stack trace for details.",
         )
