@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
+
+v0.27.1
+-------
 - Allow different aerosol types for radiation.
   PR [#3180](https://github.com/CliMA/ClimaAtmos.jl/pull/3180)
 - ![][badge-🔥behavioralΔ] Switch from `Dierckz` to `Interpolations`. `Interpolations`
