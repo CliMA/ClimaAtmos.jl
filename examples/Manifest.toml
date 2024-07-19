@@ -2544,7 +2544,9 @@ version = "7.2.1+1"
 
 [[deps.SurfaceFluxes]]
 deps = ["DocStringExtensions", "RootSolvers", "Thermodynamics"]
-git-tree-sha1 = "89c701c87f378ce95e7ddbcd69b8f1106ba8b968"
+git-tree-sha1 = "4facd194cab2494f22d3ef5f6bd003db5a9f75aa"
+repo-rev = "main"
+repo-url = "https://github.com/CliMA/SurfaceFluxes.jl"
 uuid = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
 version = "0.11.0"
 weakdeps = ["ClimaParams"]
