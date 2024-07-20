@@ -80,12 +80,11 @@ Use this job to test 1-moment microphysics related features.
 longrun_aquaplanet_dyamond
 
 Aquaplanet setup for DYAMOND (global high-resolution simulation). This job includes
-all the atmosphere components required for DYAMOND.
+all the atmosphere components required for DYAMOND. It will be updated whenever new components are ready.
 ```
 ```
 amip_target_diagedmf
 
 Aquaplanet setup for AMIP (atmosphere-land simulation). This job includes all the
-working atmosphere components required for AMIP. It can be unstable as some of them
-are still under development. It will be updated whenever new components are ready.
+working atmosphere components required for AMIP. It will be updated whenever new components are ready.
 ```
