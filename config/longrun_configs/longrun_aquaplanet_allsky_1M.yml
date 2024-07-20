@@ -1,4 +1,4 @@
-dt: "90secs"
+dt: "120secs"
 t_end: "360days"
 h_elem: 16
 z_elem: 63

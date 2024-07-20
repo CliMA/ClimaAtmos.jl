@@ -1,5 +1,5 @@
 dt_save_state_to_disk: "10days"
-dt: "90secs"
+dt: "120secs"
 t_end: "360days"
 h_elem: 16
 z_elem: 63
