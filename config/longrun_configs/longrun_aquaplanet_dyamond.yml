@@ -13,6 +13,6 @@ vert_diff: "FriersonDiffusion"
 surface_setup: "DefaultMoninObukhov" 
 rayleigh_sponge: true
 dt_save_state_to_disk: "10days"
-dt: "60secs" 
+dt: "30secs" 
 t_end: "10days"
 toml: [toml/longrun_aquaplanet.toml]
