@@ -30,6 +30,7 @@ toml: [configs/perfect_gcm_driven.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 output_default_diagnostics: false
+rad: allskywithclear
 diagnostics:
-  - short_name: [ta, hus, thetaa, clw, arup, tke, entr, detr, waup]
+  - short_name: [ta, hus, thetaa, clw, arup, tke, entr, detr, waup, rlut, rlutcs, rsut, rsutcs]
     period: 10mins
