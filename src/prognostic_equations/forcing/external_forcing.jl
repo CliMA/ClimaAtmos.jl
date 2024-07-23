@@ -9,8 +9,6 @@ import NCDatasets as NC
 import Interpolations as Intp
 import ClimaParams as CP
 
-
-
 function interp_vertical_prof(x, xp, fp)
     spl = Intp.extrapolate(
         Intp.interpolate((xp,), fp, Intp.Gridded(Intp.Linear())),
@@ -84,8 +82,8 @@ function external_forcing_cache(Y, external_forcing::GCMForcing)
 
             zc_gcm = Fields.coordinate_field(Y.c).z[colidx]
 
-            # setvar!(ᶜdTdt_fluc, "dtdt_fluc", colidx, zc_gcm, zc_forcing) #TODO: change this
-            # setvar!(ᶜdqtdt_fluc, "dqtdt_fluc", colidx, zc_gcm, zc_forcing) #TODO: change this
+            # setvar!(ᶜdTdt_fluc, "dtdt_fluc", colidx, zc_gcm, zc_forcing) #TODO: add these forcings back in
+            # setvar!(ᶜdqtdt_fluc, "dqtdt_fluc", colidx, zc_gcm, zc_forcing) #TODO: add these forcings back in
             setvar!(ᶜdTdt_hadv, "tntha", colidx, zc_gcm, zc_forcing)
             setvar!(ᶜdqtdt_hadv, "tnhusha", colidx, zc_gcm, zc_forcing)
             setvar!(ᶜdTdt_rad, "tntr", colidx, zc_gcm, zc_forcing)
@@ -151,8 +149,8 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
 
     ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_sum = p.scratch.ᶜtemp_scalar_2
-    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_nudging #  + ᶜdTdt_rad + ᶜdTdt_fluc remove nudging for now - TODO add later
-    @. ᶜdqtdt_sum = ᶜdqtdt_hadv + ᶜdqtdt_nudging # + ᶜdqtdt_fluc remove nudging for now - TODO add later
+    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_nudging #  + ᶜdTdt_rad + ᶜdTdt_fluc remove nudging for now - TODO add back later
+    @. ᶜdqtdt_sum = ᶜdqtdt_hadv + ᶜdqtdt_nudging # + ᶜdqtdt_fluc remove nudging for now - TODO add back later
 
     T_0 = TD.Parameters.T_0(thermo_params)
     Lv_0 = TD.Parameters.LH_v0(thermo_params)

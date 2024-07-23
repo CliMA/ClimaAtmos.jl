@@ -1,6 +1,6 @@
 initial_condition: "GCM"
 external_forcing: "GCM"
-external_forcing_file: "/Users/julianschmitt/Downloads/HadGEM2-A_amip.2004-2008.07.nc" # /central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc
+external_forcing_file: "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc" 
 surface_setup: "GCM"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
@@ -17,20 +17,18 @@ edmfx_filter: true
 prognostic_tke: true
 moist: "equil"
 config: "column"
-z_max: 30e3
+z_max: 40e3
 z_elem: 60
 z_stretch: true
 dz_bottom: 30
 dz_top: 3000
 perturb_initstate: false
 dt: "10secs"
-t_end: "6hours"
+t_end: "12hours"
 dt_save_state_to_disk: "6hours"
 call_cloud_diagnostics_per_stage : true
 output_dir: output/gcm_driven_scm
-#toml: [configs/perfect_gcm_driven.toml]
 toml: [toml/prognostic_edmfx_bomex.toml]
-
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 output_default_diagnostics: false

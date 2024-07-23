@@ -1192,7 +1192,7 @@ function gcm_initial_conditions(external_forcing_file)
             gcm_driven_profile_tmean(ds.group["site23"], "ua"),
             gcm_driven_profile_tmean(ds.group["site23"], "va"),
             gcm_driven_profile_tmean(ds.group["site23"], "hus"),
-            vec(mean( 1 ./ ds.group["site23"]["alpha"][:, :], dims = 2)), # TODO convert alpha to rho (convert then interpolate) #gcm_driven_reference(ds, "rho0")[:]
+            vec(mean( 1 ./ ds.group["site23"]["alpha"][:, :], dims = 2)), # convert alpha to rho using rho=1/alpha, take average profile
         )
     end
 end

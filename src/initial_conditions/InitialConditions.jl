@@ -15,7 +15,6 @@ import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 import ..n_mass_flux_subdomains
 import ..gcm_driven_profile
-# import ..gcm_driven_reference
 import ..gcm_height
 import ..gcm_driven_profile_tmean
 
