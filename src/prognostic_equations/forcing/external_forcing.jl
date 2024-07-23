@@ -7,6 +7,9 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import NCDatasets as NC
 import Interpolations as Intp
+import ClimaParams as CP
+
+
 
 function interp_vertical_prof(x, xp, fp)
     spl = Intp.extrapolate(
@@ -57,38 +60,41 @@ function external_forcing_cache(Y, external_forcing::GCMForcing)
     (; external_forcing_file) = external_forcing
 
     NC.Dataset(external_forcing_file, "r") do ds
-        function setvar!(cc_field, varname, colidx, zc_gcm, zc_les)
+        function setvar!(cc_field, varname, colidx, zc_gcm, zc_forcing)
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
-                zc_les,
-                gcm_driven_profile_tmean(ds, varname),  # TODO: time-varying tendencies
+                zc_forcing,
+                gcm_driven_profile_tmean(ds.group["site23"], varname), 
             )
         end
 
-        function setnudgevar!(cc_field, varname, colidx, zc_gcm, zc_les)
+        function setvar_subsidence!(cc_field, varname, colidx, zc_gcm, zc_forcing)
+            gravity = CP.get_parameter_values(CP.create_toml_dict(Float64), ["gravitational_acceleration"])[1]
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
-                zc_les,
-                gcm_driven_profile(ds, varname)[:, 1],
+                zc_forcing,
+                gcm_driven_profile_tmean(ds.group["site23"] ,varname) .* 
+                            gcm_driven_profile_tmean(ds.group["site23"] ,"alpha") ./ 
+                            gravity, 
             )
         end
 
-        zc_les = gcm_driven_reference(ds, "z")[:]
+        zc_forcing = gcm_height(ds.group["site23"])
         Fields.bycolumn(axes(Y.c)) do colidx
 
             zc_gcm = Fields.coordinate_field(Y.c).z[colidx]
 
-            setvar!(ᶜdTdt_fluc, "dtdt_fluc", colidx, zc_gcm, zc_les)
-            setvar!(ᶜdqtdt_fluc, "dqtdt_fluc", colidx, zc_gcm, zc_les)
-            setvar!(ᶜdTdt_hadv, "dtdt_hadv", colidx, zc_gcm, zc_les)
-            setvar!(ᶜdqtdt_hadv, "dqtdt_hadv", colidx, zc_gcm, zc_les)
-            setvar!(ᶜdTdt_rad, "dtdt_rad", colidx, zc_gcm, zc_les)
-            setvar!(ᶜls_subsidence, "ls_subsidence", colidx, zc_gcm, zc_les)
+            # setvar!(ᶜdTdt_fluc, "dtdt_fluc", colidx, zc_gcm, zc_forcing) #TODO: change this
+            # setvar!(ᶜdqtdt_fluc, "dqtdt_fluc", colidx, zc_gcm, zc_forcing) #TODO: change this
+            setvar!(ᶜdTdt_hadv, "tntha", colidx, zc_gcm, zc_forcing)
+            setvar!(ᶜdqtdt_hadv, "tnhusha", colidx, zc_gcm, zc_forcing)
+            setvar!(ᶜdTdt_rad, "tntr", colidx, zc_gcm, zc_forcing)
+            setvar_subsidence!(ᶜls_subsidence, "wap", colidx, zc_gcm, zc_forcing)
 
-            setnudgevar!(ᶜT_nudge, "temperature_mean", colidx, zc_gcm, zc_les)
-            setnudgevar!(ᶜqt_nudge, "qt_mean", colidx, zc_gcm, zc_les)
-            setnudgevar!(ᶜu_nudge, "u_mean", colidx, zc_gcm, zc_les)
-            setnudgevar!(ᶜv_nudge, "v_mean", colidx, zc_gcm, zc_les)
+            setvar!(ᶜT_nudge, "ta", colidx, zc_gcm, zc_forcing)
+            setvar!(ᶜqt_nudge, "hus", colidx, zc_gcm, zc_forcing)
+            setvar!(ᶜu_nudge, "ua", colidx, zc_gcm, zc_forcing)
+            setvar!(ᶜv_nudge, "va", colidx, zc_gcm, zc_forcing)
 
             @. ᶜinv_τ_wind[colidx] = 1 / (6 * 3600)
             @. ᶜinv_τ_scalar[colidx] = compute_gcm_driven_scalar_inv_τ(zc_gcm)
@@ -145,8 +151,8 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
 
     ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_sum = p.scratch.ᶜtemp_scalar_2
-    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_fluc + ᶜdTdt_rad + ᶜdTdt_nudging
-    @. ᶜdqtdt_sum = ᶜdqtdt_hadv + ᶜdqtdt_fluc + ᶜdqtdt_nudging
+    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_nudging #  + ᶜdTdt_rad + ᶜdTdt_fluc remove nudging for now - TODO add later
+    @. ᶜdqtdt_sum = ᶜdqtdt_hadv + ᶜdqtdt_nudging # + ᶜdqtdt_fluc remove nudging for now - TODO add later
 
     T_0 = TD.Parameters.T_0(thermo_params)
     Lv_0 = TD.Parameters.LH_v0(thermo_params)

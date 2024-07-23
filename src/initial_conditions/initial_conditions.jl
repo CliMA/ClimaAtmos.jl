@@ -1154,9 +1154,11 @@ function (initial_condition::GCMDriven)(params)
     thermo_params = CAP.thermodynamics_params(params)
 
     # Read forcing file
-    z_gcm = gcm_z(external_forcing_file)
+    z_gcm = NC.NCDataset(external_forcing_file) do ds
+        vec(gcm_height(ds.group["site23"]))
+    end
     vars = gcm_initial_conditions(external_forcing_file)
-    θ, u, v, q_tot, ρ₀ = map(vars) do value
+    T, u, v, q_tot, ρ₀ = map(vars) do value
         Intp.extrapolate(
             Intp.interpolate((z_gcm,), value, Intp.Gridded(Intp.Linear())),
             Intp.Flat(),
@@ -1169,10 +1171,10 @@ function (initial_condition::GCMDriven)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = ts = TD.PhaseEquil_ρθq(
+            thermo_state = ts = TD.PhaseEquil_ρTq( 
                 thermo_params,
-                FT(ρ₀(z)),
-                FT(θ(z)),
+                FT(ρ₀(z)), 
+                FT(T(z)),
                 FT(q_tot(z)),
             ),
             velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
@@ -1182,22 +1184,15 @@ function (initial_condition::GCMDriven)(params)
     return local_state
 end
 
-# function gcm_z(external_forcing_file, FT::DataType)
-function gcm_z(external_forcing_file)
-    NC.NCDataset(external_forcing_file) do ds
-        gcm_driven_reference(ds, "z")[:]
-    end
-end
-
 # function gcm_initial_conditions(external_forcing_file, FT)
 function gcm_initial_conditions(external_forcing_file)
     NC.NCDataset(external_forcing_file) do ds
         (  # TODO: Cast to CuVector for GPU compatibility
-            gcm_driven_profile(ds, "thetali_mean")[:, 1], # 1 is initial time index
-            gcm_driven_profile(ds, "u_mean")[:, 1],
-            gcm_driven_profile(ds, "v_mean")[:, 1],
-            gcm_driven_profile(ds, "qt_mean")[:, 1],
-            gcm_driven_reference(ds, "rho0")[:],
+            gcm_driven_profile_tmean(ds.group["site23"], "ta"),
+            gcm_driven_profile_tmean(ds.group["site23"], "ua"),
+            gcm_driven_profile_tmean(ds.group["site23"], "va"),
+            gcm_driven_profile_tmean(ds.group["site23"], "hus"),
+            vec(mean( 1 ./ ds.group["site23"]["alpha"][:, :], dims = 2)), # TODO convert alpha to rho (convert then interpolate) #gcm_driven_reference(ds, "rho0")[:]
         )
     end
 end

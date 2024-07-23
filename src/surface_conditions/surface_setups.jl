@@ -263,12 +263,12 @@ function (surface_setup::GCMDriven)(params)
     return SurfaceState(; parameterization, T)
 end
 
-function gcm_surface_conditions(external_forcing_file; imin = 793)
+function gcm_surface_conditions(external_forcing_file)
     NC.NCDataset(external_forcing_file) do ds
         (
-            mean(gcm_driven_timeseries(ds, "surface_temperature")[imin:end]),
-            mean(gcm_driven_timeseries(ds, "lhf_surface_mean")[imin:end]),
-            mean(gcm_driven_timeseries(ds, "shf_surface_mean")[imin:end]),
+            mean(gcm_driven_timeseries(ds.group["site23"], "ts")),
+            mean(gcm_driven_timeseries(ds.group["site23"], "hfls")),
+            mean(gcm_driven_timeseries(ds.group["site23"], "hfss")),
         )
     end
 end

@@ -1,0 +1,40 @@
+initial_condition: "GCM"
+external_forcing: "GCM"
+external_forcing_file: "/Users/julianschmitt/Downloads/HadGEM2-A_amip.2004-2008.07.nc" # /central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc
+surface_setup: "GCM"
+turbconv: "prognostic_edmfx"
+implicit_diffusion: true
+implicit_sgs_advection: false
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+edmfx_upwinding: first_order
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_filter: true
+prognostic_tke: true
+moist: "equil"
+config: "column"
+z_max: 30e3
+z_elem: 60
+z_stretch: true
+dz_bottom: 30
+dz_top: 3000
+perturb_initstate: false
+dt: "10secs"
+t_end: "6hours"
+dt_save_state_to_disk: "6hours"
+call_cloud_diagnostics_per_stage : true
+output_dir: output/gcm_driven_scm
+#toml: [configs/perfect_gcm_driven.toml]
+toml: [toml/prognostic_edmfx_bomex.toml]
+
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 60]
+output_default_diagnostics: false
+rad: allskywithclear
+diagnostics:
+  - short_name: [ta, hus, thetaa, clw, arup, tke, entr, detr, waup, rlut, rlutcs, rsut, rsutcs]
+    period: 10secs
