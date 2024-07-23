@@ -32,6 +32,7 @@ abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
 struct TimeVaryingInsolation <: AbstractInsolation end
 struct RCEMIPIIInsolation <: AbstractInsolation end
+struct GCMDrivenInsolation <: AbstractInsolation end
 
 abstract type AbstractSurfaceTemperature end
 struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end
