@@ -49,13 +49,15 @@ end
 
 function get_insolation_form(parsed_args)
     insolation = parsed_args["insolation"]
-    @assert insolation in ("idealized", "timevarying", "rcemipii")
+    @assert insolation in ("idealized", "timevarying", "rcemipii", "gcmdriven")
     return if insolation == "idealized"
         IdealizedInsolation()
     elseif insolation == "timevarying"
         TimeVaryingInsolation()
     elseif insolation == "rcemipii"
         RCEMIPIIInsolation()
+    elseif insolation == "gcmdriven"
+        GCMDrivenInsolation()
     end
 end
 

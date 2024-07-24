@@ -1,6 +1,6 @@
 initial_condition: "GCM"
 external_forcing: "GCM"
-external_forcing_file: "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc" 
+external_forcing_file: "/Users/julianschmitt/Downloads/HadGEM2-A_amip.2004-2008.07.nc" #"/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc" 
 surface_setup: "GCM"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
@@ -33,6 +33,7 @@ netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 output_default_diagnostics: false
 rad: allskywithclear
+insolation: "gcmdriven"
 diagnostics:
   - short_name: [ta, hus, thetaa, clw, arup, tke, entr, detr, waup, rlut, rlutcs, rsut, rsutcs]
     period: 10secs
