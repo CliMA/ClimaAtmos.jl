@@ -6,7 +6,7 @@ function tracer_cache(Y, atmos, prescribed_aerosol_names, start_date)
         return (;)
     end
 
-    # Take the aerosol2005/aero_2005.nc file, read the keys with names matching
+    # Take the aerosol concentration file, read the keys with names matching
     # the ones passed in the prescribed_aerosol_names option, and create a
     # NamedTuple that uses the same keys and has as values the TimeVaryingInputs
     # for those variables.
@@ -19,8 +19,11 @@ function tracer_cache(Y, atmos, prescribed_aerosol_names, start_date)
     timevaryinginputs = [
         TimeVaryingInput(
             joinpath(
-                @clima_artifact("aerosol2005", ClimaComms.context(Y.c)),
-                "aero_2005.nc",
+                @clima_artifact(
+                    "aerosol_concentrations",
+                    ClimaComms.context(Y.c)
+                ),
+                "aerosol_concentrations.nc",
             ),
             name,
             target_space;
