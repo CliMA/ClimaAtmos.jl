@@ -193,7 +193,10 @@ end
 function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
     FT = Spaces.undertype(axes(Y.c))
     (; rrtmgp_model) = p.radiation
-    @show fieldnames(typeof(p.external_forcing))
+    #@show fieldnames(typeof(p.external_forcing))
+    #@show propertynames(rrtmgp_model)
+    # @show p.external_forcing.cos_zenith
+    # @show rrtmgp_model.cos_zenith # Fields.field_values(p.external_forcing.insolation)[]
     rrtmgp_model.cos_zenith .= p.external_forcing.cos_zenith
     rrtmgp_model.weighted_irradiance .= p.external_forcing.insolation
 end
