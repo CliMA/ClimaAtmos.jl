@@ -40,8 +40,6 @@ external_forcing_cache(Y, atmos::AtmosModel, params) =
 
 external_forcing_cache(Y, external_forcing::Nothing, params) = (;)
 function external_forcing_cache(Y, external_forcing::GCMForcing, params)
-    @show external_forcing.external_forcing_file
-    ds = NC.Dataset(external_forcing.external_forcing_file, "r")
     FT = Spaces.undertype(axes(Y.c))
     ᶜdTdt_fluc = similar(Y.c, FT)
     ᶜdqtdt_fluc = similar(Y.c, FT)
@@ -55,12 +53,12 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
     ᶜinv_τ_wind = similar(Y.c, FT)
     ᶜinv_τ_scalar = similar(Y.c, FT)
     ᶜls_subsidence = similar(Y.c, FT)
-    insolation = mean(ds.group["site23"]["rsdt"][:] ./ ds.group["site23"]["coszen"][:]) #similar(Fields.level(Y.c.ρ, 1), FT) #similar(Spaces.level(Y.c.ρ, 1), FT)
-    cos_zenith = ds.group["site23"]["coszen"]# similar(Fields.level(Y.c.ρ, 1), FT)#similar(Spaces.level(Y.c.ρ, 1), FT)
 
     (; external_forcing_file) = external_forcing
 
+    insolation, cos_zenith = [0f1], [0f1]
     NC.Dataset(external_forcing_file, "r") do ds
+
         function setvar!(cc_field, varname, colidx, zc_gcm, zc_forcing)
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
@@ -69,15 +67,8 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
             )
         end
 
-        # function setvar_insol!(cc_field)
-        #     parent(cc_field) .= mean(ds.group["site23"]["rsdt"][:] ./ ds.group["site23"]["coszen"][:])[1]
-        # end
-
-        # function setvar_coszen!(cc_field)
-        #     parent(cc_field) .= ds.group["site23"]["coszen"][1]
-
-        #     #cc_field[colidx] .= mean(ds.group["site23"]["rsdt"][:] ./ ds.group["site23"]["coszen"][:])
-        # end
+        insolation[1] = mean(ds.group["site23"]["rsdt"][:] ./ ds.group["site23"]["coszen"][:]) #similar(Fields.level(Y.c.ρ, 1), FT) #similar(Spaces.level(Y.c.ρ, 1), FT)
+        cos_zenith[1] = ds.group["site23"]["coszen"][1]
 
         function setvar_subsidence!(cc_field, varname, colidx, zc_gcm, zc_forcing, params)
             parent(cc_field[colidx]) .= interp_vertical_prof(
@@ -106,10 +97,6 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
             setvar!(ᶜqt_nudge, "hus", colidx, zc_gcm, zc_forcing)
             setvar!(ᶜu_nudge, "ua", colidx, zc_gcm, zc_forcing)
             setvar!(ᶜv_nudge, "va", colidx, zc_gcm, zc_forcing)
-
-
-            # setvar_insol!(insolation)
-            # setvar_coszen!(cos_zenith)
 
             @. ᶜinv_τ_wind[colidx] = 1 / (6 * 3600)
             @. ᶜinv_τ_scalar[colidx] = compute_gcm_driven_scalar_inv_τ(zc_gcm)
