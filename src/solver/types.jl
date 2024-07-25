@@ -59,7 +59,9 @@ Base.@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
     C_E::FT
 end
 diffuse_momentum(::VerticalDiffusion{DM}) where {DM} = DM
-struct FriersonDiffusion{DM, FT} <: AbstractVerticalDiffusion end
+Base.@kwdef struct FriersonDiffusion{DM, FT} <: AbstractVerticalDiffusion
+    C_E::FT
+end
 diffuse_momentum(::FriersonDiffusion{DM}) where {DM} = DM
 diffuse_momentum(::Nothing) = false
 
