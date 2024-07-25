@@ -17,3 +17,6 @@ surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"
 precip_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]
+diagnostics:
+  - short_name: [edt, evu]
+    period: 1days

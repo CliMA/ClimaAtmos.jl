@@ -360,7 +360,6 @@ end
 
 function compute_boundary_layer_height!(
     h_boundary_layer,
-    f_b::FT,
     dz,
     Ri_local,
     Ri_c::FT,
@@ -391,16 +390,16 @@ function compute_bulk_richardson_number(
     z::FT,
 ) where {FT}
     # TODO Gustiness from params
-    return (grav * z) * (θ_v - θ_v_a) / (θ_v_a * (norm_ua)^2 + FT(10))
+    return (grav * z) * (θ_v - θ_v_a) / (θ_v_a * (max((norm_ua)^2, FT(1))))
 end
-function compute_exchange_coefficient(Ri_a, Ri_c, zₐ, z₀, κ::FT) where {FT}
+function compute_exchange_coefficient(Ri_a, Ri_c, zₐ, z₀, κ::FT, C_E_min::FT) where {FT}
     # Equations (12), (13), (14)
     if Ri_a < FT(0)
         return κ^2 * (log(zₐ / z₀))^(-2)
     elseif FT(0) < Ri_a < Ri_c
         return κ^2 * (log(zₐ / z₀))^(-2) * (1 - Ri_a / Ri_c)^2
     else
-        return FT(0)
+        return C_E_min
     end
 end
 
@@ -551,6 +550,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         z₀ = FT(1e-5)
         Ri_c = FT(1.0)
         f_b = FT(0.1)
+        C_E_min = p.atmos.vert_diff.C_E
 
         # Prepare scratch vars
         ᶠρK_E = p.scratch.ᶠtemp_scalar
@@ -602,7 +602,6 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         h_boundary_layer = f_b .* Fields.level(ᶜz, Spaces.nlevels(axes(Y.c)))
         compute_boundary_layer_height!(
             h_boundary_layer,
-            f_b,
             dz_local,
             Ri,
             Ri_c,
@@ -611,7 +610,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
 
         ## Exchange coefficients
         @. C_E =
-            compute_exchange_coefficient(Ri_a, Ri_c, ᶜΔz_surface ./ 2, z₀, κ)
+            compute_exchange_coefficient(Ri_a, Ri_c, ᶜΔz_surface ./ 2, z₀, κ, C_E_min)
         @. ᶜK_h = eddy_diffusivity_coefficient(
             dz_local,
             z₀,
