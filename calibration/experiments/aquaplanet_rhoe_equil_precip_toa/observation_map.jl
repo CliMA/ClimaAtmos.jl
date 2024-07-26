@@ -1,11 +1,10 @@
 import ClimaCalibrate: observation_map, path_to_ensemble_member
-import ClimaAnalysis: SimDir, get, slice, average_lat, average_lon, window
-import Statistics: var
+import ClimaAnalysis: SimDir, get, slice, average_lat, average_lon, window, times
+import Statistics: var, quantile
 
 function observation_map(iteration)
-    ensemble_size = 12
     output_dir = joinpath("output", "aquaplanet_rhoe_equil_precip_toa")
-    single_member_dims = (47,)
+    single_member_dims = (3,)
     G_ensemble = Array{Float64}(undef, single_member_dims..., ensemble_size)
 
     for m in 1:ensemble_size
@@ -22,32 +21,30 @@ function observation_map(iteration)
     return G_ensemble
 end
 
-const meters = 1.0
 const days = 86400.0
 const time = 360days
 const period = "60d"
-# Cut off first 120 day to get equilibrium, take second level slice
+# simdir = SimDir("calibration/experiments/aquaplanet_rhoe_equil_precip_toa/generate_observations/")
 function process_member_data(simdir::SimDir)
     isempty(simdir) && return NaN
 
-    observations = Vector{Float64}(undef, 47)
-    noise = zeros(Float64, 47, 47)
-
-    rlut = average_lat(average_lon(get(simdir; short_name = "rlut", period)))
-    rsut = average_lat(average_lon(get(simdir; short_name = "rsut", period)))
-    observations[1] = slice(rlut, time = 360days).data[1]
-    observations[2] = slice(rsut, time = 360days).data[1]
-
-    pr = average_lon(get(simdir; short_name = "pr", period))
-    southern_hemisphere_pr = window(pr, "lat", left = -100, right = 0)
-    observations[3:47] .= slice(southern_hemisphere_pr, time = 360days).data
-
-    noise[1,1] = var(rlut.data)
-    noise[2,2] = var(rsut.data)
-
-    southern_hemisphere_pr_variance = var(southern_hemisphere_pr.data,dims=1)
-    foreach(3:47) do i
-        noise[i,i] = southern_hemisphere_pr_variance[i-2]
+    observations = Vector{Float64}(undef, 3)
+    noise = zeros(Float64, 3, 3)
+    for (i, short_name) in enumerate(("rsut", "rlut"))
+        output_var = average_lat(average_lon(get(simdir; short_name, period)))
+        observations[i] = slice(output_var; time).data[1]
+        noise[i,i] = var(output_var.data)
     end
+
+    precip = average_lon(get(simdir; short_name = "pr", period))
+    precip = window(precip, "lat", left = -100, right = 0)
+    precip_slice = slice(precip; time)
+    # Take the bottom percentile because precipitation is negative
+    observations[3] = quantile(precip_slice.data, 0.01)
+    percentiles = map(times(precip)) do time
+        precip_slice = slice(precip; time)
+        quantile(precip_slice.data, 0.01)
+    end
+    noise[3,3] = var(percentiles)
     return observations
 end

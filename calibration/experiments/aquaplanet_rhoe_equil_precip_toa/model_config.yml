@@ -1,6 +1,6 @@
 dt: "120secs"
 t_end: "360days"
-h_elem: 16
+h_elem: 6
 z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0

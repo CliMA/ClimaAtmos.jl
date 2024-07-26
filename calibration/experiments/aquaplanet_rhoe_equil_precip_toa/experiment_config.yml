@@ -1,0 +1,6 @@
+n_iterations: 3
+ensemble_size: 10
+observations: obs_mean.jld2
+noise: obs_noise_cov.jld2
+prior: prior.toml
+output_dir: output/aquaplanet_rhoe_equil_precip_toa

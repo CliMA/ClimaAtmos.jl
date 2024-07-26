@@ -351,7 +351,7 @@ version = "0.26.3"
 
 [[deps.ClimaCalibrate]]
 deps = ["Distributions", "EnsembleKalmanProcesses", "JLD2", "Random", "TOML", "YAML"]
-git-tree-sha1 = "39a5164998bb7b9f54c9504975551525ec0be2d5"
+path = "../../../../ClimaCalibrate.jl"
 uuid = "4347a170-ebd6-470c-89d3-5c705c0cacc2"
 version = "0.0.1"
 

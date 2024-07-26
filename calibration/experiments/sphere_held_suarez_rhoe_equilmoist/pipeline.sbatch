@@ -23,8 +23,8 @@ output_dir = joinpath("output", "sphere_held_suarez_rhoe_equilmoist")
 
 experiment_config = ExperimentConfig(; n_iterations, ensemble_size, 
                                        observations, noise, output_dir, prior)
-slurm_kwargs = kwargs(time = 50, ntasks = 16, mem_per_cpu = "8G")
-eki = calibrate(CaltechHPCBackend, experiment_config; model_interface, slurm_kwargs, verbose=true)
+hpc_kwargs = kwargs(time = 50, ntasks = 16, mem_per_cpu = "8G")
+eki = calibrate(CaltechHPCBackend, experiment_config; model_interface, hpc_kwargs, verbose=true)
 
 include(joinpath(experiment_dir, "postprocessing.jl"))
 prior = get_prior(joinpath(experiment_dir, "prior.toml"))

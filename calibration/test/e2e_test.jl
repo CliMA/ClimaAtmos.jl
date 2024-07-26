@@ -94,11 +94,11 @@ if !(@isdefined backend)
 end
 @info "Running calibration E2E test" backend
 if backend <: CAL.SlurmBackend
-    slurm_kwargs = CAL.kwargs(time = 10)
+    hpc_kwargs = CAL.kwargs(time = 10)
     test_eki = CAL.calibrate(
         backend,
         experiment_config;
-        slurm_kwargs,
+        hpc_kwargs,
         model_interface,
         verbose = true,
     )
