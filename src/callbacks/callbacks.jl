@@ -190,6 +190,13 @@ function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
     rrtmgp_model.weighted_irradiance .= FT(551.58)
 end
 
+function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
+    (; rrtmgp_model) = p.radiation
+    rrtmgp_model.cos_zenith .= Fields.field2array(p.external_forcing.cos_zenith)
+    rrtmgp_model.weighted_irradiance .=
+        Fields.field2array(p.external_forcing.insolation)
+end
+
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     FT = Spaces.undertype(axes(Y.c))
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))

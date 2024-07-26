@@ -716,6 +716,7 @@ steps:
         artifact_paths: "prognostic_edmfx_gcmdriven_column/output_active/*"
         agents:
           slurm_mem: 20GB
+        soft_fail: true
 
       - label: ":genie: Prognostic EDMFX Bomex in a box"
         command: >

@@ -15,7 +15,8 @@ import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 import ..n_mass_flux_subdomains
 import ..gcm_driven_profile
-import ..gcm_driven_reference
+import ..gcm_height
+import ..gcm_driven_profile_tmean
 
 import Thermodynamics.TemperatureProfiles:
     DecayingTemperatureProfile, DryAdiabaticProfile
@@ -28,6 +29,7 @@ import AtmosphericProfilesLibrary as APL
 import SciMLBase
 import Interpolations as Intp
 import NCDatasets as NC
+import Statistics: mean
 
 include("local_state.jl")
 include("atmos_state.jl")
