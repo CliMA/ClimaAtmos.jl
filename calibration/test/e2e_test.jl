@@ -93,15 +93,15 @@ if !(@isdefined backend)
     backend = CAL.get_backend()
 end
 @info "Running calibration E2E test" backend
-if backend <: CAL.SlurmBackend
-    slurm_kwargs = CAL.kwargs(time = 15)
-    test_eki = CAL.calibrate(
-        backend,
-        experiment_config;
-        slurm_kwargs,
-        model_interface,
-        verbose = true,
-    )
+if backend <: CAL.HPCBackend
+    hpc_kwargs =
+        test_eki = CAL.calibrate(
+            backend,
+            experiment_config;
+            hpc_kwargs = CAL.kwargs(time = 15),
+            model_interface,
+            verbose = true,
+        )
 else
     test_eki = CAL.calibrate(backend, experiment_config)
 end

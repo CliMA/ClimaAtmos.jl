@@ -83,7 +83,7 @@ function override_default_config(config_dict::AbstractDict;)
         end
     end
 
-    excluded_keys = Set(["diagnostics"])
+    excluded_keys = ("diagnostics", "job_id")
     unused_keys = filter(
         k -> !haskey(default_config, k) && !(k in excluded_keys),
         keys(config_dict),
