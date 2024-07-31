@@ -4,6 +4,13 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+v0.27.2
+-------
+- Use new aerosol artifact and change start date
+  PR [#3216](https://github.com/CliMA/ClimaAtmos.jl/pull/3216)
+- Add a gpu scaling job with diagnostics
+  PR [#2852](https://github.com/CliMA/ClimaAtmos.jl/pull/2852)
+
 v0.27.1
 -------
 - Allow different aerosol types for radiation.
