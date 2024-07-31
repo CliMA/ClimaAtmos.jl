@@ -1,4 +1,4 @@
-device: CPUSingleThreaded
+device: CUDA
 job_id: "les_isdac_box"
 initial_condition: "ISDAC" 
 subsidence: "ISDAC" 
@@ -20,7 +20,7 @@ x_elem: 16
 y_elem: 16
 z_elem: 100
 z_stretch: false
-dt: "0.1secs" 
+dt: "0.03secs" 
 t_end: "1hours" 
 dt_save_state_to_disk: "10mins"
 # restart_file: "restart/isdac/day0.0.hdf5"
