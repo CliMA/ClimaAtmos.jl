@@ -548,7 +548,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         grav = CAP.grav(params)
         FT = Spaces.undertype(axes(ᶜK_h))
         z₀ = FT(1e-5)
-        Ri_c = FT(1.0)
+        Ri_c = FT(2.0)
         f_b = FT(0.1)
         C_E_min = p.atmos.vert_diff.C_E
 
