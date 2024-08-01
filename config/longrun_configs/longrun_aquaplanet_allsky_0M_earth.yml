@@ -23,3 +23,5 @@ restart_file: "/scratch/clima/slurm-buildkite/climaatmos-gpulongruns/308/climaat
 diagnostics:
   - short_name: [edt, evu, hfes, evspsbl]
     period: 30mins
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr, hfes]
+    period: 30mins
