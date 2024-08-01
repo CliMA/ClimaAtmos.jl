@@ -19,9 +19,9 @@ surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"
 precip_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]
-restart_file: "/scratch/clima/slurm-buildkite/climaatmos-gpulongruns/308/climaatmos-gpulongruns/longrun_aquaplanet_allsky_0M_earth/output_0000/day34.0.hdf5"
+restart_file: "/scratch/clima/slurm-buildkite/climaatmos-gpulongruns/311/climaatmos-gpulongruns/longrun_aquaplanet_allsky_0M_earth/output_0000/day34.18000.hdf5"
 diagnostics:
   - short_name: [edt, evu, hfes, evspsbl]
-    period: 30mins
+    period: 1mins
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr, hfes]
-    period: 30mins
+    period: 1mins
