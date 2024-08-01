@@ -10,7 +10,7 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 dt: "120secs"
 t_end: "360days"
-dt_save_state_to_disk: "1days"
+dt_save_state_to_disk: "1hours"
 moist: "equil"
 rad: "allskywithclear"
 dt_rad: "1hours"
@@ -19,6 +19,7 @@ surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"
 precip_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]
+restart_file: "/scratch/clima/slurm-buildkite/climaatmos-gpulongruns/308/climaatmos-gpulongruns/longrun_aquaplanet_allsky_0M_earth/output_0000/day34.0.hdf5"
 diagnostics:
   - short_name: [edt, evu, hfes, evspsbl]
-    period: 1days
+    period: 30mins
