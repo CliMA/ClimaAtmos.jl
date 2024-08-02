@@ -253,22 +253,24 @@ end
 
 struct GCMDriven
     external_forcing_file::String
+    cfsite_number::String
 end
 function (surface_setup::GCMDriven)(params)
     FT = eltype(params)
-    (; external_forcing_file) = surface_setup
-    T, lhf, shf = FT.(gcm_surface_conditions(external_forcing_file))
+    (; external_forcing_file, cfsite_number) = surface_setup
+    T, lhf, shf =
+        FT.(gcm_surface_conditions(external_forcing_file, cfsite_number))
     z0 = FT(1e-4)  # zrough
     parameterization = MoninObukhov(; z0, fluxes = HeatFluxes(; lhf, shf))
     return SurfaceState(; parameterization, T)
 end
 
-function gcm_surface_conditions(external_forcing_file)
+function gcm_surface_conditions(external_forcing_file, cfsite_number)
     NC.NCDataset(external_forcing_file) do ds
         (
-            mean(gcm_driven_timeseries(ds.group["site23"], "ts")),
-            mean(gcm_driven_timeseries(ds.group["site23"], "hfls")),
-            mean(gcm_driven_timeseries(ds.group["site23"], "hfss")),
+            mean(gcm_driven_timeseries(ds.group[cfsite_number], "ts")),
+            mean(gcm_driven_timeseries(ds.group[cfsite_number], "hfls")),
+            mean(gcm_driven_timeseries(ds.group[cfsite_number], "hfss")),
         )
     end
 end
