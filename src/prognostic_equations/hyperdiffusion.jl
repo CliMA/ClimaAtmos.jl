@@ -76,8 +76,8 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     # Grid scale hyperdiffusion
     @. ᶜ∇²u =
-        C123(wgradₕ(divₕ(p.precomputed.ᶜu))) -
-        C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜu))))
+        C123(wgradₕ(divₕ(p.precomputed.ᶜuʰ))) -
+        C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜu_fake)))) # Do we need full 3D u?
 
     @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.e_tot + ᶜp / Y.c.ρ))
 

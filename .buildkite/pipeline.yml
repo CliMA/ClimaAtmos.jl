@@ -56,142 +56,142 @@ steps:
 
   - wait
 
-  - group: "Regression tests"
-    steps:
+  # - group: "Regression tests"
+  #   steps:
 
-      - label: ":computer: Ensure mse tables are reset when necessary"
-        command: "julia --color=yes --project=examples regression_tests/test_reset.jl"
+  #     - label: ":computer: Ensure mse tables are reset when necessary"
+  #       command: "julia --color=yes --project=examples regression_tests/test_reset.jl"
 
-  - group: "Radiation"
-    steps:
+  # - group: "Radiation"
+  #   steps:
 
-      - label: ":computer: single column radiative equilibrium gray"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_gray.yml
-          --job_id single_column_radiative_equilibrium_gray
-        artifact_paths: "single_column_radiative_equilibrium_gray/output_active/*"
+  #     - label: ":computer: single column radiative equilibrium gray"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/single_column_radiative_equilibrium_gray.yml
+  #         --job_id single_column_radiative_equilibrium_gray
+  #       artifact_paths: "single_column_radiative_equilibrium_gray/output_active/*"
 
-      - label: ":computer: single column radiative equilibrium clearsky"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky.yml
-          --job_id single_column_radiative_equilibrium_clearsky
-        artifact_paths: "single_column_radiative_equilibrium_clearsky/output_active/*"
+  #     - label: ":computer: single column radiative equilibrium clearsky"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky.yml
+  #         --job_id single_column_radiative_equilibrium_clearsky
+  #       artifact_paths: "single_column_radiative_equilibrium_clearsky/output_active/*"
 
-      - label: ":computer: single column radiative equilibrium clearsky prognostic surface temperature"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky_prognostic_surface_temp.yml
-          --job_id single_column_radiative_equilibrium_clearsky_prognostic_surface_temp
-        artifact_paths: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/output_active/*"
+  #     - label: ":computer: single column radiative equilibrium clearsky prognostic surface temperature"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky_prognostic_surface_temp.yml
+  #         --job_id single_column_radiative_equilibrium_clearsky_prognostic_surface_temp
+  #       artifact_paths: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/output_active/*"
 
-      - label: ":computer: single column radiative equilibrium allsky idealized clouds varying insolation"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_allsky_idealized_clouds.yml
-          --job_id single_column_radiative_equilibrium_allsky_idealized_clouds
-        artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/output_active/*"
+  #     - label: ":computer: single column radiative equilibrium allsky idealized clouds varying insolation"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/single_column_radiative_equilibrium_allsky_idealized_clouds.yml
+  #         --job_id single_column_radiative_equilibrium_allsky_idealized_clouds
+  #       artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/output_active/*"
 
-  - group: "Precipitation"
-    steps:
-      - label: ":umbrella: 1-moment precipitation sanity test single column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_precipitation_test.yml
-          --job_id single_column_precipitation_test
-        artifact_paths: "single_column_precipitation_test/output_active/*"
+  # - group: "Precipitation"
+  #   steps:
+  #     - label: ":umbrella: 1-moment precipitation sanity test single column"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/single_column_precipitation_test.yml
+  #         --job_id single_column_precipitation_test
+  #       artifact_paths: "single_column_precipitation_test/output_active/*"
 
-  - group: "Gravity wave"
-    steps:
+  # - group: "Gravity wave"
+  #   steps:
 
-      - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
-        command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_3d/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
+  #       command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl"
+  #       artifact_paths: "nonorographic_gravity_wave_test_3d/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":computer: non-orographic gravity wave parameterization test with MiMA output"
-        command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_mima/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: non-orographic gravity wave parameterization test with MiMA output"
+  #       command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl"
+  #       artifact_paths: "nonorographic_gravity_wave_test_mima/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":computer: non-orographic gravity wave parameterization unit test single column"
-        command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
+  #     - label: ":computer: non-orographic gravity wave parameterization unit test single column"
+  #       command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl"
+  #       artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
 
-      - label: ":computer: orographic gravity wave parameterization unit test for base flux calculation"
-        command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_baseflux.jl"
-        artifact_paths: "orographic_gravity_wave_test_baseflux/*"
+  #     - label: ":computer: orographic gravity wave parameterization unit test for base flux calculation"
+  #       command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_baseflux.jl"
+  #       artifact_paths: "orographic_gravity_wave_test_baseflux/*"
 
-      - label: ":computer: orographic gravity wave parameterization unit test for 3d calculation"
-        command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_3d.jl"
-        artifact_paths: "orographic_gravity_wave_test_3d/*"
+  #     - label: ":computer: orographic gravity wave parameterization unit test for 3d calculation"
+  #       command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_3d.jl"
+  #       artifact_paths: "orographic_gravity_wave_test_3d/*"
 
-      - label: ":computer: single column non-orographic gravity wave parameterization"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
-          --job_id single_column_nonorographic_gravity_wave
-        artifact_paths: "single_column_nonorographic_gravity_wave/*"
+  #     - label: ":computer: single column non-orographic gravity wave parameterization"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
+  #         --job_id single_column_nonorographic_gravity_wave
+  #       artifact_paths: "single_column_nonorographic_gravity_wave/*"
 
-  - group: "Column Examples"
-    steps:
+  # - group: "Column Examples"
+  #   steps:
 
-      - label: ":computer: single column hydrostatic balance float64"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
-          --job_id single_column_hydrostatic_balance_ft64
-        artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
+  #     - label: ":computer: single column hydrostatic balance float64"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
+  #         --job_id single_column_hydrostatic_balance_ft64
+  #       artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
 
-  - group: "Box Examples"
-    steps:
+  # - group: "Box Examples"
+  #   steps:
 
-      - label: ":computer: Box hydrostatic balance (ρe_tot)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/box_hydrostatic_balance_rhoe.yml
-          --job_id box_hydrostatic_balance_rhoe
-        artifact_paths: "box_hydrostatic_balance_rhoe/output_active/*"
+  #     - label: ":computer: Box hydrostatic balance (ρe_tot)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/box_hydrostatic_balance_rhoe.yml
+  #         --job_id box_hydrostatic_balance_rhoe
+  #       artifact_paths: "box_hydrostatic_balance_rhoe/output_active/*"
 
-      - label: ":computer: 3D density current"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/box_density_current_test.yml
-          --job_id box_density_current_test
-        artifact_paths: "box_density_current_test/output_active/*"
+  #     - label: ":computer: 3D density current"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/box_density_current_test.yml
+  #         --job_id box_density_current_test
+  #       artifact_paths: "box_density_current_test/output_active/*"
 
-      - label: ":computer: Box (ρe_tot) rcemipii with diagnostic edmf"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/rcemipii_box_diagnostic_edmfx.yml
-          --job_id rcemipii_box_diagnostic_edmfx
-        artifact_paths: "rcemipii_box_diagnostic_edmfx/output_active/*"
+  #     - label: ":computer: Box (ρe_tot) rcemipii with diagnostic edmf"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/rcemipii_box_diagnostic_edmfx.yml
+  #         --job_id rcemipii_box_diagnostic_edmfx
+  #       artifact_paths: "rcemipii_box_diagnostic_edmfx/output_active/*"
 
   - group: "Plane Examples"
     steps:
-      - label: ":computer: Agnesi linear hydrostatic mountain experiment (uniform)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_agnesi_mountain_test_uniform.yml
-          --job_id plane_agnesi_mountain_test_uniform
-        artifact_paths: "plane_agnesi_mountain_test_uniform/output_active/*"
+      # - label: ":computer: Agnesi linear hydrostatic mountain experiment (uniform)"
+      #   command: >
+      #     julia --color=yes --project=examples examples/hybrid/driver.jl
+      #     --config_file $CONFIG_PATH/plane_agnesi_mountain_test_uniform.yml
+      #     --job_id plane_agnesi_mountain_test_uniform
+      #   artifact_paths: "plane_agnesi_mountain_test_uniform/output_active/*"
 
-      - label: ":computer: Agnesi linear hydrostatic mountain experiment (stretched)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_agnesi_mountain_test_stretched.yml
-          --job_id plane_agnesi_mountain_test_stretched
-        artifact_paths: "plane_agnesi_mountain_test_stretched/output_active/*"
+      # - label: ":computer: Agnesi linear hydrostatic mountain experiment (stretched)"
+      #   command: >
+      #     julia --color=yes --project=examples examples/hybrid/driver.jl
+      #     --config_file $CONFIG_PATH/plane_agnesi_mountain_test_stretched.yml
+      #     --job_id plane_agnesi_mountain_test_stretched
+      #   artifact_paths: "plane_agnesi_mountain_test_stretched/output_active/*"
 
-      - label: ":computer: Density current experiment"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_density_current_test.yml
-          --job_id plane_density_current_test
-        artifact_paths: "plane_density_current_test/output_active/*"
+      # - label: ":computer: Density current experiment"
+      #   command: >
+      #     julia --color=yes --project=examples examples/hybrid/driver.jl
+      #     --config_file $CONFIG_PATH/plane_density_current_test.yml
+      #     --job_id plane_density_current_test
+      #   artifact_paths: "plane_density_current_test/output_active/*"
 
       - label: ":computer: Analytic No Topography Test (2D)"
         command: >
@@ -207,692 +207,692 @@ steps:
           --job_id plane_analytic_no_topography_float32_test
         artifact_paths: "plane_analytic_no_topography_float32_test/output_active/*"
 
-      - label: ":computer: Analytic Cosine Hills Test (2D)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_test.yml
-          --job_id plane_analytic_cosine_hills_test
-        artifact_paths: "plane_analytic_cosine_hills_test/output_active/*"
-
-      - label: ":computer: Analytic Cosine Hills Test (2D, Float32)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_float32_test.yml
-          --job_id plane_analytic_cosine_hills_float32_test
-        artifact_paths: "plane_analytic_cosine_hills_float32_test/output_active/*"
-
-  - group: "Conservation check"
-    steps:
-
-      - label: ":computer: baroclinic wave check conservation"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation.yml
-          --job_id sphere_baroclinic_wave_conservation
-        artifact_paths: "sphere_baroclinic_wave_conservation/output_active/*"
-
-      - label: ":computer: baroclinic wave check conservation float64"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_ft64.yml
-          --job_id sphere_baroclinic_wave_conservation_ft64
-        artifact_paths: "sphere_baroclinic_wave_conservation_ft64/output_active/*"
-      
-      - label: ":computer: baroclinic wave check conservation with sources"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_source.yml
-          --job_id sphere_baroclinic_wave_conservation_source
-        artifact_paths: "sphere_baroclinic_wave_conservation_source/output_active/*"
-
-  - group: "Sphere Examples (Dycore)"
-    steps:
-
-      - label: ":computer: hydrostatic balance (ρe) float64"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_hydrostatic_balance_rhoe_ft64.yml
-          --job_id sphere_hydrostatic_balance_rhoe_ft64
-        artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":computer: baroclinic wave (ρe)"
-        key: sphere_baroclinic_wave_rhoe
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe.yml
-          --job_id sphere_baroclinic_wave_rhoe
-        artifact_paths: "sphere_baroclinic_wave_rhoe/output_active/*"
-
-      - label: ":computer: no lim baroclinic wave (ρe) equilmoist"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist.yml
-          --job_id sphere_baroclinic_wave_rhoe_equilmoist
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_baroclinic_wave_rhoe_equilmoist
-          --out_dir sphere_baroclinic_wave_rhoe_equilmoist/output_active
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/output_active/*"
-        agents:
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-
-      - label: ":computer: no lim baroclinic wave (ρe) equilmoist (deep sphere)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/deep_sphere_baroclinic_wave_rhoe_equilmoist.yml
-          --job_id deep_sphere_baroclinic_wave_rhoe_equilmoist
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id deep_sphere_baroclinic_wave_rhoe_equilmoist
-          --out_dir deep_sphere_baroclinic_wave_rhoe_equilmoist/output_active
-        artifact_paths: "deep_sphere_baroclinic_wave_rhoe_equilmoist/output_active/*"
-        agents:
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-
-      # Add this back when we figure out what to do with SSP and zalesak
-      # - label: ":computer: SSP zalesak tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
+      # - label: ":computer: Analytic Cosine Hills Test (2D)"
       #   command: >
       #     julia --color=yes --project=examples examples/hybrid/driver.jl
-      #     --config_file $CONFIG_PATH/$$JOB_NAME.yml
-      #     --job_id JOB_NAME
-      #   artifact_paths: "$$JOB_NAME/output_active/*"
-      #   agents:
-      #     slurm_mem: 64GB
-      #   env:
-      #     JOB_NAME: "sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"
+      #     --config_file $CONFIG_PATH/plane_analytic_cosine_hills_test.yml
+      #     --job_id plane_analytic_cosine_hills_test
+      #   artifact_paths: "plane_analytic_cosine_hills_test/output_active/*"
 
-      - label: ":computer: held suarez (ρe) hightop"
-        key: sphere_held_suarez_rhoe_hightop
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_hightop.yml
-          --job_id sphere_held_suarez_rhoe_hightop
-        artifact_paths: "sphere_held_suarez_rhoe_hightop/output_active/*"
+      # - label: ":computer: Analytic Cosine Hills Test (2D, Float32)"
+      #   command: >
+      #     julia --color=yes --project=examples examples/hybrid/driver.jl
+      #     --config_file $CONFIG_PATH/plane_analytic_cosine_hills_float32_test.yml
+      #     --job_id plane_analytic_cosine_hills_float32_test
+      #   artifact_paths: "plane_analytic_cosine_hills_float32_test/output_active/*"
 
-      - label: ":computer: no lim held suarez (ρe) equilmoist hightop sponge"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_hightop_sponge.yml
-          --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
+  # - group: "Conservation check"
+  #   steps:
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
-          --out_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge/output_active
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/output_active/*"
-        agents:
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+  #     - label: ":computer: baroclinic wave check conservation"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation.yml
+  #         --job_id sphere_baroclinic_wave_conservation
+  #       artifact_paths: "sphere_baroclinic_wave_conservation/output_active/*"
 
-  - group: "Sphere Examples (Aquaplanet)"
-    steps:
-
-      - label: ":umbrella: aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.yml
-          --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
-        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":computer: aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (raw_topo) high top zonally asymmetric"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.yml
-          --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
-          --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric/output_active
-        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-
-      - label: ":computer: aquaplanet (ρe_tot) nonequilmoist allsky radiation monin_obukhov varying insolation high top 1-moment"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_nonequilmoist_allsky.yml
-          --job_id sphere_aquaplanet_rhoe_nonequilmoist_allsky
-        artifact_paths: "sphere_aquaplanet_rhoe_nonequilmoist_allsky/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":computer: aquaplanet (ρe_tot) slabocean equilmoist allsky radiation monin_obukhov varying insolation"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean.yml
-          --job_id aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean
-        artifact_paths: "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: baroclinic wave check conservation float64"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_ft64.yml
+  #         --job_id sphere_baroclinic_wave_conservation_ft64
+  #       artifact_paths: "sphere_baroclinic_wave_conservation_ft64/output_active/*"
       
-      - label: ":computer: aquaplanet (ρe_tot) rcemipii with diagnostic edmf"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/rcemipii_sphere_diagnostic_edmfx.yml
-          --job_id rcemipii_sphere_diagnostic_edmfx
-        artifact_paths: "rcemipii_sphere_diagnostic_edmfx/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: baroclinic wave check conservation with sources"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_source.yml
+  #         --job_id sphere_baroclinic_wave_conservation_source
+  #       artifact_paths: "sphere_baroclinic_wave_conservation_source/output_active/*"
 
-  - group: "Sphere Examples (Topography)"
-    steps:
+  # - group: "Sphere Examples (Dycore)"
+  #   steps:
 
-      - label: ":computer: baroclinic wave (ρe) topography (dcmip)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_topography_dcmip_rs.yml
-          --job_id sphere_baroclinic_wave_rhoe_topography_dcmip_rs
-        artifact_paths: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs/output_active/*"
+  #     - label: ":computer: hydrostatic balance (ρe) float64"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/sphere_hydrostatic_balance_rhoe_ft64.yml
+  #         --job_id sphere_hydrostatic_balance_rhoe_ft64
+  #       artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":computer: held suarez (ρe) topography (dcmip)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_topography_dcmip.yml
-          --job_id sphere_held_suarez_rhoe_topography_dcmip
-        artifact_paths: "sphere_held_suarez_rhoe_topography_dcmip/output_active/*"
+  #     - label: ":computer: baroclinic wave (ρe)"
+  #       key: sphere_baroclinic_wave_rhoe
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe.yml
+  #         --job_id sphere_baroclinic_wave_rhoe
+  #       artifact_paths: "sphere_baroclinic_wave_rhoe/output_active/*"
 
-      - label: ":computer: held suarez (ρe) equilmoist topography (dcmip)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_topography_dcmip.yml
-          --job_id sphere_held_suarez_rhoe_equilmoist_topography_dcmip
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_topography_dcmip/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: no lim baroclinic wave (ρe) equilmoist"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist.yml
+  #         --job_id sphere_baroclinic_wave_rhoe_equilmoist
 
-      - label: ":computer: Diagnostic DCMIP200 surface elevation spectra"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200.yml
-          --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200
-        artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200/output_active/*"
+  #         julia --color=yes --project=examples regression_tests/test_mse.jl
+  #         --job_id sphere_baroclinic_wave_rhoe_equilmoist
+  #         --out_dir sphere_baroclinic_wave_rhoe_equilmoist/output_active
+  #       artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/output_active/*"
+  #       agents:
+  #         slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: Diagnostic Earth surface elevation spectra"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth.yml
-          --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth
-        artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/output_active/*"
+  #     - label: ":computer: no lim baroclinic wave (ρe) equilmoist (deep sphere)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/deep_sphere_baroclinic_wave_rhoe_equilmoist.yml
+  #         --job_id deep_sphere_baroclinic_wave_rhoe_equilmoist
 
-  - group: "MPI Examples"
-    steps:
+  #         julia --color=yes --project=examples regression_tests/test_mse.jl
+  #         --job_id deep_sphere_baroclinic_wave_rhoe_equilmoist
+  #         --out_dir deep_sphere_baroclinic_wave_rhoe_equilmoist/output_active
+  #       artifact_paths: "deep_sphere_baroclinic_wave_rhoe_equilmoist/output_active/*"
+  #       agents:
+  #         slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: Prep restart for MPI"
-        key: "mpi_baro_wave_make_restart"
-        command: >
-          srun julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $MPI_CONFIG_PATH/mpi_make_restart.yml
-          --job_id mpi_make_restart
-        artifact_paths: "mpi_make_restart/output_active/*"
-        env:
-          CLIMACOMMS_CONTEXT: "MPI"
-        agents:
-          slurm_ntasks: 2
-          slurm_mem: 16G
+  #     # Add this back when we figure out what to do with SSP and zalesak
+  #     # - label: ":computer: SSP zalesak tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
+  #     #   command: >
+  #     #     julia --color=yes --project=examples examples/hybrid/driver.jl
+  #     #     --config_file $CONFIG_PATH/$$JOB_NAME.yml
+  #     #     --job_id JOB_NAME
+  #     #   artifact_paths: "$$JOB_NAME/output_active/*"
+  #     #   agents:
+  #     #     slurm_mem: 64GB
+  #     #   env:
+  #     #     JOB_NAME: "sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"
 
-      - label: ":computer: Test restart for MPI baroclinic wave"
-        key: "restart_mpi_baro_wave"
-        depends_on: "mpi_baro_wave_make_restart"
-        command: >
-          tar xvf mpi_make_restart/output_active/hdf5_files.tar -C mpi_make_restart/output_active
+  #     - label: ":computer: held suarez (ρe) hightop"
+  #       key: sphere_held_suarez_rhoe_hightop
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_hightop.yml
+  #         --job_id sphere_held_suarez_rhoe_hightop
+  #       artifact_paths: "sphere_held_suarez_rhoe_hightop/output_active/*"
 
-          srun julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $MPI_CONFIG_PATH/restart_mpi_baroclinic_wave_rhoe.yml
-          --job_id restart_mpi_baroclinic_wave_rhoe
-        artifact_paths: "restart_mpi_baroclinic_wave_rhoe/output_active/*"
-        env:
-          CLIMACOMMS_CONTEXT: "MPI"
-        agents:
-          slurm_ntasks: 2
-          slurm_mem: 16G
-        timeout_in_minutes: 20
-        soft_fail: true
-        #retry:
-        #  automatic: true
+  #     - label: ":computer: no lim held suarez (ρe) equilmoist hightop sponge"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_hightop_sponge.yml
+  #         --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
 
-      - label: ":computer: MPI no lim aquaplanet (ρe) equilmoist clearsky radiation"
-        command: >
-          srun julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $MPI_CONFIG_PATH/mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky.yml
-          --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky
-        artifact_paths: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky/output_active/*"
-        env:
-          CLIMACOMMS_CONTEXT: "MPI"
-        agents:
-          slurm_ntasks: 2
-          slurm_mem: 16GB
+  #         julia --color=yes --project=examples regression_tests/test_mse.jl
+  #         --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
+  #         --out_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge/output_active
+  #       artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/output_active/*"
+  #       agents:
+  #         slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: Prep for calling remap pipeline"
-        key: "prep_remap"
-        command: >
-          srun julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $MPI_CONFIG_PATH/prep_remap.yml
-          --job_id prep_remap
-        artifact_paths: "prep_remap/output_active/*"
-        env:
-          CLIMACOMMS_CONTEXT: "MPI"
-        agents:
-          slurm_ntasks: 2
-          slurm_mem: 16G
+  # - group: "Sphere Examples (Aquaplanet)"
+  #   steps:
 
-      - label: ":computer: Exercise remap pipeline"
-        key: "remap_pipeline"
-        depends_on: "prep_remap"
-        command: >
-          tar xvf prep_remap/output_active/hdf5_files.tar -C prep_remap/output_active
+  #     - label: ":umbrella: aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.yml
+  #         --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
+  #       artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-          julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
-          --data_dir prep_remap/output_active --out_dir remap_pipeline_output
-        artifact_paths: "remap_pipeline_output/*"
+  #     - label: ":computer: aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (raw_topo) high top zonally asymmetric"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.yml
+  #         --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
 
-  - group: "Configs"
-    steps:
+  #         julia --color=yes --project=examples regression_tests/test_mse.jl
+  #         --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
+  #         --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric/output_active
+  #       artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+  #         slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      # TODO: we should somehow decouple this unit test from the perf env / scripts
-      - label: ":computer: checkbounds"
-        command: >
-          julia --color=yes --check-bounds=yes --project=perf perf/benchmark.jl
-          --config_file $PERF_CONFIG_PATH/checkbounds.yml
-          --job_id checkbounds
-        artifact_paths: "checkbounds/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: aquaplanet (ρe_tot) nonequilmoist allsky radiation monin_obukhov varying insolation high top 1-moment"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_nonequilmoist_allsky.yml
+  #         --job_id sphere_aquaplanet_rhoe_nonequilmoist_allsky
+  #       artifact_paths: "sphere_aquaplanet_rhoe_nonequilmoist_allsky/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-  - group: "Calibration"
-    steps:
-      - label: "Calibration interface unit tests"
-        command: julia --project=calibration/test calibration/test/interface.jl
-      - label: "end to end test"
-        command: julia --project=calibration/test calibration/test/e2e_test.jl
-        artifact_paths: "calibration_end_to_end_test/*"
+  #     - label: ":computer: aquaplanet (ρe_tot) slabocean equilmoist allsky radiation monin_obukhov varying insolation"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean.yml
+  #         --job_id aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean
+  #       artifact_paths: "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+      
+  #     - label: ":computer: aquaplanet (ρe_tot) rcemipii with diagnostic edmf"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/rcemipii_sphere_diagnostic_edmfx.yml
+  #         --job_id rcemipii_sphere_diagnostic_edmfx
+  #       artifact_paths: "rcemipii_sphere_diagnostic_edmfx/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-  - group: "Diagnostic EDMFX"
-    steps:
+  # - group: "Sphere Examples (Topography)"
+  #   steps:
 
-      - label: ":genie: Diagnostic EDMFX test in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_test_box.yml
-          --job_id diagnostic_edmfx_test_box
-        artifact_paths: "diagnostic_edmfx_test_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: baroclinic wave (ρe) topography (dcmip)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_topography_dcmip_rs.yml
+  #         --job_id sphere_baroclinic_wave_rhoe_topography_dcmip_rs
+  #       artifact_paths: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs/output_active/*"
 
-      - label: ":genie: Diagnostic EDMFX GABLS in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_gabls_box.yml
-          --job_id diagnostic_edmfx_gabls_box
-        artifact_paths: "diagnostic_edmfx_gabls_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: held suarez (ρe) topography (dcmip)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_topography_dcmip.yml
+  #         --job_id sphere_held_suarez_rhoe_topography_dcmip
+  #       artifact_paths: "sphere_held_suarez_rhoe_topography_dcmip/output_active/*"
 
-      - label: ":genie: Diagnostic EDMFX Bomex in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_box.yml
-          --job_id diagnostic_edmfx_bomex_box
-        artifact_paths: "diagnostic_edmfx_bomex_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: held suarez (ρe) equilmoist topography (dcmip)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_topography_dcmip.yml
+  #         --job_id sphere_held_suarez_rhoe_equilmoist_topography_dcmip
+  #       artifact_paths: "sphere_held_suarez_rhoe_equilmoist_topography_dcmip/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":genie: Diagnostic EDMFX Bomex stretched grid in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_stretched_box.yml
-          --job_id diagnostic_edmfx_bomex_stretched_box
-        artifact_paths: "diagnostic_edmfx_bomex_stretched_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: Diagnostic DCMIP200 surface elevation spectra"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200.yml
+  #         --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200
+  #       artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200/output_active/*"
 
-      - label: ":genie: Diagnostic EDMFX DYCOMS_RF01 in a box (explicit)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_explicit_box.yml
-          --job_id diagnostic_edmfx_dycoms_rf01_explicit_box
-        artifact_paths: "diagnostic_edmfx_dycoms_rf01_explicit_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: Diagnostic Earth surface elevation spectra"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth.yml
+  #         --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth
+  #       artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/output_active/*"
 
-      - label: ":genie: Diagnostic EDMFX DYCOMS_RF01 in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_box.yml
-          --job_id diagnostic_edmfx_dycoms_rf01_box
-        artifact_paths: "diagnostic_edmfx_dycoms_rf01_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  # - group: "MPI Examples"
+  #   steps:
 
-      - label: ":umbrella: Diagnostic EDMFX DYCOMS_RF02 in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf02_box.yml
-          --job_id diagnostic_edmfx_dycoms_rf02_box
-        artifact_paths: "diagnostic_edmfx_dycoms_rf02_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: Prep restart for MPI"
+  #       key: "mpi_baro_wave_make_restart"
+  #       command: >
+  #         srun julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $MPI_CONFIG_PATH/mpi_make_restart.yml
+  #         --job_id mpi_make_restart
+  #       artifact_paths: "mpi_make_restart/output_active/*"
+  #       env:
+  #         CLIMACOMMS_CONTEXT: "MPI"
+  #       agents:
+  #         slurm_ntasks: 2
+  #         slurm_mem: 16G
 
-      - label: ":umbrella: Diagnostic EDMFX Rico in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_rico_box.yml
-          --job_id diagnostic_edmfx_rico_box
-        artifact_paths: "diagnostic_edmfx_rico_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: Test restart for MPI baroclinic wave"
+  #       key: "restart_mpi_baro_wave"
+  #       depends_on: "mpi_baro_wave_make_restart"
+  #       command: >
+  #         tar xvf mpi_make_restart/output_active/hdf5_files.tar -C mpi_make_restart/output_active
 
-      - label: ":umbrella: Diagnostic EDMFX TRMM in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box.yml
-          --job_id diagnostic_edmfx_trmm_box
-        artifact_paths: "diagnostic_edmfx_trmm_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #         srun julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $MPI_CONFIG_PATH/restart_mpi_baroclinic_wave_rhoe.yml
+  #         --job_id restart_mpi_baroclinic_wave_rhoe
+  #       artifact_paths: "restart_mpi_baroclinic_wave_rhoe/output_active/*"
+  #       env:
+  #         CLIMACOMMS_CONTEXT: "MPI"
+  #       agents:
+  #         slurm_ntasks: 2
+  #         slurm_mem: 16G
+  #       timeout_in_minutes: 20
+  #       soft_fail: true
+  #       #retry:
+  #       #  automatic: true
 
-      - label: ":umbrella: Diagnostic EDMFX TRMM stretched grid in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_stretched_box.yml
-          --job_id diagnostic_edmfx_trmm_stretched_box
-        artifact_paths: "diagnostic_edmfx_trmm_stretched_box/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: MPI no lim aquaplanet (ρe) equilmoist clearsky radiation"
+  #       command: >
+  #         srun julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $MPI_CONFIG_PATH/mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky.yml
+  #         --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky
+  #       artifact_paths: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky/output_active/*"
+  #       env:
+  #         CLIMACOMMS_CONTEXT: "MPI"
+  #       agents:
+  #         slurm_ntasks: 2
+  #         slurm_mem: 16GB
 
-      - label: ":genie: Diagnostic EDMFX TRMM 0M in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box_0M.yml
-          --job_id diagnostic_edmfx_trmm_box_0M
-        artifact_paths: "diagnostic_edmfx_trmm_box_0M/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: Prep for calling remap pipeline"
+  #       key: "prep_remap"
+  #       command: >
+  #         srun julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $MPI_CONFIG_PATH/prep_remap.yml
+  #         --job_id prep_remap
+  #       artifact_paths: "prep_remap/output_active/*"
+  #       env:
+  #         CLIMACOMMS_CONTEXT: "MPI"
+  #       agents:
+  #         slurm_ntasks: 2
+  #         slurm_mem: 16G
 
-      - label: ":genie: Diagnostic EDMFX aquaplanet with TKE"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
-          --job_id diagnostic_edmfx_aquaplanet
+  #     - label: ":computer: Exercise remap pipeline"
+  #       key: "remap_pipeline"
+  #       depends_on: "prep_remap"
+  #       command: >
+  #         tar xvf prep_remap/output_active/hdf5_files.tar -C prep_remap/output_active
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id diagnostic_edmfx_aquaplanet
-          --out_dir diagnostic_edmfx_aquaplanet/output_active
-        artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+  #         julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
+  #         --data_dir prep_remap/output_active --out_dir remap_pipeline_output
+  #       artifact_paths: "remap_pipeline_output/*"
 
-  - group: "Prognostic EDMFX"
-    steps:
+  # - group: "Configs"
+  #   steps:
 
-      - label: ":genie: Prognostic EDMFX advection test in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_column.yml
-          --job_id prognostic_edmfx_adv_test_column
-        artifact_paths: "prognostic_edmfx_adv_test_column/output_active/*"
+  #     # TODO: we should somehow decouple this unit test from the perf env / scripts
+  #     - label: ":computer: checkbounds"
+  #       command: >
+  #         julia --color=yes --check-bounds=yes --project=perf perf/benchmark.jl
+  #         --config_file $PERF_CONFIG_PATH/checkbounds.yml
+  #         --job_id checkbounds
+  #       artifact_paths: "checkbounds/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-        agents:
-          slurm_mem: 20GB
+  # - group: "Calibration"
+  #   steps:
+  #     - label: "Calibration interface unit tests"
+  #       command: julia --project=calibration/test calibration/test/interface.jl
+  #     - label: "end to end test"
+  #       command: julia --project=calibration/test calibration/test/e2e_test.jl
+  #       artifact_paths: "calibration_end_to_end_test/*"
 
-      - label: ":genie: Prognostic EDMFX simple plume test in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_simpleplume_column.yml
-          --job_id prognostic_edmfx_simpleplume_column
-        artifact_paths: "prognostic_edmfx_simpleplume_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  # - group: "Diagnostic EDMFX"
+  #   steps:
 
-      - label: ":genie: Prognostic EDMFX GABLS in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column.yml
-          --job_id prognostic_edmfx_gabls_column
-        artifact_paths: "prognostic_edmfx_gabls_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":genie: Diagnostic EDMFX test in a box"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/diagnostic_edmfx_test_box.yml
+  #         --job_id diagnostic_edmfx_test_box
+  #       artifact_paths: "diagnostic_edmfx_test_box/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX Bomex in a column (pi group)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_pigroup_column.yml
-          --job_id prognostic_edmfx_bomex_pigroup_column
-        artifact_paths: "prognostic_edmfx_bomex_pigroup_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":genie: Diagnostic EDMFX GABLS in a box"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/diagnostic_edmfx_gabls_box.yml
+  #         --job_id diagnostic_edmfx_gabls_box
+  #       artifact_paths: "diagnostic_edmfx_gabls_box/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX Bomex with precribed TKE in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_column.yml
-          --job_id prognostic_edmfx_bomex_fixtke_column
-        artifact_paths: "prognostic_edmfx_bomex_fixtke_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":genie: Diagnostic EDMFX Bomex in a box"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_box.yml
+  #         --job_id diagnostic_edmfx_bomex_box
+  #       artifact_paths: "diagnostic_edmfx_bomex_box/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX Bomex stretched grid in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_stretched_column.yml
-          --job_id prognostic_edmfx_bomex_stretched_column
-        artifact_paths: "prognostic_edmfx_bomex_stretched_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":genie: Diagnostic EDMFX Bomex stretched grid in a box"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_stretched_box.yml
+  #         --job_id diagnostic_edmfx_bomex_stretched_box
+  #       artifact_paths: "diagnostic_edmfx_bomex_stretched_box/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX Bomex in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
-          --job_id prognostic_edmfx_bomex_column
-        artifact_paths: "prognostic_edmfx_bomex_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":genie: Diagnostic EDMFX DYCOMS_RF01 in a box (explicit)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_explicit_box.yml
+  #         --job_id diagnostic_edmfx_dycoms_rf01_explicit_box
+  #       artifact_paths: "diagnostic_edmfx_dycoms_rf01_explicit_box/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
-          --job_id prognostic_edmfx_bomex_column_implicit
-        artifact_paths: "prognostic_edmfx_bomex_column_implicit/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":genie: Diagnostic EDMFX DYCOMS_RF01 in a box"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_box.yml
+  #         --job_id diagnostic_edmfx_dycoms_rf01_box
+  #       artifact_paths: "diagnostic_edmfx_dycoms_rf01_box/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX Dycoms RF01 in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf01_column.yml
-          --job_id prognostic_edmfx_dycoms_rf01_column
-        artifact_paths: "prognostic_edmfx_dycoms_rf01_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":umbrella: Diagnostic EDMFX DYCOMS_RF02 in a box"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf02_box.yml
+  #         --job_id diagnostic_edmfx_dycoms_rf02_box
+  #       artifact_paths: "diagnostic_edmfx_dycoms_rf02_box/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":umbrella: Prognostic EDMFX Rico in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
-          --job_id prognostic_edmfx_rico_column
-        artifact_paths: "prognostic_edmfx_rico_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":umbrella: Diagnostic EDMFX Rico in a box"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/diagnostic_edmfx_rico_box.yml
+  #         --job_id diagnostic_edmfx_rico_box
+  #       artifact_paths: "diagnostic_edmfx_rico_box/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":umbrella: Prognostic EDMFX TRMM in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
-          --job_id prognostic_edmfx_trmm_column
-        artifact_paths: "prognostic_edmfx_trmm_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":umbrella: Diagnostic EDMFX TRMM in a box"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box.yml
+  #         --job_id diagnostic_edmfx_trmm_box
+  #       artifact_paths: "diagnostic_edmfx_trmm_box/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX TRMM with 0-moment in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_0M.yml
-          --job_id prognostic_edmfx_trmm_column_0M
-        artifact_paths: "prognostic_edmfx_trmm_column_0M/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":umbrella: Diagnostic EDMFX TRMM stretched grid in a box"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_stretched_box.yml
+  #         --job_id diagnostic_edmfx_trmm_stretched_box
+  #       artifact_paths: "diagnostic_edmfx_trmm_stretched_box/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX GCM driven in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_gcmdriven_column.yml
-          --job_id prognostic_edmfx_gcmdriven_column
-        artifact_paths: "prognostic_edmfx_gcmdriven_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-        soft_fail: true
+  #     - label: ":genie: Diagnostic EDMFX TRMM 0M in a box"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box_0M.yml
+  #         --job_id diagnostic_edmfx_trmm_box_0M
+  #       artifact_paths: "diagnostic_edmfx_trmm_box_0M/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX Bomex in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
-          --job_id prognostic_edmfx_bomex_box
-        artifact_paths: "prognostic_edmfx_bomex_box/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":genie: Diagnostic EDMFX aquaplanet with TKE"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
+  #         --job_id diagnostic_edmfx_aquaplanet
 
-      - label: ":genie: Prognostic EDMFX aquaplanet"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
-          --job_id prognostic_edmfx_aquaplanet
-        artifact_paths: "prognostic_edmfx_aquaplanet/output_active/*"
-        agents:
-          slurm_mem: 20GB
+  #         julia --color=yes --project=examples regression_tests/test_mse.jl
+  #         --job_id diagnostic_edmfx_aquaplanet
+  #         --out_dir diagnostic_edmfx_aquaplanet/output_active
+  #       artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+  #         slurm_constraint: icelake|cascadelake|skylake|epyc
+
+  # - group: "Prognostic EDMFX"
+  #   steps:
+
+  #     - label: ":genie: Prognostic EDMFX advection test in a column"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_column.yml
+  #         --job_id prognostic_edmfx_adv_test_column
+  #       artifact_paths: "prognostic_edmfx_adv_test_column/output_active/*"
+
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":genie: Prognostic EDMFX simple plume test in a column"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_simpleplume_column.yml
+  #         --job_id prognostic_edmfx_simpleplume_column
+  #       artifact_paths: "prognostic_edmfx_simpleplume_column/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":genie: Prognostic EDMFX GABLS in a column"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column.yml
+  #         --job_id prognostic_edmfx_gabls_column
+  #       artifact_paths: "prognostic_edmfx_gabls_column/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":genie: Prognostic EDMFX Bomex in a column (pi group)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_bomex_pigroup_column.yml
+  #         --job_id prognostic_edmfx_bomex_pigroup_column
+  #       artifact_paths: "prognostic_edmfx_bomex_pigroup_column/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":genie: Prognostic EDMFX Bomex with precribed TKE in a column"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_column.yml
+  #         --job_id prognostic_edmfx_bomex_fixtke_column
+  #       artifact_paths: "prognostic_edmfx_bomex_fixtke_column/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":genie: Prognostic EDMFX Bomex stretched grid in a column"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_bomex_stretched_column.yml
+  #         --job_id prognostic_edmfx_bomex_stretched_column
+  #       artifact_paths: "prognostic_edmfx_bomex_stretched_column/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":genie: Prognostic EDMFX Bomex in a column"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
+  #         --job_id prognostic_edmfx_bomex_column
+  #       artifact_paths: "prognostic_edmfx_bomex_column/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
+  #         --job_id prognostic_edmfx_bomex_column_implicit
+  #       artifact_paths: "prognostic_edmfx_bomex_column_implicit/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":genie: Prognostic EDMFX Dycoms RF01 in a column"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf01_column.yml
+  #         --job_id prognostic_edmfx_dycoms_rf01_column
+  #       artifact_paths: "prognostic_edmfx_dycoms_rf01_column/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":umbrella: Prognostic EDMFX Rico in a column"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
+  #         --job_id prognostic_edmfx_rico_column
+  #       artifact_paths: "prognostic_edmfx_rico_column/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":umbrella: Prognostic EDMFX TRMM in a column"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
+  #         --job_id prognostic_edmfx_trmm_column
+  #       artifact_paths: "prognostic_edmfx_trmm_column/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":genie: Prognostic EDMFX TRMM with 0-moment in a column"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_0M.yml
+  #         --job_id prognostic_edmfx_trmm_column_0M
+  #       artifact_paths: "prognostic_edmfx_trmm_column_0M/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":genie: Prognostic EDMFX GCM driven in a column"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_gcmdriven_column.yml
+  #         --job_id prognostic_edmfx_gcmdriven_column
+  #       artifact_paths: "prognostic_edmfx_gcmdriven_column/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
+  #       soft_fail: true
+
+  #     - label: ":genie: Prognostic EDMFX Bomex in a box"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
+  #         --job_id prognostic_edmfx_bomex_box
+  #       artifact_paths: "prognostic_edmfx_bomex_box/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":genie: Prognostic EDMFX aquaplanet"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
+  #         --job_id prognostic_edmfx_aquaplanet
+  #       artifact_paths: "prognostic_edmfx_aquaplanet/output_active/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
   - group: "GPU"
     steps:
 
-      - label: "GPU: baroclinic wave"
-        key: "gpu_baroclinic_wave_rhoe"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/gpu_baroclinic_wave_rhoe.yml
-          --job_id gpu_baroclinic_wave_rhoe
-        artifact_paths: "gpu_implicit_barowave_ref/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_mem: 16G
-          slurm_gpus: 1
+      # - label: "GPU: baroclinic wave"
+      #   key: "gpu_baroclinic_wave_rhoe"
+      #   command: >
+      #     julia --color=yes --project=examples examples/hybrid/driver.jl
+      #     --config_file $CONFIG_PATH/gpu_baroclinic_wave_rhoe.yml
+      #     --job_id gpu_baroclinic_wave_rhoe
+      #   artifact_paths: "gpu_implicit_barowave_ref/output_active/*"
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_mem: 16G
+      #     slurm_gpus: 1
 
-      - label: "GPU: compare BW with CPU"
-        command: >
-          tar xvf sphere_baroclinic_wave_rhoe/output_active/hdf5_files.tar -C sphere_baroclinic_wave_rhoe
+      # - label: "GPU: compare BW with CPU"
+      #   command: >
+      #     tar xvf sphere_baroclinic_wave_rhoe/output_active/hdf5_files.tar -C sphere_baroclinic_wave_rhoe
 
-          tar xvf gpu_baroclinic_wave_rhoe/output_active/hdf5_files.tar -C gpu_baroclinic_wave_rhoe
+      #     tar xvf gpu_baroclinic_wave_rhoe/output_active/hdf5_files.tar -C gpu_baroclinic_wave_rhoe
 
-          julia --color=yes --project=examples post_processing/compare_outputs.jl
-          --output_folder_1 sphere_baroclinic_wave_rhoe
-          --output_folder_2 gpu_baroclinic_wave_rhoe --t_end 10days
-          --compare_state false
-        depends_on:
-          - "sphere_baroclinic_wave_rhoe"
-          - "gpu_baroclinic_wave_rhoe"
+      #     julia --color=yes --project=examples post_processing/compare_outputs.jl
+      #     --output_folder_1 sphere_baroclinic_wave_rhoe
+      #     --output_folder_2 gpu_baroclinic_wave_rhoe --t_end 10days
+      #     --compare_state false
+      #   depends_on:
+      #     - "sphere_baroclinic_wave_rhoe"
+      #     - "gpu_baroclinic_wave_rhoe"
 
-      - label: "GPU: GPU dry baroclinic wave"
-        key: "target_gpu_implicit_baroclinic_wave"
-        command:
-          - mkdir -p target_gpu_implicit_baroclinic_wave
-          - >
-            nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/output_active/report
-            julia --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
-            --job_id target_gpu_implicit_baroclinic_wave
-        artifact_paths: "target_gpu_implicit_baroclinic_wave/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 32G
+      # - label: "GPU: GPU dry baroclinic wave"
+      #   key: "target_gpu_implicit_baroclinic_wave"
+      #   command:
+      #     - mkdir -p target_gpu_implicit_baroclinic_wave
+      #     - >
+      #       nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/output_active/report
+      #       julia --color=yes --project=examples examples/hybrid/driver.jl
+      #       --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
+      #       --job_id target_gpu_implicit_baroclinic_wave
+      #   artifact_paths: "target_gpu_implicit_baroclinic_wave/output_active/*"
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_mem: 32G
 
-      - label: "GPU: GPU dry baroclinic wave - 4 gpus"
-        key: "target_gpu_implicit_baroclinic_wave_4process"
-        command:
-            # nsys profile --trace=nvtx,cuda,mpi --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
-          - mkdir -p target_gpu_implicit_baroclinic_wave_4process
-          - >
-            srun --cpu-bind=threads --cpus-per-task=4
-            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave_4process.yml
-            --job_id target_gpu_implicit_baroclinic_wave_4process
-        artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
-        env:
-          CLIMACOMMS_CONTEXT: "MPI"
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
-          slurm_ntasks: 4
-          slurm_mem: 32G
+      # - label: "GPU: GPU dry baroclinic wave - 4 gpus"
+      #   key: "target_gpu_implicit_baroclinic_wave_4process"
+      #   command:
+      #       # nsys profile --trace=nvtx,cuda,mpi --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
+      #     - mkdir -p target_gpu_implicit_baroclinic_wave_4process
+      #     - >
+      #       srun --cpu-bind=threads --cpus-per-task=4
+      #       julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+      #       --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave_4process.yml
+      #       --job_id target_gpu_implicit_baroclinic_wave_4process
+      #   artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
+      #   env:
+      #     CLIMACOMMS_CONTEXT: "MPI"
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_gpus_per_task: 1
+      #     slurm_cpus_per_task: 4
+      #     slurm_ntasks: 4
+      #     slurm_mem: 32G
 
-      - label: "GPU: GPU moist Held-Suarez"
-        command:
-          - >
-            nsys profile --trace=nvtx,cuda --output=central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
-            julia --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file $CONFIG_PATH/central_gpu_hs_rhoe_equil_55km_nz63_0M.yml
-            --job_id central_gpu_hs_rhoe_equil_55km_nz63_0M
-        artifact_paths: "central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16G
+      # - label: "GPU: GPU moist Held-Suarez"
+      #   command:
+      #     - >
+      #       nsys profile --trace=nvtx,cuda --output=central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
+      #       julia --color=yes --project=examples examples/hybrid/driver.jl
+      #       --config_file $CONFIG_PATH/central_gpu_hs_rhoe_equil_55km_nz63_0M.yml
+      #       --job_id central_gpu_hs_rhoe_equil_55km_nz63_0M
+      #   artifact_paths: "central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_mem: 16G
 
-      - label: "GPU: GPU moist Held-Suarez cloud diagnostics per stage"
-        command:
-          - >
-            nsys profile --trace=nvtx,cuda --output=central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
-            julia --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file $CONFIG_PATH/central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M.yml
-            --job_id central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M
-        artifact_paths: "central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16G
+      # - label: "GPU: GPU moist Held-Suarez cloud diagnostics per stage"
+      #   command:
+      #     - >
+      #       nsys profile --trace=nvtx,cuda --output=central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
+      #       julia --color=yes --project=examples examples/hybrid/driver.jl
+      #       --config_file $CONFIG_PATH/central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M.yml
+      #       --job_id central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M
+      #   artifact_paths: "central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_mem: 16G
 
-      - label: ":umbrella: GPU: gpu_aquaplanet_dyamond"
-        command:
-          - mkdir -p gpu_aquaplanet_dyamond
-          - >
-            nsys profile --trace=nvtx,cuda --output=gpu_aquaplanet_dyamond/output_active/report
-            julia --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${CONFIG_PATH}/gpu_aquaplanet_dyamond.yml
-            --job_id gpu_aquaplanet_dyamond
-        artifact_paths: "gpu_aquaplanet_dyamond/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+      # - label: ":umbrella: GPU: gpu_aquaplanet_dyamond"
+      #   command:
+      #     - mkdir -p gpu_aquaplanet_dyamond
+      #     - >
+      #       nsys profile --trace=nvtx,cuda --output=gpu_aquaplanet_dyamond/output_active/report
+      #       julia --color=yes --project=examples examples/hybrid/driver.jl
+      #       --config_file ${CONFIG_PATH}/gpu_aquaplanet_dyamond.yml
+      #       --job_id gpu_aquaplanet_dyamond
+      #   artifact_paths: "gpu_aquaplanet_dyamond/output_active/*"
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_gpus: 1
 
-      - label: "GPU: Diagnostic EDMFX aquaplanet"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/gpu_diagnostic_edmfx_aquaplanet.yml
-          --job_id gpu_diagnostic_edmfx_aquaplanet
-        artifact_paths: "gpu_diagnostic_edmfx_aquaplanet/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 20G
+      # - label: "GPU: Diagnostic EDMFX aquaplanet"
+      #   command: >
+      #     julia --color=yes --project=examples examples/hybrid/driver.jl
+      #     --config_file $CONFIG_PATH/gpu_diagnostic_edmfx_aquaplanet.yml
+      #     --job_id gpu_diagnostic_edmfx_aquaplanet
+      #   artifact_paths: "gpu_diagnostic_edmfx_aquaplanet/output_active/*"
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_mem: 20G
 
-      - label: "GPU: Prognostic EDMFX aquaplanet"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/gpu_prognostic_edmfx_aquaplanet.yml
-          --job_id gpu_prognostic_edmfx_aquaplanet
-        artifact_paths: "gpu_prognostic_edmfx_aquaplanet/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 20G
+      # - label: "GPU: Prognostic EDMFX aquaplanet"
+      #   command: >
+      #     julia --color=yes --project=examples examples/hybrid/driver.jl
+      #     --config_file $CONFIG_PATH/gpu_prognostic_edmfx_aquaplanet.yml
+      #     --job_id gpu_prognostic_edmfx_aquaplanet
+      #   artifact_paths: "gpu_prognostic_edmfx_aquaplanet/output_active/*"
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_mem: 20G
 
       - label: "GPU: Analytic No Topography Test (2D, Long Duration)"
         command: >
@@ -993,529 +993,529 @@ steps:
         agents:
           slurm_gpus: 1
 
-      - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_long_test.yml
-          --job_id gpu_plane_analytic_cosine_hills_long_test
-        artifact_paths: "gpu_plane_analytic_cosine_hills_long_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_cosine_hills_long_test.yml
+  #         --job_id gpu_plane_analytic_cosine_hills_long_test
+  #       artifact_paths: "gpu_plane_analytic_cosine_hills_long_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Float32)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_long_float32_test.yml
-          --job_id gpu_plane_analytic_cosine_hills_long_float32_test
-        artifact_paths: "gpu_plane_analytic_cosine_hills_long_float32_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Float32)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_cosine_hills_long_float32_test.yml
+  #         --job_id gpu_plane_analytic_cosine_hills_long_float32_test
+  #       artifact_paths: "gpu_plane_analytic_cosine_hills_long_float32_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Stronger Sponge)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_strong_sponge_long_test.yml
-          --job_id gpu_plane_analytic_cosine_hills_strong_sponge_long_test
-        artifact_paths: "gpu_plane_analytic_cosine_hills_strong_sponge_long_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Stronger Sponge)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_cosine_hills_strong_sponge_long_test.yml
+  #         --job_id gpu_plane_analytic_cosine_hills_strong_sponge_long_test
+  #       artifact_paths: "gpu_plane_analytic_cosine_hills_strong_sponge_long_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Weaker Sponge)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_weak_sponge_long_test.yml
-          --job_id gpu_plane_analytic_cosine_hills_weak_sponge_long_test
-        artifact_paths: "gpu_plane_analytic_cosine_hills_weak_sponge_long_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Weaker Sponge)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_cosine_hills_weak_sponge_long_test.yml
+  #         --job_id gpu_plane_analytic_cosine_hills_weak_sponge_long_test
+  #       artifact_paths: "gpu_plane_analytic_cosine_hills_weak_sponge_long_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Higher Domain Top)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_high_top_long_test.yml
-          --job_id gpu_plane_analytic_cosine_hills_high_top_long_test
-        artifact_paths: "gpu_plane_analytic_cosine_hills_high_top_long_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Higher Domain Top)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_cosine_hills_high_top_long_test.yml
+  #         --job_id gpu_plane_analytic_cosine_hills_high_top_long_test
+  #       artifact_paths: "gpu_plane_analytic_cosine_hills_high_top_long_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Higher Domain Top, Higher Sponge)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_cosine_hills_high_top_high_sponge_long_test.yml
-          --job_id gpu_plane_analytic_cosine_hills_high_top_high_sponge_long_test
-        artifact_paths: "gpu_plane_analytic_cosine_hills_high_top_high_sponge_long_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Cosine Hills Test (2D, Long Duration, Higher Domain Top, Higher Sponge)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_cosine_hills_high_top_high_sponge_long_test.yml
+  #         --job_id gpu_plane_analytic_cosine_hills_high_top_high_sponge_long_test
+  #       artifact_paths: "gpu_plane_analytic_cosine_hills_high_top_high_sponge_long_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Cosine Hills Test (Extruded 2D)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/extruded_plane_analytic_cosine_hills_test.yml
-          --job_id gpu_extruded_plane_analytic_cosine_hills_test
-        artifact_paths: "gpu_extruded_plane_analytic_cosine_hills_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Cosine Hills Test (Extruded 2D)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/extruded_plane_analytic_cosine_hills_test.yml
+  #         --job_id gpu_extruded_plane_analytic_cosine_hills_test
+  #       artifact_paths: "gpu_extruded_plane_analytic_cosine_hills_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Cosine Hills Test (3D)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/box_analytic_cosine_hills_test.yml
-          --job_id gpu_box_analytic_cosine_hills_test
-        artifact_paths: "gpu_box_analytic_cosine_hills_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Cosine Hills Test (3D)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/box_analytic_cosine_hills_test.yml
+  #         --job_id gpu_box_analytic_cosine_hills_test
+  #       artifact_paths: "gpu_box_analytic_cosine_hills_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Cosine Hills Test (3D, Float32)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/box_analytic_cosine_hills_float32_test.yml
-          --job_id gpu_box_analytic_cosine_hills_float32_test
-        artifact_paths: "gpu_box_analytic_cosine_hills_float32_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Cosine Hills Test (3D, Float32)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/box_analytic_cosine_hills_float32_test.yml
+  #         --job_id gpu_box_analytic_cosine_hills_float32_test
+  #       artifact_paths: "gpu_box_analytic_cosine_hills_float32_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Agnesi Mountain Test (2D)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_agnesi_mountain_test.yml
-          --job_id gpu_plane_analytic_agnesi_mountain_test
-        artifact_paths: "gpu_plane_analytic_agnesi_mountain_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Agnesi Mountain Test (2D)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_agnesi_mountain_test.yml
+  #         --job_id gpu_plane_analytic_agnesi_mountain_test
+  #       artifact_paths: "gpu_plane_analytic_agnesi_mountain_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Huge Schar Mountain Test (2D)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_huge_schar_mountain_test.yml
-          --job_id gpu_plane_analytic_huge_schar_mountain_test
-        artifact_paths: "gpu_plane_analytic_huge_schar_mountain_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Huge Schar Mountain Test (2D)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_huge_schar_mountain_test.yml
+  #         --job_id gpu_plane_analytic_huge_schar_mountain_test
+  #       artifact_paths: "gpu_plane_analytic_huge_schar_mountain_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Big Schar Mountain Test (2D)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_big_schar_mountain_test.yml
-          --job_id gpu_plane_analytic_big_schar_mountain_test
-        artifact_paths: "gpu_plane_analytic_big_schar_mountain_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Big Schar Mountain Test (2D)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_big_schar_mountain_test.yml
+  #         --job_id gpu_plane_analytic_big_schar_mountain_test
+  #       artifact_paths: "gpu_plane_analytic_big_schar_mountain_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Schar Mountain Test (2D)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_test.yml
-          --job_id gpu_plane_analytic_schar_mountain_test
-        artifact_paths: "gpu_plane_analytic_schar_mountain_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Schar Mountain Test (2D)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_schar_mountain_test.yml
+  #         --job_id gpu_plane_analytic_schar_mountain_test
+  #       artifact_paths: "gpu_plane_analytic_schar_mountain_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Small Schar Mountain Test (2D)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_small_schar_mountain_test.yml
-          --job_id gpu_plane_analytic_small_schar_mountain_test
-        artifact_paths: "gpu_plane_analytic_small_schar_mountain_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Small Schar Mountain Test (2D)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_small_schar_mountain_test.yml
+  #         --job_id gpu_plane_analytic_small_schar_mountain_test
+  #       artifact_paths: "gpu_plane_analytic_small_schar_mountain_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Tiny Schar Mountain Test (2D)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_tiny_schar_mountain_test.yml
-          --job_id gpu_plane_analytic_tiny_schar_mountain_test
-        artifact_paths: "gpu_plane_analytic_tiny_schar_mountain_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Tiny Schar Mountain Test (2D)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_tiny_schar_mountain_test.yml
+  #         --job_id gpu_plane_analytic_tiny_schar_mountain_test
+  #       artifact_paths: "gpu_plane_analytic_tiny_schar_mountain_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Teeny Tiny Schar Mountain Test (2D)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_teeny_tiny_schar_mountain_test.yml
-          --job_id gpu_plane_analytic_teeny_tiny_schar_mountain_test
-        artifact_paths: "gpu_plane_analytic_teeny_tiny_schar_mountain_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Teeny Tiny Schar Mountain Test (2D)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_teeny_tiny_schar_mountain_test.yml
+  #         --job_id gpu_plane_analytic_teeny_tiny_schar_mountain_test
+  #       artifact_paths: "gpu_plane_analytic_teeny_tiny_schar_mountain_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Schar Mountain Test (2D, Float32)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_float32_test.yml
-          --job_id gpu_plane_analytic_schar_mountain_float32_test
-        artifact_paths: "gpu_plane_analytic_schar_mountain_float32_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Schar Mountain Test (2D, Float32)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_schar_mountain_float32_test.yml
+  #         --job_id gpu_plane_analytic_schar_mountain_float32_test
+  #       artifact_paths: "gpu_plane_analytic_schar_mountain_float32_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Tiny Schar Mountain Test (2D, Float32)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_tiny_schar_mountain_float32_test.yml
-          --job_id gpu_plane_analytic_tiny_schar_mountain_float32_test
-        artifact_paths: "gpu_plane_analytic_tiny_schar_mountain_float32_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Tiny Schar Mountain Test (2D, Float32)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_tiny_schar_mountain_float32_test.yml
+  #         --job_id gpu_plane_analytic_tiny_schar_mountain_float32_test
+  #       artifact_paths: "gpu_plane_analytic_tiny_schar_mountain_float32_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Schar Mountain Test (2D, No Hyperdiff)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_no_hyperdiff_test.yml
-          --job_id gpu_plane_analytic_schar_mountain_no_hyperdiff_test
-        artifact_paths: "gpu_plane_analytic_schar_mountain_no_hyperdiff_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Schar Mountain Test (2D, No Hyperdiff)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_schar_mountain_no_hyperdiff_test.yml
+  #         --job_id gpu_plane_analytic_schar_mountain_no_hyperdiff_test
+  #       artifact_paths: "gpu_plane_analytic_schar_mountain_no_hyperdiff_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Schar Mountain Test (2D, No Hyperdiff, Float32)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_no_hyperdiff_float32_test.yml
-          --job_id gpu_plane_analytic_schar_mountain_no_hyperdiff_float32_test
-        artifact_paths: "gpu_plane_analytic_schar_mountain_no_hyperdiff_float32_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Schar Mountain Test (2D, No Hyperdiff, Float32)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_schar_mountain_no_hyperdiff_float32_test.yml
+  #         --job_id gpu_plane_analytic_schar_mountain_no_hyperdiff_float32_test
+  #       artifact_paths: "gpu_plane_analytic_schar_mountain_no_hyperdiff_float32_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Schar Mountain Test (2D, Stretched Grid)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_stretched_grid_test.yml
-          --job_id gpu_plane_analytic_schar_mountain_stretched_grid_test
-        artifact_paths: "gpu_plane_analytic_schar_mountain_stretched_grid_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Schar Mountain Test (2D, Stretched Grid)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_schar_mountain_stretched_grid_test.yml
+  #         --job_id gpu_plane_analytic_schar_mountain_stretched_grid_test
+  #       artifact_paths: "gpu_plane_analytic_schar_mountain_stretched_grid_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Schar Mountain Test (2D, Higher Horizontal Resolution)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_horz_res_test.yml
-          --job_id gpu_plane_analytic_schar_mountain_high_horz_res_test
-        artifact_paths: "gpu_plane_analytic_schar_mountain_high_horz_res_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Schar Mountain Test (2D, Higher Horizontal Resolution)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_horz_res_test.yml
+  #         --job_id gpu_plane_analytic_schar_mountain_high_horz_res_test
+  #       artifact_paths: "gpu_plane_analytic_schar_mountain_high_horz_res_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Schar Mountain Test (2D, Higher Vertical Resolution)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_vert_res_test.yml
-          --job_id gpu_plane_analytic_schar_mountain_high_vert_res_test
-        artifact_paths: "gpu_plane_analytic_schar_mountain_high_vert_res_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Schar Mountain Test (2D, Higher Vertical Resolution)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_vert_res_test.yml
+  #         --job_id gpu_plane_analytic_schar_mountain_high_vert_res_test
+  #       artifact_paths: "gpu_plane_analytic_schar_mountain_high_vert_res_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Schar Mountain Test (2D, Higher Domain Top)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_top_test.yml
-          --job_id gpu_plane_analytic_schar_mountain_high_top_test
-        artifact_paths: "gpu_plane_analytic_schar_mountain_high_top_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Schar Mountain Test (2D, Higher Domain Top)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_top_test.yml
+  #         --job_id gpu_plane_analytic_schar_mountain_high_top_test
+  #       artifact_paths: "gpu_plane_analytic_schar_mountain_high_top_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Schar Mountain Test (2D, Higher Domain Top, Higher Sponge)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_top_high_sponge_test.yml
-          --job_id gpu_plane_analytic_schar_mountain_high_top_high_sponge_test
-        artifact_paths: "gpu_plane_analytic_schar_mountain_high_top_high_sponge_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Schar Mountain Test (2D, Higher Domain Top, Higher Sponge)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_top_high_sponge_test.yml
+  #         --job_id gpu_plane_analytic_schar_mountain_high_top_high_sponge_test
+  #       artifact_paths: "gpu_plane_analytic_schar_mountain_high_top_high_sponge_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: "GPU: Analytic Schar Mountain Test (2D, Higher Domain Top, Weaker and Higher Sponge)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_top_weak_high_sponge_test.yml
-          --job_id gpu_plane_analytic_schar_mountain_high_top_weak_high_sponge_test
-        artifact_paths: "gpu_plane_analytic_schar_mountain_high_top_weak_high_sponge_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #     - label: "GPU: Analytic Schar Mountain Test (2D, Higher Domain Top, Weaker and Higher Sponge)"
+  #       command: >
+  #         julia --color=yes --project=examples examples/hybrid/driver.jl
+  #         --config_file $CONFIG_PATH/plane_analytic_schar_mountain_high_top_weak_high_sponge_test.yml
+  #         --job_id gpu_plane_analytic_schar_mountain_high_top_weak_high_sponge_test
+  #       artifact_paths: "gpu_plane_analytic_schar_mountain_high_top_weak_high_sponge_test/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-  - group: "Benchmarks"
-    steps:
+  # - group: "Benchmarks"
+  #   steps:
 
-      - label: ":computer: Benchmark: GPU implicit baro wave wrt h_elem"
-        key: "gpu_implicit_barowave_wrt_h_elem"
-        command: >
+  #     - label: ":computer: Benchmark: GPU implicit baro wave wrt h_elem"
+  #       key: "gpu_implicit_barowave_wrt_h_elem"
+  #       command: >
 
-          julia --color=yes --project=examples perf/benchmark_dump.jl
-          --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_wrt_h_elem.yml
-          --job_id gpu_implicit_barowave_wrt_h_elem
-        artifact_paths: "gpu_implicit_barowave_wrt_h_elem/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-        soft_fail: true
+  #         julia --color=yes --project=examples perf/benchmark_dump.jl
+  #         --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_wrt_h_elem.yml
+  #         --job_id gpu_implicit_barowave_wrt_h_elem
+  #       artifact_paths: "gpu_implicit_barowave_wrt_h_elem/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
+  #       soft_fail: true
 
-      - label: ":computer: Benchmark: GPU implicit baro wave"
-        command: >
+  #     - label: ":computer: Benchmark: GPU implicit baro wave"
+  #       command: >
 
-          julia --color=yes --project=examples perf/benchmark_step.jl
-          --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave.yml
-          --job_id gpu_implicit_barowave
-        artifact_paths: "gpu_implicit_barowave/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
+  #         julia --color=yes --project=examples perf/benchmark_step.jl
+  #         --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave.yml
+  #         --job_id gpu_implicit_barowave
+  #       artifact_paths: "gpu_implicit_barowave/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_gpus: 1
 
-      - label: ":computer: Benchmark: GPU implicit baro wave moist"
-        command: >
+  #     - label: ":computer: Benchmark: GPU implicit baro wave moist"
+  #       command: >
 
-          julia --color=yes --project=examples perf/benchmark_step.jl
-          --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_moist.yml
-          --job_id gpu_implicit_barowave_moist
-        artifact_paths: "gpu_implicit_barowave_moist/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_mem: 16G
-          slurm_gpus: 1
+  #         julia --color=yes --project=examples perf/benchmark_step.jl
+  #         --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_moist.yml
+  #         --job_id gpu_implicit_barowave_moist
+  #       artifact_paths: "gpu_implicit_barowave_moist/output_active/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_mem: 16G
+  #         slurm_gpus: 1
 
-      - label: ":computer: Benchmark: CPU implicit baro wave"
-        command: >
-          julia --color=yes --project=examples perf/benchmark_step.jl
-          --config_file $PERF_CONFIG_PATH/cpu_implicit_barowave.yml
-          --job_id cpu_implicit_barowave
-        artifact_paths: "cpu_implicit_barowave/output_active/*"
+  #     - label: ":computer: Benchmark: CPU implicit baro wave"
+  #       command: >
+  #         julia --color=yes --project=examples perf/benchmark_step.jl
+  #         --config_file $PERF_CONFIG_PATH/cpu_implicit_barowave.yml
+  #         --job_id cpu_implicit_barowave
+  #       artifact_paths: "cpu_implicit_barowave/output_active/*"
 
-      # Benchmarks
-      - label: ":computer: Benchmark: CPU perf target (default)"
-        command: >
-          julia --color=yes --project=perf perf/benchmark.jl
-          --config_file $PERF_CONFIG_PATH/bm_perf_target.yml
-          --job_id bm_perf_target
-        agents:
-          slurm_mem: 24GB
+  #     # Benchmarks
+  #     - label: ":computer: Benchmark: CPU perf target (default)"
+  #       command: >
+  #         julia --color=yes --project=perf perf/benchmark.jl
+  #         --config_file $PERF_CONFIG_PATH/bm_perf_target.yml
+  #         --job_id bm_perf_target
+  #       agents:
+  #         slurm_mem: 24GB
 
-      - label: ":computer: Benchmark: GPU perf target"
-        command: >
-          julia --color=yes --project=perf perf/benchmark.jl
-          --config_file $PERF_CONFIG_PATH/bm_perf_target.yml
-          --job_id bm_perf_target_gpu
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_mem: 24GB
-          slurm_gpus: 1
+  #     - label: ":computer: Benchmark: GPU perf target"
+  #       command: >
+  #         julia --color=yes --project=perf perf/benchmark.jl
+  #         --config_file $PERF_CONFIG_PATH/bm_perf_target.yml
+  #         --job_id bm_perf_target_gpu
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_mem: 24GB
+  #         slurm_gpus: 1
 
-      - label: ":computer: Benchmark: CPU perf target (Threaded)"
-        command: >
-          julia --color=yes --threads 8 --project=perf perf/benchmark.jl
-          --config_file $PERF_CONFIG_PATH/bm_perf_target_threaded.yml
-          --job_id bm_perf_target_threaded
-        agents:
-          slurm_mem: 24GB
-          slurm_cpus_per_task: 8
+  #     - label: ":computer: Benchmark: CPU perf target (Threaded)"
+  #       command: >
+  #         julia --color=yes --threads 8 --project=perf perf/benchmark.jl
+  #         --config_file $PERF_CONFIG_PATH/bm_perf_target_threaded.yml
+  #         --job_id bm_perf_target_threaded
+  #       agents:
+  #         slurm_mem: 24GB
+  #         slurm_cpus_per_task: 8
 
-      - label: ":computer: Benchmark: GPU diag edmf"
-        command: >
-          julia --color=yes --project=perf perf/benchmark.jl
-          --config_file ${CONFIG_PATH}/aquaplanet_progedmf.yml
-          --job_id bm_diag_edmf_gpu
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_mem: 24GB
-          slurm_gpus: 1
+  #     - label: ":computer: Benchmark: GPU diag edmf"
+  #       command: >
+  #         julia --color=yes --project=perf perf/benchmark.jl
+  #         --config_file ${CONFIG_PATH}/aquaplanet_progedmf.yml
+  #         --job_id bm_diag_edmf_gpu
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_mem: 24GB
+  #         slurm_gpus: 1
 
-      - label: ":computer: Benchmark: GPU prog edmf"
-        command: >
-          julia --color=yes --project=perf perf/benchmark.jl
-          --config_file ${CONFIG_PATH}/aquaplanet_progedmf.yml
-          --job_id bm_prog_edmf_gpu
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_mem: 24GB
-          slurm_gpus: 1
+  #     - label: ":computer: Benchmark: GPU prog edmf"
+  #       command: >
+  #         julia --color=yes --project=perf perf/benchmark.jl
+  #         --config_file ${CONFIG_PATH}/aquaplanet_progedmf.yml
+  #         --job_id bm_prog_edmf_gpu
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_mem: 24GB
+  #         slurm_gpus: 1
 
-  - group: "Flame graphs"
-    steps:
+  # - group: "Flame graphs"
+  #   steps:
 
-      - label: ":fire: Flame graph: perf target (default)"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target.yml
-          --job_id flame_perf_target
-        artifact_paths: "flame_perf_target/*"
-        agents:
-          slurm_mem: 24GB
+  #     - label: ":fire: Flame graph: perf target (default)"
+  #       command: >
+  #         julia --color=yes --project=perf perf/flame.jl
+  #         --config_file $PERF_CONFIG_PATH/flame_perf_target.yml
+  #         --job_id flame_perf_target
+  #       artifact_paths: "flame_perf_target/*"
+  #       agents:
+  #         slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: perf target (with tracers)"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_tracers.yml
-          --job_id flame_perf_target_tracers
-        artifact_paths: "flame_perf_target_tracers/*"
-        agents:
-          slurm_mem: 24GB
+  #     - label: ":fire: Flame graph: perf target (with tracers)"
+  #       command: >
+  #         julia --color=yes --project=perf perf/flame.jl
+  #         --config_file $PERF_CONFIG_PATH/flame_perf_target_tracers.yml
+  #         --job_id flame_perf_target_tracers
+  #       artifact_paths: "flame_perf_target_tracers/*"
+  #       agents:
+  #         slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: perf target (diagnostic edmfx)"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_diagnostic_edmfx.yml
-          --job_id flame_perf_target_diagnostic_edmfx
-        artifact_paths: "flame_perf_target_diagnostic_edmfx/*"
-        agents:
-          slurm_mem: 24GB
+  #     - label: ":fire: Flame graph: perf target (diagnostic edmfx)"
+  #       command: >
+  #         julia --color=yes --project=perf perf/flame.jl
+  #         --config_file $PERF_CONFIG_PATH/flame_perf_target_diagnostic_edmfx.yml
+  #         --job_id flame_perf_target_diagnostic_edmfx
+  #       artifact_paths: "flame_perf_target_diagnostic_edmfx/*"
+  #       agents:
+  #         slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: perf target (prognostic edmfx aquaplanet)"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_prognostic_edmfx_aquaplanet.yml
-          --job_id flame_perf_target_prognostic_edmfx_aquaplanet
-        artifact_paths: "flame_perf_target_prognostic_edmfx_aquaplanet/*"
-        agents:
-          slurm_mem: 48GB
+  #     - label: ":fire: Flame graph: perf target (prognostic edmfx aquaplanet)"
+  #       command: >
+  #         julia --color=yes --project=perf perf/flame.jl
+  #         --config_file $PERF_CONFIG_PATH/flame_perf_target_prognostic_edmfx_aquaplanet.yml
+  #         --job_id flame_perf_target_prognostic_edmfx_aquaplanet
+  #       artifact_paths: "flame_perf_target_prognostic_edmfx_aquaplanet/*"
+  #       agents:
+  #         slurm_mem: 48GB
 
-      - label: ":fire: Flame graph: perf target (frierson diffusion)"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_frierson.yml
-          --job_id flame_perf_target_frierson
-        artifact_paths: "flame_perf_target_frierson/*"
-        agents:
-          slurm_mem: 48GB
+  #     - label: ":fire: Flame graph: perf target (frierson diffusion)"
+  #       command: >
+  #         julia --color=yes --project=perf perf/flame.jl
+  #         --config_file $PERF_CONFIG_PATH/flame_perf_target_frierson.yml
+  #         --job_id flame_perf_target_frierson
+  #       artifact_paths: "flame_perf_target_frierson/*"
+  #       agents:
+  #         slurm_mem: 48GB
 
-      - label: ":fire: Flame graph: perf target (Threaded)"
-        command: >
-          julia --threads 8 --color=yes --project=perf perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_threaded.yml
-          --job_id flame_perf_target_threaded
-        artifact_paths: "flame_perf_target_threaded/*"
-        agents:
-          slurm_cpus_per_task: 8
-          slurm_mem: 24GB
+  #     - label: ":fire: Flame graph: perf target (Threaded)"
+  #       command: >
+  #         julia --threads 8 --color=yes --project=perf perf/flame.jl
+  #         --config_file $PERF_CONFIG_PATH/flame_perf_target_threaded.yml
+  #         --job_id flame_perf_target_threaded
+  #       artifact_paths: "flame_perf_target_threaded/*"
+  #       agents:
+  #         slurm_cpus_per_task: 8
+  #         slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: perf target (Callbacks)"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_callbacks.yml
-          --job_id flame_perf_target_callbacks
-        artifact_paths: "flame_perf_target_callbacks/*"
-        agents:
-          slurm_mem: 24GB
+  #     - label: ":fire: Flame graph: perf target (Callbacks)"
+  #       command: >
+  #         julia --color=yes --project=perf perf/flame.jl
+  #         --config_file $PERF_CONFIG_PATH/flame_perf_target_callbacks.yml
+  #         --job_id flame_perf_target_callbacks
+  #       artifact_paths: "flame_perf_target_callbacks/*"
+  #       agents:
+  #         slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: gravity wave"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_gw.yml
-          --job_id flame_perf_gw
-        artifact_paths: "flame_perf_gw/*"
-        agents:
-          slurm_mem: 24GB
+  #     - label: ":fire: Flame graph: gravity wave"
+  #       command: >
+  #         julia --color=yes --project=perf perf/flame.jl
+  #         --config_file $PERF_CONFIG_PATH/flame_perf_gw.yml
+  #         --job_id flame_perf_gw
+  #       artifact_paths: "flame_perf_gw/*"
+  #       agents:
+  #         slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: perf target (diagnostics)"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_diagnostics.yml
-          --job_id flame_perf_diagnostics
-        artifact_paths: "flame_perf_diagnostics/*"
-        agents:
-          slurm_mem: 24GB
+  #     - label: ":fire: Flame graph: perf target (diagnostics)"
+  #       command: >
+  #         julia --color=yes --project=perf perf/flame.jl
+  #         --config_file $PERF_CONFIG_PATH/flame_perf_diagnostics.yml
+  #         --job_id flame_perf_diagnostics
+  #       artifact_paths: "flame_perf_diagnostics/*"
+  #       agents:
+  #         slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: gpu job"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_gpu_implicit_barowave_moist.yml
-          --job_id flame_gpu_implicit_barowave_moist
-        artifact_paths: "flame_gpu_implicit_barowave_moist/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_mem: 48GB
-          slurm_gpus: 1
-          gres: "gpu:p100:1"
+  #     - label: ":fire: Flame graph: gpu job"
+  #       command: >
+  #         julia --color=yes --project=perf perf/flame.jl
+  #         --config_file $PERF_CONFIG_PATH/flame_gpu_implicit_barowave_moist.yml
+  #         --job_id flame_gpu_implicit_barowave_moist
+  #       artifact_paths: "flame_gpu_implicit_barowave_moist/*"
+  #       env:
+  #         CLIMACOMMS_DEVICE: "CUDA"
+  #       agents:
+  #         slurm_mem: 48GB
+  #         slurm_gpus: 1
+  #         gres: "gpu:p100:1"
 
-  - group: "Inference/Invalidations"
-    steps:
+  # - group: "Inference/Invalidations"
+  #   steps:
 
-      # Inference
-      - label: ":rocket: JET n-failures (inference)"
-        command: >
-          julia --color=yes --project=perf perf/jet_test_nfailures.jl
-          --config_file $PERF_CONFIG_PATH/jet_n_failures.yml
-          --job_id jet_n_failures
-        agents:
-          slurm_mem: 24GB
+  #     # Inference
+  #     - label: ":rocket: JET n-failures (inference)"
+  #       command: >
+  #         julia --color=yes --project=perf perf/jet_test_nfailures.jl
+  #         --config_file $PERF_CONFIG_PATH/jet_n_failures.yml
+  #         --job_id jet_n_failures
+  #       agents:
+  #         slurm_mem: 24GB
 
-      # Latency
-      - label: ":mag::rocket: Invalidations"
-        command: >
-          julia --color=yes --project=perf perf/invalidations.jl
-        artifact_paths: "invalidations/*"
-        agents:
-          slurm_mem: 24GB
+  #     # Latency
+  #     - label: ":mag::rocket: Invalidations"
+  #       command: >
+  #         julia --color=yes --project=perf perf/invalidations.jl
+  #       artifact_paths: "invalidations/*"
+  #       agents:
+  #         slurm_mem: 24GB
 
-  - wait: ~
-    continue_on_failure: true
+  # - wait: ~
+  #   continue_on_failure: true
 
-  - label: ":robot_face: Print new mse tables"
-    command: "julia --color=yes --project=examples regression_tests/print_new_mse.jl"
+  # - label: ":robot_face: Print new mse tables"
+  #   command: "julia --color=yes --project=examples regression_tests/print_new_mse.jl"
 
-  - label: ":robot_face: Print new reference counter"
-    command: "julia --color=yes --project=examples regression_tests/print_new_ref_counter.jl"
+  # - label: ":robot_face: Print new reference counter"
+  #   command: "julia --color=yes --project=examples regression_tests/print_new_ref_counter.jl"
 
-  - label: ":bar_chart: Tabulate performance summary"
-    command: "julia --color=yes --project=perf perf/tabulate_perf_summary.jl"
+  # - label: ":bar_chart: Tabulate performance summary"
+  #   command: "julia --color=yes --project=perf perf/tabulate_perf_summary.jl"
 
-  - label: ":chart_with_downwards_trend: build history"
-    command:
-      - build_history main
-    artifact_paths:
-      - "build_history.html"
+  # - label: ":chart_with_downwards_trend: build history"
+  #   command:
+  #     - build_history main
+  #   artifact_paths:
+  #     - "build_history.html"
 
-  - wait
+  # - wait
 
-  - label: ":robot_face: Move main results"
-    command: "julia --color=yes --project=examples regression_tests/move_output.jl"
+  # - label: ":robot_face: Move main results"
+  #   command: "julia --color=yes --project=examples regression_tests/move_output.jl"

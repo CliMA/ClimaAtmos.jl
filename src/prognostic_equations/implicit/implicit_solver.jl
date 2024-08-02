@@ -399,6 +399,9 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
     # Remove unnecessary values from p to avoid allocations in bycolumn.
     p′ = (;
         p.precomputed.ᶜspecific,
+        p.precomputed.ᶜuʰ,
+        p.precomputed.ᶜu³ᴸ,
+        p.precomputed.ᶜu³ᴿ,
         p.precomputed.ᶜK,
         p.precomputed.ᶜts,
         p.precomputed.ᶜp,
@@ -467,7 +470,7 @@ end
 
 function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     (; matrix, diffusion_flag, sgs_advection_flag, topography_flag) = A
-    (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ) = p
+    (; ᶜspecific, ᶜuʰ, ᶜu³ᴸ, ᶜu³ᴿ, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ) = p
     (;
         ᶜtemp_C3,
         ∂ᶜK_∂ᶜuₕ,
@@ -492,31 +495,40 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     thermo_params = CAP.thermodynamics_params(params)
 
     ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
-    ᶠu₃ = Y.f.u₃
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
-    ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
+
+    ᶠleft_bias0 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(CT3(0)))
+    ᶠright_bias0 = Operators.RightBiasedC2F(; top = Operators.SetValue(CT3(0)))
+    ᶠleft_bias0_matrix = MatrixFields.operator_matrix(ᶠleft_bias0)
+    ᶠright_bias0_matrix = MatrixFields.operator_matrix(ᶠright_bias0)
 
     ᶜkappa_m = p.ᶜtemp_scalar
     @. ᶜkappa_m =
         TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts)
 
-    if use_derivative(topography_flag)
-        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
-            adjoint(CTh(ᶜuₕ)) + adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ),
-        )
-    else
-        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CTh(ᶜuₕ)))
-    end
+    # if use_derivative(topography_flag)
+    #     @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
+    #         adjoint(CTh(ᶜuₕ)) + adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ),
+    #     )
+    # else
+    #     @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CTh(ᶜuₕ)))
+    # end
+    # @. ∂ᶜK_∂ᶠu₃ =
+    #     ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
+    #     DiagonalMatrixRow(adjoint(CT3(ᶜuₕ))) ⋅ ᶜinterp_matrix()
+    @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CTh(ᶜuʰ)))
     @. ∂ᶜK_∂ᶠu₃ =
-        ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
-        DiagonalMatrixRow(adjoint(CT3(ᶜuₕ))) ⋅ ᶜinterp_matrix()
+        FT(0.5) * (
+            DiagonalMatrixRow(adjoint(ᶜu³ᴸ)) ⋅ ᶜleft_bias_matrix() +
+            DiagonalMatrixRow(adjoint(ᶜu³ᴿ)) ⋅ ᶜright_bias_matrix()
+        ) # TODO: Why does "/ 2" at the end break type inference on the GPU?
 
     @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix()
 
     @. ᶜadvection_matrix =
-        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ))
+        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜJ * ᶜρ) / ᶠJ)
 
     if use_derivative(topography_flag)
         ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
@@ -525,7 +537,14 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
     end
     ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
-    @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+    @. ∂ᶜρ_err_∂ᶠu₃ =
+        dtγ * FT(0.5) * ᶜadvection_matrix ⋅
+        DiagonalMatrixRow(1 / ᶠinterp(ᶜJ * ᶜρ)) ⋅ (
+            ᶠleft_bias0_matrix() ⋅ DiagonalMatrixRow(ᶜJ * ᶜρ * g³³(ᶜgⁱʲ)) ⋅
+            ᶜright_bias_matrix() +
+            ᶠright_bias0_matrix() ⋅ DiagonalMatrixRow(ᶜJ * ᶜρ * g³³(ᶜgⁱʲ)) ⋅
+            ᶜleft_bias_matrix()
+        ) # TODO: Why does "/ 2" at the end break type inference on the GPU?
 
     tracer_info = (
         (@name(c.ρe_tot), @name(ᶜh_tot)),
@@ -542,7 +561,13 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ)) ⋅
             ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅ DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
         @. ∂ᶜρχ_err_∂ᶠu₃ =
-            dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
+            dtγ * FT(0.5) * ᶜadvection_matrix ⋅
+            DiagonalMatrixRow(ᶠinterp(ᶜχ) / ᶠinterp(ᶜJ * ᶜρ)) ⋅ (
+                ᶠleft_bias0_matrix() ⋅ DiagonalMatrixRow(ᶜJ * ᶜρ * g³³(ᶜgⁱʲ)) ⋅
+                ᶜright_bias_matrix() +
+                ᶠright_bias0_matrix() ⋅ DiagonalMatrixRow(ᶜJ * ᶜρ * g³³(ᶜgⁱʲ)) ⋅
+                ᶜleft_bias_matrix()
+            ) # TODO: Why does "/ 2" at the end break type inference on the GPU?
     end
 
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
@@ -682,7 +707,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ∂ᶜρqₚ_err_∂ᶜρqₚ = matrix[ρqₚ_name, ρqₚ_name]
             ᶜwₚ = MatrixFields.get_field(p, wₚ_name)
             ᶠtmp = p.ᶠtemp_CT3
-            @. ᶠtmp = CT3(unit_basis_vector_data(CT3, ᶠlg)) * ᶠwinterp(ᶜJ, ᶜρ)
+            @. ᶠtmp =
+                CT3(unit_basis_vector_data(CT3, ᶠlg)) * ᶠinterp(ᶜJ * ᶜρ) / ᶠJ
             @. ∂ᶜρqₚ_err_∂ᶜρqₚ +=
                 dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠtmp) ⋅
                 ᶠright_bias_matrix() ⋅ DiagonalMatrixRow(-(ᶜwₚ) / ᶜρ)
