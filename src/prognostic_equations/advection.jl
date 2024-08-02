@@ -9,7 +9,7 @@ import ClimaCore.Geometry as Geometry
 NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜK, ᶜp) = p.precomputed
+    (; ᶜuʰ, ᶜK, ᶜp) = p.precomputed
     if p.atmos.turbconv_model isa AbstractEDMF
         (; ᶜu⁰) = p.precomputed
     end
@@ -17,7 +17,7 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
         (; ᶜuʲs) = p.precomputed
     end
 
-    @. Yₜ.c.ρ -= wdivₕ(Y.c.ρ * ᶜu)
+    @. Yₜ.c.ρ -= wdivₕ(Y.c.ρ * ᶜuʰ)
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).ρa -= wdivₕ(Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j))
@@ -25,7 +25,7 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     end
 
     (; ᶜh_tot) = p.precomputed
-    @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
+    @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜuʰ)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
@@ -47,14 +47,14 @@ end
 
 NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜu) = p.precomputed
+    (; ᶜuʰ) = p.precomputed
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
     end
 
     for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
-        @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.:($$ρχ_name) * ᶜu)
+        @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.:($$ρχ_name) * ᶜuʰ)
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
@@ -74,8 +74,9 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
-    (; ᶜu, ᶠu³, ᶜK) = p.precomputed
+    (; ᶜuʰ, ᶠuʰ, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
@@ -87,8 +88,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜtke⁰ = advect_tke ? p.precomputed.ᶜtke⁰ : nothing
     ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜω³ = p.scratch.ᶜtemp_CT3
-    ᶠω¹² = p.scratch.ᶠtemp_CT12
-    ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
+    ᶠωʰ = p.scratch.ᶠtemp_CT12
+    ᶠωʰʲs = p.scratch.ᶠtemp_CT12ʲs
 
     if point_type <: Geometry.Abstract3DPoint
         @. ᶜω³ = curlₕ(Y.c.uₕ)
@@ -96,13 +97,13 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. ᶜω³ = zero(ᶜω³)
     end
 
-    @. ᶠω¹² = ᶠcurlᵥ(Y.c.uₕ)
+    @. ᶠωʰ = ᶠcurlᵥ(Y.c.uₕ)
     for j in 1:n
-        @. ᶠω¹²ʲs.:($$j) = ᶠω¹²
+        @. ᶠωʰʲs.:($$j) = ᶠωʰ
     end
-    @. ᶠω¹² += CT12(curlₕ(Y.f.u₃))
+    @. ᶠωʰ += CT12(curlₕ(Y.f.u₃))
     for j in 1:n
-        @. ᶠω¹²ʲs.:($$j) += CT12(curlₕ(Y.f.sgsʲs.:($$j).u₃))
+        @. ᶠωʰʲs.:($$j) += CT12(curlₕ(Y.f.sgsʲs.:($$j).u₃))
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
@@ -114,6 +115,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 coeff,
                 Yₜ.c.ρe_tot,
                 ᶜJ,
+                ᶠJ,
                 Y.c.ρ,
                 ᶠu³,
                 ᶜh_tot,
@@ -126,30 +128,36 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         χ_name == :e_tot && continue
         for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
             tracer_upwinding isa Val{:none} && continue
-            vertical_transport!(coeff, ᶜρχₜ, ᶜJ, Y.c.ρ, ᶠu³, ᶜχ, dt, upwinding)
+            vertical_transport!(
+                coeff,
+                ᶜρχₜ,
+                ᶜJ,
+                ᶠJ,
+                Y.c.ρ,
+                ᶠu³,
+                ᶜχ,
+                dt,
+                upwinding,
+            )
         end
     end
 
     if isnothing(ᶠf¹²)
         # shallow atmosphere
-        @. Yₜ.c.uₕ -=
-            ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
-            (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+        @. Yₜ.c.uₕ -= ᶜinterp(ᶠωʰ × ᶠu³) + (ᶜf³ + ᶜω³) × ᶜuʰ
+        @. Yₜ.f.u₃ -= ᶠωʰ × ᶠuʰ + ᶠgradᵥ(ᶜK)
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
+                ᶠωʰʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
                 ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
         end
     else
         # deep atmosphere
-        @. Yₜ.c.uₕ -=
-            ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
-            (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+        @. Yₜ.c.uₕ -= ᶜinterp((ᶠf¹² + ᶠωʰ) × ᶠu³) + (ᶜf³ + ᶜω³) × ᶜuʰ
+        @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠωʰ) × ᶠuʰ + ᶠgradᵥ(ᶜK)
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
+                (ᶠf¹² + ᶠωʰʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
                 ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
         end
     end
@@ -159,6 +167,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         vertical_transport!(
             Yₜ.c.sgs⁰.ρatke,
             ᶜJ,
+            ᶠJ,
             ᶜρ⁰,
             ᶠu³⁰,
             ᶜa_scalar,

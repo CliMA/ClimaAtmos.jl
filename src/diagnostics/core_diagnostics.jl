@@ -74,9 +74,9 @@ add_diagnostic_variable!(
     comments = "Eastward (zonal) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(u_component.(Geometry.UVector.(cache.precomputed.ᶜu)))
+            return copy(u_component.(Geometry.UVector.(cache.precomputed.ᶠu)))
         else
-            out .= u_component.(Geometry.UVector.(cache.precomputed.ᶜu))
+            out .= u_component.(Geometry.UVector.(cache.precomputed.ᶠu))
         end
     end,
 )
@@ -92,9 +92,9 @@ add_diagnostic_variable!(
     comments = "Northward (meridional) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(v_component.(Geometry.VVector.(cache.precomputed.ᶜu)))
+            return copy(v_component.(Geometry.VVector.(cache.precomputed.ᶠu)))
         else
-            out .= v_component.(Geometry.VVector.(cache.precomputed.ᶜu))
+            out .= v_component.(Geometry.VVector.(cache.precomputed.ᶠu))
         end
     end,
 )
@@ -113,9 +113,9 @@ add_diagnostic_variable!(
     comments = "Vertical wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(w_component.(Geometry.WVector.(cache.precomputed.ᶜu)))
+            return copy(w_component.(Geometry.WVector.(cache.precomputed.ᶠu)))
         else
-            out .= w_component.(Geometry.WVector.(cache.precomputed.ᶜu))
+            out .= w_component.(Geometry.WVector.(cache.precomputed.ᶠu))
         end
     end,
 )
@@ -746,9 +746,9 @@ add_diagnostic_variable!(
     comments = "Predicted value of eastward (zonal) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            u_component.(cache.predicted_steady_state.ᶜu)
+            u_component.(cache.predicted_steady_state.ᶠu)
         else
-            out .= u_component.(cache.predicted_steady_state.ᶜu)
+            out .= u_component.(cache.predicted_steady_state.ᶠu)
         end
     end,
 )
@@ -761,9 +761,9 @@ add_diagnostic_variable!(
     comments = "Predicted value of northward (meridional) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            v_component.(cache.predicted_steady_state.ᶜu)
+            v_component.(cache.predicted_steady_state.ᶠu)
         else
-            out .= v_component.(cache.predicted_steady_state.ᶜu)
+            out .= v_component.(cache.predicted_steady_state.ᶠu)
         end
     end,
 )
@@ -776,9 +776,9 @@ add_diagnostic_variable!(
     comments = "Predicted value of vertical wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            w_component.(cache.predicted_steady_state.ᶜu)
+            w_component.(cache.predicted_steady_state.ᶠu)
         else
-            out .= w_component.(cache.predicted_steady_state.ᶜu)
+            out .= w_component.(cache.predicted_steady_state.ᶠu)
         end
     end,
 )
@@ -791,12 +791,12 @@ add_diagnostic_variable!(
     comments = "Error of eastward (zonal) wind component against predicted value",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            u_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
-            u_component.(cache.predicted_steady_state.ᶜu)
+            u_component.(Geometry.UVWVector.(cache.precomputed.ᶠu)) .-
+            u_component.(cache.predicted_steady_state.ᶠu)
         else
             out .=
-                u_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
-                u_component.(cache.predicted_steady_state.ᶜu)
+                u_component.(Geometry.UVWVector.(cache.precomputed.ᶠu)) .-
+                u_component.(cache.predicted_steady_state.ᶠu)
         end
     end,
 )
@@ -809,12 +809,12 @@ add_diagnostic_variable!(
     comments = "Error of northward (meridional) wind component against predicted value",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            v_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
-            v_component.(cache.predicted_steady_state.ᶜu)
+            v_component.(Geometry.UVWVector.(cache.precomputed.ᶠu)) .-
+            v_component.(cache.predicted_steady_state.ᶠu)
         else
             out .=
-                v_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
-                v_component.(cache.predicted_steady_state.ᶜu)
+                v_component.(Geometry.UVWVector.(cache.precomputed.ᶠu)) .-
+                v_component.(cache.predicted_steady_state.ᶠu)
         end
     end,
 )
@@ -827,12 +827,12 @@ add_diagnostic_variable!(
     comments = "Error of vertical wind component against predicted value",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            w_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
-            w_component.(cache.predicted_steady_state.ᶜu)
+            w_component.(Geometry.UVWVector.(cache.precomputed.ᶠu)) .-
+            w_component.(cache.predicted_steady_state.ᶠu)
         else
             out .=
-                w_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
-                w_component.(cache.predicted_steady_state.ᶜu)
+                w_component.(Geometry.UVWVector.(cache.precomputed.ᶠu)) .-
+                w_component.(cache.predicted_steady_state.ᶠu)
         end
     end,
 )
