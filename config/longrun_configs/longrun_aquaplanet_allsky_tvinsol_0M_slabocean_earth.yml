@@ -6,7 +6,7 @@ dz_top: 3000.0
 rayleigh_sponge: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-dt: "120secs"
+dt: "90secs"
 t_end: "360days"
 dt_save_state_to_disk: "30days"
 check_conservation: true
