@@ -1,0 +1,35 @@
+initial_condition: "GCM"
+external_forcing: "GCM"
+external_forcing_file: "/groups/esm/zhaoyi/GCMForcedLES/cfsite/07/HadGEM2-A/amip/Output.cfsite23_HadGEM2-A_amip_2004-2008.07.4x/stats/Stats.cfsite23_HadGEM2-A_amip_2004-2008.07.nc"
+surface_setup: "GCM"
+turbconv: "prognostic_edmfx"
+implicit_diffusion: true
+implicit_sgs_advection: false
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+edmfx_upwinding: first_order
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_filter: true
+prognostic_tke: true
+moist: "equil"
+config: "column"
+z_max: 4e3
+z_elem: 60
+z_stretch: false
+perturb_initstate: false
+dt: "10secs"
+t_end: "72hours"
+dt_save_to_disk: "10mins"
+call_cloud_diagnostics_per_stage : true
+output_dir: output/gcm_driven_scm
+toml: [scm_tomls/prognostic_edmfx_bomex.toml]
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 60]
+# output_default_diagnostics: false
+diagnostics:
+  - short_name: [hus, thetaa, clw, arup, tke, entr, detr, waup]
+    period: 10mins
