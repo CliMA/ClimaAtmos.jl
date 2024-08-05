@@ -1,0 +1,563 @@
+[optics_lookup_temperature_min]
+used_in = ["ClimaAtmos"]
+value = 160
+type = "float"
+description = "Miminum temperature in the lookup table for optical properties in RRTMGP"
+
+[f_plane_coriolis_frequency]
+used_in = ["ClimaAtmos"]
+value = 0
+type = "float"
+
+[orbit_eccentricity_at_epoch]
+used_in = ["Insolation"]
+value = 0.016708634
+type = "float"
+
+[potential_temperature_reference_pressure]
+used_in = ["Thermodynamics"]
+value = 100000
+type = "float"
+description = "Reference pressure used in potential temperature definition"
+
+[prandtl_number_0_businger]
+used_in = ["SurfaceFluxes"]
+value = 0.74
+type = "float"
+description = "Pr_0 for Businger universal functions. From Businger et al, 1971. DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[mixing_length_tke_surf_scale]
+used_in = ["ClimaAtmos"]
+value = 3.75
+type = "float"
+description = "Ratio of turbulence kinetic energy to squared friction velocity in the surface layer for the EDMF mixing length closure; denoted κ_*². See Lopez-Gomez et al. (2020) [https://doi.org/10.1029/2020MS002162], Table 1. Note: the square root, i.e. κ_*, is listed in the reference."
+
+[temperature_triple_point]
+used_in = ["Thermodynamics"]
+value = 273.16
+type = "float"
+
+[length_orbit_semi_major]
+used_in = ["Insolation"]
+value = 149597870000
+type = "float"
+description = "derived: 1 * [astronomical_unit]"
+
+[SST_wavelength]
+used_in = ["ClimaAtmos"]
+value = 6000000
+type = "float"
+description = "Wavelength of the sea surface temperature sinusoid for RCEMIPII box models. See Wing et al. (2018) [https://gmd.copernicus.org/articles/11/793/2018/]"
+
+[isobaric_specific_heat_ice]
+used_in = ["Thermodynamics"]
+value = 2100
+type = "float"
+
+[mixing_length_smin_rm]
+used_in = ["ClimaAtmos"]
+value = 1.5
+type = "float"
+description = "Upper ratio limit for smooth minimum function in mixing length closure. See Lopez-Gomez et al. (2020) Eq 40 [https://doi.org/10.1029/2020MS002161]."
+
+[C_E]
+used_in = ["ClimaAtmos"]
+value = 0.0044
+type = "float"
+description = "vertical diffusion coefficient"
+
+[latent_heat_sublimation_at_reference]
+used_in = ["Thermodynamics"]
+value = 2834400
+type = "float"
+
+[day]
+used_in = ["Insolation"]
+value = 86400
+type = "float"
+
+[isobaric_specific_heat_vapor]
+used_in = ["Thermodynamics"]
+value = 1859
+type = "float"
+
+[EDMF_surface_area]
+used_in = ["ClimaAtmos"]
+value = 0.1
+type = "float"
+description = "Combined updraft surface area fraction; used to compute boundary conditions for prognostic updraft variables. The surface area for each updraft is `surface_area / N_updrafts`. See Cohen et al. (2020) [https://doi.org/10.1029/2020MS002162], Table 2."
+
+[c_smag]
+used_in = ["ClimaAtmos"]
+value = 0.2
+type = "float"
+description = "Smagorinsky coefficient"
+
+[mixing_length_smin_ub]
+used_in = ["ClimaAtmos"]
+value = 0.1
+type = "float"
+description = "Lower limit for smooth minimum function in mixing length closure. See Lopez-Gomez et al. (2020) Eq 40 [https://doi.org/10.1029/2020MS002161]."
+
+[molar_mass_water]
+used_in = ["Thermodynamics", "RRTMGP"]
+value = 0.01801528
+type = "float"
+
+[most_stability_exponent_businger]
+used_in = ["SurfaceFluxes"]
+value = 4.42
+type = "float"
+description = "γ for Businger universal functions. From Businger et al, 1971. DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[temperature_saturation_adjustment_min]
+used_in = ["Thermodynamics"]
+value = 1
+type = "float"
+
+[SST_wavelength_latitude]
+used_in = ["ClimaAtmos"]
+value = 54
+type = "float"
+description = "Wavelength of the sea surface temperature sinusoid for RCEMIPII sphere models. See Wing et al. (2018) [https://gmd.copernicus.org/articles/11/793/2018/]"
+
+[min_area_limiter_power]
+used_in = ["ClimaAtmos"]
+value = 10
+type = "float"
+description = "Constant coefficient for the exponent in the minimum area limiter term in entrainment. Parameter not described in the literature."
+
+[pressure_normalmode_drag_coeff]
+used_in = ["ClimaAtmos"]
+value = 10.0
+type = "float"
+description = "Updraft pressure drag coefficent in perturbation pressure closure. See He et al. 2022 Eq 34 [https://doi.org/10.1002/essoar.10505084.2]."
+
+[held_suarez_T_equator_dry]
+used_in = ["ClimaAtmos"]
+value = 315
+type = "float"
+description = "Equator temperature. See Held and Suarez (1994) https://doi.org/10.1175/1520-0477(1994)075%3C1825:APFTIO%3E2.0.CO;2"
+
+[mixing_length_Prandtl_number_0]
+used_in = ["ClimaAtmos"]
+value = 0.74
+type = "float"
+description = "Turbulent Prandtl number in neutral conditions; denoted Pr_{t,0}. See Lopez-Gomez et al. (2020) [https://doi.org/10.1029/2020MS002162], Table 1 and Eq 36."
+
+[longitude_perihelion_at_epoch]
+used_in = ["Insolation"]
+value = 4.938188299449
+type = "float"
+description = "(282.937348 degrees) in radians"
+
+[stefan_boltzmann_constant]
+used_in = ["RRTMGP"]
+value = 5.67e-8
+type = "float"
+
+[temperature_min_at_reference]
+used_in = ["Thermodynamics"]
+value = 220
+type = "float"
+
+[entropy_water_vapor]
+used_in = ["Thermodynamics"]
+value = 10513.6
+type = "float"
+
+[equator_pole_temperature_gradient_wet]
+used_in = ["ClimaAtmos"]
+value = 65
+type = "float"
+description = "Temperature gradient between equator and pole for moist adiabatic atmosphere. See Held and Suarez (1994) https://doi.org/10.1175/1520-0477(1994)075%3C1825:APFTIO%3E2.0.CO;2"
+
+[held_suarez_T_equator_wet]
+used_in = ["ClimaAtmos"]
+value = 294
+type = "float"
+description = "Equator temperature. See Held and Suarez (1994) https://doi.org/10.1175/1520-0477(1994)075%3C1825:APFTIO%3E2.0.CO;2"
+
+[entropy_dry_air]
+used_in = ["Thermodynamics"]
+value = 6864.8
+type = "float"
+
+[zd_rayleigh]
+used_in = ["ClimaAtmos"]
+value = 15000.0
+type = "float"
+description = "rayleigh sponge height"
+
+[coefficient_a_m_businger]
+used_in = ["SurfaceFluxes"]
+value = 4.7
+type = "float"
+description = "a_m for Businger momentum universal functions. From Businger et al, 1971. DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[temperature_saturation_adjustment_max]
+used_in = ["Thermodynamics"]
+value = 1000
+type = "float"
+
+[density_ice_water]
+used_in = ["CloudMicrophysics"]
+value = 916.7
+type = "float"
+
+[mean_anomalistic_at_epoch]
+used_in = ["Insolation"]
+value = 6.24006014121
+type = "float"
+description = "(357.52911 degrees) in radians"
+
+[mixing_length_diss_coeff]
+used_in = ["ClimaAtmos"]
+value = 0.22
+type = "float"
+description = "Turbulence kinetic energy dissipation coefficient for the EDMF mixing length closure; denoted c_d. See Lopez-Gomez et al. (2020) [https://doi.org/10.1029/2020MS002162], Table 1."
+
+[potential_temp_vertical_gradient]
+used_in = ["ClimaAtmos"]
+value = 10
+type = "float"
+description = "Potential temperature gradient with height. See Held and Suarez (1994) https://doi.org/10.1175/1520-0477(1994)075%3C1825:APFTIO%3E2.0.CO;2"
+
+[EDMF_max_area]
+used_in = ["ClimaAtmos"]
+value = 0.9
+type = "float"
+description = "Maximum area fraction per updraft. Parameter not described in the literature."
+
+[entr_coeff]
+used_in = ["ClimaAtmos"]
+value = 1
+type = "float"
+description = "Coefficient for the w/z term in the entrainment closure. Parameter not described in the literature."
+
+[mixing_length_Ri_crit]
+used_in = ["ClimaAtmos"]
+value = 0.25
+type = "float"
+description = "Critical gradient Richardson number. It is an upper limit to the gradient Richardson number . See Li (2019) [https://doi.org/10.1016/j.atmosres.2018.09.015], Section 6.2 for details."
+
+[temperature_saturation_adjustment_init_min]
+used_in = ["Thermodynamics"]
+value = 150
+type = "float"
+
+[optics_lookup_temperature_max]
+used_in = ["ClimaAtmos"]
+value = 355
+type = "float"
+description = "Maximum temperature in the lookup table for optical properties in RRTMGP"
+
+[gas_constant]
+used_in = ["Thermodynamics", "RRTMGP"]
+value = 8.3144598
+type = "float"
+
+[orbit_obliquity_at_epoch]
+used_in = ["Insolation"]
+value = 0.408979125113246
+type = "float"
+description = "(23.432777778 degrees) in radians"
+
+[drag_layer_vertical_extent]
+used_in = ["ClimaAtmos"]
+value = 0.7
+type = "float"
+description = "Vertical extend of drag layer. See Held and Suarez (1994) https://doi.org/10.1175/1520-0477(1994)075%3C1825:APFTIO%3E2.0.CO;2"
+
+[temperature_mean_at_reference]
+used_in = ["Thermodynamics"]
+value = 290
+type = "float"
+
+[detr_inv_tau]
+used_in = ["ClimaAtmos"]
+value = 0.001
+type = "float"
+description = "Detrainment inverse timescale"
+
+[entr_inv_tau]
+used_in = ["ClimaAtmos"]
+value = 0.001
+type = "float"
+description = "Entrainment inverse timescale"
+
+[temperature_homogenous_nucleation]
+used_in = ["Thermodynamics"]
+value = 233
+type = "float"
+
+[mixing_length_static_stab_coeff]
+used_in = ["ClimaAtmos"]
+value = 0.4
+type = "float"
+description = "Static stability coefficient for the EDMF mixing length closure; denoted c_b. See Lopez-Gomez et al. (2020) [https://doi.org/10.1029/2020MS002162], Table 1."
+
+[pressure_normalmode_buoy_coeff1]
+used_in = ["ClimaAtmos"]
+value = 0.12
+type = "float"
+description = "Pressure buoyancy coefficient (encapsulating virtual mass loading effect) in perturbation pressure closure. See He et al. 2022 Eq 34 [https://doi.org/10.1002/essoar.10505084.2]."
+
+[held_suarez_minimum_temperature]
+used_in = ["ClimaAtmos"]
+value = 200
+type = "float"
+description = "Minimum temperature. See Held and Suarez (1994) https://doi.org/10.1175/1520-0477(1994)075%3C1825:APFTIO%3E2.0.CO;2"
+
+[angular_velocity_planet_rotation]
+used_in = ["ClimaAtmos"]
+value = 7.2921159e-5
+type = "float"
+
+[min_area_limiter_scale]
+used_in = ["ClimaAtmos"]
+value = 0.001
+type = "float"
+description = "Constant coefficient that scales the minimum area limiter term in entrainment. Parameter not described in the literature."
+
+[entropy_reference_temperature]
+used_in = ["Thermodynamics"]
+value = 298.15
+type = "float"
+
+[most_stability_parameter_businger]
+used_in = ["SurfaceFluxes"]
+value = 2.5
+type = "float"
+description = "ζ_a for Businger universal functions. From Businger et al, 1971. DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[molar_mass_dry_air]
+used_in = ["Thermodynamics", "RRTMGP"]
+value = 0.02897
+type = "float"
+
+[zd_viscous]
+used_in = ["ClimaAtmos"]
+value = 15000.0
+type = "float"
+description = "viscous sponge height"
+
+[planet_radius]
+used_in = ["ClimaAtmos"]
+value = 6371000
+type = "float"
+
+[water_refractive_index]
+used_in = ["ClimaAtmos"]
+value = 1.34
+type = "float"
+description = "The relative refractive index of water and air for broadband ocean surface albedo calculation. See Jin et al. (2011) [https://opg.optica.org/oe/fulltext.cfm?uri=oe-19-27-26429&id=225797]"
+
+[adiabatic_exponent_dry_air]
+used_in = ["Thermodynamics", "RRTMGP"]
+value = 0.28571428571
+type = "float"
+description = "(2/7)"
+
+[epoch_time]
+used_in = ["Insolation"]
+value = 211813488000
+type = "float"
+description = "derived: 2451545.0 * [day]"
+
+[detr_buoy_coeff]
+used_in = ["ClimaAtmos"]
+value = 0.12
+type = "float"
+description = "Coefficient for the b/w^2 term in the detrainment closure. See Tan et al. (2018) [https://doi.org/10.1002/2017MS001162], Eq 27."
+
+[density_liquid_water]
+used_in = ["CloudMicrophysics"]
+value = 1000
+type = "float"
+
+[detr_massflux_vertdiv_coeff]
+used_in = ["ClimaAtmos"]
+value = 1
+type = "float"
+description = "Coefficient for the mass flux vertical divergence term in the detrainment closure. Parameter not described in the literature."
+
+[coefficient_b_m_businger]
+used_in = ["SurfaceFluxes"]
+value = 15.0
+type = "float"
+description = "b_m for Businger momentum universal functions. From Businger et al, 1971. DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[C_H]
+used_in = ["ClimaAtmos"]
+value = 0.0044
+type = "float"
+description = "bulk transfer coefficient"
+
+[EDMF_min_area]
+used_in = ["ClimaAtmos"]
+value = 1.0e-5
+type = "float"
+description = "Minimum area fraction per updraft. Parameter not described in the literature."
+
+[isobaric_specific_heat_liquid]
+used_in = ["Thermodynamics"]
+value = 4181
+type = "float"
+
+[latent_heat_vaporization_at_reference]
+used_in = ["Thermodynamics"]
+value = 2500800
+type = "float"
+
+[detr_vertdiv_coeff]
+used_in = ["ClimaAtmos"]
+value = 1
+type = "float"
+description = "Coefficient for the vertical divergence term in the detrainment closure. Parameter not described in the literature."
+
+[SST_delta]
+used_in = ["ClimaAtmos"]
+value = 1.25
+type = "float"
+description = "Twice the amplitude of sea surface temperarture sinusoid for RCEMIPII surface conditions. See Wing et al. (2018) [https://gmd.copernicus.org/articles/11/793/2018/]"
+
+[gravitational_acceleration]
+used_in = ["Thermodynamics", "RRTMGP"]
+value = 9.81
+type = "float"
+
+[equator_pole_temperature_gradient_dry]
+used_in = ["ClimaAtmos"]
+value = 60
+type = "float"
+description = "Temperature gradient between equator and pole for dry adiabatic atmosphere. See Held and Suarez (1994) https://doi.org/10.1175/1520-0477(1994)075%3C1825:APFTIO%3E2.0.CO;2"
+
+[ocean_surface_albedo]
+used_in = ["ClimaAtmos"]
+value = 0.38
+type = "float"
+description = "Ocean surface albedo for idealized simulations. See O'Gorman and Schneider (2008) [https://journals.ametsoc.org/view/journals/clim/21/15/2007jcli2065.1.xml]"
+
+[coefficient_b_h_businger]
+used_in = ["SurfaceFluxes"]
+value = 9.0
+type = "float"
+description = "b_h for Businger heat universal functions. From Businger et al, 1971. DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[coefficient_a_h_businger]
+used_in = ["SurfaceFluxes"]
+value = 4.7
+type = "float"
+description = "a_h for Businger heat universal functions. From Businger et al, 1971. DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[pow_icenuc]
+used_in = ["Thermodynamics"]
+value = 1
+type = "float"
+
+[max_area_limiter_scale]
+used_in = ["ClimaAtmos"]
+value = 0.1
+type = "float"
+description = "Constant coefficient that scales the maximum area limiter term in detrainment. Parameter not described in the literature."
+
+[avogadro_constant]
+used_in = ["RRTMGP"]
+value = 6.02214076e23
+type = "float"
+
+[pressure_triple_point]
+used_in = ["Thermodynamics"]
+value = 611.657
+type = "float"
+
+[thermodynamics_temperature_reference]
+used_in = ["Thermodynamics"]
+value = 273.16
+type = "float"
+
+[temperature_water_freeze]
+used_in = ["Thermodynamics"]
+value = 273.15
+type = "float"
+
+[total_solar_irradiance]
+used_in = ["Insolation"]
+value = 1362
+type = "float"
+
+[SST_mean]
+used_in = ["ClimaAtmos"]
+value = 300
+type = "float"
+description = "Mean sea surface temperature for RCEMIPII surface conditions. See Wing et al. (2018) [https://gmd.copernicus.org/articles/11/793/2018/]"
+
+[detr_coeff]
+used_in = ["ClimaAtmos"]
+value = 0.001
+type = "float"
+description = "Coefficient for the w term in the detrainment closure. Parameter not described in the literature."
+
+[minimum_updraft_top]
+used_in = ["ClimaAtmos"]
+value = 500.0
+type = "float"
+description = "Minimum updraft height limiter to avoid zero division in pressure drag and entrainment/detrainment closures. Parameter not described in the literature."
+
+[von_karman_constant]
+used_in = ["SurfaceFluxes"]
+value = 0.4
+type = "float"
+
+[mixing_length_eddy_viscosity_coefficient]
+used_in = ["ClimaAtmos"]
+value = 0.14
+type = "float"
+description = "Turbulence kinetic energy diffusivity coefficient for the EDMF mixing length closure; denoted c_m. See Lopez-Gomez et al. (2020) [https://doi.org/10.1029/2020MS002162], Table 1."
+
+[alpha_rayleigh_w]
+used_in = ["ClimaAtmos"]
+value = 1.0
+type = "float"
+description = "rayleigh sponge vert velocity coeff"
+
+[mean_sea_level_pressure]
+used_in = ["Thermodynamics"]
+value = 101325
+type = "float"
+
+[max_area_limiter_power]
+used_in = ["ClimaAtmos"]
+value = 10
+type = "float"
+description = "Constant coefficient for the exponent in the maximum area limiter term in detrainment. Parameter not described in the literature."
+
+[anomalistic_year_length]
+used_in = ["Insolation"]
+value = 31558464
+type = "float"
+description = "derived: 365.25 * [day]"
+
+[alpha_rayleigh_uh]
+used_in = ["ClimaAtmos"]
+value = 0.0
+type = "float"
+description = "rayleigh sponge horizontal velocity coefficient"
+
+[kappa_2_sponge]
+used_in = ["ClimaAtmos"]
+value = 1.0e6
+type = "float"
+description = "viscous sponge coefficient"
+
+[astronomical_unit]
+used_in = ["ClimaAtmos"]
+value = 149597870000
+type = "float"
+
+[mixing_length_Prandtl_number_scale]
+used_in = ["ClimaAtmos"]
+value = 4.076923076923077
+type = "float"
+description = "Cospectral budget factor for turbulent Prandtl number for the EDMF mixing length closure, denoted ω_pr. In Lopez-Gomez et al. (2020) [https://doi.org/10.1029/2020MS002162], Eq. 36, it is described as a phenomenological constant, denoted by ω₂ and set to 53/13 ≈ 4.0769..."
