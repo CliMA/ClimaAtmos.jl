@@ -163,6 +163,17 @@ steps:
           --job_id box_density_current_test
         artifact_paths: "box_density_current_test/output_active/*"
 
+
+      - label: ":genie: LES ISDAC in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/les_isdac_box.yml
+          --job_id les_isdac_box
+        artifact_paths: "les_isdac_box/*"
+        agents:
+          slurm_mem: 16G
+          slurm_gpus: 1
+
       - label: ":computer: Box (ρe_tot) rcemipii with diagnostic edmf"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
