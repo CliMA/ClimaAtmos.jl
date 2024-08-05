@@ -29,7 +29,7 @@ dz_top: 3000
 rad: allskywithclear
 insolation: "gcmdriven"
 perturb_initstate: false
-dt: "5secs"
+dt: "10secs"
 t_end: "72hours"
 dt_save_to_disk: "10mins"
 call_cloud_diagnostics_per_stage : true

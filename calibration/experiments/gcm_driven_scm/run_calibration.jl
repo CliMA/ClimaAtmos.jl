@@ -52,7 +52,7 @@ JLD2.jldsave(
 
 
 
-ref_paths = get_les_calibration_library()
+ref_paths, _ = get_les_calibration_library()
 
 
 obs_vec = []

@@ -13,11 +13,14 @@ include("get_les_metadata.jl")
 const experiment_config_dict =
     YAML.load_file(joinpath(@__DIR__, "experiment_config.yml"))
 const output_dir = experiment_config_dict["output_dir"]
-const num_les_cases = experiment_config_dict["num_les_cases"]
 const model_config = experiment_config_dict["model_config"]
 
 function get_forcing_file(i, ref_paths)
     return "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
+end
+
+function get_cfsite_id(i, cfsite_numbers)
+    return string("site", cfsite_numbers[i])
 end
 
 """
@@ -43,10 +46,11 @@ function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
     end
     config_dict["output_default_diagnostics"] = false
 
-    ref_paths = get_les_calibration_library()
+    ref_paths, cfsite_numbers = get_les_calibration_library()
     atmos_configs = map(EKP.get_current_minibatch(eki)) do i
         config = deepcopy(config_dict)
         config["external_forcing_file"] = get_forcing_file(i, ref_paths)
+        config["cfsite_number"] = get_cfsite_id(i, cfsite_numbers)
         config["output_dir"] = joinpath(member_path, "config_$i")
         CA.AtmosConfig(config)
     end

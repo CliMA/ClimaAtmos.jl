@@ -21,7 +21,7 @@ model_config_dict = YAML.load_file(model_config)
 const output_dir = config_dict["output_dir"]
 
 
-ref_paths = get_les_calibration_library()
+ref_paths, _ = get_les_calibration_library()
 
 N_VERT_LEVELS = 60
 
