@@ -7,8 +7,8 @@ z_max: 21e3
 x_elem: 100
 z_elem: 100
 z_stretch: false
-dt: "0.5secs"
-t_end: "4days"
+dt: "0.1secs"
+t_end: "18hours"
 rayleigh_sponge: true
 toml: [toml/analytic_topography_test.toml]
 analytic_check: true

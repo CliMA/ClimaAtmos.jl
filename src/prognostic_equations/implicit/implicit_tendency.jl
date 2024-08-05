@@ -190,6 +190,13 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
 
     @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜp) / ᶠinterp(Y.c.ρ) + ᶠgradᵥ_ᶜΦ
+    # FT = eltype(Y)
+    # cp_d = FT(CAP.cp_d(p.params))
+    # thermo_params = CAP.thermodynamics_params(p.params)
+    # @. Yₜ.f.u₃ -=
+    #     cp_d *
+    #     ᶠinterp(TD.virtual_pottemp(thermo_params, p.precomputed.ᶜts)) *
+    #     ᶠgradᵥ(TD.exner(thermo_params, p.precomputed.ᶜts)) + ᶠgradᵥ_ᶜΦ
     # @. Yₜ.f.u₃ -= ᶠinterp(ᶜp / Y.c.ρ) * ᶠgradᵥ(log(ᶜp)) + ᶠgradᵥ_ᶜΦ
 
     if rayleigh_sponge isa RayleighSponge

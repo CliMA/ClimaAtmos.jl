@@ -312,7 +312,7 @@ function plot_streamlines!(place, var)
 
     u_spline = linear_interpolation((dim1, dim2), first.(var.data))
     w_spline = linear_interpolation((dim1, dim2), last.(var.data))
-    spline = point -> Makie.Point2f(u_spline(point...), w_spline(point...))
+    spline = point -> CairoMakie.Point2f(u_spline(point...), w_spline(point...))
     plot = CairoMakie.streamplot!(
         spline,
         dim1,
@@ -346,23 +346,43 @@ function plot_contours!(place, var)
         limits = (extrema(dim1), extrema(dim2)),
     )
 
-    n_levels = 21
-    var_mean = round(mean(var.data))
-    var_delta = maximum(value -> abs(value - var_mean), var.data)
-    levels = range(var_mean - var_delta, var_mean + var_delta, n_levels + 1)
-
-    spectral_colors = Makie.to_colormap(:Spectral)
-    plot_kwargs = (;
-        levels,
-        colormap = setindex!(spectral_colors, Makie.RGBA(1, 1, 1, 0), 6),
+    # Interpolate between the 11 Spectral colors with the central color replaced
+    # by transparent white.
+    spectral_colors = CairoMakie.to_colormap(:Spectral)
+    color_kwargs = (;
+        colormap = setindex!(spectral_colors, CairoMakie.RGBA(1, 1, 1, 0), 6),
         extendhigh = spectral_colors[11],
         extendlow = spectral_colors[1],
     )
-    plot = CairoMakie.contourf!(dim1, dim2, var.data; plot_kwargs...)
 
-    if var_delta / abs(var_mean) > 1e-7
-        CairoMakie.Colorbar(place[1, 2], plot; label = "$var_name [$var_units]")
-    end # Colorbar's LineAxis throws an error when var_delta ≪ abs(var_mean).
+    # Center the contour levels around either the average of the data or the
+    # nearest integer that falls into the data range.
+    var_avg = mean(var.data)
+    var_avg_int = round(Int, var_avg)
+    var_min, var_max = extrema(var.data)
+    var_cent = var_min < var_avg_int < var_max ? var_avg_int : var_avg
+    var_delta = maximum(value -> abs(value - var_cent), var.data)
+
+    if var_delta == 0
+        # For constant data, use a heatmap to avoid Colorbar's LineAxis error.
+        label = "$var_name [$var_units]"
+        plot = CairoMakie.heatmap!(dim1, dim2, var.data; color_kwargs...)
+    else
+        n_levels = 21
+        if var_delta < abs(var_cent) / 1e6
+            # Recenter the data around 0 when var_delta << abs(var_cent).
+            data = var.data .- var_cent
+            label = "$var_name - $var_cent [$var_units]"
+            levels = range(-var_delta, var_delta, n_levels + 1)
+        else
+            data = var.data
+            label = "$var_name [$var_units]"
+            levels =
+                range(var_cent - var_delta, var_cent + var_delta, n_levels + 1)
+        end
+        plot = CairoMakie.contourf!(dim1, dim2, data; levels, color_kwargs...)
+    end
+    CairoMakie.Colorbar(place[1, 2], plot; label)
 end
 
 """
@@ -675,7 +695,7 @@ function make_plots(
     make_plots_generic(output_paths, vars, y = 0.0, time = LAST_SNAP)
 end
 
-rms(var; dims) = sqrt.(mean(x -> x^2, var; dims))
+rms(var; dims) = sqrt.(mean(var .^ 2; dims))
 function level_rms(var)
     reduced_var = ClimaAnalysis.Var._reduce_over(rms, "x", var)
     if haskey(var.dims, "y")
@@ -726,7 +746,20 @@ const AnalyticTopographyTest = Union{
     Val{:gpu_plane_analytic_no_topography_no_hyperdiff_long_float32_test},
     Val{:gpu_plane_analytic_no_topography_discrete_balance_long_test},
     Val{:gpu_plane_analytic_no_topography_discrete_balance_long_float32_test},
+    Val{:gpu_plane_analytic_no_topography_no_sponge_no_grav_long_test},
+    Val{:gpu_plane_analytic_no_topography_no_sponge_no_grav_long_float32_test},
+    Val{
+        :gpu_plane_analytic_no_topography_no_sponge_no_grav_no_hyperdiff_long_test,
+    },
+    Val{
+        :gpu_plane_analytic_no_topography_no_sponge_no_grav_no_hyperdiff_long_float32_test,
+    },
+    Val{:gpu_plane_analytic_no_topography_no_sponge_no_grav_long_explicit_test},
+    Val{
+        :gpu_plane_analytic_no_topography_no_sponge_no_grav_long_explicit_float32_test,
+    },
     Val{:gpu_extruded_plane_analytic_no_topography_test},
+    Val{:box_analytic_no_topography_oswald_config_test},
     Val{:gpu_box_analytic_no_topography_test},
     Val{:gpu_box_analytic_no_topography_float32_test},
     Val{:plane_analytic_cosine_hills_test},
@@ -757,6 +790,7 @@ function make_plots(
         Val(:gpu_extruded_plane_analytic_cosine_hills_test),
         Val(:gpu_box_analytic_cosine_hills_test),
         Val(:gpu_box_analytic_cosine_hills_float32_test),
+        Val(:box_analytic_no_topography_oswald_config_test),
     )
 
     z_bounds = (; left = 0, right = 13e3) # The Rayleigh sponge starts at 13 km.
@@ -794,14 +828,19 @@ function make_plots(
         "wapredicted",
     ]
     slice_summary_vars = Iterators.flatmap(all_short_names) do short_name
-        hours_to_plot =
-            endswith(short_name, "predicted") ? (Inf,) : (1, 2, 24, Inf)
-        Iterators.flatmap(hours_to_plot) do n_hours
-            Iterators.map(simdirs) do simdir
-                data = get(simdir; short_name)
-                data = window(data, "z_reference"; z_bounds...)
-                data = slice(data; time = n_hours * 60 * 60)
-                is_3d ? slice(data; y = 0) : data
+        Iterators.flatmap(simdirs) do simdir
+            data = get(simdir; short_name)
+            data = window(data, "z_reference"; z_bounds...)
+            data = is_3d ? slice(data; y = 0) : data
+            hours_to_plot = if endswith(short_name, "predicted")
+                (Inf,)
+            elseif last(data.dims["time"]) > 24 * 60 * 60
+                (1, 2, 24, Inf)
+            else
+                (1, 2, 3, 24)
+            end
+            Iterators.map(hours_to_plot) do n_hours
+                slice(data; time = n_hours * 60 * 60)
             end
         end
     end

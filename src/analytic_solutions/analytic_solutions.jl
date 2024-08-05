@@ -10,7 +10,7 @@ background_N(::Type{FT}) where {FT} = FT(0.01)
 background_T_sfc(::Type{FT}) where {FT} = FT(288)
 background_u(::Type{FT}) where {FT} = FT(10)
 
-function initial_thermo_state(params, coord)
+function background_p_and_T(params, ζ)
     FT = eltype(params)
     g = CAP.grav(params)
     R_d = CAP.R_d(params)
@@ -19,29 +19,34 @@ function initial_thermo_state(params, coord)
     N = background_N(FT)
     T_sfc = background_T_sfc(FT)
 
+    g == 0 && return (p_sfc, T_sfc)
+
     β = N^2 / g
     a = g / (cp_d * T_sfc * β)
+    p = p_sfc * (1 - a + a * exp(-β * ζ))^(cp_d / R_d)
+    T = T_sfc * ((1 - a) * exp(β * ζ) + a)
 
-    # Replace ζ with z in the constant-N profile so that the initial condition
-    # is hydrostatically balanced.
-    z = coord.z
-
-    # Replace the constant-N profile with an isothermal profile above T = 100 to
-    # avoid unreasonably small or negative values of T.
+    # Replace the constant-N profile with an isothermal profile above T = T_iso
+    # to avoid unreasonably small or large values of T.
     T_min = FT(100)
-    z_iso = log((T_min / T_sfc - a) / (1 - a)) / β
-    p_iso = p_sfc * ((1 - a) / (1 - a * T_sfc / T_min))^(cp_d / R_d)
+    T_max = FT(500)
+    T_iso = a > 1 ? T_min : T_max
+    ζ_iso = log((T_iso / T_sfc - a) / (1 - a)) / β
+    p_iso = p_sfc * ((1 - a) / (1 - a * T_sfc / T_iso))^(cp_d / R_d)
+    if ζ > ζ_iso
+        p = p_iso * exp(-g / (R_d * T_iso) * (ζ - ζ_iso))
+        T = T_iso
+    end
 
-    # The perturbation in approximate_FΔuvw is computed around a background
-    # state that is not hydrostatically balanced and is unphysical above 30 km,
-    # but the initial condition does not need to exactly match this state.
-    p =
-        z > z_iso ? p_iso * exp(-g / (R_d * T_min) * (z - z_iso)) :
-        p_sfc * (1 - a + a * exp(-β * z))^(cp_d / R_d)
-    T = z > z_iso ? T_min : T_sfc * ((1 - a) * exp(β * z) + a)
-
-    return TD.PhaseDry_pT(CAP.thermodynamics_params(params), p, T)
+    return (p, T)
 end
+
+# Replace ζ with z in the background thermodynamic state so that the initial
+# condition is hydrostatically balanced.
+initial_thermo_state(params, coord) = TD.PhaseDry_pT(
+    CAP.thermodynamics_params(params),
+    background_p_and_T(params, coord.z)...,
+)
 
 function approximate_FΔuvw(params, k_x, k_y, ζ, Fh)
     FT = eltype(params)
@@ -54,19 +59,24 @@ function approximate_FΔuvw(params, k_x, k_y, ζ, Fh)
     u = background_u(FT)
     (; z_top) = CAP.topography_params(params)
 
+    if g == 0
+        Fh == 0 ||
+            error("the analytic solution for topography without gravity has \
+                   not been implemented yet") # TODO: compute limits for g → 0
+        return @SVector(FT[0, 0, 0])
+    end
+
     β = N^2 / g
     a = g / (cp_d * T_sfc * β)
     γ = cp_d / (cp_d - R_d)
     α = g / (γ * R_d * T_sfc * β)
     r = k_y / k_x
     k_h² = k_x^2 + k_y^2
-
-    p = p_sfc * (1 - a + a * exp(-β * ζ))^(cp_d / R_d)
-    T = T_sfc * ((1 - a) * exp(β * ζ) + a)
-
     FΔζ_xh = -im * k_x * Fh # ≈ F(-∂h/∂x / (1 - h/z_top)) to first order in h
     FΔζ_yh = -im * k_y * Fh # ≈ F(-∂h/∂y / (1 - h/z_top)) to first order in h
     FΔζ_z = Fh / z_top # ≈ F(h/z_top / (1 - h/z_top)) to first order in h
+
+    (p, T) = background_p_and_T(params, ζ)
 
     ρ_sfc = p_sfc / (R_d * T_sfc)
     m_sfc = u^2 / (γ * R_d * T_sfc)

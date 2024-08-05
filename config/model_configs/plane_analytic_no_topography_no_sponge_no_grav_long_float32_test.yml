@@ -3,15 +3,16 @@ FLOAT_TYPE: "Float32"
 initial_condition: "ConstantBuoyancyFrequencyProfile"
 topography: "Cosine2D"
 x_max: 300e3
-z_max: 21e3
-x_elem: 15
-z_elem: 50
+z_max: 13e3
+x_elem: 3
+z_elem: 31
 z_stretch: false
 nh_poly: 2
-dt: "12secs"
-t_end: "10days"
-rayleigh_sponge: true
-toml: [toml/analytic_topography_test.toml]
+max_topography_height: 0
+dt: "5secs"
+t_end: "40days"
+rayleigh_sponge: false
+toml: [toml/no_gravity.toml]
 analytic_check: true
 output_default_diagnostics: false
 diagnostics:

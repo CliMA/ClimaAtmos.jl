@@ -39,8 +39,15 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
     end
 
-    # @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
-    @. Yₜ.c.uₕ -= C12(ᶜp / Y.c.ρ * gradₕ(log(ᶜp)) + gradₕ(ᶜK + ᶜΦ))
+    # FT = eltype(Y)
+    # cp_d = FT(CAP.cp_d(p.params))
+    # thermo_params = CAP.thermodynamics_params(p.params)
+    # @. Yₜ.c.uₕ -= C12(
+    #     cp_d *
+    #     TD.virtual_pottemp(thermo_params, p.precomputed.ᶜts) *
+    #     gradₕ(TD.exner(thermo_params, p.precomputed.ᶜts)) + gradₕ(ᶜK + ᶜΦ),
+    # )
+    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end

@@ -4,12 +4,13 @@ initial_condition: "ConstantBuoyancyFrequencyProfile"
 topography: "Cosine2D"
 x_max: 300e3
 z_max: 21e3
-x_elem: 15
+x_elem: 3
 z_elem: 50
 z_stretch: false
+nh_poly: 2
 max_topography_height: 0
-dt: "12secs"
-t_end: "100days"
+dt: "5secs"
+t_end: "50days"
 hyperdiff: false
 rayleigh_sponge: true
 toml: [toml/analytic_topography_test.toml]

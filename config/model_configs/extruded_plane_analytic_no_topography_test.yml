@@ -5,12 +5,12 @@ topography: "Cosine2D"
 x_max: 300e3
 y_max: 40e3
 z_max: 21e3
-x_elem: 15
+x_elem: 3
 y_elem: 2
 z_elem: 50
 z_stretch: false
 max_topography_height: 0
-dt: "12secs"
+dt: "5secs"
 t_end: "5days"
 rayleigh_sponge: true
 toml: [toml/analytic_topography_test.toml]
