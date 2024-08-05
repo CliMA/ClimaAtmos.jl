@@ -8,7 +8,7 @@ topography: "Earth"
 topo_smoothing: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-dt: "120secs"
+dt: "60secs"
 t_end: "360days"
 dt_save_state_to_disk: "1hours"
 moist: "equil"
@@ -22,6 +22,6 @@ toml: [toml/longrun_aquaplanet.toml]
 restart_file: "/scratch/clima/slurm-buildkite/climaatmos-gpulongruns/311/climaatmos-gpulongruns/longrun_aquaplanet_allsky_0M_earth/output_0000/day34.14400.hdf5"
 diagnostics:
   - short_name: [edt, evu, hfes, evspsbl]
-    period: 2mins
+    period: 1mins
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr, hfes]
-    period: 2mins
+    period: 1mins
