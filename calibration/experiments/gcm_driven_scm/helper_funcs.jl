@@ -20,12 +20,16 @@ CLIMADIAGNOSTICS_LES_NAME_MAP =
 
 
 """Get z coordinates of CA run, given config. """
-function get_z_grid(atmos_config)
+function get_z_grid(atmos_config; z_max = nothing)
     params = CA.create_parameter_set(atmos_config)
     spaces =
         CA.get_spaces(atmos_config.parsed_args, params, atmos_config.comms_ctx)
     coord = CA.Fields.coordinate_field(spaces.center_space)
-    return convert(Vector{Float64}, parent(coord.z)[:])
+    z_vec = convert(Vector{Float64}, parent(coord.z)[:])
+    if !isnothing(z_max)
+        z_vec = filter(x -> x <= z_max, z_vec)
+    end
+    return z_vec
 end
 
 

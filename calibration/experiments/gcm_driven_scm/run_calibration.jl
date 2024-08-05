@@ -21,6 +21,7 @@ const n_iterations = experiment_config["n_iterations"]
 const ensemble_size = experiment_config["ensemble_size"]
 const output_dir = experiment_config["output_dir"]
 const model_config = experiment_config["model_config"]
+const z_max = experiment_config["z_max"]
 const prior =
     CAL.get_prior(joinpath(experiment_dir, experiment_config["prior"]))
 
@@ -30,7 +31,7 @@ atmos_config = CA.AtmosConfig(model_config_dict)
 
 
 # get/store LES obs and norm factors 
-zc_model = get_z_grid(atmos_config)
+zc_model = get_z_grid(atmos_config; z_max)
 
 norm_factors_dict = Dict(
     "thetaa" => [306.172, 8.07383],

@@ -32,6 +32,7 @@ function observation_map(iteration)
                 y_names = config_dict["y_var_names"],
                 t_start = config_dict["g_t_start_sec"],
                 t_end = config_dict["g_t_end_sec"],
+                z_max = config_dict["z_max"],
                 norm_factors_dict = f_diagnostics["norm_factors_dict"],
             )
         catch err
@@ -49,15 +50,21 @@ function process_member_data(
     reduction = "inst",
     t_start,
     t_end,
+    z_max = nothing,
     norm_factors_dict = nothing,
 )
     forcing_file_indices = EKP.get_current_minibatch(eki)
     g = Float64[]
     for i in forcing_file_indices
-        # simdir = SimDir(joinpath(member_path * "_config_$i", "output_active"))
-        simdir = SimDir(joinpath(member_path, "config_$i", "output_active"))
+        simdir = SimDir(joinpath(member_path, "config_$i", "output_0000"))
         for (i, y_name) in enumerate(y_names)
             var_i = get(simdir; short_name = y_name, reduction)
+
+            # subset vertical coordinate
+            if !isnothing(z_max)
+                z_window = filter(x -> x <= z_max, var_i.dims["z"])
+                var_i = window(var_i, "z", right = maximum(z_window))
+            end
             sim_t_end = var_i.dims["time"][end]
 
             if sim_t_end < 0.95 * t_end

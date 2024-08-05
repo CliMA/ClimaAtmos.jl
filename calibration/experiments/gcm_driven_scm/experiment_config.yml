@@ -5,7 +5,8 @@ batch_size: 1
 model_config : model_config_prognostic.yml
 output_dir : output/gcm_driven_scm
 y_var_names: [thetaa, hus, clw]
-dims : 180  # num vertical levels x num variables x batch size
+z_max : 4000 # [m]
+dims : 90  # num vertical levels below z_max x num variables x batch size
 y_t_start_sec : 475200.0 # 5.5 days (LES length = 6 days)
 y_t_end_sec : 518400.0 # 6.0 days
 g_t_start_sec : 216000.0 # 2.5 days(SCM length = 3 days)
