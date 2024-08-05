@@ -1,4 +1,4 @@
-device: CUDA
+device: CUDADevice
 job_id: "les_isdac_box"
 initial_condition: "ISDAC" 
 subsidence: "ISDAC" 
