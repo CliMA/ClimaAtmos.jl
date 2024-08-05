@@ -104,7 +104,7 @@ struct NoPrecipState{FT} <: PrecipState{FT} end
 """
     PrecipState1M(; q_rai, q_sno)
 
-Stores the values of `ρq_rai` and `ρq_sno` for the `precip_model`.
+Stores the values of `q_rai` and `q_sno` for the `precip_model`.
 If no values are provided, they are set to zero.
 """
 struct PrecipState1M{FT} <: PrecipState{FT}
@@ -113,3 +113,17 @@ struct PrecipState1M{FT} <: PrecipState{FT}
 end
 PrecipState1M(; q_rai = 0, q_sno = 0) =
     PrecipState1M{typeof(q_rai)}(q_rai, q_sno)
+
+"""
+    PrecipState2M(; n_liq, q_rai, n_rai)
+
+Stores the values of `q_rai` and `n_rai` and `n_liq` for the `precip_model`.
+If no values are provided, they are set to zero.
+"""
+struct PrecipState2M{FT} <: PrecipState{FT}
+    n_liq::FT
+    q_rai::FT
+    n_rai::FT
+end
+PrecipState2M(; n_liq = 0, q_rai = 0, n_rai = 0) =
+    PrecipState2M{typeof(q_rai)}(n_liq, q_rai, n_rai)
