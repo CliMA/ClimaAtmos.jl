@@ -722,6 +722,8 @@ const AnalyticTopographyTest = Union{
     Val{:plane_analytic_no_topography_float32_test},
     Val{:gpu_plane_analytic_no_topography_long_test},
     Val{:gpu_plane_analytic_no_topography_long_float32_test},
+    Val{:gpu_plane_analytic_no_topography_no_sponge_long_test},
+    Val{:gpu_plane_analytic_no_topography_no_sponge_long_float32_test},
     Val{:gpu_plane_analytic_no_topography_no_hyperdiff_long_test},
     Val{:gpu_plane_analytic_no_topography_no_hyperdiff_long_float32_test},
     Val{:gpu_plane_analytic_no_topography_discrete_balance_long_test},
