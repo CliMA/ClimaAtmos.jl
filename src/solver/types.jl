@@ -125,6 +125,7 @@ end
 # maybe need to <: AbstractForcing
 struct GCMForcing{FT}
     external_forcing_file::String
+    cfsite_number::String
 end
 
 struct EDMFCoriolis{U, V, FT}

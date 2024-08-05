@@ -56,7 +56,7 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
     insolation = similar(Fields.level(Y.c.ρ, 1), FT)
     cos_zenith = similar(Fields.level(Y.c.ρ, 1), FT)
 
-    (; external_forcing_file) = external_forcing
+    (; external_forcing_file, cfsite_number) = external_forcing
 
     NC.Dataset(external_forcing_file, "r") do ds
 
@@ -64,7 +64,7 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_forcing,
-                gcm_driven_profile_tmean(ds.group["site23"], varname),
+                gcm_driven_profile_tmean(ds.group[cfsite_number], varname),
             )
         end
 
@@ -79,24 +79,24 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_forcing,
-                gcm_driven_profile_tmean(ds.group["site23"], varname) .*
-                .-(gcm_driven_profile_tmean(ds.group["site23"], "alpha")) ./
-                CAP.grav(params),
+                gcm_driven_profile_tmean(ds.group[cfsite_number], varname) .* .-(
+                    gcm_driven_profile_tmean(ds.group[cfsite_number], "alpha"),
+                ) ./ CAP.grav(params),
             )
         end
 
         function set_insolation!(cc_field)
             parent(cc_field) .= mean(
-                ds.group["site23"]["rsdt"][:] ./
-                ds.group["site23"]["coszen"][:],
+                ds.group[cfsite_number]["rsdt"][:] ./
+                ds.group[cfsite_number]["coszen"][:],
             )
         end
 
         function set_cos_zenith!(cc_field)
-            parent(cc_field) .= ds.group["site23"]["coszen"][1]
+            parent(cc_field) .= ds.group[cfsite_number]["coszen"][1]
         end
 
-        zc_forcing = gcm_height(ds.group["site23"])
+        zc_forcing = gcm_height(ds.group[cfsite_number])
         Fields.bycolumn(axes(Y.c)) do colidx
 
             zc_gcm = Fields.coordinate_field(Y.c).z[colidx]

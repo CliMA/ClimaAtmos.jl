@@ -1147,17 +1147,18 @@ The `InitialCondition` from a provided GCM forcing file, with data type `DType`.
 """
 struct GCMDriven <: InitialCondition
     external_forcing_file::String
+    cfsite_number::String
 end
 
 function (initial_condition::GCMDriven)(params)
-    (; external_forcing_file) = initial_condition
+    (; external_forcing_file, cfsite_number) = initial_condition
     thermo_params = CAP.thermodynamics_params(params)
 
     # Read forcing file
     z_gcm = NC.NCDataset(external_forcing_file) do ds
-        vec(gcm_height(ds.group["site23"]))
+        vec(gcm_height(ds.group[cfsite_number]))
     end
-    vars = gcm_initial_conditions(external_forcing_file)
+    vars = gcm_initial_conditions(external_forcing_file, cfsite_number)
     T, u, v, q_tot, ρ₀ = map(vars) do value
         Intp.extrapolate(
             Intp.interpolate((z_gcm,), value, Intp.Gridded(Intp.Linear())),
@@ -1184,15 +1185,14 @@ function (initial_condition::GCMDriven)(params)
     return local_state
 end
 
-# function gcm_initial_conditions(external_forcing_file, FT)
-function gcm_initial_conditions(external_forcing_file)
+function gcm_initial_conditions(external_forcing_file, cfsite_number)
     NC.NCDataset(external_forcing_file) do ds
         (  # TODO: Cast to CuVector for GPU compatibility
-            gcm_driven_profile_tmean(ds.group["site23"], "ta"),
-            gcm_driven_profile_tmean(ds.group["site23"], "ua"),
-            gcm_driven_profile_tmean(ds.group["site23"], "va"),
-            gcm_driven_profile_tmean(ds.group["site23"], "hus"),
-            vec(mean(1 ./ ds.group["site23"]["alpha"][:, :], dims = 2)), # convert alpha to rho using rho=1/alpha, take average profile
+            gcm_driven_profile_tmean(ds.group[cfsite_number], "ta"),
+            gcm_driven_profile_tmean(ds.group[cfsite_number], "ua"),
+            gcm_driven_profile_tmean(ds.group[cfsite_number], "va"),
+            gcm_driven_profile_tmean(ds.group[cfsite_number], "hus"),
+            vec(mean(1 ./ ds.group[cfsite_number]["alpha"][:, :], dims = 2)), # convert alpha to rho using rho=1/alpha, take average profile
         )
     end
 end
