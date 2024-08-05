@@ -1,6 +1,6 @@
 prior: prior.toml
-ensemble_size: 10
-n_iterations: 3
+ensemble_size: 15
+n_iterations: 5
 model_config: model_config.yml
 observations: observations.jld2
 noise: obs_noise_cov.jld2
@@ -10,5 +10,5 @@ y_var_names: [rlut] # , rsut, rlutcs, rsutcs
 dims: 1 # num vertical levels x num variables, also shape of observations
 y_t_start_sec : 475200.0 # 5.5 days (LES length = 6 days)
 y_t_end_sec : 518400.0 # 6.0 days 
-g_t_start_sec : 10800.0 # 1 day
-g_t_end_sec : 21600.0 # 2 days
+g_t_start_sec : 72000.0 # 1 day
+g_t_end_sec : 144000.0 # 2 days

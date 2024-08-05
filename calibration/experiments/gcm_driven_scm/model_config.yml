@@ -24,8 +24,8 @@ dz_bottom: 30
 dz_top: 3000
 perturb_initstate: false
 dt: "5secs" 
-t_end: "6hours"
-dt_save_state_to_disk: "12hours"
+t_end: "40hours"
+dt_save_state_to_disk: "40hours"
 call_cloud_diagnostics_per_stage : true
 toml: [scm_tomls/prognostic_edmfx_bomex.toml]
 netcdf_output_at_levels: true

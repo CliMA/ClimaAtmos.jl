@@ -87,3 +87,68 @@ experiment_config = CAL.ExperimentConfig(;
 )
 # Run calibration
 julia_eki = CAL.calibrate(CAL.JuliaBackend, experiment_config)
+
+
+
+
+
+import ClimaAtmos as CA
+import ClimaAnalysis: SimDir, get, slice, average_xy
+import CairoMakie
+import JLD2
+import LinearAlgebra: I
+import EnsembleKalmanProcesses as EKP
+import Statistics: var, mean
+using Test
+using Revise
+
+# load observation map
+include("observation_map.jl")
+
+
+# add processes
+using Distributed
+addprocs(9)
+
+@everywhere begin
+    using Revise
+    import ClimaCalibrate as CAL
+    import ClimaAtmos as CA
+    const experiment_dir = joinpath(pkgdir(CA), "calibration", "experiments", "gcm_driven_scm")
+    const model_interface =
+        joinpath(pkgdir(CA), "calibration", "model_interface.jl")
+    const output_dir = joinpath("output", "gcm_driven_scm")
+    # include model interface
+    includet(model_interface)
+end
+
+
+# Generate observations
+obs_path = joinpath(experiment_dir, "observations.jld2")
+# if !isfile(obs_path)
+#     @info "Generating observations"
+#     config = CA.AtmosConfig(joinpath(experiment_dir, "model_config.yml"))
+#     simulation = CA.get_simulation(config)
+#     CA.solve_atmos!(simulation)
+#     observations = Vector{Float64}(undef, 1)
+#     observations .= process_member_data(SimDir(simulation.output_dir))
+#     JLD2.save_object(obs_path, observations)
+# end
+
+# Initialize experiment data
+observations = JLD2.load_object(obs_path)
+noise = 0.1 * I
+n_iterations = 3
+ensemble_size = 9
+prior = CAL.get_prior(joinpath(experiment_dir, "prior.toml"))
+experiment_config = CAL.ExperimentConfig(;
+    n_iterations,
+    ensemble_size,
+    observations,
+    noise,
+    output_dir,
+    prior,
+)
+# Run calibration
+julia_eki = CAL.calibrate(CAL.JuliaBackend, experiment_config)
+
