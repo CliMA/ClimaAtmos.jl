@@ -14,10 +14,10 @@ function observation_map(iteration)
         config_dict["ensemble_size"],
     )
 
-    # f_diagnostics = JLD2.jldopen(
-    #     joinpath(config_dict["output_dir"], "norm_vec_obs.jld2"),
-    #     "r+",
-    # )
+    f_diagnostics = JLD2.jldopen(
+        joinpath(config_dict["output_dir"], "norm_vec_obs.jld2"),
+        "r+",
+    )
 
     for m in 1:config_dict["ensemble_size"]
         member_path = TOMLInterface.path_to_ensemble_member(
@@ -32,7 +32,7 @@ function observation_map(iteration)
                 y_names = config_dict["y_var_names"],
                 t_start = config_dict["g_t_start_sec"],
                 t_end = config_dict["g_t_end_sec"],
-                # norm_vec_obs = f_diagnostics["norm_vec_obs"],
+                norm_vec_obs = f_diagnostics["norm_vec_obs"],
             )
         catch err
             @info "Error during observation map for ensemble member $m" err
