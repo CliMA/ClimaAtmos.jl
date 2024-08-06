@@ -58,7 +58,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
-    edmfx_filter_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    # edmfx_filter_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     # Non-equilibrium cloud formation
     cloud_condensate_tendency!(Yₜ, p, p.atmos.moisture_model)

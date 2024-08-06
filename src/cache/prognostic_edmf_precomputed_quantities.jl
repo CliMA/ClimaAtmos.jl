@@ -232,11 +232,11 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             max(ᶜtke⁰, 0),
             p.atmos.edmfx_entr_model,
         )
-        @. ᶜentrʲs.:($$j) = limit_entrainment(
-            ᶜentrʲs.:($$j),
-            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-            dt,
-        )
+        # @. ᶜentrʲs.:($$j) = limit_entrainment(
+        #     ᶜentrʲs.:($$j),
+        #     draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+        #     dt,
+        # )
         @. ᶜvert_div = ᶜdivᵥ(ᶠinterp(ᶜρʲs.:($$j)) * ᶠu³ʲs.:($$j)) / ᶜρʲs.:($$j)
         @. ᶜmassflux_vert_div =
             ᶜdivᵥ(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) * ᶠu³ʲs.:($$j))

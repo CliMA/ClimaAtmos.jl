@@ -69,11 +69,20 @@ function entrainment(
         Π₁ = min(max(Π₁, -1), 1)
         Π₂ = min(max(Π₂, -1), 1)
 
-        entr =
-            abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) * (
-                entr_param_vec[1] * Π₁ + entr_param_vec[2] * Π₂ + entr_param_vec[3] * Π₃ +
-                entr_param_vec[4] * Π₄ + entr_param_vec[5] * Π₅ + entr_param_vec[6]
-            )
+        # entr =
+        #     abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) * (
+        #         entr_param_vec[1] * Π₁ + entr_param_vec[2] * Π₂ + entr_param_vec[3] * Π₃ +
+        #         entr_param_vec[4] * Π₄ + entr_param_vec[5] * Π₅ + entr_param_vec[6]
+        #     ) + entr_param_vec[13] * exp(-entr_param_vec[14] * ᶜaʲ)
+        # entr = 0.2/ (ᶜz - z_sfc)
+        # entr =
+        #     abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) * (
+        #         entr_param_vec[1] * Π₁ + entr_param_vec[2] * Π₂ + entr_param_vec[3] * Π₃ +
+        #         entr_param_vec[4] * Π₄ + entr_param_vec[5] * Π₅ + entr_param_vec[6]
+        #     ) #+ 1e-3
+
+        # entr = (entr_param_vec[6] / (ᶜz - z_sfc)) +  entr_param_vec[13] * exp(-entr_param_vec[14] * ᶜaʲ)
+        entr = entr_param_vec[5]*abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) + entr_param_vec[6] * abs((ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰) + eps(FT))) +  entr_param_vec[13] * exp(-entr_param_vec[14] * ᶜaʲ)
 
         return entr
     end
@@ -231,11 +240,12 @@ function detrainment(
         # Π₁, Π₂ are unbounded, so clip values that blow up
         Π₁ = min(max(Π₁, -1), 1)
         Π₂ = min(max(Π₂, -1), 1)
-        detr =
-            -min(ᶜmassflux_vert_div, 0) / ᶜρaʲ * (
-                entr_param_vec[7] * Π₁ + entr_param_vec[8] * Π₂ + entr_param_vec[9] * Π₃ +
-                entr_param_vec[10] * Π₄ + entr_param_vec[11] * Π₅ + entr_param_vec[12]
-            )
+        # detr =
+        #     -min(ᶜmassflux_vert_div, 0) / ᶜρaʲ * (
+        #         entr_param_vec[7] * Π₁ + entr_param_vec[8] * Π₂ + entr_param_vec[9] * Π₃ +
+        #         entr_param_vec[10] * Π₄ + entr_param_vec[11] * Π₅ + entr_param_vec[12]
+        #     )
+        detr = (-min(ᶜmassflux_vert_div, 0) / ᶜρaʲ *  entr_param_vec[12]) + entr_param_vec[15] * exp(-entr_param_vec[16]*(1 - ᶜaʲ))
         return detr
     end
 end
@@ -326,14 +336,15 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         @. Yₜ.c.sgsʲs.:($$j).ρa +=
             Y.c.sgsʲs.:($$j).ρa * (ᶜentrʲs.:($$j) - ᶜdetrʲs.:($$j))
 
-        @. Yₜ.c.sgsʲs.:($$j).mse +=
-            ᶜentrʲs.:($$j) * (ᶜmse⁰ - Y.c.sgsʲs.:($$j).mse)
+        # turb_entr = 0.0
+        # @. Yₜ.c.sgsʲs.:($$j).mse +=
+        #     (ᶜentrʲs.:($$j) .+ turb_entr) * (ᶜmse⁰ - Y.c.sgsʲs.:($$j).mse)
 
-        @. Yₜ.c.sgsʲs.:($$j).q_tot +=
-            ᶜentrʲs.:($$j) * (ᶜq_tot⁰ - Y.c.sgsʲs.:($$j).q_tot)
+        # @. Yₜ.c.sgsʲs.:($$j).q_tot +=
+        #     (ᶜentrʲs.:($$j) .+ turb_entr) * (ᶜq_tot⁰ - Y.c.sgsʲs.:($$j).q_tot)
 
-        @. Yₜ.f.sgsʲs.:($$j).u₃ +=
-            ᶠinterp(ᶜentrʲs.:($$j)) * (ᶠu₃⁰ - Y.f.sgsʲs.:($$j).u₃)
+        # @. Yₜ.f.sgsʲs.:($$j).u₃ +=
+        #     ᶠinterp(ᶜentrʲs.:($$j)) * (ᶠu₃⁰ - Y.f.sgsʲs.:($$j).u₃)
     end
     return nothing
 end
