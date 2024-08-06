@@ -6,12 +6,17 @@ using Interpolations
 using Statistics
 import ClimaAtmos
 import ClimaAtmos as CA
+import ClimaCore
+import ClimaCore.Spaces as Spaces
+import ClimaCore.Fields as Fields
+import ClimaCore.Geometry as Geometry
+import ClimaCore.Operators as Operators
 const FT = Float64
 
 include("../gw_plotutils.jl")
 
 # compute the source parameters
-function non_orographic_gravity_wave(
+function non_orographic_gravity_wave_param(
     lat,
     ::Type{FT};
     gw_source_pressure = FT(31500),
@@ -75,7 +80,7 @@ function non_orographic_gravity_wave(
         gw_cw = gw_cw,
         gw_cn = cn,
         gw_c0 = c0,
-        gw_flag = gw_flag,
+        gw_flag = 0,
         gw_nk = nk,
     )
 end
@@ -124,18 +129,63 @@ bf = @. (grav / T) * (dTdz + grav / cp_d)
 bf = @. ifelse(bf < 2.5e-5, sqrt(2.5e-5), sqrt(abs(bf)))
 
 # compute u/v forcings from convective gravity waves
-params = non_orographic_gravity_wave(lat, FT)
-B0 = similar(params.gw_c)
+param = non_orographic_gravity_wave_param(lat, FT)
 # nogw forcing
 
 kmax = length(pfull) - 1
-k_source = findfirst(pfull * 100 .> params.gw_source_pressure)
-k_damp = findlast(pfull * 100 .< params.gw_damp_pressure)
+k_source = findfirst(pfull * 100 .> param.gw_source_pressure)
+k_damp = findlast(pfull * 100 .< param.gw_damp_pressure)
 
 uforcing = zeros(size(lev))
 vforcing = zeros(size(lev))
-for i in 1:length(lon)
-    for j in 1:length(lat)
+
+column_domain = ClimaCore.Domains.IntervalDomain(
+    ClimaCore.Geometry.ZPoint(FT(z[1, 1, end, 1])) ..
+    ClimaCore.Geometry.ZPoint(FT(z[1, 1, 1, 1])),
+    boundary_names = (:bottom, :top),
+)
+
+column_mesh = ClimaCore.Meshes.IntervalMesh(column_domain, nelems = 40)
+
+# construct  the face space from the center one
+column_face_space = ClimaCore.Spaces.FaceFiniteDifferenceSpace(column_mesh)
+column_center_space =
+    ClimaCore.Spaces.CenterFiniteDifferenceSpace(column_face_space)
+
+coordinate = Fields.coordinate_field(column_center_space)
+
+coordinate = Fields.coordinate_field(column_center_space)
+gw_ncval = Val(333)
+ᶜz = coordinate.z
+ᶜρ = copy(ᶜz)
+ᶜu = copy(ᶜz)
+ᶜv = copy(ᶜz)
+ᶜbf = copy(ᶜz)
+ᶜlevel = similar(ᶜρ, FT)
+u_waveforcing = similar(ᶜu)
+v_waveforcing = similar(ᶜv)
+for i in 1:Spaces.nlevels(axes(ᶜρ))
+    fill!(Fields.level(ᶜlevel, i), i)
+end
+ᶜuforcing = similar(ᶜρ, FT)
+ᶜvforcing = similar(ᶜρ, FT)
+
+
+scratch = (;
+    ᶜtemp_scalar = similar(ᶜz, FT),
+    ᶜtemp_scalar_2 = similar(ᶜz, FT),
+    ᶜtemp_scalar_3 = similar(ᶜz, FT),
+    ᶜtemp_scalar_4 = similar(ᶜz, FT),
+    ᶜtemp_scalar_5 = similar(ᶜz, FT),
+    temp_field_level = similar(Fields.level(ᶜz, 1), FT),
+)
+
+#params = (; non_orographic_gravity_wave, scratch)
+
+for j in 1:length(lat)
+    non_orographic_gravity_wave = non_orographic_gravity_wave_param(lat[j], FT)
+    params = (; non_orographic_gravity_wave, scratch)
+    for i in 1:length(lon)
         for it in 1:length(time)
             source_level =
                 kmax + 2 - Int(
@@ -145,63 +195,43 @@ for i in 1:length(lon)
                     ),
                 )
             damp_level = length(pfull) + 1 - k_damp
+            Base.parent(ᶜz) .= z[i, j, end:-1:1, it]
+            Base.parent(ᶜρ) .= ρ[i, j, end:-1:1, it]
+            Base.parent(ᶜu) .= u[i, j, end:-1:1, it]
+            Base.parent(ᶜv) .= v[i, j, end:-1:1, it]
+            Base.parent(ᶜbf) .= bf[i, j, end:-1:1, it]
+            ᶜρ_source = Fields.level(ᶜρ, source_level)
+            ᶜu_source = Fields.level(ᶜu, source_level)
+            ᶜv_source = Fields.level(ᶜv, source_level)
+            ᶜuforcing .= 0
+            ᶜvforcing .= 0
 
-            uforcing[i, j, :, it] = CA.non_orographic_gravity_wave_forcing(
-                u[i, j, end:-1:1, it],
-                bf[i, j, end:-1:1, it],
-                ρ[i, j, end:-1:1, it],
-                z[i, j, end:-1:1, it],
+            CA.non_orographic_gravity_wave_forcing(
+                ᶜu,
+                ᶜv,
+                ᶜbf,
+                ᶜρ,
+                ᶜz,
+                ᶜlevel,
                 source_level,
                 damp_level,
-                params.gw_source_ampl[j],
-                params.gw_Bw,
-                params.gw_Bn[j],
-                B0,
-                params.gw_cw[j],
-                params.gw_cn,
-                params.gw_flag[j],
-                params.gw_c,
-                params.gw_c0,
-                params.gw_nk,
+                ᶜρ_source,
+                ᶜu_source,
+                ᶜv_source,
+                ᶜuforcing,
+                ᶜvforcing,
+                gw_ncval,
+                u_waveforcing,
+                v_waveforcing,
+                params,
             )
+
+            uforcing[i, j, :, it] = parent(ᶜuforcing)
+            vforcing[i, j, :, it] = parent(ᶜvforcing)
         end
     end
 end
 uforcing_zonalave = dropdims(mean(uforcing, dims = 1), dims = 1)
-
-for i in 1:length(lon)
-    for j in 1:length(lat)
-        for it in 1:length(time)
-            source_level =
-                kmax + 2 - Int(
-                    floor(
-                        (kmax + 1) -
-                        ((kmax + 1 - k_source) * cosd(lat[j]) + 0.5),
-                    ),
-                )
-            damp_level = length(pfull) + 1 - k_damp
-
-            vforcing[i, j, :, it] = CA.non_orographic_gravity_wave_forcing(
-                v[i, j, end:-1:1, it],
-                bf[i, j, end:-1:1, it],
-                ρ[i, j, end:-1:1, it],
-                z[i, j, end:-1:1, it],
-                source_level,
-                damp_level,
-                params.gw_source_ampl[j],
-                params.gw_Bw,
-                params.gw_Bn[j],
-                B0,
-                params.gw_cw[j],
-                params.gw_cn,
-                params.gw_flag[j],
-                params.gw_c,
-                params.gw_c0,
-                params.gw_nk,
-            )
-        end
-    end
-end
 vforcing_zonalave = dropdims(mean(vforcing, dims = 1), dims = 1)
 
 # plots

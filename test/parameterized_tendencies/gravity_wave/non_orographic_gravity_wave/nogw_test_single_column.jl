@@ -6,6 +6,11 @@ using Interpolations
 using Statistics
 import ClimaAtmos
 import ClimaAtmos as CA
+import ClimaCore
+import ClimaCore.Spaces as Spaces
+import ClimaCore.Fields as Fields
+import ClimaCore.Geometry as Geometry
+import ClimaCore.Operators as Operators
 
 include("../gw_plotutils.jl")
 
@@ -18,7 +23,7 @@ face_z = FT.(0:1e3:0.5e5)
 center_z = FT(0.5) .* (face_z[1:(end - 1)] .+ face_z[2:end])
 
 # compute the source parameters
-function non_orographic_gravity_wave(
+function non_orographic_gravity_wave_param(
     ::Type{FT};
     source_height = FT(15000),
     Bw = FT(1.2),
@@ -47,8 +52,14 @@ function non_orographic_gravity_wave(
     )
 end
 
-params = non_orographic_gravity_wave(FT; Bw = 0.4, cmax = 150, kwv = 2π / 100e3)
-source_level = argmin(abs.(center_z .- params.gw_source_height))
+non_orographic_gravity_wave = non_orographic_gravity_wave_param(
+    FT;
+    Bw = 0.4,
+    cmax = 150,
+    kwv = 2π / 100e3,
+)
+source_level =
+    argmin(abs.(center_z .- non_orographic_gravity_wave.gw_source_height))
 damp_level = length(center_z)
 
 include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
@@ -123,36 +134,93 @@ center_bf_mean = mean(center_bf, dims = 1)[1, :, :]
 center_ρ_mean = mean(center_ρ, dims = 1)[1, :, :]
 
 # monthly ave Jan, April, July, Oct
+
+column_domain = ClimaCore.Domains.IntervalDomain(
+    ClimaCore.Geometry.ZPoint(0.0) .. ClimaCore.Geometry.ZPoint(50000.0),
+    boundary_names = (:bottom, :top),
+)
+
+column_mesh = ClimaCore.Meshes.IntervalMesh(column_domain, nelems = 50)
+
+column_center_space = ClimaCore.Spaces.CenterFiniteDifferenceSpace(column_mesh)
+# construct the face space from the center one
+column_face_space =
+    ClimaCore.Spaces.FaceFiniteDifferenceSpace(column_center_space)
+
+coord = ClimaCore.Fields.coordinate_field(column_center_space)
+
+gw_ncval = Val(501)
+ᶜz = coord.z
+ᶜρ = copy(ᶜz)
+ᶜu = copy(ᶜz)
+ᶜv = copy(ᶜz)
+ᶜbf = copy(ᶜz)
+ᶜlevel = similar(ᶜρ, FT)
+u_waveforcing = similar(ᶜu)
+v_waveforcing = similar(ᶜv)
+for i in 1:Spaces.nlevels(axes(ᶜρ))
+    fill!(Fields.level(ᶜlevel, i), i)
+end
+
+# zonal mean
+center_u_mean = mean(center_u, dims = 1)[1, :, :]
+center_bf_mean = mean(center_bf, dims = 1)[1, :, :]
+center_ρ_mean = mean(center_ρ, dims = 1)[1, :, :]
+
+# monthly ave Jan, April, July, Oct
 month = Dates.month.(time)
 
 ENV["GKSwstype"] = "nul"
 output_dir = "nonorographic_gravity_wave_test_single_column"
 mkpath(output_dir)
 
-B0 = similar(params.gw_c)
+scratch = (;
+    ᶜtemp_scalar = similar(ᶜz, FT),
+    ᶜtemp_scalar_2 = similar(ᶜz, FT),
+    ᶜtemp_scalar_3 = similar(ᶜz, FT),
+    ᶜtemp_scalar_4 = similar(ᶜz, FT),
+    ᶜtemp_scalar_5 = similar(ᶜz, FT),
+    temp_field_level = similar(Fields.level(ᶜz, 1), FT),
+)
+
+params = (; non_orographic_gravity_wave, scratch)
 
 # Jan
 Jan_u = mean(center_u_mean[:, month .== 1], dims = 2)[:, 1]
 Jan_bf = mean(center_bf_mean[:, month .== 1], dims = 2)[:, 1]
 Jan_ρ = mean(center_ρ_mean[:, month .== 1], dims = 2)[:, 1]
-Jan_uforcing = CA.non_orographic_gravity_wave_forcing(
-    Jan_u,
-    Jan_bf,
-    Jan_ρ,
-    center_z,
+Base.parent(ᶜρ) .= Jan_ρ
+ᶜv = ᶜu
+Base.parent(ᶜu) .= Jan_u
+Base.parent(ᶜbf) .= Jan_bf
+ᶜρ_source = Fields.level(ᶜρ, source_level)
+ᶜu_source = Fields.level(ᶜu, source_level)
+ᶜv_source = Fields.level(ᶜv, source_level)
+Jan_uforcing = similar(ᶜρ, FT)
+Jan_uforcing .= 0
+Jan_vforcing = similar(ᶜρ, FT)
+Jan_vforcing .= 0
+
+CA.non_orographic_gravity_wave_forcing(
+    ᶜu,
+    ᶜv,
+    ᶜbf,
+    ᶜρ,
+    ᶜz,
+    ᶜlevel,
     source_level,
     damp_level,
-    params.gw_source_ampl,
-    params.gw_Bw,
-    params.gw_Bn,
-    B0,
-    params.gw_cw,
-    params.gw_cn,
-    params.gw_flag,
-    params.gw_c,
-    params.gw_c0,
-    params.gw_nk,
+    ᶜρ_source,
+    ᶜu_source,
+    ᶜv_source,
+    Jan_uforcing,
+    Jan_vforcing,
+    gw_ncval,
+    u_waveforcing,
+    v_waveforcing,
+    params,
 )
+Jan_uforcing = Base.parent(Jan_uforcing)
 fig = generate_empty_figure();
 create_plot!(
     fig;
@@ -166,24 +234,35 @@ CairoMakie.save(joinpath(output_dir, "fig6jan.png"), fig)
 April_u = mean(center_u_mean[:, month .== 4], dims = 2)[:, 1]
 April_bf = mean(center_bf_mean[:, month .== 4], dims = 2)[:, 1]
 April_ρ = mean(center_ρ_mean[:, month .== 4], dims = 2)[:, 1]
-April_uforcing = CA.non_orographic_gravity_wave_forcing(
-    April_u,
-    April_bf,
-    April_ρ,
-    center_z,
+Base.parent(ᶜρ) .= April_ρ
+ᶜv = ᶜu
+Base.parent(ᶜu) .= April_u
+Base.parent(ᶜbf) .= April_bf
+April_uforcing = similar(ᶜρ, FT)
+April_uforcing .= 0
+April_vforcing = similar(ᶜρ, FT)
+April_vforcing .= 0
+
+CA.non_orographic_gravity_wave_forcing(
+    ᶜu,
+    ᶜv,
+    ᶜbf,
+    ᶜρ,
+    ᶜz,
+    ᶜlevel,
     source_level,
     damp_level,
-    params.gw_source_ampl,
-    params.gw_Bw,
-    params.gw_Bn,
-    B0,
-    params.gw_cw,
-    params.gw_cn,
-    params.gw_flag,
-    params.gw_c,
-    params.gw_c0,
-    params.gw_nk,
+    ᶜρ_source,
+    ᶜu_source,
+    ᶜv_source,
+    April_uforcing,
+    April_vforcing,
+    gw_ncval,
+    u_waveforcing,
+    v_waveforcing,
+    params,
 )
+April_uforcing = Base.parent(April_uforcing)
 fig = generate_empty_figure();
 create_plot!(
     fig;
@@ -197,24 +276,36 @@ CairoMakie.save(joinpath(output_dir, "fig6apr.png"), fig)
 July_u = mean(center_u_mean[:, month .== 7], dims = 2)[:, 1]
 July_bf = mean(center_bf_mean[:, month .== 7], dims = 2)[:, 1]
 July_ρ = mean(center_ρ_mean[:, month .== 7], dims = 2)[:, 1]
-July_uforcing = CA.non_orographic_gravity_wave_forcing(
-    July_u,
-    July_bf,
-    July_ρ,
-    center_z,
+Base.parent(ᶜρ) .= July_ρ
+ᶜv = ᶜu
+Base.parent(ᶜu) .= July_u
+Base.parent(ᶜbf) .= July_bf
+July_uforcing = similar(ᶜρ, FT)
+July_uforcing .= 0
+July_vforcing = similar(ᶜρ, FT)
+July_vforcing .= 0
+
+CA.non_orographic_gravity_wave_forcing(
+    ᶜu,
+    ᶜv,
+    ᶜbf,
+    ᶜρ,
+    ᶜz,
+    ᶜlevel,
     source_level,
     damp_level,
-    params.gw_source_ampl,
-    params.gw_Bw,
-    params.gw_Bn,
-    B0,
-    params.gw_cw,
-    params.gw_cn,
-    params.gw_flag,
-    params.gw_c,
-    params.gw_c0,
-    params.gw_nk,
+    ᶜρ_source,
+    ᶜu_source,
+    ᶜv_source,
+    July_uforcing,
+    July_vforcing,
+    gw_ncval,
+    u_waveforcing,
+    v_waveforcing,
+    params,
 )
+July_uforcing = Base.parent(July_uforcing)
+
 fig = generate_empty_figure();
 create_plot!(
     fig;
@@ -228,24 +319,36 @@ CairoMakie.save(joinpath(output_dir, "fig6jul.png"), fig)
 Oct_u = mean(center_u_mean[:, month .== 10], dims = 2)[:, 1]
 Oct_bf = mean(center_bf_mean[:, month .== 10], dims = 2)[:, 1]
 Oct_ρ = mean(center_ρ_mean[:, month .== 10], dims = 2)[:, 1]
-Oct_uforcing = CA.non_orographic_gravity_wave_forcing(
-    Oct_u,
-    Oct_bf,
-    Oct_ρ,
-    center_z,
+Base.parent(ᶜρ) .= Oct_ρ
+ᶜv = ᶜu
+Base.parent(ᶜu) .= Oct_u
+Base.parent(ᶜbf) .= Oct_bf
+Oct_uforcing = similar(ᶜρ, FT)
+Oct_uforcing .= 0
+Oct_vforcing = similar(ᶜρ, FT)
+Oct_vforcing .= 0
+
+CA.non_orographic_gravity_wave_forcing(
+    ᶜu,
+    ᶜv,
+    ᶜbf,
+    ᶜρ,
+    ᶜz,
+    ᶜlevel,
     source_level,
     damp_level,
-    params.gw_source_ampl,
-    params.gw_Bw,
-    params.gw_Bn,
-    B0,
-    params.gw_cw,
-    params.gw_cn,
-    params.gw_flag,
-    params.gw_c,
-    params.gw_c0,
-    params.gw_nk,
+    ᶜρ_source,
+    ᶜu_source,
+    ᶜv_source,
+    Oct_uforcing,
+    Oct_vforcing,
+    gw_ncval,
+    u_waveforcing,
+    v_waveforcing,
+    params,
 )
+
+Oct_uforcing = Base.parent(Oct_uforcing)
 fig = generate_empty_figure();
 create_plot!(
     fig;

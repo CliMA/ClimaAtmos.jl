@@ -28,12 +28,13 @@ function non_orographic_gravity_wave_cache(
 
     nc = Int(floor(FT(2 * cmax / dc + 1)))
     c = [FT((n - 1) * dc - cmax) for n in 1:nc]
-    source_level_z = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT})
+    source_ρ_z_u_v_level =
+        similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT})
     ᶜlevel = similar(Y.c.ρ, FT)
     for i in 1:Spaces.nlevels(axes(Y.c.ρ))
         fill!(Fields.level(ᶜlevel, i), i)
     end
-    damp_level_z = similar(source_level_z)
+
     return (;
         gw_source_height = source_height,
         gw_source_ampl = Bt_0 .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
@@ -41,6 +42,8 @@ function non_orographic_gravity_wave_cache(
         gw_Bn = Bn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_B0 = similar(c),
         gw_c = c,
+        gw_dc = dc,
+        gw_cmax = cmax,
         gw_cw = cw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_cn = cn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_c0 = c0,
@@ -48,15 +51,15 @@ function non_orographic_gravity_wave_cache(
         gw_nk = Int(nk),
         ᶜbuoyancy_frequency = similar(Y.c.ρ),
         ᶜdTdz = similar(Y.c.ρ),
-        source_level_z,
-        damp_level_z,
+        source_ρ_z_u_v_level,
         source_level = similar(Fields.level(Y.c.ρ, 1)),
         damp_level = similar(Fields.level(Y.c.ρ, 1)),
         ᶜlevel,
-        u_phy = similar(Y.c.ρ),
-        v_phy = similar(Y.c.ρ),
+        u_waveforcing = similar(Y.c.ρ),
+        v_waveforcing = similar(Y.c.ρ),
         uforcing = similar(Y.c.ρ),
         vforcing = similar(Y.c.ρ),
+        gw_ncval = Val(nc),
     )
 end
 
@@ -82,12 +85,13 @@ function non_orographic_gravity_wave_cache(
     gw_Bw = ones(FT, axes(lat)) .* Bw
     gw_cn = ones(FT, axes(lat)) .* cn
 
-    source_level_z = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT})
+    source_p_ρ_z_u_v_level =
+        similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT, FT})
     ᶜlevel = similar(Y.c.ρ, FT)
     for i in 1:Spaces.nlevels(axes(Y.c.ρ))
         fill!(Fields.level(ᶜlevel, i), i)
     end
-    damp_level_z = similar(source_level_z)
+
 
     # This is GFDL source specs -> a smooth function
     # source_ampl = @. Bt_0 +
@@ -121,20 +125,22 @@ function non_orographic_gravity_wave_cache(
         gw_c = c,
         gw_cw = gw_cw,
         gw_cn = gw_cn,
+        gw_dc = dc,
+        gw_cmax = cmax,
         gw_c0 = c0,
         gw_flag = gw_flag,
         gw_nk = Int(nk),
         ᶜbuoyancy_frequency = similar(Y.c.ρ),
         ᶜdTdz = similar(Y.c.ρ),
-        source_level_z,
-        damp_level_z,
+        source_p_ρ_z_u_v_level,
         source_level = similar(Fields.level(Y.c.ρ, 1)),
         damp_level = similar(Fields.level(Y.c.ρ, 1)),
         ᶜlevel,
-        u_phy = similar(Y.c.ρ),
-        v_phy = similar(Y.c.ρ),
+        u_waveforcing = similar(Y.c.ρ),
+        v_waveforcing = similar(Y.c.ρ),
         uforcing = similar(Y.c.ρ),
         vforcing = similar(Y.c.ρ),
+        gw_ncval = Val(nc),
     )
 end
 
@@ -153,33 +159,22 @@ function non_orographic_gravity_wave_tendency!(
         ᶜdTdz,
         ᶜbuoyancy_frequency,
         source_level,
-        source_level_z,
         damp_level,
-        damp_level_z,
-        u_phy,
-        v_phy,
+        u_waveforcing,
+        v_waveforcing,
         uforcing,
         vforcing,
         ᶜlevel,
+        gw_ncval,
     ) = p.non_orographic_gravity_wave
     (; model_config) = p.atmos
-    (;
-        gw_source_ampl,
-        gw_Bw,
-        gw_Bn,
-        gw_B0,
-        gw_c,
-        gw_cw,
-        gw_cn,
-        gw_flag,
-        gw_c0,
-        gw_nk,
-    ) = p.non_orographic_gravity_wave
 
     if model_config isa SingleColumnModel
-        (; gw_source_height) = p.non_orographic_gravity_wave
+        (; gw_source_height, source_ρ_z_u_v_level) =
+            p.non_orographic_gravity_wave
     elseif model_config isa SphericalModel
-        (; gw_source_pressure, gw_damp_pressure) = p.non_orographic_gravity_wave
+        (; gw_source_pressure, gw_damp_pressure, source_p_ρ_z_u_v_level) =
+            p.non_orographic_gravity_wave
     end
     ᶜρ = Y.c.ρ
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -201,23 +196,29 @@ function non_orographic_gravity_wave_tendency!(
         sqrt(abs(ᶜbuoyancy_frequency)),
     ) # to avoid small numbers
 
+    # prepare physical uv input variables for gravity_wave_forcing()
+    ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
+    ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+
     if model_config isa SingleColumnModel
         # source level: the index of the level that is closest to the source height
 
+        input = Base.Broadcast.broadcasted(tuple, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel)
         Operators.column_reduce!(
-            min_distance_reduce,
-            source_level_z,
-            Base.broadcasted(
-                tuple,
-                Base.broadcasted(
-                    abs,
-                    Base.broadcasted(-, ᶜz, gw_source_height),
-                ),
-                ᶜlevel,
-            ),
-        )
+            source_ρ_z_u_v_level,
+            input;
+        ) do (ρ_prev, z_prev, u_prev, v_prev, level_prev), (ρ, z, u, v, level)
+            if abs(z_prev - gw_source_height) >= abs(z - gw_source_height)
+                return (ρ, z, u, v, level)
+            else
+                return (ρ_prev, z_prev, u_prev, v_prev, level_prev)
+            end
+        end
 
-        source_level = source_level_z.:2
+        ᶜρ_source = source_ρ_z_u_v_level.:1
+        ᶜu_source = source_ρ_z_u_v_level.:3
+        ᶜv_source = source_ρ_z_u_v_level.:4
+        source_level = source_ρ_z_u_v_level.:5
 
         fill!(damp_level, Spaces.nlevels(axes(ᶜz)))
 
@@ -225,228 +226,511 @@ function non_orographic_gravity_wave_tendency!(
         (; ᶜp) = p.precomputed
         # source level: the index of the highest level whose pressure is higher than source pressure
 
+        input = Base.Broadcast.broadcasted(tuple, ᶜp, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel)
         Operators.column_reduce!(
-            positive_selector_reduce,
-            source_level_z,
-            Base.broadcasted(
-                tuple,
-                Base.broadcasted(-, ᶜp, gw_source_pressure),
-                ᶜlevel,
-            ),
-        )
+            source_p_ρ_z_u_v_level,
+            input,
+        ) do (p_prev, ρ_prev, z_prev, u_prev, v_prev, level_prev),
+        (p, ρ, z, u, v, level)
+            if (p - gw_source_pressure) <= 0
+                return (p_prev, ρ_prev, z_prev, u_prev, v_prev, level_prev)
+            else
+                return (p, ρ, z, u, v, level)
+            end
+        end
 
-        source_level = source_level_z.:2
+        ᶜρ_source = source_p_ρ_z_u_v_level.:2
+        ᶜu_source = source_p_ρ_z_u_v_level.:4
+        ᶜv_source = source_p_ρ_z_u_v_level.:5
+        source_level = source_p_ρ_z_u_v_level.:6
 
         # damp level: the index of the lowest level whose pressure is lower than the damp pressure
 
+        input = Base.Broadcast.broadcasted(tuple, ᶜlevel, ᶜp)
         Operators.column_reduce!(
-            negative_selector_reduce,
-            damp_level_z,
-            Base.broadcasted(
-                tuple,
-                Base.broadcasted(-, ᶜp, gw_damp_pressure),
-                ᶜlevel,
-            ),
-        )
-
-        damp_level = damp_level_z.:2
-
-    end
-
-    # prepare physical uv input variables for gravity_wave_forcing()
-    u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
-    v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
-
-    # GW parameterization applied bycolume
-    Fields.bycolumn(axes(ᶜρ)) do colidx
-        parent(uforcing[colidx]) .= non_orographic_gravity_wave_forcing(
-            vec(parent(u_phy[colidx])),
-            vec(parent(ᶜbuoyancy_frequency[colidx])),
-            vec(parent(ᶜρ[colidx])),
-            vec(parent(ᶜz[colidx])),
-            Int(parent(source_level[colidx])[1]),
-            Int(parent(damp_level[colidx])[1]),
-            parent(gw_source_ampl[colidx])[1],
-            parent(gw_Bw[colidx])[1],
-            parent(gw_Bn[colidx])[1],
-            gw_B0,
-            parent(gw_cw[colidx])[1],
-            parent(gw_cn[colidx])[1],
-            parent(gw_flag[colidx])[1],
-            gw_c,
-            gw_c0,
-            gw_nk,
-        )
-
-        parent(vforcing[colidx]) .= non_orographic_gravity_wave_forcing(
-            vec(parent(v_phy[colidx])),
-            vec(parent(ᶜbuoyancy_frequency[colidx])),
-            vec(parent(ᶜρ[colidx])),
-            vec(parent(ᶜz[colidx])),
-            Int(parent(source_level[colidx])[1]),
-            Int(parent(damp_level[colidx])[1]),
-            parent(gw_source_ampl[colidx])[1],
-            parent(gw_Bw)[1],
-            parent(gw_Bn)[1],
-            gw_B0,
-            parent(gw_cw)[1],
-            parent(gw_cn)[1],
-            parent(gw_flag)[1],
-            gw_c,
-            gw_c0,
-            gw_nk,
-        )
+            damp_level,
+            input;
+            transform = first,
+        ) do (level_prev, p_prev), (level, p)
+            if (p_prev - gw_damp_pressure) >= 0
+                return (level, p)
+            else
+                return (level_prev, p_prev)
+            end
+        end
 
     end
 
-    # physical uv forcing converted to Covariant12Vector and added up to uₕ tendencies
+    ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
+    ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+
+    uforcing .= 0
+    vforcing .= 0
+
+    non_orographic_gravity_wave_forcing(
+        ᶜu,
+        ᶜv,
+        ᶜbuoyancy_frequency,
+        ᶜρ,
+        ᶜz,
+        ᶜlevel,
+        source_level,
+        damp_level,
+        ᶜρ_source,
+        ᶜu_source,
+        ᶜv_source,
+        uforcing,
+        vforcing,
+        gw_ncval,
+        u_waveforcing,
+        v_waveforcing,
+        p,
+    )
+
     @. Yₜ.c.uₕ +=
         Geometry.Covariant12Vector.(Geometry.UVVector.(uforcing, vforcing))
-    return nothing
+
 end
 
 function non_orographic_gravity_wave_forcing(
-    old_ᶜu,
-    old_ᶜbf,
-    old_ᶜρ,
-    old_ᶜz,
+    ᶜu,
+    ᶜv,
+    ᶜbf,
+    ᶜρ,
+    ᶜz,
+    ᶜlevel,
     source_level,
     damp_level,
-    source_ampl,
-    Bw,
-    Bn,
-    B0,
-    cw,
-    cn,
-    flag,
-    c,
-    c0,
-    nk,
-)
-    FT = eltype(old_ᶜz)
-    # add an extra layer above model top so that forcing between the very top
-    # model layer and the upper boundary can be calculated
-    ᶜu = vcat(old_ᶜu, FT(2) * old_ᶜu[end] - old_ᶜu[end - 1])
-    ᶜρ = vcat(old_ᶜρ, old_ᶜρ[end] * old_ᶜρ[end] / old_ᶜρ[end - 1])
-    ᶜbf = vcat(old_ᶜbf, old_ᶜbf[end])
-    ᶜz = vcat(old_ᶜz, FT(2) * old_ᶜz[end] - old_ᶜz[end - 1])
+    ᶜρ_source,
+    ᶜu_source,
+    ᶜv_source,
+    uforcing,
+    vforcing,
+    gw_ncval::Val{nc},
+    u_waveforcing,
+    v_waveforcing,
+    p,
+) where {nc}
+    (;
+        gw_source_ampl,
+        gw_Bw,
+        gw_Bn,
+        gw_c,
+        gw_cw,
+        gw_cn,
+        gw_flag,
+        gw_c0,
+        gw_nk,
+    ) = p.non_orographic_gravity_wave
+    ᶜρ_p1 = p.scratch.ᶜtemp_scalar
+    ᶜz_p1 = p.scratch.ᶜtemp_scalar_2
+    ᶜu_p1 = p.scratch.ᶜtemp_scalar_3
+    ᶜv_p1 = p.scratch.ᶜtemp_scalar_4
+    ᶜbf_p1 = p.scratch.ᶜtemp_scalar_5
+    nci = get_nc(gw_ncval)
+    FT = eltype(ᶜρ)
+    ρ_endlevel = Fields.level(ᶜρ, Spaces.nlevels(axes(ᶜρ)))
+    ρ_endlevel_m1 = Fields.level(ᶜρ, Spaces.nlevels(axes(ᶜρ)) - 1)
+    Boundary_value = Fields.Field(
+        Fields.field_values(ρ_endlevel) .* Fields.field_values(ρ_endlevel) ./
+        Fields.field_values(ρ_endlevel_m1),
+        axes(ρ_endlevel),
+    )
+    field_shiftlevel_up!(ᶜρ, ᶜρ_p1, Boundary_value)
 
-    # wave spectra and the source amplitude
-    nc = length(c)
-    c_hat0 = c .- ᶜu[source_level] # c0mu0
+    u_endlevel = Fields.level(ᶜu, Spaces.nlevels(axes(ᶜu)))
+    u_endlevel_m1 = Fields.level(ᶜu, Spaces.nlevels(axes(ᶜu)) - 1)
+    Boundary_value = Fields.Field(
+        FT(2) .* Fields.field_values(u_endlevel) .-
+        Fields.field_values(u_endlevel_m1),
+        axes(u_endlevel),
+    )
+    field_shiftlevel_up!(ᶜu, ᶜu_p1, Boundary_value)
 
-    Bw_exp = @. exp(-log(2.0) * ((c * flag + c_hat0 * (1 - flag) - c0) / cw)^2)
-    Bn_exp = @. exp(-log(2.0) * ((c * flag + c_hat0 * (1 - flag) - c0) / cn)^2)
-    B0 = @. sign(c_hat0) * (Bw * Bw_exp + Bn * Bn_exp)
+    v_endlevel = Fields.level(ᶜv, Spaces.nlevels(axes(ᶜv)))
+    v_endlevel_m1 = Fields.level(ᶜv, Spaces.nlevels(axes(ᶜv)) - 1)
+    Boundary_value = Fields.Field(
+        FT(2) .* Fields.field_values(v_endlevel) .-
+        Fields.field_values(v_endlevel_m1),
+        axes(v_endlevel),
+    )
+    field_shiftlevel_up!(ᶜv, ᶜv_p1, Boundary_value)
 
-    Bsum = sum(abs.(B0))
-    if (Bsum == 0.0)
-        error("zero flux input at source level")
-    end
-    # intermittency
-    eps = calc_intermitency(ᶜρ[source_level], source_ampl, nk, Bsum)
+    Boundary_value = Fields.level(ᶜbf, Spaces.nlevels(axes(ᶜbf)))
+    field_shiftlevel_up!(ᶜbf, ᶜbf_p1, Boundary_value)
 
-    # horizontal wave length
-    kwv = [2.0 * π / ((30.0 * (10.0^n)) * 1.e3) for n in 1:nk]
-    k2 = kwv .* kwv
+    z_endlevel = Fields.level(ᶜz, Spaces.nlevels(axes(ᶜz)))
+    z_endlevel_m1 = Fields.level(ᶜz, Spaces.nlevels(axes(ᶜz)) - 1)
+    Boundary_value = Fields.Field(
+        FT(2) .* Fields.field_values(z_endlevel) .-
+        Fields.field_values(z_endlevel_m1),
+        axes(z_endlevel),
+    )
+    field_shiftlevel_up!(ᶜz, ᶜz_p1, Boundary_value)
 
-    # forcing
-    wave_forcing = zeros(length(ᶜu))
-    gwf = zeros(length(ᶜu) - 1)
-    for ink in 1:nk # loop over all wave lengths
+    mask = BitVector(ones(nc))
+    level_end = Spaces.nlevels(axes(ᶜρ))
+    B1 = ntuple(i -> 0.0, Val(nc))
 
-        mask = ones(nc)  # mask to determine which waves propagate upward
-        for k in source_level:length(ᶜu) # here ᶜu has one additional level above model top
-            fac = FT(0.5) * (ᶜρ[k] / ᶜρ[source_level]) * kwv[ink] / ᶜbf[k]
+    for ink in 1:gw_nk
 
-            ᶜHb = -(ᶜz[k] - ᶜz[k - 1]) / log(ᶜρ[k] / ᶜρ[k - 1])  # density scale height
-            alp2 = 0.25 / (ᶜHb * ᶜHb)
-            ω_r = sqrt((ᶜbf[k] * ᶜbf[k] * k2[ink]) / (k2[ink] + alp2)) # omc: (critical frequency that marks total internal reflection)
+        input_u = Base.Broadcast.broadcasted(
+            tuple,
+            ᶜu_p1,
+            ᶜu_source,
+            ᶜbf_p1,
+            ᶜρ,
+            ᶜρ_p1,
+            ᶜρ_source,
+            ᶜz_p1,
+            ᶜz,
+            source_level,
+            gw_Bw,
+            gw_Bn,
+            gw_cw,
+            gw_cn,
+            gw_c,
+            gw_flag,
+            ᶜlevel,
+            gw_source_ampl,
+        )
 
-            fm = FT(0)
-            for n in 1:nc
-                # check only those waves which are still propagating, i.e., mask = 1.0
-                if (mask[n]) == 1.0
-                    c_hat = c[n] - ᶜu[k] # c0mu
-                    # f phase speed matches the wind speed, remove c(n) from the set of propagating waves.
-                    if c_hat == 0.0
-                        mask[n] = 0.0
-                    else
-                        # define the criterion which determines if wave is reflected at this level (test).
-                        test = abs(c_hat) * kwv[ink] - ω_r
-                        if test >= 0.0
-                            # wave has undergone total internal reflection. remove it from the propagating set.
-                            mask[n] = 0.0
+
+        input_v = Base.Broadcast.broadcasted(
+            tuple,
+            ᶜv_p1,
+            ᶜv_source,
+            ᶜbf_p1,
+            ᶜρ,
+            ᶜρ_p1,
+            ᶜρ_source,
+            ᶜz_p1,
+            ᶜz,
+            source_level,
+            gw_Bw,
+            gw_Bn,
+            gw_cw,
+            gw_cn,
+            gw_c,
+            gw_flag,
+            ᶜlevel,
+            gw_source_ampl,
+        )
+
+        Operators.column_accumulate!(
+            u_waveforcing,
+            input_u;
+            init = (FT(0.0), mask, 0.0, B1),
+            transform = first,
+        ) do (wave_forcing, mask, Bsum, B0),
+        (
+            u_kp1,
+            u_source,
+            bf_kp1,
+            ρ_k,
+            ρ_kp1,
+            ρ_source,
+            z_kp1,
+            z_k,
+            source_level,
+            Bw,
+            Bn,
+            cw,
+            cn,
+            c,
+            flag,
+            level,
+            source_ampl,
+        )
+            if level >= (source_level - 1)
+                FT1 = typeof(u_kp1)
+                kwv = 2.0 * π / ((30.0 * (10.0^ink)) * 1.e3)
+                k2 = kwv * kwv
+                fac = FT1(0.5) * (ρ_kp1 / ρ_source) * kwv / bf_kp1
+                Hb = (z_kp1 - z_k) / log(ρ_k / ρ_kp1) # density scale height
+                alp2 = FT1(0.25) / (Hb * Hb)
+                ω_r = sqrt((bf_kp1 * bf_kp1 * k2) / (k2 + alp2)) # omc: (critical frequency that marks total internal reflection)
+                fm = 0.0
+                if level == (source_level - 1)
+                    mask .= 1
+                    Bsum = 0.0
+                    B0 = ntuple(
+                        n ->
+                            sign(c[n] - u_source) * (
+                                Bw * exp(
+                                    -log(2.0) *
+                                    (
+                                        (
+                                            c[n] * flag +
+                                            (c[n] - u_source) * (1 - flag) -
+                                            gw_c0
+                                        ) / cw
+                                    )^2,
+                                ) +
+                                Bn * exp(
+                                    -log(2.0) *
+                                    (
+                                        (
+                                            c[n] * flag +
+                                            (c[n] - u_source) * (1 - flag) -
+                                            gw_c0
+                                        ) / cn
+                                    )^2,
+                                )
+                            ),
+                        Val(nc),
+                    )
+                    Bsum = sum(abs.(B0))
+                end
+                for n in 1:nci
+                    # check only those waves which are still propagating, i.e., mask = 1.0
+                    if (mask[n]) == 1
+                        c_hat = c[n] - u_kp1 # c0mu
+                        # f phase speed matches the wind speed, remove c(n) from the set of propagating waves.
+                        if c_hat == 0.0
+                            mask[n] = 0
                         else
-                            if k == length(ᶜu)
-                                # this is added in MiMA implementation:
-                                # all momentum flux that escapes across the model top
-                                # is deposited to the extra level being added so that
-                                # momentum flux is conserved
-                                mask[n] = 0.0
-                                if k > source_level
-                                    fm = fm + B0[n]
-                                end
+                            c_hat0 = c[n] - u_source
+                            # define the criterion which determines if wave is reflected at this level (test).
+                            test = abs(c_hat) * kwv - ω_r
+                            if test >= 0.0
+                                # wave has undergone total internal reflection. remove it from the propagating set.
+                                mask[n] = 0
                             else
-                                # if wave is not reflected at this level, determine if it is
-                                # breaking at this level (Foc >= 0), or if wave speed relative to
-                                # windspeed has changed sign from its value at the source level
-                                # (c_hat0[n] * c_hat <= 0). if it is above the source level and is
-                                # breaking, then add its momentum flux to the accumulated sum at
-                                # this level.
-                                # set mask=0.0 to remove phase speed band c[n] from the set of active
-                                # waves moving upwards to the next level.
-                                Foc = B0[n] / (c_hat)^3 - fac
-                                if Foc >= 0.0 || (c_hat0[n] * c_hat <= 0.0)
-                                    mask[n] = 0.0
-                                    if k > source_level
+                                if level == level_end
+                                    # this is added in MiMA implementation:
+                                    # all momentum flux that escapes across the model top
+                                    # is deposited to the extra level being added so that
+                                    # momentum flux is conserved
+                                    mask[n] = 0
+                                    if level >= source_level
                                         fm = fm + B0[n]
                                     end
+                                else
+                                    # if wave is not reflected at this level, determine if it is
+                                    # breaking at this level (Foc >= 0), or if wave speed relative to
+                                    # windspeed has changed sign from its value at the source level
+                                    # (c_hat0[n] * c_hat <= 0). if it is above the source level and is
+                                    # breaking, then add its momentum flux to the accumulated sum at
+                                    # this level.
+                                    # set mask=0.0 to remove phase speed band c[n] from the set of active
+                                    # waves moving upwards to the next level.
+                                    Foc = B0[n] / FT1((c_hat)^3) - fac
+                                    if Foc >= 0.0 || (c_hat0 * c_hat <= 0.0)
+                                        mask[n] = 0
+                                        if level >= source_level
+                                            fm = fm + B0[n]
+                                        end
+                                    end
                                 end
-                            end
-                        end # (test >= 0.0)
-                    end #(c_hat == 0.0)
-                end # mask = 0
+                            end # (test >= 0.0)
+                        end #(c_hat == 0.0)
+                    end # mask = 0
 
-            end # nc: phase speed loop
+                end # nc: phase speed loop
 
-            # compute the gravity wave momentum flux forcing
-            # obtained across the entire wave spectrum at this level.
-            if k > source_level
-                rbh = sqrt(ᶜρ[k] * ᶜρ[k - 1])
-                wave_forcing[k] =
-                    (ᶜρ[source_level] / rbh) * fm * eps / (ᶜz[k] - ᶜz[k - 1])
-                if k == length(ᶜu)
-                    wave_forcing[k - 1] = 0.5 * wave_forcing[k - 1]
+                # compute the gravity wave momentum flux forcing
+                # obtained across the entire wave spectrum at this level.
+                eps = calc_intermitency(ρ_source, source_ampl, gw_nk, FT1(Bsum))
+                if level >= source_level
+                    rbh = sqrt(ρ_k * ρ_kp1)
+                    wave_forcing =
+                        (ρ_source / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
                 else
-                    wave_forcing[k - 1] =
-                        0.5 * (wave_forcing[k - 1] + wave_forcing[k])
+                    wave_forcing = FT1(0.0)
                 end
-            else
-                wave_forcing[k] = 0.0
             end
+            return (wave_forcing, mask, Bsum, B0)
 
-        end # k
-
-        # model top: deposit remaining momentum flux that goes across the model top
-        # to the levels above the damp level
-        # This is not included in Joan Alexander's original code nor the GFDL implementation;
-        # but is added in MiMA based on Tiffany Shaw's paper:
-        # https://journals.ametsoc.org/view/journals/clim/22/10/2009jcli2688.1.xml?tab_body=pdf
-        for k in damp_level:(length(ᶜu) - 1)
-            wave_forcing[k] =
-                wave_forcing[k] +
-                wave_forcing[end] / (length(ᶜu) + 1 - damp_level)
         end
 
-        # forcing
-        for k in source_level:(length(ᶜu) - 1)
-            gwf[k] = gwf[k] + wave_forcing[k]
+
+
+        Operators.column_accumulate!(
+            v_waveforcing,
+            input_v;
+            init = (FT(0.0), mask, 0.0, B1),
+            transform = first,
+        ) do (wave_forcing, mask, Bsum, B0),
+        (
+            u_kp1,
+            u_source,
+            bf_kp1,
+            ρ_k,
+            ρ_kp1,
+            ρ_source,
+            z_kp1,
+            z_k,
+            source_level,
+            Bw,
+            Bn,
+            cw,
+            cn,
+            c,
+            flag,
+            level,
+            source_ampl,
+        )
+
+            if level >= (source_level - 1)
+                FT2 = typeof(u_kp1)
+                kwv = 2.0 * π / ((30.0 * (10.0^ink)) * 1.e3)
+                k2 = kwv * kwv
+                fac = FT2(0.5) * (ρ_kp1 / ρ_source) * kwv / bf_kp1
+                Hb = (z_kp1 - z_k) / log(ρ_k / ρ_kp1) # density scale height
+                alp2 = FT2(0.25) / (Hb * Hb)
+                ω_r = sqrt((bf_kp1 * bf_kp1 * k2) / (k2 + alp2)) # omc: (critical frequency that marks total internal reflection)
+
+                fm = 0.0
+                if level == (source_level - 1)
+                    mask .= 1
+                    Bsum = 0.0
+                    B0 = ntuple(
+                        n ->
+                            sign((c[n] - u_source)) * (
+                                Bw * exp(
+                                    -log(2.0) *
+                                    (
+                                        (
+                                            c[n] * flag +
+                                            (c[n] - u_source) * (1 - flag) -
+                                            gw_c0
+                                        ) / cw
+                                    )^2,
+                                ) +
+                                Bn * exp(
+                                    -log(2.0) *
+                                    (
+                                        (
+                                            c[n] * flag +
+                                            (c[n] - u_source) * (1 - flag) -
+                                            gw_c0
+                                        ) / cn
+                                    )^2,
+                                )
+                            ),
+                        Val(nc),
+                    )
+                    Bsum = sum(abs.(B0))
+                end
+                for n in 1:nci
+                    # check only those waves which are still propagating, i.e., mask = 1.0
+                    if (mask[n]) == 1
+                        c_hat = c[n] - u_kp1 # c0mu
+                        # f phase speed matches the wind speed, remove c(n) from the set of propagating waves.
+                        if c_hat == 0.0
+                            mask[n] = 0
+                        else
+                            c_hat0 = c[n] - u_source
+                            # define the criterion which determines if wave is reflected at this level (test).
+                            test = abs(c_hat) * kwv - ω_r
+                            if test >= 0.0
+                                # wave has undergone total internal reflection. remove it from the propagating set.
+                                mask[n] = 0
+                            else
+                                if level == level_end
+                                    # this is added in MiMA implementation:
+                                    # all momentum flux that escapes across the model top
+                                    # is deposited to the extra level being added so that
+                                    # momentum flux is conserved
+                                    mask[n] = 0
+                                    if level >= source_level
+                                        fm = fm + B0[n]
+                                    end
+                                else
+                                    # if wave is not reflected at this level, determine if it is
+                                    # breaking at this level (Foc >= 0), or if wave speed relative to
+                                    # windspeed has changed sign from its value at the source level
+                                    # (c_hat0[n] * c_hat <= 0). if it is above the source level and is
+                                    # breaking, then add its momentum flux to the accumulated sum at
+                                    # this level.
+                                    # set mask=0.0 to remove phase speed band c[n] from the set of active
+                                    # waves moving upwards to the next level.
+                                    Foc = B0[n] / FT2((c_hat)^3) - fac
+                                    if Foc >= 0.0 || (c_hat0 * c_hat <= 0.0)
+                                        mask[n] = 0
+                                        if level >= source_level
+                                            fm = fm + B0[n]
+                                        end
+                                    end
+                                end
+                            end # (test >= 0.0)
+                        end #(c_hat == 0.0)
+                    end # mask = 0
+
+                end # nc: phase speed loop
+
+                # compute the gravity wave momentum flux forcing
+                # obtained across the entire wave spectrum at this level.
+                eps = calc_intermitency(ρ_source, source_ampl, gw_nk, FT2(Bsum))
+                if level >= source_level
+                    rbh = sqrt(ρ_k * ρ_kp1)
+                    wave_forcing =
+                        (ρ_source / rbh) * FT2(fm) * eps / (z_kp1 - z_k)
+                else
+                    wave_forcing = FT2(0.0)
+                end
+            end
+            return (wave_forcing, mask, Bsum, B0)
+
         end
 
-    end # ink
+        u_waveforcing_top = p.scratch.temp_field_level
+        copyto!(
+            Fields.field_values(u_waveforcing_top),
+            Fields.field_values(
+                Fields.level(
+                    u_waveforcing,
+                    Spaces.nlevels(axes(u_waveforcing)),
+                ),
+            ),
+        )
+        fill!(
+            Fields.level(u_waveforcing, Spaces.nlevels(axes(u_waveforcing))),
+            0,
+        )
 
-    return gwf
+        # v_waveforcing_top = similar(
+        #     Fields.level(v_waveforcing, Spaces.nlevels(axes(v_waveforcing))),
+        # )
+        v_waveforcing_top = p.scratch.temp_field_level
+        copyto!(
+            Fields.field_values(v_waveforcing_top),
+            Fields.field_values(
+                Fields.level(
+                    v_waveforcing,
+                    Spaces.nlevels(axes(v_waveforcing)),
+                ),
+            ),
+        )
+        fill!(
+            Fields.level(v_waveforcing, Spaces.nlevels(axes(v_waveforcing))),
+            0,
+        )
+
+        gw_average!(u_waveforcing, p.scratch.ᶜtemp_scalar)
+        gw_average!(v_waveforcing, p.scratch.ᶜtemp_scalar)
+
+        @. u_waveforcing = gw_deposit(
+            u_waveforcing_top,
+            u_waveforcing,
+            damp_level,
+            ᶜlevel,
+            level_end,
+        )
+        @. v_waveforcing = gw_deposit(
+            v_waveforcing_top,
+            v_waveforcing,
+            damp_level,
+            ᶜlevel,
+            level_end,
+        )
+
+        @. uforcing = uforcing + u_waveforcing
+        @. vforcing = vforcing + v_waveforcing
+
+    end
+    return nothing
 end
 
 # calculate the intermittency factor eps -> assuming constant Δc.
@@ -455,6 +739,28 @@ function calc_intermitency(ρ_source_level, source_ampl, nk, Bsum)
     return (source_ampl / ρ_source_level / nk) / Bsum
 end
 
-@inline min_distance_reduce(a, b) = ifelse(a[1] < b[1], a, b)
-@inline positive_selector_reduce(a, b) = ifelse(b[1] <= 0, a, b)
-@inline negative_selector_reduce(a, b) = ifelse(a[1] >= 0, b, a)
+function gw_average!(wave_forcing, wave_forcing_m1)
+    L1 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(0.0))
+    L2 = Operators.LeftBiasedF2C(;)
+    wave_forcing_m1 .= L2.(L1.(wave_forcing))
+    @. wave_forcing = 0.5 * (wave_forcing + wave_forcing_m1)
+end
+
+
+function gw_deposit(wave_forcing_top, wave_forcing, damp_level, level, height)
+    if level >= damp_level
+        wave_forcing =
+            wave_forcing + wave_forcing_top / (height + 2 - damp_level)
+    end
+    return wave_forcing
+end
+
+function get_nc(::Val{nc}) where {nc}
+    nc
+end
+
+function field_shiftlevel_up!(ᶜexample_field, ᶜshifted_field, Boundary_value)
+    R1 = Operators.RightBiasedC2F(; top = Operators.SetValue(Boundary_value))
+    R2 = Operators.RightBiasedF2C(;)
+    ᶜshifted_field .= R2.(R1.(ᶜexample_field))
+end
