@@ -10,7 +10,7 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 dt: "60secs"
 t_end: "360days"
-dt_save_state_to_disk: "1hours"
+dt_save_state_to_disk: "60secs"
 moist: "equil"
 rad: "allskywithclear"
 dt_rad: "1hours"
