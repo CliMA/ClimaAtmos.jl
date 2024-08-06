@@ -599,8 +599,8 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         )
 
         #### Detect 𝒽, boundary layer height per column
-        #h_boundary_layer = f_b .* Fields.level(ᶜz, Spaces.nlevels(axes(Y.c)))
-        h_boundary_layer = f_b .* Fields.level(ᶜz,1)
+        h_boundary_layer = f_b .* Fields.level(ᶜz, Spaces.nlevels(axes(Y.c)))
+        #h_boundary_layer = f_b .* Fields.level(ᶜz,1)
         compute_boundary_layer_height!(
             h_boundary_layer,
             dz_local,
