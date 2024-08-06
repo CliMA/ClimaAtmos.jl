@@ -42,6 +42,8 @@ function non_orographic_gravity_wave_cache(
         gw_Bn = Bn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_B0 = similar(c),
         gw_c = c,
+        gw_dc = dc,
+        gw_cmax = cmax,
         gw_cw = cw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_cn = cn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_c0 = c0,
@@ -216,7 +218,7 @@ function non_orographic_gravity_wave_tendency!(
 
         input = Base.Broadcast.broadcasted(tuple, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel)
         Operators.column_reduce!(
-            source_level,
+            source_ρ_z_u_v_level,
             input;
         ) do (ρ_prev, z_prev, u_prev, v_prev, level_prev), (ρ, z, u, v, level)
             if abs(z_prev - gw_source_height) >= abs(z - gw_source_height)
@@ -277,16 +279,16 @@ function non_orographic_gravity_wave_tendency!(
 
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
-    ᶜρ_p1 = similar(ᶜρ)
-    ᶜz_p1 = similar(ᶜz)
-    ᶜu_p1 = similar(ᶜu)
-    ᶜv_p1 = similar(ᶜv)
-    ᶜbf_p1 = similar(ᶜbuoyancy_frequency)
+    ᶜρ_p1 = p.scratch.ᶜtemp_scalar
+    ᶜz_p1 = p.scratch.ᶜtemp_scalar_2
+    ᶜu_p1 = p.scratch.ᶜtemp_scalar_3
+    ᶜv_p1 = p.scratch.ᶜtemp_scalar_4
+    ᶜbf_p1 = p.scratch.ᶜtemp_scalar_5
 
     uforcing .= 0
     vforcing .= 0
 
-    @time non_orographic_gravity_wave_forcing(
+    non_orographic_gravity_wave_forcing(
         ᶜu,
         ᶜv,
         ᶜbuoyancy_frequency,
