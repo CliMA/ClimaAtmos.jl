@@ -18,7 +18,7 @@ dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"
 precip_model: "0M"
-restart_file: "/scratch/clima/slurm-buildkite/climaatmos-gpulongruns/319/climaatmos-gpulongruns/longrun_aquaplanet_allsky_0M_earth/output_0000/day14.7200.hdf5"
+restart_file: "/scratch/clima/slurm-buildkite/climaatmos-gpulongruns/321/climaatmos-gpulongruns/longrun_aquaplanet_allsky_0M_earth/output_0000/day14.10800.hdf5"
 toml: [toml/longrun_aquaplanet.toml]
 diagnostics:
   - short_name: [edt, evu, hfes, evspsbl]
