@@ -96,9 +96,9 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_allsky_tvinsol_0M_slabocean_earth"
 
-  - group: "DYAMOND"
+          #  - group: "DYAMOND"
 
-    steps:
+          # steps:
 
       #- label: ":computer: aquaplanet dyamond"
       #  command:
