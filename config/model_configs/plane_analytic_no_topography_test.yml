@@ -8,8 +8,8 @@ x_elem: 15
 z_elem: 50
 z_stretch: false
 max_topography_height: 0
-dt: "12secs"
-t_end: "10days"
+dt: "1secs"
+t_end: "1days"
 rayleigh_sponge: true
 toml: [toml/analytic_topography_test.toml]
 analytic_check: true

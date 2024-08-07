@@ -1,5 +1,5 @@
 config: "plane"
-FLOAT_TYPE: "Float64"
+FLOAT_TYPE: "Float32"
 initial_condition: "ConstantBuoyancyFrequencyProfile"
 topography: "Cosine2D"
 x_max: 300e3
@@ -8,9 +8,10 @@ x_elem: 15
 z_elem: 31
 z_stretch: false
 max_topography_height: 0
-dt: "12secs"
-t_end: "100days"
+dt: "1secs"
+t_end: "10days"
 rayleigh_sponge: false
+toml: [toml/no_gravity.toml]
 analytic_check: true
 output_default_diagnostics: false
 diagnostics:

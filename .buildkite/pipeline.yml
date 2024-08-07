@@ -917,28 +917,6 @@ steps:
         agents:
           slurm_gpus: 1
 
-      - label: "GPU: Analytic No Topography Test (2D, Long Duration, No Sponge)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_no_topography_no_sponge_long_test.yml
-          --job_id gpu_plane_analytic_no_topography_no_sponge_long_test
-        artifact_paths: "gpu_plane_analytic_no_topography_no_sponge_long_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-
-      - label: "GPU: Analytic No Topography Test (2D, Long Duration, No Sponge, Float32)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_analytic_no_topography_no_sponge_long_float32_test.yml
-          --job_id gpu_plane_analytic_no_topography_no_sponge_long_float32_test
-        artifact_paths: "gpu_plane_analytic_no_topography_no_sponge_long_float32_test/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-
       - label: "GPU: Analytic No Topography Test (2D, Long Duration, No Hyperdiff)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -978,6 +956,72 @@ steps:
           --config_file $CONFIG_PATH/plane_analytic_no_topography_discrete_balance_long_float32_test.yml
           --job_id gpu_plane_analytic_no_topography_discrete_balance_long_float32_test
         artifact_paths: "gpu_plane_analytic_no_topography_discrete_balance_long_float32_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (2D, Long Duration, No Sponge, No Gravity)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_no_sponge_no_grav_long_test.yml
+          --job_id gpu_plane_analytic_no_topography_no_sponge_no_grav_long_test
+        artifact_paths: "gpu_plane_analytic_no_topography_no_sponge_no_grav_long_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (2D, Long Duration, No Sponge, No Gravity, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_no_sponge_no_grav_long_float32_test.yml
+          --job_id gpu_plane_analytic_no_topography_no_sponge_no_grav_long_float32_test
+        artifact_paths: "gpu_plane_analytic_no_topography_no_sponge_no_grav_long_float32_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (2D, Long Duration, No Sponge, No Gravity, No Hyperdiff)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_no_sponge_no_grav_no_hyperdiff_long_test.yml
+          --job_id gpu_plane_analytic_no_topography_no_sponge_no_grav_no_hyperdiff_long_test
+        artifact_paths: "gpu_plane_analytic_no_topography_no_sponge_no_grav_no_hyperdiff_long_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (2D, Long Duration, No Sponge, No Gravity, No Hyperdiff, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_no_sponge_no_grav_no_hyperdiff_long_float32_test.yml
+          --job_id gpu_plane_analytic_no_topography_no_sponge_no_grav_no_hyperdiff_long_float32_test
+        artifact_paths: "gpu_plane_analytic_no_topography_no_sponge_no_grav_no_hyperdiff_long_float32_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (2D, Long Duration, No Sponge, No Gravity, Explicit)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_no_sponge_no_grav_long_explicit_test.yml
+          --job_id gpu_plane_analytic_no_topography_no_sponge_no_grav_long_explicit_test
+        artifact_paths: "gpu_plane_analytic_no_topography_no_sponge_no_grav_long_explicit_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Analytic No Topography Test (2D, Long Duration, No Sponge, No Gravity, Explicit, Float32)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_analytic_no_topography_no_sponge_no_grav_long_explicit_float32_test.yml
+          --job_id gpu_plane_analytic_no_topography_no_sponge_no_grav_long_explicit_float32_test
+        artifact_paths: "gpu_plane_analytic_no_topography_no_sponge_no_grav_long_explicit_float32_test/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
