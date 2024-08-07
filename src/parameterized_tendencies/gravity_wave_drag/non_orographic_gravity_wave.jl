@@ -411,7 +411,7 @@ function non_orographic_gravity_wave_forcing(
     ᶜz_p1 .= R2.(R1.(ᶜz))
 
     mask = BitVector(ones(nc))
-    level_end= Spaces.nlevels(axes(ᶜρ))
+    level_end = Spaces.nlevels(axes(ᶜρ))
     B1 = ntuple(i -> 0.0, Val(nc))
 
     for ink in 1:nk
@@ -501,19 +501,35 @@ function non_orographic_gravity_wave_forcing(
             fm = 0.0
             if level == 1
                 #mask = ntuple(i -> true, Val(nc))
-                mask .=1
+                mask .= 1
                 Bsum = 0.0
-                B0 = ntuple(n -> sign(( (n - 1) * dc - cmax-u_kp1) ) * (
-                        Bw * exp(
-                            -log(2.0) *
-                            ((( (n - 1) * dc - cmax) * flag + ( (n - 1) * dc - cmax-u_source)  * (1 - flag) - c0) / cw)^2,
-                        ) +
-                        Bn * exp(
-                            -log(2.0) *
-                            ((( (n - 1) * dc - cmax)  * flag +  ( (n - 1) * dc - cmax-u_source) * (1 - flag) - c0) / cn)^2,
-                        )
-                    ),Val(nc))
-                    Bsum = sum(abs.(B0))   
+                B0 = ntuple(
+                    n ->
+                        sign(((n - 1) * dc - cmax - u_kp1)) * (
+                            Bw * exp(
+                                -log(2.0) *
+                                (
+                                    (
+                                        ((n - 1) * dc - cmax) * flag +
+                                        ((n - 1) * dc - cmax - u_source) *
+                                        (1 - flag) - c0
+                                    ) / cw
+                                )^2,
+                            ) +
+                            Bn * exp(
+                                -log(2.0) *
+                                (
+                                    (
+                                        ((n - 1) * dc - cmax) * flag +
+                                        ((n - 1) * dc - cmax - u_source) *
+                                        (1 - flag) - c0
+                                    ) / cn
+                                )^2,
+                            )
+                        ),
+                    Val(nc),
+                )
+                Bsum = sum(abs.(B0))
             end
             for n in 1:nci
                 # check only those waves which are still propagating, i.e., mask = 1.0
@@ -521,21 +537,21 @@ function non_orographic_gravity_wave_forcing(
                     c_hat = c[n] - u_kp1 # c0mu
                     # f phase speed matches the wind speed, remove c(n) from the set of propagating waves.
                     if c_hat == 0.0
-                        mask[n] =0 
+                        mask[n] = 0
                     else
                         c_hat0 = c[n] - u_source
                         # define the criterion which determines if wave is reflected at this level (test).
                         test = abs(c_hat) * kwv - ω_r
                         if test >= 0.0
                             # wave has undergone total internal reflection. remove it from the propagating set.
-                            mask[n] =0 
+                            mask[n] = 0
                         else
-                            if level ==level_end
+                            if level == level_end
                                 # this is added in MiMA implementation:
                                 # all momentum flux that escapes across the model top
                                 # is deposited to the extra level being added so that
                                 # momentum flux is conserved
-                                mask[n] =0 
+                                mask[n] = 0
                                 if level >= source_level
                                     fm = fm + B0[n]
                                 end
@@ -550,7 +566,7 @@ function non_orographic_gravity_wave_forcing(
                                 # waves moving upwards to the next level.
                                 Foc = B0[n] / FT1((c_hat)^3) - fac
                                 if Foc >= 0.0 || (c_hat0 * c_hat <= 0.0)
-                                    mask[n] =0 
+                                    mask[n] = 0
                                     if level >= source_level
                                         fm = fm + B0[n]
                                     end
@@ -567,8 +583,7 @@ function non_orographic_gravity_wave_forcing(
             eps = calc_intermitency(ρ_source, source_ampl, nk, FT1(Bsum))
             if level >= source_level
                 rbh = sqrt(ρ_k * ρ_kp1)
-                wave_forcing =
-                    (ρ_source / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
+                wave_forcing = (ρ_source / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
             else
                 wave_forcing = FT1(0.0)
             end
@@ -577,7 +592,7 @@ function non_orographic_gravity_wave_forcing(
         end
 
 
-    
+
         Operators.column_accumulate!(
             v_waveforcing,
             input_v;
@@ -620,19 +635,35 @@ function non_orographic_gravity_wave_forcing(
             fm = 0.0
             if level == 1
                 #mask = ntuple(i -> true, Val(nc))
-                mask .=1
+                mask .= 1
                 Bsum = 0.0
-                B0 = ntuple(n -> sign(( (n - 1) * dc - cmax-u_kp1) ) * (
-                        Bw * exp(
-                            -log(2.0) *
-                            ((( (n - 1) * dc - cmax) * flag + ( (n - 1) * dc - cmax-u_source)  * (1 - flag) - c0) / cw)^2,
-                        ) +
-                        Bn * exp(
-                            -log(2.0) *
-                            ((( (n - 1) * dc - cmax)  * flag +  ( (n - 1) * dc - cmax-u_source) * (1 - flag) - c0) / cn)^2,
-                        )
-                    ),Val(nc))
-                    Bsum = sum(abs.(B0))   
+                B0 = ntuple(
+                    n ->
+                        sign(((n - 1) * dc - cmax - u_kp1)) * (
+                            Bw * exp(
+                                -log(2.0) *
+                                (
+                                    (
+                                        ((n - 1) * dc - cmax) * flag +
+                                        ((n - 1) * dc - cmax - u_source) *
+                                        (1 - flag) - c0
+                                    ) / cw
+                                )^2,
+                            ) +
+                            Bn * exp(
+                                -log(2.0) *
+                                (
+                                    (
+                                        ((n - 1) * dc - cmax) * flag +
+                                        ((n - 1) * dc - cmax - u_source) *
+                                        (1 - flag) - c0
+                                    ) / cn
+                                )^2,
+                            )
+                        ),
+                    Val(nc),
+                )
+                Bsum = sum(abs.(B0))
             end
             for n in 1:nci
                 # check only those waves which are still propagating, i.e., mask = 1.0
@@ -640,21 +671,21 @@ function non_orographic_gravity_wave_forcing(
                     c_hat = c[n] - u_kp1 # c0mu
                     # f phase speed matches the wind speed, remove c(n) from the set of propagating waves.
                     if c_hat == 0.0
-                        mask[n] =0 
+                        mask[n] = 0
                     else
                         c_hat0 = c[n] - u_source
                         # define the criterion which determines if wave is reflected at this level (test).
                         test = abs(c_hat) * kwv - ω_r
                         if test >= 0.0
                             # wave has undergone total internal reflection. remove it from the propagating set.
-                            mask[n] =0 
+                            mask[n] = 0
                         else
                             if level == level_end
                                 # this is added in MiMA implementation:
                                 # all momentum flux that escapes across the model top
                                 # is deposited to the extra level being added so that
                                 # momentum flux is conserved
-                                mask[n] =0 
+                                mask[n] = 0
                                 if level >= source_level
                                     fm = fm + B0[n]
                                 end
@@ -669,7 +700,7 @@ function non_orographic_gravity_wave_forcing(
                                 # waves moving upwards to the next level.
                                 Foc = B0[n] / FT2((c_hat)^3) - fac
                                 if Foc >= 0.0 || (c_hat0 * c_hat <= 0.0)
-                                    mask[n] =0 
+                                    mask[n] = 0
                                     if level >= source_level
                                         fm = fm + B0[n]
                                     end
@@ -686,8 +717,7 @@ function non_orographic_gravity_wave_forcing(
             eps = calc_intermitency(ρ_source, source_ampl, nk, FT2(Bsum))
             if level >= source_level
                 rbh = sqrt(ρ_k * ρ_kp1)
-                wave_forcing =
-                    (ρ_source / rbh) * FT2(fm) * eps / (z_kp1 - z_k)
+                wave_forcing = (ρ_source / rbh) * FT2(fm) * eps / (z_kp1 - z_k)
             else
                 wave_forcing = FT2(0.0)
             end
