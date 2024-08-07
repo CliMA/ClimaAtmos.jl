@@ -24,7 +24,7 @@ z_stretch: false
 dt: "0.1secs" 
 t_end: "2hours" 
 dt_save_state_to_disk: "5mins"
-restart_file: "restart/rico/Micro1M_day0.0_Prod.hdf5"
+restart_file: "/home/edejong/ClimaAtmos.jl/restart/rico/day0.0.hdf5"
 netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
