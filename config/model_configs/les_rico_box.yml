@@ -1,12 +1,12 @@
-job_id: "les_bomex_box"
-initial_condition: "Bomex" 
-edmf_coriolis: "Bomex"
-subsidence: "Bomex" 
-ls_adv: "Bomex" 
-surface_setup: "Bomex"
+job_id: "les_rico_box"
+edmf_coriolis: "Rico"
+initial_condition: "Rico"
+subsidence: "Rico" 
+ls_adv: "Rico" 
+surface_setup: "Rico"
 moist: "equil"
 config: "box" 
-hyperdiff: "true" 
+hyperdiff: "true"
 implicit_diffusion: false
 ode_algo: "SSP33ShuOsher"
 precip_model: "1M"
@@ -16,15 +16,15 @@ smagorinsky_lilly: true
 c_smag: 0.20
 x_max: 6.4e3
 y_max: 6.4e3 
-z_max: 3.0e3 
+z_max: 4.0e3 
 x_elem: 14
 y_elem: 14
-z_elem: 40 
+z_elem: 53 
 z_stretch: false
 dt: "0.1secs" 
 t_end: "2hours" 
-dt_save_state_to_disk: "10mins"
-restart_file: "restart/bomex/Micro1M_day0.0_Prod.hdf5"
+dt_save_state_to_disk: "5mins"
+restart_file: "restart/rico/Micro1M_day0.0_Prod.hdf5"
 netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
