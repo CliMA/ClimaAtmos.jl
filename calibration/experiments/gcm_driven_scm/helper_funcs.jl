@@ -11,7 +11,7 @@ const OptVec{T} = Union{Nothing, Vector{T}}
 "Optional real"
 const OptReal = Union{Real, Nothing}
 
-"Optional real"
+"Optional dictionary"
 const OptDict = Union{Nothing, Dict}
 
 CLIMADIAGNOSTICS_LES_NAME_MAP =
@@ -19,7 +19,7 @@ CLIMADIAGNOSTICS_LES_NAME_MAP =
 
 
 
-"""Get z coordinates of CA run, given config. """
+"""Get z cell centers coordinates for CA run, given config. """
 function get_z_grid(atmos_config; z_max = nothing)
     params = CA.create_parameter_set(atmos_config)
     spaces =
@@ -290,23 +290,28 @@ end
 """
     normalize_profile(
         y::Array{FT},
-        norm_vec::Array{FT},
+        y_names,
         prof_dof::IT,
-        prof_indices::OptVec{Bool} = nothing,
+        prof_indices::OptVec{Bool} = nothing;
+        norm_factors_dict = nothing,
+        z_score_norm::Bool = true,
     ) where {FT <: Real, IT <: Integer}
 
 Perform normalization of the aggregate observation vector `y` using separate
-normalization constants for each variable, contained in `norm_vec`.
+normalization factors (μ, σ) for each variable, returned as `norm_vec`.
 
 Inputs:
- - `y` :: Aggregate observation vector.
- - `norm_vec` :: Vector of squares of normalization factors.
+ - `y` :: Aggregate observation vector (containing several variables).
+ - `y_names` :: Vector of squares of normalization factors.
  - `prof_dof` :: Degrees of freedom of vertical profiles contained in `y`.
  - `prof_indices` :: Vector of booleans specifying which variables are profiles, and which
     are timeseries.
+- `norm_factors_dict` :: Dict of precomputed normalization factors Dict(var_name => (μ, σ)) for each variable.
 - `z_score_norm` :: z-score normalization
 Output:
- - The normalized aggregate observation vector.
+ - `y_` : normalized `y` vector.
+ - `norm_vec` : normalization factors (μ, σ) for each variable.
+ The normalized aggregate observation vector.
 """
 function normalize_profile(
     y::Array{FT},
@@ -393,7 +398,7 @@ end
         y_names::Vector{String};
         ti::Real = 0.0,
         tf::OptReal = nothing,
-        z_scm::Union{Vector{T}, T} = nothing,
+        z_scm::OptVec{T} = nothing,
         prof_ind::Bool = false,
     ) where {T}
 
@@ -404,10 +409,9 @@ Inputs:
 
  - `filename`    :: nc filename
  - `y_names`     :: Names of variables to be retrieved.
- - `ti`          :: Initial time of averaging window.
- - `tf`          :: Final time of averaging window.
+ - `ti`          :: Initial time of averaging window [s].
+ - `tf`          :: Final time of averaging window [s].
  - `z_scm`       :: If given, interpolate LES observations to given levels.
- - `m`           :: ReferenceModel from which to fetch profiles, implicitly defines `ti` and `tf`.
  - `prof_ind`    :: Whether to return a boolean array indicating the variables that are profiles (i.e., not scalars). 
 
 Outputs:
@@ -480,29 +484,36 @@ end
 
 
 """
-    get_obs(filename::String,, y_names, normalize; [z_scm])
+    get_obs(
+        filename::String,
+        y_names::Vector{String},
+        z_scm::OptVec{FT} = nothing;
+        kwargs...)
 
-Get observational mean `y` and empirical time covariance `Σ`.
+Get observational mean `y` and time covariance `Σ`.
 
-The keyword `normalize` specifies whether observations are to be normalized with respect to the 
-per-quantity pooled variance or not. See [`normalize_profile`](@ref) for details.
-The normalization vector is returned along with `y` and `Σ`.
+The keyword `z_score_norm` specifies whether observations are to be normalized or not. 
+See [`normalize_profile`](@ref) for details. The normalization vector is returned along with `y` and `Σ`.
 
 If `z_scm` is given, interpolate observations to the given levels.
 
 # Arguments
-- `m`            :: A `ReferenceModel`](@ref)
-- `y_names`      :: Names of observed fields from the [`ReferenceModel`](@ref) `m`.
+ - `filename`    :: nc filename
+ - `y_names`      :: Names of variables to include.
+ - `z_scm`        :: If given, interpolate LES observations to given array of vertical levels.
 
 # Keywords
-- `z_scm`        :: If given, interpolate LES observations to given array of vertical levels.
-- `Σ_const`      :: Constant diagonal noise  
-- `model_error`  :: Model error per variable, added to the internal variability noise, and
+ - `model_error`  :: Model error per variable, added to the internal variability noise, and
                     normalized by the pooled variance of the variable.
+ - `ti`          :: Initial time of averaging window [s].
+ - `tf`          :: Final time of averaging window [s].
+ - `norm_factors_dict` :: Dict of precomputed normalization factors Dict(var_name => (μ, σ)) for each variable.
+ - `z_score_norm` :: z-score normalization
+ - `Σ_const` :: If given, sets constant diagonal σ^2 to use for noise cov Σ
 
 # Returns
-- `y::Vector`           :: Mean of observations `y`, possibly interpolated to `z_scm` levels.
-- `Σ::Matrix`           :: Observational covariance matrix `Σ`, possibly pool-normalized.
+ - `y::Vector`           :: Mean of observations `y`, possibly interpolated to `z_scm` levels.
+ - `Σ::Matrix`           :: Observational covariance matrix `Σ`
 - `norm_vec::Matrix`    :: Normalization mean & std, one row for each variable
 """
 function get_obs(
@@ -565,9 +576,11 @@ end
 
 """
     get_time_covariance(
+        filename::String,
         y_names::Vector{String},
         z_scm::Vector{FT};
-        normalize::Bool = true,
+        ti::FT = 72000.0,
+        normalize::Bool = false,
         model_error::OptVec{FT} = nothing,
         pooled_var_dict::Union{Dict, Nothing} = nothing,
     ) where {FT <: Real}
@@ -576,13 +589,14 @@ Obtain the covariance matrix of a group of profiles, where the covariance
 is obtained in time.
 
 Inputs:
- - `y_names`      :: List of variable names to be included.
+ - `filename`    :: nc filename
+ - `y_names`      :: Names of variables to include.
  - `z_scm`        :: If given, interpolates covariance matrix to this locations.
- - `normalize`    :: Whether to normalize the time series with the pooled variance
-        before computing the covariance, or not.
-- `model_error`  :: Model error per variable, added to the internal variability noise, and
+ - `ti`          :: Initial time, after which covariance is computed [s].
+ - `normalize`    :: Whether to normalize the time series before computing the covariance, or not.
+ - `model_error`  :: Model error per variable, added to the internal variability noise, and
                     normalized by the pooled variance of the variable.
-- `pooled_var_dict` :: Dict of precomputed pooled variances
+ - `pooled_var_dict` :: Dict of precomputed pooled variances
 """
 function get_time_covariance(
     filename::String,
@@ -619,7 +633,7 @@ function get_time_covariance(
                     mean(var(var_[:, ti_index:tf_index], dims = 2)) + eps(FT) # vertically averaged time-variance of variable
             end
 
-            # Normalize timeseries
+            # Normalize time series
             ts_var_i =
                 normalize ? var_[:, ti_index:tf_index] ./ sqrt(pool_var[i]) :
                 var_[:, ti_index:tf_index] # dims: (Nz, Nt)
@@ -633,7 +647,7 @@ function get_time_covariance(
                 # Store pooled variance
                 pool_var[i] = var(var_[ti_index:tf_index]) + eps(FT) # time-variance of variable
             end
-            # Normalize timeseries
+            # Normalize time series
             ts_var_i =
                 normalize ?
                 Array(var_[ti_index:tf_index]') ./ sqrt(pool_var[i]) :
@@ -663,4 +677,146 @@ function get_time_covariance(
         !isnothing(model_error) ?
         cov_mat + Diagonal(FT.(model_error_expanded)) : cov_mat
     return cov_mat, pool_var
+end
+
+"""Given calibration output directory, find iterations that contain given config."""
+function get_iters_with_config(config_i::Int, config_dict::Dict)
+    config_i_dir = "config_$config_i"
+    iters_with_config = []
+    for iter in 0:config_dict["n_iterations"]
+        for m in 1:config_dict["ensemble_size"]
+            member_path =
+                TOMLInterface.path_to_ensemble_member(output_dir, iter, m)
+
+            if isdir(member_path)
+                dirs = filter(
+                    entry -> isdir(joinpath(member_path, entry)),
+                    readdir(member_path),
+                )
+
+                if (config_i_dir in dirs) & ~(iter in iters_with_config)
+                    push!(iters_with_config, iter)
+                end
+
+            else
+                @info "Iteration not reached: $iter"
+            end
+
+        end
+    end
+    return iters_with_config
+end
+
+"""
+    ensemble_data(
+        iteration,
+        config_i::Int;
+        var_name = "hus",
+        reduction = "inst",
+        output_dir = nothing,
+        z_max = nothing,
+        n_vert_levels,
+    )
+
+Fetch output vectors `y` for a specific variable across ensemble members.
+    Fills missing data from crash simulations with NaN.
+
+# Arguments
+ - `iteration`   :: Iteration number for the ensemble data
+ - `config_i`    :: Configuration id
+
+# Keywords
+ - `var_name`    :: Name of the variable to extract data for
+ - `reduction`   :: Type of ClimaDiagnostics data reduction to apply
+ - `output_dir`  :: Calibration output dir
+ - `z_max`       :: maximum z
+ - `n_vert_levels` :: Number of vertical levels in the data
+
+# Returns
+ - `G_ensemble::Array{Float64}` :: Array containing the data for the specified variable across all ensemble members, with shape (n_vert_levels, ensemble_size).
+"""
+function ensemble_data(
+    iteration,
+    config_i::Int,
+    ;
+    var_name = "hus",
+    reduction = "inst",
+    output_dir = nothing,
+    z_max = nothing,
+    n_vert_levels,
+)
+
+    G_ensemble =
+        Array{Float64}(undef, n_vert_levels, config_dict["ensemble_size"])
+
+    for m in 1:config_dict["ensemble_size"]
+
+        try
+            member_path =
+                TOMLInterface.path_to_ensemble_member(output_dir, iteration, m)
+            simdir =
+                SimDir(joinpath(member_path, "config_$config_i", "output_0000"))
+            G_ensemble[:, m] .= get_var_data(
+                simdir,
+                var_name;
+                t_start = config_dict["g_t_start_sec"],
+                t_end = config_dict["g_t_end_sec"],
+                z_max = z_max,
+            )
+        catch err
+            @info "Error during observation map for ensemble member $m" err
+            G_ensemble[:, m] .= NaN
+        end
+    end
+    return G_ensemble
+end
+
+"""
+    get_var_data(simdir, var_name; t_start, t_end, reduction = "inst", z_max = nothing)
+
+Extract variable data from simulation directory, applying spatiotemporal filtering.
+
+# Arguments
+ - `simdir`     :: Simulation directory containing the output data
+ - `var_name`   :: Name of the variable to extract data for
+
+# Keywords
+ - `t_start`    :: Start time for the averaging window [s]
+ - `t_end`      :: End time for the averaging window [s]
+ - `reduction`  :: Type of data reduction to apply. Default is "inst"
+ - `z_max`      :: Maximum vertical level to include in the data. Default is `nothing`
+
+# Returns
+ - `y_var_i :: Array containing the averaged variable data
+"""
+
+function get_var_data(
+    simdir,
+    var_name;
+    t_start,
+    t_end,
+    reduction = "inst",
+    z_max = nothing,
+)
+
+    var_i = get(simdir; short_name = var_name, reduction = reduction)
+
+    if !isnothing(z_max)
+        z_window = filter(x -> x <= z_max, var_i.dims["z"])
+        var_i = window(var_i, "z", right = maximum(z_window))
+    end
+
+    sim_t_end = var_i.dims["time"][end]
+
+    if sim_t_end < 0.95 * t_end
+        throw(ErrorException("Simulation failed."))
+    end
+    # take time-mean of last N hours
+    var_i_ave =
+        average_time(window(var_i, "time", left = t_start, right = sim_t_end))
+
+    y_var_i = slice(var_i_ave, x = 1, y = 1).data
+
+    return y_var_i
+
 end

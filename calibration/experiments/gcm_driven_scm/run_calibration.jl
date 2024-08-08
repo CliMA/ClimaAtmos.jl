@@ -22,6 +22,7 @@ const ensemble_size = experiment_config["ensemble_size"]
 const output_dir = experiment_config["output_dir"]
 const model_config = experiment_config["model_config"]
 const z_max = experiment_config["z_max"]
+const eki_timestep = experiment_config["eki_timestep"]
 const prior =
     CAL.get_prior(joinpath(experiment_dir, experiment_config["prior"]))
 
@@ -95,7 +96,7 @@ CAL.initialize(
     observations,
     prior,
     output_dir;
-    scheduler = EKP.DefaultScheduler(0.001),
+    scheduler = EKP.DefaultScheduler(eki_timestep),
 )
 
 eki = nothing
