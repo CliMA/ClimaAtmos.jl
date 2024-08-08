@@ -45,49 +45,64 @@ end
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
 # TODO: Can we rewrite ᶠfct_boris_book and ᶠfct_zalesak so that their broadcast
 # expressions are less convoluted?
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding::Val, ᶜdivᵥ) =
-    vertical_transport!(1, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding, ᶜdivᵥ)
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding::Val) =
-    vertical_transport!(1, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding, ᶜadvdivᵥ)
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶠJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding::Val, ᶜdivᵥ) =
+    vertical_transport!(1, ᶜρχₜ, ᶜJ, ᶠJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding, ᶜdivᵥ)
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶠJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding::Val) =
+    vertical_transport!(1, ᶜρχₜ, ᶜJ, ᶠJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding, ᶜadvdivᵥ)
 vertical_transport!(
     coeff::Int,
     ᶜρχₜ,
     ᶜJ,
+    ᶠJ,
     ᶜρ,
     ᶠu³,
     ᶜχ,
     dt::Real,
     upwinding::Val,
-) = vertical_transport!(coeff, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding, ᶜadvdivᵥ)
+) = vertical_transport!(
+    coeff,
+    ᶜρχₜ,
+    ᶜJ,
+    ᶠJ,
+    ᶜρ,
+    ᶠu³,
+    ᶜχ,
+    dt,
+    upwinding,
+    ᶜadvdivᵥ,
+)
 
-vertical_transport!(coeff, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none}, ᶜdivᵥ) =
-    @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜχ)))
+vertical_transport!(coeff, ᶜρχₜ, ᶜJ, ᶠJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none}, ᶜdivᵥ) =
+    @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠinterp(ᶜJ * ᶜρ) / ᶠJ * ᶠu³ * ᶠinterp(ᶜχ)))
 vertical_transport!(
     coeff,
     ᶜρχₜ,
     ᶜJ,
+    ᶠJ,
     ᶜρ,
     ᶠu³,
     ᶜχ,
     dt,
     ::Val{:first_order},
     ᶜdivᵥ,
-) = @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)))
+) = @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠinterp(ᶜJ * ᶜρ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ)))
 vertical_transport!(
     coeff,
     ᶜρχₜ,
     ᶜJ,
+    ᶠJ,
     ᶜρ,
     ᶠu³,
     ᶜχ,
     dt,
     ::Val{:third_order},
     ᶜdivᵥ,
-) = @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠu³, ᶜχ)))
+) = @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠinterp(ᶜJ * ᶜρ) / ᶠJ * ᶠupwind3(ᶠu³, ᶜχ)))
 vertical_transport!(
     coeff,
     ᶜρχₜ,
     ᶜJ,
+    ᶠJ,
     ᶜρ,
     ᶠu³,
     ᶜχ,
@@ -96,24 +111,34 @@ vertical_transport!(
     ᶜdivᵥ,
 ) = @. ᶜρχₜ +=
     -coeff * (ᶜdivᵥ(
-        ᶠwinterp(ᶜJ, ᶜρ) * (
+        ᶠinterp(ᶜJ * ᶜρ) / ᶠJ * (
             ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_boris_book(
                 ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
-                ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
+                ᶜχ / dt - ᶜdivᵥ(ᶠinterp(ᶜJ * ᶜρ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
             )
         ),
     ))
-vertical_transport!(coeff, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak}, ᶜdivᵥ) =
-    @. ᶜρχₜ +=
-        -coeff * (ᶜdivᵥ(
-            ᶠwinterp(ᶜJ, ᶜρ) * (
-                ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_zalesak(
-                    ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
-                    ᶜχ / dt,
-                    ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
-                )
-            ),
-        ))
+vertical_transport!(
+    coeff,
+    ᶜρχₜ,
+    ᶜJ,
+    ᶠJ,
+    ᶜρ,
+    ᶠu³,
+    ᶜχ,
+    dt,
+    ::Val{:zalesak},
+    ᶜdivᵥ,
+) = @. ᶜρχₜ +=
+    -coeff * (ᶜdivᵥ(
+        ᶠinterp(ᶜJ * ᶜρ) / ᶠJ * (
+            ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_zalesak(
+                ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
+                ᶜχ / dt,
+                ᶜχ / dt - ᶜdivᵥ(ᶠinterp(ᶜJ * ᶜρ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
+            )
+        ),
+    ))
 
 vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:none}) =
     @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
@@ -127,17 +152,19 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜh_tot, ᶜspecific, ᶠu³, ᶜp) = p.precomputed
 
-    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠu³)
+    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(ᶜJ * Y.c.ρ) / ᶠJ * ᶠu³)
 
     # Central advection of active tracers (e_tot and q_tot)
-    vertical_transport!(Yₜ.c.ρe_tot, ᶜJ, Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
+    vertical_transport!(Yₜ.c.ρe_tot, ᶜJ, ᶠJ, Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     if !(moisture_model isa DryModel)
         vertical_transport!(
             Yₜ.c.ρq_tot,
             ᶜJ,
+            ᶠJ,
             Y.c.ρ,
             ᶠu³,
             ᶜspecific.q_tot,
@@ -153,16 +180,17 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         # using downward biasing and free outflow bottom boundary condition
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
-            ᶠwinterp(ᶜJ, Y.c.ρ) *
+            ᶠinterp(ᶜJ * Y.c.ρ) / ᶠJ *
             ᶠright_bias(Geometry.WVector(-(ᶜwᵣ)) * ᶜspecific.q_rai),
         )
         @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
-            ᶠwinterp(ᶜJ, Y.c.ρ) *
+            ᶠinterp(ᶜJ * Y.c.ρ) / ᶠJ *
             ᶠright_bias(Geometry.WVector(-(ᶜwₛ)) * ᶜspecific.q_sno),
         )
     end
 
     @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜp) / ᶠinterp(Y.c.ρ) + ᶠgradᵥ_ᶜΦ
+    # @. Yₜ.f.u₃ -= ᶠinterp(ᶜp / Y.c.ρ) * ᶠgradᵥ(log(ᶜp)) + ᶠgradᵥ_ᶜΦ
 
     if rayleigh_sponge isa RayleighSponge
         (; ᶠβ_rayleigh_w) = p.rayleigh_sponge

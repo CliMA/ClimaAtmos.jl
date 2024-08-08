@@ -1,0 +1,18 @@
+config: "plane"
+FLOAT_TYPE: "Float64"
+initial_condition: "ConstantBuoyancyFrequencyProfile"
+topography: "Cosine2D"
+x_max: 300e3
+z_max: 21e3
+x_elem: 15
+z_elem: 50
+z_stretch: false
+dt: "12secs"
+t_end: "100days"
+rayleigh_sponge: true
+toml: [toml/analytic_topography_weak_sponge_test.toml]
+analytic_check: true
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [orog, ua, wa, uapredicted, wapredicted, uaerror, waerror, c1error, c3error]
+    period: 1hours

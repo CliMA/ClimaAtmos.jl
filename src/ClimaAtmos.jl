@@ -16,6 +16,7 @@ include(joinpath("utils", "debug_utils.jl"))
 include(joinpath("topography", "topography.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
 include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
+include(joinpath("analytic_solutions", "analytic_solutions.jl"))
 
 include(
     joinpath("parameterized_tendencies", "radiation", "radiation_utilities.jl"),

@@ -46,8 +46,13 @@ function precomputed_quantities(Y, atmos)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     gs_quantities = (;
         ᶜspecific = specific_gs.(Y.c),
-        ᶜu = similar(Y.c, C123{FT}),
+        ᶜuʰ = similar(Y.c, CT12{FT}),
+        ᶜu³ᴸ = similar(Y.c, CT3{FT}),
+        ᶜu³ᴿ = similar(Y.c, CT3{FT}),
+        ᶠuʰ = similar(Y.f, CT12{FT}),
         ᶠu³ = similar(Y.f, CT3{FT}),
+        ᶠu = similar(Y.f, CT123{FT}),
+        ᶜu_fake = similar(Y.c, C123{FT}), # not part of reconstruction
         ᶜK = similar(Y.c, FT),
         ᶜts = similar(Y.c, TST),
         ᶜp = similar(Y.c, FT),
@@ -165,13 +170,6 @@ function precomputed_quantities(Y, atmos)
     )
 end
 
-# Interpolates the third contravariant component of Y.c.uₕ to cell faces.
-function set_ᶠuₕ³!(ᶠuₕ³, Y)
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    @. ᶠuₕ³ = ᶠwinterp(Y.c.ρ * ᶜJ, CT3(Y.c.uₕ))
-    return nothing
-end
-
 """
     set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
 
@@ -180,14 +178,16 @@ Modifies `Y.f.u₃` so that `ᶠu³` is 0 at the surface. Specifically, since
 the `turbconv_model` is EDMFX, the `Y.f.sgsʲs` are also modified so that each
 `u₃ʲ` is equal to `u₃` at the surface.
 """
-function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
-    sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
-    sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
-    sfc_g³³ = g³³_field(sfc_u₃)
-    @. sfc_u₃ = -sfc_uₕ³ / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
+function set_velocity_at_surface!(Y, turbconv_model)
+    int_uₕ = Fields.level(Y.c.uₕ, 1)
+    int_g³³ = g³³_field(int_uₕ)
+    sfc_u₃ = Fields.level(Y.f.u₃, half)
+    sfc_u₃_shifted = Fields.Field(Fields.field_values(sfc_u₃), axes(int_uₕ))
+    @. sfc_u₃_shifted.components.data.:1 =
+        -CT3(int_uₕ).components.data.:1 / int_g³³
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n_mass_flux_subdomains(turbconv_model)
-            sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
+            sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃, half)
             @. sfc_u₃ʲ = sfc_u₃
         end
     end
@@ -219,12 +219,77 @@ end
 
 # This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
 # ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
-function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
-    @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
-    @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
-    compute_kinetic!(ᶜK, ᶜuₕ, ᶠu₃)
+function set_velocity_quantities!(ᶜuʰ, ᶜu³ᴸ, ᶜu³ᴿ, ᶠuʰ, ᶠu³, ᶠu, ᶜu_fake, ᶜK, Y)
+    ᶠleft_bias0 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(CT3(0)))
+    ᶠright_bias0 = Operators.RightBiasedC2F(; top = Operators.SetValue(CT3(0)))
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    ᶠu₃ = Y.f.u₃
+    @. ᶜuʰ = CT12(ᶜuₕ) + (CT12(ᶜleft_bias(ᶠu₃)) + CT12(ᶜright_bias(ᶠu₃))) / 2
+    @. ᶠuʰ = ᶠinterp(ᶜJ * ᶜρ * ᶜuʰ) / ᶠinterp(ᶜJ * ᶜρ)
+    @. ᶜu³ᴸ = CT3(ᶜuₕ) + CT3(ᶜleft_bias(ᶠu₃))
+    @. ᶜu³ᴿ = CT3(ᶜuₕ) + CT3(ᶜright_bias(ᶠu₃))
+    @. ᶠu³ =
+        (ᶠleft_bias0(ᶜJ * ᶜρ * ᶜu³ᴿ) + ᶠright_bias0(ᶜJ * ᶜρ * ᶜu³ᴸ)) /
+        (2 * ᶠinterp(ᶜJ * ᶜρ))
+    @. ᶠu = CT123(ᶠuʰ) + CT123(ᶠu³)
+    @. ᶜu_fake = C123(ᶜuₕ) + C123(ᶜinterp(ᶠu₃))
+    @. ᶜK =
+        (
+            dot(ᶜuₕ, ᶜuʰ) +
+            (dot(ᶜleft_bias(ᶠu₃), ᶜu³ᴸ) + dot(ᶜright_bias(ᶠu₃), ᶜu³ᴿ)) / 2
+        ) / 2
     return nothing
 end
+
+#=
+ᶜuʰ = ᶜgʰʰ * ᶜuₕ + ᶜgʰ³ * (ᶜL(ᶠu₃) + ᶜR(ᶠu₃)) / 2
+ᶜu³ᴸ = ᶜg³ʰ * ᶜuₕ + ᶜg³³ * ᶜL(ᶠu₃)
+ᶜu³ᴿ = ᶜg³ʰ * ᶜuₕ + ᶜg³³ * ᶜR(ᶠu₃)
+ᶠu³ = (ᶠL(ᶜJ * ᶜρ * ᶜu³ᴿ) + ᶠR(ᶜJ * ᶜρ * ᶜu³ᴸ)) / (2 * ᶠinterp(ᶜJ * ᶜρ))
+    = (
+           ᶠL(ᶜJ * ᶜρ * (ᶜg³ʰ * ᶜuₕ + ᶜg³³ * ᶜR(ᶠu₃))) +
+           ᶠR(ᶜJ * ᶜρ * (ᶜg³ʰ * ᶜuₕ + ᶜg³³ * ᶜL(ᶠu₃)))
+      ) / (2 * ᶠinterp(ᶜJ * ᶜρ))
+    = (
+           ᶠinterp(ᶜJ * ᶜρ * ᶜg³ʰ * ᶜuₕ) +
+           (ᶠL(ᶜJ * ᶜρ * ᶜg³³ * ᶜR(ᶠu₃)) + ᶠR(ᶜJ * ᶜρ * ᶜg³³ * ᶜL(ᶠu₃))) / 2
+      ) / ᶠinterp(ᶜJ * ᶜρ)
+ᶜK = (dot(ᶜuₕ, ᶜuʰ) + (dot(ᶜL(ᶠu₃), ᶜu³ᴸ) + dot(ᶜR(ᶠu₃), ᶜu³ᴿ)) / 2) / 2
+   = (
+          ᶜuₕ' * ᶜgʰʰ * ᶜuₕ +
+          ᶜuₕ' * ᶜgʰ³ * (ᶜL(ᶠu₃) + ᶜR(ᶠu₃)) / 2 +
+          (ᶜL(ᶠu₃) + ᶜR(ᶠu₃))' * ᶜg³ʰ * ᶜuₕ / 2 +
+          (ᶜL(ᶠu₃)' * ᶜg³³ * ᶜL(ᶠu₃) + ᶜR(ᶠu₃)' * ᶜg³³ * ᶜR(ᶠu₃)) / 2
+     ) / 2
+   = (
+          ᶜuₕ' * ᶜgʰʰ * ᶜuₕ +
+          ᶜuₕ' * ᶜgʰ³ * (ᶜL(ᶠu₃) + ᶜR(ᶠu₃)) +
+          (ᶜL(ᶠu₃)' * ᶜg³³ * ᶜL(ᶠu₃) + ᶜR(ᶠu₃)' * ᶜg³³ * ᶜR(ᶠu₃)) / 2
+     ) / 2
+
+∂ᶜK∂ᶜuₕ = (ᶜgʰʰ * ᶜuₕ + ᶜgʰ³ * (ᶜL(ᶠu₃) + ᶜR(ᶠu₃)) / 2)' = ᶜuʰ'
+∂ᶜK∂ᶠu₃ =
+   = (
+          ᶜuₕ' * ᶜgʰ³ * (ᶜL_matrix + ᶜR_matrix) +
+          ᶜL(ᶠu₃)' * ᶜg³³ * ᶜL_matrix + ᶜR(ᶠu₃)' * ᶜg³³ * ᶜR_matrix
+     ) / 2
+   = (
+          (ᶜg³ʰ * ᶜuₕ + ᶜg³³ * ᶜL(ᶠu₃))' * ᶜL_matrix +
+          (ᶜg³ʰ * ᶜuₕ + ᶜg³³ * ᶜR(ᶠu₃))' * ᶜR_matrix
+     ) / 2
+   = (ᶜu³ᴸ' * ᶜL_matrix + ᶜu³ᴿ' * ᶜR_matrix) / 2
+
+∂ᶠu³∂ᶜuₕ =
+   = ᶠinterp_matrix ⋅ Diag(ᶜJ * ᶜρ * ᶜg³ʰ) / ᶠinterp(ᶜJ * ᶜρ)
+   = ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅ Diag(ᶜg³ʰ)
+∂ᶠu³∂ᶠu₃ =
+   = (
+          ᶠL_matrix ⋅ Diag(ᶜJ * ᶜρ * ᶜg³³) ⋅ ᶜR_matrix +
+          ᶠR_matrix ⋅ Diag(ᶜJ * ᶜρ * ᶜg³³) ⋅ ᶜL_matrix
+     ) / (2 * ᶠinterp(ᶜJ * ᶜρ))
+=#
 
 function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
     ρaʲs(sgsʲs) = map(sgsʲ -> sgsʲ.ρa, sgsʲs)
@@ -451,18 +516,17 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_args = (thermo_params, moisture_model)
     (; ᶜΦ) = p.core
-    (; ᶜspecific, ᶜu, ᶠu³, ᶜK, ᶜts, ᶜp) = p.precomputed
-    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+    (; ᶜspecific, ᶜuʰ, ᶜu³ᴸ, ᶜu³ᴿ, ᶠuʰ, ᶠu³, ᶠu, ᶜu_fake, ᶜK, ᶜts, ᶜp) =
+        p.precomputed
 
     @. ᶜspecific = specific_gs(Y.c)
-    set_ᶠuₕ³!(ᶠuₕ³, Y)
 
     # TODO: We might want to move this to dss! (and rename dss! to something
     # like enforce_constraints!).
-    set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
+    set_velocity_at_surface!(Y, turbconv_model)
     set_velocity_at_top!(Y, turbconv_model)
 
-    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
+    set_velocity_quantities!(ᶜuʰ, ᶜu³ᴸ, ᶜu³ᴿ, ᶠuʰ, ᶠu³, ᶠu, ᶜu_fake, ᶜK, Y)
     if n > 0
         # TODO: In the following increments to ᶜK, we actually need to add
         # quantities of the form ᶜρaχ⁰ / ᶜρ⁰ and ᶜρaχʲ / ᶜρʲ to ᶜK, rather than
