@@ -82,7 +82,7 @@ function column_indefinite_integral(
     # ---
     zc = Fields.coordinate_field(cspace)
     ᶠintegral = Fields.Field(FT, fspace)
-    Operators.column_accumulate!(f, ᶠintegral, ϕ₀)
+    Operators.column_integral_indefinite!(f, ᶠintegral, ϕ₀)
     return ColumnInterpolatableField(ᶠintegral)
 end
 
