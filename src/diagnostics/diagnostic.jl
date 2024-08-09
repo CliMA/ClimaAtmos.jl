@@ -98,7 +98,6 @@ include("core_diagnostics.jl")
 include("radiation_diagnostics.jl")
 include("edmfx_diagnostics.jl")
 include("tracer_diagnostics.jl")
-include("sgs_diagnostics.jl")
 
 # Default diagnostics and higher level interfaces
 include("default_diagnostics.jl")
