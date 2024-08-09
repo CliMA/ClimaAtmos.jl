@@ -4,7 +4,7 @@ n_iterations: 5
 model_config: model_config.yml
 observations: observations.jld2
 noise: obs_noise_cov.jld2
-output_dir: output/gcm_driven_scm
+output_dir: output/local_calibration
 batch_size: 1
 y_var_names: [rlut] # , rsut, rlutcs, rsutcs
 dims: 1 # num vertical levels x num variables, also shape of observations

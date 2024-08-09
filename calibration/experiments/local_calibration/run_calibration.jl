@@ -1,3 +1,4 @@
+# ENV["CLIMACOMMS_DEVICE"] = "CUDA"
 # Run SCM calibration of toa radiative fluxes
 import ClimaAtmos as CA
 import ClimaAnalysis: SimDir, get, slice, average_xy
