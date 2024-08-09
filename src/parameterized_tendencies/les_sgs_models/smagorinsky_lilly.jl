@@ -65,7 +65,7 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
                   1 - 3*(grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/2)
 
     ᶠρ = @. ᶠwinterp(ᶜJ, Y.c.ρ)
-    ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) * ᶠfb
+    ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) #* ᶠfb
     ᶜv_t = @. ᶜinterp(ᶠv_t)
     ᶜD = @. FT(3) * ᶜv_t
 
@@ -134,7 +134,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     @. ᶠfb = (max(FT(0), 1 - 3*(grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/2)
 
     ᶠρ = @. ᶠwinterp(ᶜJ, Y.c.ρ)
-    ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) * ᶠfb
+    ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) #* ᶠfb
     ᶜv_t = @. ᶜinterp(ᶠv_t)
     ᶜD = @. FT(3) * ᶜv_t
     

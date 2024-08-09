@@ -15,8 +15,8 @@ scalar_hyperdiffusion_coefficient: 0.2
 dt_cloud_fraction: "10mins"
 ode_algo: "SSPKnoth"
 smagorinsky_lilly: true
-tracer_upwinding: "first_order"
-energy_upwinding: "first_order"
+tracer_upwinding: "third_order"
+energy_upwinding: "third_order"
 c_smag: 0.20
 x_max: 4e3
 y_max: 4e3
