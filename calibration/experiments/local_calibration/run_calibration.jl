@@ -20,8 +20,7 @@ const model_interface = joinpath(experiment_dir, "model_interface.jl")
 include(model_interface)
 
 
-const experiment_config =
-    YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
+const experiment_config = YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 const n_iterations = experiment_config["n_iterations"]
 const ensemble_size = experiment_config["ensemble_size"]
 const output_dir = experiment_config["output_dir"]
@@ -44,8 +43,8 @@ obs_path = joinpath(experiment_dir, "observations.jld2")
 observations = JLD2.load_object(obs_path)
 
 # Initialize experiment data
-noise = .1 * I
-prior = CAL.get_prior(joinpath(experiment_dir, "prior.toml"))
+noise = JLD2.load_object(joinpath(experiment_dir, experiment_config["noise"]))
+#prior = CAL.get_prior(joinpath(experiment_dir, "prior.toml"))
 cal_ex_config = CAL.ExperimentConfig(;
     n_iterations,
     ensemble_size,
@@ -68,7 +67,10 @@ end
 @info "Initializing calibration" n_iterations ensemble_size output_dir
 CAL.initialize(
     cal_ex_config;
-    scheduler = EKP.DefaultScheduler(1),
+    scheduler = EKP.DataMisfitController(terminate_at = 1),
+    localization_method = EKP.NoLocalization(),
+    failure_handler_method = EKP.SampleSuccGauss(),
+    accelerator = EKP.DefaultAccelerator(),
 )
 
 eki = nothing
@@ -85,7 +87,7 @@ for iter in 0:(n_iterations - 1)
             experiment_dir,
             model_interface,
             module_load_str;
-            hpc_kwargs,
+            # hpc_kwargs,
         )
     end
 
@@ -109,7 +111,7 @@ end
 
 
 
-
+CAL.calibrate(experiment_dir)
 
 
 

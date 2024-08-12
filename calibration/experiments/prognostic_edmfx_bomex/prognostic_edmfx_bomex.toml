@@ -27,6 +27,3 @@ value = 0.05
 
 [pressure_normalmode_drag_coeff]
 value = 40.0
-
-[zd_rayleigh]
-value = 20000.0
