@@ -2123,6 +2123,11 @@ git-tree-sha1 = "f011fbb92c4d401059b2212c05c0601b70f8b759"
 uuid = "43287f4e-b6f4-7ad1-bb20-aadabca52c3d"
 version = "1.2.0"
 
+[[deps.PtrArrays]]
+git-tree-sha1 = "f011fbb92c4d401059b2212c05c0601b70f8b759"
+uuid = "43287f4e-b6f4-7ad1-bb20-aadabca52c3d"
+version = "1.2.0"
+
 [[deps.QOI]]
 deps = ["ColorTypes", "FileIO", "FixedPointNumbers"]
 git-tree-sha1 = "18e8f4d1426e965c7b532ddd260599e1510d26ce"
