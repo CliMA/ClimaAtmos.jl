@@ -8,6 +8,7 @@ implicit_diffusion: true
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
 edmfx_upwinding: first_order
+rayleigh_sponge: true
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
@@ -27,7 +28,7 @@ dt: "10secs"
 t_end: "6hours"
 dt_save_state_to_disk: "6hours"
 call_cloud_diagnostics_per_stage : true
-toml: [toml/prognostic_edmfx_bomex.toml]
+toml: [toml/prognostic_edmfx_gcmdriven.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 output_default_diagnostics: false
