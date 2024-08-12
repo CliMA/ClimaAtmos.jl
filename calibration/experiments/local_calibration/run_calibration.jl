@@ -48,10 +48,10 @@ noise = JLD2.load_object(joinpath(experiment_dir, experiment_config["noise"]))
 cal_ex_config = CAL.ExperimentConfig(;
     n_iterations,
     ensemble_size,
+    prior,
     observations,
     noise,
     output_dir,
-    prior,
 )
 
 # load configs and directories 
@@ -61,6 +61,15 @@ atmos_config = CA.AtmosConfig(model_config_dict)
 if !isdir(output_dir)
     mkpath(output_dir)
 end
+
+cal_ex_config = CAL.ExperimentConfig("experiment_config.yml")
+result_calibration = CAL.calibrate(CAL.JuliaBackend, cal_ex_config, 
+    scheduler = EKP.DataMisfitController(terminate_at = 1),
+    localization_method = EKP.NoLocalization(),
+    failure_handler_method = EKP.SampleSuccGauss(),
+    accelerator = EKP.DefaultAccelerator(),
+)
+
 
 
 # ExperimentConfig is created from a YAML file within the experiment_dir
@@ -111,7 +120,6 @@ end
 
 
 
-CAL.calibrate(experiment_dir)
 
 
 
