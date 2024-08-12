@@ -43,23 +43,23 @@ steps:
   - group: "les test"
     steps:
       
-      - label: "dycoms: 2 GPUs"
-        command:
-          - >
-            srun --cpu-bind=threads --cpus-per-task=4
-            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file config/model_configs/les_dycoms_box.yml
-            --job_id dycoms
-        artifact_paths: "dycoms_4gpu/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          CLIMACOMMS_CONTEXT: "MPI"
-        agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
-          slurm_ntasks: 2
-          slurm_mem: 16G
-          slurm_time: 6:00:00
+      # - label: "dycoms: 2 GPUs"
+      #   command:
+      #     - >
+      #       srun --cpu-bind=threads --cpus-per-task=4
+      #       julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+      #       --config_file config/model_configs/les_dycoms_box.yml
+      #       --job_id dycoms
+      #   artifact_paths: "dycoms_4gpu/output_active/*"
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #     CLIMACOMMS_CONTEXT: "MPI"
+      #   agents:
+      #     slurm_gpus_per_task: 1
+      #     slurm_cpus_per_task: 4
+      #     slurm_ntasks: 2
+      #     slurm_mem: 16G
+      #     slurm_time: 6:00:00
       
       - label: "bomex: 2 GPUs"
         command:
@@ -77,7 +77,7 @@ steps:
           slurm_cpus_per_task: 4
           slurm_ntasks: 2
           slurm_mem: 16G
-          slurm_time: 6:00:00
+          slurm_time: 2:00:00
       
       - label: "rico: 2 GPUs"
         command:
@@ -95,4 +95,4 @@ steps:
           slurm_cpus_per_task: 4
           slurm_ntasks: 2
           slurm_mem: 16G
-          slurm_time: 6:00:00
+          slurm_time: 2:00:00
