@@ -60,8 +60,17 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
 
     (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
+
+    ### Interp Checks
+    ᶜ∇ = Operators.GradientF2C();
+    θc2f = Operators.InterpolateC2F(;top = Operators.Extrapolate(),
+                                     bottom = Operators.SetValue(θ_v_sfc));
+    ᶜ∇θ = @. ᶜ∇(θc2f(θ_v))
+    ∇θ = @. ᶠinterp(ᶜ∇θ)
+    ###
+
     θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
-    N² = @. grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1
+    N² = @. grav / ᶠinterp(θ_v) * Geometry.WVector(∇θ).components.data.:1
     @. ᶠfb = (max(FT(0), 
                   1 - 3*(N²) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/2)
     ᶠfb .= ifelse.(N² .<= FT(0), zero(ᶠfb) .+ FT(1),ᶠfb)
@@ -133,7 +142,16 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
-    N² = @. grav / ᶠinterp(θ_v) * Geometry.WVector(ᶠgradᵥ(θ_v)).components.data.:1
+    ### Interp Checks
+    ᶜ∇ = Operators.GradientF2C();
+    θc2f = Operators.InterpolateC2F(;top = Operators.Extrapolate(),
+                                     bottom = Operators.SetValue(θ_v_sfc));
+    ᶜ∇θ = @. ᶜ∇(θc2f(θ_v))
+    ∇θ = @. ᶠinterp(ᶜ∇θ)
+    ###
+    
+    θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
+    N² = @. grav / ᶠinterp(θ_v) * Geometry.WVector(∇θ).components.data.:1
     @. ᶠfb = (max(FT(0), 
                   1 - 3*(N²) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/2)
     ᶠfb .= ifelse.(N² .<= FT(0), zero(ᶠfb) .+ FT(1),ᶠfb)
