@@ -17,6 +17,7 @@ edmfx_nh_pressure: true
 edmfx_filter: true
 prognostic_tke: true
 moist: "equil"
+cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage: true
 config: "column"
 z_max: 3e3

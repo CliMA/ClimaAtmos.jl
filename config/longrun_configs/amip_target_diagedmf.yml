@@ -6,7 +6,7 @@ z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
 moist: "equil"
-cloud_model: diagnostic_edmfx
+cloud_model: "quadrature_sgs"
 precip_model: "0M"
 override_τ_precip: false
 rad: "allskywithclear"

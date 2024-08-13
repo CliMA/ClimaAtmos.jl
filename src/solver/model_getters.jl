@@ -286,8 +286,8 @@ function get_cloud_model(parsed_args)
         GridScaleCloud()
     elseif cloud_model == "quadrature"
         QuadratureCloud()
-    elseif cloud_model == "diagnostic_edmfx"
-        DiagnosticEDMFCloud()
+    elseif cloud_model == "quadrature_sgs"
+        SGSQuadratureCloud()
     else
         error("Invalid cloud_model $(cloud_model)")
     end

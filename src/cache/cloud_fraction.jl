@@ -68,6 +68,7 @@ NVTX.@annotate function set_cloud_fraction!(
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜts, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
     (; turbconv_model) = p.atmos
+
     if isnothing(turbconv_model)
         if p.atmos.call_cloud_diagnostics_per_stage isa
            CallCloudDiagnosticsPerStage
@@ -94,11 +95,25 @@ NVTX.@annotate function set_cloud_fraction!(
         thermo_params,
     )
 end
+
+NVTX.@annotate function set_cloud_fraction!(
+    Y,
+    p,
+    moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    cloud_model::SGSQuadratureCloud,
+)
+
+    (; turbconv_model) = p.atmos
+    set_cloud_fraction!(Y, p, moisture_model, cloud_model, turbconv_model)
+end
+
+
 NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
     ::Union{EquilMoistModel, NonEquilMoistModel},
-    ::DiagnosticEDMFCloud,
+    ::SGSQuadratureCloud,
+    ::DiagnosticEDMFX,
 )
     (; SG_quad, params) = p
 
@@ -109,10 +124,9 @@ NVTX.@annotate function set_cloud_fraction!(
     (; turbconv_model) = p.atmos
 
     # TODO - we should make this default when using diagnostic edmf
-    @assert turbconv_model isa DiagnosticEDMFX
-
     # environment
     coeff = FT(2.1) # TODO - move to parameters
+
     @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,
         ᶜts,
@@ -122,6 +136,7 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜmixing_length,
         thermo_params,
     )
+
     # updrafts
     n = n_mass_flux_subdomains(turbconv_model)
 
@@ -136,6 +151,56 @@ NVTX.@annotate function set_cloud_fraction!(
                 draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)) *
                 TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).liq,
                 draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)) *
+                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).ice,
+            ),
+        )
+    end
+
+end
+
+NVTX.@annotate function set_cloud_fraction!(
+    Y,
+    p,
+    ::Union{EquilMoistModel, NonEquilMoistModel},
+    ::SGSQuadratureCloud,
+    ::PrognosticEDMFX,
+)
+    (; SG_quad, params) = p
+
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜts⁰, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
+    (; ᶜρʲs, ᶜtsʲs) = p.precomputed
+    (; turbconv_model) = p.atmos
+
+    # TODO - we should make this default when using diagnostic edmf
+    # environment
+    coeff = FT(2.1) # TODO - move to parameters
+
+    @. cloud_diagnostics_tuple = quad_loop(
+        SG_quad,
+        ᶜts⁰,
+        Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot⁰),
+        Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice⁰),
+        coeff,
+        ᶜmixing_length,
+        thermo_params,
+    )
+
+    # updrafts
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    for j in 1:n
+        @. cloud_diagnostics_tuple += NamedTuple{(:cf, :q_liq, :q_ice)}(
+            tuple(
+                ifelse(
+                    TD.has_condensate(thermo_params, ᶜtsʲs.:($$j)),
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                    0,
+                ),
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)) *
+                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).liq,
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)) *
                 TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).ice,
             ),
         )
