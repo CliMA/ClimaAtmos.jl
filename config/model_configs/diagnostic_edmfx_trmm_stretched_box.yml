@@ -1,4 +1,3 @@
-
 initial_condition: TRMM_LBA
 rad: TRMM_LBA
 surface_setup: TRMM_LBA
@@ -26,7 +25,7 @@ z_elem: 30
 z_max: 16400
 dz_bottom: 50
 dz_top: 2000
-dt: 300secs
+dt: 60secs
 t_end: 6hours
 dt_save_state_to_disk: 10mins
 FLOAT_TYPE: "Float64"

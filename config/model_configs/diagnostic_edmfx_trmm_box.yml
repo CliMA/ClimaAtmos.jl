@@ -24,7 +24,7 @@ y_elem: 2
 z_elem: 82
 z_max: 16400
 z_stretch: false
-dt: 200secs
+dt: 60secs
 t_end: 6hours
 dt_save_state_to_disk: 10mins
 FLOAT_TYPE: "Float64"
