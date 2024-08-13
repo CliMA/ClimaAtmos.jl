@@ -27,7 +27,7 @@ dt: "10secs"
 t_end: "40hours"
 dt_save_state_to_disk: "40hours"
 call_cloud_diagnostics_per_stage : true
-toml: [scm_tomls/prognostic_edmfx_bomex.toml]
+toml: [perf_prognostic_edmfx_bomex.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 output_default_diagnostics: false
@@ -48,4 +48,3 @@ diagnostics:
   #   short_name: tke
   #   period: 10mins
 ode_algo: ARS343
-output_dir: output/local_calibration
