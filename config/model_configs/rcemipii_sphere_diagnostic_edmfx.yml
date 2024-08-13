@@ -20,4 +20,3 @@ dt: 100secs
 t_end: 12hours
 dt_save_state_to_disk: 12hours
 toml: [toml/rcemipii_diagnostic_edmfx_0M.toml]
-ode_algo: ARS343

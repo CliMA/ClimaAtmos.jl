@@ -27,4 +27,3 @@ diagnostics:
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
     reduction_time: average
     period: 1hours
-ode_algo: ARS343
