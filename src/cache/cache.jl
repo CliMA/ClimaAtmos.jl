@@ -113,7 +113,15 @@ end
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
-function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
+function build_cache(
+    Y,
+    atmos,
+    params,
+    surface_setup,
+    sim_info,
+    prescribe_ozone,
+    aerosol_names,
+)
     (; dt, t_end, start_date, output_dir) = sim_info
     FT = eltype(params)
 
@@ -206,7 +214,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
 
     radiation_args =
         atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
-        (params, precomputed.ᶜp, aerosol_names) : ()
+        (params, precomputed.ᶜp, prescribe_ozone, aerosol_names) : ()
 
     hyperdiff = hyperdiffusion_cache(Y, atmos)
     rayleigh_sponge = rayleigh_sponge_cache(Y, atmos)
@@ -220,7 +228,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
-    tracers = tracer_cache(Y, atmos, aerosol_names, start_date)
+    tracers = tracer_cache(Y, atmos, prescribe_ozone, aerosol_names, start_date)
 
     args = (
         dt,

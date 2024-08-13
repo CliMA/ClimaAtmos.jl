@@ -13,6 +13,7 @@ rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 insolation: "timevarying"
+prescribe_ozone: true
 aerosol_radiation: true
 prescribed_aerosols: ["CB1", "CB2", "DST01", "OC1", "OC2", "SO4", "SSLT01"]
 surface_setup: "DefaultMoninObukhov"
@@ -32,3 +33,8 @@ dt: "120secs"
 t_end: "120days"
 toml: [toml/longrun_aquaplanet_diagedmf.toml]
 netcdf_output_at_levels: true
+diagnostics:
+  - short_name: [mmrso4, o3]
+    reduction_time: average
+    period: "1months"
+

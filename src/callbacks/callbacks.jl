@@ -62,11 +62,17 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     (; ᶠradiation_flux, rrtmgp_model) = p.radiation
     (; radiation_mode) = p.atmos
 
-    # If we have prescribed aerosols, we need to update them
+    # If we have prescribed ozone or aerosols, we need to update them
     if !isempty(p.tracers)
-        for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
-            field = getproperty(p.tracers.prescribed_aerosols_field, key)
-            evaluate!(field, tv, t)
+        if :o3 in propertynames(p.tracers)
+            evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, t)
+        end
+        if :prescribed_aerosols_field in propertynames(p.tracers)
+            for (key, tv) in
+                pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
+                field = getproperty(p.tracers.prescribed_aerosols_field, key)
+                evaluate!(field, tv, t)
+            end
         end
     end
 
@@ -171,6 +177,13 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 axes(Y.c),
             )
             @. ᶜaero_conc = maximum(p.tracers.prescribed_aerosols_field) * ᶜΔz
+        end
+        if :o3 in propertynames(p.tracers)
+            ᶜvmr_o3 = Fields.array2field(
+                rrtmgp_model.center_volume_mixing_ratio_o3,
+                axes(Y.c),
+            )
+            @. ᶜvmr_o3 = p.tracers.o3
         end
     end
 
