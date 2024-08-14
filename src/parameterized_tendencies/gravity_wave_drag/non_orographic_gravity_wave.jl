@@ -204,14 +204,19 @@ function non_orographic_gravity_wave_tendency!(
     if model_config isa SingleColumnModel
         # source level: the index of the level that is closest to the source height
 
-        Operators.column_mapreduce!(
+        Operators.column_reduce!(
             min_distance_reduce,
             source_level_z,
-            ᶜz,
-            ᶜlevel,
-        ) do z, level
-            (abs.(z .- gw_source_height), level)
-        end
+            Base.broadcasted(
+                tuple,
+                Base.broadcasted(
+                    abs,
+                    Base.broadcasted(-, ᶜz, gw_source_height),
+                ),
+                ᶜlevel,
+            ),
+        )
+
         source_level = source_level_z.:2
 
         fill!(damp_level, Spaces.nlevels(axes(ᶜz)))
@@ -220,27 +225,30 @@ function non_orographic_gravity_wave_tendency!(
         (; ᶜp) = p.precomputed
         # source level: the index of the highest level whose pressure is higher than source pressure
 
-        Operators.column_mapreduce!(
+        Operators.column_reduce!(
             positive_selector_reduce,
             source_level_z,
-            ᶜp,
-            ᶜlevel,
-        ) do p, level
-            (p .- gw_source_pressure, level)
-        end
-        source_level = source_level_z.:2
+            Base.broadcasted(
+                tuple,
+                Base.broadcasted(-, ᶜp, gw_source_pressure),
+                ᶜlevel,
+            ),
+        )
 
+        source_level = source_level_z.:2
 
         # damp level: the index of the lowest level whose pressure is lower than the damp pressure
 
-        Operators.column_mapreduce!(
+        Operators.column_reduce!(
             negative_selector_reduce,
             damp_level_z,
-            ᶜp,
-            ᶜlevel,
-        ) do p, level
-            (p .- gw_damp_pressure, level)
-        end
+            Base.broadcasted(
+                tuple,
+                Base.broadcasted(-, ᶜp, gw_damp_pressure),
+                ᶜlevel,
+            ),
+        )
+
         damp_level = damp_level_z.:2
 
     end
