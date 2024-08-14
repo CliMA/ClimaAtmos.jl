@@ -26,6 +26,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT} <: ATCP
     tke_ed_coeff::FT
     tke_diss_coeff::FT
     tke_surf_scale::FT
+    diagnostic_covariance_coeff::FT
     static_stab_coeff::FT
     Prandtl_number_scale::FT
     Prandtl_number_0::FT
