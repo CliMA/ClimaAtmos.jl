@@ -1,6 +1,6 @@
 prior: prior.toml
-ensemble_size: 100
-n_iterations: 10
+ensemble_size: 25
+n_iterations: 5
 model_config: model_config.yml
 observations: observations.jld2
 noise: obs_noise_cov.jld2

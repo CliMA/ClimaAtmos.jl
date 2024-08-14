@@ -24,7 +24,7 @@ cal_ex_config = CAL.ExperimentConfig("experiment_config.yml")
 hpc_kwargs = CAL.kwargs(time = 30, mem = "16G", reservation = "clima")
 result_calibration = CAL.calibrate(CAL.CaltechHPCBackend, cal_ex_config; 
     hpc_kwargs = hpc_kwargs,
-    scheduler = EKP.DataMisfitController(terminate_at = 1),
+    scheduler = EKP.DefaultScheduler(0.5), #EKP.DataMisfitController(terminate_at = 1)
     localization_method = EKP.NoLocalization(),
     failure_handler_method = EKP.SampleSuccGauss(),
     accelerator = EKP.DefaultAccelerator(),
