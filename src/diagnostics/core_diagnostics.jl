@@ -21,7 +21,7 @@
 #     ::T,
 # ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
 #     thermo_params = CAP.thermodynamics_params(cache.params)
-#     out .= TD.relative_humidity.(thermo_params, cache.ᶜts)
+#     @lazy @. out = TD.relative_humidity.(thermo_params, cache.ᶜts)
 # end
 #
 # 2. Define a function that has the correct signature and calls this function
@@ -29,7 +29,6 @@
 # compute_hur!(out, state, cache, time) =
 #     compute_hur!(out, state, cache, time, cache.atmos.moisture_model)
 #
-# 3. Define a function that returns an error when the model is incorrect
 #
 # compute_hur!(_, _, _, _, model::T) where {T} =
 #     error_diagnostic_variable("relative_humidity", model)
@@ -55,11 +54,7 @@ add_diagnostic_variable!(
     standard_name = "air_density",
     units = "kg m^-3",
     compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(state.c.ρ)
-        else
-            out .= state.c.ρ
-        end
+        @lazy @. out = state.c.ρ
     end,
 )
 
@@ -73,11 +68,7 @@ add_diagnostic_variable!(
     units = "m s^-1",
     comments = "Eastward (zonal) wind component",
     compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(u_component.(Geometry.UVector.(cache.precomputed.ᶜu)))
-        else
-            out .= u_component.(Geometry.UVector.(cache.precomputed.ᶜu))
-        end
+        @lazy @. out = u_component(Geometry.UVector.(cache.precomputed.ᶜu))
     end,
 )
 
@@ -91,11 +82,7 @@ add_diagnostic_variable!(
     units = "m s^-1",
     comments = "Northward (meridional) wind component",
     compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(v_component.(Geometry.VVector.(cache.precomputed.ᶜu)))
-        else
-            out .= v_component.(Geometry.VVector.(cache.precomputed.ᶜu))
-        end
+        @lazy @. out = v_component(Geometry.VVector.(cache.precomputed.ᶜu))
     end,
 )
 
@@ -112,11 +99,7 @@ add_diagnostic_variable!(
     units = "m s^-1",
     comments = "Vertical wind component",
     compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(w_component.(Geometry.WVector.(cache.precomputed.ᶜu)))
-        else
-            out .= w_component.(Geometry.WVector.(cache.precomputed.ᶜu))
-        end
+        @lazy @. out = w_component(Geometry.WVector.(cache.precomputed.ᶜu))
     end,
 )
 
@@ -130,11 +113,8 @@ add_diagnostic_variable!(
     units = "K",
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
-        if isnothing(out)
-            return TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
-        else
-            out .= TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
-        end
+        @lazy @. out =
+            TD.air_temperature(thermo_params, cache.precomputed.ᶜts)
     end,
 )
 
@@ -148,11 +128,7 @@ add_diagnostic_variable!(
     units = "K",
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
-        if isnothing(out)
-            return TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts)
-        else
-            out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts)
-        end
+        @lazy @. out = TD.dry_pottemp(thermo_params, cache.precomputed.ᶜts)
     end,
 )
 
@@ -165,11 +141,8 @@ add_diagnostic_variable!(
     units = "m^2 s^-2",
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
-        if isnothing(out)
-            return TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜts)
-        else
-            out .= TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜts)
-        end
+        @lazy @. out =
+            TD.specific_enthalpy(thermo_params, cache.precomputed.ᶜts)
     end,
 )
 
@@ -181,11 +154,7 @@ add_diagnostic_variable!(
     long_name = "Pressure at Model Full-Levels",
     units = "Pa",
     compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.ᶜp)
-        else
-            out .= cache.precomputed.ᶜp
-        end
+        @lazy @. out = cache.precomputed.ᶜp
     end,
 )
 
@@ -202,11 +171,7 @@ add_diagnostic_variable!(
         vort = @. w_component.(Geometry.WVector.(cache.precomputed.ᶜu))
         # We need to ensure smoothness, so we call DSS
         Spaces.weighted_dss!(vort)
-        if isnothing(out)
-            return copy(vort)
-        else
-            out .= vort
-        end
+        @lazy @. out = vort
     end,
 )
 
@@ -218,11 +183,7 @@ add_diagnostic_variable!(
     long_name = "Cloud fraction",
     units = "%",
     compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.cloud_diagnostics_tuple.cf) .* 100
-        else
-            out .= cache.precomputed.cloud_diagnostics_tuple.cf .* 100
-        end
+        @lazy @. out = cache.precomputed.cloud_diagnostics_tuple.cf .* 100
     end,
 )
 
@@ -236,11 +197,7 @@ add_diagnostic_variable!(
     units = "m^2 s^-2",
     comments = "The kinetic energy on cell centers",
     compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.ᶜK)
-        else
-            out .= cache.precomputed.ᶜK
-        end
+        @lazy @. out = cache.precomputed.ᶜK
     end,
 )
 
@@ -256,11 +213,7 @@ add_diagnostic_variable!(
     or from mixing length closure with EDMF SGS model.
     """,
     compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.ᶜmixing_length)
-        else
-            out .= cache.precomputed.ᶜmixing_length
-        end
+        @lazy @. out = cache.precomputed.ᶜmixing_length
     end,
 )
 
@@ -272,11 +225,7 @@ add_diagnostic_variable!(
     long_name = "Linearized Buoyancy Gradient",
     units = "s^-2",
     compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.ᶜlinear_buoygrad)
-        else
-            out .= cache.precomputed.ᶜlinear_buoygrad
-        end
+        @lazy @. out = cache.precomputed.ᶜlinear_buoygrad
     end,
 )
 
@@ -288,11 +237,7 @@ add_diagnostic_variable!(
     long_name = "String Rate Magnitude",
     units = "s^-2",
     compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.ᶜstrain_rate_norm)
-        else
-            out .= cache.precomputed.ᶜstrain_rate_norm
-        end
+        @lazy @. out = cache.precomputed.ᶜstrain_rate_norm
     end,
 )
 
@@ -312,11 +257,7 @@ function compute_hur!(
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
-    if isnothing(out)
-        return TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts)
-    else
-        out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts)
-    end
+    @lazy @. out = TD.relative_humidity(thermo_params, cache.precomputed.ᶜts)
 end
 
 add_diagnostic_variable!(
@@ -343,11 +284,7 @@ function compute_hus!(
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    if isnothing(out)
-        return state.c.ρq_tot ./ state.c.ρ
-    else
-        out .= state.c.ρq_tot ./ state.c.ρ
-    end
+    @lazy @. out = state.c.ρq_tot ./ state.c.ρ
 end
 
 add_diagnostic_variable!(
@@ -375,11 +312,7 @@ function compute_clw!(
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
-    if isnothing(out)
-        return copy(cache.precomputed.cloud_diagnostics_tuple.q_liq)
-    else
-        out .= cache.precomputed.cloud_diagnostics_tuple.q_liq
-    end
+    @lazy @. out = cache.precomputed.cloud_diagnostics_tuple.q_liq
 end
 
 add_diagnostic_variable!(
@@ -411,11 +344,7 @@ function compute_cli!(
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
-    if isnothing(out)
-        return copy(cache.precomputed.cloud_diagnostics_tuple.q_ice)
-    else
-        out .= cache.precomputed.cloud_diagnostics_tuple.q_ice
-    end
+    @lazy @. out = cache.precomputed.cloud_diagnostics_tuple.q_ice
 end
 
 add_diagnostic_variable!(
@@ -447,18 +376,10 @@ function compute_hussfc!(
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
-    if isnothing(out)
-        return TD.total_specific_humidity.(
-            thermo_params,
-            cache.precomputed.sfc_conditions.ts,
-        )
-    else
-        out .=
-            TD.total_specific_humidity.(
-                thermo_params,
-                cache.precomputed.sfc_conditions.ts,
-            )
-    end
+    @lazy @. out = TD.total_specific_humidity(
+        thermo_params,
+        cache.precomputed.sfc_conditions.ts,
+    )
 end
 
 add_diagnostic_variable!(
@@ -481,18 +402,10 @@ add_diagnostic_variable!(
     comments = "Temperature of the lower boundary of the atmosphere",
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
-        if isnothing(out)
-            return TD.air_temperature.(
-                thermo_params,
-                cache.precomputed.sfc_conditions.ts,
-            )
-        else
-            out .=
-                TD.air_temperature.(
-                    thermo_params,
-                    cache.precomputed.sfc_conditions.ts,
-                )
-        end
+        @lazy @. out = TD.air_temperature(
+            thermo_params,
+            cache.precomputed.sfc_conditions.ts,
+        )
     end,
 )
 
@@ -549,11 +462,7 @@ add_diagnostic_variable!(
 function compute_hfes!(out, state, cache, time)
     (; ρ_flux_h_tot) = cache.precomputed.sfc_conditions
     (; surface_ct3_unit) = cache.core
-    if isnothing(out)
-        return dot.(ρ_flux_h_tot, surface_ct3_unit)
-    else
-        out .= dot.(ρ_flux_h_tot, surface_ct3_unit)
-    end
+    @lazy @. out = dot(ρ_flux_h_tot, surface_ct3_unit)
 end
 
 add_diagnostic_variable!(
@@ -582,11 +491,7 @@ function compute_evspsbl!(
     (; ρ_flux_q_tot) = cache.precomputed.sfc_conditions
     (; surface_ct3_unit) = cache.core
 
-    if isnothing(out)
-        return dot.(ρ_flux_q_tot, surface_ct3_unit)
-    else
-        out .= dot.(ρ_flux_q_tot, surface_ct3_unit)
-    end
+    @lazy @. out = dot(ρ_flux_q_tot, surface_ct3_unit)
 end
 
 add_diagnostic_variable!(
@@ -616,14 +521,9 @@ function compute_pr!(
         Microphysics1Moment,
     },
 )
-    if isnothing(out)
-        return cache.precipitation.surface_rain_flux .+
-               cache.precipitation.surface_snow_flux
-    else
-        out .=
-            cache.precipitation.surface_rain_flux .+
-            cache.precipitation.surface_snow_flux
-    end
+    @lazy @. out =
+        cache.precipitation.surface_rain_flux .+
+        cache.precipitation.surface_snow_flux
 end
 
 add_diagnostic_variable!(
@@ -650,11 +550,7 @@ function compute_husra!(
     time,
     precip_model::Microphysics1Moment,
 )
-    if isnothing(out)
-        return state.c.ρq_rai ./ state.c.ρ
-    else
-        out .= state.c.ρq_rai ./ state.c.ρ
-    end
+    @lazy @. out = state.c.ρq_rai ./ state.c.ρ
 end
 
 add_diagnostic_variable!(
@@ -681,11 +577,7 @@ function compute_hussn!(
     time,
     precip_model::Microphysics1Moment,
 )
-    if isnothing(out)
-        return state.c.ρq_sno ./ state.c.ρ
-    else
-        out .= state.c.ρq_sno ./ state.c.ρ
-    end
+    @lazy @. out = state.c.ρq_sno / state.c.ρ
 end
 
 add_diagnostic_variable!(

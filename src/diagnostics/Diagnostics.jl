@@ -48,6 +48,8 @@ include(joinpath("..", "utils", "abbreviations.jl"))
 import ClimaDiagnostics:
     DiagnosticVariable, ScheduledDiagnostic, average_pre_output_hook!
 
+import LazyBroadcast: @lazy
+
 import ClimaDiagnostics.DiagnosticVariables: descriptive_short_name
 
 import ClimaDiagnostics.Schedules: EveryStepSchedule, EveryDtSchedule
