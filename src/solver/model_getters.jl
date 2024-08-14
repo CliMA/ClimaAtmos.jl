@@ -7,6 +7,8 @@ function get_moisture_model(parsed_args)
         EquilMoistModel()
     elseif moisture_name == "nonequil"
         NonEquilMoistModel()
+    elseif moisture_name == "cloudy"
+        CloudyMoistModel()
     end
 end
 
@@ -274,6 +276,8 @@ function get_precipitation_model(parsed_args)
         Microphysics0Moment()
     elseif precip_model == "1M"
         Microphysics1Moment()
+    elseif precip_model == "Cloudy"
+        MicrophysicsCloudy()
     else
         error("Invalid precip_model $(precip_model)")
     end

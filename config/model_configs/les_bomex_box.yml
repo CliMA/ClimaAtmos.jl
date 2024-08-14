@@ -22,10 +22,11 @@ y_elem: 14
 z_elem: 40 
 z_stretch: false
 dt: "0.1secs" 
-t_end: "0.1secs" 
+t_end: "4hours" 
 dt_save_state_to_disk: "10mins"
 restart_file: "restart/bomex/Micro1M_day0.0_Prod.hdf5"
+output_dir : "/groups/esm/edejong/les_bomex_box"
 netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, husra, cl, clw, cli, hussfc, evspsbl]
     period: 5secs

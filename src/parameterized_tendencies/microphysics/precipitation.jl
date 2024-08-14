@@ -4,6 +4,7 @@
 
 import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics as CM
+import Cloudy as CL
 import Thermodynamics as TD
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Operators as Operators
@@ -403,4 +404,26 @@ function precipitation_tendency!(
         @. Yₜ.c.ρq_sno[colidx] +=
             Y.c.sgsʲs.:($$j).ρa[colidx] * ᶜSqₛᵖʲs.:($$j)[colidx]
     end
+end
+
+
+#####
+##### Cloudy without sgs scheme
+#####
+function separate_liq_rai(FT, moments, pdists, cloudy_params, ρd)
+    tmp = CL.ParticleDistributions.get_standard_N_q(pdists, cloudy_params.size_threshold / cloudy_params.norms[2])
+    moments_like = ntuple(length(moments)) do k
+        if k == 1
+            max(tmp.N_liq * cloudy_params.mom_norms[1], FT(0))
+        elseif k == 2
+            max(tmp.N_rai * cloudy_params.mom_norms[1], FT(0))
+        elseif k == 3
+            max(tmp.M_liq / ρd * cloudy_params.mom_norms[2], FT(0))
+        elseif k == 4
+            max(tmp.M_rai / ρd * cloudy_params.mom_norms[2], FT(0))
+        else
+            FT(0)
+        end
+    end
+    return moments_like
 end

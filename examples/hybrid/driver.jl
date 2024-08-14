@@ -12,6 +12,7 @@ if !(@isdefined config)
     config = CA.AtmosConfig()
 end
 simulation = CA.get_simulation(config)
+@info("Output directory: ", simulation.output_dir)
 (; integrator) = simulation
 sol_res = CA.solve_atmos!(simulation)
 
