@@ -6,16 +6,14 @@ z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
 moist: "equil"
-cloud_model: diagnostic_edmfx
 precip_model: "0M"
 override_τ_precip: false
 rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
-insolation: "timevarying"
+idealized_insolation: false
 surface_setup: "DefaultMoninObukhov"
 turbconv: "diagnostic_edmfx"
-ode_algo: ARS343
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 prognostic_tke: true
@@ -27,6 +25,7 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 rayleigh_sponge: true
 dt: "100secs"
-t_end: "120days"
+t_end: "40days"
+job_id: "amip_target_diagedmf"
 toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M.toml]
 netcdf_output_at_levels: true

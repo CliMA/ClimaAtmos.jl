@@ -1,0 +1,32 @@
+job_id: "les_rico_box"
+edmf_coriolis: "Rico"
+initial_condition: "Rico"
+subsidence: "Rico" 
+ls_adv: "Rico" 
+surface_setup: "Rico"
+moist: "equil"
+config: "box" 
+hyperdiff: "true"
+implicit_diffusion: false
+ode_algo: "SSP33ShuOsher"
+precip_model: "1M"
+vorticity_hyperdiffusion_coefficient: 0
+scalar_hyperdiffusion_coefficient: 0
+smagorinsky_lilly: true
+c_smag: 0.20
+x_max: 6.4e3
+y_max: 6.4e3 
+z_max: 4.0e3 
+x_elem: 14
+y_elem: 14
+z_elem: 53 
+z_stretch: false
+dt: "0.1secs" 
+t_end: "8hours" 
+dt_save_state_to_disk: "5mins"
+output_dir : "/groups/esm/edejong/rico_runs/les_rico_box_gpu" #"/home/edejong/ClimaAtmos.jl/output/les_rico_box_gpu"
+restart_file: "restart/rico/day0.14700.hdf5"
+netcdf_interpolation_num_points: [40, 40, 80]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
+    period: 60secs

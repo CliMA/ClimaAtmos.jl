@@ -1,3 +1,4 @@
+job_id: diagnostic_edmfx_rico_box
 initial_condition: Rico
 subsidence: Rico
 ls_adv: Rico
@@ -13,10 +14,10 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil
-cloud_model: diagnostic_edmfx
+apply_limiter: false
 precip_model: "1M"
-call_cloud_diagnostics_per_stage: true
 config: box
+hyperdiff: "true"
 x_max: 1e8
 y_max: 1e8
 x_elem: 2
@@ -27,13 +28,12 @@ z_stretch: false
 dt: 100secs
 t_end: 8hours
 dt_save_state_to_disk: 10mins
-toml: [toml/diagnostic_edmfx.toml]
+toml: [toml/diagnostic_edmfx_trmm_box.toml]
 netcdf_interpolation_num_points: [8, 8, 100]
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
     period: 10mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
     period: 10mins
   - short_name: [husra, hussn]
     period: 10mins
-ode_algo: ARS343

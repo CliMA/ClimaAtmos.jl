@@ -382,23 +382,6 @@ It is assummed that some fraction ``\alpha`` of snow is melted during the proces
 \frac{d}{dt} \rho e = \rho \mathcal{S}_{acc} ((1+\alpha) I_{liq} - \alpha I_{ice} + \Phi)
 ```
 
-### Precipitation temperature
-
-Precipitation is assumed to have the same temperature as the surrounding air ``T_a``.
-The corresponding energy sink associated with heat transfer
-  between air and precipitating species can be written as
-
-```math
-\frac{d}{dt} \rho e = - \rho q_p (\boldsymbol{u} - v_p) c_p \nabla T_a
-```
-where ``q_p``, ``\boldsymbol{u}``, ``v_p``, ``c_p `` are the precipitation specific humidity,
-air velocity, precipitation terminal velocity assumed to be along the gravity axis,
-specific heat of precipitating species.
-
-!!! todo
-    We should consider replacing ``T_a`` with
-    some approximation of wet bulb temperature.
-
 ### Stability and positivity
 
 All source terms are individually limited such that they don't exceed the

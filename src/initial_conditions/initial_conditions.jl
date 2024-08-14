@@ -72,7 +72,8 @@ function column_indefinite_integral(
         boundary_names = (:bottom, :top),
     )
     z_mesh = Meshes.IntervalMesh(z_domain; nelems)
-    context = ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded())
+    device = ClimaComms.CPUSingleThreaded()
+    context = ClimaComms.SingletonCommsContext(device)
     z_topology = Topologies.IntervalTopology(context, z_mesh)
     cspace = Spaces.CenterFiniteDifferenceSpace(z_topology)
     fspace = Spaces.FaceFiniteDifferenceSpace(z_topology)
@@ -314,7 +315,7 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
         z_r = FT(250)
         r_c = FT(1)
         θ_b = FT(300)
-        θ_c = FT(0.0)
+        θ_c = FT(0.5)
         cp_d = CAP.cp_d(params)
         cv_d = CAP.cv_d(params)
         p_0 = CAP.p_ref_theta(params)
@@ -338,12 +339,11 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
         T = π_exn * θ # temperature
         p = p_0 * π_exn^(cp_d / R_d) # pressure
         ρ = p / R_d / T # density
-        q = ρ * FT(0)
 
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q),
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
         )
     end
     return local_state
@@ -427,7 +427,7 @@ function deep_atmos_baroclinic_wave_values(z, ϕ, λ, params, perturb)
     Ω = CAP.Omega(params)
     R = CAP.planet_radius(params)
 
-    # Constants from paper (See Table 1. in Ullrich et al (2014))
+    # Constants from paper (See Table 1. in Ullrich et al (2014)) 
     k = 3         # Power for temperature field
     T_e = FT(310) # Surface temperature at the equator
     T_p = FT(240) # Surface temperature at the pole
@@ -943,9 +943,7 @@ end
 The `InitialCondition` described in [Ackerman2009](@cite), but with a
 hydrostatically balanced pressure profile.
 """
-Base.@kwdef struct DYCOMS_RF02 <: InitialCondition
-    prognostic_tke::Bool = false
-end
+struct DYCOMS_RF02 <: InitialCondition end
 
 for IC in (:Dycoms_RF01, :Dycoms_RF02)
     IC_Type = Symbol(uppercase(string(IC)))

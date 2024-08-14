@@ -1,13 +1,13 @@
-h_elem: 30
-z_elem: 63
-dz_bottom: 30.0
-dz_top: 3000.0
-dt: "180secs"
-t_end: "120days"
-initial_condition: "MoistBaroclinicWave"
-moist: "equil"
-precip_model: "0M"
 dt_save_state_to_disk: "10days"
+initial_condition: "MoistBaroclinicWave"
+z_elem: 45
+dt: "300secs"
+t_end: "100days"
+dz_bottom: 30.0
+h_elem: 16
+precip_model: "0M"
+job_id: "longrun_bw_rhoe_equil_highres"
+moist: "equil"
 diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke]
     period: 1days

@@ -545,12 +545,18 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 p_prev_level,
                 ρ_prev_level,
                 ρaʲ_prev_level,
-                tsʲ_prev_level,
-                ρʲ_prev_level,
-                u³ʲ_prev_halflevel,
-                local_geometry_prev_halflevel,
-                u³_prev_halflevel,
-                ts_prev_level,
+                draft_area(ρaʲ_prev_level, ρʲ_prev_level),
+                get_physical_w(
+                    u³ʲ_prev_halflevel,
+                    local_geometry_prev_halflevel,
+                ),
+                TD.relative_humidity(thermo_params, tsʲ_prev_level),
+                ᶜphysical_buoyancy(params, ρ_prev_level, ρʲ_prev_level),
+                get_physical_w(
+                    u³_prev_halflevel,
+                    local_geometry_prev_halflevel,
+                ),
+                TD.relative_humidity(thermo_params, ts_prev_level),
                 FT(0),
                 entrʲ_prev_level,
                 vert_div_level,
@@ -1002,22 +1008,24 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
-    # Environment precipitation sources (to be applied to grid mean)
-    compute_precipitation_sources!(
-        ᶜSᵖ,
-        ᶜSᵖ_snow,
-        ᶜSqₜᵖ⁰,
-        ᶜSqᵣᵖ⁰,
-        ᶜSqₛᵖ⁰,
-        ᶜSeₜᵖ⁰,
-        Y.c.ρ,
-        ᶜqᵣ,
-        ᶜqₛ,
-        ᶜts,
-        p.core.ᶜΦ,
-        p.dt,
-        microphys_params,
-        thermo_params,
-    )
+    Fields.bycolumn(axes(Y.c.ρ)) do colidx
+        # Environment precipitation sources (to be applied to grid mean)
+        compute_precipitation_sources!(
+            ᶜSᵖ[colidx],
+            ᶜSᵖ_snow[colidx],
+            ᶜSqₜᵖ⁰[colidx],
+            ᶜSqᵣᵖ⁰[colidx],
+            ᶜSqₛᵖ⁰[colidx],
+            ᶜSeₜᵖ⁰[colidx],
+            Y.c.ρ[colidx],
+            ᶜqᵣ[colidx],
+            ᶜqₛ[colidx],
+            ᶜts[colidx],
+            p.core.ᶜΦ[colidx],
+            p.dt,
+            microphys_params,
+            thermo_params,
+        )
+    end
     return nothing
 end

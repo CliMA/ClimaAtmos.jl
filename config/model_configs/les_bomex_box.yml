@@ -8,31 +8,24 @@ moist: "equil"
 config: "box" 
 hyperdiff: "true" 
 implicit_diffusion: false
-precip_model: "0M"
-vorticity_hyperdiffusion_coefficient: 0.2
-scalar_hyperdiffusion_coefficient: 0.2
-dt_cloud_fraction: "10mins"
-ode_algo: "SSPKnoth"
+ode_algo: "SSP33ShuOsher"
+precip_model: "1M"
+vorticity_hyperdiffusion_coefficient: 0
+scalar_hyperdiffusion_coefficient: 0
 smagorinsky_lilly: true
-c_smag: 0.18
-x_max: 3.2e3
-y_max: 3.2e3 
-z_max: 4.5e3
-x_elem: 8
-y_elem: 8
-z_elem: 100
+c_smag: 0.20
+x_max: 6.4e3
+y_max: 6.4e3 
+z_max: 3.0e3 
+x_elem: 14
+y_elem: 14
+z_elem: 40 
 z_stretch: false
-dt: "0.10secs" 
-output_default_diagnostics: false
-t_end: "36000secs" 
-dt_save_state_to_disk: "30mins"
-rayleigh_sponge: true
-toml: [toml/bomex_box_rhoe.toml]
-restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/bomex/Micro0M_day0.0_Prod.hdf5"
+dt: "0.1secs" 
+t_end: "0.1secs" 
+dt_save_state_to_disk: "10mins"
+restart_file: "restart/bomex/Micro1M_day0.0_Prod.hdf5"
 netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, kvis, hfes]
-    period: 10mins
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, kvis, hfes]
-    reduction: average
-    period: 60mins
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
+    period: 5secs

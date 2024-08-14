@@ -3,8 +3,8 @@ dt_save_state_to_disk: "2days"
 regression_test: true
 initial_condition: "MoistBaroclinicWave"
 dt: "450secs"
-t_end: "10days"
+job_id: "sphere_baroclinic_wave_rhoe_equilmoist"
 moist: "equil"
 diagnostics:
-  - short_name: [pfull, wa, va, rv, hus, ke]
+  - short_name: [pfull, wa, va, rv, hus]
     period: 1days

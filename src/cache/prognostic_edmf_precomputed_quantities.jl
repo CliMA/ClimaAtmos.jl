@@ -119,7 +119,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         # Based on boundary conditions for updrafts we overwrite
         # the first interior point for EDMFX ᶜmseʲ...
         ᶜaʲ_int_val = p.scratch.temp_data_level
-        # TODO: replace this with the actual surface area fraction when
+        # TODO: replace this with the actual surface area fraction when 
         # using prognostic surface area
         @. ᶜaʲ_int_val = FT(turbconv_params.surface_area)
         ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
@@ -421,42 +421,44 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
-    # Sources from the updrafts
-    for j in 1:n
+    Fields.bycolumn(axes(Y.c.ρ)) do colidx
+        # Sources from the updrafts
+        for j in 1:n
+            compute_precipitation_sources!(
+                ᶜSᵖ[colidx],
+                ᶜSᵖ_snow[colidx],
+                ᶜSqₜᵖʲs.:($j)[colidx],
+                ᶜSqᵣᵖʲs.:($j)[colidx],
+                ᶜSqₛᵖʲs.:($j)[colidx],
+                ᶜSeₜᵖʲs.:($j)[colidx],
+                ᶜρʲs.:($j)[colidx],
+                ᶜqᵣ[colidx],
+                ᶜqₛ[colidx],
+                ᶜtsʲs.:($j)[colidx],
+                ᶜΦ[colidx],
+                dt,
+                cmp,
+                thp,
+            )
+        end
+
+        # Sources from the environment
         compute_precipitation_sources!(
-            ᶜSᵖ,
-            ᶜSᵖ_snow,
-            ᶜSqₜᵖʲs.:($j),
-            ᶜSqᵣᵖʲs.:($j),
-            ᶜSqₛᵖʲs.:($j),
-            ᶜSeₜᵖʲs.:($j),
-            ᶜρʲs.:($j),
-            ᶜqᵣ,
-            ᶜqₛ,
-            ᶜtsʲs.:($j),
-            ᶜΦ,
+            ᶜSᵖ[colidx],
+            ᶜSᵖ_snow[colidx],
+            ᶜSqₜᵖ⁰[colidx],
+            ᶜSqᵣᵖ⁰[colidx],
+            ᶜSqₛᵖ⁰[colidx],
+            ᶜSeₜᵖ⁰[colidx],
+            ᶜρ⁰[colidx],
+            ᶜqᵣ[colidx],
+            ᶜqₛ[colidx],
+            ᶜts⁰[colidx],
+            ᶜΦ[colidx],
             dt,
             cmp,
             thp,
         )
     end
-
-    # Sources from the environment
-    compute_precipitation_sources!(
-        ᶜSᵖ,
-        ᶜSᵖ_snow,
-        ᶜSqₜᵖ⁰,
-        ᶜSqᵣᵖ⁰,
-        ᶜSqₛᵖ⁰,
-        ᶜSeₜᵖ⁰,
-        ᶜρ⁰,
-        ᶜqᵣ,
-        ᶜqₛ,
-        ᶜts⁰,
-        ᶜΦ,
-        dt,
-        cmp,
-        thp,
-    )
     return nothing
 end

@@ -57,6 +57,7 @@ function get_atmos(config::AtmosConfig, params)
     atmos = AtmosModel(;
         moisture_model,
         model_config,
+        perf_mode = get_perf_mode(parsed_args),
         radiation_mode,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
@@ -92,7 +93,6 @@ function get_atmos(config::AtmosConfig, params)
         smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args, params, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
-        insolation = get_insolation_form(parsed_args),
         surface_model = get_surface_model(parsed_args),
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
         numerics = get_numerics(parsed_args),
@@ -124,6 +124,7 @@ function get_numerics(parsed_args)
         edmfx_sgsflux_upwinding,
         limiter,
         test_dycore_consistency = test_dycore,
+        use_reference_state = parsed_args["use_reference_state"],
     )
     @info "numerics $(summary(numerics))"
 
@@ -380,7 +381,6 @@ is_imex_CTS_algo_type(alg_or_tableau) =
 is_implicit_type(alg_or_tableau) = is_imex_CTS_algo_type(alg_or_tableau)
 
 is_imex_CTS_algo(::CTS.IMEXAlgorithm) = true
-is_imex_CTS_algo(::CTS.RosenbrockAlgorithm) = true
 is_imex_CTS_algo(::SciMLBase.AbstractODEAlgorithm) = false
 
 is_implicit(ode_algo) = is_imex_CTS_algo(ode_algo)
@@ -431,13 +431,6 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
     ode_name = parsed_args["ode_algo"]
     alg_or_tableau = getproperty(CTS, Symbol(ode_name))
     @info "Using ODE config: `$alg_or_tableau`"
-    if ode_name == "SSPKnoth"
-        return CTS.RosenbrockAlgorithm(CTS.tableau(CTS.SSPKnoth()))
-    end
-
-    if ode_name == "SSPKnoth"
-        return CTS.RosenbrockAlgorithm(CTS.tableau(CTS.SSPKnoth(), FT))
-    end
 
     if is_explicit_CTS_algo_type(alg_or_tableau)
         return CTS.ExplicitAlgorithm(alg_or_tableau())
@@ -487,25 +480,18 @@ function get_sim_info(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
 
-    (; job_id) = config
+    job_id = if isnothing(parsed_args["job_id"])
+        job_id_from_config(parsed_args)
+    else
+        parsed_args["job_id"]
+    end
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
     out_dir = parsed_args["output_dir"]
     base_output_dir = isnothing(out_dir) ? default_output : out_dir
 
-    allowed_dir_styles = Dict(
-        "activelink" => OutputPathGenerator.ActiveLinkStyle(),
-        "removepreexisting" => OutputPathGenerator.RemovePreexistingStyle(),
-    )
-
-    requested_style = parsed_args["output_dir_style"]
-
-    haskey(allowed_dir_styles, lowercase(requested_style)) ||
-        error("output_dir_style $(requested_style) not available")
-
     output_dir = OutputPathGenerator.generate_output_path(
         base_output_dir;
         context = config.comms_ctx,
-        style = allowed_dir_styles[lowercase(requested_style)],
     )
 
     sim = (;
@@ -614,7 +600,6 @@ function get_simulation(config::AtmosConfig)
     sim_info = get_sim_info(config)
     job_id = sim_info.job_id
     output_dir = sim_info.output_dir
-    @info "Simulation info" job_id output_dir
 
     CP.log_parameter_information(
         config.toml_dict,
@@ -679,21 +664,17 @@ function get_simulation(config::AtmosConfig)
     @info "get_callbacks: $s"
 
     # Initialize diagnostics
-    if config.parsed_args["enable_diagnostics"]
-        s = @timed_str begin
-            scheduled_diagnostics, writers = get_diagnostics(
-                config.parsed_args,
-                atmos,
-                Y,
-                p,
-                t_start,
-                sim_info.dt,
-            )
-        end
-        @info "initializing diagnostics: $s"
-    else
-        writers = nothing
+    s = @timed_str begin
+        scheduled_diagnostics, writers = get_diagnostics(
+            config.parsed_args,
+            atmos,
+            Y,
+            p,
+            t_start,
+            sim_info.dt,
+        )
     end
+    @info "initializing diagnostics: $s"
 
     continuous_callbacks = tuple()
     discrete_callbacks = callback
@@ -725,15 +706,13 @@ function get_simulation(config::AtmosConfig)
     end
     @info "init integrator: $s"
 
-    if config.parsed_args["enable_diagnostics"]
-        s = @timed_str begin
-            integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
-                integrator,
-                scheduled_diagnostics,
-            )
-        end
-        @info "Added diagnostics: $s"
+    s = @timed_str begin
+        integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
+            integrator,
+            scheduled_diagnostics,
+        )
     end
+    @info "Added diagnostics: $s"
 
     reset_graceful_exit(output_dir)
 

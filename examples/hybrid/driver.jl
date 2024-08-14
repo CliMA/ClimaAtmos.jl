@@ -4,17 +4,12 @@
 # so we force abbreviated stacktraces even in non-interactive runs.
 # (See also Base.type_limited_string_from_context())
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
-import ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
 
-import ClimaComms
-
 if !(@isdefined config)
-    (; config_file, job_id) = CA.commandline_kwargs()
-    config = CA.AtmosConfig(config_file; job_id)
+    config = CA.AtmosConfig()
 end
 simulation = CA.get_simulation(config)
 (; integrator) = simulation
@@ -29,6 +24,7 @@ import ClimaAtmos.InitialConditions as ICs
 using Statistics: mean
 import ClimaAtmos.Parameters as CAP
 import Thermodynamics as TD
+import ClimaComms
 using SciMLBase
 using PrettyTables
 using JLD2
@@ -117,25 +113,126 @@ end
 
 # Conservation checks
 if config.parsed_args["check_conservation"]
-    FT = Spaces.undertype(axes(sol.u[end].c.ρ))
     @info "Checking conservation"
-    (; energy_conservation, mass_conservation, water_conservation) =
-        CA.check_conservation(sol)
+    FT = Spaces.undertype(axes(sol.u[end].c.ρ))
 
-    @info "    Net energy change / total energy: $energy_conservation"
-    @info "    Net mass change / total mass: $mass_conservation"
-
+    # energy
+    energy_total = sum(sol.u[end].c.ρe_tot)
+    energy_atmos_change = sum(sol.u[end].c.ρe_tot) - sum(sol.u[1].c.ρe_tot)
     sfc = p.atmos.surface_model
+    if sfc isa CA.PrognosticSurfaceTemperature
+        sfc_cρh = sfc.ρ_ocean * sfc.cp_ocean * sfc.depth_ocean
+        energy_total +=
+            CA.horizontal_integral_at_boundary(sol.u[end].sfc.T .* sfc_cρh)
+        energy_surface_change =
+            CA.horizontal_integral_at_boundary(
+                sol.u[end].sfc.T .- sol.u[1].sfc.T,
+            ) * sfc_cρh
+    else
+        energy_surface_change = -p.net_energy_flux_sfc[][]
+    end
+    energy_radiation_input = -p.net_energy_flux_toa[][]
+
+    energy_net =
+        abs(
+            energy_atmos_change + energy_surface_change -
+            energy_radiation_input,
+        ) / energy_total
+    @info "    Net energy change: $energy_net"
+    if CA.has_no_source_or_sink(config.parsed_args)
+        @test (energy_net / energy_total) ≈ 0 atol = 50 * eps(FT)
+    else
+        @test (energy_net / energy_total) ≈ 0 atol = sqrt(eps(FT))
+    end
 
     if CA.has_no_source_or_sink(config.parsed_args)
-        @test energy_conservation ≈ 0 atol = 50 * eps(FT)
-        @test mass_conservation ≈ 0 atol = 50 * eps(FT)
+        # mass
+        @test sum(sol.u[1].c.ρ) ≈ sum(sol.u[end].c.ρ) rtol = 50 * eps(FT)
     else
-        @test energy_conservation ≈ 0 atol = sqrt(eps(FT))
         if sfc isa CA.PrognosticSurfaceTemperature
-            @info "    Net water change: $water_conservation"
-            @test water_conservation ≈ 0 atol = 100 * sqrt(eps(FT))
+            # water
+            water_total = sum(sol.u[end].c.ρq_tot)
+            water_atmos_change =
+                sum(sol.u[end].c.ρq_tot) - sum(sol.u[1].c.ρq_tot)
+            water_surface_change = CA.horizontal_integral_at_boundary(
+                sol.u[end].sfc.water .- sol.u[1].sfc.water,
+            )
+
+            water_net =
+                abs(water_atmos_change + water_surface_change) / water_total
+            @info "    Net water change: $water_net"
+            @test water_net ≈ 0 atol = 100 * sqrt(eps(FT))
         end
+    end
+end
+
+# Precipitation characteristic checks
+if config.parsed_args["check_precipitation"]
+    # run some simple tests based on the output
+    FT = Spaces.undertype(axes(sol.u[end].c.ρ))
+    Yₜ = similar(sol.u[end])
+    @. Yₜ = 0
+
+    Yₜ_ρ = similar(Yₜ.c.ρq_rai)
+    Yₜ_ρqₚ = similar(Yₜ.c.ρq_rai)
+    Yₜ_ρqₜ = similar(Yₜ.c.ρq_rai)
+
+
+    ClimaCore.Fields.bycolumn(axes(sol.u[end].c.ρ)) do colidx
+        CA.precipitation_tendency!(
+            Yₜ,
+            sol.u[end],
+            sol.prob.p,
+            sol.t[end],
+            colidx,
+            sol.prob.p.atmos.precip_model,
+            sol.prob.p.atmos.turbconv_model,
+        )
+
+        @. Yₜ_ρqₚ[colidx] = -Yₜ.c.ρq_rai[colidx] - Yₜ.c.ρq_sno[colidx]
+        @. Yₜ_ρqₜ[colidx] = Yₜ.c.ρq_tot[colidx]
+        @. Yₜ_ρ[colidx] = Yₜ.c.ρ[colidx]
+
+        # no nans
+        @assert !any(isnan, Yₜ.c.ρ[colidx])
+        @assert !any(isnan, Yₜ.c.ρq_tot[colidx])
+        @assert !any(isnan, Yₜ.c.ρe_tot[colidx])
+        @assert !any(isnan, Yₜ.c.ρq_rai[colidx])
+        @assert !any(isnan, Yₜ.c.ρq_sno[colidx])
+        @assert !any(isnan, sol.prob.p.precomputed.ᶜwᵣ[colidx])
+        @assert !any(isnan, sol.prob.p.precomputed.ᶜwₛ[colidx])
+
+        # treminal velocity is positive
+        @test minimum(sol.prob.p.precomputed.ᶜwᵣ[colidx]) >= FT(0)
+        @test minimum(sol.prob.p.precomputed.ᶜwₛ[colidx]) >= FT(0)
+
+        # checking for water budget conservation
+        # in the presence of precipitation sinks
+        # (This test only works without surface flux of q_tot)
+        @test all(
+            ClimaCore.isapprox(
+                Yₜ_ρqₜ[colidx],
+                Yₜ_ρqₚ[colidx],
+                rtol = 1e2 * eps(FT),
+            ),
+        )
+
+        # mass budget consistency
+        @test all(
+            ClimaCore.isapprox(Yₜ_ρ[colidx], Yₜ_ρqₜ[colidx], rtol = eps(FT)),
+        )
+
+        # cloud fraction diagnostics
+        @assert !any(
+            isnan,
+            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
+        )
+        @test minimum(
+            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
+        ) >= FT(0)
+        @test maximum(
+            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
+        ) <= FT(1)
     end
 end
 
@@ -177,10 +274,8 @@ if ClimaComms.iamroot(config.comms_ctx)
     end
     @info "Plotting done"
 
-    if islink(simulation.output_dir)
-        symlink_to_fullpath(path) = joinpath(dirname(path), readlink(path))
-    else
-        symlink_to_fullpath(path) = path
+    function symlink_to_fullpath(path)
+        return joinpath(dirname(path), readlink(path))
     end
 
     @info "Creating tarballs"

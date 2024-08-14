@@ -15,7 +15,6 @@ struct Microphysics1Moment <: AbstractPrecipitationModel end
 abstract type AbstractCloudModel end
 struct GridScaleCloud <: AbstractCloudModel end
 struct QuadratureCloud <: AbstractCloudModel end
-struct DiagnosticEDMFCloud <: AbstractCloudModel end
 
 abstract type AbstractModelConfig end
 struct SingleColumnModel <: AbstractModelConfig end
@@ -26,12 +25,6 @@ struct PlaneModel <: AbstractModelConfig end
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct ZonallyAsymmetricSST <: AbstractSST end
-struct RCEMIPIISphereSST <: AbstractSST end
-
-abstract type AbstractInsolation end
-struct IdealizedInsolation <: AbstractInsolation end
-struct TimeVaryingInsolation <: AbstractInsolation end
-struct RCEMIPIIInsolation <: AbstractInsolation end
 
 abstract type AbstractSurfaceTemperature end
 struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end
@@ -266,7 +259,7 @@ Base.broadcastable(x::AbstractDetrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractSGSamplingType) = tuple(x)
 Base.broadcastable(x::AbstractTendencyModel) = tuple(x)
 
-Base.@kwdef struct RadiationDYCOMS{FT}
+Base.@kwdef struct RadiationDYCOMS_RF01{FT}
     "Large-scale divergence"
     divergence::FT = 3.75e-6
     alpha_z::FT = 1.0
@@ -284,7 +277,15 @@ struct RadiationTRMM_LBA{R}
     end
 end
 
+# TODO: remove AbstractPerformanceMode and all subtypes
+# This is temporarily needed to investigate performance of
+# our handling of tracers.
+abstract type AbstractPerformanceMode end
+struct PerfExperimental <: AbstractPerformanceMode end
+struct PerfStandard <: AbstractPerformanceMode end
 struct TestDycoreConsistency end
+
+Base.broadcastable(x::AbstractPerformanceMode) = tuple(x)
 
 abstract type AbstractTimesteppingMode end
 struct Explicit <: AbstractTimesteppingMode end
@@ -304,6 +305,9 @@ Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM}
     test_dycore_consistency::DYCORE
 
     limiter::LIM
+
+    """Whether to subtract the reference state from the evolved state"""
+    use_reference_state::Bool
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
@@ -334,6 +338,7 @@ end
 
 Base.@kwdef struct AtmosModel{
     MC,
+    PEM,
     MM,
     PM,
     CM,
@@ -363,12 +368,12 @@ Base.@kwdef struct AtmosModel{
     SL, 
     RS,
     ST,
-    IN,
     SM,
     SA,
     NUM,
 }
     model_config::MC = nothing
+    perf_mode::PEM = nothing
     moisture_model::MM = nothing
     precip_model::PM = nothing
     cloud_model::CM = nothing
@@ -398,7 +403,6 @@ Base.@kwdef struct AtmosModel{
     smagorinsky_lilly::SL = nothing
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
-    insolation::IN = nothing
     surface_model::SM = nothing
     surface_albedo::SA = nothing
     numerics::NUM = nothing
@@ -471,103 +475,45 @@ function (cb::AtmosCallback)(integrator)
 end
 n_measured_calls(cb::AtmosCallback) = cb.n_measured_calls[]
 
-struct AtmosConfig{FT, TD, PA, C, CF}
+struct AtmosConfig{FT, TD, PA, C}
     toml_dict::TD
     parsed_args::PA
     comms_ctx::C
-    config_files::CF
-    job_id::String
 end
 
 Base.eltype(::AtmosConfig{FT}) where {FT} = FT
 
-TupleOrVector(T) = Union{Tuple{<:T, Vararg{T}}, Vector{<:T}}
-
-# Use short, relative paths, if possible.
-function normrelpath(file)
-    rfile = normpath(relpath(file, dirname(config_path)))
-    return if isfile(rfile) && samefile(rfile, file)
-        rfile
-    else
-        file
-    end
-end
-
-function maybe_add_default(config_files, default_config_file)
-    return if any(x -> samefile(x, default_config_file), config_files)
-        config_files
-    else
-        (default_config_file, config_files...)
-    end
-end
-
 """
-    AtmosConfig(
-        config_file::String = default_config_file;
-        job_id = config_id_from_config_file(config_file),
-        comms_ctx = nothing,
-    )
-    AtmosConfig(
-        config_files::Union{NTuple{<:Any, String} ,Vector{String}};
-        job_id = config_id_from_config_files(config_files),
-        comms_ctx = nothing,
-    )
+    AtmosConfig(config_file::String)
 
 Helper function for the AtmosConfig constructor. Reads a YAML file into a Dict
 and passes it to the AtmosConfig constructor.
 """
-AtmosConfig(
-    config_file::String = default_config_file;
-    job_id = config_id_from_config_file(config_file),
-    comms_ctx = nothing,
-) = AtmosConfig((config_file,); job_id, comms_ctx)
-
-function AtmosConfig(
-    config_files::TupleOrVector(String);
-    job_id = config_id_from_config_files(config_files),
-    comms_ctx = nothing,
-)
-
-    all_config_files =
-        normrelpath.(maybe_add_default(config_files, default_config_file))
-
-    configs = map(all_config_files) do config_file
-        @info "Loading yaml file $config_file"
-        strip_help_messages(YAML.load_file(config_file))
-    end
-    return AtmosConfig(
-        configs;
-        comms_ctx,
-        config_files = all_config_files,
-        job_id,
-    )
+function AtmosConfig(config_file::String; comms_ctx = nothing)
+    config = YAML.load_file(config_file)
+    return AtmosConfig(config; comms_ctx)
 end
 
 """
-    AtmosConfig(
-        configs::Union{NTuple{<:Any, Dict} ,Vector{Dict}};
-        comms_ctx = nothing,
-        config_files,
-        job_id
-    )
+    AtmosConfig(; comms_ctx = nothing)
+Helper function for the AtmosConfig constructor.
+Reads the `config_file` from the command line into a Dict
+and passes it to the AtmosConfig constructor.
+"""
+function AtmosConfig(; comms_ctx = nothing)
+    parsed_args = parse_commandline(argparse_settings())
+    return AtmosConfig(parsed_args["config_file"]; comms_ctx)
+end
 
-Constructs the AtmosConfig from the Dicts passed in. This Dict overrides all of
+AtmosConfig(::Nothing; comms_ctx = nothing) = AtmosConfig(Dict(); comms_ctx)
+
+"""
+    AtmosConfig(config::Dict; comms_ctx = nothing)
+Constructs the AtmosConfig from the Dict passed in. This Dict overrides all of
 the default configurations set in `default_config_dict()`.
 """
-AtmosConfig(configs::AbstractDict; kwargs...) =
-    AtmosConfig((configs,); kwargs...)
-function AtmosConfig(
-    configs::TupleOrVector(AbstractDict);
-    comms_ctx = nothing,
-    config_files = [default_config_file],
-    job_id = "",
-)
-    config_files = map(x -> normrelpath(x), config_files)
-
-    # using config_files = [default_config_file] as a default
-    # relies on the fact that override_default_config uses
-    # default_config_file.
-    config = override_default_config(configs)
+function AtmosConfig(config::Dict; comms_ctx = nothing)
+    config = override_default_config(config)
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     toml_dict = CP.create_toml_dict(
         FT;
@@ -581,27 +527,8 @@ function AtmosConfig(
         @info "Running ClimaCore in unthreaded mode."
     end
 
-    isempty(job_id) &&
-        @warn "`job_id` is empty and likely not passed to AtmosConfig."
-
-    @info "Making AtmosConfig with config files: $(sprint(config_summary, config_files))"
-
     C = typeof(comms_ctx)
     TD = typeof(toml_dict)
     PA = typeof(config)
-    CF = typeof(config_files)
-    return AtmosConfig{FT, TD, PA, C, CF}(
-        toml_dict,
-        config,
-        comms_ctx,
-        config_files,
-        job_id,
-    )
-end
-
-function config_summary(io::IO, config_files)
-    print(io, '\n')
-    for x in config_files
-        println(io, "   $x")
-    end
+    return AtmosConfig{FT, TD, PA, C}(toml_dict, config, comms_ctx)
 end

@@ -87,8 +87,6 @@ Base.@kwdef struct ClimaAtmosParameters{
     # Radiation
     idealized_ocean_albedo::FT
     water_refractive_index::FT
-    optics_lookup_temperature_min::FT
-    optics_lookup_temperature_max::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT

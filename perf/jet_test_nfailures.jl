@@ -1,14 +1,14 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
-import ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
 
 include("common.jl")
 
-(; config_file, job_id) = CA.commandline_kwargs()
-config = CA.AtmosConfig(config_file; job_id)
+length(ARGS) != 1 && error("Usage: jet_test_nfailures.jl <config_file>")
+config_file = ARGS[1]
+config_dict = YAML.load_file(config_file)
+config = AtmosCoveragePerfConfig(config_dict)
 
 simulation = CA.get_simulation(config)
 (; integrator) = simulation

@@ -599,30 +599,21 @@ add_diagnostic_variable!(
 
 ###
 # Precipitation (2d)
+# TODO: add precipitation flux for the 1-moment microphysics
 ###
 compute_pr!(out, state, cache, time) =
     compute_pr!(out, state, cache, time, cache.atmos.precip_model)
 compute_pr!(_, _, _, _, precip_model::T) where {T} =
     error_diagnostic_variable("pr", precip_model)
 
-function compute_pr!(
-    out,
-    state,
-    cache,
-    time,
-    precip_model::Union{
-        NoPrecipitation,
-        Microphysics0Moment,
-        Microphysics1Moment,
-    },
-)
+function compute_pr!(out, state, cache, time, precip_model::Microphysics0Moment)
     if isnothing(out)
-        return cache.precipitation.surface_rain_flux .+
-               cache.precipitation.surface_snow_flux
+        return cache.precipitation.col_integrated_rain .+
+               cache.precipitation.col_integrated_snow
     else
         out .=
-            cache.precipitation.surface_rain_flux .+
-            cache.precipitation.surface_snow_flux
+            cache.precipitation.col_integrated_rain .+
+            cache.precipitation.col_integrated_snow
     end
 end
 

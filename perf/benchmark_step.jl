@@ -12,16 +12,12 @@ include(joinpath("perf", "benchmark_step.jl"));
 ```
 =#
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
-import ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
 import ClimaComms
 
-include("common.jl")
-(; config_file, job_id) = CA.commandline_kwargs()
-config = CA.AtmosConfig(config_file; job_id)
+config = CA.AtmosConfig()
 
 simulation = CA.get_simulation(config)
 (; integrator) = simulation;
@@ -33,9 +29,8 @@ CA.benchmark_step!(integrator, Y₀); # compile first
 n_steps = 10
 comms_ctx = ClimaComms.context(integrator.u.c)
 device = ClimaComms.device(comms_ctx)
-local e
-s = CA.@timed_str begin
-    e = ClimaComms.elapsed(device) do
+e = ClimaComms.@elapsed device begin
+    s = CA.@timed_str begin
         CA.benchmark_step!(integrator, Y₀, n_steps) # run
     end
 end

@@ -36,26 +36,11 @@ end
 
 function get_sfc_temperature_form(parsed_args)
     surface_temperature = parsed_args["surface_temperature"]
-    @assert surface_temperature in
-            ("ZonallyAsymmetric", "ZonallySymmetric", "RCEMIPIISphere")
+    @assert surface_temperature in ("ZonallyAsymmetric", "ZonallySymmetric")
     return if surface_temperature == "ZonallyAsymmetric"
         ZonallyAsymmetricSST()
     elseif surface_temperature == "ZonallySymmetric"
         ZonallySymmetricSST()
-    elseif surface_temperature == "RCEMIPIISphere"
-        RCEMIPIISphereSST()
-    end
-end
-
-function get_insolation_form(parsed_args)
-    insolation = parsed_args["insolation"]
-    @assert insolation in ("idealized", "timevarying", "rcemipii")
-    return if insolation == "idealized"
-        IdealizedInsolation()
-    elseif insolation == "timevarying"
-        TimeVaryingInsolation()
-    elseif insolation == "rcemipii"
-        RCEMIPIIInsolation()
     end
 end
 
@@ -222,15 +207,21 @@ function get_orographic_gravity_wave_model(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
+function get_perf_mode(parsed_args)
+    return if parsed_args["perf_mode"] == "PerfExperimental"
+        PerfExperimental()
+    else
+        PerfStandard()
+    end
+end
+
 function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     idealized_h2o = parsed_args["idealized_h2o"]
     @assert idealized_h2o in (true, false)
+    idealized_insolation = parsed_args["idealized_insolation"]
+    @assert idealized_insolation in (true, false)
     idealized_clouds = parsed_args["idealized_clouds"]
     @assert idealized_clouds in (true, false)
-    add_isothermal_boundary_layer = parsed_args["add_isothermal_boundary_layer"]
-    @assert add_isothermal_boundary_layer in (true, false)
-    aerosol_radiation = parsed_args["aerosol_radiation"]
-    @assert aerosol_radiation in (true, false)
     radiation_name = parsed_args["rad"]
     @assert radiation_name in (
         nothing,
@@ -239,38 +230,35 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         "gray",
         "allsky",
         "allskywithclear",
-        "DYCOMS",
+        "DYCOMS_RF01",
         "TRMM_LBA",
     )
     return if radiation_name == "clearsky"
         RRTMGPI.ClearSkyRadiation(
             idealized_h2o,
+            idealized_insolation,
             idealized_clouds,
-            add_isothermal_boundary_layer,
-            aerosol_radiation,
         )
     elseif radiation_name == "gray"
         RRTMGPI.GrayRadiation(
             idealized_h2o,
+            idealized_insolation,
             idealized_clouds,
-            add_isothermal_boundary_layer,
         )
     elseif radiation_name == "allsky"
         RRTMGPI.AllSkyRadiation(
             idealized_h2o,
+            idealized_insolation,
             idealized_clouds,
-            add_isothermal_boundary_layer,
-            aerosol_radiation,
         )
     elseif radiation_name == "allskywithclear"
         RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(
             idealized_h2o,
+            idealized_insolation,
             idealized_clouds,
-            add_isothermal_boundary_layer,
-            aerosol_radiation,
         )
-    elseif radiation_name == "DYCOMS"
-        RadiationDYCOMS{FT}()
+    elseif radiation_name == "DYCOMS_RF01"
+        RadiationDYCOMS_RF01{FT}()
     elseif radiation_name == "TRMM_LBA"
         RadiationTRMM_LBA(FT)
     else
@@ -297,8 +285,6 @@ function get_cloud_model(parsed_args)
         GridScaleCloud()
     elseif cloud_model == "quadrature"
         QuadratureCloud()
-    elseif cloud_model == "diagnostic_edmfx"
-        DiagnosticEDMFCloud()
     else
         error("Invalid cloud_model $(cloud_model)")
     end
@@ -336,7 +322,7 @@ function get_subsidence_model(parsed_args, radiation_mode, FT)
     elseif subsidence == "Rico"
         APL.Rico_subsidence(FT)
     elseif subsidence == "DYCOMS"
-        @assert radiation_mode isa RadiationDYCOMS
+        @assert radiation_mode isa RadiationDYCOMS_RF01
         z -> -z * radiation_mode.divergence
     else
         error("Uncaught case")

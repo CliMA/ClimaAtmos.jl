@@ -12,13 +12,16 @@ Modify the energy variable in state `Y` given Y and the cache `p` so that
 function set_discrete_hydrostatic_balanced_state!(Y, p)
     FT = Spaces.undertype(axes(Y.c))
     ᶠgradᵥ_ᶜp = similar(Y.f.u₃)
-    set_discrete_hydrostatic_balanced_pressure!(
-        p.precomputed.ᶜp,
-        ᶠgradᵥ_ᶜp,
-        Y.c.ρ,
-        p.core.ᶠgradᵥ_ᶜΦ,
-        FT(CAP.MSLP(p.params)),
-    )
+    Fields.bycolumn(axes(Y.c.ρ)) do colidx
+        set_discrete_hydrostatic_balanced_pressure!(
+            p.precomputed.ᶜp,
+            ᶠgradᵥ_ᶜp,
+            Y.c.ρ,
+            p.core.ᶠgradᵥ_ᶜΦ,
+            FT(CAP.MSLP(p.params)),
+            colidx,
+        )
+    end
     thermo_params = CAP.thermodynamics_params(p.params)
     if p.atmos.moisture_model isa DryModel
         @. p.precomputed.ᶜts =
@@ -53,7 +56,7 @@ end
 u₃_component(u::Geometry.AxisTensor) = u.u₃
 
 """
-    set_discrete_hydrostatic_balanced_pressure!(ᶜp, ᶠgradᵥ_ᶜp, ᶜρ, ᶠgradᵥ_ᶜΦ, p1)
+    set_discrete_hydrostatic_balanced_pressure!(ᶜp, ᶠgradᵥ_ᶜp, ᶜρ, ᶠgradᵥ_ᶜΦ, p1, colidx)
 Construct discrete hydrostatic balanced pressure `ᶜp` from density `ᶜρ`,
 potential energy gradient `ᶠgradᵥ_ᶜΦ`, and surface pressure `p1`.
 
@@ -74,10 +77,11 @@ function set_discrete_hydrostatic_balanced_pressure!(
     ᶜρ,
     ᶠgradᵥ_ᶜΦ,
     p1,
+    colidx,
 )
-    @. ᶠgradᵥ_ᶜp = -(ᶠgradᵥ_ᶜΦ * ᶠinterp(ᶜρ))
-    ᶜp_data = Fields.field_values(ᶜp)
-    ᶠgradᵥ_ᶜp_data = Fields.field_values(ᶠgradᵥ_ᶜp)
+    @. ᶠgradᵥ_ᶜp[colidx] = -(ᶠgradᵥ_ᶜΦ[colidx] * ᶠinterp(ᶜρ[colidx]))
+    ᶜp_data = Fields.field_values(ᶜp[colidx])
+    ᶠgradᵥ_ᶜp_data = Fields.field_values(ᶠgradᵥ_ᶜp[colidx])
     ᶜp_data_lev₋₁ = Spaces.level(ᶜp_data, 1)
     @. ᶜp_data_lev₋₁ = p1
     @inbounds for i in 2:Spaces.nlevels(axes(ᶜp))

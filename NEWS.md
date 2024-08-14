@@ -3,59 +3,7 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
-- ![][badge-💥breaking] Change the "idealized_insolation" argument to "insolation", 
-  and add RCEMIP insolation. PR [#3150](https://github.com/CliMA/ClimaAtmos.jl/pull/3150)
-
-v0.26.3
--------
-- Add ClimaCoupler downstream test.
-  PR [#3152](https://github.com/CliMA/ClimaAtmos.jl/pull/3152)
-- Add an option to use aerosol radiation. This is not fully working yet. 
-  PR [#3147](https://github.com/CliMA/ClimaAtmos.jl/pull/3147)
-- Update to RRTMGP v0.17.0.
-  PR [#3131](https://github.com/CliMA/ClimaAtmos.jl/pull/3131)
-- Add diagnostic edmf cloud scheme.
-  PR [#3126](https://github.com/CliMA/ClimaAtmos.jl/pull/3126)
-
-v0.26.2
--------
-- Limit temperature input to RRTMGP within the lookup table range.
-  PR [#3124](https://github.com/CliMA/ClimaAtmos.jl/pull/3124)
-  
-v0.26.1
--------
-- Updated RRTMGP compat from 0.15 to 0.16
-  PR [#3114](https://github.com/CliMA/ClimaAtmos.jl/pull/3114)
-- ![][badge-🔥behavioralΔ] Removed the filter for shortwave radiative fluxes. 
-  PR [#3099](https://github.com/CliMA/ClimaAtmos.jl/pull/3099).
-
-v0.26.0
--------
-- ![][badge-💥breaking] Add precipitation fluxes to 1M microphysics output.
-  Rename col_integrated_rain (and snow) to surface_rain_flux (and snow)
-  PR [#3084](https://github.com/CliMA/ClimaAtmos.jl/pull/3084).
-
-v0.25.0
--------
-- ![][badge-💥breaking] Remove reference state from the dycore and the
-  relevant config. PR [#3074](https://github.com/CliMA/ClimaAtmos.jl/pull/3074).
-- Make prognostic and diagnostic EDMF work with 1-moment microphysics on GPU
-  PR [#3070](https://github.com/CliMA/ClimaAtmos.jl/pull/3070)
-- Add precipitation heating terms for 1-moment microphysics
-  PR [#3050](https://github.com/CliMA/ClimaAtmos.jl/pull/3050)
-
-v0.24.2
--------
-- ![][badge-🔥behavioralΔ] Fixed incorrect surface fluxes for uh. PR [#3064]
-  (https://github.com/CliMA/ClimaAtmos.jl/pull/3064).
-
-v0.24.1
--------
-
-v0.24.0
--------
-- ![][badge-💥breaking]. CPU/GPU runs can now share the same yaml files. The driver now calls `AtmosConfig` via `(; config_file, job_id) = ClimaAtmos.commandline_kwargs(); config = ClimaAtmos.AtmosConfig(config_file; job_id)`, which recovers the original behavior. PR [#2994](https://github.com/CliMA/ClimaAtmos.jl/pull/2994), issue [#2651](https://github.com/CliMA/ClimaAtmos.jl/issues/2651).
-- Move config files for gpu jobs on ci to config/model_configs/.
+- Move config files for gpu jobs on ci to config/model_configs/. 
   PR [#2948](https://github.com/CliMA/ClimaAtmos.jl/pull/2948).
 
 v0.23.0

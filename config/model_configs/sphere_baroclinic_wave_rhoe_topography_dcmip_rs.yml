@@ -4,8 +4,9 @@ rayleigh_sponge: true
 topo_smoothing: true
 initial_condition: "DryBaroclinicWave"
 t_end: "6days"
+use_reference_state: false
 dt: "200secs"
-hyperdiff: "ClimaHyperdiffusion"
+job_id: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs"
 netcdf_output_at_levels: false
 diagnostics:
   - short_name: [pfull, wa, va, rv]

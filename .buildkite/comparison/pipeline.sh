@@ -88,7 +88,7 @@ cat << EOM
         - "$job_id/scaling_data_${nprocs}_processes.jld2"
         - "$job_id/report.*.nsys-rep"
       env:
-        CLIMACOMMS_CONTEXT: "MPI"
+        CLIMACORE_DISTRIBUTED: "MPI"
         NPROCS: $nprocs
       agents:
         config: cpu

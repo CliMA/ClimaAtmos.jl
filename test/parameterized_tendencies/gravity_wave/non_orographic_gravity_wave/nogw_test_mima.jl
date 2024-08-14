@@ -1,5 +1,3 @@
-using ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 using NCDatasets
 using Dates
 using Interpolations

@@ -85,19 +85,19 @@ function set_surface_albedo!(
     surface_albedo .=
         f_direct.(
             λ,
-            Fields.array2field(μ, axes(surface_albedo)),
+            RRTMGPI.array2field(μ, axes(surface_albedo)),
             norm.(Fields.level(Y.c.uₕ, 1)),
         )
-    direct_sw_surface_albedo .= Fields.field2array(surface_albedo)'
+    direct_sw_surface_albedo .= RRTMGPI.field2array(surface_albedo)'
 
     f_diffuse = surface_albedo_diffuse(α_model)
     surface_albedo .=
         f_diffuse.(
             λ,
-            Fields.array2field(μ, axes(surface_albedo)),
+            RRTMGPI.array2field(μ, axes(surface_albedo)),
             norm.(Fields.level(Y.c.uₕ, 1)),
         )
-    diffuse_sw_surface_albedo .= Fields.field2array(surface_albedo)'
+    diffuse_sw_surface_albedo .= RRTMGPI.field2array(surface_albedo)'
 end
 
 """
@@ -115,61 +115,51 @@ Calculate the direct surface albedo using the regression function of Jin et al. 
 function surface_albedo_direct(α_model::RegressionFunctionAlbedo{FT}) where {FT}
     α_dir =
         (λ, cosθ, u) -> begin
-            if cosθ <= 0
-                return zero(FT)
-            else
-                # relative refractive index of water and air (n = n_w/n_a)
-                n = α_model.n
+            # relative refractive index of water and air (n = n_w/n_a)
+            n = α_model.n
 
-                # refractive index of water for visible light
-                n0 = α_model.n0
+            # refractive index of water for visible light
+            n0 = α_model.n0
 
-                # mean wave slope distribution width
-                σ = α_model.wave_slope(u)
+            # mean wave slope distribution width
+            σ = α_model.wave_slope(u)
 
-                # Fresnel reflectance (assuming equal contribution of the p-polorized and s-polarized components, and using the perfect dielectric medium approximation)
-                sinθ(cosθ) = sqrt(1 - cosθ^2)
-                rf_p(n, cosθ) =
-                    (
-                        (n^2 * cosθ - sqrt(n^2 - sinθ(cosθ)^2)) /
-                        (n^2 * cosθ + sqrt(n^2 - sinθ(cosθ)^2))
-                    )^2
-                rf_s(n, cosθ) =
-                    (
-                        (cosθ - sqrt(n^2 - sinθ(cosθ)^2)) /
-                        (cosθ + sqrt(n^2 - sinθ(cosθ)^2))
-                    )^2
-                rf(n, cosθ) = (rf_p(n, cosθ) + rf_s(n, cosθ)) / 2
+            # Fresnel reflectance (assuming equal contribution of the p-polorized and s-polarized components, and using the perfect dielectric medium approximation)
+            sinθ(cosθ) = sqrt(1 - cosθ^2)
+            rf_p(n, cosθ) =
+                (
+                    (n^2 * cosθ - sqrt(n^2 - sinθ(cosθ)^2)) /
+                    (n^2 * cosθ + sqrt(n^2 - sinθ(cosθ)^2))
+                )^2
+            rf_s(n, cosθ) =
+                (
+                    (cosθ - sqrt(n^2 - sinθ(cosθ)^2)) /
+                    (cosθ + sqrt(n^2 - sinθ(cosθ)^2))
+                )^2
+            rf(n, cosθ) = (rf_p(n, cosθ) + rf_s(n, cosθ)) / 2
 
-                # regression coefficients
-                p = α_model.p
+            # regression coefficients
+            p = α_model.p
 
-                # the regression function (J11, eq. 4)
-                f(cosθ, σ) =
-                    (
-                        p[1] +
-                        p[2] * cosθ +
-                        p[3] * cosθ^2 +
-                        p[4] * cosθ^3 +
-                        p[5] * σ +
-                        p[6] * σ * cosθ
-                    ) * exp(
-                        p[7] +
-                        p[8] * cosθ +
-                        p[9] * cosθ^2 +
-                        p[10] * σ +
-                        p[11] * σ * cosθ,
-                    )
-
-                # return the albedo (J11, eq. 1)
-                return min(
-                    one(FT),
-                    max(
-                        zero(FT),
-                        rf(n, cosθ) - rf(n, cosθ) / rf(n0, cosθ) * f(cosθ, σ),
-                    ),
+            # the regression function (J11, eq. 4)
+            f(cosθ, σ) =
+                (
+                    p[1] +
+                    p[2] * cosθ +
+                    p[3] * cosθ^2 +
+                    p[4] * cosθ^3 +
+                    p[5] * σ +
+                    p[6] * σ * cosθ
+                ) * exp(
+                    p[7] +
+                    p[8] * cosθ +
+                    p[9] * cosθ^2 +
+                    p[10] * σ +
+                    p[11] * σ * cosθ,
                 )
-            end
+
+            # return the albedo (J11, eq. 1)
+            return rf(n, cosθ) - rf(n, cosθ) / rf(n0, cosθ) * f(cosθ, σ)
         end
     return α_dir
 end
@@ -187,36 +177,25 @@ function surface_albedo_diffuse(
 ) where {FT}
     α_diff =
         (λ, cosθ, u) -> begin
-            if cosθ <= 0
-                return zero(FT)
-            else
-                could_fraction = 0 # TODO: connect this to the EDMF
+            could_fraction = 0 # TODO: connect this to the EDMF
 
-                # clear sky (J11, eq. 5a)
-                n = α_model.n
-                σ = α_model.wave_slope(u)
+            # clear sky (J11, eq. 5a)
+            n = α_model.n
+            σ = α_model.wave_slope(u)
 
-                q_clear = α_model.q_clear
-                α_clear =
-                    q_clear[1] +
-                    q_clear[2] * σ +
-                    q_clear[3] * n +
-                    q_clear[4] * n * σ
+            q_clear = α_model.q_clear
+            α_clear =
+                q_clear[1] +
+                q_clear[2] * σ +
+                q_clear[3] * n +
+                q_clear[4] * n * σ
 
-                # cloudy sky (J11, eq. 5b)
-                q_cloud = α_model.q_cloud
-                α_cloud = q_cloud[1] + q_cloud[2] * n + q_cloud[3] * n * σ
+            # cloudy sky (J11, eq. 5b)
+            q_cloud = α_model.q_cloud
+            α_cloud = q_cloud[1] + q_cloud[2] * n + q_cloud[3] * n * σ
 
-                # return the albedo
-                return min(
-                    one(FT),
-                    max(
-                        zero(FT),
-                        could_fraction * α_cloud +
-                        (1 - could_fraction) * α_clear,
-                    ),
-                )
-            end
+            # return the albedo
+            return could_fraction * α_cloud + (1 - could_fraction) * α_clear
         end
     return α_diff
 end

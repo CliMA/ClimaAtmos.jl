@@ -2,6 +2,22 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import YAML
 
 """
+    AtmosCoveragePerfConfig()
+    AtmosCoveragePerfConfig(; config_dict)
+
+Creates a model configuration that covers many physics components.
+The configuration precedence is as follows:
+    1. Configuration from the given config file/dict (highest precendence)
+    2. Default perf configuration (to increase coverage)
+    3. Default configuration (lowest precedence)
+"""
+function AtmosCoveragePerfConfig(config_dict = Dict())
+    perf_default_config = perf_config_dict()
+    config_dict = merge(perf_default_config, config_dict)
+    return CA.AtmosConfig(config_dict)
+end
+
+"""
     TargetJobConfig(target_job)
 
 Creates a full model configuration from the given target job.
@@ -9,10 +25,25 @@ Creates a full model configuration from the given target job.
 TargetJobConfig(target_job) =
     CA.AtmosConfig(CA.config_from_target_job(target_job))
 
+
+"""
+    perf_config_dict()
+
+Loads the default performance configuration from a file into a Dict.
+"""
+function perf_config_dict()
+    perf_defaults = joinpath(
+        dirname(@__FILE__),
+        "..",
+        "config",
+        "default_configs",
+        "default_perf.yml",
+    )
+    return YAML.load_file(perf_defaults)
+end
+
 import ClimaTimeSteppers as CTS
-get_W(i::CTS.DistributedODEIntegrator) =
-    hasproperty(i.cache, :W) ? i.cache.W : i.cache.newtons_method_cache.j
-get_W(i::CTS.RosenbrockAlgorithm) = i.cache.W
+get_W(i::CTS.DistributedODEIntegrator) = i.cache.newtons_method_cache.j
 get_W(i) = i.cache.W
 f_args(i, f::CTS.ForwardEulerODEFunction) = (copy(i.u), i.u, i.p, i.t, i.dt)
 f_args(i, f) = (similar(i.u), i.u, i.p, i.t)

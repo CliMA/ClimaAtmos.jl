@@ -8,8 +8,6 @@ config = TargetJobConfig("gpu_prognostic_edmfx_aquaplanet")
 include(joinpath(pkgdir(CA), "perf", "jet.jl"))
 =#
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
-import ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Random
 import HDF5, NCDatasets, CUDA
 Random.seed!(1234)
@@ -18,8 +16,8 @@ import ClimaAtmos as CA
 include("common.jl")
 
 if !(@isdefined config)
-    (; config_file, job_id) = CA.commandline_kwargs()
-    config = CA.AtmosConfig(config_file; job_id)
+    config_dict = Dict("z_elem" => 63, "dt" => "10secs", "t_end" => "3600secs")
+    config = AtmosCoveragePerfConfig(config_dict)
 end
 
 import JET

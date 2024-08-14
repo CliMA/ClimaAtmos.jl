@@ -13,11 +13,11 @@ Returns the filename of an artifact stored in
 `RRTMGPReferenceData/<file_name>`.
 """
 function rrtmgp_artifact(file_name)
-    artifact_name = "rrtmgp-data"
+    artifact_name = "RRTMGPReferenceData"
     artifacts_file = joinpath(pkgdir(RRTMGP), "test", "Artifacts.toml")
     data_folder = joinpath(
         Pkg.Artifacts.ensure_artifact_installed(artifact_name, artifacts_file),
-        "rrtmgp-data-1.8.1",
+        artifact_name,
     )
     return joinpath(data_folder, file_name)
 end

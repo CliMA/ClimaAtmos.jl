@@ -2,12 +2,13 @@ dt_save_state_to_disk: "10days"
 dt: "120secs"
 rad: "clearsky"
 dt_rad: "6hours"
-t_end: "480days"
+t_end: "500days"
 dz_bottom: 30.0
 dz_top: 3000.0
 h_elem: 16
 z_elem: 63
 z_max: 55000.0
+job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth"
 moist: "equil"
 precip_model: "0M"
 rayleigh_sponge: true

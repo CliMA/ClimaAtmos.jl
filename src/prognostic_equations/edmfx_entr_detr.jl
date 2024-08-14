@@ -111,49 +111,6 @@ function entrainment(
     return entr
 end
 
-function detrainment(
-    params,
-    z_prev_level::FT,
-    z_sfc_halflevel,
-    p_prev_level,
-    ρ_prev_level,
-    ρaʲ_prev_level,
-    tsʲ_prev_level,
-    ρʲ_prev_level,
-    u³ʲ_prev_halflevel,
-    local_geometry_prev_halflevel,
-    u³_prev_halflevel,
-    ts_prev_level,
-    ᶜbuoy⁰,
-    entrʲ_prev_level,
-    vert_div_level,
-    ᶜmassflux_vert_div, # mass flux divergence is not implemented for diagnostic edmf
-    tke_prev_level,
-    edmfx_detr_model,
-) where {FT}
-    thermo_params = CAP.thermodynamics_params(params)
-    detrainment(
-        params,
-        z_prev_level,
-        z_sfc_halflevel,
-        p_prev_level,
-        ρ_prev_level,
-        ρaʲ_prev_level,
-        draft_area(ρaʲ_prev_level, ρʲ_prev_level),
-        get_physical_w(u³ʲ_prev_halflevel, local_geometry_prev_halflevel),
-        TD.relative_humidity(thermo_params, tsʲ_prev_level),
-        ᶜphysical_buoyancy(params, ρ_prev_level, ρʲ_prev_level),
-        get_physical_w(u³_prev_halflevel, local_geometry_prev_halflevel),
-        TD.relative_humidity(thermo_params, ts_prev_level),
-        FT(0),
-        entrʲ_prev_level,
-        vert_div_level,
-        FT(0), # mass flux divergence is not implemented for diagnostic edmf
-        tke_prev_level,
-        edmfx_detr_model,
-    )
-end
-
 """
    Return detrainment rate [1/s].
 
@@ -309,9 +266,16 @@ function detrainment(
     return detr
 end
 
-edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
 
-function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
+function edmfx_entr_detr_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    turbconv_model::PrognosticEDMFX,
+)
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜentrʲs, ᶜdetrʲs) = p.precomputed
@@ -319,17 +283,21 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
 
     for j in 1:n
 
-        @. Yₜ.c.sgsʲs.:($$j).ρa +=
-            Y.c.sgsʲs.:($$j).ρa * (ᶜentrʲs.:($$j) - ᶜdetrʲs.:($$j))
+        @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] +=
+            Y.c.sgsʲs.:($$j).ρa[colidx] *
+            (ᶜentrʲs.:($$j)[colidx] - ᶜdetrʲs.:($$j)[colidx])
 
-        @. Yₜ.c.sgsʲs.:($$j).mse +=
-            ᶜentrʲs.:($$j) * (ᶜmse⁰ - Y.c.sgsʲs.:($$j).mse)
+        @. Yₜ.c.sgsʲs.:($$j).mse[colidx] +=
+            ᶜentrʲs.:($$j)[colidx] *
+            (ᶜmse⁰[colidx] - Y.c.sgsʲs.:($$j).mse[colidx])
 
-        @. Yₜ.c.sgsʲs.:($$j).q_tot +=
-            ᶜentrʲs.:($$j) * (ᶜq_tot⁰ - Y.c.sgsʲs.:($$j).q_tot)
+        @. Yₜ.c.sgsʲs.:($$j).q_tot[colidx] +=
+            ᶜentrʲs.:($$j)[colidx] *
+            (ᶜq_tot⁰[colidx] - Y.c.sgsʲs.:($$j).q_tot[colidx])
 
-        @. Yₜ.f.sgsʲs.:($$j).u₃ +=
-            ᶠinterp(ᶜentrʲs.:($$j)) * (ᶠu₃⁰ - Y.f.sgsʲs.:($$j).u₃)
+        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] +=
+            ᶠinterp(ᶜentrʲs.:($$j)[colidx]) *
+            (ᶠu₃⁰[colidx] - Y.f.sgsʲs.:($$j).u₃[colidx])
     end
     return nothing
 end

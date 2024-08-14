@@ -30,13 +30,6 @@ const ᶜadvdivᵥ = Operators.DivergenceF2C(
     top = Operators.SetValue(CT3(0)),
 )
 
-# Subsidence has extrapolated tendency at the top, and has no flux at the bottom.
-# TODO: This is not accurate and causes some issues at the domain top.
-const ᶜsubdivᵥ = Operators.DivergenceF2C(
-    bottom = Operators.SetValue(CT3(0)),
-    top = Operators.Extrapolate(),
-)
-
 # Precipitation has no flux at the top, but it has free outflow at the bottom.
 const ᶜprecipdivᵥ = Operators.DivergenceF2C(top = Operators.SetValue(CT3(0)))
 

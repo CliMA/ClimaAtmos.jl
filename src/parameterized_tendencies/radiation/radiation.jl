@@ -22,7 +22,7 @@ radiation_model_cache(Y, atmos::AtmosModel, args...) =
 #####
 
 radiation_model_cache(Y, radiation_mode::Nothing; args...) = (;)
-radiation_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+radiation_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 
 #####
 ##### RRTMGP Radiation
@@ -32,21 +32,14 @@ function radiation_model_cache(
     Y,
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
     params,
-    ᶜp, # Used for ozone
-    aerosol_names;
+    ᶜp; # Used for ozone
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
     data_loader = rrtmgp_data_loader,
 )
     context = ClimaComms.context(axes(Y.c))
     device = context.device
-    (; idealized_h2o, idealized_clouds) = radiation_mode
-    if !(radiation_mode isa RRTMGPI.GrayRadiation)
-        (; aerosol_radiation) = radiation_mode
-        if aerosol_radiation && !("SO4" in aerosol_names)
-            error("Aerosol radiation is turned on but SO4 is not provided")
-        end
-    end
+    (; idealized_h2o, idealized_insolation, idealized_clouds) = radiation_mode
     FT = Spaces.undertype(axes(Y.c))
     DA = ClimaComms.array_type(device){FT}
     rrtmgp_params = CAP.rrtmgp_params(params)
@@ -62,19 +55,13 @@ function radiation_model_cache(
 
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
-        latitude = Fields.field2array(bottom_coords.lat)
+        latitude = RRTMGPI.field2array(bottom_coords.lat)
     else
-        latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
+        latitude = RRTMGPI.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
     local radiation_model
     orbital_data = Insolation.OrbitalData()
-    file_name = joinpath(
-        "examples",
-        "rfmip-clear-sky",
-        "inputs",
-        "multiple_input4MIPs_radiation_RFMIP_UColorado-RFMIP-1-2_none.nc",
-    )
-    data_loader(file_name) do input_data
+    data_loader(joinpath("atmos_state", "clearsky_as.nc")) do input_data
         if radiation_mode isa RRTMGPI.GrayRadiation
             kwargs = (;
                 lapse_rate = 3.5,
@@ -109,7 +96,7 @@ function radiation_model_cache(
                 ᶜvolume_mixing_ratio_o3_field = @. FT(pressure2ozone(ᶜp))
             end
             center_volume_mixing_ratio_o3 =
-                Fields.field2array(ᶜvolume_mixing_ratio_o3_field)
+                RRTMGPI.field2array(ᶜvolume_mixing_ratio_o3_field)
 
             # the first value for each global mean volume mixing ratio is the
             # present-day value
@@ -119,7 +106,6 @@ function radiation_model_cache(
             kwargs = (;
                 use_global_means_for_well_mixed_gases = true,
                 center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
-                center_relative_humidity = NaN, # initialized in callback
                 center_volume_mixing_ratio_o3,
                 volume_mixing_ratio_co2 = input_vmr("carbon_dioxide_GM"),
                 volume_mixing_ratio_n2o = input_vmr("nitrous_oxide_GM"),
@@ -164,13 +150,13 @@ function radiation_model_cache(
                     @. ᶜis_top_cloud = ᶜz > 4e3 && ᶜz < 5e3
                     kwargs = (;
                         kwargs...,
-                        center_cloud_liquid_water_path = Fields.field2array(
+                        center_cloud_liquid_water_path = RRTMGPI.field2array(
                             @. ifelse(ᶜis_bottom_cloud, FT(0.002) * ᶜΔz, FT(0))
                         ),
-                        center_cloud_ice_water_path = Fields.field2array(
+                        center_cloud_ice_water_path = RRTMGPI.field2array(
                             @. ifelse(ᶜis_top_cloud, FT(0.001) * ᶜΔz, FT(0))
                         ),
-                        center_cloud_fraction = Fields.field2array(
+                        center_cloud_fraction = RRTMGPI.field2array(
                             @. ifelse(
                                 ᶜis_bottom_cloud | ᶜis_top_cloud,
                                 FT(1),
@@ -187,27 +173,25 @@ function radiation_model_cache(
                     )
                 end
             end
-
-            if aerosol_radiation
-                kwargs = (;
-                    kwargs...,
-                    center_aerosol_type = 3, # assuming only sulfate
-                    center_aerosol_radius = 0.2, # assuming fixed aerosol radius
-                    center_aerosol_column_mass_density = NaN, # initialized in callback
-                )
-            end
         end
 
         if RRTMGPI.requires_z(interpolation) ||
            RRTMGPI.requires_z(bottom_extrapolation)
             kwargs = (;
                 kwargs...,
-                center_z = Fields.field2array(Fields.coordinate_field(Y.c).z),
-                face_z = Fields.field2array(Fields.coordinate_field(Y.f).z),
+                center_z = RRTMGPI.field2array(Fields.coordinate_field(Y.c).z),
+                face_z = RRTMGPI.field2array(Fields.coordinate_field(Y.f).z),
             )
         end
 
-        cos_zenith = weighted_irradiance = NaN # initialized in callback
+        if idealized_insolation # perpetual equinox with no diurnal cycle
+            cos_zenith = cos(FT(π) / 3)
+            weighted_irradiance =
+                @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
+                   (4 * cos_zenith)
+        else
+            cos_zenith = weighted_irradiance = NaN # initialized in callback
+        end
 
         radiation_model = RRTMGPI.RRTMGPModel(
             rrtmgp_params,
@@ -218,6 +202,7 @@ function radiation_model_cache(
             radiation_mode,
             interpolation,
             bottom_extrapolation,
+            add_isothermal_boundary_layer = true,
             center_pressure = NaN, # initialized in callback
             center_temperature = NaN, # initialized in callback
             surface_temperature = NaN, # initialized in callback
@@ -230,6 +215,7 @@ function radiation_model_cache(
         )
     end
     return (;
+        idealized_insolation,
         orbital_data,
         idealized_h2o,
         idealized_clouds,
@@ -239,17 +225,17 @@ function radiation_model_cache(
     )
 end
 
-function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
+function radiation_tendency!(Yₜ, Y, p, t, colidx, ::RRTMGPI.AbstractRRTMGPMode)
     (; ᶠradiation_flux) = p.radiation
-    @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
+    @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
     return nothing
 end
 
 #####
-##### DYCOMS_RF01 and DYCOMS_RF02 radiation
+##### DYCOMS_RF01 radiation
 #####
 
-function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS)
+function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS_RF01)
     FT = Spaces.undertype(axes(Y.c))
     NT = NamedTuple{(:z, :ρ, :q_tot), NTuple{3, FT}}
     return (;
@@ -262,7 +248,14 @@ function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS)
         net_energy_flux_sfc = [Geometry.WVector(FT(0))],
     )
 end
-function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
+function radiation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    radiation_mode::RadiationDYCOMS_RF01,
+)
     @assert !(p.atmos.moisture_model isa DryModel)
 
     (; params) = p
@@ -276,53 +269,54 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     ᶠz = Fields.coordinate_field(Y.f).z
 
     # TODO: According to the paper, we should replace liquid_specific_humidity
-    # with TD.mixing_ratios(thermo_params, ᶜts).liq, but this wouldn't
+    # with TD.mixing_ratios(thermo_params, ᶜts[colidx]).liq, but this wouldn't
     # match the original code from TurbulenceConvection.
-    @. ᶜκρq =
+    @. ᶜκρq[colidx] =
         radiation_mode.kappa *
-        Y.c.ρ *
-        TD.liquid_specific_humidity(thermo_params, ᶜts)
+        Y.c.ρ[colidx] *
+        TD.liquid_specific_humidity(thermo_params, ᶜts[colidx])
 
-    Operators.column_integral_definite!(∫_0_∞_κρq, ᶜκρq)
+    Operators.column_integral_definite!(∫_0_∞_κρq[colidx], ᶜκρq[colidx])
 
-    Operators.column_integral_indefinite!(ᶠ∫_0_z_κρq, ᶜκρq)
+    Operators.column_integral_indefinite!(ᶠ∫_0_z_κρq[colidx], ᶜκρq[colidx])
 
     # Find the values of (z, ρ, q_tot) at the q_tot = 0.008 isoline, i.e., at
     # the level whose value of q_tot is closest to 0.008.
-    #Operators.column_mapreduce!(
-    #    (z, ρ, q_tot) -> (; z, ρ, q_tot),
-    #    (nt1, nt2) ->
-    #        abs(nt1.q_tot - FT(0.008)) < abs(nt2.q_tot - FT(0.008)) ? nt1 : nt2,
-    #    isoline_z_ρ_q,
-    #    ᶜz,
-    #    Y.c.ρ,
-    #    ᶜspecific.q_tot,
-    #)
+    Operators.column_mapreduce!(
+        (z, ρ, q_tot) -> (; z, ρ, q_tot),
+        (nt1, nt2) ->
+            abs(nt1.q_tot - FT(0.008)) < abs(nt2.q_tot - FT(0.008)) ? nt1 : nt2,
+        isoline_z_ρ_q[colidx],
+        ᶜz[colidx],
+        Y.c.ρ[colidx],
+        ᶜspecific.q_tot[colidx],
+    )
 
-    zi = FT(800);
-    ρi = FT(1.13);
-    #zi = isoline_z_ρ_q.z
-    #ρi = isoline_z_ρ_q.ρ
+    zi = isoline_z_ρ_q.z
+    ρi = isoline_z_ρ_q.ρ
 
     # TODO: According to the paper, we should remove the ifelse condition that
     # clips the third term to 0 below zi, and we should also replace cp_d with
     # cp_m, but this wouldn't match the original code from TurbulenceConvection.
     # Note: ∫_0_z_κρq - ∫_0_∞_κρq = -∫_z_∞_κρq
-    @. ᶠradiation_flux = Geometry.WVector(
-        radiation_mode.F0 * exp(ᶠ∫_0_z_κρq - ∫_0_∞_κρq) +
-        radiation_mode.F1 * exp(-(ᶠ∫_0_z_κρq)) +
+    @. ᶠradiation_flux[colidx] = Geometry.WVector(
+        radiation_mode.F0 * exp(ᶠ∫_0_z_κρq[colidx] - ∫_0_∞_κρq[colidx]) +
+        radiation_mode.F1 * exp(-(ᶠ∫_0_z_κρq[colidx])) +
         ifelse(
-            ᶠz > zi,
-            ρi *
+            ᶠz[colidx] > zi[colidx],
+            ρi[colidx] *
             cp_d *
             radiation_mode.divergence *
             radiation_mode.alpha_z *
-            (cbrt(ᶠz - zi)^4 / 4 + zi * cbrt(ᶠz - zi)),
+            (
+                cbrt(ᶠz[colidx] - zi[colidx])^4 / 4 +
+                zi[colidx] * cbrt(ᶠz[colidx] - zi[colidx])
+            ),
             FT(0),
         ),
     )
 
-    @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
+    @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
 
     return nothing
 end
@@ -340,17 +334,24 @@ function radiation_model_cache(Y, radiation_mode::RadiationTRMM_LBA)
     )
 end
 
-function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
+function radiation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    radiation_mode::RadiationTRMM_LBA,
+)
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
     # TODO: get working (need to add cache / function)
     rad = radiation_mode.rad_profile
     thermo_params = CAP.thermodynamics_params(params)
-    ᶜdTdt_rad = p.radiation.ᶜdTdt_rad
-    ᶜρ = Y.c.ρ
-    ᶜts_gm = p.precomputed.ᶜts
+    ᶜdTdt_rad = p.radiation.ᶜdTdt_rad[colidx]
+    ᶜρ = Y.c.ρ[colidx]
+    ᶜts_gm = p.precomputed.ᶜts[colidx]
     zc = Fields.coordinate_field(axes(ᶜρ)).z
     @. ᶜdTdt_rad = rad(FT(t), zc)
-    @. Yₜ.c.ρe_tot += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad
+    @. Yₜ.c.ρe_tot[colidx] += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad
     return nothing
 end

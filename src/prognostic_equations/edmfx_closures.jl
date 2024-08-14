@@ -93,12 +93,13 @@ function ᶠupdraft_nh_pressure(
     end
 end
 
-edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
 function edmfx_nh_pressure_tendency!(
     Yₜ,
     Y,
     p,
     t,
+    colidx,
     turbconv_model::PrognosticEDMFX,
 )
 
@@ -111,17 +112,21 @@ function edmfx_nh_pressure_tendency!(
     scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
 
     for j in 1:n
-        @. ᶠnh_pressure₃ʲs.:($$j) = ᶠupdraft_nh_pressure(
+        @. ᶠnh_pressure₃ʲs.:($$j)[colidx] = ᶠupdraft_nh_pressure(
             params,
             p.atmos.edmfx_nh_pressure,
-            ᶠlg,
-            ᶠbuoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
-            Y.f.sgsʲs.:($$j).u₃,
-            ᶠu₃⁰,
+            ᶠlg[colidx],
+            ᶠbuoyancy(
+                ᶠinterp(Y.c.ρ[colidx]),
+                ᶠinterp(ᶜρʲs.:($$j)[colidx]),
+                ᶠgradᵥ_ᶜΦ[colidx],
+            ),
+            Y.f.sgsʲs.:($$j).u₃[colidx],
+            ᶠu₃⁰[colidx],
             scale_height,
         )
 
-        @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠnh_pressure₃ʲs.:($$j)
+        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -= ᶠnh_pressure₃ʲs.:($$j)[colidx]
     end
 end
 
@@ -287,23 +292,31 @@ function turbulent_prandtl_number(
     return prandtl_nvec
 end
 
-edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+edmfx_filter_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
 
 """
    Apply EDMF filters:
    - Relax u_3 to zero when it is negative
    - Relax ρa to zero when it is negative
 """
-function edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
+function edmfx_filter_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    turbconv_model::PrognosticEDMFX,
+)
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; dt) = p
 
     if p.atmos.edmfx_filter
         for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                C3(min(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0)) / dt
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= min(Y.c.sgsʲs.:($$j).ρa, 0) / dt
+            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+                C3(min(Y.f.sgsʲs.:($$j).u₃[colidx].components.data.:1, 0)) / dt
+            @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] -=
+                min(Y.c.sgsʲs.:($$j).ρa[colidx], 0) / dt
         end
     end
 end

@@ -1,5 +1,4 @@
-using ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
+
 import ClimaAtmos as CA
 import SurfaceFluxes as SF
 import ClimaAtmos.Parameters as CAP
@@ -10,10 +9,7 @@ include("../../test_helpers.jl")
 @testset begin
     "Rayleigh-sponge functions"
     ### Boilerplate default integrator objects
-    config = CA.AtmosConfig(
-        Dict("initial_condition" => "DryBaroclinicWave");
-        job_id = "sponge1",
-    )
+    config = CA.AtmosConfig(Dict("initial_condition" => "DryBaroclinicWave"))
     (; Y) = generate_test_simulation(config)
     zmax = maximum(CC.Fields.coordinate_field(Y.f).z)
     z = CC.Fields.coordinate_field(Y.c).z
@@ -26,7 +22,9 @@ include("../../test_helpers.jl")
     (; ᶜβ_rayleigh_uₕ) = CA.rayleigh_sponge_cache(Y, rs)
     @test ᶜβ_rayleigh_uₕ == @. sin(FT(π) / 2 * z / zmax)^2
     test_cache = (; rayleigh_sponge = (; ᶜβ_rayleigh_uₕ = ᶜβ_rayleigh_uₕ))
-    CA.rayleigh_sponge_tendency!(ᶜYₜ, Y, test_cache, FT(0), rs)
+    CC.Fields.bycolumn(axes(Y.c)) do colidx
+        CA.rayleigh_sponge_tendency!(ᶜYₜ, Y, test_cache, FT(0), colidx, rs)
+    end
     # Test that only required tendencies are affected
     for (var_name) in filter(x -> (x != :uₕ), propertynames(Y.c))
         @test ᶜYₜ.c.:($var_name) == zeros(axes(Y.c))

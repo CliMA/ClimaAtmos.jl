@@ -334,14 +334,6 @@ function surface_state_to_conditions(
     )
 end
 
-#Sphere SST distribution from Wing et al. (2023) https://gmd.copernicus.org/preprints/gmd-2023-235/
-function surface_temperature(::RCEMIPIISphereSST, coordinates)
-    (; lat) = coordinates
-    FT = eltype(lat)
-    T = FT(300) + FT(1.25) / 2 * cosd(360 * lat / 54)
-    return T
-end
-
 function surface_temperature(::ZonallySymmetricSST, coordinates)
     (; lat, z) = coordinates
     FT = eltype(lat)
@@ -391,43 +383,31 @@ function atmos_surface_conditions(
     (; ustar, L_MO, buoy_flux, ρτxz, ρτyz, shf, lhf, evaporation) =
         surface_conditions
 
-    # surface normal
-    z = surface_normal(surface_local_geometry)
-
-    energy_flux = (; ρ_flux_h_tot = vector_from_component(shf + lhf, z))
-
+    surface_normal = C3(unit_basis_vector_data(C3, surface_local_geometry))
+    energy_flux = (; ρ_flux_h_tot = (shf + lhf) * surface_normal)
     moisture_flux =
         atmos.moisture_model isa DryModel ? (;) :
-        (; ρ_flux_q_tot = vector_from_component(evaporation, z))
-
+        (; ρ_flux_q_tot = evaporation * surface_normal)
     return (;
         ts,
         ustar,
         obukhov_length = L_MO,
         buoyancy_flux = buoy_flux,
         # This drops the C3 component of ρ_flux_u, need to add ρ_flux_u₃
-        ρ_flux_uₕ = tensor_from_components(
-            ρτxz,
-            ρτyz,
+        ρ_flux_uₕ = surface_normal ⊗ C12(
+            ρτxz * CT12(
+                CT1(unit_basis_vector_data(CT1, surface_local_geometry)),
+                surface_local_geometry,
+            ) +
+            ρτyz * CT12(
+                CT2(unit_basis_vector_data(CT2, surface_local_geometry)),
+                surface_local_geometry,
+            ),
             surface_local_geometry,
-            z,
         ),
         energy_flux...,
         moisture_flux...,
     )
-end
-
-surface_normal(L::Geometry.LocalGeometry) = C3(unit_basis_vector_data(C3, L))
-
-vector_from_component(f₁, n₁) = f₁ * n₁
-vector_from_component(f₁, L::Geometry.LocalGeometry) =
-    vector_from_component(f₁, surface_normal(L))
-
-function tensor_from_components(f₁₃, f₂₃, L, n₃ = surface_normal(L))
-    xz = CT12(CT1(unit_basis_vector_data(CT1, L)), L)
-    yz = CT12(CT2(unit_basis_vector_data(CT2, L)), L)
-    f = C12(f₁₃ * xz + f₂₃ * yz, L)
-    return n₃ ⊗ f
 end
 
 """

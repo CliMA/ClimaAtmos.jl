@@ -1,10 +1,9 @@
-dt_save_state_to_disk: "10days"
-dt: "150secs"
-t_end: "300days"
-h_elem: 30
-z_elem: 63
+h_elem: 16
+z_elem: 45
 dz_bottom: 30.0
-dz_top: 3000.0
-z_max: 55000.0
+dt: "400secs"
 perturb_initstate: false
 discrete_hydrostatic_balance: true
+t_end: "800days"
+dt_save_state_to_disk: "10days"
+job_id: "longrun_sphere_hydrostatic_balance_rhoe"

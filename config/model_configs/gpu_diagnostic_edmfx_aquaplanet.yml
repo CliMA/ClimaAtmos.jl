@@ -1,5 +1,6 @@
 dt_save_state_to_disk: "3hours"
 dt_save_to_sol: "Inf"
+job_id: gpu_diagnostic_edmfx_aquaplanet
 surface_setup: DefaultMoninObukhov
 rad: clearsky
 turbconv: diagnostic_edmfx
@@ -13,8 +14,7 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil
-precip_model: 1M
+precip_model: 0M
 dt: 100secs
 t_end: 6hours
-toml: [toml/diagnostic_edmfx.toml]
-ode_algo: ARS343
+toml: [toml/diagnostic_edmfx_box.toml]

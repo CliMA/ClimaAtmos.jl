@@ -1,5 +1,4 @@
-using ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
+
 import ClimaAtmos as CA
 import SurfaceFluxes as SF
 import ClimaAtmos.Parameters as CAP
@@ -21,7 +20,6 @@ include("../../test_helpers.jl")
             "config" => "column",
             "output_default_diagnostics" => false,
         ),
-        job_id = "precipitation1",
     )
     (; Y, p, params) = generate_test_simulation(config)
 
@@ -38,20 +36,38 @@ include("../../test_helpers.jl")
         :ᶜS_ρq_tot,
         :ᶜ3d_rain,
         :ᶜ3d_snow,
-        :surface_rain_flux,
-        :surface_snow_flux,
+        :col_integrated_rain,
+        :col_integrated_snow,
     )
     for var_name in test_varnames
         @test var_name ∈ propertynames(precip_cache)
     end
     turbconv_model = nothing # Extend to other turbulence convection models
-    CA.compute_precipitation_cache!(Y, p, precip_model, turbconv_model)
+    CC.Fields.bycolumn(axes(Y.c)) do colidx
+        CA.compute_precipitation_cache!(
+            Y,
+            p,
+            colidx,
+            precip_model,
+            turbconv_model,
+        )
+    end
     @test maximum(abs.(p.precipitation.ᶜS_ρq_tot)) <= sqrt(eps(FT))
 
     # Test that tendencies result in correct water-mass budget,
     # and that the tendency modification corresponds exactly to the
     # cached source term.
-    CA.precipitation_tendency!(ᶜYₜ, Y, p, FT(0), precip_model, turbconv_model)
+    CC.Fields.bycolumn(axes(Y.c)) do colidx
+        CA.precipitation_tendency!(
+            ᶜYₜ,
+            Y,
+            p,
+            FT(0),
+            colidx,
+            precip_model,
+            turbconv_model,
+        )
+    end
     @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
     @test ᶜYₜ.c.ρ == p.precipitation.ᶜS_ρq_tot
 
@@ -65,53 +81,30 @@ include("../../test_helpers.jl")
             "config" => "column",
             "output_default_diagnostics" => false,
         ),
-        job_id = "precipitation2",
     )
     (; Y, p, params) = generate_test_simulation(config)
     precip_model = CA.Microphysics1Moment()
     (; turbconv_model) = p.atmos
     precip_cache = CA.precipitation_cache(Y, precip_model)
     ᶜYₜ = Y .* FT(0)
-    test_varnames =
-        (:ᶜSqₜᵖ, :ᶜSqᵣᵖ, :ᶜSqₛᵖ, :ᶜSeₜᵖ, :surface_rain_flux, :surface_snow_flux)
+    test_varnames = (:ᶜSqₜᵖ, :ᶜSqᵣᵖ, :ᶜSqₛᵖ, :ᶜSeₜᵖ)
     for var_name in test_varnames
         @test var_name ∈ propertynames(precip_cache)
     end
-
-    # test helper functions
     @test CA.qₚ(FT(10), FT(2)) == FT(5)
     @test CA.qₚ(FT(-10), FT(2)) == FT(0)
     @test CA.limit(FT(10), FT(2), 5) == FT(1)
-
-    # compute source terms based on the last model state
-    CA.precipitation_tendency!(ᶜYₜ, Y, p, FT(0), precip_model, turbconv_model)
-
-    # check for nans
-    @assert !any(isnan, ᶜYₜ.c.ρ)
-    @assert !any(isnan, ᶜYₜ.c.ρq_tot)
-    @assert !any(isnan, ᶜYₜ.c.ρe_tot)
-    @assert !any(isnan, ᶜYₜ.c.ρq_rai)
-    @assert !any(isnan, ᶜYₜ.c.ρq_sno)
-    @assert !any(isnan, p.precomputed.ᶜwᵣ)
-    @assert !any(isnan, p.precomputed.ᶜwₛ)
-
-    # test water budget
+    CC.Fields.bycolumn(axes(Y.c)) do colidx
+        CA.precipitation_tendency!(
+            ᶜYₜ,
+            Y,
+            p,
+            FT(0),
+            colidx,
+            precip_model,
+            turbconv_model,
+        )
+    end
     @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
     @test ᶜYₜ.c.ρ == Y.c.ρ .* p.precipitation.ᶜSqₜᵖ
-    @test all(
-        isapprox(
-            .-p.precipitation.ᶜSqₛᵖ .- p.precipitation.ᶜSqᵣᵖ,
-            p.precipitation.ᶜSqᵣᵖ,
-            atol = eps(FT),
-        ),
-    )
-
-    # test if terminal velocity is positive
-    @test minimum(p.precomputed.ᶜwᵣ) >= FT(0)
-    @test minimum(p.precomputed.ᶜwₛ) >= FT(0)
-
-    # test if cloud fraction diagnostics make sense
-    @assert !any(isnan, p.precomputed.cloud_diagnostics_tuple.cf)
-    @test minimum(p.precomputed.cloud_diagnostics_tuple.cf) >= FT(0)
-    @test maximum(p.precomputed.cloud_diagnostics_tuple.cf) <= FT(1)
 end

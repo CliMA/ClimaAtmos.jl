@@ -1,10 +1,12 @@
+job_id: prognostic_edmfx_trmm_column_0M
 initial_condition: TRMM_LBA
 rad: TRMM_LBA
 surface_setup: TRMM_LBA
 turbconv: prognostic_edmfx
 implicit_diffusion: true
-implicit_sgs_advection: false
+implicit_sgs_advection: true
 approximate_linear_solve_iters: 2
+max_newton_iters_ode: 3
 edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
@@ -16,22 +18,20 @@ prognostic_tke: true
 moist: equil
 apply_limiter: false
 precip_model: "0M"
-call_cloud_diagnostics_per_stage: true
 config: column
 z_max: 16400
 x_elem: 2
 y_elem: 2
 z_elem: 82
 z_stretch: false
-dt: 10secs
+dt: 50secs
 t_end: 6hours
 dt_save_state_to_disk: 10mins
 FLOAT_TYPE: "Float64"
 toml: [toml/prognostic_edmfx.toml]
 netcdf_interpolation_num_points: [8, 8, 82]
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
     period: 10mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke, lmix]
     period: 10mins
-ode_algo: ARS343

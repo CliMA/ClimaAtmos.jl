@@ -61,6 +61,12 @@ longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M
 Aquaplanet with idealized insolation, gray radiation, and 0-moment microphysics.
 ```
 ```
+longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_diffonly_0M
+
+Aquaplanet with idealized insolation, clear-sky radiation, diagnostic edmf (diffusion only)
+and 0-moment microphysics.
+```
+```
 longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean
 
 Aquaplanet with slab ocean with time-varying insolation, clear-sky radiation,

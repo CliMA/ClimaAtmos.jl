@@ -1,0 +1,54 @@
+agents:
+  queue: clima
+  modules: julia/1.10.0 cuda/julia-pref openmpi/4.1.5-mpitrampoline nsight-systems/2024.2.1
+
+env:
+  JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
+  OPENBLAS_NUM_THREADS: 1
+  JULIA_NVTX_CALLBACKS: gc
+  JULIA_MAX_NUM_PRECOMPILE_FILES: 100
+  CONFIG_PATH: "config/model_configs"
+  SLURM_KILL_BAD_EXIT: 1
+  JULIA_NVTX_CALLBACKS: gc
+
+timeout_in_minutes: 1440
+
+steps:
+  - label: "init :computer:"
+    key: "init_cpu_env"
+    command:
+      - echo "--- Instantiate project"
+      - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project -e 'using Pkg; Pkg.status()'"
+
+      - echo "--- Instantiate"
+      - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'"
+      - "julia --project=examples -e 'using Pkg; Pkg.status()'"
+      - "julia --project=examples artifacts/download_artifacts.jl"
+
+    agents:
+      slurm_cpus_per_task: 8
+      slurm_gpus: 1
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+
+  - wait
+
+  - group: "Targeted les runs"
+
+    steps:
+
+      - label: ":computer: multi-cpu les test"
+        command:
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+        artifact_paths: "$$JOB_NAME/output_active/*"
+        agents:
+          slurm_ntasks: 64
+          slurm_nodes: 4
+          slurm_mem_per_cpu: 16GB
+          slurm_time: 24:00:00
+        env:
+          JOB_NAME: "les_dycoms_box"

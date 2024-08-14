@@ -8,7 +8,7 @@ import ClimaCore.Geometry as Geometry
 
 NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜΦ) = p.core
+    (; ᶜΦ, ᶜp_ref) = p.core
     (; ᶜu, ᶜK, ᶜp) = p.precomputed
     if p.atmos.turbconv_model isa AbstractEDMF
         (; ᶜu⁰) = p.precomputed
@@ -39,7 +39,7 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
     end
 
-    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
+    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp - ᶜp_ref) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end
@@ -47,7 +47,6 @@ end
 NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜu) = p.precomputed
-
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
     end
@@ -63,6 +62,7 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
                 Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
         end
     end
+
     return nothing
 end
 
@@ -95,7 +95,9 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. ᶜω³ = zero(ᶜω³)
     end
 
-    @. ᶠω¹² = ᶠcurlᵥ(Y.c.uₕ)
+    Fields.bycolumn(axes(Y.c)) do colidx
+        @. ᶠω¹²[colidx] = ᶠcurlᵥ(Y.c.uₕ[colidx])
+    end
     for j in 1:n
         @. ᶠω¹²ʲs.:($$j) = ᶠω¹²
     end
@@ -105,75 +107,102 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
-    if :ρe_tot in propertynames(Yₜ.c)
-        (; ᶜh_tot) = p.precomputed
-        for (coeff, upwinding) in ((1, energy_upwinding), (-1, Val(:none)))
-            energy_upwinding isa Val{:none} && continue
+    Fields.bycolumn(axes(Y.c)) do colidx
+        if :ρe_tot in propertynames(Yₜ.c)
+            (; ᶜh_tot) = p.precomputed
+            for (coeff, upwinding) in ((1, energy_upwinding), (-1, Val(:none)))
+                energy_upwinding isa Val{:none} && continue
+                vertical_transport!(
+                    coeff,
+                    Yₜ.c.ρe_tot[colidx],
+                    ᶜJ[colidx],
+                    Y.c.ρ[colidx],
+                    ᶠu³[colidx],
+                    ᶜh_tot[colidx],
+                    dt,
+                    upwinding,
+                )
+            end
+        end
+        for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
+            χ_name == :e_tot && continue
+            for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
+                tracer_upwinding isa Val{:none} && continue
+                vertical_transport!(
+                    coeff,
+                    ᶜρχₜ[colidx],
+                    ᶜJ[colidx],
+                    Y.c.ρ[colidx],
+                    ᶠu³[colidx],
+                    ᶜχ[colidx],
+                    dt,
+                    upwinding,
+                )
+            end
+        end
+
+    end
+
+    Fields.bycolumn(axes(Y.c)) do colidx
+        if isnothing(ᶠf¹²)
+            # shallow atmosphere
+            @. Yₜ.c.uₕ[colidx] -=
+                ᶜinterp(
+                    ᶠω¹²[colidx] ×
+                    (ᶠinterp(Y.c.ρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
+                ) / (Y.c.ρ[colidx] * ᶜJ[colidx]) +
+                (ᶜf³[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
+            @. Yₜ.f.u₃[colidx] -=
+                ᶠω¹²[colidx] × ᶠinterp(CT12(ᶜu[colidx])) + ᶠgradᵥ(ᶜK[colidx])
+            for j in 1:n
+                @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+                    ᶠω¹²ʲs.:($$j)[colidx] × ᶠinterp(CT12(ᶜuʲs.:($$j)[colidx])) +
+                    ᶠgradᵥ(ᶜKʲs.:($$j)[colidx] - ᶜinterp(ᶠKᵥʲs.:($$j)[colidx]))
+            end
+        else
+            # deep atmosphere
+            @. Yₜ.c.uₕ[colidx] -=
+                ᶜinterp(
+                    (ᶠf¹²[colidx] + ᶠω¹²[colidx]) ×
+                    (ᶠinterp(Y.c.ρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
+                ) / (Y.c.ρ[colidx] * ᶜJ[colidx]) +
+                (ᶜf³[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
+            @. Yₜ.f.u₃[colidx] -=
+                (ᶠf¹²[colidx] + ᶠω¹²[colidx]) × ᶠinterp(CT12(ᶜu[colidx])) +
+                ᶠgradᵥ(ᶜK[colidx])
+            for j in 1:n
+                @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+                    (ᶠf¹²[colidx] + ᶠω¹²ʲs.:($$j)[colidx]) ×
+                    ᶠinterp(CT12(ᶜuʲs.:($$j)[colidx])) +
+                    ᶠgradᵥ(ᶜKʲs.:($$j)[colidx] - ᶜinterp(ᶠKᵥʲs.:($$j)[colidx]))
+            end
+        end
+
+        if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
+            @. ᶜa_scalar[colidx] =
+                ᶜtke⁰[colidx] * draft_area(ᶜρa⁰[colidx], ᶜρ⁰[colidx])
             vertical_transport!(
-                coeff,
-                Yₜ.c.ρe_tot,
-                ᶜJ,
-                Y.c.ρ,
-                ᶠu³,
-                ᶜh_tot,
+                Yₜ.c.sgs⁰.ρatke[colidx],
+                ᶜJ[colidx],
+                ᶜρ⁰[colidx],
+                ᶠu³⁰[colidx],
+                ᶜa_scalar[colidx],
                 dt,
-                upwinding,
+                edmfx_upwinding,
             )
         end
     end
-    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
-        for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
-            tracer_upwinding isa Val{:none} && continue
-            vertical_transport!(coeff, ᶜρχₜ, ᶜJ, Y.c.ρ, ᶠu³, ᶜχ, dt, upwinding)
-        end
-    end
-
-    if isnothing(ᶠf¹²)
-        # shallow atmosphere
-        @. Yₜ.c.uₕ -=
-            ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
-            (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        end
-    else
-        # deep atmosphere
-        @. Yₜ.c.uₕ -=
-            ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
-            (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        end
-    end
-
-    if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
-        @. ᶜa_scalar = ᶜtke⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
-        vertical_transport!(
-            Yₜ.c.sgs⁰.ρatke,
-            ᶜJ,
-            ᶜρ⁰,
-            ᶠu³⁰,
-            ᶜa_scalar,
-            dt,
-            edmfx_upwinding,
-        )
-    end
 end
 
-edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) =
+    nothing
 
 function edmfx_sgs_vertical_advection_tendency!(
     Yₜ,
     Y,
     p,
     t,
+    colidx,
     turbconv_model::PrognosticEDMFX,
 )
     (; params) = p
@@ -190,48 +219,49 @@ function edmfx_sgs_vertical_advection_tendency!(
     ᶜKᵥʲ = p.scratch.ᶜtemp_scalar_2
     for j in 1:n
         # TODO: Add a biased GradientF2F operator in ClimaCore
-        @. ᶜu₃ʲ = ᶜinterp(Y.f.sgsʲs.:($$j).u₃)
-        @. ᶜKᵥʲ = ifelse(
-            ᶜu₃ʲ.components.data.:1 > 0,
-            ᶜleft_bias(ᶠKᵥʲs.:($$j)),
-            ᶜright_bias(ᶠKᵥʲs.:($$j)),
+        @. ᶜu₃ʲ[colidx] = ᶜinterp(Y.f.sgsʲs.:($$j).u₃[colidx])
+        @. ᶜKᵥʲ[colidx] = ifelse(
+            ᶜu₃ʲ[colidx].components.data.:1 > 0,
+            ᶜleft_bias(ᶠKᵥʲs.:($$j)[colidx]),
+            ᶜright_bias(ᶠKᵥʲs.:($$j)[colidx]),
         )
         # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
         # and calcuate the buoyancy term relative to the grid-mean density.
-        @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-            (ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρʲs.:($$j)) +
-            ᶠgradᵥ(ᶜKᵥʲ)
+        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+            (ᶠinterp(ᶜρʲs.:($$j)[colidx] - Y.c.ρ[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]) /
+            ᶠinterp(ᶜρʲs.:($$j)[colidx]) + ᶠgradᵥ(ᶜKᵥʲ[colidx])
 
         # buoyancy term in mse equation
-        @. Yₜ.c.sgsʲs.:($$j).mse +=
-            adjoint(CT3(ᶜinterp(Y.f.sgsʲs.:($$j).u₃))) *
-            (ᶜρʲs.:($$j) - Y.c.ρ) *
-            ᶜgradᵥ(CAP.grav(params) * ᶠz) / ᶜρʲs.:($$j)
+        @. Yₜ.c.sgsʲs.:($$j).mse[colidx] +=
+            adjoint(CT3(ᶜinterp(Y.f.sgsʲs.:($$j).u₃[colidx]))) *
+            (ᶜρʲs.:($$j)[colidx] - Y.c.ρ[colidx]) *
+            ᶜgradᵥ(CAP.grav(params) * ᶠz[colidx]) / ᶜρʲs.:($$j)[colidx]
     end
 
     for j in 1:n
-        @. ᶜa_scalar = draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+        @. ᶜa_scalar[colidx] =
+            draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
         vertical_transport!(
-            Yₜ.c.sgsʲs.:($j).ρa,
-            ᶜJ,
-            ᶜρʲs.:($j),
-            ᶠu³ʲs.:($j),
-            ᶜa_scalar,
+            Yₜ.c.sgsʲs.:($j).ρa[colidx],
+            ᶜJ[colidx],
+            ᶜρʲs.:($j)[colidx],
+            ᶠu³ʲs.:($j)[colidx],
+            ᶜa_scalar[colidx],
             dt,
             edmfx_upwinding,
         )
 
         vertical_advection!(
-            Yₜ.c.sgsʲs.:($j).mse,
-            ᶠu³ʲs.:($j),
-            Y.c.sgsʲs.:($j).mse,
+            Yₜ.c.sgsʲs.:($j).mse[colidx],
+            ᶠu³ʲs.:($j)[colidx],
+            Y.c.sgsʲs.:($j).mse[colidx],
             edmfx_upwinding,
         )
 
         vertical_advection!(
-            Yₜ.c.sgsʲs.:($j).q_tot,
-            ᶠu³ʲs.:($j),
-            Y.c.sgsʲs.:($j).q_tot,
+            Yₜ.c.sgsʲs.:($j).q_tot[colidx],
+            ᶠu³ʲs.:($j)[colidx],
+            Y.c.sgsʲs.:($j).q_tot[colidx],
             edmfx_upwinding,
         )
     end

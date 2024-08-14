@@ -372,7 +372,7 @@ NVTX.@annotate function ldiv!(
 )
     MatrixFields.field_matrix_solve!(A.solver, x, A.matrix, b)
     if A.transform_flag
-        @. x *= -A.dtγ_ref[]
+        @. x *= A.dtγ_ref[]
     end
 end
 
@@ -436,6 +436,8 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         )...,
         p.core.ᶜΦ,
         p.core.ᶠgradᵥ_ᶜΦ,
+        p.core.ᶜρ_ref,
+        p.core.ᶜp_ref,
         p.scratch.ᶜtemp_scalar,
         p.scratch.ᶜtemp_C3,
         p.scratch.ᶠtemp_CT3,
@@ -462,12 +464,14 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
     dtγ′ = FT(dtγ)
 
     A.dtγ_ref[] = dtγ′
-    update_implicit_equation_jacobian!(A, Y, p′, dtγ′)
+    Fields.bycolumn(axes(Y.c)) do colidx
+        update_implicit_equation_jacobian!(A, Y, p′, dtγ′, colidx)
+    end
 end
 
-function update_implicit_equation_jacobian!(A, Y, p, dtγ)
+function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     (; matrix, diffusion_flag, sgs_advection_flag, topography_flag) = A
-    (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ) = p
+    (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p
     (;
         ᶜtemp_C3,
         ∂ᶜK_∂ᶜuₕ,
@@ -499,33 +503,39 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
 
     ᶜkappa_m = p.ᶜtemp_scalar
-    @. ᶜkappa_m =
-        TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts)
+    @. ᶜkappa_m[colidx] =
+        TD.gas_constant_air(thermo_params, ᶜts[colidx]) /
+        TD.cv_m(thermo_params, ᶜts[colidx])
 
     if use_derivative(topography_flag)
-        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
-            adjoint(CTh(ᶜuₕ)) + adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ),
+        @. ∂ᶜK_∂ᶜuₕ[colidx] = DiagonalMatrixRow(
+            adjoint(CTh(ᶜuₕ[colidx])) +
+            adjoint(ᶜinterp(ᶠu₃[colidx])) * g³ʰ(ᶜgⁱʲ[colidx]),
         )
     else
-        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CTh(ᶜuₕ)))
+        @. ∂ᶜK_∂ᶜuₕ[colidx] = DiagonalMatrixRow(adjoint(CTh(ᶜuₕ[colidx])))
     end
-    @. ∂ᶜK_∂ᶠu₃ =
-        ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
-        DiagonalMatrixRow(adjoint(CT3(ᶜuₕ))) ⋅ ᶜinterp_matrix()
+    @. ∂ᶜK_∂ᶠu₃[colidx] =
+        ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃[colidx]))) +
+        DiagonalMatrixRow(adjoint(CT3(ᶜuₕ[colidx]))) ⋅ ᶜinterp_matrix()
 
-    @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix()
+    @. ᶠp_grad_matrix[colidx] =
+        DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅ ᶠgradᵥ_matrix()
 
-    @. ᶜadvection_matrix =
-        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ))
+    @. ᶜadvection_matrix[colidx] =
+        -(ᶜadvdivᵥ_matrix()) ⋅
+        DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx]))
 
     if use_derivative(topography_flag)
         ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
-        @. ∂ᶜρ_err_∂ᶜuₕ =
-            dtγ * ᶜadvection_matrix ⋅ ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅
-            DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
+        @. ∂ᶜρ_err_∂ᶜuₕ[colidx] =
+            dtγ * ᶜadvection_matrix[colidx] ⋅
+            ᶠwinterp_matrix(ᶜJ[colidx] * ᶜρ[colidx]) ⋅
+            DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ[colidx]))
     end
     ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
-    @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+    @. ∂ᶜρ_err_∂ᶠu₃[colidx] =
+        dtγ * ᶜadvection_matrix[colidx] ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ[colidx]))
 
     tracer_info = (
         (@name(c.ρe_tot), @name(ᶜh_tot)),
@@ -538,78 +548,94 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ∂ᶜρχ_err_∂ᶜuₕ = matrix[ρχ_name, @name(c.uₕ)]
         end
         ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
-        use_derivative(topography_flag) && @. ∂ᶜρχ_err_∂ᶜuₕ =
-            dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ)) ⋅
-            ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅ DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
-        @. ∂ᶜρχ_err_∂ᶠu₃ =
-            dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
+        use_derivative(topography_flag) && @. ∂ᶜρχ_err_∂ᶜuₕ[colidx] =
+            dtγ * ᶜadvection_matrix[colidx] ⋅
+            DiagonalMatrixRow(ᶠinterp(ᶜχ[colidx])) ⋅
+            ᶠwinterp_matrix(ᶜJ[colidx] * ᶜρ[colidx]) ⋅
+            DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ[colidx]))
+        @. ∂ᶜρχ_err_∂ᶠu₃[colidx] =
+            dtγ * ᶜadvection_matrix[colidx] ⋅
+            DiagonalMatrixRow(ᶠinterp(ᶜχ[colidx]) * g³³(ᶠgⁱʲ[colidx]))
     end
 
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
     ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
-    @. ∂ᶠu₃_err_∂ᶜρ =
+    @. ∂ᶠu₃_err_∂ᶜρ[colidx] =
         dtγ * (
-            ᶠp_grad_matrix ⋅
-            DiagonalMatrixRow(ᶜkappa_m * (T_tri * cv_d - ᶜK - ᶜΦ)) +
-            DiagonalMatrixRow(ᶠgradᵥ(ᶜp) / abs2(ᶠinterp(ᶜρ))) ⋅
-            ᶠinterp_matrix()
+            ᶠp_grad_matrix[colidx] ⋅ DiagonalMatrixRow(
+                ᶜkappa_m[colidx] * (T_tri * cv_d - ᶜK[colidx] - ᶜΦ[colidx]),
+            ) +
+            DiagonalMatrixRow(
+                (
+                    ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
+                    ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
+                ) / abs2(ᶠinterp(ᶜρ[colidx])),
+            ) ⋅ ᶠinterp_matrix()
         )
-    @. ∂ᶠu₃_err_∂ᶜρe_tot = dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m)
+    @. ∂ᶠu₃_err_∂ᶜρe_tot[colidx] =
+        dtγ * ᶠp_grad_matrix[colidx] ⋅ DiagonalMatrixRow(ᶜkappa_m[colidx])
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
         ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
-        @. ∂ᶠu₃_err_∂ᶜρq_tot =
-            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m * e_int_v0)
+        @. ∂ᶠu₃_err_∂ᶜρq_tot[colidx] =
+            dtγ * ᶠp_grad_matrix[colidx] ⋅
+            DiagonalMatrixRow(ᶜkappa_m[colidx] * e_int_v0)
     end
 
     ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
     ∂ᶠu₃_err_∂ᶠu₃ = matrix[@name(f.u₃), @name(f.u₃)]
     I_u₃ = DiagonalMatrixRow(one_C3xACT3)
-    @. ∂ᶠu₃_err_∂ᶜuₕ =
-        dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅ ∂ᶜK_∂ᶜuₕ
+    @. ∂ᶠu₃_err_∂ᶜuₕ[colidx] =
+        dtγ * ᶠp_grad_matrix[colidx] ⋅
+        DiagonalMatrixRow(-(ᶜkappa_m[colidx]) * ᶜρ[colidx]) ⋅ ∂ᶜK_∂ᶜuₕ[colidx]
     if p.atmos.rayleigh_sponge isa RayleighSponge
-        @. ∂ᶠu₃_err_∂ᶠu₃ =
+        @. ∂ᶠu₃_err_∂ᶠu₃[colidx] =
             dtγ * (
-                ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅
-                ∂ᶜK_∂ᶠu₃ + DiagonalMatrixRow(-p.ᶠβ_rayleigh_w * (one_C3xACT3,))
+                ᶠp_grad_matrix[colidx] ⋅
+                DiagonalMatrixRow(-(ᶜkappa_m[colidx]) * ᶜρ[colidx]) ⋅
+                ∂ᶜK_∂ᶠu₃[colidx] +
+                DiagonalMatrixRow(-p.ᶠβ_rayleigh_w[colidx] * (one_C3xACT3,))
             ) - (I_u₃,)
     else
-        @. ∂ᶠu₃_err_∂ᶠu₃ =
-            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅
-            ∂ᶜK_∂ᶠu₃ - (I_u₃,)
+        @. ∂ᶠu₃_err_∂ᶠu₃[colidx] =
+            dtγ * ᶠp_grad_matrix[colidx] ⋅
+            DiagonalMatrixRow(-(ᶜkappa_m[colidx]) * ᶜρ[colidx]) ⋅
+            ∂ᶜK_∂ᶠu₃[colidx] - (I_u₃,)
     end
 
     if use_derivative(diffusion_flag)
         (; ᶜK_h, ᶜK_u) = p
-        @. ᶜdiffusion_h_matrix =
-            ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅
+        @. ᶜdiffusion_h_matrix[colidx] =
+            ᶜadvdivᵥ_matrix() ⋅
+            DiagonalMatrixRow(ᶠinterp(ᶜρ[colidx]) * ᶠinterp(ᶜK_h[colidx])) ⋅
             ᶠgradᵥ_matrix()
         if (
             MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke)) ||
             !isnothing(p.atmos.turbconv_model) ||
             diffuse_momentum(p.atmos.vert_diff)
         )
-            @. ᶜdiffusion_u_matrix =
+            @. ᶜdiffusion_u_matrix[colidx] =
                 ᶜadvdivᵥ_matrix() ⋅
-                DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) ⋅ ᶠgradᵥ_matrix()
+                DiagonalMatrixRow(ᶠinterp(ᶜρ[colidx]) * ᶠinterp(ᶜK_u[colidx])) ⋅
+                ᶠgradᵥ_matrix()
         end
 
         ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
         ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
-        @. ∂ᶜρe_tot_err_∂ᶜρ =
-            dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(
+        @. ∂ᶜρe_tot_err_∂ᶜρ[colidx] =
+            dtγ * ᶜdiffusion_h_matrix[colidx] ⋅ DiagonalMatrixRow(
                 (
-                    -(1 + ᶜkappa_m) * ᶜspecific.e_tot -
-                    ᶜkappa_m * e_int_v0 * ᶜspecific.q_tot
-                ) / ᶜρ,
+                    -(1 + ᶜkappa_m[colidx]) * ᶜspecific.e_tot[colidx] -
+                    ᶜkappa_m[colidx] * e_int_v0 * ᶜspecific.q_tot[colidx]
+                ) / ᶜρ[colidx],
             )
-        @. ∂ᶜρe_tot_err_∂ᶜρe_tot =
-            dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((1 + ᶜkappa_m) / ᶜρ) -
-            (I,)
+        @. ∂ᶜρe_tot_err_∂ᶜρe_tot[colidx] =
+            dtγ * ᶜdiffusion_h_matrix[colidx] ⋅
+            DiagonalMatrixRow((1 + ᶜkappa_m[colidx]) / ᶜρ[colidx]) - (I,)
         if MatrixFields.has_field(Y, @name(c.ρq_tot))
             ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
-            @. ∂ᶜρe_tot_err_∂ᶜρq_tot =
-                dtγ * ᶜdiffusion_h_matrix ⋅
-                DiagonalMatrixRow(ᶜkappa_m * e_int_v0 / ᶜρ)
+            @. ∂ᶜρe_tot_err_∂ᶜρq_tot[colidx] =
+                dtγ * ᶜdiffusion_h_matrix[colidx] ⋅
+                DiagonalMatrixRow(ᶜkappa_m[colidx] * e_int_v0 / ᶜρ[colidx])
         end
 
         tracer_info = (
@@ -624,10 +650,12 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ᶜq = MatrixFields.get_field(ᶜspecific, q_name)
             ∂ᶜρq_err_∂ᶜρ = matrix[ρq_name, @name(c.ρ)]
             ∂ᶜρq_err_∂ᶜρq = matrix[ρq_name, ρq_name]
-            @. ∂ᶜρq_err_∂ᶜρ =
-                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(-(ᶜq) / ᶜρ)
-            @. ∂ᶜρq_err_∂ᶜρq =
-                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ) - (I,)
+            @. ∂ᶜρq_err_∂ᶜρ[colidx] =
+                dtγ * ᶜdiffusion_h_matrix[colidx] ⋅
+                DiagonalMatrixRow(-(ᶜq[colidx]) / ᶜρ[colidx])
+            @. ∂ᶜρq_err_∂ᶜρq[colidx] =
+                dtγ * ᶜdiffusion_h_matrix[colidx] ⋅
+                DiagonalMatrixRow(1 / ᶜρ[colidx]) - (I,)
         end
 
         if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
@@ -644,24 +672,27 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 typeof(tke⁰)(0)
 
             ᶜdissipation_matrix_diagonal = p.ᶜtemp_scalar
-            @. ᶜdissipation_matrix_diagonal =
-                ᶜρatke⁰ * ∂dissipation_rate_∂tke⁰(ᶜtke⁰, ᶜmixing_length)
+            @. ᶜdissipation_matrix_diagonal[colidx] =
+                ᶜρatke⁰[colidx] *
+                ∂dissipation_rate_∂tke⁰(ᶜtke⁰[colidx], ᶜmixing_length[colidx])
 
             ∂ᶜρatke⁰_err_∂ᶜρ = matrix[@name(c.sgs⁰.ρatke), @name(c.ρ)]
             ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
                 matrix[@name(c.sgs⁰.ρatke), @name(c.sgs⁰.ρatke)]
-            @. ∂ᶜρatke⁰_err_∂ᶜρ =
+            @. ∂ᶜρatke⁰_err_∂ᶜρ[colidx] =
                 dtγ * (
-                    ᶜdiffusion_u_matrix -
-                    DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
-                ) ⋅ DiagonalMatrixRow(-(ᶜtke⁰) / ᶜρa⁰)
-            @. ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
+                    ᶜdiffusion_u_matrix[colidx] -
+                    DiagonalMatrixRow(ᶜdissipation_matrix_diagonal[colidx])
+                ) ⋅ DiagonalMatrixRow(-(ᶜtke⁰[colidx]) / ᶜρa⁰[colidx])
+            @. ∂ᶜρatke⁰_err_∂ᶜρatke⁰[colidx] =
                 dtγ * (
                     (
-                        ᶜdiffusion_u_matrix -
-                        DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
-                    ) ⋅ DiagonalMatrixRow(1 / ᶜρa⁰) -
-                    DiagonalMatrixRow(dissipation_rate(ᶜtke⁰, ᶜmixing_length))
+                        ᶜdiffusion_u_matrix[colidx] -
+                        DiagonalMatrixRow(ᶜdissipation_matrix_diagonal[colidx])
+                    ) ⋅ DiagonalMatrixRow(1 / ᶜρa⁰[colidx]) -
+                    DiagonalMatrixRow(
+                        dissipation_rate(ᶜtke⁰[colidx], ᶜmixing_length[colidx]),
+                    )
                 ) - (I,)
         end
 
@@ -670,8 +701,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             diffuse_momentum(p.atmos.vert_diff)
         )
             ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
-            @. ∂ᶜuₕ_err_∂ᶜuₕ =
-                dtγ * DiagonalMatrixRow(1 / ᶜρ) ⋅ ᶜdiffusion_u_matrix - (I,)
+            @. ∂ᶜuₕ_err_∂ᶜuₕ[colidx] =
+                dtγ * DiagonalMatrixRow(1 / ᶜρ[colidx]) ⋅
+                ᶜdiffusion_u_matrix[colidx] - (I,)
         end
 
         ᶠlg = Fields.local_geometry_field(Y.f)
@@ -682,10 +714,13 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ∂ᶜρqₚ_err_∂ᶜρqₚ = matrix[ρqₚ_name, ρqₚ_name]
             ᶜwₚ = MatrixFields.get_field(p, wₚ_name)
             ᶠtmp = p.ᶠtemp_CT3
-            @. ᶠtmp = CT3(unit_basis_vector_data(CT3, ᶠlg)) * ᶠwinterp(ᶜJ, ᶜρ)
-            @. ∂ᶜρqₚ_err_∂ᶜρqₚ +=
+            @. ᶠtmp[colidx] =
+                CT3(unit_basis_vector_data(CT3, ᶠlg[colidx])) *
+                ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx])
+            @. ∂ᶜρqₚ_err_∂ᶜρqₚ[colidx] +=
                 dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠtmp) ⋅
-                ᶠright_bias_matrix() ⋅ DiagonalMatrixRow(-(ᶜwₚ) / ᶜρ)
+                ᶠright_bias_matrix() ⋅
+                DiagonalMatrixRow(-(ᶜwₚ[colidx]) / ᶜρ[colidx])
         end
     end
 
@@ -707,156 +742,186 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 bottom = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
             ) # Need to wrap ᶠupwind_matrix in this for well-defined boundaries.
             ᶜkappa_mʲ = p.ᶜtemp_scalar
-            @. ᶜkappa_mʲ =
-                TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
-                TD.cv_m(thermo_params, ᶜtsʲs.:(1))
+            @. ᶜkappa_mʲ[colidx] =
+                TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)[colidx]) /
+                TD.cv_m(thermo_params, ᶜtsʲs.:(1)[colidx])
             ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
-            @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
+            @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ[colidx] =
                 dtγ * (
-                    DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1))) -
+                    DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1)[colidx])) -
                     ᶜadvdivᵥ_matrix() ⋅
-                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)))
+                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)[colidx]))
                 ) - (I,)
 
             ∂ᶜmseʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot)]
-            @. ∂ᶜmseʲ_err_∂ᶜq_totʲ =
+            @. ∂ᶜmseʲ_err_∂ᶜq_totʲ[colidx] =
                 dtγ * (
                     -DiagonalMatrixRow(
-                        adjoint(ᶜinterp(ᶠu³ʲs.:(1))) *
-                        ᶜgradᵥ_ᶠΦ *
-                        Y.c.ρ *
-                        ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp) * e_int_v0,
+                        adjoint(ᶜinterp(ᶠu³ʲs.:(1)[colidx])) *
+                        ᶜgradᵥ_ᶠΦ[colidx] *
+                        Y.c.ρ[colidx] *
+                        ᶜkappa_mʲ[colidx] /
+                        ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]) * e_int_v0,
                     )
                 )
             ∂ᶜmseʲ_err_∂ᶜρ = matrix[@name(c.sgsʲs.:(1).mse), @name(c.ρ)]
-            @. ∂ᶜmseʲ_err_∂ᶜρ =
+            @. ∂ᶜmseʲ_err_∂ᶜρ[colidx] =
                 dtγ * (
                     -DiagonalMatrixRow(
-                        adjoint(ᶜinterp(ᶠu³ʲs.:(1))) * ᶜgradᵥ_ᶠΦ / ᶜρʲs.:(1),
+                        adjoint(ᶜinterp(ᶠu³ʲs.:(1)[colidx])) *
+                        ᶜgradᵥ_ᶠΦ[colidx] / ᶜρʲs.:(1)[colidx],
                     )
                 )
             ∂ᶜmseʲ_err_∂ᶜmseʲ =
                 matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
-            @. ∂ᶜmseʲ_err_∂ᶜmseʲ =
+            @. ∂ᶜmseʲ_err_∂ᶜmseʲ[colidx] =
                 dtγ * (
-                    DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1))) -
+                    DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1)[colidx])) -
                     ᶜadvdivᵥ_matrix() ⋅
-                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) -
+                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)[colidx])) -
                     DiagonalMatrixRow(
-                        adjoint(ᶜinterp(ᶠu³ʲs.:(1))) *
-                        ᶜgradᵥ_ᶠΦ *
-                        Y.c.ρ *
-                        ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp),
+                        adjoint(ᶜinterp(ᶠu³ʲs.:(1)[colidx])) *
+                        ᶜgradᵥ_ᶠΦ[colidx] *
+                        Y.c.ρ[colidx] *
+                        ᶜkappa_mʲ[colidx] /
+                        ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]),
                     )
                 ) - (I,)
 
             ∂ᶜρaʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).q_tot)]
-            @. ᶠbidiagonal_matrix_ct3 =
+            @. ᶠbidiagonal_matrix_ct3[colidx] =
                 DiagonalMatrixRow(
                     ᶠset_upwind_bcs(
                         ᶠupwind(
-                            ᶠu³ʲs.:(1),
-                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                            ᶠu³ʲs.:(1)[colidx],
+                            draft_area(
+                                Y.c.sgsʲs.:(1).ρa[colidx],
+                                ᶜρʲs.:(1)[colidx],
+                            ),
                         ),
                     ),
-                ) ⋅ ᶠwinterp_matrix(ᶜJ) ⋅ DiagonalMatrixRow(
-                    ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp) *
-                    e_int_v0,
+                ) ⋅ ᶠwinterp_matrix(ᶜJ[colidx]) ⋅ DiagonalMatrixRow(
+                    ᶜkappa_mʲ[colidx] * (ᶜρʲs.:(1)[colidx])^2 /
+                    ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]) * e_int_v0,
                 )
-            @. ᶠbidiagonal_matrix_ct3_2 =
-                DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρʲs.:(1))) ⋅
-                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
+            @. ᶠbidiagonal_matrix_ct3_2[colidx] =
+                DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρʲs.:(1)[colidx])) ⋅
+                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)[colidx])) ⋅
                 DiagonalMatrixRow(
-                    Y.c.sgsʲs.:(1).ρa * ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp) *
-                    e_int_v0,
+                    Y.c.sgsʲs.:(1).ρa[colidx] * ᶜkappa_mʲ[colidx] /
+                    ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]) * e_int_v0,
                 )
 
-            @. ∂ᶜρaʲ_err_∂ᶜq_totʲ =
-                dtγ * ᶜadvdivᵥ_matrix() ⋅
-                (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
+            @. ∂ᶜρaʲ_err_∂ᶜq_totʲ[colidx] =
+                dtγ * ᶜadvdivᵥ_matrix() ⋅ (
+                    ᶠbidiagonal_matrix_ct3[colidx] -
+                    ᶠbidiagonal_matrix_ct3_2[colidx]
+                )
             ∂ᶜρaʲ_err_∂ᶜmseʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).mse)]
-            @. ᶠbidiagonal_matrix_ct3 =
+            @. ᶠbidiagonal_matrix_ct3[colidx] =
                 DiagonalMatrixRow(
                     ᶠset_upwind_bcs(
                         ᶠupwind(
-                            ᶠu³ʲs.:(1),
-                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                            ᶠu³ʲs.:(1)[colidx],
+                            draft_area(
+                                Y.c.sgsʲs.:(1).ρa[colidx],
+                                ᶜρʲs.:(1)[colidx],
+                            ),
                         ),
                     ),
-                ) ⋅ ᶠwinterp_matrix(ᶜJ) ⋅ DiagonalMatrixRow(
-                    ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
+                ) ⋅ ᶠwinterp_matrix(ᶜJ[colidx]) ⋅ DiagonalMatrixRow(
+                    ᶜkappa_mʲ[colidx] * (ᶜρʲs.:(1)[colidx])^2 /
+                    ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]),
                 )
-            @. ᶠbidiagonal_matrix_ct3_2 =
-                DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρʲs.:(1))) ⋅
-                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
+            @. ᶠbidiagonal_matrix_ct3_2[colidx] =
+                DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρʲs.:(1)[colidx])) ⋅
+                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)[colidx])) ⋅
                 DiagonalMatrixRow(
-                    Y.c.sgsʲs.:(1).ρa * ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp),
+                    Y.c.sgsʲs.:(1).ρa[colidx] * ᶜkappa_mʲ[colidx] /
+                    ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]),
                 )
-            @. ∂ᶜρaʲ_err_∂ᶜmseʲ =
-                dtγ * ᶜadvdivᵥ_matrix() ⋅
-                (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
+            @. ∂ᶜρaʲ_err_∂ᶜmseʲ[colidx] =
+                dtγ * ᶜadvdivᵥ_matrix() ⋅ (
+                    ᶠbidiagonal_matrix_ct3[colidx] -
+                    ᶠbidiagonal_matrix_ct3_2[colidx]
+                )
             ∂ᶜρaʲ_err_∂ᶜρaʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).ρa)]
-            @. ᶜadvection_matrix =
+            @. ᶜadvection_matrix[colidx] =
                 -(ᶜadvdivᵥ_matrix()) ⋅
-                DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρʲs.:(1)))
-            @. ∂ᶜρaʲ_err_∂ᶜρaʲ =
-                dtγ * ᶜadvection_matrix ⋅
-                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
-                DiagonalMatrixRow(1 / ᶜρʲs.:(1)) - (I,)
+                DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρʲs.:(1)[colidx]))
+            @. ∂ᶜρaʲ_err_∂ᶜρaʲ[colidx] =
+                dtγ * ᶜadvection_matrix[colidx] ⋅
+                ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)[colidx])) ⋅
+                DiagonalMatrixRow(1 / ᶜρʲs.:(1)[colidx]) - (I,)
 
             ∂ᶠu₃ʲ_err_∂ᶜρ = matrix[@name(f.sgsʲs.:(1).u₃), @name(c.ρ)]
-            @. ∂ᶠu₃ʲ_err_∂ᶜρ =
-                dtγ * DiagonalMatrixRow(ᶠgradᵥ_ᶜΦ / ᶠinterp(ᶜρʲs.:(1))) ⋅
-                ᶠinterp_matrix()
+            @. ∂ᶠu₃ʲ_err_∂ᶜρ[colidx] =
+                dtγ * DiagonalMatrixRow(
+                    ᶠgradᵥ_ᶜΦ[colidx] / ᶠinterp(ᶜρʲs.:(1)[colidx]),
+                ) ⋅ ᶠinterp_matrix()
             ∂ᶠu₃ʲ_err_∂ᶜq_totʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).q_tot)]
-            @. ∂ᶠu₃ʲ_err_∂ᶜq_totʲ =
+            @. ∂ᶠu₃ʲ_err_∂ᶜq_totʲ[colidx] =
                 dtγ * DiagonalMatrixRow(
-                    ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) / (ᶠinterp(ᶜρʲs.:(1)))^2,
+                    ᶠgradᵥ_ᶜΦ[colidx] * ᶠinterp(Y.c.ρ[colidx]) /
+                    (ᶠinterp(ᶜρʲs.:(1)[colidx]))^2,
                 ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
-                    ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp) *
-                    e_int_v0,
+                    ᶜkappa_mʲ[colidx] * (ᶜρʲs.:(1)[colidx])^2 /
+                    ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]) * e_int_v0,
                 )
             ∂ᶠu₃ʲ_err_∂ᶜmseʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).mse)]
-            @. ∂ᶠu₃ʲ_err_∂ᶜmseʲ =
+            @. ∂ᶠu₃ʲ_err_∂ᶜmseʲ[colidx] =
                 dtγ * DiagonalMatrixRow(
-                    ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) / (ᶠinterp(ᶜρʲs.:(1)))^2,
+                    ᶠgradᵥ_ᶜΦ[colidx] * ᶠinterp(Y.c.ρ[colidx]) /
+                    (ᶠinterp(ᶜρʲs.:(1)[colidx]))^2,
                 ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
-                    ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
+                    ᶜkappa_mʲ[colidx] * (ᶜρʲs.:(1)[colidx])^2 /
+                    ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]),
                 )
             ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
             ᶜu₃ʲ = ᶜtemp_C3
-            @. ᶜu₃ʲ = ᶜinterp(Y.f.sgsʲs.:(1).u₃)
+            @. ᶜu₃ʲ[colidx] = ᶜinterp(Y.f.sgsʲs.:(1).u₃[colidx])
 
-            @. bdmr_l = convert(BidiagonalMatrixRow{FT}, ᶜleft_bias_matrix())
-            @. bdmr_r = convert(BidiagonalMatrixRow{FT}, ᶜright_bias_matrix())
-            @. bdmr = ifelse(ᶜu₃ʲ.components.data.:1 > 0, bdmr_l, bdmr_r)
+            @. bdmr_l[colidx] =
+                convert(BidiagonalMatrixRow{FT}, ᶜleft_bias_matrix())
+            @. bdmr_r[colidx] =
+                convert(BidiagonalMatrixRow{FT}, ᶜright_bias_matrix())
+            @. bdmr[colidx] = ifelse(
+                ᶜu₃ʲ[colidx].components.data.:1 > 0,
+                bdmr_l[colidx],
+                bdmr_r[colidx],
+            )
 
-            @. ᶠtridiagonal_matrix_c3 = -(ᶠgradᵥ_matrix()) ⋅ bdmr
+            @. ᶠtridiagonal_matrix_c3[colidx] =
+                -(ᶠgradᵥ_matrix()) ⋅ bdmr[colidx]
             if p.atmos.rayleigh_sponge isa RayleighSponge
-                @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
+                @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ[colidx] =
                     dtγ * (
-                        ᶠtridiagonal_matrix_c3 ⋅
-                        DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) -
-                        DiagonalMatrixRow(p.ᶠβ_rayleigh_w * (one_C3xACT3,))
+                        ᶠtridiagonal_matrix_c3[colidx] ⋅ DiagonalMatrixRow(
+                            adjoint(CT3(Y.f.sgsʲs.:(1).u₃[colidx])),
+                        ) - DiagonalMatrixRow(
+                            p.ᶠβ_rayleigh_w[colidx] * (one_C3xACT3,),
+                        )
                     ) - (I_u₃,)
             else
-                @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
-                    dtγ * ᶠtridiagonal_matrix_c3 ⋅
-                    DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) - (I_u₃,)
+                @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ[colidx] =
+                    dtγ * ᶠtridiagonal_matrix_c3[colidx] ⋅
+                    DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃[colidx]))) -
+                    (I_u₃,)
             end
         elseif p.atmos.rayleigh_sponge isa RayleighSponge
             ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
-            @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
-                dtγ * -DiagonalMatrixRow(p.ᶠβ_rayleigh_w * (one_C3xACT3,)) -
+            @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ[colidx] =
+                dtγ *
+                -DiagonalMatrixRow(p.ᶠβ_rayleigh_w[colidx] * (one_C3xACT3,)) -
                 (I_u₃,)
         end
     end

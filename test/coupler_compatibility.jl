@@ -1,6 +1,4 @@
 using Test
-import ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Thermodynamics as TD
 import SurfaceFluxes as SF
 import StaticArrays as SA
@@ -37,13 +35,7 @@ const T2 = 290
 @testset "Coupler Compatibility (Hacky Version)" begin
     # Initialize a model. The value of surface_setup is irrelevant, since it
     # will get overwritten.
-    config = CA.AtmosConfig(
-        Dict(
-            "initial_condition" => "DryBaroclinicWave",
-            "output_dir_style" => "RemovePreexisting",
-        );
-        job_id = "coupler_compatibility1",
-    )
+    config = CA.AtmosConfig(Dict("initial_condition" => "DryBaroclinicWave"))
     simulation = CA.get_simulation(config)
     (; integrator) = simulation
     (; p, t) = integrator
@@ -119,8 +111,7 @@ end
         Dict(
             "initial_condition" => "DryBaroclinicWave",
             "surface_setup" => "PrescribedSurface",
-        );
-        job_id = "coupler_compatibility2",
+        ),
     )
     simulation = CA.get_simulation(config)
     (; integrator) = simulation
@@ -229,8 +220,7 @@ end
             # remove the following line and check that the test runs in less than a few
             # minutes on GitHub
             "output_default_diagnostics" => false,
-        );
-        job_id = "coupler_compatibility3",
+        ),
     )
     simulation = CA.get_simulation(config)
 end

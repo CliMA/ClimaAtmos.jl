@@ -1,13 +1,11 @@
-using ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 
 @testset "Model config" begin
-    config = CA.AtmosConfig(Dict("config" => "box"), job_id = "model1")
+    config = CA.AtmosConfig(Dict("config" => "box"))
     parsed_args = config.parsed_args
     @test CA.get_model_config(parsed_args) isa CA.BoxModel
 
-    config = CA.AtmosConfig(Dict("config" => "plane"), job_id = "model2")
+    config = CA.AtmosConfig(Dict("config" => "plane"))
     parsed_args = config.parsed_args
     @test CA.get_model_config(parsed_args) isa CA.PlaneModel
 end
@@ -21,7 +19,6 @@ end
             "scalar_hyperdiffusion_coefficient" => 99.0,
             "divergence_damping_factor" => 99.0,
         ),
-        job_id = "model3",
     )
     parsed_args = config.parsed_args
     FT = eltype(config)
@@ -39,10 +36,7 @@ end
     @test hyperdiff_model.divergence_damping_factor == cam_se_ν₄_dd
 
     @info "Test unrecognized Hyperdiffusion scheme"
-    config = CA.AtmosConfig(
-        Dict("hyperdiff" => "UnknownHyperdiffusion"),
-        job_id = "model4",
-    )
+    config = CA.AtmosConfig(Dict("hyperdiff" => "UnknownHyperdiffusion"))
     parsed_args = config.parsed_args
     FT = eltype(config)
     @test_throws ErrorException CA.get_hyperdiffusion_model(parsed_args, FT)

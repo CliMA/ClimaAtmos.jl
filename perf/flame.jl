@@ -1,16 +1,16 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
-import ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
 
 include("common.jl")
 
-(; config_file, job_id) = CA.commandline_kwargs()
-config = CA.AtmosConfig(config_file; job_id)
+length(ARGS) != 1 && error("Usage: flame.jl <config_file>")
+config_file = ARGS[1]
+config_dict = YAML.load_file(config_file)
+config = AtmosCoveragePerfConfig(config_dict)
+job_id = config.parsed_args["job_id"]
 simulation = CA.get_simulation(config)
-device = ClimaComms.device(config.comms_ctx)
 (; integrator) = simulation
 
 # The callbacks flame graph is very expensive, so only do 2 steps.
@@ -38,14 +38,16 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 #####
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target"] = 1_298_056
-allocs_limit["flame_perf_target_tracers"] = 1_378_216
+allocs_limit["flame_perf_target"] = 841_104
+allocs_limit["flame_perf_target_tracers"] = 870_888
 allocs_limit["flame_perf_target_edmfx"] = 1_383_200
 allocs_limit["flame_perf_diagnostics"] = 21_359_336
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 2_140_864
-allocs_limit["flame_perf_target_frierson"] = 1_520_264
-allocs_limit["flame_perf_target_threaded"] = 2_298_355
-allocs_limit["flame_perf_target_callbacks"] = 1_446_496
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 1_383_200
+allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
+    4_018_252_656
+allocs_limit["flame_perf_target_frierson"] = 4_015_547_056
+allocs_limit["flame_perf_target_threaded"] = 1_276_864
+allocs_limit["flame_perf_target_callbacks"] = 988_816
 allocs_limit["flame_perf_gw"] = 3_268_961_856
 allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 4_000_488
 allocs_limit["flame_gpu_implicit_barowave_moist"] = 336_378
@@ -63,7 +65,10 @@ sampling_rate = expected_allocs <= max_allocs_for_full_sampling ? 1 : 0.01
 
 # Some jobs are problematic (the ones with Krylov mostly)
 # https://github.com/pfitzseb/ProfileCanvas.jl/issues/34
-if job_id in ("flame_perf_target_frierson",)
+if job_id in (
+    "flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff",
+    "flame_perf_target_frierson",
+)
     sampling_rate = 0.001
 end
 
@@ -83,9 +88,9 @@ using Test
 # Threaded/gpu allocations are not deterministic, so let's add a buffer
 # TODO: remove buffer, and threaded tests, when
 #       threaded/unthreaded functions are unified
-buffer = if device isa ClimaComms.CPUMultiThreaded
+buffer = if any(x -> occursin(x, job_id), ("threaded",))
     1.8
-elseif device isa ClimaComms.CUDADevice
+elseif any(x -> occursin(x, job_id), ("gpu",))
     5
 else
     1.1
@@ -105,7 +110,7 @@ end
 
 # https://github.com/CliMA/ClimaAtmos.jl/issues/827
 @testset "Allocations limit" begin
-    if device isa ClimaComms.CUDADevice # https://github.com/CliMA/ClimaAtmos.jl/issues/2831
+    if occursin("gpu", job_id) # https://github.com/CliMA/ClimaAtmos.jl/issues/2831
         @test allocs ≤ allocs_limit[job_id] * buffer
     else
         @test 0.25 * allocs_limit[job_id] * buffer <=
@@ -114,6 +119,7 @@ end
     end
 end
 
+import ClimaComms
 if config.comms_ctx isa ClimaComms.SingletonCommsContext && !isinteractive()
     include(joinpath(pkgdir(CA), "perf", "jet_report_nfailures.jl"))
 end

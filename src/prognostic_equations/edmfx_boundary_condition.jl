@@ -2,6 +2,8 @@
 ##### EDMFX SGS boundary condition
 #####
 
+import Distributions
+
 function sgs_scalar_first_interior_bc(
     ᶜz_int::FT,
     ᶜρ_int::FT,
@@ -47,27 +49,16 @@ function get_first_interior_variance(
     end
 end
 
-function approximate_inverf(x::FT) where {FT <: Real}
-    # From Wikipedia
-    a = FT(0.147)
-    term1 = (2 / (π * a) + log(1 - x^2) / 2)
-    term2 = log(1 - x^2) / a
-    term3 = sqrt(term1^2 - term2)
-
-    return sign(x) * sqrt(term3 - term1)
-end
-
-function guass_quantile(p::FT) where {FT <: Real}
-    return sqrt(2) * approximate_inverf(2p - 1)
-end
-
 function percentile_bounds_mean_norm(
     low_percentile::FT,
     high_percentile::FT,
 ) where {FT <: Real}
     gauss_int(x) = -exp(-x * x / 2) / sqrt(2 * pi)
-    xp_high = guass_quantile(high_percentile)
-    xp_low = guass_quantile(low_percentile)
-    return (gauss_int(xp_high) - gauss_int(xp_low)) /
-           max(high_percentile - low_percentile, eps(FT))
+    xp_low = Distributions.quantile(Distributions.Normal(), low_percentile)
+    xp_high = Distributions.quantile(Distributions.Normal(), high_percentile)
+    return (gauss_int(xp_high) - gauss_int(xp_low)) / max(
+        Distributions.cdf(Distributions.Normal(), xp_high) -
+        Distributions.cdf(Distributions.Normal(), xp_low),
+        eps(FT),
+    )
 end

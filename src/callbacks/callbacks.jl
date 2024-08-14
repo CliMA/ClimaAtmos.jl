@@ -59,9 +59,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     (; ᶜts, cloud_diagnostics_tuple, sfc_conditions) = p.precomputed
     (; params) = p
-    (; idealized_h2o, idealized_clouds) = p.radiation
+    (; idealized_insolation, idealized_h2o, idealized_clouds) = p.radiation
     (; ᶠradiation_flux, radiation_model) = p.radiation
-    (; radiation_mode) = p.atmos
 
     # If we have prescribed aerosols, we need to update them
     for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
@@ -71,27 +70,19 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     FT = Spaces.undertype(axes(Y.c))
     thermo_params = CAP.thermodynamics_params(params)
-    T_min = CAP.optics_lookup_temperature_min(params)
-    T_max = CAP.optics_lookup_temperature_max(params)
 
     sfc_ts = sfc_conditions.ts
     sfc_T =
-        Fields.array2field(radiation_model.surface_temperature, axes(sfc_ts))
+        RRTMGPI.array2field(radiation_model.surface_temperature, axes(sfc_ts))
     @. sfc_T = TD.air_temperature(thermo_params, sfc_ts)
 
-    ᶜp = Fields.array2field(radiation_model.center_pressure, axes(Y.c))
-    ᶜT = Fields.array2field(radiation_model.center_temperature, axes(Y.c))
+    ᶜp = RRTMGPI.array2field(radiation_model.center_pressure, axes(Y.c))
+    ᶜT = RRTMGPI.array2field(radiation_model.center_temperature, axes(Y.c))
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
-    # TODO: move this to RRTMGP
-    @. ᶜT =
-        min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
+    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
 
-    if !(radiation_mode isa RRTMGPI.GrayRadiation)
-        ᶜrh = Fields.array2field(
-            radiation_model.center_relative_humidity,
-            axes(Y.c),
-        )
-        ᶜvmr_h2o = Fields.array2field(
+    if !(radiation_model.radiation_mode isa RRTMGPI.GrayRadiation)
+        ᶜvmr_h2o = RRTMGPI.array2field(
             radiation_model.center_volume_mixing_ratio_h2o,
             axes(Y.c),
         )
@@ -103,7 +94,6 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             if t < t_increasing_humidity
                 max_relative_humidity *= t / t_increasing_humidity
             end
-            @. ᶜrh = max_relative_humidity
 
             # temporarily store ᶜq_tot in ᶜvmr_h2o
             ᶜq_tot = ᶜvmr_h2o
@@ -124,30 +114,30 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 thermo_params,
                 TD.PhasePartition(thermo_params, ᶜts),
             )
-            @. ᶜrh = TD.relative_humidity(thermo_params, ᶜts)
         end
     end
 
-    if p.atmos.insolation isa IdealizedInsolation ||
-       !(p.atmos.surface_albedo isa CouplerAlbedo)
-        set_insolation_variables!(Y, p, t, p.atmos.insolation)
+    if !idealized_insolation && !(p.atmos.surface_albedo isa CouplerAlbedo)
+        set_insolation_variables!(Y, p, t)
     end
 
     if !idealized_clouds && !(
-        radiation_mode isa RRTMGPI.GrayRadiation ||
-        radiation_mode isa RRTMGPI.ClearSkyRadiation
+        radiation_model.radiation_mode isa RRTMGPI.GrayRadiation ||
+        radiation_model.radiation_mode isa RRTMGPI.ClearSkyRadiation
     )
         ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
-        ᶜlwp = Fields.array2field(
+        ᶜlwp = RRTMGPI.array2field(
             radiation_model.center_cloud_liquid_water_path,
             axes(Y.c),
         )
-        ᶜiwp = Fields.array2field(
+        ᶜiwp = RRTMGPI.array2field(
             radiation_model.center_cloud_ice_water_path,
             axes(Y.c),
         )
-        ᶜfrac =
-            Fields.array2field(radiation_model.center_cloud_fraction, axes(Y.c))
+        ᶜfrac = RRTMGPI.array2field(
+            radiation_model.center_cloud_fraction,
+            axes(Y.c),
+        )
         # RRTMGP needs lwp and iwp in g/m^2
         kg_to_g_factor = 1000
         @. ᶜlwp =
@@ -159,51 +149,15 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         @. ᶜfrac = cloud_diagnostics_tuple.cf
     end
 
-    if !(radiation_mode isa RRTMGPI.GrayRadiation)
-        if radiation_mode.aerosol_radiation
-            ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
-            ᶜaero_conc = Fields.array2field(
-                radiation_model.center_aerosol_column_mass_density,
-                axes(Y.c),
-            )
-            @. ᶜaero_conc = p.tracers.prescribed_aerosol_fields.:SO4 * ᶜΔz
-        end
-    end
-
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
     RRTMGPI.update_fluxes!(radiation_model)
-    Fields.field2array(ᶠradiation_flux) .= radiation_model.face_flux
+    RRTMGPI.field2array(ᶠradiation_flux) .= radiation_model.face_flux
     return nothing
 end
 
-#Uniform insolation, magnitudes from Wing et al. (2018)
-#Note that the TOA downward shortwave fluxes won't be the same as the values in the paper if add_isothermal_boundary_layer is true
-function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
-    FT = Spaces.undertype(axes(Y.c))
-    (; radiation_model) = p.radiation
-    radiation_model.cos_zenith .= cosd(FT(42.05))
-    radiation_model.weighted_irradiance .= FT(551.58)
-end
+function set_insolation_variables!(Y, p, t)
 
-function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
-    FT = Spaces.undertype(axes(Y.c))
-    bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
-    if eltype(bottom_coords) <: Geometry.LatLongZPoint
-        latitude = Fields.field2array(bottom_coords.lat)
-    else
-        latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
-    end
-    (; radiation_model) = p.radiation
-    # perpetual equinox with no diurnal cycle
-    radiation_model.cos_zenith .= cos(FT(π) / 3)
-    weighted_irradiance =
-        @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
-           (4 * cos(FT(π) / 3))
-    radiation_model.weighted_irradiance .= weighted_irradiance
-end
-
-function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
     FT = Spaces.undertype(axes(Y.c))
     params = p.params
     insolation_params = CAP.insolation_params(params)
@@ -225,8 +179,8 @@ function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
         cos_zenith =
-            Fields.array2field(radiation_model.cos_zenith, axes(bottom_coords))
-        weighted_irradiance = Fields.array2field(
+            RRTMGPI.array2field(radiation_model.cos_zenith, axes(bottom_coords))
+        weighted_irradiance = RRTMGPI.array2field(
             radiation_model.weighted_irradiance,
             axes(bottom_coords),
         )
@@ -413,9 +367,4 @@ function reset_graceful_exit(output_dir)
     file = joinpath(output_dir, "graceful_exit.dat")
     ispath(output_dir) || mkpath(output_dir)
     open(io -> print(io, 0), file, "w")
-end
-
-function check_nans(integrator)
-    any(isnan, parent(integrator.u)) && error("Found NaN")
-    return nothing
 end

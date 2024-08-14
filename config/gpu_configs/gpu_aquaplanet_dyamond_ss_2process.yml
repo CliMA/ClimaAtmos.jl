@@ -9,7 +9,7 @@ dz_top: 3000.0
 moist: "equil"
 precip_model: "1M"
 rad: "allskywithclear"
-insolation: "timevarying"
+idealized_insolation: false
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 vert_diff: "FriersonDiffusion"
@@ -19,4 +19,5 @@ surface_setup: "DefaultMoninObukhov"
 rayleigh_sponge: true
 dt: "100secs"
 t_end: "12hours"
+job_id: "gpu_aquaplanet_dyamond_ss_2process"
 toml: [toml/longrun_aquaplanet_dyamond.toml]

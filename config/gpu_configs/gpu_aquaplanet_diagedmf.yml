@@ -1,3 +1,4 @@
+job_id: gpu_aquaplanet_diagedmf
 dt_save_state_to_disk: "Inf"
 dt_save_to_sol: "Inf"
 output_default_diagnostics: false
@@ -9,7 +10,7 @@ dz_top: 3000.0
 moist: equil 
 surface_setup: DefaultMoninObukhov 
 rad: allskywithclear
-insolation: "timevarying"
+idealized_insolation: false
 dt_rad: 1hours
 dt_cloud_fraction: 1hours
 turbconv: diagnostic_edmfx 
@@ -22,9 +23,7 @@ edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true 
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-cloud_model: diagnostic_edmfx
 precip_model: 0M
 dt: 100secs 
 t_end: 12hours 
-toml: [toml/diagnostic_edmfx.toml]
-ode_algo: ARS343
+toml: [toml/diagnostic_edmfx_box.toml]

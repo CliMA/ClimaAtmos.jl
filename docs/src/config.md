@@ -51,6 +51,7 @@ Add an entry with the following format:
     help: <help string>
 ```
 The `help` field is optional if you don't plan on making a permanent change to the configuration argument.
+If adding a configuration used in EDMF, add it to `.buildkite/default_edmf_config.yml`.
 
 See below for the full list of configuration arguments.
 

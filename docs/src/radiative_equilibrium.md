@@ -62,7 +62,7 @@ To change the ozone concentration multiply the following variable by the desired
 
 ```
 center_volume_mixing_ratio_o3 =
-                Fields.field2array(@. FT(pressure2ozone(default_cache.ᶜp))) * desired_coefficient
+                RRTMGPI.field2array(@. FT(pressure2ozone(default_cache.ᶜp))) * desired_coefficient
 ```
 
 

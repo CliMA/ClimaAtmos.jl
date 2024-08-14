@@ -4,8 +4,10 @@ topo_smoothing: true
 initial_condition: "MoistBaroclinicWave"
 dt: "450secs"
 t_end: "450secs"
+use_reference_state: false
 ode_algo: "SSP333"
 precip_model: "0M"
 topography: "DCMIP200"
+job_id: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200"
 moist: "equil"
 apply_limiter: true

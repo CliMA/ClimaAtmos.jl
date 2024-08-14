@@ -109,8 +109,8 @@ function external_forcing_cache(Y, external_forcing::GCMForcing)
     )
 end
 
-external_forcing_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
+external_forcing_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
+function external_forcing_tendency!(Yₜ, Y, p, t, colidx, ::GCMForcing)
     # horizontal advection, vertical fluctuation, nudging, subsidence (need to add),
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
@@ -132,54 +132,62 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
 
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜuₕ_nudge = p.scratch.ᶜtemp_C12
-    @. ᶜuₕ_nudge = C12(Geometry.UVVector(ᶜu_nudge, ᶜv_nudge), ᶜlg)
-    @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind
+    @. ᶜuₕ_nudge[colidx] =
+        C12(Geometry.UVVector(ᶜu_nudge[colidx], ᶜv_nudge[colidx]), ᶜlg[colidx])
+    @. Yₜ.c.uₕ[colidx] -=
+        (Y.c.uₕ[colidx] - ᶜuₕ_nudge[colidx]) * ᶜinv_τ_wind[colidx]
 
     ᶜdTdt_nudging = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
-    @. ᶜdTdt_nudging =
-        -(TD.air_temperature(thermo_params, ᶜts) - ᶜT_nudge) * ᶜinv_τ_scalar
-    @. ᶜdqtdt_nudging = -(ᶜspecific.q_tot - ᶜqt_nudge) * ᶜinv_τ_scalar
+    @. ᶜdTdt_nudging[colidx] =
+        -(TD.air_temperature(thermo_params, ᶜts[colidx]) - ᶜT_nudge[colidx]) *
+        ᶜinv_τ_scalar[colidx]
+    @. ᶜdqtdt_nudging[colidx] =
+        -(ᶜspecific.q_tot[colidx] - ᶜqt_nudge[colidx]) * ᶜinv_τ_scalar[colidx]
 
     ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_sum = p.scratch.ᶜtemp_scalar_2
-    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_fluc + ᶜdTdt_rad + ᶜdTdt_nudging
-    @. ᶜdqtdt_sum = ᶜdqtdt_hadv + ᶜdqtdt_fluc + ᶜdqtdt_nudging
+    @. ᶜdTdt_sum[colidx] =
+        ᶜdTdt_hadv[colidx] +
+        ᶜdTdt_fluc[colidx] +
+        ᶜdTdt_rad[colidx] +
+        ᶜdTdt_nudging[colidx]
+    @. ᶜdqtdt_sum[colidx] =
+        ᶜdqtdt_hadv[colidx] + ᶜdqtdt_fluc[colidx] + ᶜdqtdt_nudging[colidx]
 
     T_0 = TD.Parameters.T_0(thermo_params)
     Lv_0 = TD.Parameters.LH_v0(thermo_params)
     cv_v = TD.Parameters.cv_v(thermo_params)
     R_v = TD.Parameters.R_v(thermo_params)
     # total energy
-    @. Yₜ.c.ρe_tot +=
-        Y.c.ρ * (
-            TD.cv_m(thermo_params, ᶜts) * ᶜdTdt_sum +
+    @. Yₜ.c.ρe_tot[colidx] +=
+        Y.c.ρ[colidx] * (
+            TD.cv_m(thermo_params, ᶜts[colidx]) * ᶜdTdt_sum[colidx] +
             (
-                cv_v * (TD.air_temperature(thermo_params, ᶜts) - T_0) + Lv_0 -
-                R_v * T_0
-            ) * ᶜdqtdt_sum
+                cv_v * (TD.air_temperature(thermo_params, ᶜts[colidx]) - T_0) +
+                Lv_0 - R_v * T_0
+            ) * ᶜdqtdt_sum[colidx]
         )
     # total specific humidity
-    @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt_sum
+    @. Yₜ.c.ρq_tot[colidx] += Y.c.ρ[colidx] * ᶜdqtdt_sum[colidx]
 
     ## subsidence -->
-    ᶠls_subsidence³ = p.scratch.ᶠtemp_CT3
-    @. ᶠls_subsidence³ =
-        ᶠinterp(ᶜls_subsidence * CT3(unit_basis_vector_data(CT3, ᶜlg)))
-    subsidence!(
-        Yₜ.c.ρe_tot,
-        Y.c.ρ,
-        ᶠls_subsidence³,
-        ᶜh_tot,
-        Val{:first_order}(),
+    tom(f) = Spaces.level(f, Spaces.nlevels(axes(f)))  # get value at top of the model
+    wvec = Geometry.WVector
+    RBh = Operators.RightBiasedC2F(;
+        top = Operators.SetValue(tom(ᶜh_tot[colidx])),
     )
-    subsidence!(
-        Yₜ.c.ρq_tot,
-        Y.c.ρ,
-        ᶠls_subsidence³,
-        ᶜspecific.q_tot,
-        Val{:first_order}(),
+    RBq = Operators.RightBiasedC2F(;
+        top = Operators.SetValue(tom(ᶜspecific.q_tot[colidx])),
     )
+    @. Yₜ.c.ρe_tot[colidx] -=
+        Y.c.ρ[colidx] *
+        ᶜls_subsidence[colidx] *
+        ᶜdivᵥ(wvec(RBh(ᶜh_tot[colidx])))  # ρ⋅w⋅∇h_tot
+    @. Yₜ.c.ρq_tot[colidx] -=
+        Y.c.ρ[colidx] *
+        ᶜls_subsidence[colidx] *
+        ᶜdivᵥ(wvec(RBq(ᶜspecific.q_tot[colidx])))  # ρ⋅w⋅∇q_tot
     # <-- subsidence
 
     return nothing

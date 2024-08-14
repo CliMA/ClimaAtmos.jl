@@ -8,7 +8,7 @@ rayleigh_sponge_cache(Y, atmos::AtmosModel) =
     rayleigh_sponge_cache(Y, atmos.rayleigh_sponge)
 
 rayleigh_sponge_cache(Y, ::Nothing) = (;)
-rayleigh_sponge_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 
 function rayleigh_sponge_cache(Y, rs::RayleighSponge)
     FT = Spaces.undertype(axes(Y.c))
@@ -23,7 +23,7 @@ function rayleigh_sponge_cache(Y, rs::RayleighSponge)
     return (; ᶜβ_rayleigh_uₕ, ᶠβ_rayleigh_w)
 end
 
-function rayleigh_sponge_tendency!(Yₜ, Y, p, t, ::RayleighSponge)
+function rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx, ::RayleighSponge)
     (; ᶜβ_rayleigh_uₕ) = p.rayleigh_sponge
-    @. Yₜ.c.uₕ -= ᶜβ_rayleigh_uₕ * Y.c.uₕ
+    @. Yₜ.c.uₕ[colidx] -= ᶜβ_rayleigh_uₕ[colidx] * Y.c.uₕ[colidx]
 end

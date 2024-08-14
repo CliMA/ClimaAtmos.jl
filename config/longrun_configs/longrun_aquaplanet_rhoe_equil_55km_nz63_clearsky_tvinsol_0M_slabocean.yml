@@ -1,6 +1,6 @@
 dt_save_state_to_disk: "10days"
 dt: "150secs"
-t_end: "120days"
+t_end: "100days"
 h_elem: 16
 z_elem: 63
 dz_bottom: 30.0
@@ -14,10 +14,11 @@ vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 rad: "clearsky"
-insolation: "timevarying"
+idealized_insolation: false
 dt_rad: "1hours"
 albedo_model: "RegressionFunctionAlbedo"
 prognostic_surface: "PrognosticSurfaceTemperature"
 check_conservation: true
 bubble: false
+job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean"
 toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M.toml]

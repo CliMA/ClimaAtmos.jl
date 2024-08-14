@@ -14,4 +14,5 @@ precip_model: "0M"
 rayleigh_sponge: true
 forcing: "held_suarez"
 call_cloud_diagnostics_per_stage: true
+job_id: "central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M"
 toml: [toml/longrun_hs_rhoe_equil_55km_nz63_0M.toml]

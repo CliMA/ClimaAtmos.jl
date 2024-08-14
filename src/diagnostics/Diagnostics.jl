@@ -23,7 +23,6 @@ import ..EquilMoistModel
 import ..NonEquilMoistModel
 
 # precip_model
-import ..NoPrecipitation
 import ..Microphysics0Moment
 import ..Microphysics1Moment
 
@@ -47,18 +46,17 @@ import ..compute_gm_mixing_length!
 include(joinpath("..", "utils", "abbreviations.jl"))
 
 import ClimaDiagnostics:
-    DiagnosticVariable, ScheduledDiagnostic, average_pre_output_hook!
+    DiagnosticVariable,
+    ScheduledDiagnostic,
+    average_pre_output_hook!,
+    DiagnosticsCallback
 
 import ClimaDiagnostics.DiagnosticVariables: descriptive_short_name
 
 import ClimaDiagnostics.Schedules: EveryStepSchedule, EveryDtSchedule
 
-import ClimaDiagnostics.Writers:
-    HDF5Writer,
-    NetCDFWriter,
-    write_field!,
-    LevelsMethod,
-    FakePressureLevelsMethod
+
+import ClimaDiagnostics.Writers: HDF5Writer, NetCDFWriter, write_field!
 
 include("diagnostic.jl")
 

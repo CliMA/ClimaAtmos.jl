@@ -79,7 +79,7 @@ max_newton_iters_ode:
   value: 1
 ode_algo:
   help: "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, etc.]"
-  value: "SSPKnoth"
+  value: "ARS343"
 krylov_rtol:
   help: "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
   value: 0.1
@@ -102,15 +102,9 @@ dt_rad:
 idealized_clouds:
   help: "Use idealized clouds in radiation model [`false` (default), `true`]"
   value: false
-insolation:
-  help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`]"
-  value: "idealized"
-add_isothermal_boundary_layer:
-  help: "Add an isothermal boundary layer above the domain top for radiation [`false`, `true` (default)]"
+idealized_insolation:
+  help: "Use idealized insolation in radiation model [`false`, `true` (default)]"
   value: true
-aerosol_radiation:
-  help: "Use aerosols in radiation [`false` (default)]"
-  value: false
 dt_cloud_fraction:
   help: "Time between calling cloud fraction update"
   value: "3hours"
@@ -129,9 +123,6 @@ t_end:
 output_dir:
   help: "Output directory"
   value: ~
-output_dir_style:
-  help: "What to do when `output_dir` already exists. With `RemovePreexisting`, `output_dir` is overwritten with a new one. With `ActiveLink`, `output_dir` is treated as a base folder and numbered subfolders are created inside. A new subfolder is created every time a simulation is run, with `output_dir/output_active` pointing to the most recent results. Check out ClimaUtilities.OutputPathGenerator for more information. [`ActiveLink` (default), `RemovePreexisting`]"
-  value: "ActiveLink"
 device:
   help: "Device type to use [`auto` (default) `CPUSingleThreaded`, `CPUMultiThreaded`, `CUDADevice`]"
   value: "auto"
@@ -144,7 +135,7 @@ vert_diff:
   value: "false"
 hyperdiff:
   help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
-  value: "CAM_SE"
+  value: "ClimaHyperdiffusion"
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: true
@@ -194,8 +185,11 @@ precip_model:
   help: "Precipitation model [`nothing` (default), `0M`]"
   value: ~
 cloud_model:
-  help: "Cloud model [`grid_scale`, `quadrature` (default), `diagnostic_edmfx`]"
+  help: "Cloud model [`grid_scale`, `quadrature` (default)]"
   value: "quadrature"
+perf_mode:
+  help: "A flag for analyzing performance [`PerfStandard` (default), `PerfExperimental`]"
+  value: "PerfStandard"
 perf_summary:
   help: "Flag for collecting performance summary information"
   value: false
@@ -224,11 +218,17 @@ non_orographic_gravity_wave:
 nh_poly:
   help: "Horizontal polynomial degree. Note: The number of quadrature points in 1D within each horizontal element is then Nq = <--nh_poly> + 1"
   value: 3
+use_reference_state:
+  help: "Subtract a reference state from the dycore equations [`false`, `true` (default)]"
+  value: true
 regression_test:
   help: "(Bool) perform regression test"
   value: false
 check_conservation:
   help: "Check conservation of mass and energy [`false` (default), `true`]"
+  value: false
+check_precipitation:
+  help: "Sanity checks for 1-moment precipitation [`false` (default), `true`]"
   value: false
 ls_adv:
   help: "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"
@@ -269,18 +269,15 @@ override_τ_precip:
 output_default_diagnostics:
   help: "Output the default diagnostics associated to the selected atmospheric model"
   value: true
-enable_diagnostics:
-  help: "Set to false to fully disable the diagnostics"
-  value: true
 netcdf_output_at_levels:
   help: "Do not perform any vertical interpolation in the output NetCDF files. Instead, interpolate horizontally and output the level. "
   value: true
 netcdf_interpolation_num_points:
   help: "Override the number of interpolation point for the NetCDF output. This configuration has to be a list of integers, e.g. [180, 90, 10]."
   value: ~
-check_nan_every:
-  help: "Check if the state contains NaNs every this number of iterations"
-  value: 1024
+warn_allocations_diagnostics:
+  help: "When true, a dry-run for all the diagnostics is performed to check whether the functions allocate additional memory (which reduces performances)"
+  value: false
 log_progress:
   help: "Log simulation progress, including wall-time estimates"
   value: true
@@ -297,46 +294,3 @@ prescribed_aerosols:
 call_cloud_diagnostics_per_stage:
   help: "A temporary Bool for calling cloud diagnostics every stage"
   value: false
-# EDMF configuration
-turbconv:
-  help: "Turbulence convection scheme [`nothing` (default), 'prognostic_edmfx', 'diagnostic_edmfx']"
-  value: ~
-advection_test:
-  help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"
-  value: false
-zero_tendency:
-  help: "Turns off tendencies [`nothing` (default), `grid_scale`, `subgrid_scale`]"
-  value: ~
-implicit_sgs_advection:
-  help: "Whether to treat the subgrid-scale vertical advection tendency implicitly [`false` (default), `true`]"
-  value: false
-edmf_coriolis:
-  help: "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
-  value: ~
-edmfx_filter:
-  help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
-  value: false
-edmfx_nh_pressure:
-  help: "If set to true, it switches on EDMFX pressure drag closure.  [`true`, `false` (default)]"
-  value: false
-edmfx_entr_model:
-  help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`, `GeneralizedHarmonics`]"
-  value: ~
-edmfx_detr_model:
-  help: "EDMFX detrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`, `GeneralizedHarmonics`]"
-  value: ~
-edmfx_upwinding:
-  help: "EDMFX upwinding mode [`none` (default), `first_order`, `third_order`]"
-  value: none
-edmfx_sgsflux_upwinding:
-  help: "EDMFX SGS mass flux upwinding mode [`none` (default), `first_order`, `third_order`]"
-  value: none
-edmfx_sgs_mass_flux:
-  help: "If set to true, it switches on EDMFX SGS mass flux.  [`true`, `false` (default)]"
-  value: false
-edmfx_sgs_diffusive_flux:
-  help: "If set to true, it switches on EDMFX SGS diffusive flux.  [`true`, `false` (default)]"
-  value: false
-updraft_number:
-  help: "Sets the number of updrafts for the EDMF scheme"
-  value: 1
