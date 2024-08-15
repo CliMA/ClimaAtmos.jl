@@ -169,7 +169,6 @@ steps:
           --config_file $CONFIG_PATH/rcemipii_box_diagnostic_edmfx.yml
           --job_id rcemipii_box_diagnostic_edmfx
         artifact_paths: "rcemipii_box_diagnostic_edmfx/output_active/*"
-        soft_fail: true
 
   - group: "Plane Examples"
     steps:
@@ -883,6 +882,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
+        soft_fail: true
 
       - label: ":computer: Benchmark: GPU implicit baro wave"
         command: >
