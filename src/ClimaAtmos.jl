@@ -1,6 +1,6 @@
 module ClimaAtmos
 
-using NVTX, Colors
+using NVTX
 import Thermodynamics as TD
 
 include(joinpath("parameters", "Parameters.jl"))
