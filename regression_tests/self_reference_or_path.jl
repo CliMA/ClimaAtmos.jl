@@ -26,8 +26,6 @@ end
 
 function self_reference_or_path()
     if get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci"
-        @warn "Not using climaatmos-ci pipeline slug, assuming self-reference"
-        @info "Please review output results before merging."
         return :self_reference
     end
 
@@ -62,7 +60,7 @@ function self_reference_or_path()
     path = sorted_paths[i_largest_reference]
     ref_counter_file_main = joinpath(path, "ref_counter.jl")
 
-    @info "Files in $path:" # for debugging
+    @info "Files on main:" # for debugging
     for file_on_main in readdir(path)
         @info "   File:`$file_on_main`"
     end

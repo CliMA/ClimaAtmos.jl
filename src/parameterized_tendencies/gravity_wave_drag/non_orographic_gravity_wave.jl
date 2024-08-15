@@ -204,19 +204,14 @@ function non_orographic_gravity_wave_tendency!(
     if model_config isa SingleColumnModel
         # source level: the index of the level that is closest to the source height
 
-        Operators.column_reduce!(
+        Operators.column_mapreduce!(
             min_distance_reduce,
             source_level_z,
-            Base.broadcasted(
-                tuple,
-                Base.broadcasted(
-                    abs,
-                    Base.broadcasted(-, ᶜz, gw_source_height),
-                ),
-                ᶜlevel,
-            ),
-        )
-
+            ᶜz,
+            ᶜlevel,
+        ) do z, level
+            (abs.(z .- gw_source_height), level)
+        end
         source_level = source_level_z.:2
 
         fill!(damp_level, Spaces.nlevels(axes(ᶜz)))
@@ -225,30 +220,27 @@ function non_orographic_gravity_wave_tendency!(
         (; ᶜp) = p.precomputed
         # source level: the index of the highest level whose pressure is higher than source pressure
 
-        Operators.column_reduce!(
+        Operators.column_mapreduce!(
             positive_selector_reduce,
             source_level_z,
-            Base.broadcasted(
-                tuple,
-                Base.broadcasted(-, ᶜp, gw_source_pressure),
-                ᶜlevel,
-            ),
-        )
-
+            ᶜp,
+            ᶜlevel,
+        ) do p, level
+            (p .- gw_source_pressure, level)
+        end
         source_level = source_level_z.:2
+
 
         # damp level: the index of the lowest level whose pressure is lower than the damp pressure
 
-        Operators.column_reduce!(
+        Operators.column_mapreduce!(
             negative_selector_reduce,
             damp_level_z,
-            Base.broadcasted(
-                tuple,
-                Base.broadcasted(-, ᶜp, gw_damp_pressure),
-                ᶜlevel,
-            ),
-        )
-
+            ᶜp,
+            ᶜlevel,
+        ) do p, level
+            (p .- gw_damp_pressure, level)
+        end
         damp_level = damp_level_z.:2
 
     end
