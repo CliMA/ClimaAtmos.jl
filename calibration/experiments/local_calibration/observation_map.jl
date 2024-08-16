@@ -72,7 +72,7 @@ function process_member_data(
         #     y_var_i = (y_var_i .- y_μ) ./ y_σ
         # end
 
-        append!(g, mean(y_var_i))
+        append!(g, y_var_i)
     end
 
     return g

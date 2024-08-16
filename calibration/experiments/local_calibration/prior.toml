@@ -1,5 +1,5 @@
 [entr_coeff]
-prior = "constrained_gaussian(entr_coeff, 0.33, 0.07, 0, Inf)"
+prior = "constrained_gaussian(entr_coeff, 0.32, 0.04, 0, Inf)"
 type = "float"
 
 [entr_inv_tau]

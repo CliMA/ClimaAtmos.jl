@@ -2,6 +2,7 @@ using Revise
 using LinearAlgebra
 using Statistics
 using YAML
+import ClimaAtmos as CA
 includet("observation_map.jl")
 
 exp_config = YAML.load_file("experiment_config.yml")
@@ -10,17 +11,15 @@ exp_config = YAML.load_file("experiment_config.yml")
 observational_variances = [.1, 100, 1e7, 3, .03, 1, 1, 1, 1]
 
 # generate observations
-# if !isfile(obs_path)
-#     @info "Generating observations"
-#     config = CA.AtmosConfig(joinpath(experiment_dir, "model_config.yml"))
-#     simulation = CA.get_simulation(config)
-#     CA.solve_atmos!(simulation)
-#     observations = Vector{Float64}(undef, 1)
-#     observations .= process_member_data(SimDir(simulation.output_dir))
-#     JLD2.save_object(obs_path, observations)
-# end
+obs_path = "observations.jld2"
+if !isfile(obs_path)
+    @info "Generating observations"
+    config = CA.AtmosConfig("../perf_gcm_driven_scm/prognostic_edmfx_gcmdriven_column.yml"; job_id = "gcm_driven_scm")
+    simulation = CA.get_simulation(config)
+    CA.solve_atmos!(simulation)
+end
 
-observations = process_member_data(SimDir("../perf_gcm_driven_scm/output/gcm_driven_scm/output_active"), 
+observations = process_member_data(SimDir("output/gcm_driven_scm/output_active"), 
                     y_names = exp_config["y_var_names"],
                     t_start = exp_config["g_t_start_sec"],
                     t_end = exp_config["g_t_end_sec"],
