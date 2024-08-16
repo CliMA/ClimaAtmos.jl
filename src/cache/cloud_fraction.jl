@@ -84,13 +84,13 @@ NVTX.@annotate function set_cloud_fraction!(
         compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     end
 
-    coeff = FT(2.1) # TODO - move to parameters
+    diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
     @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,
         ᶜts,
         Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot),
         Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice),
-        coeff,
+        diagnostic_covariance_coeff,
         ᶜmixing_length,
         thermo_params,
     )
@@ -125,14 +125,14 @@ NVTX.@annotate function set_cloud_fraction!(
 
     # TODO - we should make this default when using diagnostic edmf
     # environment
-    coeff = FT(2.1) # TODO - move to parameters
+    diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
 
     @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,
         ᶜts,
         Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot),
         Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice),
-        coeff,
+        diagnostic_covariance_coeff,
         ᶜmixing_length,
         thermo_params,
     )
@@ -170,23 +170,31 @@ NVTX.@annotate function set_cloud_fraction!(
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜts⁰, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
-    (; ᶜρʲs, ᶜtsʲs) = p.precomputed
+    (; ᶜρʲs, ᶜtsʲs, ᶜρa⁰, ᶜρ⁰) = p.precomputed
     (; turbconv_model) = p.atmos
 
     # TODO - we should make this default when using diagnostic edmf
     # environment
-    coeff = FT(2.1) # TODO - move to parameters
+    diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
 
     @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,
         ᶜts⁰,
         Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot⁰),
         Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice⁰),
-        coeff,
+        diagnostic_covariance_coeff,
         ᶜmixing_length,
         thermo_params,
     )
 
+    # weight cloud diagnostics by environmental area
+    @. cloud_diagnostics_tuple *= NamedTuple{(:cf, :q_liq, :q_ice)}(
+        tuple(
+            draft_area(ᶜρa⁰, ᶜρ⁰),
+            draft_area(ᶜρa⁰, ᶜρ⁰),
+            draft_area(ᶜρa⁰, ᶜρ⁰),
+        ),
+    )
     # updrafts
     n = n_mass_flux_subdomains(turbconv_model)
 

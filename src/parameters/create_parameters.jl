@@ -12,6 +12,7 @@ function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
         :max_area_limiter_scale => :max_area_limiter_scale,
         :mixing_length_tke_surf_scale => :tke_surf_scale,
         :mixing_length_diss_coeff => :tke_diss_coeff,
+        :diagnostic_covariance_coeff => :diagnostic_covariance_coeff,
         :detr_buoy_coeff => :detr_buoy_coeff,
         :EDMF_max_area => :max_area,
         :mixing_length_smin_rm => :smin_rm,
