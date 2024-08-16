@@ -28,4 +28,5 @@ result_calibration = CAL.calibrate(CAL.CaltechHPCBackend, cal_ex_config;
     localization_method = EKP.NoLocalization(),
     failure_handler_method = EKP.SampleSuccGauss(),
     accelerator = EKP.DefaultAccelerator(),
+    verbose = true,
 )

@@ -11,3 +11,4 @@ Loading climacommon/2024_05_27
     mpiwrapper/2024_05_27 julia-preferences/2024_02_20 nsight-systems/2024.1.1
 WARNING: Method definition column_integral_definite!(Any, Any) in module Operators at /home/jschmitt/.julia/packages/ClimaCore/JebNg/src/Operators/integrals.jl:14 overwritten in module Diagnostics at /central/home/jschmitt/ClimaAtmos.jl/src/diagnostics/core_diagnostics.jl:818.
 ERROR: Method overwriting is not permitted during Module precompilation. Use `__precompile__(false)` to opt-out of precompilation.
+slurmstepd: error: *** JOB 43294621 ON hpc-21-15 CANCELLED AT 2024-08-16T16:31:01 ***
