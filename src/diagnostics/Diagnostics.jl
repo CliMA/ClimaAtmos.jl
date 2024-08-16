@@ -1,5 +1,7 @@
 module Diagnostics
 
+import Dates: Month, DateTime, Period
+
 import ClimaComms
 
 import LinearAlgebra: dot
@@ -50,7 +52,8 @@ import ClimaDiagnostics:
 
 import ClimaDiagnostics.DiagnosticVariables: descriptive_short_name
 
-import ClimaDiagnostics.Schedules: EveryStepSchedule, EveryDtSchedule
+import ClimaDiagnostics.Schedules:
+    EveryStepSchedule, EveryDtSchedule, EveryCalendarDtSchedule
 
 import ClimaDiagnostics.Writers:
     HDF5Writer,

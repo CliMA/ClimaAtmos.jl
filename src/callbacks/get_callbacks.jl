@@ -94,29 +94,50 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, t_start, dt)
             haskey(yaml_diag, "period") ||
                 error("period keyword required for diagnostics")
 
-            period_seconds = FT(time_to_seconds(yaml_diag["period"]))
+            period_str = yaml_diag["period"]
+
+            if occursin("months", period_str)
+                months = match(r"^(\d+)months$", period_str)
+                isnothing(months) && error(
+                    "$(period_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
+                )
+                period_dates = Dates.Month(parse(Int, first(months)))
+                output_schedule = CAD.EveryCalendarDtSchedule(
+                    period_dates;
+                    reference_date = p.start_date,
+                    t_start,
+                )
+                compute_schedule = CAD.EveryCalendarDtSchedule(
+                    period_dates;
+                    reference_date = p.start_date,
+                    t_start,
+                )
+            else
+                period_seconds = FT(time_to_seconds(period_str))
+                output_schedule =
+                    CAD.EveryDtSchedule(period_seconds; t_start)
+                compute_schedule =
+                    CAD.EveryDtSchedule(period_seconds; t_start)
+            end
 
             if isnothing(output_name)
                 output_short_name = CAD.descriptive_short_name(
                     CAD.get_diagnostic_variable(short_name),
-                    CAD.EveryDtSchedule(period_seconds; t_start),
+                    output_schedule,
                     reduction_time_func,
                     pre_output_hook!,
                 )
             end
 
             if isnothing(reduction_time_func)
-                compute_every = CAD.EveryDtSchedule(period_seconds; t_start)
+                compute_every = compute_schedule
             else
                 compute_every = CAD.EveryStepSchedule()
             end
 
             CAD.ScheduledDiagnostic(
                 variable = CAD.get_diagnostic_variable(short_name),
-                output_schedule_func = CAD.EveryDtSchedule(
-                    period_seconds;
-                    t_start,
-                ),
+                output_schedule_func = output_schedule,
                 compute_schedule_func = compute_every,
                 reduction_time_func = reduction_time_func,
                 pre_output_hook! = pre_output_hook!,
@@ -134,7 +155,8 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, t_start, dt)
             CAD.default_diagnostics(
                 atmos_model,
                 t_start,
-                time_to_seconds(parsed_args["t_end"]);
+                time_to_seconds(parsed_args["t_end"]),
+                p.start_date;
                 output_writer = netcdf_writer,
             )...,
             diagnostics...,
