@@ -24,7 +24,7 @@ dz_bottom: 30
 dz_top: 3000
 perturb_initstate: false
 dt: "10secs" 
-t_end: "10hours"
+t_end: "80hours"
 dt_save_state_to_disk: "40hours"
 call_cloud_diagnostics_per_stage : true
 toml: [perf_prognostic_edmfx_bomex.toml]
