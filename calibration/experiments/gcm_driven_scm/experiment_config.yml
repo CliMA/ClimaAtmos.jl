@@ -1,0 +1,15 @@
+prior: prior_prognostic.toml
+ensemble_size: 50
+n_iterations: 5
+batch_size: 1
+model_config : model_config_prognostic.yml
+output_dir : output/gcm_driven_scm
+y_var_names: [thetaa, hus, clw] # calibration variables
+z_max : 4000 # [m]
+dims : 90  # num vertical levels below z_max x num variables x batch size
+eki_timestep: 0.001 # timestep of eki
+const_noise: 0.05 # constant noise (diagonal elements of noise cov matrix Γ)
+y_t_start_sec : 475200.0 # start time of LES averaging window [s] : 5.5 days
+y_t_end_sec : 518400.0 # end time of LES averaging window [s] : 6 days (LES length = 6 days)
+g_t_start_sec : 216000.0 # start time of SCM averaging window [s] : 2.5 days
+g_t_end_sec : 259200.0 # end time of SCM averaging window [s] : 3 days (SCM length = 3 days)
