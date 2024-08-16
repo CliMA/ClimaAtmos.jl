@@ -1,6 +1,6 @@
 initial_condition: "GCM"
 external_forcing: "GCM"
-external_forcing_file: "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc" 
+external_forcing_file: "/Users/julianschmitt/Downloads/HadGEM2-A_amip.2004-2008.07.nc" 
 surface_setup: "GCM"
 turbconv: "prognostic_edmfx"
 rayleigh_sponge: true
@@ -24,7 +24,7 @@ dz_bottom: 30
 dz_top: 3000
 perturb_initstate: false
 dt: "10secs" 
-t_end: "40hours"
+t_end: "10hours"
 dt_save_state_to_disk: "40hours"
 call_cloud_diagnostics_per_stage : true
 toml: [perf_prognostic_edmfx_bomex.toml]
@@ -36,6 +36,10 @@ insolation: "gcmdriven"
 diagnostics:
     - short_name: [thetaa, hur, hus, cl, clw, cli, rlut, rlutcs, rsut, rsutcs]
       period: 10mins
+      writer: nc
+    - short_name: [rhoa, clwvi, dsevi, clvi, husvi, hurvi]
+      period: 10mins
+      writer: nc
   # - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
   #   period: 10mins
   # - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]

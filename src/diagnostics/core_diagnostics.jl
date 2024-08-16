@@ -809,3 +809,212 @@ add_diagnostic_variable!(
     comments = "Elevation of the horizontal coordinates",
     compute! = compute_orog!,
 )
+
+###
+# cloud liquid water specific humidity (1d)
+###
+compute_clwvi!(out, state, cache, time) =
+    compute_clwvi!(out, state, cache, time, cache.atmos.moisture_model)
+compute_clwvi!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("clwvi", model)
+
+function compute_clwvi!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        Operators.column_integral_definite!(out, state.c.ρ .* cache.precomputed.cloud_diagnostics_tuple.q_liq)
+        return out
+    else
+        Operators.column_integral_definite!(out, state.c.ρ .* cache.precomputed.cloud_diagnostics_tuple.q_liq)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "clwvi",
+    long_name = "Condensed Water Path",
+    standard_name = "atmosphere_mass_content_of_cloud_condensed_water",
+    units = "kg m-2",
+    comments = """
+    Mass of condensed (liquid + ice) water in the column divided by the area of the column 
+    (not just the area of the cloudy portion of the column). Includes precipitating hydrometeors
+    ONLY if the precipitating hydrometeors affect the calculation of radiative transfer in model.
+    """,
+    compute! = compute_clwvi!,
+)
+
+###
+# Dry Static Energy (1d)
+###
+compute_dsevi!(out, state, cache, time) =
+    compute_dsevi!(out, state, cache, time, cache.atmos.moisture_model)
+compute_dsevi!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("dsevi", model)
+
+function compute_dsevi!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+
+        c = CAP.cp_d(cache.params) # specific heat capacity of dry air
+        z = Fields.coordinate_field(state.c.ρ).z # vertical coordinate 
+        g = CAP.grav(cache.params) # gravity
+        # density weight the whole profile 
+        # Operators.column_integral_definite!(out, state.c.ρ .* (c .* TD.air_temperature.(thermo_params, cache.precomputed.ᶜts) .+ g .* z))
+        Operators.column_integral_definite!(out, Base.broadcasted(*, state.c.ρ,
+                                                 Base.broadcasted(+, 
+                                                 Base.broadcasted(*, c, Base.broadcasted(TD.air_temperature, thermo_params, cache.precomputed.ᶜts)), 
+                                                 Base.broadcasted(*, g, z))))
+        return out
+    else
+        c = CAP.cp_d(cache.params) # specific heat capacity of dry air
+        z = Fields.coordinate_field(state.c.ρ).z # vertical coordinate 
+        g = CAP.grav(cache.params) # gravity
+        # Operators.column_integral_definite!(out, state.c.ρ .* (c .* TD.air_temperature.(thermo_params, cache.precomputed.ᶜts) .+ g .* z))
+
+        Operators.column_integral_definite!(out, Base.broadcasted(*, state.c.ρ,
+                                                 Base.broadcasted(+, 
+                                                 Base.broadcasted(*, c, Base.broadcasted(TD.air_temperature, thermo_params, cache.precomputed.ᶜts)), 
+                                                 Base.broadcasted(*, g, z))))
+    end
+end
+
+import ClimaCore: Operators, RecursiveApply, Fields
+function Operators.column_integral_definite!(∫field, ᶜinput, init = RecursiveApply.rzero(eltype(∫field)))
+    ᶜinput_times_Δz =
+        Base.Broadcast.broadcasted(RecursiveApply.:⊠, ᶜinput, Fields.Δz_field(axes(ᶜinput)))
+    Operators.column_reduce!(RecursiveApply.:⊞, ∫field, ᶜinput_times_Δz; init)
+end
+
+add_diagnostic_variable!(
+    short_name = "dsevi",
+    long_name = "Dry Static Energy Vertical Integral",
+    standard_name = "dry_static_energy_vertical_integral",
+    units = "",
+    comments = """
+    """,
+    compute! = compute_dsevi!,
+)
+
+###
+# column integrated cloud fraction (1d)
+###
+compute_clvi!(out, state, cache, time) =
+    compute_clvi!(out, state, cache, time, cache.atmos.moisture_model)
+compute_clvi!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("clvi", model)
+
+function compute_clvi!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        z = Fields.coordinate_field(cache.precomputed.cloud_diagnostics_tuple.cf).z
+        Operators.column_integral_definite!(out, Base.broadcasted(*, ifelse.(cache.precomputed.cloud_diagnostics_tuple.cf .> 0.0f0, 1.0f0, 0.0f0),
+                                                                     Base.broadcasted(<, z, 4000)))
+        return out
+    else
+        z = Fields.coordinate_field(cache.precomputed.cloud_diagnostics_tuple.cf).z
+        Operators.column_integral_definite!(out, Base.broadcasted(*, ifelse.(cache.precomputed.cloud_diagnostics_tuple.cf .> 0.0f0, 1.0f0, 0.0f0),
+                                                                     Base.broadcasted(<, z, 4000)))
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "clvi",
+    long_name = "Vertical Cloud Fraction Integral",
+    standard_name = "vertical_cloud_fraction_integral",
+    units = "",
+    comments = """
+
+    """,
+    compute! = compute_clvi!,
+)
+
+
+###
+# Total Column Integrated Specific Humidity (1d)
+###
+compute_husvi!(out, state, cache, time) =
+    compute_husvi!(out, state, cache, time, cache.atmos.moisture_model)
+compute_husvi!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("husvi", model)
+
+function compute_husvi!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        Operators.column_integral_definite!(out, state.c.ρq_tot)
+        return out
+    else
+        Operators.column_integral_definite!(out, state.c.ρq_tot)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "husvi",
+    long_name = "Specific Humidity Vertical Integral",
+    standard_name = "specific_humidity_vi",
+    units = "kg m^-2",
+    comments = "Integrated specific humidity over the vertical column",
+    compute! = compute_husvi!,
+)
+
+###
+# Total Column Integrated Hurvi (1d)
+###
+compute_hurvi!(out, state, cache, time) =
+    compute_hurvi!(out, state, cache, time, cache.atmos.moisture_model)
+compute_hurvi!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("hurvi", model)
+
+function compute_hurvi!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        saturation = zeros(axes(Fields.level(state.f, half)))
+        Operators.column_integral_definite!(saturation, state.c.ρ .* TD.q_vap_saturation.(thermo_params, cache.precomputed.ᶜts))
+        Operators.column_integral_definite!(out, state.c.ρq_tot ./ (saturation))
+        return out
+    else
+        saturation = zeros(axes(Fields.level(state.f, half)))
+        Operators.column_integral_definite!(saturation, state.c.ρ .* TD.q_vap_saturation.(thermo_params, cache.precomputed.ᶜts))
+        Operators.column_integral_definite!(out, state.c.ρq_tot ./ (saturation))
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "hurvi",
+    long_name = "Relative Humidity Saturation-Weighted Vertical Integral",
+    standard_name = "relative_humidity_vi",
+    units = "kg m^-2",
+    comments = "Integrated relative humidity over the vertical column",
+    compute! = compute_hurvi!,
+)

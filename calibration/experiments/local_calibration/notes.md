@@ -9,8 +9,21 @@ Clouds are more simple. Here we'll just do a density reweighting: $CLW = \int \r
 
 We're going to replace temperature (`thetaa`) with dry static energy, recalling that $MSE = \underbrace{c_p\cdot T + gz}_\text{DSE} + L q_v$, ignoring $Lq_v$ since this is accounted for in `HUR` and `HUS` integrated values. We'll compute DSE for each of the column values and then again take the column integral, weighting based on the spacing: e.g. $\int \rho DSE dz$
 
+##### New Diagnostics
+ - `clwvi`: vertical integral of cloud liquid water in kg/m^2
+ - `clvi`: cloud fraction integral up to 4000m (could divide by 4000 to get "cloud fraction"), unitless
+ - `dsevi`: dry static energy vertical integral in J/ (kg * m^2) 
+ - `husvi`: density weighted column specific humidity in kg /m^2
+ - `hurvi`: $\frac{\int \rho q_v dz}{\int \rho q_v^* dz}$ unitless?
 
-## MWE 
+## DSE
+``` julia
+T = TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
+c = CAP.cp_d(params)
+z = Fields.coordinate_field(integrator.u.c).z
+g = CAP.grav(params)
+```
+As T will allocate memory (and we don't want to do this), we use `Base.broadcasted` to load lazy representations of this quantity and then directly update `out` with it. 
 
 
 ## Comments
