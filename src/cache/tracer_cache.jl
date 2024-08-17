@@ -1,5 +1,7 @@
 using ClimaUtilities.ClimaArtifacts
-import ClimaUtilities.TimeVaryingInputs: TimeVaryingInput
+import Dates: Year
+import ClimaUtilities.TimeVaryingInputs:
+    TimeVaryingInput, LinearPeriodFillingInterpolation
 
 function tracer_cache(
     Y,
@@ -27,6 +29,7 @@ function tracer_cache(
             target_space;
             reference_date = start_date,
             regridder_type = :InterpolationsRegridder,
+            method = LinearPeriodFillingInterpolation(Year(1)),
         )
         o3_cache = (; o3, prescribed_o3_timevaryinginput)
     else
@@ -57,6 +60,7 @@ function tracer_cache(
                 target_space;
                 reference_date = start_date,
                 regridder_type = :InterpolationsRegridder,
+                method = LinearPeriodFillingInterpolation(Year(1)),
             ) for name in prescribed_aerosol_names
         ]
 
