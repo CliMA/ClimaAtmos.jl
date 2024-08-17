@@ -2,6 +2,16 @@
 
 # Tracers
 
+function compute_tracer!(out, state, cache, time, tracer_name)
+    tracer_name in propertynames(cache.tracers) ||
+        error("$tracer_name does not exist in the model")
+    if isnothing(out)
+        return copy(getproperty(cache.tracers, tracer_name))
+    else
+        out .= getproperty(cache.tracers, tracer_name)
+    end
+end
+
 function compute_aerosol!(out, state, cache, time, aerosol_name)
     :prescribed_aerosols_field in propertynames(cache.tracers) ||
         error("Aerosols do not exist in the model")
@@ -16,6 +26,17 @@ function compute_aerosol!(out, state, cache, time, aerosol_name)
             getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name)
     end
 end
+
+###
+# Ozone concentration (3d)
+###
+add_diagnostic_variable!(
+    short_name = "o3",
+    long_name = "Mole Fraction of O3",
+    standard_name = "mole_fraction_of_ozone_in_air",
+    units = "mol mol^-1",
+    compute! = (out, u, p, t) -> compute_tracer!(out, u, p, t, :o3),
+)
 
 ###
 # Dust concentration (3d)

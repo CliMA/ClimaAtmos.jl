@@ -33,6 +33,7 @@ function radiation_model_cache(
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
     params,
     ᶜp, # Used for ozone
+    prescribe_ozone,
     aerosol_names;
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
@@ -81,34 +82,42 @@ function radiation_model_cache(
         else
             # the pressure and ozone concentrations are provided for each of 100
             # sites, which we average across
-            n = input_data.dim["layer"]
-            input_center_pressure = vec(
-                mean(reshape(input_data["pres_layer"][:, :], n, :); dims = 2),
-            )
-            # the first values along the third dimension of the ozone concentration
-            # data are the present-day values
-            input_center_volume_mixing_ratio_o3 =
-                vec(mean(reshape(input_data["ozone"][:, :, 1], n, :); dims = 2))
+            if !prescribe_ozone
+                n = input_data.dim["layer"]
+                input_center_pressure = vec(
+                    mean(
+                        reshape(input_data["pres_layer"][:, :], n, :);
+                        dims = 2,
+                    ),
+                )
+                # the first values along the third dimension of the ozone concentration
+                # data are the present-day values
+                input_center_volume_mixing_ratio_o3 = vec(
+                    mean(reshape(input_data["ozone"][:, :, 1], n, :); dims = 2),
+                )
 
-            # interpolate the ozone concentrations to our initial pressures
-            pressure2ozone = Intp.extrapolate(
-                Intp.interpolate(
-                    (input_center_pressure,),
-                    input_center_volume_mixing_ratio_o3,
-                    Intp.Gridded(Intp.Linear()),
-                ),
-                Intp.Flat(),
-            )
-            if device isa ClimaComms.CUDADevice
-                fv = Fields.field_values(ᶜp)
-                fld_array = DA(pressure2ozone.(Array(parent(fv))))
-                data = DataLayouts.rebuild(fv, fld_array)
-                ᶜvolume_mixing_ratio_o3_field = Fields.Field(data, axes(ᶜp))
+                # interpolate the ozone concentrations to our initial pressures
+                pressure2ozone = Intp.extrapolate(
+                    Intp.interpolate(
+                        (input_center_pressure,),
+                        input_center_volume_mixing_ratio_o3,
+                        Intp.Gridded(Intp.Linear()),
+                    ),
+                    Intp.Flat(),
+                )
+                if device isa ClimaComms.CUDADevice
+                    fv = Fields.field_values(ᶜp)
+                    fld_array = DA(pressure2ozone.(Array(parent(fv))))
+                    data = DataLayouts.rebuild(fv, fld_array)
+                    ᶜvolume_mixing_ratio_o3_field = Fields.Field(data, axes(ᶜp))
+                else
+                    ᶜvolume_mixing_ratio_o3_field = @. FT(pressure2ozone(ᶜp))
+                end
+                center_volume_mixing_ratio_o3 =
+                    Fields.field2array(ᶜvolume_mixing_ratio_o3_field)
             else
-                ᶜvolume_mixing_ratio_o3_field = @. FT(pressure2ozone(ᶜp))
+                center_volume_mixing_ratio_o3 = NaN # initialized in callback
             end
-            center_volume_mixing_ratio_o3 =
-                Fields.field2array(ᶜvolume_mixing_ratio_o3_field)
 
             # the first value for each global mean volume mixing ratio is the
             # present-day value

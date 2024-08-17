@@ -6,4 +6,7 @@ git-tree-sha1 = "9da4af348af2606764e5e2c94d9439714221dff1"
     url = "https://caltech.box.com/shared/static/chmel1vdthfvfac0yl61ayw2jqnjzr2c.gz"
 
 [aerosol_concentrations]
-    git-tree-sha1 = "a4bf66aab365d42abe428129457327d5244ed6b0"
+git-tree-sha1 = "a4bf66aab365d42abe428129457327d5244ed6b0"
+
+[ozone_concentrations]
+git-tree-sha1 = "235a16e02c24a28b20244c0f2e7f149cc783166f"

@@ -53,6 +53,7 @@ function get_atmos(config::AtmosConfig, params)
     model_config = get_model_config(parsed_args)
     vert_diff =
         get_vertical_diffusion_model(diffuse_momentum, parsed_args, params, FT)
+
     atmos = AtmosModel(;
         moisture_model,
         model_config,
@@ -657,6 +658,7 @@ function get_simulation(config::AtmosConfig)
             params,
             surface_setup,
             sim_info,
+            tracers.prescribe_ozone,
             tracers.aerosol_names,
         )
     end
