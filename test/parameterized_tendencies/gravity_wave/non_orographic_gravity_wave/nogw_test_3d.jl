@@ -6,6 +6,11 @@ using Interpolations
 using Statistics
 import ClimaAtmos
 import ClimaAtmos as CA
+import ClimaCore
+import ClimaCore.Spaces as Spaces
+import ClimaCore.Fields as Fields
+import ClimaCore.Geometry as Geometry
+import ClimaCore.Operators as Operators
 const FT = Float64
 
 include("../gw_plotutils.jl")
@@ -17,7 +22,7 @@ face_z = FT.(0:1e3:0.47e5)
 center_z = FT(0.5) .* (face_z[1:(end - 1)] .+ face_z[2:end])
 
 # compute the source parameters
-function non_orographic_gravity_wave(
+function non_orographic_gravity_wave_param(
     ::Type{FT};
     source_height = FT(15000),
     Bw = FT(1.2),
@@ -46,8 +51,14 @@ function non_orographic_gravity_wave(
     )
 end
 
-params = non_orographic_gravity_wave(FT; Bw = 0.4, cmax = 150, kwv = 2π / 100e3)
-source_level = argmin(abs.(center_z .- params.gw_source_height))
+non_orographic_gravity_wave = non_orographic_gravity_wave_param(
+    FT;
+    Bw = 0.4,
+    cmax = 150,
+    kwv = 2π / 100e3,
+)
+source_level =
+    argmin(abs.(center_z .- non_orographic_gravity_wave.gw_source_height))
 damp_level = length(center_z)
 
 include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
@@ -122,7 +133,45 @@ center_u_zonalave = mean(center_u, dims = 1)[1, :, :, :]
 center_bf_zonalave = mean(center_bf, dims = 1)[1, :, :, :]
 center_ρ_zonalave = mean(center_ρ, dims = 1)[1, :, :, :]
 
-B0 = similar(params.gw_c)
+column_domain = ClimaCore.Domains.IntervalDomain(
+    ClimaCore.Geometry.ZPoint(0.0) .. ClimaCore.Geometry.ZPoint(47000),
+    boundary_names = (:bottom, :top),
+)
+
+column_mesh = ClimaCore.Meshes.IntervalMesh(column_domain, nelems = 47)
+
+column_center_space = ClimaCore.Spaces.CenterFiniteDifferenceSpace(column_mesh)
+
+column_face_space =
+    ClimaCore.Spaces.FaceFiniteDifferenceSpace(column_center_space)
+
+coordinate = Fields.coordinate_field(column_center_space)
+gw_ncval = Val(500)
+ᶜz = coordinate.z
+ᶜρ = copy(ᶜz)
+ᶜu = copy(ᶜz)
+ᶜv = copy(ᶜz)
+ᶜbf = copy(ᶜz)
+ᶜlevel = similar(ᶜρ, FT)
+u_waveforcing = similar(ᶜu)
+v_waveforcing = similar(ᶜv)
+for i in 1:Spaces.nlevels(axes(ᶜρ))
+    fill!(Fields.level(ᶜlevel, i), i)
+end
+uforcing = similar(ᶜρ, FT)
+vforcing = similar(ᶜρ, FT)
+
+scratch = (;
+    ᶜtemp_scalar = similar(ᶜz, FT),
+    ᶜtemp_scalar_2 = similar(ᶜz, FT),
+    ᶜtemp_scalar_3 = similar(ᶜz, FT),
+    ᶜtemp_scalar_4 = similar(ᶜz, FT),
+    ᶜtemp_scalar_5 = similar(ᶜz, FT),
+    temp_field_level = similar(Fields.level(ᶜz, 1), FT),
+)
+
+params = (; non_orographic_gravity_wave, scratch)
+
 
 # Jan
 month = Dates.month.(time)
@@ -130,26 +179,38 @@ month = Dates.month.(time)
 Jan_u = mean(center_u_zonalave[:, :, month .== 1], dims = 3)[:, :, 1]
 Jan_bf = mean(center_bf_zonalave[:, :, month .== 1], dims = 3)[:, :, 1]
 Jan_ρ = mean(center_ρ_zonalave[:, :, month .== 1], dims = 3)[:, :, 1]
-Jan_uforcing = zeros(length(lat), length(center_z))
+Jan_uforcing = similar(Jan_u)
+
 for j in 1:length(lat)
-    Jan_uforcing[j, :] = CA.non_orographic_gravity_wave_forcing(
-        Jan_u[j, :],
-        Jan_bf[j, :],
-        Jan_ρ[j, :],
-        copy(center_z),
+    Base.parent(ᶜρ) .= Jan_ρ[j, :]
+    Base.parent(ᶜu) .= Jan_u[j, :]
+    Base.parent(ᶜbf) .= Jan_bf[j, :]
+    ᶜρ_source = Fields.level(ᶜρ, source_level)
+    ᶜu_source = Fields.level(ᶜu, source_level)
+    ᶜv_source = Fields.level(ᶜv, source_level)
+    uforcing .= 0
+    vforcing .= 0
+
+    CA.non_orographic_gravity_wave_forcing(
+        ᶜu,
+        ᶜv,
+        ᶜbf,
+        ᶜρ,
+        ᶜz,
+        ᶜlevel,
         source_level,
         damp_level,
-        params.gw_source_ampl,
-        params.gw_Bw,
-        params.gw_Bn,
-        B0,
-        params.gw_cw,
-        params.gw_cn,
-        params.gw_flag,
-        params.gw_c,
-        params.gw_c0,
-        params.gw_nk,
+        ᶜρ_source,
+        ᶜu_source,
+        ᶜv_source,
+        uforcing,
+        vforcing,
+        gw_ncval,
+        u_waveforcing,
+        v_waveforcing,
+        params,
     )
+    Jan_uforcing[j, :] = parent(uforcing)
 end
 
 output_dir = "nonorographic_gravity_wave_test_3d"

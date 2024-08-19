@@ -15,6 +15,8 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜtke_exch
         ᶜtemp_scalar_3 = Fields.Field(FT, center_space),
+        ᶜtemp_scalar_4 = Fields.Field(FT, center_space),
+        ᶜtemp_scalar_5 = Fields.Field(FT, center_space),
         ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
         temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),
         temp_field_level_2 = Fields.level(Fields.Field(FT, center_space), 1),
