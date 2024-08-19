@@ -4,7 +4,7 @@ n_iterations: 10
 model_config: model_config.yml
 observations: observations.jld2
 noise: obs_noise_cov.jld2
-output_dir: output/local_calibration
+output_dir: output/adaptive_t
 batch_size: 1
 y_var_names: [clwvi, clvi, dsevi, husvi, hurvi, rlut, rlutcs, rsut, rsutcs]
 dims: 9 # num vertical levels x num variables, also shape of observations

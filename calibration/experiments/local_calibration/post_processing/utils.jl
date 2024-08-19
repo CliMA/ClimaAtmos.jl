@@ -6,39 +6,108 @@ import ClimaCalibrate as CAL
 import JLD2
 using CairoMakie
 
+params_true = [.14, 1, .3, .22] # 4th position .0001, entr_inv_tau removed
 
-
-function get_parameters(iteration, output_dir)
-    # open files
-    eki_filepath = joinpath(CAL.path_to_iteration(output_dir, iteration), "eki_file.jld2")
-    eki = JLD2.load_object(eki_filepath)
-    prior_path = joinpath("../prior.toml")
-    prior = CAL.get_prior(prior_path)
-    # process EKI object to get u
-    params = EKP.transform_unconstrained_to_constrained(prior, EKP.get_u(eki))
-    params = vcat(params...)
-    names = EKP.get_name(prior)
-    params = reshape(params, length(names), eki.N_ens, iteration+1)
-    params = permutedims(params, (3, 1, 2));
-
-    return params, EKP.get_g(eki), eki.Δt, names
+function loss_plot(eki, observations; 
+    n_iters = 9,
+    n_metrics = 9,
+    config_dict=config_dict)
+    loss_vals = EKP.get_g(eki)
+    all_loss = []
+    for iteration in 1:n_iters
+        vals = []
+            for metric in 1:n_metrics
+                vmean = mean(filter(!isnan, ((loss_vals[iteration] .- observations) .^2)[metric,:]))
+                append!(vals, sqrt(vmean))
+            end
+        append!(all_loss, [vals])
+        end
+    all_loss
+        
+    fig = Figure(size = (800, 600))
+    num_per_row = 3
+    for metric in 1:n_metrics
+        row = div(metric-1, num_per_row) + 1
+        col = mod(metric-1, num_per_row) + 1
+        vals = []
+        for iteration in 1:n_iters
+            append!(vals, all_loss[iteration][metric])
+        end
+        ax = Axis(fig[row, col], title = config_dict["y_var_names"][metric])
+        lines!(ax, vals)
+    end
+    Label(fig[0,:], "Individual Observation Loss over Iteration")
+    fig
 end
 
-function plot_parameters(iteration, output_dir)
-    (params, g, dt, names) = get_parameters(iteration, output_dir)
 
-    fig = Figure(size = (800, 600))
 
+
+function gen_obs(simdir)
+    simdir = SimDir(simdir)
+    process_member_data(simdir; y_names = config_dict["y_var_names"], t_start = config_dict["g_t_start_sec"], t_end = config_dict["g_t_end_sec"])
+end
+
+function plot_start_end_distributions(eki, config_dict, observations, variances, observations_true)
+    fig = Figure(size = (1000, 600))
+    loss_vals = EKP.get_g(eki)
     num_per_row = 3
-    for i in 1:length(names)
+    for i in 1:9
         row = div(i-1, num_per_row) + 1
         col = mod(i-1, num_per_row) + 1
+
+        # get data 
+        prior_dist = loss_vals[1][i, :]
+        end_dist = filter(!isnan, loss_vals[end][i, :])
+        gmin = minimum(vcat(prior_dist, end_dist))
+        gmax = maximum(vcat(prior_dist, end_dist))
+        bins = range(gmin, gmax, length = 30)
+
+        # get perfect model run data
+        obs = observations[i]
+        obs_true = observations_true[i]
+        vari = variances[i]
         
-        ax = Axis(fig[row, col], title = names[i], xlabel = "Iteration")
         
-        for j in 1:size(params, 3)
-            lines!(ax, 1:size(params, 1), params[:, i, j], color = :red, alpha = 0.3)
+        ax = Axis(fig[row, col], title = config_dict["y_var_names"][i],
+            limits = ((minimum([gmin, obs*.997, true_obs[i]*.997]), maximum([gmax, obs*1.003, true_obs[i]*1.003])), nothing))
+        
+
+        hist!(ax, prior_dist, bins = bins, color = :blue, label = "Initial Distribution")
+        hist!(ax, end_dist, bins = bins, color = :orange, label = "Final Distribution")
+
+
+        vlines!(ax, obs, color=:red, label = "Noisy Observation")
+        vlines!(ax, true_obs[i], color="green", label = "True Observation")
+
+        # shade polygon for 2x standard deviations 
+
+        n_vari = 2
+        poly!(ax, [obs_true-n_vari*vari, obs_true+n_vari*vari, obs_true + n_vari*vari, obs_true - n_vari*vari] ,
+                    [0, 0, 60, 60],
+                    color=(:red, .2))
+        if i == 1 # add one legend for all 
+            legend = Legend(fig, ax, orientation = :vertical, tellheight = false)
+            fig[1, num_per_row + 1] = legend
         end
+    end
+    fig
+end
+
+
+function plot_parameters(eki, prior, params_true)
+    phi = cat(EKP.get_ϕ(prior, eki)..., dims = 3)
+    time = vcat(0, cumsum(eki.Δt))
+    fig = Figure(size = (1000, 800))
+    num_per_row = 3
+    for (i, name) in enumerate(EKP.get_name(prior))
+        row = div(i-1, num_per_row) + 1
+        col = mod(i-1, num_per_row) + 1
+        ax = Axis(fig[row, col], title = name)
+        for ens in 1:100
+            lines!(ax, time, phi[i, ens, :], color= :red)
+        end    
+        hlines!(ax, params_true[i])
     end
     fig
 end

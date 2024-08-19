@@ -52,4 +52,4 @@ diagnostics:
   #   short_name: tke
   #   period: 10mins
 ode_algo: ARS343
-output_dir: output/local_calibration
+output_dir: output/adaptive_t
