@@ -4,6 +4,15 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+v0.27.3
+-------
+- Add support for monthly calendar diagnostics
+  PR [#3235](https://github.com/CliMA/ClimaAtmos.jl/pull/3241)
+- Use period filling interpolation for aerosol time series
+  PR [#3246] (https://github.com/CliMA/ClimaAtmos.jl/pull/3246)
+- Add prescribe time and spatially varying ozone
+  PR [#3241](https://github.com/CliMA/ClimaAtmos.jl/pull/3241)
+
 v0.27.2
 -------
 - Use new aerosol artifact and change start date
