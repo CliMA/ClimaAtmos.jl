@@ -169,6 +169,8 @@ steps:
           --config_file $CONFIG_PATH/rcemipii_box_diagnostic_edmfx.yml
           --job_id rcemipii_box_diagnostic_edmfx
         artifact_paths: "rcemipii_box_diagnostic_edmfx/output_active/*"
+        agents:
+          slurm_mem: 20GB
 
   - group: "Plane Examples"
     steps:
