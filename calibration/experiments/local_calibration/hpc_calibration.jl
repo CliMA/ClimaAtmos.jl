@@ -12,7 +12,6 @@ include("observation_map.jl")
 
 import ClimaCalibrate as CAL
 import ClimaAtmos as CA
-const experiment_dir = joinpath(pkgdir(CA), "calibration", "experiments", "local_calibration")
 const model_interface =
     joinpath(pkgdir(CA), "calibration", "model_interface.jl")
 

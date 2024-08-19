@@ -73,8 +73,8 @@ function plot_start_end_distributions(eki, config_dict, observations, variances,
             limits = ((minimum([gmin, obs*.997, true_obs[i]*.997]), maximum([gmax, obs*1.003, true_obs[i]*1.003])), nothing))
         
 
-        hist!(ax, prior_dist, bins = bins, color = :blue, label = "Initial Distribution")
-        hist!(ax, end_dist, bins = bins, color = :orange, label = "Final Distribution")
+        hist!(ax, prior_dist, bins = bins, color = (:blue, 0.75), label = "Initial Distribution")
+        hist!(ax, end_dist, bins = bins, color = (:orange, 0.75), label = "Final Distribution")
 
 
         vlines!(ax, obs, color=:red, label = "Noisy Observation")

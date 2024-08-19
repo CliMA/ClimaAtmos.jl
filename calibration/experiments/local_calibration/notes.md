@@ -33,6 +33,14 @@ As T will allocate memory (and we don't want to do this), we use `Base.broadcast
  - `convergence_plot` in `postporcessing.jl` returns strange plots ... I think it's not generalized to more than one parameter.
 
 
-# SLURM Commands
+## SLURM Commands
  - `squeue --format="%.18i" --me -h | grep -w 43321.* | xargs scancel`
  - `sreport cluster UserUtilizationByAccount accounts=esm start=1/1/24`
+
+
+## Experiments
+ - `adaptive_t`: uses Tapio list as variances and adds noise to the true observations with standard deviation as 10\% of the intermodel spread. Random observational realization used and variances are in the `post_processing/adaptive_t` folder.
+
+**Remove DSEVI as diagnostic**
+ - `narrow_uncertainty`: What happens if we have perfect observations and small uncertainty (e.g. 5\% of the prior spread?). 
+ - perf_obs: What happens if we have perfect observations but relatively large observational uncertainty?
