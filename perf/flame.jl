@@ -46,7 +46,7 @@ allocs_limit["flame_perf_target_diagnostic_edmfx"] = 2_140_864
 allocs_limit["flame_perf_target_frierson"] = 1_520_264
 allocs_limit["flame_perf_target_threaded"] = 2_298_355
 allocs_limit["flame_perf_target_callbacks"] = 1_446_496
-allocs_limit["flame_perf_gw"] = 3_268_961_856
+allocs_limit["flame_perf_gw"] = 882_779_224
 allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 4_000_488
 allocs_limit["flame_gpu_implicit_barowave_moist"] = 336_378
 # Ideally, we would like to track all the allocations, but this becomes too
