@@ -460,7 +460,6 @@ steps:
           slurm_mem: 16G
 
       - label: ":computer: Exercise remap pipeline"
-        key: "remap_pipeline"
         depends_on: "prep_remap"
         command: >
           tar xvf prep_remap/output_active/hdf5_files.tar -C prep_remap/output_active
@@ -855,6 +854,7 @@ steps:
           slurm_gpus: 1
 
       - label: "GPU: Diagnostic EDMFX aquaplanet"
+        key: "gpu_diagnostic_edmfx_aquaplanet"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/gpu_diagnostic_edmfx_aquaplanet.yml
@@ -959,7 +959,7 @@ steps:
       - label: ":computer: Benchmark: GPU diag edmf"
         command: >
           julia --color=yes --project=perf perf/benchmark.jl
-          --config_file ${CONFIG_PATH}/aquaplanet_progedmf.yml
+          --config_file ${CONFIG_PATH}/aquaplanet_diagedmf.yml
           --job_id bm_diag_edmf_gpu
         env:
           CLIMACOMMS_DEVICE: "CUDA"
