@@ -89,12 +89,12 @@ function radiation_model_cache(
                         reshape(input_data["pres_layer"][:, :], n, :);
                         dims = 2,
                     ),
-                )::Vector{FT}
+                )
                 # the first values along the third dimension of the ozone concentration
                 # data are the present-day values
                 input_center_volume_mixing_ratio_o3 = vec(
                     mean(reshape(input_data["ozone"][:, :, 1], n, :); dims = 2),
-                )::Vector{FT}
+                )
 
                 # interpolate the ozone concentrations to our initial pressures
                 pressure2ozone = Intp.extrapolate(
