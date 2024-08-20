@@ -1045,7 +1045,7 @@ end
 
 add_diagnostic_variable!(
     short_name = "vhus",
-    long_name = "Vapor pecific Humidity",
+    long_name = "Vapor Specific Humidity",
     standard_name = "vapor_specific_humidity",
     units = "kg kg^-1",
     comments = "Mass of water vapor per mass of air",
