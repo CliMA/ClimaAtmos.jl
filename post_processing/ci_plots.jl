@@ -879,6 +879,7 @@ end
 function make_plots(
     ::Union{
         Val{:aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
+        Val{:aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean_ft64},
         Val{
             :longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean,
         },
