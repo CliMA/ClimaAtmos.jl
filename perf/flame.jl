@@ -38,15 +38,15 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 #####
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target"] = 1_458_344
-allocs_limit["flame_perf_target_tracers"] = 1_595_760
+allocs_limit["flame_perf_target"] = 1_674_376
+allocs_limit["flame_perf_target_tracers"] = 1_820_752
 allocs_limit["flame_perf_diagnostics"] = 12_301_560
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 2_285_552
-allocs_limit["flame_perf_target_frierson"] = 1_632_920
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 2_555_280
+allocs_limit["flame_perf_target_frierson"] = 1_849_976
 allocs_limit["flame_perf_target_threaded"] = 2_306_856
-allocs_limit["flame_perf_target_callbacks"] = 1_662_096
+allocs_limit["flame_perf_target_callbacks"] = 1_879_184
 allocs_limit["flame_perf_gw"] = 882_938_744
-allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 2_225_384
+allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 2_490_248
 allocs_limit["flame_gpu_implicit_barowave_moist"] = 336_378
 # Ideally, we would like to track all the allocations, but this becomes too
 # expensive there is too many of them. Here, we set the default sample rate to

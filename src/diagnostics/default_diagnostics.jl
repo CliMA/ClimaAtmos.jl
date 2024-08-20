@@ -200,8 +200,20 @@ function default_diagnostics(
     reference_date;
     output_writer,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    moist_diagnostics =
-        ["hur", "hus", "cl", "clw", "cli", "hussfc", "evspsbl", "pr"]
+    moist_diagnostics = [
+        "hur",
+        "hus",
+        "cl",
+        "clw",
+        "cli",
+        "hussfc",
+        "evspsbl",
+        "pr",
+        "prw",
+        "lwp",
+        "clwvi",
+        "clivi",
+    ]
     average_func = frequency_averages(t_start, t_end)
     return [
         average_func(

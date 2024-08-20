@@ -809,3 +809,357 @@ add_diagnostic_variable!(
     comments = "Elevation of the horizontal coordinates",
     compute! = compute_orog!,
 )
+
+###
+# Condensed water path (2d)
+###
+compute_clwvi!(out, state, cache, time) =
+    compute_clwvi!(out, state, cache, time, cache.atmos.moisture_model)
+compute_clwvi!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("clwvi", model)
+
+function compute_clwvi!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        clw = cache.scratch.ᶜtemp_scalar
+        @. clw =
+            state.c.ρ * (
+                cache.precomputed.cloud_diagnostics_tuple.q_liq +
+                cache.precomputed.cloud_diagnostics_tuple.q_ice
+            )
+        Operators.column_integral_definite!(out, clw)
+        return out
+    else
+        clw = cache.scratch.ᶜtemp_scalar
+        @. clw =
+            state.c.ρ * (
+                cache.precomputed.cloud_diagnostics_tuple.q_liq +
+                cache.precomputed.cloud_diagnostics_tuple.q_ice
+            )
+        Operators.column_integral_definite!(out, clw)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "clwvi",
+    long_name = "Condensed Water Path",
+    standard_name = "atmosphere_mass_content_of_cloud_condensed_water",
+    units = "kg m-2",
+    comments = """
+    Mass of condensed (liquid + ice) water in the column divided by the area of the column 
+    (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
+    """,
+    compute! = compute_clwvi!,
+)
+
+###
+# Liquid water path (2d)
+###
+compute_lwp!(out, state, cache, time) =
+    compute_lwp!(out, state, cache, time, cache.atmos.moisture_model)
+compute_lwp!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("lwp", model)
+
+function compute_lwp!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        lw = cache.scratch.ᶜtemp_scalar
+        @. lw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+        Operators.column_integral_definite!(out, lw)
+        return out
+    else
+        lw = cache.scratch.ᶜtemp_scalar
+        @. lw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+        Operators.column_integral_definite!(out, lw)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "lwp",
+    long_name = "Liquid Water Path",
+    standard_name = "atmosphere_mass_content_of_cloud_liquid_water",
+    units = "kg m-2",
+    comments = """
+    The total mass of liquid water in cloud per unit area.
+    (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
+    """,
+    compute! = compute_lwp!,
+)
+
+###
+# Ice water path (2d)
+###
+compute_clivi!(out, state, cache, time) =
+    compute_clivi!(out, state, cache, time, cache.atmos.moisture_model)
+compute_clivi!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("clivi", model)
+
+function compute_clivi!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        cli = cache.scratch.ᶜtemp_scalar
+        @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+        Operators.column_integral_definite!(out, cli)
+        return out
+    else
+        cli = cache.scratch.ᶜtemp_scalar
+        @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+        Operators.column_integral_definite!(out, cli)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "clivi",
+    long_name = "Ice Water Path",
+    standard_name = "atmosphere_mass_content_of_cloud_ice",
+    units = "kg m-2",
+    comments = """
+    The total mass of ice in cloud per unit area.
+    (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
+    """,
+    compute! = compute_clivi!,
+)
+
+
+###
+# Vertical integrated dry static energy (2d)
+###
+function compute_dsevi!(out, state, cache, time)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        cp = CAP.cp_d(cache.params)
+        dse = cache.scratch.ᶜtemp_scalar
+        @. dse =
+            state.c.ρ * (
+                cp * TD.air_temperature(thermo_params, cache.precomputed.ᶜts) +
+                cache.core.ᶜΦ
+            )
+        Operators.column_integral_definite!(out, dse)
+        return out
+    else
+        cp = CAP.cp_d(cache.params)
+        dse = cache.scratch.ᶜtemp_scalar
+        @. dse =
+            state.c.ρ * (
+                cp * TD.air_temperature(thermo_params, cache.precomputed.ᶜts) +
+                cache.core.ᶜΦ
+            )
+        Operators.column_integral_definite!(out, dse)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "dsevi",
+    long_name = "Dry Static Energy Vertical Integral",
+    units = "",
+    comments = """
+    """,
+    compute! = compute_dsevi!,
+)
+
+###
+# column integrated cloud fraction (2d)
+###
+compute_clvi!(out, state, cache, time) =
+    compute_clvi!(out, state, cache, time, cache.atmos.moisture_model)
+compute_clvi!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("clvi", model)
+
+function compute_clvi!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        cloud_cover = cache.scratch.ᶜtemp_scalar
+        FT = Spaces.undertype(axes(cloud_cover))
+        @. cloud_cover = ifelse(
+            cache.precomputed.cloud_diagnostics_tuple.cf > zero(FT),
+            one(FT),
+            zero(FT),
+        )
+        Operators.column_integral_definite!(out, cloud_cover)
+        return out
+    else
+        cloud_cover = cache.scratch.ᶜtemp_scalar
+        FT = Spaces.undertype(axes(cloud_cover))
+        @. cloud_cover = ifelse(
+            cache.precomputed.cloud_diagnostics_tuple.cf > zero(FT),
+            one(FT),
+            zero(FT),
+        )
+        Operators.column_integral_definite!(out, cloud_cover)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "clvi",
+    long_name = "Vertical Cloud Fraction Integral",
+    units = "m",
+    comments = """
+    The total height of the column occupied at least partially by cloud.
+    """,
+    compute! = compute_clvi!,
+)
+
+
+###
+# Column integrated total specific humidity (2d)
+###
+compute_prw!(out, state, cache, time) =
+    compute_prw!(out, state, cache, time, cache.atmos.moisture_model)
+compute_prw!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("prw", model)
+
+function compute_prw!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        Operators.column_integral_definite!(out, state.c.ρq_tot)
+        return out
+    else
+        Operators.column_integral_definite!(out, state.c.ρq_tot)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "prw",
+    long_name = "Water Vapor Path",
+    standard_name = "atmospheric_mass_content_of_water_vapor",
+    units = "kg m^-2",
+    comments = "Vertically integrated specific humidity",
+    compute! = compute_prw!,
+)
+
+###
+# Column integrated relative humidity (2d)
+###
+compute_hurvi!(out, state, cache, time) =
+    compute_hurvi!(out, state, cache, time, cache.atmos.moisture_model)
+compute_hurvi!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("hurvi", model)
+
+function compute_hurvi!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        # compute vertical integral of saturation specific humidity
+        # note next line currently allocates; currently no correct scratch space
+        sat_vi = zeros(axes(Fields.level(state.f, half)))
+        sat = cache.scratch.ᶜtemp_scalar
+        @. sat =
+            state.c.ρ *
+            TD.q_vap_saturation(thermo_params, cache.precomputed.ᶜts)
+        Operators.column_integral_definite!(sat_vi, sat)
+        # compute saturation-weighted vertical integral of specific humidity
+        hur = cache.scratch.ᶜtemp_scalar
+        @. hur = TD.vapor_specific_humidity(
+            CAP.thermodynamics_params(cache.params),
+            cache.precomputed.ᶜts,
+        )
+        hur_weighted = cache.scratch.ᶜtemp_scalar_2
+        @. hur_weighted = state.c.ρ * hur / sat_vi
+        Operators.column_integral_definite!(out, hur_weighted)
+        return out
+    else
+        # compute vertical integral of saturation specific humidity
+        # note next line currently allocates; currently no correct scratch space
+        sat_vi = zeros(axes(Fields.level(state.f, half)))
+        sat = cache.scratch.ᶜtemp_scalar
+        @. sat =
+            state.c.ρ *
+            TD.q_vap_saturation(thermo_params, cache.precomputed.ᶜts)
+        Operators.column_integral_definite!(sat_vi, sat)
+        # compute saturation-weighted vertical integral of specific humidity
+        hur = cache.scratch.ᶜtemp_scalar
+        @. hur = TD.vapor_specific_humidity(
+            CAP.thermodynamics_params(cache.params),
+            cache.precomputed.ᶜts,
+        )
+        hur_weighted = cache.scratch.ᶜtemp_scalar_2
+        @. hur_weighted = state.c.ρ * hur / sat_vi
+        Operators.column_integral_definite!(out, hur_weighted)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "hurvi",
+    long_name = "Relative Humidity Saturation-Weighted Vertical Integral",
+    standard_name = "relative_humidity_vi",
+    units = "kg m^-2",
+    comments = "Integrated relative humidity over the vertical column",
+    compute! = compute_hurvi!,
+)
+
+
+###
+# Vapor specific humidity (3d)
+###
+compute_husv!(out, state, cache, time) =
+    compute_husv!(out, state, cache, time, cache.atmos.moisture_model)
+compute_husv!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("husv", model)
+
+function compute_husv!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return TD.vapor_specific_humidity.(
+            CAP.thermodynamics_params(cache.params),
+            cache.precomputed.ᶜts,
+        )
+    else
+        out .=
+            TD.vapor_specific_humidity.(
+                CAP.thermodynamics_params(cache.params),
+                cache.precomputed.ᶜts,
+            )
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "husv",
+    long_name = "Vapor Specific Humidity",
+    units = "kg kg^-1",
+    comments = "Mass of water vapor per mass of air",
+    compute! = compute_husv!,
+)
