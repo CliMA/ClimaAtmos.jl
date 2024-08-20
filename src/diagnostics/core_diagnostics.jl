@@ -1018,3 +1018,36 @@ add_diagnostic_variable!(
     comments = "Integrated relative humidity over the vertical column",
     compute! = compute_hurvi!,
 )
+
+
+###
+# Vapor specific humidity (3d)
+###
+compute_vhus!(out, state, cache, time) =
+    compute_vhus!(out, state, cache, time, cache.atmos.moisture_model)
+compute_vhus!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("vhus", model)
+
+function compute_vhus!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return TD.vapor_specific_humidity.(CAP.thermodynamics_params(cache.params), cache.precomputed.ᶜts)
+    else
+        out .= TD.vapor_specific_humidity.(CAP.thermodynamics_params(cache.params), cache.precomputed.ᶜts)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "vhus",
+    long_name = "Vapor pecific Humidity",
+    standard_name = "vapor_specific_humidity",
+    units = "kg kg^-1",
+    comments = "Mass of water vapor per mass of air",
+    compute! = compute_vhus!,
+)
