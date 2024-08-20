@@ -119,7 +119,7 @@ config:
   value: "sphere"
 FLOAT_TYPE:
   help: "Float type"
-  value: "Float32"
+  value: "Float64"
 dt:
   help: "Simulation time step. Examples: [`10secs`, `1hours`]"
   value: "600secs"
