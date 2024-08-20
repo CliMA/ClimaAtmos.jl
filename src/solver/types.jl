@@ -2,6 +2,9 @@ import FastGaussQuadrature
 import StaticArrays as SA
 import Thermodynamics as TD
 
+import ClimaUtilities.ClimaArtifacts: @clima_artifact
+import LazyArtifacts
+
 abstract type AbstractMoistureModel end
 struct DryModel <: AbstractMoistureModel end
 struct EquilMoistModel <: AbstractMoistureModel end
@@ -570,6 +573,8 @@ function AtmosConfig(
         override_file = CP.merge_toml_files(config["toml"]),
     )
     comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
+
+    config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
     device = ClimaComms.device(comms_ctx)
     if device isa ClimaComms.CPUMultiThreaded
         @info "Running ClimaCore in threaded mode, with $(Threads.nthreads()) threads."
@@ -592,6 +597,53 @@ function AtmosConfig(
         comms_ctx,
         config_files,
         job_id,
+    )
+end
+
+"""
+    maybe_resolve_and_acquire_artifacts(input_str::AbstractString, context::ClimaComms.AbstractCommsContext)
+
+When given a string of the form `artifact"name"/something/else`, resolve the
+artifact path and download it (if not already available).
+
+In all the other cases, return the input unchanged.
+"""
+function maybe_resolve_and_acquire_artifacts(
+    input_str::AbstractString,
+    context::ClimaComms.AbstractCommsContext,
+)
+    matched = match(r"artifact\"([a-zA-Z0-9_]+)\"(\/.*)?", input_str)
+    if isnothing(matched)
+        return input_str
+    else
+        artifact_name, other_path = matched
+        return joinpath(
+            @clima_artifact(string(artifact_name), context),
+            lstrip(other_path, '/'),
+        )
+    end
+end
+
+function maybe_resolve_and_acquire_artifacts(
+    input,
+    _::ClimaComms.AbstractCommsContext,
+)
+    return input
+end
+
+"""
+    config_with_resolved_and_acquired_artifacts(input_str::AbstractString, context::ClimaComms.AbstractCommsContext)
+
+Substitute strings of the form `artifact"name"/something/else` with the actual
+artifact path.
+"""
+function config_with_resolved_and_acquired_artifacts(
+    config::AbstractDict,
+    context::ClimaComms.AbstractCommsContext,
+)
+    return Dict(
+        k => maybe_resolve_and_acquire_artifacts(v, context) for
+        (k, v) in config
     )
 end
 

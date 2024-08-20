@@ -4,6 +4,11 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+v0.27.4
+-------
+- Add artifact decoding from YAML
+  PR [#3256](https://github.com/CliMA/ClimaAtmos.jl/pull/3256)
+
 v0.27.3
 -------
 - Add support for monthly calendar diagnostics
