@@ -84,17 +84,24 @@ function radiation_model_cache(
             # sites, which we average across
             if !prescribe_ozone
                 n = input_data.dim["layer"]
-                input_center_pressure = vec(
-                    mean(
-                        reshape(input_data["pres_layer"][:, :], n, :);
-                        dims = 2,
+                input_center_pressure = Vector{FT}(
+                    vec(
+                        mean(
+                            reshape(input_data["pres_layer"][:, :], n, :);
+                            dims = 2,
+                        ),
                     ),
-                )::Vector{FT}
+                )
                 # the first values along the third dimension of the ozone concentration
                 # data are the present-day values
-                input_center_volume_mixing_ratio_o3 = vec(
-                    mean(reshape(input_data["ozone"][:, :, 1], n, :); dims = 2),
-                )::Vector{FT}
+                input_center_volume_mixing_ratio_o3 = Vector{FT}(
+                    vec(
+                        mean(
+                            reshape(input_data["ozone"][:, :, 1], n, :);
+                            dims = 2,
+                        ),
+                    ),
+                )
 
                 # interpolate the ozone concentrations to our initial pressures
                 pressure2ozone = Intp.extrapolate(
