@@ -37,7 +37,7 @@ diagnostics:
     - short_name: [thetaa, hur, hus, cl, clw, cli, rlut, rlutcs, rsut, rsutcs]
       period: 10mins
       writer: nc
-    - short_name: [rhoa, clwvi, dsevi, clvi, husvi, hurvi]
+    - short_name: [rhoa, clwvi, dsevi, clvi, prw, hurvi]
       period: 10mins
       writer: nc
   # - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
@@ -52,4 +52,4 @@ diagnostics:
   #   short_name: tke
   #   period: 10mins
 ode_algo: ARS343
-output_dir: output/narrow_uncertainty
+output_dir: output/local_calibration

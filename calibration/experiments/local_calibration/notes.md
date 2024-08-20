@@ -13,7 +13,7 @@ We're going to replace temperature (`thetaa`) with dry static energy, recalling 
  - `clwvi`: vertical integral of cloud liquid water in kg/m^2
  - `clvi`: cloud fraction integral up to 4000m (could divide by 4000 to get "cloud fraction"), unitless
  - `dsevi`: dry static energy vertical integral in J/ (kg * m^2) 
- - `husvi`: density weighted column specific humidity in kg /m^2
+ - `prw`: density weighted column specific humidity in kg /m^2
  - `hurvi`: $\frac{\int \rho q_v dz}{\int \rho q_v^* dz}$ unitless?
 
 ## DSE

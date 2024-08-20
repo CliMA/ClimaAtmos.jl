@@ -951,12 +951,12 @@ add_diagnostic_variable!(
 ###
 # Total Column Integrated Specific Humidity (1d)
 ###
-compute_husvi!(out, state, cache, time) =
-    compute_husvi!(out, state, cache, time, cache.atmos.moisture_model)
-compute_husvi!(_, _, _, _, model::T) where {T} =
-    error_diagnostic_variable("husvi", model)
+compute_prw!(out, state, cache, time) =
+    compute_prw!(out, state, cache, time, cache.atmos.moisture_model)
+compute_prw!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("prw", model)
 
-function compute_husvi!(
+function compute_prw!(
     out,
     state,
     cache,
@@ -973,12 +973,12 @@ function compute_husvi!(
 end
 
 add_diagnostic_variable!(
-    short_name = "husvi",
-    long_name = "Specific Humidity Vertical Integral",
-    standard_name = "specific_humidity_vi",
+    short_name = "prw",
+    long_name = "Water Vapor Path",
+    standard_name = "atmospheric_mass_content_of_water_vapor",
     units = "kg m^-2",
-    comments = "Integrated specific humidity over the vertical column",
-    compute! = compute_husvi!,
+    comments = "Vertically integrated specific humidity",
+    compute! = compute_prw!,
 )
 
 ###
