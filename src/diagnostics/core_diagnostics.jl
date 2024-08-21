@@ -497,6 +497,82 @@ add_diagnostic_variable!(
 )
 
 ###
+# Near-surface air temperature (2d)
+###
+add_diagnostic_variable!(
+    short_name = "tas",
+    long_name = "Near-Surface Air Temperature",
+    standard_name = "air_temperature",
+    units = "K",
+    comments = "Temperature at the bottom cell center of the atmosphere",
+    compute! = (out, state, cache, time) -> begin
+        thermo_params = CAP.thermodynamics_params(cache.params)
+        if isnothing(out)
+            return TD.air_temperature.(
+                thermo_params,
+                Fields.level(cache.precomputed.ᶜts, 1),
+            )
+        else
+            out .=
+                TD.air_temperature.(
+                    thermo_params,
+                    Fields.level(cache.precomputed.ᶜts, 1),
+                )
+        end
+    end,
+)
+
+###
+# Near-surface U velocity (2d)
+###
+add_diagnostic_variable!(
+    short_name = "uas",
+    long_name = "Eastward Near-Surface Wind",
+    standard_name = "eastward_wind",
+    units = "m s^-1",
+    comments = "Eastward component of the wind at the bottom cell center of the atmosphere",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(
+                u_component.(
+                    Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1))
+                ),
+            )
+        else
+            out .=
+                u_component.(
+                    Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1))
+                )
+        end
+    end,
+)
+
+###
+# Near-surface V velocity (2d)
+###
+add_diagnostic_variable!(
+    short_name = "vas",
+    long_name = "Northward Near-Surface Wind",
+    standard_name = "northward_wind",
+    units = "m s^-1",
+    comments = "Northward (meridional) wind component at the bottom cell center of the atmosphere",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(
+                v_component.(
+                    Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1))
+                ),
+            )
+        else
+            out .=
+                v_component.(
+                    Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1))
+                )
+        end
+    end,
+)
+
+###
 # Eastward and northward surface drag component (2d)
 ###
 function compute_tau!(out, state, cache, component)
