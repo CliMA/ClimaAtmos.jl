@@ -881,20 +881,6 @@ steps:
   - group: "Benchmarks"
     steps:
 
-      - label: ":computer: Benchmark: GPU implicit baro wave wrt h_elem"
-        key: "gpu_implicit_barowave_wrt_h_elem"
-        command: >
-
-          julia --color=yes --project=examples perf/benchmark_dump.jl
-          --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_wrt_h_elem.yml
-          --job_id gpu_implicit_barowave_wrt_h_elem
-        artifact_paths: "gpu_implicit_barowave_wrt_h_elem/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-        soft_fail: true
-
       - label: ":computer: Benchmark: GPU implicit baro wave"
         command: >
 
