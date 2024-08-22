@@ -1,7 +1,6 @@
 h_elem: 60
 z_elem: 63
 dz_bottom: 30.0
-dz_top: 3000.0
 dt: "30secs"
 t_end: "30days"
 initial_condition: "MoistBaroclinicWave"

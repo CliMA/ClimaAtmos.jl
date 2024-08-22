@@ -10,7 +10,6 @@ x_elem: 2
 y_elem: 2
 z_elem: 63
 dz_bottom: 30.0
-dz_top: 3000.0
 dt: "10secs"
 t_end: "3600secs"
 dt_save_state_to_disk: "100secs"
