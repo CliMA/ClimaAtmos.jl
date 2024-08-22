@@ -310,8 +310,8 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
         Base.broadcasted(NT ∘ tuple, ᶜz, Y.c.ρ, ᶜspecific.q_tot),
     )
 
-    zi = isoline_z_ρ_q.z
-    ρi = isoline_z_ρ_q.ρ
+    zi = FT(800) #isoline_z_ρ_q.z
+    ρi = FT(1.18)#isoline_z_ρ_q.ρ
 
     # TODO: According to the paper, we should remove the ifelse condition that
     # clips the third term to 0 below zi, and we should also replace cp_d with

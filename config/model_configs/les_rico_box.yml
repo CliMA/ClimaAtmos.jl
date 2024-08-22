@@ -15,8 +15,6 @@ scalar_hyperdiffusion_coefficient: 0.2
 dt_cloud_fraction: "10mins"
 ode_algo: "SSPKnoth"
 smagorinsky_lilly: true
-tracer_upwinding: "third_order"
-energy_upwinding: "third_order"
 c_smag: 0.20
 x_max: 4e3
 y_max: 4e3
@@ -33,8 +31,8 @@ toml: [toml/rico_box.toml]
 dt_save_state_to_disk: 30mins
 netcdf_interpolation_num_points: [30, 30, 150]
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, hfes, pr]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, husra, cl, clw, cli, hussfc, evspsbl, hfes, pr]
     period: 10mins
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, hfes, pr]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, husra, cl, clw, cli, hussfc, evspsbl, hfes, pr]
     reduction_time: average
     period: 60mins

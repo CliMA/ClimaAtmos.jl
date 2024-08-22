@@ -25,21 +25,6 @@ end
 horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
-function compute_strain_rate_f!(ϵ::Fields.Field, u::Fields.Field)
-     @assert eltype(u) <: C123
-     ᶠgradᵥ = Operators.GradientC2F(
-        bottom = Operators.SetValue(Geometry.UVWVector(0,0,0)),
-        top = Operators.SetValue(Geometry.UVWVector(0,0,0)),
-     )
-     axis_uvw = Geometry.UVWAxis()
-     @. ϵ =
-        (
-           Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))) +
-           adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))))
-        ) / 2
- end
-
-
 function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLilly) 
     if !(hasproperty(p.precomputed, :ᶜspecific))
         throw(ErrorException("p does not have the property ᶜspecific."))
@@ -73,18 +58,17 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
     
-    localu = @. Geometry.UVWVector(ᶜu)
-    ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(Y.f.u₃)
-    @. ᶜS = Geometry.project(Geometry.UVWAxis(), gradₕ(localu))
+    u_phys = @. Geometry.UVWVector(ᶜu)
+    ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(ᶠu³)
+    @. ᶜS = Geometry.project(Geometry.UVWAxis(), gradₕ(u_phys))
     CA.compute_strain_rate_center!(ᶜϵ, Geometry.Covariant123Vector.(ᶠu))
-    compute_strain_rate_f!(ᶠϵ, Geometry.Covariant123Vector.(localu))
-    @. ᶜS = (ᶜS + adjoint(ᶜS)) + ᶜϵ
-    @. ᶠS = ᶠinterp(ᶜS)
+    CA.compute_strain_rate_face!(ᶠϵ, Geometry.Covariant123Vector.(ᶜu))
+    @. ᶜS = (ᶜS + adjoint(ᶜS))/2 + ᶜϵ
+    @. ᶠS = (ᶠS + adjoint(ᶠS))/2 + ᶠϵ
 
     (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    ### Interp Checks
     ᶠts_sfc = sfc_conditions.ts
     θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
     θ_v_sfc = @. TD.virtual_pottemp(thermo_params, ᶠts_sfc)
@@ -93,46 +77,25 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
                                      bottom = Operators.SetValue(θ_v_sfc));
     ᶜ∇θ = @. ᶜ∇(θc2f(θ_v))
     ∇θ = @. ᶠinterp(ᶜ∇θ)
-    ###
 
-    θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
     N² = @. grav / ᶠinterp(θ_v) * Geometry.WVector(∇θ).components.data.:1
     @. ᶠfb = (max(FT(0), 
                   1 - 3*(N²) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/2)
     ᶠfb .= ifelse.(N² .<= FT(0), zero(ᶠfb) .+ FT(1),ᶠfb)
 
-    (; ᶜts) = p.precomputed
-    thermo_params = CAP.thermodynamics_params(p.params)
-
-    ### Interp Checks
-    ᶠts_sfc = sfc_conditions.ts
-    θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
-    θ_v_sfc = @. TD.virtual_pottemp(thermo_params, ᶠts_sfc)
-    ᶜ∇ = Operators.GradientF2C();
-    θc2f = Operators.InterpolateC2F(;top = Operators.Extrapolate(),
-                                     bottom = Operators.SetValue(θ_v_sfc));
-    ᶜ∇θ = @. ᶜ∇(θc2f(θ_v))
-    ∇θ = @. ᶠinterp(ᶜ∇θ)
-    ###
-
-    θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
-    N² = @. grav / ᶠinterp(θ_v) * Geometry.WVector(∇θ).components.data.:1
-    @. ᶠfb = (max(FT(0), 
-                  1 - 3*(N²) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/2)
-    ᶠfb .= ifelse.(N² .<= FT(0), zero(ᶠfb) .+ FT(1),ᶠfb)
-
-    ᶠρ = @. ᶠwinterp(ᶜJ, Y.c.ρ)
+    ᶠρ = @. ᶠinterp(Y.c.ρ)
     ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) * ᶠfb
     ᶜv_t = @. ᶜinterp(ᶠv_t)
     uc2f = Operators.InterpolateC2F(;top = Operators.Extrapolate(), 
                                     bottom = Operators.Extrapolate())
-    ᶠv_t = @. uc2f(ᶜv_t)
     ᶜD = @. FT(3) * ᶜv_t
 
     @. v_t = ᶜv_t
+    ᶜτ = @. FT(-2) * ᶜv_t * ᶜS
+    ᶠτ = @. FT(-2) * ᶠv_t * ᶠS
 
-    @. Yₜ.c.uₕ += C12(wdivₕ(Y.c.ρ * ᶜv_t * ᶜS)) / Y.c.ρ
-    @. Yₜ.f.u₃ += C3(wdivₕ(ᶠρ * ᶠv_t * ᶠS)) / ᶠρ
+    @. Yₜ.c.uₕ -= C12(wdivₕ(Y.c.ρ * ᶜτ) / Y.c.ρ)
+    @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ) / ᶠρ)
 
     # energy adjustment
     (; ᶜspecific) = p.precomputed
@@ -178,14 +141,13 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
 
     ᶠfb  = p.scratch.ᶠtemp_scalar
     grav = CAP.grav(params)
-
-    localu = @. Geometry.UVWVector(ᶜu)
-    ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(Y.f.u₃)
-    @. ᶜS = Geometry.project(Geometry.UVWAxis(), gradₕ(localu))
+    u_phys = @. Geometry.UVWVector(ᶜu)
+    ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(ᶠu³)
+    @. ᶜS = Geometry.project(Geometry.UVWAxis(), gradₕ(u_phys))
     CA.compute_strain_rate_center!(ᶜϵ, Geometry.Covariant123Vector.(ᶠu))
-    compute_strain_rate_f!(ᶠϵ, Geometry.Covariant123Vector.(localu))
-    @. ᶜS = (ᶜS + adjoint(ᶜS)) + ᶜϵ
-    @. ᶠS = ᶠinterp(ᶜS)
+    CA.compute_strain_rate_face!(ᶠϵ, Geometry.Covariant123Vector.(ᶜu))
+    @. ᶜS = (ᶜS + adjoint(ᶜS))/2 + ᶜϵ
+    @. ᶠS = (ᶠS + adjoint(ᶠS))/2 + ᶠϵ
     
     thermo_params = CAP.thermodynamics_params(p.params)
     θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
@@ -198,18 +160,16 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     ᶜ∇θ = @. ᶜ∇(θc2f(θ_v))
     ∇θ = @. ᶠinterp(ᶜ∇θ)
     ###
-    θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
     N² = @. grav / ᶠinterp(θ_v) * Geometry.WVector(∇θ).components.data.:1
     @. ᶠfb = (max(FT(0), 
                   1 - 3*(N²) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/2)
     ᶠfb .= ifelse.(N² .<= FT(0), zero(ᶠfb) .+ FT(1),ᶠfb)
 
-    ᶠρ = @. ᶠwinterp(ᶜJ, Y.c.ρ)
+    ᶠρ = @. ᶠinterp(Y.c.ρ)
     ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) * ᶠfb
     ᶜv_t = @. ᶜinterp(ᶠv_t)
     uc2f = Operators.InterpolateC2F(;top = Operators.Extrapolate(), 
                                     bottom = Operators.Extrapolate())
-    ᶠv_t = @. uc2f(ᶜv_t)
     ᶜD = @. FT(3) * ᶜv_t
     
     @. Yₜ.c.uₕ -= C12(
@@ -225,10 +185,14 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
         top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
         bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ),
     )
+
+    interp_u₃_flux = Operators.InterpolateC2F(
+                        top = Operators.SetValue(C3(0)),
+                        bottom = Operators.SetValue(C3(0)))
     @. Yₜ.c.uₕ -= ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ))) / Y.c.ρ
     
     @. Yₜ.f.u₃ -= C3(
-        ᶠinterp(ᶜdivᵥ(
+        interp_u₃_flux(ᶜdivᵥ(
             -2 *
             ᶠinterp(Y.c.ρ) *
             ᶠv_t *
