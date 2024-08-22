@@ -15,7 +15,6 @@ function get_les_calibration_library()
     return (ref_paths, cfsite_numbers)
 end
 
-
 """
     get_LES_library
 
