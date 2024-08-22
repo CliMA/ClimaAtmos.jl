@@ -108,7 +108,7 @@ function get_vertical_diffusion_model(
     elseif vert_diff_name in ("true", true, "VerticalDiffusion")
         VerticalDiffusion{diffuse_momentum, FT}(; C_E = params.C_E)
     elseif vert_diff_name in ("FriersonDiffusion",)
-        FriersonDiffusion{diffuse_momentum, FT}()
+        FriersonDiffusion{diffuse_momentum, FT}(; C_E = params.C_E)
     else
         error("Uncaught diffusion model `$vert_diff_name`.")
     end
