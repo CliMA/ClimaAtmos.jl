@@ -1,6 +1,3 @@
-[EDMF_min_area]
-value = 1.0e-5
-
 [EDMF_max_area]
 value = 0.7
 
@@ -21,6 +18,9 @@ value = 0
 
 [max_area_limiter_scale]
 value = 0
+
+[EDMF_min_area]
+value = 1.0e-5
 
 [zd_rayleigh]
 value = 20000.0

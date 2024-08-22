@@ -1,9 +1,3 @@
-[EDMF_surface_area]
-value = 0.1
-
-[entr_coeff]
-value = 0
-
 [detr_inv_tau]
 value = 0
 
