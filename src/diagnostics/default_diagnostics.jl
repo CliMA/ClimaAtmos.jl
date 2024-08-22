@@ -136,8 +136,21 @@ end
 # Core #
 ########
 function core_default_diagnostics(output_writer, t_start, t_end, reference_date)
-    core_diagnostics =
-        ["ts", "ta", "thetaa", "ha", "pfull", "rhoa", "ua", "va", "wa", "hfes"]
+    core_diagnostics = [
+        "ts",
+        "ta",
+        "tas",
+        "uas",
+        "vas",
+        "thetaa",
+        "ha",
+        "pfull",
+        "rhoa",
+        "ua",
+        "va",
+        "wa",
+        "hfes",
+    ]
 
     average_func = frequency_averages(t_start, t_end)
 
