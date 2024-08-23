@@ -6,12 +6,10 @@ surface_setup: Rico
 implicit_diffusion: false
 approximate_linear_solve_iters: 2
 moist: equil
+hyperdiff: "false"
 apply_limiter: false
 precip_model: "1M"
 config: box
-hyperdiff: "false"
-vorticity_hyperdiffusion_coefficient: 0.2
-scalar_hyperdiffusion_coefficient: 0.2
 dt_cloud_fraction: "10mins"
 ode_algo: "SSPKnoth"
 smagorinsky_lilly: true

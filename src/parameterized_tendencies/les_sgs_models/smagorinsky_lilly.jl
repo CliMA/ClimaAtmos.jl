@@ -41,22 +41,11 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     grav = CAP.grav(params)
     ᶜJ = Fields.local_geometry_field(Y.c).J 
 
-    (; params) = p
-    (; v_t, Δ_filter) = p.smagorinsky_lilly
-    (; ᶜu, ᶠu³, sfc_conditions) = p.precomputed 
-    (;ᶜΦ) = p.core
-
-    # Operators
-    FT = eltype(v_t)
-    ᶜJ = Fields.local_geometry_field(Y.c).J 
-
     ᶜS  = zero(p.scratch.ᶜtemp_strain)
     ᶠS  = zero(p.scratch.ᶠtemp_strain)
     ᶜϵ = zero(p.scratch.ᶜtemp_UVWxUVW)
     ᶠϵ = zero(p.scratch.ᶠtemp_UVWxUVW)
     ᶠfb  = p.scratch.ᶠtemp_scalar
-    ᶜz = Fields.coordinate_field(Y.c).z
-    ᶠz = Fields.coordinate_field(Y.f).z
     
     u_phys = @. Geometry.UVWVector(ᶜu)
     ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(ᶠu³)
@@ -136,9 +125,6 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     ᶜϵ = zero(p.scratch.ᶜtemp_UVWxUVW)
     ᶠϵ = zero(p.scratch.ᶠtemp_UVWxUVW)
     
-    ᶜz = Fields.coordinate_field(Y.c).z
-    ᶠz = Fields.coordinate_field(Y.f).z
-
     ᶠfb  = p.scratch.ᶠtemp_scalar
     grav = CAP.grav(params)
     u_phys = @. Geometry.UVWVector(ᶜu)
