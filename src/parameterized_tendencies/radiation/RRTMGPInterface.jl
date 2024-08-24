@@ -500,7 +500,9 @@ function RRTMGPModel(
             nbnd_lw = 1
         else
             local lookup_lw, idx_gases
-            data_loader("rrtmgp-gas-lw-g256.nc") do ds
+            data_loader(
+                RRTMGP.ArtifactPaths.get_lookup_filename(:gas, :lw),
+            ) do ds
                 lookup_lw, idx_gases = RRTMGP.LookUpTables.LookUpLW(ds, FT, DA)
             end
             lookups = (; lookups..., lookup_lw, idx_gases)
@@ -510,7 +512,9 @@ function RRTMGPModel(
 
             if !(radiation_mode isa ClearSkyRadiation)
                 local lookup_lw_cld
-                data_loader(joinpath("rrtmgp-clouds-lw.nc")) do ds
+                data_loader(
+                    RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :lw),
+                ) do ds
                     lookup_lw_cld =
                         use_pade_cloud_optics_mode ?
                         RRTMGP.LookUpTables.PadeCld(ds, FT, DA) :
@@ -519,9 +523,11 @@ function RRTMGPModel(
                 lookups = (; lookups..., lookup_lw_cld)
             end
             if radiation_mode.aerosol_radiation
-                local lookup_lw_aero
-                data_loader(joinpath("rrtmgp-aerosols-merra-lw.nc")) do ds
-                    lookup_lw_aero =
+                local lookup_lw_aero, idx_aerosol, idx_aerosize
+                data_loader(
+                    RRTMGP.ArtifactPaths.get_lookup_filename(:aerosol, :lw),
+                ) do ds
+                    lookup_lw_aero, idx_aerosol, idx_aerosize =
                         RRTMGP.LookUpTables.LookUpAerosolMerra(ds, FT, DA)
                 end
             else
@@ -571,7 +577,9 @@ function RRTMGPModel(
             nbnd_sw = 1
         else
             local lookup_sw, idx_gases
-            data_loader("rrtmgp-gas-sw-g224.nc") do ds
+            data_loader(
+                RRTMGP.ArtifactPaths.get_lookup_filename(:gas, :sw),
+            ) do ds
                 lookup_sw, idx_gases = RRTMGP.LookUpTables.LookUpSW(ds, FT, DA)
             end
             lookups = (; lookups..., lookup_sw, idx_gases)
@@ -581,7 +589,9 @@ function RRTMGPModel(
 
             if !(radiation_mode isa ClearSkyRadiation)
                 local lookup_sw_cld
-                data_loader(joinpath("rrtmgp-clouds-sw.nc")) do ds
+                data_loader(
+                    RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :sw),
+                ) do ds
                     lookup_sw_cld =
                         use_pade_cloud_optics_mode ?
                         RRTMGP.LookUpTables.PadeCld(ds, FT, DA) :
@@ -591,9 +601,11 @@ function RRTMGPModel(
             end
 
             if radiation_mode.aerosol_radiation
-                local lookup_sw_aero
-                data_loader(joinpath("rrtmgp-aerosols-merra-sw.nc")) do ds
-                    lookup_sw_aero =
+                local lookup_sw_aero, idx_aerosol, idx_aerosize
+                data_loader(
+                    RRTMGP.ArtifactPaths.get_lookup_filename(:aerosol, :sw),
+                ) do ds
+                    lookup_sw_aero, idx_aerosol, idx_aerosize =
                         RRTMGP.LookUpTables.LookUpAerosolMerra(ds, FT, DA)
                 end
             else
@@ -805,17 +817,34 @@ function RRTMGPModel(
         end
 
         if radiation_mode.aerosol_radiation
-            aero_type = DA{Int}(undef, nlay, ncol)
-            name = "center_aerosol_type"
-            set_and_save!(aero_type, name, t..., dict)
-            aero_size = DA{FT}(undef, nlay, ncol)
-            name = "center_aerosol_radius"
-            set_and_save!(aero_size, name, t..., dict)
-            aero_mass = DA{FT}(undef, nlay, ncol)
-            name = "center_aerosol_column_mass_density"
-            set_and_save!(aero_mass, name, t..., dict)
+            aero_mask = DA{Bool}(undef, nlay, ncol)
+
+            n_aerosol_sizes = maximum(values(idx_aerosize))
+            n_aerosols = length(idx_aerosol)
+            # See the lookup table in RRTMGP for the order of aerosols
+            aero_size = DA{FT}(undef, n_aerosol_sizes, nlay, ncol)
+            aero_mass = DA{FT}(undef, n_aerosols, nlay, ncol)
+            aerosol_size_names = ["dust", "ss"]
+            aerosol_names =
+                ["dust", "ss", "so4", "bcpi", "bcpo", "ocpi", "ocpo"]
+            for (i, name) in enumerate(aerosol_size_names)
+                set_and_save!(
+                    view(aero_size, i, :, :),
+                    "center_$(name)_radius",
+                    t...,
+                    dict,
+                )
+            end
+            for (i, name) in enumerate(aerosol_names)
+                set_and_save!(
+                    view(aero_mass, i, :, :),
+                    "center_$(name)_column_mass_density",
+                    t...,
+                    dict,
+                )
+            end
             aerosol_state = RRTMGP.AtmosphericStates.AerosolState(
-                aero_type,
+                aero_mask,
                 aero_size,
                 aero_mass,
             )
@@ -835,6 +864,7 @@ function RRTMGPModel(
             cloud_state,
             aerosol_state,
         )
+
     end
 
     if use_one_scalar_mode
@@ -1127,12 +1157,10 @@ update_boundary_layer_aerosol!(::Nothing) = nothing
 function update_boundary_layer_aerosol!(
     aerosol_state::RRTMGP.AtmosphericStates.AerosolState,
 )
-    @views aerosol_state.aero_type[end, :] .=
-        aerosol_state.aero_type[end - 1, :]
-    @views aerosol_state.aero_size[end, :] .=
-        aerosol_state.aero_size[end - 1, :]
-    @views aerosol_state.aero_mass[end, :] .=
-        aerosol_state.aero_mass[end - 1, :]
+    @views aerosol_state.aero_size[:, end, :] .=
+        aerosol_state.aero_size[:, end - 1, :]
+    @views aerosol_state.aero_mass[:, end, :] .=
+        aerosol_state.aero_mass[:, end - 1, :]
 end
 
 function clip_values!(model)
@@ -1245,12 +1273,10 @@ NVTX.@annotate function update_sw_fluxes!(
 end
 
 function update_net_fluxes!(_, model)
-    FT = eltype(model.face_flux)
     model.face_flux .= model.face_lw_flux .+ model.face_sw_flux
 
 end
 function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
-    FT = eltype(model.face_flux)
     model.face_clear_flux .=
         model.face_clear_lw_flux .+ model.face_clear_sw_flux
     model.face_flux .= model.face_lw_flux .+ model.face_sw_flux
