@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
+- Update RRTMGP and allow multiple aerosols for radiation.
+  Note: Don't use sea salt as there is an issue with the lookup
+  table. PR [#3264](https://github.com/CliMA/ClimaAtmos.jl/pull/3264)
 
 v0.27.4
 -------
