@@ -150,7 +150,7 @@ steps:
             srun --cpu-bind=threads --cpus-per-task=4
             nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_ss_1process/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_1process.yml
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_1process
         artifact_paths: "gpu_aquaplanet_dyamond_ss_1process/output_active/*"
         env:
@@ -170,7 +170,7 @@ steps:
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_2process.yml
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_2process
         artifact_paths: "gpu_aquaplanet_dyamond_ss_2process/output_active/*"
         env:
@@ -190,7 +190,7 @@ steps:
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_4process.yml
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_4process
         artifact_paths: "gpu_aquaplanet_dyamond_ss_4process/output_active/*"
         env:
