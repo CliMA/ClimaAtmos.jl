@@ -227,3 +227,58 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
 
     return nothing
 end
+
+# ISDAC external forcing (i.e. nudging)
+external_forcing_cache(Y, external_forcing::ISDACForcing, params) = (;)  # Don't need to cache anything
+function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
+    FT = Spaces.undertype(axes(Y.c))
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜspecific, ᶜts, ᶜh_tot, ᶜp) = p.precomputed
+
+    ᶜinv_τ_scalar = APL.ISDAC_inv_τ_scalar(FT)  # s⁻¹
+    ᶜinv_τ_wind = APL.ISDAC_inv_τ_wind(FT)  # s⁻¹
+    θ = APL.ISDAC_θ_liq_ice(FT)
+    u = APL.ISDAC_u(FT)
+    v = APL.ISDAC_v(FT)
+    q_tot = APL.ISDAC_q_tot(FT)
+
+    # Convert ISDAC potential temperature to air temperature
+    ta_ISDAC =
+        (pres, z) -> TD.air_temperature(
+            thermo_params,
+            TD.PhaseEquil_pθq(thermo_params, pres, θ(z), q_tot(z)),
+        )
+
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜuₕ_nudge = p.scratch.ᶜtemp_C12
+    @. ᶜuₕ_nudge = C12(Geometry.UVVector(u(ᶜz), v(ᶜz)), ᶜlg)
+    @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind(ᶜz)
+
+    # TODO: May make more sense to use initial ISDAC (hydrostatic) pressure, but would need to add it to cache,
+    # so for now just use current pressure.
+    ᶜdTdt_nudging = p.scratch.ᶜtemp_scalar
+    ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
+    @. ᶜdTdt_nudging =
+        -(TD.air_temperature(thermo_params, ᶜts) - ta_ISDAC(ᶜp, ᶜz)) *
+        ᶜinv_τ_scalar(ᶜz)
+    @. ᶜdqtdt_nudging = -(ᶜspecific.q_tot - q_tot(ᶜz)) * ᶜinv_τ_scalar(ᶜz)
+
+    T_0 = TD.Parameters.T_0(thermo_params)
+    Lv_0 = TD.Parameters.LH_v0(thermo_params)
+    cv_v = TD.Parameters.cv_v(thermo_params)
+    R_v = TD.Parameters.R_v(thermo_params)
+    # total energy
+    @. Yₜ.c.ρe_tot +=
+        Y.c.ρ * (
+            TD.cv_m(thermo_params, ᶜts) * ᶜdTdt_nudging +
+            (
+                cv_v * (TD.air_temperature(thermo_params, ᶜts) - T_0) + Lv_0 -
+                R_v * T_0
+            ) * ᶜdqtdt_nudging
+        )
+
+    # total specific humidity
+    @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt_nudging
+end

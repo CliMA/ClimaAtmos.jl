@@ -269,3 +269,14 @@ function gcm_surface_conditions(external_forcing_file, cfsite_number)
         mean(gcm_driven_timeseries(ds.group[cfsite_number], "ts"))
     end
 end
+
+struct ISDAC end
+function (::ISDAC)(params)
+    FT = eltype(params)
+    T = FT(267)  # K
+    p = FT(102000)  # Pa
+    lhf = shf = FT(0)  # neglect heat fluxes
+    z0 = FT(4e-4)  # m  surface roughness length
+    parameterization = MoninObukhov(; z0, fluxes = HeatFluxes(; lhf, shf))
+    return SurfaceState(; parameterization, T, p)
+end

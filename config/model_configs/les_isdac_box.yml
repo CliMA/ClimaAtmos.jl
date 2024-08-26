@@ -1,0 +1,30 @@
+job_id: "les_isdac_box"
+initial_condition: "ISDAC" 
+subsidence: "ISDAC" 
+surface_setup: "ISDAC"
+external_forcing: "ISDAC"
+rad: "ISDAC"
+moist: "equil"
+config: "box" 
+hyperdiff: "false" 
+implicit_diffusion: false
+ode_algo: "SSP33ShuOsher"
+precip_model: "1M"
+smagorinsky_lilly: true
+c_smag: 0.20
+x_max: 3.2e3
+y_max: 3.2e3 
+z_max: 2e3
+x_elem: 4
+y_elem: 4
+z_elem: 10
+z_stretch: false
+dt: "0.05secs" 
+t_end: "10mins" 
+dt_save_state_to_disk: "1mins"
+# restart_file: "restart/isdac/day0.0.hdf5"
+netcdf_interpolation_num_points: [10, 10, 20]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
+    reduction: average
+    period: 1mins

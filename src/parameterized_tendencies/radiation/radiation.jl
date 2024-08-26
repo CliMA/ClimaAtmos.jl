@@ -363,3 +363,32 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
     @. Yₜ.c.ρe_tot += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad
     return nothing
 end
+
+#####
+##### ISDAC radiation
+#####
+
+radiation_model_cache(Y, radiation_mode::RadiationISDAC; args...) = (;)  # Don't need a cache for ISDAC
+function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationISDAC)
+    (; F₀, F₁, κ) = radiation_mode
+    (; params, precomputed) = p
+    (; ᶜts) = precomputed
+    thermo_params = CAP.thermodynamics_params(params)
+
+    ᶜρq = p.scratch.ᶜtemp_scalar
+    @. ᶜρq = Y.c.ρ * TD.liquid_specific_humidity(thermo_params, ᶜts)
+
+    LWP_zₜ = p.scratch.temp_field_level  # column integral of LWP (zₜ = top-of-domain)
+    Operators.column_integral_definite!(LWP_zₜ, ᶜρq)
+
+    LWP_z = p.scratch.ᶠtemp_scalar  # column integral of LWP from 0 to z (z = current level)
+    Operators.column_integral_indefinite!(LWP_z, ᶜρq)
+
+    @. Yₜ.c.ρe_tot -= ᶜdivᵥ(
+        Geometry.WVector(
+            F₀ * exp(-κ * (LWP_zₜ - LWP_z)) + F₁ * exp(-κ * LWP_z),
+        ),
+    )  # = -∂F/∂z = ρ cₚ ∂T/∂t (longwave radiation)
+
+    return nothing
+end

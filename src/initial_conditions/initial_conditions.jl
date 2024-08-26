@@ -1196,3 +1196,49 @@ function gcm_initial_conditions(external_forcing_file, cfsite_number)
         )
     end
 end
+
+Base.@kwdef struct ISDAC <: InitialCondition
+    prognostic_tke::Bool = false
+    perturb::Bool = false
+end
+
+function (initial_condition::ISDAC)(params)
+    (; prognostic_tke, perturb) = initial_condition
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    p_0 = FT(102000)  # 1020 hPa
+    θ = APL.ISDAC_θ_liq_ice(FT) # K
+    q_tot = APL.ISDAC_q_tot(FT)  # kg/kg
+    # Note: ISDAC top-of-domain is ~1.5km, but we don't have access to that information here, so we use 5km to be safe
+    p = hydrostatic_pressure_profile(;
+        thermo_params,
+        p_0,
+        θ,
+        q_tot,
+        z_max = 5000,
+    )  # Pa
+
+    u = APL.ISDAC_u(FT)  # m/s
+    v = APL.ISDAC_v(FT)  # m/s
+    tke = APL.ISDAC_tke(FT)  # m²/s²
+
+    # pseudorandom fluctuations with amplitude 0.1 K
+    θ_pert(z::FT) where {FT} =
+        perturb && (z < 825) ? FT(0.1) * randn(FT) : FT(0)
+
+    function local_state(local_geometry)
+        (; z) = local_geometry.coordinates
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseEquil_pθq(
+                thermo_params,
+                p(z),
+                θ(z) + θ_pert(z),
+                q_tot(z),
+            ),
+            velocity = Geometry.UVVector(u(z), v(z)),
+            turbconv_state = EDMFState(; tke = prognostic_tke ? tke(z) : FT(0)),
+        )
+    end
+end
