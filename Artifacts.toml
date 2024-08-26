@@ -3,3 +3,11 @@ git-tree-sha1 = "a4bf66aab365d42abe428129457327d5244ed6b0"
 
 [ozone_concentrations]
 git-tree-sha1 = "235a16e02c24a28b20244c0f2e7f149cc783166f"
+
+[cfsite_gcm_forcing]
+git-tree-sha1 = "2f196bcac8950f8cb79ead41821f423d092b8951"
+lazy = true
+
+    [[cfsite_gcm_forcing.download]]
+    sha256 = "78f13efcbc71350609c8a73ed66ff28fe3653fb7a0274e34b52d720651c1c2ec"
+    url = "https://caltech.box.com/shared/static/elv5ksf3av3kum9552jxhnmlgu7vxr8u.nc"
