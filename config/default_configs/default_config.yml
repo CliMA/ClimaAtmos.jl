@@ -179,7 +179,7 @@ surface_temperature:
   help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric', 'RCEMIPII']"
   value: "ZonallySymmetric"
 initial_condition:
-  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `AgnesiHProfile`, `ScharProfile`, `RisingThermalBubbleProfile`]"
+  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `AgnesiHProfile`, `ScharProfile`, `RisingThermalBubbleProfile`, `ISDAC`]"
   value: "DecayingProfile"
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
@@ -236,7 +236,7 @@ cfsite_number:
   help: "cfsite identifier for single column forcing from  `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
   value: "site23"
 subsidence:
-  help: "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`]"
+  help: "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`, `ISDAC`]"
   value: ~
 toml:
   help: "TOML file(s) used to override model parameters"

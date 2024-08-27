@@ -235,6 +235,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         "allskywithclear",
         "DYCOMS",
         "TRMM_LBA",
+        "ISDAC",
     )
     return if radiation_name == "gray"
         RRTMGPI.GrayRadiation(add_isothermal_boundary_layer)
@@ -262,6 +263,8 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         RadiationDYCOMS{FT}()
     elseif radiation_name == "TRMM_LBA"
         RadiationTRMM_LBA(FT)
+    elseif radiation_name == "ISDAC"
+        RadiationISDAC{FT}()
     else
         nothing
     end
@@ -327,6 +330,8 @@ function get_subsidence_model(parsed_args, radiation_mode, FT)
     elseif subsidence == "DYCOMS"
         @assert radiation_mode isa RadiationDYCOMS
         z -> -z * radiation_mode.divergence
+    elseif subsidence == "ISDAC"
+        APL.ISDAC_subsidence(FT)
     else
         error("Uncaught case")
     end
@@ -372,7 +377,7 @@ end
 
 function get_external_forcing_model(parsed_args)
     external_forcing = parsed_args["external_forcing"]
-    @assert external_forcing in (nothing, "GCM")
+    @assert external_forcing in (nothing, "GCM", "ISDAC")
     return if isnothing(external_forcing)
         nothing
     elseif external_forcing == "GCM"
@@ -381,6 +386,8 @@ function get_external_forcing_model(parsed_args)
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
+    elseif external_forcing == "ISDAC"
+        ISDACForcing()
     end
 end
 
@@ -489,5 +496,28 @@ function get_tendency_model(parsed_args)
         NoSubgridScaleTendency()
     elseif isnothing(zero_tendency_name)
         UseAllTendency()
+    end
+end
+
+function check_case_consistency(parsed_args)
+    # if any flags is ISDAC, check that all are ISDAC
+    ic = parsed_args["initial_condition"]
+    subs = parsed_args["subsidence"]
+    surf = parsed_args["surface_setup"]
+    rad = parsed_args["rad"]
+    cor = parsed_args["edmf_coriolis"]
+    forc = parsed_args["forcing"]
+    moist = parsed_args["moist"]
+    ls_adv = parsed_args["ls_adv"]
+    extf = parsed_args["external_forcing"]
+
+    ISDAC_mandatory = (ic, subs, surf, rad, extf)
+    if "ISDAC" in ISDAC_mandatory
+        @assert(
+            allequal(ISDAC_mandatory) &&
+            all(isnothing, (cor, forc, ls_adv)) &&
+            moist != "dry",
+            "ISDAC setup not consistent"
+        )
     end
 end
