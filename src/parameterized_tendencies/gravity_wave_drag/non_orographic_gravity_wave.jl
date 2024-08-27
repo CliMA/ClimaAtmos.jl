@@ -313,6 +313,7 @@ function non_orographic_gravity_wave_forcing(
     u_waveforcing,
     v_waveforcing,
     p,
+    source_type = "convection",
 ) where {nc}
     # unpack parameters
     (;
@@ -521,6 +522,7 @@ function waveforcing_column_accumulate!(
     ink,
     level_end,
     gw_ncval::Val{nc},
+    source_type="convection",
 ) where {nc}
     FT = eltype(waveforcing)
     # Here we use column_accumulate function to pass the variable B0 and mask through different levels, and calculate waveforcing at each level.
@@ -557,34 +559,38 @@ function waveforcing_column_accumulate!(
         Hb = (z_kp1 - z_k) / log(ρ_k / ρ_kp1) # density scale height
         alp2 = FT1(0.25) / (Hb * Hb)
         ω_r = sqrt((bf_kp1 * bf_kp1 * k2) / (k2 + alp2)) # omc: (critical frequency that marks total internal reflection)
+        ν_vec= range(pi/3600,pi/300,length=5)
 
         # calculate momentum flux carried by gravity waves with different phase speeds.
         B0, Bsum = if level == 1
             mask = StaticBitVector{nc}(_ -> true)
-            B1 = ntuple(
-                n ->
-                    sign((c[n] - u_source)) * (
-                        Bw * exp(
-                            -log(2.0f0) *
-                            (
-                                (
-                                    c[n] * flag +
-                                    (c[n] - u_source) * (1 - flag) - c0
-                                ) / cw
-                            )^2,
-                        ) +
-                        Bn * exp(
-                            -log(2.0f0) *
-                            (
-                                (
-                                    c[n] * flag +
-                                    (c[n] - u_source) * (1 - flag) - c0
-                                ) / cn
-                            )^2,
-                        )
+            if source_type == "convection"
+                B1 = ntuple(
+                    n -> wave_source_convection(
+                        ρ_source,
+                        ν_vec,
+                        u_source,
+                        c[n],
+                        0.004,
+                        5000,
                     ),
-                Val(nc),
-            )
+                    Val(nc),
+                )
+            else
+                B1 = ntuple(
+                    n -> wave_source_original(
+                        c[n],
+                        u_source,
+                        Bw,
+                        Bn,
+                        cw,
+                        cn,
+                        c0,
+                        flag,
+                    ),
+                    Val(nc),
+                )
+            end
             Bsum1 = sum(abs, B1)
             B1, Bsum1
         else
@@ -684,4 +690,53 @@ function field_shiftlevel_up!(ᶜexample_field, ᶜshifted_field, Boundary_value
     R1 = Operators.RightBiasedC2F(; top = Operators.SetValue(Boundary_value))
     R2 = Operators.RightBiasedF2C(;)
     ᶜshifted_field .= R2.(R1.(ᶜexample_field))
+end
+
+function wave_source_convection(
+    ρ₀,
+    ν_vec,
+    U,
+    c,
+    Q₀,
+    h,
+    σₓ = 3000,
+    τ = 1,
+    L = 1000000,
+    N = 0.012,
+)
+F=0.0
+Δ=ν_vec[2]-ν_vec[1]
+nc_para=[14/45,64/45,24/45,64/45,14/45] #newton-cotes parameter
+for i=1:5
+    ν= ν_vec[i]
+    k= ν/c
+    ν_hat = ν - U * k
+    if abs(ν_hat) < N
+        Qₜ = (1 / (1 + (100 * ν)^2))
+        m = k * sqrt((N / ν_hat)^2 - 1) * (-sign(ν_hat))
+        B =
+            (k / ν_hat)^2 *
+            (σₓ / sqrt(2)) *
+            exp(-(k * σₓ / 2)^2) *
+            Q₀ * (2*pi)^2 *
+            Qₜ *
+            (pi / (m * h)) *
+            (sin(m * h) / (m^2 - (pi / h)^2))
+        F = F+ nc_para[i] * Δ * abs(k^2 / ν) *ρ₀ * sign(c-U) * sqrt((N / ν_hat)^2 - 1) * abs(B)^2 / (L * τ)
+    end
+end
+    return F
+end
+
+function wave_source_original(c, u_source, Bw, Bn, cw, cn, gw_c0, flag)
+    sign((c - u_source)) * (
+        Bw * exp(
+            -log(2.0) *
+            ((c * flag + (c - u_source) * (1 - flag) - gw_c0) / cw)^2,
+        ) +
+        Bn * exp(
+            -log(2.0) *
+            ((c * flag + (c - u_source) * (1 - flag) - gw_c0) / cn)^2,
+        )
+    )
 end
