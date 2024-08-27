@@ -42,7 +42,7 @@ import CairoMakie
 import CairoMakie.Makie
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
-import ClimaAnalysis: SimDir, slice, read_var
+import ClimaAnalysis: SimDir, slice, read_var, average_xy
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
@@ -1309,5 +1309,52 @@ function make_plots(::EDMFSpherePlots, output_paths::Vector{<:AbstractString})
         summary_files = [tmp_file],
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,
+    )
+end
+
+
+function make_plots(
+    ::Val{:gcm_driven_scm},
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+    short_names_2D = [
+        "rlut",
+        "rlutcs",
+        "rsut",
+        "rsutcs",
+        "clwvi",
+        "lwp",
+        "clivi",
+        "dsevi",
+        "clvi",
+        "prw",
+        "hurvi",
+    ]
+    short_names_3D = ["husv", "thetaa", "ta", "hur", "hus", "clw", "cl"]
+    reduction = "inst"
+    vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
+        average_xy(get(simdir; short_name, reduction))
+    end
+    vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
+        data = window(
+            get(simdir; short_name, reduction),
+            "z",
+            left = 0,
+            right = 4000,
+        )
+        return average_xy(data)
+    end
+    make_plots_generic(
+        output_paths,
+        vars_2D;
+        MAX_NUM_COLS = 2,
+        output_name = "summary_2D",
+    )
+    make_plots_generic(
+        output_paths,
+        vars_3D;
+        MAX_NUM_COLS = 2,
+        output_name = "summary_3D",
     )
 end
