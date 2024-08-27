@@ -72,7 +72,6 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     @. ᶠfb = (max(FT(0), 
                   1 - 3*(N²) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/2)
     ᶠfb .= ifelse.(N² .<= FT(0), zero(ᶠfb) .+ FT(1),ᶠfb)
-
     ᶠρ = @. ᶠinterp(Y.c.ρ)
     ᶠv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS)) * ᶠfb
     ᶜv_t = @. ᶜinterp(ᶠv_t)
@@ -139,7 +138,6 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     
     thermo_params = CAP.thermodynamics_params(p.params)
     θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
-    ### Interp Checks
     ᶠts_sfc = sfc_conditions.ts
     θ_v_sfc = @. TD.virtual_pottemp(thermo_params, ᶠts_sfc)
     ᶜ∇ = Operators.GradientF2C();
@@ -147,7 +145,6 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
                                      bottom = Operators.SetValue(θ_v_sfc));
     ᶜ∇θ = @. ᶜ∇(θc2f(θ_v))
     ∇θ = @. ᶠinterp(ᶜ∇θ)
-    ###
     N² = @. grav / ᶠinterp(θ_v) * Geometry.WVector(∇θ).components.data.:1
     @. ᶠfb = (max(FT(0), 
                   1 - 3*(N²) / (CA.norm_sqr(ᶠS) + eps(FT))))^(1/2)
@@ -177,6 +174,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     interp_u₃_flux = Operators.InterpolateC2F(
                         top = Operators.SetValue(C3(0)),
                         bottom = Operators.SetValue(C3(0)))
+
     @. Yₜ.c.uₕ -= ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ))) / Y.c.ρ
     
     @. Yₜ.f.u₃ -= C3(
