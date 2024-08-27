@@ -11,7 +11,7 @@ hyperdiff: "false"
 apply_limiter: false
 precip_model: "0M"
 dt_cloud_fraction: "10mins"
-ode_algo: "SSPKnoth"
+ode_algo: "SSP33ShuOsher"
 smagorinsky_lilly: true
 c_smag: 0.20
 x_max: 3.2e3
@@ -21,7 +21,7 @@ x_elem: 8
 y_elem: 8
 z_elem: 100
 z_stretch: false
-dt: "0.05secs" 
+dt: "0.1secs" 
 output_default_diagnostics: false
 t_end: "21600secs" 
 dt_save_state_to_disk: "30mins"

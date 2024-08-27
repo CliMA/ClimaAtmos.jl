@@ -50,6 +50,7 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     u_phys = @. Geometry.UVWVector(ᶜu)
     ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(ᶠu³)
     @. ᶜS = Geometry.project(Geometry.UVWAxis(), gradₕ(u_phys))
+    @. ᶠS = Geometry.project(Geometry.UVWAxis(), gradₕ(ᶠu))
     CA.compute_strain_rate_center!(ᶜϵ, Geometry.Covariant123Vector.(ᶠu))
     CA.compute_strain_rate_face!(ᶠϵ, Geometry.Covariant123Vector.(ᶜu))
     @. ᶜS = (ᶜS + adjoint(ᶜS))/2 + ᶜϵ
@@ -130,6 +131,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLill
     u_phys = @. Geometry.UVWVector(ᶜu)
     ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(ᶠu³)
     @. ᶜS = Geometry.project(Geometry.UVWAxis(), gradₕ(u_phys))
+    @. ᶠS = Geometry.project(Geometry.UVWAxis(), gradₕ(ᶠu))
     CA.compute_strain_rate_center!(ᶜϵ, Geometry.Covariant123Vector.(ᶠu))
     CA.compute_strain_rate_face!(ᶠϵ, Geometry.Covariant123Vector.(ᶜu))
     @. ᶜS = (ᶜS + adjoint(ᶜS))/2 + ᶜϵ
