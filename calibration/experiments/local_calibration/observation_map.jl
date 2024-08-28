@@ -14,10 +14,10 @@ function observation_map(iteration)
         config_dict["ensemble_size"],
     )
 
-    # f_diagnostics = JLD2.jldopen(
-    #     joinpath(config_dict["output_dir"], "norm_vec_obs.jld2"),
-    #     "r+",
-    # )
+    f_diagnostics = JLD2.jldopen(
+        joinpath(config_dict["output_dir"], "norm_factors.jld2"),
+        "r+",
+    )
 
     for m in 1:config_dict["ensemble_size"]
         member_path = TOMLInterface.path_to_ensemble_member(
@@ -32,7 +32,7 @@ function observation_map(iteration)
                 y_names = config_dict["y_var_names"],
                 t_start = config_dict["g_t_start_sec"],
                 t_end = config_dict["g_t_end_sec"],
-                # norm_vec_obs = f_diagnostics["norm_vec_obs"],
+                norm_vec_obs = f_diagnostics["norm_factors_dict"],
             )
         catch err
             @info "Error during observation map for ensemble member $m" err
@@ -48,8 +48,8 @@ function process_member_data(
     reduction = "inst",
     t_start,
     t_end,
-    # norm_vec_obs = [0.0, 1.0],
-    # normalize = true,
+    norm_vec_obs = [0.0, 1.0],
+    normalize = true,
 )
 
     g = Float64[]
@@ -67,10 +67,11 @@ function process_member_data(
         )
 
         y_var_i = slice(var_i_ave, x = 1, y = 1).data
-        # if normalize
-        #     y_μ, y_σ = norm_vec_obs[i, 1], norm_vec_obs[i, 2]
-        #     y_var_i = (y_var_i .- y_μ) ./ y_σ
-        # end
+        if normalize
+            # extract the variances
+            y_μ, y_σ = norm_vec_obs[y_name][1], norm_vec_obs[y_name][2] / norm_vec_obs[y_name][3]
+            y_var_i = (y_var_i .- y_μ) ./ y_σ
+        end
 
         append!(g, y_var_i)
     end

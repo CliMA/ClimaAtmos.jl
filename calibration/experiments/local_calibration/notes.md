@@ -42,5 +42,6 @@ As T will allocate memory (and we don't want to do this), we use `Base.broadcast
  - `adaptive_t`: uses Tapio list as variances and adds noise to the true observations with standard deviation as 10\% of the intermodel spread. Random observational realization used and variances are in the `post_processing/adaptive_t` folder.
 
 **Remove DSEVI as diagnostic**
- - `narrow_uncertainty`: What happens if we have perfect observations and small uncertainty (e.g. 5\% of the prior spread?). 
+ - `narrow_uncertainty`: What happens if we have perfect observations and small uncertainty (e.g. 5\% of the prior spread?). We use `[clwvi, clvi, husvi, hurvi, rlut, rlutcs, rsut, rsutcs]` and find that the calibration improves the bias across most of the metrics. strangely hte cloud 
+  - This does improve the parameters but the calibration is slow (half an iteration does not get us very far - mostly the distributions shift but do not collapse - suggesting our observations are not very informative). 
  - perf_obs: What happens if we have perfect observations but relatively large observational uncertainty?

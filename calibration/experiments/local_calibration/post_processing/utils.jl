@@ -8,9 +8,87 @@ using CairoMakie
 
 params_true = [.14, 1, .3, .22] # 4th position .0001, entr_inv_tau removed
 
-function loss_plot(eki, observations; 
+len_dict = Dict(
+    "thetaa" => 60,
+    "hus" => 60,
+    "husv" => 60,
+    "clw" => 60,
+    "lwp" => 1,
+    "prw" => 1,
+    "clwvi" => 1,
+    "clvi" => 1,
+    "husvi" => 1,
+    "hurvi" => 1,
+    "rlut" => 1,
+    "rlutcs" => 1,
+    "rsut" => 1,
+    "rsutcs" =>1,
+)
+
+function loss_plot(eki, config_dict)
+    time = eki.Δt
+    names = config_dict["y_var_names"]
+    n_iters = length(time)
+    n_metrics = length(names)
+
+    # get values
+    loss_vals = EKP.get_g(eki)
+    observations = JLD2.load_object(config_dict["observations"])
+    noise = diag(JLD2.load_object(config_dict["noise"]))
+
+    f_diagnostics = JLD2.jldopen(
+        joinpath(config_dict["output_dir"], "norm_factors.jld2"),
+        "r+",
+    )["norm_factors_dict"]
+    #f_diagnostics = norm_factors_old
+
+
+    #all_loss = []
+    fig = Figure(size = (800, 600))
+    num_per_row = 3
+    sidx = 1
+    for i in 1:n_metrics
+        name = config_dict["y_var_names"][i]
+        len = len_dict[name]
+
+        μ, σ² = f_diagnostics[name][1], f_diagnostics[name][2]
+
+        vals = []
+        for iter in 1:n_iters
+            # get observations and rescale to physical space
+            ar_vals = loss_vals[iter][sidx:(sidx + len-1), :] .* σ² .+ μ
+            obs = observations[sidx:(sidx + len-1), :]  .* σ² .+ μ
+            vmean = mean(filter(!isnan, ((ar_vals .- obs) .^2)))
+            append!(vals, sqrt(vmean))
+        end
+        row = div(i-1, num_per_row) + 1
+        col = mod(i-1, num_per_row) + 1
+        ax = Axis(fig[row, col], title = name)
+
+        lines!(ax, vals)
+        sidx +=len
+    #append!(all_loss, [vals])
+    end
+    # fig = Figure(size = (800, 600))
+    # num_per_row = 3
+    # for metric in 1:n_metrics
+    #     row = div(metric-1, num_per_row) + 1
+    #     col = mod(metric-1, num_per_row) + 1
+    #     vals = []
+    #     for iteration in 1:n_iters
+    #         println(n_iters)
+    #         append!(vals, all_loss[iteration][metric])
+    #     end
+    #     ax = Axis(fig[row, col], title = config_dict["y_var_names"][metric])
+    #     lines!(ax, vals)
+    # end
+    Label(fig[0,:], "Individual Observation Loss over Iteration")
+    fig
+end
+
+function loss_plot_old(eki, observations; 
     n_iters = 9,
-    n_metrics = 9,
+    n_metrics = 8,
     config_dict=config_dict)
     loss_vals = EKP.get_g(eki)
     all_loss = []
@@ -40,19 +118,99 @@ function loss_plot(eki, observations;
     fig
 end
 
-
-
-
 function gen_obs(simdir)
     simdir = SimDir(simdir)
     process_member_data(simdir; y_names = config_dict["y_var_names"], t_start = config_dict["g_t_start_sec"], t_end = config_dict["g_t_end_sec"])
 end
 
-function plot_start_end_distributions(eki, config_dict, observations, variances, observations_true)
+function plot_start_end_distributions(eki, config_dict)
+    fig = Figure(size = (1000, 900))
+
+    n_iters = length(eki.Δt)
+    n_metrics = length(config_dict["y_var_names"])
+
+    observations = JLD2.load_object(config_dict["observations"])
+    noise = diag(JLD2.load_object(config_dict["noise"]))
+
+    sidx = 1
+    loss_vals = EKP.get_g(eki)
+    num_per_row = 3
+    for i in 1:n_metrics
+        row = div(i-1, num_per_row) + 1
+        col = mod(i-1, num_per_row) + 1
+
+
+        # get data for this metric or profile
+        name = config_dict["y_var_names"][i]
+        f_diagnostics = JLD2.jldopen(
+            joinpath(config_dict["output_dir"], "norm_factors.jld2"),
+            "r+",
+        )["norm_factors_dict"]
+        #f_diagnostics = norm_factors_old
+
+        μ, σ² = f_diagnostics[name][1], f_diagnostics[name][2]
+
+        len = len_dict[name]
+        prior_dist = loss_vals[1][sidx:(sidx + len-1), :] .* σ² .+ μ
+        end_dist = loss_vals[n_iters][sidx:(sidx + len-1), :] .* σ² .+ μ
+        if size(prior_dist)[1] > 1
+            end_dist = end_dist[:,vec(.!any(isnan, end_dist; dims = 1))]
+
+            ax = Axis(fig[row, col], title = name)
+
+            # then its a line plot
+            for k in 1:size(prior_dist)[2]
+                lines!(ax, prior_dist[1:30, k], 1:30, color = (:blue, 0.75))
+            end 
+            for k in 1:size(end_dist)[2]
+                lines!(ax, end_dist[1:30, k], 1:30, color = (:orange, 0.75))
+            end
+            obs = observations[sidx:(sidx + 30-1), :] .* σ² .+ μ
+            println(size(obs[:, 1]))
+            lines!(ax, obs[:, 1], 1:30, color = (:red, 0.75))
+        else
+            #return vec(hcat(prior_dist, end_dist))
+            catall = vec(hcat(prior_dist, end_dist))
+            gmin = minimum(catall[.!isnan.(catall)]) 
+            gmax = maximum(catall[.!isnan.(catall)])
+            #println(σ²)
+            println(gmin, "  ", gmax)
+            bins = range(gmin, gmax, length = 30)
+            ax = Axis(fig[row, col], title = config_dict["y_var_names"][i])
+            obs = observations[sidx] .* σ² .+ μ
+            limits = ((minimum([gmin, obs*.997]), maximum([gmax, (obs*1.003)]), nothing))
+            #println(size(prior_dist[1, :]))
+
+            hist!(ax, prior_dist[1,:], bins = bins, color = (:blue, 0.75), label = "Initial Distribution")
+            hist!(ax, end_dist[1,:], bins = bins, color = (:orange, 0.75), label = "Final Distribution")
+            vlines!(ax, obs, color=:red, label = "Observation")
+
+
+            nsd = 2
+            poly!(ax, [obs-nsd*sqrt(σ²), obs+nsd*sqrt(σ²), obs + nsd*sqrt(σ²), obs - nsd*sqrt(σ²)] ,
+                        [0, 0, 60, 60],
+                        color=(:red, .2))
+            if i == 8 # add one legend for all 
+                legend = Legend(fig, ax, orientation = :vertical, tellheight = false)
+                fig[1, num_per_row + 1] = legend
+            end
+
+        end
+
+        sidx +=len
+    end
+    fig
+end
+
+function plot_start_end_distributions(eki, 
+    config_dict, 
+    observations, 
+    variances, 
+    observations_true)
     fig = Figure(size = (1000, 600))
     loss_vals = EKP.get_g(eki)
     num_per_row = 3
-    for i in 1:9
+    for i in 1:8
         row = div(i-1, num_per_row) + 1
         col = mod(i-1, num_per_row) + 1
 
@@ -66,7 +224,7 @@ function plot_start_end_distributions(eki, config_dict, observations, variances,
         # get perfect model run data
         obs = observations[i]
         obs_true = observations_true[i]
-        vari = variances[i]
+        sd = sqrt(variances[i])
         
         
         ax = Axis(fig[row, col], title = config_dict["y_var_names"][i],
@@ -82,8 +240,8 @@ function plot_start_end_distributions(eki, config_dict, observations, variances,
 
         # shade polygon for 2x standard deviations 
 
-        n_vari = 2
-        poly!(ax, [obs_true-n_vari*vari, obs_true+n_vari*vari, obs_true + n_vari*vari, obs_true - n_vari*vari] ,
+        nsd = 2
+        poly!(ax, [obs_true-nsd*sd, obs_true+nsd*sd, obs_true + nsd*sd, obs_true - nsd*sd] ,
                     [0, 0, 60, 60],
                     color=(:red, .2))
         if i == 1 # add one legend for all 

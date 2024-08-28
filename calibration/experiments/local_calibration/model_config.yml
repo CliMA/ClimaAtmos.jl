@@ -1,6 +1,6 @@
 initial_condition: "GCM"
 external_forcing: "GCM"
-external_forcing_file: "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc" 
+external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
 surface_setup: "GCM"
 turbconv: "prognostic_edmfx"
 rayleigh_sponge: true
@@ -34,10 +34,10 @@ output_default_diagnostics: false
 rad: allskywithclear
 insolation: "gcmdriven"
 diagnostics:
-    - short_name: [thetaa, hur, hus, cl, clw, cli, rlut, rlutcs, rsut, rsutcs]
+    - short_name: [hur, hus, cl, clw, cli, clivi, lwp]
       period: 10mins
       writer: nc
-    - short_name: [rhoa, clwvi, dsevi, clvi, prw, hurvi]
+    - short_name: [thetaa, husv, clwvi, clvi, prw, hurvi, rlut, rlutcs, rsut, rsutcs]
       period: 10mins
       writer: nc
   # - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
@@ -52,4 +52,4 @@ diagnostics:
   #   short_name: tke
   #   period: 10mins
 ode_algo: ARS343
-output_dir: output/local_calibration
+output_dir: output/2profiles_8vis_v2

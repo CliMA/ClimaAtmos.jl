@@ -1,6 +1,6 @@
 initial_condition: "GCM"
 external_forcing: "GCM"
-external_forcing_file: "/Users/julianschmitt/Downloads/HadGEM2-A_amip.2004-2008.07.nc"  
+external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
 surface_setup: "GCM"
 turbconv: "prognostic_edmfx"
 rayleigh_sponge: true
@@ -24,8 +24,8 @@ dz_bottom: 30
 dz_top: 3000
 perturb_initstate: false
 dt: "10secs" 
-t_end: "10hours"
-dt_save_state_to_disk: "40hours"
+t_end: "80hours"
+dt_save_state_to_disk: "80hours"
 call_cloud_diagnostics_per_stage : true
 toml: [../perf_gcm_driven_scm/perf_prognostic_edmfx_bomex.toml]
 netcdf_output_at_levels: true
@@ -34,10 +34,10 @@ output_default_diagnostics: false
 rad: allskywithclear
 insolation: "gcmdriven"
 diagnostics:
-    - short_name: [thetaa, hur, hus, cl, clw, cli, rlut, rlutcs, rsut, rsutcs, vhus]
+    - short_name: [thetaa, hur, hus, cl, clw, cli, rlut, rlutcs, rsut, rsutcs, husv] # husv is new
       period: 10mins
       writer: nc
-    - short_name: [rhoa, clwvi, dsevi, clvi, prw, hurvi]
+    - short_name: [clwvi, lwp, prw, clivi, dsevi, clvi, hurvi] # all new diagnostics
       period: 10mins
       writer: nc
   # - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
