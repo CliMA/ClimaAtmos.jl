@@ -1,4 +1,4 @@
-import ClimaAnalysis: SimDir, get, slice, average_xy
+import ClimaAnalysis: SimDir, get, slice, average_xy, window, average_time
 import LinearAlgebra: I
 import EnsembleKalmanProcesses as EKP
 import Statistics: var, mean
@@ -63,7 +63,9 @@ function loss_plot(eki, config_dict)
         end
         row = div(i-1, num_per_row) + 1
         col = mod(i-1, num_per_row) + 1
-        ax = Axis(fig[row, col], title = name)
+        ax = nothing 
+        if (n_metrics - i) < 3
+            ax = Axis(fig[row, col], title = name, xlabel = "")
 
         lines!(ax, vals)
         sidx +=len
