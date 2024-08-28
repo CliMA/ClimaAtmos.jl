@@ -2,9 +2,9 @@ prior: prior.toml
 ensemble_size: 100
 n_iterations: 10
 model_config: model_config.yml
-observations: output/2profiles_8vis_v2/observations.jld2
-noise: output/2profiles_8vis_v2/obs_noise_cov.jld2
-output_dir: output/2profiles_8vis_v2
+observations: output/2profiles_8vis_v3/observations.jld2
+noise: output/2profiles_8vis_v3/obs_noise_cov.jld2
+output_dir: output/2profiles_8vis_v3
 batch_size: 1
 y_var_names: [thetaa, husv, clwvi, clvi, prw, hurvi, rlut, rlutcs, rsut, rsutcs]
 dims: 128 # num vertical levels x num variables, also shape of observations 60+60+8

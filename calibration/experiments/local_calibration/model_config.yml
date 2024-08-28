@@ -3,6 +3,7 @@ external_forcing: "GCM"
 external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
 surface_setup: "GCM"
 turbconv: "prognostic_edmfx"
+cloud_model: "quadrature_sgs"
 rayleigh_sponge: true
 implicit_diffusion: true
 implicit_sgs_advection: false
@@ -52,4 +53,4 @@ diagnostics:
   #   short_name: tke
   #   period: 10mins
 ode_algo: ARS343
-output_dir: output/2profiles_8vis_v2
+output_dir: output/2profiles_8vis_v3

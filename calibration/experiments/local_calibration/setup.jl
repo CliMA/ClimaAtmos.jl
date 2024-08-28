@@ -4,6 +4,7 @@ using Statistics
 using YAML
 import ClimaAtmos as CA
 includet("observation_map.jl")
+include(model_interface)
 
 config_dict = YAML.load_file("experiment_config.yml")
 @info config_dict["y_var_names"]
@@ -12,7 +13,38 @@ config_dict = YAML.load_file("experiment_config.yml")
 observational_variances = ones(config_dict["dims"])
 
 # generate observations
-obs_path = joinpath(config_dict["output_dir"], "observations.jld2")
+output_dir  = config_dict["output_dir"]
+obs_path = joinpath(output_dir, "observations.jld2")
+
+if !isdir(output_dir)
+    mkdir(output_dir)
+end
+vi_wght = 10 # we'll upweight the importance of radiative vi's to compete with the profiles
+norm_factors_dict = Dict(
+    "thetaa" => [306.172, 8.07383, 1],
+    "hus" => [0.0063752, 0.00471147, 1],
+    "husv" => [0.0063752, 0.00471147, 1],
+    "clw" => [2.67537e-6, 4.44155e-6, 1],
+    "lwp" => [1, .1^2, 1],
+    "prw" => [30, 3^2, 1],
+    "clwvi" => [1.25, .1^2, 1],
+    "clvi" => [1100, 100^2, 1],
+    "husvi" => [32, 3^2, 1],
+    "hurvi" => [.45, .03^2, 1],
+    "rlut" => [279.5, 1^2, vi_wght],
+    "rlutcs" => [290, 1^2, vi_wght],
+    "rsut" => [283.5, 1^2, vi_wght],
+    "rsutcs" => [123, 1^2, vi_wght],
+)
+try
+    JLD2.jldsave(
+        joinpath(output_dir, "norm_factors.jld2");
+        norm_factors_dict = norm_factors_dict,
+    )
+catch
+    println("Norm Factors already saved: $(joinpath(output_dir, "norm_factors.jld2"))")
+end
+
 if !isfile(obs_path)
     @info "Generating observations"
     config = CA.AtmosConfig("../perf_gcm_driven_scm/prognostic_edmfx_gcmdriven_column.yml"; job_id = "gcm_driven_scm")
