@@ -1106,11 +1106,12 @@ Helper function for `make_plots_generic`. Takes a list of variables and plots
 them on the same axis.
 """
 function plot_edmf_vert_profile!(grid_loc, var_group)
-    z = var_group[1].dims["z"]
-    units = var_group[1].attributes["units"]
+    z = ClimaAnalysis.altitudes(var_group[1])
+    units = ClimaAnalysis.units(var_group[1])
+    z_units = ClimaAnalysis.dim_units(var_group[1], "z")
     ax = CairoMakie.Axis(
         grid_loc[1, 1],
-        ylabel = "z [$(var_group[1].dim_attributes["z"]["units"])]",
+        ylabel = "z [$z_units]",
         xlabel = "$(short_name(var_group[1])) [$units]",
         title = parse_var_attributes(var_group[1]),
     )
