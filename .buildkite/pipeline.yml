@@ -762,12 +762,12 @@ steps:
     steps:
 
       - label: "GPU: baroclinic wave"
-        key: "gpu_baroclinic_wave_rhoe"
+        key: "sphere_baroclinic_wave_rhoe_gpu"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/gpu_baroclinic_wave_rhoe.yml
-          --job_id gpu_baroclinic_wave_rhoe
-        artifact_paths: "gpu_implicit_barowave_ref/output_active/*"
+          --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe.yml
+          --job_id sphere_baroclinic_wave_rhoe_gpu
+        artifact_paths: "sphere_baroclinic_wave_rhoe_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
@@ -778,15 +778,15 @@ steps:
         command: >
           tar xvf sphere_baroclinic_wave_rhoe/output_active/hdf5_files.tar -C sphere_baroclinic_wave_rhoe
 
-          tar xvf gpu_baroclinic_wave_rhoe/output_active/hdf5_files.tar -C gpu_baroclinic_wave_rhoe
+          tar xvf sphere_baroclinic_wave_rhoe_gpu/output_active/hdf5_files.tar -C sphere_baroclinic_wave_rhoe_gpu
 
           julia --color=yes --project=examples post_processing/compare_outputs.jl
           --output_folder_1 sphere_baroclinic_wave_rhoe
-          --output_folder_2 gpu_baroclinic_wave_rhoe --t_end 10days
+          --output_folder_2 sphere_baroclinic_wave_rhoe_gpu --t_end 10days
           --compare_state false
         depends_on:
           - "sphere_baroclinic_wave_rhoe"
-          - "gpu_baroclinic_wave_rhoe"
+          - "sphere_baroclinic_wave_rhoe_gpu"
 
       - label: "GPU: GPU dry baroclinic wave"
         key: "target_gpu_implicit_baroclinic_wave"
@@ -812,7 +812,7 @@ steps:
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave_4process.yml
+            --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
             --job_id target_gpu_implicit_baroclinic_wave_4process
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
         env:
@@ -867,12 +867,12 @@ steps:
           slurm_gpus: 1
 
       - label: "GPU: Diagnostic EDMFX aquaplanet"
-        key: "gpu_diagnostic_edmfx_aquaplanet"
+        key: "diagnostic_edmfx_aquaplanet_gpu"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/gpu_diagnostic_edmfx_aquaplanet.yml
-          --job_id gpu_diagnostic_edmfx_aquaplanet
-        artifact_paths: "gpu_diagnostic_edmfx_aquaplanet/output_active/*"
+          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet_gpu.yml
+          --job_id diagnostic_edmfx_aquaplanet_gpu
+        artifact_paths: "diagnostic_edmfx_aquaplanet_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
@@ -882,9 +882,9 @@ steps:
       - label: "GPU: Prognostic EDMFX aquaplanet"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/gpu_prognostic_edmfx_aquaplanet.yml
-          --job_id gpu_prognostic_edmfx_aquaplanet
-        artifact_paths: "gpu_prognostic_edmfx_aquaplanet/output_active/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
