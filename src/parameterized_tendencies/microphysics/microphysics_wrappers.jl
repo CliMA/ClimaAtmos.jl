@@ -34,25 +34,16 @@ end
  - dt - model time step
 
 Returns the condensation/evaporation or deposition/sublimation rate for
-non-equilibrium cloud formation.
+non-equilibrium Morrison and Milbrandt 2015 cloud formation.
 """
 function cloud_sources(cm_params::CMP.CloudLiquid{FT}, thp, ts, dt) where {FT}
 
-    λ = TD.liquid_fraction(thp, Tₐ(thp, ts), TD.PhaseEquil)
-    qᵥ_ex_liquid = λ * (qₜ(thp, ts) - TD.q_vap_saturation_liquid(thp, ts))
+    q = TD.PhasePartition(thp, ts)
+    ρ = TD.air_density(thp, ts)
 
-    # Ideally the logic whether to apply this source term, and what relaxation
-    # timescale to use, should be based on the availability of CCNs and INPs.
-    # We need a 2-moment microphysics scheme for that.
+    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cm_params, thp, q, ρ, Tₐ(thp, ts))
 
-    # Additionally, to approximate the partitioning between the condensation/evaporation
-    # and deposition/sublimation, we are scaling down the excess q by the liquid fraction.
-    # This needs more thought.
-    S = CMNe.conv_q_vap_to_q_liq_ice(
-        cm_params,
-        PP(FT(0), qᵥ_ex_liquid, FT(0)),
-        PP(thp, ts),
-    )
+    # keeping the same limiter for now
     return ifelse(
         S > FT(0),
         min(S, limit(qᵥ(thp, ts), dt, 2)),
@@ -61,14 +52,12 @@ function cloud_sources(cm_params::CMP.CloudLiquid{FT}, thp, ts, dt) where {FT}
 end
 function cloud_sources(cm_params::CMP.CloudIce{FT}, thp, ts, dt) where {FT}
 
-    λ = TD.liquid_fraction(thp, Tₐ(thp, ts), TD.PhaseEquil)
-    qᵥ_ex_ice = (1 - λ) * (qₜ(thp, ts) - TD.q_vap_saturation_ice(thp, ts))
+    q = TD.PhasePartition(thp, ts)
+    ρ = TD.air_density(thp, ts)
 
-    S = CMNe.conv_q_vap_to_q_liq_ice(
-        cm_params,
-        PP(FT(0), FT(0), qᵥ_ex_ice),
-        PP(thp, ts),
-    )
+    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cm_params, thp, q, ρ, Tₐ(thp, ts))
+
+    # keeping the same limiter for now
     return ifelse(
         S > FT(0),
         min(S, limit(qᵥ(thp, ts), dt, 2)),
