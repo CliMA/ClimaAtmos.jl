@@ -1,5 +1,3 @@
-dt_save_state_to_disk: "3hours"
-dt_save_to_sol: "Inf"
 surface_setup: DefaultMoninObukhov
 rad: clearsky
 turbconv: diagnostic_edmfx
@@ -13,8 +11,10 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil
+cloud_model: "quadrature_sgs"
 precip_model: 1M
 dt: 100secs
-t_end: 6hours
+t_end: 12hours
+dt_save_state_to_disk: 12hours
 toml: [toml/diagnostic_edmfx.toml]
 ode_algo: ARS343
