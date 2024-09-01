@@ -87,7 +87,7 @@ Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
     source_height::FT = 15000
     Bw::FT = 1.0
     Bn::FT = 1.0
-    dc::FT = 0.6
+    dc::FT = 0.8
     cmax::FT = 99.6
     c0::FT = 0
     nk::FT = 1
