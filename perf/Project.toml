@@ -65,6 +65,7 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 URIs = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
+UnrolledUtilities = "0fe1646c-419e-43be-ac14-22321958931b"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]

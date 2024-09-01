@@ -11,6 +11,8 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Operators as Operators
+import ClimaCore.Domains as Domains
+import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
 
 include("../gw_plotutils.jl")
 
@@ -82,9 +84,9 @@ end
 (; lon, lat, lev, time, gZ, T, u) = nt
 
 # compute density and buoyancy frequency
-R_d = 287.0
-grav = 9.8
-cp_d = 1004.0
+R_d = FT(287.0)
+grav = FT(9.8)
+cp_d = FT(1004.0)
 
 Z = gZ ./ grav
 ρ = ones(size(T)) .* reshape(lev, (1, length(lev), 1)) ./ T / R_d
@@ -133,21 +135,56 @@ center_u_mean = mean(center_u, dims = 1)[1, :, :]
 center_bf_mean = mean(center_bf, dims = 1)[1, :, :]
 center_ρ_mean = mean(center_ρ, dims = 1)[1, :, :]
 
-# monthly ave Jan, April, July, Oct
+# Generate domain, space and field
+Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
+quad = Quadratures.GL{1}()
 
-column_domain = ClimaCore.Domains.IntervalDomain(
-    ClimaCore.Geometry.ZPoint(0.0) .. ClimaCore.Geometry.ZPoint(50000.0),
+x_domain = Domains.IntervalDomain(
+    Geometry.XPoint(zero(Δx)),
+    Geometry.XPoint(Δx);
+    periodic = true,
+)
+y_domain = Domains.IntervalDomain(
+    Geometry.YPoint(zero(Δx)),
+    Geometry.YPoint(Δx);
+    periodic = true,
+)
+domain = Domains.RectangleDomain(x_domain, y_domain)
+horizontal_mesh = Meshes.RectilinearMesh(domain, 1, 1)
+
+comms_ctx = ClimaComms.SingletonCommsContext{ClimaComms.CPUSingleThreaded}(
+    ClimaComms.CPUSingleThreaded(),
+)
+topology = ClimaCore.Topologies.Topology2D(
+    comms_ctx,
+    horizontal_mesh,
+    ClimaCore.Topologies.spacefillingcurve(horizontal_mesh),
+)
+h_space = Spaces.SpectralElementSpace2D(topology, quad;)
+
+h_grid = Spaces.grid(h_space)
+z_domain = Domains.IntervalDomain(
+    Geometry.ZPoint(FT(0.0)),
+    Geometry.ZPoint(FT(50000.0));
     boundary_names = (:bottom, :top),
 )
+z_stretch = Meshes.Uniform()
+z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = 50)
 
-column_mesh = ClimaCore.Meshes.IntervalMesh(column_domain, nelems = 50)
+device = ClimaComms.device(h_space)
+z_topology = ClimaCore.Topologies.IntervalTopology(
+    ClimaComms.SingletonCommsContext(device),
+    z_mesh,
+)
+z_grid = ClimaCore.Grids.FiniteDifferenceGrid(z_topology)
+hypsography = ClimaCore.Hypsography.Flat()
+grid =
+    ClimaCore.Grids.ExtrudedFiniteDifferenceGrid(h_grid, z_grid, hypsography;)
 
-column_center_space = ClimaCore.Spaces.CenterFiniteDifferenceSpace(column_mesh)
-# construct the face space from the center one
-column_face_space =
-    ClimaCore.Spaces.FaceFiniteDifferenceSpace(column_center_space)
+center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
+face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
 
-coord = ClimaCore.Fields.coordinate_field(column_center_space)
+coord = ClimaCore.Fields.coordinate_field(center_space)
 
 gw_ncval = Val(501)
 ᶜz = coord.z
@@ -157,7 +194,7 @@ gw_ncval = Val(501)
 ᶜbf = copy(ᶜz)
 ᶜlevel = similar(ᶜρ, FT)
 u_waveforcing = similar(ᶜu)
-v_waveforcing = similar(ᶜv)
+v_waveforcing = similar(ᶜu)
 for i in 1:Spaces.nlevels(axes(ᶜρ))
     fill!(Fields.level(ᶜlevel, i), i)
 end
@@ -183,6 +220,7 @@ scratch = (;
     temp_field_level = similar(Fields.level(ᶜz, 1), FT),
 )
 
+# creat input parameters
 params = (; non_orographic_gravity_wave, scratch)
 
 # Jan

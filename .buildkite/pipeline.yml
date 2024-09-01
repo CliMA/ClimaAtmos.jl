@@ -761,6 +761,18 @@ steps:
   - group: "GPU"
     steps:
 
+      - label: "GPU:Gravity waves"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/sphere_nonorographic_gravity_wave.yml
+          --job_id sphere_nonorographic_gravity_wave
+        artifact_paths: "sphere_nonorographic_gravity_wave/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+
       - label: "GPU: baroclinic wave"
         key: "sphere_baroclinic_wave_rhoe_gpu"
         command: >
