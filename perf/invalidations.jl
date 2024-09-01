@@ -1,5 +1,5 @@
 import ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
+ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 
