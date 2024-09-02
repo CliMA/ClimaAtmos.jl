@@ -1,6 +1,6 @@
 # Utilities for reading NetCDF data for GCM-driven single-column simulations.
 import NCDatasets as NC
-import StatsBase: mean
+import Statistics: mean
 
 """
     gcm_driven_profile_tmean(ds, varname)
