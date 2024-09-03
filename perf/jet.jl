@@ -9,7 +9,7 @@ include(joinpath(pkgdir(CA), "perf", "jet.jl"))
 =#
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
+ClimaComms.@import_required_backends
 import Random
 import HDF5, NCDatasets, CUDA
 Random.seed!(1234)

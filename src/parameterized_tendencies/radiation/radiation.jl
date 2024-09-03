@@ -11,7 +11,7 @@ import RRTMGP
 import .RRTMGPInterface as RRTMGPI
 
 import Interpolations
-using StatsBase: mean
+using Statistics: mean
 
 
 radiation_model_cache(Y, atmos::AtmosModel, args...) =

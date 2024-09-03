@@ -14,7 +14,7 @@ macro n_failures(ex)
 end
 
 import ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
+ClimaComms.@import_required_backends
 import SciMLBase
 import ClimaAtmos as CA
 n = Dict()

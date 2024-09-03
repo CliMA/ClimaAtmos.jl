@@ -1,6 +1,6 @@
 using Test
 import ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
+ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 
 include(joinpath("..", "perf", "common.jl"))
