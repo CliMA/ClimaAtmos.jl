@@ -334,8 +334,10 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     return nothing
 end
 
-limit_entrainment(entr::FT, a, dt) where {FT} =
-    max(min(entr, FT(0.9) * (1 - a) / max(a, eps(FT)) / dt), 0)
+limit_entrainment(entr::FT, a, dt) where {FT} = max(
+    min(entr, FT(0.9) * (1 - a) / max(a, eps(FT)) / dt, FT(0.9) * 1 / dt),
+    0,
+)
 limit_entrainment(entr::FT, a, w, dz) where {FT} =
     max(min(entr, FT(0.9) * w / dz), 0)
 limit_detrainment(detr::FT, a, dt) where {FT} =
