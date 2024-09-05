@@ -7,6 +7,8 @@ import JLD2
 using CairoMakie
 
 params_true = [.14, 1, .3, .22] # 4th position .0001, entr_inv_tau removed
+config_dict = YAML.load_file(joinpath(simdir, "experiment_config.yml"))
+output_dir = config_dict["output_dir"]
 
 len_dict = Dict(
     "thetaa" => 60,
@@ -50,7 +52,11 @@ function loss_plot(eki, config_dict)
     for i in 1:n_metrics
         name = config_dict["y_var_names"][i]
         len = len_dict[name]
-        simdir = SimDir(short)
+        simdir = SimDir(joinpath(output_dir, "iteration_001", "member_001", "output_active"))
+        # get sample variable for units and z dimension 
+        vari = get(simdir; short_name = name)
+        unts = units(vari)
+        #zdims = vari.dims["z"]
 
         μ, σ² = f_diagnostics[name][1], f_diagnostics[name][2]
 
@@ -66,29 +72,15 @@ function loss_plot(eki, config_dict)
         col = mod(i-1, num_per_row) + 1
         ax = nothing 
         if (n_metrics - i) < 3
-            ax = Axis(fig[row, col], title = name, xlabel = "Iteration")
+            ax = Axis(fig[row, col], title = name, xlabel = "Iteration", ylabel = unts)
         else
-            ax = Axis(fig[row, col], title = name)
+            ax = Axis(fig[row, col], title = name, ylabel = unts)
         end
 
         lines!(ax, vals)
         sidx +=len
-    #append!(all_loss, [vals])
     end
-    # fig = Figure(size = (800, 600))
-    # num_per_row = 3
-    # for metric in 1:n_metrics
-    #     row = div(metric-1, num_per_row) + 1
-    #     col = mod(metric-1, num_per_row) + 1
-    #     vals = []
-    #     for iteration in 1:n_iters
-    #         println(n_iters)
-    #         append!(vals, all_loss[iteration][metric])
-    #     end
-    #     ax = Axis(fig[row, col], title = config_dict["y_var_names"][metric])
-    #     lines!(ax, vals)
-    # end
-    Label(fig[0,:], "Individual Observation Loss over Iteration")
+    Label(fig[0,:], "Observation RMSE over Iteration")
     fig
 end
 
@@ -159,30 +151,37 @@ function plot_start_end_distributions(eki, config_dict)
         len = len_dict[name]
         prior_dist = loss_vals[1][sidx:(sidx + len-1), :] .* σ² .+ μ
         end_dist = loss_vals[n_iters][sidx:(sidx + len-1), :] .* σ² .+ μ
+
+        simdir = SimDir(joinpath(output_dir, "iteration_001", "member_001", "output_active"))
+        # get sample variable for units and z dimension 
+        vari = get(simdir; short_name = name)
+        unts = units(vari)
+        
         if size(prior_dist)[1] > 1
+            zdims = vari.dims["z"]
+
             end_dist = end_dist[:,vec(.!any(isnan, end_dist; dims = 1))]
 
-            ax = Axis(fig[row, col], title = name)
+            ax = Axis(fig[row, col], title = name, xlabel = unts, ylabel = "height(m)")
 
             # then its a line plot
             for k in 1:size(prior_dist)[2]
-                lines!(ax, prior_dist[1:30, k], 1:30, color = (:blue, 0.75))
+                lines!(ax, prior_dist[1:30, k], zdims[1:30], color = (:blue, 0.75))
             end 
             for k in 1:size(end_dist)[2]
-                lines!(ax, end_dist[1:30, k], 1:30, color = (:orange, 0.75))
+                lines!(ax, end_dist[1:30, k], zdims[1:30], color = (:orange, 0.75))
             end
             obs = observations[sidx:(sidx + 30-1), :] .* σ² .+ μ
             println(size(obs[:, 1]))
-            lines!(ax, obs[:, 1], 1:30, color = (:red, 0.75))
+            lines!(ax, obs[:, 1], zdims[1:30], color = (:red, 0.75))
         else
             #return vec(hcat(prior_dist, end_dist))
             catall = vec(hcat(prior_dist, end_dist))
             gmin = minimum(catall[.!isnan.(catall)]) 
             gmax = maximum(catall[.!isnan.(catall)])
-            #println(σ²)
-            println(gmin, "  ", gmax)
+
             bins = range(gmin, gmax, length = 30)
-            ax = Axis(fig[row, col], title = config_dict["y_var_names"][i])
+            ax = Axis(fig[row, col], title = config_dict["y_var_names"][i], ylabel = "Density", xlabel = unts)
             obs = observations[sidx] .* σ² .+ μ
             limits = ((minimum([gmin, obs*.997]), maximum([gmax, (obs*1.003)]), nothing))
             #println(size(prior_dist[1, :]))
@@ -194,7 +193,7 @@ function plot_start_end_distributions(eki, config_dict)
 
             nsd = 2
             poly!(ax, [obs-nsd*sqrt(σ²), obs+nsd*sqrt(σ²), obs + nsd*sqrt(σ²), obs - nsd*sqrt(σ²)] ,
-                        [0, 0, 60, 60],
+                        [0, 0, 40, 40],
                         color=(:red, .2))
             if i == 8 # add one legend for all 
                 legend = Legend(fig, ax, orientation = :vertical, tellheight = false)
