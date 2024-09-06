@@ -88,7 +88,7 @@ steps:
             srun --cpu-bind=threads --cpus-per-task=4
             nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M_4process.yml
+            --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M.yml
             --job_id gpu_hs_rhoe_equil_55km_nz63_0M_4process
         artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/*"
         env:
@@ -108,7 +108,7 @@ steps:
             srun --cpu-bind=threads --cpus-per-task=4
             nsys profile --trace=osrt,nvtx,cuda,mpi,ucx --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
+            --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
             --job_id target_gpu_implicit_baroclinic_wave_4process
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
         env:
