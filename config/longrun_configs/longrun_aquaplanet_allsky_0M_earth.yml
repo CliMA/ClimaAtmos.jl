@@ -17,5 +17,9 @@ dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"
+restart_file: "./restart/day150.0.hdf5"
 precip_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr, hfes]
+    period: 6hours
