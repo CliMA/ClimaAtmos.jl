@@ -141,9 +141,12 @@ function get_spaces(parsed_args, params, comms_ctx)
     bubble = parsed_args["bubble"]
     deep = parsed_args["deep_atmosphere"]
 
-    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
+    @assert topography in
+            ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar", "Hughes2023")
     if topography == "DCMIP200"
         warp_function = topography_dcmip200
+    elseif topography == "Hughes2023"
+        warp_function = topography_hughes2023
     elseif topography == "Agnesi"
         warp_function = topography_agnesi
     elseif topography == "Schar"

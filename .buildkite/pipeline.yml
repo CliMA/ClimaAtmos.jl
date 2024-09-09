@@ -374,29 +374,6 @@ steps:
   - group: "Sphere Examples (Topography)"
     steps:
 
-      - label: ":computer: baroclinic wave (ρe) topography (dcmip)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_topography_dcmip_rs.yml
-          --job_id sphere_baroclinic_wave_rhoe_topography_dcmip_rs
-        artifact_paths: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs/output_active/*"
-
-      - label: ":computer: held suarez (ρe) topography (dcmip)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_topography_dcmip.yml
-          --job_id sphere_held_suarez_rhoe_topography_dcmip
-        artifact_paths: "sphere_held_suarez_rhoe_topography_dcmip/output_active/*"
-
-      - label: ":computer: held suarez (ρe) equilmoist topography (dcmip)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_topography_dcmip.yml
-          --job_id sphere_held_suarez_rhoe_equilmoist_topography_dcmip
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_topography_dcmip/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
       - label: ":computer: Diagnostic DCMIP200 surface elevation spectra"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl

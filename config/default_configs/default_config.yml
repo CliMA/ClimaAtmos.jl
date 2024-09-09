@@ -78,7 +78,7 @@ max_newton_iters_ode:
   help: "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)"
   value: 1
 ode_algo:
-  help: "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, etc.]"
+  help: "ODE algorithm [`SSPKnoth` (default), `ARS343`, `SSP333`, `IMKG343a`, etc.]"
   value: "SSPKnoth"
 krylov_rtol:
   help: "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"

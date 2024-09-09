@@ -1,0 +1,16 @@
+dt_save_state_to_disk: "2days"
+initial_condition: "DryBaroclinicWave"
+topography: "Hughes2023"
+topo_smoothing: false
+moist: "equil"
+dt: "200secs"
+t_end: "10days"
+ode_algo: SSPKnoth
+  #vert_diff: "FriersonDiffusion"
+job_id: "sphere_baroclinic_wave_rhoe_hughes2023"
+diagnostics:
+  - short_name: [pfull, wa, va, rv, ke]
+    period: 1days
+  - short_name: [pfull, wa, va, rv, ke]
+    period: 1days
+    writer: h5
