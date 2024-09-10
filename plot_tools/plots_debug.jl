@@ -102,15 +102,12 @@ function get_debug_field(field)
     return index_max, index_min, debug_field
 end
 
-maxind, minind, debug_field = get_debug_field(field)
-
 #Plots.plot(getlevel(get_debug_field(Y.c.ρq_tot ./ Y.c.ρ), index_max[1]))
 #Plots.plot(getlevel(get_debug_field(Y.c.ρq_tot ./ Y.c.ρ), index_min[1]))
 
 function gen_all_time_plots(var; lon_avg=true, yaxis_min= 0, yaxis_max = 20000)
     lon_avg == 1 ? var = ClimaAnalysis.average_lon(var) : nothing
     more_kwargs = Dict( 
-                    :cb => Dict(:levels => [0:0.1:1]), 
                     :axis => Dict(:dim_on_y => true, :limits => (nothing, (yaxis_min,yaxis_max)))
                   )
     for (ii,time) in enumerate(var.dims["time"])
@@ -119,7 +116,6 @@ function gen_all_time_plots(var; lon_avg=true, yaxis_min= 0, yaxis_max = 20000)
                                        var;
                                        more_kwargs,
                                        time=time); 
-        Colorbar(fig; highclip = 1, lowclip=0)
                                        display(fig)
         end
 end
