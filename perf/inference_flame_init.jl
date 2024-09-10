@@ -39,7 +39,7 @@ using ProfileView
 import Profile
 Profile.clear_malloc_data()
 Profile.clear()
-tinf = @snoopi_deep begin
+tinf = @snoop_inference begin
     do_work!(integrator_args, integrator_kwargs)
 end
 
