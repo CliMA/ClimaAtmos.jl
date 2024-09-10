@@ -25,11 +25,15 @@ function get_extrema_from_ncvars(var)
     latmax = var.dims["lat"][imax.I[2+dim_offset]]
     lonmin = var.dims["lon"][imin.I[1+dim_offset]]
     lonmax = var.dims["lon"][imax.I[1+dim_offset]]
-    level = var.dims["z_reference"][imax.I[3+dim_offset]]
-    # returns a (mincoords, maxcoords) tuple containing
+    if haskey(var.dims, "z_reference")
+        level = var.dims["z_reference"][imax.I[3+dim_offset]]
+        return ((lonmin, latmin),(lonmax, latmax), level)
+    else
+        return ((lonmin, latmin),(lonmax, latmax))
+    end
+    # returns a (mincoords, maxcoords, (level,)) tuple containing
     # the coordinates of interest (pass these as the target 
     # lon, lat coords to the cartesian index search function)
-    return ((lonmin, latmin),(lonmax, latmax))
 end
 
 """
