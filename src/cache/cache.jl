@@ -114,13 +114,13 @@ end
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
 function build_cache(
-    Y,
-    atmos,
-    params,
-    surface_setup,
-    sim_info,
-    prescribe_ozone,
-    aerosol_names,
+    @nospecialize(Y),
+    @nospecialize(atmos),
+    @nospecialize(params),
+    @nospecialize(surface_setup),
+    @nospecialize(sim_info),
+    @nospecialize(prescribe_ozone),
+    @nospecialize(aerosol_names),
 )
     (; dt, t_end, start_date, output_dir) = sim_info
     FT = eltype(params)
