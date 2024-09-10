@@ -317,9 +317,9 @@ version = "0.6.4"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "2f1ea2708acfc18fcdd6f36ab8fd461aade78505"
+git-tree-sha1 = "9e5f2c9894491207d08c6219afa73fc31dd15fd3"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.14.12"
+version = "0.14.13"
 
     [deps.ClimaCore.extensions]
     ClimaCoreCUDAExt = "CUDA"
@@ -524,10 +524,10 @@ uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 version = "4.1.1"
 
 [[deps.CubedSphere]]
-deps = ["Elliptic", "FFTW", "Printf", "ProgressBars", "SpecialFunctions", "TaylorSeries"]
-git-tree-sha1 = "049f692019f52ad3b043edf20ef25ebd7b38eb94"
+deps = ["TaylorSeries"]
+git-tree-sha1 = "51bb25de518b4c62b7cdf26e5fbb84601bb27a60"
 uuid = "7445602f-e544-4518-8976-18f8e8ae6cdb"
-version = "0.2.6"
+version = "0.3.0"
 
 [[deps.DataAPI]]
 git-tree-sha1 = "abe83f3a2f1b857aac70ef8b269080af17764bbe"
@@ -708,11 +708,6 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "e3290f2d49e661fbd94046d7e3726ffcb2d41053"
 uuid = "5ae413db-bbd1-5e63-b57d-d24a61df00f5"
 version = "2.2.4+0"
-
-[[deps.Elliptic]]
-git-tree-sha1 = "71c79e77221ab3a29918aaf6db4f217b89138608"
-uuid = "b305315f-e792-5b7a-8f41-49f472929428"
-version = "1.0.1"
 
 [[deps.EnumX]]
 git-tree-sha1 = "bdb1942cd4c45e3c678fd11569d5cccd80976237"
@@ -1970,12 +1965,6 @@ version = "2.3.2"
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
-
-[[deps.ProgressBars]]
-deps = ["Printf"]
-git-tree-sha1 = "b437cdb0385ed38312d91d9c00c20f3798b30256"
-uuid = "49802e3a-d2f1-5c88-81d8-b72133a6f568"
-version = "1.5.1"
 
 [[deps.ProgressMeter]]
 deps = ["Distributed", "Printf"]
