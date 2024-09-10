@@ -11,7 +11,7 @@ import RRTMGP
 import .RRTMGPInterface as RRTMGPI
 
 import Interpolations
-using StatsBase: mean
+using Statistics: mean
 
 
 radiation_model_cache(Y, atmos::AtmosModel, args...) =
@@ -70,7 +70,9 @@ function radiation_model_cache(
         "inputs",
         "multiple_input4MIPs_radiation_RFMIP_UColorado-RFMIP-1-2_none.nc",
     )
-    data_loader(file_name) do input_data
+    data_loader(
+        RRTMGP.ArtifactPaths.get_input_filename(:gas, :lw),
+    ) do input_data
         if radiation_mode isa RRTMGPI.GrayRadiation
             kwargs = (;
                 lapse_rate = 3.5,
@@ -206,9 +208,16 @@ function radiation_model_cache(
             if aerosol_radiation
                 kwargs = (;
                     kwargs...,
-                    center_aerosol_type = 0, # initialized in callback
-                    center_aerosol_radius = 0.2, # assuming fixed aerosol radius
-                    center_aerosol_column_mass_density = NaN, # initialized in callback
+                    # assuming fixed aerosol radius
+                    center_dust_radius = 0.2,
+                    center_ss_radius = 0.2,
+                    center_dust_column_mass_density = NaN, # initialized in callback
+                    center_ss_column_mass_density = NaN, # initialized in callback
+                    center_so4_column_mass_density = NaN, # initialized in callback
+                    center_bcpi_column_mass_density = NaN, # initialized in callback
+                    center_bcpo_column_mass_density = NaN, # initialized in callback
+                    center_ocpi_column_mass_density = NaN, # initialized in callback
+                    center_ocpo_column_mass_density = NaN, # initialized in callback
                 )
             end
         end

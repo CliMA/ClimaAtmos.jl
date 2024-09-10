@@ -190,7 +190,7 @@ function surface_albedo_diffuse(
             if cosθ <= 0
                 return zero(FT)
             else
-                could_fraction = 0 # TODO: connect this to the EDMF
+                cloud_fraction = 0 # TODO: connect this to the EDMF
 
                 # clear sky (J11, eq. 5a)
                 n = α_model.n
@@ -212,8 +212,8 @@ function surface_albedo_diffuse(
                     one(FT),
                     max(
                         zero(FT),
-                        could_fraction * α_cloud +
-                        (1 - could_fraction) * α_clear,
+                        cloud_fraction * α_cloud +
+                        (1 - cloud_fraction) * α_clear,
                     ),
                 )
             end

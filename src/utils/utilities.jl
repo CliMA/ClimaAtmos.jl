@@ -266,7 +266,6 @@ using ClimaComms
 is_distributed(::ClimaComms.SingletonCommsContext) = false
 is_distributed(::ClimaComms.MPICommsContext) = true
 
-using Printf
 # From BenchmarkTools
 function prettytime(t)
     if t < 1e3
@@ -278,7 +277,7 @@ function prettytime(t)
     else
         value, units = t / 1e9, "s"
     end
-    return @sprintf("%.3f %s", value, units)
+    return "$(round(value, digits=3)) $units"
 end
 
 import Dates
@@ -317,7 +316,7 @@ function prettymemory(b)
     else
         value, units = b / 1024^3, "GiB"
     end
-    return @sprintf("%.2f %s", value, units)
+    return "$(round(value, digits=2)) $units"
 end
 
 """

@@ -8,7 +8,7 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import ClimaAtmos as CA
 import YAML
 import ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
+ClimaComms.@import_required_backends
 using ClimaUtilities.ClimaArtifacts
 import ClimaCalibrate:
     set_up_forward_model,

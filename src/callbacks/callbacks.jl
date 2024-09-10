@@ -128,7 +128,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 thermo_params,
                 TD.PhasePartition(thermo_params, ᶜts),
             )
-            @. ᶜrh = TD.relative_humidity(thermo_params, ᶜts)
+            @. ᶜrh = min(max(TD.relative_humidity(thermo_params, ᶜts), 0), 1)
         end
     end
 
@@ -168,15 +168,65 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         if radiation_mode.aerosol_radiation
             ᶜΔz = Fields.Δz_field(Y.c)
-            ᶜaero_type =
-                Fields.array2field(rrtmgp_model.center_aerosol_type, axes(Y.c))
-            @. ᶜaero_type =
-                set_aerosol_type(p.tracers.prescribed_aerosols_field)
+
             ᶜaero_conc = Fields.array2field(
-                rrtmgp_model.center_aerosol_column_mass_density,
+                rrtmgp_model.center_dust_column_mass_density,
                 axes(Y.c),
             )
-            @. ᶜaero_conc = maximum(p.tracers.prescribed_aerosols_field) * ᶜΔz
+            @. ᶜaero_conc = 0
+            for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04]
+                if prescribed_aerosol_name in
+                   propertynames(p.tracers.prescribed_aerosols_field)
+                    aerosol_field = getproperty(
+                        p.tracers.prescribed_aerosols_field,
+                        prescribed_aerosol_name,
+                    )
+                    @. ᶜaero_conc += aerosol_field * Y.c.ρ * ᶜΔz
+                end
+            end
+
+            ᶜaero_conc = Fields.array2field(
+                rrtmgp_model.center_ss_column_mass_density,
+                axes(Y.c),
+            )
+            @. ᶜaero_conc = 0
+            for prescribed_aerosol_name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04]
+                if prescribed_aerosol_name in
+                   propertynames(p.tracers.prescribed_aerosols_field)
+                    aerosol_field = getproperty(
+                        p.tracers.prescribed_aerosols_field,
+                        prescribed_aerosol_name,
+                    )
+                    @. ᶜaero_conc += aerosol_field * Y.c.ρ * ᶜΔz
+                end
+            end
+
+            aerosol_names_pair = [
+                (:center_so4_column_mass_density, :SO4),
+                (:center_bcpi_column_mass_density, :CB2),
+                (:center_bcpo_column_mass_density, :CB1),
+                (:center_ocpi_column_mass_density, :OC2),
+                (:center_ocpo_column_mass_density, :OC1),
+            ]
+
+            for (rrtmgp_aerosol_name, prescribed_aerosol_name) in
+                aerosol_names_pair
+                ᶜaero_conc = Fields.array2field(
+                    getproperty(rrtmgp_model, rrtmgp_aerosol_name),
+                    axes(Y.c),
+                )
+                if prescribed_aerosol_name in
+                   propertynames(p.tracers.prescribed_aerosols_field)
+                    aerosol_field = getproperty(
+                        p.tracers.prescribed_aerosols_field,
+                        prescribed_aerosol_name,
+                    )
+                    @. ᶜaero_conc = aerosol_field * Y.c.ρ * ᶜΔz
+                else
+                    @. ᶜaero_conc = 0
+                end
+            end
+
         end
         if :o3 in propertynames(p.tracers)
             ᶜvmr_o3 = Fields.array2field(
@@ -272,20 +322,6 @@ function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
             irradiance * (au / last(insolation_tuple))^2
     end
 end
-
-function set_aerosol_type(;
-    DST01 = 0,
-    SSLT01 = 0,
-    SO4 = 0,
-    CB1 = 0,
-    CB2 = 0,
-    OC1 = 0,
-    OC2 = 0,
-    _...,
-)
-    return argmax(n -> (DST01, SSLT01, SO4, CB1, CB2, OC1, OC2)[n], 1:7)
-end
-set_aerosol_type(nt) = set_aerosol_type(; nt...)
 
 NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
