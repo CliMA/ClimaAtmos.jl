@@ -3,9 +3,9 @@ ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 
-# From: https://timholy.github.io/SnoopCompile.jl/stable/snoopr/
+# From: https://timholy.github.io/SnoopCompile.jl/dev/tutorials/invalidations/#Tutorial-on-@snoop_invalidations
 using SnoopCompileCore
-invalidations = @snoopr begin
+invalidations = @snoop_invalidations begin
     (; config_file, job_id) = CA.commandline_kwargs()
     config = CA.AtmosConfig(config_file; job_id)
     include(joinpath(dirname(@__DIR__), "examples", "hybrid", "driver.jl"))
