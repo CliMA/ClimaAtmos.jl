@@ -1,4 +1,4 @@
-function get_diagnostics(parsed_args, atmos_model, Y, p, t_start, dt)
+function get_diagnostics(parsed_args, atmos_model, Y, p, dt)
 
     FT = Spaces.undertype(axes(Y.c))
 
@@ -105,19 +105,15 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, t_start, dt)
                 output_schedule = CAD.EveryCalendarDtSchedule(
                     period_dates;
                     reference_date = p.start_date,
-                    t_start,
                 )
                 compute_schedule = CAD.EveryCalendarDtSchedule(
                     period_dates;
                     reference_date = p.start_date,
-                    t_start,
                 )
             else
                 period_seconds = FT(time_to_seconds(period_str))
-                output_schedule =
-                    CAD.EveryDtSchedule(period_seconds; t_start)
-                compute_schedule =
-                    CAD.EveryDtSchedule(period_seconds; t_start)
+                output_schedule = CAD.EveryDtSchedule(period_seconds)
+                compute_schedule = CAD.EveryDtSchedule(period_seconds)
             end
 
             if isnothing(output_name)
@@ -154,7 +150,6 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, t_start, dt)
         diagnostics = [
             CAD.default_diagnostics(
                 atmos_model,
-                t_start,
                 time_to_seconds(parsed_args["t_end"]),
                 p.start_date;
                 output_writer = netcdf_writer,
@@ -177,7 +172,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, t_start, dt)
     return diagnostics, writers
 end
 
-function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
+function get_callbacks(config, sim_info, atmos, params, Y, p)
     (; parsed_args, comms_ctx) = config
     FT = eltype(params)
     (; dt, output_dir) = sim_info

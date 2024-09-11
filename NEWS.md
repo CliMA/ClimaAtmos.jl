@@ -4,6 +4,11 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+### ![][badge-🐛bugfix] Bug fixes
+
+- Fixed incorrect time/date conversion in diagnostics when restarting a
+  simulation. PR [3287](https://github.com/CliMA/ClimaAtmos.jl/pull/3287)
+
 v0.27.5
 -------
 - Update RRTMGP and allow multiple aerosols for radiation.

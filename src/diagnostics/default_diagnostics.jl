@@ -5,17 +5,17 @@
 # level interfaces, add them here. Feel free to include extra files.
 
 """
-    default_diagnostics(model, t_start, t_end, reference_date; output_writer)
+    default_diagnostics(model, t_end, start_date; output_writer)
 
 Return a list of `ScheduledDiagnostic`s associated with the given `model` that use
 `output_write` to write to disk. `t_end` is the expected simulation end time and it is used
 to choose the most reasonable output frequency.
 
-`reference_date` is the date that we assign at the start of the simulation.
+`start_date` is the date that we assign at the start of the simulation.
 We convert time to date as
 
 ```julia
-current_date = reference_date + t_start + integrator.t
+current_date = start_date + integrator.t
 ```
 
 The logic is as follows:
@@ -27,9 +27,8 @@ If `t_end >= 90 year` take monthly means.
 """
 function default_diagnostics(
     model::AtmosModel,
-    t_start::Real,
-    t_end::Real,
-    reference_date::DateTime;
+    t_end,
+    start_date::DateTime;
     output_writer,
 )
     # Unfortunately, [] is not treated nicely in a map (we would like it to be "excluded"),
@@ -39,9 +38,8 @@ function default_diagnostics(
         x ->
             default_diagnostics(
                 getfield(model, x),
-                t_start,
                 t_end,
-                reference_date;
+                start_date;
                 output_writer,
             ) != [],
         fieldnames(AtmosModel),
@@ -50,13 +48,12 @@ function default_diagnostics(
     # We use a map because we want to ensure that diagnostics is a well defined type, not
     # Any. This reduces latency.
     return vcat(
-        core_default_diagnostics(output_writer, t_start, t_end, reference_date),
+        core_default_diagnostics(output_writer, t_end, start_date),
         map(non_empty_fields) do field
             default_diagnostics(
                 getfield(model, field),
-                t_start,
                 t_end,
-                reference_date;
+                start_date;
                 output_writer,
             )
         end...,
@@ -68,8 +65,7 @@ end
 # that all the default_diagnostics return the same type). This is used by
 # default_diagnostics(model::AtmosModel; output_writer), so that we can ignore defaults for
 # submodels that have no given defaults.
-default_diagnostics(submodel, t_start, t_end, reference_date; output_writer) =
-    []
+default_diagnostics(submodel, t_end, start_date; output_writer) = []
 
 """
     produce_common_diagnostic_function(period, reduction)
@@ -80,8 +76,7 @@ function common_diagnostics(
     period,
     reduction,
     output_writer,
-    t_start,
-    reference_date,
+    start_date,
     short_names...;
     pre_output_hook! = nothing,
 )
@@ -89,9 +84,8 @@ function common_diagnostics(
         map(short_names) do short_name
             output_schedule_func =
                 period isa Period ?
-                EveryCalendarDtSchedule(period; t_start, reference_date) :
-                EveryDtSchedule(period; t_start)
-
+                EveryCalendarDtSchedule(period; reference_date = start_date) :
+                EveryDtSchedule(period)
             return ScheduledDiagnostic(
                 variable = get_diagnostic_variable(short_name),
                 compute_schedule_func = EveryStepSchedule(),
@@ -107,7 +101,7 @@ end
 include("standard_diagnostic_frequencies.jl")
 
 """
-    frequency_averages(t_start::Real, t_end::Real)
+    frequency_averages(t_end::Real)
 
 Return the correct averaging function depending on the total simulation time.
 
@@ -115,18 +109,17 @@ If `t_end < 1 day` take hourly means,
 if `t_end < 30 days` take daily means,
 if `t_end < 90 days` take means over ten days,
 If `t_end >= 90 year` take monthly means.
-
-One month is defined as 30 days.
 """
-function frequency_averages(t_start::Real, t_end::Real)
+function frequency_averages(t_end)
+    FT = eltype(t_end)
     if t_end >= 90 * 86400
-        return monthly_averages
+        return (args...; kwargs...) -> monthly_averages(FT, args...; kwargs...)
     elseif t_end >= 30 * 86400
-        return tendaily_averages
+        return (args...; kwargs...) -> tendaily_averages(FT, args...; kwargs...)
     elseif t_end >= 86400
-        return daily_averages
+        return (args...; kwargs...) -> daily_averages(FT, args...; kwargs...)
     else
-        return hourly_averages
+        return (args...; kwargs...) -> hourly_averages(FT, args...; kwargs...)
     end
 end
 
@@ -135,7 +128,7 @@ end
 ########
 # Core #
 ########
-function core_default_diagnostics(output_writer, t_start, t_end, reference_date)
+function core_default_diagnostics(output_writer, t_end, start_date)
     core_diagnostics = [
         "ts",
         "ta",
@@ -152,20 +145,21 @@ function core_default_diagnostics(output_writer, t_start, t_end, reference_date)
         "hfes",
     ]
 
-    average_func = frequency_averages(t_start, t_end)
+    average_func = frequency_averages(t_end)
+    FT = eltype(t_end)
 
     if t_end >= 90 * 86400
-        min_func = monthly_min
-        max_func = monthly_max
+        min_func = (args...; kwargs...) -> monthly_min(FT, args...; kwargs...)
+        max_func = (args...; kwargs...) -> monthly_max(FT, args...; kwargs...)
     elseif t_end >= 30 * 86400
-        min_func = tendaily_min
-        max_func = tendaily_max
+        min_func = (args...; kwargs...) -> tendaily_min(FT, args...; kwargs...)
+        max_func = (args...; kwargs...) -> tendaily_max(FT, args...; kwargs...)
     elseif t_end >= 86400
-        min_func = daily_min
-        max_func = daily_max
+        min_func = (args...; kwargs...) -> daily_min(FT, args...; kwargs...)
+        max_func = (args...; kwargs...) -> daily_max(FT, args...; kwargs...)
     else
-        min_func = hourly_min
-        max_func = hourly_max
+        min_func = (args...; kwargs...) -> hourly_min(FT, args...; kwargs...)
+        max_func = (args...; kwargs...) -> hourly_max(FT, args...; kwargs...)
     end
 
     return [
@@ -179,14 +173,9 @@ function core_default_diagnostics(output_writer, t_start, t_end, reference_date)
             output_writer,
             output_short_name = "orog_inst",
         ),
-        average_func(
-            core_diagnostics...;
-            output_writer,
-            t_start,
-            reference_date,
-        )...,
-        min_func("ts"; output_writer, t_start, reference_date),
-        max_func("ts"; output_writer, t_start, reference_date),
+        average_func(core_diagnostics...; output_writer, start_date)...,
+        min_func("ts"; output_writer, start_date),
+        max_func("ts"; output_writer, start_date),
     ]
 end
 
@@ -195,9 +184,8 @@ end
 ##################
 function default_diagnostics(
     ::T,
-    t_start,
     t_end,
-    reference_date;
+    start_date;
     output_writer,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     moist_diagnostics = [
@@ -214,15 +202,8 @@ function default_diagnostics(
         "clwvi",
         "clivi",
     ]
-    average_func = frequency_averages(t_start, t_end)
-    return [
-        average_func(
-            moist_diagnostics...;
-            output_writer,
-            t_start,
-            reference_date,
-        )...,
-    ]
+    average_func = frequency_averages(t_end)
+    return [average_func(moist_diagnostics...; output_writer, start_date)...]
 end
 
 #######################
@@ -230,23 +211,15 @@ end
 #######################
 function default_diagnostics(
     ::Microphysics1Moment,
-    t_start,
     t_end,
-    reference_date;
+    start_date;
     output_writer,
 )
     precip_diagnostics = ["husra", "hussn"]
 
-    average_func = frequency_averages(t_start, t_end)
+    average_func = frequency_averages(t_end)
 
-    return [
-        average_func(
-            precip_diagnostics...;
-            output_writer,
-            t_start,
-            reference_date,
-        )...,
-    ]
+    return [average_func(precip_diagnostics...; output_writer, start_date)...]
 end
 
 ##################
@@ -254,9 +227,8 @@ end
 ##################
 function default_diagnostics(
     ::RRTMGPI.AbstractRRTMGPMode,
-    t_start,
     t_end,
-    reference_date;
+    start_date;
     output_writer,
 )
     rad_diagnostics = [
@@ -273,24 +245,16 @@ function default_diagnostics(
         "rlus",
     ]
 
-    average_func = frequency_averages(t_start, t_end)
+    average_func = frequency_averages(t_end)
 
-    return [
-        average_func(
-            rad_diagnostics...;
-            output_writer,
-            t_start,
-            reference_date,
-        )...,
-    ]
+    return [average_func(rad_diagnostics...; output_writer, start_date)...]
 end
 
 
 function default_diagnostics(
     ::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
-    t_start,
     t_end,
-    reference_date;
+    start_date;
     output_writer,
 )
     rad_diagnostics = [
@@ -318,21 +282,11 @@ function default_diagnostics(
         "rlutcs",
     ]
 
-    average_func = frequency_averages(t_start, t_end)
+    average_func = frequency_averages(t_end)
 
     return [
-        average_func(
-            rad_diagnostics...;
-            output_writer,
-            t_start,
-            reference_date,
-        )...,
-        average_func(
-            rad_clearsky_diagnostics...;
-            output_writer,
-            t_start,
-            reference_date,
-        )...,
+        average_func(rad_diagnostics...; output_writer, start_date)...,
+        average_func(rad_clearsky_diagnostics...; output_writer, start_date)...,
     ]
 end
 
@@ -341,9 +295,8 @@ end
 ##################
 function default_diagnostics(
     ::PrognosticEDMFX,
-    t_start,
     t_end,
-    reference_date;
+    start_date;
     output_writer,
 )
     edmfx_draft_diagnostics = [
@@ -373,30 +326,19 @@ function default_diagnostics(
         "lmix",
     ]
 
-    average_func = frequency_averages(t_start, t_end)
+    average_func = frequency_averages(t_end)
 
     return [
-        average_func(
-            edmfx_draft_diagnostics...;
-            output_writer,
-            t_start,
-            reference_date,
-        )...,
-        average_func(
-            edmfx_env_diagnostics...;
-            output_writer,
-            t_start,
-            reference_date,
-        )...,
+        average_func(edmfx_draft_diagnostics...; output_writer, start_date)...,
+        average_func(edmfx_env_diagnostics...; output_writer, start_date)...,
     ]
 end
 
 
 function default_diagnostics(
     ::DiagnosticEDMFX,
-    t_start,
     t_end,
-    reference_date;
+    start_date;
     output_writer,
 )
     diagnostic_edmfx_draft_diagnostics = [
@@ -413,20 +355,18 @@ function default_diagnostics(
     ]
     diagnostic_edmfx_env_diagnostics = ["waen", "tke", "lmix"]
 
-    average_func = frequency_averages(t_start, t_end)
+    average_func = frequency_averages(t_end)
 
     return [
         average_func(
             diagnostic_edmfx_draft_diagnostics...;
             output_writer,
-            t_start,
-            reference_date,
+            start_date,
         )...,
         average_func(
             diagnostic_edmfx_env_diagnostics...;
             output_writer,
-            t_start,
-            reference_date,
+            start_date,
         )...,
     ]
 end
