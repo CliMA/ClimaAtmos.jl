@@ -61,11 +61,12 @@ end
 surface_state(sfc_setup_wrapper::SurfaceState, _, _, _) = sfc_setup_wrapper
 
 surface_state(
-    wrapped_sfc_setup::Function,
+    wrapped_sfc_setup::F,
     sfc_local_geometry_values,
     int_z_values,
     t,
-) = wrapped_sfc_setup(sfc_local_geometry_values.coordinates, int_z_values, t)
+) where {F <: Function} =
+    wrapped_sfc_setup(sfc_local_geometry_values.coordinates, int_z_values, t)
 
 # This is a hack for meeting the August 7th deadline. It is to ensure that the
 # coupler will be able to construct an integrator before overwriting its surface
@@ -149,7 +150,7 @@ Computes the surface conditions, given information about the surface and the
 first interior point. Implements the assumptions listed for `SurfaceState`.
 """
 function surface_state_to_conditions(
-    wrapped_sfc_setup,
+    wrapped_sfc_setup::WSS,
     surface_local_geometry,
     interior_ts,
     interior_u,
@@ -161,7 +162,7 @@ function surface_state_to_conditions(
     atmos,
     sfc_prognostic_temp,
     t,
-)
+) where {WSS}
     surf_state =
         surface_state(wrapped_sfc_setup, surface_local_geometry, interior_z, t)
     parameterization = surf_state.parameterization

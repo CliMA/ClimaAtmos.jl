@@ -55,12 +55,15 @@ function (::GABLS)(params)
     q_vap = FT(0)
     z0 = FT(0.1)
     parameterization = MoninObukhov(; z0)
-    surface_state(surface_coordinates, interior_z, t) = SurfaceState(;
-        parameterization,
-        T = 265 - FT(0.25) * FT(t) / 3600,
-        p,
-        q_vap,
-    )
+    function surface_state(surface_coordinates, interior_z, t)
+        _FT = eltype(surface_coordinates) # do not capture FT
+        SurfaceState(;
+            parameterization,
+            T = 265 - _FT(0.25) * _FT(t) / 3600,
+            p,
+            q_vap,
+        )
+    end
     return surface_state
 end
 
@@ -119,7 +122,8 @@ function (::LifeCycleTan2018)(params)
     z0 = FT(1e-4)
     ustar = FT(0.28)
     function surface_state(surface_coordinates, interior_z, t)
-        weight = FT(0.01) + FT(0.99) * (cos(2 * FT(π) * t / 3600) + 1) / 2
+        _FT = eltype(surface_coordinates) # do not capture FT
+        weight = _FT(0.01) + _FT(0.99) * (cos(2 * _FT(π) * t / 3600) + 1) / 2
         fluxes =
             θAndQFluxes(; θ_flux = θ_flux0 * weight, q_flux = q_flux0 * weight)
         parameterization = MoninObukhov(; z0, fluxes, ustar)
@@ -226,9 +230,10 @@ function (::TRMM_LBA)(params)
     z0 = FT(1e-4)
     ustar = FT(0.28) # 0.28 is taken from Bomex. TODO: Approximate from LES TKE.
     function surface_state(surface_coordinates, interior_z, t)
-        value = cos(FT(π) / 2 * (1 - FT(t) / (FT(5.25) * 3600)))
-        shf = 270 * max(0, value)^FT(1.5)
-        lhf = 554 * max(0, value)^FT(1.3)
+        _FT = eltype(surface_coordinates) # do not capture FT
+        value = cos(_FT(π) / 2 * (1 - _FT(t) / (_FT(5.25) * 3600)))
+        shf = 270 * max(0, value)^_FT(1.5)
+        lhf = 554 * max(0, value)^_FT(1.3)
         fluxes = HeatFluxes(; shf, lhf)
         parameterization = MoninObukhov(; z0, fluxes, ustar)
         return SurfaceState(; parameterization, T, p, q_vap)
