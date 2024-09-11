@@ -252,12 +252,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
     end
 
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
-        # TODO: better if-else criteria?
-        dt_rad = if parsed_args["config"] == "column"
-            dt
-        else
-            FT(time_to_seconds(parsed_args["dt_rad"]))
-        end
+        dt_rad = FT(time_to_seconds(parsed_args["dt_rad"]))
         callbacks =
             (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
     end

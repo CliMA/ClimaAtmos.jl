@@ -3,6 +3,7 @@ initial_condition: "IsothermalProfile"
 hyperdiff: false
 z_elem: 70
 dt: "3hours"
+dt_rad: "3hours"
 idealized_h2o: true
 t_end: "654days"
 dz_top: 10000.0
