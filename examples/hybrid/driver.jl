@@ -8,6 +8,12 @@ import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import Random
+
+# This runtime dispatch is only due to the
+# possibility of printing error messages
+import Thermodynamics as TD
+TD.print_warning() = false
+
 Random.seed!(1234)
 
 if !(@isdefined config)
