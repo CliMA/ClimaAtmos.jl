@@ -664,10 +664,11 @@ function calc_intermitency(ρ_source_level, source_ampl, nk, Bsum)
 end
 
 function gw_average!(wave_forcing, wave_forcing_m1)
-    L1 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(0.0f0))
+    FT=eltype(wave_forcing)
+    L1 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(FT(0.0)))
     L2 = Operators.LeftBiasedF2C(;)
     wave_forcing_m1 .= L2.(L1.(wave_forcing))
-    @. wave_forcing = 0.5f0 * (wave_forcing + wave_forcing_m1)
+    @. wave_forcing = FT(0.5) * (wave_forcing + wave_forcing_m1)
 end
 
 
