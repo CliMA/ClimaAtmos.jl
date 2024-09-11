@@ -67,28 +67,28 @@ steps:
 
       - label: ":computer: single column radiative equilibrium gray"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_gray.yml
           --job_id single_column_radiative_equilibrium_gray
         artifact_paths: "single_column_radiative_equilibrium_gray/output_active/*"
 
       - label: ":computer: single column radiative equilibrium clearsky"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky.yml
           --job_id single_column_radiative_equilibrium_clearsky
         artifact_paths: "single_column_radiative_equilibrium_clearsky/output_active/*"
 
       - label: ":computer: single column radiative equilibrium clearsky prognostic surface temperature"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky_prognostic_surface_temp.yml
           --job_id single_column_radiative_equilibrium_clearsky_prognostic_surface_temp
         artifact_paths: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/output_active/*"
 
       - label: ":computer: single column radiative equilibrium allsky idealized clouds varying insolation"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_allsky_idealized_clouds.yml
           --job_id single_column_radiative_equilibrium_allsky_idealized_clouds
         artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/output_active/*"
@@ -97,7 +97,7 @@ steps:
     steps:
       - label: ":umbrella: 1-moment precipitation sanity test single column"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_precipitation_test.yml
           --job_id single_column_precipitation_test
         artifact_paths: "single_column_precipitation_test/output_active/*"
@@ -131,7 +131,7 @@ steps:
 
       - label: ":computer: single column non-orographic gravity wave parameterization"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
           --job_id single_column_nonorographic_gravity_wave
         artifact_paths: "single_column_nonorographic_gravity_wave/*"
@@ -141,7 +141,7 @@ steps:
 
       - label: ":computer: single column hydrostatic balance float64"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
           --job_id single_column_hydrostatic_balance_ft64
         artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
@@ -151,21 +151,21 @@ steps:
 
       - label: ":computer: Box hydrostatic balance (ρe_tot)"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/box_hydrostatic_balance_rhoe.yml
           --job_id box_hydrostatic_balance_rhoe
         artifact_paths: "box_hydrostatic_balance_rhoe/output_active/*"
 
       - label: ":computer: 3D density current"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/box_density_current_test.yml
           --job_id box_density_current_test
         artifact_paths: "box_density_current_test/output_active/*"
 
       - label: ":computer: Box (ρe_tot) rcemipii with diagnostic edmf"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/rcemipii_box_diagnostic_edmfx.yml
           --job_id rcemipii_box_diagnostic_edmfx
         artifact_paths: "rcemipii_box_diagnostic_edmfx/output_active/*"
@@ -174,7 +174,7 @@ steps:
 
       - label: ":genie: LES ISDAC in a box"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/les_isdac_box.yml
           --job_id les_isdac_box
         artifact_paths: "les_isdac_box/*"
@@ -189,21 +189,21 @@ steps:
     steps:
       - label: ":computer: Agnesi linear hydrostatic mountain experiment (uniform)"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/plane_agnesi_mountain_test_uniform.yml
           --job_id plane_agnesi_mountain_test_uniform
         artifact_paths: "plane_agnesi_mountain_test_uniform/output_active/*"
 
       - label: ":computer: Agnesi linear hydrostatic mountain experiment (stretched)"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/plane_agnesi_mountain_test_stretched.yml
           --job_id plane_agnesi_mountain_test_stretched
         artifact_paths: "plane_agnesi_mountain_test_stretched/output_active/*"
 
       - label: ":computer: Density current experiment"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/plane_density_current_test.yml
           --job_id plane_density_current_test
         artifact_paths: "plane_density_current_test/output_active/*"
@@ -214,19 +214,19 @@ steps:
 
       - label: ":computer: baroclinic wave check conservation"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation.yml
+          julia --color=yes --project=perf examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation.yml
           --job_id sphere_baroclinic_wave_conservation
         artifact_paths: "sphere_baroclinic_wave_conservation/output_active/*"
 
       - label: ":computer: baroclinic wave check conservation float64"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_ft64.yml
+          julia --color=yes --project=perf examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_ft64.yml
           --job_id sphere_baroclinic_wave_conservation_ft64
         artifact_paths: "sphere_baroclinic_wave_conservation_ft64/output_active/*"
       
       - label: ":computer: baroclinic wave check conservation with sources"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_source.yml
+          julia --color=yes --project=perf examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_source.yml
           --job_id sphere_baroclinic_wave_conservation_source
         artifact_paths: "sphere_baroclinic_wave_conservation_source/output_active/*"
 
@@ -235,7 +235,7 @@ steps:
 
       - label: ":computer: hydrostatic balance (ρe) float64"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_hydrostatic_balance_rhoe_ft64.yml
           --job_id sphere_hydrostatic_balance_rhoe_ft64
         artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/output_active/*"
@@ -245,14 +245,14 @@ steps:
       - label: ":computer: baroclinic wave (ρe)"
         key: sphere_baroclinic_wave_rhoe
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe.yml
           --job_id sphere_baroclinic_wave_rhoe
         artifact_paths: "sphere_baroclinic_wave_rhoe/output_active/*"
 
       - label: ":computer: no lim baroclinic wave (ρe) equilmoist"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist.yml
           --job_id sphere_baroclinic_wave_rhoe_equilmoist
 
@@ -265,7 +265,7 @@ steps:
 
       - label: ":computer: no lim baroclinic wave (ρe) equilmoist (deep sphere)"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/deep_sphere_baroclinic_wave_rhoe_equilmoist.yml
           --job_id deep_sphere_baroclinic_wave_rhoe_equilmoist
 
@@ -279,7 +279,7 @@ steps:
       # Add this back when we figure out what to do with SSP and zalesak
       # - label: ":computer: SSP zalesak tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
       #   command: >
-      #     julia --color=yes --project=examples examples/hybrid/driver.jl
+      #     julia --color=yes --project=perf examples/hybrid/driver.jl
       #     --config_file $CONFIG_PATH/$$JOB_NAME.yml
       #     --job_id JOB_NAME
       #   artifact_paths: "$$JOB_NAME/output_active/*"
@@ -291,14 +291,14 @@ steps:
       - label: ":computer: held suarez (ρe) hightop"
         key: sphere_held_suarez_rhoe_hightop
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_hightop.yml
           --job_id sphere_held_suarez_rhoe_hightop
         artifact_paths: "sphere_held_suarez_rhoe_hightop/output_active/*"
 
       - label: ":computer: no lim held suarez (ρe) equilmoist hightop sponge"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_hightop_sponge.yml
           --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
 
@@ -314,7 +314,7 @@ steps:
 
       - label: ":umbrella: aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.yml
           --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/output_active/*"
@@ -323,7 +323,7 @@ steps:
 
       - label: ":computer: aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (raw_topo) high top zonally asymmetric"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.yml
           --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
 
@@ -337,7 +337,7 @@ steps:
 
       - label: ":computer: aquaplanet (ρe_tot) nonequilmoist allsky radiation monin_obukhov varying insolation high top 1-moment"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_nonequilmoist_allsky.yml
           --job_id sphere_aquaplanet_rhoe_nonequilmoist_allsky
         artifact_paths: "sphere_aquaplanet_rhoe_nonequilmoist_allsky/output_active/*"
@@ -346,7 +346,7 @@ steps:
 
       - label: ":computer: aquaplanet (ρe_tot) slabocean equilmoist allsky radiation monin_obukhov varying insolation"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean.yml
           --job_id aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean
         artifact_paths: "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean/output_active/*"
@@ -355,7 +355,7 @@ steps:
       
       - label: ":computer: aquaplanet (ρe_tot) slabocean equilmoist allsky radiation monin_obukhov varying insolation float64"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean_ft64.yml
           --job_id aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean_ft64
         artifact_paths: "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean_ft64/output_active/*"
@@ -364,7 +364,7 @@ steps:
       
       - label: ":computer: aquaplanet (ρe_tot) rcemipii with diagnostic edmf"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/rcemipii_sphere_diagnostic_edmfx.yml
           --job_id rcemipii_sphere_diagnostic_edmfx
         artifact_paths: "rcemipii_sphere_diagnostic_edmfx/output_active/*"
@@ -376,21 +376,21 @@ steps:
 
       - label: ":computer: baroclinic wave (ρe) topography (dcmip)"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_topography_dcmip_rs.yml
           --job_id sphere_baroclinic_wave_rhoe_topography_dcmip_rs
         artifact_paths: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs/output_active/*"
 
       - label: ":computer: held suarez (ρe) topography (dcmip)"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_topography_dcmip.yml
           --job_id sphere_held_suarez_rhoe_topography_dcmip
         artifact_paths: "sphere_held_suarez_rhoe_topography_dcmip/output_active/*"
 
       - label: ":computer: held suarez (ρe) equilmoist topography (dcmip)"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_topography_dcmip.yml
           --job_id sphere_held_suarez_rhoe_equilmoist_topography_dcmip
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_topography_dcmip/output_active/*"
@@ -399,14 +399,14 @@ steps:
 
       - label: ":computer: Diagnostic DCMIP200 surface elevation spectra"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200.yml
           --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200/output_active/*"
 
       - label: ":computer: Diagnostic Earth surface elevation spectra"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth.yml
           --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/output_active/*"
@@ -455,7 +455,7 @@ steps:
       - label: ":computer: Prep restart for MPI"
         key: "mpi_baro_wave_make_restart"
         command: >
-          srun julia --color=yes --project=examples examples/hybrid/driver.jl
+          srun julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/mpi_make_restart.yml
           --job_id mpi_make_restart
         artifact_paths: "mpi_make_restart/output_active/*"
@@ -471,7 +471,7 @@ steps:
         command: >
           tar xvf mpi_make_restart/output_active/hdf5_files.tar -C mpi_make_restart/output_active
 
-          srun julia --color=yes --project=examples examples/hybrid/driver.jl
+          srun julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/restart_mpi_baroclinic_wave_rhoe.yml
           --job_id restart_mpi_baroclinic_wave_rhoe
         artifact_paths: "restart_mpi_baroclinic_wave_rhoe/output_active/*"
@@ -487,7 +487,7 @@ steps:
 
       - label: ":computer: MPI no lim aquaplanet (ρe) equilmoist clearsky radiation"
         command: >
-          srun julia --color=yes --project=examples examples/hybrid/driver.jl
+          srun julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky.yml
           --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky
         artifact_paths: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky/output_active/*"
@@ -500,7 +500,7 @@ steps:
       - label: ":computer: Prep for calling remap pipeline"
         key: "prep_remap"
         command: >
-          srun julia --color=yes --project=examples examples/hybrid/driver.jl
+          srun julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/prep_remap.yml
           --job_id prep_remap
         artifact_paths: "prep_remap/output_active/*"
@@ -545,7 +545,7 @@ steps:
 
       - label: ":genie: Diagnostic EDMFX test in a box"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_test_box.yml
           --job_id diagnostic_edmfx_test_box
         artifact_paths: "diagnostic_edmfx_test_box/output_active/*"
@@ -554,7 +554,7 @@ steps:
 
       - label: ":genie: Diagnostic EDMFX GABLS in a box"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_gabls_box.yml
           --job_id diagnostic_edmfx_gabls_box
         artifact_paths: "diagnostic_edmfx_gabls_box/output_active/*"
@@ -563,7 +563,7 @@ steps:
 
       - label: ":genie: Diagnostic EDMFX Bomex in a box"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_box.yml
           --job_id diagnostic_edmfx_bomex_box
         artifact_paths: "diagnostic_edmfx_bomex_box/output_active/*"
@@ -572,7 +572,7 @@ steps:
 
       - label: ":genie: Diagnostic EDMFX Bomex stretched grid in a box"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_stretched_box.yml
           --job_id diagnostic_edmfx_bomex_stretched_box
         artifact_paths: "diagnostic_edmfx_bomex_stretched_box/output_active/*"
@@ -581,7 +581,7 @@ steps:
 
       - label: ":genie: Diagnostic EDMFX DYCOMS_RF01 in a box (explicit)"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_explicit_box.yml
           --job_id diagnostic_edmfx_dycoms_rf01_explicit_box
         artifact_paths: "diagnostic_edmfx_dycoms_rf01_explicit_box/output_active/*"
@@ -590,7 +590,7 @@ steps:
 
       - label: ":genie: Diagnostic EDMFX DYCOMS_RF01 in a box"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_box.yml
           --job_id diagnostic_edmfx_dycoms_rf01_box
         artifact_paths: "diagnostic_edmfx_dycoms_rf01_box/output_active/*"
@@ -599,7 +599,7 @@ steps:
 
       - label: ":umbrella: Diagnostic EDMFX DYCOMS_RF02 in a box"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf02_box.yml
           --job_id diagnostic_edmfx_dycoms_rf02_box
         artifact_paths: "diagnostic_edmfx_dycoms_rf02_box/output_active/*"
@@ -608,7 +608,7 @@ steps:
 
       - label: ":umbrella: Diagnostic EDMFX Rico in a box"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_rico_box.yml
           --job_id diagnostic_edmfx_rico_box
         artifact_paths: "diagnostic_edmfx_rico_box/output_active/*"
@@ -617,7 +617,7 @@ steps:
 
       - label: ":umbrella: Diagnostic EDMFX TRMM in a box"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box.yml
           --job_id diagnostic_edmfx_trmm_box
         artifact_paths: "diagnostic_edmfx_trmm_box/output_active/*"
@@ -626,7 +626,7 @@ steps:
 
       - label: ":umbrella: Diagnostic EDMFX TRMM stretched grid in a box"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_stretched_box.yml
           --job_id diagnostic_edmfx_trmm_stretched_box
         artifact_paths: "diagnostic_edmfx_trmm_stretched_box/output_active/*"
@@ -635,7 +635,7 @@ steps:
 
       - label: ":genie: Diagnostic EDMFX TRMM 0M in a box"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box_0M.yml
           --job_id diagnostic_edmfx_trmm_box_0M
         artifact_paths: "diagnostic_edmfx_trmm_box_0M/output_active/*"
@@ -644,7 +644,7 @@ steps:
 
       - label: ":genie: Diagnostic EDMFX aquaplanet with TKE"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
           --job_id diagnostic_edmfx_aquaplanet
 
@@ -661,7 +661,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX advection test in a column"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_column.yml
           --job_id prognostic_edmfx_adv_test_column
         artifact_paths: "prognostic_edmfx_adv_test_column/output_active/*"
@@ -671,7 +671,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX simple plume test in a column"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_simpleplume_column.yml
           --job_id prognostic_edmfx_simpleplume_column
         artifact_paths: "prognostic_edmfx_simpleplume_column/output_active/*"
@@ -680,7 +680,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX GABLS in a column"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column.yml
           --job_id prognostic_edmfx_gabls_column
         artifact_paths: "prognostic_edmfx_gabls_column/output_active/*"
@@ -689,7 +689,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX Bomex in a column (pi group)"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_pigroup_column.yml
           --job_id prognostic_edmfx_bomex_pigroup_column
         artifact_paths: "prognostic_edmfx_bomex_pigroup_column/output_active/*"
@@ -698,7 +698,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX Bomex with precribed TKE in a column"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_column.yml
           --job_id prognostic_edmfx_bomex_fixtke_column
         artifact_paths: "prognostic_edmfx_bomex_fixtke_column/output_active/*"
@@ -707,7 +707,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX Bomex stretched grid in a column"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_stretched_column.yml
           --job_id prognostic_edmfx_bomex_stretched_column
         artifact_paths: "prognostic_edmfx_bomex_stretched_column/output_active/*"
@@ -716,7 +716,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX Bomex in a column"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
           --job_id prognostic_edmfx_bomex_column
         artifact_paths: "prognostic_edmfx_bomex_column/output_active/*"
@@ -725,7 +725,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
           --job_id prognostic_edmfx_bomex_column_implicit
         artifact_paths: "prognostic_edmfx_bomex_column_implicit/output_active/*"
@@ -734,7 +734,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX Dycoms RF01 in a column"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf01_column.yml
           --job_id prognostic_edmfx_dycoms_rf01_column
         artifact_paths: "prognostic_edmfx_dycoms_rf01_column/output_active/*"
@@ -743,7 +743,7 @@ steps:
 
       - label: ":umbrella: Prognostic EDMFX Rico in a column"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
           --job_id prognostic_edmfx_rico_column
         artifact_paths: "prognostic_edmfx_rico_column/output_active/*"
@@ -752,7 +752,7 @@ steps:
 
       - label: ":umbrella: Prognostic EDMFX TRMM in a column"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
           --job_id prognostic_edmfx_trmm_column
         artifact_paths: "prognostic_edmfx_trmm_column/output_active/*"
@@ -761,7 +761,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX TRMM with 0-moment in a column"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_0M.yml
           --job_id prognostic_edmfx_trmm_column_0M
         artifact_paths: "prognostic_edmfx_trmm_column_0M/output_active/*"
@@ -770,7 +770,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX GCM driven in a column"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_gcmdriven_column.yml
           --job_id prognostic_edmfx_gcmdriven_column
         artifact_paths: "prognostic_edmfx_gcmdriven_column/output_active/*"
@@ -780,7 +780,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX Bomex in a box"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
           --job_id prognostic_edmfx_bomex_box
         artifact_paths: "prognostic_edmfx_bomex_box/*"
@@ -789,7 +789,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX aquaplanet"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
           --job_id prognostic_edmfx_aquaplanet
         artifact_paths: "prognostic_edmfx_aquaplanet/output_active/*"
@@ -801,7 +801,7 @@ steps:
 
       - label: "GPU:Gravity waves"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_nonorographic_gravity_wave.yml
           --job_id sphere_nonorographic_gravity_wave
         artifact_paths: "sphere_nonorographic_gravity_wave/*"
@@ -814,7 +814,7 @@ steps:
       - label: "GPU: baroclinic wave"
         key: "sphere_baroclinic_wave_rhoe_gpu"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe.yml
           --job_id sphere_baroclinic_wave_rhoe_gpu
         artifact_paths: "sphere_baroclinic_wave_rhoe_gpu/output_active/*"
@@ -844,7 +844,7 @@ steps:
           - mkdir -p target_gpu_implicit_baroclinic_wave
           - >
             nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/output_active/report
-            julia --color=yes --project=examples examples/hybrid/driver.jl
+            julia --color=yes --project=perf examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
             --job_id target_gpu_implicit_baroclinic_wave
         artifact_paths: "target_gpu_implicit_baroclinic_wave/output_active/*"
@@ -861,7 +861,7 @@ steps:
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+            julia --threads=3 --color=yes --project=perf examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
             --job_id target_gpu_implicit_baroclinic_wave_4process
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
@@ -878,7 +878,7 @@ steps:
         command:
           - >
             nsys profile --trace=nvtx,cuda --output=central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
-            julia --color=yes --project=examples examples/hybrid/driver.jl
+            julia --color=yes --project=perf examples/hybrid/driver.jl
             --config_file $CONFIG_PATH/central_gpu_hs_rhoe_equil_55km_nz63_0M.yml
             --job_id central_gpu_hs_rhoe_equil_55km_nz63_0M
         artifact_paths: "central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
@@ -892,7 +892,7 @@ steps:
         command:
           - >
             nsys profile --trace=nvtx,cuda --output=central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
-            julia --color=yes --project=examples examples/hybrid/driver.jl
+            julia --color=yes --project=perf examples/hybrid/driver.jl
             --config_file $CONFIG_PATH/central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M.yml
             --job_id central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M
         artifact_paths: "central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
@@ -907,7 +907,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond
           - >
             nsys profile --trace=nvtx,cuda --output=gpu_aquaplanet_dyamond/output_active/report
-            julia --color=yes --project=examples examples/hybrid/driver.jl
+            julia --color=yes --project=perf examples/hybrid/driver.jl
             --config_file ${CONFIG_PATH}/gpu_aquaplanet_dyamond.yml
             --job_id gpu_aquaplanet_dyamond
         artifact_paths: "gpu_aquaplanet_dyamond/output_active/*"
@@ -919,7 +919,7 @@ steps:
       - label: "GPU: Diagnostic EDMFX aquaplanet"
         key: "diagnostic_edmfx_aquaplanet_gpu"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet_gpu.yml
           --job_id diagnostic_edmfx_aquaplanet_gpu
         artifact_paths: "diagnostic_edmfx_aquaplanet_gpu/output_active/*"
@@ -931,7 +931,7 @@ steps:
 
       - label: "GPU: Prognostic EDMFX aquaplanet"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=perf examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
           --job_id prognostic_edmfx_aquaplanet_gpu
         artifact_paths: "prognostic_edmfx_aquaplanet_gpu/output_active/*"
