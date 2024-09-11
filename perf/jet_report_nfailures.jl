@@ -52,5 +52,3 @@ n = filter(x -> x.second ≠ 0, n)
 @info "n-jet failures (excluding n=0):"
 show(IOContext(stdout, :limit => false), MIME"text/plain"(), n)
 println()
-
-
