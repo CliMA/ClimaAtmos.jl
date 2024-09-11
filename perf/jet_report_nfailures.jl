@@ -27,10 +27,6 @@ Yₜ_exp = similar(Y);
 Yₜ_lim = similar(Y);
 ref_Y = similar(Y);
 
-
-using JET
-@test_opt CA.set_precomputed_quantities!(Y, p, t)
-
 #! format: off
 n["step!"]                                       = @n_failures SciMLBase.step!(integrator);
 n["horizontal_advection_tendency!"]              = @n_failures CA.horizontal_advection_tendency!(Yₜ, Y, p, t);
@@ -52,3 +48,6 @@ n = filter(x -> x.second ≠ 0, n)
 @info "n-jet failures (excluding n=0):"
 show(IOContext(stdout, :limit => false), MIME"text/plain"(), n)
 println()
+
+using JET
+@test_opt CA.set_precomputed_quantities!(Y, p, t)
