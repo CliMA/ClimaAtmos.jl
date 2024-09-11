@@ -313,7 +313,7 @@ function non_orographic_gravity_wave_forcing(
     u_waveforcing,
     v_waveforcing,
     p,
-    source_type = "convection",
+    source_type = 1,
 ) where {nc}
     # unpack parameters
     (;
@@ -438,6 +438,7 @@ function non_orographic_gravity_wave_forcing(
             ink,
             level_end,
             gw_ncval,
+            source_type,
         )
         # Accumulate meridional wave forcing in every column
         waveforcing_column_accumulate!(
@@ -450,6 +451,7 @@ function non_orographic_gravity_wave_forcing(
             ink,
             level_end,
             gw_ncval,
+            source_type
         )
 
         #extract the momentum flux outside the model top.
@@ -522,7 +524,7 @@ function waveforcing_column_accumulate!(
     ink,
     level_end,
     gw_ncval::Val{nc},
-    source_type="convection",
+    source_type,
 ) where {nc}
     FT = eltype(waveforcing)
     # Here we use column_accumulate function to pass the variable B0 and mask through different levels, and calculate waveforcing at each level.
@@ -564,7 +566,7 @@ function waveforcing_column_accumulate!(
         # calculate momentum flux carried by gravity waves with different phase speeds.
         B0, Bsum = if level == 1
             mask = StaticBitVector{nc}(_ -> true)
-            if source_type == "convection"
+            if source_type == 1
                 B1 = ntuple(
                     n -> wave_source_convection(
                         ρ_source,
