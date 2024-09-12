@@ -708,7 +708,7 @@ function wave_source_convection(
 )
 F=0.0
 Δ=ν_vec[2]-ν_vec[1]
-nc_para=[14/45,64/45,24/45,64/45,14/45] #newton-cotes parameter
+nc_para=(14/45,64/45,24/45,64/45,14/45) #newton-cotes parameter
 for i=1:5
     ν= ν_vec[i]
     k= ν/c
