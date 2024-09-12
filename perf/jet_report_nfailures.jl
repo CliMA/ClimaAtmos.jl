@@ -50,4 +50,4 @@ show(IOContext(stdout, :limit => false), MIME"text/plain"(), n)
 println()
 
 using JET
-@test_opt CA.set_precomputed_quantities!(Y, p, t)
+@test_opt SciMLBase.step!(integrator)
