@@ -2,7 +2,6 @@ h_elem: 60
 z_max: 55000.0
 z_elem: 63
 dz_bottom: 30.0
-dz_top: 3000.0
 rayleigh_sponge: true
 moist: "equil" 
 cloud_model: "grid_scale"

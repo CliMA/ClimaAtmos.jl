@@ -5,9 +5,8 @@ hyperdiff: false
 config: "column"
 initial_condition: "IsothermalProfile"
 z_max: 70000
-z_elem: 70
-dz_bottom: 100
-dz_top: 10000
+z_elem: 63
+dz_bottom: 30
 t_end: "654days"
 dt: "3hours"
 dt_rad: "3hours"

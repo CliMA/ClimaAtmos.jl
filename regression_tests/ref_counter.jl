@@ -1,6 +1,8 @@
-175
+176
 
 #=
+176:
+- Switch to hyperbolic tangent stretching
 
 175:
 - Updated dependencies, DSS refactor may have different order of operations.

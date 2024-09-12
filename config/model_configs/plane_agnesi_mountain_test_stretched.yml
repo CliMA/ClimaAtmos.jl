@@ -5,7 +5,6 @@ x_max: 240000.0
 z_elem: 45
 dt: "1.5secs"
 t_end: "14400.0secs"
-dz_top: 1000.0
 x_elem: 80
 dz_bottom: 200.0
 config: "plane"

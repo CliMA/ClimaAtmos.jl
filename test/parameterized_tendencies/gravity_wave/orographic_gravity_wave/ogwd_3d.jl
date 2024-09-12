@@ -98,10 +98,9 @@ warp_function = CA.generate_topography_warp(earth_spline)
 # Create meshes and spaces
 h_elem = 16
 nh_poly = 3
-z_max = 45e3
+z_max = 42e3
 z_elem = 33
 dz_bottom = 300.0
-dz_top = 5000.0
 radius = 6.371229e6
 
 quad = Quadratures.GLL{nh_poly + 1}()
@@ -109,7 +108,7 @@ horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
 h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
 
 
-z_stretch = Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
+z_stretch = Meshes.HyperbolicTangentStretching(dz_bottom)
 center_space, face_space = CA.make_hybrid_spaces(
     h_space,
     z_max,

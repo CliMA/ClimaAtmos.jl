@@ -3,9 +3,6 @@
 dz_bottom:
   help: "Model bottom grid depth. Default: 500m"
   value: 500.0
-dz_top:
-  help: "Model top grid depth. Default: 5000m"
-  value: 5000.0
 z_stretch:
   help: "Stretch grid in z-direction. [`true` (default), `false`]"
   value: true

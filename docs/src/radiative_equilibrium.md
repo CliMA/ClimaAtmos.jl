@@ -19,7 +19,6 @@ initial_condition: "IsothermalProfile"
 z_max: 70000
 z_elem: 70 
 dz_bottom: 100 
-dz_top: 10000 
 t_end: "654days" 
 dt: "3hours" 
 dt_save_to_sol: "30hours" 

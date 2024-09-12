@@ -22,7 +22,6 @@ z_max: 40e3
 z_elem: 60
 z_stretch: true
 dz_bottom: 30
-dz_top: 3000
 perturb_initstate: false
 dt: "10secs"
 dt_rad: "30mins"

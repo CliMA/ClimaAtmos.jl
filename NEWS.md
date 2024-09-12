@@ -9,6 +9,10 @@ Main
 - Fixed incorrect time/date conversion in diagnostics when restarting a
   simulation. PR [3287](https://github.com/CliMA/ClimaAtmos.jl/pull/3287)
 
+- ![][badge-🔥behavioralΔ] Switch to hyperbolic tangent grid stretching,
+  which only requires z_elem and dz_bottom.
+  PR [3260](https://github.com/CliMA/ClimaAtmos.jl/pull/3260)
+
 v0.27.5
 -------
 - Update RRTMGP and allow multiple aerosols for radiation.
