@@ -561,7 +561,9 @@ function waveforcing_column_accumulate!(
         Hb = (z_kp1 - z_k) / log(ρ_k / ρ_kp1) # density scale height
         alp2 = FT1(0.25) / (Hb * Hb)
         ω_r = sqrt((bf_kp1 * bf_kp1 * k2) / (k2 + alp2)) # omc: (critical frequency that marks total internal reflection)
-        ν_vec= range(pi/3600,pi/300,length=5)
+        ν_max=FT1(pi/300)
+        ν_min=FT1(pi/3600)
+        ν_vec= ntuple(n -> ν_min+(ν_max-ν_min)*((n-1)/4), Val(5))
 
         # calculate momentum flux carried by gravity waves with different phase speeds.
         B0, Bsum = if level == 1
