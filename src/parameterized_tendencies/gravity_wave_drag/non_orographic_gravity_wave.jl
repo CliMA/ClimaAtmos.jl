@@ -706,6 +706,7 @@ function wave_source_convection(
     L = 1000000,
     N = 0.012,
 )
+FT=typeof(U)
 F=0.0
 Δ=ν_vec[2]-ν_vec[1]
 nc_para=(14/45,64/45,24/45,64/45,14/45) #newton-cotes parameter
@@ -727,17 +728,17 @@ for i=1:5
         F = F+ nc_para[i] * Δ * abs(k^2 / ν) *ρ₀ * sign(c-U) * sqrt((N / ν_hat)^2 - 1) * abs(B)^2 / (L * τ)
     end
 end
-    return F
+    return FT(F)
 end
 
 function wave_source_original(c, u_source, Bw, Bn, cw, cn, gw_c0, flag)
     sign((c - u_source)) * (
         Bw * exp(
-            -log(2.0) *
+            -log(2.0f0) *
             ((c * flag + (c - u_source) * (1 - flag) - gw_c0) / cw)^2,
         ) +
         Bn * exp(
-            -log(2.0) *
+            -log(2.0f0) *
             ((c * flag + (c - u_source) * (1 - flag) - gw_c0) / cn)^2,
         )
     )
