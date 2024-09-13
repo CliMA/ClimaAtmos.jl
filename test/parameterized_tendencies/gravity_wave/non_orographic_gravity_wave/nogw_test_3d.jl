@@ -133,6 +133,7 @@ center_u_zonalave = mean(center_u, dims = 1)[1, :, :, :]
 center_bf_zonalave = mean(center_bf, dims = 1)[1, :, :, :]
 center_ρ_zonalave = mean(center_ρ, dims = 1)[1, :, :, :]
 
+#generate domain, space and field
 column_domain = ClimaCore.Domains.IntervalDomain(
     ClimaCore.Geometry.ZPoint(0.0) .. ClimaCore.Geometry.ZPoint(47000),
     boundary_names = (:bottom, :top),
@@ -153,7 +154,7 @@ gw_ncval = Val(500)
 ᶜv = copy(ᶜz)
 ᶜbf = copy(ᶜz)
 ᶜlevel = similar(ᶜρ, FT)
-u_waveforcing = similar(ᶜu)
+u_waveforcing = similar(ᶜv)
 v_waveforcing = similar(ᶜv)
 for i in 1:Spaces.nlevels(axes(ᶜρ))
     fill!(Fields.level(ᶜlevel, i), i)
@@ -170,8 +171,8 @@ scratch = (;
     temp_field_level = similar(Fields.level(ᶜz, 1), FT),
 )
 
+# create input parameter
 params = (; non_orographic_gravity_wave, scratch)
-
 
 # Jan
 month = Dates.month.(time)
