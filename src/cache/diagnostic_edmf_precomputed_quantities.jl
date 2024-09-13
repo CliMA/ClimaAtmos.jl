@@ -399,7 +399,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 TD.relative_humidity(thermo_params, ts_prev_level),
                 FT(0),
                 tke_prev_level,
-                p.atmos.edmfx_entr_model,
+                p.atmos.edmfx_model.entr_model,
             )
 
             # We don't have an upper limit to entrainment for the first level
@@ -422,16 +422,19 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             )
 
             # TODO: use updraft top instead of scale height
-            @. nh_pressure³ʲ_prev_halflevel = ᶠupdraft_nh_pressure(
-                params,
-                p.atmos.edmfx_nh_pressure,
-                local_geometry_prev_halflevel,
-                -∇Φ³_prev_level * (ρʲ_prev_level - ρ_prev_level) /
-                ρʲ_prev_level,
-                u³ʲ_prev_halflevel,
-                u³⁰_prev_halflevel,
-                scale_height,
-            )
+            if p.atmos.edmfx_model.nh_pressure isa Val{true}
+                @. nh_pressure³ʲ_prev_halflevel = ᶠupdraft_nh_pressure(
+                    params,
+                    local_geometry_prev_halflevel,
+                    -∇Φ³_prev_level * (ρʲ_prev_level - ρ_prev_level) /
+                    ρʲ_prev_level,
+                    u³ʲ_prev_halflevel,
+                    u³⁰_prev_halflevel,
+                    scale_height,
+                )
+            else
+                @. nh_pressure³ʲ_prev_halflevel = CT3(0)
+            end
 
             nh_pressure³ʲ_data_prev_halflevel =
                 nh_pressure³ʲ_prev_halflevel.components.data.:1
@@ -558,7 +561,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 vert_div_level,
                 FT(0), # mass flux divergence is not implemented for diagnostic edmf
                 tke_prev_level,
-                p.atmos.edmfx_detr_model,
+                p.atmos.edmfx_model.detr_model,
             )
 
             @. detrʲ_prev_level = limit_detrainment(
