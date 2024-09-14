@@ -1,6 +1,9 @@
-176
+177
 
 #=
+177:
+- change numerics of non-orographic gravity waves
+
 176:
 - Switch to hyperbolic tangent stretching
 

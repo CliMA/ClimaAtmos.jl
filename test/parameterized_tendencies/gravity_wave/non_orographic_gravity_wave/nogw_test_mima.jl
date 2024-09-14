@@ -128,7 +128,6 @@ dTdz = zeros(size(T))
 bf = @. (grav / T) * (dTdz + grav / cp_d)
 bf = @. ifelse(bf < 2.5e-5, sqrt(2.5e-5), sqrt(abs(bf)))
 
-# compute u/v forcings from convective gravity waves
 param = non_orographic_gravity_wave_param(lat, FT)
 # nogw forcing
 
@@ -139,6 +138,7 @@ k_damp = findlast(pfull * 100 .< param.gw_damp_pressure)
 uforcing = zeros(size(lev))
 vforcing = zeros(size(lev))
 
+#generate domain, space and field
 column_domain = ClimaCore.Domains.IntervalDomain(
     ClimaCore.Geometry.ZPoint(FT(z[1, 1, end, 1])) ..
     ClimaCore.Geometry.ZPoint(FT(z[1, 1, 1, 1])),
@@ -162,8 +162,9 @@ gw_ncval = Val(333)
 ᶜv = copy(ᶜz)
 ᶜbf = copy(ᶜz)
 ᶜlevel = similar(ᶜρ, FT)
+# waveforcing = similar(ᶜu, Tuple{FT, FT})
 u_waveforcing = similar(ᶜu)
-v_waveforcing = similar(ᶜv)
+v_waveforcing = similar(ᶜu)
 for i in 1:Spaces.nlevels(axes(ᶜρ))
     fill!(Fields.level(ᶜlevel, i), i)
 end
@@ -180,10 +181,9 @@ scratch = (;
     temp_field_level = similar(Fields.level(ᶜz, 1), FT),
 )
 
-#params = (; non_orographic_gravity_wave, scratch)
-
 for j in 1:length(lat)
     non_orographic_gravity_wave = non_orographic_gravity_wave_param(lat[j], FT)
+    # create input parameters at each level
     params = (; non_orographic_gravity_wave, scratch)
     for i in 1:length(lon)
         for it in 1:length(time)
