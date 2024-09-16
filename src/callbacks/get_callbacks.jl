@@ -243,16 +243,16 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         end
     end
 
-    if is_distributed(comms_ctx)
-        callbacks = (
-            callbacks...,
-            call_every_n_steps(
-                gc_func,
-                parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000")),
-                skip_first = true,
-            ),
-        )
-    end
+    # if is_distributed(comms_ctx)
+    #     callbacks = (
+    #         callbacks...,
+    #         call_every_n_steps(
+    #             gc_func,
+    #             parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000")),
+    #             skip_first = true,
+    #         ),
+    #     )
+    # end
 
     if parsed_args["check_conservation"]
         callbacks = (
