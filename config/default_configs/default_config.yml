@@ -283,6 +283,9 @@ restart_file:
 prescribe_ozone:
   help: "Prescribe time and spatially varying ozone from a file [`false` (default), `true`]"
   value: false
+detect_restart_file:
+  help: "When true, try finding a restart file and use it to restart the simulation. Only works with ActiveLink."
+  value: false
 prescribed_aerosols:
   help: "Which aerosols to add. List of keys from the data file (e.g., CB1, CB2)."
   value: []
