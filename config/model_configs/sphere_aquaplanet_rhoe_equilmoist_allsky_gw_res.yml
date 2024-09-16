@@ -1,6 +1,7 @@
-z_elem: 25
-z_max: 55000.0
-dz_bottom: 300.0
+z_max: 65000.0
+z_elem: 31
+dz_bottom: 50.0
+rayleigh_sponge: true
 dt: "400secs"
 t_end: "1days"
 dt_save_state_to_disk: "24hours"
@@ -12,13 +13,12 @@ precip_model: "1M"
 rad: "allskywithclear"
 aerosol_radiation: true
 insolation: "timevarying"
-rayleigh_sponge: true
 non_orographic_gravity_wave: true
 orographic_gravity_wave: "gfdl_restart"
 surface_setup: "DefaultMoninObukhov"
 prescribe_ozone: true
 prescribed_aerosols: ["CB1", "CB2", "SO4"]
-toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml]
+toml: [toml/sphere_aquaplanet.toml]
 diagnostics:
   - short_name: [edt, evu, mmrso4, mmrbcpo, mmrbcpi, o3]
     reduction_time: average

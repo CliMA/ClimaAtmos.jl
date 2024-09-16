@@ -1,6 +1,6 @@
-z_elem: 25
-z_max: 55000.0
-dz_bottom: 300.0
+z_max: 65000.0
+z_elem: 31
+dz_bottom: 50.0
 dt: "400secs"
 t_end: "18hours"
 dt_save_state_to_disk: "18hours"
@@ -14,4 +14,4 @@ rad: "allskywithclear"
 insolation: "timevarying"
 rayleigh_sponge: true
 surface_setup: "DefaultMoninObukhov"
-toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml]
+toml: [toml/sphere_aquaplanet.toml]

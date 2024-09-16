@@ -1,13 +1,13 @@
+z_max: 65000.0
+z_elem: 63
+dz_bottom: 30.0
 dt_save_state_to_disk: "100days"
 initial_condition: "IsothermalProfile"
 hyperdiff: false
-z_elem: 63
 dt: "3hours"
 dt_rad: "3hours"
 idealized_h2o: true
 t_end: "654days"
-dz_bottom: 30.0
 config: "column"
-z_max: 70000.0
 dt_save_to_sol: "30hours"
 rad: "clearsky"

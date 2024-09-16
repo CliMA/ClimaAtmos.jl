@@ -1,15 +1,14 @@
 dt_save_state_to_disk: "3months"
 initial_condition: "IsothermalProfile"
 hyperdiff: false
-# It seems radiative equilibrium needs a larger dz near the top
-# to be stable, so we use a smaller z_elem
+# It seems radiative equilibrium needs a larger dz near the top (smaller z_elem) to be stable
+z_max: 65000.0
 z_elem: 50
 dt: "3hours"
 dt_rad: "3hours"
 t_end: "654days"
 dz_bottom: 30.0
 config: "column"
-z_max: 70000.0
 dt_save_to_sol: "30hours"
 rad: "gray"
 # [2, 2, 80] instead of [1, 1, 80] because Julia ranges are inclusive of the

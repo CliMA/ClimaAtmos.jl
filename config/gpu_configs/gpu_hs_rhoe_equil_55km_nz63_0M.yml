@@ -12,4 +12,4 @@ moist: "equil"
 precip_model: "0M"
 rayleigh_sponge: true
 forcing: "held_suarez"
-toml: [toml/longrun_aquaplanet.toml]
+toml: [toml/longrun_held_suarez.toml]
