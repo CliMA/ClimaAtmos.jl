@@ -29,7 +29,15 @@ function timed_solve!(integrator)
     end
     (; tspan) = integrator.sol.prob
     es = EfficiencyStats(tspan, walltime)
-    @info "sypd: $(simulated_years_per_day(es))"
+    _sypd = simulated_years_per_day(es)
+    _sypd_str = string(round(_sypd; digits = 3))
+    sypd = _sypd_str * if _sypd < 0.01
+        sdpd = round(_sypd * 365, digits = 3)
+        " (sdpd = $sdpd)"
+    else
+        ""
+    end
+    @info "sypd: $sypd"
     n_steps = (tspan[2] - tspan[1]) / integrator.dt
     wall_time_per_timestep = time_and_units_str(walltime / n_steps)
     @info "wall_time_per_timestep: $wall_time_per_timestep"
