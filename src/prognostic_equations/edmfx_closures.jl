@@ -55,8 +55,6 @@ end
 
    Inputs (everything defined on cell faces):
    - params - set with model parameters
-   - nh_presssure_flag - bool flag for if we want/don't want to compute
-                         pressure drag
    - ᶠlg - local geometry (needed to compute the norm inside a local function)
    - ᶠbuoyʲ - covariant3 or contravariant3 updraft buoyancy
    - ᶠu3ʲ, ᶠu3⁰ - covariant3 or contravariant3 velocity for updraft and environment.
@@ -64,33 +62,21 @@ end
                   velocity is used in diagnostic edmf.
    - updraft top height
 """
-function ᶠupdraft_nh_pressure(
-    params,
-    nh_pressure_flag,
-    ᶠlg,
-    ᶠbuoyʲ,
-    ᶠu3ʲ,
-    ᶠu3⁰,
-    plume_height,
-)
-    if !nh_pressure_flag
-        return zero(ᶠu3ʲ)
-    else
-        turbconv_params = CAP.turbconv_params(params)
-        # factor multiplier for pressure buoyancy terms (effective buoyancy is (1-α_b))
-        α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
-        # factor multiplier for pressure drag
-        α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
+function ᶠupdraft_nh_pressure(params, ᶠlg, ᶠbuoyʲ, ᶠu3ʲ, ᶠu3⁰, plume_height)
+    turbconv_params = CAP.turbconv_params(params)
+    # factor multiplier for pressure buoyancy terms (effective buoyancy is (1-α_b))
+    α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
+    # factor multiplier for pressure drag
+    α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
 
-        # Independence of aspect ratio hardcoded: α₂_asp_ratio² = FT(0)
+    # Independence of aspect ratio hardcoded: α₂_asp_ratio² = FT(0)
 
-        H_up_min = CAP.min_updraft_top(turbconv_params)
+    H_up_min = CAP.min_updraft_top(turbconv_params)
 
-        # We also used to have advection term here: α_a * w_up * div_w_up
-        return α_b * ᶠbuoyʲ +
-               α_d * (ᶠu3ʲ - ᶠu3⁰) * CC.Geometry._norm(ᶠu3ʲ - ᶠu3⁰, ᶠlg) /
-               max(plume_height, H_up_min)
-    end
+    # We also used to have advection term here: α_a * w_up * div_w_up
+    return α_b * ᶠbuoyʲ +
+           α_d * (ᶠu3ʲ - ᶠu3⁰) * CC.Geometry._norm(ᶠu3ʲ - ᶠu3⁰, ᶠlg) /
+           max(plume_height, H_up_min)
 end
 
 edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
@@ -111,17 +97,19 @@ function edmfx_nh_pressure_tendency!(
     scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
 
     for j in 1:n
-        @. ᶠnh_pressure₃ʲs.:($$j) = ᶠupdraft_nh_pressure(
-            params,
-            p.atmos.edmfx_nh_pressure,
-            ᶠlg,
-            ᶠbuoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
-            Y.f.sgsʲs.:($$j).u₃,
-            ᶠu₃⁰,
-            scale_height,
-        )
-
-        @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠnh_pressure₃ʲs.:($$j)
+        if p.atmos.edmfx_model.nh_pressure isa Val{true}
+            @. ᶠnh_pressure₃ʲs.:($$j) = ᶠupdraft_nh_pressure(
+                params,
+                ᶠlg,
+                ᶠbuoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
+                Y.f.sgsʲs.:($$j).u₃,
+                ᶠu₃⁰,
+                scale_height,
+            )
+            @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠnh_pressure₃ʲs.:($$j)
+        else
+            @. ᶠnh_pressure₃ʲs.:($$j) = C3(0)
+        end
     end
 end
 
@@ -299,7 +287,7 @@ function edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
     n = n_mass_flux_subdomains(turbconv_model)
     (; dt) = p
 
-    if p.atmos.edmfx_filter
+    if p.atmos.edmfx_model.filter isa Val{true}
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
                 C3(min(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0)) / dt

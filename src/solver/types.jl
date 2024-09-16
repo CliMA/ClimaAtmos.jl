@@ -342,6 +342,24 @@ function Base.summary(io::IO, numerics::AtmosNumerics)
     end
 end
 
+const ValTF = Union{Val{true}, Val{false}}
+
+Base.@kwdef struct EDMFXModel{
+    EEM,
+    EDM,
+    ESMF <: ValTF,
+    ESDF <: ValTF,
+    ENP <: ValTF,
+    EVR <: ValTF,
+}
+    entr_model::EEM = nothing
+    detr_model::EDM = nothing
+    sgs_mass_flux::ESMF = Val(false)
+    sgs_diffusive_flux::ESDF = Val(false)
+    nh_pressure::ENP = Val(false)
+    filter::EVR = Val(false)
+end
+
 Base.@kwdef struct AtmosModel{
     MC,
     MM,
@@ -356,12 +374,7 @@ Base.@kwdef struct AtmosModel{
     EC,
     AT,
     TM,
-    EEM,
-    EDM,
-    ESMF,
-    ESDF,
-    ENP,
-    EVR,
+    EDMFX,
     TCM,
     NOGW,
     OGW,
@@ -390,12 +403,7 @@ Base.@kwdef struct AtmosModel{
     edmf_coriolis::EC = nothing
     advection_test::AT = nothing
     tendency_model::TM = nothing
-    edmfx_entr_model::EEM = nothing
-    edmfx_detr_model::EDM = nothing
-    edmfx_sgs_mass_flux::ESMF = nothing
-    edmfx_sgs_diffusive_flux::ESDF = nothing
-    edmfx_nh_pressure::ENP = nothing
-    edmfx_filter::EVR = nothing
+    edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     non_orographic_gravity_wave::NOGW = nothing
     orographic_gravity_wave::OGW = nothing

@@ -20,7 +20,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
-    if p.atmos.edmfx_sgs_mass_flux
+    if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
         # energy
         ᶠu³_diff = p.scratch.ᶠtemp_CT3
         ᶜa_scalar = p.scratch.ᶜtemp_scalar
@@ -105,7 +105,7 @@ function edmfx_sgs_mass_flux_tendency!(
     ᶜJ = Fields.local_geometry_field(Y.c).J
     FT = eltype(Y)
 
-    if p.atmos.edmfx_sgs_mass_flux
+    if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
         # energy
         ᶠu³_diff = p.scratch.ᶠtemp_CT3
         ᶜa_scalar = p.scratch.ᶜtemp_scalar
@@ -189,7 +189,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
-    if p.atmos.edmfx_sgs_diffusive_flux
+    if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar
@@ -258,7 +258,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
-    if p.atmos.edmfx_sgs_diffusive_flux
+    if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar

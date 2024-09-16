@@ -230,7 +230,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             TD.relative_humidity(thermo_params, ᶜts⁰),
             FT(0),
             max(ᶜtke⁰, 0),
-            p.atmos.edmfx_entr_model,
+            p.atmos.edmfx_model.entr_model,
         )
         @. ᶜentrʲs.:($$j) = limit_entrainment(
             ᶜentrʲs.:($$j),
@@ -258,7 +258,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             ᶜvert_div,
             ᶜmassflux_vert_div,
             ᶜtke⁰,
-            p.atmos.edmfx_detr_model,
+            p.atmos.edmfx_model.detr_model,
         )
         @. ᶜdetrʲs.:($$j) = limit_detrainment(
             ᶜdetrʲs.:($$j),

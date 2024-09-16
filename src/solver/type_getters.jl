@@ -30,26 +30,20 @@ function get_atmos(config::AtmosConfig, params)
     advection_test = parsed_args["advection_test"]
     @assert advection_test in (false, true)
 
-    edmfx_entr_model = get_entrainment_model(parsed_args)
-    edmfx_detr_model = get_detrainment_model(parsed_args)
-
-    edmfx_sgs_mass_flux = parsed_args["edmfx_sgs_mass_flux"]
-    @assert edmfx_sgs_mass_flux in (false, true)
-
-    edmfx_sgs_diffusive_flux = parsed_args["edmfx_sgs_diffusive_flux"]
-    @assert edmfx_sgs_diffusive_flux in (false, true)
-
-    edmfx_nh_pressure = parsed_args["edmfx_nh_pressure"]
-    @assert edmfx_nh_pressure in (false, true)
-
-    edmfx_filter = parsed_args["edmfx_filter"]
-    @assert edmfx_filter in (false, true)
-
     implicit_diffusion = parsed_args["implicit_diffusion"]
     @assert implicit_diffusion in (true, false)
 
     implicit_sgs_advection = parsed_args["implicit_sgs_advection"]
     @assert implicit_sgs_advection in (true, false)
+
+    edmfx_model = EDMFXModel(;
+        entr_model = get_entrainment_model(parsed_args),
+        detr_model = get_detrainment_model(parsed_args),
+        sgs_mass_flux = Val(parsed_args["edmfx_sgs_mass_flux"]),
+        sgs_diffusive_flux = Val(parsed_args["edmfx_sgs_diffusive_flux"]),
+        nh_pressure = Val(parsed_args["edmfx_nh_pressure"]),
+        filter = Val(parsed_args["edmfx_filter"]),
+    )
 
     model_config = get_model_config(parsed_args)
     vert_diff =
@@ -65,12 +59,7 @@ function get_atmos(config::AtmosConfig, params)
         edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
         advection_test,
         tendency_model = get_tendency_model(parsed_args),
-        edmfx_entr_model,
-        edmfx_detr_model,
-        edmfx_sgs_mass_flux,
-        edmfx_sgs_diffusive_flux,
-        edmfx_nh_pressure,
-        edmfx_filter,
+        edmfx_model,
         precip_model,
         cloud_model,
         forcing_type,
