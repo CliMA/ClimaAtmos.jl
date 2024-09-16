@@ -50,4 +50,5 @@ show(IOContext(stdout, :limit => false), MIME"text/plain"(), n)
 println()
 
 using JET
-@test_opt SciMLBase.step!(integrator)
+using NCDatasets, CUDA, HDF5, LLVM, GPUCompiler
+@test_opt ignored_modules = (NCDatasets, CUDA, HDF5, LLVM, GPUCompiler) SciMLBase.step!(integrator)
