@@ -326,24 +326,6 @@ function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
 end
 
 NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
-    (; t, u, p) = integrator
-    Y = u
-
-    day = floor(Int, t / (60 * 60 * 24))
-    sec = floor(Int, t % (60 * 60 * 24))
-    @info "Saving state to HDF5 file on day $day second $sec"
-    output_file = joinpath(output_dir, "day$day.$sec.hdf5")
-    comms_ctx = ClimaComms.context(integrator.u.c)
-    hdfwriter = InputOutput.HDF5Writer(output_file, comms_ctx)
-    # TODO: a better way to write metadata
-    InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t)
-    InputOutput.HDF5.write_attribute(
-        hdfwriter.file,
-        "atmos_model_hash",
-        hash(p.atmos),
-    )
-    InputOutput.write!(hdfwriter, Y, "Y")
-    Base.close(hdfwriter)
     return nothing
 end
 
