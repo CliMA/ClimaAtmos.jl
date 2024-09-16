@@ -199,15 +199,15 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
             ),
         )
     end
-    callbacks = (
-        callbacks...,
-        call_every_n_steps(
-            terminate!;
-            skip_first = true,
-            condition = (u, t, integrator) ->
-                maybe_graceful_exit(integrator),
-        ),
-    )
+    # callbacks = (
+    #     callbacks...,
+    #     call_every_n_steps(
+    #         terminate!;
+    #         skip_first = true,
+    #         condition = (u, t, integrator) ->
+    #             maybe_graceful_exit(integrator),
+    #     ),
+    # )
 
     if occursin("months", parsed_args["dt_save_state_to_disk"])
         months = match(r"^(\d+)months$", parsed_args["dt_save_state_to_disk"])
