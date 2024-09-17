@@ -166,7 +166,6 @@ function build_cache(
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
         ᶜgradᵥ_ᶠΦ = ᶜgradᵥ.(ᶠΦ),
-        ᶜT = similar(Y.c, FT),
         ᶜf³,
         ᶠf¹²,
         # Used by diagnostics such as hfres, evspblw
