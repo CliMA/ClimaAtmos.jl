@@ -317,7 +317,7 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
         z_r = FT(250)
         r_c = FT(1)
         θ_b = FT(300)
-        θ_c = FT(0.0)
+        θ_c = FT(0.5)
         cp_d = CAP.cp_d(params)
         cv_d = CAP.cv_d(params)
         p_0 = CAP.p_ref_theta(params)
@@ -341,12 +341,11 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
         T = π_exn * θ # temperature
         p = p_0 * π_exn^(cp_d / R_d) # pressure
         ρ = p / R_d / T # density
-        q = ρ * FT(0)
 
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q),
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
         )
     end
     return local_state

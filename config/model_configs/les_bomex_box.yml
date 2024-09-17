@@ -25,7 +25,7 @@ output_default_diagnostics: false
 t_end: "21600secs" 
 dt_save_state_to_disk: "30mins"
 rayleigh_sponge: true
-toml: [toml/bomex_box_rhoe.toml]
+toml: [toml/bomex_les.toml]
 restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/bomex/Micro1M_day0.0_Prod.hdf5"
 netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:

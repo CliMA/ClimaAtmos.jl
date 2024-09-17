@@ -26,7 +26,7 @@ rayleigh_sponge: true
 dt: "0.20secs"
 t_end: 12hours
 restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/rico/day0.0.hdf5"
-toml: [toml/rico_box.toml]
+toml: [toml/rico_les.toml]
 dt_save_state_to_disk: 30mins
 netcdf_interpolation_num_points: [30, 30, 150]
 diagnostics:
