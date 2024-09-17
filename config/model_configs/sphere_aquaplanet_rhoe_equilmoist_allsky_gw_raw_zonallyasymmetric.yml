@@ -17,4 +17,6 @@ surface_temperature: "ZonallyAsymmetric"
 moist: "equil"
 albedo_model: "RegressionFunctionAlbedo"
 regression_test: true
+aerosol_radiation: true
+prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "OC1", "OC2", "SO4"]
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.toml]

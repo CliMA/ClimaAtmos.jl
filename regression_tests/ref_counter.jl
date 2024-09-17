@@ -1,6 +1,9 @@
-177
+178
 
 #=
+178:
+- Added aerosol to one of the regression tests
+
 177:
 - change numerics of non-orographic gravity waves
 
