@@ -1095,7 +1095,6 @@ EDMFBoxPlotsWithPrecip = Union{
     Val{:diagnostic_edmfx_rico_box},
     Val{:diagnostic_edmfx_trmm_box},
     Val{:diagnostic_edmfx_trmm_stretched_box},
-    Val{:les_isdac_box},
 }
 
 
