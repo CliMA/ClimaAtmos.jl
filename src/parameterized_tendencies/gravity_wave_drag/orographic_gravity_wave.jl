@@ -116,7 +116,7 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     # buoyancy frequency at cell centers
     parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
     ᶜN = @. (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts)) # this is actually ᶜN^2
-    ᶜN = @. ifelse(ᶜN < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜN))) # to avoid small numbers
+    @. ᶜN = ifelse(ᶜN < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜN))) # to avoid small numbers
 
     # prepare physical uv input variables for gravity_wave_forcing()
     u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
@@ -136,8 +136,8 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
             topo_FrU_min[colidx],
             topo_FrU_clp[colidx],
             p,
-            max(FT(0), parent(hmax[colidx])[1]),
-            max(FT(0), parent(hmin[colidx])[1]),
+            max(0, parent(hmax[colidx])[1]),
+            max(0, parent(hmin[colidx])[1]),
             parent(t11[colidx])[1],
             parent(t12[colidx])[1],
             parent(t21[colidx])[1],
@@ -286,7 +286,8 @@ function get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
     # that the lowest layer that is geq to half of pressure at first face level; while
     # in our code, when interpolate from center to face, the first face level inherits
     # values at the first center level
-    return 1 + findlast(idx)[1]
+    ci = findlast(idx)::CartesianIndex
+    return 1 + ci[1]
 end
 
 function calc_base_flux!(
