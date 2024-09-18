@@ -34,7 +34,8 @@ function radiation_model_cache(
     params,
     ᶜp, # Used for ozone
     prescribe_ozone,
-    aerosol_names;
+    aerosol_names,
+    insolation_mode;
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
     data_loader = rrtmgp_data_loader,
@@ -253,11 +254,21 @@ function radiation_model_cache(
             kwargs...,
         )
     end
+    return merge(
+        (;
+            orbital_data,
+            rrtmgp_model,
+            ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
+        ),
+        insolation_cache(insolation_mode, Y),
+    )
+end
+
+insolation_cache(_, _) = (;)
+function insolation_cache(::TimeVaryingInsolation, Y)
+    FT = Spaces.undertype(axes(Y.c))
     return (;
-        orbital_data,
-        rrtmgp_model,
-        insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT}),
-        ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
+        insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT})
     )
 end
 
