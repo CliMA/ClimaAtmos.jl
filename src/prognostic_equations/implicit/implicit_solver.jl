@@ -10,7 +10,7 @@ use_derivative(::IgnoreDerivative) = false
 
 """
     ImplicitEquationJacobian(
-        Y, atmos; 
+        Y, atmos;
         approximate_solve_iters, diffusion_flag, topography_flag, sgs_advection_flag, transform_flag
     )
 
@@ -487,8 +487,12 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
 
     cv_d = FT(CAP.cv_d(params))
     Δcv_v = FT(CAP.cv_v(params)) - cv_d
-    T_tri = FT(CAP.T_triple(params))
-    e_int_v0 = T_tri * Δcv_v - FT(CAP.e_int_v0(params))
+    T_0 = FT(CAP.T_0(params))
+    R_d = FT(CAP.R_d(params))
+    cp_d = FT(CAP.cp_d(params))
+    # This term appears a few times in the Jacobian, and is technically
+    # minus ∂e_int_∂q_tot
+    ∂e_int_∂q_tot = T_0 * (Δcv_v - R_d) - FT(CAP.e_int_v0(params))
     thermo_params = CAP.thermodynamics_params(params)
 
     ᶜρ = Y.c.ρ
@@ -550,7 +554,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     @. ∂ᶠu₃_err_∂ᶜρ =
         dtγ * (
             ᶠp_grad_matrix ⋅
-            DiagonalMatrixRow(ᶜkappa_m * (T_tri * cv_d - ᶜK - ᶜΦ)) +
+            DiagonalMatrixRow(ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ)) +
             DiagonalMatrixRow(ᶠgradᵥ(ᶜp) / abs2(ᶠinterp(ᶜρ))) ⋅
             ᶠinterp_matrix()
         )
@@ -558,7 +562,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
         ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
         @. ∂ᶠu₃_err_∂ᶜρq_tot =
-            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m * e_int_v0)
+            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m * ∂e_int_∂q_tot)
     end
 
     ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
@@ -599,7 +603,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(
                 (
                     -(1 + ᶜkappa_m) * ᶜspecific.e_tot -
-                    ᶜkappa_m * e_int_v0 * ᶜspecific.q_tot
+                    ᶜkappa_m * ∂e_int_∂q_tot * ᶜspecific.q_tot
                 ) / ᶜρ,
             )
         @. ∂ᶜρe_tot_err_∂ᶜρe_tot =
@@ -609,7 +613,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
             @. ∂ᶜρe_tot_err_∂ᶜρq_tot =
                 dtγ * ᶜdiffusion_h_matrix ⋅
-                DiagonalMatrixRow(ᶜkappa_m * e_int_v0 / ᶜρ)
+                DiagonalMatrixRow(ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ)
         end
 
         tracer_info = (
@@ -727,7 +731,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                         adjoint(ᶜinterp(ᶠu³ʲs.:(1))) *
                         ᶜgradᵥ_ᶠΦ *
                         Y.c.ρ *
-                        ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp) * e_int_v0,
+                        ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp) * ∂e_int_∂q_tot,
                     )
                 )
             ∂ᶜmseʲ_err_∂ᶜρ = matrix[@name(c.sgsʲs.:(1).mse), @name(c.ρ)]
@@ -764,14 +768,14 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                     ),
                 ) ⋅ ᶠwinterp_matrix(ᶜJ) ⋅ DiagonalMatrixRow(
                     ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp) *
-                    e_int_v0,
+                    ∂e_int_∂q_tot,
                 )
             @. ᶠbidiagonal_matrix_ct3_2 =
                 DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρʲs.:(1))) ⋅
                 ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
                 DiagonalMatrixRow(
                     Y.c.sgsʲs.:(1).ρa * ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp) *
-                    e_int_v0,
+                    ∂e_int_∂q_tot,
                 )
 
             @. ∂ᶜρaʲ_err_∂ᶜq_totʲ =
@@ -820,7 +824,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                     ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) / (ᶠinterp(ᶜρʲs.:(1)))^2,
                 ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
                     ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp) *
-                    e_int_v0,
+                    ∂e_int_∂q_tot,
                 )
             ∂ᶠu₃ʲ_err_∂ᶜmseʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).mse)]
