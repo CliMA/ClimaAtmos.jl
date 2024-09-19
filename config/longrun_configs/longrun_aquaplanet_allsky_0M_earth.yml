@@ -4,6 +4,7 @@ z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
 rayleigh_sponge: true
+viscous_sponge: true
 topography: "Earth"
 topo_smoothing: true
 implicit_diffusion: true
