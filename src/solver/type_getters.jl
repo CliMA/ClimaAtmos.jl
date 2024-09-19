@@ -669,7 +669,7 @@ function get_simulation(config::AtmosConfig)
     @info "ode_configuration: $s"
 
     s = @timed_str begin
-        callback = get_callbacks(config, sim_info, atmos, params, Y, p)
+        callback = get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     end
     @info "get_callbacks: $s"
 

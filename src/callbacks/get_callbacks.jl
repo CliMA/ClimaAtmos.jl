@@ -172,7 +172,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt)
     return diagnostics, writers
 end
 
-function get_callbacks(config, sim_info, atmos, params, Y, p)
+function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     (; parsed_args, comms_ctx) = config
     FT = eltype(params)
     (; dt, output_dir) = sim_info
@@ -209,18 +209,38 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         ),
     )
 
-    dt_save_state_to_disk =
-        time_to_seconds(parsed_args["dt_save_state_to_disk"])
-    if !(dt_save_state_to_disk == Inf)
-        callbacks = (
-            callbacks...,
-            call_every_dt(
-                (integrator) ->
-                    save_state_to_disk_func(integrator, output_dir),
-                dt_save_state_to_disk;
-                skip_first = sim_info.restart,
-            ),
+    if occursin("months", parsed_args["dt_save_state_to_disk"])
+        months = match(r"^(\d+)months$", parsed_args["dt_save_state_to_disk"])
+        isnothing(months) && error(
+            "$(period_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
         )
+        period_dates = Dates.Month(parse(Int, first(months)))
+        schedule = CAD.EveryCalendarDtSchedule(
+            period_dates;
+            reference_date = p.start_date,
+            date_last = p.start_date + Dates.Second(t_start),
+        )
+        cond = let schedule = schedule
+            (u, t, integrator) -> schedule(integrator)
+        end
+        affect! = let output_dir = output_dir
+            (integrator) -> save_state_to_disk_func(integrator, output_dir)
+        end
+        callbacks = (callbacks..., SciMLBase.DiscreteCallback(cond, affect!))
+    else
+        dt_save_state_to_disk =
+            time_to_seconds(parsed_args["dt_save_state_to_disk"])
+        if !(dt_save_state_to_disk == Inf)
+            callbacks = (
+                callbacks...,
+                call_every_dt(
+                    (integrator) ->
+                        save_state_to_disk_func(integrator, output_dir),
+                    dt_save_state_to_disk;
+                    skip_first = sim_info.restart,
+                ),
+            )
+        end
     end
 
     if is_distributed(comms_ctx)
