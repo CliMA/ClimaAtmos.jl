@@ -190,7 +190,13 @@ function build_cache(
 
     radiation_args =
         atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
-        (params, precomputed.ᶜp, prescribe_ozone, aerosol_names) : ()
+        (
+            params,
+            precomputed.ᶜp,
+            prescribe_ozone,
+            aerosol_names,
+            atmos.insolation,
+        ) : ()
 
     hyperdiff = hyperdiffusion_cache(Y, atmos)
     rayleigh_sponge = rayleigh_sponge_cache(Y, atmos)
