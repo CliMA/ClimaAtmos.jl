@@ -605,7 +605,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         )
 
         #### Detect 𝒽, boundary layer height per column
-        h_boundary_layer = ᶜΔz_surface ./ 2 .+ FT(2500)
+        h_boundary_layer = ᶜΔz_surface ./ 2 .+ FT(5000)
         compute_boundary_layer_height!(
             h_boundary_layer,
             dz_local,
