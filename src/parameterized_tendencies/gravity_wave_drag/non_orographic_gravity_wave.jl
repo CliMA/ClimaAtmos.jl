@@ -566,8 +566,9 @@ function waveforcing_column_accumulate!(
         if level >= source_level - 1
             # check break condition for each gravity waves and calculate momentum flux of breaking gravity waves at each level
             # We use the unrolled_reduce function here because it performs better for parallel execution on the GPU, avoiding type instabilities.
+            n_values = StaticOneTo(nc)
             (mask, fm) =
-                unrolled_reduce(Val(nc), (mask, FT1(0.0))) do (mask, fm), (n)
+                unrolled_reduce(n_values, (mask, FT1(0.0))) do (mask, fm), (n)
                     if (mask[n]) == true
                         c_hat = c[n] - u_kp1 # c0mu
                         # f phase speed matches the wind speed, remove c(n) from the set of propagating waves.
