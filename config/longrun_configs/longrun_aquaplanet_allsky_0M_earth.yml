@@ -3,8 +3,6 @@ z_max: 55000.0
 z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
-initial_condition: MoistBaroclinicWave
-perturb_initstate: false
 rayleigh_sponge: true
 topography: "Earth"
 topo_smoothing: true
