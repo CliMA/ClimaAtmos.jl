@@ -36,7 +36,7 @@
 - Update Pi entr groups/ add parameter vectors
 
 178:
-- Added aerosol to one of the regression tests
+- Added aerosol to one of the reproducibility tests
 
 177:
 - change numerics of non-orographic gravity waves
@@ -48,7 +48,7 @@
 - Updated dependencies, DSS refactor may have different order of operations.
 
 174:
-- Regression test failed in main, try bumping the reference counter again
+- Reprodicibility test failed in main, try bumping the reference counter again
 
 173:
 - Refactor gravity wave parameterization

@@ -6,7 +6,7 @@ import ClimaCoreTempestRemap as CCTR
 include("self_reference_or_path.jl")
 
 """
-    regression_test(;
+    reproducibility_test(;
         job_id,
         reference_mse,
         ds_filename_computed,
@@ -24,7 +24,7 @@ via `varname`.
 If running on buildkite, we get `ds_filename_reference`
 from the latest merged dataset on Caltech central.
 """
-function regression_test(; job_id, reference_mse, ds_filename_computed, varname)
+function reproducibility_test(; job_id, reference_mse, ds_filename_computed, varname)
     local ds_filename_reference
 
     if haskey(ENV, "BUILDKITE_COMMIT")
@@ -64,21 +64,21 @@ function regression_test(; job_id, reference_mse, ds_filename_computed, varname)
             msg *= "\n"
             msg *= "    was created, or the name of the dataset\n"
             msg *= "    has changed. Please increment the reference\n"
-            msg *= "    counter in `regression_tests/ref_counter.jl`.\n"
+            msg *= "    counter in `reproducibility_tests/ref_counter.jl`.\n"
             msg *= "\n"
             msg *= "    If this is not the case, then please\n"
             msg *= "    open an issue with a link pointing to this\n"
             msg *= "    PR and build.\n"
             msg *= "\n"
             msg *= "For more information, please find\n"
-            msg *= "`regression_tests/README.md` and read the section\n\n"
+            msg *= "`reproducibility_tests/README.md` and read the section\n\n"
             msg *= "  `How to merge pull requests (PR) that get approved\n"
-            msg *= "   but *break* regression tests`\n\n"
+            msg *= "   but *break* reproducibility tests`\n\n"
             msg *= "for how to merge this PR."
             error(msg)
         end
     else
-        @warn "Buildkite not detected. Skipping regression tests."
+        @warn "Buildkite not detected. Skipping reproducibility tests."
         @info "Please review output results before merging."
         return reference_mse
     end
@@ -94,9 +94,9 @@ function regression_test(; job_id, reference_mse, ds_filename_computed, varname)
         )
     catch err
         msg = ""
-        msg *= "The regression test broke. Please find\n"
-        msg *= "`regression_tests/README.md` and read the section\n\n"
-        msg *= "  `How to merge pull requests (PR) that get approved but *break* regression tests`\n\n"
+        msg *= "The reproducibility test broke. Please find\n"
+        msg *= "`reproducibility_tests/README.md` and read the section\n\n"
+        msg *= "  `How to merge pull requests (PR) that get approved but *break* reproducibility tests`\n\n"
         msg *= "for how to merge this PR."
         @info msg
         rethrow(err)

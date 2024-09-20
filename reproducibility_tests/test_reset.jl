@@ -9,6 +9,6 @@ include(joinpath(@__DIR__, "mse_tables.jl"))
 mse_vals = collect(Iterators.flatten(map(x -> values(x), values(all_best_mse))))
 if self_reference && !all(mse_vals .== 0)
     error(
-        "All mse values in `regression_tests/mse_tables.jl` must be set to zero when the reference counter is incremented",
+        "All mse values in `reproducibility_tests/mse_tables.jl` must be set to zero when the reference counter is incremented",
     )
 end

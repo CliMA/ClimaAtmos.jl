@@ -214,8 +214,8 @@ non_orographic_gravity_wave:
 nh_poly:
   help: "Horizontal polynomial degree. Note: The number of quadrature points in 1D within each horizontal element is then Nq = <--nh_poly> + 1"
   value: 3
-regression_test:
-  help: "(Bool) perform regression test"
+reproducibility_test:
+  help: "(Bool) perform reproducibility test"
   value: false
 check_conservation:
   help: "Check conservation of mass and energy [`false` (default), `true`]"

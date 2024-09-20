@@ -56,11 +56,11 @@ steps:
 
   - wait
 
-  - group: "Regression tests"
+  - group: "Reproducibility tests"
     steps:
 
       - label: ":computer: Ensure mse tables are reset when necessary"
-        command: "julia --color=yes --project=examples regression_tests/test_reset.jl"
+        command: "julia --color=yes --project=examples reproducibility_tests/test_reset.jl"
 
   - group: "Radiation"
     steps:
@@ -256,7 +256,7 @@ steps:
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist.yml
           --job_id sphere_baroclinic_wave_rhoe_equilmoist
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
           --job_id sphere_baroclinic_wave_rhoe_equilmoist
           --out_dir sphere_baroclinic_wave_rhoe_equilmoist/output_active
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/output_active/*"
@@ -269,7 +269,7 @@ steps:
           --config_file $CONFIG_PATH/deep_sphere_baroclinic_wave_rhoe_equilmoist.yml
           --job_id deep_sphere_baroclinic_wave_rhoe_equilmoist
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
           --job_id deep_sphere_baroclinic_wave_rhoe_equilmoist
           --out_dir deep_sphere_baroclinic_wave_rhoe_equilmoist/output_active
         artifact_paths: "deep_sphere_baroclinic_wave_rhoe_equilmoist/output_active/*"
@@ -302,7 +302,7 @@ steps:
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_hightop_sponge.yml
           --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
           --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
           --out_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge/output_active
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/output_active/*"
@@ -327,7 +327,7 @@ steps:
           --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.yml
           --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
           --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
           --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric/output_active
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric/output_active/*"
@@ -610,7 +610,7 @@ steps:
           --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
           --job_id diagnostic_edmfx_aquaplanet
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
           --job_id diagnostic_edmfx_aquaplanet
           --out_dir diagnostic_edmfx_aquaplanet/output_active
         artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"
@@ -1111,10 +1111,10 @@ steps:
     continue_on_failure: true
 
   - label: ":robot_face: Print new mse tables"
-    command: "julia --color=yes --project=examples regression_tests/print_new_mse.jl"
+    command: "julia --color=yes --project=examples reproducibility_tests/print_new_mse.jl"
 
   - label: ":robot_face: Print new reference counter"
-    command: "julia --color=yes --project=examples regression_tests/print_new_ref_counter.jl"
+    command: "julia --color=yes --project=examples reproducibility_tests/print_new_ref_counter.jl"
 
   - label: ":bar_chart: Tabulate performance summary"
     command: "julia --color=yes --project=perf perf/tabulate_perf_summary.jl"
@@ -1128,4 +1128,4 @@ steps:
   - wait
 
   - label: ":robot_face: Move main results"
-    command: "julia --color=yes --project=examples regression_tests/move_output.jl"
+    command: "julia --color=yes --project=examples reproducibility_tests/move_output.jl"
