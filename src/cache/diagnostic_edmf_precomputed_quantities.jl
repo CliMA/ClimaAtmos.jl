@@ -406,6 +406,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 p.atmos.edmfx_model.entr_model,
             )
 
+            @. turb_entrʲ_prev_level = turbulent_entrainment(
+                params,
+                draft_area(ρaʲ_prev_level, ρʲ_prev_level),
+            )
+
             # We don't have an upper limit to entrainment for the first level
             # (calculated at i=2), as the vertical velocity at the first level is zero
             if i > 2
@@ -418,26 +423,21 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     ),
                     dz_prev_level,
                 )
+
+                @. turb_entrʲ_prev_level = limit_turb_entrainment(
+                    entrʲ_prev_level,
+                    turb_entrʲ_prev_level,
+                    get_physical_w(
+                        u³ʲ_prev_halflevel,
+                        local_geometry_prev_halflevel,
+                    ),
+                    dz_prev_level,
+                )
             end
             @. entrʲ_prev_level = limit_entrainment(
                 entrʲ_prev_level,
                 draft_area(ρaʲ_prev_level, ρʲ_prev_level),
                 dt,
-            )
-
-            @. turb_entrʲ_prev_level = turbulent_entrainment(
-                params,
-                draft_area(ρaʲ_prev_level, ρʲ_prev_level),
-            )
-
-            @. turb_entrʲ_prev_level = limit_turb_entrainment(
-                entrʲ_prev_level,
-                turb_entrʲ_prev_level,
-                get_physical_w(
-                    u³ʲ_prev_halflevel,
-                    local_geometry_prev_halflevel,
-                ),
-                dz_prev_level,
             )
 
             # TODO: use updraft top instead of scale height
