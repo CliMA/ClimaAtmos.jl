@@ -84,7 +84,9 @@ if CA.is_distributed(config.comms_ctx)
 end
 
 # Check if selected output has changed from the previous recorded output (bit-wise comparison)
-include(joinpath(@__DIR__, "..", "..", "reproducibility_tests", "mse_tables.jl"))
+include(
+    joinpath(@__DIR__, "..", "..", "reproducibility_tests", "mse_tables.jl"),
+)
 if config.parsed_args["reproducibility_test"]
     # Test results against main branch
     include(
@@ -143,7 +145,11 @@ end
 # Visualize the solution
 if ClimaComms.iamroot(config.comms_ctx)
     include(
-        joinpath(pkgdir(CA), "reproducibility_tests", "self_reference_or_path.jl"),
+        joinpath(
+            pkgdir(CA),
+            "reproducibility_tests",
+            "self_reference_or_path.jl",
+        ),
     )
     @info "Plotting"
     path = self_reference_or_path() # __build__ path (not job path)

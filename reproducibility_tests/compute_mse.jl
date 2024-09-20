@@ -24,7 +24,12 @@ via `varname`.
 If running on buildkite, we get `ds_filename_reference`
 from the latest merged dataset on Caltech central.
 """
-function reproducibility_test(; job_id, reference_mse, ds_filename_computed, varname)
+function reproducibility_test(;
+    job_id,
+    reference_mse,
+    ds_filename_computed,
+    varname,
+)
     local ds_filename_reference
 
     if haskey(ENV, "BUILDKITE_COMMIT")
