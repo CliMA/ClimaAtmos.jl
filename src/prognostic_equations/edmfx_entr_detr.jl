@@ -114,7 +114,7 @@ function entrainment(
         entr_coeff * abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) +
         min_area_limiter
 
-    return max(entr, 0)
+    return entr
 end
 
 function detrainment(
@@ -295,7 +295,7 @@ function detrainment(
             max_area_limiter
     end
 
-    return max(detr, 0)
+    return detr
 end
 
 function detrainment(
