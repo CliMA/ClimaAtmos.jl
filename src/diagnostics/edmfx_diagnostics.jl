@@ -442,6 +442,33 @@ add_diagnostic_variable!(
     compute! = compute_entr!,
 )
 
+compute_turbentr!(out, state, cache, time) =
+    compute_turbentr!(out, state, cache, time, cache.atmos.turbconv_model)
+compute_turbentr!(_, _, _, _, turbconv_model::T) where {T} =
+    error_diagnostic_variable("turbentr", turbconv_model)
+
+function compute_turbentr!(
+    out,
+    state,
+    cache,
+    time,
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
+)
+    if isnothing(out)
+        return copy(cache.precomputed.ᶜturb_entrʲs.:1)
+    else
+        out .= cache.precomputed.ᶜturb_entrʲs.:1
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "turbentr",
+    long_name = "Turbulent entrainment rate",
+    units = "s^-1",
+    comments = "Turbulent entrainment rate of the first updraft",
+    compute! = compute_turbentr!,
+)
+
 ###
 # Detrainment (3d)
 ###

@@ -204,7 +204,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         ᶜK_h,
         ρatke_flux,
     ) = p.precomputed
-    (; ᶜuʲs, ᶜtsʲs, ᶠu³ʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
+    (; ᶜuʲs, ᶜtsʲs, ᶠu³ʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -232,11 +232,21 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             max(ᶜtke⁰, 0),
             p.atmos.edmfx_model.entr_model,
         )
+
         @. ᶜentrʲs.:($$j) = limit_entrainment(
             ᶜentrʲs.:($$j),
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             dt,
         )
+
+        @. ᶜturb_entrʲs.:($$j) = turbulent_entrainment(
+            params,
+            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+        )
+
+        @. ᶜturb_entrʲs.:($$j) =
+            limit_turb_entrainment(ᶜentrʲs.:($$j), ᶜturb_entrʲs.:($$j), dt)
+
         @. ᶜvert_div = ᶜdivᵥ(ᶠinterp(ᶜρʲs.:($$j)) * ᶠu³ʲs.:($$j)) / ᶜρʲs.:($$j)
         @. ᶜmassflux_vert_div =
             ᶜdivᵥ(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) * ᶠu³ʲs.:($$j))
@@ -260,6 +270,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             ᶜtke⁰,
             p.atmos.edmfx_model.detr_model,
         )
+
         @. ᶜdetrʲs.:($$j) = limit_detrainment(
             ᶜdetrʲs.:($$j),
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),

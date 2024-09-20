@@ -5,6 +5,12 @@ import SurfaceFluxes.UniversalFunctions as UF
 import Insolation.Parameters.InsolationParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
 import CloudMicrophysics as CM
+import StaticArrays as SA
+
+
+to_svec(x::AbstractArray) = SA.SVector{length(x)}(x)
+to_svec(x) = x
+to_svec(x::NamedTuple) = map(x -> to_svec(x), x)
 
 function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
     name_map = (;
@@ -20,6 +26,8 @@ function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
         :mixing_length_Ri_crit => :Ri_crit,
         :detr_coeff => :detr_coeff,
         :EDMF_surface_area => :surface_area,
+        :entr_param_vec => :entr_param_vec,
+        :turb_entr_param_vec => :turb_entr_param_vec,
         :minimum_updraft_top => :min_updraft_top,
         :mixing_length_eddy_viscosity_coefficient => :tke_ed_coeff,
         :mixing_length_smin_ub => :smin_ub,
@@ -39,7 +47,10 @@ function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     FT = CP.float_type(toml_dict)
-    CAP.TurbulenceConvectionParameters{FT}(; parameters...)
+    parameters = to_svec(parameters)
+    VFT1 = typeof(parameters.entr_param_vec)
+    VFT2 = typeof(parameters.turb_entr_param_vec)
+    CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2}(; parameters...)
 end
 
 function SurfaceTemperatureParameters(toml_dict::CP.AbstractTOMLDict)
