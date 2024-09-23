@@ -2491,9 +2491,9 @@ version = "1.0.2"
 
 [[deps.Thermodynamics]]
 deps = ["DocStringExtensions", "KernelAbstractions", "Random", "RootSolvers"]
-git-tree-sha1 = "80b13ddc5ae7b8605ef5a055e7f23c5b5f4775cf"
+git-tree-sha1 = "8c2afc6dbb2bdac698a5b05816b7521630dea034"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-version = "0.12.7"
+version = "0.12.8"
 weakdeps = ["ClimaParams"]
 
     [deps.Thermodynamics.extensions]
