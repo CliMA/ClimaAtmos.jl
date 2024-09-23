@@ -65,12 +65,6 @@ function radiation_model_cache(
     end
     local rrtmgp_model
     orbital_data = Insolation.OrbitalData()
-    file_name = joinpath(
-        "examples",
-        "rfmip-clear-sky",
-        "inputs",
-        "multiple_input4MIPs_radiation_RFMIP_UColorado-RFMIP-1-2_none.nc",
-    )
     data_loader(
         RRTMGP.ArtifactPaths.get_input_filename(:gas, :lw),
     ) do input_data
