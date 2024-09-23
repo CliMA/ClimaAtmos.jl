@@ -8,7 +8,7 @@ vert_diff: true
 forcing: "held_suarez"
 z_max: 55000.0
 precip_model: "0M"
-regression_test: true
+reproducibility_test: true
 viscous_sponge: true
 moist: "equil"
 toml: [toml/sphere_held_suarez_rhoe_equilmoist_hightop_sponge.toml]
