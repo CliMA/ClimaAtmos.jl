@@ -42,7 +42,17 @@ if buildkite_ci
         perf_benchmarks_PR = joinpath(dirname(@__DIR__), "perf_benchmarks.json")
         perf_benchmarks_main = joinpath(path, "perf_benchmarks.json")
         mv(perf_benchmarks_PR, perf_benchmarks_main; force = true)
-        @info "readdir(): $(readdir(path))"
+        println("New reference folder: $path")
+        for (root, dirs, files) in walkdir(path)
+            println("--Directories in $root")
+            for dir in dirs
+                println("    ", joinpath(root, dir)) # path to directories
+            end
+            println("--Files in $root")
+            for file in files
+                println("    ", joinpath(root, file)) # path to files
+            end
+        end
     end
 else
     @info "ENV keys: $(keys(ENV))"
