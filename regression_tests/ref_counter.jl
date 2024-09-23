@@ -1,4 +1,4 @@
-179
+180
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+180
+- Update Thermodynamics, which changes the definition of internal energy
+  and enthalpy
+
 179:
 - Update Pi entr groups/ add parameter vectors
 
