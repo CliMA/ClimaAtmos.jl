@@ -9,6 +9,7 @@ using Test
 
 #! format: off
 @safetestset "Aqua" begin @time include("aqua.jl") end
+@safetestset "Dependencies" begin @time include("dependencies.jl") end
 @safetestset "Callbacks" begin @time include("callbacks.jl") end
 @safetestset "Utilities" begin @time include("utilities.jl") end
 @safetestset "Parameter tests" begin @time include("parameters/parameter_tests.jl") end

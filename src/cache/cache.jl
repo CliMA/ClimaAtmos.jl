@@ -168,7 +168,6 @@ function build_cache(
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
         ᶜgradᵥ_ᶠΦ = ᶜgradᵥ.(ᶠΦ),
-        ᶜT = similar(Y.c, FT),
         ᶜf³,
         ᶠf¹²,
         # Used by diagnostics such as hfres, evspblw
@@ -193,7 +192,13 @@ function build_cache(
 
     radiation_args =
         atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
-        (params, precomputed.ᶜp, prescribe_ozone, aerosol_names) : ()
+        (
+            params,
+            precomputed.ᶜp,
+            prescribe_ozone,
+            aerosol_names,
+            atmos.insolation,
+        ) : ()
 
     hyperdiff = hyperdiffusion_cache(Y, atmos)
     rayleigh_sponge = rayleigh_sponge_cache(Y, atmos)

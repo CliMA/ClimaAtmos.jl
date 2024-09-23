@@ -55,6 +55,12 @@ include("../../test_helpers.jl")
     @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
     @test ᶜYₜ.c.ρ == p.precipitation.ᶜS_ρq_tot
 
+    # test nonequilibrium cloud condensate
+    moist_model = CA.NonEquilMoistModel()
+    CA.cloud_condensate_tendency!(ᶜYₜ, p, moist_model)
+    @assert !any(isnan, ᶜYₜ.c.ρq_liq)
+    @assert !any(isnan, ᶜYₜ.c.ρq_ice)
+
     ### 1-Moment Scheme
     @info "1M Scheme"
     config = CA.AtmosConfig(
@@ -105,6 +111,12 @@ include("../../test_helpers.jl")
             atol = eps(FT),
         ),
     )
+
+    # test nonequilibrium cloud condensate
+    moist_model = CA.NonEquilMoistModel()
+    CA.cloud_condensate_tendency!(ᶜYₜ, p, moist_model)
+    @assert !any(isnan, ᶜYₜ.c.ρq_liq)
+    @assert !any(isnan, ᶜYₜ.c.ρq_ice)
 
     # test if terminal velocity is positive
     @test minimum(p.precomputed.ᶜwᵣ) >= FT(0)

@@ -13,8 +13,8 @@ function edmfx_tke_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; ᶜentrʲs, ᶜdetrʲs, ᶠu³ʲs) = p.precomputed
-    (; ᶠu³⁰, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰) = p.precomputed
+    (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs, ᶠu³ʲs) = p.precomputed
+    (; ᶠu³⁰, ᶠu³, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰) = p.precomputed
     (; ᶜK_u, ᶜK_h) = p.precomputed
     ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
     nh_pressure3ʲs =
@@ -44,11 +44,20 @@ function edmfx_tke_tendency!(
             ᶜρaʲ =
                 turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
                 p.precomputed.ᶜρaʲs.:($j)
+            # dynamical entr/detr
             @. Yₜ.c.sgs⁰.ρatke +=
                 ᶜρaʲ * (
                     ᶜdetrʲs.:($$j) * 1 / 2 *
                     norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) -
                     ᶜentrʲs.:($$j) * ᶜtke⁰
+                )
+            # turbulent entr
+            @. Yₜ.c.sgs⁰.ρatke +=
+                ᶜρaʲ *
+                ᶜturb_entrʲs.:($$j) *
+                (
+                    norm(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) *
+                    norm(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³)) - ᶜtke⁰
                 )
         end
         # pressure work

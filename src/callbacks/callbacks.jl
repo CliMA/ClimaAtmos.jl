@@ -394,12 +394,15 @@ function print_walltime_estimate(integrator)
             time_and_units_str(wall_time_ave_per_step * n_steps_total)
         wall_time_spent = time_and_units_str(wte.∑Δt_wall)
         simulation_time = time_and_units_str(Float64(t))
-        sypd = round(
-            simulated_years_per_day(
-                EfficiencyStats((t_start, t), wte.∑Δt_wall),
-            );
-            digits = 3,
-        )
+        es = EfficiencyStats((t_start, t), wte.∑Δt_wall)
+        _sypd = simulated_years_per_day(es)
+        _sypd_str = string(round(_sypd; digits = 3))
+        sypd = _sypd_str * if _sypd < 0.01
+            sdpd = round(_sypd * 365, digits = 3)
+            " (sdpd = $sdpd)"
+        else
+            ""
+        end
         estimated_finish_date =
             Dates.now() + compound_period(wall_time_remaining, Dates.Second)
         @info "Progress" simulation_time = simulation_time n_steps_completed =

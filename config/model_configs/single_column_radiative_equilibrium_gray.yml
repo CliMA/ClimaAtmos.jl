@@ -1,4 +1,4 @@
-dt_save_state_to_disk: "100days"
+dt_save_state_to_disk: "3months"
 initial_condition: "IsothermalProfile"
 hyperdiff: false
 # It seems radiative equilibrium needs a larger dz near the top

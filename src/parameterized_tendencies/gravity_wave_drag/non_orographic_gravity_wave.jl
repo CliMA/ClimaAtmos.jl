@@ -150,7 +150,7 @@ function non_orographic_gravity_wave_tendency!(
     ::NonOrographyGravityWave,
 )
     #unpack
-    (; ᶜT,) = p.core
+    ᶜT = p.scratch.ᶜtemp_scalar
     (; ᶜts) = p.precomputed
     (; params) = p
     (;

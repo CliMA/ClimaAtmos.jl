@@ -242,6 +242,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         ᶜρʲs,
         ᶜentrʲs,
         ᶜdetrʲs,
+        ᶜturb_entrʲs,
         ᶠnh_pressure³ʲs,
     ) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜtke⁰) = p.precomputed
@@ -324,6 +325,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ᶜq_totʲ = ᶜq_totʲs.:($j)
             ᶜentrʲ = ᶜentrʲs.:($j)
             ᶜdetrʲ = ᶜdetrʲs.:($j)
+            ᶜturb_entrʲ = ᶜturb_entrʲs.:($j)
             ᶠnh_pressure³ʲ = ᶠnh_pressure³ʲs.:($j)
 
             if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
@@ -356,6 +358,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             tsʲ_prev_level = Fields.field_values(Fields.level(ᶜtsʲ, i - 1))
             entrʲ_prev_level = Fields.field_values(Fields.level(ᶜentrʲ, i - 1))
             detrʲ_prev_level = Fields.field_values(Fields.level(ᶜdetrʲ, i - 1))
+            turb_entrʲ_prev_level =
+                Fields.field_values(Fields.level(ᶜturb_entrʲ, i - 1))
             nh_pressure³ʲ_prev_halflevel =
                 Fields.field_values(Fields.level(ᶠnh_pressure³ʲ, i - 1 - half))
             scale_height =
@@ -399,7 +403,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 TD.relative_humidity(thermo_params, ts_prev_level),
                 FT(0),
                 tke_prev_level,
-                p.atmos.edmfx_entr_model,
+                p.atmos.edmfx_model.entr_model,
             )
 
             # We don't have an upper limit to entrainment for the first level
@@ -421,17 +425,35 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 dt,
             )
 
-            # TODO: use updraft top instead of scale height
-            @. nh_pressure³ʲ_prev_halflevel = ᶠupdraft_nh_pressure(
+            @. turb_entrʲ_prev_level = turbulent_entrainment(
                 params,
-                p.atmos.edmfx_nh_pressure,
-                local_geometry_prev_halflevel,
-                -∇Φ³_prev_level * (ρʲ_prev_level - ρ_prev_level) /
-                ρʲ_prev_level,
-                u³ʲ_prev_halflevel,
-                u³⁰_prev_halflevel,
-                scale_height,
+                draft_area(ρaʲ_prev_level, ρʲ_prev_level),
             )
+
+            @. turb_entrʲ_prev_level = limit_turb_entrainment(
+                entrʲ_prev_level,
+                turb_entrʲ_prev_level,
+                get_physical_w(
+                    u³ʲ_prev_halflevel,
+                    local_geometry_prev_halflevel,
+                ),
+                dz_prev_level,
+            )
+
+            # TODO: use updraft top instead of scale height
+            if p.atmos.edmfx_model.nh_pressure isa Val{true}
+                @. nh_pressure³ʲ_prev_halflevel = ᶠupdraft_nh_pressure(
+                    params,
+                    local_geometry_prev_halflevel,
+                    -∇Φ³_prev_level * (ρʲ_prev_level - ρ_prev_level) /
+                    ρʲ_prev_level,
+                    u³ʲ_prev_halflevel,
+                    u³⁰_prev_halflevel,
+                    scale_height,
+                )
+            else
+                @. nh_pressure³ʲ_prev_halflevel = CT3(0)
+            end
 
             nh_pressure³ʲ_data_prev_halflevel =
                 nh_pressure³ʲ_prev_halflevel.components.data.:1
@@ -505,8 +527,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     local_geometry_prev_level.J *
                     2 *
                     (
-                        entrʲ_prev_level * u³⁰_data_prev_halflevel -
-                        entrʲ_prev_level * u³ʲ_data_prev_halflevel
+                        (entrʲ_prev_level + turb_entrʲ_prev_level) *
+                        u³⁰_data_prev_halflevel -
+                        (entrʲ_prev_level + turb_entrʲ_prev_level) *
+                        u³ʲ_data_prev_halflevel
                     )
                 )
 
@@ -558,7 +582,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 vert_div_level,
                 FT(0), # mass flux divergence is not implemented for diagnostic edmf
                 tke_prev_level,
-                p.atmos.edmfx_detr_model,
+                p.atmos.edmfx_model.detr_model,
             )
 
             @. detrʲ_prev_level = limit_detrainment(
@@ -636,8 +660,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     local_geometry_prev_level.J *
                     ρaʲ_prev_level *
                     (
-                        entrʲ_prev_level * (h_tot_prev_level - K_prev_level) -
-                        detrʲ_prev_level * mseʲ_prev_level
+                        (entrʲ_prev_level + turb_entrʲ_prev_level) *
+                        (h_tot_prev_level - K_prev_level) -
+                        (detrʲ_prev_level + turb_entrʲ_prev_level) *
+                        mseʲ_prev_level
                     )
                 )
             if precip_model isa Microphysics0Moment
@@ -683,8 +709,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     local_geometry_prev_level.J *
                     ρaʲ_prev_level *
                     (
-                        entrʲ_prev_level * q_tot_prev_level -
-                        detrʲ_prev_level * q_totʲ_prev_level
+                        (entrʲ_prev_level + turb_entrʲ_prev_level) *
+                        q_tot_prev_level -
+                        (detrʲ_prev_level + turb_entrʲ_prev_level) *
+                        q_totʲ_prev_level
                     )
                 )
             if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
@@ -788,7 +816,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
     t,
 )
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜentrʲs, ᶜdetrʲs) = p.precomputed
+    (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p.precomputed
     (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs, ᶠnh_pressure³ʲs) = p.precomputed
     (; precip_model) = p.atmos
 
@@ -803,6 +831,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
         ᶠnh_pressure³ʲ = ᶠnh_pressure³ʲs.:($j)
         ᶜentrʲ = ᶜentrʲs.:($j)
         ᶜdetrʲ = ᶜdetrʲs.:($j)
+        ᶜturb_entrʲ = ᶜturb_entrʲs.:($j)
 
         u³ʲ_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, i_top + half))
         @. u³ʲ_halflevel = CT3(0)
@@ -815,8 +844,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
 
         entrʲ_level = Fields.field_values(Fields.level(ᶜentrʲ, i_top))
         detrʲ_level = Fields.field_values(Fields.level(ᶜdetrʲ, i_top))
+        turb_entrʲ_level = Fields.field_values(Fields.level(ᶜturb_entrʲ, i_top))
         fill!(entrʲ_level, RecursiveApply.rzero(eltype(entrʲ_level)))
         fill!(detrʲ_level, RecursiveApply.rzero(eltype(detrʲ_level)))
+        fill!(turb_entrʲ_level, RecursiveApply.rzero(eltype(turb_entrʲ_level)))
         @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
 
         if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}

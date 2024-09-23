@@ -34,7 +34,8 @@ function radiation_model_cache(
     params,
     ᶜp, # Used for ozone
     prescribe_ozone,
-    aerosol_names;
+    aerosol_names,
+    insolation_mode;
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
     data_loader = rrtmgp_data_loader,
@@ -253,11 +254,21 @@ function radiation_model_cache(
             kwargs...,
         )
     end
+    return merge(
+        (;
+            orbital_data,
+            rrtmgp_model,
+            ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
+        ),
+        insolation_cache(insolation_mode, Y),
+    )
+end
+
+insolation_cache(_, _) = (;)
+function insolation_cache(::TimeVaryingInsolation, Y)
+    FT = Spaces.undertype(axes(Y.c))
     return (;
-        orbital_data,
-        rrtmgp_model,
-        insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT}),
-        ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
+        insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT})
     )
 end
 
@@ -390,14 +401,17 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationISDAC)
     LWP_zₜ = p.scratch.temp_field_level  # column integral of LWP (zₜ = top-of-domain)
     Operators.column_integral_definite!(LWP_zₜ, ᶜρq)
 
-    LWP_z = p.scratch.ᶠtemp_scalar  # column integral of LWP from 0 to z (z = current level)
-    Operators.column_integral_indefinite!(LWP_z, ᶜρq)
+    ᶠLWP_z = p.scratch.ᶠtemp_scalar  # column integral of LWP from 0 to z (z = current level)
+    Operators.column_integral_indefinite!(ᶠLWP_z, ᶜρq)
 
-    @. Yₜ.c.ρe_tot -= ᶜdivᵥ(
-        Geometry.WVector(
-            F₀ * exp(-κ * (LWP_zₜ - LWP_z)) + F₁ * exp(-κ * LWP_z),
-        ),
-    )  # = -∂F/∂z = ρ cₚ ∂T/∂t (longwave radiation)
+    # TODO: Need to compute flux before `ᶜdivᵥ` until we resolve: https://github.com/CliMA/ClimaCore.jl/issues/1989
+    radiation_flux = p.scratch.ᶠtemp_scalar
+    @. radiation_flux = F₀ * exp(-κ * (LWP_zₜ - ᶠLWP_z)) + F₁ * exp(-κ * ᶠLWP_z)
+
+    @. Yₜ.c.ρe_tot -= ᶜdivᵥ(Geometry.WVector(
+        radiation_flux,
+        # F₀ * exp(-κ * (LWP_zₜ - ᶠLWP_z)) + F₁ * exp(-κ * ᶠLWP_z),
+    ))  # = -∂F/∂z = ρ cₚ ∂T/∂t (longwave radiation)
 
     return nothing
 end

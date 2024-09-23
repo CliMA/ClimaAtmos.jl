@@ -1009,7 +1009,7 @@ end
 Aquaplanet1MPlots = Union{
     Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
     Val{:gpu_aquaplanet_dyamond},
-    Val{:longrun_aquaplanet_clearsky_1M},
+    Val{:longrun_aquaplanet_allsky_1M},
 }
 
 function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
@@ -1207,7 +1207,6 @@ EDMFBoxPlotsWithPrecip = Union{
     Val{:diagnostic_edmfx_rico_box},
     Val{:diagnostic_edmfx_trmm_box},
     Val{:diagnostic_edmfx_trmm_stretched_box},
-    Val{:les_isdac_box},
 }
 
 """

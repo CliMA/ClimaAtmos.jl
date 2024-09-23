@@ -1,6 +1,35 @@
-177
+180
+
+# **README**
+#
+# What is the ref_counter?
+#
+# The ref_counter is part of reproduciability tests. The counter identifies a
+# particular snapshot of our code, a "reference". Each PR is tested against this
+# reference to check if it reproduces the expected behavior. This allows us to
+# check that PRs that are expected to not modify the behavior do indeed preserve
+# the previous behavior.
+#
+# When am I allowed to increase the ref_counter?
+#
+# If you know that your PR is changing some behavior (e.g., you are changing
+# parameters, or how things are computed, or added a new component), you should
+# increase the number on top of this file and add an explanation on why it has
+# changed in the comments below. Increasing the ref_counter will make your PR
+# the new reference that other PRs will be compared against.
+
 
 #=
+180
+- Update Thermodynamics, which changes the definition of internal energy
+  and enthalpy
+
+179:
+- Update Pi entr groups/ add parameter vectors
+
+178:
+- Added aerosol to one of the regression tests
+
 177:
 - change numerics of non-orographic gravity waves
 
