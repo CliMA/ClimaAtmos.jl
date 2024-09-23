@@ -1071,6 +1071,7 @@ LESBoxPlots= Union{
     Val{:les_dycoms_box},
     Val{:les_bomex_box},
     Val{:les_gabls_box},
+    Val{:les_isdac_box},
 }
 
 """
