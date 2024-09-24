@@ -33,6 +33,7 @@ makedocs(;
         "Gravity Wave Drag Parameterizations" => "gravity_wave.md",
         "Ocean Surface Albedo Parameterization" => "surface_albedo.md",
         "Radiative Equilibrium" => "radiative_equilibrium.md",
+        "Restarts and checkpoints" => "restarts.md",
         "REPL scripts" => "repl_scripts.md",
         "Configuration" => "config.md",
         "Parameters" => "parameters.md",
