@@ -415,6 +415,7 @@ function get_external_forcing_model(parsed_args)
         DType = Float64  # TODO: Read from `parsed_args`
         GCMForcing{DType}(
             parsed_args["external_forcing_file"],
+            parsed_args["external_forcing_type"],
             parsed_args["cfsite_number"],
         )
     elseif external_forcing == "ISDAC"
