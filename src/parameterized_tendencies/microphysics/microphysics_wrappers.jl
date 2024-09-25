@@ -46,8 +46,8 @@ function cloud_sources(cm_params::CMP.CloudLiquid{FT}, thp, ts, dt) where {FT}
     # keeping the same limiter for now
     return ifelse(
         S > FT(0),
-        min(S, limit(qᵥ(thp, ts), dt, 2)),
-        -min(abs(S), limit(qₗ(thp, ts), dt, 2)),
+        min(S, limit(qᵥ(thp, ts), dt, 5)),
+        -min(abs(S), limit(qₗ(thp, ts), dt, 5)),
     )
 end
 function cloud_sources(cm_params::CMP.CloudIce{FT}, thp, ts, dt) where {FT}
@@ -60,8 +60,8 @@ function cloud_sources(cm_params::CMP.CloudIce{FT}, thp, ts, dt) where {FT}
     # keeping the same limiter for now
     return ifelse(
         S > FT(0),
-        min(S, limit(qᵥ(thp, ts), dt, 2)),
-        -min(abs(S), limit(qᵢ(thp, ts), dt, 2)),
+        min(S, limit(qᵥ(thp, ts), dt, 5)),
+        -min(abs(S), limit(qᵢ(thp, ts), dt, 5)),
     )
 end
 
