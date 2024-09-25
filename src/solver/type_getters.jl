@@ -291,13 +291,20 @@ function get_spaces_restart(Y)
     return (; center_space, face_space)
 end
 
-function get_state_restart(config::AtmosConfig, restart_file)
+function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     (; parsed_args, comms_ctx) = config
 
     @assert !isnothing(restart_file)
     reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
     t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
+    atmos_model_hash_in_restart =
+        InputOutput.HDF5.read_attribute(reader.file, "atmos_model_hash")
+    if atmos_model_hash_in_restart != atmos_model_hash
+        error(
+            "Restart file $(restart_file) was constructed with a different AtmosModel",
+        )
+    end
     return (Y, t_start)
 end
 
@@ -680,7 +687,11 @@ function get_simulation(config::AtmosConfig)
 
     if sim_info.restart
         s = @timed_str begin
-            (Y, t_start) = get_state_restart(config, sim_info.restart_file)
+            (Y, t_start) = get_state_restart(
+                config,
+                sim_info.restart_file,
+                hash(atmos),
+            )
             spaces = get_spaces_restart(Y)
         end
         @info "Allocating Y: $s"
