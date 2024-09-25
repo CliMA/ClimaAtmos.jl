@@ -19,12 +19,13 @@ end
 """
 Calculate height-dependent scalar relaxation timescale following from eqn. 11, Shen et al., 2022.
 """
-function compute_gcm_driven_scalar_inv_τ(z::FT) where {FT}
+function compute_gcm_driven_scalar_inv_τ(
+    z::FT;
+    τᵣ::FT = 24.0 * 3600.0,
+    zᵢ::FT = 3000.0,
+    zᵣ::FT = 3500.0,
+) where {FT}
 
-    # TODO add to ClimaParameters
-    τᵣ = FT(24.0 * 3600.0)
-    zᵢ = FT(3000.0)
-    zᵣ = FT(3500.0)
     if z < zᵢ
         return FT(0)
     elseif zᵢ <= z <= zᵣ
@@ -33,6 +34,31 @@ function compute_gcm_driven_scalar_inv_τ(z::FT) where {FT}
     elseif z > zᵣ
         return (1 / τᵣ)
     end
+end
+
+function compute_gcm_driven_scalar_inv_τ(z::FT, forcing_type::String) where {FT}
+    if forcing_type == "shallow"
+        zᵢ = FT(3000.0)
+        zᵣ = FT(3500.0)
+        τᵣ = FT(24.0 * 3600.0)
+    elseif forcing_type == "deep"
+        zᵢ = FT(16000.0)
+        zᵣ = FT(20000.0)
+        τᵣ = FT(2.0 * 3600.0)
+    end
+    return compute_gcm_driven_scalar_inv_τ(z; τᵣ, zᵢ, zᵣ)
+end
+
+function compute_gcm_driven_momentum_inv_τ(
+    z::FT,
+    forcing_type::String,
+) where {FT}
+    if forcing_type == "shallow"
+        τᵣ = FT(6.0 * 3600.0)
+    elseif forcing_type == "deep"
+        τᵣ = FT(3600.0)
+    end
+    return FT(1) / τᵣ
 end
 
 external_forcing_cache(Y, atmos::AtmosModel, params) =
@@ -56,7 +82,8 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
     insolation = similar(Fields.level(Y.c.ρ, 1), FT)
     cos_zenith = similar(Fields.level(Y.c.ρ, 1), FT)
 
-    (; external_forcing_file, cfsite_number) = external_forcing
+    (; external_forcing_file, external_forcing_type, cfsite_number) =
+        external_forcing
 
     NC.Dataset(external_forcing_file, "r") do ds
 
@@ -123,8 +150,10 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
             set_insolation!(insolation)
             set_cos_zenith!(cos_zenith)
 
-            @. ᶜinv_τ_wind[colidx] = 1 / (6 * 3600)
-            @. ᶜinv_τ_scalar[colidx] = compute_gcm_driven_scalar_inv_τ(zc_gcm)
+            @. ᶜinv_τ_wind[colidx] =
+                compute_gcm_driven_momentum_inv_τ(zc_gcm, external_forcing_type)
+            @. ᶜinv_τ_scalar[colidx] =
+                compute_gcm_driven_scalar_inv_τ(zc_gcm, external_forcing_type)
         end
     end
 
