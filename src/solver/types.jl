@@ -159,6 +159,7 @@ end
 # maybe need to <: AbstractForcing
 struct GCMForcing{FT}
     external_forcing_file::String
+    external_forcing_type::String
     cfsite_number::String
 end
 
