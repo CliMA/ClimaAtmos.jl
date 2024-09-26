@@ -377,9 +377,9 @@ version = "0.7.6"
 
 [[deps.ClimaDiagnostics]]
 deps = ["Accessors", "ClimaComms", "ClimaCore", "Dates", "NCDatasets", "SciMLBase"]
-git-tree-sha1 = "0c60c2b40b0c5ae87690734e2aedea5a8c686e91"
+git-tree-sha1 = "9526b91533254b043e860e17568555d21d1d041e"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
-version = "0.2.5"
+version = "0.2.6"
 
 [[deps.ClimaParams]]
 deps = ["TOML"]
@@ -389,9 +389,9 @@ version = "0.10.14"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "396fb5706c55b40bf7ca30498c1ea2a045827f9a"
+git-tree-sha1 = "dbc1d2c495f118c36a83fa93cd5311fe3a32f615"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
-version = "0.7.37"
+version = "0.7.38"
 
     [deps.ClimaTimeSteppers.extensions]
     ClimaTimeSteppersBenchmarkToolsExt = ["CUDA", "BenchmarkTools", "OrderedCollections", "StatsBase", "PrettyTables"]
