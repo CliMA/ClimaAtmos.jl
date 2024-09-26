@@ -26,7 +26,6 @@ const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 # load configs and directories 
 model_config_dict = YAML.load_file(model_config)
 atmos_config = CA.AtmosConfig(model_config_dict)
-zc_model = get_z_grid(atmos_config; z_max)
 
 ### create output directories & copy configs
 mkpath(output_dir)
@@ -58,12 +57,21 @@ obs_vec = []
 
 for ref_path in ref_paths
 
+    cfsite_number, _, _, _ = parse_les_path(ref_path)
+    forcing_type = get_cfsite_type(cfsite_number)
+    zc_model = get_cal_z_grid(atmos_config, z_cal_grid, forcing_type)
+
+    ti = experiment_config["y_t_start_sec"]
+    ti = isa(ti, AbstractFloat) ? ti : ti[forcing_type]
+    tf = experiment_config["y_t_end_sec"]
+    tf = isa(tf, AbstractFloat) ? tf : tf[forcing_type]
+
     y_obs, Σ_obs, norm_vec_obs = get_obs(
         ref_path,
         experiment_config["y_var_names"],
         zc_model;
-        ti = experiment_config["y_t_start_sec"],
-        tf = experiment_config["y_t_end_sec"],
+        ti = ti,
+        tf = tf,
         norm_factors_dict = norm_factors_by_var,
         z_score_norm = true,
         log_vars = log_vars,

@@ -1,18 +1,35 @@
 prior_path: prior_prognostic_pi_entr.toml
 ensemble_size: 100
 n_iterations: 12
-batch_size: 2 # number of cases per iteration
+batch_size: 3 # number of cases per iteration
 model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
 output_dir : output/exp_1 # output dir
 y_var_names: [thetaa, hus, clw] # calibration variables clw
 log_vars: ["clw"] # take log(var) when forming y, g
-z_max : 4000 # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
+# z_max: # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
+#   shallow: 4000.0
+#   deep: 15000.0
+z_max: null
+z_cal_grid: # calibration grid (stretch-grid parameters). In general, `z_elem` should be the same for all types
+  shallow:
+    z_max: 4000.0
+    z_elem: 29
+    dz_bottom: 30
+  deep:
+    z_max: 15000.0
+    z_elem: 29
+    dz_bottom: 30
 dims_per_var : 29 # num dimensions per variable (num cells in vertical profile below z_max)
 # eki_timestep: 0.1 # timestep of eki, if using default
-y_t_start_sec : 475200.0 # start time of LES averaging window [s] : 5.5 days
-y_t_end_sec : 518400.0 # end time of LES averaging window [s] : 6 days (LES length = 6 days)
-g_t_start_sec : 216000.0 # start time of SCM averaging window [s] : 2.5 days
-g_t_end_sec : 259200.0 # end time of SCM averaging window [s] : 3 days (SCM length = 3 days)
+
+y_t_start_sec: # start time of LES averaging window [s]
+  shallow: 475200.0 # 5.5 days
+  deep: 302400.0 # 3.5 days
+y_t_end_sec: # end time of LES averaging window [s]
+  shallow: 518400.0 # 6 days (LES length = 6 days)
+  deep: 345600.0 # 4 days (LES length = 4 days)
+g_t_start_sec: 216000.0 # start time of SCM averaging window [s] : 2.5 days
+g_t_end_sec: 259200.0 # end time of SCM averaging window [s] : 3 days (SCM length = 3 days)
 
 norm_factors_by_var:
   thetaa: [298.828, 8.617]
