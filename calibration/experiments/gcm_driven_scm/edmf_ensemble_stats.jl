@@ -1,12 +1,8 @@
 #!/usr/bin/env julia
 
-import ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
-
 using ArgParse
 using Distributed
 addprocs()
-
 
 @everywhere begin
     using EnsembleKalmanProcesses: TOMLInterface
@@ -95,9 +91,6 @@ function main()
     end
 
     ref_paths, _ = get_les_calibration_library()
-    comms_ctx = ClimaComms.SingletonCommsContext()
-    atmos_config = CA.AtmosConfig(model_config_dict; comms_ctx)
-    zc_model = get_z_grid(atmos_config, z_max = z_max)
 
     @everywhere function calculate_statistics(y_var)
         non_nan_values = y_var[.!isnan.(y_var)]
@@ -124,7 +117,6 @@ function main()
         cal_vars,
         const_noise_by_var,
         ref_paths,
-        zc_model,
         reduction,
         ensemble_size,
     )
@@ -147,7 +139,7 @@ function main()
             mins = Float64[]
             sum_squared_errors = zeros(Float64, ensemble_size)
             for config_i in config_indices
-                data = ensemble_data(
+                data, zc_model = ensemble_data(
                     process_profile_variable,
                     iteration,
                     config_i,
@@ -157,6 +149,7 @@ function main()
                     output_dir = output_dir,
                     z_max = z_max,
                     n_vert_levels = n_vert_levels,
+                    return_z_interp = true,
                 )
                 for i in 1:size(data, 2)
                     y_var = data[:, i]
@@ -166,12 +159,21 @@ function main()
                     push!(mins, col_min)
                 end
                 if in(var_name, cal_vars)
+                    ref_path = ref_paths[config_i]
+                    cfsite_number, _, _, _ = parse_les_path(ref_path)
+                    forcing_type = get_cfsite_type(cfsite_number)
+
+                    ti = config_dict["y_t_start_sec"]
+                    ti = isa(ti, AbstractFloat) ? ti : ti[forcing_type]
+                    tf = config_dict["y_t_end_sec"]
+                    tf = isa(tf, AbstractFloat) ? tf : tf[forcing_type]
+
                     y_true, Σ_obs, norm_vec_obs = get_obs(
-                        ref_paths[config_i],
+                        ref_path,
                         [var_name],
                         zc_model;
-                        ti = config_dict["y_t_start_sec"],
-                        tf = config_dict["y_t_end_sec"],
+                        ti = ti,
+                        tf = tf,
                         Σ_const = const_noise_by_var,
                         z_score_norm = false,
                     )
@@ -226,7 +228,6 @@ function main()
                 cal_vars,
                 const_noise_by_var,
                 ref_paths,
-                zc_model,
                 reduction,
                 ensemble_size,
             ),
