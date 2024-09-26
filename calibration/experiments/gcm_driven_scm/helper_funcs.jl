@@ -7,6 +7,10 @@ import ClimaAtmos as CA
 import ClimaCalibrate as CAL
 using Logging
 
+import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
+
+
 """Suppress Info and Warnings for any function"""
 function suppress_logs(f, args...; kwargs...)
     Logging.with_logger(Logging.SimpleLogger(stderr, Logging.Error)) do
@@ -848,7 +852,7 @@ function ensemble_data(
 
             model_config_dict = YAML.load_file(joinpath(simulation_dir, ".yml"))
             # suppress logs when creating model config, z grids to avoid cluttering output
-            model_config = suppress_logs(CA.AtmosConfig, model_config_dict)
+            model_config = suppress_logs(CA.AtmosConfig, model_config_dict; comms_ctx = ClimaComms.SingletonCommsContext())
             if !isnothing(config_dict["z_cal_grid"])
                 z_interp = suppress_logs(get_cal_z_grid, model_config, config_dict["z_cal_grid"])
             end
