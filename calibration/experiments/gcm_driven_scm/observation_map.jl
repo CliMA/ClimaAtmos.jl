@@ -4,7 +4,14 @@ import ClimaCalibrate:
 using ClimaAnalysis
 using JLD2
 using Statistics
+using Logging
 
+"""Suppress Info and Warnings for any function"""
+function suppress_logs(f, args...; kwargs...)
+    Logging.with_logger(Logging.SimpleLogger(stderr, Logging.Error)) do
+        f(args...; kwargs...)
+    end
+end
 
 function observation_map(iteration; config_dict::Dict)
 
@@ -29,6 +36,7 @@ function observation_map(iteration; config_dict::Dict)
                 t_start = config_dict["g_t_start_sec"],
                 t_end = config_dict["g_t_end_sec"],
                 z_max = config_dict["z_max"],
+                z_cal_grid = config_dict["z_cal_grid"],
                 norm_factors_dict = config_dict["norm_factors_by_var"],
                 log_vars = config_dict["log_vars"],
             )
@@ -48,13 +56,20 @@ function process_member_data(
     t_start,
     t_end,
     z_max = nothing,
+    z_cal_grid = nothing,
     norm_factors_dict = nothing,
     log_vars = [],
 )
     forcing_file_indices = EKP.get_current_minibatch(eki)
     g = Float64[]
     for i in forcing_file_indices
-        simdir = SimDir(joinpath(member_path, "config_$i", "output_0000"))
+        simulation_dir = joinpath(member_path, "config_$i", "output_0000")
+        model_config_dict = YAML.load_file(joinpath(simulation_dir, ".yml"))
+        # suppress logs when creating model config, z grids to avoid cluttering output
+        model_config = suppress_logs(CA.AtmosConfig, model_config_dict)
+        z_interp = suppress_logs(get_cal_z_grid, model_config, z_cal_grid)
+
+        simdir = SimDir(simulation_dir)
         for (i, y_name) in enumerate(y_names)
             y_var_i = process_profile_variable(
                 simdir,
@@ -63,6 +78,7 @@ function process_member_data(
                 t_start,
                 t_end,
                 z_max,
+                z_interp,
                 norm_factors_dict,
                 log_vars,
             )
@@ -81,6 +97,7 @@ function process_profile_variable(
     t_start,
     t_end,
     z_max = nothing,
+    z_interp = nothing,
     norm_factors_dict = nothing,
     log_vars = [],
 )
@@ -92,16 +109,22 @@ function process_profile_variable(
         z_window = filter(x -> x <= z_max, var_i.dims["z"])
         var_i = window(var_i, "z", right = maximum(z_window))
     end
+
     sim_t_end = var_i.dims["time"][end]
 
     if sim_t_end < 0.95 * t_end
-        throw(ErrorException("Simulation failed."))
+        throw(ErrorException("Simulation failed at: $sim_t_end"))
     end
 
     # take time-mean
     var_i_ave =
         average_time(window(var_i, "time", left = t_start, right = sim_t_end))
     y_var_i = slice(var_i_ave, x = 1, y = 1).data
+
+    # interpolate to calibration grid
+    if !isnothing(z_interp)
+        y_var_i = interp_prof_1D(y_var_i, var_i.dims["z"], z_interp)
+    end
 
     if y_name in log_vars
         y_var_i = log10.(y_var_i .+ 1e-12)
