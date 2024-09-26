@@ -20,12 +20,8 @@ function tracer_cache(
     if prescribe_ozone
         o3 = similar(Y.c.ρ)
         prescribed_o3_timevaryinginput = TimeVaryingInput(
-            joinpath(
-                @clima_artifact(
-                    "ozone_concentrations",
-                    ClimaComms.context(Y.c)
-                ),
-                "ozone_concentrations.nc",
+            AA.ozone_concentration_file_path(;
+                context = ClimaComms.context(Y.c),
             ),
             "vmro3",
             target_space;
@@ -52,12 +48,8 @@ function tracer_cache(
         target_space = axes(Y.c)
         timevaryinginputs = [
             TimeVaryingInput(
-                joinpath(
-                    @clima_artifact(
-                        "aerosol_concentrations",
-                        ClimaComms.context(Y.c)
-                    ),
-                    "aerosol_concentrations.nc",
+                AA.aerosol_concentration_file_path(;
+                    context = ClimaComms.context(Y.c),
                 ),
                 name,
                 target_space;

@@ -28,6 +28,23 @@ radiation_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 ##### RRTMGP Radiation
 #####
 
+"""
+    idealized_ozone(z::FT)
+
+Returns idealized ozone profile from Wing et al. 2018
+"""
+function idealized_ozone(z::FT) where {FT}
+    H_EARTH = FT(7000.0)
+    P0 = FT(1e5)
+    HPA_TO_PA = FT(100.0)
+    PPMV_TO_VMR = FT(1e-6)
+    p = P0 * exp(-z / H_EARTH) / HPA_TO_PA
+    g1 = FT(3.6478)
+    g2 = FT(0.83209)
+    g3 = FT(11.3515)
+    return g1 * p^g2 * exp(-p / g3) * PPMV_TO_VMR
+end
+
 function radiation_model_cache(
     Y,
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
@@ -77,46 +94,9 @@ function radiation_model_cache(
                 latitude,
             )
         else
-            # the pressure and ozone concentrations are provided for each of 100
-            # sites, which we average across
             if !prescribe_ozone
-                n = input_data.dim["layer"]
-                input_center_pressure = Vector{FT}(
-                    vec(
-                        mean(
-                            reshape(input_data["pres_layer"][:, :], n, :);
-                            dims = 2,
-                        ),
-                    ),
-                )
-                # the first values along the third dimension of the ozone concentration
-                # data are the present-day values
-                input_center_volume_mixing_ratio_o3 = Vector{FT}(
-                    vec(
-                        mean(
-                            reshape(input_data["ozone"][:, :, 1], n, :);
-                            dims = 2,
-                        ),
-                    ),
-                )
-
-                # interpolate the ozone concentrations to our initial pressures
-                pressure2ozone = Intp.extrapolate(
-                    Intp.interpolate(
-                        (input_center_pressure,),
-                        input_center_volume_mixing_ratio_o3,
-                        Intp.Gridded(Intp.Linear()),
-                    ),
-                    Intp.Flat(),
-                )
-                if device isa ClimaComms.CUDADevice
-                    fv = Fields.field_values(ᶜp)
-                    fld_array = DA(pressure2ozone.(Array(parent(fv))))
-                    data = DataLayouts.rebuild(fv, fld_array)
-                    ᶜvolume_mixing_ratio_o3_field = Fields.Field(data, axes(ᶜp))
-                else
-                    ᶜvolume_mixing_ratio_o3_field = @. FT(pressure2ozone(ᶜp))
-                end
+                ᶜvolume_mixing_ratio_o3_field =
+                    idealized_ozone.(Fields.coordinate_field(Y.c).z)
                 center_volume_mixing_ratio_o3 =
                     Fields.field2array(ᶜvolume_mixing_ratio_o3_field)
             else
