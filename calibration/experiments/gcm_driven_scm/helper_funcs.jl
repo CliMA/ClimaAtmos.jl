@@ -4,7 +4,18 @@ using Statistics
 using LinearAlgebra
 import ClimaAtmos as CA
 import ClimaCalibrate as CAL
+<<<<<<< HEAD
 import Interpolations
+=======
+using Logging
+
+"""Suppress Info and Warnings for any function"""
+function suppress_logs(f, args...; kwargs...)
+    Logging.with_logger(Logging.SimpleLogger(stderr, Logging.Error)) do
+        f(args...; kwargs...)
+    end
+end
+>>>>>>> 8c25592ea (Add external forcing types to gcm-driven scm calibration, allowing for both shallow and deep convection. Includes option for defining stretched calibration grid.)
 
 "Optional vector"
 const OptVec{T} = Union{Nothing, Vector{T}}
@@ -21,8 +32,13 @@ CLIMADIAGNOSTICS_LES_NAME_MAP =
 
 
 """Get z cell centers coordinates for CA run, given config. """
+<<<<<<< HEAD
 function get_z_grid(atmos_config; z_max = nothing)
     params = CA.ClimaAtmosParameters(atmos_config)
+=======
+function get_z_grid(atmos_config; z_max::AbstractFloat = nothing)
+    params = CA.create_parameter_set(atmos_config)
+>>>>>>> 8c25592ea (Add external forcing types to gcm-driven scm calibration, allowing for both shallow and deep convection. Includes option for defining stretched calibration grid.)
     spaces =
         CA.get_spaces(atmos_config.parsed_args, params, atmos_config.comms_ctx)
     coord = CA.Fields.coordinate_field(spaces.center_space)
@@ -31,6 +47,42 @@ function get_z_grid(atmos_config; z_max = nothing)
         z_vec = filter(x -> x <= z_max, z_vec)
     end
     return z_vec
+end
+
+"""Creates stretched vertical grid using ClimaCore utils, given `z_max`, `z_elem`, and `dz_bottom`.
+
+Output:
+ - `z_vec` :: Vector of `z` coordinates.
+"""
+function create_z_stretch(atmos_config; z_max = nothing, z_elem = nothing, dz_bottom = nothing)
+
+    config_tmp = deepcopy(atmos_config)
+    params = CA.create_parameter_set(config_tmp)
+
+    !isnothing(z_max) ? config_tmp.parsed_args["z_max"] = z_max : nothing
+    !isnothing(z_elem) ? config_tmp.parsed_args["z_elem"] = z_elem : nothing
+    !isnothing(dz_bottom) ? config_tmp.parsed_args["dz_bottom"] = dz_bottom : nothing
+
+    spaces = CA.get_spaces(config_tmp.parsed_args, params, config_tmp.comms_ctx)
+
+    coord = CA.Fields.coordinate_field(spaces.center_space);
+    z_vec = convert(Vector{Float64}, parent(coord.z)[:])
+    return z_vec
+end
+
+
+function get_cal_z_grid(atmos_config, z_cal_grid::Dict)
+    return get_cal_z_grid(atmos_config, z_cal_grid, atmos_config.parsed_args["external_forcing_type"])
+end
+
+function get_cal_z_grid(atmos_config, z_cal_grid::Dict, forcing_type::String)
+    if forcing_type in keys(z_cal_grid)
+        return create_z_stretch(atmos_config; z_max = z_cal_grid[forcing_type]["z_max"],
+                                        z_elem = z_cal_grid[forcing_type]["z_elem"],
+                                        dz_bottom = z_cal_grid[forcing_type]["dz_bottom"])
+    else
+        return get_z_grid(atmos_config)
+    end
 end
 
 
@@ -422,6 +474,11 @@ function vertical_interpolation(
     end
 end
 
+function interp_prof_1D(var_data, z_ref, z_interp)
+    nodes = (z_ref,)
+    var_itp = LinearInterpolation(nodes, var_data; extrapolation_bc = Line())
+    return var_itp(z_interp)
+end
 
 """
     get_profile(
@@ -798,18 +855,29 @@ function ensemble_data(
     output_dir = nothing,
     z_max = nothing,
     n_vert_levels,
+    return_z_interp = false,
 )
 
     G_ensemble =
         Array{Float64}(undef, n_vert_levels, config_dict["ensemble_size"])
+    z_interp = nothing
 
     for m in 1:config_dict["ensemble_size"]
 
         try
             member_path =
                 TOMLInterface.path_to_ensemble_member(output_dir, iteration, m)
+            simulation_dir = joinpath(member_path, "config_$config_i", "output_0000")
+
+            model_config_dict = YAML.load_file(joinpath(simulation_dir, ".yml"))
+            # suppress logs when creating model config, z grids to avoid cluttering output
+            model_config = suppress_logs(CA.AtmosConfig, model_config_dict)
+            if !isnothing(config_dict["z_cal_grid"])
+                z_interp = suppress_logs(get_cal_z_grid, model_config, config_dict["z_cal_grid"])
+            end
+
             simdir =
-                SimDir(joinpath(member_path, "config_$config_i", "output_0000"))
+                SimDir(simulation_dir)
 
             G_ensemble[:, m] .= process_profile_func(
                 simdir,
@@ -817,6 +885,7 @@ function ensemble_data(
                 reduction = reduction,
                 t_start = config_dict["g_t_start_sec"],
                 t_end = config_dict["g_t_end_sec"],
+                z_interp = z_interp,
                 z_max = z_max,
             )
         catch err
@@ -824,7 +893,7 @@ function ensemble_data(
             G_ensemble[:, m] .= NaN
         end
     end
-    return G_ensemble
+    return return_z_interp ? (G_ensemble, z_interp) : G_ensemble
 end
 
 """Get minimum loss (RMSE) from EKI obj for a given iteration."""

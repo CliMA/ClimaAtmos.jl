@@ -25,6 +25,7 @@ reduction = "inst"
 config_dict =
     YAML.load_file(joinpath(output_dir, "configs", "experiment_config.yml"))
 const z_max = config_dict["z_max"]
+const z_cal_grid = config_dict["z_cal_grid"]
 const cal_var_names = config_dict["y_var_names"]
 const const_noise_by_var = config_dict["const_noise_by_var"]
 const n_vert_levels = config_dict["dims_per_var"]
@@ -34,8 +35,6 @@ model_config_dict =
 ref_paths, _ = get_les_calibration_library()
 atmos_config = CA.AtmosConfig(model_config_dict)
 
-# get/store LES obs and norm factors 
-zc_model = get_z_grid(atmos_config, z_max = z_max)
 
 if isnothing(iterations)
     iterations = get_iters_with_config(config_i, config_dict)
@@ -61,7 +60,7 @@ for iteration in iterations
     @show "Iter: $iteration"
     for var_name in var_names
 
-        data = ensemble_data(
+        data, zc_model = ensemble_data(
             process_profile_variable,
             iteration,
             config_i,
@@ -71,6 +70,7 @@ for iteration in iterations
             output_dir = output_dir,
             z_max = z_max,
             n_vert_levels = n_vert_levels,
+            return_z_interp = true,
         )
 
         # size(data) = [num vertical levels x ensemble size]
@@ -87,12 +87,21 @@ for iteration in iterations
             Plots.plot!(y_var, zc_model)
         end
         if in(var_name, cal_var_names)
+            ref_path = ref_paths[config_i]
+            cfsite_number, _, _, _ = parse_les_path(ref_path)
+            forcing_type = get_cfsite_type(cfsite_number)
+
+            ti = config_dict["y_t_start_sec"]
+            ti = isa(ti, AbstractFloat) ? ti : ti[forcing_type]
+            tf = config_dict["y_t_end_sec"]
+            tf = isa(tf, AbstractFloat) ? tf : tf[forcing_type]
+
             y_truth, Σ_obs, norm_vec_obs = get_obs(
-                ref_paths[config_i],
+                ref_path,
                 [var_name],
                 zc_model;
-                ti = config_dict["y_t_start_sec"],
-                tf = config_dict["y_t_end_sec"],
+                ti = ti,
+                tf = tf,
                 Σ_const = const_noise_by_var,
                 z_score_norm = false,
             )
