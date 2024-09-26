@@ -34,3 +34,39 @@ function zero_tendency!(
     end
     return nothing
 end
+
+import ClimaCore.MatrixFields: MatrixFields, @name
+
+zero_jacobian!(_, _, _) = nothing
+
+function zero_jacobian!(matrix, ::NoGridScaleTendency, _)
+    sgs_names = (@name(c.sgs⁰), @name(c.sgsʲs), @name(f.sgsʲs))
+    for ((row_name, col_name), matrix_block) in matrix
+        any(name -> MatrixFields.is_child_name(row_name, name), sgs_names) &&
+            continue
+        matrix_block isa LinearAlgebra.UniformScaling && continue
+        matrix_block .=
+            row_name == col_name ?
+            (DiagonalMatrixRow(-one(eltype(eltype(matrix_block)))),) :
+            (zero(eltype(matrix_block)),)
+    end
+end
+
+function zero_jacobian!(matrix, ::NoSubgridScaleTendency, ::PrognosticEDMFX)
+    sgs_names = (@name(c.sgsʲs), @name(f.sgsʲs))
+    for ((row_name, col_name), matrix_block) in matrix
+        !any(name -> MatrixFields.is_child_name(row_name, name), sgs_names) &&
+            continue
+        matrix_block isa LinearAlgebra.UniformScaling && continue
+        matrix_block .=
+            row_name == col_name ?
+            (DiagonalMatrixRow(-one(eltype(eltype(matrix_block)))),) :
+            (zero(eltype(matrix_block)),)
+    end
+end
+
+# TODO: Make the Jacobian adjustment consistent with the tendency adjustment.
+
+# TODO: Move this to ClimaCore.
+Base.one(::Type{T}) where {T′, N, A, S, T <: Geometry.AxisTensor{T′, N, A, S}} =
+    T(axes(T), S(one(T′)))

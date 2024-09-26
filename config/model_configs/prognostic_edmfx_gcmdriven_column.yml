@@ -32,7 +32,7 @@ call_cloud_diagnostics_per_stage : true
 toml: [toml/prognostic_edmfx_gcmdriven.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
-output_default_diagnostics: false
+# output_default_diagnostics: false
 rad: allskywithclear
 insolation: "gcmdriven"
 diagnostics:
