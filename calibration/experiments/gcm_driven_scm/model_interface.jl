@@ -50,6 +50,7 @@ function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
         config["external_forcing_file"] = get_forcing_file(i, ref_paths)
         config["cfsite_number"] = get_cfsite_id(i, cfsite_numbers)
         config["output_dir"] = joinpath(member_path, "config_$i")
+        config["external_forcing_type"] = get_cfsite_type(i, cfsite_numbers)
         comms_ctx = ClimaComms.SingletonCommsContext()
         CA.AtmosConfig(config; comms_ctx)
     end
