@@ -1,3 +1,6 @@
+z_max: 65000.0
+z_elem: 31
+dz_bottom: 50.0
 surface_setup: DefaultMoninObukhov
 rad: clearsky
 turbconv: diagnostic_edmfx
@@ -13,8 +16,7 @@ edmfx_sgs_diffusive_flux: true
 moist: equil
 cloud_model: "quadrature_sgs"
 precip_model: 1M
-dt: 100secs
+dt: 120secs
 t_end: 12hours
-dt_save_state_to_disk: 12hours
 toml: [toml/diagnostic_edmfx.toml]
 ode_algo: ARS343

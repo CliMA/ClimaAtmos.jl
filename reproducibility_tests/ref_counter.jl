@@ -1,4 +1,4 @@
-182
+183
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+183
+- Change model top and vertical resolution
+
 182
 - We don't know why, but sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
   seemed to not produce the same result between the merge-queue branch and the main branch,
