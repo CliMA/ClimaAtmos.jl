@@ -1,41 +1,28 @@
-using ClimaUtilities.ClimaArtifacts
 import Dates: Year
 import ClimaUtilities.TimeVaryingInputs:
     TimeVaryingInput, LinearPeriodFillingInterpolation
 import Interpolations as Intp
 
-function tracer_cache(
-    Y,
-    atmos,
-    prescribe_ozone,
-    prescribed_aerosol_names,
-    start_date,
-)
-    if isempty(prescribed_aerosol_names) && !prescribe_ozone
-        return (;)
-    end
-
-    target_space = axes(Y.c)
+ozone_cache(_, _, _) = (;)
+function ozone_cache(::PrescribedOzone, Y, start_date)
+    o3 = similar(Y.c.ρ)
     extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
-    if prescribe_ozone
-        o3 = similar(Y.c.ρ)
-        prescribed_o3_timevaryinginput = TimeVaryingInput(
-            AA.ozone_concentration_file_path(;
-                context = ClimaComms.context(Y.c),
-            ),
-            "vmro3",
-            target_space;
-            reference_date = start_date,
-            regridder_type = :InterpolationsRegridder,
-            regridder_kwargs = (; extrapolation_bc),
-            method = LinearPeriodFillingInterpolation(Year(1)),
-        )
-        o3_cache = (; o3, prescribed_o3_timevaryinginput)
-    else
-        o3_cache = (;)
-    end
+    prescribed_o3_timevaryinginput = TimeVaryingInput(
+        AA.ozone_concentration_file_path(; context = ClimaComms.context(Y.c)),
+        "vmro3",
+        axes(o3);
+        reference_date = start_date,
+        regridder_type = :InterpolationsRegridder,
+        regridder_kwargs = (; extrapolation_bc),
+        method = LinearPeriodFillingInterpolation(Year(1)),
+    )
+    return (; o3, prescribed_o3_timevaryinginput)
+end
 
+function tracer_cache(Y, atmos, prescribed_aerosol_names, start_date)
     if !isempty(prescribed_aerosol_names)
+        target_space = axes(Y.c)
+
         # Take the aerosol concentration file, read the keys with names matching
         # the ones passed in the prescribed_aerosol_names option, and create a
         # NamedTuple that uses the same keys and has as values the TimeVaryingInputs
@@ -46,6 +33,7 @@ function tracer_cache(
         # time series of lon-lat-z data.
         prescribed_aerosol_names_as_symbols = Symbol.(prescribed_aerosol_names)
         target_space = axes(Y.c)
+        extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
         timevaryinginputs = [
             TimeVaryingInput(
                 AA.aerosol_concentration_file_path(;
@@ -78,5 +66,6 @@ function tracer_cache(
     else
         aerosol_cache = (;)
     end
-    return (; o3_cache..., aerosol_cache...)
+    o3_cache = ozone_cache(atmos.ozone, Y, start_date)
+    return (; aerosol_cache..., o3_cache...)
 end

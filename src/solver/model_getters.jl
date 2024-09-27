@@ -296,6 +296,11 @@ function get_cloud_model(parsed_args)
     end
 end
 
+function get_ozone(parsed_args)
+    isnothing(parsed_args["prescribe_ozone"]) && return nothing
+    return parsed_args["prescribe_ozone"] ? PrescribedOzone() : IdealizedOzone()
+end
+
 function get_forcing_type(parsed_args)
     forcing = parsed_args["forcing"]
     @assert forcing in (nothing, "held_suarez")
@@ -481,10 +486,8 @@ function get_surface_thermo_state_type(parsed_args)
 end
 
 function get_tracers(parsed_args)
-    prescribe_ozone = parsed_args["prescribe_ozone"]
-    @assert prescribe_ozone in (true, false)
     aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
-    return (; prescribe_ozone, aerosol_names)
+    return (; aerosol_names)
 end
 
 function get_tendency_model(parsed_args)

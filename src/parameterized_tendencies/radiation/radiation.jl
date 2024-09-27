@@ -10,9 +10,12 @@ import .Parameters as CAP
 import RRTMGP
 import .RRTMGPInterface as RRTMGPI
 
+import Dates: Year
+import ClimaUtilities.TimeVaryingInputs:
+    TimeVaryingInput, LinearPeriodFillingInterpolation
+
 import Interpolations
 using Statistics: mean
-
 
 radiation_model_cache(Y, atmos::AtmosModel, args...) =
     radiation_model_cache(Y, atmos.radiation_mode, args...)
@@ -28,10 +31,45 @@ radiation_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 ##### RRTMGP Radiation
 #####
 
+#########
+# Ozone #
+#########
+
+function center_vmr_o3(::IdealizedOzone, Y)
+    ᶜvolume_mixing_ratio_o3_field =
+        idealized_ozone.(Fields.coordinate_field(Y.c).z)
+    return Fields.field2array(ᶜvolume_mixing_ratio_o3_field)
+end
+
+# Initialized in callback
+center_vmr_o3(::PrescribedOzone, _) = NaN
+
 """
     idealized_ozone(z::FT)
 
-Returns idealized ozone profile from Wing et al. 2018
+Returns idealized ozone volume mixing ratio (VMR) from Wing et al. 2018.
+
+The ozone profile is calculated as a function of altitude `z` using the following formula:
+
+```math
+O_3(z) = g_1 p^{g_2} e^{(-p / g_3)}
+```
+
+where:
+
+- `O_3(z)` is the ozone concentration in volume mixing ratio (VMR) at altitude `z`.
+
+- `p` is the pressure at altitude `z` calculated using the hydrostatic equation:
+  `p = P_0 exp(-z / H_{Earth})`, where `P_0` is the surface pressure and
+  `H_{Earth}` is the scale height of the Earth's atmosphere (assumed to be 7000
+  meters).
+
+- `g_1`, `g_2`, and `g_3` are empirical constants.
+
+**References**
+
+- Wing, A. A., et al. (2018). Radiative-convective equilibrium model intercomparison
+  project. Geoscientific Model Development, 11(2), 663-690.
 """
 function idealized_ozone(z::FT) where {FT}
     H_EARTH = FT(7000.0)
@@ -49,8 +87,7 @@ function radiation_model_cache(
     Y,
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
     params,
-    ᶜp, # Used for ozone
-    prescribe_ozone,
+    ozone,
     aerosol_names,
     insolation_mode;
     interpolation = RRTMGPI.BestFit(),
@@ -93,14 +130,7 @@ function radiation_model_cache(
                 latitude,
             )
         else
-            if !prescribe_ozone
-                ᶜvolume_mixing_ratio_o3_field =
-                    idealized_ozone.(Fields.coordinate_field(Y.c).z)
-                center_volume_mixing_ratio_o3 =
-                    Fields.field2array(ᶜvolume_mixing_ratio_o3_field)
-            else
-                center_volume_mixing_ratio_o3 = NaN # initialized in callback
-            end
+            center_volume_mixing_ratio_o3 = center_vmr_o3(ozone, Y)
 
             # the first value for each global mean volume mixing ratio is the
             # present-day value
@@ -228,10 +258,7 @@ function radiation_model_cache(
         )
     end
     return merge(
-        (;
-            rrtmgp_model,
-            ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
-        ),
+        (; rrtmgp_model, ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT})),
         insolation_cache(insolation_mode, Y),
     )
 end

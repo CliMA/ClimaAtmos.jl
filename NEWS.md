@@ -4,6 +4,22 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+### Features
+
+### Ozone model is now a dispatchable type
+
+The `prescribe_ozone` flag was turned into a type, allowing for prescribing
+arbitrary ozone concentrations. The two types that are currently implemented are
+`IdealizedOzone` (implementing a static profile from Wing 2018), and
+`PrescribedOzone` (reading from CMIP6 forcing files).
+
+### Aerosol and ozone data can now be automatically downloaded
+
+Prescribed aerosol and ozone concentrations require external files. Now, a
+low-resolution version of such files is automatically downloaded when a
+higher-resolution version is not available. Please, refer to ClimaArtifacts for
+more information.
+
 ### ![][badge-🐛bugfix] Bug fixes
 
 - Fixed incorrect time/date conversion in diagnostics when restarting a
@@ -12,6 +28,8 @@ Main
 - ![][badge-🔥behavioralΔ] Switch to hyperbolic tangent grid stretching,
   which only requires z_elem and dz_bottom.
   PR [3260](https://github.com/CliMA/ClimaAtmos.jl/pull/3260)
+
+- Fixed restarts with radiation and idealized ozone.
 
 v0.27.5
 -------
