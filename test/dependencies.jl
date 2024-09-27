@@ -11,7 +11,7 @@ import Test
 # increase the complexity of the project's environment, potentially causing
 # compatibility issues and restricting the versions we can use.
 
-# This test follows the spirit of the regression tests and tries to capture the
+# This test follows the spirit of the reproducibility tests and tries to capture the
 # cost of adding a new dependency by having developers explicitly come here and
 # declare their intents.
 #

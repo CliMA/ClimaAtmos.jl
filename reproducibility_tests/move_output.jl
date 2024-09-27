@@ -27,7 +27,7 @@ if buildkite_ci
         mkpath(cluster_data_prefix)
         path = joinpath(cluster_data_prefix, commit_sha)
         mkpath(path)
-        # Only move regression data if self reference:
+        # Only move reproducibility data if self reference:
         if self_reference
             for folder_name in job_ids
                 src = folder_name

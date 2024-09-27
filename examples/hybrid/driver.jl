@@ -84,26 +84,28 @@ if CA.is_distributed(config.comms_ctx)
 end
 
 # Check if selected output has changed from the previous recorded output (bit-wise comparison)
-include(joinpath(@__DIR__, "..", "..", "regression_tests", "mse_tables.jl"))
-if config.parsed_args["regression_test"]
+include(
+    joinpath(@__DIR__, "..", "..", "reproducibility_tests", "mse_tables.jl"),
+)
+if config.parsed_args["reproducibility_test"]
     # Test results against main branch
     include(
         joinpath(
             @__DIR__,
             "..",
             "..",
-            "regression_tests",
-            "regression_tests.jl",
+            "reproducibility_tests",
+            "reproducibility_tests.jl",
         ),
     )
-    @testset "Test regression table entries" begin
+    @testset "Test reproducibility table entries" begin
         mse_keys = sort(collect(keys(all_best_mse[simulation.job_id])))
         pcs = collect(Fields.property_chains(sol.u[end]))
         for prop_chain in mse_keys
             @test prop_chain in pcs
         end
     end
-    perform_regression_tests(
+    perform_reproducibility_tests(
         simulation.job_id,
         sol.u[end],
         all_best_mse,
@@ -143,7 +145,11 @@ end
 # Visualize the solution
 if ClimaComms.iamroot(config.comms_ctx)
     include(
-        joinpath(pkgdir(CA), "regression_tests", "self_reference_or_path.jl"),
+        joinpath(
+            pkgdir(CA),
+            "reproducibility_tests",
+            "self_reference_or_path.jl",
+        ),
     )
     @info "Plotting"
     path = self_reference_or_path() # __build__ path (not job path)
