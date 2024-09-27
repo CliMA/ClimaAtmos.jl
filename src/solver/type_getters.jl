@@ -754,6 +754,7 @@ function get_simulation(config::AtmosConfig)
                 Y,
                 p,
                 sim_info.dt,
+                t_start,
             )
         end
         @info "initializing diagnostics: $s"
