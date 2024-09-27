@@ -347,9 +347,11 @@ weakdeps = ["CUDA", "MPI"]
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "806e8490ff1aa664ca579544d798f8addfa1b07d"
+git-tree-sha1 = "72814a6fb25c51a1e1c7cc36c188640a3c3233bf"
+repo-rev = "ck/dynamic_Nh"
+repo-url = "https://github.com/CliMA/ClimaCore.jl.git"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.14.15"
+version = "0.14.17"
 weakdeps = ["CUDA", "Krylov"]
 
     [deps.ClimaCore.extensions]

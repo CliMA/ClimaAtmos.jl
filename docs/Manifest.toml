@@ -2,7 +2,7 @@
 
 julia_version = "1.10.5"
 manifest_format = "2.0"
-project_hash = "64afcb8dacf7a673d0068ba1a72602801e8d529a"
+project_hash = "086f082b426a22a037c832392875e883ad42b31f"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "99a6f5d0ce1c7c6afdb759daa30226f71c54f6b0"
@@ -315,9 +315,11 @@ version = "0.6.4"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "806e8490ff1aa664ca579544d798f8addfa1b07d"
+git-tree-sha1 = "72814a6fb25c51a1e1c7cc36c188640a3c3233bf"
+repo-rev = "ck/dynamic_Nh"
+repo-url = "https://github.com/CliMA/ClimaCore.jl.git"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.14.15"
+version = "0.14.17"
 
     [deps.ClimaCore.extensions]
     ClimaCoreCUDAExt = "CUDA"
