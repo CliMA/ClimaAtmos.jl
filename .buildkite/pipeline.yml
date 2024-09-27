@@ -411,6 +411,44 @@ steps:
           --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/output_active/*"
 
+  - group: "Restarting"
+    steps:
+
+      - label: ":computer: test restart"
+        command: >
+          julia --color=yes --project=examples test/restart.jl
+        agents:
+          slurm_mem: 16GB
+
+      - label: ":computer: test restart GPU"
+        command: >
+          julia --color=yes --project=examples test/restart.jl
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+
+      # - label: ":computer: test restart MPI"
+      #   command: >
+      #     srun julia --color=yes --project=examples test/restart.jl
+      #   env:
+      #     CLIMACOMMS_CONTEXT: "MPI"
+      #   agents:
+      #     slurm_ntasks: 2
+      #     slurm_mem: 16G
+
+      # - label: ":computer: test restart GPU MPI"
+      #   command: >
+      #     srun julia --color=yes --project=examples test/restart.jl
+      #   env:
+      #     CLIMACOMMS_CONTEXT: "MPI"
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #   agents:
+      #     slurm_gpus_per_task: 1
+      #     slurm_ntasks: 2
+      #     slurm_mem: 16G
+
   - group: "MPI Examples"
     steps:
 

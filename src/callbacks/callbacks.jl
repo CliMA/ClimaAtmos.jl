@@ -333,7 +333,13 @@ NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     output_file = joinpath(output_dir, "day$day.$sec.hdf5")
     comms_ctx = ClimaComms.context(integrator.u.c)
     hdfwriter = InputOutput.HDF5Writer(output_file, comms_ctx)
-    InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t) # TODO: a better way to write metadata
+    # TODO: a better way to write metadata
+    InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t)
+    InputOutput.HDF5.write_attribute(
+        hdfwriter.file,
+        "atmos_model_hash",
+        hash(p.atmos),
+    )
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)
     return nothing
