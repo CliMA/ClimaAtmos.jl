@@ -25,7 +25,7 @@ z_elem: 15
 z_max: 2.5e3
 z_stretch: false
 rayleigh_sponge: true
-toml: [toml/isdac_box.toml]  # sponge height
+toml: [toml/isdac_box_noneq.toml]  # sponge height
 ode_algo: "SSPKnoth"
 dt: "0.05secs" 
 t_end: "1days" 
