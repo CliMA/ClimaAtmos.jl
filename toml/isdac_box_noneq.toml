@@ -1,0 +1,12 @@
+[zd_rayleigh]
+value = 2000.0
+
+[condensation_evaporation_timescale]
+value = 10
+type = "float"
+description = "Non-equilibrium microphysics condensation/evaporation time scale [s]"
+
+[sublimation_deposition_timescale]
+value = 100
+type = "float"
+description = "Non-equilibrium microphysics deposition/sublimation time scale [s]"
