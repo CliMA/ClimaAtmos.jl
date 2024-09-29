@@ -87,7 +87,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     ᶜp = Fields.array2field(rrtmgp_model.center_pressure, axes(Y.c))
     ᶜT = Fields.array2field(rrtmgp_model.center_temperature, axes(Y.c))
-    @. ᶜp = max(TD.air_pressure(thermo_params, ᶜts), FT(1.01))
+    p_min = RRTMGPI.get_p_min(rrtmgp_model)
+    @. ᶜp = max(TD.air_pressure(thermo_params, ᶜts), p_min * FT(1.01))
     # TODO: move this to RRTMGP
     @. ᶜT =
         min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
