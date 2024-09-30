@@ -388,9 +388,9 @@ version = "0.7.6"
 
 [[deps.ClimaDiagnostics]]
 deps = ["Accessors", "ClimaComms", "ClimaCore", "Dates", "NCDatasets", "SciMLBase"]
-git-tree-sha1 = "9526b91533254b043e860e17568555d21d1d041e"
+git-tree-sha1 = "ae8854e55028856675294f744ca7a6a3a3bd75bc"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
-version = "0.2.6"
+version = "0.2.7"
 
 [[deps.ClimaParams]]
 deps = ["TOML"]
