@@ -1,4 +1,3 @@
-import NCRegressionTests
 import JSON
 import ClimaCore.Fields as Fields
 include(joinpath(@__DIR__, "compute_mse.jl"))

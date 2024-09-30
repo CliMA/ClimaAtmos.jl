@@ -2,7 +2,7 @@
 
 julia_version = "1.10.5"
 manifest_format = "2.0"
-project_hash = "f170b98e0622d3f170fe6045d8258f49ebd31345"
+project_hash = "0650226b22aae022a4fd4dd08a3323bee9fb506d"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "5a5eafb8344b81b8c2237f8a6f6b3602b3f6180e"
@@ -386,6 +386,12 @@ deps = ["TOML"]
 git-tree-sha1 = "b43ca371c435056129295445122ea87fd843b505"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
 version = "0.10.14"
+
+[[deps.ClimaReproducibilityTests]]
+deps = ["OrderedCollections", "PrettyTables"]
+git-tree-sha1 = "9dd1b7c4d0310115f1cd7bcfb0e2836a3f94f69f"
+uuid = "e0c89595-00ba-42a9-9f9b-061ef3dc23a1"
+version = "0.1.0"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
@@ -1597,12 +1603,6 @@ deps = ["CFTime", "CommonDataModel", "DataStructures", "Dates", "DiskArrays", "N
 git-tree-sha1 = "77df6d3708ec0eb3441551e1f20f7503b37c2393"
 uuid = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 version = "0.14.5"
-
-[[deps.NCRegressionTests]]
-deps = ["NCDatasets", "OrderedCollections", "PrettyTables", "Test"]
-git-tree-sha1 = "fb776b03a07094113ff1d35186f209b8b1bf84be"
-uuid = "1789bc09-29e6-4c93-9c75-fe2179693664"
-version = "0.2.3"
 
 [[deps.NVTX]]
 deps = ["Colors", "JuliaNVTXCallbacks_jll", "Libdl", "NVTX_jll"]
