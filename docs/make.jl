@@ -20,6 +20,7 @@ makedocs(;
         prettyurls = !isempty(get(ENV, "CI", "")),
         collapselevel = 1,
         mathengine = MathJax3(),
+        size_threshold_ignore = ["repl_scripts.md"],
     ),
     pages = [
         "Home" => "index.md",
@@ -32,6 +33,7 @@ makedocs(;
         "Diagnostic EDMF Equations" => "diagnostic_edmf_equations.md",
         "Gravity Wave Drag Parameterizations" => "gravity_wave.md",
         "Ocean Surface Albedo Parameterization" => "surface_albedo.md",
+        "Tracers" => "tracers.md",
         "Radiative Equilibrium" => "radiative_equilibrium.md",
         "Restarts and checkpoints" => "restarts.md",
         "REPL scripts" => "repl_scripts.md",

@@ -52,6 +52,13 @@ NVTX.@annotate function cloud_fraction_model_callback!(integrator)
     set_cloud_fraction!(Y, p, p.atmos.moisture_model, p.atmos.cloud_model)
 end
 
+# TODO: Move this somewhere else
+update_o3!(_, _, _) = nothing
+function update_o3!(p, t, ::PrescribedOzone)
+    evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, t)
+    return nothing
+end
+
 NVTX.@annotate function rrtmgp_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -63,16 +70,11 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     (; radiation_mode) = p.atmos
 
     # If we have prescribed ozone or aerosols, we need to update them
-    if !isempty(p.tracers)
-        if :o3 in propertynames(p.tracers)
-            evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, t)
-        end
-        if :prescribed_aerosols_field in propertynames(p.tracers)
-            for (key, tv) in
-                pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
-                field = getproperty(p.tracers.prescribed_aerosols_field, key)
-                evaluate!(field, tv, t)
-            end
+    update_o3!(p, t, p.atmos.ozone)
+    if :prescribed_aerosols_field in propertynames(p.tracers)
+        for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
+            field = getproperty(p.tracers.prescribed_aerosols_field, key)
+            evaluate!(field, tv, t)
         end
     end
 

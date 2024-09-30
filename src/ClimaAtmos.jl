@@ -17,6 +17,9 @@ include(joinpath("topography", "topography.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
 include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
 
+include(joinpath("utils", "AtmosArtifacts.jl"))
+import .AtmosArtifacts as AA
+
 include(
     joinpath("parameterized_tendencies", "radiation", "radiation_utilities.jl"),
 )

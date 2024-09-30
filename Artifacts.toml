@@ -11,3 +11,17 @@ lazy = true
     [[cfsite_gcm_forcing.download]]
     sha256 = "78f13efcbc71350609c8a73ed66ff28fe3653fb7a0274e34b52d720651c1c2ec"
     url = "https://caltech.box.com/shared/static/elv5ksf3av3kum9552jxhnmlgu7vxr8u.nc"
+
+[aerosol_concentrations_lowres]
+git-tree-sha1 = "261cdd1ee725c99ba80812557543ce967528ed9e"
+
+    [[aerosol_concentrations_lowres.download]]
+    sha256 = "985c354cf884c7b2a850aae1285f89664f581aa6d40582ac2eeaf0387d64415e"
+    url = "https://caltech.box.com/shared/static/0ef34ii505atm8jlsx4jd2ist19p7w6b.gz"
+
+[ozone_concentrations_lowres]
+git-tree-sha1 = "6693f8451b447543952b3d557d733c7e5c670ed3"
+
+    [[ozone_concentrations_lowres.download]]
+    sha256 = "908384b32e90c733c2173654afbb974d238a9a516ad8965039077c6ddb29b5f0"
+    url = "https://caltech.box.com/shared/static/6c16wt7i1htxq6tadpt1ng2uftjgdtpr.gz"

@@ -37,6 +37,35 @@ struct TimeVaryingInsolation <: AbstractInsolation end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
 
+"""
+    AbstractOzone
+
+Describe how ozone concentration should be set.
+"""
+abstract type AbstractOzone end
+
+"""
+    IdealizedOzone
+
+Implement a static (not varying in time) idealized ozone profile as described by
+`idealized_ozone`.
+"""
+struct IdealizedOzone <: AbstractOzone end
+
+"""
+    PrescribedOzone
+
+Implement a time-varying ozone profile as read from disk.
+
+The CMIP6 forcing dataset is used. For production runs, you should acquire the
+high-resolution, multi-year `ozone_concentrations` artifact. If this is not available, a low
+resolution, single-year version will be used.
+
+Refer to ClimaArtifacts for more information on how to obtain the artifact.
+"""
+struct PrescribedOzone <: AbstractOzone end
+
+
 abstract type AbstractSurfaceTemperature end
 struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end
 Base.@kwdef struct PrognosticSurfaceTemperature{FT} <:
@@ -368,6 +397,7 @@ Base.@kwdef struct AtmosModel{
     CCDPS,
     F,
     S,
+    OZ,
     RM,
     LA,
     EXTFORCING,
@@ -397,6 +427,10 @@ Base.@kwdef struct AtmosModel{
     call_cloud_diagnostics_per_stage::CCDPS = nothing
     forcing_type::F = nothing
     subsidence::S = nothing
+
+    """What to do with ozone for radiation (when using RRTGMP)"""
+    ozone::OZ = nothing
+
     radiation_mode::RM = nothing
     ls_adv::LA = nothing
     external_forcing::EXTFORCING = nothing
