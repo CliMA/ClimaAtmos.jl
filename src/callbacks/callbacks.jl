@@ -89,7 +89,12 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     ᶜp = Fields.array2field(rrtmgp_model.center_pressure, axes(Y.c))
     ᶜT = Fields.array2field(rrtmgp_model.center_temperature, axes(Y.c))
-    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+    # When add_isothermal_boundary_layer is true, we add a layer in rrtmgp and set the
+    # pressure to half of the sum of top level pressure and rrtmgp minimum pressure. 
+    # Here we limit the pressure to p_min multiplied by a small number to prevent 
+    # pressure from decreasing or being constant with height.
+    p_min = RRTMGPI.get_p_min(rrtmgp_model)
+    @. ᶜp = max(TD.air_pressure(thermo_params, ᶜts), p_min * FT(1.01))
     # TODO: move this to RRTMGP
     @. ᶜT =
         min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
