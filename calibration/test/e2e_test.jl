@@ -20,7 +20,7 @@ using Test
 const experiment_dir = joinpath(pkgdir(CA), "calibration", "test")
 const model_interface =
     joinpath(pkgdir(CA), "calibration", "model_interface.jl")
-const output_dir = joinpath("output", "calibration_end_to_end_test")
+const output_dir = "calibration_end_to_end_test"
 include(model_interface)
 
 # Observation map
