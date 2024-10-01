@@ -22,7 +22,10 @@ if buildkite_ci
 
     using Glob
     @show readdir(joinpath(@__DIR__, ".."))
-    if in_merge_queue
+    # if a contributor manually merged, we still want to move data
+    # from scratch to `cluster_data_prefix`. So, let's also try moving
+    # data if this is running on the main branch.
+    if in_merge_queue || branch == "main"
         commit_sha = commit[1:7]
         mkpath(cluster_data_prefix)
         path = joinpath(cluster_data_prefix, commit_sha)
@@ -33,15 +36,21 @@ if buildkite_ci
                 src = folder_name
                 dst = joinpath(path, folder_name)
                 @info "Moving $src to $dst"
-                mv(src, dst; force = true)
+                if !isfile(dst)
+                    mv(src, dst; force = true)
+                end
             end
             ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl")
             ref_counter_file_main = joinpath(path, "ref_counter.jl")
-            mv(ref_counter_file_PR, ref_counter_file_main; force = true)
+            if !isfile(ref_counter_file_main)
+                mv(ref_counter_file_PR, ref_counter_file_main; force = true)
+            end
         end
         perf_benchmarks_PR = joinpath(dirname(@__DIR__), "perf_benchmarks.json")
         perf_benchmarks_main = joinpath(path, "perf_benchmarks.json")
-        mv(perf_benchmarks_PR, perf_benchmarks_main; force = true)
+        if !isfile(perf_benchmarks_main)
+            mv(perf_benchmarks_PR, perf_benchmarks_main; force = true)
+        end
         println("New reference folder: $path")
         for (root, dirs, files) in walkdir(path)
             println("--Directories in $root")
