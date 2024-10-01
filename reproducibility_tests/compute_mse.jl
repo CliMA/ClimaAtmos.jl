@@ -1,9 +1,38 @@
-import NCRegressionTests
+import ClimaReproducibilityTests as CRT
 import NCDatasets
 import Tar
 import ClimaCoreTempestRemap as CCTR
 
 include("self_reference_or_path.jl")
+
+function get_nc_data(ds, var::String)
+    if haskey(ds, var)
+        return ds[var]
+    else
+        for key in keys(ds.group)
+            if haskey(ds.group[key], var)
+                return ds.group[key][var]
+            end
+        end
+    end
+    error("No key $var for mse computation.")
+    return nothing
+end
+
+"""
+    to_dict(nc_filename::String, reference_keys::Vector{String})
+
+Convert an NCDatasets file to a `Dict`.
+"""
+function to_dict(nc_filename::String, reference_keys::Vector{String})
+    dict = Dict{String, AbstractArray}()
+    NCDatasets.Dataset(nc_filename, "r") do ds
+        for key in reference_keys
+            dict[key] = vec(Array(get_nc_data(ds, key)))
+        end
+    end
+    return dict
+end
 
 """
     reproducibility_test(;
@@ -31,6 +60,7 @@ function reproducibility_test(;
     varname,
 )
     local ds_filename_reference
+    reference_keys = map(k -> varname(k), collect(keys(reference_mse)))
 
     if haskey(ENV, "BUILDKITE_COMMIT")
         path = self_reference_or_path()
@@ -89,13 +119,17 @@ function reproducibility_test(;
     end
 
     local computed_mse
+    @info "Prescribed reference keys $reference_keys"
+    dict_computed = to_dict(ds_filename_computed, reference_keys)
+    dict_reference = to_dict(ds_filename_reference, reference_keys)
+    @info "Computed keys $(collect(keys(dict_computed)))"
+    @info "Reference keys $(collect(keys(dict_reference)))"
     try
-        computed_mse = NCRegressionTests.compute_mse(;
+        computed_mse = CRT.compute_mse(;
             job_name = string(job_id),
-            reference_mse = reference_mse,
-            ds_filename_computed = ds_filename_computed,
-            ds_filename_reference = ds_filename_reference,
-            varname = varname,
+            reference_keys = reference_keys,
+            dict_computed,
+            dict_reference,
         )
     catch err
         msg = ""

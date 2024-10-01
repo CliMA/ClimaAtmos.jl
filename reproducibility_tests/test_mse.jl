@@ -1,6 +1,5 @@
 import OrderedCollections
 import JSON
-import NCRegressionTests
 import ArgParse
 
 function parse_commandline()
@@ -35,4 +34,8 @@ computed_mse = JSON.parsefile(
     dicttype = OrderedCollections.OrderedDict,
 )
 
-NCRegressionTests.test_mse(computed_mse, best_mse_string)
+import ClimaReproducibilityTests as CRT
+using Test
+for (var, reproducible) in CRT.test_mse(; computed_mse)
+    @test reproducible
+end
