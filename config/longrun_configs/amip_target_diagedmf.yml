@@ -1,6 +1,6 @@
-h_elem: 16
-z_max: 65000.0
-z_elem: 63
+h_elem: 8
+z_max: 55000.0
+z_elem: 31
 dz_bottom: 30.0
 rayleigh_sponge: true
 viscous_sponge: true
@@ -30,7 +30,7 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 dt: "120secs"
-t_end: "120days"
+t_end: "366days"
 toml: [toml/longrun_aquaplanet_diagedmf.toml]
 netcdf_output_at_levels: true
 diagnostics:
