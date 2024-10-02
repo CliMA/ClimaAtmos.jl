@@ -36,8 +36,6 @@ ClimaComms.init(comms_ctx)
 # different.
 #
 # For this reason, we don't use Test but just print to screen the differences.
-# However, we still have to return an exit code with failure in case of the
-# comparison fails.
 
 """
     _error(arr1::AbstractArray, arr2::AbstractArray; ABS_TOL = 100eps(eltype(arr1)))
@@ -151,6 +149,17 @@ end
 
 function _compare(pass, v1::T, v2::T; name, ignore) where {T <: AbstractData}
     return pass && _compare(parent(v1), parent(v2); name, ignore)
+end
+
+# Handle views
+function _compare(
+    pass,
+    v1::SubArray{FT},
+    v2::SubArray{FT};
+    name,
+    ignore,
+) where {FT <: AbstractFloat}
+    return pass && _compare(collect(v1), collect(v2); name, ignore)
 end
 
 function _compare(
@@ -302,13 +311,13 @@ for configuration in configurations
         topography = "Earth"
         turbconv_models = [nothing, "diagnostic_edmfx"]
         # turbconv_models = ["prognostic_edmfx"]
-        radiations = [nothing]
+        radiations = [nothing, "gray"]
     else
         moistures = ["equil"]
         precips = ["1M"]
         topography = "NoWarp"
         turbconv_models = ["diagnostic_edmfx"]
-        radiations = [nothing]
+        radiations = [nothing, "gray"]
     end
 
     for turbconv_mode in turbconv_models
