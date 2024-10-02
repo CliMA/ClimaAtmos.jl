@@ -49,8 +49,7 @@ steps:
 
     agents:
       slurm_cpus_per_task: 1
-      slurm_gpus: 1
-      slurm_exclusive:
+      slurm_exclusive: true
       test:
       other: 40
     env:
