@@ -200,6 +200,8 @@ function default_diagnostics(
         "hussfc",
         "evspsbl",
         "pr",
+        "prra",
+        "prsn",
         "prw",
         "lwp",
         "clwvi",
