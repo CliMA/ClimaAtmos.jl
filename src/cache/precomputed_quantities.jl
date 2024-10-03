@@ -559,8 +559,8 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         grav = CAP.grav(params)
         FT = Spaces.undertype(axes(ᶜK_h))
         z₀ = FT(1e-5)
-        Ri_c = FT(1.0)
-        f_b = FT(0.1)
+        Ri_c = CAP.richardson_critical(params)
+        f_b = CAP.surface_layer_fraction(params)
         C_E_min = p.atmos.vert_diff.C_E
 
         # Prepare scratch vars
@@ -607,7 +607,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         )
 
         #### Detect 𝒽, boundary layer height per column
-        h_boundary_layer = ᶜΔz_surface ./ 2 .+ FT(1000)
+        h_boundary_layer = ᶜΔz_surface ./ 2 .+ FT(5000)
         compute_boundary_layer_height!(
             h_boundary_layer,
             dz_local,
