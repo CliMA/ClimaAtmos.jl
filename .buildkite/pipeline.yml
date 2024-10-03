@@ -906,7 +906,6 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond
           - >
-            nsys profile --trace=nvtx,cuda --output=gpu_aquaplanet_dyamond/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${CONFIG_PATH}/gpu_aquaplanet_dyamond.yml
             --job_id gpu_aquaplanet_dyamond
