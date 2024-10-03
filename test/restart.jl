@@ -10,6 +10,7 @@ import ClimaComms
 pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Logging
 import NCDatasets
+import YAML
 using Test
 
 import Random
@@ -340,7 +341,7 @@ for configuration in configurations
                         ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) : ""
                     output_loc = ClimaComms.bcast(comms_ctx, output_loc)
 
-                    job_id = "$(configuration)_$(moisture)_$(precip)_$(topography)_$(radiation)"
+                    job_id = "$(configuration)_$(moisture)_$(precip)_$(topography)_$(radiation)_$(turbconv_mode)"
                     test_dict = Dict(
                         "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
                         "check_nan_every" => 3,
@@ -349,7 +350,7 @@ for configuration in configurations
                         "precip_model" => precip,
                         "config" => configuration,
                         "topography" => topography,
-                        # "turbconv" => turbconv_mode,
+                        "turbconv" => turbconv_mode,
                         "dt" => "1secs",
                         "bubble" => bubble,
                         "viscous_sponge" => true,
@@ -358,7 +359,6 @@ for configuration in configurations
                         "rad" => radiation,
                         "dt_rad" => "1secs",
                         "surface_setup" => "DefaultMoninObukhov",
-                        # "implicit_diffusion" => true,
                         "call_cloud_diagnostics_per_stage" => true,  # Needed to ensure that cloud variables are computed
                         "t_end" => "3secs",
                         "dt_save_state_to_disk" => "1secs",
@@ -376,6 +376,48 @@ for configuration in configurations
         end
     end
 end
+
+# Add a configuration with all the bells and whistles
+amip_output_loc = ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) : ""
+amip_output_loc = ClimaComms.bcast(comms_ctx, amip_output_loc)
+
+amip_job_id = "amip_target_diagedmf"
+
+amip_test_dict = merge(
+    YAML.load_file(
+        joinpath(
+            @__DIR__,
+            "../config/longrun_configs/amip_target_diagedmf.yml",
+        ),
+    ),
+    Dict(
+        "h_elem" => 4,
+        "z_elem" => 15,
+        "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
+        "check_nan_every" => 3,
+        "log_progress" => false,
+        "dt" => "1secs",
+        "dt_rad" => "1secs",
+        "call_cloud_diagnostics_per_stage" => true,  # Needed to ensure that cloud variables are computed
+        "t_end" => "3secs",
+        "dt_save_state_to_disk" => "1secs",
+        "output_dir" => joinpath(amip_output_loc, amip_job_id),
+        "dt_cloud_fraction" => "1secs",
+        "rad" => "gray",        # TODO: Switch back to allsky when fixed
+        "toml" => [
+            joinpath(@__DIR__, "../toml/longrun_aquaplanet_diagedmf.toml"),
+        ],
+    ),
+)
+
+push!(
+    TESTING,
+    (;
+        test_dict = amip_test_dict,
+        job_id = amip_job_id,
+        more_ignore = Symbol[],
+    ),
+)
 
 @test all(
     @time test_restart(t.test_dict; comms_ctx, t.job_id, t.more_ignore) for
