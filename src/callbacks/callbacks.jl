@@ -304,13 +304,13 @@ function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
             )
         )
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
+    cos_zenith =
+        Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
+    weighted_irradiance = Fields.array2field(
+        rrtmgp_model.weighted_irradiance,
+        axes(bottom_coords),
+    )
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
-        cos_zenith =
-            Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
-        weighted_irradiance = Fields.array2field(
-            rrtmgp_model.weighted_irradiance,
-            axes(bottom_coords),
-        )
         @. insolation_tuple = instantaneous_zenith_angle(
             d,
             δ,
@@ -318,16 +318,14 @@ function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
             bottom_coords.long,
             bottom_coords.lat,
         ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
-        @. cos_zenith = cos(min(first(insolation_tuple), max_zenith_angle))
-        @. weighted_irradiance = irradiance * (au / last(insolation_tuple))^2
     else
-        # assume that the latitude and longitude are both 0 for flat space
-        insolation_tuple = instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0))
-        rrtmgp_model.cos_zenith .=
-            cos(min(first(insolation_tuple), max_zenith_angle))
-        rrtmgp_model.weighted_irradiance .=
-            irradiance * (au / last(insolation_tuple))^2
+        # assume that the latitude and longitude are both 0 for flat space,
+        # so that insolation_tuple is a constant Field
+        insolation_tuple .=
+            Ref(instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0)))
     end
+    @. cos_zenith = cos(min(first(insolation_tuple), max_zenith_angle))
+    @. weighted_irradiance = irradiance * (au / last(insolation_tuple))^2
 end
 
 NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
