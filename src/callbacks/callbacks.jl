@@ -322,11 +322,13 @@ function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
         @. weighted_irradiance = irradiance * (au / last(insolation_tuple))^2
     else
         # assume that the latitude and longitude are both 0 for flat space
-        insolation_tuple = instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0))
-        rrtmgp_model.cos_zenith .=
-            cos(min(first(insolation_tuple), max_zenith_angle))
-        rrtmgp_model.weighted_irradiance .=
-            irradiance * (au / last(insolation_tuple))^2
+        @. insolation_tuple =
+            instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0))
+        zenith_angle = insolation_tuple.:1
+        earth_sun_distance = insolation_tuple.:3
+        @. rrtmgp_model.cos_zenith = cos(min(zenith_angle, max_zenith_angle))
+        @. rrtmgp_model.weighted_irradiance =
+            irradiance * (au / earth_sun_distance)^2
     end
 end
 
