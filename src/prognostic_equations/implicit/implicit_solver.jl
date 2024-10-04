@@ -161,6 +161,8 @@ function ImplicitEquationJacobian(
         @name(c.ρq_ice),
         @name(c.ρq_rai),
         @name(c.ρq_sno),
+        @name(c.ρn_liq),
+        @name(c.ρn_rai),
     )
     available_tracer_names = MatrixFields.unrolled_filter(is_in_Y, tracer_names)
 
@@ -622,6 +624,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             (@name(c.ρq_ice), @name(q_ice)),
             (@name(c.ρq_rai), @name(q_rai)),
             (@name(c.ρq_sno), @name(q_sno)),
+            (@name(c.ρn_liq), @name(n_liq)),
+            (@name(c.ρn_rai), @name(n_rai)),
         )
         MatrixFields.unrolled_foreach(tracer_info) do (ρq_name, q_name)
             MatrixFields.has_field(Y, ρq_name) || return
@@ -680,7 +684,10 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
 
         ᶠlg = Fields.local_geometry_field(Y.f)
         precip_info =
-            ((@name(c.ρq_rai), @name(ᶜwᵣ)), (@name(c.ρq_sno), @name(ᶜwₛ)))
+            ((@name(c.ρq_rai), @name(ᶜwᵣ)),
+             (@name(c.ρq_sno), @name(ᶜwₛ)),
+             (@name(c.ρn_rai), @name(ᶜw_nᵣ)),
+            )
         MatrixFields.unrolled_foreach(precip_info) do (ρqₚ_name, wₚ_name)
             MatrixFields.has_field(Y, ρqₚ_name) || return
             ∂ᶜρqₚ_err_∂ᶜρqₚ = matrix[ρqₚ_name, ρqₚ_name]

@@ -788,7 +788,7 @@ function compute_husra!(
     state,
     cache,
     time,
-    precip_model::Microphysics1Moment,
+    precip_model::Union{Microphysics1Moment, Microphysics2Moment},
 )
     if isnothing(out)
         return state.c.ρq_rai ./ state.c.ρ
@@ -838,6 +838,71 @@ add_diagnostic_variable!(
     the mass of air (dry air + water vapor + cloud condensate) in the grid cells.
     """,
     compute! = compute_hussn!,
+)
+
+###
+# Number concentrations for cloud and precipitation (3d)
+###
+compute_cdnc!(out, state, cache, time) =
+    compute_cdnc!(out, state, cache, time, cache.atmos.precip_model)
+compute_cdnc!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("cdnc", model)
+
+function compute_cdnc!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Microphysics2Moment,
+)
+    if isnothing(out)
+        return state.c.ρn_liq
+    else
+        out .= state.c.ρn_liq
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "cdnc",
+    long_name = "Cloud Droplet Number Concentration in liquid water clouds",
+    standard_name = "cloud_droplet_number_concentration",
+    units = "m^-3",
+    comments = """
+    This is calculated as the number of cloud droplets in the grid cell per
+    volume of air.
+    """,
+    compute! = compute_cdnc!,
+)
+
+compute_rdnc!(out, state, cache, time) =
+    compute_rdnc!(out, state, cache, time, cache.atmos.precip_model)
+compute_rdnc!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("rdnc", model)
+
+function compute_rdnc!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Microphysics2Moment,
+)
+    if isnothing(out)
+        return state.c.ρn_rai
+    else
+        out .= state.c.ρn_rai
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "rdnc",
+    long_name = "Rain Drop Number Concentration",
+    standard_name = "rain_drop_number_concentration",
+    units = "m^-3",
+    comments = """
+    This is calculated as the number of rain drops in the grid cell per
+    volume of air.
+    """,
+    compute! = compute_rdnc!,
 )
 
 ###

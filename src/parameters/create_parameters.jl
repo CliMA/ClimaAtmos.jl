@@ -130,6 +130,12 @@ function create_parameter_set(config::AtmosConfig)
                     "ClimaAtmos",
                 ).prescribed_cloud_droplet_number_concentration,
             )
+        elseif precip_model == "2M"
+            (;
+                SB2006 = CM.Parameters.SB2006(toml_dict),
+                SB2006Vel = CM.Parameters.SB2006VelType(toml_dict),
+                aps = CM.Parameters.AirProperties(toml_dict),
+            )
         else
             error("Invalid precip_model $(precip_model)")
         end
