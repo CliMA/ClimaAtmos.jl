@@ -4,6 +4,10 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+
+v0.27.6
+-------
+
 ### Features
 
 ### Ozone model is now a dispatchable type
