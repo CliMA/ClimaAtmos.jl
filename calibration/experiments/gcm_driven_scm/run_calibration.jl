@@ -3,8 +3,6 @@ import ClimaAtmos as CA
 import EnsembleKalmanProcesses as EKP
 import YAML
 
-# import ClimaCalibrate:
-#     calibrate, ExperimentConfig, CaltechHPC, get_prior, kwargs
 import YAML
 import JLD2
 using LinearAlgebra
@@ -17,39 +15,44 @@ experiment_dir = dirname(Base.active_project())
 const model_interface = joinpath(experiment_dir, "model_interface.jl")
 const experiment_config =
     YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
-const n_iterations = experiment_config["n_iterations"]
-const ensemble_size = experiment_config["ensemble_size"]
-const output_dir = experiment_config["output_dir"]
-const model_config = experiment_config["model_config"]
-const z_max = experiment_config["z_max"]
-const eki_timestep = experiment_config["eki_timestep"]
-const const_noise = experiment_config["const_noise"]
-const prior =
-    CAL.get_prior(joinpath(experiment_dir, experiment_config["prior"]))
+
+# unpack experiment_config vars into scope 
+for (key, value) in experiment_config
+    @eval const $(Symbol(key)) = $value
+end
+
+const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
 # load configs and directories 
 model_config_dict = YAML.load_file(model_config)
 atmos_config = CA.AtmosConfig(model_config_dict)
-
-
-# get/store LES obs and norm factors 
 zc_model = get_z_grid(atmos_config; z_max)
 
-norm_factors_dict = Dict(
-    "thetaa" => [306.172, 8.07383],
-    "hus" => [0.0063752, 0.00471147],
-    "clw" => [2.67537e-6, 4.44155e-6],
+### create output directories & copy configs
+mkpath(output_dir)
+mkpath(joinpath(output_dir, "configs"))
+cp(
+    model_config,
+    joinpath(output_dir, "configs", "model_config.yml"),
+    force = true,
 )
-
-if !isdir(output_dir)
-    mkpath(output_dir)
-end
-
+cp(
+    joinpath(experiment_dir, "experiment_config.yml"),
+    joinpath(output_dir, "configs", "experiment_config.yml"),
+    force = true,
+)
+cp(
+    joinpath(experiment_dir, prior_path),
+    joinpath(output_dir, "configs", "prior.toml"),
+    force = true,
+)
+# save norm factors to output dir
 JLD2.jldsave(
     joinpath(output_dir, "norm_factors.jld2");
-    norm_factors_dict = norm_factors_dict,
+    norm_factors_dict = norm_factors_by_var,
 )
 
+### get LES obs (Y) and norm factors
 ref_paths, _ = get_les_calibration_library()
 obs_vec = []
 
@@ -61,8 +64,11 @@ for ref_path in ref_paths
         zc_model;
         ti = experiment_config["y_t_start_sec"],
         tf = experiment_config["y_t_end_sec"],
-        norm_factors_dict = norm_factors_dict,
-        Σ_const = const_noise,
+        norm_factors_dict = norm_factors_by_var,
+        z_score_norm = true,
+        log_vars = log_vars,
+        Σ_const = const_noise_by_var,
+        Σ_scaling = "const",
     )
 
     push!(
@@ -79,23 +85,33 @@ end
 
 series_names = [ref_paths[i] for i in 1:length(ref_paths)]
 
-# minibatcher
+### define minibatcher
 rfs_minibatcher =
-    EKP.RandomFixedSizeMinibatcher(experiment_config["batch_size"])
+    EKP.FixedMinibatcher(collect(1:experiment_config["batch_size"]))
 observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
-# ExperimentConfig is created from a YAML file within the experiment_dir
+###  EKI hyperparameters/settings
 @info "Initializing calibration" n_iterations ensemble_size output_dir
 CAL.initialize(
     ensemble_size,
     observations,
     prior,
     output_dir;
-    scheduler = EKP.DefaultScheduler(eki_timestep),
+    scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+    localization_method = EKP.Localizers.NoLocalization(),
+    failure_handler_method = EKP.SampleSuccGauss(),
+    accelerator = EKP.DefaultAccelerator(),
 )
 
 eki = nothing
-hpc_kwargs = CAL.kwargs(time = 60, mem = "16G")
+hpc_kwargs = CAL.kwargs(
+    time = 60,
+    mem_per_cpu = "12G",
+    cpus_per_task = batch_size + 1,
+    ntasks = 1,
+    nodes = 1,
+    reservation = "clima",
+)
 module_load_str = CAL.module_load_string(CAL.CaltechHPCBackend)
 for iter in 0:(n_iterations - 1)
     @info "Iteration $iter"
@@ -125,7 +141,7 @@ for iter in 0:(n_iterations - 1)
     )
     CAL.report_iteration_status(statuses, output_dir, iter)
     @info "Completed iteration $iter, updating ensemble"
-    G_ensemble = CAL.observation_map(iter)
+    G_ensemble = CAL.observation_map(iter; config_dict = experiment_config)
     CAL.save_G_ensemble(output_dir, iter, G_ensemble)
     eki = CAL.update_ensemble(output_dir, iter, prior)
 end
