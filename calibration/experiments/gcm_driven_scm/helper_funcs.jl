@@ -863,16 +863,79 @@ function lowest_loss_rmse(
     end
 end
 
+# function get_forcing_file(i, ref_paths)
+#     ref_path = ref_paths[i]
+#     cfsite_info =  get_cfsite_info_from_path(ref_path)
+#     return "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
+# end
+
 function get_forcing_file(i, ref_paths)
-    return "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
+    ref_path = ref_paths[i]
+    cfsite_info = get_cfsite_info_from_path(ref_path)
+    
+    forcing_model = cfsite_info["forcing_model"]
+    experiment = cfsite_info["experiment"]
+    month = cfsite_info["month"]
+
+    forcing_file_path = "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/$(forcing_model)_$(experiment).2004-2008.$(month).nc"
+    
+    return forcing_file_path
 end
 
 function get_cfsite_id(i, cfsite_numbers)
     return string("site", cfsite_numbers[i])
 end
 
+function get_cfsite_info_from_path(input_string::String)
+    pattern = r"cfsite/(\d+)/([^/]+)/([^/]+)/.*cfsite(\d+)_([^_]+)_([^_]+)_.*\.(\d{2})\..*nc"
+    m = match(pattern, input_string)
+    if m !== nothing
+        return Dict(
+            "forcing_model" => m.captures[2],
+            "cfsite_number" => m.captures[4],
+            "month" => m.captures[7],
+            "experiment" => m.captures[3]
+        )
+    else
+        return Dict{String, String}()
+    end
+end
+
+
 function get_batch_indicies_in_iteration(iteration, output_dir::AbstractString)
     iter_path = CAL.path_to_iteration(output_dir, iteration)
     eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
     return EKP.get_current_minibatch(eki)
+end
+
+
+
+
+function create_prior_with_nn(prior_path, pretrained_nn_path; arc = [8, 20, 15, 10, 1])
+
+    prior_dict = TOML.parsefile(prior_path)
+    parameter_names = keys(prior_dict)
+
+    prior_vec = Vector{EKP.ParameterDistribution}(undef, length(parameter_names))
+    for (i, n) in enumerate(parameter_names)
+        prior_vec[i] = CAL.get_parameter_distribution(prior_dict, n)
+    end
+
+    @load pretrained_nn_path serialized_weights
+    num_nn_params = length(serialized_weights)
+
+    
+    # nn_model = construct_fully_connected_nn(arc, deepcopy(serialized_weights); biases_bool = true, output_layer_activation_function = Flux.identity)
+    nn_model = construct_fully_connected_nn(arc, deepcopy(serialized_weights); biases_bool = true, activation_function = Flux.leakyrelu, output_layer_activation_function = Flux.identity)
+
+    # serialized_stds = serialize_std_model(nn_model; std_weight = 0.05, std_bias = 0.005)
+    serialized_stds = serialize_std_model(nn_model; std_weight = 0.1, std_bias = 0.00001)
+
+    nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], serialized_stds[ii]) for ii in 1:num_nn_params])
+    nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
+    nn_prior = EKP.ParameterDistribution(nn_mean_std, nn_constraint, "mixing_length_param_vec")
+    push!(prior_vec, nn_prior)
+
+    prior = EKP.combine_distributions(prior_vec)
+    return prior
 end

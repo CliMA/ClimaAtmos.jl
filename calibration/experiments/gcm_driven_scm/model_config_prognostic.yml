@@ -11,7 +11,7 @@ edmfx_upwinding: "first_order"
 rayleigh_sponge: true
 edmfx_entr_model: "PiGroups"
 edmfx_detr_model: "PiGroups"
-# precip_model: 1M
+precip_model: 1M
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
@@ -22,6 +22,8 @@ config: "column"
 hyperdiff: "false"
 z_max: 40e3
 z_elem: 60
+mixing_length_model: "nn"
+# mixing_length_model: "physical"
 z_stretch: true
 dz_bottom: 30
 rad: allskywithclear
@@ -38,5 +40,7 @@ toml: [scm_tomls/prognostic_edmfx.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 diagnostics:
-  - short_name: [hus, thetaa, clw, arup, tke, entr, detr, waup, turbentr]
-    period: 10mins
+- short_name: [thetaa, hus, cl, clw, cli, pr]
+  period: 10mins
+- short_name: [entr, detr, lmix, turbentr, tke, arup, waup]
+  period: 10mins

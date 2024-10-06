@@ -11,6 +11,7 @@ edmfx_upwinding: first_order
 rayleigh_sponge: true
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
+mixing_length_model: "nn"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true

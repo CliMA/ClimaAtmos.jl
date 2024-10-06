@@ -1,9 +1,9 @@
 #!/bin/bash
 
-#SBATCH --time=06:00:00   # walltime
+#SBATCH --time=36:00:00   # walltime
 #SBATCH --nodes=1   # number of nodes
 #SBATCH --ntasks=1  # number of processor cores (i.e. tasks)
-#SBATCH --mem=5G   # memory per CPU core
+#SBATCH --mem=60G   # memory
 #SBATCH -J "scm_calibration"   # job name
 #SBATCH --output=scm_calibration.out
 

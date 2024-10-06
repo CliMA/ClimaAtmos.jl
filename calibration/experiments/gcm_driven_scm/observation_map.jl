@@ -16,7 +16,7 @@ function observation_map(iteration; config_dict::Dict)
     G_ensemble =
         Array{Float64}(undef, full_dim..., config_dict["ensemble_size"])
 
-    iter_path = CAL.path_to_iteration(output_dir, iteration)
+    iter_path = CAL.path_to_iteration(config_dict["output_dir"], iteration)
     eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
     for m in 1:config_dict["ensemble_size"]
         member_path =
