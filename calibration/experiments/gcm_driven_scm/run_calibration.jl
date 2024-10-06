@@ -3,7 +3,6 @@ import ClimaAtmos as CA
 import EnsembleKalmanProcesses as EKP
 import YAML
 
-import YAML
 import JLD2
 using LinearAlgebra
 
@@ -107,8 +106,10 @@ CAL.initialize(
     output_dir;
     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
     localization_method = EKP.Localizers.NoLocalization(),
+    # localization_method = EKP.Localizers.SECNice(0.5, 1.0),
     failure_handler_method = EKP.SampleSuccGauss(),
-    accelerator = EKP.DefaultAccelerator(),
+    # accelerator = EKP.DefaultAccelerator(),
+    accelerator = EKP.NesterovAccelerator(),
 )
 
 eki = nothing

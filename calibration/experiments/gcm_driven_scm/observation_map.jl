@@ -110,7 +110,14 @@ function process_profile_variable(
         var_i = window(var_i, "z", right = maximum(z_window))
     end
 
-    sim_t_end = var_i.dims["time"][end]
+    sim_t_end = nothing
+    try
+        sim_t_end = var_i.dims["time"][end]
+    catch e
+        if isa(e, BoundsError)
+            throw(ErrorException("Simulation failed at: t=0"))
+        end
+    end
 
     if sim_t_end < 0.95 * t_end
         throw(ErrorException("Simulation failed at: $sim_t_end"))

@@ -28,12 +28,12 @@ const OptReal = Union{Real, Nothing}
 const OptDict = Union{Nothing, Dict}
 
 CLIMADIAGNOSTICS_LES_NAME_MAP =
-    Dict("thetaa" => "theta_mean", "hus" => "qt_mean", "clw" => "ql_mean")
+    Dict("thetaa" => "theta_mean", "hus" => "qt_mean", "clw" => "ql_mean", "cli" => "qi_mean")
 
 
 
 """Get z cell centers coordinates for CA run, given config. """
-function get_z_grid(atmos_config; z_max::AbstractFloat = nothing)
+function get_z_grid(atmos_config::CA.AtmosConfig; z_max = nothing)
     params = CA.create_parameter_set(atmos_config)
     spaces =
         CA.get_spaces(atmos_config.parsed_args, params, atmos_config.comms_ctx)
@@ -844,7 +844,6 @@ function ensemble_data(
     z_interp = nothing
 
     for m in 1:config_dict["ensemble_size"]
-
         try
             member_path =
                 TOMLInterface.path_to_ensemble_member(output_dir, iteration, m)
@@ -866,13 +865,24 @@ function ensemble_data(
                 reduction = reduction,
                 t_start = config_dict["g_t_start_sec"],
                 t_end = config_dict["g_t_end_sec"],
-                z_interp = z_interp,
                 z_max = z_max,
-            )
+                z_interp = z_interp,
+        )
+
+        # catch file i/o errors -> ensemble member crashed
         catch err
-            @info "Error during observation map for ensemble member $m" err
-            G_ensemble[:, m] .= NaN
+            err_str = string(err)
+            if occursin("Simulation failed at:", err_str) || occursin("opening file", err_str)
+                @info "Simulation failed at a specific time for ensemble member $m" err
+                G_ensemble[:, m] .= NaN
+            elseif occursin("HDF error", err_str)
+                @info "NetCDF HDF error encountered for ensemble member $m" err
+                G_ensemble[:, m] .= NaN
+            else
+                rethrow(err)
+            end
         end
+
     end
     return return_z_interp ? (G_ensemble, z_interp) : G_ensemble
 end

@@ -1,3 +1,4 @@
+using ArgParse
 import EnsembleKalmanProcesses: TOMLInterface
 import EnsembleKalmanProcesses as EKP
 using EnsembleKalmanProcesses.ParameterDistributions
@@ -14,12 +15,48 @@ include("observation_map.jl")
 include("get_les_metadata.jl")
 
 
-output_dir = "output/exp_1" # output directory
-config_i = 1 # config to plot
-ylims = (0, 4000) # y limits for plotting (`z` coord)
-iterations = nothing # iterations to plot (i.e., 0:2). default is all iterations
-var_names =
-    ("thetaa", "hus", "clw", "arup", "entr", "detr", "waup", "tke", "turbentr")
+function parse_command_line_args()
+    s = ArgParseSettings()
+    @add_arg_table s begin
+        "--output_dir"
+        help = "Directory for output files"
+        arg_type = String
+        default = "output/exp_1"
+
+        "--config_i"
+        help = "Config index to plot"
+        arg_type = Int
+        default = 1
+
+        "--iterations"
+        help = "Iterations to plot (as i.e., `0:5` or `3`) (default is all iterations)"
+        arg_type = String
+        default = nothing
+    end
+    return parse_args(s)
+end
+
+# Get command-line arguments
+parsed_args = parse_command_line_args()
+
+# Assign variables based on the parsed arguments
+output_dir = parsed_args["output_dir"]
+config_i = parsed_args["config_i"]
+# ylims = (0, 4000) # y limits for plotting (`z` coord)
+ylims = nothing
+# iterations = !isnothing(parsed_args["iterations"]) ? parse(Int, parsed_args["iterations"]) : nothing
+if !isnothing(parsed_args["iterations"])
+    if occursin(":", parsed_args["iterations"])
+        start_iter, end_iter = split(parsed_args["iterations"], ":")
+        iterations = parse(Int, start_iter):parse(Int, end_iter)
+    else
+        iterations = parse(Int, parsed_args["iterations"])
+    end
+else
+    iterations = nothing
+end
+
+var_names = ("thetaa", "hus", "clw", "cli", "entr", "detr", "waup", "tke", "arup", "turbentr")
 reduction = "inst"
 
 config_dict =
@@ -40,10 +77,10 @@ if isnothing(iterations)
     iterations = get_iters_with_config(config_i, config_dict)
 end
 
-xlims_dict = Dict("arup" => (-0.1, 0.4), "clw" => "auto")
+xlims_dict = Dict("arup" => (-0.1, 0.25), "entr" => (-1e-6, 0.002),  "detr" => (-1e-6, 0.002), "clw" => "auto", "cli" => "auto")
 
 
-function compute_plot_limits(data; margin_ratio = 0.5, fixed_margin = 1.0)
+function compute_plot_limits(data; margin_ratio = 1.5, fixed_margin = 1.0)
 
     min_val = minimum(data)
     max_val = maximum(data)
