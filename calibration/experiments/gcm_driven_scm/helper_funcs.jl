@@ -4,9 +4,7 @@ using Statistics
 using LinearAlgebra
 import ClimaAtmos as CA
 import ClimaCalibrate as CAL
-<<<<<<< HEAD
 import Interpolations
-=======
 using Logging
 
 import ClimaComms
@@ -19,7 +17,6 @@ function suppress_logs(f, args...; kwargs...)
         f(args...; kwargs...)
     end
 end
->>>>>>> 8c25592ea (Add external forcing types to gcm-driven scm calibration, allowing for both shallow and deep convection. Includes option for defining stretched calibration grid.)
 
 "Optional vector"
 const OptVec{T} = Union{Nothing, Vector{T}}
@@ -31,16 +28,20 @@ const OptReal = Union{Real, Nothing}
 const OptDict = Union{Nothing, Dict}
 
 CLIMADIAGNOSTICS_LES_NAME_MAP =
-    Dict("thetaa" => "theta_mean", "hus" => "qt_mean", "clw" => "ql_mean")
+    Dict("thetaa" => "theta_mean", "hus" => "qt_mean", "clw" => "ql_mean", "cli" => "qi_mean")
 
 
 
 """Get z cell centers coordinates for CA run, given config. """
 <<<<<<< HEAD
+<<<<<<< HEAD
 function get_z_grid(atmos_config; z_max = nothing)
     params = CA.ClimaAtmosParameters(atmos_config)
 =======
 function get_z_grid(atmos_config; z_max::AbstractFloat = nothing)
+=======
+function get_z_grid(atmos_config::CA.AtmosConfig; z_max = nothing)
+>>>>>>> 97d2cbae3 (gcm driven calibration updates: restart, plotting support for variable grids, add plot prior and normalize var scripts, add microphysics cal option)
     params = CA.create_parameter_set(atmos_config)
 >>>>>>> 8c25592ea (Add external forcing types to gcm-driven scm calibration, allowing for both shallow and deep convection. Includes option for defining stretched calibration grid.)
     spaces =
@@ -867,7 +868,6 @@ function ensemble_data(
     z_interp = nothing
 
     for m in 1:config_dict["ensemble_size"]
-
         try
             member_path =
                 TOMLInterface.path_to_ensemble_member(output_dir, iteration, m)
@@ -889,13 +889,24 @@ function ensemble_data(
                 reduction = reduction,
                 t_start = config_dict["g_t_start_sec"],
                 t_end = config_dict["g_t_end_sec"],
-                z_interp = z_interp,
                 z_max = z_max,
-            )
+                z_interp = z_interp,
+        )
+
+        # catch file i/o errors -> ensemble member crashed
         catch err
-            @info "Error during observation map for ensemble member $m" err
-            G_ensemble[:, m] .= NaN
+            err_str = string(err)
+            if occursin("Simulation failed at:", err_str) || occursin("opening file", err_str)
+                @info "Simulation failed at a specific time for ensemble member $m" err
+                G_ensemble[:, m] .= NaN
+            elseif occursin("HDF error", err_str)
+                @info "NetCDF HDF error encountered for ensemble member $m" err
+                G_ensemble[:, m] .= NaN
+            else
+                rethrow(err)
+            end
         end
+
     end
     return return_z_interp ? (G_ensemble, z_interp) : G_ensemble
 end

@@ -2,7 +2,7 @@
 
 using ArgParse
 using Distributed
-addprocs()
+addprocs(5)
 
 @everywhere begin
     using EnsembleKalmanProcesses: TOMLInterface
@@ -120,6 +120,7 @@ function main()
         reduction,
         ensemble_size,
     )
+        # config_dict = deepcopy(config_dict)
         println("Processing Iteration: $iteration")
         stats_df = DataFrame(
             iteration = Int[],
