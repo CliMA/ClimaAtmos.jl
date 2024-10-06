@@ -19,5 +19,4 @@ NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
-ClimaCalibrate = "=0.0.3"
 EnsembleKalmanProcesses = "2"
