@@ -174,6 +174,8 @@ function mixing_length(
     c_b = CAP.static_stab_coeff(turbconv_params)
     vkc = CAP.von_karman_const(params)
 
+    param_vec = CAP.mixing_length_param_vec(params)
+
     # compute the maximum mixing length at height z
     l_z = ᶜz - z_sfc
 
@@ -233,6 +235,12 @@ function mixing_length(
     # get soft minimum
     l_smin = lamb_smooth_minimum(l, smin_ub, smin_rm)
     l_limited = max(l_smag, min(l_smin, l_z))
+
+    ln_l_bias = param_vec[1].* ((ᶜlinear_buoygrad .- 0.00026)/0.0003)
+        .+ param_vec[2].*abs((ᶜtke .- 0.11454)/0.34)
+        .+ param_vec[3]*((ᶜstrain_rate_norm .- 1.5e-5)/8.03e-5)
+
+    l_limited = l_limited + exp(ln_l_bias)
 
     return MixingLength{FT}(l_limited, l_W, l_TKE, l_N)
 end

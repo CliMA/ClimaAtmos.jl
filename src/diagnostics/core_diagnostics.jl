@@ -572,6 +572,34 @@ add_diagnostic_variable!(
     end,
 )
 
+
+# compute_obulen!(out, state, cache, time) =
+#     compute_obulen!(out, state, cache, time, cache.atmos.moisture_model)
+compute_obulen!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("obulen", model)
+
+function compute_obulen!(
+    out,
+    state,
+    cache,
+    time,
+)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return copy(cache.precomputed.sfc_conditions.obukhov_length)
+    else
+        out .= cache.precomputed.sfc_conditions.obukhov_length
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "obulen",
+    long_name = "Obukhov Length Scale",
+    standard_name = "Obukhov length scale",
+    units = "m",
+    compute! = compute_obulen!,
+)
+
 ###
 # Eastward and northward surface drag component (2d)
 ###

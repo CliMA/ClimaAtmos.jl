@@ -28,6 +28,7 @@ function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
         :EDMF_surface_area => :surface_area,
         :entr_param_vec => :entr_param_vec,
         :turb_entr_param_vec => :turb_entr_param_vec,
+        :mixing_length_param_vec => :mixing_length_param_vec,
         :minimum_updraft_top => :min_updraft_top,
         :mixing_length_eddy_viscosity_coefficient => :tke_ed_coeff,
         :mixing_length_smin_ub => :smin_ub,
@@ -50,7 +51,8 @@ function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)
-    CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2}(; parameters...)
+    VFT3 = typeof(parameters.mixing_length_param_vec)
+    CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2, VFT3}(; parameters...)
 end
 
 function SurfaceTemperatureParameters(toml_dict::CP.AbstractTOMLDict)
