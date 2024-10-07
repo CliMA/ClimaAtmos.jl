@@ -1,5 +1,6 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import ClimaAtmos as CA
+import RRTMGP
 import ClimaCore
 import ClimaCore: DataLayouts, Fields, Geometry
 import ClimaCore.Fields: Field, FieldVector, field_values
@@ -28,6 +29,24 @@ ClimaComms.init(comms_ctx)
 # 2. A simulation, saved to a previous checkpoint, and read back and evolved to
 #   the same time is identical (up to some tolerance)
 # 3. ClimaAtmos can automatically detect restarts
+#
+# This test checks a variety of configurations and spends a long time compiling
+# functions. For this reason, the test takes an optional command-line argument
+# to only many tests instead of comprehensive test.
+
+MANYTESTS = false
+if length(ARGS) > 0
+    if ARGS[1] == "--manytests"
+        # Check if the first argument is "--manytests" (if provided), if yes, check
+        # the second argument for true/false. If the second argument is not provided
+        # assume true.
+        second_argument = lowercase(get(ARGS, 2, "true"))
+        second_argument == "true" && (MANYTESTS = true)
+    else
+        error("Argument $argument not recognized")
+    end
+end
+MANYTESTS && @info "Running multiple tests"
 
 # Technical note:
 #
@@ -222,6 +241,16 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
 
     simulation_restarted = CA.get_simulation(config_should_be_same)
 
+    if pkgversion(RRTMGP) <= v"0.19"
+        # Versions of RRTMGP older than 0.20 have a bug and do not set the
+        # flux_dn_dir, so that face_clear_sw_direct_flux_dn and
+        # face_sw_direct_flux_dn is uninitialized and not deterministic
+        rrtmgp_clear_fix =
+            (:face_clear_sw_direct_flux_dn, :face_sw_direct_flux_dn)
+    else
+        rrtmgp_clear_fix = ()
+    end
+
     local_success[] &= compare(
         simulation.integrator.u,
         simulation_restarted.integrator.u;
@@ -249,6 +278,7 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :rc,
             # DataHandlers contains caches, so they are stateful
             :data_handler,
+            rrtmgp_clear_fix...,
             # Config-specific
             more_ignore...,
         ]),
@@ -288,10 +318,16 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :hyperdiffusion_ghost_buffer,
             :data_handler,
             :rc,
+            rrtmgp_clear_fix...,
         ]),
     )
 
-    return local_success[]
+    return (
+        local_success[],
+        simulation,
+        simulation_restarted,
+        simulation_restarted2,
+    )
 end
 
 # Let's prepare the test_dicts. TESTING is a Vector of NamedTuples, each element
@@ -299,127 +335,131 @@ end
 
 TESTING = Any[]
 
-if comms_ctx isa ClimaComms.SingletonCommsContext
-    configurations = ["sphere", "box", "column"]
-else
-    configurations = ["sphere", "box"]
-end
-
-for configuration in configurations
-    if configuration == "sphere"
-        moistures = ["equil", "nonequil"]
-        precips = ["0M", "1M"]
-        topography = "Earth"
-        turbconv_models = [nothing, "diagnostic_edmfx"]
-        # turbconv_models = ["prognostic_edmfx"]
-        radiations = [nothing, "gray"]
+# Add a configuration with all the bells and whistles
+if MANYTESTS
+    if comms_ctx isa ClimaComms.SingletonCommsContext
+        configurations = ["sphere", "box", "column"]
     else
-        moistures = ["equil"]
-        precips = ["1M"]
-        topography = "NoWarp"
-        turbconv_models = ["diagnostic_edmfx"]
-        radiations = [nothing, "gray"]
+        configurations = ["sphere", "box"]
     end
 
-    for turbconv_mode in turbconv_models
-        for radiation in radiations
-            for moisture in moistures
-                for precip in precips
-                    if !isnothing(turbconv_mode)
-                        # EDMF only supports equilibrium moisture
-                        if occursin("edmfx", turbconv_mode)
-                            moisture == "equil" || continue
+    for configuration in configurations
+        if configuration == "sphere"
+            moistures = ["equil", "nonequil"]
+            precips = ["1M"]
+            topography = "Earth"
+            turbconv_models = [nothing, "diagnostic_edmfx"]
+            # turbconv_models = ["prognostic_edmfx"]
+            radiations = [nothing, "allsky"]
+        else
+            moistures = ["equil"]
+            precips = ["0M"]
+            topography = "NoWarp"
+            turbconv_models = ["diagnostic_edmfx"]
+            radiations = ["gray", "allskywithclear"]
+        end
+
+        for turbconv_mode in turbconv_models
+            for radiation in radiations
+                for moisture in moistures
+                    for precip in precips
+                        if !isnothing(turbconv_mode)
+                            # EDMF only supports equilibrium moisture
+                            if occursin("edmfx", turbconv_mode)
+                                moisture == "equil" || continue
+                            end
                         end
+
+                        # The `enable_bubble` case is broken for ClimaCore < 0.14.6, so we
+                        # hard-code this to be always false for those versions
+                        bubble = pkgversion(ClimaCore) > v"0.14.5"
+
+                        # Make sure that all MPI processes agree on the output_loc
+                        output_loc =
+                            ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) :
+                            ""
+                        output_loc = ClimaComms.bcast(comms_ctx, output_loc)
+
+                        job_id = "$(configuration)_$(moisture)_$(precip)_$(topography)_$(radiation)_$(turbconv_mode)"
+                        test_dict = Dict(
+                            "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
+                            "check_nan_every" => 3,
+                            "log_progress" => false,
+                            "moist" => moisture,
+                            "precip_model" => precip,
+                            "config" => configuration,
+                            "topography" => topography,
+                            "turbconv" => turbconv_mode,
+                            "dt" => "1secs",
+                            "bubble" => bubble,
+                            "viscous_sponge" => true,
+                            "rayleigh_sponge" => true,
+                            "insolation" => "timevarying",
+                            "rad" => radiation,
+                            "dt_rad" => "1secs",
+                            "surface_setup" => "DefaultMoninObukhov",
+                            "call_cloud_diagnostics_per_stage" => true,  # Needed to ensure that cloud variables are computed
+                            "t_end" => "3secs",
+                            "dt_save_state_to_disk" => "1secs",
+                            "enable_diagnostics" => false,
+                            "output_dir" => joinpath(output_loc, job_id),
+                        )
+                        more_ignore = Symbol[]
+
+                        if turbconv_mode == "prognostic_edmf"
+                            more_ignore = [:ᶠnh_pressure₃ʲs]
+                        end
+                        push!(TESTING, (; test_dict, job_id, more_ignore))
                     end
-
-                    # The `enable_bubble` case is broken for ClimaCore < 0.14.6, so we
-                    # hard-code this to be always false for those versions
-                    bubble = pkgversion(ClimaCore) > v"0.14.5"
-
-                    # Make sure that all MPI processes agree on the output_loc
-                    output_loc =
-                        ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) : ""
-                    output_loc = ClimaComms.bcast(comms_ctx, output_loc)
-
-                    job_id = "$(configuration)_$(moisture)_$(precip)_$(topography)_$(radiation)_$(turbconv_mode)"
-                    test_dict = Dict(
-                        "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
-                        "check_nan_every" => 3,
-                        "log_progress" => false,
-                        "moist" => moisture,
-                        "precip_model" => precip,
-                        "config" => configuration,
-                        "topography" => topography,
-                        "turbconv" => turbconv_mode,
-                        "dt" => "1secs",
-                        "bubble" => bubble,
-                        "viscous_sponge" => true,
-                        "rayleigh_sponge" => true,
-                        "insolation" => "timevarying",
-                        "rad" => radiation,
-                        "dt_rad" => "1secs",
-                        "surface_setup" => "DefaultMoninObukhov",
-                        "call_cloud_diagnostics_per_stage" => true,  # Needed to ensure that cloud variables are computed
-                        "t_end" => "3secs",
-                        "dt_save_state_to_disk" => "1secs",
-                        "enable_diagnostics" => false,
-                        "output_dir" => joinpath(output_loc, job_id),
-                    )
-                    more_ignore = Symbol[]
-
-                    if turbconv_mode == "prognostic_edmf"
-                        more_ignore = [:ᶠnh_pressure₃ʲs]
-                    end
-                    push!(TESTING, (; test_dict, job_id, more_ignore))
                 end
             end
         end
     end
+else
+    amip_output_loc = ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) : ""
+    amip_output_loc = ClimaComms.bcast(comms_ctx, amip_output_loc)
+
+    amip_job_id = "amip_target_diagedmf"
+
+    amip_test_dict = merge(
+        YAML.load_file(
+            joinpath(
+                @__DIR__,
+                "../config/longrun_configs/amip_target_diagedmf.yml",
+            ),
+        ),
+        Dict(
+            "h_elem" => 4,
+            "z_elem" => 15,
+            "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
+            "check_nan_every" => 3,
+            "log_progress" => false,
+            "dt" => "1secs",
+            "dt_rad" => "1secs",
+            "call_cloud_diagnostics_per_stage" => true,  # Needed to ensure that cloud variables are computed
+            "t_end" => "3secs",
+            "dt_save_state_to_disk" => "1secs",
+            "output_dir" => joinpath(amip_output_loc, amip_job_id),
+            "dt_cloud_fraction" => "1secs",
+            "rad" => "allskywithclear",
+            "toml" => [
+                joinpath(@__DIR__, "../toml/longrun_aquaplanet_diagedmf.toml"),
+            ],
+        ),
+    )
+
+    push!(
+        TESTING,
+        (;
+            test_dict = amip_test_dict,
+            job_id = amip_job_id,
+            more_ignore = Symbol[],
+        ),
+    )
 end
 
-# Add a configuration with all the bells and whistles
-amip_output_loc = ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) : ""
-amip_output_loc = ClimaComms.bcast(comms_ctx, amip_output_loc)
-
-amip_job_id = "amip_target_diagedmf"
-
-amip_test_dict = merge(
-    YAML.load_file(
-        joinpath(
-            @__DIR__,
-            "../config/longrun_configs/amip_target_diagedmf.yml",
-        ),
-    ),
-    Dict(
-        "h_elem" => 4,
-        "z_elem" => 15,
-        "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
-        "check_nan_every" => 3,
-        "log_progress" => false,
-        "dt" => "1secs",
-        "dt_rad" => "1secs",
-        "call_cloud_diagnostics_per_stage" => true,  # Needed to ensure that cloud variables are computed
-        "t_end" => "3secs",
-        "dt_save_state_to_disk" => "1secs",
-        "output_dir" => joinpath(amip_output_loc, amip_job_id),
-        "dt_cloud_fraction" => "1secs",
-        "rad" => "gray",        # TODO: Switch back to allsky when fixed
-        "toml" => [
-            joinpath(@__DIR__, "../toml/longrun_aquaplanet_diagedmf.toml"),
-        ],
-    ),
-)
-
-push!(
-    TESTING,
-    (;
-        test_dict = amip_test_dict,
-        job_id = amip_job_id,
-        more_ignore = Symbol[],
-    ),
-)
-
+# We know that this test is broken for old versions of ClimaCore
 @test all(
-    @time test_restart(t.test_dict; comms_ctx, t.job_id, t.more_ignore) for
+    @time test_restart(t.test_dict; comms_ctx, t.job_id, t.more_ignore)[1] for
     t in TESTING
-)
+) skip = pkgversion(ClimaCore) < v"0.14.18"

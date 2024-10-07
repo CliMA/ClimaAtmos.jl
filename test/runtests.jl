@@ -21,6 +21,7 @@ using Test
 @safetestset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end
 @safetestset "Model getters" begin @time include("solver/model_getters.jl") end
 @safetestset "Topography tests" begin @time include("topography.jl") end
+@safetestset "Restarts" begin @time include("restart.jl") end
 
 #! format: on
 

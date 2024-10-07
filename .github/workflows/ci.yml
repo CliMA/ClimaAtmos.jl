@@ -18,7 +18,7 @@ jobs:
   test:
     name: ci ${{ matrix.version }} - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
       matrix:
@@ -30,13 +30,21 @@ jobs:
           - windows-latest
         arch:
           - x64
+        include:
+          # macOS is much slower for some reason
+          - os: ubuntu-latest
+            timeout: 30
+          - os: macOS-latest
+            timeout: 45
+          - os: windows-latest
+            timeout: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: julia-actions/cache@v2
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
+      - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
