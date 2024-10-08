@@ -22,6 +22,7 @@ function get_atmos(config::AtmosConfig, params)
     check_case_consistency(parsed_args)
     moisture_model = get_moisture_model(parsed_args)
     precip_model = get_precipitation_model(parsed_args)
+    mixing_length_model = get_mixing_length_model(parsed_args)
     cloud_model = get_cloud_model(parsed_args)
     ozone = get_ozone(parsed_args)
     radiation_mode = get_radiation_mode(parsed_args, FT)
@@ -84,6 +85,7 @@ function get_atmos(config::AtmosConfig, params)
         edmfx_model,
         precip_model,
         cloud_model,
+        mixing_length_model,
         forcing_type,
         call_cloud_diagnostics_per_stage,
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
