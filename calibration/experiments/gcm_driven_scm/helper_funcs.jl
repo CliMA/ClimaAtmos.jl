@@ -923,13 +923,44 @@ function lowest_loss_rmse(
     end
 end
 
+# function get_forcing_file(i, ref_paths)
+#     ref_path = ref_paths[i]
+#     cfsite_info =  get_cfsite_info_from_path(ref_path)
+#     return "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
+# end
+
 function get_forcing_file(i, ref_paths)
-    return "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
+    ref_path = ref_paths[i]
+    cfsite_info = get_cfsite_info_from_path(ref_path)
+    
+    forcing_model = cfsite_info["forcing_model"]
+    experiment = cfsite_info["experiment"]
+    month = cfsite_info["month"]
+
+    forcing_file_path = "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/$(forcing_model)_$(experiment).2004-2008.$(month).nc"
+    
+    return forcing_file_path
 end
 
 function get_cfsite_id(i, cfsite_numbers)
     return string("site", cfsite_numbers[i])
 end
+
+function get_cfsite_info_from_path(input_string::String)
+    pattern = r"cfsite/(\d+)/([^/]+)/([^/]+)/.*cfsite(\d+)_([^_]+)_([^_]+)_.*\.(\d{2})\..*nc"
+    m = match(pattern, input_string)
+    if m !== nothing
+        return Dict(
+            "forcing_model" => m.captures[2],
+            "cfsite_number" => m.captures[4],
+            "month" => m.captures[7],
+            "experiment" => m.captures[3]
+        )
+    else
+        return Dict{String, String}()
+    end
+end
+
 
 function get_batch_indicies_in_iteration(iteration, output_dir::AbstractString)
     iter_path = CAL.path_to_iteration(output_dir, iteration)

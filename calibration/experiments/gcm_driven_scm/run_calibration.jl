@@ -2,6 +2,8 @@ import ClimaCalibrate as CAL
 import ClimaAtmos as CA
 import EnsembleKalmanProcesses as EKP
 import YAML
+import TOML
+using Distributions
 
 import JLD2
 using LinearAlgebra
@@ -9,6 +11,7 @@ using LinearAlgebra
 include("helper_funcs.jl")
 include("observation_map.jl")
 include("get_les_metadata.jl")
+
 
 experiment_dir = dirname(Base.active_project())
 const model_interface = joinpath(experiment_dir, "model_interface.jl")
@@ -20,7 +23,20 @@ for (key, value) in experiment_config
     @eval const $(Symbol(key)) = $value
 end
 
-const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
+prior_dict = TOML.parsefile(joinpath(experiment_dir, prior_path))
+# const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
+
+parameter_names = keys(prior_dict)
+prior_vec = [CAL.get_parameter_distribution(prior_dict, n) for n in parameter_names]
+# load pretrained weights (prior mean) and nn
+@load pretrained_nn_path serialized_weights
+num_nn_params = length(serialized_weights)
+nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], 0.25) for ii in 1:num_nn_params])
+nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
+nn_prior = EKP.ParameterDistribution(nn_mean_std, nn_constraint, "mixing_length_param_vec")
+push!(prior_vec, nn_prior)
+
+prior = EKP.combine_distributions(prior_vec)
 
 # load configs and directories 
 model_config_dict = YAML.load_file(model_config)
@@ -105,8 +121,8 @@ CAL.initialize(
     prior,
     output_dir;
     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
-    localization_method = EKP.Localizers.NoLocalization(),
-    # localization_method = EKP.Localizers.SECNice(0.5, 1.0),
+    # localization_method = EKP.Localizers.NoLocalization(),
+    localization_method = EKP.Localizers.SECNice(0.5, 1.0),
     failure_handler_method = EKP.SampleSuccGauss(),
     # accelerator = EKP.DefaultAccelerator(),
     accelerator = EKP.NesterovAccelerator(),
@@ -114,7 +130,7 @@ CAL.initialize(
 
 eki = nothing
 hpc_kwargs = CAL.kwargs(
-    time = 60,
+    time = 100,
     mem_per_cpu = "12G",
     cpus_per_task = batch_size + 1,
     ntasks = 1,

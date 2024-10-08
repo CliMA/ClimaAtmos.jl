@@ -283,6 +283,19 @@ function get_precipitation_model(parsed_args)
     end
 end
 
+function get_mixing_length_model(parsed_args)
+    ml_model = parsed_args["mixing_length_model"]
+    return if ml_model == nothing || ml_model == "physical"
+        PhysicalMixingLengthModel()
+    elseif ml_model == "nn"
+        NeuralNetworkMixingLengthModel()
+    elseif ml_model == "error"
+        MixingLengthErrorModel()
+    else
+        error("Invalid mixing_length_model $(ml_model)")
+    end
+end
+
 function get_cloud_model(parsed_args)
     cloud_model = parsed_args["cloud_model"]
     return if cloud_model == "grid_scale"

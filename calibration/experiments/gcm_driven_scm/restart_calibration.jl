@@ -13,7 +13,7 @@ include("get_les_metadata.jl")
 function main()
     s = ArgParseSettings()
     @add_arg_table! s begin
-        "output_dir"
+        "--output_dir"
         help = "The output directory for calibration"
         "--restart_iteration"
         help = "Optional: specify the iteration to restart from"
@@ -26,18 +26,18 @@ function main()
     restart_iteration = parsed_args["restart_iteration"]
 
     experiment_dir = dirname(Base.active_project())
-    const model_interface = joinpath(experiment_dir, "model_interface.jl")
+    model_interface = joinpath(experiment_dir, "model_interface.jl")
 
-    const experiment_config =
+    experiment_config =
         YAML.load_file(joinpath(output_dir, "configs", "experiment_config.yml"))
 
     for (key, value) in experiment_config
         if key != "output_dir"
-            @eval const $(Symbol(key)) = $value
+            @eval $(Symbol(key)) = $value
         end
     end
 
-    const prior = CAL.get_prior(joinpath(output_dir, "configs", "prior.toml"))
+    prior = CAL.get_prior(joinpath(output_dir, "configs", "prior.toml"))
 
     model_config_dict = YAML.load_file(joinpath(output_dir, "configs", "model_config.yml"))
     atmos_config = CA.AtmosConfig(model_config_dict)
@@ -97,17 +97,23 @@ function main()
     end
 
     last_iteration_dir = joinpath(output_dir, "iteration_$(lpad(latest_iteration, 3, '0'))")
+    @info "Restarting from iteration $latest_iteration"
 
     if isdir(last_iteration_dir)
         member_dirs = filter(x -> startswith(x, "member_"), readdir(last_iteration_dir))
         for member_dir in member_dirs
-            rm(joinpath(last_iteration_dir, member_dir); force = true, recursive = true)
+            config_dirs = filter(x -> startswith(x, "config_"), readdir(joinpath(last_iteration_dir, member_dir)))
+            for config_dir in config_dirs
+                rm(joinpath(last_iteration_dir, member_dir, config_dir); force = true, recursive = true)
+            end
         end
     end
-
-    @info "Restarting from iteration $latest_iteration"
+    
 
     eki = nothing
+    # eki_path = joinpath(CAL.path_to_iteration(output_dir, latest_iteration), "eki_file.jld2")
+    # eki = JLD2.load_object(eki_path)
+
     hpc_kwargs = CAL.kwargs(
         time = 90,
         mem_per_cpu = "12G",
@@ -141,7 +147,7 @@ function main()
             model_interface,
             module_load_str;
             hpc_kwargs,
-            verbose = false,
+            verbose = true,
             reruns = 0,
         )
         CAL.report_iteration_status(statuses, output_dir, iter)
@@ -150,6 +156,7 @@ function main()
         CAL.save_G_ensemble(output_dir, iter, G_ensemble)
         eki = CAL.update_ensemble(output_dir, iter, prior)
     end
+    
 end
 
 main()

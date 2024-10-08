@@ -15,6 +15,11 @@ struct NoPrecipitation <: AbstractPrecipitationModel end
 struct Microphysics0Moment <: AbstractPrecipitationModel end
 struct Microphysics1Moment <: AbstractPrecipitationModel end
 
+abstract type AbstractMixingLengthModel end
+struct PhysicalMixingLengthModel <: AbstractMixingLengthModel end
+struct NeuralNetworkMixingLengthModel <: AbstractMixingLengthModel end
+struct MixingLengthErrorModel <: AbstractMixingLengthModel end
+
 abstract type AbstractCloudModel end
 struct GridScaleCloud <: AbstractCloudModel end
 struct QuadratureCloud <: AbstractCloudModel end
@@ -397,6 +402,7 @@ Base.@kwdef struct AtmosModel{
     CM,
     CCDPS,
     F,
+    MLM,
     S,
     OZ,
     RM,
@@ -427,6 +433,7 @@ Base.@kwdef struct AtmosModel{
     cloud_model::CM = nothing
     call_cloud_diagnostics_per_stage::CCDPS = nothing
     forcing_type::F = nothing
+    mixing_length_model::MLM = nothing
     subsidence::S = nothing
 
     """What to do with ozone for radiation (when using RRTGMP)"""

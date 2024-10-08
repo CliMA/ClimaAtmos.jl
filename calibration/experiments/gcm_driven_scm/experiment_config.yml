@@ -1,12 +1,15 @@
 # prior_path: prior_prognostic.toml
-prior_path: prior_prognostic_pi_entr_dev_microphysics.toml
-ensemble_size: 200
-n_iterations: 15
+# prior_path: prior_prognostic_pi_entr_dev_mixlen.toml
+# prior_path: prior_prognostic_pi_entr_dev_microphysics2.toml
+# prior_path: prior_prognostic_pi_entr_dev_microphysics.toml
+prior_path: prior_precal_intermediate_std.toml
+ensemble_size: 30
+n_iterations: 2
 batch_size: 6 # number of cases per iteration
 model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
-output_dir : output_deep_conv_etki_exp/exp_12 # output dir
-y_var_names: [thetaa, hus, clw, cli] # calibration variables clw
-log_vars: ["clw", "cli"] # take log(var) when forming y, g
+output_dir : output_ml_mix/exp_1 # output dir
+y_var_names: [thetaa, hus, clw] # calibration variables clw
+log_vars: ["clw"] # take log(var) when forming y, g
 # z_max: # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
 #   shallow: 4000.0
 #   deep: 15000.0
@@ -43,3 +46,6 @@ const_noise_by_var:
   hus: 0.0001
   clw: 0.0001
   cli: 0.0025
+
+
+pretrained_nn_path: "/home/cchristo/ml_mixing_length/nn_341p_v1.jld2"

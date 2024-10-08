@@ -19,6 +19,37 @@ function get_les_calibration_library()
     return (ref_paths, cfsite_numbers)
 end
 
+
+
+
+# function get_les_calibration_library()
+#     les_library = get_LES_library()
+#     ref_paths = String[]
+#     cfsite_numbers = Int[]
+#     for model in keys(les_library)
+#         for month in keys(les_library[model])
+#             cfsite_numbers_i = [parse(Int, key) for key in keys(les_library[model][month]["cfsite_numbers"])]
+#             les_kwargs = (forcing_model = model, month = parse(Int, month), experiment = "amip")
+#             for cfsite_number in cfsite_numbers_i
+#                 try
+#                     stats_path = get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...))
+#                     push!(ref_paths, stats_path)
+#                     push!(cfsite_numbers, cfsite_number)
+#                 catch e
+#                     if isa(e, AssertionError)
+#                         continue
+#                     else
+#                         rethrow(e)
+#                     end
+#                 end
+#             end
+#         end
+#     end
+#     return (ref_paths, cfsite_numbers)
+# end
+
+
+
 function get_cfsite_type(i, cfsite_numbers)
     return get_cfsite_type(cfsite_numbers[i])
 end

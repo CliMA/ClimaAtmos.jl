@@ -184,7 +184,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
     t,
 )
 
-    (; moisture_model, turbconv_model) = p.atmos
+    (; moisture_model, turbconv_model, mixing_length_model) = p.atmos
     @assert !(moisture_model isa DryModel)
 
     (; params) = p
@@ -321,6 +321,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
 
     sfc_tke = Fields.level(ᶜtke⁰, 1)
     @. ᶜmixing_length_tuple = mixing_length(
+        # p.atmos.mixing_length_model,
         p.params,
         ustar,
         ᶜz,
@@ -333,6 +334,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         ᶜstrain_rate_norm,
         ᶜprandtl_nvec,
         ᶜtke_exch,
+        get_physical_w(ᶜuʲs.:1, ᶜlg),
+        get_physical_w(ᶜu, ᶜlg),
     )
 
     @. ᶜmixing_length = ᶜmixing_length_tuple.master
