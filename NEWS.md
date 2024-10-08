@@ -4,6 +4,12 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+### ![][badge-🐛bugfix] Bug fixes
+
+- Fixed radiation diagnostics conflicting with each other. Prior to this change,
+  adding multiple diagnostics associated to the same variable would lead to
+  incorrect results when the more diagnostics were output at the same time. PR
+  [3365](https://github.com/CliMA/ClimaAtmos.jl/pull/3365)
 
 v0.27.6
 -------
