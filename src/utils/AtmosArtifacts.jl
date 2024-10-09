@@ -67,4 +67,15 @@ function aerosol_concentration_file_path(; context = nothing)
     return res_file_path("aerosol_concentrations"; context)
 end
 
+"""
+    earth_orography_file_path(; context=nothing)
+
+Construct the file path for the 60arcsecond orography data NetCDF file.
+
+Downloads the 60arc-second dataset by default. 
+"""
+function earth_orography_file_path(; context=nothing)
+    return res_file_path("earth_orography_60arcseconds"; context)
+end
+
 end

@@ -49,9 +49,6 @@ sleve_s:
 topo_smoothing:
   help: "Choose whether to order-2 smoothing on the LGL mesh"
   value: false
-smoothing_order:
-  help: "Define the surface smoothing kernel factor (integer) [`3 (default)`]"
-  value: 3
 # ODE
 use_newton_rtol:
   help: "Whether to check if the current iteration of Newton's method has an error within a relative tolerance, instead of always taking the maximum number of iterations (only for ClimaTimeSteppers.jl)"

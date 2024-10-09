@@ -1,5 +1,5 @@
 using ClimaCore:
-    Geometry, Domains, Meshes, Topologies, Spaces, Grids, Hypsography
+    Geometry, Domains, Meshes, Topologies, Spaces, Grids, Hypsography, Fields
 using ClimaComms
 
 function periodic_line_mesh(; x_max, x_elem)
@@ -74,6 +74,40 @@ function make_horizontal_space(mesh, quad, comms_ctx, bubble)
     return space
 end
 
+function diffuse_surface_elevation_biharmonic!(
+    f::Fields.Field;
+    κ::T = 5e8,
+    maxiter::Int = 100,
+    dt::T = 5e-2,
+) where {T}
+    if eltype(f) <: Real
+        f_z = f
+    elseif eltype(f) <: Geometry.ZPoint
+        f_z = f.z
+    end
+    # Define required ops
+    wdiv = Operators.WeakDivergence()
+    grad = Operators.Gradient()
+    # Create dss buffer
+    ghost_buffer = (bf = Spaces.create_dss_buffer(f_z),)
+    # Apply smoothing
+    χf = @. wdiv(grad(f_z))
+    Spaces.weighted_dss!(χf, ghost_buffer.bf)
+    @. χf = wdiv(grad(χf))
+    for iter in 1:maxiter
+        # Euler steps
+        if iter ≠ 1
+            @. χf = wdiv(grad(f_z))
+            Spaces.weighted_dss!(χf, ghost_buffer.bf)
+            @. χf = wdiv(grad(χf))
+        end
+        Spaces.weighted_dss!(χf, ghost_buffer.bf)
+        @. f_z -= κ * dt * χf
+    end
+    # Return mutated surface elevation profile
+    return f
+end
+
 function make_hybrid_spaces(
     h_space,
     z_max,
@@ -100,8 +134,29 @@ function make_hybrid_spaces(
         z_mesh,
     )
     z_grid = Grids.FiniteDifferenceGrid(z_topology)
-    if isnothing(surface_warp)
+    if isnothing(surface_warp) && parsed_args["topography"] != "Earth"
         hypsography = Hypsography.Flat()
+    elseif isnothing(surface_warp) && parsed_args["topography"] == "Earth"
+        @info "SpaceVaryingInputs: Remapping orography onto spectral space"
+        z_surface = SpaceVaryingInputs.SpaceVaryingInput(
+            AA.earth_orography_file_path(;context=ClimaComms.context(h_space)), "z", h_space
+        )
+        parent(z_surface) .= ifelse.(parent(z_surface) .< FT(0), FT(0), parent(z_surface))
+        Δh_scale = Spaces.node_horizontal_length_scale(h_space)
+        diffuse_surface_elevation_biharmonic!(z_surface; κ=FT((Δh_scale)^4/1000), dt=FT(1), maxiter=32)
+        parent(z_surface) .= ifelse.(parent(z_surface) .< FT(0), FT(0), parent(z_surface))
+        if parsed_args["mesh_warp_type"] == "SLEVE"
+            @info "SLEVE mesh warp"
+            hypsography = Hypsography.SLEVEAdaption(
+                Geometry.ZPoint.(z_surface),
+                FT(parsed_args["sleve_eta"]),
+                FT(parsed_args["sleve_s"]),
+            )
+        elseif parsed_args["mesh_warp_type"] == "Linear"
+            @info "Linear mesh warp"
+            hypsography =
+                Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
+        end
     else
         topo_smoothing = parsed_args["topo_smoothing"]
         z_surface = surface_warp(Fields.coordinate_field(h_space))
