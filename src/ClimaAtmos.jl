@@ -1,5 +1,7 @@
 module ClimaAtmos
 
+import ClimaCore.Fields: @fused_direct
+
 using NVTX
 import Thermodynamics as TD
 

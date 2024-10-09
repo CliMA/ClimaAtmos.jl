@@ -1,6 +1,7 @@
 using ClimaCore:
     Geometry, Domains, Meshes, Topologies, Spaces, Grids, Hypsography, Fields
 using ClimaComms
+using ClimaCore: DataLayouts
 using ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
 
 function periodic_line_mesh(; x_max, x_elem)
@@ -41,7 +42,11 @@ function make_horizontal_space(
 )
     if mesh isa Meshes.AbstractMesh1D
         topology = Topologies.IntervalTopology(comms_ctx, mesh)
-        space = Spaces.SpectralElementSpace1D(topology, quad)
+        space = Spaces.SpectralElementSpace1D(
+            topology,
+            quad;
+            horizontal_layout_type = DataLayouts.IJHF,
+        )
     elseif mesh isa Meshes.AbstractMesh2D
         topology = Topologies.Topology2D(
             comms_ctx,
@@ -52,6 +57,7 @@ function make_horizontal_space(
             topology,
             quad;
             enable_bubble = bubble,
+            horizontal_layout_type = DataLayouts.IJHF,
         )
     end
     return space
@@ -70,6 +76,7 @@ function make_horizontal_space(mesh, quad, comms_ctx, bubble)
             topology,
             quad;
             enable_bubble = bubble,
+            horizontal_layout_type = DataLayouts.IJHF,
         )
     end
     return space
