@@ -1,7 +1,7 @@
 agents:
   queue: clima
   slurm_mem: 8G
-  modules: julia/1.10.0 cuda/julia-pref openmpi/4.1.5-mpitrampoline nsight-systems/2024.2.1
+  modules: julia/1.10.5 cuda/julia-pref openmpi/4.1.5-mpitrampoline nsight-systems/2024.6.1
 
 env:
   JULIA_MPI_HAS_CUDA: "true"
