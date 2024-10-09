@@ -1,4 +1,3 @@
-using Adapt
 using Dates: DateTime, @dateformat_str
 using Interpolations
 import NCDatasets
@@ -9,6 +8,7 @@ import ClimaAtmos as CA
 import LinearAlgebra
 import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
+import ClimaUtilities: SpaceVaryingInputs
 
 import ClimaDiagnostics
 
@@ -146,26 +146,7 @@ function get_spaces(parsed_args, params, comms_ctx)
     elseif topography == "NoWarp"
         warp_function = nothing
     elseif topography == "Earth"
-        data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
-        array_type = ClimaComms.array_type(comms_ctx.device)
-        earth_spline = NCDatasets.NCDataset(data_path) do data
-            zlevels = Array(data["elevation"])
-            lon = Array(data["longitude"])
-            lat = Array(data["latitude"])
-            # Apply Smoothing
-            smooth_degree = Int(parsed_args["smoothing_order"])
-            esmth = CA.gaussian_smooth(zlevels, smooth_degree)
-            Adapt.adapt(
-                array_type,
-                linear_interpolation(
-                    (lon, lat),
-                    esmth,
-                    extrapolation_bc = (Periodic(), Flat()),
-                ),
-            )
-        end
-        @info "Generated interpolation stencil"
-        warp_function = generate_topography_warp(earth_spline)
+        warp_function = nothing
     end
     @info "Topography" topography
 
@@ -183,16 +164,25 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        if warp_function == nothing
+        if warp_function == nothing && topography != "Earth"
             make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; deep)
-        else
+        elseif warp_function != nothing && topography != "Earth"
             make_hybrid_spaces(
                 h_space,
                 z_max,
                 z_elem,
                 z_stretch;
-                parsed_args = parsed_args,
                 surface_warp = warp_function,
+                deep,
+            )
+        elseif topography == "Earth"
+            make_hybrid_spaces(
+                h_space,
+                z_max,
+                z_elem,
+                z_stretch;
+                surface_warp = nothing,
+                parsed_args = parsed_args,
                 deep,
             )
         end
