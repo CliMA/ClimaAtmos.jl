@@ -25,3 +25,14 @@ git-tree-sha1 = "6693f8451b447543952b3d557d733c7e5c670ed3"
     [[ozone_concentrations_lowres.download]]
     sha256 = "908384b32e90c733c2173654afbb974d238a9a516ad8965039077c6ddb29b5f0"
     url = "https://caltech.box.com/shared/static/6c16wt7i1htxq6tadpt1ng2uftjgdtpr.gz"
+
+[earth_orography_30arcseconds]
+git-tree-sha1 = "03dd08fcbf363ed055a176dd7adefb60ff1c3493"
+
+[earth_orography_60arcseconds]
+git-tree-sha1 = "fe19d8dbe7a18ff39588e1f718014b0479d9c0f7"
+lazy = true
+
+    [[earth_orography_60arcseconds.download]]
+    sha256 = "eca66c0701d1c2b9e271742314915ffbf4a0fae92709df611c323f38e019966e"
+    url = "https://caltech.box.com/shared/static/4asrxcgl6xsgenfcug9p0wkkyhtqilgk.gz"
