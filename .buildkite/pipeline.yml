@@ -431,13 +431,13 @@ steps:
 
       - label: ":computer: test restart"
         command: >
-          julia --color=yes --project=examples test/restart.jl MANYTESTS
+          julia --color=yes --project=examples test/restart.jl --manytests true
         agents:
           slurm_mem: 16GB
 
       - label: ":computer: test restart GPU"
         command: >
-          julia --color=yes --project=examples test/restart.jl MANYTESTS
+          julia --color=yes --project=examples test/restart.jl --manytests true
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:

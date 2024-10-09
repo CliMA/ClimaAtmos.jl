@@ -32,15 +32,13 @@ jobs:
           - '~1.11.0-0'
         os:
           - ubuntu-latest
-        arch:
-          - x64
+
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/cache@v2
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
       - name: Instantiate test env
         run: |
           julia --project=test -e "using Pkg; Pkg.develop(path=\".\"); Pkg.instantiate()"
