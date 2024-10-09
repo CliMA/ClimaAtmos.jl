@@ -16,4 +16,6 @@ dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"
 precip_model: "0M"
+prescribed_aerosols: ["CB1", "CB2", "DST01", "OC1", "OC2", "SO4", "SSLT01"]
+aerosol_radiation: true
 toml: [toml/longrun_aquaplanet.toml]
