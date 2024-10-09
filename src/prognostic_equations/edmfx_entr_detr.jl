@@ -375,8 +375,8 @@ end
 limit_entrainment(entr::FT, a, w, dz) where {FT} =
     max(min(entr, FT(0.9) * w / dz), 0)
 
-limit_detrainment(detr::FT, a, w, dz) where {FT} =
-    max(min(detr, FT(0.9) * w / dz), 0)
+limit_detrainment(detr::FT, a, w, dz, dt) where {FT} =
+    limit_detrainment(max(min(detr, FT(0.9) * w / dz), 0), a, dt)
 
 function limit_turb_entrainment(dyn_entr::FT, turb_entr::FT, w, dz) where {FT}
     return max(min((FT(0.9) * w / dz) - dyn_entr, turb_entr), 0)
