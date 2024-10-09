@@ -6,6 +6,10 @@ Main
 
 ### ![][badge-🐛bugfix] Bug fixes
 
+- Update RRTMGP to v0.19.1, which fixes the sea salt aerosol lookup table.
+  Sea salt aerosol is added to the target amip config. 
+  PR [3374](https://github.com/CliMA/ClimaAtmos.jl/pull/3374)
+
 - Fixed radiation diagnostics conflicting with each other. Prior to this change,
   adding multiple diagnostics associated to the same variable would lead to
   incorrect results when the more diagnostics were output at the same time. PR
