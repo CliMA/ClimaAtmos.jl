@@ -59,6 +59,7 @@ function compute_gcm_driven_momentum_inv_τ(
         τᵣ = FT(3600.0)
     end
     return FT(1) / τᵣ
+end
 # following PyCLES https://github.com/CliMA/pycles/blob/71c1752a1ef1b43bb90e5817de9126468b4eeba9/ForcingGCMFixed.pyx#L260
 function eddy_vert_fluctuation!(ᶜρχₜ, ᶜχ, ᶜls_subsidence)
     @. ᶜρχₜ +=

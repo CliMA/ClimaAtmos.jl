@@ -9,8 +9,11 @@ using Plots
 using LinearAlgebra
 using DataFrames
 
-output_dir = "output/exp_1"
+# output_dir = "output/exp_1"
 iterations = nothing
+output_dir = "output_deep_conv_etki_exp/exp_13" # output directory
+iterations = collect(0:7)
+# iterations = (0,)
 
 include("helper_funcs.jl")
 
@@ -120,6 +123,8 @@ end
 
 
 ### print best particles and loss
+@info "Best particle in final iteration and loss"
+@show "Final Iteration: $(iterations[end])"
 loss_min_inds, loss_min_vals = get_loss_min(output_dir, iterations[end])
 df = DataFrame(ParticleNumber = loss_min_inds, Loss = loss_min_vals)
 display(df)

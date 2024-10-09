@@ -1,12 +1,15 @@
 # prior_path: prior_prognostic.toml
-prior_path: prior_prognostic_pi_entr_dev_microphysics.toml
+prior_path: prior_prognostic_pi_entr_dev_microphysics_no_cli.toml
 ensemble_size: 200
 n_iterations: 15
+
+# ensemble_size: 30
+# n_iterations: 2
 batch_size: 6 # number of cases per iteration
 model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
-output_dir : output_deep_conv_etki_exp/exp_12 # output dir
-y_var_names: [thetaa, hus, clw, cli] # calibration variables clw
-log_vars: ["clw", "cli"] # take log(var) when forming y, g
+output_dir : output_deep_conv_etki_exp/exp_17 # output dir
+y_var_names: [thetaa, hus, clw,] # calibration variables clw  cli]
+log_vars: ["clw",] # take log(var) when forming y, g  "cli"
 # z_max: # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
 #   shallow: 4000.0
 #   deep: 15000.0
