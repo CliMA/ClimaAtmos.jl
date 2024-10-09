@@ -10,7 +10,7 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 dt: "120secs"
 t_end: "360days"
-dt_save_state_to_disk: "30days"
+dt_save_state_to_disk: "17days"
 moist: "equil"
 rad: "allskywithclear"
 dt_rad: "1hours"
@@ -19,3 +19,7 @@ surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"
 precip_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]
+#restart: "/home/asridhar/Codes/ClimaAtmos.jl/output/testing_new_topo_morediags/output_0001/day17.0.hdf5"
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr, hfes]
+    period: 6hours
