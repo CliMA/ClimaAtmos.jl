@@ -367,6 +367,11 @@ function get_initial_condition(parsed_args)
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
+    elseif parsed_args["initial_condition"] == "ERA5"
+        return ICs.ERA5Driven(
+            parsed_args["external_forcing_file"],
+            parsed_args["cfsite_number"],
+        )
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
@@ -376,6 +381,11 @@ end
 
 function get_surface_setup(parsed_args)
     parsed_args["surface_setup"] == "GCM" && return SurfaceConditions.GCMDriven(
+        parsed_args["external_forcing_file"],
+        parsed_args["cfsite_number"],
+    )
+
+    parsed_args["surface_setup"] == "ERA5" && return SurfaceConditions.ERA5Driven(
         parsed_args["external_forcing_file"],
         parsed_args["cfsite_number"],
     )

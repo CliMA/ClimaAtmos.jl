@@ -42,7 +42,7 @@ import CairoMakie
 import CairoMakie.Makie
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
-import ClimaAnalysis: SimDir, slice, read_var, average_xy
+import ClimaAnalysis: SimDir, slice, read_var, average_xy, window
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
@@ -1314,9 +1314,11 @@ function make_plots(::EDMFSpherePlots, output_paths::Vector{<:AbstractString})
     )
 end
 
+ForcedSingleColumn =
+    Union{Val{:gcm_driven_scm}, Val{:era5_driven_scm}}
 
 function make_plots(
-    ::Val{:gcm_driven_scm},
+    ::ForcedSingleColumn,
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)

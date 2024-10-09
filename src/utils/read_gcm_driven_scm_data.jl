@@ -49,7 +49,13 @@ Returns a 1D ("z",) `vec` object.
 function gcm_height(ds)
     vec(mean(ds["zg"][:, :], dims = 2))
 end
+
+function era5_height(ds)
+    vec(mean(ds["zg"][:, :], dims = 2))
+end
+
 """
+    gcm_driven_timeseries(ds, varname)
 #    gcm_driven_timeseries(ds, varname)
 
 # Get `varname` from the dataset `ds` and return values
@@ -60,5 +66,9 @@ end
     If this is not the case, "garbage" data may be returned with no warning.
 """
 function gcm_driven_timeseries(ds, varname)
+    ds[varname][:]
+end
+
+function era5_driven_timeseries(ds, varname)
     ds[varname][:]
 end

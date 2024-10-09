@@ -17,6 +17,7 @@ import ..n_mass_flux_subdomains
 import ..gcm_driven_profile
 import ..gcm_height
 import ..gcm_driven_profile_tmean
+import ..era5_height
 
 import Thermodynamics.TemperatureProfiles:
     DecayingTemperatureProfile, DryAdiabaticProfile

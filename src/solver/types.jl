@@ -36,6 +36,7 @@ struct IdealizedInsolation <: AbstractInsolation end
 struct TimeVaryingInsolation <: AbstractInsolation end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
+struct ERA5DrivenInsolation <: AbstractInsolation end
 
 """
     AbstractOzone
@@ -158,6 +159,11 @@ struct LargeScaleAdvection{PT, PQ}
 end
 # maybe need to <: AbstractForcing
 struct GCMForcing{FT}
+    external_forcing_file::String
+    cfsite_number::String
+end
+
+struct ERA5Forcing{FT}
     external_forcing_file::String
     cfsite_number::String
 end
