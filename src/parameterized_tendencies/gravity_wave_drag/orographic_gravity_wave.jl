@@ -39,7 +39,8 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
     elseif ogw.topo_info == "raw_topo"
         # TODO: right now this option may easily crash
         # because we did not incorporate any smoothing when interpolate back to model grid
-        elevation_rll = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
+        elevation_rll =
+            AA.earth_orography_file_path(; context = ClimaComms.context(Y.c))
         radius =
             Spaces.topology(
                 Spaces.horizontal_space(axes(Y.c)),
