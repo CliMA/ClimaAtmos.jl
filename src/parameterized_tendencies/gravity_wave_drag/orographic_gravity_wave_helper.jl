@@ -226,10 +226,11 @@ end
 
 function compute_OGW_info(Y, elev_data, earth_radius, γ, h_frac)
     # obtain lat, lon, elevation from the elev_data
+    FT = Spaces.undertype(Spaces.axes(Y.c))
     nt = NCDataset(elev_data, "r") do ds
-        lon = Array(ds["longitude"])
-        lat = Array(ds["latitude"])
-        elev = Array(ds["elevation"])
+        lon = FT.(Array(ds["lon"]))
+        lat = FT.(Array(ds["lat"]))
+        elev = FT.(Array(ds["z"]))
         (; lon, lat, elev)
     end
     (; lon, lat, elev) = nt
