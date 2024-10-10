@@ -871,7 +871,7 @@ steps:
         command:
           - mkdir -p target_gpu_implicit_baroclinic_wave
           - >
-            nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/output_active/report
+            nsys profile --delay 100 --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
             --job_id target_gpu_implicit_baroclinic_wave
@@ -885,7 +885,7 @@ steps:
       - label: "GPU: GPU dry baroclinic wave - 4 gpus"
         key: "target_gpu_implicit_baroclinic_wave_4process"
         command:
-            # nsys profile --trace=nvtx,cuda,mpi --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
+            nsys profile --delay 100 --trace=nvtx,cuda,mpi --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
@@ -905,7 +905,7 @@ steps:
       - label: "GPU: GPU moist Held-Suarez"
         command:
           - >
-            nsys profile --trace=nvtx,cuda --output=central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
+            nsys profile --delay 100 --trace=nvtx,cuda --output=central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $CONFIG_PATH/central_gpu_hs_rhoe_equil_55km_nz63_0M.yml
             --job_id central_gpu_hs_rhoe_equil_55km_nz63_0M
@@ -919,7 +919,7 @@ steps:
       - label: "GPU: GPU moist Held-Suarez cloud diagnostics per stage"
         command:
           - >
-            nsys profile --trace=nvtx,cuda --output=central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
+            nsys profile --delay 100 --trace=nvtx,cuda --output=central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $CONFIG_PATH/central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M.yml
             --job_id central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M
