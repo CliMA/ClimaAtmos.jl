@@ -400,3 +400,62 @@ function gaussian_smooth(arr::AbstractArray, sigma::Int = 1)
 
     return smoothed_arr
 end
+
+"""
+    periods_are_commensurate(dt_large::Dates.Period, dt_small::Dates.Period)
+
+Check if two periods are commensurate, i.e., if the larger period can be
+expressed as an integer multiple of the smaller period.
+
+In this, take into account the case when periods do not have fixed size, e.g.,
+one month is a variable number of days.
+
+# Examples
+```
+julia> periods_are_commensurate(Dates.Year(1), Dates.Month(1))
+true
+
+julia> periods_are_commensurate(Dates.Month(1), Dates.Day(1))
+true
+
+julia> periods_are_commensurate(Dates.Month(1), Dates.Week(1))
+false
+```
+
+## Notes
+
+Not all the combinations are fully implemented. If something is missing, please
+consider adding it.
+"""
+function periods_are_commensurate(
+    dt_large::Dates.Period,
+    dt_small::Dates.Period,
+)
+    @warn "The combination $(typeof(dt_large)) and $(dt_small) was not covered. Please add a method to handle this case."
+    return false
+end
+
+# For FixedPeriod and OtherPeriod, it is easy, we can directly divide the two
+# (as long as they are both the same)
+function periods_are_commensurate(
+    dt_large::Dates.FixedPeriod,
+    dt_small::Dates.FixedPeriod,
+)
+    return isinteger(dt_large / dt_small)
+end
+
+function periods_are_commensurate(
+    dt_large::Dates.OtherPeriod,
+    dt_small::Dates.OtherPeriod,
+)
+    return isinteger(dt_large / dt_small)
+end
+
+function periods_are_commensurate(
+    dt_large::Dates.Month,
+    dt_small::Dates.FixedPeriod,
+)
+    # The only case where periods are commensurate for Month is when we have a
+    # Day or an integer divisor of a day.
+    return isinteger(Dates.Day(1) / dt_small)
+end

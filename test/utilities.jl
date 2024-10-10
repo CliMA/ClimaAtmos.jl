@@ -30,6 +30,18 @@ end
     @test extrema(randy)[2] >= smoothed[2]
 end
 
+@testset "periods_are_commensurate" begin
+    @test CA.periods_are_commensurate(Dates.Month(1), Dates.Day(1))
+    @test !CA.periods_are_commensurate(Dates.Month(1), Dates.Day(25))
+    @test CA.periods_are_commensurate(Dates.Week(1), Dates.Day(1))
+    @test CA.periods_are_commensurate(Dates.Day(1), Dates.Hour(1))
+    @test CA.periods_are_commensurate(Dates.Hour(1), Dates.Second(1))
+    @test CA.periods_are_commensurate(Dates.Minute(1), Dates.Second(30))
+    @test !CA.periods_are_commensurate(Dates.Minute(1), Dates.Second(13))
+    @test !CA.periods_are_commensurate(Dates.Day(1), Dates.Second(1e6))
+    @test CA.periods_are_commensurate(Dates.Month(1), Dates.Hour(1))
+end
+
 @testset "kinetic_energy (c.f. analytical function)" begin
     # Test kinetic energy function for staggered grids
     # given an analytical expression for the velocity profiles
