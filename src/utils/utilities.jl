@@ -332,9 +332,6 @@ macro timed_str(ex)
     end
 end
 
-struct AllNothing end
-const all_nothing = AllNothing()
-Base.getproperty(::AllNothing, ::Symbol) = nothing
 
 """
     horizontal_integral_at_boundary(f::Fields.Field, lev)
