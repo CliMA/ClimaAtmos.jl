@@ -110,9 +110,9 @@ function main()
     end
     
 
-    eki = nothing
-    # eki_path = joinpath(CAL.path_to_iteration(output_dir, latest_iteration), "eki_file.jld2")
-    # eki = JLD2.load_object(eki_path)
+    # eki = nothing
+    eki_path = joinpath(CAL.path_to_iteration(output_dir, latest_iteration), "eki_file.jld2")
+    eki = JLD2.load_object(eki_path)
 
     hpc_kwargs = CAL.kwargs(
         time = 90,
@@ -120,7 +120,7 @@ function main()
         cpus_per_task = batch_size + 1,
         ntasks = 1,
         nodes = 1,
-        reservation = "clima",
+        # reservation = "clima",
     )
     module_load_str = CAL.module_load_string(CAL.CaltechHPCBackend)
     for iter in latest_iteration:(n_iterations - 1)
