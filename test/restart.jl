@@ -218,7 +218,7 @@ have to be ignored when reading a simulation.
 function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
     println("job_id = $(job_id)")
 
-    local_success = Ref(true)
+    local_success = true
 
     config = CA.AtmosConfig(test_dict; job_id, comms_ctx)
 
@@ -251,17 +251,17 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
         rrtmgp_clear_fix = ()
     end
 
-    local_success[] &= compare(
+    local_success &= compare(
         simulation.integrator.u,
         simulation_restarted.integrator.u;
         name = "integrator.u",
     )
-    local_success[] &= compare(
+    local_success &= compare(
         axes(simulation.integrator.u.c),
         axes(simulation_restarted.integrator.u.c);
         name = "space",
     )
-    local_success[] &= compare(
+    local_success &= compare(
         simulation.integrator.p,
         simulation_restarted.integrator.p;
         name = "integrator.p",
@@ -302,12 +302,12 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
     CA.fill_with_nans!(simulation_restarted2.integrator.p)
 
     CA.solve_atmos!(simulation_restarted2)
-    local_success[] &= compare(
+    local_success &= compare(
         simulation.integrator.u,
         simulation_restarted2.integrator.u;
         name = "integrator.u",
     )
-    local_success[] &= compare(
+    local_success &= compare(
         simulation.integrator.p,
         simulation_restarted2.integrator.p;
         name = "integrator.p",
@@ -323,7 +323,7 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
     )
 
     return (
-        local_success[],
+        local_success,
         simulation,
         simulation_restarted,
         simulation_restarted2,
