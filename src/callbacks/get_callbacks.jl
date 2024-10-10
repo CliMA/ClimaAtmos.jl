@@ -209,14 +209,17 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         ),
     )
 
+    # Save dt_save_state_to_disk as a Dates.Period object. This is used to check
+    # if it is an integer multiple of other frequencies.
+    dt_save_state_to_disk_dates = Dates.today() # Value will be overwritten
     if occursin("months", parsed_args["dt_save_state_to_disk"])
         months = match(r"^(\d+)months$", parsed_args["dt_save_state_to_disk"])
         isnothing(months) && error(
             "$(period_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
         )
-        period_dates = Dates.Month(parse(Int, first(months)))
+        dt_save_state_to_disk_dates = Dates.Month(parse(Int, first(months)))
         schedule = CAD.EveryCalendarDtSchedule(
-            period_dates;
+            dt_save_state_to_disk_dates;
             reference_date = p.start_date,
             date_last = p.start_date + Dates.Second(t_start),
         )
@@ -231,6 +234,9 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         dt_save_state_to_disk =
             time_to_seconds(parsed_args["dt_save_state_to_disk"])
         if !(dt_save_state_to_disk == Inf)
+            # We use Millisecond to support fractional seconds, eg. 0.1
+            dt_save_state_to_disk_dates =
+                Dates.Millisecond(dt_save_state_to_disk)
             callbacks = (
                 callbacks...,
                 call_every_dt(
@@ -273,6 +279,14 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
 
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         dt_rad = FT(time_to_seconds(parsed_args["dt_rad"]))
+        # We use Millisecond to support fractional seconds, eg. 0.1
+        dt_rad_ms = Dates.Millisecond(dt_rad)
+        if parsed_args["dt_save_state_to_disk"] != "Inf" &&
+           !CA.isdivisible(dt_save_state_to_disk_dates, dt_rad_ms)
+            @warn "Radiation period ($(dt_rad_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"
+            @warn "This simulation will not be reproducible when restarted"
+        end
+
         callbacks =
             (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
     end
