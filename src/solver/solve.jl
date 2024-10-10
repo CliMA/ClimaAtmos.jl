@@ -74,7 +74,7 @@ indicating one of:
 `try-catch` is used to allow plotting
 results for simulations that have crashed.
 """
-function solve_atmos!(simulation)
+NVTX.@annotate function solve_atmos!(simulation)
     (; integrator, output_writers) = simulation
     (; tspan) = integrator.sol.prob
     @info "Running" job_id = simulation.job_id output_dir =
