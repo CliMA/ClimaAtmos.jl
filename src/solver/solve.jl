@@ -19,7 +19,7 @@ simulated_years(es::EfficiencyStats) =
     (es.tspan[2] - es.tspan[1]) * (1 / (365 * 24 * 3600)) #=seconds * years per second=#
 walltime_in_days(es::EfficiencyStats) = es.walltime * (1 / (24 * 3600)) #=seconds * days per second=#
 
-function timed_solve!(integrator)
+NVTX.@annotate function timed_solve(integrator)
     device = ClimaComms.device(integrator.u.c)
     local sol
     @time "solve!:" begin
@@ -87,12 +87,12 @@ NVTX.@annotate function solve_atmos!(simulation)
         if CA.is_distributed(comms_ctx)
             # GC.enable(false) # disabling GC causes a memory leak
             ClimaComms.barrier(comms_ctx)
-            (sol, walltime) = timed_solve!(integrator)
+            (sol, walltime) = timed_solve(integrator)
             ClimaComms.barrier(comms_ctx)
             GC.enable(true)
             return AtmosSolveResults(sol, :success, walltime)
         else
-            (sol, walltime) = timed_solve!(integrator)
+            (sol, walltime) = timed_solve(integrator)
             return AtmosSolveResults(sol, :success, walltime)
         end
     catch ret_code
