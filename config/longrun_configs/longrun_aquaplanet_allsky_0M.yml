@@ -7,7 +7,7 @@ viscous_sponge: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 dt: "120secs"
-t_end: "360days"
+t_end: "90days"
 dt_save_state_to_disk: "10days"
 moist: "equil"
 rad: "allskywithclear"
@@ -17,3 +17,6 @@ surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"
 precip_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    period: 2days # 2 day, instantaneous snapshots, available in .nc format => Plot using ClimaAnalysis.jl
