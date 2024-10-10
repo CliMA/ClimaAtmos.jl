@@ -429,6 +429,22 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16G
 
+      - label: ":computer: test restart"
+        command: >
+          julia --color=yes --project=examples test/restart.jl --manytests true
+        agents:
+          slurm_mem: 16GB
+
+      - label: ":computer: test restart GPU"
+        command: >
+          julia --color=yes --project=examples test/restart.jl --manytests true
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+
+
       # - label: ":computer: test restart MPI"
       #   command: >
       #     srun julia --color=yes --project=examples test/restart.jl
