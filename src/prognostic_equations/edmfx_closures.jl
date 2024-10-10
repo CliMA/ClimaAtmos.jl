@@ -187,18 +187,45 @@ function mixing_length(
 
     param_vec = CAP.mixing_length_param_vec(params)
 
-    X_1 = ᶜstrain_rate_norm / (ᶜlinear_buoygrad + eps(FT))
-    X_2 = ᶜtke / (ᶜlinear_buoygrad * ᶜz^2)
-    X_3 = ᶜtke / (((ᶜwʲ - ᶜw⁰)^2 + eps(FT)))
+    X_1 = ᶜstrain_rate_norm / (ᶜlinear_buoygrad + eps(FT)) # mix len pi 1
+    X_2 = ᶜtke / (ᶜlinear_buoygrad * ᶜz^2) # mix len pi 2
+    X_3 = ᶜtke / (((ᶜwʲ - ᶜw⁰)^2 + eps(FT))) # mix len pi 3
     X_4 = ᶜlinear_buoygrad
     X_5 = ᶜstrain_rate_norm
     X_6 = ᶜtke
-    X_7 = obukhov_length
+    X_7 = obukhov_length # obu_z
 
-    means = Dict(:X_1 => 0.5014, :X_2 => -1.577, :X_3 => 0.381, :X_4 => 3.89e-5,
-    :X_5 => 2.53e-5, :X_6 => 0.089, :X_7 => -0.5903)
-    stds = Dict(:X_1 => 2.122, :X_2 => 11.198, :X_3 => 0.8601, :X_4 => 2.1753e-4,
-    :X_5 => 8.307e-5, :X_6 => 0.0847, :X_7 => 1.4407)
+
+    # clip to avoid blowup 
+    X_1 = clamp(X_1, -10.0, 10.0)
+    X_2 = clamp(X_2, -1e4, 1e4)        # Threshold for mix_len_pi2
+    X_3 = clamp(X_3, -10.0, 10.0)      # Threshold for mix_len_pi3
+    X_4 = clamp(X_4, -0.02, 0.02)      # Threshold for bgrad
+    X_7 = clamp(X_7, -30.0, 30.0)
+
+
+    means = Dict{Symbol, FT}(
+        :X_1 => FT(0.5721),
+        :X_2 => FT(-1.5775),
+        :X_3 => FT(0.3665),
+        :X_4 => FT(4.69e-5),
+        :X_5 => FT(2.61e-5), 
+        :X_6 => FT(0.0809), 
+        :X_7 => FT(-0.6000)
+    )
+
+    stds = Dict{Symbol, FT}(
+        :X_1 => FT(2.143),
+        :X_2 => FT(10.3738),
+        :X_3 => FT(0.8656),
+        :X_4 => FT(2.52e-4),
+        :X_5 => FT(8.22e-5),
+        :X_6 => FT(0.0771),
+        :X_7 => FT(1.528)
+    )
+
+
+
 
     # Normalizing the variables
     X_1 = (X_1 - means[:X_1]) / stds[:X_1]
@@ -211,12 +238,17 @@ function mixing_length(
 
     X = [X_1, X_2, X_3, X_4, X_5, X_6, X_7]
 
+
     arc = [length(X), 15, 10, 5, 1]
-    nn_model = construct_fully_connected_nn(arc, param_vec; biases_bool = true)
+    nn_model = construct_fully_connected_nn(arc, param_vec; biases_bool = true, output_layer_activation_function = Flux.identity)
 
     # l_limited = max(nn_model([X]), 0.0)
     l_limited_norm = nn_model(X)[1]
-    l_limited = max(l_limited_norm * 69.499 + 45.913, 0.0)
+    l_limited = max(FT(l_limited_norm) * FT(62.2416) + FT(39.7169), FT(0.0))
+
+    if ᶜtke < FT(0.001)
+        l_limited = FT(0.0)
+    end
 
     l_W = 0.0
     l_TKE = 0.0
