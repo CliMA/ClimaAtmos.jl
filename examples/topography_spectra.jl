@@ -32,7 +32,7 @@ function generate_spaces(;h_elem=16, diffiter=32)
       )
    parent(elev_from_file) .= 
         ifelse.(parent(elev_from_file) .< FT(0), FT(0), parent(elev_from_file))
-   diffuse_surface_elevation_biharmonic!(elev_from_file, κ=FT((Δh_scale)^4/1000), dt=FT(1), maxiter=diffiter)
+   diffuse_surface_elevation_biharmonic!(elev_from_file, κ=FT((Δh_scale)^4/1000), maxiter=diffiter)
    #diffuse_surface_elevation!(elev_from_file, κ=FT((Δh_scale)^2/100), dt=FT(1), maxiter=diffiter)
    parent(elev_from_file) .= 
         ifelse.(parent(elev_from_file) .< FT(0), FT(0), parent(elev_from_file))
@@ -43,7 +43,7 @@ function diffuse_surface_elevation_biharmonic!(
     f::CC.Fields.Field;
     κ::T = 5e8,
     maxiter::Int = 100,
-    dt::T = 5e-2,
+    dt::T = 1e0,
 ) where {T}
     if eltype(f) <: Real
         f_z = f
@@ -67,7 +67,7 @@ function diffuse_surface_elevation_biharmonic!(
             @. χf = wdiv(grad(χf))
         end
         Spaces.weighted_dss!(χf, ghost_buffer.bf)
-        @. f_z -= κ * dt * χf
+        @. f_z -= κ * χf
     end
     # Return mutated surface elevation profile
     return f
@@ -101,7 +101,6 @@ end
 function generate_all_spectra(;h_elem=32)
     fig = Plots.plot()
     for ii in (0, 4, 8, 16, 32, 64, 128, 256)
-    #for ii in (512,1024, 2048, 4096, 16384, 32768)
         var = generate_spaces(;h_elem, diffiter=ii);
         sph_wn, psd = gen_spectra(var);
         fig = Plots.plot!(sph_wn[2:end], log.(psd)[2:end];lw=2, 
