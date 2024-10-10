@@ -216,7 +216,7 @@ Test if the restarts are consistent for a simulation defined by the `test_dict` 
 have to be ignored when reading a simulation.
 """
 function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
-    println("job_id = $(job_id)")
+    ClimaComms.iamroot(comms_ctx) && println("job_id = $(job_id)")
 
     local_success = true
 
