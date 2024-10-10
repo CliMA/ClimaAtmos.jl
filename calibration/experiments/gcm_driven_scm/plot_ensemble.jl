@@ -56,7 +56,7 @@ else
     iterations = nothing
 end
 
-var_names = ("thetaa", "hus", "clw", "cli", "entr", "detr", "waup", "tke", "arup", "turbentr")
+var_names = ("thetaa", "hus", "clw", "entr", "detr", "waup", "tke", "arup", "turbentr", "lmix") # "cli"
 reduction = "inst"
 
 config_dict =
