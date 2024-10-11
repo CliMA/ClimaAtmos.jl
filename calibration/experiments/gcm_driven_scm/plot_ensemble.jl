@@ -23,6 +23,11 @@ function parse_command_line_args()
         arg_type = String
         default = "output/exp_1"
 
+        "--figs_dir"
+        help = "Directory for output figs"
+        arg_type = String
+        default = "figs/exp_default"
+
         "--config_i"
         help = "Config index to plot"
         arg_type = Int
@@ -41,7 +46,9 @@ parsed_args = parse_command_line_args()
 
 # Assign variables based on the parsed arguments
 output_dir = parsed_args["output_dir"]
+figs_dir = parsed_args["figs_dir"]
 config_i = parsed_args["config_i"]
+
 # ylims = (0, 4000) # y limits for plotting (`z` coord)
 ylims = nothing
 # iterations = !isnothing(parsed_args["iterations"]) ? parse(Int, parsed_args["iterations"]) : nothing
@@ -63,7 +70,8 @@ config_dict =
     YAML.load_file(joinpath(output_dir, "configs", "experiment_config.yml"))
 const z_max = config_dict["z_max"]
 const z_cal_grid = config_dict["z_cal_grid"]
-const cal_var_names = config_dict["y_var_names"]
+cal_var_names = config_dict["y_var_names"]
+push!(cal_var_names, "wap")
 const const_noise_by_var = config_dict["const_noise_by_var"]
 const n_vert_levels = config_dict["dims_per_var"]
 model_config_dict =
@@ -77,10 +85,10 @@ if isnothing(iterations)
     iterations = get_iters_with_config(config_i, config_dict)
 end
 
-xlims_dict = Dict("arup" => (-0.1, 0.25), "entr" => (-1e-6, 0.002),  "detr" => (-1e-6, 0.002), "clw" => "auto", "cli" => "auto")
+xlims_dict = Dict("arup" => (-0.1, 0.25), "entr" => (-1e-6, 0.005),  "detr" => (-1e-6, 0.005), "clw" => "auto", "cli" => "auto", "lmix" => (-0.25, 750))
 
 
-function compute_plot_limits(data; margin_ratio = 1.5, fixed_margin = 1.0)
+function compute_plot_limits(data; margin_ratio = 2.5, fixed_margin = 1.0)
 
     min_val = minimum(data)
     max_val = maximum(data)

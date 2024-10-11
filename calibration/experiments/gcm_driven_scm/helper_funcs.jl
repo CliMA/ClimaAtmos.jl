@@ -28,8 +28,7 @@ const OptReal = Union{Real, Nothing}
 const OptDict = Union{Nothing, Dict}
 
 CLIMADIAGNOSTICS_LES_NAME_MAP =
-    Dict("thetaa" => "theta_mean", "hus" => "qt_mean", "clw" => "ql_mean", "cli" => "qi_mean")
-
+    Dict("thetaa" => "theta_mean", "hus" => "qt_mean", "clw" => "ql_mean", "cli" => "qi_mean",  "wap "=> "w_core")
 
 
 """Get z cell centers coordinates for CA run, given config. """

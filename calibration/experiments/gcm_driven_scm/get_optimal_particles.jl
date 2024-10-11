@@ -97,6 +97,23 @@ phi_best = EKP.transform_unconstrained_to_constrained(prior, u_best)
 phi_best_mean = mean(phi_best, dims = 2)
 phi_best_std = std(phi_best, dims = 2)
 
+ 
+### find ensemble member nearest to be mean 
+
+mean_diff = sum(abs, u .- u_best_mean, dims = 1)
+nearest_mean_index = argmin(mean_diff)  
+col_index = nearest_mean_index[2]
+
+u_nearest = u[:, col_index]
+phi_nearest = EKP.transform_unconstrained_to_constrained(prior, u_nearest)
+g_nearest = g[:, col_index]
+
+@info "Ensemble member nearest to the mean:"
+@info "Particle Number: $col_index"
+@info "u values: $u_nearest"
+@info "phi values: $phi_nearest"
+
+
 
 
 names = []
@@ -110,14 +127,28 @@ for i in 1:length(prior.name)
     end
 end
 
+
+# println("Best Particle Parameters:")
+# for ii = 1:length(names)
+#     println("Parameter: $(names[ii])")
+#     if occursin("turb_entr_param", names[ii])
+#         println("Mean: $(u_best_mean[ii])")
+#         println("Std: $(u_best_std[ii])")
+#     end
+#     println("Mean: $(phi_best_mean[ii])")
+#     println("Std: $(phi_best_std[ii])")
+# end
+
+
+println("Nearest Particle Parameters:")
 for ii = 1:length(names)
     println("Parameter: $(names[ii])")
     if occursin("turb_entr_param", names[ii])
-        println("Mean: $(u_best_mean[ii])")
-        println("Std: $(u_best_std[ii])")
+        println("Mean: $(u_nearest[ii])")
+        # println("Std: $(u_best_std[ii])")
     end
-    println("Mean: $(phi_best_mean[ii])")
-    println("Std: $(phi_best_std[ii])")
+    println("Mean: $(phi_nearest[ii])")
+    # println("Std: $(phi_best_std[ii])")
 end
 
 

@@ -3,17 +3,22 @@
 # prior_path: prior_prognostic_pi_entr_dev_microphysics2.toml
 # prior_path: prior_prognostic_pi_entr_dev_microphysics.toml
 # prior_path: prior_precal_intermediate_std.toml
-prior_path: prior_precal_intermediate_std_w_nearest_neig_entr.toml
+# prior_path: prior_precal_intermediate_std_w_nearest_neig_entr.toml
+prior_path: prior_precal_nearest_neighbor_same_std.toml
 
 # prior_path: prior_precal_same_std.toml
 # prior_path: prior_prognostic_pi_entr_dev_microphysics_exact_precal.toml
-ensemble_size: 100
-n_iterations: 15
+ensemble_size: 150
+n_iterations: 10
 batch_size: 6 # number of cases per iteration
 model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
-output_dir : output_ml_mix/exp_19 # output dir
+output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_24 # output dir
 y_var_names: [thetaa, hus, clw] # calibration variables clw
 log_vars: ["clw"] # take log(var) when forming y, g
+
+nice_loc_ug: 0.01
+nice_loc_gg: 0.5
+
 # z_max: # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
 #   shallow: 4000.0
 #   deep: 15000.0
