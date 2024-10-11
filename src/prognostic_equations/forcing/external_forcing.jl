@@ -2,6 +2,7 @@
 ##### External forcing (for single column experiments)
 #####
 
+import ClimaParams as CP
 import Thermodynamics as TD
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
@@ -37,6 +38,13 @@ function compute_gcm_driven_scalar_inv_τ(
     external_forcing_type::AbstractGCMDrivenForcingType,
     z::FT,
 ) where {FT}
+    name_map  = Dict(
+        "horizontal_wind_relaxation_timescale" => "horizontal_wind_relaxation_timescale",
+        "scalar_relaxation_timescale" => "scalar_relaxation_timescale",
+        "forcing_relaxation_minimum_height" => "forcing_relaxation_minimum_height",
+        "forcing_relaxation_maximum_height" => "forcing_relaxation_maximum_height",
+    )
+    params = CP.get_parameter_values(ClimaParams.create_toml_dict(Float64), name_map)
     return compute_gcm_driven_scalar_inv_τ(external_forcing_type, z)
 end
 

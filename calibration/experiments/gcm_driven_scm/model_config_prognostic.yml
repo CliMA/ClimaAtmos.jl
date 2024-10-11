@@ -1,6 +1,6 @@
 initial_condition: "GCM"
 external_forcing: "GCM"
-external_forcing_file: "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
+external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
 surface_setup: "GCM"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
@@ -29,7 +29,7 @@ rad: allskywithclear
 insolation: "gcmdriven"
 perturb_initstate: false
 dt: "10secs"
-t_end: "72hours"
+t_end: "6hours"
 dt_save_to_disk: "10mins"
 call_cloud_diagnostics_per_stage : true
 ode_algo: "ARS343"

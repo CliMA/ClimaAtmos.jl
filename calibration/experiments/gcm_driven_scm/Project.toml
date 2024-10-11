@@ -18,4 +18,4 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 [compat]
 ClimaCalibrate = "=0.0.3"
 EnsembleKalmanProcesses = "=1.1.7"
-ClimaAtmos = "=0.27.2"
+ClimaAtmos = "=0.27.5"
