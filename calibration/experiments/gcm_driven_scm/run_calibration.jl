@@ -27,7 +27,12 @@ prior_dict = TOML.parsefile(joinpath(experiment_dir, prior_path))
 # const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
 parameter_names = keys(prior_dict)
-prior_vec = [CAL.get_parameter_distribution(prior_dict, n) for n in parameter_names]
+# prior_vec = [CAL.get_parameter_distribution(prior_dict, n) for n in parameter_names]
+prior_vec = Vector{EKP.ParameterDistribution}(undef, length(parameter_names))
+for (i, n) in enumerate(parameter_names)
+    prior_vec[i] = CAL.get_parameter_distribution(prior_dict, n)
+end
+
 # load pretrained weights (prior mean) and nn
 @load pretrained_nn_path serialized_weights
 num_nn_params = length(serialized_weights)
