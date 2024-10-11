@@ -12,11 +12,12 @@ using Statistics
 
 # output_dir = "output/exp_1"
 iterations = nothing
-output_dir = "output_deep_conv_etki_exp/exp_13" # output directory
-iteration = 6 # iteration to get optimal particles
+# output_dir = "output_deep_conv_etki_exp/exp_13" # output directory
+output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/precal/exp2"
+iteration = 9 # iteration to get optimal particles
 final_iter = iteration + 1
 
-n_lowest = 15
+n_lowest = 150
 
 include("helper_funcs.jl")
 
@@ -108,11 +109,10 @@ u_nearest = u[:, col_index]
 phi_nearest = EKP.transform_unconstrained_to_constrained(prior, u_nearest)
 g_nearest = g[:, col_index]
 
-@info "Ensemble member nearest to the mean:"
+@info "Ensemble member nearest to the mean for iteration $iteration"
 @info "Particle Number: $col_index"
 @info "u values: $u_nearest"
 @info "phi values: $phi_nearest"
-
 
 
 
@@ -140,15 +140,26 @@ end
 # end
 
 
-println("Nearest Particle Parameters:")
+# println("Nearest Particle Parameters for iteration $iteration:")
+# for ii = 1:length(names)
+#     println("Parameter: $(names[ii])")
+#     if occursin("turb_entr_param", names[ii])
+#         println("Mean: $(u_nearest[ii])")
+#         # println("Std: $(u_best_std[ii])")
+#     else
+#         println("Mean: $(phi_nearest[ii])")
+#     end
+#     # println("Std: $(phi_best_std[ii])")
+# end
+
+println("Nearest Particle Standard Dev for iteration $iteration:")
 for ii = 1:length(names)
     println("Parameter: $(names[ii])")
     if occursin("turb_entr_param", names[ii])
-        println("Mean: $(u_nearest[ii])")
-        # println("Std: $(u_best_std[ii])")
+        println("Std: $(u_best_std[ii])")
+    else
+        println("Std: $(phi_best_std[ii])")
     end
-    println("Mean: $(phi_nearest[ii])")
-    # println("Std: $(phi_best_std[ii])")
 end
 
 
