@@ -939,6 +939,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
+          slurm_mem: 16G
 
       - label: "GPU: Diagnostic EDMFX aquaplanet"
         key: "diagnostic_edmfx_aquaplanet_gpu"
