@@ -9,8 +9,10 @@ using Plots
 using LinearAlgebra
 using DataFrames
 
-output_dir = "output/exp_1"
-iterations = nothing
+# output_dir = "output/exp_1"
+output_dir= "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_24"
+iterations = 0:1
+# iterations = nothing
 
 include("helper_funcs.jl")
 
