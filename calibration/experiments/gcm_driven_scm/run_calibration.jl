@@ -31,7 +31,7 @@ prior_vec = [CAL.get_parameter_distribution(prior_dict, n) for n in parameter_na
 # load pretrained weights (prior mean) and nn
 @load pretrained_nn_path serialized_weights
 num_nn_params = length(serialized_weights)
-nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], 0.01) for ii in 1:num_nn_params])
+nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], 0.02) for ii in 1:num_nn_params])
 nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
 nn_prior = EKP.ParameterDistribution(nn_mean_std, nn_constraint, "mixing_length_param_vec")
 push!(prior_vec, nn_prior)
@@ -121,11 +121,12 @@ CAL.initialize(
     prior,
     output_dir;
     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
-    # localization_method = EKP.Localizers.NoLocalization(),
-    localization_method = EKP.Localizers.SECNice(0.25, 1.0),
+    localization_method = EKP.Localizers.NoLocalization(),
+    # localization_method = EKP.Localizers.SECNice(0.01, 0.5), nice_loc_ug
+    # localization_method = EKP.Localizers.SECNice(nice_loc_ug, nice_loc_gg),
     failure_handler_method = EKP.SampleSuccGauss(),
-    accelerator = EKP.DefaultAccelerator(),
-    # accelerator = EKP.NesterovAccelerator(),
+    # accelerator = EKP.DefaultAccelerator(),
+    accelerator = EKP.NesterovAccelerator(),
 )
 
 eki = nothing

@@ -40,5 +40,5 @@ netcdf_interpolation_num_points: [2, 2, 60]
 diagnostics:
 - short_name: [thetaa, hus, cl, clw, cli, pr]
   period: 10mins
-- short_name: [entr, detr, lmix, turbentr, tke, arup, waup]
+- short_name: [entr, detr, lmix, turbentr, tke, arup, waup, edt]
   period: 10mins
