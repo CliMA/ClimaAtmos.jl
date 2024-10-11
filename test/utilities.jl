@@ -1,6 +1,7 @@
 using Test
 using ClimaComms
 ClimaComms.@import_required_backends
+import Dates
 using Random
 Random.seed!(1234)
 import ClimaAtmos as CA
@@ -28,6 +29,18 @@ end
     @test extrema(randy)[1] <= smoothed[1]
     # max
     @test extrema(randy)[2] >= smoothed[2]
+end
+
+@testset "isdivisible" begin
+    @test CA.isdivisible(Dates.Month(1), Dates.Day(1))
+    @test !CA.isdivisible(Dates.Month(1), Dates.Day(25))
+    @test CA.isdivisible(Dates.Week(1), Dates.Day(1))
+    @test CA.isdivisible(Dates.Day(1), Dates.Hour(1))
+    @test CA.isdivisible(Dates.Hour(1), Dates.Second(1))
+    @test CA.isdivisible(Dates.Minute(1), Dates.Second(30))
+    @test !CA.isdivisible(Dates.Minute(1), Dates.Second(13))
+    @test !CA.isdivisible(Dates.Day(1), Dates.Second(1e6))
+    @test CA.isdivisible(Dates.Month(1), Dates.Hour(1))
 end
 
 @testset "kinetic_energy (c.f. analytical function)" begin
