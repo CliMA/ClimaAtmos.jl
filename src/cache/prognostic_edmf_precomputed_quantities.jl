@@ -342,6 +342,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         ᶜtke_exch,
         get_physical_w(ᶜuʲs.:1, ᶜlg),
         get_physical_w(ᶜu, ᶜlg),
+        p.atmos.mixing_length_model,
     )
 
     @. ᶜmixing_length = ᶜmixing_length_tuple.master
