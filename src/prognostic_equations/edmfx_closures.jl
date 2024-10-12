@@ -7,6 +7,8 @@ import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 using Flux
 
+Base.broadcastable(x::AbstractMixingLengthModel) = tuple(x)
+
 """
     Return draft area given ρa and ρ
 """
@@ -131,41 +133,6 @@ function lamb_smooth_minimum(
     return smin
 end
 
-
-# function mixing_length(
-#     mixing_length_model,
-#     params,
-#     ustar::FT,
-#     ᶜz::FT,
-#     z_sfc::FT,
-#     ᶜdz::FT,
-#     sfc_tke::FT,
-#     ᶜlinear_buoygrad::FT,
-#     ᶜtke::FT,
-#     obukhov_length::FT,
-#     ᶜstrain_rate_norm::FT,
-#     ᶜPr::FT,
-#     ᶜtke_exch::FT,
-# ) where {FT}
-
-#     return mixing_length(
-#         params,
-#         ustar,
-#         ᶜz,
-#         z_sfc,
-#         ᶜdz,
-#         sfc_tke,
-#         ᶜlinear_buoygrad,
-#         ᶜtke,
-#         obukhov_length,
-#         ᶜstrain_rate_norm,
-#         ᶜPr,
-#         ᶜtke_exch,
-#         mixing_length_model,
-#     )
-# end
-
-
 function mixing_length(
     params,
     ustar::FT,
@@ -181,7 +148,7 @@ function mixing_length(
     ᶜtke_exch::FT,
     ᶜwʲ::FT,
     ᶜw⁰::FT,
-    # ::NeuralNetworkMixingLengthModel,
+    ::NeuralNetworkMixingLengthModel,
 ) where {FT}
 
     param_vec = CAP.mixing_length_param_vec(params)
@@ -257,121 +224,123 @@ function mixing_length(
 end
 
 
-# """
-#     mixing_length(params, ustar, ᶜz, sfc_tke, ᶜlinear_buoygrad, ᶜtke, obukhov_length, ᶜstrain_rate_norm, ᶜPr, ᶜtke_exch)
+"""
+    mixing_length(params, ustar, ᶜz, sfc_tke, ᶜlinear_buoygrad, ᶜtke, obukhov_length, ᶜstrain_rate_norm, ᶜPr, ᶜtke_exch)
 
-# where:
-# - `params`: set with model parameters
-# - `ustar`: friction velocity
-# - `ᶜz`: height
-# - `tke_sfc`: env kinetic energy at first cell center
-# - `ᶜlinear_buoygrad`: buoyancy gradient
-# - `ᶜtke`: env turbulent kinetic energy
-# - `obukhov_length`: surface Monin Obukhov length
-# - `ᶜstrain_rate_norm`: Frobenius norm of strain rate tensor
-# - `ᶜPr`: Prandtl number
-# - `ᶜtke_exch`: subdomain exchange term
+where:
+- `params`: set with model parameters
+- `ustar`: friction velocity
+- `ᶜz`: height
+- `tke_sfc`: env kinetic energy at first cell center
+- `ᶜlinear_buoygrad`: buoyancy gradient
+- `ᶜtke`: env turbulent kinetic energy
+- `obukhov_length`: surface Monin Obukhov length
+- `ᶜstrain_rate_norm`: Frobenius norm of strain rate tensor
+- `ᶜPr`: Prandtl number
+- `ᶜtke_exch`: subdomain exchange term
 
-# Returns mixing length as a smooth minimum between
-# wall-constrained length scale,
-# production-dissipation balanced length scale,
-# effective static stability length scale, and
-# Smagorinsky length scale.
-# """
-# function mixing_length(
-#     params,
-#     ustar::FT,
-#     ᶜz::FT,
-#     z_sfc::FT,
-#     ᶜdz::FT,
-#     sfc_tke::FT,
-#     ᶜlinear_buoygrad::FT,
-#     ᶜtke::FT,
-#     obukhov_length::FT,
-#     ᶜstrain_rate_norm::FT,
-#     ᶜPr::FT,
-#     ᶜtke_exch::FT,
-#     ::PhysicalMixingLengthModel,
-# ) where {FT}
+Returns mixing length as a smooth minimum between
+wall-constrained length scale,
+production-dissipation balanced length scale,
+effective static stability length scale, and
+Smagorinsky length scale.
+"""
+function mixing_length(
+    params,
+    ustar::FT,
+    ᶜz::FT,
+    z_sfc::FT,
+    ᶜdz::FT,
+    sfc_tke::FT,
+    ᶜlinear_buoygrad::FT,
+    ᶜtke::FT,
+    obukhov_length::FT,
+    ᶜstrain_rate_norm::FT,
+    ᶜPr::FT,
+    ᶜtke_exch::FT,
+    ᶜwʲ::FT,
+    ᶜw⁰::FT,
+    ::PhysicalMixingLengthModel,
+) where {FT}
 
-#     turbconv_params = CAP.turbconv_params(params)
-#     c_m = CAP.tke_ed_coeff(turbconv_params)
-#     c_d = CAP.tke_diss_coeff(turbconv_params)
-#     smin_ub = CAP.smin_ub(turbconv_params)
-#     smin_rm = CAP.smin_rm(turbconv_params)
-#     c_b = CAP.static_stab_coeff(turbconv_params)
-#     vkc = CAP.von_karman_const(params)
+    turbconv_params = CAP.turbconv_params(params)
+    c_m = CAP.tke_ed_coeff(turbconv_params)
+    c_d = CAP.tke_diss_coeff(turbconv_params)
+    smin_ub = CAP.smin_ub(turbconv_params)
+    smin_rm = CAP.smin_rm(turbconv_params)
+    c_b = CAP.static_stab_coeff(turbconv_params)
+    vkc = CAP.von_karman_const(params)
 
-#     param_vec = CAP.mixing_length_param_vec(params)
+    param_vec = CAP.mixing_length_param_vec(params)
 
-#     # compute the maximum mixing length at height z
-#     l_z = ᶜz - z_sfc
+    # compute the maximum mixing length at height z
+    l_z = ᶜz - z_sfc
 
-#     # compute the l_W - the wall constraint mixing length
-#     # which imposes an upper limit on the size of eddies near the surface
-#     # kz scale (surface layer)
-#     if obukhov_length < 0.0 #unstable
-#         l_W =
-#             vkc * (ᶜz - z_sfc) /
-#             max(sqrt(sfc_tke / ustar / ustar) * c_m, eps(FT)) *
-#             min((1 - 100 * (ᶜz - z_sfc) / obukhov_length)^FT(0.2), 1 / vkc)
-#     else # neutral or stable
-#         l_W =
-#             vkc * (ᶜz - z_sfc) /
-#             max(sqrt(sfc_tke / ustar / ustar) * c_m, eps(FT))
-#     end
+    # compute the l_W - the wall constraint mixing length
+    # which imposes an upper limit on the size of eddies near the surface
+    # kz scale (surface layer)
+    if obukhov_length < 0.0 #unstable
+        l_W =
+            vkc * (ᶜz - z_sfc) /
+            max(sqrt(sfc_tke / ustar / ustar) * c_m, eps(FT)) *
+            min((1 - 100 * (ᶜz - z_sfc) / obukhov_length)^FT(0.2), 1 / vkc)
+    else # neutral or stable
+        l_W =
+            vkc * (ᶜz - z_sfc) /
+            max(sqrt(sfc_tke / ustar / ustar) * c_m, eps(FT))
+    end
 
-#     # compute l_TKE - the production-dissipation balanced length scale
-#     a_pd = c_m * (2 * ᶜstrain_rate_norm - ᶜlinear_buoygrad / ᶜPr) * sqrt(ᶜtke)
-#     # Dissipation term
-#     c_neg = c_d * ᶜtke * sqrt(ᶜtke)
-#     if abs(a_pd) > eps(FT) && 4 * a_pd * c_neg > -(ᶜtke_exch * ᶜtke_exch)
-#         l_TKE = max(
-#             -(ᶜtke_exch / 2 / a_pd) +
-#             sqrt(ᶜtke_exch * ᶜtke_exch + 4 * a_pd * c_neg) / 2 / a_pd,
-#             0,
-#         )
-#     elseif abs(a_pd) < eps(FT) && abs(ᶜtke_exch) > eps(FT)
-#         l_TKE = c_neg / ᶜtke_exch
-#     else
-#         l_TKE = FT(0)
-#     end
+    # compute l_TKE - the production-dissipation balanced length scale
+    a_pd = c_m * (2 * ᶜstrain_rate_norm - ᶜlinear_buoygrad / ᶜPr) * sqrt(ᶜtke)
+    # Dissipation term
+    c_neg = c_d * ᶜtke * sqrt(ᶜtke)
+    if abs(a_pd) > eps(FT) && 4 * a_pd * c_neg > -(ᶜtke_exch * ᶜtke_exch)
+        l_TKE = max(
+            -(ᶜtke_exch / 2 / a_pd) +
+            sqrt(ᶜtke_exch * ᶜtke_exch + 4 * a_pd * c_neg) / 2 / a_pd,
+            0,
+        )
+    elseif abs(a_pd) < eps(FT) && abs(ᶜtke_exch) > eps(FT)
+        l_TKE = c_neg / ᶜtke_exch
+    else
+        l_TKE = FT(0)
+    end
 
-#     # compute l_N - the effective static stability length scale.
-#     N_eff = sqrt(max(ᶜlinear_buoygrad, 0))
-#     if N_eff > 0.0
-#         l_N = min(sqrt(max(c_b * ᶜtke, 0)) / N_eff, l_z)
-#     else
-#         l_N = l_z
-#     end
+    # compute l_N - the effective static stability length scale.
+    N_eff = sqrt(max(ᶜlinear_buoygrad, 0))
+    if N_eff > 0.0
+        l_N = min(sqrt(max(c_b * ᶜtke, 0)) / N_eff, l_z)
+    else
+        l_N = l_z
+    end
 
-#     # compute l_smag - smagorinsky length scale
-#     l_smag = smagorinsky_lilly_length(
-#         CAP.c_smag(params),
-#         N_eff,
-#         ᶜdz,
-#         ᶜPr,
-#         ᶜstrain_rate_norm,
-#     )
+    # compute l_smag - smagorinsky length scale
+    l_smag = smagorinsky_lilly_length(
+        CAP.c_smag(params),
+        N_eff,
+        ᶜdz,
+        ᶜPr,
+        ᶜstrain_rate_norm,
+    )
 
-#     # add limiters
-#     l = SA.SVector(
-#         l_N > l_z ? l_z : l_N,
-#         l_TKE > l_z ? l_z : l_TKE,
-#         l_W > l_z ? l_z : l_W,
-#     )
-#     # get soft minimum
-#     l_smin = lamb_smooth_minimum(l, smin_ub, smin_rm)
-#     l_limited = max(l_smag, min(l_smin, l_z))
+    # add limiters
+    l = SA.SVector(
+        l_N > l_z ? l_z : l_N,
+        l_TKE > l_z ? l_z : l_TKE,
+        l_W > l_z ? l_z : l_W,
+    )
+    # get soft minimum
+    l_smin = lamb_smooth_minimum(l, smin_ub, smin_rm)
+    l_limited = max(l_smag, min(l_smin, l_z))
 
-#     # ln_l_bias = param_vec[1].* ((ᶜlinear_buoygrad .- 0.00026)/0.0003)
-#     #     .+ param_vec[2].*abs((ᶜtke .- 0.11454)/0.34)
-#     #     .+ param_vec[3]*((ᶜstrain_rate_norm .- 1.5e-5)/8.03e-5)
+    # ln_l_bias = param_vec[1].* ((ᶜlinear_buoygrad .- 0.00026)/0.0003)
+    #     .+ param_vec[2].*abs((ᶜtke .- 0.11454)/0.34)
+    #     .+ param_vec[3]*((ᶜstrain_rate_norm .- 1.5e-5)/8.03e-5)
 
-#     # l_limited = l_limited + exp(ln_l_bias)
+    # l_limited = l_limited + exp(ln_l_bias)
 
-#     return MixingLength{FT}(l_limited, l_W, l_TKE, l_N)
-# end
+    return MixingLength{FT}(l_limited, l_W, l_TKE, l_N)
+end
 
 """
     turbulent_prandtl_number(params, obukhov_length, ᶜRi_grad)
