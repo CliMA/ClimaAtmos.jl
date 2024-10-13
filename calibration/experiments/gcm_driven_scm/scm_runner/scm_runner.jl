@@ -19,9 +19,7 @@ include("runner_helper.jl")
 using Distributed
 
 
-
-
-NUM_WORKERS = 3
+NUM_WORKERS = 14
 rel_path = "/groups/esm/cchristo/climaatmos_scm_calibrations/scm_runs"
 run_output_dir = joinpath(rel_path, "exp1")
 base_config_path = "model_config_prognostic_runner.yml"
@@ -45,9 +43,18 @@ function generate_atmos_configs(base_config_path::String, parameter_path::String
     num_cases = length(ref_paths)
     atmos_configs = map(collect(1:num_cases)) do i
         config = deepcopy(config_dict)
+
+        cfsite_info = get_cfsite_info_from_path(ref_paths[i])
+        forcing_model = cfsite_info["forcing_model"]
+        experiment = cfsite_info["experiment"]
+        month = cfsite_info["month"]
+        cfsite_number = cfsite_info["cfsite_number"]
+
         config["external_forcing_file"] = get_forcing_file(i, ref_paths)
-        config["cfsite_number"] = get_cfsite_id(i, cfsite_numbers)
-        config["output_dir"] = joinpath(run_output_dir, "config_$i")
+        # config["cfsite_number"] = get_cfsite_id(i, cfsite_numbers)
+        config["cfsite_number"] = string("site", cfsite_number)
+
+        config["output_dir"] = joinpath(run_output_dir, "cfsite_$(cfsite_number)_$(forcing_model)_$(experiment)_$(month)")
         config["external_forcing_type"] = get_cfsite_type(i, cfsite_numbers)
         comms_ctx = ClimaComms.SingletonCommsContext()
         CA.AtmosConfig(config; comms_ctx)
