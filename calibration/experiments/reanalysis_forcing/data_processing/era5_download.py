@@ -4,7 +4,6 @@ dataset = "reanalysis-era5-pressure-levels"
 request = {
     "product_type": ["reanalysis"],
     "variable": [
-        "divergence",
         "fraction_of_cloud_cover",
         "geopotential",
         "relative_humidity",
@@ -15,8 +14,7 @@ request = {
         "temperature",
         "u_component_of_wind",
         "v_component_of_wind",
-        "vertical_velocity",
-        "vorticity"
+        "vertical_velocity"
     ],
     "year": ["2008"],
     "month": ["07"],
@@ -51,7 +49,7 @@ request = {
     ],
     "data_format": "netcdf",
     "download_format": "zip",
-    "area": [-7, -127, -21, -71]
+    "area": [39, -150, 16, -122]#[-7, -127, -21, -71]
 }
 
 client = cdsapi.Client()

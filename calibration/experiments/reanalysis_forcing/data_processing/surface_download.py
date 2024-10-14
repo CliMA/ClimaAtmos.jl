@@ -30,7 +30,7 @@ request = {
     ],
     "data_format": "netcdf",
     "download_format": "unarchived",
-    "area": [-7, -127, -21, -71]
+    "area": [39, -150, 16, -122]#[-7, -127, -21, -71]
 }
 
 client = cdsapi.Client()

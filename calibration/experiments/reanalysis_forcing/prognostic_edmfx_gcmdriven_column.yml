@@ -1,7 +1,7 @@
 initial_condition: "ERA5"
 external_forcing: "ERA5"
 # external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
-external_forcing_file: "era5_forcing_v2.nc"
+external_forcing_file: "era5_forcing.nc"
 cfsite_number : "site23"
 surface_setup: "ERA5"
 turbconv: "prognostic_edmfx"
@@ -26,7 +26,7 @@ dz_bottom: 30
 perturb_initstate: false
 dt: "10secs"
 dt_rad: "30mins"
-t_end: "300hours"
+t_end: "150hours"
 dt_save_state_to_disk: "100hours"
 cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage : true
