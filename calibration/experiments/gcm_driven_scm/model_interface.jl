@@ -59,7 +59,7 @@ function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
 end
 
 
-addprocs(batch_size)
+addprocs(min(batch_size, 5))
 @everywhere begin
     import ClimaAtmos as CA
     using JLD2

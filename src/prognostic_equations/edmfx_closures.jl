@@ -153,45 +153,49 @@ function mixing_length(
 
     param_vec = CAP.mixing_length_param_vec(params)
 
+    l_z = ᶜz - z_sfc
+    # X_vars = ["mix_len_pi1", "mix_len_pi2", "mix_len_pi3", "bgrad", "strain", "tke", "z_obu", "res_obu"]
     X_1 = ᶜstrain_rate_norm / (ᶜlinear_buoygrad + eps(FT)) # mix len pi 1
     X_2 = ᶜtke / (ᶜlinear_buoygrad * ᶜz^2) # mix len pi 2
     X_3 = ᶜtke / (((ᶜwʲ - ᶜw⁰)^2 + eps(FT))) # mix len pi 3
-    X_4 = ᶜlinear_buoygrad
-    X_5 = ᶜstrain_rate_norm
-    X_6 = ᶜtke
-    X_7 = obukhov_length # obu_z
+    X_4 = ᶜlinear_buoygrad #bgrad
+    X_5 = ᶜstrain_rate_norm #strain
+    X_6 = ᶜtke #tke
+    X_7 = ᶜz / (obukhov_length + eps(FT)) # z_obu
+    X_8 = ᶜdz / (obukhov_length + eps(FT)) # res_obu
 
 
     # clip to avoid blowup 
-    X_1 = clamp(X_1, -10.0, 10.0)
-    X_2 = clamp(X_2, -1e4, 1e4)        # Threshold for mix_len_pi2
-    X_3 = clamp(X_3, -10.0, 10.0)      # Threshold for mix_len_pi3
-    X_4 = clamp(X_4, -0.02, 0.02)      # Threshold for bgrad
-    X_7 = clamp(X_7, -30.0, 30.0)
+    X_1 = clamp(X_1, -100.0, 100.0)
+    X_2 = clamp(X_2, -1e4, 1e4)
+    X_3 = clamp(X_3, -100.0, 100.0)
+    X_4 = clamp(X_4, -0.02, 0.02)
+    X_5 = clamp(X_5, -1e-3, 1e-3)
+    X_7 = clamp(X_7, -3e4, 3e4)
+    X_8 = clamp(X_8, -2500, 2500)
 
 
     means = Dict{Symbol, FT}(
-        :X_1 => FT(0.5721),
-        :X_2 => FT(-1.5775),
-        :X_3 => FT(0.3665),
-        :X_4 => FT(4.69e-5),
-        :X_5 => FT(2.61e-5), 
-        :X_6 => FT(0.0809), 
-        :X_7 => FT(-0.6000)
+        :X_1 => FT(0.08152589946985245),    # mix_len_pi1
+        :X_2 => FT(-9.220643997192383),     # mix_len_pi2
+        :X_3 => FT(1.456505298614502),      # mix_len_pi3
+        :X_4 => FT(4.150567838223651e-05),  # bgrad
+        :X_5 => FT(1.2203592632431537e-05), # strain
+        :X_6 => FT(0.1851629614830017),     # tke
+        :X_7 => FT(-56.88902282714844),     # z_obu
+        :X_8 => FT(-7.018703460693359)      # res_obu
     )
-
+    
     stds = Dict{Symbol, FT}(
-        :X_1 => FT(2.143),
-        :X_2 => FT(10.3738),
-        :X_3 => FT(0.8656),
-        :X_4 => FT(2.52e-4),
-        :X_5 => FT(8.22e-5),
-        :X_6 => FT(0.0771),
-        :X_7 => FT(1.528)
+        :X_1 => FT(42.38632678985596),        # mix_len_pi1
+        :X_2 => FT(1158.9794158935547),       # mix_len_pi2
+        :X_3 => FT(55.166049003601074),        # mix_len_pi3
+        :X_4 => FT(0.0010860399197554216),     # bgrad
+        :X_5 => FT(0.0001870773485279642),     # strain
+        :X_6 => FT(2.441168576478958),          # tke
+        :X_7 => FT(4223.447265625),            # z_obu
+        :X_8 => FT(414.67926025390625)         # res_obu
     )
-
-
-
 
     # Normalizing the variables
     X_1 = (X_1 - means[:X_1]) / stds[:X_1]
@@ -201,16 +205,33 @@ function mixing_length(
     X_5 = (X_5 - means[:X_5]) / stds[:X_5]
     X_6 = (X_6 - means[:X_6]) / stds[:X_6]
     X_7 = (X_7 - means[:X_7]) / stds[:X_7]
+    X_8 = (X_8 - means[:X_8]) / stds[:X_8]
 
-    X = [X_1, X_2, X_3, X_4, X_5, X_6, X_7]
+    X = [X_1, X_2, X_3, X_4, X_5, X_6, X_7, X_8]
 
 
-    arc = [length(X), 15, 10, 5, 1]
+    # arc = [length(X), 15, 10, 5, 1]
+    arc = [length(X), 20, 15, 10, 1]
+
     nn_model = construct_fully_connected_nn(arc, param_vec; biases_bool = true, output_layer_activation_function = Flux.identity)
 
     # l_limited = max(nn_model([X]), 0.0)
     l_limited_norm = nn_model(X)[1]
-    l_limited = max(FT(l_limited_norm) * FT(62.2416) + FT(39.7169), FT(0.0))
+    l_limited = max(FT(l_limited_norm) * FT(510.1035690307617) + FT(36.83180618286133), FT(0.0))
+
+    
+
+
+    N_eff = sqrt(max(ᶜlinear_buoygrad, 0))
+
+    l_smag = smagorinsky_lilly_length(
+        CAP.c_smag(params),
+        N_eff,
+        ᶜdz,
+        ᶜPr,
+        ᶜstrain_rate_norm,
+    )
+    l_limited = max(l_smag, min(l_limited, l_z))
 
     if ᶜtke < FT(0.001)
         l_limited = FT(0.0)

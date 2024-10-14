@@ -5,10 +5,16 @@ import EnsembleKalmanProcesses as EKP
 import YAML
 import JLD2
 using LinearAlgebra
+using Random
+using Flux
+using TOML
+using Distributions
+
 
 include("helper_funcs.jl")
 include("observation_map.jl")
 include("get_les_metadata.jl")
+include("nn_helpers.jl")
 
 function main()
     s = ArgParseSettings()
@@ -37,54 +43,32 @@ function main()
         end
     end
 
-    prior = CAL.get_prior(joinpath(output_dir, "configs", "prior.toml"))
+    prior_dict = TOML.parsefile(joinpath(output_dir, "configs", "prior.toml"))
+
+    parameter_names = keys(prior_dict)
+
+    prior_vec = Vector{EKP.ParameterDistribution}(undef, length(parameter_names))
+    for (i, n) in enumerate(parameter_names)
+        prior_vec[i] = CAL.get_parameter_distribution(prior_dict, n)
+    end
+
+    @load pretrained_nn_path serialized_weights
+    num_nn_params = length(serialized_weights)
+
+    arc = [8, 20, 15, 10, 1]
+    nn_model = construct_fully_connected_nn(arc, deepcopy(serialized_weights); biases_bool = true, output_layer_activation_function = Flux.identity)
+    serialized_stds = serialize_std_model(nn_model; std_weight = 0.03, std_bias = 0.005)
+
+    nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], serialized_stds[ii]) for ii in 1:num_nn_params])
+    nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
+    nn_prior = EKP.ParameterDistribution(nn_mean_std, nn_constraint, "mixing_length_param_vec")
+    push!(prior_vec, nn_prior)
+
+    prior = EKP.combine_distributions(prior_vec)
 
     model_config_dict = YAML.load_file(joinpath(output_dir, "configs", "model_config.yml"))
     atmos_config = CA.AtmosConfig(model_config_dict)
 
-    ref_paths, _ = get_les_calibration_library()
-    obs_vec = []
-
-    for ref_path in ref_paths
-        cfsite_number, _, _, _ = parse_les_path(ref_path)
-        forcing_type = get_cfsite_type(cfsite_number)
-        zc_model = get_cal_z_grid(atmos_config, z_cal_grid, forcing_type)
-
-        ti = experiment_config["y_t_start_sec"]
-        ti = isa(ti, AbstractFloat) ? ti : ti[forcing_type]
-        tf = experiment_config["y_t_end_sec"]
-        tf = isa(tf, AbstractFloat) ? tf : tf[forcing_type]
-
-        y_obs, Σ_obs, norm_vec_obs = get_obs(
-            ref_path,
-            experiment_config["y_var_names"],
-            zc_model;
-            ti = ti,
-            tf = tf,
-            norm_factors_dict = norm_factors_by_var,
-            z_score_norm = true,
-            log_vars = log_vars,
-            Σ_const = const_noise_by_var,
-            Σ_scaling = "const",
-        )
-
-        push!(
-            obs_vec,
-            EKP.Observation(
-                Dict(
-                    "samples" => y_obs,
-                    "covariances" => Σ_obs,
-                    "names" => split(ref_path, "/")[end],
-                ),
-            ),
-        )
-    end
-
-    series_names = [ref_paths[i] for i in 1:length(ref_paths)]
-
-    rfs_minibatcher =
-        EKP.FixedMinibatcher(collect(1:experiment_config["batch_size"]))
-    observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
     @info "Initializing calibration" n_iterations ensemble_size output_dir
 
@@ -108,14 +92,13 @@ function main()
             end
         end
     end
-    
 
-    # eki = nothing
+
     eki_path = joinpath(CAL.path_to_iteration(output_dir, latest_iteration), "eki_file.jld2")
     eki = JLD2.load_object(eki_path)
 
     hpc_kwargs = CAL.kwargs(
-        time = 90,
+        time = 120,
         mem_per_cpu = "12G",
         cpus_per_task = batch_size + 1,
         ntasks = 1,
@@ -127,7 +110,7 @@ function main()
         @info "Iteration $iter"
         jobids = map(1:ensemble_size) do member
             @info "Running ensemble member $member"
-            member_dir = joinpath(output_dir, "iteration_$(lpad(iter, 3, '0'))", "member_$(lpad(member, 3, '0'))")
+
             CAL.slurm_model_run(
                 iter,
                 member,

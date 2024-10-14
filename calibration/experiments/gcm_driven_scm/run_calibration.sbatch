@@ -3,7 +3,7 @@
 #SBATCH --time=24:00:00   # walltime
 #SBATCH --nodes=1   # number of nodes
 #SBATCH --ntasks=1  # number of processor cores (i.e. tasks)
-#SBATCH --mem=10G   # memory
+#SBATCH --mem=60G   # memory
 #SBATCH -J "scm_calibration"   # job name
 #SBATCH --output=scm_calibration.out
 
