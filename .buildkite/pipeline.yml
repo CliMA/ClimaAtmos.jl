@@ -444,26 +444,35 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16G
 
+      # This job occasionally times out. We add a soft file when the agent is
+      # lost because of timeout
+      - label: ":computer: test restart MPI"
+        command: >
+          srun julia --color=yes --project=examples test/restart.jl
+        env:
+          CLIMACOMMS_CONTEXT: "MPI"
+        timeout_in_minutes: 20
+        soft_fail:
+          - exit_status: -1
+        agents:
+          slurm_ntasks: 2
+          slurm_mem: 16G
 
-      # - label: ":computer: test restart MPI"
-      #   command: >
-      #     srun julia --color=yes --project=examples test/restart.jl
-      #   env:
-      #     CLIMACOMMS_CONTEXT: "MPI"
-      #   agents:
-      #     slurm_ntasks: 2
-      #     slurm_mem: 16G
-
-      # - label: ":computer: test restart GPU MPI"
-      #   command: >
-      #     srun julia --color=yes --project=examples test/restart.jl
-      #   env:
-      #     CLIMACOMMS_CONTEXT: "MPI"
-      #     CLIMACOMMS_DEVICE: "CUDA"
-      #   agents:
-      #     slurm_gpus_per_task: 1
-      #     slurm_ntasks: 2
-      #     slurm_mem: 16G
+      # This job occasionally times out. We add a soft file when the agent is
+      # lost because of timeout
+      - label: ":computer: test restart GPU MPI"
+        command: >
+          srun julia --color=yes --project=examples test/restart.jl
+        env:
+          CLIMACOMMS_CONTEXT: "MPI"
+          CLIMACOMMS_DEVICE: "CUDA"
+        timeout_in_minutes: 20
+        soft_fail:
+          - exit_status: -1
+        agents:
+          slurm_gpus_per_task: 1
+          slurm_ntasks: 2
+          slurm_mem: 20G
 
   - group: "MPI Examples"
     steps:
@@ -930,6 +939,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
+          slurm_mem: 16G
 
       - label: "GPU: Diagnostic EDMFX aquaplanet"
         key: "diagnostic_edmfx_aquaplanet_gpu"
