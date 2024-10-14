@@ -4,6 +4,8 @@ import EnsembleKalmanProcesses as EKP
 import YAML
 import TOML
 using Distributions
+using Random
+using Flux
 
 import JLD2
 using LinearAlgebra
@@ -11,6 +13,7 @@ using LinearAlgebra
 include("helper_funcs.jl")
 include("observation_map.jl")
 include("get_les_metadata.jl")
+include("nn_helpers.jl")
 
 
 experiment_dir = dirname(Base.active_project())
@@ -34,14 +37,29 @@ for (i, n) in enumerate(parameter_names)
 end
 
 # load pretrained weights (prior mean) and nn
+# @load pretrained_nn_path serialized_weights
+# num_nn_params = length(serialized_weights)
+# nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], 0.05) for ii in 1:num_nn_params])
+# nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
+# nn_prior = EKP.ParameterDistribution(nn_mean_std, nn_constraint, "mixing_length_param_vec")
+# push!(prior_vec, nn_prior)
+
+# prior = EKP.combine_distributions(prior_vec)
+
 @load pretrained_nn_path serialized_weights
 num_nn_params = length(serialized_weights)
-nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], 0.02) for ii in 1:num_nn_params])
+
+arc = [8, 20, 15, 10, 1]
+nn_model = construct_fully_connected_nn(arc, deepcopy(serialized_weights); biases_bool = true, output_layer_activation_function = Flux.identity)
+serialized_stds = serialize_std_model(nn_model; std_weight = 0.03, std_bias = 0.005)
+
+nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], serialized_stds[ii]) for ii in 1:num_nn_params])
 nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
 nn_prior = EKP.ParameterDistribution(nn_mean_std, nn_constraint, "mixing_length_param_vec")
 push!(prior_vec, nn_prior)
 
 prior = EKP.combine_distributions(prior_vec)
+
 
 # load configs and directories 
 model_config_dict = YAML.load_file(model_config)
@@ -113,9 +131,40 @@ end
 
 series_names = [ref_paths[i] for i in 1:length(ref_paths)]
 
-### define minibatcher
+
+# function create_minibatches_internal(n_indices::Int, batch_size::Int)
+#     shuffled_indices = shuffle(1:n_indices)
+#     num_full_batches = div(n_indices, batch_size)
+#     remainder = rem(n_indices, batch_size)
+#     batches = [collect(shuffled_indices[(i-1)*batch_size + 1 : i*batch_size]) for i in 1:num_full_batches]
+#     if remainder > 0
+#         batches[num_full_batches] = vcat(batches[num_full_batches], collect(shuffled_indices[num_full_batches * batch_size + 1 : end]))
+#     end
+#     return batches
+# end
+
+function create_minibatches_internal(n_indices::Int, batch_size::Int)
+    shuffled_indices = shuffle(1:n_indices)
+    num_full_batches = div(n_indices, batch_size)
+    batches = [collect(shuffled_indices[(i-1)*batch_size + 1 : i*batch_size]) for i in 1:num_full_batches]
+    return batches
+end
+
+minibatch_inds = create_minibatches_internal(length(series_names), experiment_config["batch_size"])
+
+@show minibatch_inds
+
 rfs_minibatcher =
-    EKP.FixedMinibatcher(collect(1:experiment_config["batch_size"]))
+    EKP.FixedMinibatcher(minibatch_inds)
+
+
+# for (i, batch) in enumerate(rfs_minibatcher)
+#     println("Batch $i: ", batch)
+# end
+    
+# rfs_minibatcher =
+#     EKP.FixedMinibatcher(collect(1:experiment_config["batch_size"]))
+
 observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
 ###  EKI hyperparameters/settings
@@ -136,9 +185,9 @@ CAL.initialize(
 
 eki = nothing
 hpc_kwargs = CAL.kwargs(
-    time = 60,
+    time = 120,
     mem_per_cpu = "12G",
-    cpus_per_task = batch_size + 1,
+    cpus_per_task = min(batch_size + 1, 5),
     ntasks = 1,
     nodes = 1,
     # reservation = "clima",

@@ -7,19 +7,45 @@ using Glob
 CFSITE_TYPES = Dict("shallow" => (collect(4:15)..., collect(17:23)...),
                     "deep" =>  (collect(30:33)..., collect(66:70)..., 82, 92, 94, 96, 99, 100))
 
-function get_les_calibration_library()
-    les_library = get_shallow_LES_library()
-    # AMIP data: July, NE Pacific
-    cfsite_numbers = (17, 18, 22, 23, 30, 94)
-    les_kwargs = (forcing_model = "HadGEM2-A", month = 7, experiment = "amip")
-    ref_paths = [
-        get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...)) for
-        cfsite_number in cfsite_numbers
-    ]
+# function get_les_calibration_library()
+#     les_library = get_shallow_LES_library()
+#     # AMIP data: July, NE Pacific
+#     cfsite_numbers = (17, 18, 22, 23, 30, 94)
+#     les_kwargs = (forcing_model = "HadGEM2-A", month = 7, experiment = "amip")
+#     ref_paths = [
+#         get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...)) for
+#         cfsite_number in cfsite_numbers
+#     ]
+#     return (ref_paths, cfsite_numbers)
+# end
+
+
+function get_les_calibration_library() # HADGEM
+    les_library = get_LES_library()
+    ref_paths = String[]
+    cfsite_numbers = Int[]
+    models = ["HadGEM2-A"]
+    for model in models
+        for month in keys(les_library[model])
+            cfsite_numbers_i = [parse(Int, key) for key in keys(les_library[model][month]["cfsite_numbers"])]
+            les_kwargs = (forcing_model = model, month = parse(Int, month), experiment = "amip")
+            for cfsite_number in cfsite_numbers_i
+                try
+                    stats_path = get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...))
+                    push!(ref_paths, stats_path)
+                    push!(cfsite_numbers, cfsite_number)
+                catch e
+                    if isa(e, AssertionError)
+                        continue
+                    else
+                        rethrow(e)
+                    end
+                end
+            end
+        end
+    end
     return (ref_paths, cfsite_numbers)
 end
-
-
 
 
 # function get_les_calibration_library()
@@ -76,11 +102,13 @@ function get_LES_library()
     LES_library = get_shallow_LES_library()
     deep_sites = deepcopy(CFSITE_TYPES["deep"])
 
-    append!(LES_library["HadGEM2-A"]["07"]["cfsite_numbers"], deep_sites)
-    append!(LES_library["HadGEM2-A"]["01"]["cfsite_numbers"], deep_sites)
-    sites_04 = deepcopy(setdiff(deep_sites, [32, 92, 94]))
+    sites_07 = deepcopy(setdiff(deep_sites, [92, 99, 100]))
+    append!(LES_library["HadGEM2-A"]["07"]["cfsite_numbers"], sites_07)
+    sites_01 = deepcopy(setdiff(deep_sites, [99,]))
+    append!(LES_library["HadGEM2-A"]["01"]["cfsite_numbers"], sites_01)
+    sites_04 = deepcopy(setdiff(deep_sites, [32, 92, 94, 96, 99, 100]))
     append!(LES_library["HadGEM2-A"]["04"]["cfsite_numbers"], sites_04)
-    sites_10 = deepcopy(setdiff(deep_sites, [94, 100]))
+    sites_10 = deepcopy(setdiff(deep_sites, [92, 94, 99, 100]))
     append!(LES_library["HadGEM2-A"]["10"]["cfsite_numbers"], sites_10)
 
     LES_library_full = deepcopy(LES_library)
