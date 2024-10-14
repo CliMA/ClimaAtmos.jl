@@ -225,6 +225,8 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     @assert add_isothermal_boundary_layer in (true, false)
     aerosol_radiation = parsed_args["aerosol_radiation"]
     @assert aerosol_radiation in (true, false)
+    seed_rng = parsed_args["radiation_seed_rng"]
+    @assert seed_rng in (true, false)
     radiation_name = parsed_args["rad"]
     @assert radiation_name in (
         nothing,
@@ -251,6 +253,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
             idealized_clouds,
             add_isothermal_boundary_layer,
             aerosol_radiation,
+            seed_rng,
         )
     elseif radiation_name == "allskywithclear"
         RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(
@@ -258,6 +261,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
             idealized_clouds,
             add_isothermal_boundary_layer,
             aerosol_radiation,
+            seed_rng,
         )
     elseif radiation_name == "DYCOMS"
         RadiationDYCOMS{FT}()

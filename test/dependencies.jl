@@ -57,6 +57,7 @@ known_dependencies = Set([
     "NCDatasets",
     "NVTX",
     "RRTMGP",
+    "Random",
     "SciMLBase",
     "StaticArrays",
     # Statistics is used to call 'mean' on ClimaCore Fields

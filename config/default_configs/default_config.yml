@@ -336,3 +336,6 @@ edmfx_sgs_diffusive_flux:
 updraft_number:
   help: "Sets the number of updrafts for the EDMF scheme"
   value: 1
+radiation_seed_rng:
+  help: "Seeds the random number generator with simulation time in seconds before updating fluxes if clouds are present"
+  value: true
