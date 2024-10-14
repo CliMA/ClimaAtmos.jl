@@ -6,50 +6,6 @@ import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
 
 """
-    set_prognostic_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
-
-Updates the edmf environment precomputed quantities stored in `p` for edmfx.
-"""
-NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
-    Y,
-    p,
-    ᶠuₕ³,
-    t,
-)
-    @assert !(p.atmos.moisture_model isa DryModel)
-
-    thermo_params = CAP.thermodynamics_params(p.params)
-    (; turbconv_model) = p.atmos
-    (; ᶜΦ,) = p.core
-    (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
-    (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
-        p.precomputed
-
-    @. ᶜρa⁰ = ρa⁰(Y.c)
-    @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
-    @. ᶜmse⁰ = divide_by_ρa(
-        Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
-        ᶜρa⁰,
-        Y.c.ρ * (ᶜh_tot - ᶜK),
-        Y.c.ρ,
-        turbconv_model,
-    )
-    @. ᶜq_tot⁰ = divide_by_ρa(
-        Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
-        ᶜρa⁰,
-        Y.c.ρq_tot,
-        Y.c.ρ,
-        turbconv_model,
-    )
-    set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
-    set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
-    # @. ᶜK⁰ += ᶜtke⁰
-    @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
-    @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
-    return nothing
-end
-
-"""
     set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
 
 Updates the draft thermo state and boundary conditions
@@ -62,8 +18,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
     t,
 )
     (; moisture_model, turbconv_model) = p.atmos
-    #EDMFX BCs only support total energy as state variable
-    @assert !(moisture_model isa DryModel)
 
     FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
@@ -78,20 +32,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
     for j in 1:n
-        ᶜuʲ = ᶜuʲs.:($j)
-        ᶠu³ʲ = ᶠu³ʲs.:($j)
-        ᶜKʲ = ᶜKʲs.:($j)
-        ᶠKᵥʲ = ᶠKᵥʲs.:($j)
-        ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
         ᶜtsʲ = ᶜtsʲs.:($j)
-        ᶜρʲ = ᶜρʲs.:($j)
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
-
-        set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
-        @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
-        @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
-        @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
 
         # EDMFX boundary condition:
 

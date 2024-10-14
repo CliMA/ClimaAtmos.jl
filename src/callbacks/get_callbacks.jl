@@ -23,6 +23,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
         "average" => ((+), CAD.average_pre_output_hook!),
     )
 
+    dict_writer = CAD.DictWriter()
     hdf5_writer = CAD.HDF5Writer(p.output_dir)
 
     if !isnothing(parsed_args["netcdf_interpolation_num_points"])
@@ -45,11 +46,13 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
         z_sampling_method,
         sync_schedule = CAD.EveryStepSchedule(),
     )
-    writers = (hdf5_writer, netcdf_writer)
 
-    # The default writer is HDF5
+    writers = (; dict_writer, hdf5_writer, netcdf_writer)
+
+    # The default writer is NetCDF
     ALLOWED_WRITERS = Dict(
         "nothing" => netcdf_writer,
+        "dict" => dict_writer,
         "h5" => hdf5_writer,
         "hdf5" => hdf5_writer,
         "nc" => netcdf_writer,
@@ -157,7 +160,47 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
             diagnostics...,
         ]
     end
-    diagnostics = collect(diagnostics)
+    if parsed_args["output_default_diagnostics"] && (
+        parsed_args["use_exact_jacobian"] ||
+        parsed_args["debug_approximate_jacobian"]
+    )
+        period_seconds =
+            min(
+                max(
+                    1,
+                    parsed_args["n_steps_update_exact_jacobian"],
+                    fld(p.t_end / 9, p.dt), # Save no more than 10 matrices.
+                ),
+                fld(p.t_end, p.dt), # Save at least 2 matrices.
+            ) * p.dt
+        schedule = CAD.EveryDtSchedule(period_seconds)
+        exact_jacobian_diagnostic = CAD.ScheduledDiagnostic(;
+            variable = CAD.get_diagnostic_variable("ejac1"),
+            output_schedule_func = schedule,
+            compute_schedule_func = deepcopy(schedule),
+            output_writer = dict_writer,
+        )
+        diagnostics = [diagnostics..., exact_jacobian_diagnostic]
+        if parsed_args["debug_approximate_jacobian"]
+            approx_jacobian_diagnostic = CAD.ScheduledDiagnostic(;
+                variable = CAD.get_diagnostic_variable("ajac1"),
+                output_schedule_func = deepcopy(schedule),
+                compute_schedule_func = deepcopy(schedule),
+                output_writer = dict_writer,
+            )
+            approx_jacobian_error_diagnostic = CAD.ScheduledDiagnostic(;
+                variable = CAD.get_diagnostic_variable("ajacerr1"),
+                output_schedule_func = deepcopy(schedule),
+                compute_schedule_func = deepcopy(schedule),
+                output_writer = dict_writer,
+            )
+            diagnostics = [
+                diagnostics...,
+                approx_jacobian_diagnostic,
+                approx_jacobian_error_diagnostic,
+            ]
+        end
+    end
 
     for writer in writers
         writer_str = nameof(typeof(writer))
@@ -275,6 +318,19 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         dt_cf = FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
         callbacks =
             (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
+    end
+
+    if (
+        parsed_args["use_exact_jacobian"] ||
+        parsed_args["debug_approximate_jacobian"]
+    ) && parsed_args["n_steps_update_exact_jacobian"] != 0
+        callbacks = (
+            callbacks...,
+            call_every_n_steps(
+                update_exact_jacobian!,
+                parsed_args["n_steps_update_exact_jacobian"],
+            ),
+        )
     end
 
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode

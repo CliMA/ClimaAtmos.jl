@@ -1227,3 +1227,155 @@ add_diagnostic_variable!(
     comments = "Mass of water vapor per mass of air",
     compute! = compute_husv!,
 )
+
+###
+# Implicit solver
+###
+function compute_ejac1!(out, state, cache, time)
+    FT = eltype(state)
+    device = ClimaComms.device(state)
+    first_column_jacobian = view(cache.jacobian.cache.column_matrices, 1, :, :)
+    if isnothing(out)
+        column_length = length(first(column_iterator(state)))
+        out = Array{FT}(undef, column_length, column_length)
+    end
+    ClimaComms.allowscalar(copyto!, device, out, first_column_jacobian)
+    view(out, LinearAlgebra.diagind(out)) .+= 1
+    out ./= cache.jacobian.cache.dtγ_ref[]
+end
+
+add_diagnostic_variable!(
+    short_name = "ejac1",
+    long_name = "Exact Jacobian matrix of first column",
+    standard_name = "exact_jacobian",
+    units = "",
+    comments = "Exact Jacobian matrix of tendency in first column",
+    compute! = compute_ejac1!,
+)
+
+tensor_axes_tuple(::Type{T}) where {T} =
+    T <: Geometry.AxisTensor ?
+    map(axis -> typeof(axis).parameters[1], axes(T)) : ()
+
+# TODO: Move this function to ClimaCore.
+# In order for the following function to be used in Field broadcast expressions,
+# it has to be type-stable. As of Julia 1.10, this means that it needs to use
+# unrolled functions, and that its default recursion limit must be disabled.
+primitive_value_at_index(value, (row_axes, col_axes)) =
+    if isprimitivetype(typeof(value)) # same as a LinearAlgebra.UniformScaling
+        row_axes == col_axes ? value : zero(value)
+    elseif value isa Geometry.AxisVector
+        @assert isprimitivetype(eltype(value))
+        @assert length(row_axes) == 1 && length(col_axes) == 0
+        value_axes = tensor_axes_tuple(typeof(value))
+        row_axis_index = findfirst(==(row_axes[1]), value_axes[1])
+        isnothing(row_axis_index) ? zero(eltype(value)) : value[row_axis_index]
+    elseif value isa Geometry.AxisTensor
+        @assert isprimitivetype(eltype(value))
+        @assert length(row_axes) == 1 && length(col_axes) == 1
+        value_axes = tensor_axes_tuple(typeof(value))
+        row_axis_index = findfirst(==(row_axes[1]), value_axes[1])
+        col_axis_index = findfirst(==(col_axes[1]), value_axes[2])
+        isnothing(row_axis_index) || isnothing(col_axis_index) ?
+        zero(eltype(value)) : value[row_axis_index, col_axis_index]
+    elseif value isa LinearAlgebra.Adjoint
+        primitive_value_at_index(parent(value), (col_axes, row_axes))
+    else
+        sub_names = fieldnames(typeof(value))
+        sub_values =
+            MatrixFields.unrolled_map(Base.Fix1(getfield, value), sub_names)
+        nonempty_sub_values =
+            MatrixFields.unrolled_filter(x -> sizeof(x) > 0, sub_values)
+        @assert length(nonempty_sub_values) == 1
+        primitive_value_at_index(nonempty_sub_values[1], (row_axes, col_axes))
+    end
+
+@static if hasfield(Method, :recursion_relation)
+    for method in methods(primitive_value_at_index)
+        method.recursion_relation = Returns(true)
+    end
+end
+
+function compute_ajac1!(out, state, cache, time)
+    FT = eltype(state)
+    device = ClimaComms.device(state)
+    field_names = scalar_field_names(state)
+    index_ranges = scalar_field_index_ranges(state)
+    if isnothing(out)
+        column_length = length(first(column_iterator(state)))
+        out = Array{FT}(undef, column_length, column_length)
+    end
+    out .= FT(0)
+    for ((block_row, block_col), matrix_block) in cache.jacobian.cache.matrix
+        is_child_name_of_row = Base.Fix2(MatrixFields.is_child_name, block_row)
+        is_child_name_of_col = Base.Fix2(MatrixFields.is_child_name, block_col)
+        subblock_row_indices = findall(is_child_name_of_row, field_names)
+        subblock_col_indices = findall(is_child_name_of_col, field_names)
+        for (sub_row, subblock_row_index) in enumerate(subblock_row_indices)
+            for (sub_col, subblock_col_index) in enumerate(subblock_col_indices)
+                row_index_range = index_ranges[subblock_row_index]
+                col_index_range = index_ranges[subblock_col_index]
+                out_subblock = view(out, row_index_range, col_index_range)
+                if matrix_block isa LinearAlgebra.UniformScaling
+                    view(out_subblock, LinearAlgebra.diagind(out_subblock)) .=
+                        sub_row == sub_col ? matrix_block.λ :
+                        zero(matrix_block.λ)
+                else
+                    block_row_field = MatrixFields.get_field(state, block_row)
+                    block_col_field = MatrixFields.get_field(state, block_col)
+                    subblock_row_axes = map(
+                        Base.Fix2(getindex, sub_row),
+                        tensor_axes_tuple(eltype(block_row_field)),
+                    )
+                    subblock_col_axes = map(
+                        Base.Fix2(getindex, sub_col),
+                        tensor_axes_tuple(eltype(block_col_field)),
+                    )
+                    @assert length(subblock_row_axes) in (0, 1)
+                    @assert length(subblock_col_axes) in (0, 1)
+                    value_in_subblock = Base.Fix2(
+                        primitive_value_at_index,
+                        (subblock_row_axes, subblock_col_axes),
+                    )
+                    column_block = Fields.column(matrix_block, 1, 1, 1)
+                    column_subblock = map.(value_in_subblock, column_block)
+                    ClimaComms.allowscalar(
+                        copyto!,
+                        device,
+                        out_subblock,
+                        MatrixFields.column_field2array_view(column_subblock),
+                    )
+                end
+            end
+        end
+    end
+    view(out, LinearAlgebra.diagind(out)) .+= FT(1)
+    out ./= cache.jacobian.cache.dtγ_ref[]
+end
+
+add_diagnostic_variable!(
+    short_name = "ajac1",
+    long_name = "Approximate Jacobian matrix of first column",
+    standard_name = "approx_jacobian",
+    units = "",
+    comments = "Approximate Jacobian matrix of tendency in first column",
+    compute! = compute_ajac1!,
+)
+
+add_diagnostic_variable!(
+    short_name = "ajacerr1",
+    long_name = "Error of approximate Jacobian matrix of first column",
+    standard_name = "approx_jacobian_error",
+    units = "",
+    comments = "Error of approximate Jacobian matrix of tendency in first column",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            compute_ajac1!(nothing, state, cache, time) .-
+            compute_ejac1!(nothing, state, cache, time)
+        else
+            compute_ajac1!(out, state, cache, time)
+            out .-= compute_ejac1!(nothing, state, cache, time)
+            # TODO: Rewrite this to avoid allocations.
+        end
+    end,
+)

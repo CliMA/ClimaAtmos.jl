@@ -204,6 +204,7 @@ struct MixingLength{FT}
     tke::FT
     buoy::FT
 end
+MixingLength(args...) = MixingLength{promote_type(typeof.(args)...)}(args...)
 
 abstract type AbstractEDMF end
 
