@@ -10,49 +10,33 @@ using LinearAlgebra
 using DataFrames
 using Statistics
 
-# output_dir = "output/exp_1"
-iterations = nothing
-# output_dir = "output_deep_conv_etki_exp/exp_13" # output directory
-output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/precal/exp2"
-iteration = 9 # iteration to get optimal particles
-final_iter = iteration + 1
-
-n_lowest = 150
 
 include("helper_funcs.jl")
+# output_dir = "output/exp_1"
+# iterations = nothing
+# output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/precal/exp2"
+output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_39"
+iteration = 13 # iteration to get optimal particles
+final_iter = iteration + 1
 
-prior_dict = TOML.parsefile(joinpath(output_dir, "configs", "prior.toml"))
+n_lowest = 200
 
-function serialize_dict(dict)
-    serialized = Dict{String, Any}()
-    for (key, value) in dict
-        if isa(value, Dict)
-            serialized[key] = serialize_dict(value)
-        elseif isa(value, Vector)
-            serialized[key] = [isa(v, Union{Int, Float64, String, Bool, Array}) ? v : string(v) for v in value]
-        elseif isa(value, Union{Int, Float64, String, Bool})
-            serialized[key] = value
-        else
-            serialized[key] = string(value)
-        end
-    end
-    return serialized
-end
 
-serializable_dict = serialize_dict(prior_dict)
 
-# Open a file and write the serialized TOML dictionary
-open("tessy_prior.toml", "w") do io
-    TOML.print(io, serializable_dict)
-end
+const config_dict =
+    YAML.load_file(joinpath(output_dir, "configs", "experiment_config.yml"))
+const pretrained_nn_path = config_dict["pretrained_nn_path"]
 
+
+prior_path = joinpath(output_dir, "configs", "prior.toml")
+prior = create_prior_with_nn(prior_path, pretrained_nn_path)
 
 
 
 # TOML.write("tessy_prior.toml", prior_dict)
 
 
-const prior = CAL.get_prior(joinpath(output_dir, "configs", "prior.toml"))
+# const prior = CAL.get_prior(joinpath(output_dir, "configs", "prior.toml"))
 
 
 ### print best particles and loss
@@ -101,7 +85,9 @@ phi_best_std = std(phi_best, dims = 2)
  
 ### find ensemble member nearest to be mean 
 
-mean_diff = sum(abs, u .- u_best_mean, dims = 1)
+
+# mean_diff = sum(abs, u .- u_best_mean, dims = 1)
+mean_diff = sum(abs, u .- mean(u, dims = 2), dims = 1)
 nearest_mean_index = argmin(mean_diff)  
 col_index = nearest_mean_index[2]
 

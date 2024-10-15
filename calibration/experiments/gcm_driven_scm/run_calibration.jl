@@ -21,20 +21,29 @@ const model_interface = joinpath(experiment_dir, "model_interface.jl")
 const experiment_config =
     YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
+
 # unpack experiment_config vars into scope 
 for (key, value) in experiment_config
     @eval const $(Symbol(key)) = $value
 end
 
-prior_dict = TOML.parsefile(joinpath(experiment_dir, prior_path))
+# load configs and directories 
+model_config_dict = YAML.load_file(model_config)
+atmos_config = CA.AtmosConfig(model_config_dict)
+
+
+
+# prior_path = joinpath(experiment_dir, prior_path)
+
+# prior_dict = TOML.parsefile(joinpath(experiment_dir, prior_path))
 # const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
-parameter_names = keys(prior_dict)
-# prior_vec = [CAL.get_parameter_distribution(prior_dict, n) for n in parameter_names]
-prior_vec = Vector{EKP.ParameterDistribution}(undef, length(parameter_names))
-for (i, n) in enumerate(parameter_names)
-    prior_vec[i] = CAL.get_parameter_distribution(prior_dict, n)
-end
+# parameter_names = keys(prior_dict)
+# # prior_vec = [CAL.get_parameter_distribution(prior_dict, n) for n in parameter_names]
+# prior_vec = Vector{EKP.ParameterDistribution}(undef, length(parameter_names))
+# for (i, n) in enumerate(parameter_names)
+#     prior_vec[i] = CAL.get_parameter_distribution(prior_dict, n)
+# end
 
 # load pretrained weights (prior mean) and nn
 # @load pretrained_nn_path serialized_weights
@@ -46,24 +55,31 @@ end
 
 # prior = EKP.combine_distributions(prior_vec)
 
-@load pretrained_nn_path serialized_weights
-num_nn_params = length(serialized_weights)
+# @load pretrained_nn_path serialized_weights
+# num_nn_params = length(serialized_weights)
 
-arc = [8, 20, 15, 10, 1]
-nn_model = construct_fully_connected_nn(arc, deepcopy(serialized_weights); biases_bool = true, output_layer_activation_function = Flux.identity)
-serialized_stds = serialize_std_model(nn_model; std_weight = 0.03, std_bias = 0.005)
+# arc = [8, 20, 15, 10, 1]
+# nn_model = construct_fully_connected_nn(arc, deepcopy(serialized_weights); biases_bool = true, output_layer_activation_function = Flux.identity)
+# serialized_stds = serialize_std_model(nn_model; std_weight = 0.03, std_bias = 0.005)
 
-nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], serialized_stds[ii]) for ii in 1:num_nn_params])
-nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
-nn_prior = EKP.ParameterDistribution(nn_mean_std, nn_constraint, "mixing_length_param_vec")
-push!(prior_vec, nn_prior)
+# nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], serialized_stds[ii]) for ii in 1:num_nn_params])
+# nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
+# nn_prior = EKP.ParameterDistribution(nn_mean_std, nn_constraint, "mixing_length_param_vec")
+# push!(prior_vec, nn_prior)
 
-prior = EKP.combine_distributions(prior_vec)
+# prior = EKP.combine_distributions(prior_vec)
 
 
-# load configs and directories 
-model_config_dict = YAML.load_file(model_config)
-atmos_config = CA.AtmosConfig(model_config_dict)
+# const pretrained_nn_path = config_dict["pretrained_nn_path"]
+
+if model_config_dict["mixing_length_model"] == "nn"
+    prior = create_prior_with_nn(prior_path, pretrained_nn_path; arc = [8, 20, 15, 10, 1])
+else 
+    const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
+end
+
+
+
 
 ### create output directories & copy configs
 mkpath(output_dir)
@@ -185,7 +201,7 @@ CAL.initialize(
 
 eki = nothing
 hpc_kwargs = CAL.kwargs(
-    time = 120,
+    time = 70,
     mem_per_cpu = "12G",
     cpus_per_task = min(batch_size + 1, 5),
     ntasks = 1,

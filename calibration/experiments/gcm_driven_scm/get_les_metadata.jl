@@ -102,14 +102,24 @@ function get_LES_library()
     LES_library = get_shallow_LES_library()
     deep_sites = deepcopy(CFSITE_TYPES["deep"])
 
-    sites_07 = deepcopy(setdiff(deep_sites, [92, 99, 100]))
-    append!(LES_library["HadGEM2-A"]["07"]["cfsite_numbers"], sites_07)
-    sites_01 = deepcopy(setdiff(deep_sites, [99,]))
-    append!(LES_library["HadGEM2-A"]["01"]["cfsite_numbers"], sites_01)
-    sites_04 = deepcopy(setdiff(deep_sites, [32, 92, 94, 96, 99, 100]))
+
+    # remove <0 ql/cli cases 
+    # sites_07 = deepcopy(setdiff(deep_sites, [92, 99, 100]))
+    # append!(LES_library["HadGEM2-A"]["07"]["cfsite_numbers"], sites_07)
+    # sites_01 = deepcopy(setdiff(deep_sites, [99,]))
+    # append!(LES_library["HadGEM2-A"]["01"]["cfsite_numbers"], sites_01)
+    # sites_04 = deepcopy(setdiff(deep_sites, [32, 92, 94, 96, 99, 100]))
+    # append!(LES_library["HadGEM2-A"]["04"]["cfsite_numbers"], sites_04)
+    # sites_10 = deepcopy(setdiff(deep_sites, [92, 94, 99, 100]))
+    # append!(LES_library["HadGEM2-A"]["10"]["cfsite_numbers"], sites_10)
+
+    append!(LES_library["HadGEM2-A"]["07"]["cfsite_numbers"], deep_sites)
+    append!(LES_library["HadGEM2-A"]["01"]["cfsite_numbers"], deep_sites)
+    sites_04 = deepcopy(setdiff(deep_sites, [32, 92, 94]))
     append!(LES_library["HadGEM2-A"]["04"]["cfsite_numbers"], sites_04)
-    sites_10 = deepcopy(setdiff(deep_sites, [92, 94, 99, 100]))
+    sites_10 = deepcopy(setdiff(deep_sites, [94, 100]))
     append!(LES_library["HadGEM2-A"]["10"]["cfsite_numbers"], sites_10)
+
 
     LES_library_full = deepcopy(LES_library)
     for model in keys(LES_library_full)
