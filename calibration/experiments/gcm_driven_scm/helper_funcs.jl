@@ -5,7 +5,13 @@ using Statistics
 using LinearAlgebra
 import ClimaAtmos as CA
 import ClimaCalibrate as CAL
+import EnsembleKalmanProcesses as EKP
 using Logging
+using TOML
+using Flux
+using JLD2
+
+include("nn_helpers.jl")
 
 import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
@@ -285,6 +291,11 @@ function fetch_interpolate_transform(
     else
         var_ = nc_fetch_interpolate(var_name, filename, z_scm)
     end
+    
+    if var_name == "ql_mean" || var_name == "qi_mean"
+        var_ = max.(var_, 0.0)
+    end
+
     return var_
 end
 
@@ -965,4 +976,33 @@ function get_batch_indicies_in_iteration(iteration, output_dir::AbstractString)
     iter_path = CAL.path_to_iteration(output_dir, iteration)
     eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
     return EKP.get_current_minibatch(eki)
+end
+
+
+
+
+function create_prior_with_nn(prior_path, pretrained_nn_path; arc = [8, 20, 15, 10, 1])
+
+    prior_dict = TOML.parsefile(prior_path)
+    parameter_names = keys(prior_dict)
+
+    prior_vec = Vector{EKP.ParameterDistribution}(undef, length(parameter_names))
+    for (i, n) in enumerate(parameter_names)
+        prior_vec[i] = CAL.get_parameter_distribution(prior_dict, n)
+    end
+
+    @load pretrained_nn_path serialized_weights
+    num_nn_params = length(serialized_weights)
+
+    
+    nn_model = construct_fully_connected_nn(arc, deepcopy(serialized_weights); biases_bool = true, output_layer_activation_function = Flux.identity)
+    serialized_stds = serialize_std_model(nn_model; std_weight = 0.03, std_bias = 0.005)
+
+    nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], serialized_stds[ii]) for ii in 1:num_nn_params])
+    nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
+    nn_prior = EKP.ParameterDistribution(nn_mean_std, nn_constraint, "mixing_length_param_vec")
+    push!(prior_vec, nn_prior)
+
+    prior = EKP.combine_distributions(prior_vec)
+    return prior
 end
