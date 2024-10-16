@@ -13,9 +13,9 @@ prior_path: prior_nearest_neig_particle_i9_m3_precal_exp2_tighten_std.toml
 # prior_path: prior_prognostic_pi_entr_dev_microphysics_exact_precal.toml
 ensemble_size: 250
 n_iterations: 25
-batch_size: 10 # number of cases per iteration
+batch_size: 20 # number of cases per iteration
 model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
-output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_39 # output dir
+output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_40 # output dir
 y_var_names: [thetaa, hus, clw] # calibration variables clw
 log_vars: ["clw"] # take log(var) when forming y, g
 
@@ -54,9 +54,9 @@ norm_factors_by_var:
   cli: [-11.697, 1.304] # log norm factors
 
 const_noise_by_var:
-  thetaa: 0.001
-  hus: 0.001
-  clw: 0.001
+  thetaa: 0.0036
+  hus: 0.0036
+  clw: 0.0036
   cli: 0.01
 
 

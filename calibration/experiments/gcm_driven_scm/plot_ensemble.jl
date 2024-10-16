@@ -160,13 +160,28 @@ for iteration in iterations
             xlims = compute_plot_limits(y_truth)
         end
 
+        cfsite_info = get_cfsite_info_from_path(ref_paths[config_i])
+        forcing_model = cfsite_info["forcing_model"]
+        experiment = cfsite_info["experiment"]
+        month = cfsite_info["month"]
+        cfsite_number = cfsite_info["cfsite_number"]
+
         Plots.plot!(
             xlabel = var_name,
             ylabel = "Height (z)",
-            title = var_name,
+            title = "$var_name (cfsite: $cfsite_number, month: $month, model: $forcing_model)",
             xlims = xlims,
             ylims = ylims,
         )
+
+
+        # Plots.plot!(
+        #     xlabel = var_name,
+        #     ylabel = "Height (z)",
+        #     title = var_name,
+        #     xlims = xlims,
+        #     ylims = ylims,
+        # )
 
         plot_rel_dir = joinpath(
             output_dir,

@@ -22,7 +22,8 @@ config: "column"
 hyperdiff: "false"
 z_max: 40e3
 z_elem: 60
-mixing_length_model: "physical" # physical
+# mixing_length_model: "physical" # physical
+mixing_length_model: "nn"
 z_stretch: true
 dz_bottom: 30
 rad: allskywithclear
@@ -44,4 +45,6 @@ diagnostics:
 - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]
   period: 10mins
 - short_name: [entr, detr, lmix, bgrad, strain, edt, evu, turbentr, obulen]
+  period: 10mins
+- short_name: [rlut, rlutcs, rsut, rsutcs, rsdt, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv]
   period: 10mins

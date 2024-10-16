@@ -98,9 +98,9 @@ function main()
     eki = JLD2.load_object(eki_path)
 
     hpc_kwargs = CAL.kwargs(
-        time = 120,
+        time = 90,
         mem_per_cpu = "12G",
-        cpus_per_task = batch_size + 1,
+        cpus_per_task = min(batch_size + 1, 5),
         ntasks = 1,
         nodes = 1,
         # reservation = "clima",
