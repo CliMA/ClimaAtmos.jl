@@ -201,7 +201,7 @@ CAL.initialize(
 
 eki = nothing
 hpc_kwargs = CAL.kwargs(
-    time = 70,
+    time = 90,
     mem_per_cpu = "12G",
     cpus_per_task = min(batch_size + 1, 5),
     ntasks = 1,
