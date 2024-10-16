@@ -39,7 +39,9 @@ if backend <: CAL.HPCBackend
             Dates.value(t2 - t1) / 1000 / 60
         end / length(wait_times)
 
-    if mean_wait_time_in_mins > 20
+    @show mean_wait_time_in_mins
+
+    if mean_wait_time_in_mins > 10
         @warn """Average wait time for esmbuild is $(round(mean_wait_time_in_mins, digits=2)) minutes. \
                 Cluster is too busy to run this test, exiting"""
         exit()
