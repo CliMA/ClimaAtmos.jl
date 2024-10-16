@@ -19,11 +19,25 @@ include("runner_helper.jl")
 using Distributed
 
 
-NUM_WORKERS = 14
+NUM_WORKERS = 7
 rel_path = "/groups/esm/cchristo/climaatmos_scm_calibrations/scm_runs"
-run_output_dir = joinpath(rel_path, "exp1")
 base_config_path = "model_config_prognostic_runner.yml"
-parameter_path = "parameters_nearest_neig_particle_i9_m3_precal_exp2.toml"
+
+
+# run_output_dir = joinpath(rel_path, "exp1")
+# parameter_path = "parameters_nearest_neig_particle_i9_m3_precal_exp2.toml"
+
+
+# run_output_dir = joinpath(rel_path, "exp2_i7_m3_ml_mix_exp39")
+# parameter_path = "parameters_nearest_neig_particle_i7_m3_ml_mix_exp39.toml"
+
+# run_output_dir = joinpath(rel_path, "exp2_i13_m68_ml_mix_exp39")
+# parameter_path = "parameters_nearest_neig_particle_i13_m68_ml_mix_exp39.toml"
+
+
+
+run_output_dir = joinpath(rel_path, "exp_i5_m149_ml_mix_exp40")
+parameter_path = "parameters_nearest_neig_particle_i5_m149_ml_mix_exp40.toml"
 
 
 """
