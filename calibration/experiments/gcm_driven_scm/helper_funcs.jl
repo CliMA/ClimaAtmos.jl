@@ -1020,7 +1020,7 @@ function create_prior_with_nn(prior_path, pretrained_nn_path; arc = [8, 20, 15, 
 
     
     nn_model = construct_fully_connected_nn(arc, deepcopy(serialized_weights); biases_bool = true, output_layer_activation_function = Flux.identity)
-    serialized_stds = serialize_std_model(nn_model; std_weight = 0.03, std_bias = 0.005)
+    serialized_stds = serialize_std_model(nn_model; std_weight = 0.05, std_bias = 0.005)
 
     nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], serialized_stds[ii]) for ii in 1:num_nn_params])
     nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
