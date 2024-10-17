@@ -1,5 +1,5 @@
 using ClimaCore:
-    Geometry, Domains, Meshes, Topologies, Spaces, Grids, Hypsography
+    Geometry, Domains, Meshes, Topologies, Spaces, Grids, Hypsography, Fields
 using ClimaComms
 
 function periodic_line_mesh(; x_max, x_elem)
@@ -100,7 +100,42 @@ function make_hybrid_spaces(
         z_mesh,
     )
     z_grid = Grids.FiniteDifferenceGrid(z_topology)
-    if isnothing(surface_warp)
+
+    if parsed_args["topography"] == "Earth"
+        @info "SpaceVaryingInputs: Remapping orography onto spectral space"
+        z_surface = SpaceVaryingInputs.SpaceVaryingInput(
+            AA.earth_orography_file_path(;
+                context = ClimaComms.context(h_space),
+            ),
+            "z",
+            h_space,
+        )
+        parent(z_surface) .=
+            ifelse.(parent(z_surface) .< FT(0), FT(0), parent(z_surface))
+        Δh_scale = Spaces.node_horizontal_length_scale(h_space)
+        Hypsography.diffuse_surface_elevation!(
+            z_surface;
+            κ = FT((Δh_scale)^2 / 100),
+            dt = FT(1),
+            maxiter = 128,
+        )
+        parent(z_surface) .=
+            ifelse.(parent(z_surface) .< FT(0), FT(0), parent(z_surface))
+        if parsed_args["mesh_warp_type"] == "SLEVE"
+            @info "SLEVE mesh warp"
+            hypsography = Hypsography.SLEVEAdaption(
+                Geometry.ZPoint.(z_surface),
+                FT(parsed_args["sleve_eta"]),
+                FT(parsed_args["sleve_s"]),
+            )
+        elseif parsed_args["mesh_warp_type"] == "Linear"
+            @info "Linear mesh warp"
+            hypsography =
+                Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
+        else
+            @error "Undefined mesh-warping option"
+        end
+    elseif isnothing(surface_warp)
         hypsography = Hypsography.Flat()
     else
         topo_smoothing = parsed_args["topo_smoothing"]
@@ -121,6 +156,7 @@ function make_hybrid_spaces(
                 Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
         end
     end
+
     grid = Grids.ExtrudedFiniteDifferenceGrid(h_grid, z_grid, hypsography; deep)
     # TODO: return the grid
     center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
