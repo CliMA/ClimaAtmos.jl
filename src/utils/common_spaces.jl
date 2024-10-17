@@ -146,14 +146,9 @@ function make_hybrid_spaces(
         parent(z_surface) .=
             ifelse.(parent(z_surface) .< FT(0), FT(0), parent(z_surface))
         Δh_scale = Spaces.node_horizontal_length_scale(h_space)
-        #diffuse_surface_elevation_biharmonic!(
-        #    z_surface;
-        #    κ = FT((Δh_scale)^4 / 1000),
-        #    maxiter = 512,
-        #)
         Hypsography.diffuse_surface_elevation!(
              z_surface;
-             κ = FT(1e9),
+             κ = FT(1e8),
              dt = FT(1),
              maxiter = 128)
         parent(z_surface) .=
