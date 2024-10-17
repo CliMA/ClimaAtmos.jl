@@ -24,20 +24,20 @@ steps:
       - "echo $$JULIA_DEPOT_PATH"
 
       - echo "--- Instantiate project"
-      - "julia --project -e 'using Pkg; Pkg.add(;url=\"https://github.com/CliMA/UnrolledUtilities.jl\", rev=\"dy/15_plus_16\")'"
+      - "julia --project -e 'using Pkg; Pkg.add(;url=\"https://github.com/CliMA/UnrolledUtilities.jl\", rev=\"8b2a080524573fb484a961ed079bf874fcdc9032\")'"
       - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project -e 'using Pkg; Pkg.precompile()'"
       - "julia --project -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Instantiate examples"
-      - "julia --project=examples -e 'using Pkg; Pkg.add(;url=\"https://github.com/CliMA/UnrolledUtilities.jl\", rev=\"dy/15_plus_16\")'"
+      - "julia --project=examples -e 'using Pkg; Pkg.add(;url=\"https://github.com/CliMA/UnrolledUtilities.jl\", rev=\"8b2a080524573fb484a961ed079bf874fcdc9032\")'"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Instantiate perf"
-      - "julia --project=perf -e 'using Pkg; Pkg.add(;url=\"https://github.com/CliMA/UnrolledUtilities.jl\", rev=\"dy/15_plus_16\")'"
+      - "julia --project=perf -e 'using Pkg; Pkg.add(;url=\"https://github.com/CliMA/UnrolledUtilities.jl\", rev=\"8b2a080524573fb484a961ed079bf874fcdc9032\")'"
       - "julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=perf -e 'using Pkg; Pkg.status()'"
