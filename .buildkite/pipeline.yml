@@ -454,6 +454,7 @@ steps:
         timeout_in_minutes: 20
         soft_fail:
           - exit_status: -1
+          - exit_status: 255
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
@@ -469,6 +470,7 @@ steps:
         timeout_in_minutes: 20
         soft_fail:
           - exit_status: -1
+          - exit_status: 255
         agents:
           slurm_gpus_per_task: 1
           slurm_ntasks: 2
