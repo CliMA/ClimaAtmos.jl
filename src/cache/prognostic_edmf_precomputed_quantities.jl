@@ -25,27 +25,31 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
         p.precomputed
 
-    @. ᶜρa⁰ = ρa⁰(Y.c)
-    @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
-    @. ᶜmse⁰ = divide_by_ρa(
-        Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
-        ᶜρa⁰,
-        Y.c.ρ * (ᶜh_tot - ᶜK),
-        Y.c.ρ,
-        turbconv_model,
-    )
-    @. ᶜq_tot⁰ = divide_by_ρa(
-        Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
-        ᶜρa⁰,
-        Y.c.ρq_tot,
-        Y.c.ρ,
-        turbconv_model,
-    )
+    @fused_direct begin
+        @. ᶜρa⁰ = ρa⁰(Y.c)
+        @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
+        @. ᶜmse⁰ = divide_by_ρa(
+            Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρ * (ᶜh_tot - ᶜK),
+            Y.c.ρ,
+            turbconv_model,
+        )
+        @. ᶜq_tot⁰ = divide_by_ρa(
+            Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρq_tot,
+            Y.c.ρ,
+            turbconv_model,
+        )
+    end
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke⁰
-    @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
-    @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
+    @fused_direct begin
+        @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
+        @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
+    end
     return nothing
 end
 
@@ -90,8 +94,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
 
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
-        @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
-        @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
+        @fused_direct begin
+            @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
+            @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
+        end
 
         # EDMFX boundary condition:
 
@@ -335,12 +341,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         ᶜtke_exch,
     )
 
-    @. ᶜmixing_length = ᶜmixing_length_tuple.master
 
     turbconv_params = CAP.turbconv_params(params)
     c_m = CAP.tke_ed_coeff(turbconv_params)
-    @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
-    @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
+    @fused_direct begin
+        @. ᶜmixing_length = ᶜmixing_length_tuple.master
+        @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
+        @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
+    end
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
     ρ_int_values = Fields.field_values(Fields.level(ᶜρa⁰, 1))
