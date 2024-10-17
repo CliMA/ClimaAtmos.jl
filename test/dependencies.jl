@@ -57,6 +57,8 @@ known_dependencies = Set([
     "NCDatasets",
     "NVTX",
     "RRTMGP",
+    # used to reset seed for random number generator used for cloudy RRTMGP runs to enable bit-wise reproducibility for tests
+    "Random",
     "SciMLBase",
     "StaticArrays",
     # Statistics is used to call 'mean' on ClimaCore Fields
