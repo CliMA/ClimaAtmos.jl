@@ -13,7 +13,7 @@ prior = "constrained_gaussian(mixing_length_eddy_viscosity_coefficient, 0.129381
 type = "float"
 
 [mixing_length_diss_coeff]
-prior = "constrained_gaussian(mixing_length_diss_coeff, 0.13515021886991527, 0.7, 0, Inf)"
+prior = "constrained_gaussian(mixing_length_diss_coeff, 0.13515021886991527, 0.07, 0, Inf)"
 type = "float"
 
 [mixing_length_tke_surf_scale]

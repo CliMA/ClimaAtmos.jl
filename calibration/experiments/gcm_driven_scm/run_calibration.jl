@@ -195,13 +195,13 @@ CAL.initialize(
     # localization_method = EKP.Localizers.SECNice(0.01, 0.5), nice_loc_ug
     # localization_method = EKP.Localizers.SECNice(nice_loc_ug, nice_loc_gg),
     failure_handler_method = EKP.SampleSuccGauss(),
-    # accelerator = EKP.DefaultAccelerator(),
-    accelerator = EKP.NesterovAccelerator(),
+    accelerator = EKP.DefaultAccelerator(),
+    # accelerator = EKP.NesterovAccelerator(),
 )
 
 eki = nothing
 hpc_kwargs = CAL.kwargs(
-    time = 90,
+    time = 120,
     mem_per_cpu = "12G",
     cpus_per_task = min(batch_size + 1, 5),
     ntasks = 1,
