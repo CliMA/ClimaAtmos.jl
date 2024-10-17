@@ -156,6 +156,17 @@ function get_viscous_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     end
 end
 
+function get_smagorinsky_lilly_model(parsed_args, params, ::Type{FT}) where {FT}
+    is_model_active = parsed_args["smagorinsky_lilly"]
+    Cs = parsed_args["c_smag"]
+    @assert is_model_active in (true, false)
+    return if is_model_active == true
+        SmagorinskyLilly{FT}(; Cs)
+    else
+        nothing
+    end
+end
+
 function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     rs_name = parsed_args["rayleigh_sponge"]
     return if rs_name in ("false", false)
