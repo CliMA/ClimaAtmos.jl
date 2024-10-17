@@ -150,7 +150,7 @@ function make_hybrid_spaces(
              z_surface;
              κ = FT(1e9),
              dt = FT(1),
-             maxiter = 64)
+             maxiter = 128)
         parent(z_surface) .=
             ifelse.(parent(z_surface) .< FT(0), FT(0), parent(z_surface))
         if parsed_args["mesh_warp_type"] == "SLEVE"
