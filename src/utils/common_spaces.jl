@@ -148,9 +148,9 @@ function make_hybrid_spaces(
         Δh_scale = Spaces.node_horizontal_length_scale(h_space)
         Hypsography.diffuse_surface_elevation!(
              z_surface;
-             κ = FT(1e8),
+             κ = FT(1e9),
              dt = FT(1),
-             maxiter = 128)
+             maxiter = 64)
         parent(z_surface) .=
             ifelse.(parent(z_surface) .< FT(0), FT(0), parent(z_surface))
         if parsed_args["mesh_warp_type"] == "SLEVE"
