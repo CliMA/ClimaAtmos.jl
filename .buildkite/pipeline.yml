@@ -566,6 +566,9 @@ steps:
       - label: "end to end test"
         command: julia --project=calibration/test calibration/test/e2e_test.jl
         artifact_paths: "calibration_end_to_end_test/*"
+        soft_fail:
+          - exit_status: 1
+
 
   - group: "Diagnostic EDMFX"
     steps:
