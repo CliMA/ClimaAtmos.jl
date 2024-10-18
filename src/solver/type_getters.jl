@@ -164,7 +164,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        if topography == "Earth"
+        if warp_function == nothing
             make_hybrid_spaces(
                 h_space,
                 z_max,
