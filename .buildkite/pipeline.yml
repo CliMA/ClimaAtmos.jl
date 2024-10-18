@@ -1187,11 +1187,11 @@ steps:
   - label: ":bar_chart: Tabulate performance summary"
     command: "julia --color=yes --project=perf perf/tabulate_perf_summary.jl"
 
-  - label: ":chart_with_downwards_trend: build history"
-    command:
-      - build_history main
-    artifact_paths:
-      - "build_history.html"
+  # - label: ":chart_with_downwards_trend: build history"
+  #   command:
+  #     - build_history main
+  #   artifact_paths:
+  #     - "build_history.html"
 
   - wait
 
