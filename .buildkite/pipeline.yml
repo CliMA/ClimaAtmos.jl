@@ -568,7 +568,6 @@ steps:
         artifact_paths: "calibration_end_to_end_test/*"
         soft_fail: true
 
-
   - group: "Diagnostic EDMFX"
     steps:
 

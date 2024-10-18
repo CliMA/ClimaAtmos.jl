@@ -5,6 +5,7 @@ import RRTMGP.AtmosphericStates as AS
 using ClimaCore: DataLayouts, Spaces, Fields
 import ClimaComms
 using NVTX
+using Random
 
 # TODO: Move this file to RRTMGP.jl, once the interface has been settled.
 # It will be faster to do interface development in the same repo as experiment
@@ -25,12 +26,16 @@ struct AllSkyRadiation <: AbstractRRTMGPMode
     idealized_clouds::Bool
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
+    "Reset the RNG seed before calling RRTGMP to a known value (the timestep number). When modeling cloud optics, RRTGMP uses a random number generator. Resetting the seed every time RRTGMP is called to a deterministic value ensures that the simulation is fully reproducible and can be restarted in a reproducible way. Disable this option when running production runs."
+    reset_rng_seed::Bool
 end
 struct AllSkyRadiationWithClearSkyDiagnostics <: AbstractRRTMGPMode
     idealized_h2o::Bool
     idealized_clouds::Bool
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
+    "Reset the RNG seed before calling RRTGMP to a known value (the timestep number). When modeling cloud optics, RRTGMP uses a random number generator. Resetting the seed every time RRTGMP is called to a deterministic value ensures that the simulation is fully reproducible and can be restarted in a reproducible way. Disable this option when running production runs."
+    reset_rng_seed::Bool
 end
 
 """
@@ -1020,7 +1025,7 @@ function set_and_save!(
 end
 
 """
-    update_fluxes!(model)
+    update_fluxes!(model, seedval)
 
 Updates the fluxes in the `RRTMGPModel` based on its internal state. Returns the
 net flux at cell faces in the domain, `model.face_flux`. The full set of fluxes
@@ -1040,7 +1045,14 @@ If `extension_nlay > 0`, the set of available fluxes also includes all of the
 aforementioned values prefixed by `extension_`, corresponding to the values at
 cell faces in the extension.
 """
-NVTX.@annotate function update_fluxes!(model)
+NVTX.@annotate function update_fluxes!(model, seedval)
+    (; radiation_mode) = model
+    if (
+        radiation_mode isa AllSkyRadiation ||
+        radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
+    )
+        radiation_mode.reset_rng_seed && Random.seed!(seedval)
+    end
     model.implied_values != :none && update_implied_values!(model)
     model.radiation_mode.add_isothermal_boundary_layer &&
         update_boundary_layer!(model)
