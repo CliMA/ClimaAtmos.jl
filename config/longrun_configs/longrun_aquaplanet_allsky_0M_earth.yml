@@ -8,7 +8,6 @@ topography: "Earth"
 topo_smoothing: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-cloud_model: "quadrature_sgs"
 override_τ_precip: false
 dt: "120secs"
 t_end: "360days"
