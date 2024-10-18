@@ -1,6 +1,7 @@
 using ClimaCore:
     Geometry, Domains, Meshes, Topologies, Spaces, Grids, Hypsography, Fields
 using ClimaComms
+using ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
 
 function periodic_line_mesh(; x_max, x_elem)
     domain = Domains.IntervalDomain(
@@ -79,13 +80,12 @@ function make_hybrid_spaces(
     z_max,
     z_elem,
     z_stretch;
-    surface_warp = nothing,
+    topography = nothing,
     topo_smoothing = false,
     deep = false,
     parsed_args = nothing,
 )
     FT = eltype(z_max)
-    # TODO: change this to make_hybrid_grid
     h_grid = Spaces.grid(h_space)
     z_domain = Domains.IntervalDomain(
         Geometry.ZPoint(zero(z_max)),
@@ -100,9 +100,21 @@ function make_hybrid_spaces(
         z_mesh,
     )
     z_grid = Grids.FiniteDifferenceGrid(z_topology)
-
-    if parsed_args["topography"] == "Earth"
-        @info "SpaceVaryingInputs: Remapping orography onto spectral space"
+    
+    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
+    if topography == "DCMIP200"
+        z_surface = SpaceVaryingInput(topography_dcmip200, h_space)
+        @info "Computing DCMIP200 orography on spectral horizontal space"
+    elseif topography == "Agnesi"
+        z_surface = SpaceVaryingInput(topography_agnesi, h_space)
+        @info "Computing Agnesi orography on spectral horizontal space"
+    elseif topography == "Schar"
+        z_surface = SpaceVaryingInput(topography_schar, h_space)
+        @info "Computing Schar orography on spectral horizontal space"
+    elseif topography == "NoWarp"
+        z_surface = zeros(h_space)
+        @info "No surface orography warp applied"
+    elseif topography == "Earth"
         z_surface = SpaceVaryingInputs.SpaceVaryingInput(
             AA.earth_orography_file_path(;
                 context = ClimaComms.context(h_space),
@@ -110,6 +122,12 @@ function make_hybrid_spaces(
             "z",
             h_space,
         )
+        @info "Remapping Earth orography from ETOPO2022 data onto horizontal space"
+    end
+
+    if topography == nothing
+        hypsography = Hypsography.Flat()
+    elseif topography == "Earth"
         parent(z_surface) .=
             ifelse.(parent(z_surface) .< FT(0), FT(0), parent(z_surface))
         Δh_scale = Spaces.node_horizontal_length_scale(h_space)
@@ -135,11 +153,8 @@ function make_hybrid_spaces(
         else
             @error "Undefined mesh-warping option"
         end
-    elseif isnothing(surface_warp)
-        hypsography = Hypsography.Flat()
     else
         topo_smoothing = parsed_args["topo_smoothing"]
-        z_surface = surface_warp(Fields.coordinate_field(h_space))
         if topo_smoothing
             Hypsography.diffuse_surface_elevation!(z_surface)
         end
@@ -158,7 +173,6 @@ function make_hybrid_spaces(
     end
 
     grid = Grids.ExtrudedFiniteDifferenceGrid(h_grid, z_grid, hypsography; deep)
-    # TODO: return the grid
     center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
     face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
     return center_space, face_space

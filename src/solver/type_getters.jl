@@ -136,20 +136,6 @@ function get_spaces(parsed_args, params, comms_ctx)
     bubble = parsed_args["bubble"]
     deep = parsed_args["deep_atmosphere"]
 
-    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
-    if topography == "DCMIP200"
-        warp_function = topography_dcmip200
-    elseif topography == "Agnesi"
-        warp_function = topography_agnesi
-    elseif topography == "Schar"
-        warp_function = topography_schar
-    elseif topography == "NoWarp"
-        warp_function = nothing
-    elseif topography == "Earth"
-        warp_function = nothing
-    end
-    @info "Topography" topography
-
 
     h_elem = parsed_args["h_elem"]
     radius = CAP.planet_radius(params)
@@ -164,27 +150,15 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        if warp_function == nothing
-            make_hybrid_spaces(
-                h_space,
-                z_max,
-                z_elem,
-                z_stretch;
-                surface_warp = nothing,
-                parsed_args = parsed_args,
-                deep,
-            )
-        else
-            make_hybrid_spaces(
-                h_space,
-                z_max,
-                z_elem,
-                z_stretch;
-                surface_warp = warp_function,
-                deep,
-                parsed_args,
-            )
-        end
+        make_hybrid_spaces(
+            h_space,
+            z_max,
+            z_elem,
+            z_stretch;
+            topography,
+            deep,
+            parsed_args = parsed_args,
+        )
     elseif parsed_args["config"] == "column" # single column
         @warn "perturb_initstate flag is ignored for single column configuration"
         FT = eltype(params)
@@ -234,8 +208,8 @@ function get_spaces(parsed_args, params, comms_ctx)
             z_max,
             z_elem,
             z_stretch;
+            topography, 
             parsed_args,
-            surface_warp = warp_function,
             deep,
         )
     elseif parsed_args["config"] == "plane"
@@ -258,8 +232,8 @@ function get_spaces(parsed_args, params, comms_ctx)
             z_max,
             z_elem,
             z_stretch;
+            topography,
             parsed_args,
-            surface_warp = warp_function,
             deep,
         )
     end
