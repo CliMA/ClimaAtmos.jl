@@ -259,7 +259,6 @@ end
         zlim[2],
         velem,
         z_stretch;
-        topo_smoothing = false,
         deep = false,
     )
     @test test_cent_space == cent_space

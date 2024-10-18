@@ -124,6 +124,7 @@ function make_hybrid_spaces(
         @info "Remapping Earth orography from ETOPO2022 data onto horizontal space"
     end
 
+    topo_smoothing = parsed_args["topo_smoothing"]
     if topography == nothing
         hypsography = Hypsography.Flat()
     elseif topography == "Earth"
@@ -153,7 +154,6 @@ function make_hybrid_spaces(
             @error "Undefined mesh-warping option"
         end
     else
-        topo_smoothing = parsed_args["topo_smoothing"]
         if topo_smoothing
             Hypsography.diffuse_surface_elevation!(z_surface)
         end
