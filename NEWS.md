@@ -4,10 +4,13 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+
+v0.27.7
+-------
 ### ![][badge-🐛bugfix] Bug fixes
 
 - Update RRTMGP to v0.19.1, which fixes the sea salt aerosol lookup table.
-  Sea salt aerosol is added to the target amip config. 
+  Sea salt aerosol is added to the target amip config.
   PR [3374](https://github.com/CliMA/ClimaAtmos.jl/pull/3374)
 
 - Fixed radiation diagnostics conflicting with each other. Prior to this change,
