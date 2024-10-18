@@ -259,7 +259,6 @@ end
         zlim[2],
         velem,
         z_stretch;
-        surface_warp = nothing,
         topo_smoothing = false,
         deep = false,
     )

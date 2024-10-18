@@ -154,7 +154,6 @@ function get_spaces(parsed_args, params, comms_ctx)
             z_max,
             z_elem,
             z_stretch;
-            topography,
             deep,
             parsed_args = parsed_args,
         )
@@ -231,7 +230,6 @@ function get_spaces(parsed_args, params, comms_ctx)
             z_max,
             z_elem,
             z_stretch;
-            topography,
             parsed_args,
             deep,
         )

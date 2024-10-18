@@ -80,8 +80,6 @@ function make_hybrid_spaces(
     z_max,
     z_elem,
     z_stretch;
-    topography = nothing,
-    topo_smoothing = false,
     deep = false,
     parsed_args = nothing,
 )
@@ -101,6 +99,7 @@ function make_hybrid_spaces(
     )
     z_grid = Grids.FiniteDifferenceGrid(z_topology)
 
+    topography = parsed_args["topography"]
     @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
     if topography == "DCMIP200"
         z_surface = SpaceVaryingInput(topography_dcmip200, h_space)
@@ -115,7 +114,7 @@ function make_hybrid_spaces(
         z_surface = zeros(h_space)
         @info "No surface orography warp applied"
     elseif topography == "Earth"
-        z_surface = SpaceVaryingInputs.SpaceVaryingInput(
+        z_surface = SpaceVaryingInput(
             AA.earth_orography_file_path(;
                 context = ClimaComms.context(h_space),
             ),
