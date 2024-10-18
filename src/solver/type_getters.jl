@@ -174,8 +174,6 @@ function get_spaces(parsed_args, params, comms_ctx)
                 parsed_args = parsed_args,
                 deep,
             )
-        elseif warp_function == nothing && topography != "Earth"
-            make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; deep, parsed_args)
         else
             make_hybrid_spaces(
                 h_space,
