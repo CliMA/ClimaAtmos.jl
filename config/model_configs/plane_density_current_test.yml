@@ -2,14 +2,14 @@ dt_save_state_to_disk: "3600secs"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
 z_elem: 90
-dt: "0.3secs"
+dt: "0.5secs"
 t_end: "900.0secs"
 discrete_hydrostatic_balance: true
 z_stretch: false
 x_elem: 80
 config: "plane"
 z_max: 6400.0
-output_default_diagnostics: false
+# output_default_diagnostics: false
 diagnostics:
   - short_name: thetaa
     period: 900secs

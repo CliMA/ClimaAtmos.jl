@@ -4,6 +4,43 @@
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
 
+function implicit_precomputed_quantities(Y, atmos)
+    FT = eltype(Y)
+    TST = thermo_state_type(atmos.moisture_model, FT)
+    n = n_mass_flux_subdomains(atmos.turbconv_model)
+    gs_quantities = (;
+        ᶜspecific = specific_gs.(Y.c),
+        ᶠuₕ³ = similar(Y.f, CT3{FT}),
+        ᶜu = similar(Y.c, C123{FT}),
+        ᶠu³ = similar(Y.f, CT3{FT}),
+        ᶜK = similar(Y.c, FT),
+        ᶜts = similar(Y.c, TST),
+        ᶜp = similar(Y.c, FT),
+        ᶜh_tot = similar(Y.c, FT),
+    )
+    advective_sgs_quantities =
+        atmos.turbconv_model isa PrognosticEDMFX ?
+        (;
+            ᶜtke⁰ = similar(Y.c, FT),
+            ᶜρa⁰ = similar(Y.c, FT),
+            ᶜmse⁰ = similar(Y.c, FT),
+            ᶜq_tot⁰ = similar(Y.c, FT),
+            ᶠu₃⁰ = similar(Y.f, C3{FT}),
+            ᶜu⁰ = similar(Y.c, C123{FT}),
+            ᶠu³⁰ = similar(Y.f, CT3{FT}),
+            ᶜK⁰ = similar(Y.c, FT),
+            ᶜts⁰ = similar(Y.c, TST),
+            ᶜρ⁰ = similar(Y.c, FT),
+            ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
+            ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
+            ᶜKʲs = similar(Y.c, NTuple{n, FT}),
+            ᶠKᵥʲs = similar(Y.f, NTuple{n, FT}),
+            ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
+            ᶜρʲs = similar(Y.c, NTuple{n, FT}),
+        ) : (;)
+    return (; gs_quantities..., advective_sgs_quantities...)
+end
+
 """
     precomputed_quantities(Y, atmos)
 
@@ -42,16 +79,8 @@ function precomputed_quantities(Y, atmos)
     TST = thermo_state_type(atmos.moisture_model, FT)
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)
-    fspace = axes(Y.f)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     gs_quantities = (;
-        ᶜspecific = specific_gs.(Y.c),
-        ᶜu = similar(Y.c, C123{FT}),
-        ᶠu³ = similar(Y.f, CT3{FT}),
-        ᶜK = similar(Y.c, FT),
-        ᶜts = similar(Y.c, TST),
-        ᶜp = similar(Y.c, FT),
-        ᶜh_tot = similar(Y.c, FT),
         ᶜmixing_length = similar(Y.c, FT),
         ᶜlinear_buoygrad = similar(Y.c, FT),
         ᶜstrain_rate_norm = similar(Y.c, FT),
@@ -76,42 +105,26 @@ function precomputed_quantities(Y, atmos)
     advective_sgs_quantities =
         atmos.turbconv_model isa PrognosticEDMFX ?
         (;
-            ᶜtke⁰ = similar(Y.c, FT),
-            ᶜρa⁰ = similar(Y.c, FT),
-            ᶠu₃⁰ = similar(Y.f, C3{FT}),
-            ᶜu⁰ = similar(Y.c, C123{FT}),
-            ᶠu³⁰ = similar(Y.f, CT3{FT}),
-            ᶜK⁰ = similar(Y.c, FT),
-            ᶜmse⁰ = similar(Y.c, FT),
-            ᶜq_tot⁰ = similar(Y.c, FT),
-            ᶜts⁰ = similar(Y.c, TST),
-            ᶜρ⁰ = similar(Y.c, FT),
             ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
             ᶜK_u = similar(Y.c, FT),
             ᶜK_h = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
-            ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
-            ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
-            ᶜKʲs = similar(Y.c, NTuple{n, FT}),
-            ᶠKᵥʲs = similar(Y.f, NTuple{n, FT}),
-            ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
             bdmr_l = similar(Y.c, BidiagonalMatrixRow{FT}),
             bdmr_r = similar(Y.c, BidiagonalMatrixRow{FT}),
             bdmr = similar(Y.c, BidiagonalMatrixRow{FT}),
-            ᶜρʲs = similar(Y.c, NTuple{n, FT}),
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
             ᶠnh_pressure₃ʲs = similar(Y.f, NTuple{n, C3{FT}}),
-            ᶜgradᵥ_θ_virt⁰ = Fields.Field(C3{FT}, cspace),
-            ᶜgradᵥ_q_tot⁰ = Fields.Field(C3{FT}, cspace),
-            ᶜgradᵥ_θ_liq_ice⁰ = Fields.Field(C3{FT}, cspace),
+            ᶜgradᵥ_θ_virt⁰ = similar(Y.c, C3{FT}),
+            ᶜgradᵥ_q_tot⁰ = similar(Y.c, C3{FT}),
+            ᶜgradᵥ_θ_liq_ice⁰ = similar(Y.c, C3{FT}),
             precipitation_sgs_quantities...,
         ) : (;)
     sgs_quantities = (;
-        ᶜgradᵥ_θ_virt = Fields.Field(C3{FT}, cspace),
-        ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
-        ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
+        ᶜgradᵥ_θ_virt = similar(Y.c, C3{FT}),
+        ᶜgradᵥ_q_tot = similar(Y.c, C3{FT}),
+        ᶜgradᵥ_θ_liq_ice = similar(Y.c, C3{FT}),
     )
 
     diagnostic_sgs_quantities =
@@ -157,6 +170,7 @@ function precomputed_quantities(Y, atmos)
             ᶜqₛ = similar(Y.c, FT),
         ) : (;)
     return (;
+        implicit_precomputed_quantities(Y, atmos)...,
         gs_quantities...,
         sgs_quantities...,
         advective_sgs_quantities...,
@@ -328,14 +342,14 @@ end
 function eddy_diffusivity_coefficient(
     z::FT,
     z₀,
-    f_b::FT,
-    h::FT,
+    f_b,
+    h,
     uₐ,
-    C_E::FT,
-    Ri::FT,
-    Ri_a::FT,
-    Ri_c::FT,
-    κ::FT,
+    C_E,
+    Ri,
+    Ri_a,
+    Ri_c,
+    κ,
 ) where {FT}
     # Equations (17), (18)
     if z <= f_b * h
@@ -414,12 +428,12 @@ end
 
 function compute_surface_layer_diffusivity(
     z::FT,
-    z₀::FT,
-    κ::FT,
-    C_E::FT,
-    Ri::FT,
-    Ri_a::FT,
-    Ri_c::FT,
+    z₀,
+    κ,
+    C_E,
+    Ri,
+    Ri_a,
+    Ri_c,
     norm_uₐ,
 ) where {FT}
     # Equations (19), (20)
@@ -454,15 +468,19 @@ function instead of recomputing the value yourself. Otherwise, it will be
 difficult to ensure that the duplicated computations are consistent.
 """
 NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
+    set_implicit_precomputed_quantities!(Y, p, t)
+    set_explicit_precomputed_quantities!(Y, p, t)
+end
+function set_implicit_precomputed_quantities!(Y, p, t)
     (; moisture_model, turbconv_model, vert_diff, precip_model, cloud_model) =
         p.atmos
     (; call_cloud_diagnostics_per_stage) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
+    turbconv_params = CAP.turbconv_params(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_args = (thermo_params, moisture_model)
     (; ᶜΦ) = p.core
-    (; ᶜspecific, ᶜu, ᶠu³, ᶜK, ᶜts, ᶜp) = p.precomputed
-    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+    (; ᶜspecific, ᶠuₕ³, ᶜu, ᶠu³, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
 
     @. ᶜspecific = specific_gs(Y.c)
     set_ᶠuₕ³!(ᶠuₕ³, Y)
@@ -490,6 +508,63 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     end
     @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+    @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
+
+    if turbconv_model isa PrognosticEDMFX
+        @assert !(moisture_model isa DryModel)
+        (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
+        (; ᶜtke⁰, ᶜρa⁰, ᶜmse⁰, ᶜq_tot⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰) =
+            p.precomputed
+
+        for j in 1:n
+            ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
+            ᶜmseʲ = Y.c.sgsʲs.:($j).mse
+            ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+
+            ᶜuʲ = ᶜuʲs.:($j)
+            ᶠu³ʲ = ᶠu³ʲs.:($j)
+            ᶜKʲ = ᶜKʲs.:($j)
+            ᶠKᵥʲ = ᶠKᵥʲs.:($j)
+            ᶜtsʲ = ᶜtsʲs.:($j)
+            ᶜρʲ = ᶜρʲs.:($j)
+
+            set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
+            @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
+            @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
+            @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
+        end
+
+        @. ᶜρa⁰ = ρa⁰(Y.c)
+        @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
+        @. ᶜmse⁰ = divide_by_ρa(
+            Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρ * (ᶜh_tot - ᶜK),
+            Y.c.ρ,
+            turbconv_model,
+        )
+        @. ᶜq_tot⁰ = divide_by_ρa(
+            Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρq_tot,
+            Y.c.ρ,
+            turbconv_model,
+        )
+        set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
+        set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
+        # @. ᶜK⁰ += ᶜtke⁰
+        @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
+        @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
+    end
+
+    return nothing
+end
+function set_explicit_precomputed_quantities!(Y, p, t)
+    (; moisture_model, turbconv_model, vert_diff, precip_model, cloud_model) =
+        p.atmos
+    (; call_cloud_diagnostics_per_stage) = p.atmos
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶠuₕ³, ᶜts, ᶜp) = p.precomputed
 
     if turbconv_model isa AbstractEDMF
         @. p.precomputed.ᶜgradᵥ_θ_virt =
@@ -499,9 +574,6 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         @. p.precomputed.ᶜgradᵥ_θ_liq_ice =
             ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
     end
-
-    (; ᶜh_tot) = p.precomputed
-    @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
 
     if !isnothing(p.sfc_setup)
         SurfaceConditions.update_surface_conditions!(Y, p, t)
@@ -519,12 +591,11 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
-        set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_precipitation!(
             Y,
             p,
-            p.atmos.precip_model,
+            precip_model,
         )
     end
 
@@ -537,7 +608,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
             Y,
             p,
             t,
-            p.atmos.precip_model,
+            precip_model,
         )
     end
 
@@ -546,7 +617,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         interior_uₕ = Fields.level(Y.c.uₕ, 1)
         ᶜΔz_surface = Fields.Δz_field(interior_uₕ)
         @. ᶜK_h = eddy_diffusivity_coefficient(
-            p.atmos.vert_diff.C_E,
+            vert_diff.C_E,
             norm(interior_uₕ),
             ᶜΔz_surface / 2,
             ᶜp,

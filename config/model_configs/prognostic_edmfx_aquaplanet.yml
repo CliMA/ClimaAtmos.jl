@@ -21,7 +21,7 @@ dt: 10secs
 t_end: 1hours
 dt_save_state_to_disk: 600secs
 toml: [toml/prognostic_edmfx.toml]
-output_default_diagnostics: false
+# output_default_diagnostics: false
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfes, hur, hus, cl, clw, cli, evspsbl, pr, rsd, rsu, rld, rlu]
     reduction_time: average

@@ -151,10 +151,17 @@ if ClimaComms.iamroot(config.comms_ctx)
             "self_reference_or_path.jl",
         ),
     )
+
+    # TODO: Improve design of Diagnostics to make Jacobian plotting less clunky.
+    (; dict_writer) = simulation.output_writers
+    Yₜ_end = similar(integrator.u)
+    CA.implicit_tendency!(Yₜ_end, integrator.u, integrator.p, integrator.t)
+
     @info "Plotting"
     path = self_reference_or_path() # __build__ path (not job path)
     if path == :self_reference
-        make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
+        paths = [simulation.output_dir]
+        make_plots(Val(Symbol(reference_job_id)), paths, dict_writer, Yₜ_end)
     else
         main_job_path = joinpath(path, reference_job_id)
         nc_dir = joinpath(main_job_path, "nc_files")
@@ -176,11 +183,11 @@ if ClimaComms.iamroot(config.comms_ctx)
         end
 
         paths = if isempty(readdir(nc_dir))
-            simulation.output_dir
+            [simulation.output_dir]
         else
             [simulation.output_dir, nc_dir]
         end
-        make_plots(Val(Symbol(reference_job_id)), paths)
+        make_plots(Val(Symbol(reference_job_id)), paths, dict_writer, Yₜ_end)
     end
     @info "Plotting done"
 

@@ -1,6 +1,6 @@
 dt_save_state_to_disk: "Inf"
 dt_save_to_sol: "Inf"
-output_default_diagnostics: false
+# output_default_diagnostics: false
 h_elem: 30
 z_max: 65000.0
 z_elem: 63

@@ -5,7 +5,6 @@
 import StaticArrays
 import ClimaCore.Geometry: ⊗
 import ClimaCore.Utilities: half
-import LinearAlgebra: norm
 import Thermodynamics as TD
 import SurfaceFluxes as SF
 import ClimaCore.Spaces as Spaces

@@ -1,7 +1,6 @@
 import ClimaCore.DataLayouts as DL
 import .RRTMGPInterface as RRTMGPI
 import Thermodynamics as TD
-import LinearAlgebra
 import ClimaCore.Fields
 import ClimaComms
 import ClimaCore as CC
@@ -415,7 +414,7 @@ function print_walltime_estimate(integrator)
             ""
         end
         estimated_finish_date =
-            Dates.now() + compound_period(wall_time_remaining, Dates.Second)
+            Dates.now() + compound_period(wall_time_remaining)
         @info "Progress" simulation_time = simulation_time n_steps_completed =
             n_steps wall_time_per_step = wall_time_ave_per_step_str wall_time_total =
             wall_time_total wall_time_remaining = wall_time_remaining_str wall_time_spent =
@@ -461,6 +460,43 @@ function gc_func(integrator)
         "# full_sweep" = num_post.full_sweep,
     )
     return nothing
+end
+
+# TODO: Move this function to ClimaTimeSteppers.jl
+get_dtγ(integrator) =
+    if (
+        integrator.alg isa CTS.RosenbrockAlgorithm ||
+        integrator.alg.name isa CTS.IMEXARKAlgorithmName
+    )
+        tableau_coefficients =
+            integrator.alg isa CTS.RosenbrockAlgorithm ?
+            integrator.alg.tableau.Γ : integrator.alg.tableau.a_imp
+        γs = unique(filter(!iszero, LinearAlgebra.diag(tableau_coefficients)))
+        length(γs) == 1 || error(
+            "The exact Jacobian must be updated on every Newton \
+             iteration, rather than on every timestep (or every N steps), \
+             because the specified IMEX algorithm has implicit stages \
+             with distinct tableau coefficients (i.e., it is not an \
+             SDIRK algorithm).",
+        )
+        FT = eltype(integrator.u)
+        FT(integrator.dt * γs[1])
+    else
+        nothing
+    end
+
+function update_exact_jacobian!(integrator)
+    dtγ = get_dtγ(integrator)
+    isnothing(dtγ) && return
+    (; u, p, t) = integrator
+    update_exact_jacobian!(p.jacobian, u, p, dtγ, t)
+end
+
+function update_jacobian_init!(integrator)
+    dtγ = get_dtγ(integrator)
+    isnothing(dtγ) && return
+    (; u, p, t) = integrator
+    update_jacobian_init!(p.jacobian, u, p, dtγ, t)
 end
 
 """
