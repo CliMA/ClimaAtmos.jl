@@ -243,6 +243,12 @@ end
 @testset "make hybrid spaces" begin
     (; cent_space, face_space, xlim, zlim, velem, helem, npoly, quad) =
         get_cartesian_spaces()
+    config = CA.AtmosConfig(
+        Dict(
+           "topography" => "NoWarp",
+           "topo_smoothing" => false,
+        ),
+    )
     device = ClimaComms.CPUSingleThreaded()
     comms_ctx = ClimaComms.context(device)
     z_stretch = Meshes.Uniform()
@@ -260,6 +266,7 @@ end
         velem,
         z_stretch;
         deep = false,
+        parsed_args=config.parsed_args
     )
     @test test_cent_space == cent_space
     @test test_face_space == face_space

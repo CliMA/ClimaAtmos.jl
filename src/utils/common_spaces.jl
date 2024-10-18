@@ -125,7 +125,7 @@ function make_hybrid_spaces(
     end
 
     topo_smoothing = parsed_args["topo_smoothing"]
-    if topography == nothing
+    if topography == "NoWarp"
         hypsography = Hypsography.Flat()
     elseif topography == "Earth"
         parent(z_surface) .=
