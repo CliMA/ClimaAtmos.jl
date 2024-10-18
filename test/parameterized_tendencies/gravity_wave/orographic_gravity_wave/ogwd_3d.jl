@@ -92,13 +92,8 @@ quad = Quadratures.GLL{nh_poly + 1}()
 horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
 h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
 z_stretch = Meshes.HyperbolicTangentStretching(dz_bottom)
-center_space, face_space = CA.make_hybrid_spaces(
-    h_space,
-    z_max,
-    z_elem,
-    z_stretch;
-    parsed_args,
-)
+center_space, face_space =
+    CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
 
 ᶜlocal_geometry = Fields.local_geometry_field(center_space)
 ᶠlocal_geometry = Fields.local_geometry_field(face_space)

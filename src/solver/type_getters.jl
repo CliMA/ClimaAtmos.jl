@@ -225,14 +225,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(
-            h_space,
-            z_max,
-            z_elem,
-            z_stretch;
-            parsed_args,
-            deep,
-        )
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args, deep)
     end
     ncols = Fields.ncolumns(center_space)
     ndofs_total = ncols * z_elem
