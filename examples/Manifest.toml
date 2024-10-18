@@ -155,10 +155,10 @@ uuid = "a9b6321e-bd34-4604-b9c9-b65b8de01458"
 version = "0.1.0"
 
 [[deps.Automa]]
-deps = ["PrecompileTools", "TranscodingStreams"]
-git-tree-sha1 = "014bc22d6c400a7703c0f5dc1fdc302440cf88be"
+deps = ["PrecompileTools", "SIMD", "TranscodingStreams"]
+git-tree-sha1 = "a8f503e8e1a5f583fbef15a8440c8c7e32185df2"
 uuid = "67c07d97-cdcb-5c2c-af73-a7f9c32a568b"
-version = "1.0.4"
+version = "1.1.0"
 
 [[deps.AxisAlgorithms]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "WoodburyMatrices"]
@@ -323,7 +323,7 @@ version = "0.5.7"
 
 [[deps.ClimaAtmos]]
 deps = ["Adapt", "ArgParse", "ArtifactWrappers", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Dates", "DiffEqBase", "FastGaussQuadrature", "Insolation", "Interpolations", "LazyArtifacts", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "RRTMGP", "SciMLBase", "StaticArrays", "Statistics", "SurfaceFluxes", "Thermodynamics", "UnrolledUtilities", "YAML"]
-path = ".."
+git-tree-sha1 = "ea3534c0db72817156dd6b558ba3e6f07c84b28c"
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 version = "0.27.6"
 
@@ -386,9 +386,9 @@ version = "0.2.8"
 
 [[deps.ClimaParams]]
 deps = ["TOML"]
-git-tree-sha1 = "b43ca371c435056129295445122ea87fd843b505"
+git-tree-sha1 = "ca82603622e2df9dbf14716e43589b76e9705840"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "0.10.14"
+version = "0.10.15"
 
 [[deps.ClimaReproducibilityTests]]
 deps = ["OrderedCollections", "PrettyTables"]
