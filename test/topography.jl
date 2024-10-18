@@ -30,8 +30,8 @@ include("test_helpers.jl")
 
 @testset "test topography functions" begin
     (; FT, coords) = get_spherical_spaces()
-    @test extrema(CA.topography_dcmip200(coords)) == (FT(0), FT(2000))
-    loc = findmax(parent(CA.topography_dcmip200(coords)))
+    @test extrema(CA.topography_dcmip200.(coords)) == (FT(0), FT(2000))
+    loc = findmax(parent(CA.topography_dcmip200.(coords)))
     @test parent(coords.lat)[loc[2]] == FT(0)
     @test parent(coords.long)[loc[2]] == FT(-90)
 end
