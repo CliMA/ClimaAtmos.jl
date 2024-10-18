@@ -1,3 +1,3 @@
 [astronomical_unit]
-prior = "constrained_gaussian(astronomical_unit, 200_000, 100597870000, -Inf, Inf)"
+prior = "constrained_gaussian(astronomical_unit, 60_000_000_000, 100_000_000_000, 200_000, Inf)"
 type = "float"
