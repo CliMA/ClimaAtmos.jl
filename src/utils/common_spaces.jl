@@ -100,7 +100,7 @@ function make_hybrid_spaces(
         z_mesh,
     )
     z_grid = Grids.FiniteDifferenceGrid(z_topology)
-    
+
     @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
     if topography == "DCMIP200"
         z_surface = SpaceVaryingInput(topography_dcmip200, h_space)

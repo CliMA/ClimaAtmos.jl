@@ -8,7 +8,6 @@ import ClimaAtmos as CA
 import LinearAlgebra
 import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
-import ClimaUtilities: SpaceVaryingInputs
 
 import ClimaDiagnostics
 
@@ -208,7 +207,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             z_max,
             z_elem,
             z_stretch;
-            topography, 
+            topography,
             parsed_args,
             deep,
         )
