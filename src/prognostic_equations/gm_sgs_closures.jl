@@ -19,7 +19,7 @@ function smagorinsky_lilly_length(c_smag, N_eff, dz, Pr, ϵ_st)
     return N_eff > FT(0) ?
            c_smag *
            dz *
-           max(0, 1 - N_eff^2 / Pr / 2 / max(ϵ_st, eps(FT)))^(1 / 4) :
+           max(FT(0), 1 - N_eff^2 / Pr / 2 / max(ϵ_st, eps(FT)))^(1 / FT(4)) :
            c_smag * dz
 end
 

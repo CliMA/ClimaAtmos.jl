@@ -1,6 +1,6 @@
 dt_save_state_to_disk: "Inf"
 dt_save_to_sol: "Inf"
-output_default_diagnostics: false
+# output_default_diagnostics: false
 dt: "150secs"
 t_end: "2days"
 h_elem: 16

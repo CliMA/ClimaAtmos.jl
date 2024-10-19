@@ -153,17 +153,17 @@ Smagorinsky length scale.
 """
 function mixing_length(
     params,
-    ustar::FT,
+    ustar,
     ᶜz::FT,
-    z_sfc::FT,
-    ᶜdz::FT,
-    sfc_tke::FT,
-    ᶜlinear_buoygrad::FT,
-    ᶜtke::FT,
-    obukhov_length::FT,
-    ᶜstrain_rate_norm::FT,
-    ᶜPr::FT,
-    ᶜtke_exch::FT,
+    z_sfc,
+    ᶜdz,
+    sfc_tke,
+    ᶜlinear_buoygrad,
+    ᶜtke,
+    obukhov_length,
+    ᶜstrain_rate_norm,
+    ᶜPr,
+    ᶜtke_exch,
 ) where {FT}
 
     turbconv_params = CAP.turbconv_params(params)
@@ -234,7 +234,7 @@ function mixing_length(
     l_smin = lamb_smooth_minimum(l, smin_ub, smin_rm)
     l_limited = max(l_smag, min(l_smin, l_z))
 
-    return MixingLength{FT}(l_limited, l_W, l_TKE, l_N)
+    return MixingLength(l_limited, l_W, l_TKE, l_N)
 end
 
 """

@@ -3,7 +3,9 @@ surface_setup: "SimplePlume"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: true
-use_exact_jacobian: false
+use_exact_jacobian: true
+n_steps_update_exact_jacobian: 0
+debug_approximate_jacobian: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
 zero_tendency: "grid_scale"
@@ -23,8 +25,8 @@ z_max: 4e3
 z_elem: 80
 z_stretch: false
 perturb_initstate: false
-dt: 40secs
-t_end: "12hours"
+dt: 30secs
+t_end: "30mins"
 dt_save_state_to_disk: "10mins"
 toml: [toml/prognostic_edmfx_simpleplume.toml]
 netcdf_interpolation_num_points: [2, 2, 80]

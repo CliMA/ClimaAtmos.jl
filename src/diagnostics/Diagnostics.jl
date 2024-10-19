@@ -4,10 +4,19 @@ import Dates: Month, DateTime, Period
 
 import ClimaComms
 
+import LinearAlgebra
 import LinearAlgebra: dot
 
 import ClimaCore:
-    Fields, Geometry, InputOutput, Meshes, Spaces, Operators, Domains, Grids
+    Fields,
+    MatrixFields,
+    Geometry,
+    InputOutput,
+    Meshes,
+    Spaces,
+    Operators,
+    Domains,
+    Grids
 import ClimaCore.Utilities: half
 import Thermodynamics as TD
 
@@ -43,6 +52,9 @@ import ..DiagnosticEDMFX
 # functions used to calculate diagnostics
 import ..draft_area
 import ..compute_gm_mixing_length!
+import ..column_iterator
+import ..scalar_field_names
+import ..scalar_field_index_ranges
 
 # We need the abbreviations for symbols like curl, grad, and so on
 include(joinpath("..", "utils", "abbreviations.jl"))
@@ -56,6 +68,7 @@ import ClimaDiagnostics.Schedules:
     EveryStepSchedule, EveryDtSchedule, EveryCalendarDtSchedule
 
 import ClimaDiagnostics.Writers:
+    DictWriter,
     HDF5Writer,
     NetCDFWriter,
     write_field!,
