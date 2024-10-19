@@ -4,21 +4,24 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+v0.27.7
+-------
+
 ### Reproducible restarts for simulations with clouds with RRTMGP
 
-- Reset the RNG seed before calling RRTGMP to a known value (the iteration number). 
-  When modeling cloud optics, RRTGMP uses a random number generator. Resetting 
-  the seed every time RRTGMP is called to a deterministic value ensures that the 
+- Reset the RNG seed before calling RRTGMP to a known value (the iteration number).
+  When modeling cloud optics, RRTGMP uses a random number generator. Resetting
+  the seed every time RRTGMP is called to a deterministic value ensures that the
   simulation is fully reproducible and can be restarted in a reproducible way.
   Disable this option when running production runs.
 
-  Note: Setting this option to `true` is behavior-changing. 
+  Note: Setting this option to `true` is behavior-changing.
   PR [3382](https://github.com/CliMA/ClimaAtmos.jl/pull/3382)
 
 ### ![][badge-🐛bugfix] Bug fixes
 
 - Update RRTMGP to v0.19.1, which fixes the sea salt aerosol lookup table.
-  Sea salt aerosol is added to the target amip config. 
+  Sea salt aerosol is added to the target amip config.
   PR [3374](https://github.com/CliMA/ClimaAtmos.jl/pull/3374)
 
 - Fixed radiation diagnostics conflicting with each other. Prior to this change,
