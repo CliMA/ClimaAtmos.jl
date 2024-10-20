@@ -89,12 +89,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     ᶜp = Fields.array2field(rrtmgp_model.center_pressure, axes(Y.c))
     ᶜT = Fields.array2field(rrtmgp_model.center_temperature, axes(Y.c))
-    # When add_isothermal_boundary_layer is true, we add a layer in rrtmgp and set the
-    # pressure to half of the sum of top level pressure and rrtmgp minimum pressure. 
-    # Here we limit the pressure to p_min multiplied by a small number to prevent 
-    # pressure from decreasing or being constant with height.
-    p_min = RRTMGPI.get_p_min(rrtmgp_model)
-    @. ᶜp = max(TD.air_pressure(thermo_params, ᶜts), p_min * FT(1.01))
+    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     # TODO: move this to RRTMGP
     @. ᶜT =
         min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
@@ -246,7 +241,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
-    RRTMGPI.update_fluxes!(rrtmgp_model)
+    RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(t / integrator.p.dt))
     Fields.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
     return nothing
 end

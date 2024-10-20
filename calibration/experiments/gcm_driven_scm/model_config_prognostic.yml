@@ -9,34 +9,38 @@ approximate_linear_solve_iters: 2
 max_newton_iters_ode: 1
 edmfx_upwinding: "first_order"
 rayleigh_sponge: true
-edmfx_entr_model: "Generalized"
-edmfx_detr_model: "Generalized"
+edmfx_entr_model: "PiGroups"
+edmfx_detr_model: "PiGroups"
 # precip_model: 1M
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
-edmfx_filter: true
+edmfx_filter: false
 prognostic_tke: true
 moist: "equil"
 config: "column"
 hyperdiff: "false"
-max: 40e3
+z_max: 40e3
 z_elem: 60
 z_stretch: true
 dz_bottom: 30
-dz_top: 3000
 rad: allskywithclear
 insolation: "gcmdriven"
 perturb_initstate: false
 dt: "10secs"
+<<<<<<< HEAD
 t_end: "6hours"
+=======
+dt_rad: "30mins"
+t_end: "72hours"
+>>>>>>> origin/main
 dt_save_to_disk: "10mins"
+cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage : true
 ode_algo: "ARS343"
-output_dir: output/gcm_driven_scm
 toml: [scm_tomls/prognostic_edmfx.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 diagnostics:
-  - short_name: [hus, thetaa, clw, arup, tke, entr, detr, waup]
+  - short_name: [hus, thetaa, clw, arup, tke, entr, detr, waup, turbentr]
     period: 10mins

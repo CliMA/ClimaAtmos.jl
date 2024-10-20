@@ -16,7 +16,7 @@ dt_cloud_fraction: "1hours"
 insolation: "timevarying"
 prescribe_ozone: true
 aerosol_radiation: true
-prescribed_aerosols: ["CB1", "CB2", "DST01", "OC1", "OC2", "SO4"]
+prescribed_aerosols: ["CB1", "CB2", "DST01", "OC1", "OC2", "SO4", "SSLT01"]
 surface_setup: "DefaultMoninObukhov"
 turbconv: "diagnostic_edmfx"
 ode_algo: ARS343

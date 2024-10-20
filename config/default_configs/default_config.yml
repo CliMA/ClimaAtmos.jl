@@ -339,3 +339,6 @@ edmfx_sgs_diffusive_flux:
 updraft_number:
   help: "Sets the number of updrafts for the EDMF scheme"
   value: 1
+radiation_reset_rng_seed:
+  help: "Reset the RNG seed before calling RRTGMP to a known value (the timestep number). When modeling cloud optics, RRTGMP uses a random number generator. Resetting the seed every time RRTGMP is called to a deterministic value ensures that the simulation is fully reproducible and can be restarted in a reproducible way. Disable this option when running production runs. Please note that this flag is only used for `AllSkyRadiation` and `AllSkyRadiationWithClearSkyDiagnostics` radiation modes."
+  value: false

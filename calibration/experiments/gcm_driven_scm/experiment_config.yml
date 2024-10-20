@@ -1,15 +1,25 @@
-prior: prior_prognostic.toml
-ensemble_size: 50
-n_iterations: 5
-batch_size: 1
-model_config : model_config_prognostic.yml
-output_dir : output/gcm_driven_scm
-y_var_names: [thetaa, hus, clw] # calibration variables
-z_max : 4000 # [m]
-dims : 90  # num vertical levels below z_max x num variables x batch size
-eki_timestep: 0.001 # timestep of eki
-const_noise: 0.05 # constant noise (diagonal elements of noise cov matrix Γ)
+prior_path: prior_prognostic_pi_entr.toml
+ensemble_size: 100
+n_iterations: 12
+batch_size: 2 # number of cases per iteration
+model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
+output_dir : output/exp_1 # output dir
+y_var_names: [thetaa, hus, clw] # calibration variables clw
+log_vars: ["clw"] # take log(var) when forming y, g
+z_max : 4000 # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
+dims_per_var : 29 # num dimensions per variable (num cells in vertical profile below z_max)
+# eki_timestep: 0.1 # timestep of eki, if using default
 y_t_start_sec : 475200.0 # start time of LES averaging window [s] : 5.5 days
 y_t_end_sec : 518400.0 # end time of LES averaging window [s] : 6 days (LES length = 6 days)
 g_t_start_sec : 216000.0 # start time of SCM averaging window [s] : 2.5 days
 g_t_end_sec : 259200.0 # end time of SCM averaging window [s] : 3 days (SCM length = 3 days)
+
+norm_factors_by_var:
+  thetaa: [298.828, 8.617]
+  hus: [0.00676, 0.00423]
+  clw: [-9.808, 3.116] # log norm factors
+
+const_noise_by_var:
+  thetaa: 0.00005
+  hus: 0.00005
+  clw: 0.00005
