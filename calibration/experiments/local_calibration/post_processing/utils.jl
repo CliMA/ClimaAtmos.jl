@@ -5,6 +5,7 @@ import Statistics: var, mean
 import ClimaCalibrate as CAL
 import JLD2
 using CairoMakie
+using LaTeXStrings
 
 params_true = [.14, 1, .3, .22] # 4th position .0001, entr_inv_tau removed
 config_dict = YAML.load_file(joinpath(simdir, "experiment_config.yml"))
@@ -257,20 +258,36 @@ function plot_start_end_distributions(eki,
     fig
 end
 
+d = Dict("mixing_length_eddy_viscosity_coefficient"=> "Mixing Length Eddy Viscosity",
+        "detr_massflux_vertdiv_coeff" => "Detrainment Massflux Vertical Div",
+        "entr_coeff" => "Entrainment Coefficient",
+        "mixing_length_diss_coeff" => "Mixing Length Dissipation Coefficient",
+)
 
 function plot_parameters(eki, prior, params_true)
     phi = cat(EKP.get_ϕ(prior, eki)..., dims = 3)
     time = vcat(0, cumsum(eki.Δt))
-    fig = Figure(size = (1000, 800))
-    num_per_row = 3
+    fig = Figure(size = (1200, 350))
+    num_per_row = 4
     for (i, name) in enumerate(EKP.get_name(prior))
         row = div(i-1, num_per_row) + 1
         col = mod(i-1, num_per_row) + 1
-        ax = Axis(fig[row, col], title = name)
-        for ens in 1:100
-            lines!(ax, time, phi[i, ens, :], color= :red)
+        if i ==1
+            ax = Axis(fig[row, col], title = d[name], xlabel = "Iteration", ylabel = "Parameter Coefficient")
+        else
+            ax = Axis(fig[row, col], title = d[name], xlabel = "Iteration")
+        end
+        time = 1:length(time)
+        lines!(ax, time, phi[i, 1, :], color= :red, label = "Ensemble Member")
+        for ens in 2:100
+                lines!(ax, time, phi[i, ens, :], color= :red)
         end    
-        hlines!(ax, params_true[i])
+        lines!(ax, time, vec(mean(phi[i, :, :], dims = 1)), color = :blue, label = "Ensemble Mean")
+        hlines!(ax, params_true[i], color = :black, label = L"\theta^*")
+        if i == 4
+            legend = Legend(fig, ax, orientation = :vertical, tellheight = false)
+            fig[1, num_per_row + 1] = legend
+        end
     end
     fig
 end
