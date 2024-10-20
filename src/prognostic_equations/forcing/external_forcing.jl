@@ -45,7 +45,7 @@ function compute_gcm_driven_scalar_inv_τ(
         "forcing_relaxation_maximum_height" => "forcing_relaxation_maximum_height",
     )
     params = CP.get_parameter_values(ClimaParams.create_toml_dict(Float64), name_map)
-    return compute_gcm_driven_scalar_inv_τ(external_forcing_type, z)
+    return compute_gcm_driven_scalar_inv_τ(params, z)
 end
 
 function compute_gcm_driven_scalar_inv_τ(
