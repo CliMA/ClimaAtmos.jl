@@ -488,8 +488,13 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
-    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+    (; ᶜh_tot) = p.precomputed
+    @fused_direct begin
+        @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
+        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+        @. ᶜh_tot =
+            TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
+    end
 
     if turbconv_model isa AbstractEDMF
         @. p.precomputed.ᶜgradᵥ_θ_virt =
@@ -500,8 +505,6 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
             ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
     end
 
-    (; ᶜh_tot) = p.precomputed
-    @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
 
     if !isnothing(p.sfc_setup)
         SurfaceConditions.update_surface_conditions!(Y, p, t)
