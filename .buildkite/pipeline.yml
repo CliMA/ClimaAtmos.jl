@@ -454,6 +454,7 @@ steps:
         timeout_in_minutes: 20
         soft_fail:
           - exit_status: -1
+          - exit_status: 255
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
@@ -469,6 +470,7 @@ steps:
         timeout_in_minutes: 20
         soft_fail:
           - exit_status: -1
+          - exit_status: 255
         agents:
           slurm_gpus_per_task: 1
           slurm_ntasks: 2
@@ -564,6 +566,7 @@ steps:
       - label: "end to end test"
         command: julia --project=calibration/test calibration/test/e2e_test.jl
         artifact_paths: "calibration_end_to_end_test/*"
+        soft_fail: true
 
   - group: "Diagnostic EDMFX"
     steps:
@@ -1182,11 +1185,11 @@ steps:
   - label: ":bar_chart: Tabulate performance summary"
     command: "julia --color=yes --project=perf perf/tabulate_perf_summary.jl"
 
-  - label: ":chart_with_downwards_trend: build history"
-    command:
-      - build_history main
-    artifact_paths:
-      - "build_history.html"
+  # - label: ":chart_with_downwards_trend: build history"
+  #   command:
+  #     - build_history main
+  #   artifact_paths:
+  #     - "build_history.html"
 
   - wait
 

@@ -305,13 +305,16 @@ function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     @assert !isnothing(restart_file)
     reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
+    # TODO: Do not use InputOutput.HDF5 directly
     t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
-    atmos_model_hash_in_restart =
-        InputOutput.HDF5.read_attribute(reader.file, "atmos_model_hash")
-    if atmos_model_hash_in_restart != atmos_model_hash
-        error(
-            "Restart file $(restart_file) was constructed with a different AtmosModel",
-        )
+    if "atmos_model_hash" in keys(InputOutput.HDF5.attrs(reader.file))
+        atmos_model_hash_in_restart =
+            InputOutput.HDF5.read_attribute(reader.file, "atmos_model_hash")
+        if atmos_model_hash_in_restart != atmos_model_hash
+            error(
+                "Restart file $(restart_file) was constructed with a different AtmosModel",
+            )
+        end
     end
     return (Y, t_start)
 end
