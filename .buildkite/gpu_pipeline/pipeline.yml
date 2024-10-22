@@ -51,7 +51,7 @@ steps:
         command:
           - mkdir -p target_gpu_implicit_baroclinic_wave
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=target_gpu_implicit_baroclinic_wave/output_active/report
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=target_gpu_implicit_baroclinic_wave/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
             --job_id target_gpu_implicit_baroclinic_wave
@@ -68,7 +68,7 @@ steps:
         command:
           - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M.yml
             --job_id gpu_hs_rhoe_equil_55km_nz63_0M
@@ -86,7 +86,7 @@ steps:
           - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/report-%q{PMI_RANK}
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M.yml
             --job_id gpu_hs_rhoe_equil_55km_nz63_0M_4process
@@ -106,7 +106,7 @@ steps:
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            nsys profile --trace=osrt,nvtx,cuda,mpi,ucx --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
+            nsys profile --delay 100 --trace=osrt,nvtx,cuda,mpi,ucx --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
             --job_id target_gpu_implicit_baroclinic_wave_4process
@@ -128,7 +128,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_diag_1process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_diag_1process/output_active/report julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_diag_1process/output_active/report julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_diag_1process.yml
             --job_id gpu_aquaplanet_dyamond_diag_1process
         artifact_paths: "gpu_aquaplanet_dyamond_diag_1process/output_active/*"
@@ -148,7 +148,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ss_1process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_ss_1process/output_active/report
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_ss_1process/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_1process
@@ -307,7 +307,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_diagedmf
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_diagedmf/output_active/report
+            nsys profile --delay 200 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_diagedmf/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${MODEL_CONFIG_PATH}aquaplanet_diagedmf.yml
             --job_id gpu_aquaplanet_diagedmf
@@ -319,7 +319,7 @@ steps:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 1
-          slurm_mem: 32G
+          slurm_mem: 64G
           slurm_exclusive:
 
       - label: "gpu_aquaplanet_diagedmf_benchmark"
@@ -331,6 +331,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
+          slurm_mem: 64G
           slurm_gpus: 1
 
   - group: "Prognostic EDMF GPU"
@@ -340,7 +341,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_progedmf
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_progedmf/output_active/report
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_progedmf/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${MODEL_CONFIG_PATH}aquaplanet_progedmf.yml
             --job_id gpu_aquaplanet_progedmf
