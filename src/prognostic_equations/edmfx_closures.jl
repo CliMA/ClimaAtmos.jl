@@ -213,7 +213,8 @@ function mixing_length(
     # arc = [length(X), 15, 10, 5, 1]
     arc = [length(X), 20, 15, 10, 1]
 
-    nn_model = construct_fully_connected_nn(arc, param_vec; biases_bool = true, output_layer_activation_function = Flux.identity)
+    # nn_model = construct_fully_connected_nn(arc, param_vec; biases_bool = true, output_layer_activation_function = Flux.identity)
+    nn_model = construct_fully_connected_nn(arc, param_vec; biases_bool = true, activation_function = Flux.leakyrelu, output_layer_activation_function = Flux.identity)
 
     # l_limited = max(nn_model([X]), 0.0)
     l_limited_norm = nn_model(X)[1]

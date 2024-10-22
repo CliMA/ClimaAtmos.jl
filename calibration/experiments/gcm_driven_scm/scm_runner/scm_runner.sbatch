@@ -1,9 +1,10 @@
 #!/bin/bash
 
-#SBATCH --time=10:00:00   # walltime
+#SBATCH --time=6:00:00   # walltime
 #SBATCH --nodes=1   # number of nodes
-#SBATCH --ntasks=8  # number of processor cores (i.e. tasks)
-#SBATCH --mem=75G   # memory
+#SBATCH --ntasks=11  # number of processor cores (i.e. tasks)
+#SBATCH --mem=100G   # memory
+#SBATCH --cpus-per-task=1
 #SBATCH -J "scm_runner"   # job name
 #SBATCH --output=scm_runner.out
 

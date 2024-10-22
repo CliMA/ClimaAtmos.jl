@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH --time=24:00:00   # walltime
+#SBATCH --time=30:00:00   # walltime
 #SBATCH --nodes=1   # number of nodes
 #SBATCH --ntasks=1  # number of processor cores (i.e. tasks)
 #SBATCH --mem=60G   # memory per CPU core
-#SBATCH -J "scm_cal_restart"   # job name
+#SBATCH -J "2scm_cal_restart"   # job name
 #SBATCH --output=scm_cal_restart.out
 
 module purge
