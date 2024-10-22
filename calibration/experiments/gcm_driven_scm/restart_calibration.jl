@@ -98,7 +98,7 @@ function main()
     eki = JLD2.load_object(eki_path)
 
     hpc_kwargs = CAL.kwargs(
-        time = 90,
+        time = 180,
         mem_per_cpu = "12G",
         cpus_per_task = min(batch_size + 1, 5),
         ntasks = 1,

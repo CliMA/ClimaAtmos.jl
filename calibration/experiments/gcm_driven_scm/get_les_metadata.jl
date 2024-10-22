@@ -20,22 +20,28 @@ CFSITE_TYPES = Dict("shallow" => (collect(4:15)..., collect(17:23)...),
 # end
 
 
-function get_les_calibration_library() # HADGEM
-    les_library = get_LES_library()
+
+function get_les_calibration_library() # HADGEM, shallow only
+    les_library = get_shallow_LES_library()
     ref_paths = String[]
     cfsite_numbers = Int[]
     models = ["HadGEM2-A"]
+
     for model in models
         for month in keys(les_library[model])
-            cfsite_numbers_i = [parse(Int, key) for key in keys(les_library[model][month]["cfsite_numbers"])]
+            cfsite_numbers_i = collect(les_library[model][month]["cfsite_numbers"])  # Collect cfsite_numbers without `keys`
             les_kwargs = (forcing_model = model, month = parse(Int, month), experiment = "amip")
+            
             for cfsite_number in cfsite_numbers_i
+                println("Processing cfsite_number: $cfsite_number for model: $model, month: $month")
                 try
                     stats_path = get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...))
+                    println("Successfully retrieved stats_path: $stats_path")
                     push!(ref_paths, stats_path)
                     push!(cfsite_numbers, cfsite_number)
-                catch e
+                catch e                    
                     if isa(e, AssertionError)
+                        println("Skipping due to AssertionError.")
                         continue
                     else
                         rethrow(e)
@@ -46,6 +52,36 @@ function get_les_calibration_library() # HADGEM
     end
     return (ref_paths, cfsite_numbers)
 end
+
+
+
+
+# function get_les_calibration_library() # HADGEM
+#     les_library = get_LES_library()
+#     ref_paths = String[]
+#     cfsite_numbers = Int[]
+#     models = ["HadGEM2-A"]
+#     for model in models
+#         for month in keys(les_library[model])
+#             cfsite_numbers_i = [parse(Int, key) for key in keys(les_library[model][month]["cfsite_numbers"])]
+#             les_kwargs = (forcing_model = model, month = parse(Int, month), experiment = "amip")
+#             for cfsite_number in cfsite_numbers_i
+#                 try
+#                     stats_path = get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...))
+#                     push!(ref_paths, stats_path)
+#                     push!(cfsite_numbers, cfsite_number)
+#                 catch e
+#                     if isa(e, AssertionError)
+#                         continue
+#                     else
+#                         rethrow(e)
+#                     end
+#                 end
+#             end
+#         end
+#     end
+#     return (ref_paths, cfsite_numbers)
+# end
 
 
 # function get_les_calibration_library()
