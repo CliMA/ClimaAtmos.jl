@@ -1,0 +1,26 @@
+job_id: "les_gabls_box"
+edmf_coriolis: GABLS
+initial_condition: GABLS
+surface_setup: GABLS
+implicit_diffusion: false
+moist: "equil"
+precip_model: "1M"
+config: "box"
+hyperdiff: "false"
+x_max: 1e3
+y_max: 1e3
+z_max: 500
+x_elem: 5
+y_elem: 5
+z_elem: 10
+z_stretch: false
+dt: "0.10secs"
+t_end: "100secs"
+dt_save_state_to_disk: "30mins"
+perturb_initstate: true
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [20, 20, 20]
+#restart_file: "restart/gabls/day0.0.hdf5"
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
+    period: 10secs
