@@ -394,7 +394,7 @@ get_jacobian(ode_algo, Y, atmos, parsed_args) =
         preserve_unfactorized_jacobian =
             parsed_args["output_default_diagnostics"] ||
             "ejac1" in diagnostics_names ||
-            any(contains("ejac1"), diagnostics_names)
+            any(contains("ejac1"), Iterators.flatten(diagnostics_names))
         exact_jacobian_alg = ExactJacobian(;
             always_update_exact_jacobian,
             preserve_unfactorized_jacobian,

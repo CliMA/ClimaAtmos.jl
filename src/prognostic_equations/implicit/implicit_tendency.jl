@@ -16,6 +16,8 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             t,
             p.atmos.turbconv_model,
         )
+        edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+        edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 
     if p.atmos.diff_mode == Implicit()

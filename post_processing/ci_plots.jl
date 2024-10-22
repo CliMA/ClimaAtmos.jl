@@ -1456,6 +1456,7 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_bomex_stretched_column},
     Val{:prognostic_edmfx_bomex_pigroup_column},
     Val{:prognostic_edmfx_bomex_implicit_column},
+    Val{:prognostic_edmfx_bomex_implicit_column_autodiff},
     Val{:prognostic_edmfx_dycoms_rf01_column},
     Val{:prognostic_edmfx_trmm_column_0M},
     Val{:prognostic_edmfx_simpleplume_column},
