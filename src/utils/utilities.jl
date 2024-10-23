@@ -454,3 +454,52 @@ function isdivisible(
     # have any common divisor)
     return isinteger(Dates.Day(1) / dt_small)
 end
+
+"""
+    promote_period(period::Dates.Period)
+
+Promote a period to the largest possible period type.
+
+This function attempts to represent a given `Period` using the largest possible
+unit of time. For example, a period of 24 hours will be promoted to 1 day. If
+a clean promotion is not possible, return the input as it is.
+
+# Examples
+```julia-repl
+julia> promote_period(Hour(24))
+1 day
+
+julia> promote_period(Day(14))
+2 weeks
+
+julia> promote_period(Second(86401))
+86401 seconds
+
+julia> promote_period(Millisecond(1))
+1 millisecond
+```
+"""
+function promote_period(period::Dates.Period)
+    ms = Int(Dates.toms(period))
+    # Hard to do this with varying periods like Month/Year...
+    PeriodTypes = [
+        Dates.Week,
+        Dates.Day,
+        Dates.Hour,
+        Dates.Minute,
+        Dates.Second,
+        Dates.Millisecond,
+    ]
+    for PeriodType in PeriodTypes
+        period_ms = Int(Dates.toms(PeriodType(1)))
+        if ms % period_ms == 0
+            # Millisecond will always match, if nothing else matches
+            return PeriodType(ms // period_ms)
+        end
+    end
+end
+
+function promote_period(period::Dates.OtherPeriod)
+    # For varying periods, we just return them as they are
+    return period
+end

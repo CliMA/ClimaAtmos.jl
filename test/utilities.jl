@@ -266,3 +266,11 @@ end
     @test test_cent_space == cent_space
     @test test_face_space == face_space
 end
+
+@testset "promote_period" begin
+    @test CA.promote_period(Dates.Hour(24)) == Dates.Day(1)
+    @test CA.promote_period(Dates.Day(14)) == Dates.Week(2)
+    @test CA.promote_period(Dates.Millisecond(1)) == Dates.Millisecond(1)
+    @test CA.promote_period(Dates.Minute(120)) == Dates.Hour(2)
+    @test CA.promote_period(Dates.Second(3600)) == Dates.Hour(1)
+end
