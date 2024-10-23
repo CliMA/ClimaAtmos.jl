@@ -21,7 +21,7 @@ cᵥₗ(thp) = TD.Parameters.cv_l(thp)
 cᵥᵢ(thp) = TD.Parameters.cv_i(thp)
 
 # helper function to limit the tendency
-function limit(q::FT, dt::FT, n::Int) where {FT}
+function limit(q, dt, n::Int)
     return q / dt / n
 end
 
@@ -82,19 +82,19 @@ function q_tot_precipitation_sources(
     thp,
     cmp,
     dt,
-    qₜ::FT,
+    qₜ,
     ts,
-) where {FT <: Real}
-    return FT(0)
+)
+    return zero(qₜ)
 end
 function q_tot_precipitation_sources(
     ::Microphysics0Moment,
     thp,
     cmp,
     dt,
-    qₜ::FT,
+    qₜ,
     ts,
-) where {FT <: Real}
+)
     return -min(max(qₜ, 0) / dt, -CM0.remove_precipitation(cmp, PP(thp, ts)))
 end
 
@@ -111,10 +111,10 @@ for the 0-moment scheme
 function e_tot_0M_precipitation_sources_helper(
     thp,
     ts,
-    Φ::FT,
-) where {FT <: Real}
+    Φ,
+)
 
-    λ::FT = TD.liquid_fraction(thp, ts)
+    λ = TD.liquid_fraction(thp, ts)
 
     return λ * Iₗ(thp, ts) + (1 - λ) * Iᵢ(thp, ts) + Φ
 end
