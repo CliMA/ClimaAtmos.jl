@@ -2,7 +2,7 @@
 
 julia_version = "1.10.5"
 manifest_format = "2.0"
-project_hash = "1b8f2c1a4c1bc4fd937f4c1ec969061b8acdbb19"
+project_hash = "22032137324bfceee0e460cda1d39767a2176934"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "eea5d80188827b35333801ef97a40c2ed653b081"
@@ -2571,9 +2571,9 @@ uuid = "9602ed7d-8fef-5bc8-8597-8f21381861e8"
 version = "0.1.5"
 
 [[deps.UnrolledUtilities]]
-git-tree-sha1 = "1244bd810bfd53c539ef5463b01dd9b808c2e5da"
+git-tree-sha1 = "5caf11dfadeee25daafa7caabb3f252a977ffe72"
 uuid = "0fe1646c-419e-43be-ac14-22321958931b"
-version = "0.1.5"
+version = "0.1.6"
 weakdeps = ["StaticArrays"]
 
     [deps.UnrolledUtilities.extensions]
