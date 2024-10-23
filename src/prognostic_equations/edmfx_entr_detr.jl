@@ -18,39 +18,40 @@
 
 function entrainment(
     params,
-    ᶜz::FT,
-    z_sfc::FT,
-    ᶜp::FT,
-    ᶜρ::FT,
-    ᶜaʲ::FT,
-    ᶜwʲ::FT,
-    ᶜRHʲ::FT,
-    ᶜbuoyʲ::FT,
-    ᶜw⁰::FT,
-    ᶜRH⁰::FT,
-    ᶜbuoy⁰::FT,
-    ᶜtke⁰::FT,
+    ᶜz,
+    z_sfc,
+    ᶜp,
+    ᶜρ,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜRHʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜRH⁰,
+    ᶜbuoy⁰,
+    ᶜtke⁰,
     ::NoEntrainment,
-) where {FT}
-    return FT(0)
+)
+    return zero(eltype(params))
 end
 
 function entrainment(
     params,
-    ᶜz::FT,
-    z_sfc::FT,
-    ᶜp::FT,
-    ᶜρ::FT,
-    ᶜaʲ::FT,
-    ᶜwʲ::FT,
-    ᶜRHʲ::FT,
-    ᶜbuoyʲ::FT,
-    ᶜw⁰::FT,
-    ᶜRH⁰::FT,
-    ᶜbuoy⁰::FT,
-    ᶜtke⁰::FT,
+    ᶜz,
+    z_sfc,
+    ᶜp,
+    ᶜρ,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜRHʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜRH⁰,
+    ᶜbuoy⁰,
+    ᶜtke⁰,
     ::PiGroupsEntrainment,
-) where {FT}
+)
+    FT = eltype(params)
     if ᶜaʲ <= FT(0)
         return FT(0)
     else
@@ -85,20 +86,21 @@ end
 
 function entrainment(
     params,
-    ᶜz::FT,
-    z_sfc::FT,
-    ᶜp::FT,
-    ᶜρ::FT,
-    ᶜaʲ::FT,
-    ᶜwʲ::FT,
-    ᶜRHʲ::FT,
-    ᶜbuoyʲ::FT,
-    ᶜw⁰::FT,
-    ᶜRH⁰::FT,
-    ᶜbuoy⁰::FT,
-    ᶜtke⁰::FT,
+    ᶜz,
+    z_sfc,
+    ᶜp,
+    ᶜρ,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜRHʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜRH⁰,
+    ᶜbuoy⁰,
+    ᶜtke⁰,
     ::GeneralizedEntrainment,
-) where {FT}
+)
+    FT = eltype(params)
     turbconv_params = CAP.turbconv_params(params)
     entr_inv_tau = CAP.entr_tau(turbconv_params)
     entr_coeff = CAP.entr_coeff(turbconv_params)
@@ -117,9 +119,9 @@ function entrainment(
     return max(entr, 0)
 end
 
-function detrainment(
+function detrainment_from_thermo_state(
     params,
-    z_prev_level::FT,
+    z_prev_level,
     z_sfc_halflevel,
     p_prev_level,
     ρ_prev_level,
@@ -136,7 +138,8 @@ function detrainment(
     ᶜmassflux_vert_div, # mass flux divergence is not implemented for diagnostic edmf
     tke_prev_level,
     edmfx_detr_model,
-) where {FT}
+)
+    FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     detrainment(
         params,
@@ -176,48 +179,48 @@ end
 """
 function detrainment(
     params,
-    ᶜz::FT,
-    z_sfc::FT,
-    ᶜp::FT,
-    ᶜρ::FT,
-    ᶜρaʲ::FT,
-    ᶜaʲ::FT,
-    ᶜwʲ::FT,
-    ᶜRHʲ::FT,
-    ᶜbuoyʲ::FT,
-    ᶜw⁰::FT,
-    ᶜRH⁰::FT,
-    ᶜbuoy⁰::FT,
-    ᶜentr::FT,
-    ᶜvert_div::FT,
-    ᶜmassflux_vert_div::FT,
-    ᶜtke⁰::FT,
+    ᶜz,
+    z_sfc,
+    ᶜp,
+    ᶜρ,
+    ᶜρaʲ,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜRHʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜRH⁰,
+    ᶜbuoy⁰,
+    ᶜentr,
+    ᶜvert_div,
+    ᶜmassflux_vert_div,
+    ᶜtke⁰,
     ::NoDetrainment,
-) where {FT}
-    return FT(0)
+)
+    return zero(eltype(params))
 end
 
 function detrainment(
     params,
-    ᶜz::FT,
-    z_sfc::FT,
-    ᶜp::FT,
-    ᶜρ::FT,
-    ᶜρaʲ::FT,
-    ᶜaʲ::FT,
-    ᶜwʲ::FT,
-    ᶜRHʲ::FT,
-    ᶜbuoyʲ::FT,
-    ᶜw⁰::FT,
-    ᶜRH⁰::FT,
-    ᶜbuoy⁰::FT,
-    ᶜentr::FT,
-    ᶜvert_div::FT,
-    ᶜmassflux_vert_div::FT,
-    ᶜtke⁰::FT,
+    ᶜz,
+    z_sfc,
+    ᶜp,
+    ᶜρ,
+    ᶜρaʲ,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜRHʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜRH⁰,
+    ᶜbuoy⁰,
+    ᶜentr,
+    ᶜvert_div,
+    ᶜmassflux_vert_div,
+    ᶜtke⁰,
     ::PiGroupsDetrainment,
-) where {FT}
-
+)
+    FT = eltype(params)
     if ᶜaʲ <= FT(0)
         return FT(0)
     else
@@ -250,24 +253,25 @@ end
 
 function detrainment(
     params,
-    ᶜz::FT,
-    z_sfc::FT,
-    ᶜp::FT,
-    ᶜρ::FT,
-    ᶜρaʲ::FT,
-    ᶜaʲ::FT,
-    ᶜwʲ::FT,
-    ᶜRHʲ::FT,
-    ᶜbuoyʲ::FT,
-    ᶜw⁰::FT,
-    ᶜRH⁰::FT,
-    ᶜbuoy⁰::FT,
-    ᶜentr::FT,
-    ᶜvert_div::FT,
-    ᶜmassflux_vert_div::FT,
-    ᶜtke⁰::FT,
+    ᶜz,
+    z_sfc,
+    ᶜp,
+    ᶜρ,
+    ᶜρaʲ,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜRHʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜRH⁰,
+    ᶜbuoy⁰,
+    ᶜentr,
+    ᶜvert_div,
+    ᶜmassflux_vert_div,
+    ᶜtke⁰,
     ::GeneralizedDetrainment,
-) where {FT}
+)
+    FT = eltype(params)
     turbconv_params = CAP.turbconv_params(params)
     detr_inv_tau = CAP.detr_tau(turbconv_params)
     detr_coeff = CAP.detr_coeff(turbconv_params)
@@ -300,33 +304,30 @@ end
 
 function detrainment(
     params,
-    ᶜz::FT,
-    z_sfc::FT,
-    ᶜp::FT,
-    ᶜρ::FT,
-    ᶜρaʲ::FT,
-    ᶜaʲ::FT,
-    ᶜwʲ::FT,
-    ᶜRHʲ::FT,
-    ᶜbuoyʲ::FT,
-    ᶜw⁰::FT,
-    ᶜRH⁰::FT,
-    ᶜbuoy⁰::FT,
-    ᶜentr::FT,
-    ᶜvert_div::FT,
-    ᶜmassflux_vert_div::FT,
+    ᶜz,
+    z_sfc,
+    ᶜp,
+    ᶜρ,
+    ᶜρaʲ,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜRHʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜRH⁰,
+    ᶜbuoy⁰,
+    ᶜentr,
+    ᶜvert_div,
+    ᶜmassflux_vert_div,
     ::ConstantAreaDetrainment,
-) where {FT}
+)
     detr = ᶜentr - ᶜvert_div
     return max(detr, 0)
 end
 
-function turbulent_entrainment(params, ᶜaʲ::FT) where {FT}
+function turbulent_entrainment(params, ᶜaʲ)
     turb_entr_param_vec = CAP.turb_entr_param_vec(params)
-    return max(
-        turb_entr_param_vec[1] * exp(-turb_entr_param_vec[2] * ᶜaʲ),
-        FT(0),
-    )
+    return max(turb_entr_param_vec[1] * exp(-turb_entr_param_vec[2] * ᶜaʲ), 0)
 end
 
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
@@ -366,7 +367,7 @@ limit_entrainment(entr::FT, a, dt) where {FT} = max(
 limit_detrainment(detr::FT, a, dt) where {FT} =
     max(min(detr, FT(0.9) * 1 / dt), 0)
 
-function limit_turb_entrainment(dyn_entr::FT, turb_entr::FT, dt) where {FT}
+function limit_turb_entrainment(dyn_entr::FT, turb_entr, dt) where {FT}
     return max(min((FT(0.9) * 1 / dt) - dyn_entr, turb_entr), 0)
 end
 
@@ -378,6 +379,6 @@ limit_entrainment(entr::FT, a, w, dz) where {FT} =
 limit_detrainment(detr::FT, a, w, dz, dt) where {FT} =
     limit_detrainment(max(min(detr, FT(0.9) * w / dz), 0), a, dt)
 
-function limit_turb_entrainment(dyn_entr::FT, turb_entr::FT, w, dz) where {FT}
+function limit_turb_entrainment(dyn_entr::FT, turb_entr, w, dz) where {FT}
     return max(min((FT(0.9) * w / dz) - dyn_entr, turb_entr), 0)
 end
