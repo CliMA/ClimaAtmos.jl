@@ -39,15 +39,17 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
     Φ_level,
 )
     FT = eltype(thermo_params)
-    @. ts_level = TD.PhaseEquil_phq(
-        thermo_params,
-        p_level,
-        mse_level - Φ_level,
-        q_tot_level,
-        8,
-        FT(0.0003),
-    )
-    @. ρ_level = TD.air_density(thermo_params, ts_level)
+    @fused_direct begin
+        @. ts_level = TD.PhaseEquil_phq(
+            thermo_params,
+            p_level,
+            mse_level - Φ_level,
+            q_tot_level,
+            8,
+            FT(0.0003),
+        )
+        @. ρ_level = TD.air_density(thermo_params, ts_level)
+    end
     return nothing
 end
 
