@@ -16,7 +16,7 @@ const OptReal = Union{Real, Nothing}
 const OptDict = Union{Nothing, Dict}
 
 CLIMADIAGNOSTICS_LES_NAME_MAP =
-    Dict("thetaa" => "theta_mean", "hus" => "qt_mean", "clw" => "ql_mean")
+    Dict("thetaa" => "theta_mean", "hus" => "qt_mean", "clw" => "ql_mean", "ta" => "temperature_mean")
 
 
 
