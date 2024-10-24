@@ -757,16 +757,31 @@ function get_simulation(config::AtmosConfig)
     # Initialize diagnostics
     if config.parsed_args["enable_diagnostics"]
         s = @timed_str begin
-            scheduled_diagnostics, writers = get_diagnostics(
-                config.parsed_args,
-                atmos,
-                Y,
-                p,
-                sim_info.dt,
-                t_start,
-            )
+            scheduled_diagnostics, writers, periods_reductions =
+                get_diagnostics(
+                    config.parsed_args,
+                    atmos,
+                    Y,
+                    p,
+                    sim_info.dt,
+                    t_start,
+                )
         end
         @info "initializing diagnostics: $s"
+
+        # Check for consistency between diagnostics and checkpoints
+        checkpoint_frequency = checkpoint_frequency_from_parsed_args(
+            config.parsed_args["dt_save_state_to_disk"],
+        )
+
+        if checkpoint_frequency != Inf
+            if any(
+                x -> !CA.isdivisible(checkpoint_frequency, x),
+                periods_reductions,
+            )
+                @warn "Some accumulated diagnostics might not be evenly divisible by the checkpointing frequency ($(CA.promote_period(checkpoint_frequency)))"
+            end
+        end
     else
         writers = nothing
     end

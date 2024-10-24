@@ -47,3 +47,19 @@ is started.
 If is also possible to manually specify a restart file. In this case, this will
 override any file automatically detected.
 
+### Accumulated Diagnostics
+
+At the moment, `ClimaAtmos` does not support working with accumulated
+diagnostics across restarts. The present limitations are best illustrated with
+an example.
+
+Suppose you are saving 30-day averages and stop the simulation at day 45. If you
+do so, you'll find output for day 30 and the checkpoint at day 45. Then, if you
+restart the simulation, you'll see that the next diagnostic output will be at
+day 75, and not day 60. In other words, the counter starts from 0 with every
+restart.
+
+!!! note
+
+    If you care about accurate accumulated diagnostics, make sure to line up your
+    checkpoint and diagnostic frequencies.
