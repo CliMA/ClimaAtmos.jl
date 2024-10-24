@@ -156,6 +156,18 @@ function precomputed_quantities(Y, atmos)
             ᶜqᵣ = similar(Y.c, FT),
             ᶜqₛ = similar(Y.c, FT),
         ) : (;)
+    smagorinsky_lilly_quantities = if atmos.smagorinsky_lilly isa SmagorinskyLilly
+        uvw_vec = UVW(FT(0), FT(0), FT(0))
+        (;
+            ᶜτ_smag = similar(Y.c, typeof(uvw_vec * uvw_vec')),
+            ᶠτ_smag = similar(Y.f, typeof(uvw_vec * uvw_vec')),
+            ᶜD_smag = similar(Y.c, FT),
+            ᶠD_smag = similar(Y.f, FT),
+        )
+    else
+        (;)
+    end
+
     return (;
         gs_quantities...,
         sgs_quantities...,
@@ -164,6 +176,7 @@ function precomputed_quantities(Y, atmos)
         vert_diff_quantities...,
         precipitation_quantities...,
         cloud_diagnostics_tuple,
+        smagorinsky_lilly_quantities...,
     )
 end
 
@@ -642,6 +655,10 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     # TODO
     if call_cloud_diagnostics_per_stage isa CallCloudDiagnosticsPerStage
         set_cloud_fraction!(Y, p, moisture_model, cloud_model)
+    end
+
+    if p.atmos.smagorinsky_lilly isa SmagorinskyLilly
+        set_smagorinsky_lilly_precomputed_quantities!(Y, p)
     end
 
     return nothing
