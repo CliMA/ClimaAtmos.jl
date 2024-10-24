@@ -77,6 +77,12 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             evaluate!(field, tv, t)
         end
     end
+    if :prescribed_clouds_field in propertynames(p.tracers)
+        for (key, tv) in pairs(p.tracers.prescribed_cloud_timevaryinginputs)
+            field = getproperty(p.tracers.prescribed_clouds_field, key)
+            evaluate!(field, tv, t)
+        end
+    end
 
     FT = Spaces.undertype(axes(Y.c))
     thermo_params = CAP.thermodynamics_params(params)

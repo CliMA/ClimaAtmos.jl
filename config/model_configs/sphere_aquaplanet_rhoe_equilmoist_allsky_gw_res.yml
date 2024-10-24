@@ -3,7 +3,7 @@ z_elem: 31
 dz_bottom: 50.0
 rayleigh_sponge: true
 dt: "400secs"
-t_end: "1days"
+t_end: "1hours"
 dt_save_state_to_disk: "24hours"
 vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
