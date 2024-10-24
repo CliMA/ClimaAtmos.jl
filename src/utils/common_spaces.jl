@@ -147,7 +147,7 @@ function make_hybrid_spaces(
         parent(z_surface) .= ifelse.(parent(z_surface) .< FT(0), FT(0), parent(z_surface))
         Δh_scale = Spaces.node_horizontal_length_scale(h_space)
         limiter = Limiters.QuasiMonotoneLimiter(z_surface)
-        diffuse_surface_elevation_biharmonic!(z_surface; κ=FT((Δh_scale)^4/1000), dt=FT(1), maxiter=128, limiter=limiter)
+        diffuse_surface_elevation_biharmonic!(z_surface; κ=FT((Δh_scale)^4/1000), dt=FT(1), maxiter=256, limiter=limiter)
         parent(z_surface) .= ifelse.(parent(z_surface) .< FT(0), FT(0), parent(z_surface))
         if parsed_args["mesh_warp_type"] == "SLEVE"
             @info "SLEVE mesh warp"
