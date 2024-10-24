@@ -6,6 +6,8 @@ import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics.Microphysics2M as CM2
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
 import CloudMicrophysics.Parameters as CMP
+using CUDA
+using NVTX
 
 # define some aliases and functions to make the code more readable
 const Iₗ = TD.internal_energy_liquid
@@ -136,7 +138,7 @@ The specific humidity source terms are defined as defined as Δmᵢ / (m_dry + m
 where i stands for total, rain or snow.
 Also returns the total energy source term due to the microphysics processes.
 """
-function compute_precipitation_sources!(
+NVTX.@annotate function compute_precipitation_sources!(
     Sᵖ,
     Sᵖ_snow,
     Sqₜᵖ,
@@ -153,108 +155,183 @@ function compute_precipitation_sources!(
     thp,
 )
     FT = eltype(thp)
-    # @. Sqₜᵖ = FT(0) should work after fixing
-    # https://github.com/CliMA/ClimaCore.jl/issues/1786
-    @. Sqₜᵖ = ρ * FT(0)
-    @. Sqᵣᵖ = ρ * FT(0)
-    @. Sqₛᵖ = ρ * FT(0)
-    @. Seₜᵖ = ρ * FT(0)
+    device = ClimaComms.device(Sᵖ)
+    dims = Base.size(Fields.field_values(Sᵖ))
+    fvargs =
+        Fields.field_values.((
+            Sᵖ,
+            Sᵖ_snow,
+            Sqₜᵖ,
+            Sqᵣᵖ,
+            Sqₛᵖ,
+            Seₜᵖ,
+            ρ,
+            qᵣ,
+            qₛ,
+            ts,
+            Φ,
+        ))
+    args = (dt, mp, thp)
+    pointwise_dispatch(
+        device,
+        dims,
+        compute_precipitation_sources_kernel!,
+        fvargs...,
+        args...,
+    )
+    return nothing
+end
 
-    #! format: off
-    # rain autoconversion: q_liq -> q_rain
-    @. Sᵖ = ifelse(
-        mp.Ndp <= 0,
-        CM1.conv_q_liq_to_q_rai(mp.pr.acnv1M, qₗ(thp, ts), true),
-        CM2.conv_q_liq_to_q_rai(mp.var, qₗ(thp, ts), ρ, mp.Ndp),
-    )
-    @. Sᵖ = min(limit(qₗ(thp, ts), dt, 5), Sᵖ)
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqᵣᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+@inline function compute_precipitation_sources_kernel!(
+    Sᵖ,
+    Sᵖ_snow,
+    Sqₜᵖ,
+    Sqᵣᵖ,
+    Sqₛᵖ,
+    Seₜᵖ,
+    ρ,
+    qᵣ,
+    qₛ,
+    ts,
+    Φ,
+    dt,
+    mp,
+    thp,
+    idx,
+)
+    FT = eltype(thp)
+    @inbounds begin
+        # @. Sqₜᵖ = FT(0) should work after fixing
+        # https://github.com/CliMA/ClimaCore.jl/issues/1786
+        Sqₜᵖ[idx] = zero(Sqₜᵖ[idx])
+        Sqᵣᵖ[idx] = zero(Sqᵣᵖ[idx])
+        Sqₛᵖ[idx] = zero(Sqₛᵖ[idx])
+        Seₜᵖ[idx] = zero(Seₜᵖ[idx])
 
-    # snow autoconversion assuming no supersaturation: q_ice -> q_snow
-    @. Sᵖ = min(
-        limit(qᵢ(thp, ts), dt, 5),
-        CM1.conv_q_ice_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ(thp, ts), true),
-    )
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+        #! format: off
+        # rain autoconversion: q_liq -> q_rain
+        Sᵖ[idx] = ifelse(
+            mp.Ndp <= 0,
+            CM1.conv_q_liq_to_q_rai(mp.pr.acnv1M, qₗ(thp, ts[idx]), true),
+            CM2.conv_q_liq_to_q_rai(mp.var, qₗ(thp, ts[idx]), ρ[idx], mp.Ndp),
+        )
+        Sᵖ[idx] = min(limit(qₗ(thp, ts[idx]), dt, 5), Sᵖ[idx])
+        Sqₜᵖ[idx] -= Sᵖ[idx]
+        Sqᵣᵖ[idx] += Sᵖ[idx]
+        Seₜᵖ[idx] -= Sᵖ[idx] * (Iₗ(thp, ts[idx]) + Φ[idx])
+    
+        # snow autoconversion assuming no supersaturation: q_ice -> q_snow
+        Sᵖ[idx] = min(
+            limit(qᵢ(thp, ts[idx]), dt, 5),
+            CM1.conv_q_ice_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ(thp, ts[idx]), true),
+        )
+        Sqₜᵖ[idx] -= Sᵖ[idx]
+        Sqₛᵖ[idx] += Sᵖ[idx]
+        Seₜᵖ[idx] -= Sᵖ[idx] * (Iᵢ(thp, ts[idx]) + Φ[idx])
+    
+        # accretion: q_liq + q_rain -> q_rain
+        Sᵖ[idx] = min(
+            limit(qₗ(thp, ts[idx]), dt, 5),
+            CM1.accretion(mp.cl, mp.pr, mp.tv.rain, mp.ce, qₗ(thp, ts[idx]), qᵣ[idx], ρ[idx]),
+        )
+        Sqₜᵖ[idx] -= Sᵖ[idx]
+        Sqᵣᵖ[idx] += Sᵖ[idx]
+        Seₜᵖ[idx] -= Sᵖ[idx] * (Iₗ(thp, ts[idx]) + Φ[idx])
+    
+        # accretion: q_ice + q_snow -> q_snow
+        Sᵖ[idx] = min(
+            limit(qᵢ(thp, ts[idx]), dt, 5),
+            CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ(thp, ts[idx]), qₛ[idx], ρ[idx]),
+        )
+        Sqₜᵖ[idx] -= Sᵖ[idx]
+        Sqₛᵖ[idx] += Sᵖ[idx]
+        Seₜᵖ[idx] -= Sᵖ[idx] * (Iᵢ(thp, ts[idx]) + Φ[idx])
+    
+        # accretion: q_liq + q_sno -> q_sno or q_rai
+        # sink of cloud water via accretion cloud water + snow
+        Sᵖ[idx] = min(
+            limit(qₗ(thp, ts[idx]), dt, 5),
+            CM1.accretion(mp.cl, mp.ps, mp.tv.snow, mp.ce, qₗ(thp, ts[idx]), qₛ[idx], ρ[idx]),
+        )
+        # if T < T_freeze cloud droplets freeze to become snow
+        # else the snow melts and both cloud water and snow become rain
+        #α(thp, ts[idx]) = cᵥₗ(thp) / Lf(thp, ts[idx]) * (Tₐ(thp, ts[idx]) - mp.ps.T_freeze)
+        α(thparg, tsarg) = cᵥₗ(thparg) / Lf(thparg, tsarg) * (Tₐ(thparg, tsarg) - mp.ps.T_freeze)
+        Sᵖ_snow[idx] = ifelse(
+            Tₐ(thp, ts[idx]) < mp.ps.T_freeze,
+            Sᵖ[idx],
+            FT(-1) * min(Sᵖ[idx] * α(thp, ts[idx]), limit(qₛ[idx], dt, 5)),
+        )
+        Sqₛᵖ[idx] += Sᵖ_snow[idx]
+        Sqₜᵖ[idx] -= Sᵖ[idx]
+        Sqᵣᵖ[idx] += ifelse(Tₐ(thp, ts[idx]) < mp.ps.T_freeze, FT(0), Sᵖ[idx] - Sᵖ_snow[idx])
+        Seₜᵖ[idx] -= ifelse(
+            Tₐ(thp, ts[idx]) < mp.ps.T_freeze,
+            Sᵖ[idx] * (Iᵢ(thp, ts[idx]) + Φ[idx]),
+            Sᵖ[idx] * (Iₗ(thp, ts[idx]) + Φ[idx]) - Sᵖ_snow[idx] * (Iₗ(thp, ts[idx]) - Iᵢ(thp, ts[idx])),
+        )
+    
+        # accretion: q_ice + q_rai -> q_sno
+        Sᵖ[idx] = min(
+            limit(qᵢ(thp, ts[idx]), dt, 5),
+            CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ(thp, ts[idx]), qᵣ[idx], ρ[idx]),
+        )
+        Sqₜᵖ[idx] -= Sᵖ[idx]
+        Sqₛᵖ[idx] += Sᵖ[idx]
+        Seₜᵖ[idx] -= Sᵖ[idx] * (Iᵢ(thp, ts[idx]) + Φ[idx])
+        # sink of rain via accretion cloud ice - rain
+        Sᵖ[idx] = min(
+            limit(qᵣ[idx], dt, 5),
+            CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ(thp, ts[idx]), qᵣ[idx], ρ[idx]),
+        )
+        Sqᵣᵖ[idx] -= Sᵖ[idx]
+        Sqₛᵖ[idx] += Sᵖ[idx]
+        Seₜᵖ[idx] += Sᵖ[idx] * Lf(thp, ts[idx])
+    
+        # accretion: q_rai + q_sno -> q_rai or q_sno
+        Sᵖ[idx] = ifelse(
+            Tₐ(thp, ts[idx]) < mp.ps.T_freeze,
+            min(
+                limit(qᵣ[idx], dt, 5),
+                CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ[idx], qᵣ[idx], ρ[idx]),
+            ),
+            -min(
+                limit(qₛ[idx], dt, 5),
+                CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qᵣ[idx], qₛ[idx], ρ[idx]),
+            ),
+        )
+        Sqₛᵖ[idx] += Sᵖ[idx]
+        Sqᵣᵖ[idx] -= Sᵖ[idx]
+        Seₜᵖ[idx] += Sᵖ[idx] * Lf(thp, ts[idx])
+        #! format: on
+    end
+end
 
-    # accretion: q_liq + q_rain -> q_rain
-    @. Sᵖ = min(
-        limit(qₗ(thp, ts), dt, 5),
-        CM1.accretion(mp.cl, mp.pr, mp.tv.rain, mp.ce, qₗ(thp, ts), qᵣ, ρ),
-    )
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqᵣᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+function pointwise_dispatch(
+    device::ClimaComms.CUDADevice,
+    dims,
+    pointwisefn!,
+    args...,
+)
+    NI, NJ, _, NV, NH = dims
+    max_threads = 768#512#256
+    @assert NI * NJ ≤ max_threads
+    nvthreads = Int(fld(max_threads, NI * NJ))
+    nvblocks = Int(cld(NV, nvthreads))
+    CUDA.@cuda always_inline = true threads = (NI, NJ, nvthreads) blocks =
+        (nvblocks, NH) pointwise_cuda_kernel!(pointwisefn!, NV, args...)
+    return nothing
+end
 
-    # accretion: q_ice + q_snow -> q_snow
-    @. Sᵖ = min(
-        limit(qᵢ(thp, ts), dt, 5),
-        CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ(thp, ts), qₛ, ρ),
-    )
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
-
-    # accretion: q_liq + q_sno -> q_sno or q_rai
-    # sink of cloud water via accretion cloud water + snow
-    @. Sᵖ = min(
-        limit(qₗ(thp, ts), dt, 5),
-        CM1.accretion(mp.cl, mp.ps, mp.tv.snow, mp.ce, qₗ(thp, ts), qₛ, ρ),
-    )
-    # if T < T_freeze cloud droplets freeze to become snow
-    # else the snow melts and both cloud water and snow become rain
-    α(thp, ts) = cᵥₗ(thp) / Lf(thp, ts) * (Tₐ(thp, ts) - mp.ps.T_freeze)
-    @. Sᵖ_snow = ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
-        Sᵖ,
-        FT(-1) * min(Sᵖ * α(thp, ts), limit(qₛ, dt, 5)),
-    )
-    @. Sqₛᵖ += Sᵖ_snow
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqᵣᵖ += ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ - Sᵖ_snow)
-    @. Seₜᵖ -= ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
-        Sᵖ * (Iᵢ(thp, ts) + Φ),
-        Sᵖ * (Iₗ(thp, ts) + Φ) - Sᵖ_snow * (Iₗ(thp, ts) - Iᵢ(thp, ts)),
-    )
-
-    # accretion: q_ice + q_rai -> q_sno
-    @. Sᵖ = min(
-        limit(qᵢ(thp, ts), dt, 5),
-        CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ(thp, ts), qᵣ, ρ),
-    )
-    @. Sqₜᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
-    # sink of rain via accretion cloud ice - rain
-    @. Sᵖ = min(
-        limit(qᵣ, dt, 5),
-        CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ(thp, ts), qᵣ, ρ),
-    )
-    @. Sqᵣᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
-    @. Seₜᵖ += Sᵖ * Lf(thp, ts)
-
-    # accretion: q_rai + q_sno -> q_rai or q_sno
-    @. Sᵖ = ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
-        min(
-            limit(qᵣ, dt, 5),
-            CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ, qᵣ, ρ),
-        ),
-        -min(
-            limit(qₛ, dt, 5),
-            CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qᵣ, qₛ, ρ),
-        ),
-    )
-    @. Sqₛᵖ += Sᵖ
-    @. Sqᵣᵖ -= Sᵖ
-    @. Seₜᵖ += Sᵖ * Lf(thp, ts)
-    #! format: on
+function pointwise_cuda_kernel!(pointwisefn!, NV, args...)
+    (i, j, tv) = threadIdx()
+    (bv, bh, _) = blockIdx()
+    v = tv + (bv - 1) * blockDim().z
+    if v ≤ NV
+        idx = CartesianIndex(i, j, 1, v, bh)
+        pointwisefn!(args..., idx)
+    end
+    return nothing
 end
 
 """
