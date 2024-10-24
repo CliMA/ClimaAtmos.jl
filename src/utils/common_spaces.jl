@@ -1,5 +1,5 @@
 using ClimaCore:
-    Geometry, Domains, Meshes, Topologies, Spaces, Grids, Hypsography, Fields
+    Geometry, Domains, Meshes, Topologies, Spaces, Grids, Hypsography, Fields, Limiters
 using ClimaComms
 
 function periodic_line_mesh(; x_max, x_elem)
@@ -79,6 +79,7 @@ function diffuse_surface_elevation_biharmonic!(
     κ::T = 5e8,
     maxiter::Int = 100,
     dt::T = 5e-2,
+    limiter=limiter,
 ) where {T}
     if eltype(f) <: Real
         f_z = f
@@ -97,6 +98,8 @@ function diffuse_surface_elevation_biharmonic!(
     for iter in 1:maxiter
         # Euler steps
         if iter ≠ 1
+            Limiters.compute_bounds!(limiter, f_z, Fields.ones(axes(f_z)))
+            Limiters.apply_limiter!(f_z, Fields.ones(axes(f_z)), limiter)
             @. χf = wdiv(grad(f_z))
             Spaces.weighted_dss!(χf, ghost_buffer.bf)
             @. χf = wdiv(grad(χf))
@@ -143,7 +146,8 @@ function make_hybrid_spaces(
         )
         parent(z_surface) .= ifelse.(parent(z_surface) .< FT(0), FT(0), parent(z_surface))
         Δh_scale = Spaces.node_horizontal_length_scale(h_space)
-        diffuse_surface_elevation_biharmonic!(z_surface; κ=FT((Δh_scale)^4/1000), dt=FT(1), maxiter=128)
+        limiter = Limiters.QuasiMonotoneLimiter(z_surface)
+        diffuse_surface_elevation_biharmonic!(z_surface; κ=FT((Δh_scale)^4/1000), dt=FT(1), maxiter=128, limiter=limiter)
         parent(z_surface) .= ifelse.(parent(z_surface) .< FT(0), FT(0), parent(z_surface))
         if parsed_args["mesh_warp_type"] == "SLEVE"
             @info "SLEVE mesh warp"
