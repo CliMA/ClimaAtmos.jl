@@ -3,25 +3,33 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # extract locations and pick sites
-geo = xr.open_dataset("geolocation.nc")
+geo = xr.open_dataset("coszen_data.nc")
 minsite = 2
 maxsite = 23
-lats = geo.where((geo["site"] <=maxsite) & (geo["site"] >= minsite) & (geo["site"] != 16), drop = True).lat
-lons = geo.where((geo["site"] <=maxsite) & (geo["site"] >= minsite) & (geo["site"] != 16), drop = True).lon
-sites = geo.where((geo["site"] <=maxsite) & (geo["site"] >= minsite) & (geo["site"] != 16), drop = True).site
+included_sites = geo.where((geo["site"] <=maxsite) & (geo["site"] >= minsite) & (geo["site"] != 16), drop = True)
+lats = included_sites.lat
+lons = included_sites.lon
+sites = included_sites.site
+coszen = included_sites.coszen
 
 # northern hemisphere era5 data 
-nh_column_data = xr.open_dataset("~/Downloads/era5/col_NHcf.nc")
-nh_surface_data = xr.open_dataset("~/Downloads/era5/surface_NHcf.nc")
+nh_column_data = xr.open_dataset("~/Downloads/era5/monthly/NH_monthly_PL.nc")
+nh_surface_data = xr.open_dataset("~/Downloads/era5/monthly/NH_monthly_surface.nc")
 
 
 # southern hemisphere era5 data
-sh_column_data = xr.open_dataset("~/Downloads/era5/col_SHcf.nc")
-sh_surface_data = xr.open_dataset("~/Downloads/era5/surface_SHcf.nc")
+sh_column_data = xr.open_dataset("~/Downloads/era5/monthly/SH_monthly_PL.nc")
+sh_surface_data = xr.open_dataset("~/Downloads/era5/monthly/SH_monthly_surface.nc")
 
 
 
 def get_horizontal_tendencies(lon, lat, column_ds):
+    """Computes horizontal tendencies for temperature and specific humidity at a given location.
+    Args:
+    lon: site longitude
+    lat: site latitude
+    column_ds: xarray dataset containing ERA5 data at pressure levels 
+    """
     west = column_ds.where((column_ds.latitude == lat) & (column_ds.longitude == lon - .25), drop = True).isel(latitude=0, longitude=0).squeeze()
     east = column_ds.where((column_ds.latitude == lat) & (column_ds.longitude == lon + .25), drop = True).isel(latitude=0, longitude=0).squeeze()
     north = column_ds.where((column_ds.latitude == lat + .25) & (column_ds.longitude == lon), drop = True).isel(latitude=0, longitude=0).squeeze()
@@ -46,42 +54,42 @@ def get_horizontal_tendencies(lon, lat, column_ds):
 
 #get_tendencies(lon, lat, col)[0]
 
-def get_vertical_tendencies(surface_ds, var, vertvar = "wa"):
+def get_vertical_tendencies(column_ds, var, vertvar = "wa"):
     """
-    Calculate the temperature and specific humidity tendencies as a function of levels
+    Calculate the temperature and specific humidity vertical tendencies as a function of levels
     using vertical advection.
     """
     tntva_trend = []
     
     # Loop through each pressure level
-    num_levels = surface_ds[vertvar].shape[1]  # Number of vertical levels
+    num_levels = column_ds[vertvar].shape[1]  # Number of vertical levels
 
     for i in range(num_levels):
         if i == 0:  # Bottom level (forward difference)
-            tntva = surface_ds[vertvar][:, i] * (surface_ds[var][:, i+1] - surface_ds[var][:, i]) / (surface_ds.z[:, i+1] - surface_ds.z[:, i])
+            tntva = column_ds[vertvar][:, i] * (column_ds[var][:, i+1] - column_ds[var][:, i]) / (column_ds.z[:, i+1] - column_ds.z[:, i])
         
         elif i == num_levels - 1:  # Top level (backward difference)
-            tntva = surface_ds[vertvar][:, i] * (surface_ds[var][:, i] - surface_ds[var][:, i-1]) / (surface_ds.z[:, i] - surface_ds.z[:, i-1])
+            tntva = column_ds[vertvar][:, i] * (column_ds[var][:, i] - column_ds[var][:, i-1]) / (column_ds.z[:, i] - column_ds.z[:, i-1])
         
         else:  # Middle levels (surface_dsed difference)
-            tntva = surface_ds[vertvar][:, i] * (surface_ds[var][:, i+1] - 2 * surface_ds[var][:, i] +  surface_ds[var][:, i-1]) / ((surface_ds.z[:, i+1] - surface_ds.z[:, i-1]))
+            tntva = column_ds[vertvar][:, i] * (column_ds[var][:, i+1] - 2 * column_ds[var][:, i] +  column_ds[var][:, i-1]) / ((column_ds.z[:, i+1] - column_ds.z[:, i-1]))
 
-        tntva = tntva.assign_coords(pressure_level=surface_ds.pressure_level[i])
+        tntva = tntva.assign_coords(pressure_level=column_ds.pressure_level[i])
 
         # Append the result to the trend list
         tntva_trend.append(tntva)
     
     # Convert the trend list to an xarray object, correctly indexed by pressure levels
     tntva_trend = xr.concat(tntva_trend, dim="pressure_level")
-    tntva_trend = tntva_trend.assign_coords(pressure_level=surface_ds.pressure_level)
+    tntva_trend = tntva_trend.assign_coords(pressure_level=column_ds.pressure_level)
 
     # transpose so time is the first dimension
     tntva_trend = tntva_trend.transpose("valid_time", "pressure_level")
 
     return tntva_trend
 
-def get_forcing_data(group, column_ds, surface_ds, geo = geo):
-    loc = geo.where(geo["site"] == group, drop = True)
+def get_forcing_data(cfsite, column_ds, surface_ds, geo = geo):
+    loc = geo.where(geo["site"] == cfsite, drop = True)
     lat = np.round(loc.lat.values[0] / .25) * .25
     lon = np.round(loc.lon.values[0] / .25) * .25
 
@@ -100,8 +108,8 @@ def get_forcing_data(group, column_ds, surface_ds, geo = geo):
 
 
     ##### get surface data #####
-    coszen = xr.open_dataset("/Users/julianschmitt/Downloads/HadGEM2-A_amip.2004-2008.07.nc", group = f"site{group}").coszen
-    sitecol["coszen"] = coszen
+    #coszen = xr.open_dataset("/Users/julianschmitt/Downloads/HadGEM2-A_amip.2004-2008.07.nc", group = f"site{group}").coszen
+    # sitecol["coszen"] = coszen
 
     # rescale TOA incident radiation to w/m2 by dividing by the time step of ERA5 (1 hour)
     sitesf["tisr"] = sitesf["tisr"] / 3600
@@ -144,4 +152,5 @@ output_file = 'era5_forcing.nc'
 # for northern hemisphere sites
 for site_id in range(16, 24):
     site_data = get_forcing_data(site_id, nh_column_data, nh_surface_data)
+    site_data["coszen"] = geo2.where((geo2.site ==23) & (geo2.time ==7), drop = True).coszen.values[0][0]
     site_data.to_netcdf(output_file, mode='a', group=f'site{site_id}')
