@@ -20,17 +20,6 @@ include("test_helpers.jl")
     @test CA.sort_files_by_time(fns) == filenames.(t_sorted)
 end
 
-@testset "gaussian_smooth" begin
-    # No smooth on constant
-    @test CA.gaussian_smooth(3.0 * ones(132, 157)) ≈ 3.0 * ones(132, 157)
-    randy = rand(123, 145)
-    smoothed = CA.gaussian_smooth(randy)
-    # min
-    @test extrema(randy)[1] <= smoothed[1]
-    # max
-    @test extrema(randy)[2] >= smoothed[2]
-end
-
 @testset "isdivisible" begin
     @test CA.isdivisible(Dates.Month(1), Dates.Day(1))
     @test !CA.isdivisible(Dates.Month(1), Dates.Day(25))
@@ -243,6 +232,9 @@ end
 @testset "make hybrid spaces" begin
     (; cent_space, face_space, xlim, zlim, velem, helem, npoly, quad) =
         get_cartesian_spaces()
+    config = CA.AtmosConfig(
+        Dict("topography" => "NoWarp", "topo_smoothing" => false),
+    )
     device = ClimaComms.CPUSingleThreaded()
     comms_ctx = ClimaComms.context(device)
     z_stretch = Meshes.Uniform()
@@ -259,9 +251,8 @@ end
         zlim[2],
         velem,
         z_stretch;
-        surface_warp = nothing,
-        topo_smoothing = false,
         deep = false,
+        parsed_args = config.parsed_args,
     )
     @test test_cent_space == cent_space
     @test test_face_space == face_space
