@@ -5,212 +5,169 @@
 import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
 import ClimaCore: Geometry
-import ClimaCore.Utilities: half
 
-smagorinsky_lilly_cache(Y, atmos::AtmosModel) =
-    smagorinsky_lilly_cache(Y, atmos.smagorinsky_lilly)
+"""
+    set_smagorinsky_lilly_precomputed_quantities!(Y, p)
 
-smagorinsky_lilly_cache(Y, ::Nothing) = (;)
+Compute the Smagorinsky-Lilly diffusivity tensors, `ᶜτ_smag`, `ᶠτ_smag`, `ᶜD_smag`, and `ᶠD_smag`. 
+Store in the precomputed quantities `p.precomputed`.
 
-function smagorinsky_lilly_cache(Y, sl::SmagorinskyLilly)
-    (; Cs) = sl
+The subgrid-scale momentum flux tensor is defined by `τ = -2 νₜ ∘ S`, where `νₜ` is the Smagorinsky-Lilly eddy viscosity 
+and `S` is the strain rate tensor. 
+
+The turbulent diffusivity is defined as `D = νₜ / Pr_t`, where `Pr_t = 1/3` is the turbulent Prandtl number for neutral 
+stratification. 
+
+These quantities are computed for both cell centers and faces, with prefixes `ᶜ` and `ᶠ`, respectively.
+
+
+# Arguments
+- `Y`: The model state.
+- `p`: The model parameters, e.g. `AtmosCache`.
+"""
+function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
+
+    (; atmos, precomputed, scratch, params) = p
+    (; Cs) = atmos.smagorinsky_lilly
+    (; ᶜu, ᶠu³, ᶜts, ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶠD_smag) = precomputed
     FT = eltype(Y)
+    grav = CAP.grav(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    Pr_t = FT(1 / 3)
+    (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = scratch
+    (; ᶜtemp_scalar, ᶜtemp_scalar_2, ᶠtemp_scalar, ᶜtemp_UVW, ᶠtemp_UVW) =
+        scratch
+
+    ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
+    ᶠgradᵥ_uvw = Operators.GradientC2F(
+        bottom = Operators.SetGradient(∇ᵥuvw_boundary),
+        top = Operators.SetGradient(∇ᵥuvw_boundary),
+    )
+    axis_uvw = (Geometry.UVWAxis(),)
+
+    # Compute UVW velocities
+    ᶜu_uvw = @. ᶜtemp_UVW = UVW(ᶜu)
+    ᶠu_uvw = @. ᶠtemp_UVW = UVW(ᶠinterp(Y.c.uₕ)) + UVW(ᶠu³)
+
+    # Gradients
+    ## cell centers
+    ∇ᶜu_uvw = @. ᶜtemp_UVWxUVW = Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))  # vertical component
+    @. ∇ᶜu_uvw += Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))  # horizontal component
+    ## cell faces
+    ∇ᶠu_uvw = @. ᶠtemp_UVWxUVW = Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))  # vertical component
+    @. ∇ᶠu_uvw += Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))  # horizontal component
+
+    # Strain rate tensor
+    ᶜS = @. ᶜtemp_strain = (∇ᶜu_uvw + adjoint(∇ᶜu_uvw)) / 2
+    ᶠS = @. ᶠtemp_strain = (∇ᶠu_uvw + adjoint(∇ᶠu_uvw)) / 2
+
+    # Stratification correction
+    ᶜθ_v = @. ᶜtemp_scalar = TD.virtual_pottemp(thermo_params, ᶜts)
+    ᶜ∇ᵥθ = @. ᶜtemp_scalar_2 =
+        Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜθ_v))).components.data.:1
+    ᶜN² = @. ᶜtemp_scalar = grav / ᶜθ_v * ᶜ∇ᵥθ
+    ᶜS_norm = @. ᶜtemp_scalar_2 = √(2 * CA.norm_sqr(ᶜS))
+
+    ᶜRi = @. ᶜtemp_scalar = ᶜN² / (ᶜS_norm^2 + eps(FT))  # Ri = N² / |S|²
+    ᶜfb = @. ᶜtemp_scalar = ifelse(ᶜRi ≤ 0, 1, max(0, 1 - ᶜRi / Pr_t)^(1 / 4))
+
+    # filter scale
     h_space = Spaces.horizontal_space(axes(Y.c))
-    Δₕ_filter = Spaces.node_horizontal_length_scale(h_space)
-    ᶜtemp_scalar_3 = zero(Fields.Field(Float32, axes(Y.c.ρ)))
-    v_t = ᶜtemp_scalar_3
-    return (; v_t, Δₕ_filter)
+    Δ_xy = Spaces.node_horizontal_length_scale(h_space)^2 # Δ_x * Δ_y
+    ᶜΔ_z = Fields.Δz_field(Y.c)
+    ᶜΔ = @. ᶜtemp_scalar = ∛(Δ_xy * ᶜΔ_z) * ᶜfb
+
+    # Smagorinsky-Lilly eddy viscosity
+    ᶜνₜ = @. ᶜtemp_scalar = Cs^2 * ᶜΔ^2 * ᶜS_norm
+    ᶠνₜ = @. ᶠtemp_scalar = ᶠinterp(ᶜνₜ)
+
+    # Subgrid-scale momentum flux tensor, `τ = -2 νₜ ∘ S`
+    @. ᶜτ_smag = -2 * ᶜνₜ * ᶜS
+    @. ᶠτ_smag = -2 * ᶠνₜ * ᶠS
+
+    # Turbulent diffusivity
+    @. ᶜD_smag = ᶜνₜ / Pr_t
+    @. ᶠD_smag = ᶠνₜ / Pr_t
+
+    nothing
 end
 
 horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
-function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLilly) 
-    if !(hasproperty(p.precomputed, :ᶜspecific))
-        throw(ErrorException("p does not have the property ᶜspecific."))
-    end
+function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
+    (; ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶜspecific, ᶜh_tot) = p.precomputed
 
-    (; Cs) = sl
-    (; params) = p
-    (; v_t, Δₕ_filter) = p.smagorinsky_lilly
-    (; ᶜu, ᶠu³, sfc_conditions) = p.precomputed 
-    
-    Δ_filter = Δₕ_filter
+    ## Momentum tendencies
+    ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(Y.c.ρ)
+    @. Yₜ.c.uₕ -= C12(wdivₕ(Y.c.ρ * ᶜτ_smag) / Y.c.ρ)
+    @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_smag) / ᶠρ)
 
-    # Operators
-    FT = eltype(v_t)
-    grav = CAP.grav(params)
-    ᶜJ = Fields.local_geometry_field(Y.c).J 
-    Pr_t_neutral = FT(1/3)
+    ## Total energy tendency
+    @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(ᶜh_tot))
 
-    ᶜS  = zero(p.scratch.ᶜtemp_strain)
-    ᶠS  = zero(p.scratch.ᶠtemp_strain)
-    ᶜϵ = zero(p.scratch.ᶜtemp_UVWxUVW)
-    ᶠϵ = zero(p.scratch.ᶠtemp_UVWxUVW)
-    ᶠfb  = p.scratch.ᶠtemp_scalar
-    ᶜfb  = p.scratch.ᶜtemp_scalar
-    
-    u_phys = @. Geometry.UVWVector(ᶜu)
-    ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(ᶠu³)
-    @. ᶜS = Geometry.project(Geometry.UVWAxis(), gradₕ(u_phys))
-    @. ᶠS = Geometry.project(Geometry.UVWAxis(), gradₕ(ᶠu))
-    CA.compute_strain_rate_center!(ᶜϵ, Geometry.Covariant123Vector.(ᶠu))
-    CA.compute_strain_rate_face!(ᶠϵ, Geometry.Covariant123Vector.(ᶜu))
-    @. ᶜS = (ᶜS + adjoint(ᶜS))/2 + ᶜϵ
-    @. ᶠS = (ᶠS + adjoint(ᶠS))/2 + ᶠϵ
-
-    (; ᶜts) = p.precomputed
-    thermo_params = CAP.thermodynamics_params(p.params)
-
-    ᶠts_sfc = sfc_conditions.ts
-    θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
-    θ_v_sfc = @. TD.virtual_pottemp(thermo_params, ᶠts_sfc)
-    ᶜ∇ = Operators.GradientF2C();
-    θc2f = Operators.InterpolateC2F(;top = Operators.Extrapolate(),
-                                     bottom = Operators.SetValue(θ_v_sfc));
-    ᶜ∇θ = @. ᶜ∇(ᶠinterp(θ_v))
-
-    N² = @. grav / θ_v * Geometry.WVector(ᶜ∇θ).components.data.:1
-    @. ᶜfb = (max(FT(0), 
-                  1 - N² / Pr_t_neutral / (CA.norm_sqr(ᶜS) + eps(FT))))^(1/2)
-    ᶜfb .= ifelse.(N² .<= FT(0), zero(ᶜfb) .+ FT(1),ᶜfb)
-
-    ᶠρ = @. ᶠinterp(Y.c.ρ)
-    ᶜv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶜS)) * ᶜfb
-    ᶠv_t = @. ᶠinterp(ᶜv_t)
-    ᶜD = @. ᶜv_t / Pr_t_neutral
-
-    ᶜτ = @. FT(-2) * ᶜv_t * ᶜS
-    ᶠτ = @. FT(-2) * ᶠv_t * ᶠS
-
-    @. Yₜ.c.uₕ -= C12(wdivₕ(Y.c.ρ * ᶜτ) / Y.c.ρ)
-    @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ) / ᶠρ)
-
-    (; ᶜspecific) = p.precomputed
-    if :ρe_tot in propertynames(Yₜ.c)
-       (; ᶜh_tot) = p.precomputed
-        @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD * gradₕ(ᶜh_tot)) 
-    end
-
-    # q_tot and other tracer adjustment (moisture affects mass terms 
-    # as well)
+    ## Tracer diffusion and associated mass changes
     for (ᶜρχₜ, ᶜχ, χ_name) in CA.matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
-        @. ᶜρχₜ += wdivₕ(Y.c.ρ * ᶜD * gradₕ(ᶜχ)) 
-        if !(χ_name in (:q_rai, :q_sno))
-            @. Yₜ.c.ρ += wdivₕ(Y.c.ρ * ᶜD * gradₕ(ᶜχ)) 
+        ᶜρχₜ_diffusion =
+            @. p.scratch.ᶜtemp_scalar = wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(ᶜχ))
+        @. ᶜρχₜ += ᶜρχₜ_diffusion
+        # Rain and snow does not affect the mass
+        if χ_name ∉ (:q_rai, :q_sno)
+            @. Yₜ.c.ρ += ᶜρχₜ_diffusion
         end
     end
 
 end
 
-function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLilly) 
-    if !(hasproperty(p.precomputed, :ᶜspecific))
-        throw(ErrorException("p does not have the property ᶜspecific."))
-    end
-    
-    (; params) = p
-    (; Cs) = sl
-    (; v_t, Δₕ_filter) = p.smagorinsky_lilly
-    (; ᶜu, ᶠu³, sfc_conditions, ᶜspecific, ᶜts) = p.precomputed 
+function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
+    FT = eltype(Y)
+    (; sfc_temp_C3, ᶠtemp_scalar, ᶜtemp_scalar) = p.scratch
+    (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, ᶜspecific, ᶜh_tot, sfc_conditions) =
+        p.precomputed
+    (; ρ_flux_uₕ, ρ_flux_h_tot, ρ_flux_q_tot) = sfc_conditions
+
+    # Define operators
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
-
-    FT = eltype(v_t)
-    Δ_filter = Δₕ_filter
-    Pr_t_neutral = FT(1/3)
-
-    grav = CAP.grav(params)
-    ᶜJ = Fields.local_geometry_field(Y.c).J 
-
-    ᶜS  = zero(p.scratch.ᶜtemp_strain)
-    ᶠS  = zero(p.scratch.ᶠtemp_strain)
-    ᶜϵ = zero(p.scratch.ᶜtemp_UVWxUVW)
-    ᶠϵ = zero(p.scratch.ᶠtemp_UVWxUVW)
-    
-    ᶠfb  = p.scratch.ᶠtemp_scalar
-    ᶜfb  = p.scratch.ᶜtemp_scalar
-    u_phys = @. Geometry.UVWVector(ᶜu)
-    ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(ᶠu³)
-    @. ᶜS = Geometry.project(Geometry.UVWAxis(), gradₕ(u_phys))
-    @. ᶠS = Geometry.project(Geometry.UVWAxis(), gradₕ(ᶠu))
-    CA.compute_strain_rate_face!(ᶠϵ, Geometry.Covariant123Vector.(ᶜu))
-    CA.compute_strain_rate_center!(ᶜϵ, Geometry.Covariant123Vector.(ᶠu))
-    @. ᶜS = (ᶜS + adjoint(ᶜS))/2 + ᶜϵ
-    @. ᶠS = (ᶠS + adjoint(ᶠS))/2 + ᶠϵ
-    
-    thermo_params = CAP.thermodynamics_params(p.params)
-    θ_v = @. TD.virtual_pottemp(thermo_params, ᶜts)
-    ᶠts_sfc = sfc_conditions.ts
-    θ_v_sfc = @. TD.virtual_pottemp(thermo_params, ᶠts_sfc)
-    ᶜ∇ = Operators.GradientF2C();
-    θc2f = Operators.InterpolateC2F(;top = Operators.Extrapolate(),
-                                     bottom = Operators.SetValue(θ_v_sfc));
-    ᶜ∇θ = @. ᶜ∇(ᶠinterp(θ_v))
-    N² = @. grav / θ_v * Geometry.WVector(ᶜ∇θ).components.data.:1
-    @. ᶜfb = (max(FT(0), 
-                  1 - N² / Pr_t_neutral / (CA.norm_sqr(ᶜS) + eps(FT))))^(1/2)
-    ᶜfb .= ifelse.(N² .<= FT(0), zero(ᶜfb) .+ FT(1),ᶜfb)
-
-    ᶜv_t = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶜS)) * ᶜfb
-    ᶠv_t = @. ᶠinterp(ᶜv_t)
-    ᶜD = @. ᶜv_t / Pr_t_neutral
-    
-    @. Yₜ.c.uₕ -= C12(
-        ᶜdivᵥ(
-            -2 *
-            ᶠinterp(Y.c.ρ) *
-            ᶠv_t *
-            ᶠS,
-        ) / Y.c.ρ,
-    )
-    # apply boundary condition for momentum flux
     ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
         top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
-        bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ),
+        bottom = Operators.SetValue(ρ_flux_uₕ),
     )
-
-    @. Yₜ.c.uₕ -= ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ))) / Y.c.ρ
-
     ᶠdivᵥ = Operators.DivergenceC2F(
-                         bottom = Operators.SetDivergence(FT(0)),
-                         top = Operators.SetDivergence(FT(0))
-                       )
-    
-    @. Yₜ.f.u₃ -= C3(
-        ᶠdivᵥ(
-            -2 *
-            Y.c.ρ *
-            ᶜv_t *
-            ᶜS,
-           ) / ᶠinterp(Y.c.ρ),
+        bottom = Operators.SetDivergence(FT(0)),
+        top = Operators.SetDivergence(FT(0)),
+    )
+    top = Operators.SetValue(C3(FT(0)))
+    ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(;
+        top,
+        bottom = Operators.SetValue(ρ_flux_h_tot),
     )
 
-    (; ᶜh_tot) = p.precomputed
-    ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
-        top = Operators.SetValue(C3(FT(0))),
-        bottom = Operators.SetValue(sfc_conditions.ρ_flux_h_tot), 
-    )
-    @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(
-    				-(ᶠinterp(Y.c.ρ) * 
-    				ᶠinterp(ᶜD) * 
-    				ᶠgradᵥ(ᶜh_tot))
-    			  )
-    
-    ρ_flux_χ = zero(p.scratch.sfc_temp_C3)
+    # Apply to tendencies
+    ## Horizontal momentum tendency
+    ᶠρ = @. ᶠtemp_scalar = ᶠinterp(Y.c.ρ)
+    @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(ᶠρ * ᶠτ_smag) / Y.c.ρ)
+    ## Apply boundary condition for momentum flux
+    @. Yₜ.c.uₕ -= ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ))) / Y.c.ρ
+    ## Vertical momentum tendency
+    @. Yₜ.f.u₃ -= C3(ᶠdivᵥ(Y.c.ρ * ᶜτ_smag) / ᶠρ)
+
+    ## Total energy tendency
+    @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜh_tot)))
+
+    ## Tracer diffusion and associated mass changes
+    sfc_zero = @. sfc_temp_C3 = C3(FT(0))
     for (ᶜρχₜ, ᶜχ, χ_name) in CA.matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
-        if χ_name == :q_tot
-            @. ρ_flux_χ = sfc_conditions.ρ_flux_q_tot
-        else
-            @. ρ_flux_χ = C3(FT(0))
-        end
-        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(ρ_flux_χ), 
-        )
-        @. ᶜρχₜ -= ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜD) * ᶠgradᵥ(ᶜχ)))
-        if !(χ_name in (:q_rai, :q_sno))
-            @. Yₜ.c.ρ -= ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜD) * ᶠgradᵥ(ᶜχ)))
+
+        bottom = Operators.SetValue(χ_name == :q_tot ? ρ_flux_q_tot : sfc_zero)
+        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(; top, bottom)
+
+        ᶜ∇ᵥρD∇χₜ = @. ᶜtemp_scalar = ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜχ)))
+        @. ᶜρχₜ -= ᶜ∇ᵥρD∇χₜ
+        # Rain and snow does not affect the mass
+        if χ_name ∉ (:q_rai, :q_sno)
+            @. Yₜ.c.ρ -= ᶜ∇ᵥρD∇χₜ
         end
     end
 end
