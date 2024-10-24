@@ -4,8 +4,8 @@
 import CloudMicrophysics.Microphysics1M as CM1
 
 # helper function to safely get precipitation from state
-function qₚ(ρqₚ::FT, ρ::FT) where {FT}
-    return max(FT(0), ρqₚ / ρ)
+function qₚ(ρqₚ, ρ)
+    return max(zero(ρ), ρqₚ / ρ)
 end
 
 """
