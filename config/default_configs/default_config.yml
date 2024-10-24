@@ -99,6 +99,9 @@ dt_rad:
 idealized_clouds:
   help: "Use idealized clouds in radiation model [`false` (default), `true`]"
   value: false
+prescribe_clouds_in_radiation:
+  help: "Use prescribed clouds in radiation model. Clouds are read from ERA5 data and updated every time radiation is called. The year 2010 is used and continuously repeated. This mode only affect radiation and is only relevant for the RRTGMP mode. [`false` (default), `true`]"
+  value: false
 insolation:
   help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`]"
   value: "idealized"

@@ -6,6 +6,12 @@ Main
 
 ### Features
 
+### New option for prescribing clouds in radiation
+
+When `prescribe_clouds_in_radiation` is set to true, clouds in radiation 
+is prescribed from a file (monthly cloud properties in 2010 from ERA5).
+PR [3405](https://github.com/CliMA/ClimaAtmos.jl/pull/3405)
+
 ### ETOPO2022 60arc-second topography dataset. 
 
 - Update artifacts to use 60arc-second ETOPO2022 ice-surface topography

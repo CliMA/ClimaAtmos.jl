@@ -1,5 +1,7 @@
 module RRTMGPInterface
 
+import ..AbstractCloudInRadiation
+
 using RRTMGP
 import RRTMGP.AtmosphericStates as AS
 using ClimaCore: DataLayouts, Spaces, Fields
@@ -21,20 +23,36 @@ struct ClearSkyRadiation <: AbstractRRTMGPMode
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
 end
-struct AllSkyRadiation <: AbstractRRTMGPMode
+struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
     idealized_h2o::Bool
     idealized_clouds::Bool
+    cloud::ACR
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
-    "Reset the RNG seed before calling RRTGMP to a known value (the timestep number). When modeling cloud optics, RRTGMP uses a random number generator. Resetting the seed every time RRTGMP is called to a deterministic value ensures that the simulation is fully reproducible and can be restarted in a reproducible way. Disable this option when running production runs."
+    """
+    Reset the RNG seed before calling RRTGMP to a known value (the timestep number). 
+    When modeling cloud optics, RRTGMP uses a random number generator. 
+    Resetting the seed every time RRTGMP is called to a deterministic value ensures that 
+    the simulation is fully reproducible and can be restarted in a reproducible way. 
+    Disable this option when running production runs.
+    """
     reset_rng_seed::Bool
 end
-struct AllSkyRadiationWithClearSkyDiagnostics <: AbstractRRTMGPMode
+struct AllSkyRadiationWithClearSkyDiagnostics{
+    ACR <: AbstractCloudInRadiation,
+} <: AbstractRRTMGPMode
     idealized_h2o::Bool
     idealized_clouds::Bool
+    cloud::ACR
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
-    "Reset the RNG seed before calling RRTGMP to a known value (the timestep number). When modeling cloud optics, RRTGMP uses a random number generator. Resetting the seed every time RRTGMP is called to a deterministic value ensures that the simulation is fully reproducible and can be restarted in a reproducible way. Disable this option when running production runs."
+    """
+    Reset the RNG seed before calling RRTGMP to a known value (the timestep number). 
+    When modeling cloud optics, RRTGMP uses a random number generator. 
+    Resetting the seed every time RRTGMP is called to a deterministic value ensures that 
+    the simulation is fully reproducible and can be restarted in a reproducible way. 
+    Disable this option when running production runs.
+    """
     reset_rng_seed::Bool
 end
 
