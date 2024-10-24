@@ -199,26 +199,17 @@ function get_spaces(parsed_args, params, comms_ctx)
     elseif parsed_args["config"] == "column" # single column
         @warn "perturb_initstate flag is ignored for single column configuration"
         FT = eltype(params)
-        Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
-        quad = Quadratures.GL{1}()
-        horizontal_mesh = periodic_rectangle_mesh(;
-            x_max = Δx,
-            y_max = Δx,
-            x_elem = 1,
-            y_elem = 1,
-        )
-        if bubble
+        quad = nothing
+        horizontal_mesh = nothing
+        bubble &&
             @warn "Bubble correction not compatible with single column configuration. It will be switched off."
-            bubble = false
-        end
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
         z_stretch = if parsed_args["z_stretch"]
             Meshes.HyperbolicTangentStretching(dz_bottom)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
+        # make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
+        make_column_spaces(z_max, z_elem, z_stretch, comms_ctx)
     elseif parsed_args["config"] == "box"
         FT = eltype(params)
         nh_poly = parsed_args["nh_poly"]
@@ -274,13 +265,18 @@ function get_spaces(parsed_args, params, comms_ctx)
             deep,
         )
     end
-    ncols = Fields.ncolumns(center_space)
-    ndofs_total = ncols * z_elem
-    hspace = Spaces.horizontal_space(center_space)
-    quad_style = Spaces.quadrature_style(hspace)
-    Nq = Quadratures.degrees_of_freedom(quad_style)
-
-    @info "Resolution stats: " Nq h_elem z_elem ncols ndofs_total
+    if center_space isa Spaces.FiniteDifferenceSpace
+        ncols = 1
+        ndofs_total = ncols * z_elem
+        @info "Resolution stats: " z_elem ncols ndofs_total
+    else
+        ncols = Fields.ncolumns(center_space)
+        ndofs_total = ncols * z_elem
+        hspace = Spaces.horizontal_space(center_space)
+        quad_style = Spaces.quadrature_style(hspace)
+        Nq = Quadratures.degrees_of_freedom(quad_style)
+        @info "Resolution stats: " Nq h_elem z_elem ncols ndofs_total
+    end
     return (;
         center_space,
         face_space,

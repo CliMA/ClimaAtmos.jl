@@ -56,6 +56,29 @@ function make_horizontal_space(
     return space
 end
 
+function make_column_spaces(
+    z_max,
+    z_elem,
+    z_stretch,
+    comms_ctx::ClimaComms.SingletonCommsContext,
+)
+    z_domain = Domains.IntervalDomain(
+        Geometry.ZPoint(zero(z_max)),
+        Geometry.ZPoint(z_max);
+        boundary_names = (:bottom, :top),
+    )
+    z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
+    @info "z heights" z_mesh.faces
+    device = ClimaComms.device(comms_ctx)
+    z_topology = Topologies.IntervalTopology(
+        ClimaComms.SingletonCommsContext(device),
+        z_mesh,
+    )
+    cspace = Spaces.CenterFiniteDifferenceSpace(z_topology)
+    fspace = Spaces.CenterFiniteDifferenceSpace(cspace)
+    return (cspace, fspace)
+end
+
 function make_horizontal_space(mesh, quad, comms_ctx, bubble)
     if mesh isa Meshes.AbstractMesh1D
         error("Distributed mode does not work with 1D horizontal spaces.")
