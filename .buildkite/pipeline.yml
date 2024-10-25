@@ -3,6 +3,7 @@ agents:
   # pbs_l_mem: 8G
   modules: climacommon/2024_05_27
 
+
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
   OPENBLAS_NUM_THREADS: 1
@@ -59,6 +60,8 @@ steps:
 
       - label: ":computer: Ensure mse tables are reset when necessary"
         command: "julia --color=yes --project=examples reproducibility_tests/test_reset.jl"
+        pbs_l_select: "1:ncpus=1"
+        pbs_q: "develop"
 
   - group: "Radiation"
     steps:
@@ -69,3 +72,5 @@ steps:
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_gray.yml
           --job_id single_column_radiative_equilibrium_gray
         artifact_paths: "single_column_radiative_equilibrium_gray/output_active/*"
+        pbs_l_select: "1:ncpus=1"
+        pbs_q: "develop"
