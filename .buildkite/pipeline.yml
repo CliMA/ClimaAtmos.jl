@@ -184,6 +184,58 @@ steps:
           slurm_mem: 16G
           slurm_gpus: 1
         soft_fail: true
+      
+      - label: ":genie: LES Bomex in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/les_bomex_box.yml
+          --job_id les_bomex_box
+        artifact_paths: "les_bomex_box/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_mem: 16G
+          slurm_gpus: 1
+        soft_fail: false
+      
+      - label: ":genie: LES DYCOMS in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/les_dycoms_box.yml
+          --job_id les_dycoms_box
+        artifact_paths: "les_dycoms_box/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_mem: 16G
+          slurm_gpus: 1
+        soft_fail: false
+      
+      - label: ":genie: LES GABLS in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/les_gabls_box.yml
+          --job_id les_gabls_box
+        artifact_paths: "les_gabls_box/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_mem: 16G
+          slurm_gpus: 1
+        soft_fail: false
+      
+      - label: ":genie: LES Rico in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/les_rico_box.yml
+          --job_id les_rico_box
+        artifact_paths: "les_rico_box/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_mem: 16G
+          slurm_gpus: 1
+        soft_fail: false
 
   - group: "Plane Examples"
     steps:

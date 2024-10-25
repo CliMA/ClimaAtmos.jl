@@ -1,32 +1,36 @@
-job_id: les_rico_box
+# Rico config
 initial_condition: Rico
 subsidence: Rico
 edmf_coriolis: Rico
 ls_adv: Rico
 surface_setup: Rico
-implicit_diffusion: false
-approximate_linear_solve_iters: 2
-moist: equil
-hyperdiff: "false"
-apply_limiter: false
-precip_model: "1M"
 config: box
-dt_cloud_fraction: "10mins"
-ode_algo: "SSPKnoth"
+# microphysics
+moist: equil
+precip_model: "1M"
+# diffusion
+implicit_diffusion: false
+hyperdiff: false
+approximate_linear_solve_iters: 2
 smagorinsky_lilly: true
+# time and spatial discretization, ICs, BCs
+ode_algo: "SSPKnoth"
 c_smag: 0.17
 x_max: 4e3
 y_max: 4e3
+z_max: 6e3
 x_elem: 10
 y_elem: 10
 z_elem: 150
-z_max: 6e3
 z_stretch: false
 rayleigh_sponge: true
+dt_cloud_fraction: "10mins"
 dt: "0.20secs"
 t_end: 12hours
+apply_limiter: false
 restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/rico/day0.0.hdf5"
-toml: [toml/rico_les.toml]
+toml: [toml/les_rico.toml]  # sponge height
+# diagnostics
 dt_save_state_to_disk: 30mins
 netcdf_interpolation_num_points: [30, 30, 150]
 diagnostics:
