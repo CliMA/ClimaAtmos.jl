@@ -139,7 +139,7 @@ function make_hybrid_spaces(
             z_surface;
             κ = FT(28e7 * (30 / nelem)^2),
             dt = FT(1),
-            maxiter = 256,
+            maxiter = 128,
         )
         z_surface = @. mask(z_surface)
         if parsed_args["mesh_warp_type"] == "SLEVE"
