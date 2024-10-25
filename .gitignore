@@ -30,6 +30,8 @@ docs/site/
 test/Manifest.toml
 calibration/test/Manifest.toml
 
+Artifacts.toml
+
 # ignore vscode artifacts
 *.vscode
 *.DS

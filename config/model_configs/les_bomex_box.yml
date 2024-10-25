@@ -24,10 +24,10 @@ z_elem: 100
 z_stretch: false
 dt_cloud_fraction: "10mins"
 dt: "0.2secs" 
-t_end: "6hrs" 
+t_end: "6hours" 
 rayleigh_sponge: true
 toml: [toml/les_bomex.toml]  # sponge height
-restart_file: "/home/asridhar/ClimaAtmos.jl/restart/bomex/Micro1M_day0.0_Prod.hdf5"
+restart_file: "/groups/esm/hervik/climaatmos-les-artifacts/les_bomex_day0.0.hdf5"
 # diagnostics
 call_cloud_diagnostics_per_stage: true
 output_default_diagnostics: false

@@ -24,10 +24,10 @@ z_stretch: false
 tracer_upwinding: third_order
 dt_cloud_fraction: "10mins"
 dt: "0.05secs"
-t_end: "4hrs"
+t_end: "4hours"
 rayleigh_sponge: true
 toml: [toml/les_dycoms.toml]  # sponge height
-restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/dycoms/day0_1m.hdf5"
+restart_file: "/groups/esm/hervik/climaatmos-les-artifacts/les_dycoms_day0.0.hdf5"
 # diagnostics
 dt_save_state_to_disk: "30mins"
 netcdf_interpolation_num_points: [30,30,75]

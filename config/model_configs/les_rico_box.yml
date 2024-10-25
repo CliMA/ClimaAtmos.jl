@@ -26,9 +26,9 @@ z_stretch: false
 rayleigh_sponge: true
 dt_cloud_fraction: "10mins"
 dt: "0.20secs"
-t_end: 12hours
+t_end: "12hours"
 apply_limiter: false
-restart_file: "/home/asridhar/Codes/ClimaAtmos.jl/restart/rico/day0.0.hdf5"
+restart_file: "/groups/esm/hervik/climaatmos-les-artifacts/les_rico_day0.0.hdf5"
 toml: [toml/les_rico.toml]  # sponge height
 # diagnostics
 dt_save_state_to_disk: 30mins
