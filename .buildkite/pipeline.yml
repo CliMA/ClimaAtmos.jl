@@ -2,7 +2,8 @@ agents:
   queue: derecho
   # pbs_l_mem: 8G
   modules: climacommon/2024_05_27
-
+  pbs_l_select: "1:ncpus=1"
+  pbs_q: "develop"
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -60,9 +61,6 @@ steps:
 
       - label: ":computer: Ensure mse tables are reset when necessary"
         command: "julia --color=yes --project=examples reproducibility_tests/test_reset.jl"
-        agents:
-          pbs_l_select: "1:ncpus=1"
-          pbs_q: "develop"
 
   - group: "Radiation"
     steps:
@@ -73,6 +71,60 @@ steps:
           --config_file $CONFIG_PATH/single_column_radiative_equilibrium_gray.yml
           --job_id single_column_radiative_equilibrium_gray
         artifact_paths: "single_column_radiative_equilibrium_gray/output_active/*"
-        agents:
-          pbs_l_select: "1:ncpus=1"
-          pbs_q: "develop"
+
+      - label: ":computer: single column radiative equilibrium clearsky"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky.yml
+          --job_id single_column_radiative_equilibrium_clearsky
+        artifact_paths: "single_column_radiative_equilibrium_clearsky/output_active/*"
+
+      - label: ":computer: single column radiative equilibrium clearsky prognostic surface temperature"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky_prognostic_surface_temp.yml
+          --job_id single_column_radiative_equilibrium_clearsky_prognostic_surface_temp
+        artifact_paths: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/output_active/*"
+
+      - label: ":computer: single column radiative equilibrium allsky idealized clouds varying insolation"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_allsky_idealized_clouds.yml
+          --job_id single_column_radiative_equilibrium_allsky_idealized_clouds
+        artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/output_active/*"
+
+  - group: "Precipitation"
+    steps:
+      - label: ":umbrella: 1-moment precipitation sanity test single column"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/single_column_precipitation_test.yml
+          --job_id single_column_precipitation_test
+        artifact_paths: "single_column_precipitation_test/output_active/*"
+
+  - group: "Column Examples"
+    steps:
+
+      - label: ":computer: single column hydrostatic balance float64"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
+          --job_id single_column_hydrostatic_balance_ft64
+        artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
+
+  - group: "Box Examples"
+    steps:
+
+      - label: ":computer: Box hydrostatic balance (ρe_tot)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/box_hydrostatic_balance_rhoe.yml
+          --job_id box_hydrostatic_balance_rhoe
+        artifact_paths: "box_hydrostatic_balance_rhoe/output_active/*"
+
+      - label: ":computer: 3D density current"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/box_density_current_test.yml
+          --job_id box_density_current_test
+        artifact_paths: "box_density_current_test/output_active/*"
