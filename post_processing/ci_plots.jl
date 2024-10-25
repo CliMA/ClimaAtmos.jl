@@ -1066,7 +1066,7 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
     )
 end
 
-LESBoxPlots= Union{
+LESBoxPlots = Union{
     Val{:les_rico_box},
     Val{:les_dycoms_box},
     Val{:les_bomex_box},
@@ -1138,25 +1138,32 @@ function make_plots(
         hours = 3600.0
         window_end = last(var.dims["time"])
         window_start = window_end - 2hours
-        var_window = ClimaAnalysis.window(var, "time"; left=window_start, right=window_end)
+        var_window = ClimaAnalysis.window(
+            var,
+            "time";
+            left = window_start,
+            right = window_end,
+        )
         var_reduced = horizontal_average(average_time(var_window))
         return var_reduced
     end
-    
+
     var_groups_xyt_reduced =
         map_comparison(simdirs, short_names) do simdir, short_name
             return [
-                get(simdir; short_name, reduction, period) |> windowed_reduction
+                get(simdir; short_name, reduction, period) |>
+                windowed_reduction,
             ]
         end
-    
+
     var_groups_xy_reduced =
         map_comparison(simdirs, short_names) do simdir, short_name
             return [
-                get(simdir; short_name, reduction, period) |> horizontal_average
+                get(simdir; short_name, reduction, period) |>
+                horizontal_average,
             ]
         end
-    
+
     tmp_file = make_plots_generic(
         output_paths,
         var_groups_xyt_reduced,
