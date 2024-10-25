@@ -150,7 +150,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
         diagnostics = [
             CAD.default_diagnostics(
                 atmos_model,
-                time_to_seconds(parsed_args["t_end"]) - t_start,
+                FT(time_to_seconds(parsed_args["t_end"]) - t_start),
                 p.start_date;
                 output_writer = netcdf_writer,
             )...,
