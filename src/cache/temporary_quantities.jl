@@ -50,8 +50,8 @@ function temporary_quantities(Y, atmos)
         ᶠtemp_UVW = Fields.Field(typeof(uvw_vec), face_space), # UVW(ᶠu³)
         ᶜtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
         ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
-        ᶜtemp_strain =  Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
-        ᶠtemp_strain =  Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
+        ᶜtemp_strain = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
+        ᶠtemp_strain = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
         # TODO: Remove this hack
         sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
         # Implicit solver cache:

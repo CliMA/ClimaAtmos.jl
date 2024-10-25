@@ -418,7 +418,7 @@ Base.@kwdef struct AtmosModel{
     DM,
     SAM,
     VS,
-    SL, 
+    SL,
     RS,
     ST,
     IN,

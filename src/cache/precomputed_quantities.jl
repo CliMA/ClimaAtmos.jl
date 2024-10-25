@@ -156,17 +156,18 @@ function precomputed_quantities(Y, atmos)
             ᶜqᵣ = similar(Y.c, FT),
             ᶜqₛ = similar(Y.c, FT),
         ) : (;)
-    smagorinsky_lilly_quantities = if atmos.smagorinsky_lilly isa SmagorinskyLilly
-        uvw_vec = UVW(FT(0), FT(0), FT(0))
-        (;
-            ᶜτ_smag = similar(Y.c, typeof(uvw_vec * uvw_vec')),
-            ᶠτ_smag = similar(Y.f, typeof(uvw_vec * uvw_vec')),
-            ᶜD_smag = similar(Y.c, FT),
-            ᶠD_smag = similar(Y.f, FT),
-        )
-    else
-        (;)
-    end
+    smagorinsky_lilly_quantities =
+        if atmos.smagorinsky_lilly isa SmagorinskyLilly
+            uvw_vec = UVW(FT(0), FT(0), FT(0))
+            (;
+                ᶜτ_smag = similar(Y.c, typeof(uvw_vec * uvw_vec')),
+                ᶠτ_smag = similar(Y.f, typeof(uvw_vec * uvw_vec')),
+                ᶜD_smag = similar(Y.c, FT),
+                ᶠD_smag = similar(Y.f, FT),
+            )
+        else
+            (;)
+        end
 
     return (;
         gs_quantities...,
