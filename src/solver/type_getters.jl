@@ -275,6 +275,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         )
     end
     ncols = Fields.ncolumns(center_space)
+    z_elem = Spaces.nlevels(face_space)
     ndofs_total = ncols * z_elem
     hspace = Spaces.horizontal_space(center_space)
     quad_style = Spaces.quadrature_style(hspace)

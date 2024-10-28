@@ -16,7 +16,8 @@ prognostic_tke: true
 moist: "equil"
 config: "column"
 hyperdiff: false
-z_max: 400
+z_max: 70000
+truncation: 4000
 x_elem: 2
 y_elem: 2
 z_elem: 40
@@ -25,7 +26,7 @@ dt: "10secs"
 t_end: "48hours"
 dt_save_state_to_disk: "1000hours"
 perturb_initstate: false
-toml: [../toml/prognostic_edmfx.toml]
+toml: [toml/prognostic_edmfx.toml]
 netcdf_interpolation_num_points: [2, 2, 40]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]

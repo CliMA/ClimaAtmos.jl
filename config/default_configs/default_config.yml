@@ -27,6 +27,9 @@ z_elem:
 z_max:
   help: "Model top height. Default: 30km"
   value: 30000.0
+truncation:
+  help: "Use vertical grid specified by z_max but run the model to a lower height. Default: off"
+  value: nothing
 vorticity_hyperdiffusion_coefficient:
   help: "Hyperdiffusion coefficient for vorticity (m s-1)"
   value: 1.5

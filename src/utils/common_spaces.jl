@@ -74,6 +74,25 @@ function make_horizontal_space(mesh, quad, comms_ctx, bubble)
     return space
 end
 
+function get_truncated_grid(z_mesh, truncation, FT)
+    # set up domain for new grid
+    z_domain_trunc = Domains.IntervalDomain(
+        Geometry.ZPoint(zero(FT(0))),
+        Geometry.ZPoint(FT(truncation));
+        boundary_names = (:bottom, :top),
+    )
+    
+    # extract elements from original mesh and threshold below truncation
+    grid_element_vec = Geometry.tofloat.(z_mesh.faces)
+    @info "grid elements" grid_element_vec[10] < FT(truncation)
+    grid_element_trunc_vec = filter(x -> x < FT(truncation), grid_element_vec)
+    @info "truncated grid elements" grid_element_trunc_vec
+    grid_element_trunc_zpt = Geometry.ZPoint.(grid_element_trunc_vec)
+
+    # create new mesh
+    Meshes.IntervalMesh(z_domain_trunc, grid_element_trunc_zpt)
+end
+
 function make_hybrid_spaces(
     h_space,
     z_max,
@@ -92,7 +111,17 @@ function make_hybrid_spaces(
         Geometry.ZPoint(z_max);
         boundary_names = (:bottom, :top),
     )
-    z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
+    truncation = parsed_args["truncation"]
+    @info "truncation" FT(truncation)
+    if isnothing(truncation)
+        z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
+    else
+        z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
+        @info "type of z_mesh" typeof(z_mesh)
+        z_mesh = get_truncated_grid(z_mesh, truncation, FT)
+        z_elem = length(z_mesh.faces)
+        @info "type of z_mesh" typeof(z_mesh)
+    end
     @info "z heights" z_mesh.faces
     device = ClimaComms.device(h_space)
     z_topology = Topologies.IntervalTopology(
@@ -125,5 +154,6 @@ function make_hybrid_spaces(
     # TODO: return the grid
     center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
     face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
+    # Spaces.nlevels(center_space)V == new_number of zpoints
     return center_space, face_space
 end
