@@ -1,6 +1,6 @@
 using Adapt
 using Dates: DateTime, @dateformat_str
-using Interpolations
+import Interpolations
 import NCDatasets
 import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
@@ -157,10 +157,13 @@ function get_spaces(parsed_args, params, comms_ctx)
             esmth = CA.gaussian_smooth(zlevels, smooth_degree)
             Adapt.adapt(
                 array_type,
-                linear_interpolation(
+                Interpolations.linear_interpolation(
                     (lon, lat),
                     esmth,
-                    extrapolation_bc = (Periodic(), Flat()),
+                    extrapolation_bc = (
+                        Interpolations.Periodic(),
+                        Interpolations.Flat(),
+                    ),
                 ),
             )
         end

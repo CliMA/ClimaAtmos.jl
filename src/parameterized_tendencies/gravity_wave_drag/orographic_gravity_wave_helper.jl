@@ -1,5 +1,5 @@
 using NCDatasets
-using Interpolations
+import Interpolations
 using Statistics: mean
 
 """
@@ -269,10 +269,13 @@ function compute_OGW_info(Y, elev_data, earth_radius, γ, h_frac)
 
     # NOTE: GFDL may incorporate some smoothing when inerpolate it to model grid
     for varname in (:hmax, :hmin, :t11, :t12, :t21, :t22)
-        li_obj = linear_interpolation(
+        li_obj = Interpolations.linear_interpolation(
             (lon, lat),
             getproperty(topo_ll, varname),
-            extrapolation_bc = (Periodic(), Flat()),
+            extrapolation_bc = (
+                Interpolations.Periodic(),
+                Interpolations.Flat(),
+            ),
         )
         Fields.bycolumn(axes(Y.c.ρ)) do colidx
             parent(getproperty(topo_cg, varname)[colidx]) .=
@@ -303,10 +306,13 @@ function regrid_OGW_info(Y, orographic_info_rll)
     cg_lon = Fields.level(Fields.coordinate_field(Y.c).long, 1)
 
     for varname in (:hmax, :hmin, :t11, :t12, :t21, :t22)
-        li_obj = linear_interpolation(
+        li_obj = Interpolations.linear_interpolation(
             (lon, lat),
             getproperty(topo_ll, varname),
-            extrapolation_bc = (Periodic(), Flat()),
+            extrapolation_bc = (
+                Interpolations.Periodic(),
+                Interpolations.Flat(),
+            ),
         )
         Fields.bycolumn(axes(Y.c.ρ)) do colidx
             parent(getproperty(topo_cg, varname)[colidx]) .=
