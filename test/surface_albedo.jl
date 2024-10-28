@@ -37,14 +37,19 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
     config.parsed_args["rad"] = "clearsky"
     config.parsed_args["albedo_model"] = "CouplerAlbedo"
     simulation = ClimaAtmos.get_simulation(config)
-    (; u, p, t) = simulation.integrator
+    (; u, p) = simulation.integrator
 
-    ClimaAtmos.set_surface_albedo!(u, p, t, p.atmos.surface_albedo)
+    ClimaAtmos.set_surface_albedo!(u, p, Float64(0), p.atmos.surface_albedo)
 
-    # test that the albedo is not initiated by atmos (includes NaNs)
-    @test isnan(sum(p.radiation.rrtmgp_model.direct_sw_surface_albedo))
-    @test isnan(sum(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo))
+    # test that the albedo initialized to 0.38 at t = 0 in the coupled case
+    @test all(p.radiation.rrtmgp_model.direct_sw_surface_albedo .== FT(0.38))
+    @test all(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo .== FT(0.38))
 
+    ClimaAtmos.set_surface_albedo!(u, p, Float64(1), p.atmos.surface_albedo)
+
+    # test that the albedo is unchanged when updated at t > 0 in the coupled case
+    @test all(p.radiation.rrtmgp_model.direct_sw_surface_albedo .== FT(0.38))
+    @test all(p.radiation.rrtmgp_model.diffuse_sw_surface_albedo .== FT(0.38))
 end
 
 
