@@ -17,11 +17,11 @@ moist: "equil"
 config: "column"
 hyperdiff: false
 z_max: 70000
-dz_bottom: 30.
+dz_bottom: 15.
 truncation: 400
 x_elem: 2
 y_elem: 2
-z_elem: 200
+z_elem: 1000
 z_stretch: true
 dt: "10secs"
 t_end: "48hours"
