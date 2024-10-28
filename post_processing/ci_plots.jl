@@ -1120,15 +1120,15 @@ function make_plots(
         short_name = short_names[1],
         reduction,
     )
-    if "5m" in available_periods
-        period = "5m"
-    elseif "10m" in available_periods
-        period = "10m"
-    elseif "30m" in available_periods
-        period = "30m"
-    elseif "1h" in available_periods
-        period = "1h"
-    end
+    # if "5m" in available_periods
+    #     period = "5m"
+    # elseif "10m" in available_periods
+    #     period = "10m"
+    # elseif "30m" in available_periods
+    #     period = "30m"
+    # elseif "1h" in available_periods
+    #     period = "1h"
+    # end
 
     # Window average from instantaneous snapshots?
     function horizontal_average(var)
@@ -1151,7 +1151,7 @@ function make_plots(
     var_groups_xyt_reduced =
         map_comparison(simdirs, short_names) do simdir, short_name
             return [
-                get(simdir; short_name, reduction, period) |>
+                get(simdir; short_name, reduction) |>
                 windowed_reduction,
             ]
         end
@@ -1159,7 +1159,7 @@ function make_plots(
     var_groups_xy_reduced =
         map_comparison(simdirs, short_names) do simdir, short_name
             return [
-                get(simdir; short_name, reduction, period) |>
+                get(simdir; short_name, reduction) |>
                 horizontal_average,
             ]
         end
