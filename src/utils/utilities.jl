@@ -503,3 +503,29 @@ function promote_period(period::Dates.OtherPeriod)
     # For varying periods, we just return them as they are
     return period
 end
+
+"""
+    get_truncated_grid(z_mesh::Meshes.IntervalMesh, truncation::Real, ::Type{FT}) where {FT}
+
+Given a `Meshes.IntervalMesh` object `z_mesh`, truncate the mesh at a given `truncation` and return a new mesh.
+
+`get_truncated_grid` is useful for running simulations on the same grid spacing as e.g., a GCM, but only simulating 
+the boundary layer or a shallow cloud layer where the top of the profile is not needed. It is called by `make_hybrid_spaces`.
+"""
+function get_truncated_grid(z_mesh::Meshes.IntervalMesh, truncation::Real, ::Type{FT}) where {FT}
+    # set up domain for new grid
+    z_domain_trunc = Domains.IntervalDomain(
+        Geometry.ZPoint(zero(FT(0))),
+        Geometry.ZPoint(FT(truncation));
+        boundary_names = (:bottom, :top),
+    )
+    
+    # extract elements from original mesh and threshold below truncation
+    grid_element_vec = Geometry.tofloat.(z_mesh.faces)
+    grid_element_trunc_vec = filter(x -> x < FT(truncation), grid_element_vec)
+    @info "Truncating grid to $(length(grid_element_trunc_vec)) elements below $truncation meters."
+    grid_element_trunc_zpt = Geometry.ZPoint.(grid_element_trunc_vec)
+
+    # create new mesh
+    Meshes.IntervalMesh(z_domain_trunc, grid_element_trunc_zpt)
+end

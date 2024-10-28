@@ -92,8 +92,10 @@ function make_hybrid_spaces(
         Geometry.ZPoint(z_max);
         boundary_names = (:bottom, :top),
     )
+    truncation = parsed_args["truncation"]
     z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
-    @info "z heights" z_mesh.faces
+    z_mesh = truncation isa Number ? get_truncated_grid(z_mesh, truncation, FT) : z_mesh
+    z_elem = length(z_mesh.faces) # redefine number of elements based on new grid structure
     device = ClimaComms.device(h_space)
     z_topology = Topologies.IntervalTopology(
         ClimaComms.SingletonCommsContext(device),
@@ -125,5 +127,6 @@ function make_hybrid_spaces(
     # TODO: return the grid
     center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
     face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
+    # Spaces.nlevels(center_space)V == new_number of zpoints
     return center_space, face_space
 end
