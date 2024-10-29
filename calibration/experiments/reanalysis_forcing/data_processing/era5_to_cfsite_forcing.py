@@ -1,3 +1,9 @@
+# Create ERA5 forcing file for CFSite SCM from ERA5 data downloaded from ECMWF CDS API.
+# Need to change file pathing/ define coszen data (see other scripts for computation)
+# also need to change short wave period to 1 hour for hourly data and 1 day for monthly data (ugh)
+
+tisr_resolution = 86400 # for monthly data; change to 3600 for hourly data
+
 import xarray as xr 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -84,7 +90,7 @@ def get_vertical_tendencies(column_ds, var, vertvar = "wa"):
     tntva_trend = tntva_trend.assign_coords(pressure_level=column_ds.pressure_level)
 
     # transpose so time is the first dimension
-    tntva_trend = tntva_trend.transpose("valid_time", "pressure_level")
+    tntva_trend = tntva_trend.transpose("date", "pressure_level")
 
     return tntva_trend
 
@@ -99,7 +105,7 @@ def get_forcing_data(cfsite, column_ds, surface_ds, geo = geo):
     ##### get column data #####
     # compute temperature
     R_d = 287.05  # Specific gas constant for dry air (J/(kg·K))
-    g = 9.81  # Gravitational acceleration (m/s²)
+    g = 9.807  # Gravitational acceleration (m/s²)
     pressure = sitecol.pressure_level * 100  # Convert to Pa
     pressure_broadcasted = pressure.broadcast_like(column_ds.t)
     # Compute air density using the ideal gas law: rho = P / (R_d * T)
@@ -110,14 +116,18 @@ def get_forcing_data(cfsite, column_ds, surface_ds, geo = geo):
     ##### get surface data #####
     #coszen = xr.open_dataset("/Users/julianschmitt/Downloads/HadGEM2-A_amip.2004-2008.07.nc", group = f"site{group}").coszen
     # sitecol["coszen"] = coszen
+    coszen = geo.where(geo["site"] == cfsite, drop = True)
 
     # rescale TOA incident radiation to w/m2 by dividing by the time step of ERA5 (1 hour)
-    sitesf["tisr"] = sitesf["tisr"] / 3600
+    sitesf["tisr"] = sitesf["tisr"] / tisr_resolution
 
     #### Combine data ####
-    sitedata = xr.merge([sitecol[["z", "t", "rho", "u", "v", "w", "q", "coszen"]], sitesf[["slhf", "sshf", "tisr", "skt"]]])
+    sitedata = xr.merge([sitecol[["z", "t", "rho", "u", "v", "w", "q"]], 
+                         sitesf[["slhf", "sshf", "tisr", "skt"]],
+                         coszen[["coszen"]]])
 
-    sitedata = sitedata.rename({"t": "ta", "u": "ua", "v": "va", "w": "wa", "q": "hus", "slhf": "hfls", "sshf": "hfss", "skt": "ts", "tisr": "rsdt"})
+    sitedata = sitedata.rename({"t": "ta", "u": "ua", "v": "va", "w": "wa", "q": "hus", "slhf": "hfls", "sshf": "hfss", "skt": "ts", "tisr": "rsdt", "z": "zg"})
+    sitedata["z"] = sitedata["zg"] / g # convert geopotential (zg) to height in meters (z)
 
     # remove latitude/longitude dependence - not actually selecting a value on the meridian, just the first value of the array
     sitedata = sitedata.isel(latitude=0, longitude=0).squeeze()
@@ -135,22 +145,19 @@ def get_forcing_data(cfsite, column_ds, surface_ds, geo = geo):
 
     sitedata["tntha"] = tntha
     sitedata["tnhusha"] = tnhusha
-
-    # approximate geopotential 
-    sitedata["zg"] = sitedata["z"] / 9.81
     
     return sitedata
 
-output_file = 'era5_forcing.nc'
+output_file = 'era5_monthly_forcing.nc'
 
 # for southern hemisphere sites 
-# for site_id in range(2, 16): # e.g. 2-15
-#     print("Running site: ", site_id)
-#     site_data = get_forcing_data(site_id, sh_column_data, sh_surface_data)
-#     site_data.to_netcdf(output_file, mode='a', group=f'site{site_id}')
+for site_id in range(2, 16): # e.g. 2-15
+    print("Running site: ", site_id)
+    site_data = get_forcing_data(site_id, sh_column_data, sh_surface_data)
+    site_data.to_netcdf(output_file, mode='a', group=f'site{site_id}')
 
 # for northern hemisphere sites
 for site_id in range(16, 24):
+    print("Running site: ", site_id)
     site_data = get_forcing_data(site_id, nh_column_data, nh_surface_data)
-    site_data["coszen"] = geo2.where((geo2.site ==23) & (geo2.time ==7), drop = True).coszen.values[0][0]
     site_data.to_netcdf(output_file, mode='a', group=f'site{site_id}')
