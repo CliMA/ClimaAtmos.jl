@@ -4,6 +4,18 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+### Features
+
+### ETOPO2022 60arc-second topography dataset. 
+
+- Update artifacts to use 60arc-second ETOPO2022 ice-surface topography
+  dataset. Update surface smoothing functions to rely only on spectral 
+  Laplacian operations. Update raw-topo gravity wave parameterization 
+  dataset. Update interfaces in `make_hybrid_spaces` to support new 
+  inputs using `SpaceVaryingInput` utility. Include a simple example
+  to generate spectra from scalar variables. 
+  PR [3378](https://github.com/CliMA/ClimaAtmos.jl/pull/3378)
+
 v0.27.7
 -------
 

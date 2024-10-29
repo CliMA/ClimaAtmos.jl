@@ -6,6 +6,8 @@ import ClimaAtmos as CA
 import Thermodynamics as TD
 import ClimaParams as CP
 import ClimaComms
+import ClimaAtmos: AtmosArtifacts as AA
+import ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
 using ClimaCoreTempestRemap
 
 import Interpolations
@@ -20,6 +22,7 @@ comms_ctx = ClimaComms.SingletonCommsContext()
 (; config_file, job_id) = CA.commandline_kwargs()
 config = CA.AtmosConfig(config_file; job_id, comms_ctx)
 
+config.parsed_args["topography"] = "Earth";
 config.parsed_args["topo_smoothing"] = false;
 config.parsed_args["mesh_warp_type"] = "Linear";
 (; parsed_args) = config
@@ -77,24 +80,6 @@ for k in 1:size(bk)[1]
 end
 p_center = 0.5 * (p_half[:, :, 1:(end - 1), :] .+ p_half[:, :, 2:end, :])
 
-# earth warp
-data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
-earth_spline = NCDataset(data_path) do data
-    zlevels = Array(data["elevation"])
-    lon = Array(data["longitude"])
-    lat = Array(data["latitude"])
-    # Apply Smoothing
-    smooth_degree = 15
-    esmth = CA.gaussian_smooth(zlevels, smooth_degree)
-    Interpolations.linear_interpolation(
-        (lon, lat),
-        zlevels,
-        extrapolation_bc = (Interpolations.Periodic(), Interpolations.Flat()),
-    )
-end
-@info "Generated interpolation stencil"
-warp_function = CA.generate_topography_warp(earth_spline)
-
 # Create meshes and spaces
 h_elem = 16
 nh_poly = 3
@@ -106,17 +91,9 @@ radius = 6.371229e6
 quad = Quadratures.GLL{nh_poly + 1}()
 horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
 h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
-
-
 z_stretch = Meshes.HyperbolicTangentStretching(dz_bottom)
-center_space, face_space = CA.make_hybrid_spaces(
-    h_space,
-    z_max,
-    z_elem,
-    z_stretch;
-    parsed_args,
-    surface_warp = warp_function,
-)
+center_space, face_space =
+    CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
 
 ᶜlocal_geometry = Fields.local_geometry_field(center_space)
 ᶠlocal_geometry = Fields.local_geometry_field(face_space)

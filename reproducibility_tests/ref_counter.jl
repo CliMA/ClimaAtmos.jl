@@ -1,4 +1,4 @@
-185
+186
 
 # **README**
 #
@@ -20,6 +20,14 @@
 
 
 #=
+
+186
+- Topography dataset has been modified to the 60 arc-second ETOPO2022 dataset. 
+  This is behaviour changing for the gravity-wave (raw-topo) parameterization
+  when computing `hmax` and `T tensor`.
+
+185
+
 184
 - Changed default ozone profile.
   Jobs that failed:
