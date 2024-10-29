@@ -4,9 +4,9 @@
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
 
-struct UniformNamedTuple{K, T, N}
-    k::NTuple{N, K}
-    v::NTuple{N, T}
+struct UniformNamedTuple{K, T}
+    k::Vector{K}
+    v::Vector{T}
 end
 # @inline Base.getproperty(nt::UniformNamedTuple, sym::Symbol) =
 #     getproperty(nt, Val(sym))
@@ -17,18 +17,17 @@ to_named_tuple(nt::UniformNamedTuple) = (; zip(nt.k, nt.v)...)
     if isnothing(i)
         error("No property $sym found in $(to_named_tuple(nt))")
     else
-        @inbounds getproperty(getfield(nt, :v), i)
+        @inbounds getindex(getfield(nt, :v), i)
     end
 end
-Base.eltype(::UniformNamedTuple{K, T, N}) where {K, T, N} = K
-Base.length(::UniformNamedTuple{K, T, N}) where {K, T, N} = N
+Base.eltype(::UniformNamedTuple{K, T}) where {K, T} = K
+Base.length(nt::UniformNamedTuple{K, T}) where {K, T} = length(getfield(nt, :v))
 function to_uniform_named_tuple(nt)
-    k = Tuple(keys(nt))
-    v = Tuple(values(nt))
+    k = collect(Tuple(keys(nt)))
+    v = collect(Tuple(values(nt)))
     K = typeof(first(k))
     T = typeof(first(v))
-    N = length(v)
-    return UniformNamedTuple{K, T, N}(k, v)
+    return UniformNamedTuple{K, T}(k, v)
 end
 
 struct TypeGroupedNamedTuple{M, C}
