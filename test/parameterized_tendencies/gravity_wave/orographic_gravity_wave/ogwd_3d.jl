@@ -8,7 +8,7 @@ import ClimaParams as CP
 import ClimaComms
 using ClimaCoreTempestRemap
 
-using Interpolations
+import Interpolations
 
 const FT = Float64
 include(
@@ -86,10 +86,10 @@ earth_spline = NCDataset(data_path) do data
     # Apply Smoothing
     smooth_degree = 15
     esmth = CA.gaussian_smooth(zlevels, smooth_degree)
-    linear_interpolation(
+    Interpolations.linear_interpolation(
         (lon, lat),
         zlevels,
-        extrapolation_bc = (Periodic(), Flat()),
+        extrapolation_bc = (Interpolations.Periodic(), Interpolations.Flat()),
     )
 end
 @info "Generated interpolation stencil"
@@ -128,10 +128,13 @@ function ᶜinterp_latlon2cg(lon, lat, datain, ᶜlocal_geometry)
     for k in 1:size(datain)[3]
         push!(
             li_obj,
-            linear_interpolation(
+            Interpolations.linear_interpolation(
                 (lon, lat),
                 datain[:, :, k],
-                extrapolation_bc = (Periodic(), Flat()),
+                extrapolation_bc = (
+                    Interpolations.Periodic(),
+                    Interpolations.Flat(),
+                ),
             ),
         )
     end
@@ -154,10 +157,10 @@ end
 function ᶜinterp2CAlevels(gfdl_z_full, gfdl_data, ᶜlocal_geometry)
     gfdl_ca_data = Fields.Field(FT, axes(ᶜlocal_geometry))
     Fields.bycolumn(axes(ᶜlocal_geometry)) do colidx
-        li = linear_interpolation(
+        li = Interpolations.linear_interpolation(
             parent(gfdl_z_full[colidx])[:],
             parent(gfdl_data[colidx])[:],
-            extrapolation_bc = Line(),
+            extrapolation_bc = Interpolations.Line(),
         )
         parent(gfdl_ca_data[colidx]) .=
             li.(parent(ᶜlocal_geometry.coordinates.z[colidx]))

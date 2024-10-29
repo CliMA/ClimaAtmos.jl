@@ -3,7 +3,7 @@ import ClimaAtmos
 import ClimaAtmos as CA
 using ClimaCore: Fields, Domains, Meshes, Topologies, Spaces, Geometry
 import ClimaComms, Logging
-using Interpolations
+import Interpolations
 using ClimaCoreTempestRemap
 const FT = Float64
 
