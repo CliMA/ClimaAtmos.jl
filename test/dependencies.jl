@@ -32,8 +32,6 @@ direct_dependencies =
 known_dependencies = Set([
     # ArgParse is used to read --config_file and --job_id from command line
     "ArgParse",
-    # ArtifactWrappers is used to topography and gravity wave NetCDF data
-    "ArtifactWrappers",
     "Artifacts",
     "AtmosphericProfilesLibrary",
     "ClimaComms",
@@ -55,7 +53,7 @@ known_dependencies = Set([
     "NCDatasets",
     "NVTX",
     "RRTMGP",
-    # used to reset seed for random number generator used for cloudy RRTMGP runs to enable bit-wise reproducibility for tests
+    # Random is used to reset seed for random number generator used for cloudy RRTMGP runs to enable bit-wise reproducibility for tests
     "Random",
     "SciMLBase",
     "StaticArrays",

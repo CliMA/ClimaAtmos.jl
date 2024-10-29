@@ -87,7 +87,7 @@ end
 
 
 # MiMA data
-include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
+include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
 mima_data = joinpath(mima_gwf_path(), "mima_gwf.nc")
 
 nt = NCDataset(mima_data) do ds

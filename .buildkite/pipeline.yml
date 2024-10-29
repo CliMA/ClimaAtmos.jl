@@ -44,9 +44,6 @@ steps:
       - "julia --project=calibration/test -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=calibration/test -e 'using Pkg; Pkg.status()'"
 
-      - echo "--- Download artifacts"
-      - "julia --project=examples artifacts/download_artifacts.jl"
-
     agents:
       slurm_cpus_per_task: 8
       slurm_gpus: 1

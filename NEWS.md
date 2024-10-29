@@ -1,26 +1,29 @@
 ClimaAtmos.jl Release Notes
 ============================
 
-Main
+v0.27.8
 -------
 
 ### Features
 
 ### New option for prescribing clouds in radiation
 
-When `prescribe_clouds_in_radiation` is set to true, clouds in radiation 
+When `prescribe_clouds_in_radiation` is set to true, clouds in radiation
 is prescribed from a file (monthly cloud properties in 2010 from ERA5).
 PR [3405](https://github.com/CliMA/ClimaAtmos.jl/pull/3405)
 
-### ETOPO2022 60arc-second topography dataset. 
+### ![][badge-✨feature/enhancement] Improvements to Earth's topography
 
-- Update artifacts to use 60arc-second ETOPO2022 ice-surface topography
-  dataset. Update surface smoothing functions to rely only on spectral 
-  Laplacian operations. Update raw-topo gravity wave parameterization 
-  dataset. Update interfaces in `make_hybrid_spaces` to support new 
-  inputs using `SpaceVaryingInput` utility. Include a simple example
-  to generate spectra from scalar variables. 
-  PR [3378](https://github.com/CliMA/ClimaAtmos.jl/pull/3378)
+Starting with `0.27.8`, `ClimaAtmos` now uses the
+[ETOPO2022](https://www.ncei.noaa.gov/products/etopo-global-relief-model)
+dataset for topography (at 60arc-second resolution). The Gaussian smoothing
+scheme was removed in favor of a diffusive scheme controlled by the
+`topography_damping_factor`.
+
+`ClimaAtmos` now also comes with an a simple example to generate spectra from
+scalar variables.
+
+PR [3378](https://github.com/CliMA/ClimaAtmos.jl/pull/3378)
 
 v0.27.7
 -------

@@ -28,7 +28,7 @@ config.parsed_args["mesh_warp_type"] = "Linear";
 (; parsed_args) = config
 
 # load gfdl data
-include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
+include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
 ncfile = joinpath(gfdl_ogw_data_path(), "gfdl_ogw.nc")
 nt = NCDataset(ncfile) do ds
     lon = Array(ds["lon"])
