@@ -780,7 +780,10 @@ function get_simulation(config::AtmosConfig)
                 x -> !CA.isdivisible(checkpoint_frequency, x),
                 periods_reductions,
             )
-                @warn "Some accumulated diagnostics might not be evenly divisible by the checkpointing frequency ($(CA.promote_period(checkpoint_frequency)))"
+                accum_str =
+                    join(CA.promote_period.(collect(periods_reductions)), ", ")
+                checkpt_str = CA.promote_period(checkpoint_frequency)
+                @warn "The checkpointing frequency (dt_save_state_to_disk = $checkpt_str) should be an integer multiple of all diagnostics accumulation periods ($accum_str) to simulations can be safely restarted from any checkpoint"
             end
         end
     else
