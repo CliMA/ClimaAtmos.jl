@@ -51,7 +51,7 @@ function gcm_height(ds)
 end
 
 function era5_height(ds)
-    vec(mean(ds["zg"][:, :], dims = 2))
+    vec(mean(ds["z"][:, :], dims = 2))
 end
 
 """

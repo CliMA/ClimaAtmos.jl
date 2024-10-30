@@ -403,3 +403,129 @@ function gaussian_smooth(arr::AbstractArray, sigma::Int = 1)
 
     return smoothed_arr
 end
+
+"""
+    isdivisible(dt_large::Dates.Period, dt_small::Dates.Period)
+
+Check if two periods are evenly divisible, i.e., if the larger period can be
+expressed as an integer multiple of the smaller period.
+
+In this, take into account the case when periods do not have fixed size, e.g.,
+one month is a variable number of days.
+
+# Examples
+```
+julia> isdivisible(Dates.Year(1), Dates.Month(1))
+true
+
+julia> isdivisible(Dates.Month(1), Dates.Day(1))
+true
+
+julia> isdivisible(Dates.Month(1), Dates.Week(1))
+false
+```
+
+## Notes
+
+Not all the combinations are fully implemented. If something is missing, please
+consider adding it.
+"""
+function isdivisible(dt_large::Dates.Period, dt_small::Dates.Period)
+    @warn "The combination $(typeof(dt_large)) and $(dt_small) was not covered. Please add a method to handle this case."
+    return false
+end
+
+# For FixedPeriod and OtherPeriod, it is easy, we can directly divide the two
+# (as long as they are both the same)
+function isdivisible(dt_large::Dates.FixedPeriod, dt_small::Dates.FixedPeriod)
+    return isinteger(dt_large / dt_small)
+end
+
+function isdivisible(dt_large::Dates.OtherPeriod, dt_small::Dates.OtherPeriod)
+    return isinteger(dt_large / dt_small)
+end
+
+function isdivisible(
+    dt_large::Union{Dates.Month, Dates.Year},
+    dt_small::Dates.FixedPeriod,
+)
+    # The only case where periods are commensurate for Month/Year is when we
+    # have a Day or an integer divisor of a day. (Note that 365 and 366 don't
+    # have any common divisor)
+    return isinteger(Dates.Day(1) / dt_small)
+end
+
+"""
+    promote_period(period::Dates.Period)
+
+Promote a period to the largest possible period type.
+
+This function attempts to represent a given `Period` using the largest possible
+unit of time. For example, a period of 24 hours will be promoted to 1 day. If
+a clean promotion is not possible, return the input as it is.
+
+# Examples
+```julia-repl
+julia> promote_period(Hour(24))
+1 day
+
+julia> promote_period(Day(14))
+2 weeks
+
+julia> promote_period(Second(86401))
+86401 seconds
+
+julia> promote_period(Millisecond(1))
+1 millisecond
+```
+"""
+function promote_period(period::Dates.Period)
+    ms = Int(Dates.toms(period))
+    # Hard to do this with varying periods like Month/Year...
+    PeriodTypes = [
+        Dates.Week,
+        Dates.Day,
+        Dates.Hour,
+        Dates.Minute,
+        Dates.Second,
+        Dates.Millisecond,
+    ]
+    for PeriodType in PeriodTypes
+        period_ms = Int(Dates.toms(PeriodType(1)))
+        if ms % period_ms == 0
+            # Millisecond will always match, if nothing else matches
+            return PeriodType(ms // period_ms)
+        end
+    end
+end
+
+function promote_period(period::Dates.OtherPeriod)
+    # For varying periods, we just return them as they are
+    return period
+end
+
+"""
+    get_truncated_grid(z_mesh::Meshes.IntervalMesh, truncation::Real, ::Type{FT}) where {FT}
+
+Given a `Meshes.IntervalMesh` object `z_mesh`, truncate the mesh at a given `truncation` and return a new mesh.
+
+`get_truncated_grid` is useful for running simulations on the same grid spacing as e.g., a GCM, but only simulating 
+the boundary layer or a shallow cloud layer where the top of the profile is not needed. It is called by `make_hybrid_spaces`.
+"""
+function get_truncated_grid(z_mesh::Meshes.IntervalMesh, truncation::Real, ::Type{FT}) where {FT}
+    # set up domain for new grid
+    z_domain_trunc = Domains.IntervalDomain(
+        Geometry.ZPoint(zero(FT(0))),
+        Geometry.ZPoint(FT(truncation));
+        boundary_names = (:bottom, :top),
+    )
+    
+    # extract elements from original mesh and threshold below truncation
+    grid_element_vec = Geometry.tofloat.(z_mesh.faces)
+    grid_element_trunc_vec = filter(x -> x < FT(truncation), grid_element_vec)
+    @info "Truncating grid to $(length(grid_element_trunc_vec)) elements below $truncation meters."
+    grid_element_trunc_zpt = Geometry.ZPoint.(grid_element_trunc_vec)
+
+    # create new mesh
+    Meshes.IntervalMesh(z_domain_trunc, grid_element_trunc_zpt)
+end
