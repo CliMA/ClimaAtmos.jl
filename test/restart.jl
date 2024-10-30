@@ -8,6 +8,7 @@ import ClimaCore.DataLayouts: AbstractData
 import ClimaCore.Geometry: AxisTensor
 import ClimaCore.Spaces: AbstractSpace
 import ClimaComms
+import ClimaUtilities.OutputPathGenerator: maybe_wait_filesystem
 pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Logging
 import NCDatasets
@@ -384,6 +385,10 @@ if MANYTESTS
                             ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) :
                             ""
                         output_loc = ClimaComms.bcast(comms_ctx, output_loc)
+                        # Sometimes the shared filesystem doesn't work properly
+                        # and the folder is not synced across MPI processes.
+                        # Let's add an additional check here.
+                        maybe_wait_filesystem(comms_ctx, output_loc)
 
                         job_id = "$(configuration)_$(moisture)_$(precip)_$(topography)_$(radiation)_$(turbconv_mode)"
                         test_dict = Dict(
@@ -423,6 +428,9 @@ if MANYTESTS
 else
     amip_output_loc = ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) : ""
     amip_output_loc = ClimaComms.bcast(comms_ctx, amip_output_loc)
+    # Sometimes the shared filesystem doesn't work properly and the folder is
+    # not synced across MPI processes. Let's add an additional check here.
+    maybe_wait_filesystem(comms_ctx, amip_output_loc)
 
     amip_job_id = "amip_target_diagedmf"
 
