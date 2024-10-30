@@ -885,8 +885,13 @@ steps:
       - label: "GPU: GPU dry baroclinic wave - 4 gpus"
         key: "target_gpu_implicit_baroclinic_wave_4process"
         command:
-            nsys profile --delay 100 --trace=nvtx,cuda,mpi --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
+          # - >
+          #   srun --cpu-bind=threads --cpus-per-task=4
+          #   nsys profile --delay 100 --trace=nvtx,cuda,mpi --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
+          #   julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+          #   --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
+          #   --job_id target_gpu_implicit_baroclinic_wave_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
