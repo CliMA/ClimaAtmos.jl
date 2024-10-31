@@ -36,3 +36,10 @@ lazy = true
     [[earth_orography_60arcseconds.download]]
     sha256 = "eca66c0701d1c2b9e271742314915ffbf4a0fae92709df611c323f38e019966e"
     url = "https://caltech.box.com/shared/static/4asrxcgl6xsgenfcug9p0wkkyhtqilgk.gz"
+    
+[era5_cloud]
+git-tree-sha1 = "10742e0a2e343d13bb04df379e300a83402d4106"
+
+    [[era5_cloud.download]]
+    sha256 = "bb51e2f2d315b487e05a8d38944d4ad937ee4a40c43b68541220c5d54425e24a"
+    url = "https://caltech.box.com/shared/static/b6ur4ap4vo04j09vdulem96z9fxqlgyn.gz"

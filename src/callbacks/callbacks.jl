@@ -77,6 +77,12 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             evaluate!(field, tv, t)
         end
     end
+    if :prescribed_clouds_field in propertynames(p.radiation)
+        for (key, tv) in pairs(p.radiation.prescribed_cloud_timevaryinginputs)
+            field = getproperty(p.radiation.prescribed_clouds_field, key)
+            evaluate!(field, tv, t)
+        end
+    end
 
     FT = Spaces.undertype(axes(Y.c))
     thermo_params = CAP.thermodynamics_params(params)
@@ -157,13 +163,25 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             )
             # RRTMGP needs lwp and iwp in g/m^2
             kg_to_g_factor = 1000
+            cloud_liquid_water_content =
+                radiation_mode.cloud isa PrescribedCloudInRadiation ?
+                p.radiation.prescribed_clouds_field.clwc :
+                cloud_diagnostics_tuple.q_liq
+            cloud_ice_water_content =
+                radiation_mode.cloud isa PrescribedCloudInRadiation ?
+                p.radiation.prescribed_clouds_field.ciwc :
+                cloud_diagnostics_tuple.q_ice
+            cloud_fraction =
+                radiation_mode.cloud isa PrescribedCloudInRadiation ?
+                p.radiation.prescribed_clouds_field.cc :
+                cloud_diagnostics_tuple.cf
             @. ᶜlwp =
-                kg_to_g_factor * Y.c.ρ * cloud_diagnostics_tuple.q_liq * ᶜΔz /
-                max(cloud_diagnostics_tuple.cf, eps(FT))
+                kg_to_g_factor * Y.c.ρ * cloud_liquid_water_content * ᶜΔz /
+                max(cloud_fraction, eps(FT))
             @. ᶜiwp =
-                kg_to_g_factor * Y.c.ρ * cloud_diagnostics_tuple.q_ice * ᶜΔz /
-                max(cloud_diagnostics_tuple.cf, eps(FT))
-            @. ᶜfrac = cloud_diagnostics_tuple.cf
+                kg_to_g_factor * Y.c.ρ * cloud_ice_water_content * ᶜΔz /
+                max(cloud_fraction, eps(FT))
+            @. ᶜfrac = cloud_fraction
         end
     end
 

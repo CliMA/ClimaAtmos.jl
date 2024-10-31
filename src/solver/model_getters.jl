@@ -221,6 +221,12 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     @assert idealized_h2o in (true, false)
     idealized_clouds = parsed_args["idealized_clouds"]
     @assert idealized_clouds in (true, false)
+    cloud = get_cloud_in_radiation(parsed_args)
+    if idealized_clouds && (cloud isa PrescribedCloudInRadiation)
+        error(
+            "idealized_clouds and prescribe_clouds_in_radiation cannot be true at the same time",
+        )
+    end
     add_isothermal_boundary_layer = parsed_args["add_isothermal_boundary_layer"]
     @assert add_isothermal_boundary_layer in (true, false)
     aerosol_radiation = parsed_args["aerosol_radiation"]
@@ -242,6 +248,10 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     if !(radiation_name in ("allsky", "allskywithclear")) && reset_rng_seed
         @warn "reset_rng_seed does not have any effect with $radiation_name radiation option"
     end
+    if !(radiation_name in ("allsky", "allskywithclear")) &&
+       (cloud isa PrescribedCloudInRadiation)
+        @warn "prescribe_clouds_in_radiation does not have any effect with $radiation_name radiation option"
+    end
     return if radiation_name == "gray"
         RRTMGPI.GrayRadiation(add_isothermal_boundary_layer)
     elseif radiation_name == "clearsky"
@@ -254,6 +264,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         RRTMGPI.AllSkyRadiation(
             idealized_h2o,
             idealized_clouds,
+            cloud,
             add_isothermal_boundary_layer,
             aerosol_radiation,
             reset_rng_seed,
@@ -262,6 +273,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(
             idealized_h2o,
             idealized_clouds,
+            cloud,
             add_isothermal_boundary_layer,
             aerosol_radiation,
             reset_rng_seed,
@@ -306,6 +318,12 @@ end
 function get_ozone(parsed_args)
     isnothing(parsed_args["prescribe_ozone"]) && return nothing
     return parsed_args["prescribe_ozone"] ? PrescribedOzone() : IdealizedOzone()
+end
+
+function get_cloud_in_radiation(parsed_args)
+    isnothing(parsed_args["prescribe_clouds_in_radiation"]) && return nothing
+    return parsed_args["prescribe_clouds_in_radiation"] ?
+           PrescribedCloudInRadiation() : InteractiveCloudInRadiation()
 end
 
 function get_forcing_type(parsed_args)

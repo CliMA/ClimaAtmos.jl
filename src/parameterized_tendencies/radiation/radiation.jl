@@ -10,11 +10,14 @@ import .Parameters as CAP
 import RRTMGP
 import .RRTMGPInterface as RRTMGPI
 
-import Dates: Year
+import Dates: Year, Date
 import ClimaUtilities.TimeVaryingInputs:
-    TimeVaryingInput, LinearPeriodFillingInterpolation
+    TimeVaryingInput,
+    PeriodicCalendar,
+    LinearPeriodFillingInterpolation,
+    LinearInterpolation
 
-import Interpolations
+import Interpolations as Intp
 using Statistics: mean
 
 radiation_model_cache(Y, atmos::AtmosModel, args...) =
@@ -86,6 +89,7 @@ end
 function radiation_model_cache(
     Y,
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
+    start_date,
     params,
     ozone,
     aerosol_names,
@@ -257,10 +261,49 @@ function radiation_model_cache(
             kwargs...,
         )
     end
+    cloud_cache = (;)
+    if (radiation_mode isa RRTMGPI.AllSkyRadiation) ||
+       (radiation_mode isa RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics)
+        cloud_cache = get_cloud_cache(radiation_mode.cloud, Y, start_date)
+    end
     return merge(
         (; rrtmgp_model, ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT})),
         insolation_cache(insolation_mode, Y),
+        cloud_cache,
     )
+end
+
+get_cloud_cache(_, _, _) = (;)
+function get_cloud_cache(::PrescribedCloudInRadiation, Y, start_date)
+    target_space = axes(Y.c)
+    prescribed_cloud_names = ("cc", "clwc", "ciwc")
+    prescribed_cloud_names_as_symbols = Symbol.(prescribed_cloud_names)
+    extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
+    timevaryinginputs = [
+        TimeVaryingInput(
+            joinpath(
+                @clima_artifact("era5_cloud", ClimaComms.context(Y.c)),
+                "era5_cloud.nc",
+            ),
+            name,
+            target_space;
+            reference_date = start_date,
+            regridder_type = :InterpolationsRegridder,
+            regridder_kwargs = (; extrapolation_bc),
+            method = LinearInterpolation(PeriodicCalendar(Year(1), Date(2010))),
+        ) for name in prescribed_cloud_names
+    ]
+
+    prescribed_clouds_field = similar(
+        Y.c,
+        NamedTuple{
+            prescribed_cloud_names_as_symbols,
+            NTuple{length(prescribed_cloud_names_as_symbols), eltype(Y.c.ρ)},
+        },
+    )
+    prescribed_cloud_timevaryinginputs =
+        (; zip(prescribed_cloud_names_as_symbols, timevaryinginputs)...)
+    return (; prescribed_clouds_field, prescribed_cloud_timevaryinginputs)
 end
 
 insolation_cache(_, _) = (;)
