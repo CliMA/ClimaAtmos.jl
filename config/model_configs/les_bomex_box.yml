@@ -20,11 +20,11 @@ y_max: 3.2e3
 z_max: 4.5e3
 x_elem: 8
 y_elem: 8
-z_elem: 100
+z_elem: 60
 z_stretch: false
 dt_cloud_fraction: "10mins"
-dt: "0.2secs" 
-t_end: "6hours" 
+dt: "0.1secs" 
+t_end: "3hours" 
 rayleigh_sponge: true
 toml: [toml/les_bomex.toml]  # sponge height
 restart_file: "/groups/esm/hervik/climaatmos-les-artifacts/les_bomex_day0.0.hdf5"
@@ -36,6 +36,3 @@ netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, hfes]
     period: 10mins
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, hfes]
-    reduction: average
-    period: 60mins

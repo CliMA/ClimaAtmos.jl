@@ -30,10 +30,8 @@ toml: [toml/les_dycoms.toml]  # sponge height
 restart_file: "/groups/esm/hervik/climaatmos-les-artifacts/les_dycoms_day0.0.hdf5"
 # diagnostics
 dt_save_state_to_disk: "30mins"
+output_default_diagnostics: false
 netcdf_interpolation_num_points: [30,30,75]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, hfes]
     period: 10mins
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, hfes]
-    reduction_time: average
-    period: 60mins

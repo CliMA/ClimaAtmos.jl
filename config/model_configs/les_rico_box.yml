@@ -21,12 +21,12 @@ y_max: 4e3
 z_max: 6e3
 x_elem: 10
 y_elem: 10
-z_elem: 150
+z_elem: 60
 z_stretch: false
 rayleigh_sponge: true
 dt_cloud_fraction: "10mins"
 dt: "0.20secs"
-t_end: "12hours"
+t_end: "2hours"
 apply_limiter: false
 restart_file: "/groups/esm/hervik/climaatmos-les-artifacts/les_rico_day0.0.hdf5"
 toml: [toml/les_rico.toml]  # sponge height
@@ -36,6 +36,3 @@ netcdf_interpolation_num_points: [30, 30, 150]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, husra, cl, clw, cli, hussfc, evspsbl, hfes, pr]
     period: 10mins
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, husra, cl, clw, cli, hussfc, evspsbl, hfes, pr]
-    reduction_time: average
-    period: 60mins
