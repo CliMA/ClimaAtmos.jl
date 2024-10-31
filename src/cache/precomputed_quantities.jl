@@ -325,18 +325,7 @@ function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
     K_E = C_E * norm_v_a * z_a
     return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
 end
-function eddy_diffusivity_coefficient(
-    z::FT,
-    z₀,
-    f_b::FT,
-    h::FT,
-    uₐ,
-    C_E::FT,
-    Ri::FT,
-    Ri_a::FT,
-    Ri_c::FT,
-    κ::FT,
-) where {FT}
+function eddy_diffusivity_coefficient(z, z₀, f_b, h, uₐ, C_E, Ri, Ri_a, Ri_c, κ)
     # Equations (17), (18)
     if z <= f_b * h
         K_b =
@@ -356,7 +345,7 @@ function eddy_diffusivity_coefficient(
         K = K_b * (z / f_b / h) * (1 - (z - f_b * h) / (1 - f_b) / h)^2
         return K
     else
-        return FT(0)
+        return zero(z)
     end
 end
 
@@ -364,9 +353,9 @@ function compute_boundary_layer_height!(
     h_boundary_layer,
     dz,
     Ri_local,
-    Ri_c::FT,
+    Ri_c,
     Ri_a,
-) where {FT}
+)
     nlevels = Spaces.nlevels(Spaces.axes(Ri_local))
     for level in 1:(nlevels - 1)
         h_boundary_layer .=
@@ -385,22 +374,22 @@ function compute_boundary_layer_height!(
 end
 
 function compute_bulk_richardson_number(
-    θ_v,
+    θ_v::FT,
     θ_v_a,
     norm_ua,
     grav,
-    z::FT,
+    z,
 ) where {FT}
     # TODO Gustiness from ClimaParams
     return (grav * z) * (θ_v - θ_v_a) / (θ_v_a * (max((norm_ua)^2, FT(10))))
 end
 function compute_exchange_coefficient(
-    Ri_a,
+    Ri_a::FT,
     Ri_c,
     zₐ,
     z₀,
-    κ::FT,
-    C_E_min::FT,
+    κ,
+    C_E_min,
 ) where {FT}
     # Equations (12), (13), (14)
     if Ri_a <= FT(0)
@@ -414,12 +403,12 @@ end
 
 function compute_surface_layer_diffusivity(
     z::FT,
-    z₀::FT,
-    κ::FT,
-    C_E::FT,
-    Ri::FT,
-    Ri_a::FT,
-    Ri_c::FT,
+    z₀,
+    κ,
+    C_E,
+    Ri,
+    Ri_a,
+    Ri_c,
     norm_uₐ,
 ) where {FT}
     # Equations (19), (20)

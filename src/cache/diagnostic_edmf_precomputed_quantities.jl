@@ -597,7 +597,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     ρ_prev_level
                 ) / local_geometry_level.J / ρ_level
 
-            @. detrʲ_prev_level = detrainment(
+            @. detrʲ_prev_level = detrainment_from_thermo_state(
                 params,
                 z_prev_level,
                 z_sfc_halflevel,

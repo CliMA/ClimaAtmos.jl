@@ -25,7 +25,7 @@ has_no_source_or_sink(parsed_args) = all((
 
 # we may be hitting a slow path:
 # https://stackoverflow.com/questions/14687665/very-slow-stdpow-for-bases-very-close-to-1
-fast_pow(x::FT, y::FT) where {FT <: AbstractFloat} = exp(y * log(x))
+fast_pow(x, y) = exp(y * log(x))
 
 """
     time_from_filename(file)
