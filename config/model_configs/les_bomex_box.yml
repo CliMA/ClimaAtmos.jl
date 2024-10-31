@@ -20,7 +20,7 @@ y_max: 3.2e3
 z_max: 4.5e3
 x_elem: 8
 y_elem: 8
-z_elem: 60
+z_elem: 45
 z_stretch: false
 dt_cloud_fraction: "10mins"
 dt: "0.1secs" 
