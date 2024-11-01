@@ -125,7 +125,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     (; sfc_temp_C3, ᶠtemp_scalar, ᶜtemp_scalar) = p.scratch
     (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, ᶜspecific, ᶜh_tot, sfc_conditions) =
         p.precomputed
-    (; ρ_flux_uₕ, ρ_flux_h_tot, ρ_flux_q_tot) = sfc_conditions
+    (; ρ_flux_uₕ, ρ_flux_h_tot) = sfc_conditions
 
     # Define operators
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
@@ -160,7 +160,9 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     for (ᶜρχₜ, ᶜχ, χ_name) in CA.matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
 
-        bottom = Operators.SetValue(χ_name == :q_tot ? ρ_flux_q_tot : sfc_zero)
+        bottom = Operators.SetValue(
+            χ_name == :q_tot ? sfc_conditions.ρ_flux_q_tot : sfc_zero,
+        )
         ᶜdivᵥ_ρχ = Operators.DivergenceF2C(; top, bottom)
 
         ᶜ∇ᵥρD∇χₜ = @. ᶜtemp_scalar = ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜχ)))
