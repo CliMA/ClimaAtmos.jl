@@ -8,8 +8,8 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 moist: "equil" 
 cloud_model: "grid_scale"
-dt: "30secs" 
-t_end: "10days"
+dt: "60secs" 
+t_end: "30days"
 dt_save_state_to_disk: "10days"
 rad: "allskywithclear"
 insolation: "timevarying"
