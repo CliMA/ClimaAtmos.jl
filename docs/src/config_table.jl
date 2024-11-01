@@ -1,4 +1,6 @@
 const ca_dir = joinpath(@__DIR__, "..", "..")
+const output_file = joinpath(@__DIR__, "config.md")
+const input_file = joinpath(@__DIR__, "config_no_table.md")
 import YAML
 # Use OrderedCollections to preserve YAML order for docs
 import OrderedCollections: OrderedDict
@@ -16,16 +18,29 @@ function make_table_from_config_file(config_file, title)
     end
     data = hcat(config_names, config_types, config_helps)
     pretty_table(
+        String,
         data;
         title = title,
         header = ["Argument", "Type", "Description"],
         alignment = :l,
-        crop = :none,
+        backend = Val(:markdown),
     )
 end
 default_configs = joinpath(ca_dir, "config", "default_configs")
 default_config_file = joinpath(default_configs, "default_config.yml")
-
-make_table_from_config_file(default_config_file, "Default configuration")
+open(output_file, "w") do config_md
+    open(input_file) do f
+        while !eof(f)
+            s = readline(f)
+            write(config_md, s)
+            write(config_md, "\n")
+        end
+    end
+    table = make_table_from_config_file(
+        default_config_file,
+        "Default configuration",
+    )
+    write(config_md, table)
+end
 
 nothing

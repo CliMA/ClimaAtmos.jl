@@ -1,6 +1,5 @@
-using Adapt
 using Dates: DateTime, @dateformat_str
-using Interpolations
+import Interpolations
 import NCDatasets
 import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
@@ -137,43 +136,8 @@ function get_spaces(parsed_args, params, comms_ctx)
     z_elem = Int(parsed_args["z_elem"])
     z_max = FT(parsed_args["z_max"])
     dz_bottom = FT(parsed_args["dz_bottom"])
-    topography = parsed_args["topography"]
     bubble = parsed_args["bubble"]
     deep = parsed_args["deep_atmosphere"]
-
-    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
-    if topography == "DCMIP200"
-        warp_function = topography_dcmip200
-    elseif topography == "Agnesi"
-        warp_function = topography_agnesi
-    elseif topography == "Schar"
-        warp_function = topography_schar
-    elseif topography == "NoWarp"
-        warp_function = nothing
-    elseif topography == "Earth"
-        data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
-        array_type = ClimaComms.array_type(comms_ctx.device)
-        earth_spline = NCDatasets.NCDataset(data_path) do data
-            zlevels = Array(data["elevation"])
-            lon = Array(data["longitude"])
-            lat = Array(data["latitude"])
-            # Apply Smoothing
-            smooth_degree = Int(parsed_args["smoothing_order"])
-            esmth = CA.gaussian_smooth(zlevels, smooth_degree)
-            Adapt.adapt(
-                array_type,
-                linear_interpolation(
-                    (lon, lat),
-                    esmth,
-                    extrapolation_bc = (Periodic(), Flat()),
-                ),
-            )
-        end
-        @info "Generated interpolation stencil"
-        warp_function = generate_topography_warp(earth_spline)
-    end
-    @info "Topography" topography
-
 
     h_elem = parsed_args["h_elem"]
     radius = CAP.planet_radius(params)
@@ -188,19 +152,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        if warp_function == nothing
-            make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; deep)
-        else
-            make_hybrid_spaces(
-                h_space,
-                z_max,
-                z_elem,
-                z_stretch;
-                parsed_args = parsed_args,
-                surface_warp = warp_function,
-                deep,
-            )
-        end
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; deep, parsed_args)
     elseif parsed_args["config"] == "column" # single column
         @warn "perturb_initstate flag is ignored for single column configuration"
         FT = eltype(params)
@@ -245,15 +197,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(
-            h_space,
-            z_max,
-            z_elem,
-            z_stretch;
-            parsed_args,
-            surface_warp = warp_function,
-            deep,
-        )
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args, deep)
     elseif parsed_args["config"] == "plane"
         FT = eltype(params)
         nh_poly = parsed_args["nh_poly"]
@@ -269,15 +213,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(
-            h_space,
-            z_max,
-            z_elem,
-            z_stretch;
-            parsed_args,
-            surface_warp = warp_function,
-            deep,
-        )
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args, deep)
     end
     ncols = Fields.ncolumns(center_space)
     ndofs_total = ncols * z_elem
@@ -782,7 +718,10 @@ function get_simulation(config::AtmosConfig)
                 x -> !CA.isdivisible(checkpoint_frequency, x),
                 periods_reductions,
             )
-                @warn "Some accumulated diagnostics might not be evenly divisible by the checkpointing frequency ($(CA.promote_period(checkpoint_frequency)))"
+                accum_str =
+                    join(CA.promote_period.(collect(periods_reductions)), ", ")
+                checkpt_str = CA.promote_period(checkpoint_frequency)
+                @warn "The checkpointing frequency (dt_save_state_to_disk = $checkpt_str) should be an integer multiple of all diagnostics accumulation periods ($accum_str) to simulations can be safely restarted from any checkpoint"
             end
         end
     else

@@ -20,4 +20,6 @@ t_end: "8hours"
 prescribe_ozone: true
 aerosol_radiation: true
 prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "OC1", "OC2", "SO4", "SOA", "SSLT01", "SSLT02", "SSLT03", "SSLT04"]
+prescribe_clouds_in_radiation: true
+radiation_reset_rng_seed: true
 toml: [toml/longrun_aquaplanet.toml]

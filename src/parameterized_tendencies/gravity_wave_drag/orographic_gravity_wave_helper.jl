@@ -1,5 +1,5 @@
 using NCDatasets
-using Interpolations
+import Interpolations
 using Statistics: mean
 
 """
@@ -226,10 +226,13 @@ end
 
 function compute_OGW_info(Y, elev_data, earth_radius, γ, h_frac)
     # obtain lat, lon, elevation from the elev_data
+    FT = Spaces.undertype(Spaces.axes(Y.c))
+    # downsample to elev dims (3600×1800)
+    skip_pt = 6
     nt = NCDataset(elev_data, "r") do ds
-        lon = Array(ds["longitude"])
-        lat = Array(ds["latitude"])
-        elev = Array(ds["elevation"])
+        lon = FT.(Array(ds["lon"]))[1:skip_pt:end]
+        lat = FT.(Array(ds["lat"]))[1:skip_pt:end]
+        elev = FT.(Array(ds["z"]))[1:skip_pt:end, 1:skip_pt:end]
         (; lon, lat, elev)
     end
     (; lon, lat, elev) = nt
@@ -269,10 +272,13 @@ function compute_OGW_info(Y, elev_data, earth_radius, γ, h_frac)
 
     # NOTE: GFDL may incorporate some smoothing when inerpolate it to model grid
     for varname in (:hmax, :hmin, :t11, :t12, :t21, :t22)
-        li_obj = linear_interpolation(
+        li_obj = Interpolations.linear_interpolation(
             (lon, lat),
             getproperty(topo_ll, varname),
-            extrapolation_bc = (Periodic(), Flat()),
+            extrapolation_bc = (
+                Interpolations.Periodic(),
+                Interpolations.Flat(),
+            ),
         )
         Fields.bycolumn(axes(Y.c.ρ)) do colidx
             parent(getproperty(topo_cg, varname)[colidx]) .=
@@ -303,10 +309,13 @@ function regrid_OGW_info(Y, orographic_info_rll)
     cg_lon = Fields.level(Fields.coordinate_field(Y.c).long, 1)
 
     for varname in (:hmax, :hmin, :t11, :t12, :t21, :t22)
-        li_obj = linear_interpolation(
+        li_obj = Interpolations.linear_interpolation(
             (lon, lat),
             getproperty(topo_ll, varname),
-            extrapolation_bc = (Periodic(), Flat()),
+            extrapolation_bc = (
+                Interpolations.Periodic(),
+                Interpolations.Flat(),
+            ),
         )
         Fields.bycolumn(axes(Y.c.ρ)) do colidx
             parent(getproperty(topo_cg, varname)[colidx]) .=

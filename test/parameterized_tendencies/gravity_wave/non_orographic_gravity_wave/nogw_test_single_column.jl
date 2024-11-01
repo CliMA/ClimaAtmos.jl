@@ -2,8 +2,8 @@ using ClimaComms
 ClimaComms.@import_required_backends
 using NCDatasets
 using Dates
-using Interpolations
 using Statistics
+import Interpolations
 import ClimaAtmos
 import ClimaAtmos as CA
 import ClimaCore
@@ -107,24 +107,24 @@ center_bf = zeros(length(lon), length(center_z), length(time))
 center_ρ = zeros(length(lon), length(center_z), length(time))
 for i in 1:length(lon)
     for it in 1:length(time)
-        interp_linear = LinearInterpolation(
+        interp_linear = Interpolations.LinearInterpolation(
             Z[i, :, it][end:-1:1],
             u[i, :, it][end:-1:1],
-            extrapolation_bc = Line(),
+            extrapolation_bc = Interpolations.Line(),
         )
         center_u[i, :, it] = interp_linear.(center_z)
 
-        interp_linear = LinearInterpolation(
+        interp_linear = Interpolations.LinearInterpolation(
             Z[i, :, it][end:-1:1],
             bf[i, :, it][end:-1:1],
-            extrapolation_bc = Line(),
+            extrapolation_bc = Interpolations.Line(),
         )
         center_bf[i, :, it] = interp_linear.(center_z)
 
-        interp_linear = LinearInterpolation(
+        interp_linear = Interpolations.LinearInterpolation(
             Z[i, :, it][end:-1:1],
             ρ[i, :, it][end:-1:1],
-            extrapolation_bc = Line(),
+            extrapolation_bc = Interpolations.Line(),
         )
         center_ρ[i, :, it] = interp_linear.(center_z)
     end

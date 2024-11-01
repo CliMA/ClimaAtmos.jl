@@ -30,8 +30,6 @@ direct_dependencies =
     keys(Pkg.dependencies(identity, atmos_uuid).dependencies) |> Set
 
 known_dependencies = Set([
-    # Adapt is used to generate the spline for Earth topography
-    "Adapt",
     # ArgParse is used to read --config_file and --job_id from command line
     "ArgParse",
     # ArtifactWrappers is used to topography and gravity wave NetCDF data

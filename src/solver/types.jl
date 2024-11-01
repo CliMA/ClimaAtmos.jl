@@ -65,6 +65,28 @@ Refer to ClimaArtifacts for more information on how to obtain the artifact.
 """
 struct PrescribedOzone <: AbstractOzone end
 
+"""
+    AbstractCloudInRadiation
+
+Describe how cloud properties should be set in radiation.
+
+This is only relevant for RRTGMP.
+"""
+abstract type AbstractCloudInRadiation end
+
+"""
+    InteractiveCloudInRadiation
+
+Use cloud properties computed in the model
+"""
+struct InteractiveCloudInRadiation <: AbstractCloudInRadiation end
+
+"""
+    PrescribedCloudInRadiation
+
+Use monthly-average cloud properties from ERA5.
+"""
+struct PrescribedCloudInRadiation <: AbstractCloudInRadiation end
 
 abstract type AbstractSurfaceTemperature end
 struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end

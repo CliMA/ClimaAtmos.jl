@@ -75,7 +75,7 @@ else
 fi
 
 if [[ "$profiling" == "enable" ]]; then
-    command="nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=${job_id}/report.%q{NPROCS}.%q{PMI_RANK} $command"
+    command="nsys profile --delay 100 --trace=nvtx,mpi --mpi-impl=mpich --output=${job_id}/report.%q{NPROCS}.%q{PMI_RANK} $command"
 fi
 
 cat << EOM

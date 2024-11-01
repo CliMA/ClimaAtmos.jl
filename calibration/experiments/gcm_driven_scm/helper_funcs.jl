@@ -1,10 +1,10 @@
 
 using NCDatasets
-using Interpolations
 using Statistics
 using LinearAlgebra
 import ClimaAtmos as CA
 import ClimaCalibrate as CAL
+import Interpolations
 
 "Optional vector"
 const OptVec{T} = Union{Nothing, Vector{T}}
@@ -396,16 +396,27 @@ function vertical_interpolation(
     if ndims(var_) == 2
         # Create interpolant
         nodes = (z_ref, 1:size(var_, 2))
-        var_itp = extrapolate(
-            interpolate(nodes, var_, (Gridded(Linear()), NoInterp())),
-            Line(),
+        var_itp = Interpolations.extrapolate(
+            Interpolations.interpolate(
+                nodes,
+                var_,
+                (
+                    Interpolations.Gridded(Interpolations.Linear()),
+                    Interpolations.NoInterp(),
+                ),
+            ),
+            Interpolations.Line(),
         )
         # Return interpolated vector
         return var_itp(z_scm, 1:size(var_, 2))
     elseif ndims(var_) == 1
         # Create interpolant
         nodes = (z_ref,)
-        var_itp = LinearInterpolation(nodes, var_; extrapolation_bc = Line())
+        var_itp = Interpolations.LinearInterpolation(
+            nodes,
+            var_;
+            extrapolation_bc = Interpolations.Line(),
+        )
         # Return interpolated vector
         return var_itp(z_scm)
     end

@@ -6,7 +6,7 @@ using DocumenterCitations
 
 disable_logging(Base.CoreLogging.Info) # Hide doctest's `@info` printing
 bib = CitationBibliography(joinpath(@__DIR__, "bibliography.bib"))
-
+include(joinpath(@__DIR__, "src", "config_table.jl"))
 doctest(ClimaAtmos; plugins = [bib])
 disable_logging(Base.CoreLogging.BelowMinLevel) # Re-enable all logging
 

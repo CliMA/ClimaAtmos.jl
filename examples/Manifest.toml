@@ -2,7 +2,7 @@
 
 julia_version = "1.10.5"
 manifest_format = "2.0"
-project_hash = "be6045099f729d184bd2b243a3b7ce10523cb3e6"
+project_hash = "0650226b22aae022a4fd4dd08a3323bee9fb506d"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "eea5d80188827b35333801ef97a40c2ed653b081"
@@ -377,9 +377,9 @@ version = "0.7.6"
 
 [[deps.ClimaDiagnostics]]
 deps = ["Accessors", "ClimaComms", "ClimaCore", "Dates", "NCDatasets", "SciMLBase"]
-git-tree-sha1 = "205961865d827825c2f5da0a18a605245cfec95e"
+git-tree-sha1 = "ace174fe5e4ae04c50a7835683baecd92e49c0d4"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
-version = "0.2.8"
+version = "0.2.10"
 
 [[deps.ClimaParams]]
 deps = ["TOML"]
@@ -1233,9 +1233,9 @@ version = "0.2.1+0"
 
 [[deps.KernelAbstractions]]
 deps = ["Adapt", "Atomix", "InteractiveUtils", "MacroTools", "PrecompileTools", "Requires", "StaticArrays", "UUIDs", "UnsafeAtomics", "UnsafeAtomicsLLVM"]
-git-tree-sha1 = "04e52f596d0871fa3890170fa79cb15e481e4cd8"
+git-tree-sha1 = "e73a077abc7fe798fe940deabe30ef6c66bdde52"
 uuid = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
-version = "0.9.28"
+version = "0.9.29"
 weakdeps = ["EnzymeCore", "LinearAlgebra", "SparseArrays"]
 
     [deps.KernelAbstractions.extensions]
@@ -1251,9 +1251,9 @@ version = "0.6.9"
 
 [[deps.Krylov]]
 deps = ["LinearAlgebra", "Printf", "SparseArrays"]
-git-tree-sha1 = "71dd823bf0a5aaa8264e1143b96a0baa631f4ce0"
+git-tree-sha1 = "4f20a2df85a9e5d55c9e84634bbf808ed038cabd"
 uuid = "ba0b0d4f-ebba-5204-a429-3ac8c609bfb7"
-version = "0.9.7"
+version = "0.9.8"
 
 [[deps.KrylovKit]]
 deps = ["GPUArraysCore", "LinearAlgebra", "PackageExtensionCompat", "Printf", "VectorInterface"]
@@ -2062,9 +2062,9 @@ version = "0.1.0"
 
 [[deps.SciMLBase]]
 deps = ["ADTypes", "Accessors", "ArrayInterface", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "Expronicon", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "PrecompileTools", "Preferences", "Printf", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "SciMLStructures", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface"]
-git-tree-sha1 = "0da22990d48d9297b05f9f6f1275f209d29840c0"
+git-tree-sha1 = "86e1c491cddf233d77d8aadbe289005db44e8445"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "2.57.0"
+version = "2.57.2"
 
     [deps.SciMLBase.extensions]
     SciMLBaseChainRulesCoreExt = "ChainRulesCore"
