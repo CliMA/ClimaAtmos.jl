@@ -1380,7 +1380,7 @@ function make_plots(
         "prw",
         "hurvi",
     ]
-    short_names_3D = ["thetaa", "ta", "hur", "hus", "clw", "cl", "cli", "ua", "va", "wa", "waup"]
+    short_names_3D = ["thetaa", "ta", "ua", "va", "wa", "waup", "tke", "arup"]
     reduction = "inst"
     # vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
     #     average_xy(get(simdir; short_name, reduction))
