@@ -30,7 +30,7 @@ perturb_initstate: false
 dt: "10secs"
 dt_rad: "30mins"
 t_end: "72hours"
-dt_save_to_disk: "10mins"
+dt_save_state_to_disk: "10mins"
 cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage : true
 ode_algo: "ARS343"
