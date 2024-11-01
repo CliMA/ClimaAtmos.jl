@@ -1150,18 +1150,12 @@ function make_plots(
 
     var_groups_xyt_reduced =
         map_comparison(simdirs, short_names) do simdir, short_name
-            return [
-                get(simdir; short_name, reduction) |>
-                windowed_reduction,
-            ]
+            return [get(simdir; short_name, reduction) |> windowed_reduction]
         end
 
     var_groups_xy_reduced =
         map_comparison(simdirs, short_names) do simdir, short_name
-            return [
-                get(simdir; short_name, reduction) |>
-                horizontal_average,
-            ]
+            return [get(simdir; short_name, reduction) |> horizontal_average]
         end
 
     tmp_file = make_plots_generic(
