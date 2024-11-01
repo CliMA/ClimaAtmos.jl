@@ -23,8 +23,6 @@ orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 
 orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
-include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
-
 function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
 
     @assert Spaces.topology(Spaces.horizontal_space(axes(Y.c))).mesh.domain isa

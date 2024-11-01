@@ -64,7 +64,7 @@ source_level =
     argmin(abs.(center_z .- non_orographic_gravity_wave.gw_source_height))
 damp_level = length(center_z)
 
-include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
+include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
 
 era_data =
     joinpath(era_single_column_dataset_path(), "box-single_column_test.nc")

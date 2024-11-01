@@ -1,11 +1,10 @@
 name = "ClimaAtmos"
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 authors = ["Climate Modeling Alliance"]
-version = "0.27.7"
+version = "0.27.8"
 
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
-ArtifactWrappers = "a14bc488-3040-4b00-9dc1-f6467924858a"
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 AtmosphericProfilesLibrary = "86bc3604-9858-485a-bdbe-831ec50de11d"
 ClimaComms = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
@@ -37,7 +36,6 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
 ArgParse = "1"
-ArtifactWrappers = "0.2"
 Artifacts = "1"
 AtmosphericProfilesLibrary = "0.1.7"
 ClimaComms = "0.6.4"

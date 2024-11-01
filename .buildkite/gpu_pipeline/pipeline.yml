@@ -31,9 +31,6 @@ steps:
       - julia --project=perf -e 'using CUDA; CUDA.precompile_runtime()'
       - julia --project=perf -e 'using Pkg; Pkg.status()'
 
-      - echo "--- Download artifacts"
-      - julia --project=examples artifacts/download_artifacts.jl
-
     agents:
       slurm_gpus: 1
       slurm_cpus_per_task: 8
