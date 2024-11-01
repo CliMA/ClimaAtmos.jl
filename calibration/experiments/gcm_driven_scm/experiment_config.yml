@@ -15,7 +15,9 @@ ensemble_size: 250
 n_iterations: 10
 batch_size: 30 # number of cases per iteration
 model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
-output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_43 # output dir
+# output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_43 # output dir
+# output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_51 # output dir
+output_dir : /central/scratch/cchristo/output_ml_mix/exp_51
 y_var_names: [thetaa, hus, clw] # calibration variables clw
 log_vars: ["clw"] # take log(var) when forming y, g
 
@@ -69,4 +71,7 @@ const_noise_by_var:
 # pretrained_nn_path: "/home/cchristo/ml_mixing_length/nn_341p_v1.jld2"
 # pretrained_nn_path: "/home/cchristo/ml_mixing_length/nn_341p_v5.jld2"
 # pretrained_nn_path: "/home/cchristo/ml_mixing_length/prev_scripts/nn_341p_v1.jld2"
-pretrained_nn_path: "/home/cchristo/ml_mixing_length/nn_666p_final.jld2"
+
+
+# pretrained_nn_path: "/home/cchristo/ml_mixing_length/nn_666p_final.jld2"
+pretrained_nn_path: "/home/cchristo/ml_mixing_length/nn_666p_leaky_relu.jld2"

@@ -6,12 +6,12 @@
 #SBATCH --mem=100G   # memory
 #SBATCH --cpus-per-task=1
 #SBATCH -J "scm_runner"   # job name
-#SBATCH --output=scm_runner.out
+#SBATCH --output=scm_runner_%j.out
 
 module purge
 export MODULEPATH="/groups/esm/modules:$MODULEPATH"
 module load climacommon/2024_05_27
 
-julia --project scm_runner.jl
+julia --project scm_runner.jl "$@"
 
 echo finished

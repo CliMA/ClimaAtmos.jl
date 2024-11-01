@@ -18,38 +18,38 @@ include("runner_helper.jl")
 
 using Distributed
 
+using ArgParse
 
 NUM_WORKERS = 10
-rel_path = "/groups/esm/cchristo/climaatmos_scm_calibrations/scm_runs"
-base_config_path = "model_config_prognostic_runner.yml"
 
 
-# run_output_dir = joinpath(rel_path, "exp1")
-# parameter_path = "parameters_nearest_neig_particle_i9_m3_precal_exp2.toml"
+# example usage
+# sbatch scm_runner.sbatch --run_output_dir=/groups/esm/cchristo/climaatmos_scm_calibrations/scm_runs/nearest_neig_particle_i6_m31_exp51 --parameter_path=./optimal_tomls/parameters_nearest_neig_particle_i6_m31_exp51.toml
 
+function main()
+    s = ArgParseSettings()
+    @add_arg_table! s begin
+        "--run_output_dir"
+        help = "Directory to output SCM simulations"
+        required = true
 
-# run_output_dir = joinpath(rel_path, "exp2_i7_m3_ml_mix_exp39")
-# parameter_path = "parameters_nearest_neig_particle_i7_m3_ml_mix_exp39.toml"
+        "--parameter_path"
+        help = "Path to parameter TOML file"
+        required = true
+    end
 
-# run_output_dir = joinpath(rel_path, "exp2_i13_m68_ml_mix_exp39")
-# parameter_path = "parameters_nearest_neig_particle_i13_m68_ml_mix_exp39.toml"
+    args = parse_args(s)
 
-# run_output_dir = joinpath(rel_path, "exp2_i4_m27_ml_mix_exp43")
-# parameter_path = "parameters_nearest_neig_particle_i4_m27_ml_mix_exp43.toml"
+    base_config_path = "./model_config_prognostic_runner.yml"
+    run_output_dir = args["run_output_dir"]
+    parameter_path = args["parameter_path"]
 
-run_output_dir = joinpath(rel_path, "nearest_neig_particle_i8_m121_exp50")
-parameter_path = "./optimal_tomls/parameters_nearest_neig_particle_i8_m121_exp50.toml"
+    all_configs = generate_atmos_configs(base_config_path, parameter_path, run_output_dir)
+    run_all_simluations(all_configs)
+end
 
-
-"""
-base_config_path - path to the base ClimaAtmos config file
-run_output_dir - dir to output scm sims 
-
-"""
 function generate_atmos_configs(base_config_path::String, parameter_path::String, run_output_dir::String)
-
     config_dict = YAML.load_file(base_config_path)
-    # set output
     config_dict["output_dir"] = run_output_dir
     config_dict["toml"] = [parameter_path]
     config_dict["output_default_diagnostics"] = false
@@ -58,7 +58,6 @@ function generate_atmos_configs(base_config_path::String, parameter_path::String
     num_cases = length(ref_paths)
     atmos_configs = map(collect(1:num_cases)) do i
         config = deepcopy(config_dict)
-
         cfsite_info = get_cfsite_info_from_path(ref_paths[i])
         forcing_model = cfsite_info["forcing_model"]
         experiment = cfsite_info["experiment"]
@@ -66,9 +65,7 @@ function generate_atmos_configs(base_config_path::String, parameter_path::String
         cfsite_number = cfsite_info["cfsite_number"]
 
         config["external_forcing_file"] = get_forcing_file(i, ref_paths)
-        # config["cfsite_number"] = get_cfsite_id(i, cfsite_numbers)
         config["cfsite_number"] = string("site", cfsite_number)
-
         config["output_dir"] = joinpath(run_output_dir, "cfsite_$(cfsite_number)_$(forcing_model)_$(experiment)_$(month)")
         config["external_forcing_type"] = get_cfsite_type(i, cfsite_numbers)
         comms_ctx = ClimaComms.SingletonCommsContext()
@@ -77,8 +74,6 @@ function generate_atmos_configs(base_config_path::String, parameter_path::String
 
     return atmos_configs
 end
-
-
 
 addprocs(NUM_WORKERS)
 @everywhere begin
@@ -91,9 +86,7 @@ end
     sol_res = CA.solve_atmos!(simulation)
     if sol_res.ret_code == :simulation_crashed
         !isnothing(sol_res.sol) && sol_res.sol .= eltype(sol_res.sol)(NaN)
-        error(
-            "The ClimaAtmos simulation has crashed. See the stack trace for details.",
-        )
+        error("The ClimaAtmos simulation has crashed. See the stack trace for details.")
     end
 end
 
@@ -102,18 +95,11 @@ function run_all_simluations(atmos_configs)
     println("Number of workers: ", nprocs())
 
     start_time = time()
-
     pmap(run_atmos_simulation, atmos_configs)
-
     end_time = time()
     elapsed_time = (end_time - start_time) / 60.0
 
     @info "Finished all model simulations. Total time taken: $(elapsed_time) minutes."
 end
 
-
-
-
-
-all_configs = generate_atmos_configs(base_config_path, parameter_path, run_output_dir)
-run_all_simluations(all_configs)
+main()
