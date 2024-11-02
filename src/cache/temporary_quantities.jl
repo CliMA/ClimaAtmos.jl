@@ -37,6 +37,7 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_C12 = Fields.Field(C12{FT}, center_space), # ᶜuₕ_mean
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜ∇Φ₃
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³, ᶜ∇Φ³
+        ᶜtemp_C123 = Fields.Field(C123{FT}, center_space),
         ᶜtemp_CT123 = Fields.Field(CT123{FT}, center_space),
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
         ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
@@ -44,6 +45,7 @@ function temporary_quantities(Y, atmos)
             NTuple{n_mass_flux_subdomains(atmos.turbconv_model), CT12{FT}},
             face_space,
         ), # ᶠω¹²ʲs
+        ᶠtemp_C12 = Fields.Field(C12{FT}, face_space),
         ᶠtemp_C123 = Fields.Field(C123{FT}, face_space), # χ₁₂₃
         ᶜtemp_UVWxUVW = Fields.Field(
             typeof(UVW(FT(0), FT(0), FT(0)) * UVW(FT(0), FT(0), FT(0))'),
@@ -68,5 +70,12 @@ function temporary_quantities(Y, atmos)
         ᶜdiffusion_h_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶠtridiagonal_matrix_c3 = similar(Y.f, TridiagonalMatrixRow{C3{FT}}),
+        ghost_buffer = (;
+            ᶜtemp_scalar = Spaces.create_dss_buffer(similar(Y.c, FT)),
+            ᶜtemp_C3 = Spaces.create_dss_buffer(similar(Y.c, C3{FT})),
+            ᶜtemp_C12 = Spaces.create_dss_buffer(similar(Y.c, C12{FT})),
+            ᶜtemp_C123 = Spaces.create_dss_buffer(similar(Y.c, C123{FT})),
+            ᶠtemp_C12 = Spaces.create_dss_buffer(similar(Y.f, C12{FT})),
+        ),
     )
 end

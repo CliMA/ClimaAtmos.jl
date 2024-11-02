@@ -278,7 +278,7 @@ function compute_precipitation_heating!(
 
     # compute full temperature gradient
     @. ᶜ∇T = CT123(ᶜgradᵥ(ᶠinterp(Tₐ(thp, ᶜts))))
-    @. ᶜ∇T += CT123(gradₕ(Tₐ(thp, ᶜts)))
+    @. ᶜ∇T += CT123(wgradₕ(Tₐ(thp, ᶜts)))
     # dot product with effective velocity of precipitation
     # (times q and specific heat)
     @. ᶜSeₜᵖ -= dot(ᶜ∇T, (ᶜu - C123(Geometry.WVector(ᶜwᵣ)))) * cᵥₗ(thp) * ᶜqᵣ

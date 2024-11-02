@@ -13,11 +13,8 @@ const CT3 = Geometry.Contravariant3Vector
 const CT123 = Geometry.Contravariant123Vector
 const UVW = Geometry.UVWVector
 
-const divₕ = Operators.Divergence()
 const wdivₕ = Operators.WeakDivergence()
-const gradₕ = Operators.Gradient()
 const wgradₕ = Operators.WeakGradient()
-const curlₕ = Operators.Curl()
 const wcurlₕ = Operators.WeakCurl()
 
 const ᶜinterp = Operators.InterpolateF2C()
