@@ -1,5 +1,5 @@
 # This jobs takes too long so we use a lower top and coarser vertical resolution
-# z_max: 65000.0
+# z_max: 70000.0
 # z_elem: 31
 # dz_bottom: 50.0
 # rayleigh_sponge: true
