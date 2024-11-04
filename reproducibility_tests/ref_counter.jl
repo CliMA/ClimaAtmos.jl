@@ -1,4 +1,4 @@
-188
+189
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+
+189
+- Deep-atmos configuration is now the default
 
 188
 - Updated dependencies
