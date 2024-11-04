@@ -2,7 +2,7 @@ dt_save_state_to_disk: "3months"
 initial_condition: "IsothermalProfile"
 hyperdiff: false
 # It seems radiative equilibrium needs a larger dz near the top (smaller z_elem) to be stable
-z_max: 65000.0
+z_max: 60000.0
 z_elem: 50
 dt: "3hours"
 dt_rad: "3hours"
