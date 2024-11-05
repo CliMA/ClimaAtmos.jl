@@ -1,5 +1,5 @@
 struct AtmosSimulation{
-    FT <: AbstractFloat,
+    FT,
     S1 <: AbstractString,
     S2 <: AbstractString,
     OW,
