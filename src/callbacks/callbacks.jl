@@ -327,6 +327,8 @@ NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
     Y = u
 
+    # TODO: Use ITime here
+    t = float(t)
     day = floor(Int, t / (60 * 60 * 24))
     sec = floor(Int, t % (60 * 60 * 24))
     @info "Saving state to HDF5 file on day $day second $sec"
@@ -392,15 +394,15 @@ function print_walltime_estimate(integrator)
         n_steps = ceil(Int, (t - t_start) / dt)
         wall_time_ave_per_step = wte.∑Δt_wall / n_steps
         wall_time_ave_per_step_str = time_and_units_str(wall_time_ave_per_step)
-        percent_complete = round((t - t_start) / t_end * 100; digits = 1)
+        percent_complete = round(float(t - t_start) / float(t_end) * 100; digits = 1)
         n_steps_remaining = n_steps_total - n_steps
         wall_time_remaining = wall_time_ave_per_step * n_steps_remaining
         wall_time_remaining_str = time_and_units_str(wall_time_remaining)
         wall_time_total =
             time_and_units_str(wall_time_ave_per_step * n_steps_total)
         wall_time_spent = time_and_units_str(wte.∑Δt_wall)
-        simulation_time = time_and_units_str(Float64(t))
-        es = EfficiencyStats((t_start, t), wte.∑Δt_wall)
+        simulation_time = time_and_units_str(float(t))
+        es = EfficiencyStats((float(t_start), float(t)), wte.∑Δt_wall)
         _sypd = simulated_years_per_day(es)
         _sypd_str = string(round(_sypd; digits = 3))
         sypd = _sypd_str * if _sypd < 0.01

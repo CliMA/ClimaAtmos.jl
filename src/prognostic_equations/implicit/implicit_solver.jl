@@ -459,7 +459,7 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
 
     # Convert dtγ from a Float64 to an FT.
     FT = Spaces.undertype(axes(Y.c))
-    dtγ′ = FT(dtγ)
+    dtγ′ = FT(float(dtγ))
 
     A.dtγ_ref[] = dtγ′
     update_implicit_equation_jacobian!(A, Y, p′, dtγ′)

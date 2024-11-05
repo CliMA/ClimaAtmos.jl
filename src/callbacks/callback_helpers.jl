@@ -31,7 +31,8 @@ end
 function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
     cb! = AtmosCallback(f!, EveryΔt(dt))
     @assert dt ≠ Inf "Adding callback that never gets called!"
-    next_t = Ref{typeof(dt)}()
+    # TODO: Change this
+    next_t = Ref{Any}()
     affect! = function (integrator)
         cb!(integrator)
 
@@ -98,7 +99,7 @@ function n_steps_per_cycle_per_cb(cbs::SciMLBase.CallbackSet, dt)
     return map(atmos_callbacks(cbs)) do cb
         cbf = callback_frequency(cb)
         if cbf isa EveryΔt
-            Int(ceil(cbf.Δt / dt))
+            cbf.Δt / dt
         elseif cbf isa EveryNSteps
             cbf.n
         else

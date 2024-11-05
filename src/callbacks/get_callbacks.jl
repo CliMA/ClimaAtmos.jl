@@ -151,7 +151,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
         diagnostics = [
             CAD.default_diagnostics(
                 atmos_model,
-                FT(time_to_seconds(parsed_args["t_end"]) - t_start),
+                float(ITime(time_to_seconds(parsed_args["t_end"])) - t_start),
                 p.start_date;
                 output_writer = netcdf_writer,
             )...,
@@ -291,13 +291,13 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     end
 
     if !parsed_args["call_cloud_diagnostics_per_stage"]
-        dt_cf = FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
+        dt_cf = ITime(time_to_seconds(parsed_args["dt_cloud_fraction"]))
         callbacks =
             (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
     end
 
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
-        dt_rad = FT(time_to_seconds(parsed_args["dt_rad"]))
+        dt_rad = ITime(time_to_seconds(parsed_args["dt_rad"]))
         # We use Millisecond to support fractional seconds, eg. 0.1
         dt_rad_ms = Dates.Millisecond(dt_rad)
         if parsed_args["dt_save_state_to_disk"] != "Inf" &&
