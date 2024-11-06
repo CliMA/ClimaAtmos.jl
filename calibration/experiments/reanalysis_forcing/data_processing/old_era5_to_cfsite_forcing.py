@@ -6,18 +6,27 @@ tisr_resolution = 86400 # for monthly data; change to 3600 for hourly data
 
 import xarray as xr 
 import numpy as np
-import pandas as pd
+import matplotlib.pyplot as plt
 
-months = [1, 4, 7, 10]
-lat_min = -45
-lat_max = 45
-lon_min = 100
-lon_max = 290
-
-# extract locations and pick sites (lets just look between midlatitudes for now)
+# extract locations and pick sites
 geo = xr.open_dataset("coszen_data.nc")
-surface = xr.open_mfdataset("/Users/julianschmitt/Downloads/era5/monthly/global_surface_20yr.nc")
-pressure = xr.open_mfdataset("/Users/julianschmitt/Downloads/era5/monthly/global_pressure_20yr.nc")
+minsite = 2
+maxsite = 23
+included_sites = geo.where((geo["site"] <=maxsite) & (geo["site"] >= minsite) & (geo["site"] != 16), drop = True)
+lats = included_sites.lat
+lons = included_sites.lon
+sites = included_sites.site
+coszen = included_sites.coszen
+
+# northern hemisphere era5 data 
+nh_column_data = xr.open_dataset("~/Downloads/era5/monthly/NH_monthly_PL.nc")
+nh_surface_data = xr.open_dataset("~/Downloads/era5/monthly/NH_monthly_surface.nc")
+
+
+# southern hemisphere era5 data
+sh_column_data = xr.open_dataset("~/Downloads/era5/monthly/SH_monthly_PL.nc")
+sh_surface_data = xr.open_dataset("~/Downloads/era5/monthly/SH_monthly_surface.nc")
+
 
 
 def get_horizontal_tendencies(lon, lat, column_ds):
@@ -57,18 +66,19 @@ def get_vertical_tendencies(column_ds, var, vertvar = "wa"):
     using vertical advection.
     """
     tntva_trend = []
+    
     # Loop through each pressure level
-    num_levels = column_ds[vertvar].shape[0]  # Number of vertical levels
+    num_levels = column_ds[vertvar].shape[1]  # Number of vertical levels
 
     for i in range(num_levels):
         if i == 0:  # Bottom level (forward difference)
-            tntva = column_ds[vertvar][i] * (column_ds[var][i+1] - column_ds[var][i]) / (column_ds.z[i+1] - column_ds.z[i])
+            tntva = column_ds[vertvar][:, i] * (column_ds[var][:, i+1] - column_ds[var][:, i]) / (column_ds.z[:, i+1] - column_ds.z[:, i])
         
         elif i == num_levels - 1:  # Top level (backward difference)
-            tntva = column_ds[vertvar][i] * (column_ds[var][i] - column_ds[var][i-1]) / (column_ds.z[i] - column_ds.z[i-1])
+            tntva = column_ds[vertvar][:, i] * (column_ds[var][:, i] - column_ds[var][:, i-1]) / (column_ds.z[:, i] - column_ds.z[:, i-1])
         
         else:  # Middle levels (surface_dsed difference)
-            tntva = column_ds[vertvar][i] * (column_ds[var][i+1] - 2 * column_ds[var][i] +  column_ds[var][i-1]) / ((column_ds.z[i+1] - column_ds.z[i-1]))
+            tntva = column_ds[vertvar][:, i] * (column_ds[var][:, i+1] - 2 * column_ds[var][:, i] +  column_ds[var][:, i-1]) / ((column_ds.z[:, i+1] - column_ds.z[:, i-1]))
 
         tntva = tntva.assign_coords(pressure_level=column_ds.pressure_level[i])
 
@@ -78,6 +88,9 @@ def get_vertical_tendencies(column_ds, var, vertvar = "wa"):
     # Convert the trend list to an xarray object, correctly indexed by pressure levels
     tntva_trend = xr.concat(tntva_trend, dim="pressure_level")
     tntva_trend = tntva_trend.assign_coords(pressure_level=column_ds.pressure_level)
+
+    # transpose so time is the first dimension
+    tntva_trend = tntva_trend.transpose("date", "pressure_level")
 
     return tntva_trend
 
@@ -117,7 +130,7 @@ def get_forcing_data(cfsite, column_ds, surface_ds, geo = geo):
     sitedata["z"] = sitedata["zg"] / g # convert geopotential (zg) to height in meters (z)
 
     # remove latitude/longitude dependence - not actually selecting a value on the meridian, just the first value of the array
-    sitedata = sitedata.squeeze()
+    sitedata = sitedata.isel(latitude=0, longitude=0).squeeze()
 
     # calculate tendency terms
     sitedata["wap"] = sitedata["wa"] * sitedata["rho"]
@@ -128,61 +141,23 @@ def get_forcing_data(cfsite, column_ds, surface_ds, geo = geo):
 
 
     # compute horizontal tendencies
-    tntha, tnhusha = get_horizontal_tendencies(lon, lat, column_ds)
+    tntha, tnhusha = get_horizontal_tendencies(lon - 360, lat, column_ds)
 
     sitedata["tntha"] = tntha
     sitedata["tnhusha"] = tnhusha
     
     return sitedata
 
-# process data to region of interest for some computational efficiency (for now)
-pressure = pressure.where((pressure.latitude > lat_min) & (pressure.latitude < lat_max) & (pressure.longitude > lon_min) & (pressure.longitude < lon_max), drop =True)
-surface = surface.where((surface.latitude > lat_min) & (surface.latitude < lat_max) & (surface.longitude > lon_min) & (surface.longitude < lon_max), drop =True)
-geo = geo.where((geo.lat > lat_min) & (geo.lat < lat_max) & (geo.lon > lon_min) & (geo.lon < lon_max), drop =True)
+output_file = 'era5_monthly_forcing.nc'
 
-# monthly time mean
-pressure["date"] = pd.to_datetime(pressure["date"].astype(str), format="%Y%m%d")
-surface["date"] = pd.to_datetime(surface["date"].astype(str), format="%Y%m%d")
-pressure_avg = pressure.groupby("date.month").mean()
-surface_avg = surface.groupby("date.month").mean()
+# for southern hemisphere sites 
+for site_id in range(2, 16): # e.g. 2-15
+    print("Running site: ", site_id)
+    site_data = get_forcing_data(site_id, sh_column_data, sh_surface_data)
+    site_data.to_netcdf(output_file, mode='a', group=f'site{site_id}')
 
-# compute
-surface_avg = surface_avg.load()
-pressure_avg = pressure_avg.load()
-
-# loop through months
-for month in [1, 4, 7, 10]:
-    output_file = f'era5_monthly_forcing_{month}.nc'
-
-    pressure_ds = pressure_avg.sel(month = month, drop = True)
-    surface_ds = surface_avg.sel(month = month, drop = True)
-    geo_ds = geo.sel(date = month, drop=True)
-
-    for site_id in geo_ds.site.values:
-        print("Running site: ", site_id)
-        site_data = get_forcing_data(site_id, pressure_ds, surface_ds, geo_ds)
-        site_data.to_netcdf(output_file, mode='a', group=f'site{site_id}')
-
-
-
-
-
-
-
-
-
-
-
-# output_file = 'era5_monthly_forcing.nc'
-
-# # for southern hemisphere sites 
-# for site_id in range(2, 16): # e.g. 2-15
-#     print("Running site: ", site_id)
-#     site_data = get_forcing_data(site_id, sh_column_data, sh_surface_data)
-#     site_data.to_netcdf(output_file, mode='a', group=f'site{site_id}')
-
-# # for northern hemisphere sites
-# for site_id in range(16, 24):
-#     print("Running site: ", site_id)
-#     site_data = get_forcing_data(site_id, nh_column_data, nh_surface_data)
-#     site_data.to_netcdf(output_file, mode='a', group=f'site{site_id}')
+# for northern hemisphere sites
+for site_id in range(16, 24):
+    print("Running site: ", site_id)
+    site_data = get_forcing_data(site_id, nh_column_data, nh_surface_data)
+    site_data.to_netcdf(output_file, mode='a', group=f'site{site_id}')

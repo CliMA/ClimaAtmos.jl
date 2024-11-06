@@ -33,6 +33,9 @@ Returns a 2D ("z", "t") `Matrix` object.
 function gcm_driven_profile(ds, varname)
     ds[varname][:, :]
 end
+function era5_driven_profile(ds, varname)
+    ds[varname][:]
+end
 
 """
     gcm_driven_reference(ds, varname)
@@ -51,7 +54,7 @@ function gcm_height(ds)
 end
 
 function era5_height(ds)
-    vec(mean(ds["z"][:, :], dims = 2))
+    vec(mean(ds["z"][:], dims = 2))
 end
 
 """

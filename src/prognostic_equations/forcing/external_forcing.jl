@@ -326,7 +326,7 @@ function external_forcing_cache(Y, external_forcing::ERA5Forcing, params)
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_forcing,
-                gcm_driven_profile_tmean(ds.group[cfsite_number], varname),
+                era5_driven_profile(ds.group[cfsite_number], varname),
             )
         end
 
@@ -341,8 +341,8 @@ function external_forcing_cache(Y, external_forcing::ERA5Forcing, params)
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_forcing,
-                gcm_driven_profile_tmean(ds.group[cfsite_number], varname) ./ .-(
-                    gcm_driven_profile_tmean(ds.group[cfsite_number], "rho"),
+                era5_driven_profile(ds.group[cfsite_number], varname) ./ .-(
+                    era5_driven_profile(ds.group[cfsite_number], "rho"),
                 ) ./ CAP.grav(params),
             )
         end

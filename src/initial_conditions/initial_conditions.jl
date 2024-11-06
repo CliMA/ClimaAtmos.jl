@@ -1246,11 +1246,11 @@ end
 function era5_initial_conditions(external_forcing_file, cfsite_number)
     NC.NCDataset(external_forcing_file) do ds
         (  # TODO: Cast to CuVector for GPU compatibility
-            gcm_driven_profile_tmean(ds.group[cfsite_number], "ta"),
-            gcm_driven_profile_tmean(ds.group[cfsite_number], "ua"),
-            gcm_driven_profile_tmean(ds.group[cfsite_number], "va"),
-            gcm_driven_profile_tmean(ds.group[cfsite_number], "hus"),
-            vec(mean(ds.group[cfsite_number]["rho"][:, :], dims = 2)), # convert alpha to rho using rho=1/alpha, take average profile
+            era5_driven_profile(ds.group[cfsite_number], "ta"),
+            era5_driven_profile(ds.group[cfsite_number], "ua"),
+            era5_driven_profile(ds.group[cfsite_number], "va"),
+            era5_driven_profile(ds.group[cfsite_number], "hus"),
+            ds.group[cfsite_number]["rho"][:], # convert alpha to rho using rho=1/alpha, take average profile
         )
     end
 end
