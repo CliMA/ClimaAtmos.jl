@@ -1,6 +1,7 @@
 using Distributed, ClusterManagers
 
 addprocs(SlurmManager(10), t="00:20:00", cpus_per_task=1,exeflags="--project=$(Base.active_project())")
+@info "Launched workers"
 
 @everywhere begin
 	import ClimaCalibrate as CAL
@@ -42,6 +43,7 @@ function process_member_data(simdir::SimDir)
 end
 
 if !isfile(obs_path)
+    import JLD2
     @info "Generating observations"
     atmos_config = CA.AtmosConfig(joinpath(experiment_dir, "model_config.yml"))
     simulation = CA.get_simulation(atmos_config)
@@ -98,6 +100,8 @@ function calibrate(config)
 end
 
 eki = calibrate(config)
+scatter_plot(eki)
+param_versus_iter_plot(eki)
 
 import EnsembleKalmanProcesses as EKP
 import Statistics: var, mean
@@ -156,6 +160,3 @@ function param_versus_iter_plot(eki::EKP.EnsembleKalmanProcess)
     CairoMakie.save(output, f)
     return output
 end
-
-scatter_plot(eki)
-param_versus_iter_plot(eki)
