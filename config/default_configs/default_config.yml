@@ -39,7 +39,7 @@ topography:
   value: "NoWarp"
 mesh_warp_type:
   help: "Sets the interior mesh warp method [`Linear`, `SLEVE`]"
-  value: "Linear"
+  value: "SLEVE"
 sleve_eta:
   help: "If SLEVE coordinates are chosen, sets the `ηₕ` parameter (if z/z_top > ηₕ, no warping is applied)"
   value: 0.7
