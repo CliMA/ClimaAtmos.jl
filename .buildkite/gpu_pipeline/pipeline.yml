@@ -31,6 +31,11 @@ steps:
       - julia --project=perf -e 'using CUDA; CUDA.precompile_runtime()'
       - julia --project=perf -e 'using Pkg; Pkg.status()'
 
+      - echo "--- Instantiate analysis"
+      - julia --project=.buildkite/analysis -e 'using Pkg; Pkg.instantiate(;verbose=true)'
+      - julia --project=.buildkite/analysis -e 'using Pkg; Pkg.precompile()'
+      - julia --project=.buildkite/analysis -e 'using Pkg; Pkg.status()'
+
       - echo "--- Download artifacts"
       - julia --project=examples artifacts/download_artifacts.jl
 
@@ -55,6 +60,9 @@ steps:
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
             --job_id target_gpu_implicit_baroclinic_wave
+
+          - nsys stats --report cuda_gpu_trace target_gpu_implicit_baroclinic_wave/output_active/report.nsys-rep --output target_gpu_implicit_baroclinic_wave/output_active/ --format csv
+          - julia --project=.buildkite/analysis .buildkite/nsight_analysis.jl --out_dir target_gpu_implicit_baroclinic_wave/output_active/
         artifact_paths: "target_gpu_implicit_baroclinic_wave/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -72,6 +80,9 @@ steps:
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_0M.yml
             --job_id gpu_hs_rhoe_equil_55km_nz63_0M
+
+          - nsys stats --report cuda_gpu_trace gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report.nsys-rep --output gpu_hs_rhoe_equil_55km_nz63_0M/output_active/ --format csv
+          - julia --project=.buildkite/analysis .buildkite/nsight_analysis.jl --out_dir gpu_hs_rhoe_equil_55km_nz63_0M/output_active/
         artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -90,6 +101,10 @@ steps:
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_0M.yml
             --job_id gpu_hs_rhoe_equil_55km_nz63_0M_4process
+
+          # TODO: add analysis for all gpu devices
+          - nsys stats --report cuda_gpu_trace gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/report-0.nsys-rep --output gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/ --format csv
+          - julia --project=.buildkite/analysis .buildkite/nsight_analysis.jl --out_dir gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/
         artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -110,6 +125,10 @@ steps:
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
             --job_id target_gpu_implicit_baroclinic_wave_4process
+
+          # TODO: add analysis for all gpu devices
+          - nsys stats --report cuda_gpu_trace target_gpu_implicit_baroclinic_wave_4process/output_active/report-0.nsys-rep --output target_gpu_implicit_baroclinic_wave_4process/output_active/ --format csv
+          - julia --project=.buildkite/analysis .buildkite/nsight_analysis.jl --out_dir target_gpu_implicit_baroclinic_wave_4process/output_active/
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -131,6 +150,9 @@ steps:
             nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_diag_1process/output_active/report julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_diag_1process.yml
             --job_id gpu_aquaplanet_dyamond_diag_1process
+
+          - nsys stats --report cuda_gpu_trace gpu_aquaplanet_dyamond_diag_1process/output_active/report.nsys-rep --output gpu_aquaplanet_dyamond_diag_1process/output_active/ --format csv
+          - julia --project=.buildkite/analysis .buildkite/nsight_analysis.jl --out_dir gpu_aquaplanet_dyamond_diag_1process/output_active/
         artifact_paths: "gpu_aquaplanet_dyamond_diag_1process/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -152,6 +174,9 @@ steps:
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_1process
+
+          - nsys stats --report cuda_gpu_trace gpu_aquaplanet_dyamond_ss_1process/output_active/report.nsys-rep --output gpu_aquaplanet_dyamond_ss_1process/output_active/ --format csv
+          - julia --project=.buildkite/analysis .buildkite/nsight_analysis.jl --out_dir gpu_aquaplanet_dyamond_ss_1process/output_active/
         artifact_paths: "gpu_aquaplanet_dyamond_ss_1process/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -169,9 +194,14 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ss_2process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_ss_2process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_2process
+
+          # TODO: add analysis for all gpu devices
+          - nsys stats --report cuda_gpu_trace gpu_aquaplanet_dyamond_ss_2process/output_active/report-0.nsys-rep --output=gpu_aquaplanet_dyamond_ss_2process/output_active/ --format csv
+          - julia --project=.buildkite/analysis .buildkite/nsight_analysis.jl --out_dir gpu_aquaplanet_dyamond_ss_2process/output_active/
         artifact_paths: "gpu_aquaplanet_dyamond_ss_2process/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -189,9 +219,14 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ss_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_ss_4process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_4process
+
+          # TODO: add analysis for all gpu devices
+          - nsys stats --report cuda_gpu_trace gpu_aquaplanet_dyamond_ss_4process/output_active/report-0.nsys-rep --output gpu_aquaplanet_dyamond_ss_4process/output_active/ --format csv
+          - julia --project=.buildkite/analysis .buildkite/nsight_analysis.jl --out_dir gpu_aquaplanet_dyamond_ss_4process/output_active/
         artifact_paths: "gpu_aquaplanet_dyamond_ss_4process/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -227,9 +262,13 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ws_1process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_ws_1process/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_1process.yml
             --job_id gpu_aquaplanet_dyamond_ws_1process
+
+          - nsys stats --report cuda_gpu_trace gpu_aquaplanet_dyamond_ws_1process/output_active/report.nsys-rep --output gpu_aquaplanet_dyamond_ws_1process/output_active/ --format csv
+          - julia --project=.buildkite/analysis .buildkite/nsight_analysis.jl --out_dir gpu_aquaplanet_dyamond_ws_1process/output_active/
         artifact_paths: "gpu_aquaplanet_dyamond_ws_1process/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -247,9 +286,13 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ws_2process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_ws_2process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_2process.yml
             --job_id gpu_aquaplanet_dyamond_ws_2process
+
+          - nsys stats --report cuda_gpu_trace gpu_aquaplanet_dyamond_ws_2process/output_active/report-0.nsys-rep --output gpu_aquaplanet_dyamond_ws_2process/output_active/ --format csv
+          - julia --project=.buildkite/analysis .buildkite/nsight_analysis.jl --out_dir gpu_aquaplanet_dyamond_ws_2process/output_active/
         artifact_paths: "gpu_aquaplanet_dyamond_ws_2process/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -267,9 +310,13 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ws_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_ws_4process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_4process.yml
             --job_id gpu_aquaplanet_dyamond_ws_4process
+
+          - nsys stats --report cuda_gpu_trace gpu_aquaplanet_dyamond_ws_4process/output_active/report-0.nsys-rep --output gpu_aquaplanet_dyamond_ws_4process/output_active/ --format csv
+          - julia --project=.buildkite/analysis .buildkite/nsight_analysis.jl --out_dir gpu_aquaplanet_dyamond_ws_4process/output_active/
         artifact_paths: "gpu_aquaplanet_dyamond_ws_4process/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -311,6 +358,9 @@ steps:
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${MODEL_CONFIG_PATH}aquaplanet_diagedmf.yml
             --job_id gpu_aquaplanet_diagedmf
+
+          - nsys stats --report cuda_gpu_trace gpu_aquaplanet_diagedmf/output_active/report.nsys-rep --output gpu_aquaplanet_diagedmf/output_active/ --format csv
+          - julia --project=.buildkite/analysis .buildkite/nsight_analysis.jl --out_dir gpu_aquaplanet_diagedmf/output_active/
         artifact_paths: "gpu_aquaplanet_diagedmf/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -345,6 +395,9 @@ steps:
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${MODEL_CONFIG_PATH}aquaplanet_progedmf.yml
             --job_id gpu_aquaplanet_progedmf
+
+          - nsys stats --report cuda_gpu_trace gpu_aquaplanet_progedmf/output_active/report.nsys-rep --output gpu_aquaplanet_progedmf/output_active/ --format csv
+          - julia --project=.buildkite/analysis .buildkite/nsight_analysis.jl --out_dir gpu_aquaplanet_progedmf/output_active/
         artifact_paths: "gpu_aquaplanet_progedmf/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"

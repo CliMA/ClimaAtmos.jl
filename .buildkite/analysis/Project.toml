@@ -1,0 +1,6 @@
+[deps]
+ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
+VegaLite = "112f6efa-9a02-5b7d-90c0-432ed331239a"
