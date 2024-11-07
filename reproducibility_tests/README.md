@@ -18,14 +18,37 @@ Our solution to dealing with failure modes is by providing users with two workfl
    - [Update mse tables](#How-to-update-mse-tables)
 
  - A comparable reference dataset does **not** exists:
-   - Increment the reference counter in `reproducibility_tests/ref_counter.jl`. This triggers a "self-reference".
+   - Increment the reference counter in `reproducibility_tests/ref_counter.jl`.
    - [Update mse tables](#How-to-update-mse-tables) _all to zero values_
 
 At this moment, it's crucial to mention several important points:
 
- - When a reference dataset does not exist, we still perform a reproducibility test so that we continuously exercise the testing infrastructure. However, we compare the solution dataset with itself (which we call a "self-reference"). Therefore, _all reproducibility tests for all jobs will pass_ (no matter what the results look like) when the reference counter is incremented. So, it is important to review the quality of the results when the reference counter is incremented.
+ - When a reference dataset does not exist, we still perform a reproducibility test so that we continuously exercise the testing infrastructure. However, we compare the solution dataset with itself. Therefore, _all reproducibility tests for all jobs will pass_ (no matter what the results look like) when the reference counter is incremented. So, it is important to review the quality of the results when the reference counter is incremented.
 
- - Every time the reference counter is incremented, data from that PR is saved onto Caltech's central cluster. And that solution's dataset is the new reference dataset that all future PRs are compared against (until the reference counter is incremented again).
+ - When a PR passes CI on buildkite while in the github merge queue, or when a PR lands on the main branch, data from the HEAD commit of that PR is saved onto Caltech's central cluster. And that solution's dataset is the new reference dataset that all future PRs are compared against (until the reference counter is incremented again). So, a PR will have some number of comparable references (including zero). For example, if we line up pull requests in the order that they are merged:
+
+```
+0186_73hasd ...
+
+0187_73hasd # PR 1000 has 0 comparable references
+0187_fgsae7 # PR 2309 has 1 comparable references
+0187_sdf63a # PR 1412 has 2 comparable references
+
+0188_73hasd # PR 2359 has 0 comparable references
+
+0189_sdf63a # PR 9346 has 0 comparable references
+0189_73hasd # PR 3523 has 1 comparable references
+...
+```
+
+Note: We currently do not prepend the folder names by the reference counter, however, we will make this improvement soon.
+
+## Allowing flaky tests
+
+Users can add the flag `test_broken_report_flakiness` to the `test_mse.jl` script: `julia --project=examples reproducibility_tests/test_mse.jl --test_broken_report_flakiness true`, which will have the following behavior:
+
+ - If the test is not reproducible (i.e., flaky) when compared against `N` comparable references, then the test will pass and be reported as broken.
+ - If the test is reproducible when compared against `N` comparable references, then the test will fail `@test_broken`, and users will be asked to fix the broken test. At which point you can remove the `--test_broken_report_flakiness true` flag from that particular job, reinforcing a strict reproducibility constraint.
 
 ## How to update mse tables
 
@@ -72,7 +95,7 @@ Reprodicibility tests are performed at the end of `examples/hybrid/driver.jl`, a
  0) Run a simulation, with a particular `job_id`, to the final time.
  1) Load a dictionary, `all_best_mse`, of previous "best" mean-squared errors from `mse_tables.jl` and extract the mean squared errors for the given `job_id` (store in job-specific dictionary, `best_mse`).
  2) Export the solution (a `FieldVector`) at the final simulation time to an `NCDataset` file.
- 3) Compute the errors between the exported solution and the exported solution from the reference `NCDataset` file (which is saved in a dedicated folder on the Caltech Central cluster) and save into a dictionary, called `computed_mse`.
+ 3) Compute the errors between the exported solution and the exported solution from the reference `NCDataset` files (which are saved in a dedicated folders on the Caltech Central cluster) and save into a dictionary, called `computed_mse`.
  4) Export this dictionary (`computed_mse`) to the output folder
  5) Test that `computed_mse` is no worse than `best_mse` (determines if reproducibility test passes or not).
 
@@ -89,12 +112,12 @@ To think about tracking which dataset to compare against, it's helpful to consid
 Reference            hash of          hash of
  counter             merged           reference
 ref_counter.jl       commit            commit
-   1             =>  "V50XdC"  =>    "V50XdC" # Self reference
+   1             =>  "V50XdC"  =>    "V50XdC" # no comparable references
    1             =>  "lBKsAn"  =>    "V50XdC"
    1             =>  "Eh2ToX"  =>    "V50XdC"
-   2             =>  "bnMLxi"  =>    "bnMLxi" # Self reference
+   2             =>  "bnMLxi"  =>    "bnMLxi" # no comparable references
    2             =>  "Jjx16f"  =>    "bnMLxi"
-   3             =>  "dHkJqc"  =>    "dHkJqc" # Self reference
+   3             =>  "dHkJqc"  =>    "dHkJqc" # no comparable references
    3             =>  "SIgf1i"  =>    "dHkJqc"
    3             =>  "vTsCoY"  =>    "dHkJqc"
    3             =>  "VvCzAH"  =>    "dHkJqc"
@@ -102,15 +125,16 @@ ref_counter.jl       commit            commit
 
 The way this works is:
 
- 1) We start off with a self reference: print a new reference
+ 1) We start off with no comparable references: print a new reference
     counter in the `print new reference counter` job.
 
  2) (PR author) copy-paste counter into `reproducibility_tests/ref_counter.jl`
 
  3) Upon next CI run, before performing CI test,
-    we check if the counter indicates a self-reference by
-    checking if `reproducibility_tests/ref_counter.jl` in the PR
-    matches (e.g.,) `aRsVoY/ref_counter.jl` in the last
-    merged commit (on central). If yes, then it's a self
-    reference, if not, then we look-up the dataset based
-    on the counter.
+    we check if the counter indicates the existence of comparable
+    references by checking if `reproducibility_tests/ref_counter.jl`
+    in the PR matches (for example) `aRsVoY/ref_counter.jl` in the last
+    merged commit (on central). If there are comparable references,
+    we compare against them and require they pass our
+    reproducibility tests, if not, then we throw a warning to let
+    users know that they should visually verify the simulation results.

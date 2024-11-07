@@ -2,8 +2,8 @@ import OrderedCollections
 import JSON
 
 # Get cases from JobIDs in mse_tables file:
-include(joinpath(@__DIR__, "self_reference_or_path.jl"))
-self_reference = self_reference_or_path() == :self_reference
+include(joinpath(@__DIR__, "latest_comparable_paths.jl"))
+paths = latest_comparable_paths()
 
 all_lines = readlines(joinpath(@__DIR__, "mse_tables.jl"))
 lines = deepcopy(all_lines)
@@ -14,21 +14,31 @@ job_ids = getindex.(split.(lines, "\""), 2)
 
 include(joinpath(@__DIR__, "mse_tables.jl"))
 
-percent_reduction_mse = Dict()
-
 computed_mse = OrderedCollections.OrderedDict()
 files_skipped = OrderedCollections.OrderedDict()
+is_mse_file(x) = startswith(basename(x), "computed_mse") && endswith(x, ".json")
 for job_id in job_ids
-    filename = joinpath(job_id, "output_active/computed_mse.json")
-    if !isfile(filename)
-        @warn "File $filename skipped"
-        files_skipped[job_id] = true
-        continue
-    end
-    jsonfile =
-        JSON.parsefile(filename; dicttype = OrderedCollections.OrderedDict)
     files_skipped[job_id] = false
-    computed_mse[job_id] = jsonfile
+end
+
+for job_id in job_ids
+    all_filenames = readdir(joinpath(job_id, "output_active"); join = true)
+    mse_filenames = filter(is_mse_file, all_filenames)
+    @info "mse_filenames: $mse_filenames"
+    for filename in mse_filenames
+        if !isfile(filename)
+            @warn "File $filename skipped"
+            files_skipped[job_id] = true
+            continue
+        end
+        if !haskey(computed_mse, job_id)
+            jsonfile = JSON.parsefile(
+                filename;
+                dicttype = OrderedCollections.OrderedDict,
+            )
+            computed_mse[job_id] = jsonfile
+        end
+    end
 end
 
 println("#################################")
@@ -46,7 +56,9 @@ for job_id in keys(computed_mse)
                 "all_best_mse[\"$job_id\"][$(var)] = \"$(computed_mse[job_id][var])\"",
             )
         else
-            self_reference && (computed_mse[job_id][var] = 0)
+            # It's easier to update the reference counter, rather than updating
+            # the mse tables, so let's always print zeros:
+            computed_mse[job_id][var] = 0
             println(
                 "all_best_mse[\"$job_id\"][$(var)] = $(computed_mse[job_id][var])",
             )
@@ -60,47 +72,32 @@ println("#################################")
 println("#################################")
 println("#################################")
 
-if self_reference
+if isempty(paths)
     @warn string(
         "The printed `all_best_mse` values have",
-        "been set to zero, due to self-reference,",
+        "been set to zero, due to no comparable references,",
         "for copy-paste convenience.",
     )
 end
 
 # Cleanup
 for job_id in job_ids
-    rm(joinpath(job_id, "computed_mse.json"); force = true)
+    all_files = readdir(job_id)
+    mse_filenames = filter(is_mse_file, all_files)
+    for f in mse_filenames
+        rm(f; force = true)
+    end
 end
-
-#####
-##### min percentage reduction of mse across cases
-#####
 
 println("-- DO NOT COPY --")
 
 for job_id in keys(computed_mse)
-    percent_reduction_mse[job_id] = 0
     for var in keys(computed_mse[job_id])
         if haskey(all_best_mse[job_id], var)
             all_best_mse[job_id][var] isa Real || continue # skip if "NA"
             computed_mse[job_id][var] isa Real || continue # skip if "NA"
-            percent_reduction_mse[job_id] = min(
-                percent_reduction_mse[job_id],
-                (all_best_mse[job_id][var] - computed_mse[job_id][var]) /
-                all_best_mse[job_id][var] * 100,
-            )
-        else
-            percent_reduction_mse[job_id] = "NA"
         end
     end
-end
-
-for job_id in keys(percent_reduction_mse)
-    @info "percent_reduction_mse[$job_id] = $(percent_reduction_mse[job_id])"
-end
-if !isempty(percent_reduction_mse)
-    @info "min mse reduction (%) over all cases = $(min(values(percent_reduction_mse)...))"
 end
 
 if any(values(files_skipped))

@@ -148,15 +148,15 @@ if ClimaComms.iamroot(config.comms_ctx)
         joinpath(
             pkgdir(CA),
             "reproducibility_tests",
-            "self_reference_or_path.jl",
+            "latest_comparable_paths.jl",
         ),
     )
     @info "Plotting"
-    path = self_reference_or_path() # __build__ path (not job path)
-    if path == :self_reference
+    paths = latest_comparable_paths() # __build__ path (not job path)
+    if isempty(paths)
         make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
     else
-        main_job_path = joinpath(path, reference_job_id)
+        main_job_path = joinpath(first(paths), reference_job_id)
         nc_dir = joinpath(main_job_path, "nc_files")
         if ispath(nc_dir)
             @info "nc_dir exists"

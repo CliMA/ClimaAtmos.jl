@@ -24,12 +24,12 @@ if isempty(path) # no folders found
 elseif !isfile(joinpath(path, "ref_counter.jl")) # no file found
     @warn "file `$(joinpath(path, "ref_counter.jl"))` not found"
     @info "readdir(path) = `$(readdir(path))`"
-    # This may be the very first self-reference,
+    # We may be rebooting the reproducibility tests (no comparable references),
     # in which case, verify, allow, and warn.
     ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl")
     ref_counter_PR = parse(Int, first(readlines(ref_counter_file_PR)))
-    if ref_counter_PR == 1 # The very first self-reference
-        @warn "Assuming (very first) self reference"
+    if ref_counter_PR == 1 # Absolutely no comparable references
+        @warn "Assuming 0 comparable references"
         ref_counter = 1
     end
 else
