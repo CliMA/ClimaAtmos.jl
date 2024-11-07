@@ -33,6 +33,7 @@ makedocs(;
         "Diagnostic EDMF Equations" => "diagnostic_edmf_equations.md",
         "Gravity Wave Drag Parameterizations" => "gravity_wave.md",
         "Ocean Surface Albedo Parameterization" => "surface_albedo.md",
+        "Topography Representation" => "topography.md",
         "Tracers" => "tracers.md",
         "Radiative Equilibrium" => "radiative_equilibrium.md",
         "Restarts and checkpoints" => "restarts.md",
