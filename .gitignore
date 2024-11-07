@@ -49,3 +49,4 @@ calibration/test/Manifest.toml
 
 # misc
 .DS_Store
+*.out

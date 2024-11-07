@@ -7,26 +7,43 @@ import Interpolations
 
 
 function get_era5_calibration_library()
-    ref_paths = []
+    ref_paths, months, sites = [], [], []
     for month in [1,4,7,10]
         for cfsite in 2:23
-            filename = "era5_cfsite_obs_data.nc"
+            filename = "../data/era5_cfsite_obs_data.nc"
             site = "site$cfsite"
-            push!(ref_paths, (filename, month, site))
+            push!(ref_paths, filename)
+            push!(months, month)
+            push!(sites, site)
         end
     end
+    ref_paths, months, sites
 end
 
-norm_factors_dict = JLD2.load("norm_factors_dict.jld2")["norm_factors_dict"]
+function get_forcing_file(i, months)
+    return "../data/era5_monthly_forcing_$(months[i]).nc"
+end
+
+function get_cfsite_id(i, cfsites)
+    return cfsites[i]
+end
+
+function get_batch_indicies_in_iteration(iteration, output_dir::AbstractString)
+    iter_path = CAL.path_to_iteration(output_dir, iteration)
+    eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
+    return EKP.get_current_minibatch(eki)
+end
+
+norm_factors_dict = JLD2.load("../data/norm_factors_dict.jld2")["norm_factors_dict"]
 
 function get_obs(
     filename::String,
     month::Integer,
     site::String,
-    y_names::Vector{String},
-    normalize::Bool,
-    norm_factors_dict::Dict{String, Tuple{Float64, Float64}},
-    z_scm::Vector{FT},
+    y_names::Vector{String};
+    normalize::Bool = true,
+    norm_factors_dict = norm_factors_dict,
+    z_scm::Vector{FT} = z_scm,
     log_vars::Vector{String} = ["clw"],
 ) where {FT <: AbstractFloat}
     y = []
@@ -43,7 +60,8 @@ function get_obs(
             push!(y, var_)
         end
     end
-    return vcat(y...)
+    obs_data = vcat(y...)
+    return obs_data
 end
 
 

@@ -2,8 +2,9 @@
 using Distributed, ClusterManagers
 project=dirname(Base.active_project())
 cd(project)
-addprocs(SlurmManager(1), t="01:30:00", cpus_per_task=3,exeflags=["--project=$project", "-p", "3"])
-addprocs(SlurmManager(5),  t="01:30:00", cpus_per_task=3,exeflags=["--project=$project", "-p", "3"])
+# addprocs(SlurmManager(1), t="01:30:00", cpus_per_task=3,exeflags=["--project=$project", "-p", "3"])
+# addprocs(SlurmManager(5),  t="01:30:00", cpus_per_task=3,exeflags=["--project=$project", "-p", "3"])
+addprocs(SlurmManager(100),  t="04:30:00", cpus_per_task=1,exeflags=["--project=$project"], mem_per_cpu=8000)
 
 @everywhere begin
     import ClimaCalibrate as CAL
@@ -16,13 +17,13 @@ addprocs(SlurmManager(5),  t="01:30:00", cpus_per_task=3,exeflags=["--project=$p
 
     import ClimaComms
     ENV["CLIMACOMMS_CONTEXT"] = "SINGLETON"
-
-    include("helper_funcs.jl")
-    include("observation_map.jl")
+    using Revise
+    includet("helper_funcs.jl")
+    includet("observation_map.jl")
     # include("get_les_metadata.jl")
     experiment_dir = dirname(Base.active_project())
     model_interface = joinpath(experiment_dir, "model_interface.jl")
-    include(model_interface)
+    includet(model_interface)
     experiment_config =
         YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
@@ -61,26 +62,25 @@ JLD2.jldsave(
     norm_factors_dict = norm_factors_by_var,
 )
 
-### get LES obs (Y) and norm factors
+### get ERA5 obs (Y) and norm factors
 @everywhere begin
     #include("get_les_metadata.jl")
-    ref_paths = get_era5_calibration_library()
+    ref_paths, months, sites = get_era5_calibration_library()
     obs_vec = []
 
-    for ref_path in ref_paths
+    for i in 1:length(ref_paths)
         
-        y_obs, Σ_obs, norm_vec_obs = get_obs(
-            ref_path,
-            experiment_config["y_var_names"],
-            zc_model;
-            ti = experiment_config["y_t_start_sec"],
-            tf = experiment_config["y_t_end_sec"],
+        y_obs = get_obs(
+            ref_paths[i],
+            months[i],
+            sites[i],
+            experiment_config["y_var_names"];
+            normalize = true,
             norm_factors_dict = norm_factors_by_var,
-            z_score_norm = true,
+            z_scm = zc_model,
             log_vars = log_vars,
-            Σ_const = const_noise_by_var,
-            Σ_scaling = "const",
         )
+        Σ_obs = I(length(y_obs))
 
         push!(
             obs_vec,
@@ -88,7 +88,7 @@ JLD2.jldsave(
                 Dict(
                     "samples" => y_obs,
                     "covariances" => Σ_obs,
-                    "names" => split(ref_path, "/")[end],
+                    "names" => join([months[1], sites[1]], "_"),
                 ),
             ),
         )
@@ -133,6 +133,7 @@ function run_iteration(ensemble_size, output_dir, iter)
     return eki
 end
 
-for i in 1:n_iterations
+for i in 0:n_iterations
     eki = run_iteration(ensemble_size, output_dir, i)
 end
+println("Finished!")

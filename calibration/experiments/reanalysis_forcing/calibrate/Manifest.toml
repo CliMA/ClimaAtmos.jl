@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.6"
+julia_version = "1.10.5"
 manifest_format = "2.0"
-project_hash = "628891daf5cd263ad8d4ae32f0c20e2fa6976460"
+project_hash = "524435280a1fd3036a89e605003b43ff65022105"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "eea5d80188827b35333801ef97a40c2ed653b081"
@@ -478,6 +478,12 @@ version = "0.22.3"
     [deps.CloudMicrophysics.weakdeps]
     DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
     MLJ = "add582a8-e3ab-11e8-2d5e-e98b27df1bc7"
+
+[[deps.ClusterManagers]]
+deps = ["Distributed", "Logging", "Pkg", "Sockets"]
+git-tree-sha1 = "6a678b98d5ea4d2773e92c7ae607cf7371043684"
+uuid = "34f1f09b-3a8b-5176-ab39-66d58a4d544e"
+version = "0.4.6"
 
 [[deps.CodeTracking]]
 deps = ["InteractiveUtils", "UUIDs"]
