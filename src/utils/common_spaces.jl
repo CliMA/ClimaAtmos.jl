@@ -75,7 +75,7 @@ function make_column_spaces(
         z_mesh,
     )
     cspace = Spaces.CenterFiniteDifferenceSpace(z_topology)
-    fspace = Spaces.CenterFiniteDifferenceSpace(cspace)
+    fspace = Spaces.FaceFiniteDifferenceSpace(cspace)
     return (cspace, fspace)
 end
 
