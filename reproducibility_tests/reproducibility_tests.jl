@@ -1,41 +1,28 @@
 import JSON
-import ClimaCore.Fields as Fields
+import ClimaCore.Fields
+import ClimaCore.InputOutput
 include(joinpath(@__DIR__, "compute_mse.jl"))
 
-function perform_reproducibility_tests(
+function export_reproducibility_results(
+    comms_ctx,
     job_id::String,
     Y_last::Fields.FieldVector,
-    all_best_mse::AbstractDict,
     output_dir::String,
 )
     # This is helpful for starting up new tables
-    @info "Job-specific MSE table format:"
-    println("all_best_mse[\"$job_id\"] = OrderedCollections.OrderedDict()")
+    @info "Comparing variables:"
     for prop_chain in Fields.property_chains(Y_last)
-        println("all_best_mse[\"$job_id\"][$prop_chain] = 0.0")
+        println("   $prop_chain")
     end
-    # Extract best mse for this job:
-    best_mse = all_best_mse[job_id]
 
-    ds_filename_computed = joinpath(output_dir, "prog_state.nc")
+    ds_filename_computed = joinpath(output_dir, "prog_state.hdf5")
 
-    function process_name(s::AbstractString)
-        # "c_ρ", "c_ρe", "c_uₕ_1", "c_uₕ_2", "f_w_1", "c_sgs⁰_ρatke"
-        s = replace(s, "components_data_" => "")
-        s = replace(s, "ₕ" => "_h")
-        s = replace(s, "ρ" => "rho")
-        s = replace(s, "⁰" => "_0")
-        return s
-    end
-    varname(pc::Tuple) = process_name(join(pc, "_"))
+    hdfwriter = InputOutput.HDF5Writer(ds_filename_computed, comms_ctx)
+    InputOutput.write!(hdfwriter, Y_last, "Y")
+    Base.close(hdfwriter)
 
-    export_nc(Y_last; nc_filename = ds_filename_computed, varname)
-    (computed_mses, paths) = reproducibility_test(;
-        job_id,
-        reference_mse = best_mse,
-        ds_filename_computed,
-        varname,
-    )
+    (computed_mses, paths) =
+        reproducibility_results(config.comms_ctx; job_id, ds_filename_computed)
 
     for (computed_mse, path) in zip(computed_mses, paths)
         commit_hash = basename(path)

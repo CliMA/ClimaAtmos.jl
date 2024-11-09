@@ -5,14 +5,8 @@ import JSON
 include(joinpath(@__DIR__, "latest_comparable_paths.jl"))
 paths = latest_comparable_paths()
 
-all_lines = readlines(joinpath(@__DIR__, "mse_tables.jl"))
-lines = deepcopy(all_lines)
-filter!(x -> occursin("] = OrderedCollections", x), lines)
-job_ids = getindex.(split.(lines, "\""), 2)
-@assert count(x -> occursin("OrderedDict", x), all_lines) == length(job_ids) + 1
-@assert length(job_ids) ≠ 0 # safety net
-
 include(joinpath(@__DIR__, "mse_tables.jl"))
+job_ids = reproducibility_test_job_ids
 
 computed_mse = OrderedCollections.OrderedDict()
 files_skipped = OrderedCollections.OrderedDict()
@@ -21,10 +15,11 @@ for job_id in job_ids
     files_skipped[job_id] = false
 end
 
+@info "length(job_ids) = $(length(job_ids))"
 for job_id in job_ids
     all_filenames = readdir(joinpath(job_id, "output_active"); join = true)
     mse_filenames = filter(is_mse_file, all_filenames)
-    @info "mse_filenames: $mse_filenames"
+    isempty(mse_filenames) || @info "mse_filenames: $mse_filenames"
     for filename in mse_filenames
         if !isfile(filename)
             @warn "File $filename skipped"
@@ -41,26 +36,22 @@ for job_id in job_ids
     end
 end
 
-println("#################################")
-println("################################# MSE tables")
-println("#################################")
+println("################################# Computed MSEs")
 println("#! format: off")
 println("#")
 
-println("all_best_mse = OrderedCollections.OrderedDict()\n#")
 for job_id in keys(computed_mse)
-    println("all_best_mse[\"$job_id\"] = OrderedCollections.OrderedDict()")
     for var in keys(computed_mse[job_id])
         if computed_mse[job_id][var] == "NA"
             println(
-                "all_best_mse[\"$job_id\"][$(var)] = \"$(computed_mse[job_id][var])\"",
+                "mse_dict[\"$job_id\"][$(var)] = \"$(computed_mse[job_id][var])\"",
             )
         else
             # It's easier to update the reference counter, rather than updating
             # the mse tables, so let's always print zeros:
             computed_mse[job_id][var] = 0
             println(
-                "all_best_mse[\"$job_id\"][$(var)] = $(computed_mse[job_id][var])",
+                "mse_dict[\"$job_id\"][$(var)] = $(computed_mse[job_id][var])",
             )
         end
     end
@@ -69,16 +60,8 @@ end
 println("#! format: on")
 
 println("#################################")
-println("#################################")
-println("#################################")
 
-if isempty(paths)
-    @warn string(
-        "The printed `all_best_mse` values have",
-        "been set to zero, due to no comparable references,",
-        "for copy-paste convenience.",
-    )
-end
+isempty(paths) && @warn string("No comparable references.")
 
 # Cleanup
 for job_id in job_ids
@@ -90,15 +73,6 @@ for job_id in job_ids
 end
 
 println("-- DO NOT COPY --")
-
-for job_id in keys(computed_mse)
-    for var in keys(computed_mse[job_id])
-        if haskey(all_best_mse[job_id], var)
-            all_best_mse[job_id][var] isa Real || continue # skip if "NA"
-            computed_mse[job_id][var] isa Real || continue # skip if "NA"
-        end
-    end
-end
 
 if any(values(files_skipped))
     @info "Skipped files:"

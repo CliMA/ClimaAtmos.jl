@@ -2,12 +2,8 @@
 include(joinpath(@__DIR__, "latest_comparable_paths.jl"))
 paths = latest_comparable_paths()
 
-all_lines = readlines(joinpath(@__DIR__, "mse_tables.jl"))
-lines = deepcopy(all_lines)
-filter!(x -> occursin("] = OrderedCollections", x), lines)
-job_ids = getindex.(split.(lines, "\""), 2)
-@assert count(x -> occursin("OrderedDict", x), all_lines) == length(job_ids) + 1
-@assert length(job_ids) ≠ 0 # safety net
+include(joinpath(@__DIR__, "mse_tables.jl"))
+job_ids = reproducibility_test_job_ids
 
 # Note: cluster_data_prefix is also defined in compute_mse.jl
 cluster_data_prefix = "/central/scratch/esm/slurm-buildkite/climaatmos-main"
@@ -21,7 +17,7 @@ if buildkite_ci
     @info "commit = $(commit)"
 
     using Glob
-    @show readdir(joinpath(@__DIR__, ".."))
+    # @show readdir(joinpath(@__DIR__, ".."))
     # if a contributor manually merged, we still want to move data
     # from scratch to `cluster_data_prefix`. So, let's also try moving
     # data if this is running on the main branch.

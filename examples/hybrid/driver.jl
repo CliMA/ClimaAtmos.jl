@@ -87,8 +87,8 @@ end
 include(
     joinpath(@__DIR__, "..", "..", "reproducibility_tests", "mse_tables.jl"),
 )
-if config.parsed_args["reproducibility_test"]
-    # Test results against main branch
+if get(ENV, "test_reproducibility", "false") == "true"
+    # Export reproducibility results, to later test against the main branch
     include(
         joinpath(
             @__DIR__,
@@ -98,17 +98,10 @@ if config.parsed_args["reproducibility_test"]
             "reproducibility_tests.jl",
         ),
     )
-    @testset "Test reproducibility table entries" begin
-        mse_keys = sort(collect(keys(all_best_mse[simulation.job_id])))
-        pcs = collect(Fields.property_chains(sol.u[end]))
-        for prop_chain in mse_keys
-            @test prop_chain in pcs
-        end
-    end
-    perform_reproducibility_tests(
+    export_reproducibility_results(
+        config.comms_ctx,
         simulation.job_id,
         sol.u[end],
-        all_best_mse,
         simulation.output_dir,
     )
 end
