@@ -144,6 +144,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
           --job_id single_column_hydrostatic_balance_ft64
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id single_column_hydrostatic_balance_ft64
+          --out_dir single_column_hydrostatic_balance_ft64/output_active
         artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
 
   - group: "Box Examples"
@@ -154,6 +158,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/box_hydrostatic_balance_rhoe.yml
           --job_id box_hydrostatic_balance_rhoe
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id box_hydrostatic_balance_rhoe
+          --out_dir box_hydrostatic_balance_rhoe/output_active
         artifact_paths: "box_hydrostatic_balance_rhoe/output_active/*"
 
       - label: ":computer: 3D density current"
@@ -161,6 +169,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/box_density_current_test.yml
           --job_id box_density_current_test
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id box_density_current_test
+          --out_dir box_density_current_test/output_active
         artifact_paths: "box_density_current_test/output_active/*"
 
       - label: ":computer: Box (ρe_tot) rcemipii with diagnostic edmf"
@@ -168,6 +180,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/rcemipii_box_diagnostic_edmfx.yml
           --job_id rcemipii_box_diagnostic_edmfx
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id rcemipii_box_diagnostic_edmfx
+          --out_dir rcemipii_box_diagnostic_edmfx/output_active
         artifact_paths: "rcemipii_box_diagnostic_edmfx/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -177,6 +193,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/les_isdac_box.yml
           --job_id les_isdac_box
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id les_isdac_box
+          --out_dir les_isdac_box/output_active
         artifact_paths: "les_isdac_box/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -192,6 +212,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/plane_agnesi_mountain_test_uniform.yml
           --job_id plane_agnesi_mountain_test_uniform
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id plane_agnesi_mountain_test_uniform
+          --out_dir plane_agnesi_mountain_test_uniform/output_active
         artifact_paths: "plane_agnesi_mountain_test_uniform/output_active/*"
 
       - label: ":computer: Agnesi linear hydrostatic mountain experiment (stretched)"
@@ -199,6 +223,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/plane_agnesi_mountain_test_stretched.yml
           --job_id plane_agnesi_mountain_test_stretched
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id plane_agnesi_mountain_test_stretched
+          --out_dir plane_agnesi_mountain_test_stretched/output_active
         artifact_paths: "plane_agnesi_mountain_test_stretched/output_active/*"
 
       - label: ":computer: Density current experiment"
@@ -206,6 +234,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/plane_density_current_test.yml
           --job_id plane_density_current_test
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id plane_density_current_test
+          --out_dir plane_density_current_test/output_active
         artifact_paths: "plane_density_current_test/output_active/*"
 
 
@@ -238,6 +270,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_hydrostatic_balance_rhoe_ft64.yml
           --job_id sphere_hydrostatic_balance_rhoe_ft64
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id sphere_hydrostatic_balance_rhoe_ft64
+          --out_dir sphere_hydrostatic_balance_rhoe_ft64/output_active
         artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -248,6 +284,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe.yml
           --job_id sphere_baroclinic_wave_rhoe
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id sphere_baroclinic_wave_rhoe
+          --out_dir sphere_baroclinic_wave_rhoe/output_active
         artifact_paths: "sphere_baroclinic_wave_rhoe/output_active/*"
 
       - label: ":computer: no lim baroclinic wave (ρe) equilmoist"
@@ -294,6 +334,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_hightop.yml
           --job_id sphere_held_suarez_rhoe_hightop
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id sphere_held_suarez_rhoe_hightop
+          --out_dir sphere_held_suarez_rhoe_hightop/output_active
         artifact_paths: "sphere_held_suarez_rhoe_hightop/output_active/*"
 
       - label: ":computer: no lim held suarez (ρe) equilmoist hightop sponge"
@@ -344,6 +388,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_nonequilmoist_allsky.yml
           --job_id sphere_aquaplanet_rhoe_nonequilmoist_allsky
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id sphere_aquaplanet_rhoe_nonequilmoist_allsky
+          --out_dir sphere_aquaplanet_rhoe_nonequilmoist_allsky/output_active
         artifact_paths: "sphere_aquaplanet_rhoe_nonequilmoist_allsky/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -353,6 +401,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean.yml
           --job_id aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean
+          --out_dir aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean/output_active
         artifact_paths: "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -362,6 +414,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean_ft64.yml
           --job_id aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean_ft64
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean_ft64
+          --out_dir aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean_ft64/output_active
         artifact_paths: "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean_ft64/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -371,6 +427,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/rcemipii_sphere_diagnostic_edmfx.yml
           --job_id rcemipii_sphere_diagnostic_edmfx
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id rcemipii_sphere_diagnostic_edmfx
+          --out_dir rcemipii_sphere_diagnostic_edmfx/output_active
         artifact_paths: "rcemipii_sphere_diagnostic_edmfx/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -383,6 +443,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_topography_dcmip_rs.yml
           --job_id sphere_baroclinic_wave_rhoe_topography_dcmip_rs
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id sphere_baroclinic_wave_rhoe_topography_dcmip_rs
+          --out_dir sphere_baroclinic_wave_rhoe_topography_dcmip_rs/output_active
         artifact_paths: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs/output_active/*"
 
       - label: ":computer: held suarez (ρe) topography (dcmip)"
@@ -390,6 +454,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_topography_dcmip.yml
           --job_id sphere_held_suarez_rhoe_topography_dcmip
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id sphere_held_suarez_rhoe_topography_dcmip
+          --out_dir sphere_held_suarez_rhoe_topography_dcmip/output_active
         artifact_paths: "sphere_held_suarez_rhoe_topography_dcmip/output_active/*"
 
       - label: ":computer: held suarez (ρe) equilmoist topography (dcmip)"
@@ -397,6 +465,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_topography_dcmip.yml
           --job_id sphere_held_suarez_rhoe_equilmoist_topography_dcmip
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id sphere_held_suarez_rhoe_equilmoist_topography_dcmip
+          --out_dir sphere_held_suarez_rhoe_equilmoist_topography_dcmip/output_active
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_topography_dcmip/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -406,6 +478,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200.yml
           --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200
+          --out_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200/output_active
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200/output_active/*"
 
       - label: ":computer: Diagnostic Earth surface elevation spectra"
@@ -413,6 +489,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth.yml
           --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth
+          --out_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/output_active
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/output_active/*"
 
   - group: "Restarting"
@@ -521,6 +601,10 @@ steps:
           srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky.yml
           --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky
+          --out_dir mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky/output_active
         artifact_paths: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky/output_active/*"
         env:
           CLIMACOMMS_CONTEXT: "MPI"
@@ -580,6 +664,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_test_box.yml
           --job_id diagnostic_edmfx_test_box
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_test_box
+          --out_dir diagnostic_edmfx_test_box/output_active
         artifact_paths: "diagnostic_edmfx_test_box/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -589,6 +677,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_gabls_box.yml
           --job_id diagnostic_edmfx_gabls_box
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_gabls_box
+          --out_dir diagnostic_edmfx_gabls_box/output_active
         artifact_paths: "diagnostic_edmfx_gabls_box/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -598,6 +690,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_box.yml
           --job_id diagnostic_edmfx_bomex_box
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_bomex_box
+          --out_dir diagnostic_edmfx_bomex_box/output_active
         artifact_paths: "diagnostic_edmfx_bomex_box/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -607,6 +703,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_bomex_stretched_box.yml
           --job_id diagnostic_edmfx_bomex_stretched_box
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_bomex_stretched_box
+          --out_dir diagnostic_edmfx_bomex_stretched_box/output_active
         artifact_paths: "diagnostic_edmfx_bomex_stretched_box/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -616,6 +716,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_explicit_box.yml
           --job_id diagnostic_edmfx_dycoms_rf01_explicit_box
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_dycoms_rf01_explicit_box
+          --out_dir diagnostic_edmfx_dycoms_rf01_explicit_box/output_active
         artifact_paths: "diagnostic_edmfx_dycoms_rf01_explicit_box/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -625,6 +729,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_box.yml
           --job_id diagnostic_edmfx_dycoms_rf01_box
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_dycoms_rf01_box
+          --out_dir diagnostic_edmfx_dycoms_rf01_box/output_active
         artifact_paths: "diagnostic_edmfx_dycoms_rf01_box/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -634,6 +742,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf02_box.yml
           --job_id diagnostic_edmfx_dycoms_rf02_box
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_dycoms_rf02_box
+          --out_dir diagnostic_edmfx_dycoms_rf02_box/output_active
         artifact_paths: "diagnostic_edmfx_dycoms_rf02_box/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -643,6 +755,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_rico_box.yml
           --job_id diagnostic_edmfx_rico_box
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_rico_box
+          --out_dir diagnostic_edmfx_rico_box/output_active
         artifact_paths: "diagnostic_edmfx_rico_box/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -652,6 +768,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box.yml
           --job_id diagnostic_edmfx_trmm_box
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_trmm_box
+          --out_dir diagnostic_edmfx_trmm_box/output_active
         artifact_paths: "diagnostic_edmfx_trmm_box/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -661,6 +781,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_stretched_box.yml
           --job_id diagnostic_edmfx_trmm_stretched_box
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_trmm_stretched_box
+          --out_dir diagnostic_edmfx_trmm_stretched_box/output_active
         artifact_paths: "diagnostic_edmfx_trmm_stretched_box/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -670,6 +794,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box_0M.yml
           --job_id diagnostic_edmfx_trmm_box_0M
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_trmm_box_0M
+          --out_dir diagnostic_edmfx_trmm_box_0M/output_active
         artifact_paths: "diagnostic_edmfx_trmm_box_0M/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -696,6 +824,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_column.yml
           --job_id prognostic_edmfx_adv_test_column
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_adv_test_column
+          --out_dir prognostic_edmfx_adv_test_column/output_active
         artifact_paths: "prognostic_edmfx_adv_test_column/output_active/*"
 
         agents:
@@ -706,6 +838,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_simpleplume_column.yml
           --job_id prognostic_edmfx_simpleplume_column
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_simpleplume_column
+          --out_dir prognostic_edmfx_simpleplume_column/output_active
         artifact_paths: "prognostic_edmfx_simpleplume_column/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -715,6 +851,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column.yml
           --job_id prognostic_edmfx_gabls_column
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_gabls_column
+          --out_dir prognostic_edmfx_gabls_column/output_active
         artifact_paths: "prognostic_edmfx_gabls_column/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -724,6 +864,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_pigroup_column.yml
           --job_id prognostic_edmfx_bomex_pigroup_column
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_bomex_pigroup_column
+          --out_dir prognostic_edmfx_bomex_pigroup_column/output_active
         artifact_paths: "prognostic_edmfx_bomex_pigroup_column/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -733,6 +877,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_column.yml
           --job_id prognostic_edmfx_bomex_fixtke_column
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_bomex_fixtke_column
+          --out_dir prognostic_edmfx_bomex_fixtke_column/output_active
         artifact_paths: "prognostic_edmfx_bomex_fixtke_column/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -742,6 +890,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_stretched_column.yml
           --job_id prognostic_edmfx_bomex_stretched_column
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_bomex_stretched_column
+          --out_dir prognostic_edmfx_bomex_stretched_column/output_active
         artifact_paths: "prognostic_edmfx_bomex_stretched_column/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -751,6 +903,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
           --job_id prognostic_edmfx_bomex_column
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_bomex_column
+          --out_dir prognostic_edmfx_bomex_column/output_active
         artifact_paths: "prognostic_edmfx_bomex_column/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -760,6 +916,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
           --job_id prognostic_edmfx_bomex_column_implicit
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_bomex_column_implicit
+          --out_dir prognostic_edmfx_bomex_column_implicit/output_active
         artifact_paths: "prognostic_edmfx_bomex_column_implicit/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -769,6 +929,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf01_column.yml
           --job_id prognostic_edmfx_dycoms_rf01_column
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_dycoms_rf01_column
+          --out_dir prognostic_edmfx_dycoms_rf01_column/output_active
         artifact_paths: "prognostic_edmfx_dycoms_rf01_column/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -778,6 +942,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
           --job_id prognostic_edmfx_rico_column
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_rico_column
+          --out_dir prognostic_edmfx_rico_column/output_active
         artifact_paths: "prognostic_edmfx_rico_column/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -787,6 +955,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
           --job_id prognostic_edmfx_trmm_column
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_trmm_column
+          --out_dir prognostic_edmfx_trmm_column/output_active
         artifact_paths: "prognostic_edmfx_trmm_column/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -796,6 +968,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_0M.yml
           --job_id prognostic_edmfx_trmm_column_0M
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_trmm_column_0M
+          --out_dir prognostic_edmfx_trmm_column_0M/output_active
         artifact_paths: "prognostic_edmfx_trmm_column_0M/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -805,6 +981,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_gcmdriven_column.yml
           --job_id prognostic_edmfx_gcmdriven_column
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_gcmdriven_column
+          --out_dir prognostic_edmfx_gcmdriven_column/output_active
         artifact_paths: "prognostic_edmfx_gcmdriven_column/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -815,6 +995,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
           --job_id prognostic_edmfx_bomex_box
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_bomex_box
+          --out_dir prognostic_edmfx_bomex_box/output_active
         artifact_paths: "prognostic_edmfx_bomex_box/*"
         agents:
           slurm_mem: 20GB
@@ -824,6 +1008,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
           --job_id prognostic_edmfx_aquaplanet
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_aquaplanet
+          --out_dir prognostic_edmfx_aquaplanet/output_active
         artifact_paths: "prognostic_edmfx_aquaplanet/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -849,6 +1037,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe.yml
           --job_id sphere_baroclinic_wave_rhoe_gpu
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id sphere_baroclinic_wave_rhoe_gpu
+          --out_dir sphere_baroclinic_wave_rhoe_gpu/output_active
         artifact_paths: "sphere_baroclinic_wave_rhoe_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -901,6 +1093,10 @@ steps:
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
             --job_id target_gpu_implicit_baroclinic_wave_4process
+
+            julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+            --job_id target_gpu_implicit_baroclinic_wave_4process
+            --out_dir target_gpu_implicit_baroclinic_wave_4process/output_active
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
         env:
           CLIMACOMMS_CONTEXT: "MPI"
@@ -918,6 +1114,10 @@ steps:
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $CONFIG_PATH/central_gpu_hs_rhoe_equil_55km_nz63_0M.yml
             --job_id central_gpu_hs_rhoe_equil_55km_nz63_0M
+
+            julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+            --job_id central_gpu_hs_rhoe_equil_55km_nz63_0M
+            --out_dir central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active
         artifact_paths: "central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -932,6 +1132,10 @@ steps:
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $CONFIG_PATH/central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M.yml
             --job_id central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M
+
+            julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+            --job_id central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M
+            --out_dir central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active
         artifact_paths: "central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -946,6 +1150,10 @@ steps:
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${CONFIG_PATH}/gpu_aquaplanet_dyamond.yml
             --job_id gpu_aquaplanet_dyamond
+
+            julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+            --job_id gpu_aquaplanet_dyamond
+            --out_dir gpu_aquaplanet_dyamond/output_active
         artifact_paths: "gpu_aquaplanet_dyamond/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -959,6 +1167,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet_gpu.yml
           --job_id diagnostic_edmfx_aquaplanet_gpu
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id diagnostic_edmfx_aquaplanet_gpu
+          --out_dir diagnostic_edmfx_aquaplanet_gpu/output_active
         artifact_paths: "diagnostic_edmfx_aquaplanet_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -971,6 +1183,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
           --job_id prognostic_edmfx_aquaplanet_gpu
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_aquaplanet_gpu
+          --out_dir prognostic_edmfx_aquaplanet_gpu/output_active
         artifact_paths: "prognostic_edmfx_aquaplanet_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
