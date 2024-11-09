@@ -153,7 +153,7 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_allsky_diagedmf_0M"
-      
+
       - label: ":computer: aquaplanet equilmoist allsky radiation + prognostic edmf diffusion only + 0M microphysics"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
@@ -186,6 +186,17 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_allsky_1M"
+
+      - label: ":umbrella: aquaplanet non-equilmoist allsky radiation + 1M microphysics"
+        command:
+          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+        artifact_paths: "$$JOB_NAME/output_active/*"
+        agents:
+          slurm_gpus: 1
+          slurm_time: 24:00:00
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          JOB_NAME: "longrun_aquaplanet_allsky_1M_noneq"
 
       - label: ":computer: aquaplanet equilmoist allsky radiation + time-varying insolation + 0M microphysics + slab ocean"
         command:
