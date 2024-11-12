@@ -2,9 +2,7 @@
 Please see ClimaAtmos.jl/reproducibility_tests/README.md
 for a more detailed information on how reproducibility tests work.
 =#
-@info "##########################################"
 @info "########################################## Reproducibility tests"
-@info "##########################################"
 
 import OrderedCollections
 import JSON
@@ -37,10 +35,6 @@ function get_params()
 end
 
 (; job_id, out_dir, test_broken_report_flakiness) = get_params()
-include(joinpath(@__DIR__, "mse_tables.jl"))
-best_mse = all_best_mse[job_id]
-best_mse_string =
-    Dict(map(x -> string(x) => best_mse[x], collect(keys(best_mse))))
 
 import ClimaReproducibilityTests as CRT
 using Test
@@ -97,6 +91,4 @@ test_reproducibility_results(
     test_broken_report_flakiness,
 )
 
-@info "##########################################"
-@info "##########################################"
 @info "##########################################"

@@ -5,67 +5,67 @@ import ClimaCoreTempestRemap as CCTR
 
 include("latest_comparable_paths.jl")
 
-function get_nc_data(ds, var::String)
-    if haskey(ds, var)
-        return ds[var]
-    else
-        for key in keys(ds.group)
-            if haskey(ds.group[key], var)
-                return ds.group[key][var]
-            end
-        end
-    end
-    error("No key $var for mse computation.")
-    return nothing
-end
-
 """
-    to_dict(nc_filename::String, reference_keys::Vector{String})
+    to_dict(filename::String, comms_ctx)
 
-Convert an NCDatasets file to a `Dict`.
+Convert the HDF5 file containing the
+prognostic field `Y` into a `Dict`
+using ClimaCore's `property_chains` and
+`single_field` functions.
 """
-function to_dict(nc_filename::String, reference_keys::Vector{String})
-    dict = Dict{String, AbstractArray}()
-    NCDatasets.Dataset(nc_filename, "r") do ds
-        for key in reference_keys
-            dict[key] = vec(Array(get_nc_data(ds, key)))
-        end
+function to_dict(filename::String, comms_ctx)
+    dict = Dict{Any, AbstractArray}()
+    reader = InputOutput.HDF5Reader(filename, comms_ctx)
+    Y = InputOutput.read_field(reader, "Y")
+    Base.close(reader)
+    for prop_chain in Fields.property_chains(Y)
+        dict[prop_chain] =
+            vec(Array(parent(Fields.single_field(Y, prop_chain))))
     end
     return dict
 end
 
 """
-    reproducibility_test(;
+    zero_dict(filename::String, comms_ctx)
+
+Return a dict of zeros for all `ClimaCore.Fields.property_chains`
+in the fieldvector `Y` contained in the HDF5 file `filename`.
+"""
+function zero_dict(filename::String, comms_ctx)
+    dict = Dict{Any, AbstractArray}()
+    reader = InputOutput.HDF5Reader(filename, comms_ctx)
+    Y = InputOutput.read_field(reader, "Y")
+    Base.close(reader)
+    for prop_chain in Fields.property_chains(Y)
+        dict[prop_chain] =
+            vec(Array(parent(Fields.single_field(Y, prop_chain)))) .* 0
+    end
+    return dict
+end
+
+"""
+    reproducibility_results(
+        comms_ctx;
         job_id,
-        reference_mse,
         ds_filename_computed,
         ds_filename_reference = nothing,
-        varname,
     )
 
 Returns a `Dict` of mean-squared errors between
-`NCDataset`s `ds_filename_computed` and
-`ds_filename_reference` for all keys in `reference_mse`.
-Keys in `reference_mse` may directly map to keys in
-the `NCDataset`s, or they may be mapped to the keys
-via `varname`.
+datasets `ds_filename_computed` and
+`ds_filename_reference` for all variables.
 
 If running on buildkite, we get `ds_filename_reference`
 from the latest merged dataset on Caltech central.
 """
-function reproducibility_test(;
-    job_id,
-    reference_mse,
-    ds_filename_computed,
-    varname,
-)
+function reproducibility_results(comms_ctx; job_id, ds_filename_computed)
     local ds_filename_reference
-    reference_keys = map(k -> varname(k), collect(keys(reference_mse)))
     paths = String[] # initialize for later handling
 
     if haskey(ENV, "BUILDKITE_COMMIT")
         paths = latest_comparable_paths(10)
-        isempty(paths) && return (reference_mse, paths)
+        isempty(paths) &&
+            return (zero_dict(ds_filename_computed, comms_ctx), paths)
         @info "`ds_filename_computed`: `$ds_filename_computed`"
         ds_filename_references =
             map(p -> joinpath(p, ds_filename_computed), paths)
@@ -94,40 +94,41 @@ function reproducibility_test(;
                     @warn "There is no reference dataset, and no NC tar file."
                 end
             end
-            if !isfile(ds_filename_reference)
-                msg = "\n\n"
-                msg *= "Pull request author:\n"
-                msg *= "    It seems that a new dataset,\n"
-                msg *= "\n"
-                msg *= "dataset file:`$(ds_filename_computed)`,"
-                msg *= "\n"
-                msg *= "    was created, or the name of the dataset\n"
-                msg *= "    has changed. Please increment the reference\n"
-                msg *= "    counter in `reproducibility_tests/ref_counter.jl`.\n"
-                msg *= "\n"
-                msg *= "    If this is not the case, then please\n"
-                msg *= "    open an issue with a link pointing to this\n"
-                msg *= "    PR and build.\n"
-                msg *= "\n"
-                msg *= "For more information, please find\n"
-                msg *= "`reproducibility_tests/README.md` and read the section\n\n"
-                msg *= "  `How to merge pull requests (PR) that get approved\n"
-                msg *= "   but *break* reproducibility tests`\n\n"
-                msg *= "for how to merge this PR."
-                error(msg)
-            end
+        end
+        non_existent_files = filter(x -> !isfile(x), ds_filename_references)
+        if !isempty(non_existent_files)
+            msg = "\n\n"
+            msg *= "Pull request author:\n"
+            msg *= "    It seems that a new dataset,\n"
+            msg *= "\n"
+            msg *= "dataset file(s):`$(non_existent_files)`,"
+            msg *= "\n"
+            msg *= "    was created, or the name of the dataset\n"
+            msg *= "    has changed. Please increment the reference\n"
+            msg *= "    counter in `reproducibility_tests/ref_counter.jl`.\n"
+            msg *= "\n"
+            msg *= "    If this is not the case, then please\n"
+            msg *= "    open an issue with a link pointing to this\n"
+            msg *= "    PR and build.\n"
+            msg *= "\n"
+            msg *= "For more information, please find\n"
+            msg *= "`reproducibility_tests/README.md` and read the section\n\n"
+            msg *= "  `How to merge pull requests (PR) that get approved\n"
+            msg *= "   but *break* reproducibility tests`\n\n"
+            msg *= "for how to merge this PR."
+            error(msg)
         end
     else
         @warn "Buildkite not detected. Skipping reproducibility tests."
         @info "Please review output results before merging."
-        return (reference_mse, paths)
+        return (zero_dict(ds_filename_computed, comms_ctx), paths)
     end
 
     local computed_mse
-    @info "Prescribed reference keys $reference_keys"
-    dict_computed = to_dict(ds_filename_computed, reference_keys)
-    dict_references =
-        map(ds -> to_dict(ds, reference_keys), ds_filename_references)
+    dict_computed = to_dict(ds_filename_computed, comms_ctx)
+    dict_references = map(ds -> to_dict(ds, comms_ctx), ds_filename_references)
+    reference_keys = keys(first(dict_references))
+    @info "Reference keys $reference_keys"
     @info "Computed keys $(collect(keys(dict_computed)))"
     @info "Reference keys $(collect(keys(first(dict_references))))"
     if all(dr -> keys(dict_computed) == keys(dr), dict_references) && all(
@@ -152,63 +153,4 @@ function reproducibility_test(;
     end
     return (computed_mses, paths)
 
-end
-
-
-##### TODO: move below functions to ClimaCore
-
-function first_center_space(fv::Fields.FieldVector)
-    for prop_chain in Fields.property_chains(fv)
-        f = Fields.single_field(fv, prop_chain)
-        space = axes(f)
-        if space isa Spaces.CenterExtrudedFiniteDifferenceSpace
-            return space
-        end
-    end
-    error("Unfound space")
-end
-
-function first_face_space(fv::Fields.FieldVector)
-    for prop_chain in Fields.property_chains(fv)
-        f = Fields.single_field(fv, prop_chain)
-        space = axes(f)
-        if space isa Spaces.FaceExtrudedFiniteDifferenceSpace
-            return space
-        end
-    end
-    error("Unfound space")
-end
-
-function export_nc(
-    Y::Fields.FieldVector;
-    nc_filename,
-    t_now = 0.0,
-    center_space = first_center_space,
-    face_space = first_face_space,
-    filter_prop_chain = pn -> true, # use all fields
-    varname::Function,
-)
-    prop_chains = Fields.property_chains(Y)
-    filter!(filter_prop_chain, prop_chains)
-    cspace = center_space(Y)
-    fspace = face_space(Y)
-    # create a temporary dir for intermediate data
-    FT = eltype(Y)
-    NCDatasets.NCDataset(nc_filename, "c") do nc
-        # defines the appropriate dimensions and variables for a space coordinate
-        # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
-        nc_time = CCTR.def_time_coord(nc)
-        CCTR.def_space_coord(nc, cspace, type = "cgll")
-        CCTR.def_space_coord(nc, fspace, type = "cgll")
-        # define variables for the prognostic states
-        for prop_chain in Fields.property_chains(Y)
-            f = Fields.single_field(Y, prop_chain)
-            space = axes(f)
-            nc_var = CCTR.defVar(nc, varname(prop_chain), FT, space, ("time",))
-            nc_var[:, 1] = f
-        end
-        # TODO: interpolate w onto center space and save it the same way as the other vars
-        nc_time[1] = t_now
-    end
-    return nothing
 end
