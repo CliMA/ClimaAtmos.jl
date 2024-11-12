@@ -1,62 +1,60 @@
-reproducibility_test_job_ids = [ # TODO: can we instead automatically grab this from the .buildkite file?
-    "sphere_baroclinic_wave_rhoe_equilmoist",
-    "sphere_held_suarez_rhoe_equilmoist_hightop_sponge",
-    "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res",
-    "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric",
-    "deep_sphere_baroclinic_wave_rhoe_equilmoist",
-    "diagnostic_edmfx_aquaplanet",
-    "single_column_hydrostatic_balance_ft64",
-    "box_hydrostatic_balance_rhoe",
-    "box_density_current_test",
-    "rcemipii_box_diagnostic_edmfx",
-    "les_isdac_box",
-    "plane_agnesi_mountain_test_uniform",
-    "plane_agnesi_mountain_test_stretched",
-    "plane_density_current_test",
-    "sphere_hydrostatic_balance_rhoe_ft64",
-    "sphere_baroclinic_wave_rhoe",
-    "sphere_held_suarez_rhoe_hightop",
-    "sphere_aquaplanet_rhoe_nonequilmoist_allsky",
-    "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean",
-    "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean_ft64",
-    "rcemipii_sphere_diagnostic_edmfx",
-    "sphere_baroclinic_wave_rhoe_topography_dcmip_rs",
-    "sphere_held_suarez_rhoe_topography_dcmip",
-    "sphere_held_suarez_rhoe_equilmoist_topography_dcmip",
-    "sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200",
-    "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth",
-    "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky",
-    "diagnostic_edmfx_test_box",
-    "diagnostic_edmfx_gabls_box",
-    "diagnostic_edmfx_bomex_box",
-    "diagnostic_edmfx_bomex_stretched_box",
-    "diagnostic_edmfx_dycoms_rf01_explicit_box",
-    "diagnostic_edmfx_dycoms_rf01_box",
-    "diagnostic_edmfx_dycoms_rf02_box",
-    "diagnostic_edmfx_rico_box",
-    "diagnostic_edmfx_trmm_box",
-    "diagnostic_edmfx_trmm_stretched_box",
-    "diagnostic_edmfx_trmm_box_0M",
-    "prognostic_edmfx_adv_test_column",
-    "prognostic_edmfx_simpleplume_column",
-    "prognostic_edmfx_gabls_column",
-    "prognostic_edmfx_bomex_pigroup_column",
-    "prognostic_edmfx_bomex_fixtke_column",
-    "prognostic_edmfx_bomex_stretched_column",
-    "prognostic_edmfx_bomex_column",
-    "prognostic_edmfx_bomex_column_implicit",
-    "prognostic_edmfx_dycoms_rf01_column",
-    "prognostic_edmfx_rico_column",
-    "prognostic_edmfx_trmm_column",
-    "prognostic_edmfx_trmm_column_0M",
-    "prognostic_edmfx_gcmdriven_column",
-    "prognostic_edmfx_bomex_box",
-    "prognostic_edmfx_aquaplanet",
-    "sphere_baroclinic_wave_rhoe_gpu",
-    "diagnostic_edmfx_aquaplanet_gpu",
-    "prognostic_edmfx_aquaplanet_gpu",
-    "central_gpu_hs_rhoe_equil_55km_nz63_0M",
-    "central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M",
-    "gpu_aquaplanet_dyamond",
-    "target_gpu_implicit_baroclinic_wave_4process",
-]
+#################################
+################################# MSE tables
+#################################
+#! format: off
+#
+all_best_mse = OrderedCollections.OrderedDict()
+#
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"] = OrderedCollections.OrderedDict()
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρ)] = 0
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρe_tot)] = 0
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 0
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 0
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρq_tot)] = 0
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:f, :u₃, :components, :data, 1)] = 0
+#
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_sponge"] = OrderedCollections.OrderedDict()
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_sponge"][(:c, :ρ)] = 0
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_sponge"][(:c, :ρe_tot)] = 0
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_sponge"][(:c, :uₕ, :components, :data, 1)] = 0
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_sponge"][(:c, :uₕ, :components, :data, 2)] = 0
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_sponge"][(:c, :ρq_tot)] = 0
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_sponge"][(:f, :u₃, :components, :data, 1)] = 0
+#
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"] = OrderedCollections.OrderedDict()
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"][(:c, :ρ)] = 0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"][(:c, :ρe_tot)] = 0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"][(:c, :uₕ, :components, :data, 1)] = 0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"][(:c, :uₕ, :components, :data, 2)] = 0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"][(:c, :ρq_tot)] = 0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"][(:f, :u₃, :components, :data, 1)] = 0
+#
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"] = OrderedCollections.OrderedDict()
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"][(:c, :ρ)] = 0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"][(:c, :ρe_tot)] = 0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"][(:c, :uₕ, :components, :data, 1)] = 0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"][(:c, :uₕ, :components, :data, 2)] = 0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"][(:c, :ρq_tot)] = 0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"][(:f, :u₃, :components, :data, 1)] = 0
+#
+all_best_mse["deep_sphere_baroclinic_wave_rhoe_equilmoist"] = OrderedCollections.OrderedDict()
+all_best_mse["deep_sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρ)] = 0
+all_best_mse["deep_sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρe_tot)] = 0
+all_best_mse["deep_sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 0
+all_best_mse["deep_sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 0
+all_best_mse["deep_sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρq_tot)] = 0
+all_best_mse["deep_sphere_baroclinic_wave_rhoe_equilmoist"][(:f, :u₃, :components, :data, 1)] = 0
+#
+all_best_mse["diagnostic_edmfx_aquaplanet"] = OrderedCollections.OrderedDict()
+all_best_mse["diagnostic_edmfx_aquaplanet"][(:c, :ρ)] = 0
+all_best_mse["diagnostic_edmfx_aquaplanet"][(:c, :uₕ, :components, :data, 1)] = 0
+all_best_mse["diagnostic_edmfx_aquaplanet"][(:c, :uₕ, :components, :data, 2)] = 0
+all_best_mse["diagnostic_edmfx_aquaplanet"][(:c, :ρe_tot)] = 0
+all_best_mse["diagnostic_edmfx_aquaplanet"][(:c, :ρq_tot)] = 0
+all_best_mse["diagnostic_edmfx_aquaplanet"][(:c, :sgs⁰, :ρatke)] = 0
+all_best_mse["diagnostic_edmfx_aquaplanet"][(:f, :u₃, :components, :data, 1)] = 0
+#
+#! format: on
+#################################
+#################################
+#################################

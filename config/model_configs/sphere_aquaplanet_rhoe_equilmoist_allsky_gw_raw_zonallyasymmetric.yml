@@ -16,6 +16,7 @@ cloud_model: "grid_scale"
 surface_temperature: "ZonallyAsymmetric"
 moist: "equil"
 albedo_model: "RegressionFunctionAlbedo"
+reproducibility_test: true
 aerosol_radiation: true
 prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "OC1", "OC2", "SO4"]
 toml: [toml/sphere_aquaplanet.toml]

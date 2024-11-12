@@ -9,5 +9,6 @@ t_end: "4days"
 vert_diff: true
 forcing: "held_suarez"
 precip_model: "0M"
+reproducibility_test: true
 moist: "equil"
 toml: [toml/sphere_held_suarez.toml]

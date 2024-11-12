@@ -1,4 +1,4 @@
-187
+186
 
 # **README**
 #
@@ -20,12 +20,6 @@
 
 
 #=
-
-187
-- Data for reproducibility tests are now exported via HDF5 instead of NC files,
-  and incrementing the reference counter is far easier to update our system
-  than supporting the comparison of data exported (and some pre-processed)
-  from different formats.
 
 186
 - Topography dataset has been modified to the 60 arc-second ETOPO2022 dataset. 
