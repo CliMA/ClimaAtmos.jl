@@ -1,31 +1,25 @@
 import Dates
 
-"""
-    sorted_dataset_folder(; dir=pwd())
-
-Return a the subdirectory paths within the given `dir` (defaults
-to the current working directory) sorted by modification time
-(oldest to newest).  Return an empty vector if no subdirectories
-are found.
-"""
-function sorted_dataset_folder(; dir = pwd())
-    matching_paths = filter(ispath, readdir(dir; join = true))
+function find_latest_dataset_folder(; dir = pwd())
+    matching_paths = String[]
+    for file in readdir(dir)
+        !ispath(joinpath(dir, file)) && continue
+        # Skip folders without the ref_counter
+        isfile(joinpath(dir, "ref_counter.jl")) || continue
+        push!(matching_paths, joinpath(dir, file))
+    end
     isempty(matching_paths) && return ""
     # sort by timestamp
     sorted_paths =
         sort(matching_paths; by = f -> Dates.unix2datetime(stat(f).mtime))
-    return sorted_paths
+    return pop!(sorted_paths)
 end
 
-find_latest_dataset_folder(; dir = pwd()) = pop!(sorted_dataset_folder(; dir))
-
 cluster_data_prefix = "/central/scratch/esm/slurm-buildkite/climaatmos-main"
-sorted_folders = sorted_dataset_folder(; dir = cluster_data_prefix)
-path = sorted_folders[end]
+path = find_latest_dataset_folder(; dir = cluster_data_prefix)
 ref_counter = 0 # (error)
 if isempty(path) # no folders found
     ref_counter = 1
-    @warn "sorted_folders = $sorted_folders"
     @warn "path: `$path` is empty, setting `ref_counter = 1`"
 elseif !isfile(joinpath(path, "ref_counter.jl")) # no file found
     @warn "file `$(joinpath(path, "ref_counter.jl"))` not found"

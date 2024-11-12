@@ -64,8 +64,9 @@ To update the mse tables:
 
 To add a new reproducibility test:
 
- - Add `julia --color=yes --project=examples reproducibility_tests/test_mse.jl --job_id [job_id] --out_dir [job_id]` as a separate command for the new (or existing) job, and set the `test_reproducibility` environment flag. For example: `test_reproducibility: "true"`.
- - Add the job's `job_id` into the `reproducibility_test_job_ids` vector in `reproducibility_test/mse_tables.jl`.
+ - Set the command-line `reproducibility_test` to true, and add `julia --color=yes --project=examples reproducibility_tests/test_mse.jl --job_id [job_id] --out_dir [job_id]` as a separate command for the new (or existing) job
+ - Copy the `all_best_mse` dict template from the job's log
+ - Paste the `all_best_mse` dict template into `reproducibility_test/mse_tables.jl`
 
 <!-- TODO: improve names / mark off sections for all_best_mse dict -->
 
@@ -89,17 +90,19 @@ We cannot (easily) compare the output with a reference if we change the spatial 
 
 ## A detailed procedure of how reproducibility tests are performed
 
-Reprodicibility results are computed at the end of the `examples/hybrid/driver.jl` script, and tested in the `reproducibility_tests/test_mse.jl`. This separation helps us delay. Here is an outline of the reproducibility test procedure:
+Reprodicibility tests are performed at the end of `examples/hybrid/driver.jl`, after a simulation completes, and relies on a unique job id (`job_id`). Here is an outline of the reproducibility test procedure:
 
  0) Run a simulation, with a particular `job_id`, to the final time.
- 1) Export the solution (a `FieldVector`) at the final simulation time to an HDF5 file.
- 2) Compute the mean squared errors (MSE) against all other comparable references (which are saved in a dedicated folders on the Caltech Central cluster) for all fieldvector variables in the prognostic state.
- 3) Convert this set of MSEs to a dictionary (called `computed_mse`), and export it to a file in the output folder.
+ 1) Load a dictionary, `all_best_mse`, of previous "best" mean-squared errors from `mse_tables.jl` and extract the mean squared errors for the given `job_id` (store in job-specific dictionary, `best_mse`).
+ 2) Export the solution (a `FieldVector`) at the final simulation time to an `NCDataset` file.
+ 3) Compute the errors between the exported solution and the exported solution from the reference `NCDataset` files (which are saved in a dedicated folders on the Caltech Central cluster) and save into a dictionary, called `computed_mse`.
+ 4) Export this dictionary (`computed_mse`) to the output folder
+ 5) Test that `computed_mse` is no worse than `best_mse` (determines if reproducibility test passes or not).
 
 After these steps are performed at the end of the driver, additional jobs are run:
 
  1) Print `computed_mse` for all jobs to make updating `reproducibility_tests/mse_tables.jl` easy
- 2) If we're on the github queue merging branch (all tests have passed, and the PR is effectively merging), move the HDF5 files from the scratch directory onto the dedicated folder on the Caltech Central cluster.
+ 2) If we're on the github queue merging branch (all tests have passed, and the PR is effectively merging), move the `NCDataset`s from the scratch directory onto the dedicated folder on the Caltech Central cluster.
 
 ## How we track which dataset to compare against
 
