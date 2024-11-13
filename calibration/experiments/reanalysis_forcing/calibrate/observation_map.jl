@@ -15,7 +15,7 @@ function observation_map(iteration; config_dict::Dict)
         config_dict["dims_per_var"] *
         length(config_dict["y_var_names"]) *
         config_dict["batch_size"]
-
+    
     G_ensemble =
         Array{Float64}(undef, full_dim..., config_dict["ensemble_size"])
 
@@ -54,25 +54,24 @@ function process_member_data(
     norm_factors_dict = nothing,
     log_vars = [],
 )
-    #forcing_file_indices = EKP.get_current_minibatch(eki)
+    forcing_file_indices = EKP.get_current_minibatch(eki)
     g = Float64[]
-    # for i in forcing_file_indices
-    simdir = SimDir(member_path)#SimDir(joinpath(member_path, "config_$i", "output_0000"))
-    for (i, y_name) in enumerate(y_names)
-        y_var_i = process_profile_variable(
-            simdir,
-            y_name;
-            reduction,
-            t_start,
-            t_end,
-            z_max,
-            norm_factors_dict,
-            log_vars,
-        )
-        append!(g, y_var_i)
+    for i in forcing_file_indices
+        simdir = SimDir(joinpath(member_path, "config_$i", "output_0000"))
+        for (i, y_name) in enumerate(y_names)
+            y_var_i = process_profile_variable(
+                simdir,
+                y_name;
+                reduction,
+                t_start,
+                t_end,
+                z_max,
+                norm_factors_dict,
+                log_vars,
+            )
+            append!(g, y_var_i)
+        end
     end
-    # end
-
     return g
 end
 
@@ -96,7 +95,7 @@ function process_profile_variable(
         var_i = window(var_i, "z", right = maximum(z_window))
     end
     sim_t_end = var_i.dims["time"][end]
-    println("sim time: $(sim_t_end/86400.) days")
+    #println("sim time: $(sim_t_end/86400.) days")
 
     if sim_t_end < 0.95 * t_end
         throw(ErrorException("Simulation failed."))

@@ -4,8 +4,14 @@ project=dirname(Base.active_project())
 cd(project)
 # addprocs(SlurmManager(1), t="01:30:00", cpus_per_task=3,exeflags=["--project=$project", "-p", "3"])
 # addprocs(SlurmManager(5),  t="01:30:00", cpus_per_task=3,exeflags=["--project=$project", "-p", "3"])
-addprocs(SlurmManager(100),  t="04:30:00", cpus_per_task=1,exeflags=["--project=$project"], mem_per_cpu=8000)
+addprocs(SlurmManager(100),  
+        t="04:50:00", 
+        cpus_per_task=1,
+        exeflags=["--project=$project"], 
+        mem_per_cpu=8000)
 
+
+@info "Running Script..."
 @everywhere begin
     import ClimaCalibrate as CAL
     import ClimaAtmos as CA
@@ -61,6 +67,7 @@ JLD2.jldsave(
     joinpath(output_dir, "norm_factors.jld2");
     norm_factors_dict = norm_factors_by_var,
 )
+@info "Loaded packages and copied files..."
 
 ### get ERA5 obs (Y) and norm factors
 @everywhere begin
@@ -101,6 +108,7 @@ JLD2.jldsave(
         EKP.FixedMinibatcher(collect(1:experiment_config["batch_size"]))
     observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 end
+@info "Obtained Observations..."
 
 ###  EKI hyperparameters/settings
 @info "Initializing calibration" n_iterations ensemble_size output_dir
@@ -127,13 +135,14 @@ function run_iteration(ensemble_size, output_dir, iter)
     end
     s = @elapsed fetch.(futures)
     @info "Completed iteration $iter in $(round(s)) seconds, updating ensemble"
-    G_ensemble = CAL.observation_map(iter; config_dict = experiment_config)
+    G_ensemble = observation_map(iter; config_dict = experiment_config)
     CAL.save_G_ensemble(output_dir, iter, G_ensemble)
     eki = CAL.update_ensemble(output_dir, iter, prior)
     return eki
 end
 
-for i in 0:n_iterations
+for i in 1:n_iterations
+    @info "Running Iteration" i
     eki = run_iteration(ensemble_size, output_dir, i)
 end
 println("Finished!")
