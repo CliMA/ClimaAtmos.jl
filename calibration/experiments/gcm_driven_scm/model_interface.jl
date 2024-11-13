@@ -12,11 +12,11 @@ include("get_les_metadata.jl")
 include("helper_funcs.jl")
 
 using Distributed
-const experiment_config_dict =
+experiment_config_dict =
     YAML.load_file(joinpath(@__DIR__, "experiment_config.yml"))
-const output_dir = experiment_config_dict["output_dir"]
-const model_config = experiment_config_dict["model_config"]
-const batch_size = experiment_config_dict["batch_size"]
+output_dir = experiment_config_dict["output_dir"]
+model_config = experiment_config_dict["model_config"]
+batch_size = experiment_config_dict["batch_size"]
 
 
 """
@@ -58,7 +58,6 @@ function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
 end
 
 
-addprocs(batch_size)
 @everywhere begin
     import ClimaAtmos as CA
     using JLD2

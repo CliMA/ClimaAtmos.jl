@@ -1,18 +1,22 @@
 using Distributed, ClusterManagers
 
-addprocs(SlurmManager(10), t="00:20:00", cpus_per_task=1,exeflags="--project=$(Base.active_project())")
+addprocs(
+    SlurmManager(10),
+    t = "00:20:00",
+    cpus_per_task = 1,
+    exeflags = "--project=$(Base.active_project())",
+)
 @info "Launched workers"
 
 @everywhere begin
-	import ClimaCalibrate as CAL
-	import ClimaAtmos as CA
+    import ClimaCalibrate as CAL
+    import ClimaAtmos as CA
 
-	experiment_dir = joinpath(pkgdir(CA), "calibration", "test")
-	model_interface =
-		joinpath(pkgdir(CA), "calibration", "model_interface.jl")
-	output_dir = "calibration_end_to_end_test"
-	include(model_interface)
-	ensemble_size = 30
+    experiment_dir = joinpath(pkgdir(CA), "calibration", "test")
+    model_interface = joinpath(pkgdir(CA), "calibration", "model_interface.jl")
+    output_dir = "calibration_end_to_end_test"
+    include(model_interface)
+    ensemble_size = 30
     obs_path = joinpath(experiment_dir, "observations.jld2")
 end
 
@@ -57,24 +61,24 @@ end
 @everywhere begin
     import JLD2
     import LinearAlgebra: I
-	astronomical_unit = 149_597_870_000
-	observations = JLD2.load_object(obs_path)
-	noise = 0.1 * I
-	n_iterations = 6
-	prior = CAL.get_prior(joinpath(experiment_dir, "prior.toml"))
+    astronomical_unit = 149_597_870_000
+    observations = JLD2.load_object(obs_path)
+    noise = 0.1 * I
+    n_iterations = 6
+    prior = CAL.get_prior(joinpath(experiment_dir, "prior.toml"))
 
-	config = CAL.ExperimentConfig(;
-		n_iterations,
-		ensemble_size,
-		observations,
-		noise,
-		output_dir,
-		prior,
-	)
+    config = CAL.ExperimentConfig(;
+        n_iterations,
+        ensemble_size,
+        observations,
+        noise,
+        output_dir,
+        prior,
+    )
 end
 
 function run_iteration(config, iter)
-    futures = map(1:config.ensemble_size) do m
+    futures = map(1:(config.ensemble_size)) do m
         worker_index = mod(m - 1, length(workers())) + 1
         worker = workers()[worker_index]
         @info "Running on worker $worker"
@@ -91,7 +95,7 @@ end
 function calibrate(config)
     CAL.initialize(config)
     eki = nothing
-    for iter in 0:config.n_iterations
+    for iter in 0:(config.n_iterations)
         s = @elapsed run_iteration(config, iter)
         @info "Iteration $iter time: $s"
 

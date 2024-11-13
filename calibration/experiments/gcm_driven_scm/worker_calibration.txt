@@ -1,0 +1,231 @@
+The latest version of Julia in the `release` channel is 1.10.5+0.x64.linux.gnu. You currently have `1.10.4+0.x64.linux.gnu` installed. Run:
+
+  juliaup update
+
+in your terminal shell to install Julia 1.10.5+0.x64.linux.gnu and update the `release` channel to that version.
+srun: job 44791797 queued and waiting for resources
+srun: job 44791797 has been allocated resources
+srun: job 44791798 queued and waiting for resources
+srun: job 44791798 has been allocated resources
+srun: forcing job termination
+srun: forcing job termination
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+srun: error: hpc-24-09: task 2: Killed
+srun: error: hpc-93-29: task 4: Killed
+srun: error: hpc-91-11: task 4: Killed
+srun: error: hpc-92-30: task 3: Killed
+srun: error: hpc-89-39: task 2: Killed
+srun: error: hpc-24-08: tasks 0-1: Killed
+srun: error: hpc-89-39: task 3: Killed
+srun: error: hpc-24-08: tasks 0-1: Killed
+[ Info: Starting SLURM job julia-2083067: `srun -J julia-2083067 -n 5 -D /central/home/nefrathe/clima/ClimaAtmos.jl/calibration/experiments/gcm_driven_scm --cpus-per-task=3 -t 01:30:00 -o /central/home/nefrathe/clima/ClimaAtmos.jl/calibration/experiments/gcm_driven_scm/./julia-2083067-17304993193-%4t.out /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/bin/julia --project=/central/home/nefrathe/clima/ClimaAtmos.jl/calibration/experiments/gcm_driven_scm/Project.toml -p 3 --worker=Z6ejcxgtUUxhFtZt`
+[ Info: Worker 0 (after 0 s): No output file "/central/home/nefrathe/clima/ClimaAtmos.jl/calibration/experiments/gcm_driven_scm/./julia-2083067-17304993193-0000.out" yet
+[ Info: Worker 0 (after 1 s): Output file found, but no connection details yet
+[ Info: Worker 0 ready after 3 s on host 172.18.28.50, port 9598
+[ Info: Worker 1 ready after 3 s on host 172.18.28.50, port 9599
+[ Info: Worker 2 ready after 3 s on host 172.18.28.159, port 9012
+[ Info: Worker 3 ready after 3 s on host 172.18.28.159, port 9013
+[ Info: Worker 4 ready after 3 s on host 172.18.28.161, port 9905
+[ Info: Starting SLURM job julia-2083067: `srun -J julia-2083067 -n 5 -D /central/home/nefrathe/clima/ClimaAtmos.jl/calibration/experiments/gcm_driven_scm --cpus-per-task=3 -t 01:30:00 -o /central/home/nefrathe/clima/ClimaAtmos.jl/calibration/experiments/gcm_driven_scm/./julia-2083067-17304993262-%4t.out /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/bin/julia --project=/central/home/nefrathe/clima/ClimaAtmos.jl/calibration/experiments/gcm_driven_scm/Project.toml -p 3 --worker=Z6ejcxgtUUxhFtZt`
+[ Info: Worker 0 (after 0 s): No output file "/central/home/nefrathe/clima/ClimaAtmos.jl/calibration/experiments/gcm_driven_scm/./julia-2083067-17304993262-0000.out" yet
+[ Info: Worker 0 (after 1 s): Output file found, but no connection details yet
+[ Info: Worker 0 ready after 3 s on host 172.18.28.50, port 9798
+[ Info: Worker 1 ready after 3 s on host 172.18.28.50, port 9799
+[ Info: Worker 2 ready after 3 s on host 172.18.28.51, port 9582
+[ Info: Worker 3 ready after 3 s on host 172.18.28.204, port 9723
+[ Info: Worker 4 ready after 3 s on host 172.18.28.234, port 9350
+[ Info: Running on CPUSingleThreaded.
+[ Info: Setting up single-process ClimaAtmos run
+[ Info: Running ClimaCore in unthreaded mode.
+┌ Warning: `job_id` is empty and likely not passed to AtmosConfig.
+└ @ ClimaAtmos /central/home/nefrathe/clima/ClimaAtmos.jl/src/solver/types.jl:659
+┌ Info: Making AtmosConfig with config files: 
+└    /central/home/nefrathe/clima/ClimaAtmos.jl/src/solver/../../config/default_configs/default_config.yml
+┌ Warning: perturb_initstate flag is ignored for single column configuration
+└ @ ClimaAtmos /central/home/nefrathe/clima/ClimaAtmos.jl/src/solver/type_getters.jl:152
+┌ Warning: Bubble correction not compatible with single column configuration. It will be switched off.
+└ @ ClimaAtmos /central/home/nefrathe/clima/ClimaAtmos.jl/src/solver/type_getters.jl:163
+┌ Info: z heights
+│   z_mesh.faces =
+│    61-element Vector{ClimaCore.Geometry.ZPoint{Float32}}:
+│     ZPoint(0.0)
+│     ZPoint(30.0)
+│     ZPoint(62.88452)
+│     ZPoint(98.928185)
+│     ⋮
+│     ZPoint(36278.35)
+│     ZPoint(38135.195)
+└     ZPoint(40000.0)
+[ Info: No surface orography warp applied
+┌ Info: Resolution stats: 
+│   Nq = 1
+│   h_elem = 6
+│   z_elem = 60
+│   ncols = 1
+└   ndofs_total = 60
+┌ Info: Initializing calibration
+│   n_iterations = 12
+│   ensemble_size = 100
+└   output_dir = "output/exp_1"
+Worker 9 terminated.
+Worker 4 terminated.
+UNHANDLED TASK ERROR: IOError: read: connection reset by peer (ECONNRESET)
+Stacktrace:
+  [1] wait_readnb(x::Sockets.TCPSocket, nb::Int64)
+    @ Base ./stream.jl:410
+  [2] (::Base.var"#wait_locked#739")(s::Sockets.TCPSocket, buf::IOBuffer, nb::Int64)
+    @ Base ./stream.jl:949
+  [3] unsafe_read(s::Sockets.TCPSocket, p::Ptr{UInt8}, nb::UInt64)
+    @ Base ./stream.jl:955
+  [4] unsafe_read
+    @ ./io.jl:774 [inlined]
+  [5] unsafe_read(s::Sockets.TCPSocket, p::Base.RefValue{NTuple{4, Int64}}, n::Int64)
+    @ Base ./io.jl:773
+  [6] read!
+    @ ./io.jl:775 [inlined]
+  [7] deserialize_hdr_raw
+    @ /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/messages.jl:167 [inlined]
+  [8] message_handler_loop(r_stream::Sockets.TCPSocket, w_stream::Sockets.TCPSocket, incoming::Bool)
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:172
+  [9] process_tcp_streams(r_stream::Sockets.TCPSocket, w_stream::Sockets.TCPSocket, incoming::Bool)
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:133
+ [10] (::Distributed.var"#103#104"{Sockets.TCPSocket, Sockets.TCPSocket, Bool})()
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:121
+Worker 7 terminated.
+UNHANDLED TASK ERROR: IOError: read: connection reset by peer (ECONNRESET)
+Stacktrace:
+  [1] wait_readnb(x::Sockets.TCPSocket, nb::Int64)
+    @ Base ./stream.jl:410
+  [2] (::Base.var"#wait_locked#739")(s::Sockets.TCPSocket, buf::IOBuffer, nb::Int64)
+    @ Base ./stream.jl:949
+  [3] unsafe_read(s::Sockets.TCPSocket, p::Ptr{UInt8}, nb::UInt64)
+    @ Base ./stream.jl:955
+  [4] unsafe_read
+    @ ./io.jl:774 [inlined]
+  [5] unsafe_read(s::Sockets.TCPSocket, p::Base.RefValue{NTuple{4, Int64}}, n::Int64)
+    @ Base ./io.jl:773
+  [6] read!
+    @ ./io.jl:775 [inlined]
+  [7] deserialize_hdr_raw
+    @ /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/messages.jl:167 [inlined]
+  [8] message_handler_loop(r_stream::Sockets.TCPSocket, w_stream::Sockets.TCPSocket, incoming::Bool)
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:172
+  [9] process_tcp_streams(r_stream::Sockets.TCPSocket, w_stream::Sockets.TCPSocket, incoming::Bool)
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:133
+ [10] (::Distributed.var"#103#104"{Sockets.TCPSocket, Sockets.TCPSocket, Bool})()
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:121
+Worker 6 terminated.
+Worker 8 terminated.
+Worker 2 terminated.
+Worker 10 terminated.
+Worker 3 terminated.
+Worker 5 terminated.
+Worker 11 terminated.
+UNHANDLED TASK ERROR: IOError: read: connection reset by peer (ECONNRESET)
+Stacktrace:
+  [1] wait_readnb(x::Sockets.TCPSocket, nb::Int64)
+    @ Base ./stream.jl:410
+  [2] (::Base.var"#wait_locked#739")(s::Sockets.TCPSocket, buf::IOBuffer, nb::Int64)
+    @ Base ./stream.jl:949
+  [3] unsafe_read(s::Sockets.TCPSocket, p::Ptr{UInt8}, nb::UInt64)
+    @ Base ./stream.jl:955
+  [4] unsafe_read
+    @ ./io.jl:774 [inlined]
+  [5] unsafe_read(s::Sockets.TCPSocket, p::Base.RefValue{NTuple{4, Int64}}, n::Int64)
+    @ Base ./io.jl:773
+  [6] read!
+    @ ./io.jl:775 [inlined]
+  [7] deserialize_hdr_raw
+    @ /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/messages.jl:167 [inlined]
+  [8] message_handler_loop(r_stream::Sockets.TCPSocket, w_stream::Sockets.TCPSocket, incoming::Bool)
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:172
+  [9] process_tcp_streams(r_stream::Sockets.TCPSocket, w_stream::Sockets.TCPSocket, incoming::Bool)
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:133
+ [10] (::Distributed.var"#103#104"{Sockets.TCPSocket, Sockets.TCPSocket, Bool})()
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:121
+UNHANDLED TASK ERROR: IOError: read: connection reset by peer (ECONNRESET)
+Stacktrace:
+  [1] wait_readnb(x::Sockets.TCPSocket, nb::Int64)
+    @ Base ./stream.jl:410
+  [2] (::Base.var"#wait_locked#739")(s::Sockets.TCPSocket, buf::IOBuffer, nb::Int64)
+    @ Base ./stream.jl:949
+  [3] unsafe_read(s::Sockets.TCPSocket, p::Ptr{UInt8}, nb::UInt64)
+    @ Base ./stream.jl:955
+  [4] unsafe_read
+    @ ./io.jl:774 [inlined]
+  [5] unsafe_read(s::Sockets.TCPSocket, p::Base.RefValue{NTuple{4, Int64}}, n::Int64)
+    @ Base ./io.jl:773
+  [6] read!
+    @ ./io.jl:775 [inlined]
+  [7] deserialize_hdr_raw
+    @ /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/messages.jl:167 [inlined]
+  [8] message_handler_loop(r_stream::Sockets.TCPSocket, w_stream::Sockets.TCPSocket, incoming::Bool)
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:172
+  [9] process_tcp_streams(r_stream::Sockets.TCPSocket, w_stream::Sockets.TCPSocket, incoming::Bool)
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:133
+ [10] (::Distributed.var"#103#104"{Sockets.TCPSocket, Sockets.TCPSocket, Bool})()
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:121
+UNHANDLED TASK ERROR: IOError: read: connection reset by peer (ECONNRESET)
+Stacktrace:
+  [1] wait_readnb(x::Sockets.TCPSocket, nb::Int64)
+    @ Base ./stream.jl:410
+  [2] (::Base.var"#wait_locked#739")(s::Sockets.TCPSocket, buf::IOBuffer, nb::Int64)
+    @ Base ./stream.jl:949
+  [3] unsafe_read(s::Sockets.TCPSocket, p::Ptr{UInt8}, nb::UInt64)
+    @ Base ./stream.jl:955
+  [4] unsafe_read
+    @ ./io.jl:774 [inlined]
+  [5] unsafe_read(s::Sockets.TCPSocket, p::Base.RefValue{NTuple{4, Int64}}, n::Int64)
+    @ Base ./io.jl:773
+  [6] read!
+    @ ./io.jl:775 [inlined]
+  [7] deserialize_hdr_raw
+    @ /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/messages.jl:167 [inlined]
+  [8] message_handler_loop(r_stream::Sockets.TCPSocket, w_stream::Sockets.TCPSocket, incoming::Bool)
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:172
+  [9] process_tcp_streams(r_stream::Sockets.TCPSocket, w_stream::Sockets.TCPSocket, incoming::Bool)
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:133
+ [10] (::Distributed.var"#103#104"{Sockets.TCPSocket, Sockets.TCPSocket, Bool})()
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/process_messages.jl:121
+ERROR: LoadError: ProcessExitedException(2)
+Stacktrace:
+  [1] try_yieldto(undo::typeof(Base.ensure_rescheduled))
+    @ Base ./task.jl:931
+  [2] wait()
+    @ Base ./task.jl:995
+  [3] wait(c::Base.GenericCondition{ReentrantLock}; first::Bool)
+    @ Base ./condition.jl:130
+  [4] wait
+    @ ./condition.jl:125 [inlined]
+  [5] take_buffered(c::Channel{Any})
+    @ Base ./channels.jl:477
+  [6] take!(c::Channel{Any})
+    @ Base ./channels.jl:471
+  [7] take!(::Distributed.RemoteValue)
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/remotecall.jl:726
+  [8] remotecall_fetch(::Function, ::Distributed.Worker, ::Int64, ::Vararg{Any}; kwargs::@Kwargs{})
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/remotecall.jl:461
+  [9] remotecall_fetch(::Function, ::Distributed.Worker, ::Int64, ::Vararg{Any})
+    @ Distributed /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/remotecall.jl:454
+ [10] remotecall_fetch
+    @ /central/home/nefrathe/.julia/juliaup/julia-1.10.4+0.x64.linux.gnu/share/julia/stdlib/v1.10/Distributed/src/remotecall.jl:492 [inlined]
+ [11] (::var"#127#128"{Int64})(m::Int64)
+    @ Main /central/home/nefrathe/clima/ClimaAtmos.jl/calibration/experiments/gcm_driven_scm/run_worker_calibration.jl:124
+ [12] iterate
+    @ ./generator.jl:47 [inlined]
+ [13] collect_to!
+    @ ./array.jl:892 [inlined]
+ [14] collect_to_with_first!
+    @ ./array.jl:870 [inlined]
+ [15] _collect(c::UnitRange{Int64}, itr::Base.Generator{UnitRange{Int64}, var"#127#128"{Int64}}, ::Base.EltypeUnknown, isz::Base.HasShape{1})
+    @ Base ./array.jl:864
+ [16] collect_similar
+    @ ./array.jl:763 [inlined]
+ [17] map
+    @ ./abstractarray.jl:3285 [inlined]
+ [18] run_iteration(ensemble_size::Int64, output_dir::String, iter::Int64)
+    @ Main /central/home/nefrathe/clima/ClimaAtmos.jl/calibration/experiments/gcm_driven_scm/run_worker_calibration.jl:122
+ [19] top-level scope
+    @ /central/home/nefrathe/clima/ClimaAtmos.jl/calibration/experiments/gcm_driven_scm/run_worker_calibration.jl:135
+in expression starting at /central/home/nefrathe/clima/ClimaAtmos.jl/calibration/experiments/gcm_driven_scm/run_worker_calibration.jl:135
