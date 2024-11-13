@@ -141,7 +141,7 @@ function run_iteration(ensemble_size, output_dir, iter)
     return eki
 end
 
-for i in 1:n_iterations
+for i in 0:n_iterations
     @info "Running Iteration" i
     eki = run_iteration(ensemble_size, output_dir, i)
 end
