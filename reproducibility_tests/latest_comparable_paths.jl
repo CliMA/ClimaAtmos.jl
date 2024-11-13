@@ -12,7 +12,7 @@ are found.
 """
 function sorted_dataset_folder(; dir = pwd())
     matching_paths = filter(ispath, readdir(dir; join = true))
-    isempty(matching_paths) && return ""
+    isempty(matching_paths) && return String[]
     # sort by timestamp
     sorted_paths =
         sort(matching_paths; by = f -> Dates.unix2datetime(stat(f).mtime))
@@ -40,85 +40,80 @@ function ref_counters_per_path(paths)
 end
 
 """
-    latest_comparable_paths(n::Integer)
+    paths = latest_comparable_paths(;
+        n = 5,
+        root_path = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+        ref_counter_PR = read_ref_counter(joinpath(@__DIR__, "ref_counter.jl"))
+    )
 
 Returns a vector of strings, containing the `n`
-latest comparable paths based on
-`reproducibility_tests/ref_counter.jl`.
-"""
-function latest_comparable_paths(n = 5)
-    if get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci"
-        @warn "Not using climaatmos-ci pipeline slug, assuming no comparable references"
-        @info "Please review output results before merging."
-        return String[]
-    end
+latest comparable paths. The assumed folder structure
+is:
 
-    # Note: cluster_data_prefix is also defined in move_output.jl
-    cluster_data_prefix = "/central/scratch/esm/slurm-buildkite/climaatmos-main"
+```
+root_path/some_folder_1/ref_counter.jl
+root_path/some_folder_2/ref_counter.jl
+root_path/some_folder_3/ref_counter.jl
+```
+
+If a subfolder does not contain a `ref_counter.jl` file
+then it is filtered out as not-comparable. The `ref_counter.jl`
+files are assumed to start with a single integer,
+which is read. If that integer matches `ref_counter_PR`,
+then that path is considered comparable.
+
+`paths[1]` is the most recent comparable path, and
+`paths[end]` is the oldest comparable path.
+"""
+function latest_comparable_paths(;
+    n = 5,
+    root_path = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+    ref_counter_PR = read_ref_counter(joinpath(@__DIR__, "ref_counter.jl")),
+)
+    @info "---Finding the latest comparable paths"
+    # Note: root_path is also defined in move_output.jl
     # Get (sorted) array of paths, `pop!(sorted_paths)`
     # is the most recent merged folder.
-    sorted_paths = sorted_dataset_folder(; dir = cluster_data_prefix)
+    sorted_paths = sorted_dataset_folder(; dir = root_path)
     if isempty(sorted_paths)
-        @warn "No paths on main found, assuming no comparable references"
-        @info "Please review output results before merging."
+        @warn "No paths found in $root_path"
         return String[]
     end
     # Find oldest path in main with the same reference
     # counter as the one in the PR. If none exists,
     # then assume no comparable references.
 
-    ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl")
-    @assert isfile(ref_counter_file_PR)
-    ref_counter_PR = read_ref_counter(ref_counter_file_PR)
-
-    ref_counters_main = ref_counters_per_path(sorted_paths)
-    i_comparable_references = findall(ref_counters_main) do ref_counter_main
-        ref_counter_main == ref_counter_PR
-    end
-    if isnothing(i_comparable_references)
-        @warn "`ref_counter.jl` not found on main, assuming no comparable references"
-        @info "Please review output results before merging."
+    # Short circuit if we don't find anything:
+    found_ref_counters =
+        filter(p -> isfile(joinpath(p, "ref_counter.jl")), sorted_paths)
+    if isempty(found_ref_counters)
+        @warn "No reference counters found in paths: $sorted_paths"
         return String[]
     end
-    @info "Found $(length(i_comparable_references)) comparable references:$i_comparable_references"
-    # Largest ref-counter reference path:
-    paths = map(i -> sorted_paths[i], i_comparable_references)
-    @info "$(length(paths)) paths found:"
-    for p in paths
-        @info "     $p, $(Dates.unix2datetime(stat(p).mtime))"
-    end
-    ref_counter_files_main = map(p -> joinpath(p, "ref_counter.jl"), paths)
-    @info "$(length(ref_counter_files_main)) reference counter paths on central"
-    filter!(isfile, ref_counter_files_main)
-    @info "$(length(ref_counter_files_main)) reference counter paths on central after filtering isfile"
 
-    # for p in paths
-    #     @info "Files in $p:" # for debugging
-    #     for file_on_main in readdir(p)
-    #         @info "   File:`$file_on_main`"
-    #     end
-    # end
-    @assert all(isfile, ref_counter_files_main)
-    ref_counters_main = map(read_ref_counter, ref_counter_files_main)
-    if all(rc -> ref_counter_PR == rc + 1, ref_counters_main) # new reference
-        @warn "`ref_counter.jl` incremented, assuming no comparable references"
-        @info "Ref counters main: $ref_counters_main."
-        @info "Please review output results before merging."
+    # Find comparable paths
+    comparable_paths = String[]
+    @info "Reference counters found:"
+    for (i, path) in enumerate(sorted_paths)
+        ref_counter_file = joinpath(path, "ref_counter.jl")
+        !isfile(ref_counter_file) && continue
+        rc = read_ref_counter(ref_counter_file)
+        comparable = ref_counter_PR == rc
+        suffix = comparable ? ", comparable" : ""
+        @info "     $path: $rc$suffix"
+        comparable && push!(comparable_paths, path)
+    end
+
+    if isempty(comparable_paths)
+        @warn "No comparable paths found in any of the paths:$sorted_paths"
         return String[]
-    elseif all(rc -> ref_counter_PR == rc, ref_counters_main) # unchanged reference
-        @info "Ref counters main: $ref_counters_main."
-        @info "Comparing results against main path:$paths"
-    else
-        error(
-            "Unexpected reference. Please open an issue pointing to this build.",
-        )
     end
 
-    paths = reverse(paths)[1:min(n, length(paths))]
-    @info "Limiting comparable paths to $n:"
-    for p in paths
-        @info "     $p, $(Dates.unix2datetime(stat(p).mtime))"
+    comparable_paths = reverse(comparable_paths) # sort so that
+
+    if length(comparable_paths) > n # limit to n comparable paths
+        comparable_paths = comparable_paths[1:min(n, length(comparable_paths))]
     end
-    # Get the top 10 most recent paths to compare against:
-    return paths
+
+    return comparable_paths
 end
