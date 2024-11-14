@@ -22,6 +22,7 @@ using Test
 @safetestset "Model getters" begin @time include("solver/model_getters.jl") end
 @safetestset "Topography tests" begin @time include("topography.jl") end
 @safetestset "Restarts" begin @time include("restart.jl") end
+@safetestset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
 
 #! format: on
 

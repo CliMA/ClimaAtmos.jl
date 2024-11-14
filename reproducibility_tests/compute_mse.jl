@@ -64,7 +64,7 @@ function reproducibility_test(;
     paths = String[] # initialize for later handling
 
     if haskey(ENV, "BUILDKITE_COMMIT")
-        paths = latest_comparable_paths(10)
+        paths = latest_comparable_paths(; n = 10)
         isempty(paths) && return (reference_mse, paths)
         @info "`ds_filename_computed`: `$ds_filename_computed`"
         ds_filename_references =
