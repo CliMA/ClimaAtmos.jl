@@ -2,7 +2,7 @@ import OrderedCollections
 import JSON
 
 # Get cases from JobIDs in mse_tables file:
-include(joinpath(@__DIR__, "latest_comparable_paths.jl"))
+include(joinpath(@__DIR__, "reproducibility_utils.jl"))
 paths = latest_comparable_paths()
 
 all_lines = readlines(joinpath(@__DIR__, "mse_tables.jl"))
