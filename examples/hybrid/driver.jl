@@ -148,7 +148,7 @@ if ClimaComms.iamroot(config.comms_ctx)
         joinpath(
             pkgdir(CA),
             "reproducibility_tests",
-            "latest_comparable_paths.jl",
+            "reproducibility_utils.jl",
         ),
     )
     @info "Plotting"

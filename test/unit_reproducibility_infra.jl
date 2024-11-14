@@ -4,7 +4,7 @@ using Revise; include("test/unit_reproducibility_infra.jl")
 using Test
 using Dates
 
-include(joinpath("..", "reproducibility_tests/latest_comparable_paths.jl"))
+include(joinpath("..", "reproducibility_tests/reproducibility_utils.jl"))
 
 function make_ref_file_counter(dir, pathname, i)
     d = mkdir(pathname)
