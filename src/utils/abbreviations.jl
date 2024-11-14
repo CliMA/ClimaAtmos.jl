@@ -85,6 +85,11 @@ const ᶠfct_zalesak = Operators.FCTZalesak(
     bottom = Operators.FirstOrderOneSided(),
     top = Operators.FirstOrderOneSided(),
 )
+const ᶠtvd_minmod = Operators.TVDSlopeLimitedFlux(
+    bottom = Operators.FirstOrderOneSided(),
+    top = Operators.FirstOrderOneSided(),
+    method = Operators.MinModLimiter(),
+)
 
 const ᶜinterp_matrix = MatrixFields.operator_matrix(ᶜinterp)
 const ᶜleft_bias_matrix = MatrixFields.operator_matrix(ᶜleft_bias)

@@ -203,10 +203,10 @@ viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false
 tracer_upwinding:
-  help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+  help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`, `tvd_limiter`]"
   value: none
 energy_upwinding:
-  help: "Energy upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+  help: "Energy upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`, `tvd_limiter`]"
   value: none
 orographic_gravity_wave:
   help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`]"

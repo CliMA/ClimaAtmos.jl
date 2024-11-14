@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.6"
+julia_version = "1.10.2"
 manifest_format = "2.0"
 project_hash = "b0cd3fa0e3153549529fa43102bd0bdae16ff23d"
 
@@ -342,7 +342,9 @@ weakdeps = ["CUDA", "MPI"]
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "7632911d7b09fb3e067984626b07b3eb1113e55e"
+git-tree-sha1 = "542d4ef2ab96dc72922a1672385c5b7371d28763"
+repo-rev = "as/limiter-template"
+repo-url = "https://github.com/CliMA/ClimaCore.jl.git"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
 version = "0.14.20"
 weakdeps = ["CUDA", "Krylov"]
@@ -531,7 +533,7 @@ weakdeps = ["Dates", "LinearAlgebra"]
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.1.1+0"
+version = "1.1.0+0"
 
 [[deps.CompositionsBase]]
 git-tree-sha1 = "802bb88cd69dfd1509f6670416bd4434015693ad"
@@ -2621,7 +2623,7 @@ version = "0.15.2+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.11.0+0"
+version = "5.8.0+1"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]

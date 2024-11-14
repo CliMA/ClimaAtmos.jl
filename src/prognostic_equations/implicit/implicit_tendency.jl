@@ -114,6 +114,16 @@ vertical_transport!(coeff, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:za
                 )
             ),
         ))
+vertical_transport!(coeff, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:tvd_limiter}, ᶜdivᵥ) =
+    @. ᶜρχₜ +=
+        -coeff * (ᶜdivᵥ(
+            ᶠwinterp(ᶜJ, ᶜρ) * (
+                ᶠupwind1(ᶠu³, ᶜχ) + ᶠtvd_minmod(
+                    ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
+                    ᶜχ / dt,
+                )
+            ),
+        ))
 
 vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:none}) =
     @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
