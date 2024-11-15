@@ -85,10 +85,10 @@ const ᶠfct_zalesak = Operators.FCTZalesak(
     bottom = Operators.FirstOrderOneSided(),
     top = Operators.FirstOrderOneSided(),
 )
-const ᶠtvd_minmod = Operators.TVDSlopeLimitedFlux(
+const ᶠtvd_limiter = Operators.TVDSlopeLimitedFlux(
     bottom = Operators.FirstOrderOneSided(),
     top = Operators.FirstOrderOneSided(),
-    method = Operators.MinModLimiter(),
+    method = Operators.VanLeerLimiter(),
 )
 
 const ᶜinterp_matrix = MatrixFields.operator_matrix(ᶜinterp)

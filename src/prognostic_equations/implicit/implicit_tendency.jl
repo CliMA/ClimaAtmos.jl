@@ -118,7 +118,7 @@ vertical_transport!(coeff, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:tv
     @. ᶜρχₜ +=
         -coeff * (ᶜdivᵥ(
             ᶠwinterp(ᶜJ, ᶜρ) * (
-                ᶠupwind1(ᶠu³, ᶜχ) + ᶠtvd_minmod(
+                ᶠupwind1(ᶠu³, ᶜχ) + ᶠtvd_limiter(
                     ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
                     ᶜχ / dt,
                 )
