@@ -13,4 +13,4 @@ MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
-ClimaCalibrate = "0.0.2 - 0.0.4"
+ClimaCalibrate = "0.0.5"

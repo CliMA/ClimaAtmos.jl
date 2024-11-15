@@ -564,7 +564,10 @@ steps:
       - label: "Calibration interface unit tests"
         command: julia --project=calibration/test calibration/test/interface.jl
       - label: "end to end test"
-        command: julia --project=calibration/test calibration/test/e2e_test.jl
+        command: srun julia --project=calibration/test calibration/test/slurm_workers.jl
+        agents:
+          slurm_ntasks: 11
+          slurm_cpus_per_task: 1
         artifact_paths: "calibration_end_to_end_test/*"
         soft_fail: true
 
