@@ -67,5 +67,8 @@ else
 end
 
 if buildkite_ci && in_merge_queue
-    cleanup_central(cluster_data_prefix)
+    folders = get_reference_paths_to_delete(; root_path = cluster_data_prefix)
+    for f in folders
+        rm(f; recursive = true, force = true)
+    end
 end
