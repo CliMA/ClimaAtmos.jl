@@ -403,6 +403,10 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         p.precomputed.ᶜts,
         p.precomputed.ᶜp,
         (
+            p.atmos.moisture_model isa NonEquilMoistModel ?
+            (; p.precomputed.ᶜwₗ, p.precomputed.ᶜwᵢ) : (;)
+        )...,
+        (
             p.atmos.precip_model isa Microphysics1Moment ?
             (; p.precomputed.ᶜwᵣ, p.precomputed.ᶜwₛ) : (;)
         )...,
@@ -679,8 +683,12 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         end
 
         ᶠlg = Fields.local_geometry_field(Y.f)
-        precip_info =
-            ((@name(c.ρq_rai), @name(ᶜwᵣ)), (@name(c.ρq_sno), @name(ᶜwₛ)))
+        precip_info = (
+            (@name(c.ρq_liq), @name(ᶜwₗ)),
+            (@name(c.ρq_ice), @name(ᶜwᵢ)),
+            (@name(c.ρq_rai), @name(ᶜwᵣ)),
+            (@name(c.ρq_sno), @name(ᶜwₛ)),
+        )
         MatrixFields.unrolled_foreach(precip_info) do (ρqₚ_name, wₚ_name)
             MatrixFields.has_field(Y, ρqₚ_name) || return
             ∂ᶜρqₚ_err_∂ᶜρqₚ = matrix[ρqₚ_name, ρqₚ_name]

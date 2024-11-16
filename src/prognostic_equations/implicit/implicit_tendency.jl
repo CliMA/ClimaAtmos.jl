@@ -161,11 +161,23 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         )
     end
 
+    # Advection of cloud condensate and precipitation with the mean flow
+    # is done with other passive tracers in the explicit tendency.
+    # Here we add the advection with cloud condensate and precipitation
+    # terminal velocity using downward biasing
+    # and free outflow bottom boundary condition
+    if moisture_model isa NonEquilMoistModel
+        (; ᶜwₗ, ᶜwᵢ) = p.precomputed
+        @. Yₜ.c.ρq_liq -= ᶜprecipdivᵥ(
+            ᶠwinterp(ᶜJ, Y.c.ρ) *
+            ᶠright_bias(Geometry.WVector(-(ᶜwₗ)) * ᶜspecific.q_liq),
+        )
+        @. Yₜ.c.ρq_ice -= ᶜprecipdivᵥ(
+            ᶠwinterp(ᶜJ, Y.c.ρ) *
+            ᶠright_bias(Geometry.WVector(-(ᶜwᵢ)) * ᶜspecific.q_ice),
+        )
+    end
     if precip_model isa Microphysics1Moment
-        # Advection of precipitation with the mean flow
-        # is done with other passive tracers in the explicit tendency.
-        # Here we add the advection with precipitation terminal velocity
-        # using downward biasing and free outflow bottom boundary condition
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
             ᶠwinterp(ᶜJ, Y.c.ρ) *

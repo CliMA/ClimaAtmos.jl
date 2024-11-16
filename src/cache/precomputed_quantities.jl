@@ -147,6 +147,12 @@ function precomputed_quantities(Y, atmos)
         else
             (;)
         end
+    sedimentation_quantities =
+        atmos.moisture_model isa NonEquilMoistModel ?
+        (;
+            ᶜwₗ = similar(Y.c, FT),
+            ᶜwᵢ = similar(Y.c, FT),
+        ) : (;)
     precipitation_quantities =
         atmos.precip_model isa Microphysics1Moment ?
         (;
@@ -174,6 +180,7 @@ function precomputed_quantities(Y, atmos)
         advective_sgs_quantities...,
         diagnostic_sgs_quantities...,
         vert_diff_quantities...,
+        sedimentation_quantities...,
         precipitation_quantities...,
         cloud_diagnostics_tuple,
         smagorinsky_lilly_quantities...,
