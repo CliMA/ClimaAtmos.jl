@@ -12,10 +12,10 @@ y_elem: 45
 z_stretch: false
 x_elem: 45
 config: "box"
-hyperdiff: "true"
 z_max: 6400.0
 smagorinsky_lilly: true
 c_smag: 0.25
+prandtl_turbulent_neutral: 0.333
 netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
   - short_name: [thetaa, wa, ua, ta, va, hfes, rhoa, rv, ha]

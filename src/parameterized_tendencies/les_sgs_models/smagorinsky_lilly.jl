@@ -1,5 +1,5 @@
 #####
-##### Smagornsky Lilly Diffusion
+##### Smagorinsky Lilly Diffusion
 #####
 
 import ClimaCore.Fields as Fields
@@ -15,7 +15,7 @@ Store in the precomputed quantities `p.precomputed`.
 The subgrid-scale momentum flux tensor is defined by `τ = -2 νₜ ∘ S`, where `νₜ` is the Smagorinsky-Lilly eddy viscosity 
 and `S` is the strain rate tensor. 
 
-The turbulent diffusivity is defined as `D = νₜ / Pr_t`, where `Pr_t = 1/3` is the turbulent Prandtl number for neutral 
+The turbulent diffusivity is defined as `D = νₜ / Pr_t`, where `Pr_t` is the turbulent Prandtl number for neutral 
 stratification. 
 
 These quantities are computed for both cell centers and faces, with prefixes `ᶜ` and `ᶠ`, respectively.
@@ -28,12 +28,11 @@ These quantities are computed for both cell centers and faces, with prefixes `�
 function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
 
     (; atmos, precomputed, scratch, params) = p
-    (; Cs) = atmos.smagorinsky_lilly
+    (; Cs, Pr_t) = atmos.smagorinsky_lilly
     (; ᶜu, ᶠu³, ᶜts, ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶠD_smag) = precomputed
     FT = eltype(Y)
     grav = CAP.grav(params)
     thermo_params = CAP.thermodynamics_params(params)
-    Pr_t = FT(1 / 3)
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = scratch
     (; ᶜtemp_scalar, ᶜtemp_scalar_2, ᶠtemp_scalar, ᶜtemp_UVW, ᶠtemp_UVW) =
         scratch
