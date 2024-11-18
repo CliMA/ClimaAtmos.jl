@@ -1,6 +1,6 @@
 [zd_viscous]
-value = 45000.0
+value = 40000.0
 
 [zd_rayleigh]
-value = 45000.0
+value = 40000.0
 

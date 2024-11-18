@@ -3,7 +3,7 @@ import NCDatasets
 import Tar
 import ClimaCoreTempestRemap as CCTR
 
-include("self_reference_or_path.jl")
+include("reproducibility_utils.jl")
 
 function get_nc_data(ds, var::String)
     if haskey(ds, var)
@@ -61,86 +61,96 @@ function reproducibility_test(;
 )
     local ds_filename_reference
     reference_keys = map(k -> varname(k), collect(keys(reference_mse)))
+    paths = String[] # initialize for later handling
 
     if haskey(ENV, "BUILDKITE_COMMIT")
-        path = self_reference_or_path()
-        path == :self_reference && return reference_mse
-        ds_filename_reference = joinpath(path, ds_filename_computed)
+        paths = latest_comparable_paths(; n = 10)
+        isempty(paths) && return (reference_mse, paths)
         @info "`ds_filename_computed`: `$ds_filename_computed`"
-        @info "`ds_filename_reference`: `$ds_filename_reference`"
-        job_dir = dirname(ds_filename_reference)
-        nc_tar = joinpath(job_dir, "nc_files.tar")
-        # We may have converted to tarball, try to
-        # extract nc files from tarball first:
-        if !isfile(ds_filename_reference)
-            if isfile(nc_tar)
-                mktempdir(joinpath(job_dir, tempdir())) do tdir
-                    # We must extract to an empty folder, let's
-                    # move it back to job_dir after.
-                    Tar.extract(nc_tar, tdir) do hdr
-                        basename(hdr.path) == basename(ds_filename_reference)
+        ds_filename_references =
+            map(p -> joinpath(p, ds_filename_computed), paths)
+        for ds_filename_reference in ds_filename_references
+            @info "`ds_filename_reference`: `$ds_filename_reference`"
+            job_dir = dirname(ds_filename_reference)
+            nc_tar = joinpath(job_dir, "nc_files.tar")
+            # We may have converted to tarball, try to
+            # extract nc files from tarball first:
+            if !isfile(ds_filename_reference)
+                if isfile(nc_tar)
+                    mktempdir(joinpath(job_dir, tempdir())) do tdir
+                        # We must extract to an empty folder, let's
+                        # move it back to job_dir after.
+                        Tar.extract(nc_tar, tdir) do hdr
+                            basename(hdr.path) ==
+                            basename(ds_filename_reference)
+                        end
+                        mv(
+                            joinpath(tdir, basename(ds_filename_reference)),
+                            joinpath(job_dir, basename(ds_filename_reference));
+                            force = true,
+                        )
                     end
-                    mv(
-                        joinpath(tdir, basename(ds_filename_reference)),
-                        joinpath(job_dir, basename(ds_filename_reference));
-                        force = true,
-                    )
+                else
+                    @warn "There is no reference dataset, and no NC tar file."
                 end
-            else
-                @warn "There is no reference dataset, and no NC tar file."
             end
-        end
-        if !isfile(ds_filename_reference)
-            msg = "\n\n"
-            msg *= "Pull request author:\n"
-            msg *= "    It seems that a new dataset,\n"
-            msg *= "\n"
-            msg *= "dataset file:`$(ds_filename_computed)`,"
-            msg *= "\n"
-            msg *= "    was created, or the name of the dataset\n"
-            msg *= "    has changed. Please increment the reference\n"
-            msg *= "    counter in `reproducibility_tests/ref_counter.jl`.\n"
-            msg *= "\n"
-            msg *= "    If this is not the case, then please\n"
-            msg *= "    open an issue with a link pointing to this\n"
-            msg *= "    PR and build.\n"
-            msg *= "\n"
-            msg *= "For more information, please find\n"
-            msg *= "`reproducibility_tests/README.md` and read the section\n\n"
-            msg *= "  `How to merge pull requests (PR) that get approved\n"
-            msg *= "   but *break* reproducibility tests`\n\n"
-            msg *= "for how to merge this PR."
-            error(msg)
+            if !isfile(ds_filename_reference)
+                msg = "\n\n"
+                msg *= "Pull request author:\n"
+                msg *= "    It seems that a new dataset,\n"
+                msg *= "\n"
+                msg *= "dataset file:`$(ds_filename_computed)`,"
+                msg *= "\n"
+                msg *= "    was created, or the name of the dataset\n"
+                msg *= "    has changed. Please increment the reference\n"
+                msg *= "    counter in `reproducibility_tests/ref_counter.jl`.\n"
+                msg *= "\n"
+                msg *= "    If this is not the case, then please\n"
+                msg *= "    open an issue with a link pointing to this\n"
+                msg *= "    PR and build.\n"
+                msg *= "\n"
+                msg *= "For more information, please find\n"
+                msg *= "`reproducibility_tests/README.md` and read the section\n\n"
+                msg *= "  `How to merge pull requests (PR) that get approved\n"
+                msg *= "   but *break* reproducibility tests`\n\n"
+                msg *= "for how to merge this PR."
+                error(msg)
+            end
         end
     else
         @warn "Buildkite not detected. Skipping reproducibility tests."
         @info "Please review output results before merging."
-        return reference_mse
+        return (reference_mse, paths)
     end
 
     local computed_mse
     @info "Prescribed reference keys $reference_keys"
     dict_computed = to_dict(ds_filename_computed, reference_keys)
-    dict_reference = to_dict(ds_filename_reference, reference_keys)
+    dict_references =
+        map(ds -> to_dict(ds, reference_keys), ds_filename_references)
     @info "Computed keys $(collect(keys(dict_computed)))"
-    @info "Reference keys $(collect(keys(dict_reference)))"
-    try
-        computed_mse = CRT.compute_mse(;
-            job_name = string(job_id),
-            reference_keys = reference_keys,
-            dict_computed,
-            dict_reference,
-        )
-    catch err
+    @info "Reference keys $(collect(keys(first(dict_references))))"
+    if all(dr -> keys(dict_computed) == keys(dr), dict_references) && all(
+        dr -> typeof(values(dict_computed)) == typeof(values(dr)),
+        dict_references,
+    )
+        computed_mses = map(dict_references) do dict_reference
+            CRT.compute_mse(;
+                job_name = string(job_id),
+                reference_keys = reference_keys,
+                dict_computed,
+                dict_reference,
+            )
+        end
+    else
         msg = ""
         msg *= "The reproducibility test broke. Please find\n"
         msg *= "`reproducibility_tests/README.md` and read the section\n\n"
         msg *= "  `How to merge pull requests (PR) that get approved but *break* reproducibility tests`\n\n"
         msg *= "for how to merge this PR."
-        @info msg
-        rethrow(err)
+        error(msg)
     end
-    return computed_mse
+    return (computed_mses, paths)
 
 end
 

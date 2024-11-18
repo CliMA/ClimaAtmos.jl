@@ -1,5 +1,5 @@
 h_elem: 16
-z_max: 60000.0
+z_max: 65000.0
 z_elem: 63
 dz_bottom: 30.0
 rayleigh_sponge: true
@@ -9,11 +9,12 @@ approximate_linear_solve_iters: 2
 dt: "120secs"
 t_end: "360days"
 dt_save_state_to_disk: "10days"
-moist: "equil"
+cloud_model: "grid_scale"
+moist: "nonequil"
+precip_model: "1M"
 rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"
-precip_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]

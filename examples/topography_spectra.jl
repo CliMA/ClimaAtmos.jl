@@ -44,7 +44,6 @@ function generate_spaces(;
     Δh_scale = Spaces.node_horizontal_length_scale(h_space)
     @assert h_space isa CC.Spaces.SpectralElementSpace2D
     coords = CC.Fields.coordinate_field(h_space)
-    target_field = CC.Fields.zeros(h_space)
     elev_from_file = SpaceVaryingInputs.SpaceVaryingInput(
         AA.earth_orography_file_path(; context = comms_ctx),
         "z",
@@ -129,7 +128,7 @@ function generate_all_spectra(; h_elem = 16)
         xgridvisible = true,
         ygridvisible = false,
     )
-    for ii in (1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
+    for ii in collect(range(1, 10, length = 10))
         n_attenuation = ii
         test_var = generate_spaces(; h_elem, n_attenuation)
         Δh_scale = Spaces.node_horizontal_length_scale(Spaces.axes(test_var))
@@ -140,5 +139,86 @@ function generate_all_spectra(; h_elem = 16)
         scatterlines!(sph_wn[2:end], psd[2:end], label = "iter = $(maxiter)")
     end
     CairoMakie.Legend(fig[1, 2], ax1)
+    return fig
+end
+
+"""
+    compare_elevation(;h_elem, n_attenuation)
+Computes the difference between the (regridded) elevation profile
+on a spectral element grid with `h_elem` without any smoothing against
+the corresponding regridded and smoothed surface elevation field. 
+Returns regridded arrays of target topography, and differences
+on cubed-sphere with `h_elem` elements per panel.
+(This field can then be plotted with `ClimaCorePlots`)
+"""
+function compare_elevation(;
+    h_elem = 16,
+    n_attenuation = 5,
+    planet_radius = 6.378e6,
+)
+    FT = Float32
+    space1 = generate_spaces(; h_elem, n_attenuation)
+    space2 = generate_spaces(; h_elem, n_attenuation = 1)
+    Δh_scale = Spaces.node_horizontal_length_scale(Spaces.axes(space2))
+    raw_space_diff = space2 .- space1
+    # Linear Interpolation for visualization
+    npts = Int(round(2π * planet_radius / Δh_scale))
+    npts = ifelse(rem(npts, 2) == 0, npts, npts + 1)
+    longpts = range(FT(-180), FT(180.0), Int(npts))
+    latpts = range(FT(-90), FT(90), Int(npts // 2))
+    hcoords =
+        [Geometry.LatLongPoint(lat, long) for long in longpts, lat in latpts]
+    regridded_space_diff = remap_to_array(raw_space_diff, hcoords)
+    regridded_tgt_space = remap_to_array(space1, hcoords)
+    return (
+        raw_space_diff,
+        regridded_space_diff,
+        longpts,
+        latpts,
+        regridded_tgt_space,
+    )
+end
+
+(hspace_diff, regrid_space_diff, lon, lat, regridded_target_space) =
+    compare_elevation(; h_elem = 16, n_attenuation = 5);
+
+"""
+    generate_fig_Δelevation(;h_elem, n_attenuation)
+Given elevation data regridded onto a cubed-sphere grid with `h_elem²` panels per
+face, generate a figure with the following plots: 
+(1) Difference in regridded elevation data (raw cubed-sphere data - smoothed cubed-sphere data)
+(2) Surface elevation as seen by the model (smoothed cubed-sphere data)
+The "regridding" step implied here consists of interpolating (linear interoplation by default)the ETOPO2022 
+raw dataset (via ClimaArtifacts) onto the required ClimaAtmos grid.
+"""
+function generate_fig_Δelevation(; h_elem = 16, n_attenuation = 5)
+    fig = Figure(; size = (2000, 1000))
+    ax1 = Axis(
+        fig[1, 1],
+        xlabel = "lon",
+        ylabel = "lat",
+        title = "Difference in regridded surface elevation (raw - smoothed)",
+    )
+    ax2 = Axis(
+        fig[2, 1],
+        xlabel = "lon",
+        ylabel = "lat",
+        title = "Regridded surface elevation (smoothed)",
+    )
+    color_levels = 25
+    cmap = cgrad(:curl, color_levels; categorical = true)
+    raw_Δelevation, regridded_Δelevation, lon, lat, regridded_tgt =
+        compare_elevation(; h_elem, n_attenuation)
+    figdata1 = CairoMakie.contourf!(
+        ax1,
+        lon,
+        lat,
+        regridded_Δelevation;
+        colormap = cmap,
+    )
+    figdata2 =
+        CairoMakie.contourf!(ax2, lon, lat, regridded_tgt; colormap = cmap)
+    Colorbar(fig[1, 2], figdata1, label = "Elevation diff [m]")
+    Colorbar(fig[2, 2], figdata2, label = "Regridded elevation [m]")
     return fig
 end

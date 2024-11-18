@@ -51,7 +51,7 @@ topo_smoothing:
   value: false
 topography_damping_factor:
   help: "Factor by which smallest resolved length-scale is to be damped"
-  value: 512
+  value: 5
 # ODE
 use_newton_rtol:
   help: "Whether to check if the current iteration of Newton's method has an error within a relative tolerance, instead of always taking the maximum number of iterations (only for ClimaTimeSteppers.jl)"

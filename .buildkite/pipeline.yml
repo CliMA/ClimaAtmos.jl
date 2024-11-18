@@ -369,6 +369,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.yml
           --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl --test_broken_report_flakiness true
+          --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
+          --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/output_active
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/output_active/*"
         agents:
           slurm_mem: 20GB
@@ -964,7 +968,7 @@ steps:
           - >
             nsys profile --delay 100 --trace=nvtx,cuda --output=central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file $CONFIG_PATH/central_gpu_hs_rhoe_equil_55km_nz63_0M.yml
+            --config_file $CONFIG_PATH/central_gpu_hs_rhoe_equil_0M.yml
             --job_id central_gpu_hs_rhoe_equil_55km_nz63_0M
         artifact_paths: "central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
         env:
@@ -978,7 +982,7 @@ steps:
           - >
             nsys profile --delay 100 --trace=nvtx,cuda --output=central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file $CONFIG_PATH/central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M.yml
+            --config_file $CONFIG_PATH/central_cloud_diag_gpu_hs_rhoe_equil_0M.yml
             --job_id central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M
         artifact_paths: "central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
         env:
