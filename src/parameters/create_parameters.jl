@@ -96,6 +96,7 @@ function create_parameter_set(config::AtmosConfig)
         (;
             liquid = CM.Parameters.CloudLiquid(toml_dict),
             ice = CM.Parameters.CloudIce(toml_dict),
+            Ch2022 = CM.Parameters.Chen2022VelType(toml_dict),
         )
     else
         nothing
