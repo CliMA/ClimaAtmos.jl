@@ -1,21 +1,20 @@
-job_id: "box_density_current_test"
-dt_save_state_to_disk: "10secs"
 initial_condition: "DryDensityCurrentProfile"
-x_max: 51200.0
-z_elem: 45
-dt: "0.3secs"
-t_end: "1000secs"
-discrete_hydrostatic_balance: true
-hyperdiff: "false"
-y_max: 51200.0
-y_elem: 45
-z_stretch: false
-x_elem: 45
 config: "box"
-z_max: 6400.0
 smagorinsky_lilly: true
 c_smag: 0.25
+discrete_hydrostatic_balance: true
+hyperdiff: "false"
+x_max: 51200.0
+y_max: 51200.0
+z_max: 6400.0
+x_elem: 45
+y_elem: 45
+z_elem: 45
+z_stretch: false
+dt: "0.25secs"
+t_end: "1020secs"
 prandtl_turbulent_neutral: 0.333
+dt_save_state_to_disk: "60secs"
 netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
   - short_name: [thetaa, wa, ua, ta, va, hfes, rhoa, rv, ha]
