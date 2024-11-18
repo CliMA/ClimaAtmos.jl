@@ -12,10 +12,10 @@ y_elem: 45
 z_elem: 45
 z_stretch: false
 dt: "0.25secs"
-t_end: "1020secs"
+t_end: "20secs"
 prandtl_turbulent_neutral: 0.333
-dt_save_state_to_disk: "60secs"
+dt_save_state_to_disk: "5secs"
 netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
   - short_name: [thetaa, wa, ua, ta, va, hfes, rhoa, rv, ha]
-    period: 30secs
+    period: 5secs
