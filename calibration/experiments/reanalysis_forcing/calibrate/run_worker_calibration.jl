@@ -4,12 +4,22 @@ project=dirname(Base.active_project())
 cd(project)
 # addprocs(SlurmManager(1), t="01:30:00", cpus_per_task=3,exeflags=["--project=$project", "-p", "3"])
 # addprocs(SlurmManager(5),  t="01:30:00", cpus_per_task=3,exeflags=["--project=$project", "-p", "3"])
-addprocs(SlurmManager(100),  
-        t="04:50:00", 
-        cpus_per_task=1,
-        exeflags=["--project=$project"], 
-        mem_per_cpu=8000)
+# addprocs(SlurmManager(100),  
+#         t="14:50:00", 
+#         cpus_per_task=1,
+#         exeflags=["--project=$project"], 
+#         mem_per_cpu=8000)
+function create_worker_pool()    
+    addprocs(
+        SlurmManager(100),
+        t = "10:00:00",
+        cpus_per_task = 1,
+        exeflags = "--project=$(Base.active_project())"
+    )
+    return WorkerPool(workers())
+end
 
+worker_pool = create_worker_pool()
 
 @info "Running Script..."
 @everywhere begin
@@ -95,7 +105,7 @@ JLD2.jldsave(
                 Dict(
                     "samples" => y_obs,
                     "covariances" => Σ_obs,
-                    "names" => join([months[1], sites[1]], "_"),
+                    "names" => join([months[i], sites[i]], "_"),
                 ),
             ),
         )
@@ -127,22 +137,63 @@ eki = nothing
 
 member_worker(m::Int) = workers()[mod(m - 1, length(workers())) + 1]
 
-function run_iteration(ensemble_size, output_dir, iter)
-    futures = map(1:ensemble_size) do m
-        worker = member_worker(m)
-        atmos_configs = remotecall_fetch(CAL.set_up_forward_model, worker, m, iter, experiment_dir)
-        remotecall(CAL.run_forward_model, worker, atmos_configs)
-    end
-    s = @elapsed fetch.(futures)
-    @info "Completed iteration $iter in $(round(s)) seconds, updating ensemble"
-    G_ensemble = observation_map(iter; config_dict = experiment_config)
-    CAL.save_G_ensemble(output_dir, iter, G_ensemble)
-    eki = CAL.update_ensemble(output_dir, iter, prior)
-    return eki
+
+function update_ensemble(output_dir::AbstractString, iteration, prior)
+    iter_path = CAL.path_to_iteration(output_dir, iteration)
+    eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
+    @info eki
+    # Load data from the ensemble
+    G_ens = JLD2.load_object(joinpath(iter_path, "G_ensemble.jld2"))
+    @info G_ens
+    terminate = EKP.update_ensemble!(eki, G_ens)
+    CAL.save_eki_state(eki, output_dir, iteration + 1, prior)
+    return terminate
 end
 
-for i in 0:n_iterations
-    @info "Running Iteration" i
-    eki = run_iteration(ensemble_size, output_dir, i)
+# function run_iteration(ensemble_size, output_dir, iter)
+#     futures = map(1:ensemble_size) do m
+#         worker = member_worker(m)
+#         atmos_configs = remotecall_fetch(CAL.set_up_forward_model, worker, m, iter, experiment_dir)
+#         remotecall(CAL.run_forward_model, worker, atmos_configs)
+#     end
+#     s = @elapsed fetch.(futures)
+#     @info "Completed iteration $iter in $(round(s)) seconds, updating ensemble"
+#     G_ensemble = observation_map(iter; config_dict = experiment_config)
+#     @info G_ensemble
+#     CAL.save_G_ensemble(output_dir, iter, G_ensemble)
+#     eki = update_ensemble(output_dir, iter, prior)
+#     return eki
+# end
+
+function run_iteration(ensemble_size, output_dir, iter, worker_pool)
+    @sync begin
+        for m in 1:ensemble_size
+            @async begin
+                # Get worker from worker_pool
+                worker = take!(worker_pool)
+                try
+                    @info "Running member $m on worker $worker"
+                    # Run the model 
+                    atmos_configs = CAL.set_up_forward_model(m, iter, experiment_dir)
+                    remotecall_wait(CAL.run_forward_model, worker, atmos_configs)
+                catch e 
+                    @error "Error running member $m" exception = e
+                finally 
+                    # Return worker to the worker_pool
+                    put!(worker_pool, worker)
+                end
+            end
+        end
+    end
+end
+
+for iter in 0:n_iterations
+    @info "Running Iteration" iter
+    (; time, value) = @timed run_iteration(ensemble_size, output_dir, iter, worker_pool)
+    @info "Iteration $iter time: $time"
+    G_ensemble = observation_map(iter; config_dict = experiment_config)
+    @info size(G_ensemble)
+    CAL.save_G_ensemble(output_dir, iter, G_ensemble)
+    eki = update_ensemble(output_dir, iter, prior)
 end
 println("Finished!")

@@ -1,5 +1,5 @@
 prior_path: prior_narrow.toml
-ensemble_size: 50
+ensemble_size: 100
 n_iterations: 10
 batch_size: 1 # number of cases per iteration
 model_config : prognostic_edmfx_gcmdriven_column.yml 

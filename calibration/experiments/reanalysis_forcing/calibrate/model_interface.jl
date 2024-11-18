@@ -87,8 +87,7 @@ function run_forward_model(atmos_configs)
 
     start_time = time()
 
-    #pmap(run_atmos_simulation, atmos_configs)
-    #run_atmos_simulation(atmos_configs[1])
+    # pmap(run_atmos_simulation, atmos_configs)
     for config in atmos_configs
         run_atmos_simulation(config)
     end

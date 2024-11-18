@@ -18,7 +18,7 @@ config_i = 1 # config to plot
 ylims = (0, 4000) # y limits for plotting (`z` coord)
 iterations = nothing # iterations to plot (i.e., 0:2). default is all iterations
 var_names =
-    ("thetaa", "hus", "clw", "arup", "entr", "detr", "waup", "tke", "turbentr")
+    ("thetaa", "hus", "clw", "arup", "entr", "detr", "waup", "tke", "turbentr", "ta")
 reduction = "inst"
 
 config_dict =
