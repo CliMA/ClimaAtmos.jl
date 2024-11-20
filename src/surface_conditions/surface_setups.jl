@@ -91,8 +91,9 @@ function (::Soares)(params)
     z0 = FT(0.16) # 0.16 is taken from the Nieuwstadt paper.
     θ_flux = FT(0.06)
     q_flux = FT(2.5e-5)
+    ustar::FT = 0.28 # just to initilize grid mean covariances
     parameterization =
-        MoninObukhov(; z0, fluxes = θAndQFluxes(; θ_flux, q_flux))
+        MoninObukhov(; z0, fluxes = θAndQFluxes(; θ_flux, q_flux), ustar)
     return SurfaceState(; parameterization, T, p, q_vap)
 end
 
@@ -187,7 +188,7 @@ function (::DYCOMS_RF02)(params)
     ustar = FT(0.25)
     parameterization =
         MoninObukhov(; z0, fluxes = HeatFluxes(; shf, lhf), ustar)
-    return SurfaceState(; parameterization, T, p, q_vap)
+    return SurfaceState(; parameterization, T, p, q_vap) 
 end
 
 struct Rico end

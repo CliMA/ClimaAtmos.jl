@@ -1454,3 +1454,85 @@ function make_plots(
         output_name = "summary_3D",
     )
 end
+
+
+
+function make_plots(
+    sim_type::Val{:prognostic_edmfx_soares_column},
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+
+    short_names = [
+        "wa",
+        "waup",
+        "ta",
+        "taup",
+        "hus",
+        "husup",
+        "arup",
+        "tke",
+        "ua",
+        "thetaa",
+        "thetaaup",
+        "ha",
+        "haup",
+        "hur",
+        "hurup",
+        "lmix",
+        "cl",
+        "clw",
+        "clwup",
+        "cli",
+        "cliup",
+    ]
+    reduction = "inst"
+
+    available_periods = ClimaAnalysis.available_periods(
+        simdirs[1];
+        short_name = short_names[1],
+        reduction,
+    )
+    if "5m" in available_periods
+        period = "5m"
+    elseif "10m" in available_periods
+        period = "10m"
+    elseif "30m" in available_periods
+        period = "30m"
+    end
+
+    short_name_tuples = pair_edmf_names(short_names)
+    var_groups_zt =
+        map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
+            return [
+                slice(
+                    get(simdir; short_name, reduction, period),
+                    x = 0.0,
+                    y = 0.0,
+                ) for short_name in name_tuple
+            ]
+        end
+
+    var_groups_z = [
+        ([slice(v, time = LAST_SNAP) for v in group]...,) for
+        group in var_groups_zt
+    ]
+
+    tmp_file = make_plots_generic(
+        output_paths,
+        output_name = "tmp",
+        var_groups_z;
+        plot_fn = plot_edmf_vert_profile!,
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+
+    make_plots_generic(
+        output_paths,
+        vcat(var_groups_zt...),
+        plot_fn = plot_parsed_attribute_title!,
+        summary_files = [tmp_file],
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+end

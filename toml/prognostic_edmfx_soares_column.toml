@@ -1,3 +1,9 @@
+[zd_rayleigh]
+value = 40000.0
+
+[zd_viscous]
+value = 40000.0
+
 [EDMF_surface_area]
 value = 0.1
 
@@ -11,7 +17,7 @@ value = 0.7
 value = 0.0001
 
 [entr_coeff]
-value = 0
+value = 0.1
 
 [min_area_limiter_scale]
 value = 0
