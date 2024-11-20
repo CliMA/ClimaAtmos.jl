@@ -525,6 +525,10 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     #     compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     # end
 
+    if moisture_model isa NonEquilMoistModel
+        set_sedimentation_precomputed_quantities!(Y, p, t)
+    end
+
     if precip_model isa Microphysics1Moment
         set_precipitation_precomputed_quantities!(Y, p, t)
     end

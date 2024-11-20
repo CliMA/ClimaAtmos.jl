@@ -2,16 +2,19 @@ z_max: 60000.0
 z_elem: 31
 dz_bottom: 50.0
 dt: "400secs"
-t_end: "18hours"
+t_end: "1hours"
 dt_save_state_to_disk: "18hours"
 vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 cloud_model: "grid_scale"
 moist: "nonequil"
-precip_model: "nothing"
+precip_model: "1M"
 rad: "allskywithclear"
 insolation: "timevarying"
 rayleigh_sponge: true
 surface_setup: "DefaultMoninObukhov"
 toml: [toml/sphere_aquaplanet.toml]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, husra, cl, clw, cli, hussfc, evspsbl, hfes, pr]
+    period: 400secs
