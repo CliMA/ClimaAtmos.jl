@@ -44,15 +44,15 @@ def get_horizontal_tendencies(lon, lat, column_ds):
 
     # compute advective tendencies
     # Temperature
-    tntha = center.u * (east.t - west.t) / (2 * dx) + center.v * (north.t - south.t) / (2 * dy)
+    tntha = - (center.u * (east.t - west.t) / (2 * dx) + center.v * (north.t - south.t) / (2 * dy))
     # specific humidity
-    tnhusha = center.u * (east.q - west.q) / (2 * dx) + center.v * (north.q - south.q) / (2 * dy)
+    tnhusha = -(center.u * (east.q - west.q) / (2 * dx) + center.v * (north.q - south.q) / (2 * dy))
 
     return tntha, tnhusha
 
 #get_tendencies(lon, lat, col)[0]
 
-def get_vertical_tendencies(column_ds, var, vertvar = "wa"):
+def get_vertical_tendencies(column_ds, var, vertvar = "wap"):
     """
     Calculate the temperature and specific humidity vertical tendencies as a function of levels
     using vertical advection. Here we take the tendency over the geopotential height not the height in meters
@@ -60,7 +60,7 @@ def get_vertical_tendencies(column_ds, var, vertvar = "wa"):
     tntva_trend = []
     # Loop through each pressure level
     num_levels = column_ds[vertvar].shape[0]  # Number of vertical levels
-
+    # Tendency is - w *d/dz(var): convention here needs to flip sign because zg is positive here 
     for i in range(num_levels):
         if i == 0:  # Bottom level (forward difference)
             tntva = column_ds[vertvar][i] * (column_ds[var][i+1] - column_ds[var][i]) / (column_ds.zg[i+1] - column_ds.zg[i])
@@ -93,7 +93,7 @@ def get_forcing_data(cfsite, column_ds, surface_ds, geo = geo):
     ##### get column data #####
     # compute temperature
     R_d = 287.05  # Specific gas constant for dry air (J/(kg·K))
-    g = 9.807  # Gravitational acceleration (m/s²)
+    g = -9.807  # Gravitational acceleration (m/s²)
     pressure = sitecol.pressure_level * 100  # Convert to Pa
     pressure_broadcasted = pressure.broadcast_like(column_ds.t)
     # Compute air density using the ideal gas law: rho = P / (R_d * T)
@@ -119,7 +119,7 @@ def get_forcing_data(cfsite, column_ds, surface_ds, geo = geo):
     sitedata["sshf"] = - sitedata["sshf"] / time_resolution
 
     sitedata = sitedata.rename({"t": "ta", "u": "ua", "v": "va", "w": "wa", "q": "hus", "slhf": "hfls", "sshf": "hfss", "skt": "ts", "tisr": "rsdt", "z": "zg"})
-    sitedata["z"] = sitedata["zg"] / g # convert geopotential (zg) to height in meters (z)
+    sitedata["z"] = sitedata["zg"] / (-g) # convert geopotential (zg) to height in meters (z): negative because zg is positive 
 
     # remove latitude/longitude dependence
     sitedata = sitedata.squeeze()
@@ -156,7 +156,7 @@ surface_avg = surface_avg.load()
 # pressure_avg = pressure_avg.load()
 
 # loop through months
-for month in range(1, 2):
+for month in range(1, 13):
     output_file = f'era5_monthly_forcing_{month}.nc'
 
     pressure_ds = pressure_avg.sel(month = month, drop = True)
