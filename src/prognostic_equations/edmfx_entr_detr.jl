@@ -136,6 +136,7 @@ function detrainment_from_thermo_state(
     entrʲ_prev_level,
     vert_div_level,
     ᶜmassflux_vert_div, # mass flux divergence is not implemented for diagnostic edmf
+    ᶜw_vert_div, # mass flux divergence is not implemented for diagnostic edmf
     tke_prev_level,
     edmfx_detr_model,
 )
@@ -158,6 +159,7 @@ function detrainment_from_thermo_state(
         entrʲ_prev_level,
         vert_div_level,
         FT(0), # mass flux divergence is not implemented for diagnostic edmf
+        FT(0), # w divergence is not implemented for diagnostic edmf
         tke_prev_level,
         edmfx_detr_model,
     )
@@ -194,6 +196,7 @@ function detrainment(
     ᶜentr,
     ᶜvert_div,
     ᶜmassflux_vert_div,
+    ᶜw_vert_div,
     ᶜtke⁰,
     ::NoDetrainment,
 )
@@ -217,6 +220,7 @@ function detrainment(
     ᶜentr,
     ᶜvert_div,
     ᶜmassflux_vert_div,
+    ᶜw_vert_div,
     ᶜtke⁰,
     ::PiGroupsDetrainment,
 )
@@ -268,6 +272,7 @@ function detrainment(
     ᶜentr,
     ᶜvert_div,
     ᶜmassflux_vert_div,
+    ᶜw_vert_div,
     ᶜtke⁰,
     ::GeneralizedDetrainment,
 )
@@ -319,9 +324,15 @@ function detrainment(
     ᶜentr,
     ᶜvert_div,
     ᶜmassflux_vert_div,
+    ᶜw_vert_div,
+    ᶜtke⁰,
     ::ConstantAreaDetrainment,
 )
-    detr = ᶜentr - ᶜvert_div
+    if ᶜρaʲ <= 0
+        detr = 0
+    else
+        detr = (ᶜvert_div < 0) * (ᶜentr - ᶜw_vert_div)
+    end
     return max(detr, 0)
 end
 
@@ -364,8 +375,10 @@ limit_entrainment(entr::FT, a, dt) where {FT} = max(
     min(entr, FT(0.9) * (1 - a) / max(a, eps(FT)) / dt, FT(0.9) * 1 / dt),
     0,
 )
+# limit_detrainment(detr::FT, a, dt) where {FT} =
+#     max(min(detr, FT(0.9) * 1 / dt), 0)
 limit_detrainment(detr::FT, a, dt) where {FT} =
-    max(min(detr, FT(0.9) * 1 / dt), 0)
+    max(detr, 0)
 
 function limit_turb_entrainment(dyn_entr::FT, turb_entr, dt) where {FT}
     return max(min((FT(0.9) * 1 / dt) - dyn_entr, turb_entr), 0)

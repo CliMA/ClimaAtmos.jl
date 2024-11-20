@@ -614,6 +614,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 entrʲ_prev_level,
                 vert_div_level,
                 FT(0), # mass flux divergence is not implemented for diagnostic edmf
+                FT(0), # w divergence is not implemented for diagnostic edmf
                 tke_prev_level,
                 p.atmos.edmfx_model.detr_model,
             )
