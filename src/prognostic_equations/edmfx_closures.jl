@@ -3,6 +3,7 @@
 #####
 
 import StaticArrays as SA
+import Thermodynamics.Parameters as TDP
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 
@@ -16,9 +17,9 @@ end
 """
     Return buoyancy on cell centers.
 """
-function ᶜphysical_buoyancy(params, ᶜρ_ref, ᶜρ)
+function ᶜphysical_buoyancy(thermo_params, ᶜρ_ref, ᶜρ)
     # TODO - replace by ᶜgradᵥᶠΦ when we move to deep atmosphere
-    g = CAP.grav(params)
+    g = TDP.grav(thermo_params)
     return (ᶜρ_ref - ᶜρ) / ᶜρ * g
 end
 """
