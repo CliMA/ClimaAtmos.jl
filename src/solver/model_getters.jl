@@ -497,8 +497,8 @@ function get_detrainment_model(parsed_args)
         GeneralizedDetrainment()
     elseif detr_model == "GeneralizedHarmonics"
         GeneralizedHarmonicsDetrainment()
-    elseif detr_model == "ConstantArea"
-        ConstantAreaDetrainment()
+    elseif detr_model == "SmoothArea"
+        SmoothAreaDetrainment()
     else
         error("Invalid detr_model $(detr_model)")
     end

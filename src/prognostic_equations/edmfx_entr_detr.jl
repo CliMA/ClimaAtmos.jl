@@ -142,6 +142,7 @@ function detrainment_from_thermo_state(
     entrʲ_prev_level,
     vert_div_level,
     ᶜmassflux_vert_div, # mass flux divergence is not implemented for diagnostic edmf
+    w_vert_div_level,
     tke_prev_level,
     edmfx_detr_model,
 )
@@ -164,6 +165,7 @@ function detrainment_from_thermo_state(
         entrʲ_prev_level,
         vert_div_level,
         FT(0), # mass flux divergence is not implemented for diagnostic edmf
+        w_vert_div_level,
         tke_prev_level,
         edmfx_detr_model,
     )
@@ -202,6 +204,7 @@ function detrainment(
     ᶜentr,
     ᶜvert_div,
     ᶜmassflux_vert_div,
+    ᶜw_vert_div,
     ᶜtke⁰,
     ::NoDetrainment,
 )
@@ -226,6 +229,7 @@ function detrainment(
     ᶜentr,
     ᶜvert_div,
     ᶜmassflux_vert_div,
+    ᶜw_vert_div,
     ᶜtke⁰,
     ::PiGroupsDetrainment,
 )
@@ -278,6 +282,7 @@ function detrainment(
     ᶜentr,
     ᶜvert_div,
     ᶜmassflux_vert_div,
+    ᶜw_vert_div,
     ᶜtke⁰,
     ::GeneralizedDetrainment,
 )
@@ -329,9 +334,15 @@ function detrainment(
     ᶜentr,
     ᶜvert_div,
     ᶜmassflux_vert_div,
-    ::ConstantAreaDetrainment,
+    ᶜw_vert_div,
+    ᶜtke⁰,
+    ::SmoothAreaDetrainment,
 )
-    detr = ᶜentr - ᶜvert_div
+    if (ᶜρaʲ <= 0) || (ᶜw_vert_div >= 0)
+        detr = 0
+    else
+        detr = ᶜentr - ᶜw_vert_div
+    end
     return max(detr, 0)
 end
 
