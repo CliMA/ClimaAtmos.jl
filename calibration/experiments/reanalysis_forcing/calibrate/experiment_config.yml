@@ -3,11 +3,11 @@ ensemble_size: 100
 n_iterations: 10
 batch_size: 1 # number of cases per iteration
 model_config : prognostic_edmfx_gcmdriven_column.yml 
-output_dir : /scratch/julian/calibrations/precal_17_23 # output dir
+output_dir : /scratch/julian/calibrations/precal_17 # output dir
 y_var_names: [ta, hus, clw] # calibration variables clw
 log_vars: ["clw"] # take log(var) when forming y, g
-z_max : 40000 # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
-dims_per_var : 161 # num dimensions per variable (num cells in vertical profile below z_max)
+z_max : 4000 # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
+dims_per_var : 62 # num dimensions per variable (num cells in vertical profile below z_max)
 # eki_timestep: 0.1 # timestep of eki, if using default
 # y_t_start_sec : 475200.0 # start time of LES averaging window [s] : 5.5 days
 # y_t_end_sec : 518400.0 # end time of LES averaging window [s] : 6 days (LES length = 6 days)

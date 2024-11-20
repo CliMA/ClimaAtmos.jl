@@ -9,7 +9,7 @@ using Plots
 using LinearAlgebra
 using DataFrames
 
-output_dir = "/scratch/julian/calibrations/precal_17_23"
+output_dir = "/scratch/julian/calibrations/precal_17"
 iterations = nothing
 
 include("helper_funcs.jl")

@@ -13,7 +13,7 @@ include("helper_funcs.jl")
 include("observation_map.jl")
 
 
-output_dir = "/scratch/julian/calibrations/precal_17_23" # output directory
+output_dir = "/scratch/julian/calibrations/precal_17" # output directory
 config_i = 1 # config to plot
 ylims = (0, 4000) # y limits for plotting (`z` coord)
 iterations = nothing # iterations to plot (i.e., 0:2). default is all iterations
