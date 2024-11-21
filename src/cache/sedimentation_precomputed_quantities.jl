@@ -3,12 +3,6 @@
 #####
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
 
-# TODO - duplicated with precip, should be moved to some common helper module
-# helper function to safely get precipitation from state
-function q_cc(ρq::FT, ρ::FT) where {FT}
-    return max(FT(0), ρq / ρ)
-end
-
 """
     set_sedimentation_precomputed_quantities!(Y, p, t)
 
@@ -26,13 +20,13 @@ function set_sedimentation_precomputed_quantities!(Y, p, t)
         cmc.liquid,
         cmc.Ch2022.rain,
         Y.c.ρ,
-        q_cc(Y.c.ρq_liq, Y.c.ρ),
+        max(0, Y.c.ρq_liq / Y.c.ρ),
     )
     @. ᶜwᵢ = CMNe.terminal_velocity(
         cmc.ice,
         cmc.Ch2022.small_ice,
         Y.c.ρ,
-        q_cc(Y.c.ρq_ice, Y.c.ρ),
+        max(0, Y.c.ρq_ice / Y.c.ρ),
     )
     return nothing
 end
