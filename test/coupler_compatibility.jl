@@ -83,7 +83,6 @@ const T2 = 290
         p.rayleigh_sponge,
         p.viscous_sponge,
         p.precipitation,
-        p.subsidence,
         p.large_scale_advection,
         p.external_forcing,
         p.edmf_coriolis,
