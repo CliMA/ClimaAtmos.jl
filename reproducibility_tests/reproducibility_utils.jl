@@ -85,11 +85,17 @@ end
         n = 5,
         root_path = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
         ref_counter_PR = read_ref_counter(joinpath(@__DIR__, "ref_counter.jl"))
+        skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci"
     )
 
 Returns a vector of strings, containing the `n`
-latest comparable paths. The assumed folder structure
-is:
+latest comparable paths in the `root_path` directory.
+Only paths that match the `ref_counter_PR` are
+returned, and an empty vector is retuned if
+`skip = true`. By default, `skip` is set to
+`get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci"`.
+
+The assumed folder structure is:
 
 ```
 root_path/some_folder_1/ref_counter.jl
@@ -110,53 +116,19 @@ function latest_comparable_paths(;
     n = 5,
     root_path = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
     ref_counter_PR = read_ref_counter(joinpath(@__DIR__, "ref_counter.jl")),
+    skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
 )
-    @info "---Finding the latest comparable paths"
-    # Note: root_path is also defined in move_output.jl
-    # Get (sorted) array of paths, `pop!(sorted_paths)`
-    # is the most recent merged folder.
-    sorted_paths = sorted_dataset_folder(; dir = root_path)
-    if isempty(sorted_paths)
-        @warn "No paths found in $root_path"
-        return String[]
+    skip && return String[]
+    bins = compute_bins(root_path)
+    isempty(bins) && return String[]
+    ref_counter_bins = filter(bins) do bin
+        f = joinpath(first(bin), "ref_counter.jl")
+        isfile(f) && ref_counter_PR == read_ref_counter(f)
     end
-    # Find oldest path in main with the same reference
-    # counter as the one in the PR. If none exists,
-    # then assume no comparable references.
-
-    # Short circuit if we don't find anything:
-    found_ref_counters =
-        filter(p -> isfile(joinpath(p, "ref_counter.jl")), sorted_paths)
-    if isempty(found_ref_counters)
-        @warn "No reference counters found in paths: $sorted_paths"
-        return String[]
-    end
-
-    # Find comparable paths
-    comparable_paths = String[]
-    @info "Reference counters found:"
-    for (i, path) in enumerate(sorted_paths)
-        ref_counter_file = joinpath(path, "ref_counter.jl")
-        !isfile(ref_counter_file) && continue
-        rc = read_ref_counter(ref_counter_file)
-        comparable = ref_counter_PR == rc
-        suffix = comparable ? ", comparable" : ""
-        @info "     $path: $rc$suffix"
-        comparable && push!(comparable_paths, path)
-    end
-
-    if isempty(comparable_paths)
-        @warn "No comparable paths found in any of the paths:$sorted_paths"
-        return String[]
-    end
-
-    comparable_paths = reverse(comparable_paths) # sort so that
-
-    if length(comparable_paths) > n # limit to n comparable paths
-        comparable_paths = comparable_paths[1:min(n, length(comparable_paths))]
-    end
-
-    return comparable_paths
+    isnothing(ref_counter_bins) && return String[]
+    isempty(ref_counter_bins) && return String[]
+    comparable_paths = ref_counter_bins[1]
+    return comparable_paths[1:min(n, length(comparable_paths))]
 end
 
 """

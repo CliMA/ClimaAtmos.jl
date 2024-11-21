@@ -30,6 +30,7 @@ end
             paths = quiet_latest_comparable_paths(;
                 root_path = path,
                 ref_counter_PR = 2,
+                skip = false,
             )
             @test paths == []
         end
@@ -42,6 +43,7 @@ end
             paths = quiet_latest_comparable_paths(;
                 root_path = path,
                 ref_counter_PR = 2,
+                skip = false,
             )
             @test paths == []
         end
@@ -54,6 +56,7 @@ end
             paths = quiet_latest_comparable_paths(;
                 root_path = path,
                 ref_counter_PR = 2,
+                skip = false,
             )
             @test paths == []
         end
@@ -68,6 +71,7 @@ end
             paths = quiet_latest_comparable_paths(;
                 root_path = path,
                 ref_counter_PR = 2,
+                skip = false,
             )
             @test paths == [p2]
         end
@@ -85,6 +89,7 @@ end
             paths = quiet_latest_comparable_paths(;
                 root_path = path,
                 ref_counter_PR = 3,
+                skip = false,
             )
             @test paths == [p6, p5, p4, p3] # p6 is most recent
         end
@@ -103,6 +108,7 @@ end
                 n = 2,
                 root_path = path,
                 ref_counter_PR = 3,
+                skip = false,
             )
             @test paths == [p6, p5] # p6 is most recent
         end
@@ -121,10 +127,9 @@ end
                 n = 2,
                 root_path = path,
                 ref_counter_PR = 3,
+                skip = false,
             )
-            # TODO: do we want to compare against p3 here?
-            # This could be problematic for reverted commits
-            @test paths == [p6, p3]
+            @test paths == [p6]
         end
     end
 
@@ -142,6 +147,7 @@ end
                 n = 2,
                 root_path = path,
                 ref_counter_PR = 3,
+                skip = false,
             )
             @test paths == [p7, p6]
         end

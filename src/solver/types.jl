@@ -132,10 +132,12 @@ Base.@kwdef struct SmagorinskyLilly{FT} <: AbstractEddyViscosityModel
 end
 
 Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
+    zmax::FT
     zd::FT
     α_uₕ::FT
     α_w::FT
 end
+Base.Broadcast.broadcastable(x::RayleighSponge) = tuple(x)
 
 abstract type AbstractGravityWave end
 Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
