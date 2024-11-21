@@ -184,6 +184,7 @@ steps:
           slurm_mem: 16G
           slurm_gpus: 1
         soft_fail: true
+
   - group: "Plane Examples"
     steps:
       - label: ":computer: Agnesi linear hydrostatic mountain experiment (uniform)"
