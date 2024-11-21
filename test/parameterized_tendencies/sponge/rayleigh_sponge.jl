@@ -22,11 +22,9 @@ include("../../test_helpers.jl")
     FT = eltype(Y)
     ᶜYₜ = zero(Y)
     ### Component test begins here
-    rs = CA.RayleighSponge(; zd = FT(0), α_uₕ = FT(1), α_w = FT(1))
-    (; ᶜβ_rayleigh_uₕ) = CA.rayleigh_sponge_cache(Y, rs)
-    @test ᶜβ_rayleigh_uₕ == @. sin(FT(π) / 2 * z / zmax)^2
-    test_cache = (; rayleigh_sponge = (; ᶜβ_rayleigh_uₕ = ᶜβ_rayleigh_uₕ))
-    CA.rayleigh_sponge_tendency!(ᶜYₜ, Y, test_cache, FT(0), rs)
+    rs = CA.RayleighSponge(; zmax, zd = FT(0), α_uₕ = FT(1), α_w = FT(1))
+    @test CA.β_rayleigh_uₕ.(rs, z) == @. sin(FT(π) / 2 * z / zmax)^2
+    CA.rayleigh_sponge_tendency!(ᶜYₜ, Y, nothing, FT(0), rs)
     # Test that only required tendencies are affected
     for (var_name) in filter(x -> (x != :uₕ), propertynames(Y.c))
         @test ᶜYₜ.c.:($var_name) == zeros(axes(Y.c))
@@ -34,6 +32,6 @@ include("../../test_helpers.jl")
     for (var_name) in propertynames(Y.f)
         @test ᶜYₜ.f.:($var_name) == zeros(axes(Y.f))
     end
-    @test ᶜYₜ.c.uₕ.components.data.:1 == -1 .* (ᶜβ_rayleigh_uₕ)
-    @test ᶜYₜ.c.uₕ.components.data.:2 == -1 .* (ᶜβ_rayleigh_uₕ)
+    @test ᶜYₜ.c.uₕ.components.data.:1 == -1 .* (CA.β_rayleigh_uₕ.(rs, z))
+    @test ᶜYₜ.c.uₕ.components.data.:2 == -1 .* (CA.β_rayleigh_uₕ.(rs, z))
 end
