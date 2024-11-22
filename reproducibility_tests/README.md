@@ -57,7 +57,7 @@ To update the mse tables:
  - Click the *Print new mse tables* buildkite job
  - Click the *Running commands* entry in the *Log* tab
  - Copy this output until `-- DO NOT COPY --`
- - Paste these contents into `reproducibility_tests/mse_tables.jl`
+ - Paste these contents into `reproducibility_tests/reproducibility_test_job_ids.jl`
  - Add, commit, and push these changes.
 
 ## Adding a new reproducibility test
@@ -66,7 +66,7 @@ To add a new reproducibility test:
 
  - Set the command-line `reproducibility_test` to true, and add `julia --color=yes --project=examples reproducibility_tests/test_mse.jl --job_id [job_id] --out_dir [job_id]` as a separate command for the new (or existing) job
  - Copy the `all_best_mse` dict template from the job's log
- - Paste the `all_best_mse` dict template into `reproducibility_test/mse_tables.jl`
+ - Paste the `all_best_mse` dict template into `reproducibility_test/reproducibility_test_job_ids.jl`
 
 <!-- TODO: improve names / mark off sections for all_best_mse dict -->
 
@@ -93,7 +93,7 @@ We cannot (easily) compare the output with a reference if we change the spatial 
 Reprodicibility tests are performed at the end of `examples/hybrid/driver.jl`, after a simulation completes, and relies on a unique job id (`job_id`). Here is an outline of the reproducibility test procedure:
 
  0) Run a simulation, with a particular `job_id`, to the final time.
- 1) Load a dictionary, `all_best_mse`, of previous "best" mean-squared errors from `mse_tables.jl` and extract the mean squared errors for the given `job_id` (store in job-specific dictionary, `best_mse`).
+ 1) Load a list of job IDs in `reproducibility_test_job_ids.jl`.
  2) Export the solution (a `FieldVector`) at the final simulation time to an `NCDataset` file.
  3) Compute the errors between the exported solution and the exported solution from the reference `NCDataset` files (which are saved in a dedicated folders on the Caltech Central cluster) and save into a dictionary, called `computed_mse`.
  4) Export this dictionary (`computed_mse`) to the output folder
@@ -101,7 +101,7 @@ Reprodicibility tests are performed at the end of `examples/hybrid/driver.jl`, a
 
 After these steps are performed at the end of the driver, additional jobs are run:
 
- 1) Print `computed_mse` for all jobs to make updating `reproducibility_tests/mse_tables.jl` easy
+ 1) Print `computed_mse` for all jobs
  2) If we're on the github queue merging branch (all tests have passed, and the PR is effectively merging), move the `NCDataset`s from the scratch directory onto the dedicated folder on the Caltech Central cluster.
 
 ## How we track which dataset to compare against
