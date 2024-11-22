@@ -1,4 +1,4 @@
-# srun --time=00:15:00  --ntasks=11 --cpus-per-task=1 --output=slurm_workers.txt julia --project=calibration/test/slurm_workers.jl
+# srun --time=01:00:00  --ntasks=16 --cpus-per-task=1 --output=slurm_workers.txt julia --project=calibration/test/slurm_workers.jl
 using Distributed, ClusterManagers
 import ClimaCalibrate as CAL
 import ClimaAnalysis: SimDir, get, slice, average_xy
@@ -73,7 +73,8 @@ function run_iteration(config, iter, worker_pool)
     ensemble_results = Dict{Int, Any}()
     for _ in 1:config.ensemble_size
         m, result = take!(results)
-        if result isa Exception            @error "Member $m failed" error=result
+        if result isa Exception
+            @error "Member $m failed" error=result
         else
             ensemble_results[m] = result
         end
@@ -99,6 +100,8 @@ function calibrate(config, worker_pool)
 end
 
 worker_pool = create_worker_pool()
+
+@everywhere println(string(myid()))
 
 @everywhere begin
     import ClimaCalibrate as CAL
