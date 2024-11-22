@@ -1,8 +1,9 @@
 h_elem: 16
-z_max: 55000.0
+z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
 rayleigh_sponge: true
+viscous_sponge: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3

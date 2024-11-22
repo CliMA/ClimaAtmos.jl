@@ -1,7 +1,7 @@
 dt_save_state_to_disk: "Inf"
 dt_save_to_sol: "Inf"
 h_elem: 30
-z_max: 55000.0
+z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
 moist: "equil"
@@ -15,9 +15,12 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 surface_setup: "DefaultMoninObukhov"
 rayleigh_sponge: true
+viscous_sponge: true
 dt: "90secs"
 t_end: "8hours"
 prescribe_ozone: true
 aerosol_radiation: true
 prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "OC1", "OC2", "SO4", "SOA", "SSLT01", "SSLT02", "SSLT03", "SSLT04"]
+prescribe_clouds_in_radiation: true
+radiation_reset_rng_seed: true
 toml: [toml/longrun_aquaplanet.toml]

@@ -3,7 +3,7 @@ import ClimaAtmos
 import ClimaAtmos as CA
 using ClimaCore: Fields, Domains, Meshes, Topologies, Spaces, Geometry
 import ClimaComms, Logging
-using Interpolations
+import Interpolations
 using ClimaCoreTempestRemap
 const FT = Float64
 
@@ -13,6 +13,9 @@ include(
 )
 
 comms_ctx = ClimaComms.SingletonCommsContext()
+(; config_file, job_id) = CA.commandline_kwargs()
+config = CA.AtmosConfig(config_file; job_id, comms_ctx)
+config.parsed_args["topography"] = "NoWarp"
 
 # Create meshes and spaces
 h_elem = 6
@@ -25,8 +28,13 @@ quad = Quadratures.GLL{nh_poly + 1}()
 horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
 h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
 z_stretch = Meshes.Uniform()
-center_space, face_space =
-    CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+center_space, face_space = CA.make_hybrid_spaces(
+    h_space,
+    z_max,
+    z_elem,
+    z_stretch;
+    parsed_args = config.parsed_args,
+)
 
 ᶜlocal_geometry = Fields.local_geometry_field(center_space)
 ᶠlocal_geometry = Fields.local_geometry_field(face_space)

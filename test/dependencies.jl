@@ -11,7 +11,7 @@ import Test
 # increase the complexity of the project's environment, potentially causing
 # compatibility issues and restricting the versions we can use.
 
-# This test follows the spirit of the regression tests and tries to capture the
+# This test follows the spirit of the reproducibility tests and tries to capture the
 # cost of adding a new dependency by having developers explicitly come here and
 # declare their intents.
 #
@@ -30,8 +30,6 @@ direct_dependencies =
     keys(Pkg.dependencies(identity, atmos_uuid).dependencies) |> Set
 
 known_dependencies = Set([
-    # Adapt is used to generate the spline for Earth topography
-    "Adapt",
     # ArgParse is used to read --config_file and --job_id from command line
     "ArgParse",
     # ArtifactWrappers is used to topography and gravity wave NetCDF data
@@ -57,6 +55,8 @@ known_dependencies = Set([
     "NCDatasets",
     "NVTX",
     "RRTMGP",
+    # used to reset seed for random number generator used for cloudy RRTMGP runs to enable bit-wise reproducibility for tests
+    "Random",
     "SciMLBase",
     "StaticArrays",
     # Statistics is used to call 'mean' on ClimaCore Fields

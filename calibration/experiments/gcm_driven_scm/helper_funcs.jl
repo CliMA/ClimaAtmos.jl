@@ -1,9 +1,10 @@
 
 using NCDatasets
-using Interpolations
 using Statistics
 using LinearAlgebra
 import ClimaAtmos as CA
+import ClimaCalibrate as CAL
+import Interpolations
 
 "Optional vector"
 const OptVec{T} = Union{Nothing, Vector{T}}
@@ -320,21 +321,29 @@ function normalize_profile(
     prof_indices::OptVec{Bool} = nothing;
     norm_factors_dict = nothing,
     z_score_norm::Bool = true,
+    log_vars = [],
+    Σ_const::Dict = nothing,
+    Σ_scaling::String = nothing,
 ) where {FT <: Real, IT <: Integer}
     y_ = deepcopy(y)
     n_vars = length(y_names)
+    noise = zeros(0)
     prof_indices =
         isnothing(prof_indices) ? repeat([true], n_vars) : prof_indices
     norm_vec = Array{Float64}(undef, n_vars, 2)
     loc_start = 1
     for i in 1:n_vars
+        var_name = y_names[i]
         loc_end = prof_indices[i] ? loc_start + prof_dof - 1 : loc_start
 
         if z_score_norm
             y_i = y_[loc_start:loc_end]
+            if var_name in log_vars
+                y_i = log10.(y_i .+ 1e-12)
+            end
 
             if !isnothing(norm_factors_dict)
-                norm_i = norm_factors_dict[y_names[i]]
+                norm_i = norm_factors_dict[var_name]
                 y_μ, y_σ = norm_i
             else
                 y_μ, y_σ = mean(y_i), std(y_i)
@@ -344,9 +353,20 @@ function normalize_profile(
         else
             y_[loc_start:loc_end] = y_[loc_start:loc_end]
         end
+
+
+        if Σ_scaling == "prop"
+            append!(noise, Σ_const[var_name] * abs.(y_[loc_start:loc_end]))
+        elseif Σ_scaling == "const"
+            append!(
+                noise,
+                Σ_const[var_name] * ones(length(y_[loc_start:loc_end])),
+            )
+        end
+
         loc_start = loc_end + 1
     end
-    return y_, norm_vec
+    return y_, norm_vec, Diagonal(noise)
 end
 
 """
@@ -376,16 +396,27 @@ function vertical_interpolation(
     if ndims(var_) == 2
         # Create interpolant
         nodes = (z_ref, 1:size(var_, 2))
-        var_itp = extrapolate(
-            interpolate(nodes, var_, (Gridded(Linear()), NoInterp())),
-            Line(),
+        var_itp = Interpolations.extrapolate(
+            Interpolations.interpolate(
+                nodes,
+                var_,
+                (
+                    Interpolations.Gridded(Interpolations.Linear()),
+                    Interpolations.NoInterp(),
+                ),
+            ),
+            Interpolations.Line(),
         )
         # Return interpolated vector
         return var_itp(z_scm, 1:size(var_, 2))
     elseif ndims(var_) == 1
         # Create interpolant
         nodes = (z_ref,)
-        var_itp = LinearInterpolation(nodes, var_; extrapolation_bc = Line())
+        var_itp = Interpolations.LinearInterpolation(
+            nodes,
+            var_;
+            extrapolation_bc = Interpolations.Line(),
+        )
         # Return interpolated vector
         return var_itp(z_scm)
     end
@@ -510,6 +541,7 @@ If `z_scm` is given, interpolate observations to the given levels.
  - `norm_factors_dict` :: Dict of precomputed normalization factors Dict(var_name => (μ, σ)) for each variable.
  - `z_score_norm` :: z-score normalization
  - `Σ_const` :: If given, sets constant diagonal σ^2 to use for noise cov Σ
+ -  `Σ_scaling` ::String = {"const", "prop"}
 
 # Returns
  - `y::Vector`           :: Mean of observations `y`, possibly interpolated to `z_scm` levels.
@@ -525,11 +557,18 @@ function get_obs(
     model_error::OptVec{FT} = nothing,
     norm_factors_dict = nothing,
     z_score_norm = true,
-    Σ_const::FT = nothing,
+    log_vars = [],
+    Σ_const::Dict = nothing,
+    Σ_scaling::String = "const",
 ) where {FT <: Real}
 
     # map to CA names to LES names 
     y_names = [CLIMADIAGNOSTICS_LES_NAME_MAP[var_i] for var_i in y_names]
+    if !isnothing(log_vars)
+        log_vars =
+            [CLIMADIAGNOSTICS_LES_NAME_MAP[log_var_i] for log_var_i in log_vars]
+    end
+
     if !isnothing(norm_factors_dict)
         norm_factors_dict = Dict(
             CLIMADIAGNOSTICS_LES_NAME_MAP[var_i] => value for
@@ -537,29 +576,36 @@ function get_obs(
         )
     end
 
+    if !isnothing(Σ_const)
+        Σ_const = Dict(
+            CLIMADIAGNOSTICS_LES_NAME_MAP[var_i] => value for
+            (var_i, value) in Σ_const
+        )
+    end
+
     # Get true observables
     y, prof_indices = get_profile(
         filename,
-        y_names,
+        y_names;
         z_scm = z_scm,
         ti = ti,
         tf = tf,
         prof_ind = true,
     )
     # normalize
-    y, norm_vec = normalize_profile(
+    y, norm_vec, Σ = normalize_profile(
         y,
         y_names,
         length(z_scm),
-        prof_indices,
+        prof_indices;
         norm_factors_dict = norm_factors_dict,
         z_score_norm = z_score_norm,
+        log_vars = log_vars,
+        Σ_const,
+        Σ_scaling,
     )
 
-
-    if !isnothing(Σ_const)
-        Σ = collect(Diagonal(Σ_const * ones(length(y))))
-    else
+    if isnothing(Σ_const) & isnothing(Σ_scaling)
         # time covariance
         Σ, pool_var = get_time_covariance(
             filename,
@@ -704,13 +750,18 @@ function get_iters_with_config(config_i::Int, config_dict::Dict)
 
         end
     end
+    if length(iters_with_config) == 0
+        @info "No iterations found for config $config_i"
+    end
     return iters_with_config
 end
 
 """
     ensemble_data(
+        process_profile_func,
         iteration,
-        config_i::Int;
+        config_i::Int,
+        config_dict;
         var_name = "hus",
         reduction = "inst",
         output_dir = nothing,
@@ -722,8 +773,10 @@ Fetch output vectors `y` for a specific variable across ensemble members.
     Fills missing data from crash simulations with NaN.
 
 # Arguments
+ - `process_profile_func` :: Function to process profile data (typically the observation map)
  - `iteration`   :: Iteration number for the ensemble data
  - `config_i`    :: Configuration id
+ - `config_dict` :: Configuration dictionary
 
 # Keywords
  - `var_name`    :: Name of the variable to extract data for
@@ -736,9 +789,10 @@ Fetch output vectors `y` for a specific variable across ensemble members.
  - `G_ensemble::Array{Float64}` :: Array containing the data for the specified variable across all ensemble members, with shape (n_vert_levels, ensemble_size).
 """
 function ensemble_data(
+    process_profile_func,
     iteration,
     config_i::Int,
-    ;
+    config_dict;
     var_name = "hus",
     reduction = "inst",
     output_dir = nothing,
@@ -756,9 +810,11 @@ function ensemble_data(
                 TOMLInterface.path_to_ensemble_member(output_dir, iteration, m)
             simdir =
                 SimDir(joinpath(member_path, "config_$config_i", "output_0000"))
-            G_ensemble[:, m] .= get_var_data(
+
+            G_ensemble[:, m] .= process_profile_func(
                 simdir,
                 var_name;
+                reduction = reduction,
                 t_start = config_dict["g_t_start_sec"],
                 t_end = config_dict["g_t_end_sec"],
                 z_max = z_max,
@@ -771,52 +827,52 @@ function ensemble_data(
     return G_ensemble
 end
 
-"""
-    get_var_data(simdir, var_name; t_start, t_end, reduction = "inst", z_max = nothing)
+"""Get minimum loss (RMSE) from EKI obj for a given iteration."""
+function get_loss_min(output_dir, iteration; n_lowest = 10, return_rmse = true)
+    iter_path = CAL.path_to_iteration(output_dir, iteration)
+    eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
 
-Extract variable data from simulation directory, applying spatiotemporal filtering.
+    iter_path_p1 = CAL.path_to_iteration(output_dir, iteration + 1)
+    eki_p1 = JLD2.load_object(joinpath(iter_path_p1, "eki_file.jld2"))
 
-# Arguments
- - `simdir`     :: Simulation directory containing the output data
- - `var_name`   :: Name of the variable to extract data for
+    y = EKP.get_obs(eki)
+    g = EKP.get_g_final(eki_p1)
 
-# Keywords
- - `t_start`    :: Start time for the averaging window [s]
- - `t_end`      :: End time for the averaging window [s]
- - `reduction`  :: Type of data reduction to apply. Default is "inst"
- - `z_max`      :: Maximum vertical level to include in the data. Default is `nothing`
+    # Find successful simulations
+    non_nan_columns_indices = findall(x -> !x, vec(any(isnan, g, dims = 1)))
+    g = g[:, non_nan_columns_indices]
 
-# Returns
- - `y_var_i :: Array containing the averaged variable data
-"""
+    return lowest_loss_rmse(y, g; n_lowest, return_rmse)
+end
 
-function get_var_data(
-    simdir,
-    var_name;
-    t_start,
-    t_end,
-    reduction = "inst",
-    z_max = nothing,
+function lowest_loss_rmse(
+    y::Vector,
+    g::Matrix;
+    n_lowest::Int = 1,
+    return_rmse = true,
 )
+    @assert length(y) == size(g, 1)
+    y_diff = y .- g
+    rmse = sqrt.(sum(y_diff .^ 2, dims = 1) ./ size(y_diff, 1))
+    sorted_indices = sortperm(vec(rmse); rev = false)
 
-    var_i = get(simdir; short_name = var_name, reduction = reduction)
-
-    if !isnothing(z_max)
-        z_window = filter(x -> x <= z_max, var_i.dims["z"])
-        var_i = window(var_i, "z", right = maximum(z_window))
+    if return_rmse
+        return sorted_indices[1:n_lowest], rmse[sorted_indices[1:n_lowest]]
+    else
+        return sorted_indices[1:n_lowest]
     end
+end
 
-    sim_t_end = var_i.dims["time"][end]
+function get_forcing_file(i, ref_paths)
+    return "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
+end
 
-    if sim_t_end < 0.95 * t_end
-        throw(ErrorException("Simulation failed."))
-    end
-    # take time-mean of last N hours
-    var_i_ave =
-        average_time(window(var_i, "time", left = t_start, right = sim_t_end))
+function get_cfsite_id(i, cfsite_numbers)
+    return string("site", cfsite_numbers[i])
+end
 
-    y_var_i = slice(var_i_ave, x = 1, y = 1).data
-
-    return y_var_i
-
+function get_batch_indicies_in_iteration(iteration, output_dir::AbstractString)
+    iter_path = CAL.path_to_iteration(output_dir, iteration)
+    eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
+    return EKP.get_current_minibatch(eki)
 end

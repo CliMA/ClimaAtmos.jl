@@ -1,0 +1,49 @@
+[entr_param_vec]
+prior = "VectorOfParameterized([Normal(0.0, 1.0), Normal(0.0, 1.0), Normal(0.0, 1.0), Normal(0.0, 1.0), Normal(0.0, 1.0), Normal(0.25, 0.15), Normal(0.0, 1.0), Normal(0.0, 1.0), Normal(0.0, 1.0), Normal(0.0, 1.0), Normal(0.0, 1.0), Normal(0.6, 0.3)])"
+constraint = "repeat([no_constraint()], 12)"
+type = "float"
+
+[entr_inv_tau]
+prior = "constrained_gaussian(entr_inv_tau, 1e-4, 6e-5, 0, Inf)"
+type = "float"
+
+[turb_entr_param_vec]
+prior = "VectorOfParameterized([Normal(-3.149, 0.554), Normal(8.228, 0.362)])"
+constraint = "repeat([bounded_below(0.0)], 2)"
+type = "float"
+
+[mixing_length_eddy_viscosity_coefficient]
+prior = "constrained_gaussian(mixing_length_eddy_viscosity_coefficient, 0.14, 0.07, 0, Inf)"
+type = "float"
+
+[mixing_length_diss_coeff]
+prior = "constrained_gaussian(mixing_length_diss_coeff, 0.22, 0.15, 0, Inf)"
+type = "float"
+
+[mixing_length_tke_surf_scale]
+prior = "constrained_gaussian(mixing_length_tke_surf_scale, 2.5, 2.0, 0, Inf)"
+type = "float"
+
+[mixing_length_static_stab_coeff]
+prior = "constrained_gaussian(mixing_length_static_stab_coeff, 0.4, 0.2, 0, Inf)"
+type = "float"
+
+[mixing_length_Prandtl_number_0]
+prior = "constrained_gaussian(mixing_length_Prandtl_number_0, 0.74, 0.2, 0, Inf)"
+type = "float"
+
+[pressure_normalmode_buoy_coeff1]
+prior = "constrained_gaussian(pressure_normalmode_buoy_coeff1, 0.12, 0.08, 0, Inf)"
+type = "float"
+
+[pressure_normalmode_drag_coeff]
+prior = "constrained_gaussian(pressure_normalmode_drag_coeff, 40.0, 10.0, 0, Inf)"
+type = "float"
+
+[diagnostic_covariance_coeff]
+prior = "constrained_gaussian(diagnostic_covariance_coeff, 2.1, 0.5, 0, Inf)"
+type = "float"
+
+[EDMF_surface_area]
+prior = "constrained_gaussian(EDMF_surface_area, 0.1, 0.03, 0, Inf)"
+type = "float"

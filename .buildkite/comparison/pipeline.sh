@@ -13,7 +13,7 @@ profiling=disable
 # set up environment and agents
 cat << EOM
 env:
-  JULIA_VERSION: "1.8.5"
+  JULIA_VERSION: "1.10.5"
   MPICH_VERSION: "4.0.0"
   OPENMPI_VERSION: "4.1.1"
   CUDA_VERSION: "11.3"
@@ -75,14 +75,14 @@ else
 fi
 
 if [[ "$profiling" == "enable" ]]; then
-    command="nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=${job_id}/report.%q{NPROCS}.%q{PMI_RANK} $command"
+    command="nsys profile --delay 100 --trace=nvtx,mpi --mpi-impl=mpich --output=${job_id}/report.%q{NPROCS}.%q{PMI_RANK} $command"
 fi
 
 cat << EOM
     - label: ":computer: MPI Held-Suarez $res resolution test(ρe_tot) - ($nprocs) process"
       key: $job_id
       command:
-        - module load cuda/11.3 nsight-systems/2023.3.1
+        - module load cuda/11.3 nsight-systems/2024.6.1
         - mpiexec $command
       artifact_paths:
         - "$job_id/scaling_data_${nprocs}_processes.jld2"

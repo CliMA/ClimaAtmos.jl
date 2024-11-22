@@ -5,7 +5,7 @@ In the file, you can set configuration arguments as `key: value` pairs to overri
 YAML parsing is fairly forgiving -- values will generally be parsed to the correct type.
 The only exception is true/false strings. These need quotes around them, or they will be parsed to `Bool`s.
 
-To start the model with a custom configuration, run: 
+To start the model with a custom configuration, run:
 
 `julia --project=examples examples/driver.jl --config_file <yaml>`
 
@@ -43,14 +43,14 @@ dt_save_state_to_disk: "10mins"
 toml: [toml/prognostic_edmfx.toml]
 ```
 
-Keys can also point to artifacts. As artifacts are folders, we specify both the artifact name, as we would from the REPL, and file to read from, separated by a `/`. For example, to drive a single 
-column model with an external forcing file from GCM output, we include the following lines in the 
+Keys can also point to artifacts. As artifacts are folders, we specify both the artifact name, as we would from the REPL, and file to read from, separated by a `/`. For example, to drive a single
+column model with an external forcing file from GCM output, we include the following lines in the
 configuration:
 ```
 insolation: "gcmdriven"
 external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
 ```
-To learn more about artifacts and how they're used in CliMA, visit [ClimaArtifacts.jl](https://github.com/CliMA/ClimaArtifacts). 
+To learn more about artifacts and how they're used in CliMA, visit [ClimaArtifacts.jl](https://github.com/CliMA/ClimaArtifacts).
 
 To add a new configuration argument/key, open `.buildkite/default_config.yml`.
 Add an entry with the following format:
@@ -65,6 +65,4 @@ See below for the full list of configuration arguments.
 
 
 # Default Configuration
-```@example
-include("config_table.jl");
-```
+

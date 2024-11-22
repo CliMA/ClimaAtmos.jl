@@ -169,13 +169,14 @@ end
 
 function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     rs_name = parsed_args["rayleigh_sponge"]
+    zmax = parsed_args["z_max"]
     return if rs_name in ("false", false)
         nothing
     elseif rs_name in ("true", true, "RayleighSponge")
         zd = params.zd_rayleigh
         α_uₕ = params.alpha_rayleigh_uh
         α_w = params.alpha_rayleigh_w
-        RayleighSponge{FT}(; zd, α_uₕ, α_w)
+        RayleighSponge{FT}(; zmax, zd, α_uₕ, α_w)
     else
         error("Uncaught rayleigh sponge model `$rs_name`.")
     end
@@ -232,10 +233,18 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     @assert idealized_h2o in (true, false)
     idealized_clouds = parsed_args["idealized_clouds"]
     @assert idealized_clouds in (true, false)
+    cloud = get_cloud_in_radiation(parsed_args)
+    if idealized_clouds && (cloud isa PrescribedCloudInRadiation)
+        error(
+            "idealized_clouds and prescribe_clouds_in_radiation cannot be true at the same time",
+        )
+    end
     add_isothermal_boundary_layer = parsed_args["add_isothermal_boundary_layer"]
     @assert add_isothermal_boundary_layer in (true, false)
     aerosol_radiation = parsed_args["aerosol_radiation"]
     @assert aerosol_radiation in (true, false)
+    reset_rng_seed = parsed_args["radiation_reset_rng_seed"]
+    @assert reset_rng_seed in (true, false)
     radiation_name = parsed_args["rad"]
     @assert radiation_name in (
         nothing,
@@ -248,6 +257,13 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         "TRMM_LBA",
         "ISDAC",
     )
+    if !(radiation_name in ("allsky", "allskywithclear")) && reset_rng_seed
+        @warn "reset_rng_seed does not have any effect with $radiation_name radiation option"
+    end
+    if !(radiation_name in ("allsky", "allskywithclear")) &&
+       (cloud isa PrescribedCloudInRadiation)
+        @warn "prescribe_clouds_in_radiation does not have any effect with $radiation_name radiation option"
+    end
     return if radiation_name == "gray"
         RRTMGPI.GrayRadiation(add_isothermal_boundary_layer)
     elseif radiation_name == "clearsky"
@@ -260,15 +276,19 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         RRTMGPI.AllSkyRadiation(
             idealized_h2o,
             idealized_clouds,
+            cloud,
             add_isothermal_boundary_layer,
             aerosol_radiation,
+            reset_rng_seed,
         )
     elseif radiation_name == "allskywithclear"
         RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(
             idealized_h2o,
             idealized_clouds,
+            cloud,
             add_isothermal_boundary_layer,
             aerosol_radiation,
+            reset_rng_seed,
         )
     elseif radiation_name == "DYCOMS"
         RadiationDYCOMS{FT}()
@@ -305,6 +325,17 @@ function get_cloud_model(parsed_args)
     else
         error("Invalid cloud_model $(cloud_model)")
     end
+end
+
+function get_ozone(parsed_args)
+    isnothing(parsed_args["prescribe_ozone"]) && return nothing
+    return parsed_args["prescribe_ozone"] ? PrescribedOzone() : IdealizedOzone()
+end
+
+function get_cloud_in_radiation(parsed_args)
+    isnothing(parsed_args["prescribe_clouds_in_radiation"]) && return nothing
+    return parsed_args["prescribe_clouds_in_radiation"] ?
+           PrescribedCloudInRadiation() : InteractiveCloudInRadiation()
 end
 
 function get_forcing_type(parsed_args)
@@ -492,10 +523,8 @@ function get_surface_thermo_state_type(parsed_args)
 end
 
 function get_tracers(parsed_args)
-    prescribe_ozone = parsed_args["prescribe_ozone"]
-    @assert prescribe_ozone in (true, false)
     aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
-    return (; prescribe_ozone, aerosol_names)
+    return (; aerosol_names)
 end
 
 function get_tendency_model(parsed_args)

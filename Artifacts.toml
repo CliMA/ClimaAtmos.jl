@@ -11,3 +11,35 @@ lazy = true
     [[cfsite_gcm_forcing.download]]
     sha256 = "78f13efcbc71350609c8a73ed66ff28fe3653fb7a0274e34b52d720651c1c2ec"
     url = "https://caltech.box.com/shared/static/elv5ksf3av3kum9552jxhnmlgu7vxr8u.nc"
+
+[aerosol_concentrations_lowres]
+git-tree-sha1 = "261cdd1ee725c99ba80812557543ce967528ed9e"
+
+    [[aerosol_concentrations_lowres.download]]
+    sha256 = "985c354cf884c7b2a850aae1285f89664f581aa6d40582ac2eeaf0387d64415e"
+    url = "https://caltech.box.com/shared/static/0ef34ii505atm8jlsx4jd2ist19p7w6b.gz"
+
+[ozone_concentrations_lowres]
+git-tree-sha1 = "6693f8451b447543952b3d557d733c7e5c670ed3"
+
+    [[ozone_concentrations_lowres.download]]
+    sha256 = "908384b32e90c733c2173654afbb974d238a9a516ad8965039077c6ddb29b5f0"
+    url = "https://caltech.box.com/shared/static/6c16wt7i1htxq6tadpt1ng2uftjgdtpr.gz"
+
+[earth_orography_30arcseconds]
+git-tree-sha1 = "03dd08fcbf363ed055a176dd7adefb60ff1c3493"
+
+[earth_orography_60arcseconds]
+git-tree-sha1 = "fe19d8dbe7a18ff39588e1f718014b0479d9c0f7"
+lazy = true
+
+    [[earth_orography_60arcseconds.download]]
+    sha256 = "eca66c0701d1c2b9e271742314915ffbf4a0fae92709df611c323f38e019966e"
+    url = "https://caltech.box.com/shared/static/4asrxcgl6xsgenfcug9p0wkkyhtqilgk.gz"
+    
+[era5_cloud]
+git-tree-sha1 = "10742e0a2e343d13bb04df379e300a83402d4106"
+
+    [[era5_cloud.download]]
+    sha256 = "bb51e2f2d315b487e05a8d38944d4ad937ee4a40c43b68541220c5d54425e24a"
+    url = "https://caltech.box.com/shared/static/b6ur4ap4vo04j09vdulem96z9fxqlgyn.gz"

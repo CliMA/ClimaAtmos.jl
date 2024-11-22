@@ -9,19 +9,15 @@ import EnsembleKalmanProcesses as EKP
 using JLD2
 
 include("get_les_metadata.jl")
+include("helper_funcs.jl")
 
+using Distributed
 const experiment_config_dict =
     YAML.load_file(joinpath(@__DIR__, "experiment_config.yml"))
 const output_dir = experiment_config_dict["output_dir"]
 const model_config = experiment_config_dict["model_config"]
+const batch_size = experiment_config_dict["batch_size"]
 
-function get_forcing_file(i, ref_paths)
-    return "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
-end
-
-function get_cfsite_id(i, cfsite_numbers)
-    return string("site", cfsite_numbers[i])
-end
 
 """
     set_up_forward_model(member, iteration, experiment_dir::AbstractString)
@@ -33,6 +29,8 @@ Turns off default diagnostics and sets the TOML parameter file to the member's p
 This assumes that the  config dictionary has an `output_dir` key.
 """
 function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
+    experiment_config_dict =
+        YAML.load_file(joinpath(experiment_dir, model_config))
     config_dict = YAML.load_file(joinpath(experiment_dir, model_config))
     iter_path = CAL.path_to_iteration(output_dir, iteration)
     eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
@@ -52,26 +50,41 @@ function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
         config["external_forcing_file"] = get_forcing_file(i, ref_paths)
         config["cfsite_number"] = get_cfsite_id(i, cfsite_numbers)
         config["output_dir"] = joinpath(member_path, "config_$i")
-        CA.AtmosConfig(config)
+        comms_ctx = ClimaComms.SingletonCommsContext()
+        CA.AtmosConfig(config; comms_ctx)
     end
+
     return atmos_configs
 end
 
-"""
-    run_forward_model(atmos_config::CA.AtmosConfig)
 
-Run the atmosphere model with the given an AtmosConfig object.
-Currently only has basic error handling.
-"""
-function run_forward_model(atmos_configs)#::Vector{CA.AtmosConfig})
-    for atmos_config in atmos_configs
-        simulation = CA.get_simulation(atmos_config)
-        sol_res = CA.solve_atmos!(simulation)
-        if sol_res.ret_code == :simulation_crashed
-            !isnothing(sol_res.sol) && sol_res.sol .= eltype(sol_res.sol)(NaN)
-            error(
-                "The ClimaAtmos simulation has crashed. See the stack trace for details.",
-            )
-        end
+addprocs(batch_size)
+@everywhere begin
+    import ClimaAtmos as CA
+    using JLD2
+end
+
+@everywhere function run_atmos_simulation(atmos_config)
+    simulation = CA.get_simulation(atmos_config)
+    sol_res = CA.solve_atmos!(simulation)
+    if sol_res.ret_code == :simulation_crashed
+        !isnothing(sol_res.sol) && sol_res.sol .= eltype(sol_res.sol)(NaN)
+        error(
+            "The ClimaAtmos simulation has crashed. See the stack trace for details.",
+        )
     end
+end
+
+function run_forward_model(atmos_configs)
+    @info "Preparing to run $(length(atmos_configs)) model simulations in parallel."
+    println("Number of workers: ", nprocs())
+
+    start_time = time()
+
+    pmap(run_atmos_simulation, atmos_configs)
+
+    end_time = time()
+    elapsed_time = (end_time - start_time) / 60.0
+
+    @info "Finished all model simulations. Total time taken: $(elapsed_time) minutes."
 end

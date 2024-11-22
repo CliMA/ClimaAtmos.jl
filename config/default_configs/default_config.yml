@@ -49,9 +49,9 @@ sleve_s:
 topo_smoothing:
   help: "Choose whether to order-2 smoothing on the LGL mesh"
   value: false
-smoothing_order:
-  help: "Define the surface smoothing kernel factor (integer) [`3 (default)`]"
-  value: 3
+topography_damping_factor:
+  help: "Factor by which smallest resolved length-scale is to be damped"
+  value: 5
 # ODE
 use_newton_rtol:
   help: "Whether to check if the current iteration of Newton's method has an error within a relative tolerance, instead of always taking the maximum number of iterations (only for ClimaTimeSteppers.jl)"
@@ -98,6 +98,9 @@ dt_rad:
   value: "6hours"
 idealized_clouds:
   help: "Use idealized clouds in radiation model [`false` (default), `true`]"
+  value: false
+prescribe_clouds_in_radiation:
+  help: "Use prescribed clouds in radiation model. Clouds are read from ERA5 data and updated every time radiation is called. The year 2010 is used and continuously repeated. This mode only affect radiation and is only relevant for the RRTGMP mode. [`false` (default), `true`]"
   value: false
 insolation:
   help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`]"
@@ -218,8 +221,8 @@ non_orographic_gravity_wave:
 nh_poly:
   help: "Horizontal polynomial degree. Note: The number of quadrature points in 1D within each horizontal element is then Nq = <--nh_poly> + 1"
   value: 3
-regression_test:
-  help: "(Bool) perform regression test"
+reproducibility_test:
+  help: "(Bool) perform reproducibility test"
   value: false
 check_conservation:
   help: "Check conservation of mass and energy [`false` (default), `true`]"
@@ -287,6 +290,9 @@ restart_file:
 prescribe_ozone:
   help: "Prescribe time and spatially varying ozone from a file [`false` (default), `true`]"
   value: false
+detect_restart_file:
+  help: "When true, try finding a restart file and use it to restart the simulation. Only works with ActiveLink."
+  value: false
 prescribed_aerosols:
   help: "Which aerosols to add. List of keys from the data file (e.g., CB1, CB2)."
   value: []
@@ -337,3 +343,6 @@ edmfx_sgs_diffusive_flux:
 updraft_number:
   help: "Sets the number of updrafts for the EDMF scheme"
   value: 1
+radiation_reset_rng_seed:
+  help: "Reset the RNG seed before calling RRTGMP to a known value (the timestep number). When modeling cloud optics, RRTGMP uses a random number generator. Resetting the seed every time RRTGMP is called to a deterministic value ensures that the simulation is fully reproducible and can be restarted in a reproducible way. Disable this option when running production runs. Please note that this flag is only used for `AllSkyRadiation` and `AllSkyRadiationWithClearSkyDiagnostics` radiation modes."
+  value: false

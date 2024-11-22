@@ -4,6 +4,81 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+
+v0.27.9
+-------
+
+v0.27.8
+-------
+
+### Features
+
+### New option for prescribing clouds in radiation
+
+When `prescribe_clouds_in_radiation` is set to true, clouds in radiation
+is prescribed from a file (monthly cloud properties in 2010 from ERA5).
+PR [3405](https://github.com/CliMA/ClimaAtmos.jl/pull/3405)
+
+### ETOPO2022 60arc-second topography dataset.
+
+- Update artifacts to use 60arc-second ETOPO2022 ice-surface topography
+  dataset. Update surface smoothing functions to rely only on spectral
+  Laplacian operations. Update raw-topo gravity wave parameterization
+  dataset. Update interfaces in `make_hybrid_spaces` to support new
+  inputs using `SpaceVaryingInput` utility. Include a simple example
+  to generate spectra from scalar variables.
+  PR [3378](https://github.com/CliMA/ClimaAtmos.jl/pull/3378)
+
+v0.27.7
+-------
+
+### Features
+
+### Reproducible restarts for simulations with clouds with RRTMGP
+
+- Reset the RNG seed before calling RRTGMP to a known value (the iteration number).
+  When modeling cloud optics, RRTGMP uses a random number generator. Resetting
+  the seed every time RRTGMP is called to a deterministic value ensures that the
+  simulation is fully reproducible and can be restarted in a reproducible way.
+  Disable this option when running production runs.
+
+  Note: Setting this option to `true` is behavior-changing.
+  PR [3382](https://github.com/CliMA/ClimaAtmos.jl/pull/3382)
+
+### ![][badge-🐛bugfix] Bug fixes
+
+- Update RRTMGP to v0.19.1, which fixes the sea salt aerosol lookup table.
+  Sea salt aerosol is added to the target amip config.
+  PR [3374](https://github.com/CliMA/ClimaAtmos.jl/pull/3374)
+
+- Fixed radiation diagnostics conflicting with each other. Prior to this change,
+  adding multiple diagnostics associated to the same variable would lead to
+  incorrect results when the more diagnostics were output at the same time. PR
+  [3365](https://github.com/CliMA/ClimaAtmos.jl/pull/3365)
+
+- ClimaAtmos no longer fails when reading restart files generated with versions
+  of ClimaAtmos prior to `0.27.6`. PR
+  [3388](https://github.com/CliMA/ClimaAtmos.jl/pull/3388)
+
+v0.27.6
+-------
+
+### Features
+
+### Ozone model is now a dispatchable type
+
+The `prescribe_ozone` flag was turned into a type, allowing for prescribing
+arbitrary ozone concentrations. The two types that are currently implemented are
+`IdealizedOzone` (implementing a static profile from Wing 2018), and
+`PrescribedOzone` (reading from CMIP6 forcing files).
+
+### Aerosol and ozone data can now be automatically downloaded
+
+Prescribed aerosol and ozone concentrations require external files. Now, a
+low-resolution version of such files is automatically downloaded when a
+higher-resolution version is not available. Please, refer to ClimaArtifacts for
+more information.
+
 ### ![][badge-🐛bugfix] Bug fixes
 
 - Fixed incorrect time/date conversion in diagnostics when restarting a
@@ -12,6 +87,8 @@ Main
 - ![][badge-🔥behavioralΔ] Switch to hyperbolic tangent grid stretching,
   which only requires z_elem and dz_bottom.
   PR [3260](https://github.com/CliMA/ClimaAtmos.jl/pull/3260)
+
+- Fixed restarts with radiation and idealized ozone.
 
 v0.27.5
 -------

@@ -35,6 +35,13 @@ function compute_gcm_driven_scalar_inv_τ(z::FT) where {FT}
     end
 end
 
+# following PyCLES https://github.com/CliMA/pycles/blob/71c1752a1ef1b43bb90e5817de9126468b4eeba9/ForcingGCMFixed.pyx#L260
+function eddy_vert_fluctuation!(ᶜρχₜ, ᶜχ, ᶜls_subsidence)
+    @. ᶜρχₜ +=
+        Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜχ))).components.data.:1 *
+        ᶜls_subsidence
+end
+
 external_forcing_cache(Y, atmos::AtmosModel, params) =
     external_forcing_cache(Y, atmos.external_forcing, params)
 
@@ -101,8 +108,6 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
 
             zc_gcm = Fields.coordinate_field(Y.c).z[colidx]
 
-            # setvar!(ᶜdTdt_fluc, "dtdt_fluc", colidx, zc_gcm, zc_forcing) #TODO: add these forcings back in
-            # setvar!(ᶜdqtdt_fluc, "dqtdt_fluc", colidx, zc_gcm, zc_forcing) #TODO: add these forcings back in
             setvar!(ᶜdTdt_hadv, "tntha", colidx, zc_gcm, zc_forcing)
             setvar!(ᶜdqtdt_hadv, "tnhusha", colidx, zc_gcm, zc_forcing)
             setvar!(ᶜdTdt_rad, "tntr", colidx, zc_gcm, zc_forcing)
@@ -114,11 +119,19 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
                 zc_forcing,
                 params,
             )
-
+            # GCM states, used for nudging + vertical eddy advection
             setvar!(ᶜT_nudge, "ta", colidx, zc_gcm, zc_forcing)
             setvar!(ᶜqt_nudge, "hus", colidx, zc_gcm, zc_forcing)
             setvar!(ᶜu_nudge, "ua", colidx, zc_gcm, zc_forcing)
             setvar!(ᶜv_nudge, "va", colidx, zc_gcm, zc_forcing)
+
+            # vertical eddy advection (Shen et al., 2022; eqn. 9,10)
+            # sum of two terms to give total tendency. First term:
+            setvar!(ᶜdTdt_fluc, "tntva", colidx, zc_gcm, zc_forcing)
+            setvar!(ᶜdqtdt_fluc, "tnhusva", colidx, zc_gcm, zc_forcing)
+            # second term:
+            eddy_vert_fluctuation!(ᶜdTdt_fluc, ᶜT_nudge, ᶜls_subsidence)
+            eddy_vert_fluctuation!(ᶜdqtdt_fluc, ᶜqt_nudge, ᶜls_subsidence)
 
             set_insolation!(insolation)
             set_cos_zenith!(cos_zenith)
@@ -172,6 +185,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
     @. ᶜuₕ_nudge = C12(Geometry.UVVector(ᶜu_nudge, ᶜv_nudge), ᶜlg)
     @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind
 
+    # nudging tendency
     ᶜdTdt_nudging = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
     @. ᶜdTdt_nudging =
@@ -180,8 +194,8 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
 
     ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_sum = p.scratch.ᶜtemp_scalar_2
-    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_nudging #  + ᶜdTdt_fluc remove nudging for now - TODO add back later
-    @. ᶜdqtdt_sum = ᶜdqtdt_hadv + ᶜdqtdt_nudging # + ᶜdqtdt_fluc remove nudging for now - TODO add back later
+    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_nudging + ᶜdTdt_fluc
+    @. ᶜdqtdt_sum = ᶜdqtdt_hadv + ᶜdqtdt_nudging + ᶜdqtdt_fluc
 
     T_0 = TD.Parameters.T_0(thermo_params)
     Lv_0 = TD.Parameters.LH_v0(thermo_params)
@@ -217,13 +231,14 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
         ᶜspecific.q_tot,
         Val{:first_order}(),
     )
-    # <-- subsidence
+
     # needed to address top boundary condition for forcings. Otherwise upper portion of domain is anomalously cold
     ρe_tot_top = Fields.level(Yₜ.c.ρe_tot, Spaces.nlevels(axes(Y.c)))
     @. ρe_tot_top = 0.0
 
     ρq_tot_top = Fields.level(Yₜ.c.ρq_tot, Spaces.nlevels(axes(Y.c)))
     @. ρq_tot_top = 0.0
+    # <-- subsidence
 
     return nothing
 end
