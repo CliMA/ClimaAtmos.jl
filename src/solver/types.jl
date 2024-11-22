@@ -128,6 +128,7 @@ end
 abstract type AbstractEddyViscosityModel end
 Base.@kwdef struct SmagorinskyLilly{FT} <: AbstractEddyViscosityModel
     Cs::FT = 0.2
+    Pr_t::FT = 1 / 3
 end
 
 Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
@@ -442,7 +443,7 @@ Base.@kwdef struct AtmosModel{
     DM,
     SAM,
     VS,
-    SL, 
+    SL,
     RS,
     ST,
     IN,

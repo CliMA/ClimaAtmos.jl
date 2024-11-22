@@ -159,9 +159,10 @@ end
 function get_smagorinsky_lilly_model(parsed_args, params, ::Type{FT}) where {FT}
     is_model_active = parsed_args["smagorinsky_lilly"]
     Cs = parsed_args["c_smag"]
+    Pr_t = parsed_args["prandtl_turbulent_neutral"]  # Turbulent Prandtl number for neutral stratification
     @assert is_model_active in (true, false)
     return if is_model_active == true
-        SmagorinskyLilly{FT}(; Cs)
+        SmagorinskyLilly{FT}(; Cs, Pr_t)
     else
         nothing
     end

@@ -40,14 +40,7 @@ function create_plot!(
     if Z == nothing
         generic_axis = fig[p_loc[1], p_loc[2]] = GridLayout()
         axis = Axis(generic_axis[1, 1]; title, xlabel, ylabel, xscale, yscale)
-        CairoMakie.lines!(
-            X,
-            Y;
-            title,
-            linewidth,
-            label = label[1],
-            linestyle = :solid,
-        )
+        CairoMakie.lines!(X, Y; linewidth, label = label[1], linestyle = :solid)
     else
         generic_axis = fig[p_loc[1], p_loc[2]] = GridLayout() # Generic Axis Layout
         Axis(generic_axis[1, 1]; title, xlabel, ylabel, yscale, yreversed) # Plot specific attributes
