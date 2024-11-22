@@ -11,29 +11,16 @@ function topography_dcmip200(coords)
     FT = eltype(λ)
     ϕₘ = FT(0) # degrees (equator)
     λₘ = FT(3 / 2 * 180)  # degrees
-    rₘ = @. FT(acos(sind(ϕₘ) * sind(ϕ) + cosd(ϕₘ) * cosd(ϕ) * cosd(λ - λₘ))) # Great circle distance (rads)
+    rₘ = FT(acos(sind(ϕₘ) * sind(ϕ) + cosd(ϕₘ) * cosd(ϕ) * cosd(λ - λₘ))) # Great circle distance (rads)
     Rₘ = FT(3π / 4) # Moutain radius
     ζₘ = FT(π / 16) # Mountain oscillation half-width
     h₀ = FT(2000)
-    zₛ = @. ifelse(
+    zₛ = ifelse(
         rₘ < Rₘ,
         FT(h₀ / 2) * (1 + cospi(rₘ / Rₘ)) * (cospi(rₘ / ζₘ))^2,
         FT(0),
     )
     return zₛ
-end
-
-function generate_topography_warp(earth_spline)
-    function topography_earth(coords)
-        λ, Φ = coords.long, coords.lat
-        FT = eltype(λ)
-        @info "Load spline"
-        elevation = @. FT(earth_spline(λ, Φ))
-        zₛ = @. ifelse(elevation > FT(0), elevation, FT(0))
-        @info "Assign elevation"
-        return zₛ
-    end
-    return topography_earth
 end
 
 """
@@ -52,7 +39,7 @@ function topography_agnesi(coords)
     h_c = FT(1)
     a_c = FT(10000)
     x_c = FT(120000)
-    zₛ = @. h_c / (1 + ((x - x_c) / a_c)^2)
+    zₛ = h_c / (1 + ((x - x_c) / a_c)^2)
     return zₛ
 end
 
@@ -74,6 +61,6 @@ function topography_schar(coords)
     λ_c = FT(4000)
     a_c = FT(5000)
     x_c = FT(60000)
-    zₛ = @. h_c * exp(-((x - x_c) / a_c)^2) * (cospi((x - x_c) / λ_c))^2
+    zₛ = h_c * exp(-((x - x_c) / a_c)^2) * (cospi((x - x_c) / λ_c))^2
     return zₛ
 end

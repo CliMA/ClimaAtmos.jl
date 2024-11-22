@@ -25,7 +25,7 @@ has_no_source_or_sink(parsed_args) = all((
 
 # we may be hitting a slow path:
 # https://stackoverflow.com/questions/14687665/very-slow-stdpow-for-bases-very-close-to-1
-fast_pow(x::FT, y::FT) where {FT <: AbstractFloat} = exp(y * log(x))
+fast_pow(x, y) = exp(y * log(x))
 
 """
     time_from_filename(file)
@@ -353,53 +353,101 @@ function horizontal_integral_at_boundary(f::Fields.Field)
 end
 
 """
-    gaussian_smooth(arr, sigma = 1)
+    isdivisible(dt_large::Dates.Period, dt_small::Dates.Period)
 
-Smooth the given 2D array by applying a Gaussian blur.
+Check if two periods are evenly divisible, i.e., if the larger period can be
+expressed as an integer multiple of the smaller period.
 
-Edges are not properly smoothed out: the edge value is extended to infinity.
+In this, take into account the case when periods do not have fixed size, e.g.,
+one month is a variable number of days.
+
+# Examples
+```
+julia> isdivisible(Dates.Year(1), Dates.Month(1))
+true
+
+julia> isdivisible(Dates.Month(1), Dates.Day(1))
+true
+
+julia> isdivisible(Dates.Month(1), Dates.Week(1))
+false
+```
+
+## Notes
+
+Not all the combinations are fully implemented. If something is missing, please
+consider adding it.
 """
-function gaussian_smooth(arr::AbstractArray, sigma::Int = 1)
-    n1, n2 = size(arr)
+function isdivisible(dt_large::Dates.Period, dt_small::Dates.Period)
+    @warn "The combination $(typeof(dt_large)) and $(dt_small) was not covered. Please add a method to handle this case."
+    return false
+end
 
-    # We assume that the Gaussian goes to zero at 10 sigma and ignore contributions outside of that window
-    window = Int(ceil(10 * sigma))
+# For FixedPeriod and OtherPeriod, it is easy, we can directly divide the two
+# (as long as they are both the same)
+function isdivisible(dt_large::Dates.FixedPeriod, dt_small::Dates.FixedPeriod)
+    return isinteger(dt_large / dt_small)
+end
 
-    # Prepare the 2D Gaussian kernel
-    gauss = [
-        exp.(-(x .^ 2 .+ y .^ 2) / (2 * sigma^2)) for
-        x in range(-window, window), y in range(-window, window)
+function isdivisible(dt_large::Dates.OtherPeriod, dt_small::Dates.OtherPeriod)
+    return isinteger(dt_large / dt_small)
+end
+
+function isdivisible(
+    dt_large::Union{Dates.Month, Dates.Year},
+    dt_small::Dates.FixedPeriod,
+)
+    # The only case where periods are commensurate for Month/Year is when we
+    # have a Day or an integer divisor of a day. (Note that 365 and 366 don't
+    # have any common divisor)
+    return isinteger(Dates.Day(1) / dt_small)
+end
+
+"""
+    promote_period(period::Dates.Period)
+
+Promote a period to the largest possible period type.
+
+This function attempts to represent a given `Period` using the largest possible
+unit of time. For example, a period of 24 hours will be promoted to 1 day. If
+a clean promotion is not possible, return the input as it is.
+
+# Examples
+```julia-repl
+julia> promote_period(Hour(24))
+1 day
+
+julia> promote_period(Day(14))
+2 weeks
+
+julia> promote_period(Second(86401))
+86401 seconds
+
+julia> promote_period(Millisecond(1))
+1 millisecond
+```
+"""
+function promote_period(period::Dates.Period)
+    ms = Int(Dates.toms(period))
+    # Hard to do this with varying periods like Month/Year...
+    PeriodTypes = [
+        Dates.Week,
+        Dates.Day,
+        Dates.Hour,
+        Dates.Minute,
+        Dates.Second,
+        Dates.Millisecond,
     ]
-
-    # Normalize it
-    gauss = gauss / sum(gauss)
-
-    smoothed_arr = zeros(size(arr))
-
-    # 2D convolution
-    for i in 1:n1
-        for j in 1:n2
-            # For each point, we "look left and right (up and down)" within our window
-            for wx in (-window):window
-                for wy in (-window):window
-                    # For values at the edge, we keep using the edge value
-                    k = clamp(i + wx, 1, n1)
-                    l = clamp(j + wy, 1, n2)
-
-                    # gauss has size 2window + 1, so its midpoint (when the gaussian is max)
-                    # is at 1 + window
-                    #
-                    # Eg, for window of 3, wx will go through the values -3, -2, 1, 0, 1, 2, 3,
-                    # and the midpoint is 4 (= 1 + window)
-                    mid_gauss_idx = 1 + window
-
-                    smoothed_arr[i, j] +=
-                        arr[k, l] *
-                        gauss[mid_gauss_idx + wx, mid_gauss_idx + wy]
-                end
-            end
+    for PeriodType in PeriodTypes
+        period_ms = Int(Dates.toms(PeriodType(1)))
+        if ms % period_ms == 0
+            # Millisecond will always match, if nothing else matches
+            return PeriodType(ms // period_ms)
         end
     end
+end
 
-    return smoothed_arr
+function promote_period(period::Dates.OtherPeriod)
+    # For varying periods, we just return them as they are
+    return period
 end

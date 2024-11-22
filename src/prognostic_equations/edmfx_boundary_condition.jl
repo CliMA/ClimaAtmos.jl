@@ -4,9 +4,9 @@
 
 function sgs_scalar_first_interior_bc(
     ᶜz_int::FT,
-    ᶜρ_int::FT,
-    ᶜaʲ_int::FT,
-    ᶜscalar_int::FT,
+    ᶜρ_int,
+    ᶜaʲ_int,
+    ᶜscalar_int,
     sfc_buoyancy_flux,
     sfc_ρ_flux_scalar,
     ustar,
@@ -33,8 +33,8 @@ end
 function get_first_interior_variance(
     flux,
     ustar::FT,
-    z::FT,
-    oblength::FT,
+    z,
+    oblength,
     local_geometry,
 ) where {FT}
     c_star = -flux / ustar
@@ -47,7 +47,7 @@ function get_first_interior_variance(
     end
 end
 
-function approximate_inverf(x::FT) where {FT <: Real}
+function approximate_inverf(x::FT) where {FT}
     # From Wikipedia
     a = FT(0.147)
     term1 = (2 / (π * a) + log(1 - x^2) / 2)
@@ -57,14 +57,14 @@ function approximate_inverf(x::FT) where {FT <: Real}
     return sign(x) * sqrt(term3 - term1)
 end
 
-function guass_quantile(p::FT) where {FT <: Real}
+function guass_quantile(p)
     return sqrt(2) * approximate_inverf(2p - 1)
 end
 
 function percentile_bounds_mean_norm(
     low_percentile::FT,
-    high_percentile::FT,
-) where {FT <: Real}
+    high_percentile,
+) where {FT}
     gauss_int(x) = -exp(-x * x / 2) / sqrt(2 * pi)
     xp_high = guass_quantile(high_percentile)
     xp_low = guass_quantile(low_percentile)

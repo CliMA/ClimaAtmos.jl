@@ -2,8 +2,8 @@ using ClimaComms
 ClimaComms.@import_required_backends
 using NCDatasets
 using Dates
-using Interpolations
 using Statistics
+import Interpolations
 import ClimaAtmos
 import ClimaAtmos as CA
 import ClimaCore

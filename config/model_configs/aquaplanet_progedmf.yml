@@ -2,9 +2,11 @@ dt_save_state_to_disk: "Inf"
 dt_save_to_sol: "Inf"
 output_default_diagnostics: false
 h_elem: 30
-z_max: 55000.0
+z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
+rayleigh_sponge: true
+viscous_sponge: true
 moist: equil
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
@@ -26,6 +28,6 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 precip_model: 0M
 dt: 10secs
-t_end: 3hours
+t_end: 61mins
 toml: [toml/prognostic_edmfx.toml]
 ode_algo: ARS343

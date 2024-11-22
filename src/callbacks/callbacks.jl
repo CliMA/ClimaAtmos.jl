@@ -52,6 +52,13 @@ NVTX.@annotate function cloud_fraction_model_callback!(integrator)
     set_cloud_fraction!(Y, p, p.atmos.moisture_model, p.atmos.cloud_model)
 end
 
+# TODO: Move this somewhere else
+update_o3!(_, _, _) = nothing
+function update_o3!(p, t, ::PrescribedOzone)
+    evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, t)
+    return nothing
+end
+
 NVTX.@annotate function rrtmgp_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -63,16 +70,17 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     (; radiation_mode) = p.atmos
 
     # If we have prescribed ozone or aerosols, we need to update them
-    if !isempty(p.tracers)
-        if :o3 in propertynames(p.tracers)
-            evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, t)
+    update_o3!(p, t, p.atmos.ozone)
+    if :prescribed_aerosols_field in propertynames(p.tracers)
+        for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
+            field = getproperty(p.tracers.prescribed_aerosols_field, key)
+            evaluate!(field, tv, t)
         end
-        if :prescribed_aerosols_field in propertynames(p.tracers)
-            for (key, tv) in
-                pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
-                field = getproperty(p.tracers.prescribed_aerosols_field, key)
-                evaluate!(field, tv, t)
-            end
+    end
+    if :prescribed_clouds_field in propertynames(p.radiation)
+        for (key, tv) in pairs(p.radiation.prescribed_cloud_timevaryinginputs)
+            field = getproperty(p.radiation.prescribed_clouds_field, key)
+            evaluate!(field, tv, t)
         end
     end
 
@@ -155,13 +163,25 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             )
             # RRTMGP needs lwp and iwp in g/m^2
             kg_to_g_factor = 1000
+            cloud_liquid_water_content =
+                radiation_mode.cloud isa PrescribedCloudInRadiation ?
+                p.radiation.prescribed_clouds_field.clwc :
+                cloud_diagnostics_tuple.q_liq
+            cloud_ice_water_content =
+                radiation_mode.cloud isa PrescribedCloudInRadiation ?
+                p.radiation.prescribed_clouds_field.ciwc :
+                cloud_diagnostics_tuple.q_ice
+            cloud_fraction =
+                radiation_mode.cloud isa PrescribedCloudInRadiation ?
+                p.radiation.prescribed_clouds_field.cc :
+                cloud_diagnostics_tuple.cf
             @. ᶜlwp =
-                kg_to_g_factor * Y.c.ρ * cloud_diagnostics_tuple.q_liq * ᶜΔz /
-                max(cloud_diagnostics_tuple.cf, eps(FT))
+                kg_to_g_factor * Y.c.ρ * cloud_liquid_water_content * ᶜΔz /
+                max(cloud_fraction, eps(FT))
             @. ᶜiwp =
-                kg_to_g_factor * Y.c.ρ * cloud_diagnostics_tuple.q_ice * ᶜΔz /
-                max(cloud_diagnostics_tuple.cf, eps(FT))
-            @. ᶜfrac = cloud_diagnostics_tuple.cf
+                kg_to_g_factor * Y.c.ρ * cloud_ice_water_content * ᶜΔz /
+                max(cloud_fraction, eps(FT))
+            @. ᶜfrac = cloud_fraction
         end
     end
 
@@ -239,7 +259,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
-    RRTMGPI.update_fluxes!(rrtmgp_model)
+    RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(t / integrator.p.dt))
     Fields.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
     return nothing
 end
@@ -297,13 +317,13 @@ function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
             )
         )
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
+    cos_zenith =
+        Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
+    weighted_irradiance = Fields.array2field(
+        rrtmgp_model.weighted_irradiance,
+        axes(bottom_coords),
+    )
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
-        cos_zenith =
-            Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
-        weighted_irradiance = Fields.array2field(
-            rrtmgp_model.weighted_irradiance,
-            axes(bottom_coords),
-        )
         @. insolation_tuple = instantaneous_zenith_angle(
             d,
             δ,
@@ -311,16 +331,14 @@ function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
             bottom_coords.long,
             bottom_coords.lat,
         ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
-        @. cos_zenith = cos(min(first(insolation_tuple), max_zenith_angle))
-        @. weighted_irradiance = irradiance * (au / last(insolation_tuple))^2
     else
-        # assume that the latitude and longitude are both 0 for flat space
-        insolation_tuple = instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0))
-        rrtmgp_model.cos_zenith .=
-            cos(min(first(insolation_tuple), max_zenith_angle))
-        rrtmgp_model.weighted_irradiance .=
-            irradiance * (au / last(insolation_tuple))^2
+        # assume that the latitude and longitude are both 0 for flat space,
+        # so that insolation_tuple is a constant Field
+        insolation_tuple .=
+            Ref(instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0)))
     end
+    @. cos_zenith = cos(min(first(insolation_tuple), max_zenith_angle))
+    @. weighted_irradiance = irradiance * (au / last(insolation_tuple))^2
 end
 
 NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
@@ -333,7 +351,13 @@ NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     output_file = joinpath(output_dir, "day$day.$sec.hdf5")
     comms_ctx = ClimaComms.context(integrator.u.c)
     hdfwriter = InputOutput.HDF5Writer(output_file, comms_ctx)
-    InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t) # TODO: a better way to write metadata
+    # TODO: a better way to write metadata
+    InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t)
+    InputOutput.HDF5.write_attribute(
+        hdfwriter.file,
+        "atmos_model_hash",
+        hash(p.atmos),
+    )
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)
     return nothing

@@ -17,6 +17,9 @@ include(joinpath("topography", "topography.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
 include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
 
+include(joinpath("utils", "AtmosArtifacts.jl"))
+import .AtmosArtifacts as AA
+
 include(
     joinpath("parameterized_tendencies", "radiation", "radiation_utilities.jl"),
 )
@@ -107,7 +110,13 @@ include(
 )
 include(joinpath("parameterized_tendencies", "sponge", "rayleigh_sponge.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
-include(joinpath("parameterized_tendencies", "les_sgs_models", "smagorinsky_lilly.jl"))
+include(
+    joinpath(
+        "parameterized_tendencies",
+        "les_sgs_models",
+        "smagorinsky_lilly.jl",
+    ),
+)
 include(joinpath("prognostic_equations", "advection.jl"))
 
 include(joinpath("cache", "temporary_quantities.jl"))

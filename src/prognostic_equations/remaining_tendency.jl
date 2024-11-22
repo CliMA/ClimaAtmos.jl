@@ -89,6 +89,10 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lilly)
     vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lilly)
 
+    sl = p.atmos.smagorinsky_lilly
+    horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
+    vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
+
     # NOTE: This will zero out all momentum tendencies in the edmfx advection test
     # please DO NOT add additional velocity tendencies after this function
     # Other SGS tendencies

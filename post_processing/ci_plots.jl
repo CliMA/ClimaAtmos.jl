@@ -1066,12 +1066,11 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
     )
 end
 
-LESBoxPlots= Union{
+LESBoxPlots = Union{
     Val{:les_rico_box},
     Val{:les_dycoms_box},
     Val{:les_bomex_box},
     Val{:les_gabls_box},
-    Val{:les_isdac_box},
 }
 
 """
@@ -1121,15 +1120,15 @@ function make_plots(
         short_name = short_names[1],
         reduction,
     )
-    if "5m" in available_periods
-        period = "5m"
-    elseif "10m" in available_periods
-        period = "10m"
-    elseif "30m" in available_periods
-        period = "30m"
-    elseif "1h" in available_periods
-        period = "1h"
-    end
+    # if "5m" in available_periods
+    #     period = "5m"
+    # elseif "10m" in available_periods
+    #     period = "10m"
+    # elseif "30m" in available_periods
+    #     period = "30m"
+    # elseif "1h" in available_periods
+    #     period = "1h"
+    # end
 
     # Window average from instantaneous snapshots?
     function horizontal_average(var)
@@ -1139,25 +1138,26 @@ function make_plots(
         hours = 3600.0
         window_end = last(var.dims["time"])
         window_start = window_end - 2hours
-        var_window = ClimaAnalysis.window(var, "time"; left=window_start, right=window_end)
+        var_window = ClimaAnalysis.window(
+            var,
+            "time";
+            left = window_start,
+            right = window_end,
+        )
         var_reduced = horizontal_average(average_time(var_window))
         return var_reduced
     end
-    
+
     var_groups_xyt_reduced =
         map_comparison(simdirs, short_names) do simdir, short_name
-            return [
-                get(simdir; short_name, reduction, period) |> windowed_reduction
-            ]
+            return [get(simdir; short_name, reduction) |> windowed_reduction]
         end
-    
+
     var_groups_xy_reduced =
         map_comparison(simdirs, short_names) do simdir, short_name
-            return [
-                get(simdir; short_name, reduction, period) |> horizontal_average
-            ]
+            return [get(simdir; short_name, reduction) |> horizontal_average]
         end
-    
+
     tmp_file = make_plots_generic(
         output_paths,
         var_groups_xyt_reduced,

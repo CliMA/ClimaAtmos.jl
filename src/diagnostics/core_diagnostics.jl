@@ -711,6 +711,70 @@ add_diagnostic_variable!(
     compute! = compute_pr!,
 )
 
+compute_prra!(out, state, cache, time) =
+    compute_prra!(out, state, cache, time, cache.atmos.precip_model)
+compute_prra!(_, _, _, _, precip_model::T) where {T} =
+    error_diagnostic_variable("prra", precip_model)
+
+function compute_prra!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Union{
+        NoPrecipitation,
+        Microphysics0Moment,
+        Microphysics1Moment,
+    },
+)
+    if isnothing(out)
+        return cache.precipitation.surface_rain_flux
+    else
+        out .= cache.precipitation.surface_rain_flux
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "prra",
+    long_name = "Rainfall Flux",
+    standard_name = "rainfall_flux",
+    units = "kg m^-2 s^-1",
+    comments = "Precipitation including all forms of water in the liquid phase",
+    compute! = compute_prra!,
+)
+
+compute_prsn!(out, state, cache, time) =
+    compute_prsn!(out, state, cache, time, cache.atmos.precip_model)
+compute_prsn!(_, _, _, _, precip_model::T) where {T} =
+    error_diagnostic_variable("prsn", precip_model)
+
+function compute_prsn!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Union{
+        NoPrecipitation,
+        Microphysics0Moment,
+        Microphysics1Moment,
+    },
+)
+    if isnothing(out)
+        return cache.precipitation.surface_snow_flux
+    else
+        out .= cache.precipitation.surface_snow_flux
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "prsn",
+    long_name = "Snowfall Flux",
+    standard_name = "snowfall_flux",
+    units = "kg m^-2 s^-1",
+    comments = "Precipitation including all forms of water in the solid phase",
+    compute! = compute_prsn!,
+)
+
 ###
 # Precipitation (3d)
 ###

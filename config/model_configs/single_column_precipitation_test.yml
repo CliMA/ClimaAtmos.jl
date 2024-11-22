@@ -14,7 +14,7 @@ precip_model: "1M"
 vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-regression_test: false
+reproducibility_test: false
 toml: [toml/single_column_precipitation_test.toml]
 diagnostics:
   - short_name: [hus, clw, cli, husra, hussn, ta, wa]

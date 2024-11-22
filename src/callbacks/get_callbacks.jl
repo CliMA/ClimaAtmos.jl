@@ -1,4 +1,4 @@
-function get_diagnostics(parsed_args, atmos_model, Y, p, dt)
+function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
 
     FT = Spaces.undertype(axes(Y.c))
 
@@ -102,19 +102,20 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt)
                     "$(period_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
                 )
                 period_dates = Dates.Month(parse(Int, first(months)))
-                output_schedule = CAD.EveryCalendarDtSchedule(
-                    period_dates;
-                    reference_date = p.start_date,
-                )
-                compute_schedule = CAD.EveryCalendarDtSchedule(
-                    period_dates;
-                    reference_date = p.start_date,
-                )
             else
                 period_seconds = FT(time_to_seconds(period_str))
-                output_schedule = CAD.EveryDtSchedule(period_seconds)
-                compute_schedule = CAD.EveryDtSchedule(period_seconds)
+                period_dates =
+                    CA.promote_period.(Dates.Second(period_seconds))
             end
+
+            output_schedule = CAD.EveryCalendarDtSchedule(
+                period_dates;
+                reference_date = p.start_date,
+            )
+            compute_schedule = CAD.EveryCalendarDtSchedule(
+                period_dates;
+                reference_date = p.start_date,
+            )
 
             if isnothing(output_name)
                 output_short_name = CAD.descriptive_short_name(
@@ -150,7 +151,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt)
         diagnostics = [
             CAD.default_diagnostics(
                 atmos_model,
-                time_to_seconds(parsed_args["t_end"]),
+                FT(time_to_seconds(parsed_args["t_end"]) - t_start),
                 p.start_date;
                 output_writer = netcdf_writer,
             )...,
@@ -158,6 +159,25 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt)
         ]
     end
     diagnostics = collect(diagnostics)
+
+    periods_reductions = Set()
+    for diag in diagnostics
+        isa_reduction = !isnothing(diag.reduction_time_func)
+        isa_reduction || continue
+
+        if diag.output_schedule_func isa CAD.EveryDtSchedule
+            period = Dates.Second(diag.output_schedule_func.dt)
+        elseif diag.output_schedule_func isa CAD.EveryCalendarDtSchedule
+            period = diag.output_schedule_func.dt
+        else
+            continue
+        end
+
+        push!(periods_reductions, period)
+    end
+
+    periods_str = join(CA.promote_period.(periods_reductions), ", ")
+    @info "Saving accumulated diagnostics to disk with frequency: $(periods_str)"
 
     for writer in writers
         writer_str = nameof(typeof(writer))
@@ -169,8 +189,27 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt)
         @info "$writer_str: $diags_outputs"
     end
 
-    return diagnostics, writers
+    return diagnostics, writers, periods_reductions
 end
+
+function checkpoint_frequency_from_parsed_args(dt_save_state_to_disk::String)
+    if occursin("months", dt_save_state_to_disk)
+        months = match(r"^(\d+)months$", dt_save_state_to_disk)
+        isnothing(months) && error(
+            "$(period_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
+        )
+        return Dates.Month(parse(Int, first(months)))
+    else
+        dt_save_state_to_disk = time_to_seconds(dt_save_state_to_disk)
+        if !(dt_save_state_to_disk == Inf)
+            # We use Millisecond to support fractional seconds, eg. 0.1
+            return Dates.Millisecond(1000dt_save_state_to_disk)
+        else
+            return Inf
+        end
+    end
+end
+
 
 function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     (; parsed_args, comms_ctx) = config
@@ -209,14 +248,14 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         ),
     )
 
-    if occursin("months", parsed_args["dt_save_state_to_disk"])
-        months = match(r"^(\d+)months$", parsed_args["dt_save_state_to_disk"])
-        isnothing(months) && error(
-            "$(period_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
-        )
-        period_dates = Dates.Month(parse(Int, first(months)))
+    # Save dt_save_state_to_disk as a Dates.Period object. This is used to check
+    # if it is an integer multiple of other frequencies.
+    dt_save_state_to_disk_dates = checkpoint_frequency_from_parsed_args(
+        parsed_args["dt_save_state_to_disk"],
+    )
+    if dt_save_state_to_disk_dates != Inf
         schedule = CAD.EveryCalendarDtSchedule(
-            period_dates;
+            dt_save_state_to_disk_dates;
             reference_date = p.start_date,
             date_last = p.start_date + Dates.Second(t_start),
         )
@@ -227,20 +266,6 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
             (integrator) -> save_state_to_disk_func(integrator, output_dir)
         end
         callbacks = (callbacks..., SciMLBase.DiscreteCallback(cond, affect!))
-    else
-        dt_save_state_to_disk =
-            time_to_seconds(parsed_args["dt_save_state_to_disk"])
-        if !(dt_save_state_to_disk == Inf)
-            callbacks = (
-                callbacks...,
-                call_every_dt(
-                    (integrator) ->
-                        save_state_to_disk_func(integrator, output_dir),
-                    dt_save_state_to_disk;
-                    skip_first = sim_info.restart,
-                ),
-            )
-        end
     end
 
     if is_distributed(comms_ctx)
@@ -273,6 +298,14 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
 
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         dt_rad = FT(time_to_seconds(parsed_args["dt_rad"]))
+        # We use Millisecond to support fractional seconds, eg. 0.1
+        dt_rad_ms = Dates.Millisecond(dt_rad)
+        if parsed_args["dt_save_state_to_disk"] != "Inf" &&
+           !CA.isdivisible(dt_save_state_to_disk_dates, dt_rad_ms)
+            @warn "Radiation period ($(dt_rad_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"
+            @warn "This simulation will not be reproducible when restarted"
+        end
+
         callbacks =
             (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
     end

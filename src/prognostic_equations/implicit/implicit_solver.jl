@@ -451,10 +451,6 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         p.dt,
         p.params,
         p.atmos,
-        (
-            p.atmos.rayleigh_sponge isa RayleighSponge ?
-            (; p.rayleigh_sponge.ᶠβ_rayleigh_w) : (;)
-        )...,
     )
 
     # Convert dtγ from a Float64 to an FT.
@@ -570,11 +566,14 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     I_u₃ = DiagonalMatrixRow(one_C3xACT3)
     @. ∂ᶠu₃_err_∂ᶜuₕ =
         dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅ ∂ᶜK_∂ᶜuₕ
-    if p.atmos.rayleigh_sponge isa RayleighSponge
+    rs = p.atmos.rayleigh_sponge
+    ᶠz = Fields.coordinate_field(Y.f).z
+    if rs isa RayleighSponge
         @. ∂ᶠu₃_err_∂ᶠu₃ =
             dtγ * (
                 ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅
-                ∂ᶜK_∂ᶠu₃ + DiagonalMatrixRow(-p.ᶠβ_rayleigh_w * (one_C3xACT3,))
+                ∂ᶜK_∂ᶠu₃ +
+                DiagonalMatrixRow(-β_rayleigh_w(rs, ᶠz) * (one_C3xACT3,))
             ) - (I_u₃,)
     else
         @. ∂ᶠu₃_err_∂ᶠu₃ =
@@ -844,23 +843,26 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             @. bdmr = ifelse(ᶜu₃ʲ.components.data.:1 > 0, bdmr_l, bdmr_r)
 
             @. ᶠtridiagonal_matrix_c3 = -(ᶠgradᵥ_matrix()) ⋅ bdmr
-            if p.atmos.rayleigh_sponge isa RayleighSponge
+            if rs isa RayleighSponge
                 @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                     dtγ * (
                         ᶠtridiagonal_matrix_c3 ⋅
                         DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) -
-                        DiagonalMatrixRow(p.ᶠβ_rayleigh_w * (one_C3xACT3,))
+                        DiagonalMatrixRow(
+                            β_rayleigh_w(rs, ᶠz) * (one_C3xACT3,),
+                        )
                     ) - (I_u₃,)
             else
                 @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                     dtγ * ᶠtridiagonal_matrix_c3 ⋅
                     DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) - (I_u₃,)
             end
-        elseif p.atmos.rayleigh_sponge isa RayleighSponge
+        elseif rs isa RayleighSponge
             ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
             @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
-                dtγ * -DiagonalMatrixRow(p.ᶠβ_rayleigh_w * (one_C3xACT3,)) -
+                dtγ *
+                -DiagonalMatrixRow(β_rayleigh_w(rs, ᶠz) * (one_C3xACT3,)) -
                 (I_u₃,)
         end
     end

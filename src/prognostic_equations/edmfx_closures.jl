@@ -3,22 +3,23 @@
 #####
 
 import StaticArrays as SA
+import Thermodynamics.Parameters as TDP
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 
 """
     Return draft area given ρa and ρ
 """
-function draft_area(ρa::FT, ρ::FT) where {FT}
+function draft_area(ρa, ρ)
     return ρa / ρ
 end
 
 """
     Return buoyancy on cell centers.
 """
-function ᶜphysical_buoyancy(params, ᶜρ_ref::FT, ᶜρ::FT) where {FT}
+function ᶜphysical_buoyancy(thermo_params, ᶜρ_ref, ᶜρ)
     # TODO - replace by ᶜgradᵥᶠΦ when we move to deep atmosphere
-    g = CAP.grav(params)
+    g = TDP.grav(thermo_params)
     return (ᶜρ_ref - ᶜρ) / ᶜρ * g
 end
 """
@@ -119,7 +120,7 @@ lambert_2_over_e(::Type{FT}) where {FT} = FT(0.46305551336554884) # since we can
 function lamb_smooth_minimum(
     l::SA.SVector,
     lower_bound::FT,
-    upper_bound::FT,
+    upper_bound,
 ) where {FT}
     x_min = minimum(l)
     λ_0 = max(x_min * lower_bound / lambert_2_over_e(FT), upper_bound)
@@ -153,19 +154,20 @@ Smagorinsky length scale.
 """
 function mixing_length(
     params,
-    ustar::FT,
-    ᶜz::FT,
-    z_sfc::FT,
-    ᶜdz::FT,
-    sfc_tke::FT,
-    ᶜlinear_buoygrad::FT,
-    ᶜtke::FT,
-    obukhov_length::FT,
-    ᶜstrain_rate_norm::FT,
-    ᶜPr::FT,
-    ᶜtke_exch::FT,
-) where {FT}
+    ustar,
+    ᶜz,
+    z_sfc,
+    ᶜdz,
+    sfc_tke,
+    ᶜlinear_buoygrad,
+    ᶜtke,
+    obukhov_length,
+    ᶜstrain_rate_norm,
+    ᶜPr,
+    ᶜtke_exch,
+)
 
+    FT = eltype(params)
     turbconv_params = CAP.turbconv_params(params)
     c_m = CAP.tke_ed_coeff(turbconv_params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
@@ -251,10 +253,11 @@ buoyancy gradient and shear production.
 """
 function turbulent_prandtl_number(
     params,
-    obukhov_length::FT,
-    ᶜlinear_buoygrad::FT,
-    ᶜstrain_rate_norm::FT,
-) where {FT}
+    obukhov_length,
+    ᶜlinear_buoygrad,
+    ᶜstrain_rate_norm,
+)
+    FT = eltype(params)
     turbconv_params = CAP.turbconv_params(params)
     Ri_c = CAP.Ri_crit(turbconv_params)
     ω_pr = CAP.Prandtl_number_scale(turbconv_params)

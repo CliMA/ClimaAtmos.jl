@@ -1,4 +1,4 @@
-180
+188
 
 # **README**
 #
@@ -20,6 +20,36 @@
 
 
 #=
+
+188
+- Updated dependencies
+
+187
+- Change the model top for a few ci cases
+
+186
+- Topography dataset has been modified to the 60 arc-second ETOPO2022 dataset. 
+  This is behaviour changing for the gravity-wave (raw-topo) parameterization
+  when computing `hmax` and `T tensor`.
+
+185
+
+184
+- Changed default ozone profile.
+  Jobs that failed:
+  - Diagnostic EDMFX aquaplanet with TKE
+
+183
+- Change model top and vertical resolution
+
+182
+- We don't know why, but sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
+  seemed to not produce the same result between the merge-queue branch and the main branch,
+  but now seems to be reproducing the same results.
+
+181
+- Ensure limit turbulent entrainment is positive
+
 180
 - Update Thermodynamics, which changes the definition of internal energy
   and enthalpy
@@ -28,7 +58,7 @@
 - Update Pi entr groups/ add parameter vectors
 
 178:
-- Added aerosol to one of the regression tests
+- Added aerosol to one of the reproducibility tests
 
 177:
 - change numerics of non-orographic gravity waves
@@ -40,7 +70,7 @@
 - Updated dependencies, DSS refactor may have different order of operations.
 
 174:
-- Regression test failed in main, try bumping the reference counter again
+- Reprodicibility test failed in main, try bumping the reference counter again
 
 173:
 - Refactor gravity wave parameterization

@@ -1,10 +1,13 @@
 module RRTMGPInterface
 
+import ..AbstractCloudInRadiation
+
 using RRTMGP
 import RRTMGP.AtmosphericStates as AS
 using ClimaCore: DataLayouts, Spaces, Fields
 import ClimaComms
 using NVTX
+using Random
 
 # TODO: Move this file to RRTMGP.jl, once the interface has been settled.
 # It will be faster to do interface development in the same repo as experiment
@@ -20,17 +23,37 @@ struct ClearSkyRadiation <: AbstractRRTMGPMode
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
 end
-struct AllSkyRadiation <: AbstractRRTMGPMode
+struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
     idealized_h2o::Bool
     idealized_clouds::Bool
+    cloud::ACR
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
+    """
+    Reset the RNG seed before calling RRTGMP to a known value (the timestep number). 
+    When modeling cloud optics, RRTGMP uses a random number generator. 
+    Resetting the seed every time RRTGMP is called to a deterministic value ensures that 
+    the simulation is fully reproducible and can be restarted in a reproducible way. 
+    Disable this option when running production runs.
+    """
+    reset_rng_seed::Bool
 end
-struct AllSkyRadiationWithClearSkyDiagnostics <: AbstractRRTMGPMode
+struct AllSkyRadiationWithClearSkyDiagnostics{
+    ACR <: AbstractCloudInRadiation,
+} <: AbstractRRTMGPMode
     idealized_h2o::Bool
     idealized_clouds::Bool
+    cloud::ACR
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
+    """
+    Reset the RNG seed before calling RRTGMP to a known value (the timestep number). 
+    When modeling cloud optics, RRTGMP uses a random number generator. 
+    Resetting the seed every time RRTGMP is called to a deterministic value ensures that 
+    the simulation is fully reproducible and can be restarted in a reproducible way. 
+    Disable this option when running production runs.
+    """
+    reset_rng_seed::Bool
 end
 
 """
@@ -622,7 +645,6 @@ function RRTMGPModel(
             RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
         set_and_save!(flux_sw.flux_up, "face_sw_flux_up", t...)
         set_and_save!(flux_sw.flux_dn, "face_sw_flux_dn", t...)
-        set_and_save!(flux_sw.flux_dn_dir, "face_sw_direct_flux_dn", t...)
         set_and_save!(flux_sw.flux_net, "face_sw_flux", t...)
         if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
             flux_sw2 = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
@@ -634,6 +656,7 @@ function RRTMGPModel(
                 t...,
             )
             set_and_save!(flux_sw2.flux_net, "face_clear_sw_flux", t...)
+            set_and_save!(flux_sw.flux_dn_dir, "face_sw_direct_flux_dn", t...)
         end
 
         cos_zenith = DA{FT}(undef, ncol)
@@ -1020,7 +1043,7 @@ function set_and_save!(
 end
 
 """
-    update_fluxes!(model)
+    update_fluxes!(model, seedval)
 
 Updates the fluxes in the `RRTMGPModel` based on its internal state. Returns the
 net flux at cell faces in the domain, `model.face_flux`. The full set of fluxes
@@ -1040,7 +1063,14 @@ If `extension_nlay > 0`, the set of available fluxes also includes all of the
 aforementioned values prefixed by `extension_`, corresponding to the values at
 cell faces in the extension.
 """
-NVTX.@annotate function update_fluxes!(model)
+NVTX.@annotate function update_fluxes!(model, seedval)
+    (; radiation_mode) = model
+    if (
+        radiation_mode isa AllSkyRadiation ||
+        radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
+    )
+        radiation_mode.reset_rng_seed && Random.seed!(seedval)
+    end
     model.implied_values != :none && update_implied_values!(model)
     model.radiation_mode.add_isothermal_boundary_layer &&
         update_boundary_layer!(model)

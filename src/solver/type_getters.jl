@@ -1,6 +1,5 @@
-using Adapt
 using Dates: DateTime, @dateformat_str
-using Interpolations
+import Interpolations
 import NCDatasets
 import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
@@ -20,10 +19,16 @@ function get_atmos(config::AtmosConfig, params)
     moisture_model = get_moisture_model(parsed_args)
     precip_model = get_precipitation_model(parsed_args)
     cloud_model = get_cloud_model(parsed_args)
+    ozone = get_ozone(parsed_args)
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
     call_cloud_diagnostics_per_stage =
         get_call_cloud_diagnostics_per_stage(parsed_args)
+
+    if isnothing(ozone) && radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+        @warn "prescribe_ozone is set to nothing with an RRTMGP model. Resetting to IdealizedOzone. This behavior will stop being supported in some future release"
+        ozone = IdealizedOzone()
+    end
 
     diffuse_momentum = !(forcing_type isa HeldSuarezForcing)
 
@@ -52,6 +57,7 @@ function get_atmos(config::AtmosConfig, params)
     atmos = AtmosModel(;
         moisture_model,
         model_config,
+        ozone,
         radiation_mode,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
@@ -79,7 +85,11 @@ function get_atmos(config::AtmosConfig, params)
         diff_mode = implicit_diffusion ? Implicit() : Explicit(),
         sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
-        smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args, params, FT),
+        smagorinsky_lilly = get_smagorinsky_lilly_model(
+            parsed_args,
+            params,
+            FT,
+        ),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         insolation = get_insolation_form(parsed_args),
@@ -126,43 +136,8 @@ function get_spaces(parsed_args, params, comms_ctx)
     z_elem = Int(parsed_args["z_elem"])
     z_max = FT(parsed_args["z_max"])
     dz_bottom = FT(parsed_args["dz_bottom"])
-    topography = parsed_args["topography"]
     bubble = parsed_args["bubble"]
     deep = parsed_args["deep_atmosphere"]
-
-    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
-    if topography == "DCMIP200"
-        warp_function = topography_dcmip200
-    elseif topography == "Agnesi"
-        warp_function = topography_agnesi
-    elseif topography == "Schar"
-        warp_function = topography_schar
-    elseif topography == "NoWarp"
-        warp_function = nothing
-    elseif topography == "Earth"
-        data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
-        array_type = ClimaComms.array_type(comms_ctx.device)
-        earth_spline = NCDatasets.NCDataset(data_path) do data
-            zlevels = Array(data["elevation"])
-            lon = Array(data["longitude"])
-            lat = Array(data["latitude"])
-            # Apply Smoothing
-            smooth_degree = Int(parsed_args["smoothing_order"])
-            esmth = CA.gaussian_smooth(zlevels, smooth_degree)
-            Adapt.adapt(
-                array_type,
-                linear_interpolation(
-                    (lon, lat),
-                    esmth,
-                    extrapolation_bc = (Periodic(), Flat()),
-                ),
-            )
-        end
-        @info "Generated interpolation stencil"
-        warp_function = generate_topography_warp(earth_spline)
-    end
-    @info "Topography" topography
-
 
     h_elem = parsed_args["h_elem"]
     radius = CAP.planet_radius(params)
@@ -177,19 +152,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        if warp_function == nothing
-            make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; deep)
-        else
-            make_hybrid_spaces(
-                h_space,
-                z_max,
-                z_elem,
-                z_stretch;
-                parsed_args = parsed_args,
-                surface_warp = warp_function,
-                deep,
-            )
-        end
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; deep, parsed_args)
     elseif parsed_args["config"] == "column" # single column
         @warn "perturb_initstate flag is ignored for single column configuration"
         FT = eltype(params)
@@ -234,15 +197,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(
-            h_space,
-            z_max,
-            z_elem,
-            z_stretch;
-            parsed_args,
-            surface_warp = warp_function,
-            deep,
-        )
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args, deep)
     elseif parsed_args["config"] == "plane"
         FT = eltype(params)
         nh_poly = parsed_args["nh_poly"]
@@ -258,15 +213,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(
-            h_space,
-            z_max,
-            z_elem,
-            z_stretch;
-            parsed_args,
-            surface_warp = warp_function,
-            deep,
-        )
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args, deep)
     end
     ncols = Fields.ncolumns(center_space)
     ndofs_total = ncols * z_elem
@@ -292,13 +239,21 @@ function get_spaces_restart(Y)
     return (; center_space, face_space)
 end
 
-function get_state_restart(config::AtmosConfig)
+function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     (; parsed_args, comms_ctx) = config
-    restart_file = parsed_args["restart_file"]
+
     @assert !isnothing(restart_file)
     reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
+    # TODO: Do not use InputOutput.HDF5 directly
     t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
+    if "atmos_model_hash" in keys(InputOutput.HDF5.attrs(reader.file))
+        atmos_model_hash_in_restart =
+            InputOutput.HDF5.read_attribute(reader.file, "atmos_model_hash")
+        if atmos_model_hash_in_restart != atmos_model_hash
+            @warn "Restart file $(restart_file) was constructed with a different AtmosModel"
+        end
+    end
     return (Y, t_start)
 end
 
@@ -478,6 +433,54 @@ thermo_state_type(::EquilMoistModel, ::Type{FT}) where {FT} = TD.PhaseEquil{FT}
 thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
     TD.PhaseNonEquil{FT}
 
+auto_detect_restart_file(::OutputPathGenerator.OutputPathGeneratorStyle, _) =
+    error("auto_detect_restart_file works only with ActiveLink")
+
+"""
+    auto_detect_restart_file(::ActiveLinkStyle, base_output_dir)
+
+Return the most recent restart file in the directory structure in `base_output_dir`, if any.
+
+`auto_detect_restart_file` scans the content of `base_output_dir` matching the expected
+names for output folders generated by `ActiveLinkStyle` and for restart files
+(`dayDDDD.SSSSS.hdf5`). If no folder or no restart file is found, return `nothing`: this
+means that the simulation cannot be automatically restarted. If a folder is found, look
+inside it and return the latest restart file (latest measured by the time in the file name).
+"""
+function auto_detect_restart_file(
+    output_dir_style::OutputPathGenerator.ActiveLinkStyle,
+    base_output_dir,
+)
+    # if base_output_dir does not exist, we return restart_file = nothing because there is
+    # no restart file to be detected
+    isdir(base_output_dir) || return nothing
+
+    # output_dir will be something like ABC/DEF/output_1234
+    name_rx = r"output_(\d\d\d\d)"
+    restart_file_rx = r"day\d+\.\w+\.hdf5"
+    restart_file = nothing
+
+    existing_outputs =
+        filter(x -> !isnothing(match(name_rx, x)), readdir(base_output_dir))
+
+    isempty(existing_outputs) && return nothing
+
+    latest_output = first(sort(existing_outputs, rev = true))
+    previous_folder = joinpath(base_output_dir, latest_output)
+    possible_restart_files =
+        filter(f -> occursin(restart_file_rx, f), readdir(previous_folder))
+    if isempty(possible_restart_files)
+        @warn "Detected folder $(previous_folder), but no restart file was found"
+        return nothing
+    end
+
+    restart_file_name = last(CA.sort_files_by_time(possible_restart_files))
+    restart_file = joinpath(previous_folder, restart_file_name)
+    @assert isfile(restart_file) "Restart file does not exist"
+
+    return restart_file
+end
+
 function get_sim_info(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
@@ -497,15 +500,28 @@ function get_sim_info(config::AtmosConfig)
     haskey(allowed_dir_styles, lowercase(requested_style)) ||
         error("output_dir_style $(requested_style) not available")
 
+    output_dir_style = allowed_dir_styles[lowercase(requested_style)]
+
+    # We look for a restart before creating a new output dir because we want to
+    # look for previous folders
+    restart_file =
+        parsed_args["detect_restart_file"] ?
+        auto_detect_restart_file(output_dir_style, base_output_dir) :
+        parsed_args["restart_file"]
+
     output_dir = OutputPathGenerator.generate_output_path(
         base_output_dir;
         context = config.comms_ctx,
-        style = allowed_dir_styles[lowercase(requested_style)],
+        style = output_dir_style,
     )
+
+    isnothing(restart_file) ||
+        @info "Restarting simulation from file $restart_file"
 
     sim = (;
         output_dir,
-        restart = !isnothing(parsed_args["restart_file"]),
+        restart = !isnothing(restart_file),
+        restart_file,
         job_id,
         dt = FT(time_to_seconds(parsed_args["dt"])),
         start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
@@ -620,7 +636,11 @@ function get_simulation(config::AtmosConfig)
 
     if sim_info.restart
         s = @timed_str begin
-            (Y, t_start) = get_state_restart(config)
+            (Y, t_start) = get_state_restart(
+                config,
+                sim_info.restart_file,
+                hash(atmos),
+            )
             spaces = get_spaces_restart(Y)
         end
         @info "Allocating Y: $s"
@@ -653,7 +673,6 @@ function get_simulation(config::AtmosConfig)
             params,
             surface_setup,
             sim_info,
-            tracers.prescribe_ozone,
             tracers.aerosol_names,
         )
     end
@@ -677,15 +696,34 @@ function get_simulation(config::AtmosConfig)
     # Initialize diagnostics
     if config.parsed_args["enable_diagnostics"]
         s = @timed_str begin
-            scheduled_diagnostics, writers = get_diagnostics(
-                config.parsed_args,
-                atmos,
-                Y,
-                p,
-                sim_info.dt,
-            )
+            scheduled_diagnostics, writers, periods_reductions =
+                get_diagnostics(
+                    config.parsed_args,
+                    atmos,
+                    Y,
+                    p,
+                    sim_info.dt,
+                    t_start,
+                )
         end
         @info "initializing diagnostics: $s"
+
+        # Check for consistency between diagnostics and checkpoints
+        checkpoint_frequency = checkpoint_frequency_from_parsed_args(
+            config.parsed_args["dt_save_state_to_disk"],
+        )
+
+        if checkpoint_frequency != Inf
+            if any(
+                x -> !CA.isdivisible(checkpoint_frequency, x),
+                periods_reductions,
+            )
+                accum_str =
+                    join(CA.promote_period.(collect(periods_reductions)), ", ")
+                checkpt_str = CA.promote_period(checkpoint_frequency)
+                @warn "The checkpointing frequency (dt_save_state_to_disk = $checkpt_str) should be an integer multiple of all diagnostics accumulation periods ($accum_str) to simulations can be safely restarted from any checkpoint"
+            end
+        end
     else
         writers = nothing
     end

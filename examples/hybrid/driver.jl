@@ -84,26 +84,28 @@ if CA.is_distributed(config.comms_ctx)
 end
 
 # Check if selected output has changed from the previous recorded output (bit-wise comparison)
-include(joinpath(@__DIR__, "..", "..", "regression_tests", "mse_tables.jl"))
-if config.parsed_args["regression_test"]
+include(
+    joinpath(@__DIR__, "..", "..", "reproducibility_tests", "mse_tables.jl"),
+)
+if config.parsed_args["reproducibility_test"]
     # Test results against main branch
     include(
         joinpath(
             @__DIR__,
             "..",
             "..",
-            "regression_tests",
-            "regression_tests.jl",
+            "reproducibility_tests",
+            "reproducibility_tests.jl",
         ),
     )
-    @testset "Test regression table entries" begin
+    @testset "Test reproducibility table entries" begin
         mse_keys = sort(collect(keys(all_best_mse[simulation.job_id])))
         pcs = collect(Fields.property_chains(sol.u[end]))
         for prop_chain in mse_keys
             @test prop_chain in pcs
         end
     end
-    perform_regression_tests(
+    perform_reproducibility_tests(
         simulation.job_id,
         sol.u[end],
         all_best_mse,
@@ -143,14 +145,18 @@ end
 # Visualize the solution
 if ClimaComms.iamroot(config.comms_ctx)
     include(
-        joinpath(pkgdir(CA), "regression_tests", "self_reference_or_path.jl"),
+        joinpath(
+            pkgdir(CA),
+            "reproducibility_tests",
+            "reproducibility_utils.jl",
+        ),
     )
     @info "Plotting"
-    path = self_reference_or_path() # __build__ path (not job path)
-    if path == :self_reference
+    paths = latest_comparable_paths() # __build__ path (not job path)
+    if isempty(paths)
         make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
     else
-        main_job_path = joinpath(path, reference_job_id)
+        main_job_path = joinpath(first(paths), reference_job_id)
         nc_dir = joinpath(main_job_path, "nc_files")
         if ispath(nc_dir)
             @info "nc_dir exists"

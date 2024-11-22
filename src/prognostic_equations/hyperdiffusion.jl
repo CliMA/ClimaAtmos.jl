@@ -34,14 +34,15 @@ function hyperdiffusion_cache(Y, hyperdiff::ClimaHyperdiffusion, turbconv_model)
     sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
-            ᶜ∇²tke⁰ = similar(Y.c, FT),
             ᶜ∇²uₕʲs = similar(Y.c, NTuple{n, C12{FT}}),
             ᶜ∇²uᵥʲs = similar(Y.c, NTuple{n, C3{FT}}),
             ᶜ∇²mseʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²q_totʲs = similar(Y.c, NTuple{n, FT}),
-        ) :
-        turbconv_model isa DiagnosticEDMFX ? (; ᶜ∇²tke⁰ = similar(Y.c, FT)) :
+        ) : (;)
+    maybe_ᶜ∇²tke⁰ =
+        use_prognostic_tke(turbconv_model) ? (; ᶜ∇²tke⁰ = similar(Y.c, FT)) :
         (;)
+    sgs_quantities = (; sgs_quantities..., maybe_ᶜ∇²tke⁰...)
     quantities = (; gs_quantities..., sgs_quantities...)
     if do_dss
         quantities = (;
@@ -66,12 +67,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; ᶜp, ᶜspecific) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜtke⁰) = p.precomputed
-        (; ᶜ∇²tke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
-    end
-    if turbconv_model isa DiagnosticEDMFX
-        (; ᶜtke⁰) = p.precomputed
-        (; ᶜ∇²tke⁰) = p.hyperdiff
+        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
 
     # Grid scale hyperdiffusion
@@ -82,6 +78,8 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.e_tot + ᶜp / Y.c.ρ))
 
     if diffuse_tke
+        (; ᶜtke⁰) = p.precomputed
+        (; ᶜ∇²tke⁰) = p.hyperdiff
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜtke⁰))
     end
 
@@ -120,10 +118,10 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; ᶜp, ᶜspecific) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜρa⁰, ᶜtke⁰) = p.precomputed
-        (; ᶜ∇²tke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
+        (; ᶜρa⁰) = p.precomputed
+        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
-    if turbconv_model isa DiagnosticEDMFX
+    if use_prognostic_tke(turbconv_model)
         (; ᶜtke⁰) = p.precomputed
         (; ᶜ∇²tke⁰) = p.hyperdiff
     end
@@ -172,10 +170,12 @@ function dss_hyperdiffusion_tendency_pairs(p)
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     diffuse_tke = use_prognostic_tke(turbconv_model)
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²tke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²mseʲs) = p.hyperdiff
-    elseif turbconv_model isa DiagnosticEDMFX
+        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²mseʲs) = p.hyperdiff
+    end
+    if use_prognostic_tke(turbconv_model)
         (; ᶜ∇²tke⁰) = p.hyperdiff
     end
+
     core_dynamics_pairs = (
         ᶜ∇²u => buffer.ᶜ∇²u,
         ᶜ∇²specific_energy => buffer.ᶜ∇²specific_energy,

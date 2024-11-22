@@ -1,9 +1,8 @@
-import NCRegressionTests
 import JSON
 import ClimaCore.Fields as Fields
 include(joinpath(@__DIR__, "compute_mse.jl"))
 
-function perform_regression_tests(
+function perform_reproducibility_tests(
     job_id::String,
     Y_last::Fields.FieldVector,
     all_best_mse::AbstractDict,
@@ -31,16 +30,20 @@ function perform_regression_tests(
     varname(pc::Tuple) = process_name(join(pc, "_"))
 
     export_nc(Y_last; nc_filename = ds_filename_computed, varname)
-    computed_mse = regression_test(;
+    (computed_mses, paths) = reproducibility_test(;
         job_id,
         reference_mse = best_mse,
         ds_filename_computed,
         varname,
     )
 
-    computed_mse_filename = joinpath(output_dir, "computed_mse.json")
+    for (computed_mse, path) in zip(computed_mses, paths)
+        commit_hash = basename(path)
+        computed_mse_filename =
+            joinpath(output_dir, "computed_mse_$commit_hash.json")
 
-    open(computed_mse_filename, "w") do io
-        JSON.print(io, computed_mse)
+        open(computed_mse_filename, "w") do io
+            JSON.print(io, computed_mse)
+        end
     end
 end

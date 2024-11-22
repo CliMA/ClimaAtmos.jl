@@ -14,6 +14,7 @@ Alternatively, you can clone the `ClimaAtmos`
 ```
 $ git clone https://github.com/CliMA/ClimaAtmos.jl.git
 ```
+This is useful if you want to keep up with bleeding-edge changes between major releases.
 
 Now change into the `ClimaAtmos.jl` directory with 
 

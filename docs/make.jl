@@ -6,7 +6,7 @@ using DocumenterCitations
 
 disable_logging(Base.CoreLogging.Info) # Hide doctest's `@info` printing
 bib = CitationBibliography(joinpath(@__DIR__, "bibliography.bib"))
-
+include(joinpath(@__DIR__, "src", "config_table.jl"))
 doctest(ClimaAtmos; plugins = [bib])
 disable_logging(Base.CoreLogging.BelowMinLevel) # Re-enable all logging
 
@@ -20,6 +20,7 @@ makedocs(;
         prettyurls = !isempty(get(ENV, "CI", "")),
         collapselevel = 1,
         mathengine = MathJax3(),
+        size_threshold_ignore = ["repl_scripts.md"],
     ),
     pages = [
         "Home" => "index.md",
@@ -32,7 +33,10 @@ makedocs(;
         "Diagnostic EDMF Equations" => "diagnostic_edmf_equations.md",
         "Gravity Wave Drag Parameterizations" => "gravity_wave.md",
         "Ocean Surface Albedo Parameterization" => "surface_albedo.md",
+        "Topography Representation" => "topography.md",
+        "Tracers" => "tracers.md",
         "Radiative Equilibrium" => "radiative_equilibrium.md",
+        "Restarts and checkpoints" => "restarts.md",
         "REPL scripts" => "repl_scripts.md",
         "Configuration" => "config.md",
         "Parameters" => "parameters.md",
