@@ -190,6 +190,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
     (; params) = p
     (; dt) = p
     thermo_params = CAP.thermodynamics_params(params)
+    turbconv_params = CAP.turbconv_params(params)
 
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -217,7 +218,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
     for j in 1:n
         # entrainment/detrainment
         @. ᶜentrʲs.:($$j) = entrainment(
-            params,
+            thermo_params,
+            turbconv_params,
             ᶜz,
             z_sfc,
             ᶜp,
@@ -225,7 +227,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
-            ᶜphysical_buoyancy(params, Y.c.ρ, ᶜρʲs.:($$j)),
+            ᶜphysical_buoyancy(thermo_params, Y.c.ρ, ᶜρʲs.:($$j)),
             get_physical_w(ᶜu, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
             FT(0),
@@ -240,7 +242,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         )
 
         @. ᶜturb_entrʲs.:($$j) = turbulent_entrainment(
-            params,
+            turbconv_params,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
         )
 
@@ -251,7 +253,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         @. ᶜmassflux_vert_div =
             ᶜdivᵥ(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) * ᶠu³ʲs.:($$j))
         @. ᶜdetrʲs.:($$j) = detrainment(
-            params,
+            thermo_params,
+            turbconv_params,
             ᶜz,
             z_sfc,
             ᶜp,
@@ -260,7 +263,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
-            ᶜphysical_buoyancy(params, Y.c.ρ, ᶜρʲs.:($$j)),
+            ᶜphysical_buoyancy(thermo_params, Y.c.ρ, ᶜρʲs.:($$j)),
             get_physical_w(ᶜu, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
             FT(0),
