@@ -85,7 +85,13 @@ end
 
 # Check if selected output has changed from the previous recorded output (bit-wise comparison)
 include(
-    joinpath(@__DIR__, "..", "..", "reproducibility_tests", "mse_tables.jl"),
+    joinpath(
+        @__DIR__,
+        "..",
+        "..",
+        "reproducibility_tests",
+        "reproducibility_test_job_ids.jl",
+    ),
 )
 if config.parsed_args["reproducibility_test"]
     # Test results against main branch
@@ -95,21 +101,14 @@ if config.parsed_args["reproducibility_test"]
             "..",
             "..",
             "reproducibility_tests",
-            "reproducibility_tests.jl",
+            "reproducibility_tools.jl",
         ),
     )
-    @testset "Test reproducibility table entries" begin
-        mse_keys = sort(collect(keys(all_best_mse[simulation.job_id])))
-        pcs = collect(Fields.property_chains(sol.u[end]))
-        for prop_chain in mse_keys
-            @test prop_chain in pcs
-        end
-    end
-    perform_reproducibility_tests(
-        simulation.job_id,
+    export_reproducibility_results(
         sol.u[end],
-        all_best_mse,
-        simulation.output_dir,
+        config.comms_ctx;
+        job_id = simulation.job_id,
+        computed_dir = simulation.output_dir,
     )
 end
 
@@ -145,7 +144,7 @@ if ClimaComms.iamroot(config.comms_ctx)
         ),
     )
     @info "Plotting"
-    paths = latest_comparable_paths() # __build__ path (not job path)
+    paths = latest_comparable_dirs() # __build__ path (not job path)
     if isempty(paths)
         make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
     else

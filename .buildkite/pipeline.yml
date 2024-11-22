@@ -56,11 +56,11 @@ steps:
 
   - wait
 
-  - group: "Reproducibility tests"
+  - group: "Reproducibility infrastructure"
     steps:
 
-      - label: ":computer: Ensure mse tables are reset when necessary"
-        command: "julia --color=yes --project=examples reproducibility_tests/test_reset.jl"
+      - label: ":computer: Test reproducibility infrastructure"
+        command: "julia --color=yes --project=examples test/unit_reproducibility_infra.jl"
 
   - group: "Radiation"
     steps:
@@ -1220,7 +1220,7 @@ steps:
     continue_on_failure: true
 
   - label: ":robot_face: Print new mse tables"
-    command: "julia --color=yes --project=examples reproducibility_tests/print_new_mse.jl"
+    command: "julia --color=yes --project=examples reproducibility_tests/mse_summary.jl"
 
   - label: ":robot_face: Print new reference counter"
     command: "julia --color=yes --project=examples reproducibility_tests/print_new_ref_counter.jl"
