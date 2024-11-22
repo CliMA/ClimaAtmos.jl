@@ -17,14 +17,14 @@ function set_sedimentation_precomputed_quantities!(Y, p, t)
 
     # compute the precipitation terminal velocity [m/s]
     @. ᶜwₗ = CMNe.terminal_velocity(
-        $(Ref(cmc.liquid)),
-        $(Ref(cmc.Ch2022.rain)),
+        $(tuple(cmc.liquid)),
+        $(tuple(cmc.Ch2022.rain)),
         Y.c.ρ,
         max(0, Y.c.ρq_liq / Y.c.ρ),
     )
     @. ᶜwᵢ = CMNe.terminal_velocity(
-        $(Ref(cmc.ice)),
-        $(Ref(cmc.Ch2022.small_ice)),
+        $(tuple(cmc.ice)),
+        $(tuple(cmc.Ch2022.small_ice)),
         Y.c.ρ,
         max(0, Y.c.ρq_ice / Y.c.ρ),
     )
