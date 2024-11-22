@@ -95,21 +95,14 @@ if config.parsed_args["reproducibility_test"]
             "..",
             "..",
             "reproducibility_tests",
-            "reproducibility_tests.jl",
+            "compute_mse.jl", # TODO: improve filename
         ),
     )
-    @testset "Test reproducibility table entries" begin
-        mse_keys = sort(collect(keys(all_best_mse[simulation.job_id])))
-        pcs = collect(Fields.property_chains(sol.u[end]))
-        for prop_chain in mse_keys
-            @test prop_chain in pcs
-        end
-    end
-    perform_reproducibility_tests(
-        simulation.job_id,
+    export_reproducibility_results(
         sol.u[end],
-        all_best_mse,
-        simulation.output_dir,
+        config.comms_ctx;
+        job_id = simulation.job_id,
+        computed_dir = simulation.output_dir,
     )
 end
 
@@ -152,7 +145,7 @@ if ClimaComms.iamroot(config.comms_ctx)
         ),
     )
     @info "Plotting"
-    paths = latest_comparable_paths() # __build__ path (not job path)
+    paths = latest_comparable_dirs() # __build__ path (not job path)
     if isempty(paths)
         make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
     else
