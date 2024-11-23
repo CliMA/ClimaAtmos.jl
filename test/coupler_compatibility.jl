@@ -80,8 +80,6 @@ const T2 = 290
         p.scratch,
         p.hyperdiff,
         p.do_dss,
-        p.rayleigh_sponge,
-        p.viscous_sponge,
         p.precipitation,
         p.large_scale_advection,
         p.external_forcing,

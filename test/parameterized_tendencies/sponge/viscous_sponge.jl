@@ -1,27 +1,34 @@
+#=
+julia --project=examples
+using Revise; include("test/parameterized_tendencies/sponge/viscous_sponge.jl")
+=#
 using ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
-import SurfaceFluxes as SF
-import ClimaAtmos.Parameters as CAP
-import ClimaCore as CC
-include("../../test_helpers.jl")
+import ClimaCore
+using ClimaCore: Spaces, Grids, Fields
+if pkgversion(ClimaCore) ≥ v"0.14.18"
+    using ClimaCore.CommonGrids
+    using Test
 
-### Common Objects ###
-@testset begin
-    "Rayleigh-sponge functions"
-    ### Boilerplate default integrator objects
-    config = CA.AtmosConfig(Dict("initial_condition" => "DryBaroclinicWave"))
-    (; Y) = generate_test_simulation(config)
-    z = CC.Fields.coordinate_field(Y.c).z
-    zmax = maximum(CC.Fields.coordinate_field(Y.f).z)
-    Y.c.uₕ.components.data.:1 .= ones(axes(Y.c))
-    Y.c.uₕ.components.data.:2 .= ones(axes(Y.c))
-    ᶜYₜ = Y .* FT(0)
-    FT = eltype(Y)
-    ### Component test begins here
-    rs = CA.RayleighSponge(; zmax, zd = FT(0), α_uₕ = FT(1), α_w = FT(1))
-    @test CA.β_rayleigh_uₕ.(rs, z) == @. sin(FT(π) / 2 * z / zmax)^2
-    CA.viscous_sponge_tendency!(ᶜYₜ, Y, nothing, FT(0), rs)
-    @test ᶜYₜ.c.uₕ.components.data.:1 == -1 .* (CA.β_rayleigh_uₕ.(rs, z))
-    @test ᶜYₜ.c.uₕ.components.data.:2 == -1 .* (CA.β_rayleigh_uₕ.(rs, z))
+    ### Common Objects ###
+    @testset "Viscous-sponge functions" begin
+        grid = ExtrudedCubedSphereGrid(;
+            z_elem = 10,
+            z_min = 0,
+            z_max = 1,
+            radius = 10,
+            h_elem = 10,
+            n_quad_points = 4,
+        )
+        cspace = Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
+        fspace = Spaces.FaceExtrudedFiniteDifferenceSpace(cspace)
+        z = Fields.coordinate_field(cspace).z
+        zmax = maximum(Fields.coordinate_field(fspace).z)
+        FT = typeof(zmax)
+        ### Component test begins here
+        s = CA.ViscousSponge{FT}(; zd = 0, κ₂ = 1)
+        @test CA.β_viscous.(s, z, zmax) == @. ifelse(z > s.zd, s.κ₂, FT(0)) *
+                 sin(FT(π) / 2 * (z - s.zd) / (zmax - s.zd))^2
+    end
 end

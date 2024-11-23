@@ -568,12 +568,13 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅ ∂ᶜK_∂ᶜuₕ
     rs = p.atmos.rayleigh_sponge
     ᶠz = Fields.coordinate_field(Y.f).z
+    zmax = z_max(axes(Y.f))
     if rs isa RayleighSponge
         @. ∂ᶠu₃_err_∂ᶠu₃ =
             dtγ * (
                 ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅
                 ∂ᶜK_∂ᶠu₃ +
-                DiagonalMatrixRow(-β_rayleigh_w(rs, ᶠz) * (one_C3xACT3,))
+                DiagonalMatrixRow(-β_rayleigh_w(rs, ᶠz, zmax) * (one_C3xACT3,))
             ) - (I_u₃,)
     else
         @. ∂ᶠu₃_err_∂ᶠu₃ =
@@ -849,7 +850,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                         ᶠtridiagonal_matrix_c3 ⋅
                         DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) -
                         DiagonalMatrixRow(
-                            β_rayleigh_w(rs, ᶠz) * (one_C3xACT3,),
+                            β_rayleigh_w(rs, ᶠz, zmax) * (one_C3xACT3,),
                         )
                     ) - (I_u₃,)
             else
@@ -862,8 +863,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
             @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                 dtγ *
-                -DiagonalMatrixRow(β_rayleigh_w(rs, ᶠz) * (one_C3xACT3,)) -
-                (I_u₃,)
+                -DiagonalMatrixRow(
+                    β_rayleigh_w(rs, ᶠz, zmax) * (one_C3xACT3,),
+                ) - (I_u₃,)
         end
     end
 

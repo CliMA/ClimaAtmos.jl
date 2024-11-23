@@ -120,18 +120,17 @@ diffuse_momentum(::FriersonDiffusion{DM}) where {DM} = DM
 diffuse_momentum(::Nothing) = false
 
 abstract type AbstractSponge end
+Base.Broadcast.broadcastable(x::AbstractSponge) = tuple(x)
 Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
     zd::FT
     κ₂::FT
 end
 
 Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
-    zmax::FT
     zd::FT
     α_uₕ::FT
     α_w::FT
 end
-Base.Broadcast.broadcastable(x::RayleighSponge) = tuple(x)
 
 abstract type AbstractGravityWave end
 Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
