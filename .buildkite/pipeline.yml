@@ -568,9 +568,12 @@ steps:
       - label: "Calibration interface unit tests"
         command: julia --project=calibration/test calibration/test/interface.jl
       - label: "end to end test"
-        command: julia --project=calibration/test calibration/test/e2e_test.jl
+        command: srun -n 10 -o calibration_end_to_end_test/task_%t.txt julia --project=calibration/test calibration/test/mpi.jl
         artifact_paths: "calibration_end_to_end_test/*"
         soft_fail: true
+        agents:
+          slurm_ntasks: 10
+          slurm_cpus_per_task: 1
 
   - group: "Diagnostic EDMFX"
     steps:

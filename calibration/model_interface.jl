@@ -55,7 +55,7 @@ function set_up_forward_model(member, iteration, config_dict::AbstractDict)
 
     # Turn off default diagnostics
     config_dict["output_default_diagnostics"] = false
-    return CA.AtmosConfig(config_dict)
+    return CA.AtmosConfig(config_dict; comms_ctx = ClimaComms.SingletonCommsContext())
 end
 
 """
