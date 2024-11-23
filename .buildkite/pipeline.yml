@@ -568,7 +568,7 @@ steps:
         agents:
           slurm_ntasks: 12
           slurm_cpus_per_task: 1
-          slurm_mem_per_cpu: 8G
+          slurm_mem: 96GB
         artifact_paths: "calibration_end_to_end_test/*"
         soft_fail: true
 
