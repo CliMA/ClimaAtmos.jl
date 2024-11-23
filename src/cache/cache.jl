@@ -16,8 +16,8 @@ struct AtmosCache{
     DSS,
     RS,
     VS,
-    SL, 
     PR,
+    SUB,
     LSAD,
     EXTFORCING,
     EDMFCOR,
@@ -79,8 +79,8 @@ struct AtmosCache{
     """Additional parameters used by the various tendencies"""
     rayleigh_sponge::RS
     viscous_sponge::VS
-    smagorinsky_lilly::SL
     precipitation::PR
+    subsidence::SUB
     large_scale_advection::LSAD
     external_forcing::EXTFORCING
     edmf_coriolis::EDMFCOR
@@ -187,8 +187,8 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     hyperdiff = hyperdiffusion_cache(Y, atmos)
     rayleigh_sponge = rayleigh_sponge_cache(Y, atmos)
     viscous_sponge = viscous_sponge_cache(Y, atmos)
-    smagorinsky_lilly = smagorinsky_lilly_cache(Y, atmos)
     precipitation = precipitation_cache(Y, atmos)
+    subsidence = subsidence_cache(Y, atmos)
     large_scale_advection = large_scale_advection_cache(Y, atmos)
     external_forcing = external_forcing_cache(Y, atmos, params)
     edmf_coriolis = edmf_coriolis_cache(Y, atmos)
@@ -216,8 +216,8 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         do_dss,
         rayleigh_sponge,
         viscous_sponge,
-        smagorinsky_lilly,
         precipitation,
+        subsidence,
         large_scale_advection,
         external_forcing,
         edmf_coriolis,

@@ -1,4 +1,5 @@
 [deps]
+AbbreviatedStackTraces = "ac637c84-cc71-43bf-9c33-c1b4316be3d4"
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
 ArtifactWrappers = "a14bc488-3040-4b00-9dc1-f6467924858a"
 AtmosphericProfilesLibrary = "86bc3604-9858-485a-bdbe-831ec50de11d"
@@ -31,6 +32,7 @@ IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 Krylov = "ba0b0d4f-ebba-5204-a429-3ac8c609bfb7"
 LazyArtifacts = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
