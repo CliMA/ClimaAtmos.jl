@@ -33,7 +33,7 @@ struct AtmosCache{
     """ClimaAtmosParameters that have to be used"""
     params::CAP
 
-    """Variables that are used generally, such as ᶜΦ"""
+    """Variables that are used generally"""
     core::COR
 
     """Used by update_surface_conditions! in set_precomputed_quantities! and coupler"""
@@ -89,10 +89,8 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     grav = FT(CAP.grav(params))
-    ᶜΦ = grav .* ᶜcoord.z
-    ᶠΦ = grav .* ᶠcoord.z
-
-    (; ᶜf³, ᶠf¹²) = compute_coriolis(ᶜcoord, ᶠcoord, params)
+    ᶜz = ᶜcoord.z
+    ᶠz = ᶠcoord.z
 
     ghost_buffer =
         !do_dss(axes(Y.c)) ? (;) :
@@ -121,11 +119,8 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
 
     core = (
-        ᶜΦ,
-        ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
-        ᶜgradᵥ_ᶠΦ = ᶜgradᵥ.(ᶠΦ),
-        ᶜf³,
-        ᶠf¹²,
+        ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(Φ.(grav, ᶜz)),
+        ᶜgradᵥ_ᶠΦ = ᶜgradᵥ.(Φ.(grav, ᶠz)),
         # Used by diagnostics such as hfres, evspblw
         surface_ct3_unit = CT3.(
             unit_basis_vector_data.(CT3, sfc_local_geometry)
@@ -191,33 +186,4 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     )
 
     return AtmosCache{map(typeof, args)...}(args...)
-end
-
-
-function compute_coriolis(ᶜcoord, ᶠcoord, params)
-    if eltype(ᶜcoord) <: Geometry.LatLongZPoint
-        Ω = CAP.Omega(params)
-        global_geom = Spaces.global_geometry(axes(ᶜcoord))
-        if global_geom isa Geometry.DeepSphericalGlobalGeometry
-            @info "using deep atmosphere"
-            coriolis_deep(coord::Geometry.LatLongZPoint) = Geometry.LocalVector(
-                Geometry.Cartesian123Vector(zero(Ω), zero(Ω), 2 * Ω),
-                global_geom,
-                coord,
-            )
-            ᶜf³ = @. CT3(CT123(coriolis_deep(ᶜcoord)))
-            ᶠf¹² = @. CT12(CT123(coriolis_deep(ᶠcoord)))
-        else
-            coriolis_shallow(coord::Geometry.LatLongZPoint) =
-                Geometry.WVector(2 * Ω * sind(coord.lat))
-            ᶜf³ = @. CT3(coriolis_shallow(ᶜcoord))
-            ᶠf¹² = nothing
-        end
-    else
-        f = CAP.f_plane_coriolis_frequency(params)
-        coriolis_f_plane(coord) = Geometry.WVector(f)
-        ᶜf³ = @. CT3(coriolis_f_plane(ᶜcoord))
-        ᶠf¹² = nothing
-    end
-    return (; ᶜf³, ᶠf¹²)
 end

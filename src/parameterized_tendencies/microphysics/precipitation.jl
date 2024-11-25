@@ -46,7 +46,6 @@ function compute_precipitation_cache!(Y, p, ::Microphysics0Moment, _)
     (; params, dt) = p
     (; ᶜts) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precipitation
-    (; ᶜΦ) = p.core
     cm_params = CAP.microphysics_0m_params(params)
     thermo_params = CAP.thermodynamics_params(params)
     @. ᶜS_ρq_tot =
@@ -57,9 +56,11 @@ function compute_precipitation_cache!(Y, p, ::Microphysics0Moment, _)
             Y.c.ρq_tot / Y.c.ρ,
             ᶜts,
         )
+    grav = TDP.grav(thermo_params)
+    ᶜz = Fields.coordinate_field(axes(Y.c)).z
     @. ᶜS_ρe_tot =
         ᶜS_ρq_tot *
-        e_tot_0M_precipitation_sources_helper(thermo_params, ᶜts, ᶜΦ)
+        e_tot_0M_precipitation_sources_helper(thermo_params, ᶜts, Φ(grav, ᶜz))
 end
 function compute_precipitation_cache!(
     Y,
@@ -69,11 +70,12 @@ function compute_precipitation_cache!(
 )
     # For environment we multiply by grid mean ρ and not byᶜρa⁰
     # assuming a⁰=1
-    (; ᶜΦ) = p.core
     (; ᶜSqₜᵖ⁰, ᶜSqₜᵖʲs, ᶜρaʲs) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precipitation
     (; ᶜts, ᶜtsʲs) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
+    grav = TDP.grav(thermo_params)
+    ᶜz = Fields.coordinate_field(axes(Y.c)).z
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     ρ = Y.c.ρ
@@ -82,7 +84,7 @@ function compute_precipitation_cache!(
     @. ᶜS_ρe_tot =
         ᶜSqₜᵖ⁰ *
         ρ *
-        e_tot_0M_precipitation_sources_helper(thermo_params, ᶜts, ᶜΦ)
+        e_tot_0M_precipitation_sources_helper(thermo_params, ᶜts, Φ(grav, ᶜz))
     for j in 1:n
         @. ᶜS_ρq_tot += ᶜSqₜᵖʲs.:($$j) * ᶜρaʲs.:($$j)
         @. ᶜS_ρe_tot +=
@@ -91,7 +93,7 @@ function compute_precipitation_cache!(
             e_tot_0M_precipitation_sources_helper(
                 thermo_params,
                 ᶜtsʲs.:($$j),
-                ᶜΦ,
+                Φ(grav, ᶜz),
             )
     end
 end
@@ -101,19 +103,20 @@ function compute_precipitation_cache!(
     ::Microphysics0Moment,
     ::PrognosticEDMFX,
 )
-    (; ᶜΦ) = p.core
     (; ᶜSqₜᵖ⁰, ᶜSqₜᵖʲs, ᶜρa⁰) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precipitation
     (; ᶜts⁰, ᶜtsʲs) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    grav = TDP.grav(thermo_params)
+    ᶜz = Fields.coordinate_field(axes(Y.c)).z
 
     @. ᶜS_ρq_tot = ᶜSqₜᵖ⁰ * ᶜρa⁰
     @. ᶜS_ρe_tot =
         ᶜSqₜᵖ⁰ *
         ᶜρa⁰ *
-        e_tot_0M_precipitation_sources_helper(thermo_params, ᶜts⁰, ᶜΦ)
+        e_tot_0M_precipitation_sources_helper(thermo_params, ᶜts⁰, Φ(grav, ᶜz))
     for j in 1:n
         @. ᶜS_ρq_tot += ᶜSqₜᵖʲs.:($$j) * Y.c.sgsʲs.:($$j).ρa
         @. ᶜS_ρe_tot +=
@@ -122,7 +125,7 @@ function compute_precipitation_cache!(
             e_tot_0M_precipitation_sources_helper(
                 thermo_params,
                 ᶜtsʲs.:($$j),
-                ᶜΦ,
+                Φ(grav, ᶜz),
             )
     end
 end
@@ -220,8 +223,10 @@ function compute_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     FT = Spaces.undertype(axes(Y.c))
     (; dt) = p
     (; ᶜts, ᶜqᵣ, ᶜqₛ, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
-    (; ᶜΦ) = p.core
     (; ᶜSqₜᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜSeₜᵖ) = p.precipitation
+    thermo_params = CAP.thermodynamics_params(p.params)
+    grav = TDP.grav(thermo_params)
+    ᶜz = Fields.coordinate_field(axes(Y.c)).z
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
@@ -244,7 +249,6 @@ function compute_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         ᶜqᵣ,
         ᶜqₛ,
         ᶜts,
-        ᶜΦ,
         dt,
         cmp,
         thp,
@@ -262,7 +266,6 @@ function compute_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         ᶜqᵣ,
         ᶜqₛ,
         ᶜts,
-        ᶜΦ,
         dt,
         cmp,
         thp,
@@ -278,8 +281,10 @@ function compute_precipitation_cache!(
 )
     FT = Spaces.undertype(axes(Y.c))
     (; dt) = p
+    thermo_params = CAP.thermodynamics_params(p.params)
+    grav = TDP.grav(thermo_params)
+    ᶜz = Fields.coordinate_field(axes(Y.c)).z
     (; ᶜts, ᶜqᵣ, ᶜqₛ, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
-    (; ᶜΦ) = p.core
     # Grid mean precipitation sinks
     (; ᶜSqₜᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜSeₜᵖ) = p.precipitation
     # additional scratch storage
@@ -308,7 +313,6 @@ function compute_precipitation_cache!(
         ᶜqᵣ,
         ᶜqₛ,
         ᶜts,
-        ᶜΦ,
         dt,
         cmp,
         thp,

@@ -81,7 +81,7 @@ function q_tot_0M_precipitation_sources(thp, cmp::CMP.Parameters0M, dt, qₜ, ts
 end
 
 """
-    e_tot_0M_precipitation_sources_helper(thp, ts, Φ)
+    e_tot_0M_precipitation_sources_helper(thp, ts, g, z)
 
  - thp - set with thermodynamics parameters
  - ts - thermodynamic state (see td package for details)
@@ -98,14 +98,13 @@ function e_tot_0M_precipitation_sources_helper(thp, ts, Φ)
 end
 
 """
-    compute_precipitation_sources!(Sᵖ, Sᵖ_snow, Sqₜᵖ, Sqᵣᵖ, Sqₛᵖ, Seₜᵖ, ρ, qᵣ, qₛ, ts, Φ, dt, mp, thp)
+    compute_precipitation_sources!(Sᵖ, Sᵖ_snow, Sqₜᵖ, Sqᵣᵖ, Sqₛᵖ, Seₜᵖ, ρ, qᵣ, qₛ, ts, dt, mp, thp)
 
  - Sᵖ, Sᵖ_snow - temporary containters to help compute precipitation source terms
  - Sqₜᵖ, Sqᵣᵖ, Sqₛᵖ, Seₜᵖ - cached storage for precipitation source terms
  - ρ - air density
  - qᵣ, qₛ - precipitation (rain and snow) specific humidity
  - ts - thermodynamic state (see td package for details)
- - Φ - geopotential
  - dt - model time step
  - thp, cmp - structs with thermodynamic and microphysics parameters
 
@@ -125,11 +124,12 @@ function compute_precipitation_sources!(
     qᵣ,
     qₛ,
     ts,
-    Φ,
     dt,
     mp,
     thp,
 )
+    g = TDP.grav(thp)
+    z = Fields.coordinate_field(axes(ρ)).z
     FT = eltype(thp)
     # @. Sqₜᵖ = FT(0) should work after fixing
     # https://github.com/CliMA/ClimaCore.jl/issues/1786
@@ -148,7 +148,7 @@ function compute_precipitation_sources!(
     @. Sᵖ = min(limit(qₗ(thp, ts), dt, 5), Sᵖ)
     @. Sqₜᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ(g, z))
 
     # snow autoconversion assuming no supersaturation: q_ice -> q_snow
     @. Sᵖ = min(
@@ -157,7 +157,7 @@ function compute_precipitation_sources!(
     )
     @. Sqₜᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ(g, z))
 
     # accretion: q_liq + q_rain -> q_rain
     @. Sᵖ = min(
@@ -166,7 +166,7 @@ function compute_precipitation_sources!(
     )
     @. Sqₜᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ(g, z))
 
     # accretion: q_ice + q_snow -> q_snow
     @. Sᵖ = min(
@@ -175,7 +175,7 @@ function compute_precipitation_sources!(
     )
     @. Sqₜᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ(g, z))
 
     # accretion: q_liq + q_sno -> q_sno or q_rai
     # sink of cloud water via accretion cloud water + snow
@@ -196,8 +196,8 @@ function compute_precipitation_sources!(
     @. Sqᵣᵖ += ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ - Sᵖ_snow)
     @. Seₜᵖ -= ifelse(
         Tₐ(thp, ts) < mp.ps.T_freeze,
-        Sᵖ * (Iᵢ(thp, ts) + Φ),
-        Sᵖ * (Iₗ(thp, ts) + Φ) - Sᵖ_snow * (Iₗ(thp, ts) - Iᵢ(thp, ts)),
+        Sᵖ * (Iᵢ(thp, ts) + Φ(g, z)),
+        Sᵖ * (Iₗ(thp, ts) + Φ(g, z)) - Sᵖ_snow * (Iₗ(thp, ts) - Iᵢ(thp, ts)),
     )
 
     # accretion: q_ice + q_rai -> q_sno
@@ -207,7 +207,7 @@ function compute_precipitation_sources!(
     )
     @. Sqₜᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ(g, z))
     # sink of rain via accretion cloud ice - rain
     @. Sᵖ = min(
         limit(qᵣ, dt, 5),
@@ -274,14 +274,13 @@ function compute_precipitation_heating!(
     @. ᶜSeₜᵖ -= dot(ᶜ∇T, (ᶜu - C123(Geometry.WVector(ᶜwₛ)))) * cᵥᵢ(thp) * ᶜqₛ
 end
 """
-    compute_precipitation_sinks!(Sᵖ, Sqₜᵖ, Sqᵣᵖ, Sqₛᵖ, Seₜᵖ, ρ, qᵣ, qₛ, ts, Φ, dt, mp, thp)
+    compute_precipitation_sinks!(Sᵖ, Sqₜᵖ, Sqᵣᵖ, Sqₛᵖ, Seₜᵖ, ρ, qᵣ, qₛ, ts, dt, mp, thp)
 
  - Sᵖ - a temporary containter to help compute precipitation source terms
  - Sqₜᵖ, Sqᵣᵖ, Sqₛᵖ, Seₜᵖ - cached storage for precipitation source terms
  - ρ - air density
  - qᵣ, qₛ - precipitation (rain and snow) specific humidities
  - ts - thermodynamic state (see td package for details)
- - Φ - geopotential
  - dt - model time step
  - thp, cmp - structs with thermodynamic and microphysics parameters
 
@@ -300,7 +299,6 @@ function compute_precipitation_sinks!(
     qᵣ,
     qₛ,
     ts,
-    Φ,
     dt,
     mp,
     thp,
@@ -308,6 +306,8 @@ function compute_precipitation_sinks!(
     FT = eltype(Sqₜᵖ)
     sps = (mp.ps, mp.tv.snow, mp.aps, thp)
     rps = (mp.pr, mp.tv.rain, mp.aps, thp)
+    g = TDP.grav(thp)
+    z = Fields.coordinate_field(axes(ρ)).z
 
     #! format: off
     # evaporation: q_rai -> q_vap
@@ -317,7 +317,7 @@ function compute_precipitation_sinks!(
     )
     @. Sqₜᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ(g, z))
 
     # melting: q_sno -> q_rai
     @. Sᵖ = min(
@@ -337,6 +337,6 @@ function compute_precipitation_sinks!(
     )
     @. Sqₜᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ
-    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ(g, z))
     #! format: on
 end

@@ -471,9 +471,10 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     thermo_params = CAP.thermodynamics_params(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_args = (thermo_params, moisture_model)
-    (; ᶜΦ) = p.core
     (; ᶜspecific, ᶜu, ᶠu³, ᶜK, ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+    ᶜz = Fields.coordinate_field(axes(Y.c)).z
+    grav = TDP.grav(thermo_params)
 
     @. ᶜspecific = specific_gs(Y.c)
     set_ᶠuₕ³!(ᶠuₕ³, Y)
@@ -499,7 +500,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
+    @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, Φ(grav, ᶜz), Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
     if turbconv_model isa AbstractEDMF

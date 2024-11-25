@@ -469,7 +469,6 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
                 p.precomputed.bdmr,
             ) : (;)
         )...,
-        p.core.ᶜΦ,
         p.core.ᶠgradᵥ_ᶜΦ,
         p.scratch.ᶜtemp_scalar,
         p.scratch.ᶜtemp_C3,
@@ -498,7 +497,7 @@ end
 
 function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     (; matrix, diffusion_flag, sgs_advection_flag, topography_flag) = A
-    (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜh_tot) = p
+    (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶠgradᵥ_ᶜΦ, ᶜh_tot) = p
     (;
         ᶜtemp_C3,
         ∂ᶜK_∂ᶜuₕ,
@@ -525,6 +524,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     # minus ∂e_int_∂q_tot
     ∂e_int_∂q_tot = T_0 * (Δcv_v - R_d) - FT(CAP.e_int_v0(params))
     thermo_params = CAP.thermodynamics_params(params)
+    grav = TDP.grav(thermo_params)
+    ᶜz = Fields.coordinate_field(axes(Y.c)).z
 
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
@@ -585,7 +586,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     @. ∂ᶠu₃_err_∂ᶜρ =
         dtγ * (
             ᶠp_grad_matrix ⋅
-            DiagonalMatrixRow(ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ)) +
+            DiagonalMatrixRow(ᶜkappa_m * (T_0 * cp_d - ᶜK - Φ(grav, ᶜz))) +
             DiagonalMatrixRow(ᶠgradᵥ(ᶜp) / abs2(ᶠinterp(ᶜρ))) ⋅
             ᶠinterp_matrix()
         )

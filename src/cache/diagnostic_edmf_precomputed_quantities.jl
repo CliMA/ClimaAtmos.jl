@@ -34,13 +34,14 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
     mse_level,
     q_tot_level,
     p_level,
-    Φ_level,
+    z_level,
 )
     FT = eltype(thermo_params)
+    grav = TDP.grav(thermo_params)
     @. ts_level = TD.PhaseEquil_phq(
         thermo_params,
         p_level,
-        mse_level - Φ_level,
+        mse_level - Φ(grav, z_level),
         q_tot_level,
         8,
         FT(0.0003),
@@ -92,7 +93,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     (; turbconv_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
-    (; ᶜΦ) = p.core
     (; ᶜp, ᶠu³, ᶜh_tot, ᶜK) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
@@ -112,7 +112,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     q_tot_int_level = Fields.field_values(Fields.level(q_tot, 1))
 
     p_int_level = Fields.field_values(Fields.level(ᶜp, 1))
-    Φ_int_level = Fields.field_values(Fields.level(ᶜΦ, 1))
 
     local_geometry_int_level =
         Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
@@ -187,7 +186,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
             mseʲ_int_level,
             q_totʲ_int_level,
             p_int_level,
-            Φ_int_level,
+            z_int_level,
         )
         @. ρaʲ_int_level = ρʲ_int_level * FT(turbconv_params.surface_area)
     end
@@ -296,7 +295,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
-    (; ᶜΦ) = p.core
     (; ᶜp, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
     (;
@@ -324,13 +322,17 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     microphys_1m_params = CAP.microphysics_1m_params(params)
     turbconv_params = CAP.turbconv_params(params)
 
-    ᶠΦ = p.scratch.ᶠtemp_scalar
-    @. ᶠΦ = CAP.grav(params) * ᶠz
+    g = CAP.grav(params)
+    ᶜcoords = Fields.coordinate_field(Y.c)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶠz = Fields.coordinate_field(Y.f).z
+    global_geom = Spaces.global_geometry(axes(ᶜcoords))
+
     ᶜ∇Φ³ = p.scratch.ᶜtemp_CT3
-    @. ᶜ∇Φ³ = CT3(ᶜgradᵥ(ᶠΦ))
-    @. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
+    @. ᶜ∇Φ³ = CT3(ᶜgradᵥ(Φ(g, ᶠz)))
+    @. ᶜ∇Φ³ += CT3(gradₕ(Φ(g, ᶜz)))
     ᶜ∇Φ₃ = p.scratch.ᶜtemp_C3
-    @. ᶜ∇Φ₃ = ᶜgradᵥ(ᶠΦ)
+    @. ᶜ∇Φ₃ = ᶜgradᵥ(Φ(g, ᶠz))
 
     z_sfc_halflevel =
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
@@ -344,7 +346,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         h_tot_level = Fields.field_values(Fields.level(ᶜh_tot, i))
         q_tot_level = Fields.field_values(Fields.level(q_tot, i))
         p_level = Fields.field_values(Fields.level(ᶜp, i))
-        Φ_level = Fields.field_values(Fields.level(ᶜΦ, i))
+        z_level = Fields.field_values(Fields.level(ᶜz, i))
         local_geometry_level = Fields.field_values(
             Fields.level(Fields.local_geometry_field(Y.c), i),
         )
@@ -355,7 +357,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         end_index = fieldcount(eltype(∂x∂ξ_level)) # This will be 4 in 2D and 9 in 3D.
         ∂x³∂ξ³_level = ∂x∂ξ_level.:($end_index)
 
-        Φ_prev_level = Fields.field_values(Fields.level(ᶜΦ, i - 1))
         ∇Φ³_prev_level = Fields.field_values(Fields.level(ᶜ∇Φ³, i - 1))
         ∇Φ³_data_prev_level = ∇Φ³_prev_level.components.data.:1
         ∇Φ₃_prev_level = Fields.field_values(Fields.level(ᶜ∇Φ₃, i - 1))
@@ -554,7 +555,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     q_rai_prev_level,
                     q_sno_prev_level,
                     tsʲ_prev_level,
-                    Φ_prev_level,
                     dt,
                     microphys_1m_params,
                     thermo_params,
@@ -701,7 +701,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                             e_tot_0M_precipitation_sources_helper(
                                 thermo_params,
                                 tsʲ_prev_level,
-                                Φ_prev_level,
+                                Φ(g, z_prev_level),
                             )
                         )
                     )
@@ -806,7 +806,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 mseʲ_level,
                 q_totʲ_level,
                 p_level,
-                Φ_level,
+                z_level,
             )
         end
         ρaʲs_level = Fields.field_values(Fields.level(ᶜρaʲs, i))
@@ -1070,7 +1070,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         ᶜqᵣ,
         ᶜqₛ,
         ᶜts,
-        p.core.ᶜΦ,
         p.dt,
         microphys_1m_params,
         thermo_params,

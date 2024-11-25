@@ -20,7 +20,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
 
     thermo_params = CAP.thermodynamics_params(p.params)
     (; turbconv_model) = p.atmos
-    (; ᶜΦ,) = p.core
+    ᶜz = Fields.coordinate_field(axes(Y.c)).z
+    grav = TDP.grav(thermo_params)
     (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
     (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
         p.precomputed
@@ -44,7 +45,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke⁰
-    @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
+    @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - Φ(grav, ᶜz), ᶜq_tot⁰)
     @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
     return nothing
 end
@@ -72,7 +73,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
     thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
 
-    (; ᶜΦ,) = p.core
+    grav = TDP.grav(thermo_params)
+    ᶜz = Fields.coordinate_field(Y.c).z
     (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK) = p.precomputed
     (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
@@ -90,7 +92,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
 
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
-        @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
+        @. ᶜtsʲ =
+            TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - Φ(grav, ᶜz), ᶜq_totʲ)
         @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
 
         # EDMFX boundary condition:
@@ -153,12 +156,11 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         )
 
         # Then overwrite the prognostic variables at first inetrior point.
-        ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
         ᶜtsʲ_int_val = Fields.field_values(Fields.level(ᶜtsʲ, 1))
         @. ᶜtsʲ_int_val = TD.PhaseEquil_phq(
             thermo_params,
             ᶜp_int_val,
-            ᶜmseʲ_int_val - ᶜΦ_int_val,
+            ᶜmseʲ_int_val - Φ(grav, ᶜz_int_val),
             ᶜq_totʲ_int_val,
         )
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
@@ -416,7 +418,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     @assert !(p.atmos.moisture_model isa DryModel)
 
     (; params, dt) = p
-    (; ᶜΦ,) = p.core
     thp = CAP.thermodynamics_params(params)
     cmp = CAP.microphysics_1m_params(params)
 
@@ -443,7 +444,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             ᶜqᵣ,
             ᶜqₛ,
             ᶜtsʲs.:($j),
-            ᶜΦ,
             dt,
             cmp,
             thp,
@@ -462,7 +462,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜqᵣ,
         ᶜqₛ,
         ᶜts⁰,
-        ᶜΦ,
         dt,
         cmp,
         thp,
