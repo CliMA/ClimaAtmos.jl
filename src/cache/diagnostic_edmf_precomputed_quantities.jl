@@ -598,6 +598,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     u³ʲ_data_prev_halflevel *
                     ρ_prev_level
                 ) / local_geometry_level.J / ρ_level
+            w_vert_div_level = p.scratch.temp_data_level_3
+            @. w_vert_div_level =
+                (
+                    local_geometry_halflevel.J * u³ʲ_data_halflevel -
+                    local_geometry_prev_level.J * u³ʲ_data_prev_halflevel
+                ) / local_geometry_level.J
 
             @. detrʲ_prev_level = detrainment_from_thermo_state(
                 thermo_params,
@@ -617,6 +623,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 entrʲ_prev_level,
                 vert_div_level,
                 FT(0), # mass flux divergence is not implemented for diagnostic edmf
+                w_vert_div_level,
                 tke_prev_level,
                 p.atmos.edmfx_model.detr_model,
             )
