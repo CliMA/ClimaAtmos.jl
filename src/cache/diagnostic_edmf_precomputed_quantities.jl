@@ -327,13 +327,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     microphys_params = CAP.microphysics_precipitation_params(params)
     turbconv_params = CAP.turbconv_params(params)
 
-    ᶠΦ = p.scratch.ᶠtemp_scalar
-    @. ᶠΦ = CAP.grav(params) * ᶠz
+    g = CAP.grav(params)
     ᶜ∇Φ³ = p.scratch.ᶜtemp_CT3
-    @. ᶜ∇Φ³ = CT3(ᶜgradᵥ(ᶠΦ))
+    @. ᶜ∇Φ₃ = ᶜgradᵥ(Φ(g, ᶠz))
+    @. ᶜ∇Φ³ = CT3(ᶜ∇Φ₃)
     @. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
     ᶜ∇Φ₃ = p.scratch.ᶜtemp_C3
-    @. ᶜ∇Φ₃ = ᶜgradᵥ(ᶠΦ)
 
     z_sfc_halflevel =
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
