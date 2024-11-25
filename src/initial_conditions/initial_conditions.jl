@@ -161,6 +161,31 @@ function (initial_condition::DecayingProfile)(params)
 end
 
 """
+    DYAMONDSummer(; perturb = true)
+
+An `InitialCondition` with a decaying temperature profile, and with an optional
+perturbation to the temperature.
+"""
+struct DYAMONDSummer <: InitialCondition end
+
+function (initial_condition::DYAMONDSummer)(params)
+    function local_state(local_geometry)
+        FT = eltype(params)
+        grav = CAP.grav(params)
+        thermo_params = CAP.thermodynamics_params(params)
+
+        T, p = FT(300), FT(100000) # placeholder values
+
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+        )
+    end
+    return local_state
+end
+
+"""
     AgnesiHProfile(; perturb = false)
 
 An `InitialCondition` with a decaying temperature profile

@@ -43,3 +43,11 @@ git-tree-sha1 = "10742e0a2e343d13bb04df379e300a83402d4106"
     [[era5_cloud.download]]
     sha256 = "bb51e2f2d315b487e05a8d38944d4ad937ee4a40c43b68541220c5d54425e24a"
     url = "https://caltech.box.com/shared/static/b6ur4ap4vo04j09vdulem96z9fxqlgyn.gz"
+
+[DYAMOND_SUMMER_ICS_p98deg]
+git-tree-sha1 = "5ef4bb950eceb86430464c8637ede7f075a1449f"
+lazy = true
+
+    [[DYAMOND_SUMMER_ICS_p98deg.download]]
+    sha256 = "da552c32c4e66a053992f3b2c96ebaeb78c1aded1818b4e7c2deea77d521dda1"
+    url = "https://caltech.box.com/shared/static/ad8d774iwaezctwud1g1lqbp9irbjj38.gz"

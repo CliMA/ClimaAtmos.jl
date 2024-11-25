@@ -1,6 +1,7 @@
 using Dates: DateTime, @dateformat_str
 import Interpolations
 import NCDatasets
+import ClimaUtilities
 import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
@@ -8,6 +9,9 @@ import ClimaAtmos as CA
 import LinearAlgebra
 import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
+import ClimaAtmos.AtmosArtifacts as AA
+#using ClimaParams
+import Thermodynamics as TD
 
 import ClimaDiagnostics
 
@@ -267,6 +271,8 @@ function get_initial_condition(parsed_args)
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
             parsed_args["perturb_initstate"],
         )
+    elseif parsed_args["initial_condition"] in ["DYAMONDSummer"]
+        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
     elseif parsed_args["initial_condition"] in [
         "Nieuwstadt",
         "GABLS",
@@ -616,7 +622,6 @@ end
 function get_simulation(config::AtmosConfig)
     params = create_parameter_set(config)
     atmos = get_atmos(config, params)
-
     sim_info = get_sim_info(config)
     job_id = sim_info.job_id
     output_dir = sim_info.output_dir
@@ -660,6 +665,80 @@ function get_simulation(config::AtmosConfig)
     end
 
     tracers = get_tracers(config.parsed_args)
+
+    if initial_condition isa ClimaAtmos.InitialConditions.DYAMONDSummer
+        @show "DYAMONDSummer, initialize from file"
+        thermo_params = params.thermodynamics_params
+        file_path = AA.dyamond_summer_artifact_path(;
+            context = get_comms_context(config.parsed_args),
+        )
+        Pressure = ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
+            file_path,
+            "p",
+            spaces.center_space,
+        )
+        Temperature = ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
+            file_path,
+            "t",
+            spaces.center_space,
+        )
+        q_tot = ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
+            file_path,
+            "q",
+            spaces.center_space,
+        )
+        q = TD.PhasePartition.(q_tot)
+        Y.c.ρ .= TD.air_density.(thermo_params, Temperature, Pressure, q)
+        vel =
+            ClimaCore.Geometry.UVWVector.(
+                ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
+                    file_path,
+                    "u",
+                    spaces.center_space,
+                ),
+                ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
+                    file_path,
+                    "v",
+                    spaces.center_space,
+                ),
+                ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
+                    file_path,
+                    "w",
+                    spaces.center_space,
+                ),
+            )
+        Y.c.uₕ .=
+            ClimaCore.Geometry.Covariant12Vector.(
+                ClimaCore.Geometry.UVVector.(vel)
+            )
+        Y.f.u₃ .=
+            ᶠinterp.(
+                ClimaCore.Geometry.Covariant3Vector.(
+                    ClimaCore.Geometry.WVector.(vel)
+                )
+            )
+        e_kin = similar(Temperature)
+        compute_kinetic!(e_kin, Y.c.uₕ, Y.f.u₃)
+        e_pot = ClimaCore.Fields.coordinate_field(Y.c).z .* thermo_params.grav
+        Y.c.ρe_tot .=
+            TD.total_energy.(thermo_params, Temperature, e_kin, e_pot) .* Y.c.ρ
+        Y.c.ρq_tot .= q_tot .* Y.c.ρ
+        if config.parsed_args["precip_model"] == "1M"
+            Y.c.ρq_sno .=
+                ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
+                    file_path,
+                    "cswc",
+                    spaces.center_space,
+                ) .* Y.c.ρ
+            Y.c.ρq_rai .=
+                ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
+                    file_path,
+                    "crwc",
+                    spaces.center_space,
+                ) .* Y.c.ρ
+        end
+        @show "****************************"
+    end
 
     s = @timed_str begin
         p = build_cache(

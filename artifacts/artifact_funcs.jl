@@ -61,3 +61,16 @@ function gfdl_ogw_data_path()
     )
     return AW.get_data_folder(gfdl_data)
 end
+
+# DYAMOND summer initial conditions
+function DYAMOND_SUMMER_ICS_p98deg_dataset_path()
+    DYAMOND_SUMMER_ICS_p98deg_dataset = AW.ArtifactWrapper(
+        @__DIR__,
+        "DYAMOND_SUMMER_ICS_p98deg",
+        AW.ArtifactFile[AW.ArtifactFile(
+            url = "https://caltech.box.com/shared/static/1nqueb39ro33b2ps7zm2df9hpbkps6wy.gz",
+            filename = "DYAMOND_SUMMER_ICS_p98deg.nc",
+        ),],
+    )
+    return AW.get_data_folder(DYAMOND_SUMMER_ICS_p98deg_dataset)
+end
