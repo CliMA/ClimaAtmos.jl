@@ -721,7 +721,8 @@ function get_simulation(config::AtmosConfig)
         compute_kinetic!(e_kin, Y.c.uₕ, Y.f.u₃)
         e_pot = ClimaCore.Fields.coordinate_field(Y.c).z .* thermo_params.grav
         Y.c.ρe_tot .=
-            TD.total_energy.(thermo_params, Temperature, e_kin, e_pot) .* Y.c.ρ
+            TD.total_energy.(thermo_params, e_kin, e_pot, Temperature, q) .*
+            Y.c.ρ
         Y.c.ρq_tot .= q_tot .* Y.c.ρ
         if config.parsed_args["precip_model"] == "1M"
             Y.c.ρq_sno .=
