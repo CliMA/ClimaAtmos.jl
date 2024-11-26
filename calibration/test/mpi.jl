@@ -156,7 +156,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         obs_path = joinpath(experiment_dir, "observations.jld2")
         if !isfile(obs_path)
             @info "Generating observations"
-            atmos_config = CA.AtmosConfig(joinpath(experiment_dir, "model_config.yml"))
+            atmos_config = CA.AtmosConfig(joinpath(experiment_dir, "model_config.yml"); comms_ctx = ClimaComms.SingletonCommsContext())
             simulation = CA.get_simulation(atmos_config)
             CA.solve_atmos!(simulation)
             observations = Vector{Float64}(undef, 1)
