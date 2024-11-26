@@ -574,7 +574,7 @@ steps:
         agents:
           slurm_ntasks: 10
           slurm_cpus_per_task: 1
-          slurm_mem: 20GB
+          slurm_mem: 96GB
           slurm_time: "00:20:00"
 
   - group: "Diagnostic EDMFX"
