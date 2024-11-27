@@ -22,7 +22,7 @@ steps:
       - env | grep CUDA_VISIBLE_DEVICES
       - env | grep SLURM_STEP_GPUS
       - echo "--- MPI rank GPU visibility"
-      - mpiexec -n 2 bash -c 'echo "Rank $OMPI_COMM_WORLD_RANK: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"'
+      - mpiexec -n 2 bash -c "echo 'Rank $OMPI_COMM_WORLD_RANK: CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES'"
       - echo "--- GPU Status"
       - nvidia-smi
       - echo "--- SLURM GPU info"
