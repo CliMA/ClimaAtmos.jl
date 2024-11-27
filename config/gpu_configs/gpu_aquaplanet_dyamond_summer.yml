@@ -1,7 +1,7 @@
 dt_save_state_to_disk: "Inf"
 dt_save_to_sol: "Inf"
 output_default_diagnostics: false
-h_elem: 30
+h_elem: 16
 z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
@@ -17,8 +17,8 @@ vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 surface_setup: "DefaultMoninObukhov"
-dt: "1secs"
-t_end: "3secs"
+dt: "30secs"
+t_end: "120secs"
 toml: [toml/longrun_aquaplanet.toml]
 prescribe_ozone: true
 aerosol_radiation: true
@@ -27,4 +27,4 @@ initial_condition: "DYAMONDSummer"
 topography: "Earth"
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
-    period: 1sec
+    period: "30secs"

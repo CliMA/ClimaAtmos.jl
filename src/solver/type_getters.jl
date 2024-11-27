@@ -650,7 +650,28 @@ function get_simulation(config::AtmosConfig)
 
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
-
+    #-----------
+    function column_iterator(field)
+        horz_space = Spaces.horizontal_space(axes(field))
+        qs =
+            1:Quadratures.degrees_of_freedom(
+                Spaces.quadrature_style(horz_space),
+            )
+        hs = Spaces.eachslabindex(horz_space)
+        return if Fields.field_values(field) isa
+                  Union{DataLayouts.VIFH, DataLayouts.IFH}
+            Iterators.map(Iterators.product(qs, hs)) do (i, h)
+                Fields.column(field, i, h)
+            end
+        else
+            @assert Fields.field_values(field) isa
+                    Union{DataLayouts.VIJFH, DataLayouts.IJFH}
+            Iterators.map(Iterators.product(qs, qs, hs)) do (i, j, h)
+                Fields.column(field, i, j, h)
+            end
+        end
+    end
+    #-----------
     if !sim_info.restart
         s = @timed_str begin
             Y = ICs.atmos_state(
@@ -672,26 +693,55 @@ function get_simulation(config::AtmosConfig)
         file_path = AA.dyamond_summer_artifact_path(;
             context = get_comms_context(config.parsed_args),
         )
-        Pressure = ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
-            file_path,
-            "p",
-            spaces.center_space,
+        p_sfc = Fields.level(
+            ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "p",
+                spaces.face_space,
+            ),
+            Fields.half,
         )
-        Temperature = ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
+        ᶠT = ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
+            file_path,
+            "t",
+            spaces.face_space,
+        )
+        ᶠq_tot = ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
+            file_path,
+            "q",
+            spaces.face_space,
+        )
+        ᶜT = ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
             file_path,
             "t",
             spaces.center_space,
         )
-        q_tot = ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
+        ᶜq_tot = ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
             file_path,
             "q",
             spaces.center_space,
         )
-        thermo_state =
-            TD.PhaseEquil_pTq.(thermo_params, Pressure, Temperature, q_tot)
-        #q = TD.PhasePartition.(q_tot)
-        #Y.c.ρ .= TD.air_density.(thermo_params, Temperature, Pressure, q)
-        Y.c.ρ .= TD.air_density.(thermo_params, thermo_state)
+        ᶜp = similar(Y.c.ρ)
+        ᶠ∂lnp∂z = @. -thermo_params.grav / (
+            TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶠq_tot)) * ᶠT
+        )
+        context = get_comms_context(config.parsed_args)
+        for (ᶜp_col, ᶠ∂lnp∂z_col, p_sfc_col) in zip(
+            column_iterator(ᶜp),
+            column_iterator(ᶠ∂lnp∂z),
+            column_iterator(p_sfc),
+        )
+            ClimaCore.Operators.column_integral_indefinite!(
+                ᶜp_col,
+                ᶠ∂lnp∂z_col,
+                log(
+                    ClimaComms.allowscalar(getindex, context.device, p_sfc_col),
+                ),
+            ) # actually computes ln(ᶜp)
+            @. ᶜp_col = exp(ᶜp_col) # replaces ln(ᶜp) with ᶜp
+        end
+        ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜp, ᶜT, ᶜq_tot)
+        Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
         vel =
             ClimaCore.Geometry.UVWVector.(
                 ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
@@ -720,12 +770,12 @@ function get_simulation(config::AtmosConfig)
                     ClimaCore.Geometry.WVector.(vel)
                 )
             )
-        e_kin = similar(Temperature)
+        e_kin = similar(ᶜT)
         compute_kinetic!(e_kin, Y.c.uₕ, Y.f.u₃)
         e_pot = ClimaCore.Fields.coordinate_field(Y.c).z .* thermo_params.grav
         Y.c.ρe_tot .=
-            TD.total_energy.(thermo_params, thermo_state, e_kin, e_pot) .* Y.c.ρ
-        Y.c.ρq_tot .= q_tot .* Y.c.ρ
+            TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
+        Y.c.ρq_tot .= ᶜq_tot .* Y.c.ρ
         if config.parsed_args["precip_model"] == "1M"
             Y.c.ρq_sno .=
                 ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
@@ -742,7 +792,6 @@ function get_simulation(config::AtmosConfig)
         end
         @show "****************************"
     end
-
     s = @timed_str begin
         p = build_cache(
             Y,
