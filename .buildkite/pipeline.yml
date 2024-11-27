@@ -24,6 +24,7 @@ steps:
       - echo "--- MPI rank GPU visibility"
       - mpiexec -n 2 bash -c "echo $OMPI_COMM_WORLD_RANK"
       - mpiexec -n 2 bash -c "echo $CUDA_VISIBLE_DEVICES"
+      - mpiexec -n 2 bash -c "printenv CUDA_VISIBLE_DEVICES"
       - echo "--- GPU Status"
       - nvidia-smi
       - echo "--- SLURM GPU info"
