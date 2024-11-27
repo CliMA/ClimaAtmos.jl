@@ -687,8 +687,11 @@ function get_simulation(config::AtmosConfig)
             "q",
             spaces.center_space,
         )
-        q = TD.PhasePartition.(q_tot)
-        Y.c.ρ .= TD.air_density.(thermo_params, Temperature, Pressure, q)
+        thermo_state =
+            TD.PhaseEquil_pTq.(thermo_params, Pressure, Temperature, q_tot)
+        #q = TD.PhasePartition.(q_tot)
+        #Y.c.ρ .= TD.air_density.(thermo_params, Temperature, Pressure, q)
+        Y.c.ρ .= TD.air_density.(thermo_params, thermo_state)
         vel =
             ClimaCore.Geometry.UVWVector.(
                 ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
@@ -721,8 +724,7 @@ function get_simulation(config::AtmosConfig)
         compute_kinetic!(e_kin, Y.c.uₕ, Y.f.u₃)
         e_pot = ClimaCore.Fields.coordinate_field(Y.c).z .* thermo_params.grav
         Y.c.ρe_tot .=
-            TD.total_energy.(thermo_params, e_kin, e_pot, Temperature, q) .*
-            Y.c.ρ
+            TD.total_energy.(thermo_params, thermo_state, e_kin, e_pot) .* Y.c.ρ
         Y.c.ρq_tot .= q_tot .* Y.c.ρ
         if config.parsed_args["precip_model"] == "1M"
             Y.c.ρq_sno .=
