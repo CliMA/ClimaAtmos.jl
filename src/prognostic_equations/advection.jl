@@ -73,13 +73,14 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
     (; ᶜspecific) = p.precomputed
+    ᶜcoords = Fields.coordinate_field(Y.c)
+    global_geom = Spaces.global_geometry(axes(ᶜcoord))
 
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
     ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
@@ -129,26 +130,32 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    if isnothing(ᶠf¹²)
+    if global_geom isa Geometry.DeepSphericalGlobalGeometry
+        # deep atmosphere
+        @. Yₜ.c.uₕ -=
+            ᶜinterp(
+                (f¹²(ᶠcoords, global_geom, params) + ᶠω¹²) ×
+                (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³),
+            ) / (Y.c.ρ * ᶜJ) +
+            (f³(ᶜcoords, global_geom, params) + ᶜω³) × CT12(ᶜu)
+        @. Yₜ.f.u₃ -=
+            (f¹²(ᶠcoords, global_geom, params) + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) +
+            ᶠgradᵥ(ᶜK)
+        for j in 1:n
+            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
+                (f¹²(ᶠcoords, global_geom, params) + ᶠω¹²ʲs.:($$j)) ×
+                ᶠinterp(CT12(ᶜuʲs.:($$j))) +
+                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
+        end
+    else
         # shallow atmosphere
         @. Yₜ.c.uₕ -=
             ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
-            (ᶜf³ + ᶜω³) × CT12(ᶜu)
+            (f³(ᶜcoords, global_geom, params) + ᶜω³) × CT12(ᶜu)
         @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
                 ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        end
-    else
-        # deep atmosphere
-        @. Yₜ.c.uₕ -=
-            ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
-            (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
                 ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
         end
     end

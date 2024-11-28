@@ -115,8 +115,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     ᶜΦ = grav .* ᶜcoord.z
     ᶠΦ = grav .* ᶠcoord.z
 
-    (; ᶜf³, ᶠf¹²) = compute_coriolis(ᶜcoord, ᶠcoord, params)
-
     quadrature_style =
         Spaces.quadrature_style(Spaces.horizontal_space(axes(Y.c)))
     do_dss = quadrature_style isa Quadratures.GLL
@@ -150,8 +148,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
         ᶜgradᵥ_ᶠΦ = ᶜgradᵥ.(ᶠΦ),
-        ᶜf³,
-        ᶠf¹²,
         # Used by diagnostics such as hfres, evspblw
         surface_ct3_unit = CT3.(
             unit_basis_vector_data.(CT3, sfc_local_geometry)
@@ -217,33 +213,4 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     )
 
     return AtmosCache{map(typeof, args)...}(args...)
-end
-
-
-function compute_coriolis(ᶜcoord, ᶠcoord, params)
-    if eltype(ᶜcoord) <: Geometry.LatLongZPoint
-        Ω = CAP.Omega(params)
-        global_geom = Spaces.global_geometry(axes(ᶜcoord))
-        if global_geom isa Geometry.DeepSphericalGlobalGeometry
-            @info "using deep atmosphere"
-            coriolis_deep(coord::Geometry.LatLongZPoint) = Geometry.LocalVector(
-                Geometry.Cartesian123Vector(zero(Ω), zero(Ω), 2 * Ω),
-                global_geom,
-                coord,
-            )
-            ᶜf³ = @. CT3(CT123(coriolis_deep(ᶜcoord)))
-            ᶠf¹² = @. CT12(CT123(coriolis_deep(ᶠcoord)))
-        else
-            coriolis_shallow(coord::Geometry.LatLongZPoint) =
-                Geometry.WVector(2 * Ω * sind(coord.lat))
-            ᶜf³ = @. CT3(coriolis_shallow(ᶜcoord))
-            ᶠf¹² = nothing
-        end
-    else
-        f = CAP.f_plane_coriolis_frequency(params)
-        coriolis_f_plane(coord) = Geometry.WVector(f)
-        ᶜf³ = @. CT3(coriolis_f_plane(ᶜcoord))
-        ᶠf¹² = nothing
-    end
-    return (; ᶜf³, ᶠf¹²)
 end
