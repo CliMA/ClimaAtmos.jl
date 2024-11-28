@@ -10,6 +10,7 @@ function temporary_quantities(Y, atmos)
 
     FT = Spaces.undertype(center_space)
     CTh = CTh_vector_type(Y.c)
+    uvw_vec = UVW(FT(0), FT(0), FT(0))
     return (;
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
@@ -45,14 +46,12 @@ function temporary_quantities(Y, atmos)
             face_space,
         ), # ᶠω¹²ʲs
         ᶠtemp_C123 = Fields.Field(C123{FT}, face_space), # χ₁₂₃
-        ᶜtemp_UVWxUVW = Fields.Field(
-            typeof(UVW(FT(0), FT(0), FT(0)) * UVW(FT(0), FT(0), FT(0))'),
-            center_space,
-        ), # ᶜstrain_rate
-        ᶠtemp_UVWxUVW = Fields.Field(
-            typeof(UVW(FT(0), FT(0), FT(0)) * UVW(FT(0), FT(0), FT(0))'),
-            face_space,
-        ), # ᶠstrain_rate
+        ᶜtemp_UVW = Fields.Field(typeof(uvw_vec), center_space), # UVW(ᶜu)
+        ᶠtemp_UVW = Fields.Field(typeof(uvw_vec), face_space), # UVW(ᶠu³)
+        ᶜtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
+        ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
+        ᶜtemp_strain = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
+        ᶠtemp_strain = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
         # TODO: Remove this hack
         sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
         # Implicit solver cache:
