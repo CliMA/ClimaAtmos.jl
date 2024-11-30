@@ -720,7 +720,7 @@ function get_simulation(config::AtmosConfig)
             file_path,
             "q",
             spaces.center_space,
-        )
+        ) ./ 2
         ᶜp = similar(Y.c.ρ)
         ᶠ∂lnp∂z = @. -thermo_params.grav / (
             TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶠq_tot)) * ᶠT
@@ -740,8 +740,11 @@ function get_simulation(config::AtmosConfig)
             ) # actually computes ln(ᶜp)
             @. ᶜp_col = exp(ᶜp_col) # replaces ln(ᶜp) with ᶜp
         end
+        @info extrema(ᶜp)
         ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜp, ᶜT, ᶜq_tot)
         Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
+        @info extrema(Y.c.ρ)
+        @info extrema(ᶜts.T)
         vel =
             ClimaCore.Geometry.UVWVector.(
                 ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
@@ -764,12 +767,12 @@ function get_simulation(config::AtmosConfig)
             ClimaCore.Geometry.Covariant12Vector.(
                 ClimaCore.Geometry.UVVector.(vel)
             )
-        Y.f.u₃ .=
-            ᶠinterp.(
-                ClimaCore.Geometry.Covariant3Vector.(
-                    ClimaCore.Geometry.WVector.(vel)
-                )
-            )
+        # Y.f.u₃ .=
+        #     ᶠinterp.(
+        #         ClimaCore.Geometry.Covariant3Vector.(
+        #             ClimaCore.Geometry.WVector.(vel)
+        #         )
+        #     )
         e_kin = similar(ᶜT)
         compute_kinetic!(e_kin, Y.c.uₕ, Y.f.u₃)
         e_pot = ClimaCore.Fields.coordinate_field(Y.c).z .* thermo_params.grav
@@ -807,6 +810,8 @@ function get_simulation(config::AtmosConfig)
     if config.parsed_args["discrete_hydrostatic_balance"]
         set_discrete_hydrostatic_balanced_state!(Y, p)
     end
+
+    #@info extrema(p.precomputed.ᶜts.T)
 
     FT = Spaces.undertype(axes(Y.c))
     s = @timed_str begin
