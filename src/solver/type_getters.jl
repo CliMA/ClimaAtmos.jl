@@ -650,28 +650,6 @@ function get_simulation(config::AtmosConfig)
 
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
-    #-----------
-    function column_iterator(field)
-        horz_space = Spaces.horizontal_space(axes(field))
-        qs =
-            1:Quadratures.degrees_of_freedom(
-                Spaces.quadrature_style(horz_space),
-            )
-        hs = Spaces.eachslabindex(horz_space)
-        return if Fields.field_values(field) isa
-                  Union{DataLayouts.VIFH, DataLayouts.IFH}
-            Iterators.map(Iterators.product(qs, hs)) do (i, h)
-                Fields.column(field, i, h)
-            end
-        else
-            @assert Fields.field_values(field) isa
-                    Union{DataLayouts.VIJFH, DataLayouts.IJFH}
-            Iterators.map(Iterators.product(qs, qs, hs)) do (i, j, h)
-                Fields.column(field, i, j, h)
-            end
-        end
-    end
-    #-----------
     if !sim_info.restart
         s = @timed_str begin
             Y = ICs.atmos_state(
@@ -701,16 +679,6 @@ function get_simulation(config::AtmosConfig)
             ),
             Fields.half,
         )
-        ᶠT = ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
-            file_path,
-            "t",
-            spaces.face_space,
-        )
-        ᶠq_tot = ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
-            file_path,
-            "q",
-            spaces.face_space,
-        )
         ᶜT = ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput(
             file_path,
             "t",
@@ -721,26 +689,13 @@ function get_simulation(config::AtmosConfig)
             "q",
             spaces.center_space,
         )
-        ᶜp = similar(Y.c.ρ)
-        ᶠ∂lnp∂z = @. -thermo_params.grav / (
-            TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶠq_tot)) * ᶠT
+        ᶜ∂lnp∂z = @. -thermo_params.grav / (
+            TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT
         )
-        context = get_comms_context(config.parsed_args)
-        for (ᶜp_col, ᶠ∂lnp∂z_col, p_sfc_col) in zip(
-            column_iterator(ᶜp),
-            column_iterator(ᶠ∂lnp∂z),
-            column_iterator(p_sfc),
-        )
-            ClimaCore.Operators.column_integral_indefinite!(
-                ᶜp_col,
-                ᶠ∂lnp∂z_col,
-                log(
-                    ClimaComms.allowscalar(getindex, context.device, p_sfc_col),
-                ),
-            ) # actually computes ln(ᶜp)
-            @. ᶜp_col = exp(ᶜp_col) # replaces ln(ᶜp) with ᶜp
-        end
-        ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜp, ᶜT, ᶜq_tot)
+        ᶠlnp_over_psfc = zeros(spaces.face_space)
+        ClimaCore.Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
+        ᶠp = p_sfc .* exp.(ᶠlnp_over_psfc)
+        ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp(ᶠp), ᶜT, ᶜq_tot)
         Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
         vel =
             ClimaCore.Geometry.UVWVector.(
