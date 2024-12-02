@@ -10,39 +10,15 @@ import YAML
 import ClimaComms
 ClimaComms.@import_required_backends
 using ClimaUtilities.ClimaArtifacts
-import ClimaCalibrate:
-    set_up_forward_model,
-    run_forward_model,
-    path_to_ensemble_member,
-    ExperimentConfig
+import ClimaCalibrate: forward_model, path_to_ensemble_member
+import ClimaCalibrate as CAL
 
-"""
-    set_up_forward_model(member, iteration, experiment_dir::AbstractString)
-    set_up_forward_model(member, iteration, ::ExperimentConfig; experiment_dir)
-    set_up_forward_model(member, iteration, config_dict::AbstractDict)
-
-Return an AtmosConfig object for the given member and iteration.
-
-Turns off default diagnostics and sets the TOML parameter file to the member's path.
-This assumes that the  config dictionary has an `output_dir` key.
-"""
-function set_up_forward_model(
-    member,
-    iteration,
-    ::ExperimentConfig;
-    experiment_dir = dirname(Base.active_project()),
-)
-    # Assume experiment_dir is project dir
-    config_dict = YAML.load_file(joinpath(experiment_dir, "model_config.yml"))
-    set_up_forward_model(member, iteration, config_dict::AbstractDict)
-end
-
-function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
-    config_dict = YAML.load_file(joinpath(experiment_dir, "model_config.yml"))
-    set_up_forward_model(member, iteration, config_dict::AbstractDict)
-end
-
-function set_up_forward_model(member, iteration, config_dict::AbstractDict)
+function CAL.forward_model(iteration, member, config_dict = nothing)
+    experiment_dir = dirname(Base.active_project())
+    if isnothing(config_dict)
+        config_dict =
+            YAML.load_file(joinpath(experiment_dir, "model_config.yml"))
+    end
     output_dir = config_dict["output_dir"]
     member_path = path_to_ensemble_member(output_dir, iteration, member)
     config_dict["output_dir"] = member_path
@@ -55,16 +31,10 @@ function set_up_forward_model(member, iteration, config_dict::AbstractDict)
 
     # Turn off default diagnostics
     config_dict["output_default_diagnostics"] = false
-    return CA.AtmosConfig(config_dict)
-end
-
-"""
-    run_forward_model(atmos_config::CA.AtmosConfig)
-
-Run the atmosphere model with the given an AtmosConfig object.
-Currently only has basic error handling.
-"""
-function run_forward_model(atmos_config::CA.AtmosConfig)
+    atmos_config = CA.AtmosConfig(
+        config_dict;
+        comms_ctx = ClimaComms.SingletonCommsContext(),
+    )
     simulation = CA.get_simulation(atmos_config)
     sol_res = CA.solve_atmos!(simulation)
     if sol_res.ret_code == :simulation_crashed
@@ -72,4 +42,5 @@ function run_forward_model(atmos_config::CA.AtmosConfig)
             "The ClimaAtmos simulation has crashed. See the stack trace for details.",
         )
     end
+    return simulation
 end
