@@ -1,3 +1,4 @@
+reference_job_id: "les_box"
 initial_condition: "DryDensityCurrentProfile"
 config: "box"
 smagorinsky_lilly: true
@@ -17,5 +18,5 @@ prandtl_turbulent_neutral: 0.333
 dt_save_state_to_disk: "5secs"
 netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
-  - short_name: [thetaa, wa, ua, ta, va, hfes, rhoa, rv, ha]
-    period: 5secs
+  - short_name: [wa, ua, va, ta, thetaa, ha]
+    period: 5secs 

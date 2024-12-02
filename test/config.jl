@@ -37,3 +37,17 @@ repeated_job_ids = filter(kv -> length(kv[2]) > 1, value_to_keys)
 file, io = mktemp()
 config_err = ErrorException("File $(CA.normrelpath(file)) is empty or missing.")
 @test_throws config_err CA.AtmosConfig(file)
+
+@testset "Check that entries in `default_config.yml` have `help` and `value` keys" begin
+    config = CA.load_yaml_file(CA.default_config_file)
+    missing_help = String[]
+    missing_value = String[]
+    for (key, value) in config
+        !haskey(value, "help") && push!(missing_help, key)
+        !haskey(value, "value") && push!(missing_value, key)
+    end
+    # Every key in the default config should have a `help` and `value` key
+    # If not, these tests will fail, indicating which keys are missing
+    @test isempty(missing_help)
+    @test isempty(missing_value)
+end

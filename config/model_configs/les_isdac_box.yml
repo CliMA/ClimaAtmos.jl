@@ -1,4 +1,5 @@
 # ISDAC config
+reference_job_id: "les_box"  # for plotting
 initial_condition: "ISDAC" 
 subsidence: "ISDAC" 
 surface_setup: "ISDAC"

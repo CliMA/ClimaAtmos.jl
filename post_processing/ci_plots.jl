@@ -1066,12 +1066,7 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
     )
 end
 
-LESBoxPlots = Union{
-    Val{:les_rico_box},
-    Val{:les_dycoms_box},
-    Val{:les_bomex_box},
-    Val{:les_gabls_box},
-}
+LESBoxPlots = Union{Val{:les_box}}
 
 """
     plot_les_vert_profile!(grid_loc, var_group)
@@ -1115,20 +1110,7 @@ function make_plots(
         "clw",
         "cli",
     ]
-    available_periods = ClimaAnalysis.available_periods(
-        simdirs[1];
-        short_name = short_names[1],
-        reduction,
-    )
-    # if "5m" in available_periods
-    #     period = "5m"
-    # elseif "10m" in available_periods
-    #     period = "10m"
-    # elseif "30m" in available_periods
-    #     period = "30m"
-    # elseif "1h" in available_periods
-    #     period = "1h"
-    # end
+    short_names = short_names ∩ collect(keys(simdirs[1].vars))
 
     # Window average from instantaneous snapshots?
     function horizontal_average(var)

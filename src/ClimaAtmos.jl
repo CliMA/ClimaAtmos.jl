@@ -3,6 +3,7 @@ module ClimaAtmos
 using NVTX
 import Thermodynamics as TD
 
+include("compat.jl")
 include(joinpath("parameters", "Parameters.jl"))
 import .Parameters as CAP
 

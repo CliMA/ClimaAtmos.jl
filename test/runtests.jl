@@ -18,6 +18,7 @@ using Test
 @safetestset "surface albedo tests" begin @time include("surface_albedo.jl") end
 @safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
 @safetestset "Sponge interface tests" begin @time include("parameterized_tendencies/sponge/rayleigh_sponge.jl") end
+@safetestset "Sponge interface tests" begin @time include("parameterized_tendencies/sponge/viscous_sponge.jl") end
 @safetestset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end
 @safetestset "Model getters" begin @time include("solver/model_getters.jl") end
 @safetestset "Topography tests" begin @time include("topography.jl") end

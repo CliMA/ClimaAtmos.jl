@@ -14,13 +14,10 @@ struct AtmosCache{
     SCRA,
     HYPE,
     DSS,
-    RS,
-    VS,
     PR,
     LSAD,
     EXTFORCING,
     EDMFCOR,
-    FOR,
     NONGW,
     ORGW,
     RAD,
@@ -76,13 +73,10 @@ struct AtmosCache{
     do_dss::DSS
 
     """Additional parameters used by the various tendencies"""
-    rayleigh_sponge::RS
-    viscous_sponge::VS
     precipitation::PR
     large_scale_advection::LSAD
     external_forcing::EXTFORCING
     edmf_coriolis::EDMFCOR
-    forcing::FOR
     non_orographic_gravity_wave::NONGW
     orographic_gravity_wave::ORGW
     radiation::RAD
@@ -183,13 +177,10 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         (start_date, params, atmos.ozone, aerosol_names, atmos.insolation) : ()
 
     hyperdiff = hyperdiffusion_cache(Y, atmos)
-    rayleigh_sponge = rayleigh_sponge_cache(Y, atmos)
-    viscous_sponge = viscous_sponge_cache(Y, atmos)
     precipitation = precipitation_cache(Y, atmos)
     large_scale_advection = large_scale_advection_cache(Y, atmos)
     external_forcing = external_forcing_cache(Y, atmos, params)
     edmf_coriolis = edmf_coriolis_cache(Y, atmos)
-    forcing = forcing_cache(Y, atmos)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
@@ -211,13 +202,10 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         scratch,
         hyperdiff,
         do_dss,
-        rayleigh_sponge,
-        viscous_sponge,
         precipitation,
         large_scale_advection,
         external_forcing,
         edmf_coriolis,
-        forcing,
         non_orographic_gravity_wave,
         orographic_gravity_wave,
         radiation,

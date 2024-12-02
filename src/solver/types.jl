@@ -120,6 +120,7 @@ diffuse_momentum(::FriersonDiffusion{DM}) where {DM} = DM
 diffuse_momentum(::Nothing) = false
 
 abstract type AbstractSponge end
+Base.Broadcast.broadcastable(x::AbstractSponge) = tuple(x)
 Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
     zd::FT
     κ₂::FT
@@ -132,12 +133,10 @@ Base.@kwdef struct SmagorinskyLilly{FT} <: AbstractEddyViscosityModel
 end
 
 Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
-    zmax::FT
     zd::FT
     α_uₕ::FT
     α_w::FT
 end
-Base.Broadcast.broadcastable(x::RayleighSponge) = tuple(x)
 
 abstract type AbstractGravityWave end
 Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
@@ -272,7 +271,7 @@ struct NoDetrainment <: AbstractDetrainmentModel end
 struct PiGroupsDetrainment <: AbstractDetrainmentModel end
 struct GeneralizedDetrainment <: AbstractDetrainmentModel end
 struct GeneralizedHarmonicsDetrainment <: AbstractDetrainmentModel end
-struct ConstantAreaDetrainment <: AbstractDetrainmentModel end
+struct SmoothAreaDetrainment <: AbstractDetrainmentModel end
 
 abstract type AbstractQuadratureType end
 struct LogNormalQuad <: AbstractQuadratureType end
@@ -656,17 +655,25 @@ function AtmosConfig(
         override_file = CP.merge_toml_files(config["toml"]),
     )
     comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
+    device = ClimaComms.device(comms_ctx)
+    silence_non_root_processes(comms_ctx)
+    @info "Running on $(nameof(typeof(device)))"
+    if comms_ctx isa ClimaComms.SingletonCommsContext
+        @info "Setting up single-process ClimaAtmos run"
+    else
+        @info "Setting up distributed ClimaAtmos run" nprocs =
+            ClimaComms.nprocs(comms_ctx)
+    end
 
     config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
-    device = ClimaComms.device(comms_ctx)
     if device isa ClimaComms.CPUMultiThreaded
-        @info "Running ClimaCore in threaded mode, with $(Threads.nthreads()) threads."
+        @info "Running ClimaCore in threaded mode, with $(Threads.nthreads()) threads"
     else
-        @info "Running ClimaCore in unthreaded mode."
+        @info "Running ClimaCore in unthreaded mode"
     end
 
     isempty(job_id) &&
-        @warn "`job_id` is empty and likely not passed to AtmosConfig."
+        @warn "`job_id` is empty and likely not passed to AtmosConfig"
 
     @info "Making AtmosConfig with config files: $(sprint(config_summary, config_files))"
 

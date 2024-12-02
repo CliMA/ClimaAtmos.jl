@@ -170,14 +170,13 @@ end
 
 function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     rs_name = parsed_args["rayleigh_sponge"]
-    zmax = parsed_args["z_max"]
     return if rs_name in ("false", false)
         nothing
     elseif rs_name in ("true", true, "RayleighSponge")
         zd = params.zd_rayleigh
         α_uₕ = params.alpha_rayleigh_uh
         α_w = params.alpha_rayleigh_w
-        RayleighSponge{FT}(; zmax, zd, α_uₕ, α_w)
+        RayleighSponge{FT}(; zd, α_uₕ, α_w)
     else
         error("Uncaught rayleigh sponge model `$rs_name`.")
     end
@@ -510,8 +509,8 @@ function get_detrainment_model(parsed_args)
         GeneralizedDetrainment()
     elseif detr_model == "GeneralizedHarmonics"
         GeneralizedHarmonicsDetrainment()
-    elseif detr_model == "ConstantArea"
-        ConstantAreaDetrainment()
+    elseif detr_model == "SmoothArea"
+        SmoothAreaDetrainment()
     else
         error("Invalid detr_model $(detr_model)")
     end
