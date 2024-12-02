@@ -586,8 +586,12 @@ steps:
         command: julia --project=calibration/test calibration/test/interface.jl
       - label: "end to end test"
         command: julia --project=calibration/test calibration/test/e2e_test.jl
+        agents:
+          slurm_ntasks: 10
+          slurm_cpus_per_task: 1
+          slurm_mem: 96GB
+          slurm_time: "00:30:00"
         artifact_paths: "calibration_end_to_end_test/*"
-        soft_fail: true
 
   - group: "Diagnostic EDMFX"
     steps:

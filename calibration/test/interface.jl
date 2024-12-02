@@ -14,20 +14,28 @@ mktempdir() do output_dir
     mkpath(member_path)
     # We need to check that a "base" TOML is support alongside the TOML sampled from the prior
     base_toml_file = touch(joinpath(output_dir, "default_parameters.toml"))
-    sampled_toml_file = touch(joinpath(member_path, "parameters.toml"))
+    # Write our own parameter file
+    open(joinpath(member_path, "parameters.toml"), "w") do file
+        toml_contents = """
+        [gravitational_acceleration]
+        value = 10.0
+        """
+        write(file, toml_contents)
+    end
     config_dict = Dict(
         "output_default_diagnostics" => true,
         "moist" => "equil",
         "toml" => [base_toml_file],
         "output_dir" => output_dir,
+        "t_end" => "600secs",
     )
-    (; parsed_args) =
-        ClimaCalibrate.set_up_forward_model(member, iter, config_dict)
+    simulation = ClimaCalibrate.forward_model(iter, member, config_dict)
 
     @testset "Atmos Configuration" begin
-        @test parsed_args["moist"] == "equil"
-        @test parsed_args["output_dir"] == member_path
-        @test parsed_args["output_default_diagnostics"] == false
-        @test parsed_args["toml"] == [base_toml_file, sampled_toml_file]
+        @test simulation.t_end == 600
+        @test simulation.output_dir == joinpath(member_path, "output_0000")
+        @test simulation.integrator.p.atmos.moisture_model ==
+              CA.EquilMoistModel()
+        @test simulation.integrator.p.params.rrtmgp_params.grav == 10.0
     end
 end
