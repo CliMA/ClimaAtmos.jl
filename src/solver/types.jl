@@ -16,10 +16,51 @@ struct NoPrecipitation <: AbstractPrecipitationModel end
 struct Microphysics0Moment <: AbstractPrecipitationModel end
 struct Microphysics1Moment <: AbstractPrecipitationModel end
 
+# TODO: Add docstrings explaining this
+abstract type AbstractQuadratureType end
+struct LogNormalQuad <: AbstractQuadratureType end
+struct GaussianQuad <: AbstractQuadratureType end
+
+# TODO: Add docstrings explaining this
+abstract type AbstractSGSamplingType end
+struct SGSMean <: AbstractSGSamplingType end
+struct SGSQuadrature{N, QT, A, W} <: AbstractSGSamplingType
+    quadrature_type::QT
+    a::A
+    w::W
+    function SGSQuadrature(
+        ::Type{FT};
+        quadrature_name = "gaussian",
+        quadrature_order = 3,
+    ) where {FT}
+        quadrature_type = if quadrature_name == "log-normal"
+            LogNormalQuad()
+        elseif quadrature_name == "gaussian"
+            GaussianQuad()
+        else
+            error("Invalid thermodynamics quadrature $(quadrature_name)")
+        end
+        N = quadrature_order
+        # TODO: double check this python-> julia translation
+        # a, w = np.polynomial.hermite.hermgauss(N)
+        a, w = FastGaussQuadrature.gausshermite(N)
+        a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
+        QT = typeof(quadrature_type)
+        return new{N, QT, typeof(a), typeof(w)}(quadrature_type, a, w)
+    end
+end
+quadrature_order(::SGSQuadrature{N}) where {N} = N
+quad_type(::SGSQuadrature{N}) where {N} = N #TODO - this seems wrong?
+
+# TODO: Add docstrings explaining this
 abstract type AbstractCloudModel end
 struct GridScaleCloud <: AbstractCloudModel end
-struct QuadratureCloud <: AbstractCloudModel end
-struct SGSQuadratureCloud <: AbstractCloudModel end
+struct QuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
+    SG_quad::SGQ
+end
+struct SGSQuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
+    SG_quad::SGQ
+end
 
 abstract type AbstractModelConfig end
 struct SingleColumnModel <: AbstractModelConfig end
@@ -273,40 +314,6 @@ struct PiGroupsDetrainment <: AbstractDetrainmentModel end
 struct GeneralizedDetrainment <: AbstractDetrainmentModel end
 struct GeneralizedHarmonicsDetrainment <: AbstractDetrainmentModel end
 struct SmoothAreaDetrainment <: AbstractDetrainmentModel end
-
-abstract type AbstractQuadratureType end
-struct LogNormalQuad <: AbstractQuadratureType end
-struct GaussianQuad <: AbstractQuadratureType end
-
-abstract type AbstractSGSamplingType end
-struct SGSMean <: AbstractSGSamplingType end
-struct SGSQuadrature{N, QT, A, W} <: AbstractSGSamplingType
-    quadrature_type::QT
-    a::A
-    w::W
-    function SGSQuadrature(
-        ::Type{FT};
-        quadrature_name = "gaussian",
-        quadrature_order = 3,
-    ) where {FT}
-        quadrature_type = if quadrature_name == "log-normal"
-            LogNormalQuad()
-        elseif quadrature_name == "gaussian"
-            GaussianQuad()
-        else
-            error("Invalid thermodynamics quadrature $(quadrature_name)")
-        end
-        N = quadrature_order
-        # TODO: double check this python-> julia translation
-        # a, w = np.polynomial.hermite.hermgauss(N)
-        a, w = FastGaussQuadrature.gausshermite(N)
-        a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
-        QT = typeof(quadrature_type)
-        return new{N, QT, typeof(a), typeof(w)}(quadrature_type, a, w)
-    end
-end
-quadrature_order(::SGSQuadrature{N}) where {N} = N
-quad_type(::SGSQuadrature{N}) where {N} = N #TODO - this seems wrong?
 
 abstract type AbstractSurfaceThermoState end
 struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
