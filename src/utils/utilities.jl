@@ -262,6 +262,18 @@ function verify_callbacks(t)
     end
 end
 
+
+"""
+    do_dss(space)
+
+Return whether the underlying horizontal space required DSS or not.
+"""
+function do_dss(space::Spaces.AbstractSpace)
+    return Spaces.quadrature_style(Spaces.horizontal_space(space)) isa
+           Quadratures.GLL
+end
+
+
 using ClimaComms
 is_distributed(::ClimaComms.SingletonCommsContext) = false
 is_distributed(::ClimaComms.MPICommsContext) = true
