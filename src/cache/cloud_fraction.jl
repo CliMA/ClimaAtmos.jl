@@ -60,9 +60,10 @@ NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
     ::Union{EquilMoistModel, NonEquilMoistModel},
-    ::QuadratureCloud,
+    qc::QuadratureCloud,
 )
-    (; SG_quad, params) = p
+    SG_quad = qc.SG_quad
+    (; params) = p
 
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
@@ -112,10 +113,11 @@ NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
     ::Union{EquilMoistModel, NonEquilMoistModel},
-    ::SGSQuadratureCloud,
+    qc::SGSQuadratureCloud,
     ::DiagnosticEDMFX,
 )
-    (; SG_quad, params) = p
+    SG_quad = qc.SG_quad
+    (; params) = p
 
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
@@ -162,10 +164,11 @@ NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
     ::Union{EquilMoistModel, NonEquilMoistModel},
-    ::SGSQuadratureCloud,
+    qc::SGSQuadratureCloud,
     ::PrognosticEDMFX,
 )
-    (; SG_quad, params) = p
+    SG_quad = qc.SG_quad
+    (; params) = p
 
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
