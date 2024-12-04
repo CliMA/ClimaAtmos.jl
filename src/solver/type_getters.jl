@@ -695,7 +695,7 @@ function get_simulation(config::AtmosConfig)
         ᶠlnp_over_psfc = zeros(spaces.face_space)
         ClimaCore.Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
         ᶠp = p_sfc .* exp.(ᶠlnp_over_psfc)
-        ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp(ᶠp), ᶜT, ᶜq_tot)
+        ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp.(ᶠp), ᶜT, ᶜq_tot)
         Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
         vel =
             ClimaCore.Geometry.UVWVector.(

@@ -17,8 +17,8 @@ vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 surface_setup: "DefaultMoninObukhov"
-dt: "30secs"
-t_end: "120secs"
+dt: "5secs"
+t_end: "10days"
 toml: [toml/longrun_aquaplanet.toml]
 prescribe_ozone: true
 aerosol_radiation: true
@@ -27,4 +27,4 @@ initial_condition: "DYAMONDSummer"
 topography: "Earth"
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
-    period: "30secs"
+    period: "1hours"

@@ -45,9 +45,8 @@ git-tree-sha1 = "10742e0a2e343d13bb04df379e300a83402d4106"
     url = "https://caltech.box.com/shared/static/b6ur4ap4vo04j09vdulem96z9fxqlgyn.gz"
 
 [DYAMOND_SUMMER_ICS_p98deg]
-git-tree-sha1 = "5ef4bb950eceb86430464c8637ede7f075a1449f"
-lazy = true
+git-tree-sha1 = "46aa28a9177dd7e4cbb813eeba3e02597c3ba071"
 
     [[DYAMOND_SUMMER_ICS_p98deg.download]]
-    sha256 = "da552c32c4e66a053992f3b2c96ebaeb78c1aded1818b4e7c2deea77d521dda1"
-    url = "https://caltech.box.com/shared/static/ad8d774iwaezctwud1g1lqbp9irbjj38.gz"
+    sha256 = "9a5efd20d68d9b954af2fd7803bccdda3fc7ef4ff60421ed13d18f768312d2e3"
+    url = "https://caltech.box.com/shared/static/whn01xr83v0s4p8tc59ds3nvfsfe6ebs.gz"
