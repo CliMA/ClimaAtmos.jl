@@ -156,16 +156,10 @@ function get_viscous_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     end
 end
 
-function get_smagorinsky_lilly_model(parsed_args, params, ::Type{FT}) where {FT}
+function get_smagorinsky_lilly_model(parsed_args)
     is_model_active = parsed_args["smagorinsky_lilly"]
-    Cs = parsed_args["c_smag"]
-    Pr_t = parsed_args["prandtl_turbulent_neutral"]  # Turbulent Prandtl number for neutral stratification
     @assert is_model_active in (true, false)
-    return if is_model_active == true
-        SmagorinskyLilly{FT}(; Cs, Pr_t)
-    else
-        nothing
-    end
+    return is_model_active ? SmagorinskyLilly() : nothing
 end
 
 function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}

@@ -15,8 +15,6 @@ approximate_linear_solve_iters: 2
 hyperdiff: "false" 
 apply_limiter: false
 smagorinsky_lilly: true
-c_smag: 0.20
-prandtl_turbulent_neutral: 0.333
 # time- and spatial discretization
 x_elem: 10
 x_max: 3.2e3

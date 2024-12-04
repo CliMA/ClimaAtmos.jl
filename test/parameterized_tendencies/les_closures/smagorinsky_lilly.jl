@@ -57,13 +57,7 @@ import Thermodynamics as TD
     Y.c.uₕ .= Geometry.Covariant12Vector(vel)
     Y.f.u₃ .= Geometry.Covariant3Vector(w)
 
-    horizontal_smagorinsky_lilly_tendency(
-        Yₜ,
-        Y,
-        p,
-        t,
-        SmagorinskyLilly(FT(0.2)),
-    )
+    horizontal_smagorinsky_lilly_tendency(Yₜ, Y, p, t, SmagorinskyLilly())
 
     ### Component test begins here
 end

@@ -28,7 +28,8 @@ These quantities are computed for both cell centers and faces, with prefixes `�
 function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
 
     (; atmos, precomputed, scratch, params) = p
-    (; Cs, Pr_t) = atmos.smagorinsky_lilly
+    c_smag = CAP.c_smag(params)
+    Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(params))
     (; ᶜu, ᶠu³, ᶜts, ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶠD_smag) = precomputed
     FT = eltype(Y)
     grav = CAP.grav(params)
@@ -77,7 +78,7 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
     ᶜΔ = @. ᶜtemp_scalar = ∛(Δ_xy * ᶜΔ_z) * ᶜfb
 
     # Smagorinsky-Lilly eddy viscosity
-    ᶜνₜ = @. ᶜtemp_scalar = Cs^2 * ᶜΔ^2 * ᶜS_norm
+    ᶜνₜ = @. ᶜtemp_scalar = c_smag^2 * ᶜΔ^2 * ᶜS_norm
     ᶠνₜ = @. ᶠtemp_scalar = ᶠinterp(ᶜνₜ)
 
     # Subgrid-scale momentum flux tensor, `τ = -2 νₜ ∘ S`

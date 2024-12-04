@@ -127,10 +127,7 @@ Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
 end
 
 abstract type AbstractEddyViscosityModel end
-Base.@kwdef struct SmagorinskyLilly{FT} <: AbstractEddyViscosityModel
-    Cs::FT = 0.2
-    Pr_t::FT = 1 / 3
-end
+struct SmagorinskyLilly <: AbstractEddyViscosityModel end
 
 Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
     zd::FT

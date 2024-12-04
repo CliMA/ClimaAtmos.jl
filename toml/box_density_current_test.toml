@@ -1,5 +1,6 @@
-[zd_rayleigh]
-value = 2000.0
+[c_smag]
+value = 0.25
+type = "float"
 
 [mixing_length_Prandtl_number_0]
 value = 0.33333
