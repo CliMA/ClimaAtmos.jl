@@ -22,7 +22,7 @@ rayleigh_sponge_cache(Y, rs::RayleighSponge) = nothing
 
 function rayleigh_sponge_tendency!(Yₜ, Y, p, t, s::RayleighSponge)
     ᶜz = Fields.coordinate_field(Y.c).z
-    # @. Yₜ.c.uₕ -= β_rayleigh_uₕ(s, ᶜz) * Y.c.uₕ
-    @. Yₜ.c.uₕ.components.:1 -= β_rayleigh_uₕ(s, ᶜz) * (Y.c.uₕ.components.:1 - 0.005)
+    @. Yₜ.c.uₕ -= β_rayleigh_uₕ(s, ᶜz) * Y.c.uₕ
+    #@. Yₜ.c.uₕ.components.:1 -= 0.2 * (Y.c.uₕ.components.:1 - 0.005) # β_rayleigh_uₕ(s, ᶜz)
     # @info β_rayleigh_uₕ.(s, ᶜz)
 end
