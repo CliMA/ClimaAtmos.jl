@@ -341,7 +341,7 @@ function detrainment(
     if ᶜρaʲ <= 0
         detr = 0
     else
-        detr = (ᶜvert_div < 0) * (ᶜentr - ᶜw_vert_div)
+        detr = (ᶜw_vert_div < 0) * (ᶜentr - ᶜw_vert_div)
     end
     return max(detr, 0)
 end

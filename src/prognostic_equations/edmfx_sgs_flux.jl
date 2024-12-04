@@ -187,6 +187,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; sfc_conditions) = p.precomputed
     (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length) = p.precomputed
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
+    # @. ᶜK_u = 15
+    # @. ᶜK_h = 15
+    # @. ᶜK_u = sqrt(ᶜtke⁰) * ᶜmixing_length
     ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}

@@ -3,8 +3,9 @@ initial_condition: "Soares"
 # edmf_coriolis: "Soares"
 # ls_adv: "Soares"
 surface_setup: "Soares"
+rayleigh_sponge: true
 turbconv: "prognostic_edmfx"
-implicit_diffusion: false
+implicit_diffusion: true
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
 edmfx_upwinding: "first_order"
@@ -14,18 +15,18 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 edmfx_filter: true
-prognostic_tke: true # should we set this as true or false?
+prognostic_tke: false # should we set this as true or false?
 moist: "equil"
 config: "column"
 hyperdiff: false
-z_max: 3e3
-z_elem: 120
+z_max: 3750
+z_elem: 75
 z_stretch: false
 perturb_initstate: false
-dt: "10secs"
+dt: "5secs"
 t_end: "8hours"
 dt_save_state_to_disk: "14hours"
-toml: [toml/prognostic_edmfx.toml]
+toml: [toml/prognostic_edmfx_soares_column.toml]
 netcdf_interpolation_num_points: [2, 2, 100]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
