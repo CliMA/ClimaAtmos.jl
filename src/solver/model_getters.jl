@@ -53,7 +53,10 @@ function get_insolation_form(parsed_args)
     return if insolation == "idealized"
         IdealizedInsolation()
     elseif insolation == "timevarying"
-        TimeVaryingInsolation()
+        # TODO: Remove this argument once we have support for integer time and
+        # we can easily convert from time to date
+        start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd")
+        TimeVaryingInsolation(start_date)
     elseif insolation == "rcemipii"
         RCEMIPIIInsolation()
     elseif insolation == "gcmdriven"

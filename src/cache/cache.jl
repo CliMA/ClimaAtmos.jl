@@ -2,7 +2,6 @@ struct AtmosCache{
     FT <: AbstractFloat,
     FTE,
     WTE,
-    SD,
     AM,
     NUM,
     CAP,
@@ -35,9 +34,6 @@ struct AtmosCache{
 
     """Walltime estimate"""
     walltime_estimate::WTE
-
-    """Start date (used for insolation and for data files)."""
-    start_date::SD
 
     """AtmosModel"""
     atmos::AM
@@ -190,7 +186,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         dt,
         t_end,
         WallTimeEstimate(),
-        start_date,
         atmos,
         numerics,
         params,

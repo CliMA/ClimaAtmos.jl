@@ -1,4 +1,6 @@
-function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
+function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, t_start)
+
+    (; dt, start_date) = sim_info
 
     FT = Spaces.undertype(axes(Y.c))
 
@@ -110,11 +112,11 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
 
             output_schedule = CAD.EveryCalendarDtSchedule(
                 period_dates;
-                reference_date = p.start_date,
+                reference_date = start_date,
             )
             compute_schedule = CAD.EveryCalendarDtSchedule(
                 period_dates;
-                reference_date = p.start_date,
+                reference_date = start_date,
             )
 
             if isnothing(output_name)
@@ -152,7 +154,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
             CAD.default_diagnostics(
                 atmos_model,
                 FT(time_to_seconds(parsed_args["t_end"]) - t_start),
-                p.start_date;
+                start_date;
                 output_writer = netcdf_writer,
             )...,
             diagnostics...,
@@ -214,7 +216,7 @@ end
 function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     (; parsed_args, comms_ctx) = config
     FT = eltype(params)
-    (; dt, output_dir) = sim_info
+    (; dt, output_dir, start_date) = sim_info
 
     callbacks = ()
     if parsed_args["log_progress"]
@@ -256,8 +258,8 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     if dt_save_state_to_disk_dates != Inf
         schedule = CAD.EveryCalendarDtSchedule(
             dt_save_state_to_disk_dates;
-            reference_date = p.start_date,
-            date_last = p.start_date + Dates.Second(t_start),
+            reference_date = start_date,
+            date_last = start_date + Dates.Second(t_start),
         )
         cond = let schedule = schedule
             (u, t, integrator) -> schedule(integrator)
