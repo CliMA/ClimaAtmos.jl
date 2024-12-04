@@ -135,6 +135,31 @@ function create_parameter_set(config::AtmosConfig)
         end
     MPP = typeof(microphysics_precipitation_params)
 
+    vert_diff_model = parsed_args["vert_diff"]
+    name_map_vert_diff =
+        if vert_diff_model in
+           ("true", true, "VerticalDiffusion", "FriersonDiffusion")
+            (; :C_E => :C_E,)
+        elseif vert_diff_model in ("DecayWithHeightDiffusion",)
+            (; :H_diffusion => :H, :D_0_diffusion => :D₀)
+        else
+            nothing
+        end
+    vert_diff_params = if vert_diff_model in ("false", false, "none")
+        nothing
+    elseif vert_diff_model in (
+        "true",
+        true,
+        "VerticalDiffusion",
+        "FriersonDiffusion",
+        "DecayWithHeightDiffusion",
+    )
+        CP.get_parameter_values(toml_dict, name_map_vert_diff, "ClimaAtmos")
+    else
+        error("Invalid diffusion model `$vert_diff_model`.")
+    end
+    VDP = typeof(vert_diff_params)
+
     name_map = (;
         :f_plane_coriolis_frequency => :f_plane_coriolis_frequency,
         :equator_pole_temperature_gradient_wet => :ΔT_y_wet,
@@ -145,7 +170,6 @@ function create_parameter_set(config::AtmosConfig)
         :zd_viscous => :zd_viscous,
         :planet_radius => :planet_radius,
         :potential_temp_vertical_gradient => :Δθ_z,
-        :C_E => :C_E,
         :C_H => :C_H,
         :c_smag => :c_smag,
         :alpha_rayleigh_w => :alpha_rayleigh_w,
@@ -161,7 +185,19 @@ function create_parameter_set(config::AtmosConfig)
         :optics_lookup_temperature_max => :optics_lookup_temperature_max,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-    return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPC, MPP, WP, SFP, TCP, STP}(;
+    return CAP.ClimaAtmosParameters{
+        FT,
+        TP,
+        RP,
+        IP,
+        MPC,
+        MPP,
+        WP,
+        SFP,
+        TCP,
+        STP,
+        VDP,
+    }(;
         parameters...,
         thermodynamics_params,
         rrtmgp_params,
@@ -172,5 +208,6 @@ function create_parameter_set(config::AtmosConfig)
         surface_fluxes_params,
         turbconv_params,
         surface_temp_params,
+        vert_diff_params,
     )
 end
