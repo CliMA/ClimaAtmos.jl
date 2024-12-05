@@ -730,7 +730,7 @@ function get_simulation(config::AtmosConfig)
                 accum_str =
                     join(CA.promote_period.(collect(periods_reductions)), ", ")
                 checkpt_str = CA.promote_period(checkpoint_frequency)
-                @warn "The checkpointing frequency (dt_save_state_to_disk = $checkpt_str) should be an integer multiple of all diagnostics accumulation periods ($accum_str) to simulations can be safely restarted from any checkpoint"
+                @warn "The checkpointing frequency (dt_save_state_to_disk = $checkpt_str) should be an integer multiple of all diagnostics accumulation periods ($accum_str) so simulations can be safely restarted from any checkpoint"
             end
         end
     else
