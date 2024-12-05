@@ -1,6 +1,7 @@
 import FastGaussQuadrature
 import StaticArrays as SA
 import Thermodynamics as TD
+import Dates
 
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
@@ -33,7 +34,10 @@ struct RCEMIPIISST <: AbstractSST end
 
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
-struct TimeVaryingInsolation <: AbstractInsolation end
+struct TimeVaryingInsolation <: AbstractInsolation
+    # TODO: Remove when we can easily go from time to date
+    start_date::Dates.DateTime
+end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
 

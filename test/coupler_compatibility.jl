@@ -68,7 +68,6 @@ const T2 = 290
         p.dt,
         simulation.t_end,
         CA.WallTimeEstimate(),
-        p.start_date,
         p.atmos,
         p.numerics,
         p.params,

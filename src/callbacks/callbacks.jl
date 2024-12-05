@@ -297,16 +297,17 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     rrtmgp_model.weighted_irradiance .= weighted_irradiance
 end
 
-function set_insolation_variables!(Y, p, t, ::TimeVaryingInsolation)
+function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     FT = Spaces.undertype(axes(Y.c))
     params = p.params
     insolation_params = CAP.insolation_params(params)
     (; insolation_tuple, rrtmgp_model) = p.radiation
 
-    current_datetime = p.start_date + Dates.Second(round(Int, t)) # current time
+    current_datetime = tvi.start_date + Dates.Second(round(Int, t)) # current time
     max_zenith_angle = FT(π) / 2 - eps(FT)
     irradiance = FT(CAP.tot_solar_irrad(params))
     au = FT(CAP.astro_unit(params))
+    # TODO: Where does this date0 come from?
     date0 = DateTime("2000-01-01T11:58:56.816")
     d, δ, η_UTC =
         FT.(

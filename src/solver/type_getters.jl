@@ -711,7 +711,7 @@ function get_simulation(config::AtmosConfig)
                     atmos,
                     Y,
                     p,
-                    sim_info.dt,
+                    sim_info,
                     t_start,
                 )
         end
