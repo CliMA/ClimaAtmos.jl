@@ -490,8 +490,7 @@ simulation will gracefully exit with the integrator.
 !!! note
     This may not be reliable for MPI jobs.
 """
-function maybe_graceful_exit(integrator)
-    output_dir = integrator.p.output_dir
+function maybe_graceful_exit(output_dir, integrator)
     file = joinpath(output_dir, "graceful_exit.dat")
     if isfile(file)
         open(file, "r") do io

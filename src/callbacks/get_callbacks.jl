@@ -1,4 +1,12 @@
-function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, t_start)
+function get_diagnostics(
+    parsed_args,
+    atmos_model,
+    Y,
+    p,
+    sim_info,
+    t_start,
+    output_dir,
+)
 
     (; dt, start_date) = sim_info
 
@@ -25,7 +33,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, t_start)
         "average" => ((+), CAD.average_pre_output_hook!),
     )
 
-    hdf5_writer = CAD.HDF5Writer(p.output_dir)
+    hdf5_writer = CAD.HDF5Writer(output_dir)
 
     if !isnothing(parsed_args["netcdf_interpolation_num_points"])
         num_netcdf_points =
@@ -42,7 +50,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, t_start)
 
     netcdf_writer = CAD.NetCDFWriter(
         axes(Y.c),
-        p.output_dir,
+        output_dir,
         num_points = num_netcdf_points;
         z_sampling_method,
         sync_schedule = CAD.EveryStepSchedule(),
@@ -245,8 +253,10 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         call_every_n_steps(
             terminate!;
             skip_first = true,
-            condition = (u, t, integrator) ->
-                maybe_graceful_exit(integrator),
+            condition = let output_dir = output_dir
+                (u, t, integrator) ->
+                    maybe_graceful_exit(output_dir, integrator)
+            end,
         ),
     )
 
