@@ -1,7 +1,5 @@
 struct AtmosCache{
     FT <: AbstractFloat,
-    FTE,
-    WTE,
     AM,
     NUM,
     CAP,
@@ -27,12 +25,6 @@ struct AtmosCache{
 }
     """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
     dt::FT
-
-    """End time of the simulation (in seconds). This used by callbacks"""
-    t_end::FTE
-
-    """Walltime estimate"""
-    walltime_estimate::WTE
 
     """AtmosModel"""
     atmos::AM
@@ -98,7 +90,7 @@ end
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
 function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
-    (; dt, t_end, start_date) = sim_info
+    (; dt, start_date, output_dir) = sim_info
     FT = eltype(params)
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
@@ -180,8 +172,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
 
     args = (
         dt,
-        t_end,
-        WallTimeEstimate(),
         atmos,
         numerics,
         params,
