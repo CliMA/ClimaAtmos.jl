@@ -24,7 +24,6 @@ struct AtmosCache{
     NETFLUXTOA,
     NETFLUXSFC,
     CONSCHECK,
-    OD,
 }
     """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
     dt::FT
@@ -84,9 +83,6 @@ struct AtmosCache{
 
     """Conservation check for prognostic surface temperature"""
     conservation_check::CONSCHECK
-
-    """Directory output."""
-    output_dir::OD
 end
 
 # Functions on which the model depends:
@@ -102,7 +98,7 @@ end
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
 function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
-    (; dt, t_end, start_date, output_dir) = sim_info
+    (; dt, t_end, start_date) = sim_info
     FT = eltype(params)
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
@@ -208,7 +204,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         net_energy_flux_toa,
         net_energy_flux_sfc,
         conservation_check,
-        output_dir,
     )
 
     return AtmosCache{map(typeof, args)...}(args...)

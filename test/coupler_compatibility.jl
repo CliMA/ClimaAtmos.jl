@@ -90,7 +90,6 @@ const T2 = 290
         p.net_energy_flux_toa,
         p.net_energy_flux_sfc,
         p.conservation_check,
-        p.output_dir,
     )
 
     # Test that set_precomputed_quantities! can be used to update the surface
