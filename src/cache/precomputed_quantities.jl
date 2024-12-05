@@ -333,8 +333,8 @@ ts_sgs(thermo_params, moisture_model, specific, K, Φ, p) = thermo_state(
     p,
 )
 
-function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
-    p_pbl = 85000
+function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p, p_sfc)
+    p_pbl = 0.85 * p_sfc
     p_strato = 10000
     K_E = C_E * norm_v_a * z_a
     return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
@@ -547,12 +547,14 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     if vert_diff isa VerticalDiffusion
         (; ᶜK_h) = p.precomputed
         interior_uₕ = Fields.level(Y.c.uₕ, 1)
+        interior_p = Fields.level(ᶜp, 1) # TODO - could be more accurate and extrapolate to surface
         ᶜΔz_surface = Fields.Δz_field(interior_uₕ)
         @. ᶜK_h = eddy_diffusivity_coefficient(
             p.atmos.vert_diff.C_E,
             norm(interior_uₕ),
             ᶜΔz_surface / 2,
             ᶜp,
+            interior_p,
         )
     elseif vert_diff isa FriersonDiffusion
         (; ᶜK_h, sfc_conditions, ᶜts) = p.precomputed
@@ -561,10 +563,10 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         κ = CAP.von_karman_const(params)
         grav = CAP.grav(params)
         FT = Spaces.undertype(axes(ᶜK_h))
-        z₀ = FT(1e-4)
+        z₀ = FT(1e-5)
         Ri_c = FT(1.0)
         f_b = FT(0.1)
-        C_E_min = p.atmos.vert_diff.C_E
+        C_E_min = p.atmos.vert_diff.C_E # TODO - run VerticalDiffusion  one with default C_E and one with   10xdefault
 
         # Prepare scratch vars
         θ_v = p.scratch.ᶜtemp_scalar
