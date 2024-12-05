@@ -82,4 +82,12 @@ function earth_orography_file_path(; context = nothing)
     )
 end
 
+function dyamond_summer_artifact_path(; context = nothing)
+    filename = "DYAMOND_SUMMER_ICS_p98deg.nc"
+    return joinpath(
+        @clima_artifact("DYAMOND_SUMMER_ICS_p98deg", context),
+        filename,
+    )
+end
+
 end
