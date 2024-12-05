@@ -148,6 +148,12 @@ function precomputed_quantities(Y, atmos)
     else
         (;)
     end
+    sedimentation_quantities =
+        atmos.moisture_model isa NonEquilMoistModel ?
+        (;
+            ᶜwₗ = similar(Y.c, FT),
+            ᶜwᵢ = similar(Y.c, FT),
+        ) : (;)
     precipitation_quantities =
         atmos.precip_model isa Microphysics1Moment ?
         (;
@@ -175,6 +181,7 @@ function precomputed_quantities(Y, atmos)
         advective_sgs_quantities...,
         diagnostic_sgs_quantities...,
         vert_diff_quantities...,
+        sedimentation_quantities...,
         precipitation_quantities...,
         cloud_diagnostics_tuple,
         smagorinsky_lilly_quantities...,
@@ -515,6 +522,10 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     #     (; ᶜmixing_length) = p.precomputed
     #     compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     # end
+
+    if moisture_model isa NonEquilMoistModel
+        set_sedimentation_precomputed_quantities!(Y, p, t)
+    end
 
     if precip_model isa Microphysics1Moment
         set_precipitation_precomputed_quantities!(Y, p, t)
