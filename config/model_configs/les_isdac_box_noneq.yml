@@ -5,6 +5,7 @@ surface_setup: "ISDAC"
 external_forcing: "ISDAC"
 rad: "ISDAC"
 config: "box"
+output_dir: "/scratch/olivia/noneq_les_tests"
 # microphysics
 cloud_model: "grid_scale"
 moist: "nonequil"
@@ -18,13 +19,16 @@ smagorinsky_lilly: true
 c_smag: 0.20
 # time- and spatial discretization
 #x_elem: 10
-x_elem: 320 # 10m resolution
+#x_elem: 320 # 10m resolution
+x_elem: 100 # 32m resolution
 x_max: 3.2e3
 #y_elem: 10
-y_elem: 320 #10m resolution
+#y_elem: 320 #10m resolution
+y_elem: 100 # 32m resolution
 y_max: 3.2e3 
 #z_elem: 15
-z_elem: 500 #5m resolution
+#z_elem: 500 #5m resolution
+z_elem: 175 # about 15m resolution
 z_max: 2.5e3
 z_stretch: false
 rayleigh_sponge: true
@@ -33,7 +37,7 @@ toml: [toml/isdac_box_noneq.toml] # both params are 10s
 ode_algo: "SSPKnoth"
 dt: "0.05secs" 
 #t_end: "1days" 
-t_end: "12hours"
+t_end: "1hours"
 dt_cloud_fraction: "10mins"
 dt_save_state_to_disk: "1mins"
 netcdf_interpolation_num_points: [30, 30, 150]
