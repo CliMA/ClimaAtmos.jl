@@ -40,12 +40,18 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, t_start)
         parsed_args["netcdf_output_at_levels"] ? CAD.LevelsMethod() :
         CAD.FakePressureLevelsMethod()
 
+    # The start_date keyword was added in v0.2.9. For prior versions, the diagnostics will
+    # not contain the date
+    maybe_add_start_date =
+        pkgversion(CAD.ClimaDiagnostics) >= v"0.2.9" ? (; start_date) : (;)
+
     netcdf_writer = CAD.NetCDFWriter(
         axes(Y.c),
         p.output_dir,
         num_points = num_netcdf_points;
         z_sampling_method,
         sync_schedule = CAD.EveryStepSchedule(),
+        maybe_add_start_date...,
     )
     writers = (hdf5_writer, netcdf_writer)
 
