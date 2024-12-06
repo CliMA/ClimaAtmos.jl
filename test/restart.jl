@@ -380,9 +380,12 @@ if MANYTESTS
                         # hard-code this to be always false for those versions
                         bubble = pkgversion(ClimaCore) > v"0.14.5"
 
+                        job_id = "$(configuration)_$(moisture)_$(precip)_$(topography)_$(radiation)_$(turbconv_mode)"
+
                         # Make sure that all MPI processes agree on the output_loc
                         output_loc =
-                            ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) :
+                            ClimaComms.iamroot(comms_ctx) ?
+                            mktempdir(pwd(); prefix = job_id, cleanup = false) :
                             ""
                         output_loc = ClimaComms.bcast(comms_ctx, output_loc)
                         # Sometimes the shared filesystem doesn't work properly
@@ -390,7 +393,6 @@ if MANYTESTS
                         # Let's add an additional check here.
                         maybe_wait_filesystem(comms_ctx, output_loc)
 
-                        job_id = "$(configuration)_$(moisture)_$(precip)_$(topography)_$(radiation)_$(turbconv_mode)"
                         test_dict = Dict(
                             "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
                             "check_nan_every" => 3,
@@ -426,13 +428,14 @@ if MANYTESTS
         end
     end
 else
-    amip_output_loc = ClimaComms.iamroot(comms_ctx) ? mktempdir(pwd()) : ""
+    amip_job_id = "amip_target_diagedmf"
+    amip_output_loc =
+        ClimaComms.iamroot(comms_ctx) ?
+        mktempdir(pwd(); prefix = amip_job_id, cleanup = false) : ""
     amip_output_loc = ClimaComms.bcast(comms_ctx, amip_output_loc)
     # Sometimes the shared filesystem doesn't work properly and the folder is
     # not synced across MPI processes. Let's add an additional check here.
     maybe_wait_filesystem(comms_ctx, amip_output_loc)
-
-    amip_job_id = "amip_target_diagedmf"
 
     amip_test_dict = merge(
         YAML.load_file(
