@@ -234,14 +234,17 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
 
     callbacks = ()
     if parsed_args["log_progress"]
-        @info "Progress logging enabled."
-        callbacks = (
-            callbacks...,
-            call_every_n_steps(
-                (integrator) -> print_walltime_estimate(integrator);
-                skip_first = true,
-            ),
-        )
+        @info "Progress logging enabled"
+        walltime_info = WallTimeInfo()
+        tot_steps = ceil(Int, (sim_info.t_end - t_start) / dt)
+        five_percent_steps = ceil(Int, 0.05 * tot_steps)
+        cond = let schedule = CappedGeometricSeriesSchedule(five_percent_steps)
+            (u, t, integrator) -> schedule(integrator)
+        end
+        affect! = let wt = walltime_info
+            (integrator) -> report_walltime(wt, integrator)
+        end
+        callbacks = (callbacks..., SciMLBase.DiscreteCallback(cond, affect!))
     end
     check_nan_every = parsed_args["check_nan_every"]
     if check_nan_every > 0

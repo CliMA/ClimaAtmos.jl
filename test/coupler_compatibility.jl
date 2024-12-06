@@ -66,8 +66,6 @@ const T2 = 290
     @. sfc_setup = (surface_state,)
     p_overwritten = CA.AtmosCache(
         p.dt,
-        simulation.t_end,
-        CA.WallTimeEstimate(),
         p.atmos,
         p.numerics,
         p.params,
