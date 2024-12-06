@@ -16,13 +16,6 @@ is_tracer_var(symbol) = !(
     is_turbconv_var(symbol)
 )
 
-has_no_source_or_sink(parsed_args) = all((
-    isnothing(parsed_args["forcing"]),
-    parsed_args["vert_diff"] == "false",
-    isnothing(parsed_args["turbconv"]),
-    isnothing(parsed_args["precip_model"]),
-))
-
 # we may be hitting a slow path:
 # https://stackoverflow.com/questions/14687665/very-slow-stdpow-for-bases-very-close-to-1
 fast_pow(x, y) = exp(y * log(x))
