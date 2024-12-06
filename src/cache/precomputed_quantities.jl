@@ -139,10 +139,7 @@ function precomputed_quantities(Y, atmos)
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             precipitation_sgs_quantities...,
         ) : (;)
-    vert_diff_quantities = if atmos.vert_diff isa VerticalDiffusion
-        ᶜK_h = similar(Y.c, FT)
-        (; ᶜK_u = ᶜK_h, ᶜK_h) # ᶜK_u aliases ᶜK_h because they are always equal.
-    elseif atmos.vert_diff isa FriersonDiffusion
+    vert_diff_quantities = if atmos.vert_diff isa Union{VerticalDiffusion, DecayWithHeightDiffusion, FriersonDiffusion}
         ᶜK_h = similar(Y.c, FT)
         (; ᶜK_u = ᶜK_h, ᶜK_h) # ᶜK_u aliases ᶜK_h because they are always equal.
     else
@@ -333,6 +330,11 @@ ts_sgs(thermo_params, moisture_model, specific, K, Φ, p) = thermo_state(
     p,
 )
 
+function eddy_diffusivity_coefficient(z, z_sfc)
+   D₀ = 5     # m2/s
+   H = 8000   # m
+   return D₀ * exp(-(z - z_sfc) / H)
+end
 function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p, p_sfc)
     p_pbl = 0.85 * p_sfc
     p_strato = 10000
@@ -544,7 +546,16 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         )
     end
 
-    if vert_diff isa VerticalDiffusion
+    if vert_diff isa DecayWithHeightDiffusion
+        (; ᶜK_h) = p.precomputed
+
+        ᶜz = Fields.coordinate_field(Y.c).z
+
+        ᶠz_sfc = p.scratch.temp_data_face_level
+        ᶠz_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+
+        @. ᶜK_h = eddy_diffusivity_coefficient(ᶜz, ᶠz_sfc)
+    elseif vert_diff isa VerticalDiffusion
         (; ᶜK_h) = p.precomputed
         interior_uₕ = Fields.level(Y.c.uₕ, 1)
         interior_p = Fields.level(ᶜp, 1) # TODO - could be more accurate and extrapolate to surface
@@ -566,7 +577,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         z₀ = FT(1e-5)
         Ri_c = FT(1.0)
         f_b = FT(0.1)
-        C_E_min = p.atmos.vert_diff.C_E # TODO - run VerticalDiffusion  one with default C_E and one with   10xdefault
+        C_E_min = p.atmos.vert_diff.C_E
 
         # Prepare scratch vars
         θ_v = p.scratch.ᶜtemp_scalar
