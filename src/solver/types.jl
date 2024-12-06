@@ -117,6 +117,11 @@ Base.@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
     C_E::FT
 end
 diffuse_momentum(::VerticalDiffusion{DM}) where {DM} = DM
+Base.@kwdef struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
+    H::FT  # TODO - make part of ClimaParams
+    D₀::FT # TODO - make part of ClimaParams
+end
+diffuse_momentum(::DecayWithHeightDiffusion{DM}) where {DM} = DM
 Base.@kwdef struct FriersonDiffusion{DM, FT} <: AbstractVerticalDiffusion
     C_E::FT
 end

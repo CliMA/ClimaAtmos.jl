@@ -23,7 +23,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     Y,
     p,
     t,
-    ::Union{VerticalDiffusion, FriersonDiffusion},
+    ::Union{VerticalDiffusion, FriersonDiffusion, DecayWithHeightDiffusion},
 )
     FT = eltype(Y)
     (; ᶜu, ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h, sfc_conditions) = p.precomputed

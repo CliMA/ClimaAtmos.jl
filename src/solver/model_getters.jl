@@ -112,6 +112,8 @@ function get_vertical_diffusion_model(
         VerticalDiffusion{diffuse_momentum, FT}(; C_E = params.C_E)
     elseif vert_diff_name in ("FriersonDiffusion",)
         FriersonDiffusion{diffuse_momentum, FT}(; C_E = params.C_E)
+    elseif vert_diff_name in ("DecayWithHeightDiffusion",)
+        DecayWithHeightDiffusion{diffuse_momentum, FT}(; H = FT(8000), D₀ = FT(5)) # TODO - make it part of ClimaParams
     else
         error("Uncaught diffusion model `$vert_diff_name`.")
     end
