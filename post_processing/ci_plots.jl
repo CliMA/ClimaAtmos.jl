@@ -677,8 +677,13 @@ function make_plots(::DryBaroWavePlots, output_paths::Vector{<:AbstractString})
     )
 end
 
+SphereOrographyPlots = Union{
+    Val{:sphere_baroclinic_wave_rhoe_topography_dcmip_rs},
+    Val{:sphere_baroclinic_wave_rhoe_hughes2023},
+}
+
 function make_plots(
-    ::Val{:sphere_baroclinic_wave_rhoe_topography_dcmip_rs},
+    ::SphereOrographyPlots,
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
