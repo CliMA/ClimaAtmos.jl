@@ -100,7 +100,8 @@ function make_hybrid_spaces(
     z_grid = Grids.FiniteDifferenceGrid(z_topology)
 
     topography = parsed_args["topography"]
-    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
+    @assert topography in
+            ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar", "Hughes2023")
     if topography == "DCMIP200"
         z_surface = SpaceVaryingInput(topography_dcmip200, h_space)
         @info "Computing DCMIP200 orography on spectral horizontal space"
@@ -110,6 +111,9 @@ function make_hybrid_spaces(
     elseif topography == "Schar"
         z_surface = SpaceVaryingInput(topography_schar, h_space)
         @info "Computing Schar orography on spectral horizontal space"
+    elseif topography == "Hughes2023"
+        z_surface = SpaceVaryingInput(topography_hughes2023, h_space)
+        @info "Computing Hughes2023 orography on spectral horizontal space"
     elseif topography == "Earth"
         z_surface = SpaceVaryingInput(
             AA.earth_orography_file_path(;

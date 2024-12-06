@@ -692,6 +692,7 @@ end
 MoistBaroWavePlots = Union{
     Val{:sphere_baroclinic_wave_rhoe_equilmoist},
     Val{:sphere_baroclinic_wave_rhoe_equilmoist_deepatmos},
+    Val{:sphere_baroclinic_wave_rhoe_equilmoist_hughes2023},
 }
 
 function make_plots(
