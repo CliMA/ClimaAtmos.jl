@@ -6,7 +6,7 @@ viscous_sponge: true
 dt_save_state_to_disk: "4days"
 dt: "400secs"
 t_end: "4days"
-vert_diff: true
+vert_diff: "DecayWithHeightDiffusion"
 forcing: "held_suarez"
 precip_model: "0M"
 reproducibility_test: true
