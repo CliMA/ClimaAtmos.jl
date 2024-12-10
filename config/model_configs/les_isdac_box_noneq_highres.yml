@@ -1,0 +1,49 @@
+# ISDAC config
+initial_condition: "ISDAC" 
+subsidence: "ISDAC" 
+surface_setup: "ISDAC"
+external_forcing: "ISDAC"
+rad: "ISDAC"
+config: "box"
+output_dir: "/scratch/olivia/noneq_les_tests_highres"
+# microphysics
+cloud_model: "grid_scale"
+moist: "nonequil"
+precip_model: "1M"
+# diffusion
+implicit_diffusion: false
+approximate_linear_solve_iters: 2
+hyperdiff: "false" 
+apply_limiter: false
+smagorinsky_lilly: true
+c_smag: 0.20
+# time- and spatial discretization
+#x_elem: 10
+x_elem: 320 # 10m resolution
+#x_elem: 100 # 32m resolution
+x_max: 3.2e3
+#y_elem: 10
+y_elem: 320 #10m resolution
+#y_elem: 100 # 32m resolution
+y_max: 3.2e3 
+#z_elem: 15
+z_elem: 500 #5m resolution
+#z_elem: 175 # about 15m resolution
+z_max: 2.5e3
+z_stretch: false
+rayleigh_sponge: true
+#toml: [toml/WBF_experiments/isdac_box_noneq_01.toml]  # sponge height
+toml: [toml/isdac_box_noneq.toml] # both params are 10s
+ode_algo: "SSPKnoth"
+dt: "0.05secs" 
+#t_end: "1days" 
+t_end: "1hours"
+dt_cloud_fraction: "10mins"
+dt_save_state_to_disk: "1mins"
+netcdf_interpolation_num_points: [30, 30, 150]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, husra, cl, clw, cli, hussfc, evspsbl, hfes, pr]
+    period: 10mins
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, husra, cl, clw, cli, hussfc, evspsbl, hfes, pr]
+    reduction_time: average
+    period: 60mins
