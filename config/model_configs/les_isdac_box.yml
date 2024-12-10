@@ -1,4 +1,5 @@
 # ISDAC config
+reference_job_id: "les_box"  # for plotting
 initial_condition: "ISDAC" 
 subsidence: "ISDAC" 
 surface_setup: "ISDAC"
@@ -14,7 +15,6 @@ approximate_linear_solve_iters: 2
 hyperdiff: "false" 
 apply_limiter: false
 smagorinsky_lilly: true
-c_smag: 0.20
 # time- and spatial discretization
 x_elem: 10
 x_max: 3.2e3
@@ -24,11 +24,13 @@ z_elem: 15
 z_max: 2.5e3
 z_stretch: false
 rayleigh_sponge: true
-toml: [toml/isdac_box.toml]  # sponge height
+toml: [toml/les_isdac.toml]  # sponge height
 ode_algo: "SSPKnoth"
 dt: "0.05secs" 
 t_end: "2mins" 
 dt_cloud_fraction: "10mins"
+restart_file: "/groups/esm/hervik/climaatmos-les-artifacts/les_isdac_day0.0.hdf5"
+# diagnostics
 dt_save_state_to_disk: "1mins"
 netcdf_interpolation_num_points: [30, 30, 150]
 diagnostics:

@@ -66,9 +66,6 @@ const T2 = 290
     @. sfc_setup = (surface_state,)
     p_overwritten = CA.AtmosCache(
         p.dt,
-        simulation.t_end,
-        CA.WallTimeEstimate(),
-        p.start_date,
         p.atmos,
         p.numerics,
         p.params,
@@ -91,7 +88,6 @@ const T2 = 290
         p.net_energy_flux_toa,
         p.net_energy_flux_sfc,
         p.conservation_check,
-        p.output_dir,
     )
 
     # Test that set_precomputed_quantities! can be used to update the surface

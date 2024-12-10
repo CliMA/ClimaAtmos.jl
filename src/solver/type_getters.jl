@@ -89,6 +89,7 @@ function get_atmos(config::AtmosConfig, params)
         diff_mode = implicit_diffusion ? Implicit() : Explicit(),
         sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
+        smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         insolation = get_insolation_form(parsed_args),
@@ -595,18 +596,7 @@ function get_comms_context(parsed_args)
     end
     comms_ctx = ClimaComms.context(device)
     ClimaComms.init(comms_ctx)
-    if ClimaComms.iamroot(comms_ctx)
-        Logging.global_logger(Logging.ConsoleLogger(stderr, Logging.Info))
-    else
-        Logging.global_logger(Logging.NullLogger())
-    end
-    @info "Running on $(nameof(typeof(device)))."
-    if comms_ctx isa ClimaComms.SingletonCommsContext
-        @info "Setting up single-process ClimaAtmos run"
-    else
-        @info "Setting up distributed ClimaAtmos run" nprocs =
-            ClimaComms.nprocs(comms_ctx)
-    end
+
     if NVTX.isactive()
         # makes output on buildkite a bit nicer
         if ClimaComms.iamroot(comms_ctx)
@@ -617,6 +607,26 @@ function get_comms_context(parsed_args)
     end
 
     return comms_ctx
+end
+
+"""
+    silence_non_root_processes(comms_ctx)
+
+Set the logging behavior based on the process rank within the given communication context `comms_ctx`.
+If the process is the root process, logging is set to display messages to the console with `Info` level.
+For all other processes, logging is silenced by setting it to a `NullLogger`.
+
+# Arguments
+- `comms_ctx`: The communication context used to determine the rank of the process.
+
+"""
+function silence_non_root_processes(comms_ctx)
+    # Set logging to only display for the root process
+    if ClimaComms.iamroot(comms_ctx)
+        Logging.global_logger(Logging.ConsoleLogger(stderr, Logging.Info))
+    else
+        Logging.global_logger(Logging.NullLogger())
+    end
 end
 
 function get_simulation(config::AtmosConfig)
@@ -783,8 +793,9 @@ function get_simulation(config::AtmosConfig)
                     atmos,
                     Y,
                     p,
-                    sim_info.dt,
+                    sim_info,
                     t_start,
+                    output_dir,
                 )
         end
         @info "initializing diagnostics: $s"
@@ -802,7 +813,7 @@ function get_simulation(config::AtmosConfig)
                 accum_str =
                     join(CA.promote_period.(collect(periods_reductions)), ", ")
                 checkpt_str = CA.promote_period(checkpoint_frequency)
-                @warn "The checkpointing frequency (dt_save_state_to_disk = $checkpt_str) should be an integer multiple of all diagnostics accumulation periods ($accum_str) to simulations can be safely restarted from any checkpoint"
+                @warn "The checkpointing frequency (dt_save_state_to_disk = $checkpt_str) should be an integer multiple of all diagnostics accumulation periods ($accum_str) so simulations can be safely restarted from any checkpoint"
             end
         end
     else

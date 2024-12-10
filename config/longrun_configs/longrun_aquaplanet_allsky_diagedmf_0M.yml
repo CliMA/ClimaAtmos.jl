@@ -25,5 +25,5 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 precip_model: "0M"
-override_τ_precip: false
+override_precip_timescale: false
 toml: [toml/longrun_aquaplanet_diagedmf.toml]

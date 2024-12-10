@@ -47,6 +47,8 @@ import ..compute_gm_mixing_length!
 # We need the abbreviations for symbols like curl, grad, and so on
 include(joinpath("..", "utils", "abbreviations.jl"))
 
+import ClimaDiagnostics
+
 import ClimaDiagnostics:
     DiagnosticVariable, ScheduledDiagnostic, average_pre_output_hook!
 
