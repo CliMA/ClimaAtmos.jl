@@ -1,4 +1,4 @@
-188
+189
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+
+189
+- Added soares dry convective boundary layer test case
 
 188
 - Updated dependencies
