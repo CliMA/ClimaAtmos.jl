@@ -1,7 +1,4 @@
 initial_condition: "Soares"
-# subsidence: "Soares"
-# edmf_coriolis: "Soares"
-# ls_adv: "Soares"
 surface_setup: "Soares"
 rayleigh_sponge: true
 turbconv: "prognostic_edmfx"
@@ -10,7 +7,7 @@ implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
 edmfx_upwinding: "first_order"
 edmfx_entr_model: "Generalized"
-edmfx_detr_model: "ConstantArea"
+edmfx_detr_model: "SmoothArea"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true

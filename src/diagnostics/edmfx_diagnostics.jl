@@ -15,13 +15,15 @@ function compute_arup!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     if isnothing(out)
         return draft_area.(
             (state.c.sgsʲs.:1).ρa,
-            TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
+            state.c.ρ,
+            #TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
         )
     else
         out .=
             draft_area.(
                 (state.c.sgsʲs.:1).ρa,
-                TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
+                state.c.ρ,
+                #TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
             )
     end
 end
