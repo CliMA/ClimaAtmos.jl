@@ -266,3 +266,26 @@ function check_conservation(sol)
 
     return (; energy_conservation, mass_conservation, water_conservation)
 end
+
+write_diagnostics_as_txt(simulation::AtmosSimulation) = write_diagnostics_as_txt(simulation.output_writers[1], simulation.output_dir)
+write_diagnostics_as_txt(writer, output_dir) = nothing
+
+function write_diagnostics_as_txt(writer::ClimaDiagnostics.Writers.DictWriter, output_dir)
+    @info "Writing diagnostics to text files"
+    for diagnostic in keys(writer.dict)
+        filename = joinpath(output_dir, diagnostic * ".txt")
+        # writer[diagnostic] is a dictionary with keys the times and with values Fields. We need
+        # to be a little careful because dictionaries are not ordered, so we have to sort them
+        # by time.
+        times = collect(keys(writer[diagnostic]))
+        sort_indices = sortperm(times)
+        values_all = Base.getindex.(collect(values(writer[diagnostic]))[sort_indices], 1)
+        
+        t, y = times[sort_indices], values_all
+        open(filename, "w") do io
+            for (ti, yi) in zip(t, y)
+                println(io, "$ti $yi")
+            end
+        end
+    end
+end

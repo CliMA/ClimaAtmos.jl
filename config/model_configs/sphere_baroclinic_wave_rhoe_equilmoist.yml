@@ -5,6 +5,4 @@ initial_condition: "MoistBaroclinicWave"
 dt: "450secs"
 t_end: "10days"
 moist: "equil"
-diagnostics:
-  - short_name: [pfull, wa, va, rv, hus, ke]
-    period: 1days
+prognostic_surface: "PrognosticSurfaceTemperature"

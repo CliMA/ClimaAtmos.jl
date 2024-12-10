@@ -33,7 +33,7 @@ function get_diagnostics(
         "average" => ((+), CAD.average_pre_output_hook!),
     )
 
-    dict_writer = CAD.DictWriter(output_dir)
+    dict_writer = CAD.DictWriter()
     hdf5_writer = CAD.HDF5Writer(output_dir)
 
     if !isnothing(parsed_args["netcdf_interpolation_num_points"])

@@ -40,9 +40,13 @@ import ..FriersonDiffusion
 import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 
+# surface_model
+import ..PrognosticSurfaceTemperature
+
 # functions used to calculate diagnostics
 import ..draft_area
 import ..compute_gm_mixing_length!
+import ..horizontal_integral_at_boundary
 
 # We need the abbreviations for symbols like curl, grad, and so on
 include(joinpath("..", "utils", "abbreviations.jl"))
@@ -58,6 +62,7 @@ import ClimaDiagnostics.Schedules:
     EveryStepSchedule, EveryDtSchedule, EveryCalendarDtSchedule
 
 import ClimaDiagnostics.Writers:
+    DictWriter,
     HDF5Writer,
     NetCDFWriter,
     write_field!,

@@ -132,6 +132,9 @@ if config.parsed_args["check_conservation"]
     @test water_conservation ≈ 0 atol = 100 * eps(FT)
 end
 
+# Write diagnostics that are in DictWriter to text files
+CA.write_diagnostics_as_txt(simulation)
+
 # Visualize the solution
 if ClimaComms.iamroot(config.comms_ctx)
     include(
