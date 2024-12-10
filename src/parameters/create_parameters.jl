@@ -104,7 +104,7 @@ function create_parameter_set(config::AtmosConfig)
 
     # Microphysics scheme parameters (from CloudMicrophysics.jl)
     # TODO - repeating the logic from solver/model_getters.jl...
-    if parsed_args["override_τ_precip"]
+    if parsed_args["override_precip_timescale"]
         toml_dict["precipitation_timescale"]["value"] =
             FT(CA.time_to_seconds(parsed_args["dt"]))
     end

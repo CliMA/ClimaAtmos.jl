@@ -2,11 +2,14 @@
 ##### EDMF entrainment detrainment
 #####
 
+import Thermodynamics.Parameters as TDP
+
 """
    Return entrainment rate [1/s].
 
    Inputs (everything defined on cell centers):
-   - params set with model parameters
+   - `thermo_params` thermodynamics parameters
+   - `turbconv_params` turbulence convection parameters
    - ᶜz, z_sfc, ᶜp, ᶜρ, - grid-scale height, surface height, grid-scale pressure and density
    - buoy_flux_surface - buoyancy flux at the surface
    - ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ - updraft area, physical vertical velocity,
@@ -17,7 +20,8 @@
 """
 
 function entrainment(
-    params,
+    thermo_params,
+    turbconv_params,
     ᶜz,
     z_sfc,
     ᶜp,
@@ -32,11 +36,12 @@ function entrainment(
     ᶜtke⁰,
     ::NoEntrainment,
 )
-    return zero(eltype(params))
+    return zero(eltype(thermo_params))
 end
 
 function entrainment(
-    params,
+    thermo_params,
+    turbconv_params,
     ᶜz,
     z_sfc,
     ᶜp,
@@ -51,14 +56,14 @@ function entrainment(
     ᶜtke⁰,
     ::PiGroupsEntrainment,
 )
-    FT = eltype(params)
+    FT = eltype(thermo_params)
     if ᶜaʲ <= FT(0)
         return FT(0)
     else
-        g = CAP.grav(params)
+        g = TDP.grav(thermo_params)
         ref_H = ᶜp / (ᶜρ * g)
 
-        entr_param_vec = CAP.entr_param_vec(params)
+        entr_param_vec = CAP.entr_param_vec(turbconv_params)
 
         # non-dimensional pi-groups
         Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
@@ -85,7 +90,8 @@ function entrainment(
 end
 
 function entrainment(
-    params,
+    thermo_params,
+    turbconv_params,
     ᶜz,
     z_sfc,
     ᶜp,
@@ -100,8 +106,7 @@ function entrainment(
     ᶜtke⁰,
     ::GeneralizedEntrainment,
 )
-    FT = eltype(params)
-    turbconv_params = CAP.turbconv_params(params)
+    FT = eltype(thermo_params)
     entr_inv_tau = CAP.entr_tau(turbconv_params)
     entr_coeff = CAP.entr_coeff(turbconv_params)
     min_area_limiter_scale = CAP.min_area_limiter_scale(turbconv_params)
@@ -120,7 +125,8 @@ function entrainment(
 end
 
 function detrainment_from_thermo_state(
-    params,
+    thermo_params,
+    turbconv_params,
     z_prev_level,
     z_sfc_halflevel,
     p_prev_level,
@@ -136,13 +142,14 @@ function detrainment_from_thermo_state(
     entrʲ_prev_level,
     vert_div_level,
     ᶜmassflux_vert_div, # mass flux divergence is not implemented for diagnostic edmf
+    w_vert_div_level,
     tke_prev_level,
     edmfx_detr_model,
 )
-    FT = eltype(params)
-    thermo_params = CAP.thermodynamics_params(params)
+    FT = eltype(thermo_params)
     detrainment(
-        params,
+        thermo_params,
+        turbconv_params,
         z_prev_level,
         z_sfc_halflevel,
         p_prev_level,
@@ -151,13 +158,14 @@ function detrainment_from_thermo_state(
         draft_area(ρaʲ_prev_level, ρʲ_prev_level),
         get_physical_w(u³ʲ_prev_halflevel, local_geometry_prev_halflevel),
         TD.relative_humidity(thermo_params, tsʲ_prev_level),
-        ᶜphysical_buoyancy(params, ρ_prev_level, ρʲ_prev_level),
+        ᶜphysical_buoyancy(thermo_params, ρ_prev_level, ρʲ_prev_level),
         get_physical_w(u³_prev_halflevel, local_geometry_prev_halflevel),
         TD.relative_humidity(thermo_params, ts_prev_level),
         FT(0),
         entrʲ_prev_level,
         vert_div_level,
         FT(0), # mass flux divergence is not implemented for diagnostic edmf
+        w_vert_div_level,
         tke_prev_level,
         edmfx_detr_model,
     )
@@ -167,7 +175,8 @@ end
    Return detrainment rate [1/s].
 
    Inputs (everything defined on cell centers):
-   - params set with model parameters
+   - `thermo_params` thermodynamics parameters
+   - `turbconv_params` turbulence convection parameters
    - ᶜz, z_sfc, ᶜp, ᶜρ, - grid-scale height, surface height, grid-scale pressure and density
    - buoy_flux_surface - buoyancy flux at the surface
    - ᶜρaʲ, ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ - updraft effective density, updraft area, physical vertical velocity,
@@ -178,7 +187,8 @@ end
    - ᶜvert_div,ᶜmassflux_vert_div - vertical divergence, vertical mass flux divergence
 """
 function detrainment(
-    params,
+    thermo_params,
+    turbconv_params,
     ᶜz,
     z_sfc,
     ᶜp,
@@ -194,14 +204,16 @@ function detrainment(
     ᶜentr,
     ᶜvert_div,
     ᶜmassflux_vert_div,
+    ᶜw_vert_div,
     ᶜtke⁰,
     ::NoDetrainment,
 )
-    return zero(eltype(params))
+    return zero(eltype(thermo_params))
 end
 
 function detrainment(
-    params,
+    thermo_params,
+    turbconv_params,
     ᶜz,
     z_sfc,
     ᶜp,
@@ -217,17 +229,18 @@ function detrainment(
     ᶜentr,
     ᶜvert_div,
     ᶜmassflux_vert_div,
+    ᶜw_vert_div,
     ᶜtke⁰,
     ::PiGroupsDetrainment,
 )
-    FT = eltype(params)
+    FT = eltype(thermo_params)
     if ᶜaʲ <= FT(0)
         return FT(0)
     else
-        g = CAP.grav(params)
+        g = TDP.grav(thermo_params)
         ref_H = ᶜp / (ᶜρ * g)
 
-        entr_param_vec = CAP.entr_param_vec(params)
+        entr_param_vec = CAP.entr_param_vec(turbconv_params)
 
         # non-dimensional pi-groups
         Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
@@ -252,7 +265,8 @@ function detrainment(
 end
 
 function detrainment(
-    params,
+    thermo_params,
+    turbconv_params,
     ᶜz,
     z_sfc,
     ᶜp,
@@ -268,11 +282,11 @@ function detrainment(
     ᶜentr,
     ᶜvert_div,
     ᶜmassflux_vert_div,
+    ᶜw_vert_div,
     ᶜtke⁰,
     ::GeneralizedDetrainment,
 )
-    FT = eltype(params)
-    turbconv_params = CAP.turbconv_params(params)
+    FT = eltype(thermo_params)
     detr_inv_tau = CAP.detr_tau(turbconv_params)
     detr_coeff = CAP.detr_coeff(turbconv_params)
     detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
@@ -303,7 +317,8 @@ function detrainment(
 end
 
 function detrainment(
-    params,
+    thermo_params,
+    turbconv_params,
     ᶜz,
     z_sfc,
     ᶜp,
@@ -319,14 +334,20 @@ function detrainment(
     ᶜentr,
     ᶜvert_div,
     ᶜmassflux_vert_div,
-    ::ConstantAreaDetrainment,
+    ᶜw_vert_div,
+    ᶜtke⁰,
+    ::SmoothAreaDetrainment,
 )
-    detr = ᶜentr - ᶜvert_div
+    if (ᶜρaʲ <= 0) || (ᶜw_vert_div >= 0)
+        detr = 0
+    else
+        detr = ᶜentr - ᶜw_vert_div
+    end
     return max(detr, 0)
 end
 
-function turbulent_entrainment(params, ᶜaʲ)
-    turb_entr_param_vec = CAP.turb_entr_param_vec(params)
+function turbulent_entrainment(turbconv_params, ᶜaʲ)
+    turb_entr_param_vec = CAP.turb_entr_param_vec(turbconv_params)
     return max(turb_entr_param_vec[1] * exp(-turb_entr_param_vec[2] * ᶜaʲ), 0)
 end
 

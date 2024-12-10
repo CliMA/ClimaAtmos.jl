@@ -325,6 +325,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
     thermo_params = CAP.thermodynamics_params(params)
     microphys_params = CAP.microphysics_precipitation_params(params)
+    turbconv_params = CAP.turbconv_params(params)
 
     ᶠΦ = p.scratch.ᶠtemp_scalar
     @. ᶠΦ = CAP.grav(params) * ᶠz
@@ -458,7 +459,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             tke_prev_level = Fields.field_values(Fields.level(ᶜtke⁰, i - 1))
 
             @. entrʲ_prev_level = entrainment(
-                params,
+                thermo_params,
+                turbconv_params,
                 z_prev_level,
                 z_sfc_halflevel,
                 p_prev_level,
@@ -469,7 +471,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     local_geometry_prev_halflevel,
                 ),
                 TD.relative_humidity(thermo_params, tsʲ_prev_level),
-                ᶜphysical_buoyancy(params, ρ_prev_level, ρʲ_prev_level),
+                ᶜphysical_buoyancy(thermo_params, ρ_prev_level, ρʲ_prev_level),
                 get_physical_w(
                     u³_prev_halflevel,
                     local_geometry_prev_halflevel,
@@ -481,7 +483,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             )
 
             @. turb_entrʲ_prev_level = turbulent_entrainment(
-                params,
+                turbconv_params,
                 draft_area(ρaʲ_prev_level, ρʲ_prev_level),
             )
 
@@ -596,9 +598,16 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     u³ʲ_data_prev_halflevel *
                     ρ_prev_level
                 ) / local_geometry_level.J / ρ_level
+            w_vert_div_level = p.scratch.temp_data_level_3
+            @. w_vert_div_level =
+                (
+                    local_geometry_halflevel.J * u³ʲ_data_halflevel -
+                    local_geometry_prev_level.J * u³ʲ_data_prev_halflevel
+                ) / local_geometry_level.J
 
             @. detrʲ_prev_level = detrainment_from_thermo_state(
-                params,
+                thermo_params,
+                turbconv_params,
                 z_prev_level,
                 z_sfc_halflevel,
                 p_prev_level,
@@ -614,6 +623,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 entrʲ_prev_level,
                 vert_div_level,
                 FT(0), # mass flux divergence is not implemented for diagnostic edmf
+                w_vert_div_level,
                 tke_prev_level,
                 p.atmos.edmfx_model.detr_model,
             )

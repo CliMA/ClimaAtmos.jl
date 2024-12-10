@@ -3,6 +3,7 @@ module ClimaAtmos
 using NVTX
 import Thermodynamics as TD
 
+include("compat.jl")
 include(joinpath("parameters", "Parameters.jl"))
 import .Parameters as CAP
 
@@ -110,6 +111,13 @@ include(
 )
 include(joinpath("parameterized_tendencies", "sponge", "rayleigh_sponge.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
+include(
+    joinpath(
+        "parameterized_tendencies",
+        "les_sgs_models",
+        "smagorinsky_lilly.jl",
+    ),
+)
 include(joinpath("prognostic_equations", "advection.jl"))
 
 include(joinpath("cache", "temporary_quantities.jl"))

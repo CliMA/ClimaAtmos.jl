@@ -53,7 +53,10 @@ function get_insolation_form(parsed_args)
     return if insolation == "idealized"
         IdealizedInsolation()
     elseif insolation == "timevarying"
-        TimeVaryingInsolation()
+        # TODO: Remove this argument once we have support for integer time and
+        # we can easily convert from time to date
+        start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd")
+        TimeVaryingInsolation(start_date)
     elseif insolation == "rcemipii"
         RCEMIPIIInsolation()
     elseif insolation == "gcmdriven"
@@ -154,6 +157,12 @@ function get_viscous_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     else
         error("Uncaught viscous sponge model `$vs_name`.")
     end
+end
+
+function get_smagorinsky_lilly_model(parsed_args)
+    is_model_active = parsed_args["smagorinsky_lilly"]
+    @assert is_model_active in (true, false)
+    return is_model_active ? SmagorinskyLilly() : nothing
 end
 
 function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
@@ -497,8 +506,8 @@ function get_detrainment_model(parsed_args)
         GeneralizedDetrainment()
     elseif detr_model == "GeneralizedHarmonics"
         GeneralizedHarmonicsDetrainment()
-    elseif detr_model == "ConstantArea"
-        ConstantAreaDetrainment()
+    elseif detr_model == "SmoothArea"
+        SmoothAreaDetrainment()
     else
         error("Invalid detr_model $(detr_model)")
     end

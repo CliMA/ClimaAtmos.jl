@@ -9,7 +9,7 @@ dt_save_state_to_disk: "20days"
 moist: "equil"
 cloud_model: "quadrature_sgs"
 precip_model: "0M"
-override_τ_precip: false
+override_precip_timescale: false
 rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"

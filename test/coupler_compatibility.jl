@@ -66,9 +66,6 @@ const T2 = 290
     @. sfc_setup = (surface_state,)
     p_overwritten = CA.AtmosCache(
         p.dt,
-        simulation.t_end,
-        CA.WallTimeEstimate(),
-        p.start_date,
         p.atmos,
         p.numerics,
         p.params,
@@ -80,14 +77,10 @@ const T2 = 290
         p.scratch,
         p.hyperdiff,
         p.do_dss,
-        p.rayleigh_sponge,
-        p.viscous_sponge,
         p.precipitation,
-        p.subsidence,
         p.large_scale_advection,
         p.external_forcing,
         p.edmf_coriolis,
-        p.forcing,
         p.non_orographic_gravity_wave,
         p.orographic_gravity_wave,
         p.radiation,
@@ -95,7 +88,6 @@ const T2 = 290
         p.net_energy_flux_toa,
         p.net_energy_flux_sfc,
         p.conservation_check,
-        p.output_dir,
     )
 
     # Test that set_precomputed_quantities! can be used to update the surface

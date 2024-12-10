@@ -1,6 +1,7 @@
 import FastGaussQuadrature
 import StaticArrays as SA
 import Thermodynamics as TD
+import Dates
 
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
@@ -33,7 +34,10 @@ struct RCEMIPIISST <: AbstractSST end
 
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
-struct TimeVaryingInsolation <: AbstractInsolation end
+struct TimeVaryingInsolation <: AbstractInsolation
+    # TODO: Remove when we can easily go from time to date
+    start_date::Dates.DateTime
+end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
 
@@ -120,10 +124,14 @@ diffuse_momentum(::FriersonDiffusion{DM}) where {DM} = DM
 diffuse_momentum(::Nothing) = false
 
 abstract type AbstractSponge end
+Base.Broadcast.broadcastable(x::AbstractSponge) = tuple(x)
 Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
     zd::FT
     κ₂::FT
 end
+
+abstract type AbstractEddyViscosityModel end
+struct SmagorinskyLilly <: AbstractEddyViscosityModel end
 
 Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
     zd::FT
@@ -264,7 +272,7 @@ struct NoDetrainment <: AbstractDetrainmentModel end
 struct PiGroupsDetrainment <: AbstractDetrainmentModel end
 struct GeneralizedDetrainment <: AbstractDetrainmentModel end
 struct GeneralizedHarmonicsDetrainment <: AbstractDetrainmentModel end
-struct ConstantAreaDetrainment <: AbstractDetrainmentModel end
+struct SmoothAreaDetrainment <: AbstractDetrainmentModel end
 
 abstract type AbstractQuadratureType end
 struct LogNormalQuad <: AbstractQuadratureType end
@@ -435,6 +443,7 @@ Base.@kwdef struct AtmosModel{
     DM,
     SAM,
     VS,
+    SL,
     RS,
     ST,
     IN,
@@ -468,6 +477,7 @@ Base.@kwdef struct AtmosModel{
     diff_mode::DM = nothing
     sgs_adv_mode::SAM = nothing
     viscous_sponge::VS = nothing
+    smagorinsky_lilly::SL = nothing
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
     insolation::IN = nothing
@@ -646,17 +656,25 @@ function AtmosConfig(
         override_file = CP.merge_toml_files(config["toml"]),
     )
     comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
+    device = ClimaComms.device(comms_ctx)
+    silence_non_root_processes(comms_ctx)
+    @info "Running on $(nameof(typeof(device)))"
+    if comms_ctx isa ClimaComms.SingletonCommsContext
+        @info "Setting up single-process ClimaAtmos run"
+    else
+        @info "Setting up distributed ClimaAtmos run" nprocs =
+            ClimaComms.nprocs(comms_ctx)
+    end
 
     config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
-    device = ClimaComms.device(comms_ctx)
     if device isa ClimaComms.CPUMultiThreaded
-        @info "Running ClimaCore in threaded mode, with $(Threads.nthreads()) threads."
+        @info "Running ClimaCore in threaded mode, with $(Threads.nthreads()) threads"
     else
-        @info "Running ClimaCore in unthreaded mode."
+        @info "Running ClimaCore in unthreaded mode"
     end
 
     isempty(job_id) &&
-        @warn "`job_id` is empty and likely not passed to AtmosConfig."
+        @warn "`job_id` is empty and likely not passed to AtmosConfig"
 
     @info "Making AtmosConfig with config files: $(sprint(config_summary, config_files))"
 

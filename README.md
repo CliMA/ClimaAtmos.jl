@@ -26,7 +26,7 @@ ClimaAtmos.jl
 [gha-ci-img]: https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml/badge.svg
 [gha-ci-url]: https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml
 
-[bk-ci-img]: https://badge.buildkite.com/2a31b42d67409c27660a0dcce65b49294cd9c6b9f14c12f21e.svg
+[bk-ci-img]: https://badge.buildkite.com/2a31b42d67409c27660a0dcce65b49294cd9c6b9f14c12f21e.svg/?branch=main
 [bk-ci-url]: https://buildkite.com/clima/climaatmos-ci
 
 [codecov-img]: https://codecov.io/gh/CliMA/ClimaAtmos.jl/branch/main/graph/badge.svg
