@@ -37,7 +37,7 @@ toml: [toml/isdac_box_noneq.toml] # both params are 10s
 ode_algo: "SSPKnoth"
 dt: "0.05secs" 
 #t_end: "1days" 
-t_end: "1hours"
+t_end: "24hours"
 dt_cloud_fraction: "10mins"
 dt_save_state_to_disk: "1mins"
 netcdf_interpolation_num_points: [30, 30, 150]
