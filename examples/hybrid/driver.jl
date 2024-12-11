@@ -14,6 +14,7 @@ if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()
     config = CA.AtmosConfig(config_file; job_id)
 end
+config = CA.AtmosConfig("config/gpu_configs/target_gpu_implicit_baroclinic_wave.yml")
 simulation = CA.get_simulation(config)
 (; integrator) = simulation
 sol_res = CA.solve_atmos!(simulation)
