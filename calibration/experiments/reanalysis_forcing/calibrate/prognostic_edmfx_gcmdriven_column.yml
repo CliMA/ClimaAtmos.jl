@@ -18,6 +18,7 @@ edmfx_nh_pressure: true
 edmfx_filter: true
 prognostic_tke: true
 moist: "equil"
+precip_model: "1M"
 config: "column"
 z_max: 70e3
 truncation: 40000
@@ -28,7 +29,6 @@ perturb_initstate: false
 dt: "3secs"
 dt_rad: "30mins"
 t_end: "259200secs"
-dt_save_state_to_disk: "100hours"
 cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage : true
 toml: [toml/simple_precalibrated.toml]

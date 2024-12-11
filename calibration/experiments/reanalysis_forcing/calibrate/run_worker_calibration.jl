@@ -11,7 +11,7 @@ cd(project)
 #         mem_per_cpu=8000)
 function create_worker_pool()    
     addprocs(
-        SlurmManager(100),
+        SlurmManager(50),
         t = "10:00:00",
         cpus_per_task = 1,
         exeflags = "--project=$(Base.active_project())"
