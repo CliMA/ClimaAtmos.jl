@@ -757,6 +757,8 @@ function get_simulation(config::AtmosConfig)
         end
         @show "****************************"
     end
+    FT = Spaces.undertype(axes(Y.c))
+    Y.f.u₃ .*= FT(0)
     s = @timed_str begin
         p = build_cache(
             Y,
@@ -773,7 +775,6 @@ function get_simulation(config::AtmosConfig)
         set_discrete_hydrostatic_balanced_state!(Y, p)
     end
 
-    FT = Spaces.undertype(axes(Y.c))
     s = @timed_str begin
         ode_algo = ode_configuration(FT, config.parsed_args)
     end

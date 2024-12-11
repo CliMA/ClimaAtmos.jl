@@ -8,6 +8,7 @@ dz_bottom: 30.0
 rayleigh_sponge: true
 viscous_sponge: true
 moist: "equil"
+divergence_damping_factor: 10
 precip_model: "1M"
 rad: "allskywithclear"
 insolation: "timevarying"
@@ -17,7 +18,7 @@ vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 surface_setup: "DefaultMoninObukhov"
-dt: "2secs"
+dt: "1secs"
 t_end: "10days"
 toml: [toml/longrun_aquaplanet.toml]
 prescribe_ozone: true
@@ -27,4 +28,4 @@ initial_condition: "DYAMONDSummer"
 topography: "Earth"
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
-    period: "5mins"
+    period: "1mins"
