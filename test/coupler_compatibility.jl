@@ -76,7 +76,6 @@ const T2 = 290
         p.precomputed,
         p.scratch,
         p.hyperdiff,
-        p.do_dss,
         p.precipitation,
         p.large_scale_advection,
         p.external_forcing,
