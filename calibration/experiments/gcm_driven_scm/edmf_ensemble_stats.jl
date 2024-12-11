@@ -2,7 +2,7 @@
 
 using ArgParse
 using Distributed
-addprocs(5)
+addprocs(1)
 
 @everywhere begin
     using EnsembleKalmanProcesses: TOMLInterface
@@ -56,6 +56,12 @@ function parse_args()
     return parse_with_settings(s)
 end
 
+@everywhere function validate_ensemble_member(iteration_dir, batch_size)
+    config_dirs = filter(x -> isdir(joinpath(iteration_dir, x)), readdir(iteration_dir))
+    num_configs = count(x -> startswith(x, "config_"), config_dirs)
+    return num_configs == batch_size
+end
+
 function main()
     args = parse_args()
 
@@ -83,6 +89,7 @@ function main()
     cal_vars = config_dict["y_var_names"]
     const_noise_by_var = config_dict["const_noise_by_var"]
     n_iterations = config_dict["n_iterations"]
+    batch_size = config_dict["batch_size"]
     model_config_dict =
         YAML.load_file(joinpath(output_dir, "configs", "model_config.yml"))
 
@@ -119,8 +126,8 @@ function main()
         ref_paths,
         reduction,
         ensemble_size,
+        batch_size,
     )
-        # config_dict = deepcopy(config_dict)
         println("Processing Iteration: $iteration")
         stats_df = DataFrame(
             iteration = Int[],
@@ -134,12 +141,17 @@ function main()
             rmse_std = Union{Missing, Float64}[],
         )
         config_indices = get_batch_indicies_in_iteration(iteration, output_dir)
+        iteration_dir = joinpath(output_dir, "iteration_$(lpad(iteration, 3, '0'))")
+    
+        valid_ensemble_members = filter(config_i -> validate_ensemble_member(joinpath(iteration_dir, "member_$(lpad(config_i, 3, '0'))"), batch_size), config_indices)
+    
         for var_name in var_names
             means = Float64[]
             maxs = Float64[]
             mins = Float64[]
             sum_squared_errors = zeros(Float64, ensemble_size)
-            for config_i in config_indices
+    
+            for config_i in valid_ensemble_members
                 data, zc_model = ensemble_data(
                     process_profile_variable,
                     iteration,
@@ -178,16 +190,13 @@ function main()
                         Σ_const = const_noise_by_var,
                         z_score_norm = false,
                     )
-                    sum_squared_errors +=
-                        compute_ensemble_squared_error(data, y_true)
+                    sum_squared_errors += compute_ensemble_squared_error(data, y_true)
                 end
             end
+    
             if in(var_name, cal_vars)
-                # Compute RMSE per ensemble member
                 rmse_per_member = sqrt.(sum_squared_errors / n_vert_levels)
-                # Filter out NaNs (failed simulations)
                 valid_rmse = rmse_per_member[.!isnan.(rmse_per_member)]
-                non_nan_simulation_count = length(valid_rmse)
                 mean_rmse = mean(valid_rmse)
                 min_rmse = minimum(valid_rmse)
                 max_rmse = maximum(valid_rmse)
@@ -231,6 +240,7 @@ function main()
                 ref_paths,
                 reduction,
                 ensemble_size,
+                batch_size,
             ),
             iterations_list,
         )
