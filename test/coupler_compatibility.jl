@@ -72,7 +72,6 @@ const T2 = 290
         p.core,
         sfc_setup,
         p.ghost_buffer,
-        p.SG_quad,
         p.precomputed,
         p.scratch,
         p.hyperdiff,
