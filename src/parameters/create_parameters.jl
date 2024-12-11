@@ -12,7 +12,16 @@ to_svec(x::AbstractArray) = SA.SVector{length(x)}(x)
 to_svec(x) = x
 to_svec(x::NamedTuple) = map(x -> to_svec(x), x)
 
-function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
+TurbulenceConvectionParameters(
+    ::Type{FT},
+    overrides = NamedTuple(),
+) where {FT <: AbstractFloat} =
+    TurbulenceConvectionParameters(CP.create_toml_dict(FT), overrides)
+
+function TurbulenceConvectionParameters(
+    toml_dict::CP.AbstractTOMLDict,
+    overrides = NamedTuple(),
+)
     name_map = (;
         :min_area_limiter_scale => :min_area_limiter_scale,
         :max_area_limiter_scale => :max_area_limiter_scale,
@@ -46,14 +55,24 @@ function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
         :entr_inv_tau => :entr_tau,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-    FT = CP.float_type(toml_dict)
+    parameters = merge(parameters, overrides)
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)
+    FT = CP.float_type(toml_dict)
     CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2}(; parameters...)
 end
 
-function SurfaceTemperatureParameters(toml_dict::CP.AbstractTOMLDict)
+SurfaceTemperatureParameters(
+    ::Type{FT},
+    overrides = NamedTuple(),
+) where {FT <: AbstractFloat} =
+    SurfaceTemperatureParameters(CP.create_toml_dict(FT), overrides)
+
+function SurfaceTemperatureParameters(
+    toml_dict::CP.AbstractTOMLDict,
+    overrides = NamedTuple(),
+)
     name_map = (;
         :SST_mean => :SST_mean,
         :SST_delta => :SST_delta,
@@ -61,9 +80,36 @@ function SurfaceTemperatureParameters(toml_dict::CP.AbstractTOMLDict)
         :SST_wavelength_latitude => :SST_wavelength_latitude,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    parameters = merge(parameters, overrides)
     FT = CP.float_type(toml_dict)
     CAP.SurfaceTemperatureParameters{FT}(; parameters...)
 end
+
+atmos_name_map = (;
+    :f_plane_coriolis_frequency => :f_plane_coriolis_frequency,
+    :equator_pole_temperature_gradient_wet => :ΔT_y_wet,
+    :angular_velocity_planet_rotation => :Omega,
+    :equator_pole_temperature_gradient_dry => :ΔT_y_dry,
+    :held_suarez_T_equator_wet => :T_equator_wet,
+    :zd_rayleigh => :zd_rayleigh,
+    :zd_viscous => :zd_viscous,
+    :planet_radius => :planet_radius,
+    :potential_temp_vertical_gradient => :Δθ_z,
+    :C_E => :C_E,
+    :C_H => :C_H,
+    :c_smag => :c_smag,
+    :alpha_rayleigh_w => :alpha_rayleigh_w,
+    :alpha_rayleigh_uh => :alpha_rayleigh_uh,
+    :astronomical_unit => :astro_unit,
+    :held_suarez_T_equator_dry => :T_equator_dry,
+    :drag_layer_vertical_extent => :σ_b,
+    :kappa_2_sponge => :kappa_2_sponge,
+    :held_suarez_minimum_temperature => :T_min_hs,
+    :ocean_surface_albedo => :idealized_ocean_albedo,
+    :water_refractive_index => :water_refractive_index,
+    :optics_lookup_temperature_min => :optics_lookup_temperature_min,
+    :optics_lookup_temperature_max => :optics_lookup_temperature_max,
+)
 
 function create_parameter_set(config::AtmosConfig)
     (; toml_dict, parsed_args) = config
@@ -135,33 +181,58 @@ function create_parameter_set(config::AtmosConfig)
         end
     MPP = typeof(microphysics_precipitation_params)
 
-    name_map = (;
-        :f_plane_coriolis_frequency => :f_plane_coriolis_frequency,
-        :equator_pole_temperature_gradient_wet => :ΔT_y_wet,
-        :angular_velocity_planet_rotation => :Omega,
-        :equator_pole_temperature_gradient_dry => :ΔT_y_dry,
-        :held_suarez_T_equator_wet => :T_equator_wet,
-        :zd_rayleigh => :zd_rayleigh,
-        :zd_viscous => :zd_viscous,
-        :planet_radius => :planet_radius,
-        :potential_temp_vertical_gradient => :Δθ_z,
-        :C_E => :C_E,
-        :C_H => :C_H,
-        :c_smag => :c_smag,
-        :alpha_rayleigh_w => :alpha_rayleigh_w,
-        :alpha_rayleigh_uh => :alpha_rayleigh_uh,
-        :astronomical_unit => :astro_unit,
-        :held_suarez_T_equator_dry => :T_equator_dry,
-        :drag_layer_vertical_extent => :σ_b,
-        :kappa_2_sponge => :kappa_2_sponge,
-        :held_suarez_minimum_temperature => :T_min_hs,
-        :ocean_surface_albedo => :idealized_ocean_albedo,
-        :water_refractive_index => :water_refractive_index,
-        :optics_lookup_temperature_min => :optics_lookup_temperature_min,
-        :optics_lookup_temperature_max => :optics_lookup_temperature_max,
-    )
-    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    parameters =
+        CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
     return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPC, MPP, WP, SFP, TCP, STP}(;
+        parameters...,
+        thermodynamics_params,
+        rrtmgp_params,
+        insolation_params,
+        microphysics_cloud_params,
+        microphysics_precipitation_params,
+        water_params,
+        surface_fluxes_params,
+        turbconv_params,
+        surface_temp_params,
+    )
+end
+
+function ClimaAtmosParameters(
+    FT;
+    turbconv_params,
+    thermodynamics_params,
+    microphysics_cloud_params,
+    insolation_params,
+    rrtmgp_params,
+    surface_temp_params,
+    overrides...,
+)
+    FT = CP.float_type(toml_dict)
+    TCP = typeof(turbconv_params)
+    TP = typeof(thermodynamics_params)
+    RP = typeof(rrtmgp_params)
+    IP = typeof(insolation_params)
+    WP = typeof(water_params)
+    SFP = typeof(surface_fluxes_params)
+    STP = typeof(surface_temp_params)
+    MPC = typeof(microphysics_cloud_params)
+    MPP = typeof(microphysics_precipitation_params)
+
+    parameters =
+        CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
+    parameters = merge(parameters, overrides)
+    return CA.Parameters.ClimaAtmosParameters{
+        FT,
+        TP,
+        RP,
+        IP,
+        MPC,
+        MPP,
+        WP,
+        SFP,
+        TCP,
+        STP,
+    }(;
         parameters...,
         thermodynamics_params,
         rrtmgp_params,
