@@ -16,7 +16,7 @@ if !(@isdefined config)
 end
 simulation = CA.get_simulation(config)
 (; integrator) = simulation
-error("stopping here")
+#error("stopping here")
 sol_res = CA.solve_atmos!(simulation)
 
 (; atmos, params) = integrator.p

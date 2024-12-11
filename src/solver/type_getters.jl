@@ -688,14 +688,14 @@ function get_simulation(config::AtmosConfig)
             file_path,
             "q",
             spaces.center_space,
-        )
+        ) ./ 2
         ᶜ∂lnp∂z = @. -thermo_params.grav / (
             TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT
         )
         ᶠlnp_over_psfc = zeros(spaces.face_space)
         ClimaCore.Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
         ᶠp = p_sfc .* exp.(ᶠlnp_over_psfc)
-        ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp(ᶠp), ᶜT, ᶜq_tot)
+        ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp.(ᶠp), ᶜT, ᶜq_tot)
         Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
         vel =
             ClimaCore.Geometry.UVWVector.(
@@ -719,12 +719,12 @@ function get_simulation(config::AtmosConfig)
             ClimaCore.Geometry.Covariant12Vector.(
                 ClimaCore.Geometry.UVVector.(vel)
             )
-        Y.f.u₃ .=
-            ᶠinterp.(
-                ClimaCore.Geometry.Covariant3Vector.(
-                    ClimaCore.Geometry.WVector.(vel)
-                )
-            )
+        # Y.f.u₃ .=
+        #     ᶠinterp.(
+        #         ClimaCore.Geometry.Covariant3Vector.(
+        #             ClimaCore.Geometry.WVector.(vel)
+        #         )
+        #     )
         e_kin = similar(ᶜT)
         compute_kinetic!(e_kin, Y.c.uₕ, Y.f.u₃)
         e_pot = ClimaCore.Fields.coordinate_field(Y.c).z .* thermo_params.grav

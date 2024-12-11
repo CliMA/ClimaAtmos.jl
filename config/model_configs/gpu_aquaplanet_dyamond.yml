@@ -1,11 +1,13 @@
 dt_save_state_to_disk: "Inf"
 dt_save_to_sol: "Inf"
-h_elem: 30
+h_elem: 12
 z_max: 60000.0
-z_elem: 63
-dz_bottom: 30.0
+z_elem: 39
+dz_bottom: 100.0
+initial_condition: "DYAMONDSummer"
+topography: "Earth"
 moist: "equil"
-precip_model: "1M"
+precip_model: "0M"
 rad: "allskywithclear"
 insolation: "timevarying"
 dt_rad: "1hours"
@@ -16,11 +18,11 @@ approximate_linear_solve_iters: 2
 surface_setup: "DefaultMoninObukhov"
 rayleigh_sponge: true
 viscous_sponge: true
-dt: "90secs"
-t_end: "8hours"
-prescribe_ozone: true
-aerosol_radiation: true
-prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "OC1", "OC2", "SO4", "SOA", "SSLT01", "SSLT02", "SSLT03", "SSLT04"]
-prescribe_clouds_in_radiation: true
-radiation_reset_rng_seed: true
+dt: "30secs"
+t_end: "1hours"
+# prescribe_ozone: true
+# aerosol_radiation: true
+# prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "OC1", "OC2", "SO4", "SOA", "SSLT01", "SSLT02", "SSLT03", "SSLT04"]
+# prescribe_clouds_in_radiation: true
+# radiation_reset_rng_seed: true
 toml: [toml/longrun_aquaplanet.toml]
