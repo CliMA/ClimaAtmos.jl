@@ -223,7 +223,8 @@ end
                        coeff, ᶜlength_scale, thermo_params)
 
 where:
-  - SG_quad is a struct containing information about quadrature type and order
+  - SG_quad is a struct containing information about Gaussian quadrature order,
+    sampling point values and weights
   - ts is the thermodynamic state
   - ᶜ∇q, ᶜ∇θ are the gradients of q_tot and liquid ice potential temperature
   - coeff - a free parameter (to be moved into params)
@@ -251,7 +252,6 @@ function quad_loop(
     # and limited covarainces
     function get_x_hat(χ1, χ2)
 
-        @assert SG_quad.quadrature_type isa GaussianQuad
         FT = eltype(χ1)
 
         q′q′ = covariance_from_grad(coeff, ᶜlength_scale, ᶜ∇q, ᶜ∇q)

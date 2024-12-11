@@ -16,48 +16,71 @@ struct NoPrecipitation <: AbstractPrecipitationModel end
 struct Microphysics0Moment <: AbstractPrecipitationModel end
 struct Microphysics1Moment <: AbstractPrecipitationModel end
 
-# TODO: Add docstrings explaining this
-abstract type AbstractQuadratureType end
-struct LogNormalQuad <: AbstractQuadratureType end
-struct GaussianQuad <: AbstractQuadratureType end
+"""
 
-# TODO: Add docstrings explaining this
+    AbstractSGSamplingType
+
+How sub-grid scale diagnostic should be sampled in computing cloud fraction.
+"""
 abstract type AbstractSGSamplingType end
+
+"""
+    SGSMean
+
+Use the mean value.
+"""
 struct SGSMean <: AbstractSGSamplingType end
-struct SGSQuadrature{N, QT, A, W} <: AbstractSGSamplingType
-    quadrature_type::QT
-    a::A
-    w::W
-    function SGSQuadrature(
-        ::Type{FT};
-        quadrature_name = "gaussian",
-        quadrature_order = 3,
-    ) where {FT}
-        quadrature_type = if quadrature_name == "log-normal"
-            LogNormalQuad()
-        elseif quadrature_name == "gaussian"
-            GaussianQuad()
-        else
-            error("Invalid thermodynamics quadrature $(quadrature_name)")
-        end
+
+"""
+    SGSQuadrature
+
+Compute the mean as a weighted sum of the Gauss-Hermite quadrature points.
+"""
+struct SGSQuadrature{N, A, W} <: AbstractSGSamplingType
+    a::A  # values
+    w::W  # weights
+    function SGSQuadrature(::Type{FT}; quadrature_order = 3) where {FT}
         N = quadrature_order
         # TODO: double check this python-> julia translation
         # a, w = np.polynomial.hermite.hermgauss(N)
         a, w = FastGaussQuadrature.gausshermite(N)
         a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
-        QT = typeof(quadrature_type)
-        return new{N, QT, typeof(a), typeof(w)}(quadrature_type, a, w)
+        return new{N, typeof(a), typeof(w)}(a, w)
     end
 end
 quadrature_order(::SGSQuadrature{N}) where {N} = N
-quad_type(::SGSQuadrature{N}) where {N} = N #TODO - this seems wrong?
 
-# TODO: Add docstrings explaining this
+"""
+    AbstractCloudModel
+
+How to compute the cloud fraction.
+"""
 abstract type AbstractCloudModel end
+
+"""
+    GridScaleCloud
+
+Compute the cloud fraction based on grid mean conditions.
+"""
 struct GridScaleCloud <: AbstractCloudModel end
+
+"""
+    QuadratureCloud
+
+Compute the cloud fraction by sampling over the quadrature points, but without
+the EDMF sub-grid scale model.
+"""
 struct QuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
     SG_quad::SGQ
 end
+
+"""
+    SGSQuadratureCloud
+
+Compute the cloud fraction as a sum of the EDMF environment and updraft
+contributions. The EDMF environment cloud fraction is computed by sampling over
+the quadrature points.
+"""
 struct SGSQuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
     SG_quad::SGQ
 end
