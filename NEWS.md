@@ -8,6 +8,14 @@ Main
 v0.27.9
 -------
 
+### Features
+
+### New option for vertical diffusion
+
+When `vert_diff` is set to `DecayWithHeightDiffusion`, diffusion decays
+exponentially with height.
+PR [3475](https://github.com/CliMA/ClimaAtmos.jl/pull/3475)
+
 v0.27.8
 -------
 

@@ -16,5 +16,5 @@ rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
-vert_diff: "FriersonDiffusion"
+vert_diff: "DecayWithHeightDiffusion"
 toml: [toml/longrun_aquaplanet.toml]

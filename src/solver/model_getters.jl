@@ -106,12 +106,15 @@ function get_vertical_diffusion_model(
     ::Type{FT},
 ) where {FT}
     vert_diff_name = parsed_args["vert_diff"]
+    vdp = CAP.vert_diff_params(params)
     return if vert_diff_name in ("false", false, "none")
         nothing
     elseif vert_diff_name in ("true", true, "VerticalDiffusion")
-        VerticalDiffusion{diffuse_momentum, FT}(; C_E = params.C_E)
+        VerticalDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
     elseif vert_diff_name in ("FriersonDiffusion",)
-        FriersonDiffusion{diffuse_momentum, FT}(; C_E = params.C_E)
+        FriersonDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
+    elseif vert_diff_name in ("DecayWithHeightDiffusion",)
+        DecayWithHeightDiffusion{diffuse_momentum, FT}(; H = vdp.H, D₀ = vdp.D₀)
     else
         error("Uncaught diffusion model `$vert_diff_name`.")
     end

@@ -69,6 +69,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     SFP,
     TCP,
     STP,
+    VDP,
 } <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
@@ -79,12 +80,12 @@ Base.@kwdef struct ClimaAtmosParameters{
     surface_fluxes_params::SFP
     turbconv_params::TCP
     surface_temp_params::STP
+    vert_diff_params::VDP
     Omega::FT
     f_plane_coriolis_frequency::FT
     planet_radius::FT
     astro_unit::FT
     c_smag::FT
-    C_E::FT
     C_H::FT
     # Held Suarez
     ΔT_y_dry::FT

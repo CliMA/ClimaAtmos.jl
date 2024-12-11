@@ -4,7 +4,7 @@ dz_bottom: 50.0
 dt: "400secs"
 t_end: "18hours"
 dt_save_state_to_disk: "18hours"
-vert_diff: "FriersonDiffusion"
+vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 cloud_model: "grid_scale"
