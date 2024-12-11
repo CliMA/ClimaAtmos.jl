@@ -1,8 +1,8 @@
 struct AtmosCache{
     FT,
-    FTE,
-    WTE,
-    SD,
+    # FTE, # I don't know what FTE, WTE, and SD are used for
+    # WTE,
+    # SD,
     AM,
     NUM,
     CAP,
