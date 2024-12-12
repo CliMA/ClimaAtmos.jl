@@ -233,8 +233,11 @@ external_forcing:
   help: "External forcing for single column experiments [`nothing` (default), `GCM`]"
   value: ~
 external_forcing_file:
-  help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions [`nothing` (default), `path/to/file`]"
+  help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions. Used for GCM-driven SCM and ISDAC setup [`nothing` (default), `path/to/file`]"
   value: ~
+external_forcing_type:
+  help: "External forcing type used for GCM-driven SCM forcings, determining the scalar and momentum relaxation profiles [`shallow` (default), `deep`]"
+  value: "shallow"
 cfsite_number:
   help: "cfsite identifier for single column forcing from  `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
   value: "site23"
