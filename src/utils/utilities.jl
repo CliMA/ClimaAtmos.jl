@@ -444,3 +444,21 @@ function promote_period(period::Dates.OtherPeriod)
     # For varying periods, we just return them as they are
     return period
 end
+
+function iscolumn(space)
+    # TODO: Our columns are 2+1D boxes with one element at the base. Fix this
+    isbox =
+        Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
+        Domains.RectangleDomain
+    isbox || return false
+    has_one_element =
+        Meshes.nelements(
+            Spaces.topology(Spaces.horizontal_space(space)).mesh,
+        ) == 1
+    has_one_element && return true
+end
+
+function issphere(space)
+    return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
+           Domains.SphereDomain
+end

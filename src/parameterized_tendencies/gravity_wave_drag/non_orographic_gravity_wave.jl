@@ -2,144 +2,136 @@
 ##### Non-orographic gravity wave parameterization
 #####
 using UnrolledUtilities
+import ClimaCore.Domains
+import ClimaCore.Meshes
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Operators as Operator
 
 non_orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
-    non_orographic_gravity_wave_cache(
-        Y,
-        atmos.non_orographic_gravity_wave,
-        atmos.model_config,
-    )
+    non_orographic_gravity_wave_cache(Y, atmos.non_orographic_gravity_wave)
 
-non_orographic_gravity_wave_cache(Y, ::Nothing, ::AbstractModelConfig) = (;)
+non_orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 
 non_orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
-function non_orographic_gravity_wave_cache(
-    Y,
-    gw::NonOrographyGravityWave,
-    ::SingleColumnModel,
-)
-    FT = Spaces.undertype(axes(Y.c))
-    (; source_height, Bw, Bn, Bt_0, dc, cmax, c0, nk, cw, cn) = gw
+function non_orographic_gravity_wave_cache(Y, gw::NonOrographyGravityWave)
+    if iscolumn(axes(Y.c))
+        FT = Spaces.undertype(axes(Y.c))
+        (; source_height, Bw, Bn, Bt_0, dc, cmax, c0, nk, cw, cn) = gw
 
-    nc = Int(floor(FT(2 * cmax / dc + 1)))
-    c = ntuple(n -> FT((n - 1) * dc - cmax), Val(nc))
-    source_ρ_z_u_v_level =
-        similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT})
-    ᶜlevel = similar(Y.c.ρ, FT)
-    for i in 1:Spaces.nlevels(axes(Y.c.ρ))
-        fill!(Fields.level(ᶜlevel, i), i)
-    end
+        nc = Int(floor(FT(2 * cmax / dc + 1)))
+        c = ntuple(n -> FT((n - 1) * dc - cmax), Val(nc))
+        source_ρ_z_u_v_level =
+            similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT})
+        ᶜlevel = similar(Y.c.ρ, FT)
+        for i in 1:Spaces.nlevels(axes(Y.c.ρ))
+            fill!(Fields.level(ᶜlevel, i), i)
+        end
 
-    return (;
-        gw_source_height = source_height,
-        gw_source_ampl = Bt_0 .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
-        gw_Bw = Bw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
-        gw_Bn = Bn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
-        gw_c = c,
-        gw_dc = dc,
-        gw_cmax = cmax,
-        gw_cw = cw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
-        gw_cn = cn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
-        gw_c0 = c0,
-        gw_flag = ones(FT, axes(Fields.level(Y.c.ρ, 1))),
-        gw_nk = Int(nk),
-        ᶜbuoyancy_frequency = similar(Y.c.ρ),
-        ᶜdTdz = similar(Y.c.ρ),
-        source_ρ_z_u_v_level,
-        source_level = similar(Fields.level(Y.c.ρ, 1)),
-        damp_level = similar(Fields.level(Y.c.ρ, 1)),
-        ᶜlevel,
-        u_waveforcing = similar(Y.c.ρ),
-        v_waveforcing = similar(Y.c.ρ),
-        uforcing = similar(Y.c.ρ),
-        vforcing = similar(Y.c.ρ),
-        gw_ncval = Val(nc),
-    )
-end
+        return (;
+            gw_source_height = source_height,
+            gw_source_ampl = Bt_0 .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
+            gw_Bw = Bw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
+            gw_Bn = Bn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
+            gw_c = c,
+            gw_dc = dc,
+            gw_cmax = cmax,
+            gw_cw = cw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
+            gw_cn = cn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
+            gw_c0 = c0,
+            gw_flag = ones(FT, axes(Fields.level(Y.c.ρ, 1))),
+            gw_nk = Int(nk),
+            ᶜbuoyancy_frequency = similar(Y.c.ρ),
+            ᶜdTdz = similar(Y.c.ρ),
+            source_ρ_z_u_v_level,
+            source_level = similar(Fields.level(Y.c.ρ, 1)),
+            damp_level = similar(Fields.level(Y.c.ρ, 1)),
+            ᶜlevel,
+            u_waveforcing = similar(Y.c.ρ),
+            v_waveforcing = similar(Y.c.ρ),
+            uforcing = similar(Y.c.ρ),
+            vforcing = similar(Y.c.ρ),
+            gw_ncval = Val(nc),
+        )
+    elseif issphere(axes(Y.c))
 
-function non_orographic_gravity_wave_cache(
-    Y,
-    gw::NonOrographyGravityWave,
-    ::SphericalModel,
-)
+        FT = Spaces.undertype(axes(Y.c))
+        (; source_pressure, damp_pressure, Bw, Bn, Bt_0, Bt_n, Bt_s, Bt_eq) = gw
+        (; ϕ0_s, ϕ0_n, dϕ_n, dϕ_s, dc, cmax, c0, nk, cw, cw_tropics, cn) = gw
 
-    FT = Spaces.undertype(axes(Y.c))
-    (; source_pressure, damp_pressure, Bw, Bn, Bt_0, Bt_n, Bt_s, Bt_eq) = gw
-    (; ϕ0_s, ϕ0_n, dϕ_n, dϕ_s, dc, cmax, c0, nk, cw, cw_tropics, cn) = gw
+        nc = Int(floor(FT(2 * cmax / dc + 1)))
+        c = ntuple(n -> FT((n - 1) * dc - cmax), Val(nc))
 
-    nc = Int(floor(FT(2 * cmax / dc + 1)))
-    c = ntuple(n -> FT((n - 1) * dc - cmax), Val(nc))
+        ᶜlocal_geometry = Fields.local_geometry_field(Fields.level(Y.c, 1))
+        lat = ᶜlocal_geometry.coordinates.lat
 
-    ᶜlocal_geometry = Fields.local_geometry_field(Fields.level(Y.c, 1))
-    lat = ᶜlocal_geometry.coordinates.lat
+        gw_Bn = @. ifelse(dϕ_s <= lat <= dϕ_n, FT(0), Bn)
+        gw_cw = @. ifelse(dϕ_s <= lat <= dϕ_n, cw_tropics, cw)
+        gw_flag = @. ifelse(dϕ_s <= lat <= dϕ_n, FT(0), FT(1))
+        gw_Bw = ones(FT, axes(lat)) .* Bw
+        gw_cn = ones(FT, axes(lat)) .* cn
 
-    gw_Bn = @. ifelse(dϕ_s <= lat <= dϕ_n, FT(0), Bn)
-    gw_cw = @. ifelse(dϕ_s <= lat <= dϕ_n, cw_tropics, cw)
-    gw_flag = @. ifelse(dϕ_s <= lat <= dϕ_n, FT(0), FT(1))
-    gw_Bw = ones(FT, axes(lat)) .* Bw
-    gw_cn = ones(FT, axes(lat)) .* cn
-
-    source_p_ρ_z_u_v_level =
-        similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT, FT})
-    ᶜlevel = similar(Y.c.ρ, FT)
-    for i in 1:Spaces.nlevels(axes(Y.c.ρ))
-        fill!(Fields.level(ᶜlevel, i), i)
-    end
+        source_p_ρ_z_u_v_level =
+            similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT, FT})
+        ᶜlevel = similar(Y.c.ρ, FT)
+        for i in 1:Spaces.nlevels(axes(Y.c.ρ))
+            fill!(Fields.level(ᶜlevel, i), i)
+        end
 
 
-    # This is GFDL source specs -> a smooth function
-    # source_ampl = @. Bt_0 +
-    #     Bt_n * FT(0.5) * (FT(1) + tanh((lat - ϕ0_n) / dϕ_n)) +
-    #     Bt_s * FT(0.5) * (FT(1) + tanh((lat - ϕ0_s) / dϕ_s))
+        # This is GFDL source specs -> a smooth function
+        # source_ampl = @. Bt_0 +
+        #     Bt_n * FT(0.5) * (FT(1) + tanh((lat - ϕ0_n) / dϕ_n)) +
+        #     Bt_s * FT(0.5) * (FT(1) + tanh((lat - ϕ0_s) / dϕ_s))
 
-    # This latitude depend source follows MiMA specs
-    source_ampl = @. ifelse(
-        (lat > ϕ0_n) | (lat < ϕ0_s),
-        Bt_0 +
-        Bt_n * FT(0.5) * (FT(1) + tanh((lat - ϕ0_n) / dϕ_n)) +
-        Bt_s * FT(0.5) * (FT(1) + tanh((lat - ϕ0_s) / dϕ_s)),
-        ifelse(
-            dϕ_s <= lat <= dϕ_n,
-            Bt_eq,
+        # This latitude depend source follows MiMA specs
+        source_ampl = @. ifelse(
+            (lat > ϕ0_n) | (lat < ϕ0_s),
+            Bt_0 +
+            Bt_n * FT(0.5) * (FT(1) + tanh((lat - ϕ0_n) / dϕ_n)) +
+            Bt_s * FT(0.5) * (FT(1) + tanh((lat - ϕ0_s) / dϕ_s)),
             ifelse(
-                dϕ_n <= lat <= ϕ0_n,
-                Bt_0 + (Bt_eq - Bt_0) / (ϕ0_n - dϕ_n) * (ϕ0_n - lat),
-                Bt_0 + (Bt_eq - Bt_0) / (ϕ0_s - dϕ_s) * (ϕ0_s - lat),
+                dϕ_s <= lat <= dϕ_n,
+                Bt_eq,
+                ifelse(
+                    dϕ_n <= lat <= ϕ0_n,
+                    Bt_0 + (Bt_eq - Bt_0) / (ϕ0_n - dϕ_n) * (ϕ0_n - lat),
+                    Bt_0 + (Bt_eq - Bt_0) / (ϕ0_s - dϕ_s) * (ϕ0_s - lat),
+                ),
             ),
-        ),
-    )
+        )
 
-    return (;
-        gw_source_pressure = source_pressure,
-        gw_damp_pressure = damp_pressure,
-        gw_source_ampl = source_ampl,
-        gw_Bw = gw_Bw,
-        gw_Bn = gw_Bn,
-        gw_c = c,
-        gw_cw = gw_cw,
-        gw_cn = gw_cn,
-        gw_dc = dc,
-        gw_cmax = cmax,
-        gw_c0 = c0,
-        gw_flag = gw_flag,
-        gw_nk = Int(nk),
-        ᶜbuoyancy_frequency = similar(Y.c.ρ),
-        ᶜdTdz = similar(Y.c.ρ),
-        source_p_ρ_z_u_v_level,
-        source_level = similar(Fields.level(Y.c.ρ, 1)),
-        damp_level = similar(Fields.level(Y.c.ρ, 1)),
-        ᶜlevel,
-        u_waveforcing = similar(Y.c.ρ),
-        v_waveforcing = similar(Y.c.ρ),
-        uforcing = similar(Y.c.ρ),
-        vforcing = similar(Y.c.ρ),
-        gw_ncval = Val(nc),
-    )
+        return (;
+            gw_source_pressure = source_pressure,
+            gw_damp_pressure = damp_pressure,
+            gw_source_ampl = source_ampl,
+            gw_Bw = gw_Bw,
+            gw_Bn = gw_Bn,
+            gw_c = c,
+            gw_cw = gw_cw,
+            gw_cn = gw_cn,
+            gw_dc = dc,
+            gw_cmax = cmax,
+            gw_c0 = c0,
+            gw_flag = gw_flag,
+            gw_nk = Int(nk),
+            ᶜbuoyancy_frequency = similar(Y.c.ρ),
+            ᶜdTdz = similar(Y.c.ρ),
+            source_p_ρ_z_u_v_level,
+            source_level = similar(Fields.level(Y.c.ρ, 1)),
+            damp_level = similar(Fields.level(Y.c.ρ, 1)),
+            ᶜlevel,
+            u_waveforcing = similar(Y.c.ρ),
+            v_waveforcing = similar(Y.c.ρ),
+            uforcing = similar(Y.c.ρ),
+            vforcing = similar(Y.c.ρ),
+            gw_ncval = Val(nc),
+        )
+    else
+        error("Only sphere and columns are supported")
+    end
 end
 
 function non_orographic_gravity_wave_tendency!(
@@ -165,7 +157,6 @@ function non_orographic_gravity_wave_tendency!(
         ᶜlevel,
         gw_ncval,
     ) = p.non_orographic_gravity_wave
-    (; model_config) = p.atmos
 
     ᶜρ = Y.c.ρ
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -191,7 +182,7 @@ function non_orographic_gravity_wave_tendency!(
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
-    if model_config isa SingleColumnModel
+    if iscolumn(axes(Y.c))
         # source level: the index of the level that is closest to the source height
         (; gw_source_height, source_ρ_z_u_v_level) =
             p.non_orographic_gravity_wave
@@ -216,7 +207,7 @@ function non_orographic_gravity_wave_tendency!(
 
         fill!(damp_level, Spaces.nlevels(axes(ᶜz)))
 
-    elseif model_config isa SphericalModel
+    elseif issphere(axes(Y.c))
         (; ᶜp) = p.precomputed
         (; gw_source_pressure, gw_damp_pressure, source_p_ρ_z_u_v_level) =
             p.non_orographic_gravity_wave
@@ -255,7 +246,8 @@ function non_orographic_gravity_wave_tendency!(
                 return (level_prev, p_prev)
             end
         end
-
+    else
+        error("Only sphere and columns are supported")
     end
 
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1

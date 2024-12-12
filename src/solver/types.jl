@@ -21,12 +21,6 @@ struct GridScaleCloud <: AbstractCloudModel end
 struct QuadratureCloud <: AbstractCloudModel end
 struct SGSQuadratureCloud <: AbstractCloudModel end
 
-abstract type AbstractModelConfig end
-struct SingleColumnModel <: AbstractModelConfig end
-struct SphericalModel <: AbstractModelConfig end
-struct BoxModel <: AbstractModelConfig end
-struct PlaneModel <: AbstractModelConfig end
-
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct ZonallyAsymmetricSST <: AbstractSST end
@@ -420,7 +414,6 @@ Base.@kwdef struct EDMFXModel{
 end
 
 Base.@kwdef struct AtmosModel{
-    MC,
     MM,
     PM,
     CM,
@@ -451,7 +444,6 @@ Base.@kwdef struct AtmosModel{
     SA,
     NUM,
 }
-    model_config::MC = nothing
     moisture_model::MM = nothing
     precip_model::PM = nothing
     cloud_model::CM = nothing
