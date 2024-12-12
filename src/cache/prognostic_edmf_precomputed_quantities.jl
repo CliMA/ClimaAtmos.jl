@@ -106,7 +106,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     # @. ᶜK⁰ += ᶜtke⁰
 
     # create phase partition
-    ᶜq_pt⁰ = TD.PhasePartition(ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    @. ᶜq_pt⁰ = TD.PhasePartition(ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰)
     @. ᶜts⁰ = TD.PhaseNonEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_pt⁰)
     @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
     return nothing
@@ -281,7 +281,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
 
-        ᶜq_ptʲ = TD.PhasePartition(ᶜq_totʲ, ᶜq_liqʲ, ᶜq_iceʲ)
+        @. ᶜq_ptʲ = TD.PhasePartition(ᶜq_totʲ, ᶜq_liqʲ, ᶜq_iceʲ)
         @. ᶜtsʲ = TD.PhaseNonEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_ptʲ)
 
         @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
