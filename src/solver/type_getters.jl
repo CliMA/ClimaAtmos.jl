@@ -265,6 +265,8 @@ function get_initial_condition(parsed_args)
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
             parsed_args["perturb_initstate"],
         )
+    elseif parsed_args["initial_condition"] in ["DYAMONDSummer"]
+        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
     elseif parsed_args["initial_condition"] in [
         "Nieuwstadt",
         "GABLS",
@@ -623,7 +625,6 @@ end
 function get_simulation(config::AtmosConfig)
     params = create_parameter_set(config)
     atmos = get_atmos(config, params)
-
     sim_info = get_sim_info(config)
     job_id = sim_info.job_id
     output_dir = sim_info.output_dir
@@ -652,7 +653,6 @@ function get_simulation(config::AtmosConfig)
 
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
-
     if !sim_info.restart
         s = @timed_str begin
             Y = ICs.atmos_state(
@@ -667,6 +667,13 @@ function get_simulation(config::AtmosConfig)
     end
 
     tracers = get_tracers(config.parsed_args)
+
+    CA.InitialConditions.overwrite_initial_conditions!(
+        initial_condition,
+        Y,
+        params.thermodynamics_params,
+        config,
+    )
 
     s = @timed_str begin
         p = build_cache(

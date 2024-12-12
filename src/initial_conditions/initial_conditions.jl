@@ -161,6 +161,31 @@ function (initial_condition::DecayingProfile)(params)
 end
 
 """
+    DYAMONDSummer(; perturb = true)
+
+An `InitialCondition` with a decaying temperature profile, and with an optional
+perturbation to the temperature.
+"""
+struct DYAMONDSummer <: InitialCondition end
+
+function (initial_condition::DYAMONDSummer)(params)
+    function local_state(local_geometry)
+        FT = eltype(params)
+        grav = CAP.grav(params)
+        thermo_params = CAP.thermodynamics_params(params)
+
+        T, p = FT(300), FT(100000) # placeholder values
+
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+        )
+    end
+    return local_state
+end
+
+"""
     AgnesiHProfile(; perturb = false)
 
 An `InitialCondition` with a decaying temperature profile
@@ -351,10 +376,80 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
     return local_state
 end
 
+overwrite_initial_conditions!(initial_condition::InitialCondition, args...) =
+    (return nothing)
+
+"""
+    overwrite_initial_conditions!(initial_condition, Y, thermo_params, config)
+Given a prognostic state `Y`, an `initial condition` (specifically, where
+initial values are assigned from interpolations of existing datasets), a `thermo_state`,
+and the `config::AtmosConfig` object, this function overwrites the default initial condition
+and populates prognostic variables with interpolated values using the `SpaceVaryingInputs`
+tool. 
+"""
+function overwrite_initial_conditions!(
+    initial_condition::DYAMONDSummer,
+    Y,
+    thermo_params,
+    config,
+)
+    # Get file from AtmosArtifacts
+    file_path = AA.dyamond_summer_artifact_path(; context = config.comms_ctx)
+    center_space = Fields.axes(Y.c)
+    face_space = Fields.axes(Y.f)
+    # Using surface pressure, air temperature and specific humidity 
+    # from the dataset, compute air pressure. 
+    p_sfc = Fields.level(
+        SpaceVaryingInputs.SpaceVaryingInput(file_path, "p", face_space),
+        Fields.half,
+    )
+    ᶜT = SpaceVaryingInputs.SpaceVaryingInput(file_path, "t", center_space)
+    ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(file_path, "q", center_space)
+    ᶜ∂lnp∂z = @. -thermo_params.grav /
+       (TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT)
+    ᶠlnp_over_psfc = zeros(face_space)
+    Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
+    ᶠp = p_sfc .* exp.(ᶠlnp_over_psfc)
+    ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp.(ᶠp), ᶜT, ᶜq_tot)
+    # Assign prognostic variables from equilibrium moisture models
+    Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
+    vel =
+        Geometry.UVWVector.(
+            SpaceVaryingInputs.SpaceVaryingInput(file_path, "u", center_space),
+            SpaceVaryingInputs.SpaceVaryingInput(file_path, "v", center_space),
+            SpaceVaryingInputs.SpaceVaryingInput(file_path, "w", center_space),
+        )
+    Y.c.uₕ .= C12.(Geometry.UVVector.(vel))
+    Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
+    e_kin = similar(ᶜT)
+    compute_kinetic!(e_kin, Y.c.uₕ, Y.f.u₃)
+    e_pot = Fields.coordinate_field(Y.c).z .* thermo_params.grav
+    Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
+    if config.parsed_args["moist"] == "dry"
+        error("`dry` configurations are incompatible with the interpolated DYAMOND-summer initial conditions.")
+    else
+        Y.c.ρq_tot .= ᶜq_tot .* Y.c.ρ
+    end
+    if config.parsed_args["precip_model"] == "1M"
+        Y.c.ρq_sno .=
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "cswc",
+                center_space,
+            ) .* Y.c.ρ
+        Y.c.ρq_rai .=
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "crwc",
+                center_space,
+            ) .* Y.c.ρ
+    end
+    return nothing
+end
+
 ##
 ## Baroclinic Wave
 ##
-
 function shallow_atmos_baroclinic_wave_values(z, ϕ, λ, params, perturb)
     FT = eltype(params)
     R_d = CAP.R_d(params)
