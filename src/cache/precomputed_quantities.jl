@@ -59,6 +59,12 @@ function precomputed_quantities(Y, atmos)
     )
     cloud_diagnostics_tuple =
         similar(Y.c, @NamedTuple{cf::FT, q_liq::FT, q_ice::FT})
+    moisture_sgs_quantities =
+        atmos.moisture_model isa NonEquilMoistModel ?
+        (;
+            ᶜq_liq⁰ = similar(Y.c, FT),
+            ᶜq_ice⁰ = similar(Y.c, FT),
+        ) : (;)
     precipitation_sgs_quantities =
         atmos.precip_model isa Microphysics0Moment ?
         (; ᶜSqₜᵖʲs = similar(Y.c, NTuple{n, FT}), ᶜSqₜᵖ⁰ = similar(Y.c, FT)) :
@@ -107,6 +113,7 @@ function precomputed_quantities(Y, atmos)
             ᶜgradᵥ_q_tot⁰ = Fields.Field(C3{FT}, cspace),
             ᶜgradᵥ_θ_liq_ice⁰ = Fields.Field(C3{FT}, cspace),
             precipitation_sgs_quantities...,
+            moisture_sgs_quantities...,
         ) : (;)
     sgs_quantities = (;
         ᶜgradᵥ_θ_virt = Fields.Field(C3{FT}, cspace),
