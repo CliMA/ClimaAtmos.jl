@@ -442,8 +442,8 @@ function atmos_surface_conditions(
         atmos.moisture_model isa DryModel ? (;) :
         (;
         ρ_flux_q_tot = vector_from_component(evaporation, z),
-        ρ_flux_q_liq = vector_from_component(FT(0), z),
-        ρ_flux_q_ice = vector_from_component(FT(0), z), # hacky
+        ρ_flux_q_liq = vector_from_component(0, z),
+        ρ_flux_q_ice = vector_from_component(0, z), # hacky
         )
 
     return (;
