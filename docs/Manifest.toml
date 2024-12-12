@@ -349,9 +349,9 @@ version = "0.2.11"
 
 [[deps.ClimaParams]]
 deps = ["TOML"]
-git-tree-sha1 = "489c5655993c62fb34293908a6b0877e32f183ee"
+git-tree-sha1 = "df21e7c6101f38cfd61f82a9e965332eb3136854"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "0.10.16"
+version = "0.10.17"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
