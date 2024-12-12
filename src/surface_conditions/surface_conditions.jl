@@ -92,6 +92,8 @@ function set_dummy_surface_conditions!(p)
             TD.PhasePartition(FT(0)),
         )
         @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
+        @. sfc_conditions.ρ_flux_q_liq = C3(FT(0))
+        @. sfc_conditions.ρ_flux_q_ice = C3(FT(0))
     end
     @. sfc_conditions.ρ_flux_h_tot = C3(FT(0))
 end
@@ -478,7 +480,11 @@ Gets the return type of `surface_conditions` without evaluating the function.
 function surface_conditions_type(atmos, ::Type{FT}) where {FT}
     energy_flux_names = (:ρ_flux_h_tot,)
     moisture_flux_names =
-        atmos.moisture_model isa DryModel ? () : (:ρ_flux_q_tot,)
+        atmos.moisture_model isa DryModel ? () : (
+            :ρ_flux_q_tot,
+            :ρ_flux_q_liq,
+            :ρ_flux_q_ice,
+            )
     names = (
         :ts,
         :ustar,
