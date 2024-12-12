@@ -307,11 +307,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         )
         ᶜρ_int_val = Fields.field_values(Fields.level(Y.c.ρ, 1))
         ᶜp_int_val = Fields.field_values(Fields.level(ᶜp, 1))
-        (; ρ_flux_h_tot, ρ_flux_q_tot, ustar, obukhov_length) =
+        (; ρ_flux_h_tot, ρ_flux_q_tot, ρ_flux_q_liq, ρ_flux_q_ice, ustar, obukhov_length) =
             p.precomputed.sfc_conditions
         buoyancy_flux_val = Fields.field_values(buoyancy_flux)
         ρ_flux_h_tot_val = Fields.field_values(ρ_flux_h_tot)
         ρ_flux_q_tot_val = Fields.field_values(ρ_flux_q_tot)
+        ρ_flux_q_liq_val = Fields.field_values(ρ_flux_q_liq)
+        ρ_flux_q_ice_val = Fields.field_values(ρ_flux_q_ice)
         ustar_val = Fields.field_values(ustar)
         obukhov_length_val = Fields.field_values(obukhov_length)
         sfc_local_geometry_val = Fields.field_values(
@@ -363,7 +365,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
             ᶜaʲ_int_val,
             ᶜq_liq_int_val,
             buoyancy_flux_val,
-            ρ_flux_q_tot_val,
+            ρ_flux_q_liq_val, # need to figure out what this should be
             ustar_val,
             obukhov_length_val,
             sfc_local_geometry_val,
