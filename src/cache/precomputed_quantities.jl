@@ -64,6 +64,8 @@ function precomputed_quantities(Y, atmos)
         (;
             ᶜq_liq⁰ = similar(Y.c, FT),
             ᶜq_ice⁰ = similar(Y.c, FT),
+            ᶜgradᵥ_q_liq⁰ = Fields.Field(C3{FT}, cspace),
+            ᶜgradᵥ_q_ice⁰ = Fields.Field(C3{FT}, cspace),
         ) : (;)
     precipitation_sgs_quantities =
         atmos.precip_model isa Microphysics0Moment ?
@@ -111,7 +113,7 @@ function precomputed_quantities(Y, atmos)
             ᶠnh_pressure₃ʲs = similar(Y.f, NTuple{n, C3{FT}}),
             ᶜgradᵥ_θ_virt⁰ = Fields.Field(C3{FT}, cspace),
             ᶜgradᵥ_q_tot⁰ = Fields.Field(C3{FT}, cspace),
-            ᶜgradᵥ_θ_liq_ice⁰ = Fields.Field(C3{FT}, cspace),
+            ᶜgradᵥ_θ_liq_ice⁰ = Fields.Field(C3{FT}, cspace), # does this need to be made different?
             precipitation_sgs_quantities...,
             moisture_sgs_quantities...,
         ) : (;)
@@ -528,8 +530,20 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     end
 
     if turbconv_model isa PrognosticEDMFX
-        set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
-        set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
+        set_prognostic_edmf_precomputed_quantities_draft_and_bc!(
+            Y,
+            p,
+            ᶠuₕ³,
+            t,
+            p.atmos.moisture_model,
+            )
+        set_prognostic_edmf_precomputed_quantities_environment!(
+            Y,
+            p,
+            ᶠuₕ³,
+            t,
+            p.atmos.moisture_model,
+            )
         set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_precipitation!(
             Y,
