@@ -17,6 +17,7 @@ edmfx_nh_pressure: true
 edmfx_filter: true
 prognostic_tke: true
 moist: "nonequil"
+precip_model: "1M"
 config: "column"
 output_dir: "/scratch/olivia/noneq_edmf_gcmdriven"
 z_max: 40e3
@@ -24,7 +25,7 @@ z_elem: 60
 z_stretch: true
 dz_bottom: 30
 perturb_initstate: false
-dt: "10secs"
+dt: "1secs" # might need to make shorter
 dt_rad: "30mins"
 t_end: "6hours"
 dt_save_state_to_disk: "6hours"
