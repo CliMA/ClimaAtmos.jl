@@ -44,7 +44,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke⁰
-    @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
+    # @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
+    @. ᶜts⁰ = TD.PhaseNonEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
     @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
     return nothing
 end
@@ -90,7 +91,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
 
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
-        @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
+        @. ᶜtsʲ = TD.PhaseNonEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
+	#@. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
         @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
 
         # EDMFX boundary condition:
@@ -155,12 +157,18 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         # Then overwrite the prognostic variables at first inetrior point.
         ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
         ᶜtsʲ_int_val = Fields.field_values(Fields.level(ᶜtsʲ, 1))
-        @. ᶜtsʲ_int_val = TD.PhaseEquil_phq(
-            thermo_params,
-            ᶜp_int_val,
-            ᶜmseʲ_int_val - ᶜΦ_int_val,
-            ᶜq_totʲ_int_val,
-        )
+        #@. ᶜtsʲ_int_val = TD.PhaseEquil_phq(
+        #    thermo_params,
+        #    ᶜp_int_val,
+        #    ᶜmseʲ_int_val - ᶜΦ_int_val,
+        #    ᶜq_totʲ_int_val,
+        #)
+        @. ᶜtsʲ_int_val = TD.PhaseNonEquil_phq(
+             thermo_params,
+             ᶜp_int_val,
+             ᶜmseʲ_int_val - ᶜΦ_int_val,
+             ᶜq_totʲ_int_val,
+         )
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
         sgsʲs_ρa_int_val =
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
