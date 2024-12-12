@@ -15,6 +15,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     p,
     ᶠuₕ³,
     t,
+    ::EquilMoistModel,
 )
     @assert !(p.atmos.moisture_model isa DryModel)
 
@@ -23,13 +24,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; ᶜΦ,) = p.core
     (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
 
-    if p.atmos.moisture_model isa EquilMoistModel
-       (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
-            p.precomputed
-
-    elseif p.atmos.moisture_model isa NonEquilMoistModel 
-       (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_pt⁰) =
-            p.precomputed # i THINK smthn like this?????
+    (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
+        p.precomputed
 
     @. ᶜρa⁰ = ρa⁰(Y.c)
     @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
@@ -40,31 +36,82 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         Y.c.ρ,
         turbconv_model,
     )
-    if p.atmos.moisture_model isa EquilMoistModel
-    	@. ᶜq_tot⁰ = divide_by_ρa(
-        	Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
-        	ᶜρa⁰,
-        	Y.c.ρq_tot,
-        	Y.c.ρ,
-       	 turbconv_model,
-    	)
-    elseif p.atmos.moisture_model isa NonEquilMoistModel
-	@. ᶜq_pt⁰ = divide_by_ρa(
-                Y.c.ρq_pt - ρaq_pt⁺(Y.c.sgsʲs),
+    @. ᶜq_tot⁰ = divide_by_ρa(
+     	        Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
                 ᶜρa⁰,
-                Y.c.ρq_pt,
+                Y.c.ρq_tot,
                 Y.c.ρ,
-         turbconv_model,
-        ) # another guess?
+                turbconv_model,
+            )
 
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke⁰
-    # @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
-    @. ᶜts⁰ = TD.PhaseNonEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
+
+    @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
     @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
     return nothing
 end
+
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
+    Y,
+    p,
+    ᶠuₕ³,
+    t,
+    ::NonEquilMoistModel,
+)
+    @assert !(p.atmos.moisture_model isa DryModel)
+
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; turbconv_model) = p.atmos
+    (; ᶜΦ,) = p.core
+    (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
+
+    (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰) =
+        p.precomputed
+
+    @. ᶜρa⁰ = ρa⁰(Y.c)
+    @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
+    @. ᶜmse⁰ = divide_by_ρa(
+        Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
+        ᶜρa⁰,
+        Y.c.ρ * (ᶜh_tot - ᶜK),
+        Y.c.ρ,
+        turbconv_model,
+    )
+    @. ᶜq_tot⁰ = divide_by_ρa(
+                Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+                ᶜρa⁰,
+                Y.c.ρq_tot,
+                Y.c.ρ,
+                turbconv_model,
+            )
+    @. ᶜq_liq⁰ = divide_by_ρa(
+                Y.c.ρq_liq - ρaq_liq⁺(Y.c.sgsʲs),
+                ᶜρa⁰,
+                Y.c.ρq_liq,
+                Y.c.ρ,
+                turbconv_model,
+            )
+    @. ᶜq_ice⁰ = divide_by_ρa(
+                Y.c.ρq_ice - ρaq_pt⁺(Y.c.sgsʲs),
+                ᶜρa⁰,
+                Y.c.ρq_ice,
+                Y.c.ρ,
+                turbconv_model,
+            )
+
+    set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
+    set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
+    # @. ᶜK⁰ += ᶜtke⁰
+
+    # create phase partition
+    ᶜq_pt⁰ = TD.PhasePartition(ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    @. ᶜts⁰ = TD.PhaseNonEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_pt⁰)
+    @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
+    return nothing
+end
+
 
 """
     set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
@@ -77,6 +124,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
     p,
     ᶠuₕ³,
     t,
+    ::EquilMoistModel,
 )
     (; moisture_model, turbconv_model) = p.atmos
     #EDMFX BCs only support total energy as state variable
@@ -107,8 +155,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
 
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
-        @. ᶜtsʲ = TD.PhaseNonEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
-	#@. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
+
+        @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
+
         @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
 
         # EDMFX boundary condition:
@@ -170,21 +219,18 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
             sfc_local_geometry_val,
         )
 
+
         # Then overwrite the prognostic variables at first inetrior point.
         ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
         ᶜtsʲ_int_val = Fields.field_values(Fields.level(ᶜtsʲ, 1))
-        #@. ᶜtsʲ_int_val = TD.PhaseEquil_phq(
-        #    thermo_params,
-        #    ᶜp_int_val,
-        #    ᶜmseʲ_int_val - ᶜΦ_int_val,
-        #    ᶜq_totʲ_int_val,
-        #)
-        @. ᶜtsʲ_int_val = TD.PhaseNonEquil_phq(
-             thermo_params,
-             ᶜp_int_val,
-             ᶜmseʲ_int_val - ᶜΦ_int_val,
-             ᶜq_totʲ_int_val,
-         )
+
+        @. ᶜtsʲ_int_val = TD.PhaseEquil_phq(
+            thermo_params,
+            ᶜp_int_val,
+            ᶜmseʲ_int_val - ᶜΦ_int_val,
+            ᶜq_totʲ_int_val,
+        )
+
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
         sgsʲs_ρa_int_val =
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
@@ -195,8 +241,65 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
             TD.air_density(thermo_params, ᶜtsʲ_int_val)
     end
     return nothing
-end
+enNVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
+    Y,
+    p,
+    ᶠuₕ³,
+    t,
+    ::NonEquilMoistModel,
+)
+    @assert !(p.atmos.moisture_model isa DryModel)
 
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; turbconv_model) = p.atmos
+    (; ᶜΦ,) = p.core
+    (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
+
+    (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰) =
+        p.precomputed
+
+    @. ᶜρa⁰ = ρa⁰(Y.c)
+    @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
+    @. ᶜmse⁰ = divide_by_ρa(
+        Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
+        ᶜρa⁰,
+        Y.c.ρ * (ᶜh_tot - ᶜK),
+        Y.c.ρ,
+        turbconv_model,
+    )
+    @. ᶜq_tot⁰ = divide_by_ρa(
+                Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+                ᶜρa⁰,
+                Y.c.ρq_tot,
+                Y.c.ρ,
+                turbconv_model,
+            )
+    @. ᶜq_liq⁰ = divide_by_ρa(
+                Y.c.ρq_liq - ρaq_liq⁺(Y.c.sgsʲs),
+                ᶜρa⁰,
+                Y.c.ρq_liq,
+                Y.c.ρ,
+                turbconv_model,
+            )
+    @. ᶜq_ice⁰ = divide_by_ρa(
+                Y.c.ρq_ice - ρaq_pt⁺(Y.c.sgsʲs),
+                ᶜρa⁰,
+                Y.c.ρq_ice,
+                Y.c.ρ,
+                turbconv_model,
+            )
+
+    set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
+    set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
+    # @. ᶜK⁰ += ᶜtke⁰
+
+    # create phase partition
+    ᶜq_pt⁰ = TD.PhasePartition(ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    @. ᶜts⁰ = TD.PhaseNonEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_pt⁰)
+
+    @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
+    return nothing
+end
 """
     set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
 
@@ -264,7 +367,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             ᶜentrʲs.:($$j),
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             dt,
-        )
+        ) 
 
         @. ᶜturb_entrʲs.:($$j) = turbulent_entrainment(
             turbconv_params,
