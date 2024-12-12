@@ -313,12 +313,13 @@ end
 
 function get_cloud_model(parsed_args)
     cloud_model = parsed_args["cloud_model"]
+    FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     return if cloud_model == "grid_scale"
         GridScaleCloud()
     elseif cloud_model == "quadrature"
-        QuadratureCloud()
+        QuadratureCloud(SGSQuadrature(FT))
     elseif cloud_model == "quadrature_sgs"
-        SGSQuadratureCloud()
+        SGSQuadratureCloud(SGSQuadrature(FT))
     else
         error("Invalid cloud_model $(cloud_model)")
     end
