@@ -122,8 +122,6 @@ function set_surface_conditions!(p, surface_conditions, surface_ts)
         surface_conditions,
         surface_ts,
         sfc_local_geometry,
-        atmos,
-        params,
     )
 end
 
@@ -332,8 +330,6 @@ function surface_state_to_conditions(
         SF.surface_conditions(surface_fluxes_params, inputs),
         ts,
         surface_local_geometry,
-        atmos,
-        thermo_params,
     )
 end
 
@@ -412,9 +408,7 @@ end
     atmos_surface_conditions(
         surface_conditions,
         ts,
-        surface_local_geometry,
-        atmos,
-        thermo_params,
+        surface_local_geometry
     )
 
 Adds local geometry information to the `SurfaceFluxes.SurfaceFluxConditions` struct
@@ -425,8 +419,6 @@ function atmos_surface_conditions(
     surface_conditions,
     ts,
     surface_local_geometry,
-    atmos,
-    thermo_params,
 )
     (; ustar, L_MO, buoy_flux, ρτxz, ρτyz, shf, lhf, evaporation) =
         surface_conditions
@@ -436,9 +428,8 @@ function atmos_surface_conditions(
 
     energy_flux = (; ρ_flux_h_tot = vector_from_component(shf + lhf, z))
 
-    moisture_flux =
-        atmos.moisture_model isa DryModel ? (;) :
-        (; ρ_flux_q_tot = vector_from_component(evaporation, z))
+    # NOTE: Technically, ρ_flux_q_tot is not needed when the model is Dry ...
+    moisture_flux = (; ρ_flux_q_tot = vector_from_component(evaporation, z))
 
     return (;
         ts,
@@ -477,8 +468,9 @@ Gets the return type of `surface_conditions` without evaluating the function.
 """
 function surface_conditions_type(atmos, ::Type{FT}) where {FT}
     energy_flux_names = (:ρ_flux_h_tot,)
-    moisture_flux_names =
-        atmos.moisture_model isa DryModel ? () : (:ρ_flux_q_tot,)
+    # NOTE: Technically ρ_flux_q_tot is not really needed for a dry model, but
+    # SF always has evaporation
+    moisture_flux_names = (:ρ_flux_q_tot,)
     names = (
         :ts,
         :ustar,
