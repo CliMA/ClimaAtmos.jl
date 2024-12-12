@@ -324,7 +324,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     end
 
     thermo_params = CAP.thermodynamics_params(params)
-    microphys_params = CAP.microphysics_precipitation_params(params)
+    microphys_0m_params = CAP.microphysics_0m_params(params)
+    microphys_1m_params = CAP.microphysics_1m_params(params)
     turbconv_params = CAP.turbconv_params(params)
 
     ᶠΦ = p.scratch.ᶠtemp_scalar
@@ -541,7 +542,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 @. S_q_totʲ_prev_level = q_tot_precipitation_sources(
                     precip_model,
                     thermo_params,
-                    microphys_params,
+                    microphys_0m_params,
                     dt,
                     q_totʲ_prev_level,
                     tsʲ_prev_level,
@@ -560,7 +561,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     tsʲ_prev_level,
                     Φ_prev_level,
                     dt,
-                    microphys_params,
+                    microphys_1m_params,
                     thermo_params,
                 )
             end
@@ -1032,7 +1033,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     precip_model::Microphysics0Moment,
 )
     thermo_params = CAP.thermodynamics_params(p.params)
-    microphys_params = CAP.microphysics_precipitation_params(p.params)
+    microphys_0m_params = CAP.microphysics_0m_params(p.params)
     (; dt) = p
     (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
@@ -1041,7 +1042,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     @. ᶜSqₜᵖ⁰ = q_tot_precipitation_sources(
         precip_model,
         thermo_params,
-        microphys_params,
+        microphys_0m_params,
         dt,
         q_tot,
         ᶜts,
@@ -1055,7 +1056,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     precip_model::Microphysics1Moment,
 )
     thermo_params = CAP.thermodynamics_params(p.params)
-    microphys_params = CAP.microphysics_precipitation_params(p.params)
+    microphys_1m_params = CAP.microphysics_1m_params(p.params)
 
     (; ᶜts, ᶜSqₜᵖ⁰, ᶜSeₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
@@ -1078,7 +1079,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         ᶜts,
         p.core.ᶜΦ,
         p.dt,
-        microphys_params,
+        microphys_1m_params,
         thermo_params,
     )
     return nothing
