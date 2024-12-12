@@ -24,3 +24,7 @@ prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "OC1", "
 prescribe_clouds_in_radiation: true
 radiation_reset_rng_seed: true
 toml: [toml/longrun_aquaplanet.toml]
+diagnostics:
+  - short_name: [massa, energya]
+    period: 1hours
+    writer: dict

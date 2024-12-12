@@ -222,7 +222,6 @@ Return:
 - `energy_conservation = energy_net / energy_total`
 - `mass_conservation = (mass(t_end) - mass(t_0)) / mass(t_0)`
 - `water_conservation = (water_atmos + water_surface) / water_total`
-
 """
 function check_conservation(sol)
     # energy
@@ -265,4 +264,40 @@ function check_conservation(sol)
         abs(water_atmos_change + water_surface_change) / water_total
 
     return (; energy_conservation, mass_conservation, water_conservation)
+end
+
+function write_diagnostics_as_txt(simulation::AtmosSimulation)
+    foreach(
+        w -> write_diagnostics_as_txt(w, simulation.output_dir),
+        filter(w -> w isa CAD.DictWriter, simulation.output_writers),
+    )
+    return nothing
+end
+
+
+"""
+    write_diagnostics_as_txt(writer, output_dir)
+
+Write diagnostics in DictWriter to text files. This function is
+added because currently we do not support writing scalars to netcdf.
+It only supports diagnostics that are 1-element vectors.
+Related issue: https://github.com/CliMA/ClimaDiagnostics.jl/issues/100
+"""
+function write_diagnostics_as_txt(
+    writer::ClimaDiagnostics.Writers.DictWriter,
+    output_dir,
+)
+    @info "Writing diagnostics to text files"
+    for diagnostic in keys(writer.dict)
+        first(values(writer[diagnostic])) isa Vector ||
+            "write_diagnostics_as_txt is not supported for diagnostics that are not vectors"
+        filename = joinpath(output_dir, diagnostic * ".txt")
+        times = collect(keys(writer[diagnostic]))
+        values_all = getindex.(collect(values(writer[diagnostic])), 1)
+        open(filename, "w") do io
+            for (ti, vi) in zip(times, values_all)
+                println(io, "$ti $vi")
+            end
+        end
+    end
 end

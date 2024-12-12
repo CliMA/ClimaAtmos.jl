@@ -33,6 +33,7 @@ function get_diagnostics(
         "average" => ((+), CAD.average_pre_output_hook!),
     )
 
+    dict_writer = CAD.DictWriter()
     hdf5_writer = CAD.HDF5Writer(output_dir)
 
     if !isnothing(parsed_args["netcdf_interpolation_num_points"])
@@ -61,11 +62,12 @@ function get_diagnostics(
         sync_schedule = CAD.EveryStepSchedule(),
         maybe_add_start_date...,
     )
-    writers = (hdf5_writer, netcdf_writer)
+    writers = (dict_writer, hdf5_writer, netcdf_writer)
 
-    # The default writer is HDF5
+    # The default writer is netcdf
     ALLOWED_WRITERS = Dict(
         "nothing" => netcdf_writer,
+        "dict" => dict_writer,
         "h5" => hdf5_writer,
         "hdf5" => hdf5_writer,
         "nc" => netcdf_writer,
