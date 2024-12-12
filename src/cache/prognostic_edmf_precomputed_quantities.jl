@@ -22,8 +22,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
     (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
-    (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
-        p.precomputed
+
+    if p.atmos.moisture_model isa EquilMoistModel
+       (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
+            p.precomputed
+
+    elseif p.atmos.moisture_model isa NonEquilMoistModel 
+       (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_pt⁰) =
+            p.precomputed # i THINK smthn like this?????
 
     @. ᶜρa⁰ = ρa⁰(Y.c)
     @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
@@ -34,13 +40,23 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         Y.c.ρ,
         turbconv_model,
     )
-    @. ᶜq_tot⁰ = divide_by_ρa(
-        Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
-        ᶜρa⁰,
-        Y.c.ρq_tot,
-        Y.c.ρ,
-        turbconv_model,
-    )
+    if p.atmos.moisture_model isa EquilMoistModel
+    	@. ᶜq_tot⁰ = divide_by_ρa(
+        	Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+        	ᶜρa⁰,
+        	Y.c.ρq_tot,
+        	Y.c.ρ,
+       	 turbconv_model,
+    	)
+    elseif p.atmos.moisture_model isa NonEquilMoistModel
+	@. ᶜq_pt⁰ = divide_by_ρa(
+                Y.c.ρq_pt - ρaq_pt⁺(Y.c.sgsʲs),
+                ᶜρa⁰,
+                Y.c.ρq_pt,
+                Y.c.ρ,
+         turbconv_model,
+        ) # another guess?
+
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke⁰
