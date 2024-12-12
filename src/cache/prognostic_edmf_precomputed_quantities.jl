@@ -106,8 +106,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     # @. ᶜK⁰ += ᶜtke⁰
 
     # create phase partition
-    @. ᶜq_pt⁰ = TD.PhasePartition(ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰)
-    @. ᶜts⁰ = TD.PhaseNonEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_pt⁰)
+    #@. q_pt⁰ = TD.PhasePartition(ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    @. ᶜts⁰ = TD.PhaseNonEquil_phq(
+        thermo_params,
+        ᶜp,
+        ᶜmse⁰ - ᶜΦ,
+        TD.PhasePartition.(ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰),
+        )
     @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
     return nothing
 end
@@ -219,8 +224,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
             sfc_local_geometry_val,
         )
 
-
-        # Then overwrite the prognostic variables at first inetrior point.
+        # Then overwrite the prognostic variables at first interior point.
         ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
         ᶜtsʲ_int_val = Fields.field_values(Fields.level(ᶜtsʲ, 1))
 
@@ -281,8 +285,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
 
-        @. ᶜq_ptʲ = TD.PhasePartition(ᶜq_totʲ, ᶜq_liqʲ, ᶜq_iceʲ)
-        @. ᶜtsʲ = TD.PhaseNonEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_ptʲ)
+        #@. q_ptʲ = TD.PhasePartition(ᶜq_totʲ, ᶜq_liqʲ, ᶜq_iceʲ)
+        @. ᶜtsʲ = TD.PhaseNonEquil_phq(
+            thermo_params,
+            ᶜp,
+            ᶜmseʲ - ᶜΦ,
+            TD.PhasePartition.(ᶜq_totʲ, ᶜq_liqʲ, ᶜq_iceʲ),
+            )
 
         @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
 
@@ -346,16 +355,43 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
             sfc_local_geometry_val,
         )
 
+        ᶜq_liq_int_val = Fields.field_values(Fields.level(ᶜspecific.q_liq, 1))
+        ᶜq_liqʲ_int_val = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
+        @. ᶜq_liqʲ_int_val = sgs_scalar_first_interior_bc(
+            ᶜz_int_val - z_sfc_val,
+            ᶜρ_int_val,
+            ᶜaʲ_int_val,
+            ᶜq_liq_int_val,
+            buoyancy_flux_val,
+            ρ_flux_q_tot_val,
+            ustar_val,
+            obukhov_length_val,
+            sfc_local_geometry_val,
+        )
+
+        ᶜq_ice_int_val = Fields.field_values(Fields.level(ᶜspecific.q_ice, 1))
+        ᶜq_iceʲ_int_val = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
+        @. ᶜq_iceʲ_int_val = sgs_scalar_first_interior_bc(
+            ᶜz_int_val - z_sfc_val,
+            ᶜρ_int_val,
+            ᶜaʲ_int_val,
+            ᶜq_ice_int_val,
+            buoyancy_flux_val,
+            ρ_flux_q_ice_val,
+            ustar_val,
+            obukhov_length_val,
+            sfc_local_geometry_val,
+        )
 
         # Then overwrite the prognostic variables at first inetrior point.
         ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
         ᶜtsʲ_int_val = Fields.field_values(Fields.level(ᶜtsʲ, 1))
 
-        @. ᶜtsʲ_int_val = TD.PhaseEquil_phq(
+        @. ᶜtsʲ_int_val = TD.PhaseNonEquil_phq(
             thermo_params,
             ᶜp_int_val,
             ᶜmseʲ_int_val - ᶜΦ_int_val,
-            ᶜq_totʲ_int_val,
+            TD.PhasePartition.(ᶜq_totʲ_int_val, ᶜq_liqʲ_int_val, ᶜq_iceʲ_int_val)
         )
 
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
