@@ -50,13 +50,11 @@ function get_atmos(config::AtmosConfig, params)
         filter = Val(parsed_args["edmfx_filter"]),
     )
 
-    model_config = get_model_config(parsed_args)
     vert_diff =
         get_vertical_diffusion_model(diffuse_momentum, parsed_args, params, FT)
 
     atmos = AtmosModel(;
         moisture_model,
-        model_config,
         ozone,
         radiation_mode,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
@@ -73,7 +71,6 @@ function get_atmos(config::AtmosConfig, params)
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
             parsed_args,
-            model_config,
             FT,
         ),
         orographic_gravity_wave = get_orographic_gravity_wave_model(
