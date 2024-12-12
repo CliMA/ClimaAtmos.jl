@@ -222,7 +222,7 @@ function compute_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         ᶜqₛ,
         ᶜts,
         ᶜΦ,
-        dt,
+        float(dt),
         cmp,
         thp,
     )
@@ -240,7 +240,7 @@ function compute_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         ᶜqₛ,
         ᶜts,
         ᶜΦ,
-        dt,
+        float(dt),
         cmp,
         thp,
     )
