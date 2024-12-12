@@ -22,7 +22,10 @@ cᵥᵢ(thp) = TD.Parameters.cv_i(thp)
 
 # helper function to limit the tendency
 function limit(q, dt, n::Int)
-    return q / dt / n
+    # Convert to float for ITime
+    # Alternatively, this can be placed at
+    # compute_precipitation_sources! and compute_precipitation_sinks!
+    return q / float(dt) / n
 end
 
 """
