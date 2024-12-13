@@ -1,6 +1,7 @@
-initial_condition: "DryBaroclinicWave"
+initial_condition: "MoistBaroclinicWave"
 dt: "400secs"
 t_end: "5days"
+moist: "equil"
 dt_save_state_to_disk: "5days"
 check_conservation: true
 diagnostics:
