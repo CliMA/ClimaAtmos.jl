@@ -55,6 +55,7 @@ end
 # TODO: Move this somewhere else
 update_o3!(_, _, _) = nothing
 function update_o3!(p, t, ::PrescribedOzone)
+    # Can remove float from this, once this is resolved in tracer_cache.jl
     evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, float(t))
     return nothing
 end
