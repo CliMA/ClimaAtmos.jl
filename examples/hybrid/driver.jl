@@ -116,6 +116,9 @@ end
 @info "Callback verification, n_expected_calls: $(CA.n_expected_calls(integrator))"
 @info "Callback verification, n_measured_calls: $(CA.n_measured_calls(integrator))"
 
+# Write diagnostics that are in DictWriter to text files
+CA.write_diagnostics_as_txt(simulation)
+
 # Conservation checks
 if config.parsed_args["check_conservation"]
     FT = Spaces.undertype(axes(sol.u[end].c.ρ))
@@ -131,9 +134,6 @@ if config.parsed_args["check_conservation"]
     @test mass_conservation ≈ 0 atol = 100 * eps(FT)
     @test water_conservation ≈ 0 atol = 100 * eps(FT)
 end
-
-# Write diagnostics that are in DictWriter to text files
-CA.write_diagnostics_as_txt(simulation)
 
 # Visualize the solution
 if ClimaComms.iamroot(config.comms_ctx)
