@@ -230,11 +230,9 @@ function ImplicitEquationJacobian(
             atmos.turbconv_model isa PrognosticEDMFX &&
             atmos.moisture_model isa NonEquilMoistModel
         )
-            sgs_const_names =
-                (@name(c.sgsʲs.:(1).q_liq), @name(c.sgsʲs.:(1).q_ice))
             MatrixFields.unrolled_map(
                 name -> (name, name) => FT(-1) * I,
-                sgs_const_names,
+                (@name(c.sgsʲs.:(1).q_liq), @name(c.sgsʲs.:(1).q_ice)),
             )
         else
             ()
