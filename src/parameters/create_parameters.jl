@@ -8,15 +8,30 @@ import CloudMicrophysics as CM
 import StaticArrays as SA
 
 function ClimaAtmosParameters(config::AtmosConfig)
-    (;toml_dict, parsed_args ) = config
+    (; toml_dict, parsed_args) = config
     FT = CP.float_type(toml_dict)
-    return ClimaAtmosParameters(toml_dict, FT(CA.time_to_seconds(parsed_args["dt"])))
+    return ClimaAtmosParameters(
+        toml_dict,
+        FT(CA.time_to_seconds(parsed_args["dt"])),
+    )
 end
 
-ClimaAtmosParameters(::Type{FT}, dt = nothing) where {FT} = 
+"""
+    ClimaAtmosParameters(FT, dt)
+    ClimaAtmosParameters(toml_dict, dt)
+    ClimaAtmosParameters(config::AtmosConfig)
+
+Construct the parameter set for any ClimaAtmos configuration.
+
+If dt is passed in, it will be used to override the `precipitation_timescale` parameter.
+"""
+ClimaAtmosParameters(::Type{FT}, dt = nothing) where {FT} =
     ClimaAtmosParameters(CP.create_toml_dict(FT), dt)
 
-function ClimaAtmosParameters(toml_dict::TD, dt = nothing) where {TD<:CP.AbstractTOMLDict}
+function ClimaAtmosParameters(
+    toml_dict::TD,
+    dt = nothing,
+) where {TD <: CP.AbstractTOMLDict}
     if !isnothing(dt)
         toml_dict["precipitation_timescale"]["value"] = dt
     end
@@ -33,9 +48,6 @@ function ClimaAtmosParameters(toml_dict::TD, dt = nothing) where {TD<:CP.Abstrac
 
     insolation_params = InsolationParameters(toml_dict)
     IP = typeof(insolation_params)
-
-    water_params = CM.Parameters.WaterProperties(toml_dict)
-    WP = typeof(water_params)
 
     surface_fluxes_params =
         SF.Parameters.SurfaceFluxesParameters(toml_dict, UF.BusingerParams)
@@ -57,7 +69,19 @@ function ClimaAtmosParameters(toml_dict::TD, dt = nothing) where {TD<:CP.Abstrac
 
     parameters =
         CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
-    return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPC, MP0M, MP1M, WP, SFP, TCP, STP, VDP}(;
+    return CAP.ClimaAtmosParameters{
+        FT,
+        TP,
+        RP,
+        IP,
+        MPC,
+        MP0M,
+        MP1M,
+        SFP,
+        TCP,
+        STP,
+        VDP,
+    }(;
         parameters...,
         thermodynamics_params,
         rrtmgp_params,
@@ -65,7 +89,6 @@ function ClimaAtmosParameters(toml_dict::TD, dt = nothing) where {TD<:CP.Abstrac
         microphysics_cloud_params,
         microphysics_0m_params,
         microphysics_1m_params,
-        water_params,
         surface_fluxes_params,
         turbconv_params,
         surface_temp_params,

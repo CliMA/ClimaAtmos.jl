@@ -66,7 +66,6 @@ Base.@kwdef struct ClimaAtmosParameters{
     MPC,
     MP0M,
     MP1M,
-    WP,
     SFP,
     TCP,
     STP,
@@ -77,8 +76,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     insolation_params::IP
     microphysics_cloud_params::MPC
     microphysics_0m_params::MP0M
-    microphysics_1m_params:: MP1M
-    water_params::WP
+    microphysics_1m_params::MP1M
     surface_fluxes_params::SFP
     turbconv_params::TCP
     surface_temp_params::STP
@@ -129,10 +127,6 @@ end
 for var in [:molmass_ratio, :R_d, :R_v, :e_int_v0, :cp_d, :cv_v, :cv_l, :cv_d]
     @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
 end
-
-# Forwarding CloudMicrophysics parameters
-ρ_cloud_liq(ps::ACAP) = ps.water_params.ρw
-ρ_cloud_ice(ps::ACAP) = ps.water_params.ρi
 
 # Forwarding SurfaceFluxes parameters
 von_karman_const(ps::ACAP) =
