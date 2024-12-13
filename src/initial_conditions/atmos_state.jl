@@ -154,11 +154,15 @@ function turbconv_moisture_variables(ls, ::EquilMoistModel)
         q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
     )
 end
-turbconv_moisture_variables(ls, ::NonEquilMoistModel) = (;
-    q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state),
-    q_liq = TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state),
-    q_ice = TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state),
-)
+function turbconv_moisture_variables(ls, ::NonEquilMoistModel)
+    #@info(ls.thermo_state)
+    #@assert !(ls.thermo_state isa TD.AbstractPhaseEquil)
+    return (;
+        q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state),
+        q_liq = TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state),
+        q_ice = TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state),
+    )
+end
 
 turbconv_face_variables(ls, ::Nothing) = (;)
 turbconv_face_variables(ls, turbconv_model::PrognosticEDMFX) = (;
