@@ -35,7 +35,7 @@ scalar_hyperdiffusion_coefficient:
   value: 1.5
 # Topography
 topography:
-  help: "Define the surface elevation profile [`NoWarp`,`Earth`,`DCMIP200`,`Agnesi`]"
+  help: "Define the surface elevation profile [`NoWarp` (default),`Earth`,`DCMIP200`,`Agnesi`, `Schar`, `Hughes2023`]"
   value: "NoWarp"
 mesh_warp_type:
   help: "Sets the interior mesh warp method [`Linear`, `SLEVE`]"

@@ -420,6 +420,13 @@ steps:
           --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth.yml
           --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/output_active/*"
+      
+      - label: ":computer: Baroclinic wave (ρe) equilmoist (Hughes2023 double mountain config)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_hughes2023.yml
+          --job_id sphere_baroclinic_wave_rhoe_hughes2023
+        artifact_paths: "sphere_baroclinic_wave_rhoe_hughes2023/output_active/*"
 
   - group: "Restarting"
     steps:
