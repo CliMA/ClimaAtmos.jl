@@ -225,6 +225,21 @@ function ImplicitEquationJacobian(
         )
     end
 
+    sgs_const_blocks =
+        if (
+            atmos.turbconv_model isa PrognosticEDMFX &&
+            atmos.moisture_model isa NonEquilMoistModel
+        )
+            sgs_const_names =
+                (@name(c.sgsʲs.:(1).q_liq), @name(c.sgsʲs.:(1).q_ice))
+            MatrixFields.unrolled_map(
+                name -> (name, name) => FT(-1) * I,
+                sgs_const_names,
+            )
+        else
+            ()
+        end
+
     sgs_advection_blocks = if atmos.turbconv_model isa PrognosticEDMFX
         @assert n_prognostic_mass_flux_subdomains(atmos.turbconv_model) == 1
         sgs_scalar_names = (
@@ -272,12 +287,22 @@ function ImplicitEquationJacobian(
 
     matrix = MatrixFields.FieldMatrix(
         identity_blocks...,
+        sgs_const_blocks...,
         sgs_advection_blocks...,
         advection_blocks...,
         diffusion_blocks...,
     )
 
-    sgs_names_if_available = if atmos.turbconv_model isa PrognosticEDMFX
+    sgs_const_names_if_available =
+        if (
+            atmos.turbconv_model isa PrognosticEDMFX &&
+            atmos.moisture_model isa NonEquilMoistModel
+        )
+            (@name(c.sgsʲs.:(1).q_liq), @name(c.sgsʲs.:(1).q_ice))
+        else
+            ()
+        end
+    sgs_advection_names_if_available = if atmos.turbconv_model isa PrognosticEDMFX
         (
             @name(c.sgsʲs.:(1).q_tot),
             @name(c.sgsʲs.:(1).mse),
@@ -292,7 +317,8 @@ function ImplicitEquationJacobian(
     names₁_group₃ = (@name(c.ρe_tot),)
     names₁ = (
         names₁_group₁...,
-        sgs_names_if_available...,
+        sgs_const_names_if_available...,
+        sgs_advection_names_if_available...,
         names₁_group₂...,
         names₁_group₃...,
     )
