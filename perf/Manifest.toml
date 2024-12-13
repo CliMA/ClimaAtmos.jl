@@ -350,7 +350,7 @@ version = "0.5.7"
 deps = ["ArgParse", "ArtifactWrappers", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Dates", "DiffEqBase", "FastGaussQuadrature", "Insolation", "Interpolations", "LazyArtifacts", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "RRTMGP", "Random", "SciMLBase", "StaticArrays", "Statistics", "SurfaceFluxes", "Thermodynamics", "UnrolledUtilities", "YAML"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
-version = "0.27.9"
+version = "0.28.0"
 
 [[deps.ClimaComms]]
 git-tree-sha1 = "ec303a4a66dc0a0ebe15a639a7e685afeaa0daef"
@@ -1760,9 +1760,9 @@ uuid = "510215fc-4207-5dde-b226-833fc4488ee2"
 version = "0.5.5"
 
 [[deps.OffsetArrays]]
-git-tree-sha1 = "1a27764e945a152f7ca7efa04de513d473e9542e"
+git-tree-sha1 = "39d000d9c33706b8364817d8894fae1548f40295"
 uuid = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
-version = "1.14.1"
+version = "1.14.2"
 weakdeps = ["Adapt"]
 
     [deps.OffsetArrays.extensions]
