@@ -223,7 +223,7 @@ compute_husup!(
     moisture_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
-    "Can only compute updraft specific humidity and with a moist model and with EDMFX",
+    "Can only compute updraft specific humidity with a moist model and with EDMFX",
 )
 
 function compute_husup!(

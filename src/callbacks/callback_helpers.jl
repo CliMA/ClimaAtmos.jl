@@ -1,4 +1,5 @@
 import SciMLBase
+
 #####
 ##### Callback helpers
 #####
@@ -109,3 +110,44 @@ end
 
 n_steps_per_cycle_per_cb_diagnostic(cbs) =
     [callback_frequency(cb).n for cb in cbs if callback_frequency(cb).n > 0]
+
+
+# TODO: Move to ClimaUtilities once we move the schedules there
+import ClimaDiagnostics.Schedules: AbstractSchedule
+
+"""
+    CappedGeometricSeriesSchedule(max_steps)
+
+True every 2^N iterations or every `max_steps`.
+
+This is useful to have an exponential ramp up of something that saturates to a constant
+frequency. (For instance, reporting something more frequently at the beginning of the
+simulation, and less frequency later)
+"""
+struct CappedGeometricSeriesSchedule <: AbstractSchedule
+    """GeometricSeriesSchedule(integrator) is true every 2^N iterations or every max_steps"""
+    max_steps::Int
+    """Last step that this returned true"""
+    step_last::Base.RefValue{Int}
+
+    function CappedGeometricSeriesSchedule(max_steps; step_last = Ref(0))
+        return new(max_steps, step_last)
+    end
+end
+
+"""
+    CappedGeometricSeriesSchedule(integrator)
+
+Returns true if `integrator.step >= last_step + max_steps`, or when `integrator.step` is a
+power of 2. `last_step` is the last step this function was true and `max_step` is maximum
+allowed interval as defined in the schedule.
+"""
+function (schedule::CappedGeometricSeriesSchedule)(integrator)::Bool
+    if isinteger(log2(integrator.step)) ||
+       integrator.step > schedule.step_last[] + schedule.max_steps
+        schedule.step_last[] = integrator.step
+        return true
+    else
+        return false
+    end
+end

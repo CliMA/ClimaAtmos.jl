@@ -148,12 +148,6 @@ hyperdiff:
 smagorinsky_lilly:
   help: "Smagorinsky-Lilly diffusive closure [`false` (default), `true`]"
   value: false
-c_smag: 
-  help: "Smagorinsky coefficient"
-  value: 0.2
-prandtl_turbulent_neutral:
-  help: "Turbulent Prandtl number for neutral stratification"
-  value: 0.333
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: true
@@ -265,7 +259,7 @@ implicit_diffusion:
 approximate_linear_solve_iters:
   help: "Number of iterations for the approximate linear solve (used when `implicit_diffusion` is true)"
   value: 1
-override_τ_precip:
+override_precip_timescale:
   help: "If true, sets τ_precip to dt. Otherwise, τ_precip is set to the value in the toml dictionary"
   value: true
 output_default_diagnostics:

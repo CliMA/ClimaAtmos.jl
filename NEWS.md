@@ -3,7 +3,13 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
+### Features
 
+### Write diagnostics to text files
+
+Added functionality to write diagnostics in DictWriter to text files.
+This is useful for outputing scalar diagnostics, such as total mass of
+the atmosphere. PR [3476](https://github.com/CliMA/ClimaAtmos.jl/pull/3476)
 
 v0.27.9
 -------

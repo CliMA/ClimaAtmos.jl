@@ -1,4 +1,14 @@
-function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
+function get_diagnostics(
+    parsed_args,
+    atmos_model,
+    Y,
+    p,
+    sim_info,
+    t_start,
+    output_dir,
+)
+
+    (; dt, start_date) = sim_info
 
     FT = Spaces.undertype(axes(Y.c))
 
@@ -23,7 +33,8 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
         "average" => ((+), CAD.average_pre_output_hook!),
     )
 
-    hdf5_writer = CAD.HDF5Writer(p.output_dir)
+    dict_writer = CAD.DictWriter()
+    hdf5_writer = CAD.HDF5Writer(output_dir)
 
     if !isnothing(parsed_args["netcdf_interpolation_num_points"])
         num_netcdf_points =
@@ -38,18 +49,25 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
         parsed_args["netcdf_output_at_levels"] ? CAD.LevelsMethod() :
         CAD.FakePressureLevelsMethod()
 
+    # The start_date keyword was added in v0.2.9. For prior versions, the diagnostics will
+    # not contain the date
+    maybe_add_start_date =
+        pkgversion(CAD.ClimaDiagnostics) >= v"0.2.9" ? (; start_date) : (;)
+
     netcdf_writer = CAD.NetCDFWriter(
         axes(Y.c),
-        p.output_dir,
+        output_dir,
         num_points = num_netcdf_points;
         z_sampling_method,
         sync_schedule = CAD.EveryStepSchedule(),
+        maybe_add_start_date...,
     )
-    writers = (hdf5_writer, netcdf_writer)
+    writers = (dict_writer, hdf5_writer, netcdf_writer)
 
-    # The default writer is HDF5
+    # The default writer is netcdf
     ALLOWED_WRITERS = Dict(
         "nothing" => netcdf_writer,
+        "dict" => dict_writer,
         "h5" => hdf5_writer,
         "hdf5" => hdf5_writer,
         "nc" => netcdf_writer,
@@ -110,11 +128,11 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
 
             output_schedule = CAD.EveryCalendarDtSchedule(
                 period_dates;
-                reference_date = p.start_date,
+                reference_date = start_date,
             )
             compute_schedule = CAD.EveryCalendarDtSchedule(
                 period_dates;
-                reference_date = p.start_date,
+                reference_date = start_date,
             )
 
             if isnothing(output_name)
@@ -152,7 +170,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, dt, t_start)
             CAD.default_diagnostics(
                 atmos_model,
                 FT(time_to_seconds(parsed_args["t_end"]) - t_start),
-                p.start_date;
+                start_date;
                 output_writer = netcdf_writer,
             )...,
             diagnostics...,
@@ -214,18 +232,21 @@ end
 function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     (; parsed_args, comms_ctx) = config
     FT = eltype(params)
-    (; dt, output_dir) = sim_info
+    (; dt, output_dir, start_date) = sim_info
 
     callbacks = ()
     if parsed_args["log_progress"]
-        @info "Progress logging enabled."
-        callbacks = (
-            callbacks...,
-            call_every_n_steps(
-                (integrator) -> print_walltime_estimate(integrator);
-                skip_first = true,
-            ),
-        )
+        @info "Progress logging enabled"
+        walltime_info = WallTimeInfo()
+        tot_steps = ceil(Int, (sim_info.t_end - t_start) / dt)
+        five_percent_steps = ceil(Int, 0.05 * tot_steps)
+        cond = let schedule = CappedGeometricSeriesSchedule(five_percent_steps)
+            (u, t, integrator) -> schedule(integrator)
+        end
+        affect! = let wt = walltime_info
+            (integrator) -> report_walltime(wt, integrator)
+        end
+        callbacks = (callbacks..., SciMLBase.DiscreteCallback(cond, affect!))
     end
     check_nan_every = parsed_args["check_nan_every"]
     if check_nan_every > 0
@@ -243,8 +264,10 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         call_every_n_steps(
             terminate!;
             skip_first = true,
-            condition = (u, t, integrator) ->
-                maybe_graceful_exit(integrator),
+            condition = let output_dir = output_dir
+                (u, t, integrator) ->
+                    maybe_graceful_exit(output_dir, integrator)
+            end,
         ),
     )
 
@@ -256,8 +279,8 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     if dt_save_state_to_disk_dates != Inf
         schedule = CAD.EveryCalendarDtSchedule(
             dt_save_state_to_disk_dates;
-            reference_date = p.start_date,
-            date_last = p.start_date + Dates.Second(t_start),
+            reference_date = start_date,
+            date_last = start_date + Dates.Second(t_start),
         )
         cond = let schedule = schedule
             (u, t, integrator) -> schedule(integrator)
