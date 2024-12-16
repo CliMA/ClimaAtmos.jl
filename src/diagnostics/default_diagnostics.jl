@@ -141,6 +141,7 @@ function core_default_diagnostics(output_writer, duration, start_date)
         "thetaa",
         "ha",
         "pfull",
+        "zg",
         "rhoa",
         "ua",
         "va",

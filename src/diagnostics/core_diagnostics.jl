@@ -211,6 +211,23 @@ add_diagnostic_variable!(
 )
 
 ###
+# Geopotential height (3d)
+###
+add_diagnostic_variable!(
+    short_name = "zg",
+    long_name = "Geopotential Height",
+    standard_name = "geopotential_height",
+    units = "m",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return cache.core.ᶜΦ ./ CAP.grav(cache.params)
+        else
+            out .= cache.core.ᶜΦ ./ CAP.grav(cache.params)
+        end
+    end,
+)
+
+###
 # Cloud fraction (3d)
 ###
 add_diagnostic_variable!(
