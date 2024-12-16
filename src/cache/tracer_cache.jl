@@ -12,7 +12,7 @@ function ozone_cache(::PrescribedOzone, Y, start_date)
         AA.ozone_concentration_file_path(; context = ClimaComms.context(Y.c)),
         "vmro3",
         axes(o3);
-        reference_date = start_date, # TODO: Remove this and make a new constructor for this
+        # reference_date = start_date, # TODO: Remove this and make a new constructor for this
         regridder_type = :InterpolationsRegridder,
         regridder_kwargs = (; extrapolation_bc),
         method = LinearPeriodFillingInterpolation(Year(1)),
@@ -42,7 +42,7 @@ function tracer_cache(Y, atmos, prescribed_aerosol_names, start_date)
                 ),
                 name,
                 target_space;
-                reference_date = start_date,
+                # reference_date = start_date,
                 regridder_type = :InterpolationsRegridder,
                 regridder_kwargs = (; extrapolation_bc),
                 method = LinearPeriodFillingInterpolation(Year(1)),
