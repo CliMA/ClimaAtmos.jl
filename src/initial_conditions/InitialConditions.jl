@@ -1,6 +1,5 @@
 module InitialConditions
 
-import ..AtmosArtifacts as AA
 import ..AtmosModel
 import ..DryModel
 import ..EquilMoistModel

@@ -161,15 +161,16 @@ function (initial_condition::DecayingProfile)(params)
 end
 
 """
-    DYAMONDSummer()
+    MoistFromFile(file_path)
 
-This function assigns a default initial condition, populating the `LocalState`
-with `NaN`, prior to applying the `overwrite_initial_conditions` method, which
-interpolates values from NetCDF data onto the `ExtrudedFiniteDifferenceSpace`.
+This function assigns an empty initial condition for , populating the `LocalState` with
+`NaN`, and later overwriting it with the content of the given file
 """
-struct DYAMONDSummer <: InitialCondition end
+struct MoistFromFile <: InitialCondition
+    file_path::String
+end
 
-function (initial_condition::DYAMONDSummer)(params)
+function (initial_condition::MoistFromFile)(params)
     function local_state(local_geometry)
         FT = eltype(params)
         grav = CAP.grav(params)
@@ -379,28 +380,43 @@ end
 
 """
     overwrite_initial_conditions!(initial_condition, args...)
+
 Do-nothing fallback method for the operation overwriting initial conditions 
 (this functionality required in instances where we interpolate initial conditions from NetCDF files). 
 Future work may revisit this design choice. 
 """
-overwrite_initial_conditions!(initial_condition::InitialCondition, args...) =
-    (return nothing)
+function overwrite_initial_conditions!(
+    initial_condition::InitialCondition,
+    args...,
+)
+    return nothing
+end
 
 """
-    overwrite_initial_conditions!(initial_condition, Y, thermo_params, config)
-Given a prognostic state `Y`, an `initial condition` (specifically, where
-initial values are assigned from interpolations of existing datasets), a `thermo_state`, this function overwrites the default initial condition
-and populates prognostic variables with interpolated values using the `SpaceVaryingInputs`
-tool. To mitigate issues related to unbalanced states following the interpolation operation, 
-we recompute vertical pressure levels assuming hydrostatic balance, given the surface pressure
+    overwrite_initial_conditions!(initial_condition::MoistFromFile, Y, thermo_params, config)
+
+Given a prognostic state `Y`, an `initial condition` (specifically, where initial values are
+assigned from interpolations of existing datasets), a `thermo_state`, this function
+overwrites the default initial condition and populates prognostic variables with
+interpolated values using the `SpaceVaryingInputs` tool. To mitigate issues related to
+unbalanced states following the interpolation operation, we recompute vertical pressure
+levels assuming hydrostatic balance, given the surface pressure.
+
+We expect the file to contain the following variables:
+- `p`, for pressure,
+- `t`, for temperature,
+- `q`, for humidity,
+- `u, v, w`, for velocity,
+- `cswc, crwc` for snow and rain water content (for 1 moment microphysics).
 """
 function overwrite_initial_conditions!(
-    initial_condition::DYAMONDSummer,
+    initial_conditions::MoistFromFile,
     Y,
     thermo_params,
 )
-    # Get file from AtmosArtifacts
-    file_path = AA.dyamond_summer_artifact_path(; context = config.comms_ctx)
+    file_path = initial_conditions.file_path
+    isfile(file_path) || error("$(file_path) is not a file")
+    @info "Overwriting initial conditions with data from file $(file_path)"
     center_space = Fields.axes(Y.c)
     face_space = Fields.axes(Y.f)
     # Using surface pressure, air temperature and specific humidity 

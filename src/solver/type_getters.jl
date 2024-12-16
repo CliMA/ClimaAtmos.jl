@@ -294,9 +294,10 @@ function get_initial_condition(parsed_args)
         "RisingThermalBubbleProfile",
         "ScharProfile",
         "PrecipitatingColumn",
-        "DYAMONDSummer",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
+    elseif isfile(parsed_args["initial_condition"])
+        return ICs.MoistFromFile(parsed_args["initial_condition"])
     elseif parsed_args["initial_condition"] == "GCM"
         @assert parsed_args["prognostic_tke"] == true
         return ICs.GCMDriven(
@@ -663,21 +664,20 @@ function get_simulation(config::AtmosConfig)
             t_start = Spaces.undertype(axes(Y.c))(0)
         end
         @info "Allocating Y: $s"
+
+        # In instances where we wish to interpolate existing datasets, e.g.
+        # NetCDF files containing spatially varying thermodynamic properties,
+        # this call to `overwrite_initial_conditions` overwrites the variables
+        # in `Y` (specific to `initial_condition`) with those computed using the
+        # `SpaceVaryingInputs` tool.
+        CA.InitialConditions.overwrite_initial_conditions!(
+            initial_condition,
+            Y,
+            params.thermodynamics_params,
+        )
     end
 
     tracers = get_tracers(config.parsed_args)
-
-    # In instances where we wish to interpolate existing datasets,
-    # e.g. NetCDF files containing spatially varying thermodynamic properties, 
-    # this call to `overwrite_initial_conditions`
-    # accesses the appropriate artifact for a given `initial_condition`
-    # and then updates some predetermined state `Y` (specific to `initial_condition`) 
-    # with those computed using the `SpaceVaryingInputs` tool.
-    CA.InitialConditions.overwrite_initial_conditions!(
-        initial_condition,
-        Y,
-        params.thermodynamics_params,
-    )
 
     s = @timed_str begin
         p = build_cache(
