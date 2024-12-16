@@ -287,7 +287,7 @@ function get_cloud_cache(::PrescribedCloudInRadiation, Y, start_date)
             ),
             name,
             target_space;
-            reference_date = start_date,
+            # reference_date = start_date,
             regridder_type = :InterpolationsRegridder,
             regridder_kwargs = (; extrapolation_bc),
             method = LinearInterpolation(PeriodicCalendar(Year(1), Date(2010))),

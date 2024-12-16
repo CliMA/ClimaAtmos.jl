@@ -56,7 +56,7 @@ end
 update_o3!(_, _, _) = nothing
 function update_o3!(p, t, ::PrescribedOzone)
     # Can remove float from this, once this is resolved in tracer_cache.jl
-    evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, float(t))
+    evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, t)
     return nothing
 end
 
@@ -75,13 +75,13 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     if :prescribed_aerosols_field in propertynames(p.tracers)
         for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
             field = getproperty(p.tracers.prescribed_aerosols_field, key)
-            evaluate!(field, tv, float(t))
+            evaluate!(field, tv, t)
         end
     end
     if :prescribed_clouds_field in propertynames(p.radiation)
         for (key, tv) in pairs(p.radiation.prescribed_cloud_timevaryinginputs)
             field = getproperty(p.radiation.prescribed_clouds_field, key)
-            evaluate!(field, tv, float(t))
+            evaluate!(field, tv, t)
         end
     end
 
