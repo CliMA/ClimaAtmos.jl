@@ -1,4 +1,5 @@
 import Dates: Year
+import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs:
     TimeVaryingInput, LinearPeriodFillingInterpolation
 import Interpolations as Intp
@@ -14,7 +15,10 @@ function ozone_cache(::PrescribedOzone, Y, start_date)
         reference_date = start_date,
         regridder_type = :InterpolationsRegridder,
         regridder_kwargs = (; extrapolation_bc),
-        method = LinearPeriodFillingInterpolation(Year(1)),
+        method = LinearPeriodFillingInterpolation(
+            Year(1),
+            TimeVaryingInputs.Flat(),
+        ),
     )
     return (; o3, prescribed_o3_timevaryinginput)
 end
