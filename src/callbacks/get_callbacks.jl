@@ -7,7 +7,6 @@ function get_diagnostics(
     t_start,
     output_dir,
 )
-
     (; dt, start_date) = sim_info
 
     FT = Spaces.undertype(axes(Y.c))
@@ -123,15 +122,24 @@ function get_diagnostics(
                 period_dates =
                     CA.promote_period.(Dates.Second(period_seconds))
             end
-
-            output_schedule = CAD.EveryCalendarDtSchedule(
-                period_dates;
-                reference_date = start_date,
+            # Main.@infiltrate
+            output_schedule = CAD._EveryITimeSchedule(
+                ITime(0, start_date = start_date),
+                ITime(1, period = period_dates),
             )
-            compute_schedule = CAD.EveryCalendarDtSchedule(
-                period_dates;
-                reference_date = start_date,
+            compute_schedule = CAD._EveryITimeSchedule(
+                ITime(0, start_date = start_date),
+                ITime(1, period = period_dates),
             )
+            # TODO: There should be some variant of this that works with ITime
+            # output_schedule = CAD.EveryCalendarDtSchedule(
+            #     period_dates;
+            #     reference_date = start_date,
+            # )
+            # compute_schedule = CAD.EveryCalendarDtSchedule(
+            #     period_dates;
+            #     reference_date = start_date,
+            # )
 
             if isnothing(output_name)
                 output_short_name = CAD.descriptive_short_name(
@@ -167,7 +175,7 @@ function get_diagnostics(
         diagnostics = [
             CAD.default_diagnostics(
                 atmos_model,
-                float(ITime(time_to_seconds(parsed_args["t_end"])) - t_start),
+                ITime(time_to_seconds(parsed_args["t_end"])) - t_start,
                 start_date;
                 output_writer = netcdf_writer,
             )...,

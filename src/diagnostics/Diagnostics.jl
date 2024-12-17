@@ -55,7 +55,7 @@ import ClimaDiagnostics:
 import ClimaDiagnostics.DiagnosticVariables: descriptive_short_name
 
 import ClimaDiagnostics.Schedules:
-    EveryStepSchedule, EveryDtSchedule, EveryCalendarDtSchedule
+    EveryStepSchedule, EveryDtSchedule, EveryCalendarDtSchedule, _EveryITimeSchedule
 
 import ClimaDiagnostics.Writers:
     HDF5Writer,
