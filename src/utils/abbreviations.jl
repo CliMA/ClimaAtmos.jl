@@ -93,6 +93,7 @@ const ᶠtvd_minmod = Operators.TVDSlopeLimitedFlux(
 const SLMethod = Operators.LinVanLeerC2F(
     bottom = Operators.FirstOrderOneSided(),
     top = Operators.FirstOrderOneSided(),
+    method = Operators.Mono5(),
 )
 
 const ᶜinterp_matrix = MatrixFields.operator_matrix(ᶜinterp)
