@@ -2,6 +2,7 @@
 ##### Implicit tendencies
 #####
 
+import ClimaCore
 import ClimaCore: Fields, Geometry
 
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
@@ -73,6 +74,20 @@ vertical_transport!(
     ::Val{:first_order},
     ᶜdivᵥ,
 ) = @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)))
+@static if pkgversion(ClimaCore) ≥ v"0.14.22"
+    vertical_transport!(
+        coeff,
+        ᶜρχₜ,
+        ᶜJ,
+        ᶜρ,
+        ᶠu³,
+        ᶜχ,
+        dt,
+        ::Val{:vanleer_limiter},
+        ᶜdivᵥ,
+    ) = @. ᶜρχₜ +=
+        -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠlin_vanleer(ᶠu³, ᶜχ, dt)))
+end
 vertical_transport!(
     coeff,
     ᶜρχₜ,

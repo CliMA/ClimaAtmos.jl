@@ -9,6 +9,12 @@ v0.28.1
 -------
 ### Features
 
+### Add van Leer class operator
+
+Added a new vertical transport option `vanleer_limiter` (for tracer and energy variables)
+which uses methods described in Lin et al. (1994) to apply slope-limited upwinding. Adds 
+operator 
+
 ### Read initial conditions from NetCDF files
 
 Added functionality to allow initial conditions to be overwritten by
