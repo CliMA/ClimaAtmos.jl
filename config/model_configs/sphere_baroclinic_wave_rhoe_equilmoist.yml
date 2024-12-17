@@ -5,6 +5,8 @@ initial_condition: "MoistBaroclinicWave"
 dt: "450secs"
 t_end: "10days"
 moist: "equil"
+tracer_upwinding: vanleer_limiter
+energy_upwinding: vanleer_limiter
 diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke]
     period: 1days

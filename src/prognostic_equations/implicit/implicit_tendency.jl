@@ -81,6 +81,17 @@ vertical_transport!(
     ᶠu³,
     ᶜχ,
     dt,
+    ::Val{:vanleer_limiter},
+    ᶜdivᵥ,
+) = @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠlin_vanleer(ᶠu³, ᶜχ, dt)))
+vertical_transport!(
+    coeff,
+    ᶜρχₜ,
+    ᶜJ,
+    ᶜρ,
+    ᶠu³,
+    ᶜχ,
+    dt,
     ::Val{:third_order},
     ᶜdivᵥ,
 ) = @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠu³, ᶜχ)))

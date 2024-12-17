@@ -85,6 +85,11 @@ const ᶠfct_zalesak = Operators.FCTZalesak(
     bottom = Operators.FirstOrderOneSided(),
     top = Operators.FirstOrderOneSided(),
 )
+const ᶠlin_vanleer = Operators.LinVanLeerC2F(
+    bottom = Operators.FirstOrderOneSided(),
+    top = Operators.FirstOrderOneSided(),
+    method = Operators.Mono5(),
+)
 
 const ᶜinterp_matrix = MatrixFields.operator_matrix(ᶜinterp)
 const ᶜleft_bias_matrix = MatrixFields.operator_matrix(ᶜleft_bias)
