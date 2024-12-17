@@ -90,6 +90,10 @@ const ᶠtvd_minmod = Operators.TVDSlopeLimitedFlux(
     top = Operators.FirstOrderOneSided(),
     method = Operators.MinModLimiter(),
 )
+const SLMethod = Operators.LinVanLeerC2F(
+    bottom = Operators.FirstOrderOneSided(),
+    top = Operators.FirstOrderOneSided(),
+)
 
 const ᶜinterp_matrix = MatrixFields.operator_matrix(ᶜinterp)
 const ᶜleft_bias_matrix = MatrixFields.operator_matrix(ᶜleft_bias)
