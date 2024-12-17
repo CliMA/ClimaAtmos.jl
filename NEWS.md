@@ -5,6 +5,12 @@ Main
 -------
 ### Features
 
+### Add van Leer class operator
+
+Added a new vertical transport option `vanleer_limiter` (for tracer and energy variables)
+which uses methods described in Lin et al. (1994) to apply slope-limited upwinding. Adds 
+operator 
+
 ### Write diagnostics to text files
 
 Added functionality to write diagnostics in DictWriter to text files.
