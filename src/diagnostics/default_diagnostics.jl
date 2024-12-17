@@ -109,6 +109,7 @@ If `duration >= 90 year` take monthly means.
 """
 function frequency_averages(duration)
     FT = eltype(duration)
+    duration = float(duration)
     if duration >= 90 * 86400
         return (args...; kwargs...) -> monthly_averages(FT, args...; kwargs...)
     elseif duration >= 30 * 86400
@@ -147,6 +148,8 @@ function core_default_diagnostics(output_writer, duration, start_date)
 
     average_func = frequency_averages(duration)
     FT = eltype(duration)
+
+    duration = float(duration)
 
     if duration >= 90 * 86400
         min_func = (args...; kwargs...) -> monthly_min(FT, args...; kwargs...)
