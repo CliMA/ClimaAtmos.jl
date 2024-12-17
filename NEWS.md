@@ -5,6 +5,12 @@ Main
 -------
 ### Features
 
+### DYAMOND-summer initial conditions
+
+Added functionality to allow initial conditions to be overwritten by 
+interpolated datasets. Currently supports equilibrium moisture models
+for DYAMOND runs, assuming a simulation start date of 1 August 2016.
+
 ### Write diagnostics to text files
 
 Added functionality to write diagnostics in DictWriter to text files.

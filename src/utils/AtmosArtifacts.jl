@@ -82,6 +82,13 @@ function earth_orography_file_path(; context = nothing)
     )
 end
 
+"""
+    dyamond_summer_artifact_path(; context = nothing)
+
+Construct the file path for the 0.98deg DYAMOND initial conditions: 
+the artifact contains initial conditions for DYAMOND simulations 
+beginning on 1 August 2016.
+"""
 function dyamond_summer_artifact_path(; context = nothing)
     filename = "DYAMOND_SUMMER_ICS_p98deg.nc"
     return joinpath(

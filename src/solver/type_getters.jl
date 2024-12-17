@@ -265,8 +265,6 @@ function get_initial_condition(parsed_args)
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
             parsed_args["perturb_initstate"],
         )
-    elseif parsed_args["initial_condition"] in ["DYAMONDSummer"]
-        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
     elseif parsed_args["initial_condition"] in [
         "Nieuwstadt",
         "GABLS",
@@ -296,6 +294,7 @@ function get_initial_condition(parsed_args)
         "RisingThermalBubbleProfile",
         "ScharProfile",
         "PrecipitatingColumn",
+        "DYAMONDSummer",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
     elseif parsed_args["initial_condition"] == "GCM"
@@ -668,11 +667,16 @@ function get_simulation(config::AtmosConfig)
 
     tracers = get_tracers(config.parsed_args)
 
+    # In instances where we wish to interpolate existing datasets,
+    # e.g. NetCDF files containing spatially varying thermodynamic properties, 
+    # this call to `overwrite_initial_conditions`
+    # accesses the appropriate artifact for a given `initial_condition`
+    # and then updates some predetermined state `Y` (specific to `initial_condition`) 
+    # with those computed using the `SpaceVaryingInputs` tool.
     CA.InitialConditions.overwrite_initial_conditions!(
         initial_condition,
         Y,
         params.thermodynamics_params,
-        config,
     )
 
     s = @timed_str begin
