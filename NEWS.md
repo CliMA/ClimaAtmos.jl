@@ -5,10 +5,29 @@ Main
 -------
 ### Features
 
+### Read initial conditions from NetCDF files
+
+Added functionality to allow initial conditions to be overwritten by
+interpolated NetCDF datasets.
+
+To use this feature from the YAML interface, just pass the path of the file.
+We expect the file to contain the following variables:
+- `p`, for pressure,
+- `t`, for temperature,
+- `q`, for humidity,
+- `u, v, w`, for velocity,
+- `cswc, crwc` for snow and rain water content (for 1 moment microphysics).
+
+For example, to use the DYAMONDSummer initial condition, set
+```
+initial_condition: "artifact\"DYAMONDSummer\"/DYAMOND_SUMMER_ICS_p98deg.nc"
+```
+in your configuration file.
+
 ### Write diagnostics to text files
 
 Added functionality to write diagnostics in DictWriter to text files.
-This is useful for outputing scalar diagnostics, such as total mass of
+This is useful for outputting scalar diagnostics, such as total mass of
 the atmosphere. PR [3476](https://github.com/CliMA/ClimaAtmos.jl/pull/3476)
 
 v0.28.0

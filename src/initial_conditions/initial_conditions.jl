@@ -161,6 +161,33 @@ function (initial_condition::DecayingProfile)(params)
 end
 
 """
+    MoistFromFile(file_path)
+
+This function assigns an empty initial condition for , populating the `LocalState` with
+`NaN`, and later overwriting it with the content of the given file
+"""
+struct MoistFromFile <: InitialCondition
+    file_path::String
+end
+
+function (initial_condition::MoistFromFile)(params)
+    function local_state(local_geometry)
+        FT = eltype(params)
+        grav = CAP.grav(params)
+        thermo_params = CAP.thermodynamics_params(params)
+
+        T, p = FT(NaN), FT(NaN) # placeholder values
+
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+        )
+    end
+    return local_state
+end
+
+"""
     AgnesiHProfile(; perturb = false)
 
 An `InitialCondition` with a decaying temperature profile
@@ -351,10 +378,117 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
     return local_state
 end
 
+"""
+    overwrite_initial_conditions!(initial_condition, args...)
+
+Do-nothing fallback method for the operation overwriting initial conditions 
+(this functionality required in instances where we interpolate initial conditions from NetCDF files). 
+Future work may revisit this design choice. 
+"""
+function overwrite_initial_conditions!(
+    initial_condition::InitialCondition,
+    args...,
+)
+    return nothing
+end
+
+"""
+    overwrite_initial_conditions!(initial_condition::MoistFromFile, Y, thermo_params, config)
+
+Given a prognostic state `Y`, an `initial condition` (specifically, where initial values are
+assigned from interpolations of existing datasets), a `thermo_state`, this function
+overwrites the default initial condition and populates prognostic variables with
+interpolated values using the `SpaceVaryingInputs` tool. To mitigate issues related to
+unbalanced states following the interpolation operation, we recompute vertical pressure
+levels assuming hydrostatic balance, given the surface pressure.
+
+We expect the file to contain the following variables:
+- `p`, for pressure,
+- `t`, for temperature,
+- `q`, for humidity,
+- `u, v, w`, for velocity,
+- `cswc, crwc` for snow and rain water content (for 1 moment microphysics).
+"""
+function overwrite_initial_conditions!(
+    initial_conditions::MoistFromFile,
+    Y,
+    thermo_params,
+)
+    file_path = initial_conditions.file_path
+    isfile(file_path) || error("$(file_path) is not a file")
+    @info "Overwriting initial conditions with data from file $(file_path)"
+    center_space = Fields.axes(Y.c)
+    face_space = Fields.axes(Y.f)
+    # Using surface pressure, air temperature and specific humidity 
+    # from the dataset, compute air pressure. 
+    p_sfc = Fields.level(
+        SpaceVaryingInputs.SpaceVaryingInput(file_path, "p", face_space),
+        Fields.half,
+    )
+    ᶜT = SpaceVaryingInputs.SpaceVaryingInput(file_path, "t", center_space)
+    ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(file_path, "q", center_space)
+
+    # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile, 
+    # recompute the pressure levels assuming hydrostatic balance is maintained.
+    # Uses the ClimaCore `column_integral_indefinite!` function to solve 
+    # ∂(ln𝑝)/∂z = -g/(Rₘ(q)T), where
+    # p is the local pressure
+    # g is the gravitational constant
+    # q is the specific humidity
+    # Rₘ is the gas constant for moist air
+    # T is the air temperature
+    # p is then updated with the integral result, given p_sfc,
+    # following which the thermodynamic state is constructed. 
+    ᶜ∂lnp∂z = @. -thermo_params.grav /
+       (TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT)
+    ᶠlnp_over_psfc = zeros(face_space)
+    Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
+    ᶠp = p_sfc .* exp.(ᶠlnp_over_psfc)
+    ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp.(ᶠp), ᶜT, ᶜq_tot)
+
+    # Assign prognostic variables from equilibrium moisture models
+    Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
+    # Velocity is first assigned on cell-centers and then interpolated onto
+    # cell faces.
+    vel =
+        Geometry.UVWVector.(
+            SpaceVaryingInputs.SpaceVaryingInput(file_path, "u", center_space),
+            SpaceVaryingInputs.SpaceVaryingInput(file_path, "v", center_space),
+            SpaceVaryingInputs.SpaceVaryingInput(file_path, "w", center_space),
+        )
+    Y.c.uₕ .= C12.(Geometry.UVVector.(vel))
+    Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
+    e_kin = similar(ᶜT)
+    compute_kinetic!(e_kin, Y.c.uₕ, Y.f.u₃)
+    e_pot = Fields.coordinate_field(Y.c).z .* thermo_params.grav
+    Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
+    if hasproperty(Y.c, :ρq_tot)
+        Y.c.ρq_tot .= ᶜq_tot .* Y.c.ρ
+    else
+        error(
+            "`dry` configurations are incompatible with the interpolated initial conditions.",
+        )
+    end
+    if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
+        Y.c.ρq_sno .=
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "cswc",
+                center_space,
+            ) .* Y.c.ρ
+        Y.c.ρq_rai .=
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "crwc",
+                center_space,
+            ) .* Y.c.ρ
+    end
+    return nothing
+end
+
 ##
 ## Baroclinic Wave
 ##
-
 function shallow_atmos_baroclinic_wave_values(z, ϕ, λ, params, perturb)
     FT = eltype(params)
     R_d = CAP.R_d(params)
