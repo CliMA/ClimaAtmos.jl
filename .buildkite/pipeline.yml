@@ -281,15 +281,6 @@ steps:
         artifact_paths: "deep_sphere_baroclinic_wave_rhoe_equilmoist/output_active/*"
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
-      
-      - label: ":computer: test DYAMOND interpolated initial conditions"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_summer.yml
-          --job_id gpu_aquaplanet_dyamond_summer
-        artifact_paths: "gpu_aquaplanet_dyamond_summer/output_active/*"
-        agents:
-          slurm_constraint: icelake|cascadelake|skylake|epyc
 
       # Add this back when we figure out what to do with SSP and zalesak
       # - label: ":computer: SSP zalesak tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
@@ -969,6 +960,18 @@ steps:
             --config_file ${CONFIG_PATH}/gpu_aquaplanet_dyamond.yml
             --job_id gpu_aquaplanet_dyamond
         artifact_paths: "gpu_aquaplanet_dyamond/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+      
+      - label: "GPU: test DYAMOND interpolated initial conditions"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_summer.yml
+          --job_id gpu_aquaplanet_dyamond_summer
+        artifact_paths: "gpu_aquaplanet_dyamond_summer/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
