@@ -27,10 +27,10 @@ function flux_accumulation!(integrator)
         nlevels = Spaces.nlevels(axes(Y.c))
         net_energy_flux_toa[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
-            Δt
+            float(Δt)
         if p.atmos.surface_model isa PrescribedSurfaceTemperature
             net_energy_flux_sfc[] +=
-                horizontal_integral_at_boundary(ᶠradiation_flux, half) * Δt
+                horizontal_integral_at_boundary(ᶠradiation_flux, half) * float(Δt)
         end
     end
     return nothing
