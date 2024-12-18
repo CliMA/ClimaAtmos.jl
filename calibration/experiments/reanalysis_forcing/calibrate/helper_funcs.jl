@@ -9,8 +9,8 @@ using JLD2
 
 function get_era5_calibration_library()
     ref_paths, months, sites = [], [], []
-    for month in [1]#[1,4,7,10]
-        for cfsite in [23]
+    for month in [7]#[1,4,7,10]
+        for cfsite in collect(2:23)
             filename = "../data/era5_cfsite_obs_data.nc"
             site = "site$cfsite"
             push!(ref_paths, filename)

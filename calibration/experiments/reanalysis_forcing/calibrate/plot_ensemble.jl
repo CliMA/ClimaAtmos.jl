@@ -13,8 +13,8 @@ include("helper_funcs.jl")
 include("observation_map.jl")
 
 
-output_dir = "/scratch/julian/calibrations/precal_23" # output directory
-config_i = 1 # config to plot
+output_dir = "/scratch/julian/calibrations/$(ARGS[1])" # output directory
+config_i = parse(Int64, ARGS[2]) # config to plot
 ylims = (0, 4000) # y limits for plotting (`z` coord)
 iterations = nothing # iterations to plot (i.e., 0:2). default is all iterations
 var_names =
@@ -71,9 +71,9 @@ for iteration in iterations
             z_max = z_max,
             n_vert_levels = n_vert_levels,
         )
-        if var_name == "clw"
-            data = log10.(data)
-        end
+        # if var_name == "clw"
+        #     data = log10.(data)
+        # end
         
         # size(data) = [num vertical levels x ensemble size]
         eki_filepath = joinpath(
@@ -96,7 +96,7 @@ for iteration in iterations
                 [var_name];
                 normalize = false,
                 z_scm = zc_model,
-                log_vars = ["clw"],
+                log_vars = [""], #["clw]
             )
             Plots.plot!(y_truth, zc_model, color = :black, label = "LES")
         end

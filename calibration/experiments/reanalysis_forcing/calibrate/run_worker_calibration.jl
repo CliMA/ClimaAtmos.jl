@@ -11,7 +11,7 @@ cd(project)
 #         mem_per_cpu=8000)
 function create_worker_pool()    
     addprocs(
-        SlurmManager(50),
+        SlurmManager(10),
         t = "10:00:00",
         cpus_per_task = 1,
         exeflags = "--project=$(Base.active_project())"
@@ -34,12 +34,12 @@ worker_pool = create_worker_pool()
     import ClimaComms
     ENV["CLIMACOMMS_CONTEXT"] = "SINGLETON"
     using Revise
-    includet("helper_funcs.jl")
-    includet("observation_map.jl")
+    include("helper_funcs.jl")
+    include("observation_map.jl")
     # include("get_les_metadata.jl")
     experiment_dir = dirname(Base.active_project())
     model_interface = joinpath(experiment_dir, "model_interface.jl")
-    includet(model_interface)
+    include(model_interface)
     experiment_config =
         YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
@@ -115,7 +115,7 @@ JLD2.jldsave(
 
     ### define minibatcher
     rfs_minibatcher =
-        EKP.FixedMinibatcher(collect(1:experiment_config["batch_size"]))
+        EKP.RandomFixedSizeMinibatcher(experiment_config["batch_size"])
     observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 end
 @info "Obtained Observations..."
