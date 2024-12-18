@@ -514,15 +514,20 @@ function get_sim_info(config::AtmosConfig)
 
     isnothing(restart_file) ||
         @info "Restarting simulation from file $restart_file"
-
+    # Need to do this to fix the bug with type ClimaODEFunction has no field sys
+    # This bug comes from typeof(prob.tspan) === typeof(tspan_promote) being false
+    # in the function get_concrete_problem in the package DiffEqBase
+    dt = ITime(time_to_seconds(parsed_args["dt"]))
+    t_end = ITime(time_to_seconds(parsed_args["t_end"]))
+    (dt, t_end) = promote(dt, t_end)
     sim = (;
         output_dir,
         restart = !isnothing(restart_file),
         restart_file,
         job_id,
-        dt = ITime(time_to_seconds(parsed_args["dt"])),
+        dt = dt,
         start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
-        t_end = ITime(time_to_seconds(parsed_args["t_end"])),
+        t_end = t_end,
     )
     @show sim.t_end,  sim.dt
     n_steps = floor(Int, sim.t_end / sim.dt)
