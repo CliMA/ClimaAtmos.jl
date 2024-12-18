@@ -113,8 +113,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             # the fact that we have a very unrealistic initial condition
             max_relative_humidity = FT(0.6)
             t_increasing_humidity = FT(60 * 60 * 24 * 30)
-            if t < t_increasing_humidity
-                max_relative_humidity *= t / t_increasing_humidity
+            if float(t) < t_increasing_humidity
+                max_relative_humidity *= float(t) / t_increasing_humidity
             end
             @. ᶜrh = max_relative_humidity
 
