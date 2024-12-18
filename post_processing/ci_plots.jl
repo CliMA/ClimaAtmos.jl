@@ -679,7 +679,6 @@ end
 
 SphereOrographyPlots = Union{
     Val{:sphere_baroclinic_wave_rhoe_topography_dcmip_rs},
-    Val{:gpu_aquaplanet_dyamond_summer},
     Val{:sphere_baroclinic_wave_rhoe_hughes2023},
 }
 
@@ -828,7 +827,10 @@ function make_plots(
 end
 
 function make_plots(
-    ::Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric},
+    ::Union{
+        Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric},
+        Val{:gpu_aquaplanet_dyamond_summer},
+    },
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
