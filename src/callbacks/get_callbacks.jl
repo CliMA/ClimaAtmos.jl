@@ -126,11 +126,13 @@ function get_diagnostics(
             (_, date_last_compute) = promote(sim_info.dt, ITime(0, start_date = start_date))
             output_schedule = CAD._EveryITimeSchedule(
                 date_last_output,
-                ITime(1, period = period_dates),
+                # ITime(1, period = period_dates),
+                period_dates,
             )
             compute_schedule = CAD._EveryITimeSchedule(
                 date_last_compute,
-                ITime(1, period = period_dates),
+                # ITime(1, period = period_dates),
+                period_dates,
             )
             # TODO: There should be some variant of this that works with ITime
             # output_schedule = CAD.EveryCalendarDtSchedule(
