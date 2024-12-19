@@ -33,7 +33,7 @@ end
         config =
             CA.AtmosConfig(config_dict, job_id = "paremter_tests$(index + 1)")
         # Ensure that there are no errors
-        @test CA.create_parameter_set(config) isa
+        @test CA.ClimaAtmosParameters(config) isa
               CA.Parameters.ClimaAtmosParameters
     end
 end
