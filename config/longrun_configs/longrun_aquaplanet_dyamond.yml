@@ -6,8 +6,10 @@ rayleigh_sponge: true
 viscous_sponge: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
+topography: "Earth"
+start_date: "20160801"
+initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 moist: "equil"
-cloud_model: "grid_scale"
 dt: "60secs"
 t_end: "30days"
 dt_save_state_to_disk: "10days"
