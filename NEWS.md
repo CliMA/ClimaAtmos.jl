@@ -3,6 +3,10 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
+
+
+v0.28.1
+-------
 ### Features
 
 ### Read initial conditions from NetCDF files
