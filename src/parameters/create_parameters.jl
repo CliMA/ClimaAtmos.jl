@@ -7,12 +7,164 @@ import Thermodynamics.Parameters.ThermodynamicsParameters
 import CloudMicrophysics as CM
 import StaticArrays as SA
 
+function ClimaAtmosParameters(config::AtmosConfig)
+    (; toml_dict, parsed_args) = config
+    FT = CP.float_type(toml_dict)
+    return ClimaAtmosParameters(
+        toml_dict,
+        FT(CA.time_to_seconds(parsed_args["dt"])),
+    )
+end
+
+"""
+    ClimaAtmosParameters(FT, dt)
+    ClimaAtmosParameters(toml_dict, dt)
+    ClimaAtmosParameters(config::AtmosConfig)
+
+Construct the parameter set for any ClimaAtmos configuration.
+
+If dt is passed in, it will be used to override the `precipitation_timescale` parameter.
+"""
+ClimaAtmosParameters(::Type{FT}, dt = nothing) where {FT} =
+    ClimaAtmosParameters(CP.create_toml_dict(FT), dt)
+
+function ClimaAtmosParameters(
+    toml_dict::TD,
+    dt = nothing,
+) where {TD <: CP.AbstractTOMLDict}
+    if !isnothing(dt)
+        toml_dict["precipitation_timescale"]["value"] = dt
+    end
+    FT = CP.float_type(toml_dict)
+
+    turbconv_params = TurbulenceConvectionParameters(toml_dict)
+    TCP = typeof(turbconv_params)
+
+    thermodynamics_params = ThermodynamicsParameters(toml_dict)
+    TP = typeof(thermodynamics_params)
+
+    rrtmgp_params = RRTMGPParameters(toml_dict)
+    RP = typeof(rrtmgp_params)
+
+    insolation_params = InsolationParameters(toml_dict)
+    IP = typeof(insolation_params)
+
+    surface_fluxes_params =
+        SF.Parameters.SurfaceFluxesParameters(toml_dict, UF.BusingerParams)
+    SFP = typeof(surface_fluxes_params)
+
+    surface_temp_params = SurfaceTemperatureParameters(toml_dict)
+    STP = typeof(surface_temp_params)
+
+    microphysics_cloud_params = cloud_parameters(toml_dict)
+    MPC = typeof(microphysics_cloud_params)
+
+    microphysics_0m_params = CM.Parameters.Parameters0M(toml_dict)
+    microphysics_1m_params = microphys_1m_parameters(toml_dict)
+    MP0M = typeof(microphysics_0m_params)
+    MP1M = typeof(microphysics_1m_params)
+
+    vert_diff_params = vert_diff_parameters(toml_dict)
+    VDP = typeof(vert_diff_params)
+
+    parameters =
+        CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
+    return CAP.ClimaAtmosParameters{
+        FT,
+        TP,
+        RP,
+        IP,
+        MPC,
+        MP0M,
+        MP1M,
+        SFP,
+        TCP,
+        STP,
+        VDP,
+    }(;
+        parameters...,
+        thermodynamics_params,
+        rrtmgp_params,
+        insolation_params,
+        microphysics_cloud_params,
+        microphysics_0m_params,
+        microphysics_1m_params,
+        surface_fluxes_params,
+        turbconv_params,
+        surface_temp_params,
+        vert_diff_params,
+    )
+end
+
+atmos_name_map = (;
+    :f_plane_coriolis_frequency => :f_plane_coriolis_frequency,
+    :equator_pole_temperature_gradient_wet => :ΔT_y_wet,
+    :angular_velocity_planet_rotation => :Omega,
+    :equator_pole_temperature_gradient_dry => :ΔT_y_dry,
+    :held_suarez_T_equator_wet => :T_equator_wet,
+    :zd_rayleigh => :zd_rayleigh,
+    :zd_viscous => :zd_viscous,
+    :planet_radius => :planet_radius,
+    :potential_temp_vertical_gradient => :Δθ_z,
+    :C_H => :C_H,
+    :c_smag => :c_smag,
+    :alpha_rayleigh_w => :alpha_rayleigh_w,
+    :alpha_rayleigh_uh => :alpha_rayleigh_uh,
+    :astronomical_unit => :astro_unit,
+    :held_suarez_T_equator_dry => :T_equator_dry,
+    :drag_layer_vertical_extent => :σ_b,
+    :kappa_2_sponge => :kappa_2_sponge,
+    :held_suarez_minimum_temperature => :T_min_hs,
+    :ocean_surface_albedo => :idealized_ocean_albedo,
+    :water_refractive_index => :water_refractive_index,
+    :optics_lookup_temperature_min => :optics_lookup_temperature_min,
+    :optics_lookup_temperature_max => :optics_lookup_temperature_max,
+)
+
+cloud_parameters(FT_or_toml) = (;
+    liquid = CM.Parameters.CloudLiquid(FT_or_toml),
+    ice = CM.Parameters.CloudIce(FT_or_toml),
+)
+
+microphys_1m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
+    microphys_1m_parameters(CP.create_toml_dict(FT))
+
+microphys_1m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
+    cl = CM.Parameters.CloudLiquid(toml_dict),
+    ci = CM.Parameters.CloudIce(toml_dict),
+    pr = CM.Parameters.Rain(toml_dict),
+    ps = CM.Parameters.Snow(toml_dict),
+    ce = CM.Parameters.CollisionEff(toml_dict),
+    tv = CM.Parameters.Blk1MVelType(toml_dict),
+    aps = CM.Parameters.AirProperties(toml_dict),
+    var = CM.Parameters.VarTimescaleAcnv(toml_dict),
+    Ndp = CP.get_parameter_values(
+        toml_dict,
+        "prescribed_cloud_droplet_number_concentration",
+        "ClimaAtmos",
+    ).prescribed_cloud_droplet_number_concentration,
+)
+
+function vert_diff_parameters(toml_dict)
+    name_map = (; :C_E => :C_E, :H_diffusion => :H, :D_0_diffusion => :D₀)
+    return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+end
+
 
 to_svec(x::AbstractArray) = SA.SVector{length(x)}(x)
 to_svec(x) = x
 to_svec(x::NamedTuple) = map(x -> to_svec(x), x)
 
-function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
+TurbulenceConvectionParameters(
+    ::Type{FT},
+    overrides = NamedTuple(),
+) where {FT <: AbstractFloat} =
+    TurbulenceConvectionParameters(CP.create_toml_dict(FT), overrides)
+
+function TurbulenceConvectionParameters(
+    toml_dict::CP.AbstractTOMLDict,
+    overrides = NamedTuple(),
+)
     name_map = (;
         :min_area_limiter_scale => :min_area_limiter_scale,
         :max_area_limiter_scale => :max_area_limiter_scale,
@@ -46,14 +198,24 @@ function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
         :entr_inv_tau => :entr_tau,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-    FT = CP.float_type(toml_dict)
+    parameters = merge(parameters, overrides)
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)
+    FT = CP.float_type(toml_dict)
     CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2}(; parameters...)
 end
 
-function SurfaceTemperatureParameters(toml_dict::CP.AbstractTOMLDict)
+SurfaceTemperatureParameters(
+    ::Type{FT},
+    overrides = NamedTuple(),
+) where {FT <: AbstractFloat} =
+    SurfaceTemperatureParameters(CP.create_toml_dict(FT), overrides)
+
+function SurfaceTemperatureParameters(
+    toml_dict::CP.AbstractTOMLDict,
+    overrides = NamedTuple(),
+)
     name_map = (;
         :SST_mean => :SST_mean,
         :SST_delta => :SST_delta,
@@ -61,153 +223,7 @@ function SurfaceTemperatureParameters(toml_dict::CP.AbstractTOMLDict)
         :SST_wavelength_latitude => :SST_wavelength_latitude,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    parameters = merge(parameters, overrides)
     FT = CP.float_type(toml_dict)
     CAP.SurfaceTemperatureParameters{FT}(; parameters...)
-end
-
-function create_parameter_set(config::AtmosConfig)
-    (; toml_dict, parsed_args) = config
-    FT = CP.float_type(toml_dict)
-
-    turbconv_params = TurbulenceConvectionParameters(toml_dict)
-    TCP = typeof(turbconv_params)
-
-    thermodynamics_params = ThermodynamicsParameters(toml_dict)
-    TP = typeof(thermodynamics_params)
-
-    rrtmgp_params = RRTMGPParameters(toml_dict)
-    RP = typeof(rrtmgp_params)
-
-    insolation_params = InsolationParameters(toml_dict)
-    IP = typeof(insolation_params)
-
-    water_params = CM.Parameters.WaterProperties(toml_dict)
-    WP = typeof(water_params)
-
-    surface_fluxes_params =
-        SF.Parameters.SurfaceFluxesParameters(toml_dict, UF.BusingerParams)
-    SFP = typeof(surface_fluxes_params)
-
-    surface_temp_params = SurfaceTemperatureParameters(toml_dict)
-    STP = typeof(surface_temp_params)
-
-    moisture_model = parsed_args["moist"]
-    microphysics_cloud_params = if moisture_model == "nonequil"
-        (;
-            liquid = CM.Parameters.CloudLiquid(toml_dict),
-            ice = CM.Parameters.CloudIce(toml_dict),
-        )
-    else
-        nothing
-    end
-    MPC = typeof(microphysics_cloud_params)
-
-    # Microphysics scheme parameters (from CloudMicrophysics.jl)
-    # TODO - repeating the logic from solver/model_getters.jl...
-    if parsed_args["override_precip_timescale"]
-        toml_dict["precipitation_timescale"]["value"] =
-            FT(CA.time_to_seconds(parsed_args["dt"]))
-    end
-    precip_model = parsed_args["precip_model"]
-    microphysics_precipitation_params =
-        if precip_model == nothing || precip_model == "nothing"
-            nothing
-        elseif precip_model == "0M"
-            CM.Parameters.Parameters0M(toml_dict)
-        elseif precip_model == "1M"
-            (;
-                cl = CM.Parameters.CloudLiquid(toml_dict),
-                ci = CM.Parameters.CloudIce(toml_dict),
-                pr = CM.Parameters.Rain(toml_dict),
-                ps = CM.Parameters.Snow(toml_dict),
-                ce = CM.Parameters.CollisionEff(toml_dict),
-                tv = CM.Parameters.Blk1MVelType(toml_dict),
-                aps = CM.Parameters.AirProperties(toml_dict),
-                var = CM.Parameters.VarTimescaleAcnv(toml_dict),
-                Ndp = CP.get_parameter_values(
-                    toml_dict,
-                    "prescribed_cloud_droplet_number_concentration",
-                    "ClimaAtmos",
-                ).prescribed_cloud_droplet_number_concentration,
-            )
-        else
-            error("Invalid precip_model $(precip_model)")
-        end
-    MPP = typeof(microphysics_precipitation_params)
-
-    vert_diff_model = parsed_args["vert_diff"]
-    name_map_vert_diff =
-        if vert_diff_model in
-           ("true", true, "VerticalDiffusion", "FriersonDiffusion")
-            (; :C_E => :C_E,)
-        elseif vert_diff_model in ("DecayWithHeightDiffusion",)
-            (; :H_diffusion => :H, :D_0_diffusion => :D₀)
-        else
-            nothing
-        end
-    vert_diff_params = if vert_diff_model in ("false", false, "none")
-        nothing
-    elseif vert_diff_model in (
-        "true",
-        true,
-        "VerticalDiffusion",
-        "FriersonDiffusion",
-        "DecayWithHeightDiffusion",
-    )
-        CP.get_parameter_values(toml_dict, name_map_vert_diff, "ClimaAtmos")
-    else
-        error("Invalid diffusion model `$vert_diff_model`.")
-    end
-    VDP = typeof(vert_diff_params)
-
-    name_map = (;
-        :f_plane_coriolis_frequency => :f_plane_coriolis_frequency,
-        :equator_pole_temperature_gradient_wet => :ΔT_y_wet,
-        :angular_velocity_planet_rotation => :Omega,
-        :equator_pole_temperature_gradient_dry => :ΔT_y_dry,
-        :held_suarez_T_equator_wet => :T_equator_wet,
-        :zd_rayleigh => :zd_rayleigh,
-        :zd_viscous => :zd_viscous,
-        :planet_radius => :planet_radius,
-        :potential_temp_vertical_gradient => :Δθ_z,
-        :C_H => :C_H,
-        :c_smag => :c_smag,
-        :alpha_rayleigh_w => :alpha_rayleigh_w,
-        :alpha_rayleigh_uh => :alpha_rayleigh_uh,
-        :astronomical_unit => :astro_unit,
-        :held_suarez_T_equator_dry => :T_equator_dry,
-        :drag_layer_vertical_extent => :σ_b,
-        :kappa_2_sponge => :kappa_2_sponge,
-        :held_suarez_minimum_temperature => :T_min_hs,
-        :ocean_surface_albedo => :idealized_ocean_albedo,
-        :water_refractive_index => :water_refractive_index,
-        :optics_lookup_temperature_min => :optics_lookup_temperature_min,
-        :optics_lookup_temperature_max => :optics_lookup_temperature_max,
-    )
-    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-    return CAP.ClimaAtmosParameters{
-        FT,
-        TP,
-        RP,
-        IP,
-        MPC,
-        MPP,
-        WP,
-        SFP,
-        TCP,
-        STP,
-        VDP,
-    }(;
-        parameters...,
-        thermodynamics_params,
-        rrtmgp_params,
-        insolation_params,
-        microphysics_cloud_params,
-        microphysics_precipitation_params,
-        water_params,
-        surface_fluxes_params,
-        turbconv_params,
-        surface_temp_params,
-        vert_diff_params,
-    )
 end

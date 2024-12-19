@@ -83,7 +83,7 @@ end
 function q_tot_precipitation_sources(
     ::Microphysics0Moment,
     thp,
-    cmp,
+    cmp::CMP.Parameters0M,
     dt,
     qₜ,
     ts,

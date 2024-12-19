@@ -390,7 +390,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
 
     (; params, dt) = p
     thp = CAP.thermodynamics_params(params)
-    cmp = CAP.microphysics_precipitation_params(params)
+    cmp = CAP.microphysics_0m_params(params)
     (; ᶜts⁰, ᶜq_tot⁰, ᶜtsʲs, ᶜSqₜᵖʲs, ᶜSqₜᵖ⁰) = p.precomputed
 
     # Sources from the updrafts
@@ -426,7 +426,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     (; params, dt) = p
     (; ᶜΦ,) = p.core
     thp = CAP.thermodynamics_params(params)
-    cmp = CAP.microphysics_precipitation_params(params)
+    cmp = CAP.microphysics_1m_params(params)
 
     (; ᶜSeₜᵖʲs, ᶜSqₜᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
     (; ᶜSeₜᵖ⁰, ᶜSqₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρ⁰, ᶜts⁰) = p.precomputed

@@ -623,7 +623,7 @@ function silence_non_root_processes(comms_ctx)
 end
 
 function get_simulation(config::AtmosConfig)
-    params = create_parameter_set(config)
+    params = ClimaAtmosParameters(config)
     atmos = get_atmos(config, params)
     sim_info = get_sim_info(config)
     job_id = sim_info.job_id
