@@ -27,5 +27,4 @@ edmfx_filter: true
 edmfx_sgs_mass_flux: false
 edmfx_sgs_diffusive_flux: true
 precip_model: "0M"
-override_precip_timescale: false
 toml: [toml/longrun_aquaplanet_progedmf.toml]

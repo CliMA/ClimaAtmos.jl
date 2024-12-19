@@ -22,7 +22,7 @@ CLIMADIAGNOSTICS_LES_NAME_MAP =
 
 """Get z cell centers coordinates for CA run, given config. """
 function get_z_grid(atmos_config; z_max = nothing)
-    params = CA.create_parameter_set(atmos_config)
+    params = CA.ClimaAtmosParameters(atmos_config)
     spaces =
         CA.get_spaces(atmos_config.parsed_args, params, atmos_config.comms_ctx)
     coord = CA.Fields.coordinate_field(spaces.center_space)
