@@ -841,6 +841,15 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":genie: Prognostic EDMFX Soares in a column"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_soares_column.yml
+          --job_id prognostic_edmfx_soares_column
+        artifact_paths: "prognostic_edmfx_soares_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
   - group: "GPU"
     steps:
 
