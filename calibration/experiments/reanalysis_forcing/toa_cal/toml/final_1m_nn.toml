@@ -1,0 +1,38 @@
+[entr_param_vec]
+value = [-0.03970381530067492, 0.07421290749530188, 0.1805025566580846, 0.15494998443503677, -0.19559974680971823, -0.019943361845802376, -0.07811861534099573, 0.20460436569880988, 0.9866119459877382, -1.4075930614117624, 0.31464997909672837, 0.3192204792486643]
+
+[EDMF_surface_area]
+value = 0.11368116898355826
+
+[mixing_length_eddy_viscosity_coefficient]
+value = 0.022315219347084154
+
+[snow_autoconversion_timescale]
+value = 135.08789867674423
+
+[turb_entr_param_vec]
+value = [0.03710224326889695, 4452.656039570235]
+
+[rain_autoconversion_timescale]
+value = 6394.273609340287
+
+[mixing_length_tke_surf_scale]
+value = 0.3822230704689704
+
+[mixing_length_diss_coeff]
+value = 0.09622472269129516
+
+[pressure_normalmode_drag_coeff]
+value = 12.91939065706462
+
+[mixing_length_Prandtl_number_0]
+value = 1.2548014183245413
+
+[diagnostic_covariance_coeff]
+value = 2.0788545616973444
+
+[mixing_length_static_stab_coeff]
+value = 0.11452491152031997
+
+[pressure_normalmode_buoy_coeff1]
+value = 0.31224839168284846

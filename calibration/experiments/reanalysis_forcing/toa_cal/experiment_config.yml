@@ -3,7 +3,7 @@ ensemble_size: 100
 n_iterations: 10
 batch_size: 1 # number of cases per iteration
 model_config : prognostic_edmfx_gcmdriven_column.yml 
-output_dir : /scratch/julian/calibrations/exp_3_cf23_no_eddy_visc # output dir
+output_dir : /scratch/julian/calibrations/exp_4 # output dir
 y_var_names: [ta, hus, clw] # calibration variables clw
 log_vars: ["clw"] # take log(var) when forming y, g
 z_max : 4000 # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration

@@ -9,14 +9,14 @@ using Plots
 using LinearAlgebra
 using DataFrames
 
-output_dir = "/scratch/julian/calibrations/exp_3_cf23_no_eddy_visc"
+output_dir = "/scratch/julian/calibrations/exp_1"
 iterations = nothing
 
 include("helper_funcs.jl")
 
 const config_dict =
     YAML.load_file(joinpath(output_dir, "configs", "experiment_config.yml"))
-const n_iterations = n_iterations = config_dict["n_iterations"]
+const n_iterations = 7#n_iterations = config_dict["n_iterations"]
 
 # plotting output dirs
 plot_dir = joinpath(output_dir, "plots", "param_plots")

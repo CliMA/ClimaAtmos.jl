@@ -1,29 +1,18 @@
 # julia --project=calibration/experiments/gcm_driven_scm calibration/experiments/gcm_driven_scm/run_worker_calibration.jl
-using Distributed, ClusterManagers
+using Distributed
+using ClimaCalibrate
+
 project=dirname(Base.active_project())
 cd(project)
-# addprocs(SlurmManager(1), t="01:30:00", cpus_per_task=3,exeflags=["--project=$project", "-p", "3"])
-# addprocs(SlurmManager(5),  t="01:30:00", cpus_per_task=3,exeflags=["--project=$project", "-p", "3"])
-# addprocs(SlurmManager(100),  
-#         t="14:50:00", 
-#         cpus_per_task=1,
-#         exeflags=["--project=$project"], 
-#         mem_per_cpu=8000)
-function create_worker_pool()    
-    addprocs(
-        SlurmManager(100),
-        t = "10:00:00",
-        cpus_per_task = 1,
-        exeflags = "--project=$(Base.active_project())"
-    )
-    return WorkerPool(workers())
-end
 
-worker_pool = create_worker_pool()
+addprocs(SlurmManager(2))
+
+# worker_pool = create_worker_pool()
 
 @info "Running Script..."
 @everywhere begin
-    import ClimaCalibrate as CAL
+    #import ClimaCalibrate as CAL
+    using ClimaCalibrate
     import ClimaAtmos as CA
     
     import EnsembleKalmanProcesses as EKP
@@ -36,12 +25,11 @@ worker_pool = create_worker_pool()
     using Revise
     include("helper_funcs.jl")
     include("observation_map.jl")
-    # include("get_les_metadata.jl")
+
     experiment_dir = dirname(Base.active_project())
     model_interface = joinpath(experiment_dir, "model_interface.jl")
     include(model_interface)
-    experiment_config =
-        YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
+    experiment_config = YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
     experiment_config_nt = NamedTuple(Symbol.(keys(experiment_config)) .=> values(experiment_config))
     (; output_dir, n_iterations, log_vars, prior_path, model_config, const_noise_by_var, z_max, norm_factors_by_var, ensemble_size) = experiment_config_nt
@@ -119,6 +107,43 @@ JLD2.jldsave(
     observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 end
 @info "Obtained Observations..."
+
+eki = calibrate(
+    WorkerBackend, 
+    ensemble_size,
+    n_iterations,
+    observations,
+    prior,
+    output_dir;
+    scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+    localization_method = EKP.Localizers.NoLocalization(),
+    failure_handler_method = EKP.SampleSuccGauss(),
+    accelerator = EKP.DefaultAccelerator(),
+)
+
+eki = calibrate(
+    WorkerBackend,
+    # problem because observations are generated from an observation series so not in ExperimentConfig 
+    ExperimentConfig(joinpath(experiment_dir, "experiment_config.yml")), 
+    scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+    localization_method = EKP.Localizers.NoLocalization(),
+    failure_handler_method = EKP.SampleSuccGauss(),
+    accelerator = EKP.DefaultAccelerator(),
+)
+
+eki = calibrate(
+    WorkerBackend, 
+    ensemble_size,
+    n_iterations,
+    observations,
+    prior,
+    output_dir
+)
+
+
+
+
+
 
 ###  EKI hyperparameters/settings
 @info "Initializing calibration" n_iterations ensemble_size output_dir

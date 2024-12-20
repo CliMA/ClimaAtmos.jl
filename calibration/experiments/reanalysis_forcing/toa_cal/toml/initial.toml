@@ -23,7 +23,7 @@ value = 0.5507468907407347
 value = 0.13515021886991527
 
 [pressure_normalmode_drag_coeff]
-value = 25.872050045766862
+value = 25.872050045766862,
 
 [mixing_length_Prandtl_number_0]
 value = 1.0831106562777666
