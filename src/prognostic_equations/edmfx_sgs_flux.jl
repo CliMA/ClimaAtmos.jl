@@ -314,4 +314,4 @@ function edmfx_sgs_diffusive_flux_tendency!(
 end
 
 tke_dissipation(ρatke⁰, tke⁰, mixing_length, c_d, dt) =
-    tke⁰ >= 0 ? c_d * ρatke⁰ * sqrt(tke⁰) / max(mixing_length, 1) : ρatke⁰ / dt
+    tke⁰ >= 0 ? c_d * ρatke⁰ * sqrt(tke⁰) / max(mixing_length, 1) : ρatke⁰ / float(dt)
