@@ -124,8 +124,8 @@ function get_diagnostics(
                 period_dates =
                     CA.promote_period.(Dates.Second(period_seconds))
             end
-            (_, date_last_output) = promote(sim_info.dt, ITime(0, start_date = start_date))
-            (_, date_last_compute) = promote(sim_info.dt, ITime(0, start_date = start_date))
+            (_, date_last_output) = promote(sim_info.dt, ITime(0, epoch = start_date))
+            (_, date_last_compute) = promote(sim_info.dt, ITime(0, epoch = start_date))
             output_schedule = CAD._EveryITimeSchedule(
                 date_last_output,
                 # ITime(1, period = period_dates),

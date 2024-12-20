@@ -653,7 +653,7 @@ function get_simulation(config::AtmosConfig)
                 sim_info.restart_file,
                 hash(atmos),
             )
-            t_start = ITime(t_start; start_date = sim_info.start_date)
+            t_start = ITime(t_start; epoch = sim_info.start_date)
             spaces = get_spaces_restart(Y)
         end
         @info "Allocating Y: $s"
@@ -671,7 +671,7 @@ function get_simulation(config::AtmosConfig)
                 spaces.center_space,
                 spaces.face_space,
             )
-            t_start = ITime(0; start_date = sim_info.start_date)
+            t_start = ITime(0; epoch = sim_info.start_date)
         end
         @info "Allocating Y: $s"
 
