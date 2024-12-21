@@ -5,28 +5,26 @@ import NVTX
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields, RecursiveApply
 
-NVTX.@annotate function kinetic_energy!(
-    K_level,
+@inline function kinetic_energy(
     uₕ_level,
     u³_halflevel,
     local_geometry_level,
     local_geometry_halflevel,
 )
-    @. K_level =
-        (
-            dot(
-                C123(uₕ_level, local_geometry_level),
-                CT123(uₕ_level, local_geometry_level),
-            ) +
-            dot(
-                C123(u³_halflevel, local_geometry_halflevel),
-                CT123(u³_halflevel, local_geometry_halflevel),
-            ) +
-            2 * dot(
-                CT123(uₕ_level, local_geometry_level),
-                C123(u³_halflevel, local_geometry_halflevel),
-            )
-        ) / 2
+    return (
+        dot(
+            C123(uₕ_level, local_geometry_level),
+            CT123(uₕ_level, local_geometry_level),
+        ) +
+        dot(
+            C123(u³_halflevel, local_geometry_halflevel),
+            CT123(u³_halflevel, local_geometry_halflevel),
+        ) +
+        2 * dot(
+            CT123(uₕ_level, local_geometry_level),
+            C123(u³_halflevel, local_geometry_halflevel),
+        )
+    ) / 2
 end
 
 NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
@@ -71,8 +69,7 @@ NVTX.@annotate function set_diagnostic_edmfx_env_quantities_level!(
         ρ_level,
         turbconv_model,
     )
-    kinetic_energy!(
-        K⁰_level,
+    @. K⁰_level = kinetic_energy(
         uₕ_level,
         u³⁰_halflevel,
         local_geometry_level,
@@ -177,8 +174,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
             local_geometry_int_halflevel,
         )
 
-        kinetic_energy!(
-            Kʲ_int_level,
+        @. Kʲ_int_level = kinetic_energy(
             uₕ_int_level,
             u³ʲ_int_halflevel,
             local_geometry_int_level,
@@ -798,8 +794,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 )
             end
 
-            kinetic_energy!(
-                Kʲ_level,
+            @. Kʲ_level = kinetic_energy(
                 uₕ_level,
                 u³ʲ_halflevel,
                 local_geometry_level,
