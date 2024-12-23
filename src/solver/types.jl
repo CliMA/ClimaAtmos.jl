@@ -103,6 +103,8 @@ struct GCMDrivenInsolation <: AbstractInsolation end
     AbstractOzone
 
 Describe how ozone concentration should be set.
+
+Currently, this is only relevant for RRTGMP.
 """
 abstract type AbstractOzone end
 
@@ -126,6 +128,33 @@ resolution, single-year version will be used.
 Refer to ClimaArtifacts for more information on how to obtain the artifact.
 """
 struct PrescribedOzone <: AbstractOzone end
+
+"""
+    AbstractAerosols
+
+Describe how aerosol concentrations should be set.
+
+Currently, this is only relevant for RRTGMP.
+"""
+abstract type AbstractAerosols end
+
+"""
+    PrescribedCMIP5Aerosols
+
+Implement a time-varying ozone profile as read from disk.
+
+The CMIP5 forcing dataset is used. For production runs, you should acquire the
+high-resolution, multi-year `aerosol_concentrations` artifact. If this is not
+available, a low resolution, single-year version will be used.
+
+Refer to ClimaArtifacts for more information on how to obtain the artifact.
+
+`aerosol_names` is the list of aerosols to use. The names have to match what is
+in the artifact.
+"""
+struct PrescribedCMIP5Aerosols{T} <: AbstractAerosols
+    aerosol_names::T
+end
 
 """
     AbstractCloudInRadiation
@@ -456,6 +485,7 @@ Base.@kwdef struct AtmosModel{
     F,
     S,
     OZ,
+    AERO,
     RM,
     LA,
     EXTFORCING,
@@ -488,6 +518,9 @@ Base.@kwdef struct AtmosModel{
 
     """What to do with ozone for radiation (when using RRTGMP)"""
     ozone::OZ = nothing
+
+    """What to do with aerosols for radiation (when using RRTGMP)"""
+    aerosols::AERO = nothing
 
     radiation_mode::RM = nothing
     ls_adv::LA = nothing

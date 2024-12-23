@@ -1,4 +1,18 @@
-# Aerosols
+# Tracers
+
+## Aerosols
+
+`ClimaAtmos` can read aerosol profiles from the CIMP5 forcing data. The data is
+described in
+[`ClimaArtifacts`](https://github.com/CliMA/ClimaArtifacts/tree/main/aerosol_concentrations)
+and it is only relevant for the radiation transfer, and only when RRTMGP is
+used.
+
+To enable this mode, use the `PrescribedCMIP5Aerosols` aerosols model. Upon
+construction, `PrescribedCMIP5Aerosols` takes the list of aerosol names to be
+used. The names have to match what is in the file.
+
+## Ozone
 
 `ClimaAtmos` implements two modes for ozone profiles. These are only relevant
 for the radiation transfer, and only when RRTMGP is used.
