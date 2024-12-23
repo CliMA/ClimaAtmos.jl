@@ -82,14 +82,10 @@ function common_diagnostics(
 )
     return vcat(
         map(short_names) do short_name
-            output_schedule_func =
-                period isa Period ?
-                EveryCalendarDtSchedule(period; reference_date = start_date) :
-                EveryDtSchedule(period)
             return ScheduledDiagnostic(
                 variable = get_diagnostic_variable(short_name),
                 compute_schedule_func = EveryStepSchedule(),
-                output_schedule_func = output_schedule_func,
+                output_schedule_func = EveryCalendarDtSchedule(period; reference_date = start_date),
                 reduction_time_func = reduction,
                 output_writer = output_writer,
                 pre_output_hook! = pre_output_hook!,

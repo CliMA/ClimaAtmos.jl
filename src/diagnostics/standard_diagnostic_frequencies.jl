@@ -61,7 +61,7 @@ Return a list of `ScheduledDiagnostics` that compute the max over ten days for t
 """
 tendaily_maxs(FT, short_names...; output_writer, start_date) =
     common_diagnostics(
-        10 * 24 * 60 * 60 * one(FT),
+        Day(10),
         max,
         output_writer,
         start_date,
@@ -82,7 +82,7 @@ Return a list of `ScheduledDiagnostics` that compute the min over ten days for t
 """
 tendaily_mins(FT, short_names...; output_writer, start_date) =
     common_diagnostics(
-        10 * 24 * 60 * 60 * one(FT),
+        Day(10),
         min,
         output_writer,
         start_date,
@@ -104,7 +104,7 @@ Return a list of `ScheduledDiagnostics` that compute the average over ten days f
 # An average is just a sum with a normalization before output
 tendaily_averages(FT, short_names...; output_writer, start_date) =
     common_diagnostics(
-        10 * 24 * 60 * 60 * one(FT),
+        Day(10),
         (+),
         output_writer,
         start_date,
@@ -126,7 +126,7 @@ tendaily_average(FT, short_names; output_writer, start_date) =
 Return a list of `ScheduledDiagnostics` that compute the daily max for the given variables.
 """
 daily_maxs(FT, short_names...; output_writer, start_date) = common_diagnostics(
-    24 * 60 * 60 * one(FT),
+    Day(1),
     max,
     output_writer,
     start_date,
@@ -147,7 +147,7 @@ daily_max(FT, short_names; output_writer, start_date) =
 Return a list of `ScheduledDiagnostics` that compute the daily min for the given variables.
 """
 daily_mins(FT, short_names...; output_writer, start_date) = common_diagnostics(
-    24 * 60 * 60 * one(FT),
+    Day(1),
     min,
     output_writer,
     start_date,
@@ -169,7 +169,7 @@ Return a list of `ScheduledDiagnostics` that compute the daily average for the g
 # An average is just a sum with a normalization before output
 daily_averages(FT, short_names...; output_writer, start_date) =
     common_diagnostics(
-        24 * 60 * 60 * one(FT),
+        Day(1),
         (+),
         output_writer,
         start_date,
@@ -191,7 +191,7 @@ daily_average(FT, short_names; output_writer, start_date) =
 Return a list of `ScheduledDiagnostics` that compute the hourly max for the given variables.
 """
 hourly_maxs(FT, short_names...; output_writer, start_date) = common_diagnostics(
-    60 * 60 * one(FT),
+    Hour(1),
     max,
     output_writer,
     start_date,
@@ -212,7 +212,7 @@ hourly_max(FT, short_names; output_writer, start_date) =
 Return a list of `ScheduledDiagnostics` that compute the hourly min for the given variables.
 """
 hourly_mins(FT, short_names...; output_writer, start_date) = common_diagnostics(
-    60 * 60 * one(FT),
+    Hour(1),
     min,
     output_writer,
     start_date,
@@ -235,7 +235,7 @@ Return a list of `ScheduledDiagnostics` that compute the hourly average for the 
 """
 hourly_averages(FT, short_names...; output_writer, start_date) =
     common_diagnostics(
-        60 * 60 * one(FT),
+        Hour(1),
         (+),
         output_writer,
         start_date,

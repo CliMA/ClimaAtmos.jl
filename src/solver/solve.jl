@@ -16,7 +16,7 @@ simulated_years_per_day(es::EfficiencyStats) =
     simulated_years(es) / walltime_in_days(es)
 
 simulated_years(es::EfficiencyStats) =
-    (es.tspan[2] - es.tspan[1]) * (1 / (365 * 24 * 3600)) #=seconds * years per second=#
+    float(es.tspan[2] - es.tspan[1]) * (1 / (365 * 24 * 3600)) #=seconds * years per second=#
 walltime_in_days(es::EfficiencyStats) = es.walltime * (1 / (24 * 3600)) #=seconds * days per second=#
 
 function timed_solve!(integrator)
@@ -83,36 +83,36 @@ function solve_atmos!(simulation)
     SciMLBase.step!(integrator)
     precompile_callbacks(integrator)
     GC.gc()
-    try
-        if CA.is_distributed(comms_ctx)
-            # GC.enable(false) # disabling GC causes a memory leak
-            ClimaComms.barrier(comms_ctx)
-            (sol, walltime) = timed_solve!(integrator)
-            ClimaComms.barrier(comms_ctx)
-            GC.enable(true)
-            return AtmosSolveResults(sol, :success, walltime)
-        else
-            (sol, walltime) = timed_solve!(integrator)
-            return AtmosSolveResults(sol, :success, walltime)
-        end
-    catch ret_code
-        if !CA.is_distributed(comms_ctx)
-            # We can only save when not distributed because we don't have a way to sync the
-            # MPI processes (maybe just one MPI rank crashes, leading to a hanging
-            # simulation)
-            CA.save_state_to_disk_func(integrator, simulation.output_dir)
-        end
-        @error "ClimaAtmos simulation crashed. Stacktrace for failed simulation" exception =
-            (ret_code, catch_backtrace())
-        return AtmosSolveResults(nothing, :simulation_crashed, nothing)
-    finally
-        # Close all the files opened by the writers
-
-        maxrss_str = prettymemory(maxrss())
-        @info "Memory currently used (after solve!) by the process (RSS): $maxrss_str"
-
-        isnothing(output_writers) || foreach(close, output_writers)
+    # try
+    if CA.is_distributed(comms_ctx)
+        # GC.enable(false) # disabling GC causes a memory leak
+        ClimaComms.barrier(comms_ctx)
+        (sol, walltime) = timed_solve!(integrator)
+        ClimaComms.barrier(comms_ctx)
+        GC.enable(true)
+        return AtmosSolveResults(sol, :success, walltime)
+    else
+        (sol, walltime) = timed_solve!(integrator)
+        return AtmosSolveResults(sol, :success, walltime)
     end
+    # catch ret_code
+    #     if !CA.is_distributed(comms_ctx)
+    #         # We can only save when not distributed because we don't have a way to sync the
+    #         # MPI processes (maybe just one MPI rank crashes, leading to a hanging
+    #         # simulation)
+    #         CA.save_state_to_disk_func(integrator, simulation.output_dir)
+    #     end
+    #     @error "ClimaAtmos simulation crashed. Stacktrace for failed simulation" exception =
+    #         (ret_code, catch_backtrace())
+    #     return AtmosSolveResults(nothing, :simulation_crashed, nothing)
+    # finally
+    #     # Close all the files opened by the writers
+
+    #     maxrss_str = prettymemory(maxrss())
+    #     @info "Memory currently used (after solve!) by the process (RSS): $maxrss_str"
+
+    #     isnothing(output_writers) || foreach(close, output_writers)
+    # end
 end
 
 """
