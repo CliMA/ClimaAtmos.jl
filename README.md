@@ -118,3 +118,4 @@ Let us know by [opening an issue](https://github.com/CliMA/ClimaAtmos.jl/issues/
 Here is the rule of thumb [coding style](https://clima.github.io/ClimateMachine.jl/latest/DevDocs/CodeStyle/) and [unicode usage restrictions](https://clima.github.io/ClimateMachine.jl/latest/DevDocs/AcceptableUnicode/).
 
 For more information, check out our [contributor's guide](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/).
+
