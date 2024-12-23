@@ -34,7 +34,8 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
     (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) = ogw
 
     if ogw.topo_info == "gfdl_restart"
-        orographic_info_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
+        orographic_info_rll =
+            AA.topo_res_file_path(; context = ClimaComms.context(Y.c))
         topo_info = regrid_OGW_info(Y, orographic_info_rll)
     elseif ogw.topo_info == "raw_topo"
         # TODO: right now this option may easily crash

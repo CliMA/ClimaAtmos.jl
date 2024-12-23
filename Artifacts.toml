@@ -36,7 +36,7 @@ lazy = true
     [[earth_orography_60arcseconds.download]]
     sha256 = "eca66c0701d1c2b9e271742314915ffbf4a0fae92709df611c323f38e019966e"
     url = "https://caltech.box.com/shared/static/4asrxcgl6xsgenfcug9p0wkkyhtqilgk.gz"
-    
+
 [era5_cloud]
 git-tree-sha1 = "10742e0a2e343d13bb04df379e300a83402d4106"
 
@@ -51,3 +51,10 @@ lazy = true
     [[DYAMOND_SUMMER_ICS_p98deg.download]]
     sha256 = "9a5efd20d68d9b954af2fd7803bccdda3fc7ef4ff60421ed13d18f768312d2e3"
     url = "https://caltech.box.com/shared/static/whn01xr83v0s4p8tc59ds3nvfsfe6ebs.gz"
+
+[topo_drag]
+git-tree-sha1 = "9970989c13c2ad015ab5738d42fd9f5b320f1451"
+
+    [[topo_drag.download]]
+    sha256 = "2960d7ee10b3a15203dfa8b05b1b94c9546212230e5828787577864113829d6e"
+    url = "https://caltech.box.com/shared/static/pflpi9qoay7jknmajlj1uaxqtnp4frj2.gz"
