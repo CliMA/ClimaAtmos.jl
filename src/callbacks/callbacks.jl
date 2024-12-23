@@ -364,6 +364,8 @@ NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
     Y = u
 
+    # TODO: Use ITime here
+    t = float(t)
     day = floor(Int, t / (60 * 60 * 24))
     sec = floor(Int, t % (60 * 60 * 24))
     @info "Saving state to HDF5 file on day $day second $sec"

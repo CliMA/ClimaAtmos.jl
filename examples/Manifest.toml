@@ -2,7 +2,7 @@
 
 julia_version = "1.10.7"
 manifest_format = "2.0"
-project_hash = "13bc74579bbfd1b4bab2e5d6cddd05f9a01dba06"
+project_hash = "0650226b22aae022a4fd4dd08a3323bee9fb506d"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "72af59f5b8f09faee36b4ec48e014a79210f2f4f"
@@ -413,9 +413,9 @@ version = "0.1.1"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "ff967e27a56a938d3e719bb8d2e025b086c3f808"
+git-tree-sha1 = "dbc1d2c495f118c36a83fa93cd5311fe3a32f615"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
-version = "0.7.39"
+version = "0.7.38"
 
     [deps.ClimaTimeSteppers.extensions]
     ClimaTimeSteppersBenchmarkToolsExt = ["CUDA", "BenchmarkTools", "OrderedCollections", "StatsBase", "PrettyTables"]
@@ -428,8 +428,8 @@ version = "0.7.39"
     StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [[deps.ClimaUtilities]]
-deps = ["Artifacts", "ClimaComms", "Dates"]
-git-tree-sha1 = "cd699551a7c9f721363bbf92b2c61c436b1a3959"
+deps = ["Artifacts", "Dates"]
+git-tree-sha1 = "7e024b52c3a6713680665b3cc9f6cb9b872db357"
 uuid = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
 version = "0.1.20"
 weakdeps = ["Adapt", "CUDA", "ClimaCore", "ClimaCoreTempestRemap", "Interpolations", "NCDatasets"]
