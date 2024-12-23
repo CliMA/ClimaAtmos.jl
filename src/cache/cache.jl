@@ -1,5 +1,5 @@
 struct AtmosCache{
-    FT <: AbstractFloat,
+    FT,
     AM,
     NUM,
     CAP,

@@ -27,10 +27,10 @@ function flux_accumulation!(integrator)
         nlevels = Spaces.nlevels(axes(Y.c))
         net_energy_flux_toa[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
-            Δt
+            float(Δt)
         if p.atmos.surface_model isa PrescribedSurfaceTemperature
             net_energy_flux_sfc[] +=
-                horizontal_integral_at_boundary(ᶠradiation_flux, half) * Δt
+                horizontal_integral_at_boundary(ᶠradiation_flux, half) * float(Δt)
         end
     end
     return nothing
@@ -346,6 +346,8 @@ NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
     Y = u
 
+    # TODO: Use ITime here
+    t = float(t)
     day = floor(Int, t / (60 * 60 * 24))
     sec = floor(Int, t % (60 * 60 * 24))
     @info "Saving state to HDF5 file on day $day second $sec"
