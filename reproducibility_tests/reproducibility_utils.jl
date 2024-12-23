@@ -41,6 +41,10 @@ comparable states
 ################################################################################
 =#
 
+# debug_reproducibility() = false
+debug_reproducibility() =
+    get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) == "climaatmos-ci"
+
 import Dates
 import OrderedCollections
 
@@ -420,9 +424,23 @@ function move_data_to_save_dir(;
         for src in dirs_src
             dst = joinpath(dest_dir, basename(src))
             mv(src, dst; force = true)
+            debug_reproducibility() &&
+                @info "Reproducibility: File $src moved to $dst"
         end
         ref_counter_file_main = joinpath(dest_dir, "ref_counter.jl")
         mv(ref_counter_file_PR, ref_counter_file_main; force = true)
+    else
+        if debug_reproducibility()
+            @warn "Repro: skipping data movement"
+            @show in_merge_queue
+            @show branch == "main"
+            @show source_has_changed(;
+                n = 1,
+                root_dir = dest_root,
+                ref_counter_PR,
+                skip,
+            )
+        end
     end
 end
 

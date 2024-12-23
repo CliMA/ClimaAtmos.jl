@@ -27,7 +27,10 @@ function error_if_dissimilar_dicts(dicts, dict)
     end
 end
 
-function no_comparison_error(non_existent_files)
+all_files_in_dir(dir) =
+    map((root, dirs, files) -> joinpath(root, file), walkdir(dir))
+
+function no_comparison_error(dirs, non_existent_files)
     msg = "\n\n"
     msg *= "Pull request author:\n"
     msg *= "    It seems that a new dataset,\n"
@@ -47,6 +50,10 @@ function no_comparison_error(non_existent_files)
     msg *= "  `How to merge pull requests (PR) that get approved\n"
     msg *= "   but *break* reproducibility tests`\n\n"
     msg *= "for how to merge this PR."
+    msg *= "\n\n"
+    for dir in dirs
+        msg *= "Files in dirs: $(all_files_in_dir(dir))\n"
+    end
     error(msg)
 end
 
@@ -178,7 +185,7 @@ function reproducibility_results(
     # foreach(x->maybe_extract(x), data_file_references)
 
     non_existent_files = filter(x -> !isfile(x), data_file_references)
-    isempty(non_existent_files) || no_comparison_error(non_existent_files)
+    isempty(non_existent_files) || no_comparison_error(dirs, non_existent_files)
 
     dict_computed_solution = to_dict(data_file_computed, name, comms_ctx)
     dict_reference_solutions =
@@ -253,6 +260,7 @@ function export_reproducibility_results(
     hdfwriter = InputOutput.HDF5Writer(data_file_computed, comms_ctx)
     InputOutput.write!(hdfwriter, field_vec, name)
     Base.close(hdfwriter)
+    @info "Reproducibility: File $data_file_computed exported"
 
     (dirs, computed_mses, how) = reproducibility_results(
         comms_ctx;

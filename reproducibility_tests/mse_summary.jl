@@ -10,6 +10,7 @@ include(joinpath(@__DIR__, "reproducibility_test_job_ids.jl"))
 job_ids = reproducibility_test_job_ids()
 
 computed_mses = get_computed_mses(; job_ids)
+isempty(computed_mses) && @warn "No MSEs were computed"
 print_mse_summary(; mses = computed_mses)
 print_skipped_jobs(; mses = computed_mses)
 

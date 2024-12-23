@@ -10,13 +10,17 @@ include(joinpath(@__DIR__, "reproducibility_tools.jl"))
 (; job_id, out_dir, test_broken_report_flakiness) =
     reproducibility_test_params()
 
+debug = true
 repro_dir = joinpath(out_dir, "reproducibility_bundle")
 computed_mse_filenames =
     map(filter(default_is_mse_file, readdir(repro_dir))) do x
         joinpath(repro_dir, x)
     end
-
 if isempty(computed_mse_filenames)
+    @warn "No reproducibility tests performed, due to non-existent comparable data."
+    debug && @show readdir(out_dir)
+    debug && @show readdir(repro_dir)
+    debug && @show filter(default_is_mse_file, readdir(repro_dir))
     dirs = latest_comparable_dirs()
     if isempty(dirs) # no comparable references
         bins = compute_bins() # all reproducible bins, may or may not be comparable
@@ -46,19 +50,21 @@ if isempty(computed_mse_filenames)
         error(msg)
     end
 else
-    commit_hashes =
-        map(x -> basename(dirname(dirname(x))), computed_mse_filenames)
-    results = report_reproducibility_results(
-        commit_hashes,
-        computed_mse_filenames;
-        test_broken_report_flakiness,
-    )
+    @testset "Reproducibility tests" begin
+        commit_hashes =
+            map(x -> basename(dirname(dirname(x))), computed_mse_filenames)
+        results = report_reproducibility_results(
+            commit_hashes,
+            computed_mse_filenames;
+            test_broken_report_flakiness,
+        )
 
-    if test_broken_report_flakiness
-        @test results == :not_yet_reproducible
-        @test_broken results == :now_reproducible
-    else
-        @test results == :reproducible
+        if test_broken_report_flakiness
+            @test results == :not_yet_reproducible
+            @test_broken results == :now_reproducible
+        else
+            @test results == :reproducible
+        end
     end
 end
 

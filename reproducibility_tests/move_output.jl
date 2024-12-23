@@ -17,6 +17,7 @@ move_data_to_save_dir(;
 
 if buildkite_ci && in_merge_queue
     folders = get_reference_dirs_to_delete(; root_dir = cluster_data_prefix)
+    debug_reproducibility() && @warn "Repro: deleting folders $folders"
     for f in folders
         rm(f; recursive = true, force = true)
     end
