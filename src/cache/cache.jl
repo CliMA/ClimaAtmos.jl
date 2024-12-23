@@ -9,7 +9,6 @@ struct AtmosCache{
     PREC,
     SCRA,
     HYPE,
-    DSS,
     PR,
     LSAD,
     EXTFORCING,
@@ -53,8 +52,6 @@ struct AtmosCache{
        ghost buffers for DSS"""
     hyperdiff::HYPE
 
-    do_dss::DSS
-
     """Additional parameters used by the various tendencies"""
     precipitation::PR
     large_scale_advection::LSAD
@@ -97,11 +94,8 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
 
     (; ᶜf³, ᶠf¹²) = compute_coriolis(ᶜcoord, ᶠcoord, params)
 
-    quadrature_style =
-        Spaces.quadrature_style(Spaces.horizontal_space(axes(Y.c)))
-    do_dss = quadrature_style isa Quadratures.GLL
     ghost_buffer =
-        !do_dss ? (;) :
+        !do_dss(axes(Y.c)) ? (;) :
         (; c = Spaces.create_dss_buffer(Y.c), f = Spaces.create_dss_buffer(Y.f))
 
     net_energy_flux_toa = [Geometry.WVector(FT(0))]
@@ -176,7 +170,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         precomputed,
         scratch,
         hyperdiff,
-        do_dss,
         precipitation,
         large_scale_advection,
         external_forcing,
