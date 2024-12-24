@@ -544,7 +544,9 @@ end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; atmos, dt) = p
-    dt_save_to_sol = ITime(time_to_seconds(parsed_args["dt_save_to_sol"]))
+    # Another option is just to make ITime take inf
+    dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+    dt_save_to_sol = dt_save_to_sol == Inf ? Inf : ITime(dt_save_to_sol)
 
     s = @timed_str begin
         func = if parsed_args["split_ode"]
