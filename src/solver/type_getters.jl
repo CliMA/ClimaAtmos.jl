@@ -517,8 +517,9 @@ function get_sim_info(config::AtmosConfig)
     # Need to do this to fix the bug with type ClimaODEFunction has no field sys
     # This bug comes from typeof(prob.tspan) === typeof(tspan_promote) being false
     # in the function get_concrete_problem in the package DiffEqBase
+    epoch = DateTime(parsed_args["start_date"], dateformat"yyyymmdd")
     dt = ITime(time_to_seconds(parsed_args["dt"]))
-    t_end = ITime(time_to_seconds(parsed_args["t_end"]))
+    t_end = ITime(time_to_seconds(parsed_args["t_end"]), epoch = epoch)
     (dt, t_end) = promote(dt, t_end)
     sim = (;
         output_dir,
@@ -526,7 +527,7 @@ function get_sim_info(config::AtmosConfig)
         restart_file,
         job_id,
         dt = dt,
-        start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
+        start_date = epoch,
         t_end = t_end,
     )
     @show sim.t_end,  sim.dt
@@ -543,7 +544,7 @@ end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; atmos, dt) = p
-    dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+    dt_save_to_sol = ITime(time_to_seconds(parsed_args["dt_save_to_sol"]))
 
     s = @timed_str begin
         func = if parsed_args["split_ode"]
@@ -571,14 +572,13 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     end
     @info "Define ode function: $s"
     problem = SciMLBase.ODEProblem(func, Y, tspan, p)
-    # saveat = if dt_save_to_sol == Inf
-    #     tspan[2]
-    # elseif tspan[2] % dt_save_to_sol == 0
-    #     dt_save_to_sol
-    # else
-    #     [tspan[1]:dt_save_to_sol:tspan[2]..., tspan[2]]
-    # end # ensure that tspan[2] is always saved
-    saveat = [tspan[2]]
+    saveat = if dt_save_to_sol == Inf
+        tspan[2]
+    elseif iszero(tspan[2] % dt_save_to_sol)
+        dt_save_to_sol
+    else
+        promote([tspan[1]:dt_save_to_sol:tspan[2]..., tspan[2]]...)
+    end # ensure that tspan[2] is always saved
     @info "dt_save_to_sol: $dt_save_to_sol, length(saveat): $(length(saveat))"
     args = (problem, ode_algo)
     kwargs = (; saveat, callback, dt, additional_integrator_kwargs(ode_algo)...)
@@ -671,7 +671,7 @@ function get_simulation(config::AtmosConfig)
                 spaces.center_space,
                 spaces.face_space,
             )
-            t_start = ITime(0; epoch = sim_info.start_date)
+            t_start = ITime(Spaces.undertype(axes(Y.c))(0); epoch = sim_info.start_date)
         end
         @info "Allocating Y: $s"
 
@@ -764,7 +764,6 @@ function get_simulation(config::AtmosConfig)
     steps_cycle = lcm(steps_cycle_non_diag)
     @info "n_steps_per_cycle_per_cb (non diagnostics): $steps_cycle_non_diag"
     @info "n_steps_per_cycle (non diagnostics): $steps_cycle"
-
     tspan = (t_start, sim_info.t_end)
     s = @timed_str begin
         integrator_args, integrator_kwargs = args_integrator(
