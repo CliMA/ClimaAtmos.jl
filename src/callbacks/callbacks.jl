@@ -138,7 +138,10 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             end
 
             # assume that ᶜq_vap = ᶜq_tot when computing ᶜvmr_h2o
-            @. ᶜvmr_h2o = TD.shum_to_mixing_ratio(ᶜq_tot, ᶜq_tot)
+            @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
+                thermo_params,
+                TD.PhasePartition(ᶜq_tot),
+            )
         else
             @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
                 thermo_params,
