@@ -1199,6 +1199,8 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
             @test source_checksum(hash1) == source_checksum(computed_dir)
             @test source_checksum(hash2) == source_checksum(computed_dir)
 
+            repro_folder = "repro_bundle"
+            repro_dir = joinpath(save_dir, "hash_new", repro_folder)
             move_data_to_save_dir(;
                 dest_root = save_dir,
                 buildkite_ci = true,
@@ -1212,25 +1214,12 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
                     "ref_counter.jl",
                 ),
                 ref_counter_PR = 3,
+                repro_folder,
                 skip = false,
             )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    "hash_new",
-                    "job_id_1",
-                    "ref_prog_state.hdf5",
-                ),
-            )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    "hash_new",
-                    "job_id_2",
-                    "ref_prog_state.hdf5",
-                ),
-            )
-            @test isfile(joinpath(save_dir, "hash_new", "ref_counter.jl"))
+            @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.hdf5"))
+            @test isfile(joinpath(repro_dir, "job_id_2", "ref_prog_state.hdf5"))
+            @test isfile(joinpath(repro_dir, "ref_counter.jl"))
         end
     end
 
@@ -1283,6 +1272,8 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
             @test source_checksum(hash1) == source_checksum(computed_dir)
             @test source_checksum(hash2) == source_checksum(computed_dir)
 
+            repro_folder = "repro_bundle"
+            repro_dir = joinpath(save_dir, "hash_new", repro_folder)
             move_data_to_save_dir(;
                 dest_root = save_dir,
                 buildkite_ci = true,
@@ -1295,26 +1286,13 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
                     ref_counter_file_dir,
                     "ref_counter.jl",
                 ),
+                repro_folder,
                 ref_counter_PR = 3,
                 skip = false,
             )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    "hash_new",
-                    "job_id_1",
-                    "ref_prog_state.hdf5",
-                ),
-            )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    "hash_new",
-                    "job_id_2",
-                    "ref_prog_state.hdf5",
-                ),
-            )
-            @test isfile(joinpath(save_dir, "hash_new", "ref_counter.jl"))
+            @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.hdf5"))
+            @test isfile(joinpath(repro_dir, "job_id_2", "ref_prog_state.hdf5"))
+            @test isfile(joinpath(repro_dir, "ref_counter.jl"))
         end
     end
 end

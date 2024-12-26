@@ -401,6 +401,7 @@ function move_data_to_save_dir(;
     ref_counter_PR = read_ref_counter(ref_counter_file_PR),
     skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
     n_hash_characters = 7,
+    repro_folder = "reproducibility_bundle",
 )
     buildkite_ci || return nothing
 
@@ -419,15 +420,17 @@ function move_data_to_save_dir(;
         mkpath(dest_root)
         dest_dir = joinpath(dest_root, commit_sha)
         mkpath(dest_dir)
+        dest_repro = joinpath(dest_dir, repro_folder)
+        mkpath(dest_repro)
         # Always move reproducibility data, so that we
         # can compare against multiple references
         for src in dirs_src
-            dst = joinpath(dest_dir, basename(src))
+            dst = joinpath(dest_repro, basename(src))
             mv(src, dst; force = true)
             debug_reproducibility() &&
                 @info "Reproducibility: File $src moved to $dst"
         end
-        ref_counter_file_main = joinpath(dest_dir, "ref_counter.jl")
+        ref_counter_file_main = joinpath(dest_repro, "ref_counter.jl")
         mv(ref_counter_file_PR, ref_counter_file_main; force = true)
     else
         if debug_reproducibility()

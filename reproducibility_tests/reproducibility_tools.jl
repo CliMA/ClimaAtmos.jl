@@ -27,8 +27,15 @@ function error_if_dissimilar_dicts(dicts, dict)
     end
 end
 
-all_files_in_dir(dir) =
-    map((root, dirs, files) -> joinpath(root, file), walkdir(dir))
+function all_files_in_dir(dir)
+    all_files = String[]
+    for (root, dirs, files) in walkdir(dir)
+        for file in files
+            push!(all_files, joinpath(root, file))
+        end
+    end
+    return all_files
+end
 
 function no_comparison_error(dirs, non_existent_files)
     msg = "\n\n"
@@ -252,11 +259,12 @@ function export_reproducibility_results(
         joinpath(@__DIR__, "ref_counter.jl"),
     ),
     skip::Bool = !haskey(ENV, "BUILDKITE_COMMIT"),
+    repro_folder = "reproducibility_bundle",
 )
-    repro_folder = joinpath(computed_dir, "reproducibility_bundle")
-    data_file_computed = joinpath(repro_folder, computed_filename)
+    repro_dir = joinpath(computed_dir, repro_folder)
+    data_file_computed = joinpath(repro_dir, computed_filename)
 
-    mkpath(repro_folder)
+    mkpath(repro_dir)
     hdfwriter = InputOutput.HDF5Writer(data_file_computed, comms_ctx)
     InputOutput.write!(hdfwriter, field_vec, name)
     Base.close(hdfwriter)
@@ -277,7 +285,7 @@ function export_reproducibility_results(
     for (computed_mse, dir) in zip(computed_mses, dirs)
         commit_hash = basename(dirname(dir))
         computed_mse_file =
-            joinpath(repro_folder, "computed_mse_$commit_hash.json")
+            joinpath(repro_dir, "computed_mse_$commit_hash.json")
 
         open(computed_mse_file, "w") do io
             JSON.print(io, computed_mse)
