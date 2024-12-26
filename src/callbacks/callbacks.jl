@@ -130,7 +130,10 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             end
 
             # assume that ᶜq_vap = ᶜq_tot when computing ᶜvmr_h2o
-            @. ᶜvmr_h2o = TD.shum_to_mixing_ratio(ᶜq_tot, ᶜq_tot)
+            @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
+                thermo_params,
+                TD.PhasePartition(ᶜq_tot),
+            )
         else
             @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
                 thermo_params,
@@ -148,6 +151,16 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     if radiation_mode isa RRTMGPI.AllSkyRadiation ||
        radiation_mode isa RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
         if !radiation_mode.idealized_clouds
+            if radiation_mode.cloud isa PrescribedCloudInRadiation
+                @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
+                    thermo_params,
+                    TD.PhasePartition(
+                        p.radiation.prescribed_clouds_field.q,
+                        p.radiation.prescribed_clouds_field.clwc,
+                        p.radiation.prescribed_clouds_field.ciwc,
+                    ),
+                )
+            end
             ᶜΔz = Fields.Δz_field(Y.c)
             ᶜlwp = Fields.array2field(
                 rrtmgp_model.center_cloud_liquid_water_path,
