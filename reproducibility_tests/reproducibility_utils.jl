@@ -13,20 +13,16 @@ Consider the following set of reproducibility directories, prefixed
 by "reference counters", which allow users to compare against other
 reproducible states in that column.
 
-Note that reference counter changes can "rewind"(which may happen in the case of
-reverted commits). In such cases, we do consider the rewound state as an
-entirely new state, in order to fully preserve the history (to some depth).
+Note that the reference counter must increment in the case of reverted commits,
+resulting in an entirely new state, in order to fully preserve the history
+(to some depth).
 
-An important consequence of this requires precise terminology to avoid ambiguous
-descriptions.
-
-For example, "comparable references per reference counter" is not well defined,
-because the reference counter can be reverted. So, let's introduce the concept
-of a "bin", which can be defined as a collection of directories created in a
-period with the same reference counter. Folders created before and after that
-bin have a different reference counter. Also, `n_bins == n_reference_changes +
-1`(modulo the edge case of when there are no bins) because, if the reference
-counter doesn't change, new results are put into the same bin.
+Here, we introduce the concept of a "bin", which can be defined as a collection
+of directories created in a period with the same reference counter. Folders
+created before and after that bin have a different reference counter. Also,
+`n_bins == n_reference_changes + 1`(modulo the edge case of when there are no
+bins) because, if the reference counter doesn't change, new results are put
+into the same bin.
 
 ```
 comparable states
@@ -34,19 +30,69 @@ comparable states
          |                                                                             |
          |  bin 1      bin 2      bin 3      bin 4      bin 5      bin 6      bin 7    |
          |                                                                             |
-         |  02_49f92   04_36ebe   05_beb8a   06_4d837   05_8c311   08_45875   10_bc1e0 |
-         |             04_d6e48              06_d6d73              08_1cc58            |
-         v             04_4c042                                                        v newest
+         |  02_49f92   03_36ebe   04_beb8a   05_4d837   06_8c311   07_45875   08_bc1e0 |
+         |             03_d6e48              05_d6d73              07_1cc58            |
+         v             03_4c042                                                        v newest
 ```
+
+# File states
+
+Reproducibility tests inherently rely on comparing multiple states, which means
+that our reproducibility testing infrastructure is _stateful_. During our
+continuous integration testing (CI), files are generated, moved, and zipped. To help
+assist our understanding and reasoning, we let's assume that there are two states:
+
+## state 1: end of simulation, folder structure
+
+ - `job_id/output_dir/`
+ - `job_id/output_dir/reproducibility_bundle/`
+ - `job_id/output_dir/reproducibility_bundle/ref_counter.jl`
+ - `job_id/output_dir/reproducibility_bundle/prog_state.hdf5`
+
+## state 2: data is saved for future reference
+
+ - `commit_hash/job_id/output_dir/`
+ - `commit_hash/job_id/output_dir/reproducibility_bundle/`
+ - `commit_hash/job_id/output_dir/reproducibility_bundle/ref_counter.jl`
+ - `commit_hash/job_id/output_dir/reproducibility_bundle/prog_state.hdf5`
+
+ - `commit_hash/reproducibility_bundle/ref_counter.jl`
+ - `commit_hash/reproducibility_bundle/job_id/`
+ - `commit_hash/reproducibility_bundle/job_id/prog_state.hdf5`
+
+In other words, we strip out `output_dir/`, and swap `job_id` and
+`reproducibility_bundle`. This is done for two reasons:
+
+ - The ref_counter is job-independent, hence the swap
+ - The `output_dir/` is redundant to the purpose of the commit hash folder
+
 ################################################################################
 =#
 
-# debug_reproducibility() = false
+# debug_reproducibility() = true
 debug_reproducibility() =
     get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) == "climaatmos-ci"
 
 import Dates
 import OrderedCollections
+
+function string_all_files_in_dir(dir)
+    msg = "Files in dir $dir\n"
+    for file in all_files_in_dir(dir)
+        msg *= "     $file\n"
+    end
+    return msg
+end
+
+function all_files_in_dir(dir)
+    all_files = String[]
+    for (root, dirs, files) in walkdir(dir; follow_symlinks = true)
+        for file in files
+            push!(all_files, joinpath(root, file))
+        end
+    end
+    return all_files
+end
 
 read_ref_counter(file) = parse(Int, first(readlines(file)))
 
@@ -54,8 +100,8 @@ read_ref_counter(file) = parse(Int, first(readlines(file)))
     sorted_dirs_with_matched_files(; dir = pwd(), filename)
 
 Return an array of subdirectories of `dir` (defaults to the current working
-directory) sorted by modification time (oldest to newest). Return an empty
-vector if no subdirectories are found.
+directory) sorted by the reference counters contained in the folders. Return an
+empty vector if no subdirectories are found.
 
 This function recurses through `dir`, and finds all directories that have the
 file `filename`.
@@ -75,26 +121,9 @@ function sorted_dirs_with_matched_files(;
     isempty(matched_dirs) && return String[]
     # sort by timestamp
     sorted_dirs =
-        sort(matched_dirs; by = f -> Dates.unix2datetime(stat(f).mtime))
+        sort(matched_dirs; by = f -> read_ref_counter(joinpath(f, filename)))
     return sorted_dirs
 end
-
-"""
-    sorted_dataset_folder(; dir=pwd())
-
-Return an array of subdirectories of `dir` (defaults to the current working
-directory) sorted by modification time (oldest to newest). Return an empty
-vector if no subdirectories are found.
-"""
-function sorted_dataset_folder(; dir = pwd())
-    matching_dirs = filter(isdir, readdir(dir; join = true))
-    isempty(matching_dirs) && return String[]
-    # sort by timestamp
-    sorted_dirs =
-        sort(matching_dirs; by = f -> Dates.unix2datetime(stat(f).mtime))
-    return sorted_dirs
-end
-
 
 """
     ref_counters_per_dir(dirs)
@@ -200,17 +229,17 @@ comparable states
          v             04_4c042                                                        v newest
 ```
 """
-compute_bins(
+function compute_bins(
     root_dir::String = "/central/scratch/esm/slurm-buildkite/climaatmos-main";
     filename = "ref_counter.jl",
-) = compute_bins(
-    reverse(
-        sorted_dirs_with_matched_files(;
-            dir = root_dir,
-            filename = "ref_counter.jl",
-        ),
-    ),
 )
+    dirs = sorted_dirs_with_matched_files(;
+        dir = root_dir,
+        filename = "ref_counter.jl",
+    )
+    return compute_bins(reverse(dirs))
+end
+
 function compute_bins(sorted_dirs::Vector{String})
     @assert isempty(invalid_reference_folders(sorted_dirs))
     bins = Vector{String}[]
@@ -241,11 +270,31 @@ function compute_bins(sorted_dirs::Vector{String})
     return bins
 end
 
+print_bins(bins) = print_bins(stdout, bins)
+print_bins(io::IO, bins) = println(io, string_bins(bins))
+
+"""
+    string_bins(bins)
+
+Return a string summarizing the given bins.
+"""
+function string_bins(bins)
+    msg = "Bins:\n"
+    for (i, bin) in enumerate(bins)
+        msg *= "  Bin $i:\n"
+        for (j, state) in enumerate(bin)
+            ref_counter = read_ref_counter(joinpath(state, "ref_counter.jl"))
+            msg *= "    (State $j, ref_counter): ($state, $ref_counter)\n"
+        end
+    end
+    return msg
+end
+
 """
     get_reference_dirs_to_delete(;
         root_dir,
-        keep_n_comparable_states = 5,
-        keep_n_bins_back = 7,
+        keep_n_comparable_states = 100,
+        keep_n_bins_back = 100,
     )
 
 Return a list of folders to delete.
@@ -262,9 +311,9 @@ keep_n_comparable_states
          |                                                                             |
          |  bin 1      bin 2      bin 3      bin 4      bin 5      bin 6      bin 7    |
          |                                                                             |
-         |  02_49f92   04_36ebe   05_beb8a   06_4d837   05_8c311   08_45875   10_bc1e0 |
-         |             04_d6e48              06_d6d73              08_1cc58            |
-         v             04_4c042                                                        v newest
+         |  02_49f92   03_36ebe   04_beb8a   05_4d837   06_8c311   07_45875   08_bc1e0 |
+         |             03_d6e48              05_d6d73              07_1cc58            |
+         v             03_4c042                                                        v newest
 ```
 
 With these folders, and given a reference counter of 10, we'll see the following
@@ -274,35 +323,18 @@ behavior:
     get_reference_dirs_to_delete(;
         keep_n_comparable_states = 4,
         keep_n_bins_back = 3
-    ) -> [02_49f92, 04_36ebe, 04_d6e48, 04_4c042]
+    ) -> [02_49f92, 03_36ebe, 03_d6e48, 03_4c042]
 
     get_reference_dirs_to_delete(;
         keep_n_comparable_states = 1,
         keep_n_bins_back = 5
-    ) -> [02_49f92, 04_d6e48, 04_4c042, 06_d6d73, 08_1cc58]
+    ) -> [02_49f92, 03_d6e48, 03_4c042, 05_d6d73, 07_1cc58]
 ```
-
-Note:
-    `keep_n_references_back` is sorted _chronologically_, in order to correctly
-    operate in the case of reverted pull requests. In other words, the above
-    references may look like this:
-
-```
-keep_n_comparable_states
-         |                           <---- keep_n_bins_back                            | oldest
-         |                                                                             |
-         |  bin 1      bin 2      bin 3      bin 4      bin 5      bin 6      bin 7    |
-         |                                                                             |
-         |  02_49f92   04_36ebe   05_beb8a   06_4d837   05_8c311   08_45875   10_bc1e0 |
-         |             04_d6e48              06_d6d73              08_1cc58            |
-         v             04_4c042                                                        v newest
-```
-
 """
 function get_reference_dirs_to_delete(;
     root_dir,
-    keep_n_comparable_states = 5,
-    keep_n_bins_back = 7,
+    keep_n_comparable_states = 100,
+    keep_n_bins_back = 100,
     filename = "ref_counter.jl",
 )
     dirs = sorted_dirs_with_matched_files(; dir = root_dir, filename)
@@ -333,7 +365,7 @@ Return a hash from the contents of all Julia files found recursively in `dir`
 """
 function source_checksum(dir = pwd())
     jl_files = String[]
-    for (root, dirs, files) in walkdir(dir)
+    for (root, dirs, files) in walkdir(dir; follow_symlinks = true)
         for file in files
             endswith(file, ".jl") && push!(jl_files, joinpath(root, file))
         end
@@ -368,26 +400,48 @@ function source_has_changed(;
     end
 end
 
+rm_folder(path; strip_folder) =
+    joinpath(filter(x -> !occursin(strip_folder, x), splitpath(path))...)
+
 """
     move_data_to_save_dir(;
         dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
-        buildkite_ci = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) == "climaatmos-ci",
+        buildkite_ci = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) ==
+                       "climaatmos-ci",
         commit = get(ENV, "BUILDKITE_COMMIT", nothing),
         branch = get(ENV, "BUILDKITE_BRANCH", nothing),
         in_merge_queue = startswith(branch, "gh-readonly-queue/main/"),
         dirs_src,
+        strip_folder = Pair("output_active", ""),
         ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
+        ref_counter_PR = read_ref_counter(ref_counter_file_PR),
+        skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
+        n_hash_characters = 7,
+        repro_folder = "reproducibility_bundle",
     )
 
-Moves data from directories `dirs_src[i]` to `dest_root/commit_sha/basename
-(dirs_src[i])`, given some conditions are met. In particular, data movement
-will occur when this function is called:
+Moves data in the following way:
+
+for job_id in dest_src
+  `job_id/out/repro/ref_counter.jl`  -> `commit_hash/repro/ref_counter.jl`
+  `job_id/out/repro/`                -> `commit_hash/repro/job_id/`
+  `job_id/out/repro/prog_state.hdf5` -> `commit_hash/repro/job_id/prog_state.hdf5`
+end
+
+Note that files not in the `repro` folder are not moved.
+
+In other words, we strip out `out/`, and swap `job_id` and `repro`. This is done
+for two reasons:
+
+ - The ref_counter is job-independent, hence the swap
+ - The `out/` is redundant to the purpose of the commit hash folder
+
+Data movement will occur when this function is called:
 
  - on a job run in buildkite
  - when in the merge queue
  - when on the main branch if the `source_checksum` is different from the source
    code in the latest comparable reference
-
 """
 function move_data_to_save_dir(;
     dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
@@ -397,6 +451,7 @@ function move_data_to_save_dir(;
     branch = get(ENV, "BUILDKITE_BRANCH", nothing),
     in_merge_queue = startswith(branch, "gh-readonly-queue/main/"),
     dirs_src,
+    strip_folder = "output_active",
     ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
     ref_counter_PR = read_ref_counter(ref_counter_file_PR),
     skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
@@ -426,12 +481,36 @@ function move_data_to_save_dir(;
         # can compare against multiple references
         for src in dirs_src
             dst = joinpath(dest_repro, basename(src))
+            debug_reproducibility() && @info "Repro: moving $src to $dst"
             mv(src, dst; force = true)
-            debug_reproducibility() &&
-                @info "Reproducibility: File $src moved to $dst"
+        end
+        for dst in all_files_in_dir(dest_repro)
+            dst_new = rm_folder(dst; strip_folder)
+            if debug_reproducibility()
+                @show isfile(dst)
+                @show dst
+                @show dst_new
+            end
+            if dst ≠ dst_new
+                mkpath(dirname(dst_new))
+                debug_reproducibility() &&
+                    @info "Repro: re-moving $dst to $dst_new"
+                mv(dst, dst_new; force = true)
+            end
         end
         ref_counter_file_main = joinpath(dest_repro, "ref_counter.jl")
+        debug_reproducibility() &&
+            @info "Repro: moving $ref_counter_file_PR to $ref_counter_file_main"
         mv(ref_counter_file_PR, ref_counter_file_main; force = true)
+        if debug_reproducibility()
+            println("####################### SRC")
+            for src in dirs_src
+                @info(string_all_files_in_dir(src))
+            end
+            println("####################### DST")
+            @info(string_all_files_in_dir(dest_repro))
+            println("#######################")
+        end
     else
         if debug_reproducibility()
             @warn "Repro: skipping data movement"

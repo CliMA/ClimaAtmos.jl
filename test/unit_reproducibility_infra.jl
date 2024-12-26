@@ -5,6 +5,7 @@ using Revise; include("test/unit_reproducibility_infra.jl")
 using Test
 import Dates
 import Logging
+import ClimaUtilities.OutputPathGenerator
 
 # this also includes reproducibility_utils.jl
 include(joinpath("..", "reproducibility_tests/reproducibility_tools.jl"))
@@ -147,7 +148,7 @@ end
         @test dirs == [d6, d5] # d6 is most recent
     end
 
-    # reverted commits examples
+    # folders modified out of chronological order examples
     make_and_cd() do dir
         d1 = make_ref_file_counter(1, dir, "d1")
         d2 = make_ref_file_counter(2, dir, "d2")
@@ -161,7 +162,7 @@ end
             ref_counter_PR = 3,
             skip = false,
         )
-        @test dirs == [d6]
+        @test dirs == [d6, d3]
     end
 
     # appending to p7 now, confusingly, removes p3:
@@ -186,13 +187,17 @@ end
 @testset "Reproducibility infrastructure: validate_reference_folders" begin
     # No dirs at all
     make_and_cd() do dir
-        @test invalid_reference_folders(sorted_dataset_folder(; dir)) == []
+        @test invalid_reference_folders(
+            sorted_dirs_with_matched_files(; dir),
+        ) == []
     end
 
     # 1 dir without ref counter
     make_and_cd() do dir
         p1 = make_dir(dir, "d1")
-        @test invalid_reference_folders(sorted_dataset_folder(; dir)) == [p1]
+        @test invalid_reference_folders(
+            sorted_dirs_with_matched_files(; dir),
+        ) == []
     end
 
     # mix
@@ -203,8 +208,9 @@ end
         r2 = make_dir(dir, "r2")
         d3 = make_ref_file_counter(3, dir, "d3")
         r3 = make_dir(dir, "r3")
-        @test invalid_reference_folders(sorted_dataset_folder(; dir)) ==
-              [r1, r2, r3]
+        @test invalid_reference_folders(
+            sorted_dirs_with_matched_files(; dir),
+        ) == []
     end
 end
 
@@ -237,9 +243,13 @@ end
         d6 = make_ref_file_counter(5, dir, "d6")
         d7 = make_ref_file_counter(6, dir, "d7")
         @test compute_bins(dir) == [[d7], [d6, d5], [d4, d3], [d2], [d1]]
+        @test occursin(
+            "(State 1, ref_counter):",
+            string_bins(compute_bins(dir)),
+        )
     end
 
-    # simulating reverted PR
+    # simulating folders modified out of chronological order
     make_and_cd() do dir
         d1 = make_ref_file_counter(1, dir, "d1")
         d2 = make_ref_file_counter(2, dir, "d2")
@@ -248,7 +258,7 @@ end
         d5 = make_ref_file_counter(3, dir, "d5")
         d6 = make_ref_file_counter(4, dir, "d6")
         d7 = make_ref_file_counter(5, dir, "d7")
-        @test compute_bins(dir) == [[d7], [d6], [d5], [d4], [d3], [d2], [d1]]
+        @test compute_bins(dir) == [[d7], [d6, d4], [d5, d3], [d2], [d1]]
     end
 end
 
@@ -297,45 +307,6 @@ end
         d09 = make_ref_file_counter(6, dir, "09")
         d10 = make_ref_file_counter(6, dir, "10")
         d11 = make_ref_file_counter(7, dir, "11")
-        dirs = get_reference_dirs_to_delete(;
-            root_dir = dir,
-            keep_n_comparable_states = 1,
-            keep_n_bins_back = 5,
-        )
-        @test dirs == reverse([d01, d02, d03, d04, d06, d09])
-        dirs = get_reference_dirs_to_delete(;
-            root_dir = dir,
-            keep_n_comparable_states = 4,
-            keep_n_bins_back = 3,
-        )
-        @test dirs == reverse([d01, d02, d03, d04, d05, d06, d07])
-    end
-
-    #=
-    # Reverted commits example, consider:
-
-    keep_n_comparable_states
-             |    <---- keep_n_bins_back    | oldest
-             |                              |
-             |  B01 B02 B03 B01 B02 B03 B04 |
-             |                              |
-             |  d01 d02 d05 d06 d08 d09 d11 |
-             |      d03     d07     d10     |
-             v      d04                     v newest
-    =#
-
-    make_and_cd() do dir
-        d01 = make_ref_file_counter(1, dir, "01")
-        d02 = make_ref_file_counter(2, dir, "02")
-        d03 = make_ref_file_counter(2, dir, "03")
-        d04 = make_ref_file_counter(2, dir, "04")
-        d05 = make_ref_file_counter(3, dir, "05")
-        d06 = make_ref_file_counter(1, dir, "06")
-        d07 = make_ref_file_counter(1, dir, "07")
-        d08 = make_ref_file_counter(2, dir, "08")
-        d09 = make_ref_file_counter(3, dir, "09")
-        d10 = make_ref_file_counter(3, dir, "10")
-        d11 = make_ref_file_counter(4, dir, "11")
         dirs = get_reference_dirs_to_delete(;
             root_dir = dir,
             keep_n_comparable_states = 1,
@@ -700,6 +671,15 @@ MSEs[\"d3\"][b] = 3
      job_id:`d1`, file:`OrderedCollections.OrderedDict(\"a\" => 1, \"b\" => 1)`
      job_id:`d3`, file:`OrderedCollections.OrderedDict(\"a\" => 3, \"b\" => 3)`
 "
+    end
+end
+
+@testset "all_files_in_dir with generate_output_path" begin
+    make_and_cd() do dir
+        # Tests that symlink directories are not
+        # returned in all_files_in_dir
+        output_dir = OutputPathGenerator.generate_output_path(dir)
+        @test all_files_in_dir(dir) == String[]
     end
 end
 
@@ -1255,16 +1235,16 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
             make_file_with_contents(computed_dir, "file_z.jl", "abc")
             ref_counter_file_dir =
                 make_ref_file_counter(3, computed_dir, "repro_bundle")
-            job_id_1 = joinpath(computed_dir, "job_id_1")
-            job_id_2 = joinpath(computed_dir, "job_id_2")
+            job_id_1 = joinpath(computed_dir, "repro_bundle", "job_id_1")
+            job_id_2 = joinpath(computed_dir, "repro_bundle", "job_id_2")
             put_data_file(
-                job_id_1,
+                joinpath(job_id_1, "output_active"),
                 fv,
                 comms_ctx;
                 filename = "ref_prog_state.hdf5",
             )
             put_data_file(
-                job_id_2,
+                joinpath(job_id_2, "output_active"),
                 fv,
                 comms_ctx;
                 filename = "ref_prog_state.hdf5",
@@ -1273,8 +1253,8 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
             @test source_checksum(hash2) == source_checksum(computed_dir)
 
             repro_folder = "repro_bundle"
-            repro_dir = joinpath(save_dir, "hash_new", repro_folder)
             move_data_to_save_dir(;
+                strip_folder = "output_active",
                 dest_root = save_dir,
                 buildkite_ci = true,
                 commit = "hash_new",
@@ -1290,6 +1270,7 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
                 ref_counter_PR = 3,
                 skip = false,
             )
+            repro_dir = joinpath(save_dir, "hash_new", "repro_bundle")
             @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.hdf5"))
             @test isfile(joinpath(repro_dir, "job_id_2", "ref_prog_state.hdf5"))
             @test isfile(joinpath(repro_dir, "ref_counter.jl"))

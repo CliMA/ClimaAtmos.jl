@@ -42,7 +42,16 @@ if isempty(computed_mse_filenames)
                 read_ref_counter(joinpath(newest_saved_dir, "ref_counter.jl"))
             ref_counter_PR =
                 read_ref_counter(joinpath(@__DIR__, "ref_counter.jl"))
-            @assert ref_counter_PR == newest_saved_ref_counter + 1 "Reference counter must be incremented by 1. ref_counter_PR=$ref_counter_PR, newest_saved_ref_counter=$newest_saved_ref_counter"
+            if ref_counter_PR ≠ newest_saved_ref_counter + 1
+                if debug_reproducibility()
+                    @info "    ref_counter_PR=$ref_counter_PR, newest_saved_ref_counter=$newest_saved_ref_counter\n"
+                    @info "newest_saved_dir: $newest_saved_dir\n"
+                    @info "newest_saved_dir_legacy: $newest_saved_dir_legacy\n"
+                    @info "newest_saved_dir_new: $newest_saved_dir_new\n"
+                    print_bins(bins)
+                end
+                error("Reference counter must be incremented by 1.")
+            end
         end
     else
         msg = "There were comparable references, but no computed mse files exist."
