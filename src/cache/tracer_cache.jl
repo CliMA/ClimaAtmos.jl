@@ -15,10 +15,7 @@ function ozone_cache(::PrescribedOzone, Y, start_date)
         reference_date = start_date,
         regridder_type = :InterpolationsRegridder,
         regridder_kwargs = (; extrapolation_bc),
-        method = LinearPeriodFillingInterpolation(
-            Year(1),
-            TimeVaryingInputs.Flat(),
-        ),
+        method = LinearPeriodFillingInterpolation(Year(1)),
     )
     return (; o3, prescribed_o3_timevaryinginput)
 end
