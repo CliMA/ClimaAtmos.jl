@@ -27,16 +27,6 @@ function error_if_dissimilar_dicts(dicts, dict)
     end
 end
 
-function all_files_in_dir(dir)
-    all_files = String[]
-    for (root, dirs, files) in walkdir(dir)
-        for file in files
-            push!(all_files, joinpath(root, file))
-        end
-    end
-    return all_files
-end
-
 function no_comparison_error(dirs, non_existent_files)
     msg = "\n\n"
     msg *= "Pull request author:\n"
@@ -59,7 +49,10 @@ function no_comparison_error(dirs, non_existent_files)
     msg *= "for how to merge this PR."
     msg *= "\n\n"
     for dir in dirs
-        msg *= "Files in dirs: $(all_files_in_dir(dir))\n"
+        msg *= "Files in dir $dir\n"
+        for file in all_files_in_dir(dir)
+            msg *= "     $file\n"
+        end
     end
     error(msg)
 end
