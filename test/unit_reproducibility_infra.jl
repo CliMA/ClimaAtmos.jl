@@ -683,6 +683,306 @@ end
     end
 end
 
+@testset "Reproducibility infrastructure: save_dir_transform" begin
+    make_and_cd() do dir
+        job_id = "job_id"
+        commit = "commit_sha"
+        n_hash_characters = 10
+        output = "output_active"
+        strip_folder = output
+        repro_folder = "rbundle"
+        src = joinpath("$job_id", "$output", "$repro_folder", "prog_state.hdf5")
+        dst = joinpath("$commit", "$repro_folder", "$job_id", "prog_state.hdf5")
+        @test save_dir_transform(
+            src;
+            dest_root = dir,
+            job_id,
+            commit,
+            n_hash_characters,
+            repro_folder,
+            strip_folder,
+        ) == joinpath(dir, dst)
+
+        job_id = "job_id"
+        commit = "commit_sha"
+        n_hash_characters = 10
+        output = "output_active"
+        strip_folder = output
+        repro_folder = "rbundle"
+        src = joinpath("$job_id", "$output", "prog_state.hdf5")
+        dst = joinpath("$commit", "$repro_folder", "$job_id", "prog_state.hdf5")
+        @test save_dir_transform(
+            src;
+            dest_root = dir,
+            job_id,
+            commit,
+            n_hash_characters,
+            repro_folder,
+            strip_folder,
+        ) == joinpath(dir, dst)
+    end
+end
+
+@testset "Reproducibility infrastructure: strip_output_active_path" begin
+    @test strip_output_active_path(joinpath("a", "b", "c")) ==
+          joinpath("a", "b", "c")
+    @test strip_output_active_path(joinpath("a", "output_active", "c")) ==
+          joinpath("a", "c")
+    @test strip_output_active_path(joinpath("a", "output_1234", "c")) ==
+          joinpath("a", "c")
+    @test strip_output_active_path(joinpath("a", "output_1A34", "c")) ==
+          joinpath("a", "output_1A34", "c")
+end
+
+@testset "Reproducibility infrastructure: save_dir_in_out_list" begin
+    mktempdir2_cd_computed() do (save_dir, computed_dir)
+        hash1 = joinpath(save_dir, "hash1")
+        hash2 = joinpath(save_dir, "hash2")
+        make_file_with_contents(hash1, "file_x.jl", "abc")
+        make_file_with_contents(hash1, "file_y.jl", "abc")
+        make_file_with_contents(hash1, "file_z.jl", "abc")
+        make_ref_file_counter(3, hash1, "repro_bundle")
+
+        make_file_with_contents(hash2, "file_x.jl", "abc")
+        make_file_with_contents(hash2, "file_y.jl", "abc")
+        make_file_with_contents(hash2, "file_z.jl", "abc")
+        make_ref_file_counter(3, hash2, "repro_bundle")
+
+        make_file_with_contents(computed_dir, "file_x.jl", "abc")
+        make_file_with_contents(computed_dir, "file_y.jl", "abc")
+        make_file_with_contents(computed_dir, "file_z.jl", "abc")
+        ref_counter_file_dir =
+            make_ref_file_counter(3, computed_dir, "repro_bundle")
+        job_id_1 = joinpath(computed_dir, "repro_bundle", "job_id_1")
+        job_id_2 = joinpath(computed_dir, "repro_bundle", "job_id_2")
+
+        mkpath(joinpath(job_id_1, "output_active"))
+        file = joinpath(job_id_1, "output_active", "ref_prog_state.dat")
+        open(io -> println(io, 1), file, "w")
+
+        mkpath(joinpath(job_id_2, "output_active"))
+        file = joinpath(job_id_2, "output_active", "ref_prog_state.dat")
+        open(io -> println(io, 1), file, "w")
+
+        @test source_checksum(hash1) == source_checksum(computed_dir)
+        @test source_checksum(hash2) == source_checksum(computed_dir)
+
+        repro_folder = "repro_bundle"
+        (; files_src, files_dest) = save_dir_in_out_list(;
+            dirs_src = [job_id_1, job_id_2],
+            dest_root = save_dir,
+            commit = "commit_sha",
+            n_hash_characters = 10,
+            repro_folder,
+            strip_folder = "output_active",
+        )
+
+        @test files_src[1] == joinpath(
+            computed_dir,
+            "repro_bundle",
+            "job_id_1",
+            "output_active",
+            "ref_prog_state.dat",
+        )
+        @test files_src[2] == joinpath(
+            computed_dir,
+            "repro_bundle",
+            "job_id_2",
+            "output_active",
+            "ref_prog_state.dat",
+        )
+        @test files_dest[1] == joinpath(
+            save_dir,
+            "commit_sha",
+            "repro_bundle",
+            "job_id_1",
+            "ref_prog_state.dat",
+        )
+        @test files_dest[1] == joinpath(
+            save_dir,
+            "commit_sha",
+            "repro_bundle",
+            "job_id_1",
+            "ref_prog_state.dat",
+        )
+
+    end
+end
+
+@testset "Reproducibility infrastructure: move_data_to_save_dir legacy folder structure" begin
+    mktempdir2_cd_computed() do (save_dir, computed_dir)
+        hash1 = joinpath(save_dir, "hash1")
+        hash2 = joinpath(save_dir, "hash2")
+        make_file_with_contents(hash1, "file_x.jl", "abc")
+        make_file_with_contents(hash1, "file_y.jl", "abc")
+        make_file_with_contents(hash1, "file_z.jl", "abc")
+        make_ref_file_counter(3, hash1)
+
+        make_file_with_contents(hash2, "file_x.jl", "abc")
+        make_file_with_contents(hash2, "file_y.jl", "abc")
+        make_file_with_contents(hash2, "file_z.jl", "abc")
+        make_ref_file_counter(3, hash2)
+
+        make_file_with_contents(computed_dir, "file_x.jl", "abc")
+        make_file_with_contents(computed_dir, "file_y.jl", "abc")
+        make_file_with_contents(computed_dir, "file_z.jl", "abc")
+        ref_counter_file_dir = make_ref_file_counter(3, computed_dir)
+        job_id_1 = joinpath(computed_dir, "job_id_1")
+        job_id_2 = joinpath(computed_dir, "job_id_2")
+
+        mkpath(joinpath(job_id_1, "output_active"))
+        file = joinpath(job_id_1, "output_active", "ref_prog_state.dat")
+        open(io -> println(io, 1), file, "w")
+
+        mkpath(joinpath(job_id_2, "output_active"))
+        file = joinpath(job_id_2, "output_active", "ref_prog_state.dat")
+        open(io -> println(io, 1), file, "w")
+
+        @test source_checksum(hash1) == source_checksum(computed_dir)
+        @test source_checksum(hash2) == source_checksum(computed_dir)
+
+        repro_folder = "repro_bundle"
+        repro_dir = joinpath(save_dir, "hash_new", repro_folder)
+        move_data_to_save_dir(;
+            dest_root = save_dir,
+            buildkite_ci = true,
+            commit = "hash_new",
+            n_hash_characters = length("hash_new"),
+            branch = "unit_test_move_data_to_save_dir",
+            in_merge_queue = true,
+            dirs_src = [job_id_1, job_id_2],
+            ref_counter_file_PR = joinpath(
+                ref_counter_file_dir,
+                "ref_counter.jl",
+            ),
+            ref_counter_PR = 3,
+            repro_folder,
+            skip = false,
+        )
+        @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.dat"))
+        @test isfile(joinpath(repro_dir, "job_id_2", "ref_prog_state.dat"))
+        @test isfile(joinpath(repro_dir, "ref_counter.jl"))
+    end
+end
+
+@testset "Reproducibility infrastructure: move_data_to_save_dir" begin
+    mktempdir2_cd_computed() do (save_dir, computed_dir)
+        hash1 = joinpath(save_dir, "hash1")
+        hash2 = joinpath(save_dir, "hash2")
+        make_file_with_contents(hash1, "file_x.jl", "abc")
+        make_file_with_contents(hash1, "file_y.jl", "abc")
+        make_file_with_contents(hash1, "file_z.jl", "abc")
+        make_ref_file_counter(3, hash1, "repro_bundle")
+
+        make_file_with_contents(hash2, "file_x.jl", "abc")
+        make_file_with_contents(hash2, "file_y.jl", "abc")
+        make_file_with_contents(hash2, "file_z.jl", "abc")
+        make_ref_file_counter(3, hash2, "repro_bundle")
+
+        make_file_with_contents(computed_dir, "file_x.jl", "abc")
+        make_file_with_contents(computed_dir, "file_y.jl", "abc")
+        make_file_with_contents(computed_dir, "file_z.jl", "abc")
+        ref_counter_file_dir =
+            make_ref_file_counter(3, computed_dir, "repro_bundle")
+        job_id_1 = joinpath(computed_dir, "repro_bundle", "job_id_1")
+        job_id_2 = joinpath(computed_dir, "repro_bundle", "job_id_2")
+
+
+        mkpath(joinpath(job_id_1, "output_active"))
+        file = joinpath(job_id_1, "output_active", "ref_prog_state.dat")
+        open(io -> println(io, 1), file, "w")
+
+        mkpath(joinpath(job_id_2, "output_active"))
+        file = joinpath(job_id_2, "output_active", "ref_prog_state.dat")
+        open(io -> println(io, 1), file, "w")
+
+        @test source_checksum(hash1) == source_checksum(computed_dir)
+        @test source_checksum(hash2) == source_checksum(computed_dir)
+
+        repro_folder = "repro_bundle"
+        move_data_to_save_dir(;
+            strip_folder = "output_active",
+            dest_root = save_dir,
+            buildkite_ci = true,
+            commit = "hash_new",
+            n_hash_characters = length("hash_new"),
+            branch = "unit_test_move_data_to_save_dir",
+            in_merge_queue = true,
+            dirs_src = [job_id_1, job_id_2],
+            ref_counter_file_PR = joinpath(
+                ref_counter_file_dir,
+                "ref_counter.jl",
+            ),
+            repro_folder,
+            ref_counter_PR = 3,
+            skip = false,
+        )
+        repro_dir = joinpath(save_dir, "hash_new", "repro_bundle")
+        @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.dat"))
+        @test isfile(joinpath(repro_dir, "job_id_2", "ref_prog_state.dat"))
+        @test isfile(joinpath(repro_dir, "ref_counter.jl"))
+    end
+end
+
+@testset "Reproducibility infrastructure: move_data_to_save_dir with symlinks" begin
+    mktempdir2_cd_computed() do (save_dir, computed_dir)
+        hash1 = joinpath(save_dir, "hash1")
+        hash2 = joinpath(save_dir, "hash2")
+        make_file_with_contents(hash1, "file_x.jl", "abc")
+        make_file_with_contents(hash1, "file_y.jl", "abc")
+        make_file_with_contents(hash1, "file_z.jl", "abc")
+        make_ref_file_counter(3, hash1, "repro_bundle")
+
+        make_file_with_contents(hash2, "file_x.jl", "abc")
+        make_file_with_contents(hash2, "file_y.jl", "abc")
+        make_file_with_contents(hash2, "file_z.jl", "abc")
+        make_ref_file_counter(3, hash2, "repro_bundle")
+
+        make_file_with_contents(computed_dir, "file_x.jl", "abc")
+        make_file_with_contents(computed_dir, "file_y.jl", "abc")
+        make_file_with_contents(computed_dir, "file_z.jl", "abc")
+        ref_counter_file_dir =
+            make_ref_file_counter(3, computed_dir, "repro_bundle")
+        job_id_1 = joinpath(computed_dir, "repro_bundle", "job_id_1")
+        job_id_2 = joinpath(computed_dir, "repro_bundle", "job_id_2")
+
+
+        job_id_1_sym_dir = OutputPathGenerator.generate_output_path(job_id_1)
+        file = joinpath(job_id_1_sym_dir, "ref_prog_state.dat")
+        open(io -> println(io, 1), file, "w")
+
+        job_id_2_sym_dir = OutputPathGenerator.generate_output_path(job_id_2)
+        file = joinpath(job_id_2_sym_dir, "ref_prog_state.dat")
+        open(io -> println(io, 1), file, "w")
+
+        @test source_checksum(hash1) == source_checksum(computed_dir)
+        @test source_checksum(hash2) == source_checksum(computed_dir)
+
+        repro_folder = "repro_bundle"
+        move_data_to_save_dir(;
+            strip_folder = "output_active",
+            dest_root = save_dir,
+            buildkite_ci = true,
+            commit = "hash_new",
+            n_hash_characters = length("hash_new"),
+            branch = "unit_test_move_data_to_save_dir",
+            in_merge_queue = true,
+            dirs_src = [job_id_1, job_id_2],
+            ref_counter_file_PR = joinpath(
+                ref_counter_file_dir,
+                "ref_counter.jl",
+            ),
+            repro_folder,
+            ref_counter_PR = 3,
+            skip = false,
+        )
+        repro_dir = joinpath(save_dir, "hash_new", "repro_bundle")
+        @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.dat"))
+        @test isfile(joinpath(repro_dir, "job_id_2", "ref_prog_state.dat"))
+        @test isfile(joinpath(repro_dir, "ref_counter.jl"))
+    end
+end
+
 using ClimaComms
 using ClimaCore: Spaces, Fields, Grids, InputOutput
 using ClimaCore
@@ -1128,152 +1428,6 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
             @test isfile(joinpath(repro_dir, "computed_mse_CH05.json"))
             @test isfile(joinpath(repro_dir, "computed_mse_CH04.json"))
             @test isfile(joinpath(repro_dir, "computed_mse_CH03.json"))
-        end
-    end
-
-    @testset "Reproducibility infrastructure: move_data_to_save_dir legacy folder structure" begin
-        mktempdir2_cd_computed() do (save_dir, computed_dir)
-            grid = ExtrudedCubedSphereGrid(;
-                z_elem = 5,
-                z_min = 0,
-                z_max = 1,
-                radius = 10,
-                h_elem = 5,
-                n_quad_points = 2,
-            )
-            space =
-                Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
-            comms_ctx = ClimaComms.context(space)
-            fv = Fields.FieldVector(; x = ones(space), y = ones(space))
-
-            hash1 = joinpath(save_dir, "hash1")
-            hash2 = joinpath(save_dir, "hash2")
-            make_file_with_contents(hash1, "file_x.jl", "abc")
-            make_file_with_contents(hash1, "file_y.jl", "abc")
-            make_file_with_contents(hash1, "file_z.jl", "abc")
-            make_ref_file_counter(3, hash1)
-
-            make_file_with_contents(hash2, "file_x.jl", "abc")
-            make_file_with_contents(hash2, "file_y.jl", "abc")
-            make_file_with_contents(hash2, "file_z.jl", "abc")
-            make_ref_file_counter(3, hash2)
-
-            make_file_with_contents(computed_dir, "file_x.jl", "abc")
-            make_file_with_contents(computed_dir, "file_y.jl", "abc")
-            make_file_with_contents(computed_dir, "file_z.jl", "abc")
-            ref_counter_file_dir = make_ref_file_counter(3, computed_dir)
-            job_id_1 = joinpath(computed_dir, "job_id_1")
-            job_id_2 = joinpath(computed_dir, "job_id_2")
-            put_data_file(
-                job_id_1,
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                job_id_2,
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            @test source_checksum(hash1) == source_checksum(computed_dir)
-            @test source_checksum(hash2) == source_checksum(computed_dir)
-
-            repro_folder = "repro_bundle"
-            repro_dir = joinpath(save_dir, "hash_new", repro_folder)
-            move_data_to_save_dir(;
-                dest_root = save_dir,
-                buildkite_ci = true,
-                commit = "hash_new",
-                n_hash_characters = length("hash_new"),
-                branch = "unit_test_move_data_to_save_dir",
-                in_merge_queue = true,
-                dirs_src = [job_id_1, job_id_2],
-                ref_counter_file_PR = joinpath(
-                    ref_counter_file_dir,
-                    "ref_counter.jl",
-                ),
-                ref_counter_PR = 3,
-                repro_folder,
-                skip = false,
-            )
-            @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.hdf5"))
-            @test isfile(joinpath(repro_dir, "job_id_2", "ref_prog_state.hdf5"))
-            @test isfile(joinpath(repro_dir, "ref_counter.jl"))
-        end
-    end
-
-    @testset "Reproducibility infrastructure: move_data_to_save_dir" begin
-        mktempdir2_cd_computed() do (save_dir, computed_dir)
-            grid = ExtrudedCubedSphereGrid(;
-                z_elem = 5,
-                z_min = 0,
-                z_max = 1,
-                radius = 10,
-                h_elem = 5,
-                n_quad_points = 2,
-            )
-            space =
-                Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
-            comms_ctx = ClimaComms.context(space)
-            fv = Fields.FieldVector(; x = ones(space), y = ones(space))
-
-            hash1 = joinpath(save_dir, "hash1")
-            hash2 = joinpath(save_dir, "hash2")
-            make_file_with_contents(hash1, "file_x.jl", "abc")
-            make_file_with_contents(hash1, "file_y.jl", "abc")
-            make_file_with_contents(hash1, "file_z.jl", "abc")
-            make_ref_file_counter(3, hash1, "repro_bundle")
-
-            make_file_with_contents(hash2, "file_x.jl", "abc")
-            make_file_with_contents(hash2, "file_y.jl", "abc")
-            make_file_with_contents(hash2, "file_z.jl", "abc")
-            make_ref_file_counter(3, hash2, "repro_bundle")
-
-            make_file_with_contents(computed_dir, "file_x.jl", "abc")
-            make_file_with_contents(computed_dir, "file_y.jl", "abc")
-            make_file_with_contents(computed_dir, "file_z.jl", "abc")
-            ref_counter_file_dir =
-                make_ref_file_counter(3, computed_dir, "repro_bundle")
-            job_id_1 = joinpath(computed_dir, "repro_bundle", "job_id_1")
-            job_id_2 = joinpath(computed_dir, "repro_bundle", "job_id_2")
-            put_data_file(
-                joinpath(job_id_1, "output_active"),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                joinpath(job_id_2, "output_active"),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            @test source_checksum(hash1) == source_checksum(computed_dir)
-            @test source_checksum(hash2) == source_checksum(computed_dir)
-
-            repro_folder = "repro_bundle"
-            move_data_to_save_dir(;
-                strip_folder = "output_active",
-                dest_root = save_dir,
-                buildkite_ci = true,
-                commit = "hash_new",
-                n_hash_characters = length("hash_new"),
-                branch = "unit_test_move_data_to_save_dir",
-                in_merge_queue = true,
-                dirs_src = [job_id_1, job_id_2],
-                ref_counter_file_PR = joinpath(
-                    ref_counter_file_dir,
-                    "ref_counter.jl",
-                ),
-                repro_folder,
-                ref_counter_PR = 3,
-                skip = false,
-            )
-            repro_dir = joinpath(save_dir, "hash_new", "repro_bundle")
-            @test isfile(joinpath(repro_dir, "job_id_1", "ref_prog_state.hdf5"))
-            @test isfile(joinpath(repro_dir, "job_id_2", "ref_prog_state.hdf5"))
-            @test isfile(joinpath(repro_dir, "ref_counter.jl"))
         end
     end
 end

@@ -86,9 +86,11 @@ end
 
 function all_files_in_dir(dir)
     all_files = String[]
-    for (root, dirs, files) in walkdir(dir; follow_symlinks = true)
+    for (root, dirs, files) in walkdir(dir)
         for file in files
-            push!(all_files, joinpath(root, file))
+            f = joinpath(root, file)
+            isfile(f) || continue # avoid symlinks
+            push!(all_files, f)
         end
     end
     return all_files
@@ -365,7 +367,7 @@ Return a hash from the contents of all Julia files found recursively in `dir`
 """
 function source_checksum(dir = pwd())
     jl_files = String[]
-    for (root, dirs, files) in walkdir(dir; follow_symlinks = true)
+    for (root, dirs, files) in walkdir(dir)
         for file in files
             endswith(file, ".jl") && push!(jl_files, joinpath(root, file))
         end
@@ -377,6 +379,20 @@ function source_checksum(dir = pwd())
     return hash(joined_contents)
 end
 
+
+"""
+    source_has_changed(
+        n = 5,
+        root_dir = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+        ref_counter_PR = read_ref_counter(joinpath(@__DIR__, "ref_counter.jl")),
+        skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
+        src_dir = dirname(@__DIR__),
+    )
+
+Returns a Boolean indicating if the `.jl` files in `src_dir` have changed base
+on `latest_comparable_dirs` (please see the argument list in the
+`latest_comparable_dirs` documentation).
+"""
 function source_has_changed(;
     n = 5,
     root_dir = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
@@ -400,24 +416,74 @@ function source_has_changed(;
     end
 end
 
-rm_folder(path; strip_folder) =
-    joinpath(filter(x -> !occursin(strip_folder, x), splitpath(path))...)
+"""
+    strip_output_active_folder(folder)
+
+Returns "" if `folder` is `"output_active"` or in the form `output_active_XXXX`
+where `X` are integers between 0 and 9
+"""
+function strip_output_active_folder(folder)
+    if folder == "output_active"
+        return ""
+    elseif occursin("output_", folder) &&
+           length(folder) == length("output_XXXX")
+        is_active_output_folder = true
+        rfolder = reverse(folder)
+        for i in 1:4
+            try
+                parse(Int, rfolder[i])
+            catch
+                is_active_output_folder = false
+            end
+        end
+        if is_active_output_folder
+            return ""
+        else
+            return folder
+        end
+    else
+        return folder
+    end
+end
+
+"""
+    strip_output_active_path(path)
+
+Applies `strip_output_active_folder` to all folders in the given path.
+"""
+strip_output_active_path(path) =
+    joinpath(map(x -> strip_output_active_folder(x), splitpath(path))...)
+
+print_dir_tree(dir) = print_dir_tree(stdout, dir)
+print_dir_tree(io::IO, dir) = println(io, string_dir_tree(dir))
+
+function string_dir_tree(dir)
+    s = "Files in `$dir`\n:"
+    for (root, _, files) in walkdir(dir)
+        for file in files
+            f = joinpath(root, file)
+            isfile(f) || continue # rm symlink folders (included but not files)
+            s *= "  $f\n"
+        end
+    end
+    return s
+end
 
 """
     move_data_to_save_dir(;
-        dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
         buildkite_ci = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) ==
                        "climaatmos-ci",
-        commit = get(ENV, "BUILDKITE_COMMIT", nothing),
         branch = get(ENV, "BUILDKITE_BRANCH", nothing),
         in_merge_queue = startswith(branch, "gh-readonly-queue/main/"),
         dirs_src,
-        strip_folder = Pair("output_active", ""),
         ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
         ref_counter_PR = read_ref_counter(ref_counter_file_PR),
         skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
+        dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+        commit = get(ENV, "BUILDKITE_COMMIT", nothing),
         n_hash_characters = 7,
         repro_folder = "reproducibility_bundle",
+        strip_folder = strip_output_active_path,
     )
 
 Moves data in the following way:
@@ -444,19 +510,19 @@ Data movement will occur when this function is called:
    code in the latest comparable reference
 """
 function move_data_to_save_dir(;
-    dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
     buildkite_ci = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) ==
                    "climaatmos-ci",
-    commit = get(ENV, "BUILDKITE_COMMIT", nothing),
     branch = get(ENV, "BUILDKITE_BRANCH", nothing),
     in_merge_queue = startswith(branch, "gh-readonly-queue/main/"),
     dirs_src,
-    strip_folder = "output_active",
     ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
     ref_counter_PR = read_ref_counter(ref_counter_file_PR),
     skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
+    dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+    commit = get(ENV, "BUILDKITE_COMMIT", nothing),
     n_hash_characters = 7,
     repro_folder = "reproducibility_bundle",
+    strip_folder = strip_output_active_path,
 )
     buildkite_ci || return nothing
 
@@ -471,46 +537,44 @@ function move_data_to_save_dir(;
         branch == "main" &&
         source_has_changed(; n = 1, root_dir = dest_root, ref_counter_PR, skip)
     )
-        commit_sha = commit[1:min(n_hash_characters, length(commit))]
-        mkpath(dest_root)
-        dest_dir = joinpath(dest_root, commit_sha)
-        mkpath(dest_dir)
-        dest_repro = joinpath(dest_dir, repro_folder)
-        mkpath(dest_repro)
-        # Always move reproducibility data, so that we
-        # can compare against multiple references
-        for src in dirs_src
-            dst = joinpath(dest_repro, basename(src))
-            debug_reproducibility() && @info "Repro: moving $src to $dst"
-            mv(src, dst; force = true)
+        (; files_src, files_dest) = save_dir_in_out_list(;
+            dirs_src,
+            dest_root,
+            commit,
+            n_hash_characters,
+            repro_folder,
+            strip_folder,
+        )
+        if debug_reproducibility()
+            @show repro_folder
+            @show dirs_src
+            @show dest_root
+            @show files_dest
+            @show files_src
+            @show isfile.(files_src)
+            println("******")
+            foreach(print_dir_tree, dirs_src)
+            println("******")
+            print_dir_tree(dest_root)
+            println("******")
         end
-        for dst in all_files_in_dir(dest_repro)
-            dst_new = rm_folder(dst; strip_folder)
-            if debug_reproducibility()
-                @show isfile(dst)
-                @show dst
-                @show dst_new
-            end
-            if dst ≠ dst_new
-                mkpath(dirname(dst_new))
-                debug_reproducibility() &&
-                    @info "Repro: re-moving $dst to $dst_new"
-                mv(dst, dst_new; force = true)
-            end
+        for (src, dest) in zip(files_src, files_dest)
+            @show src
+            @show dest
+            @assert isfile(src)
+            mkpath(dirname(dest))
+            mv(src, dest; force = true)
         end
+        dest_repro = destination_directory(;
+            dest_root,
+            commit,
+            n_hash_characters,
+            repro_folder,
+        )
         ref_counter_file_main = joinpath(dest_repro, "ref_counter.jl")
         debug_reproducibility() &&
             @info "Repro: moving $ref_counter_file_PR to $ref_counter_file_main"
         mv(ref_counter_file_PR, ref_counter_file_main; force = true)
-        if debug_reproducibility()
-            println("####################### SRC")
-            for src in dirs_src
-                @info(string_all_files_in_dir(src))
-            end
-            println("####################### DST")
-            @info(string_all_files_in_dir(dest_repro))
-            println("#######################")
-        end
     else
         if debug_reproducibility()
             @warn "Repro: skipping data movement"
@@ -524,6 +588,98 @@ function move_data_to_save_dir(;
             )
         end
     end
+end
+
+
+"""
+    save_dir_transform(
+        src;
+        job_id,
+        dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+        commit = get(ENV, "BUILDKITE_COMMIT", nothing),
+        n_hash_characters = 7,
+        repro_folder = "reproducibility_bundle",
+        strip_folder = strip_output_active_path,
+    )
+
+Returns the output file, to be saved, given:
+ - `src` the source file
+ - `job_id` the job ID
+ - `dest_root` the destination root directory
+ - `commit` the commit hash
+ - `n_hash_characters` truncates the commit hash to given number of characters
+ - `repro_folder` reproducibility folder
+ - `strip_folder` function to strip folders in output path
+"""
+function save_dir_transform(
+    src;
+    job_id,
+    dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+    commit = get(ENV, "BUILDKITE_COMMIT", nothing),
+    n_hash_characters = 7,
+    repro_folder = "reproducibility_bundle",
+    strip_folder = strip_output_active_path,
+)
+    dest_repro = destination_directory(;
+        dest_root,
+        commit,
+        n_hash_characters,
+        repro_folder,
+    )
+    src_filename = basename(src)
+    dst = joinpath(dest_repro, job_id, src_filename)
+    return strip_output_active_path(dst)
+end
+
+"""
+    destination_directory(;
+        dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+        commit = get(ENV, "BUILDKITE_COMMIT", nothing),
+        n_hash_characters = 7,
+        repro_folder = "reproducibility_bundle",
+    )
+
+Return the reproducibility destination directory:
+`root/commit_sha/repro_folder`, given:
+ - `dest_root` the destination root directory
+ - `commit` the commit hash
+ - `n_hash_characters` truncates the commit hash to given number of characters
+ - `repro_folder` reproducibility folder
+"""
+function destination_directory(;
+    dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+    commit = get(ENV, "BUILDKITE_COMMIT", nothing),
+    n_hash_characters = 7,
+    repro_folder = "reproducibility_bundle",
+)
+    commit_sha = commit[1:min(n_hash_characters, length(commit))]
+    return joinpath(dest_root, commit_sha, repro_folder)
+end
+
+"""
+    save_dir_in_out_list
+
+Returns two vectors of strings, containing input and output files, for moving
+data from the computed to saved directories.
+
+```julia
+(; files_src, files_dest) = save_dir_in_out_list(; dirs_src)
+for (src, dest) in zip(files_src, files_dest)
+    mv(src, dest; force = true)
+end
+```
+"""
+function save_dir_in_out_list(; dirs_src, kwargs...)
+    files_dest = String[]
+    files_src = String[]
+    for src_dir in dirs_src
+        job_id = basename(src_dir)
+        for src in all_files_in_dir(src_dir)
+            push!(files_src, src)
+            push!(files_dest, save_dir_transform(src; job_id, kwargs...))
+        end
+    end
+    return (; files_src, files_dest)
 end
 
 parse_file(file) = eval(Meta.parse(join(readlines(file))))
