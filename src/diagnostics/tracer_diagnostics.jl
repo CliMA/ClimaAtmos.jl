@@ -27,6 +27,82 @@ function compute_aerosol!(out, state, cache, time, aerosol_name)
     end
 end
 
+function compute_dust!(out, state, cache, time)
+    :prescribed_aerosols_field in propertynames(cache.tracers) ||
+        error("Aerosols do not exist in the model")
+    any(
+        x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
+        [:DST01, :DST02, :DST03, :DST04],
+    ) || error("Dust does not exist in the model")
+    if isnothing(out)
+        aero_conc = cache.scratch.ᶜtemp_scalar
+        @. aero_conc = 0
+        for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04]
+            if prescribed_aerosol_name in
+               propertynames(cache.tracers.prescribed_aerosols_field)
+                aerosol_field = getproperty(
+                    cache.tracers.prescribed_aerosols_field,
+                    prescribed_aerosol_name,
+                )
+                @. aero_conc += aerosol_field
+            end
+        end
+        return aero_conc
+    else
+        aero_conc = cache.scratch.ᶜtemp_scalar
+        @. aero_conc = 0
+        for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04]
+            if prescribed_aerosol_name in
+               propertynames(cache.tracers.prescribed_aerosols_field)
+                aerosol_field = getproperty(
+                    cache.tracers.prescribed_aerosols_field,
+                    prescribed_aerosol_name,
+                )
+                @. aero_conc += aerosol_field
+            end
+        end
+        out .= aero_conc
+    end
+end
+
+function compute_sea_salt!(out, state, cache, time)
+    :prescribed_aerosols_field in propertynames(cache.tracers) ||
+        error("Aerosols do not exist in the model")
+    any(
+        x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
+        [:SSLT01, :SSLT02, :SSLT03, :SSLT04],
+    ) || error("Sea salt does not exist in the model")
+    if isnothing(out)
+        aero_conc = cache.scratch.ᶜtemp_scalar
+        @. aero_conc = 0
+        for prescribed_aerosol_name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04]
+            if prescribed_aerosol_name in
+               propertynames(cache.tracers.prescribed_aerosols_field)
+                aerosol_field = getproperty(
+                    cache.tracers.prescribed_aerosols_field,
+                    prescribed_aerosol_name,
+                )
+                @. aero_conc += aerosol_field
+            end
+        end
+        return aero_conc
+    else
+        aero_conc = cache.scratch.ᶜtemp_scalar
+        @. aero_conc = 0
+        for prescribed_aerosol_name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04]
+            if prescribed_aerosol_name in
+               propertynames(cache.tracers.prescribed_aerosols_field)
+                aerosol_field = getproperty(
+                    cache.tracers.prescribed_aerosols_field,
+                    prescribed_aerosol_name,
+                )
+                @. aero_conc += aerosol_field
+            end
+        end
+        out .= aero_conc
+    end
+end
+
 ###
 # Ozone concentration (3d)
 ###
@@ -46,8 +122,8 @@ add_diagnostic_variable!(
     long_name = "Dust Aerosol Mass Mixing Ratio",
     standard_name = "mass_fraction_of_dust_dry_aerosol_particles_in_air",
     units = "kg kg^-1",
-    comments = "Prescribed dry mass fraction of dust aerosol particles in air. Only the smallest size is included.",
-    compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, :DST01),
+    comments = "Prescribed dry mass fraction of dust aerosol particles in air.",
+    compute! = (out, u, p, t) -> compute_dust!(out, u, p, t),
 )
 
 ###
@@ -58,8 +134,8 @@ add_diagnostic_variable!(
     long_name = "Sea-Salt Aerosol Mass Mixing Ratio",
     standard_name = "mass_fraction_of_sea_salt_dry_aerosol_particles_in_air",
     units = "kg kg^-1",
-    comments = "Prescribed dry mass fraction of sea salt aerosol particles in air. Only the smallest size is included.",
-    compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, :SSLT01),
+    comments = "Prescribed dry mass fraction of sea salt aerosol particles in air.",
+    compute! = (out, u, p, t) -> compute_sea_salt!(out, u, p, t),
 )
 
 ###

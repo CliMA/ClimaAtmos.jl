@@ -104,7 +104,21 @@ function radiation_model_cache(
         (; aerosol_radiation) = radiation_mode
         if aerosol_radiation && !(any(
             x -> x in aerosol_names,
-            ["DST01", "SSLT01", "SO4", "CB1", "CB2", "OC1", "OC2"],
+            [
+                "DST01",
+                "DST02",
+                "DST03",
+                "DST04",
+                "SSLT01",
+                "SSLT02",
+                "SSLT03",
+                "SSLT04",
+                "SO4",
+                "CB1",
+                "CB2",
+                "OC1",
+                "OC2",
+            ],
         ))
             error(
                 "Need at least one aerosol type when aerosol radiation is turned on",
@@ -218,7 +232,7 @@ function radiation_model_cache(
                     kwargs...,
                     # assuming fixed aerosol radius
                     center_dust_radius = 0.2,
-                    center_ss_radius = 0.2,
+                    center_ss_radius = 11.5,
                     center_dust_column_mass_density = NaN, # initialized in callback
                     center_ss_column_mass_density = NaN, # initialized in callback
                     center_so4_column_mass_density = NaN, # initialized in callback
