@@ -1,7 +1,6 @@
 import ClimaReproducibilityTests as CRT
 import ClimaCore: InputOutput, Fields
 import ClimaComms
-import JSON
 
 include("reproducibility_utils.jl")
 
@@ -180,7 +179,8 @@ function reproducibility_results(
         :no_comparable_dirs,
     )
 
-    data_file_references = map(p -> joinpath(p, reference_filename), dirs)
+    data_file_references =
+        map(p -> joinpath(p, job_id, reference_filename), dirs)
 
     # foreach(x->maybe_extract(x), data_file_references)
 
@@ -203,6 +203,11 @@ function reproducibility_results(
                 dict_reference = dict_reference_solution,
             )
         end
+    if debug_reproducibility()
+        println("------ end of reproducibility_results")
+        @show computed_mses
+        println("------")
+    end
     return (dirs, computed_mses, :successful_comparison)
 end
 
@@ -235,7 +240,7 @@ This function returns:
  - exports the results from field-vector `field_vec`, and saves it into the
    reproducibility folder
  - Compares the computed results against comparable references
- - Writes the dictionary of comparisons to json files in the reproducibility
+ - Writes the dictionary of comparisons to mse files in the reproducibility
    folder
 """
 function export_reproducibility_results(
@@ -275,16 +280,25 @@ function export_reproducibility_results(
         skip,
     )
 
+    commit_shas = readdir(save_dir)
     for (computed_mse, dir) in zip(computed_mses, dirs)
-        commit_hash = basename(dirname(dir))
-        computed_mse_file =
-            joinpath(repro_dir, "computed_mse_$commit_hash.json")
+        commit_hash = commit_sha_from_dir(commit_shas, dir)
+        computed_mse_file = joinpath(repro_dir, "computed_mse_$commit_hash.dat")
 
         open(computed_mse_file, "w") do io
-            JSON.print(io, computed_mse)
+            print(io, computed_mse)
         end
     end
     return (data_file_computed, computed_mses, dirs, how)
+end
+
+function commit_sha_from_mse_file(file)
+    filename = basename(file)
+    if startswith(filename, "computed_mse_") && endswith(filename, ".dat")
+        return replace(filename, "computed_mse_" => "", ".dat" => "")
+    else
+        error("File $file does not follow correct format.")
+    end
 end
 
 import ClimaReproducibilityTests as CRT
@@ -367,6 +381,11 @@ function report_reproducibility_results(
 
     for computed_mse in computed_mses
         all_reproducible = true
+        if debug_reproducibility()
+            println("---- in report_reproducibility_results")
+            @show computed_mse
+            println("----")
+        end
         for (var, reproducible) in CRT.test_mse(; computed_mse)
             if !reproducible
                 all_reproducible = false
@@ -420,8 +439,9 @@ function report_reproducibility_results(
     table_data = hcat(sources, summary_statuses)
     PrettyTables.pretty_table(io, table_data; header, crop = :none)
 
+    n_comparisons = length(computed_mses)
     println(io, "Summary:")
-    println(io, "   n_comparisons                = $(length(computed_mses))")
+    println(io, "   n_comparisons                = $n_comparisons")
     println(io, "   n_times_reproducible         = $n_times_reproducible")
     println(io, "   n_times_not_reproducible     = $n_times_not_reproducible")
     println(io, "   n_passes                     = $n_passes")
@@ -440,7 +460,7 @@ function report_reproducibility_results(
     elseif test_broken_report_flakiness
         return :not_yet_reproducible
     else
-        if n_passes ≥ n_pass_limit
+        if n_passes ≥ n_pass_limit || n_passes == n_comparisons
             return :reproducible
         else
             return :not_reproducible

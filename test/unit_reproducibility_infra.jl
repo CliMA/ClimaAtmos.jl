@@ -34,14 +34,14 @@ function make_ref_file_counter(i, dir...)
     return d
 end
 
-function make_json(
+function make_mse(
     i,
     dir...;
     subfolder = "output_active",
-    jsonfile = "computed_mse.json",
+    mse_file = "computed_mse.dat",
 )
     d = mkpath(joinpath(dir..., subfolder))
-    open(io -> println(io, i), joinpath(d, jsonfile), "w")
+    open(io -> println(io, i), joinpath(d, mse_file), "w")
     return d
 end
 rbundle(p) = joinpath(p, "reproducibility_bundle")
@@ -445,19 +445,18 @@ end
 
 
 import OrderedCollections: OrderedDict
-import JSON
 
 @testset "Reproducibility infrastructure: report_reproducibility_results - filename" begin
     make_and_cd() do dir
         mses1 = OrderedDict("a" => 0, "b" => 0)
         mses2 = OrderedDict("a" => 1, "b" => 1)
         mses3 = OrderedDict("a" => 0, "b" => 0)
-        d1 = make_json(mses1, dir, "d1")
-        d2 = make_json(mses2, dir, "d2")
-        d3 = make_json(mses3, dir, "d3")
+        d1 = make_mse(mses1, dir, "d1")
+        d2 = make_mse(mses2, dir, "d2")
+        d3 = make_mse(mses3, dir, "d3")
         paths = [d1, d2, d3]
         computed_mse_filenames = map(paths) do p
-            joinpath(p, "computed_mse.json")
+            joinpath(p, "computed_mse.dat")
         end
         io = IOBuffer()
         @test report_reproducibility_results(
@@ -606,9 +605,9 @@ end
         mses1 = OrderedDict("a" => 1, "b" => 1)
         mses2 = OrderedDict("a" => 2, "b" => 2)
         mses3 = OrderedDict("a" => 3, "b" => 3)
-        d1 = make_json(mses1, dir, "d1")
-        d2 = make_json(mses2, dir, "d2")
-        d3 = make_json(mses3, dir, "d3")
+        d1 = make_mse(mses1, dir, "d1")
+        d2 = make_mse(mses2, dir, "d2")
+        d3 = make_mse(mses3, dir, "d3")
 
         job_ids = ["d1", "d2", "d3"]
         computed_mses = get_computed_mses(;
@@ -639,9 +638,9 @@ end
         mses1 = OrderedDict("a" => 1, "b" => 1)
         mses2 = OrderedDict("a" => 2, "b" => 2)
         mses3 = OrderedDict("a" => 3, "b" => 3)
-        d1 = make_json(mses1, dir, "d1")
-        d2 = make_json(mses2, dir, "d2"; jsonfile = "comuted_mse.json") # intentional typo
-        d3 = make_json(mses3, dir, "d3")
+        d1 = make_mse(mses1, dir, "d1")
+        d2 = make_mse(mses2, dir, "d2"; mse_file = "comuted_mse.dat") # intentional typo
+        d3 = make_mse(mses3, dir, "d3")
 
         job_ids = ["d1", "d2", "d3"]
         computed_mses = get_computed_mses(;
@@ -687,7 +686,6 @@ end
     make_and_cd() do dir
         job_id = "job_id"
         commit = "commit_sha"
-        n_hash_characters = 10
         output = "output_active"
         strip_folder = output
         repro_folder = "rbundle"
@@ -698,14 +696,12 @@ end
             dest_root = dir,
             job_id,
             commit,
-            n_hash_characters,
             repro_folder,
             strip_folder,
         ) == joinpath(dir, dst)
 
         job_id = "job_id"
         commit = "commit_sha"
-        n_hash_characters = 10
         output = "output_active"
         strip_folder = output
         repro_folder = "rbundle"
@@ -716,7 +712,6 @@ end
             dest_root = dir,
             job_id,
             commit,
-            n_hash_characters,
             repro_folder,
             strip_folder,
         ) == joinpath(dir, dst)
@@ -732,6 +727,15 @@ end
           joinpath("a", "c")
     @test strip_output_active_path(joinpath("a", "output_1A34", "c")) ==
           joinpath("a", "output_1A34", "c")
+end
+
+@testset "Reproducibility infrastructure: commit_sha_from_mse_file" begin
+    @test_throws ErrorException commit_sha_from_mse_file(
+        joinpath("a", "b", "c"),
+    )
+    @test commit_sha_from_mse_file(
+        joinpath("a", "b", "computed_mse_H123.dat"),
+    ) == "H123"
 end
 
 @testset "Reproducibility infrastructure: save_dir_in_out_list" begin
@@ -772,7 +776,6 @@ end
             dirs_src = [job_id_1, job_id_2],
             dest_root = save_dir,
             commit = "commit_sha",
-            n_hash_characters = 10,
             repro_folder,
             strip_folder = "output_active",
         )
@@ -847,7 +850,6 @@ end
             dest_root = save_dir,
             buildkite_ci = true,
             commit = "hash_new",
-            n_hash_characters = length("hash_new"),
             branch = "unit_test_move_data_to_save_dir",
             in_merge_queue = true,
             dirs_src = [job_id_1, job_id_2],
@@ -905,7 +907,6 @@ end
             dest_root = save_dir,
             buildkite_ci = true,
             commit = "hash_new",
-            n_hash_characters = length("hash_new"),
             branch = "unit_test_move_data_to_save_dir",
             in_merge_queue = true,
             dirs_src = [job_id_1, job_id_2],
@@ -964,7 +965,6 @@ end
             dest_root = save_dir,
             buildkite_ci = true,
             commit = "hash_new",
-            n_hash_characters = length("hash_new"),
             branch = "unit_test_move_data_to_save_dir",
             in_merge_queue = true,
             dirs_src = [job_id_1, job_id_2],
@@ -981,6 +981,41 @@ end
         @test isfile(joinpath(repro_dir, "job_id_2", "ref_prog_state.dat"))
         @test isfile(joinpath(repro_dir, "ref_counter.jl"))
     end
+end
+@testset "Reproducibility infrastructure: commit_sha_from_dir" begin
+    @test commit_sha_from_dir(
+        ["CH1", "CH2", "CH3"],
+        joinpath("a", "b", "c", "CH1", "e", "f"),
+    ) == "CH1"
+    @test commit_sha_from_dir(
+        ["CH1", "CH2", "CH3"],
+        joinpath("a", "b", "c", "CH2", "e", "f"),
+    ) == "CH2"
+    @test commit_sha_from_dir(
+        ["CH1", "CH2", "CH3"],
+        joinpath("a", "b", "c", "e", "f", "CH2"),
+    ) == "CH2"
+    @test commit_sha_from_dir(
+        ["CH1", "CH2", "CH3"],
+        joinpath("CH2", "a", "b", "c", "e", "f"),
+    ) == "CH2"
+
+    @test commit_sha_from_dir(
+        ["CH1_xyz", "CH2_xyz", "CH3_xyz"],
+        joinpath("a", "b", "c", "CH1", "e", "f"),
+    ) == "CH1"
+    @test commit_sha_from_dir(
+        ["CH1_xyz", "CH2_xyz", "CH3_xyz"],
+        joinpath("a", "b", "c", "CH2", "e", "f"),
+    ) == "CH2"
+    @test commit_sha_from_dir(
+        ["CH1_xyz", "CH2_xyz", "CH3_xyz"],
+        joinpath("a", "b", "c", "e", "f", "CH2"),
+    ) == "CH2"
+    @test commit_sha_from_dir(
+        ["CH1_xyz", "CH2_xyz", "CH3_xyz"],
+        joinpath("CH2", "a", "b", "c", "e", "f"),
+    ) == "CH2"
 end
 
 using ClimaComms
@@ -1019,8 +1054,18 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
         end
     end
 
+    # ## state 1: end of simulation, folder structure
+    #  - `job_id/output_dir/`
+    #  - `job_id/output_dir/reproducibility_bundle/`
+    #  - `job_id/output_dir/reproducibility_bundle/ref_counter.jl`
+    #  - `job_id/output_dir/reproducibility_bundle/prog_state.hdf5`
+    # ## state 2: data is saved for future reference
+    #  - `commit_hash/job_id/reproducibility_bundle/`
+    #  - `commit_hash/job_id/reproducibility_bundle/ref_counter.jl`
+    #  - `commit_hash/job_id/reproducibility_bundle/prog_state.hdf5`
+
     @testset "Reproducibility infrastructure: reproducibility_results - legacy folder structure" begin
-        make_and_cd() do dir
+        mktempdir2_cd_computed() do (save_dir, computed_dir)
             grid = ExtrudedCubedSphereGrid(;
                 z_elem = 5,
                 z_min = 0,
@@ -1033,19 +1078,25 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
                 Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
             comms_ctx = ClimaComms.context(space)
 
+            # Folder structure:
+            job_id = "unit_test"
+            rfolder = "rbundle"
+            output = "output_active"
+            repro_dir = joinpath(computed_dir, job_id, output, rfolder)
+            mkpath(repro_dir)
+
             fv = Fields.FieldVector(; x = ones(space), y = ones(space))
-            file = joinpath(dir, "my_prog_state.hdf5")
+            file = joinpath(repro_dir, "my_prog_state.hdf5")
             hdfwriter = InputOutput.HDF5Writer(file, comms_ctx)
             InputOutput.write!(hdfwriter, fv, "Y")
             Base.close(hdfwriter)
 
             # Not on buildkite
-            job_id = "unit_test"
             (d, v, how) = reproducibility_results(
                 comms_ctx;
                 job_id,
                 name = "Y",
-                save_dir = dir,
+                save_dir = save_dir,
                 ref_counter_PR = 1,
                 reference_filename = "my_prog_state.hdf5",
                 data_file_computed = file,
@@ -1066,7 +1117,7 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
                 comms_ctx;
                 job_id,
                 name = "Y",
-                save_dir = dir,
+                save_dir = save_dir,
                 reference_filename = "my_prog_state.hdf5",
                 ref_counter_PR = 1,
                 data_file_computed = file,
@@ -1083,26 +1134,111 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
 
             # Successful comparison
 
-            d01 = make_ref_file_counter(1, dir, "01")
-            d02 = make_ref_file_counter(2, dir, "02")
-            d03 = make_ref_file_counter(3, dir, "03")
-            d04 = make_ref_file_counter(3, dir, "04")
-            d05 = make_ref_file_counter(3, dir, "05")
+            commit_sha_01 = "commit_hash_01"
+            commit_sha_02 = "commit_hash_02"
+            commit_sha_03 = "commit_hash_03"
+            commit_sha_04 = "commit_hash_04"
+            commit_sha_05 = "commit_hash_05"
+            d01 = make_ref_file_counter(1, save_dir, commit_sha_01, rfolder)
+            d02 = make_ref_file_counter(2, save_dir, commit_sha_02, rfolder)
+            d03 = make_ref_file_counter(3, save_dir, commit_sha_03, rfolder)
+            d04 = make_ref_file_counter(3, save_dir, commit_sha_04, rfolder)
+            d05 = make_ref_file_counter(3, save_dir, commit_sha_05, rfolder)
 
-            put_data_file(d01, fv, comms_ctx; filename = "ref_prog_state.hdf5")
-            put_data_file(d02, fv, comms_ctx; filename = "ref_prog_state.hdf5")
-            put_data_file(d03, fv, comms_ctx; filename = "ref_prog_state.hdf5")
-            put_data_file(d04, fv, comms_ctx; filename = "ref_prog_state.hdf5")
+            put_data_file(
+                joinpath(d01, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
+            put_data_file(
+                joinpath(d02, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
+            put_data_file(
+                joinpath(d03, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
+            put_data_file(
+                joinpath(d04, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
             fv.x .= 200
             fv.y .= 300
-            put_data_file(d05, fv, comms_ctx; filename = "ref_prog_state.hdf5")
+            put_data_file(
+                joinpath(d05, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
 
-            job_id = "unit_test"
+            # Test folder structure
+            @test isfile(
+                joinpath(
+                    computed_dir,
+                    job_id,
+                    output,
+                    rfolder,
+                    "my_prog_state.hdf5",
+                ),
+            )
+            @test isfile(
+                joinpath(
+                    save_dir,
+                    commit_sha_01,
+                    rfolder,
+                    job_id,
+                    "ref_prog_state.hdf5",
+                ),
+            )
+            @test isfile(
+                joinpath(
+                    save_dir,
+                    commit_sha_02,
+                    rfolder,
+                    job_id,
+                    "ref_prog_state.hdf5",
+                ),
+            )
+            @test isfile(
+                joinpath(
+                    save_dir,
+                    commit_sha_03,
+                    rfolder,
+                    job_id,
+                    "ref_prog_state.hdf5",
+                ),
+            )
+            @test isfile(
+                joinpath(
+                    save_dir,
+                    commit_sha_04,
+                    rfolder,
+                    job_id,
+                    "ref_prog_state.hdf5",
+                ),
+            )
+            @test isfile(
+                joinpath(
+                    save_dir,
+                    commit_sha_05,
+                    rfolder,
+                    job_id,
+                    "ref_prog_state.hdf5",
+                ),
+            )
+
             (d, v, how) = reproducibility_results(
                 comms_ctx;
                 job_id,
                 name = "Y",
-                save_dir = dir,
+                save_dir = save_dir,
                 ref_counter_PR = 3,
                 reference_filename = "ref_prog_state.hdf5",
                 data_file_computed = file,
@@ -1138,18 +1274,21 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
             comms_ctx = ClimaComms.context(space)
 
             fv = Fields.FieldVector(; x = ones(space), y = ones(space))
-            file = joinpath(
-                computed_dir,
-                "reproducibility_bundle",
-                "computed_prog_state.hdf5",
-            )
-            mkpath(dirname(file))
+
+            # Folder structure:
+            job_id = "unit_test"
+            rfolder = "rbundle"
+            output = "output_active"
+            repro_dir = joinpath(computed_dir, job_id, output, rfolder)
+            mkpath(repro_dir)
+
+            file = joinpath(repro_dir, "computed_prog_state.hdf5")
+            mkpath(repro_dir)
             hdfwriter = InputOutput.HDF5Writer(file, comms_ctx)
             InputOutput.write!(hdfwriter, fv, "Y")
             Base.close(hdfwriter)
 
             # Not on buildkite
-            job_id = "unit_test"
             (d, v, how) = reproducibility_results(
                 comms_ctx;
                 job_id,
@@ -1170,7 +1309,6 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
             @test how == :skipped
 
             # Empty comparable dirs
-            job_id = "unit_test"
             (d, v, how) = reproducibility_results(
                 comms_ctx;
                 job_id,
@@ -1192,19 +1330,49 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
 
             # Successful comparison
 
-            d01 = make_ref_file_counter(1, save_dir, rbundle("01"))
-            d02 = make_ref_file_counter(2, save_dir, rbundle("02"))
-            d03 = make_ref_file_counter(3, save_dir, rbundle("03"))
-            d04 = make_ref_file_counter(3, save_dir, rbundle("04"))
-            d05 = make_ref_file_counter(3, save_dir, rbundle("05"))
+            commit_sha_01 = "commit_hash_01"
+            commit_sha_02 = "commit_hash_02"
+            commit_sha_03 = "commit_hash_03"
+            commit_sha_04 = "commit_hash_04"
+            commit_sha_05 = "commit_hash_05"
+            d01 = make_ref_file_counter(1, save_dir, commit_sha_01, rfolder)
+            d02 = make_ref_file_counter(2, save_dir, commit_sha_02, rfolder)
+            d03 = make_ref_file_counter(3, save_dir, commit_sha_03, rfolder)
+            d04 = make_ref_file_counter(3, save_dir, commit_sha_04, rfolder)
+            d05 = make_ref_file_counter(3, save_dir, commit_sha_05, rfolder)
 
-            put_data_file(d01, fv, comms_ctx; filename = "ref_prog_state.hdf5")
-            put_data_file(d02, fv, comms_ctx; filename = "ref_prog_state.hdf5")
-            put_data_file(d03, fv, comms_ctx; filename = "ref_prog_state.hdf5")
-            put_data_file(d04, fv, comms_ctx; filename = "ref_prog_state.hdf5")
+            put_data_file(
+                joinpath(d01, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
+            put_data_file(
+                joinpath(d02, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
+            put_data_file(
+                joinpath(d03, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
+            put_data_file(
+                joinpath(d04, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
             fv.x .= 200
             fv.y .= 300
-            put_data_file(d05, fv, comms_ctx; filename = "ref_prog_state.hdf5")
+            put_data_file(
+                joinpath(d05, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
 
             job_id = "unit_test"
             (d, v, how) = reproducibility_results(
@@ -1229,6 +1397,62 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
 
             @test d == [d05, d04, d03]
             @test how == :successful_comparison
+
+            # Test folder structure
+            @test isfile(
+                joinpath(
+                    computed_dir,
+                    job_id,
+                    output,
+                    rfolder,
+                    "computed_prog_state.hdf5",
+                ),
+            )
+            @test isfile(
+                joinpath(
+                    save_dir,
+                    commit_sha_01,
+                    rfolder,
+                    job_id,
+                    "ref_prog_state.hdf5",
+                ),
+            )
+            @test isfile(
+                joinpath(
+                    save_dir,
+                    commit_sha_02,
+                    rfolder,
+                    job_id,
+                    "ref_prog_state.hdf5",
+                ),
+            )
+            @test isfile(
+                joinpath(
+                    save_dir,
+                    commit_sha_03,
+                    rfolder,
+                    job_id,
+                    "ref_prog_state.hdf5",
+                ),
+            )
+            @test isfile(
+                joinpath(
+                    save_dir,
+                    commit_sha_04,
+                    rfolder,
+                    job_id,
+                    "ref_prog_state.hdf5",
+                ),
+            )
+            @test isfile(
+                joinpath(
+                    save_dir,
+                    commit_sha_05,
+                    rfolder,
+                    job_id,
+                    "ref_prog_state.hdf5",
+                ),
+            )
         end
     end
 
@@ -1246,7 +1470,12 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
                 Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
             comms_ctx = ClimaComms.context(space)
 
+            # Folder structure:
             job_id = "unit_test_export_reproducibility_results"
+            rfolder = "rbundle"
+            output = "output_active"
+            repro_dir = joinpath(computed_dir, job_id, output, rfolder)
+            mkpath(repro_dir)
 
             fv = Fields.FieldVector(; x = ones(space), y = ones(space))
 
@@ -1283,25 +1512,55 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
             @test isempty(dirs)
 
             # Successful comparisons, legacy path configuration
-            d01 = make_ref_file_counter(1, save_dir, "01")
-            d02 = make_ref_file_counter(2, save_dir, "02")
-            d03 = make_ref_file_counter(3, save_dir, "03")
-            d04 = make_ref_file_counter(3, save_dir, "04")
-            d05 = make_ref_file_counter(3, save_dir, "05")
+            commit_sha_01 = "commit_hash_01"
+            commit_sha_02 = "commit_hash_02"
+            commit_sha_03 = "commit_hash_03"
+            commit_sha_04 = "commit_hash_04"
+            commit_sha_05 = "commit_hash_05"
+            d01 = make_ref_file_counter(1, save_dir, commit_sha_01)
+            d02 = make_ref_file_counter(2, save_dir, commit_sha_02)
+            d03 = make_ref_file_counter(3, save_dir, commit_sha_03)
+            d04 = make_ref_file_counter(3, save_dir, commit_sha_04)
+            d05 = make_ref_file_counter(3, save_dir, commit_sha_05)
 
-            put_data_file(d01, fv, comms_ctx; filename = "ref_prog_state.hdf5")
-            put_data_file(d02, fv, comms_ctx; filename = "ref_prog_state.hdf5")
-            put_data_file(d03, fv, comms_ctx; filename = "ref_prog_state.hdf5")
-            put_data_file(d04, fv, comms_ctx; filename = "ref_prog_state.hdf5")
+            put_data_file(
+                joinpath(d01, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
+            put_data_file(
+                joinpath(d02, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
+            put_data_file(
+                joinpath(d03, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
+            put_data_file(
+                joinpath(d04, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
             fv.x .= 200
             fv.y .= 300
-            put_data_file(d05, fv, comms_ctx; filename = "ref_prog_state.hdf5")
+            put_data_file(
+                joinpath(d05, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
 
-            @test isfile(joinpath(d01, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d02, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d03, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d04, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d05, "ref_prog_state.hdf5"))
+            @test isfile(joinpath(d01, job_id, "ref_prog_state.hdf5"))
+            @test isfile(joinpath(d02, job_id, "ref_prog_state.hdf5"))
+            @test isfile(joinpath(d03, job_id, "ref_prog_state.hdf5"))
+            @test isfile(joinpath(d04, job_id, "ref_prog_state.hdf5"))
+            @test isfile(joinpath(d05, job_id, "ref_prog_state.hdf5"))
             @test isfile(joinpath(d01, "ref_counter.jl"))
             @test isfile(joinpath(d02, "ref_counter.jl"))
             @test isfile(joinpath(d03, "ref_counter.jl"))
@@ -1341,7 +1600,12 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
                 Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
             comms_ctx = ClimaComms.context(space)
 
+            # Folder structure:
             job_id = "unit_test_export_reproducibility_results"
+            rfolder = "rbundle"
+            output = "output_active"
+            repro_dir = joinpath(computed_dir, job_id, output, rfolder)
+            mkpath(repro_dir)
 
             fv = Fields.FieldVector(; x = ones(space), y = ones(space))
 
@@ -1359,6 +1623,7 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
                     n = 10,
                     ref_counter_PR = 1,
                     skip = true,
+                    repro_folder = rfolder,
                 )
             @test how == :skipped
             @test isempty(dirs)
@@ -1377,30 +1642,61 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
                     n = 10,
                     ref_counter_PR = 1,
                     skip = false,
+                    repro_folder = rfolder,
                 )
             @test how == :no_comparable_dirs
             @test isempty(dirs)
 
-            # Successful comparisons, legacy path configuration
-            d01 = make_ref_file_counter(1, save_dir, rbundle("CH01"))
-            d02 = make_ref_file_counter(2, save_dir, rbundle("CH02"))
-            d03 = make_ref_file_counter(3, save_dir, rbundle("CH03"))
-            d04 = make_ref_file_counter(3, save_dir, rbundle("CH04"))
-            d05 = make_ref_file_counter(3, save_dir, rbundle("CH05"))
+            # Successful comparisons, legacy path configuration (no repro folder)
+            commit_sha_01 = "sha_01"
+            commit_sha_02 = "sha_02"
+            commit_sha_03 = "sha_03"
+            commit_sha_04 = "sha_04"
+            commit_sha_05 = "sha_05"
+            d01 = make_ref_file_counter(1, save_dir, commit_sha_01)
+            d02 = make_ref_file_counter(2, save_dir, commit_sha_02)
+            d03 = make_ref_file_counter(3, save_dir, commit_sha_03)
+            d04 = make_ref_file_counter(3, save_dir, commit_sha_04)
+            d05 = make_ref_file_counter(3, save_dir, commit_sha_05)
 
-            put_data_file(d01, fv, comms_ctx; filename = "ref_prog_state.hdf5")
-            put_data_file(d02, fv, comms_ctx; filename = "ref_prog_state.hdf5")
-            put_data_file(d03, fv, comms_ctx; filename = "ref_prog_state.hdf5")
-            put_data_file(d04, fv, comms_ctx; filename = "ref_prog_state.hdf5")
+            put_data_file(
+                joinpath(d01, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
+            put_data_file(
+                joinpath(d02, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
+            put_data_file(
+                joinpath(d03, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
+            put_data_file(
+                joinpath(d04, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
             fv.x .= 200
             fv.y .= 300
-            put_data_file(d05, fv, comms_ctx; filename = "ref_prog_state.hdf5")
+            put_data_file(
+                joinpath(d05, job_id),
+                fv,
+                comms_ctx;
+                filename = "ref_prog_state.hdf5",
+            )
 
-            @test isfile(joinpath(d01, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d02, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d03, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d04, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d05, "ref_prog_state.hdf5"))
+            @test isfile(joinpath(d01, job_id, "ref_prog_state.hdf5"))
+            @test isfile(joinpath(d02, job_id, "ref_prog_state.hdf5"))
+            @test isfile(joinpath(d03, job_id, "ref_prog_state.hdf5"))
+            @test isfile(joinpath(d04, job_id, "ref_prog_state.hdf5"))
+            @test isfile(joinpath(d05, job_id, "ref_prog_state.hdf5"))
             @test isfile(joinpath(d01, "ref_counter.jl"))
             @test isfile(joinpath(d02, "ref_counter.jl"))
             @test isfile(joinpath(d03, "ref_counter.jl"))
@@ -1420,14 +1716,15 @@ if pkgversion(ClimaCore) ≥ v"0.14.18"
                     n = 10,
                     ref_counter_PR = 3,
                     skip = false,
+                    repro_folder = rfolder,
                 )
             @test how == :successful_comparison
             @test dirs == [d05, d04, d03]
-            repro_dir = joinpath(computed_dir, "reproducibility_bundle")
+            repro_dir = joinpath(computed_dir, rfolder)
             @test isfile(joinpath(repro_dir, "computed_prog_state.hdf5"))
-            @test isfile(joinpath(repro_dir, "computed_mse_CH05.json"))
-            @test isfile(joinpath(repro_dir, "computed_mse_CH04.json"))
-            @test isfile(joinpath(repro_dir, "computed_mse_CH03.json"))
+            @test isfile(joinpath(repro_dir, "computed_mse_$commit_sha_05.dat"))
+            @test isfile(joinpath(repro_dir, "computed_mse_$commit_sha_04.dat"))
+            @test isfile(joinpath(repro_dir, "computed_mse_$commit_sha_03.dat"))
         end
     end
 end
