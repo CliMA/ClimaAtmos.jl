@@ -20,6 +20,7 @@ function get_atmos(config::AtmosConfig, params)
     precip_model = get_precipitation_model(parsed_args)
     cloud_model = get_cloud_model(parsed_args)
     ozone = get_ozone(parsed_args)
+    aerosols = get_aerosols(parsed_args)
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
     call_cloud_diagnostics_per_stage =
@@ -28,6 +29,10 @@ function get_atmos(config::AtmosConfig, params)
     if isnothing(ozone) && radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         @warn "prescribe_ozone is set to nothing with an RRTMGP model. Resetting to IdealizedOzone. This behavior will stop being supported in some future release"
         ozone = IdealizedOzone()
+    end
+
+    if !isnothing(aerosols) && !(radiation_mode isa RRTMGPI.AbstractRRTMGPMode)
+        @warn "$aerosols is effective only with an RRTGMP model"
     end
 
     diffuse_momentum = !(forcing_type isa HeldSuarezForcing)
@@ -56,6 +61,7 @@ function get_atmos(config::AtmosConfig, params)
     atmos = AtmosModel(;
         moisture_model,
         ozone,
+        aerosols,
         radiation_mode,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
@@ -677,17 +683,8 @@ function get_simulation(config::AtmosConfig)
         )
     end
 
-    tracers = get_tracers(config.parsed_args)
-
     s = @timed_str begin
-        p = build_cache(
-            Y,
-            atmos,
-            params,
-            surface_setup,
-            sim_info,
-            tracers.aerosol_names,
-        )
+        p = build_cache(Y, atmos, params, surface_setup, sim_info)
     end
     @info "Allocating cache (p): $s"
 

@@ -498,9 +498,10 @@ function get_surface_thermo_state_type(parsed_args)
     return dict[parsed_args["surface_thermo_state_type"]]
 end
 
-function get_tracers(parsed_args)
-    aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
-    return (; aerosol_names)
+function get_aerosols(parsed_args)
+    isnothing(parsed_args["prescribed_aerosols"]) && return nothing
+    aerosol_names = Symbol.(Tuple(parsed_args["prescribed_aerosols"]))
+    return PrescribedCMIP5Aerosols(aerosol_names)
 end
 
 function get_tendency_model(parsed_args)

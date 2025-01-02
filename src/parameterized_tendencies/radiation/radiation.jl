@@ -92,7 +92,7 @@ function radiation_model_cache(
     start_date,
     params,
     ozone,
-    aerosol_names,
+    aerosols,
     insolation_mode;
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
@@ -102,11 +102,13 @@ function radiation_model_cache(
     device = context.device
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         (; aerosol_radiation) = radiation_mode
-        if aerosol_radiation && !(any(
-            x -> x in aerosol_names,
-            ["DST01", "SSLT01", "SO4", "CB1", "CB2", "OC1", "OC2"],
-        ))
-            error(
+        if aerosol_radiation
+            aerosols isa PrescribedCMIP5Aerosols ||
+                error("Only `PrescribedCMIP5Aerosols` is currently supported")
+            any(
+                x -> x in aerosols.aerosol_names,
+                ["DST01", "SSLT01", "SO4", "CB1", "CB2", "OC1", "OC2"],
+            ) || error(
                 "Need at least one aerosol type when aerosol radiation is turned on",
             )
         end

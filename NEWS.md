@@ -4,6 +4,15 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+### Features
+
+### Aerosols are now its own type PR [3492](https://github.com/CliMA/ClimaAtmos.jl/pull/3492)
+
+Aerosols, currently only relevant for radiation interaction when using a RRTGMP
+model, are now described by a new type, `AbstractAerosols`. The one aerosol
+model currently implemented is `PrescribedCMIP5Aerosols`, where aerosol
+concentrations are read from CMIP5 forcing data. The YAML interface has not
+changed.
 
 v0.28.1
 -------

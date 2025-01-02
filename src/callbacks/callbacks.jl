@@ -187,6 +187,9 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         if radiation_mode.aerosol_radiation
+            # This is because we hard-code the names of the symbols
+            @assert integrator.p.atmos.aerosols isa PrescribedCMIP5Aerosols "The only aerosol model currently supported is `PrescribedCMIP5Aerosols`"
+
             ᶜΔz = Fields.Δz_field(Y.c)
 
             ᶜaero_conc = Fields.array2field(
