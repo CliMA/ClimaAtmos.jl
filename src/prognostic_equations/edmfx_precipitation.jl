@@ -16,7 +16,8 @@ function edmfx_precipitation_tendency!(
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜSqₜᵖʲs, ᶜtsʲs) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜΦ) = p.core
+    grav = TDP.grav(thermo_params)
+    ᶜz = Fields.coordinate_field(axes(Y.c)).z
 
     for j in 1:n
 
@@ -27,7 +28,7 @@ function edmfx_precipitation_tendency!(
                 e_tot_0M_precipitation_sources_helper(
                     thermo_params,
                     ᶜtsʲs.:($$j),
-                    ᶜΦ,
+                    Φ(grav, ᶜz),
                 ) - TD.internal_energy(thermo_params, ᶜtsʲs.:($$j))
             )
 
@@ -48,7 +49,6 @@ function edmfx_precipitation_tendency!(
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜSeₜᵖʲs, ᶜSqₜᵖʲs, ᶜtsʲs) = p.precomputed
     thp = CAP.thermodynamics_params(p.params)
-    (; ᶜΦ) = p.core
 
     for j in 1:n
 
