@@ -1,4 +1,5 @@
 using ClimaCore: Geometry, Operators, MatrixFields
+import ClimaCore
 
 # Alternatively, we could use Vec₁₂₃, Vec³, etc., if that is more readable.
 const C1 = Geometry.Covariant1Vector
@@ -85,6 +86,13 @@ const ᶠfct_zalesak = Operators.FCTZalesak(
     bottom = Operators.FirstOrderOneSided(),
     top = Operators.FirstOrderOneSided(),
 )
+@static if pkgversion(ClimaCore) ≥ v"0.14.22"
+    const ᶠlin_vanleer = Operators.LinVanLeerC2F(
+        bottom = Operators.FirstOrderOneSided(),
+        top = Operators.FirstOrderOneSided(),
+        constraint = Operators.MonotoneLocalExtrema(), # (Mono5)
+    )
+end
 
 const ᶜinterp_matrix = MatrixFields.operator_matrix(ᶜinterp)
 const ᶜleft_bias_matrix = MatrixFields.operator_matrix(ᶜleft_bias)
