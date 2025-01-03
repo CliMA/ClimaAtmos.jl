@@ -1,5 +1,5 @@
 [precipitation_timescale]
-value = 600
+value = 120
 
 [entr_inv_tau]
 value = 0.002
