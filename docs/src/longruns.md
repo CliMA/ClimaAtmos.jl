@@ -13,6 +13,11 @@ longrun_dry_baroclinic_wave
 Dry baroclinic wave. Test the dry dycore initial value problem.
 ```
 ```
+longrun_dry_baroclinic_wave_he60
+
+Dry baroclinic wave with a higher resolution.
+```
+```
 longrun_moist_baroclinic_wave
 
 Moist baroclinic wave. Test the moist dycore initial value problem.

@@ -308,7 +308,7 @@ steps:
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_hightop_sponge.yml
           --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
 
-          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl --test_broken_report_flakiness true
           --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
           --out_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge/output_active
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/output_active/*"
