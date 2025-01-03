@@ -7,15 +7,6 @@ import Thermodynamics.Parameters.ThermodynamicsParameters
 import CloudMicrophysics as CM
 import StaticArrays as SA
 
-function ClimaAtmosParameters(config::AtmosConfig)
-    (; toml_dict, parsed_args) = config
-    FT = CP.float_type(toml_dict)
-    return ClimaAtmosParameters(
-        toml_dict,
-        FT(CA.time_to_seconds(parsed_args["dt"])),
-    )
-end
-
 """
     ClimaAtmosParameters(FT, dt)
     ClimaAtmosParameters(toml_dict, dt)
@@ -25,6 +16,16 @@ Construct the parameter set for any ClimaAtmos configuration.
 
 If dt is passed in, it will be used to override the `precipitation_timescale` parameter.
 """
+function ClimaAtmosParameters(config::AtmosConfig)
+    (; toml_dict, parsed_args) = config
+    FT = CP.float_type(toml_dict)
+    override_dt =
+        parsed_args["override_precip_timescale"] ?
+        FT(CA.time_to_seconds(parsed_args["dt"])) : nothing
+
+    return ClimaAtmosParameters(toml_dict, override_dt)
+end
+
 ClimaAtmosParameters(::Type{FT}, dt = nothing) where {FT} =
     ClimaAtmosParameters(CP.create_toml_dict(FT), dt)
 
