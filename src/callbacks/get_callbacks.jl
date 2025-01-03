@@ -1,3 +1,5 @@
+import ClimaTimeSteppers.Callbacks: EveryXSimulationTime, EveryXSimulationSteps
+
 function get_diagnostics(
     parsed_args,
     atmos_model,
@@ -264,21 +266,26 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         @info "Checking NaNs in the state every $(check_nan_every) steps"
         callbacks = (
             callbacks...,
-            call_every_n_steps(
-                (integrator) -> check_nans(integrator),
+            EveryXSimulationSteps(
+                AtmosCallback(
+                    (integrator) -> check_nans(integrator),
+                    EveryNSteps(check_nan_every),
+                ),
                 check_nan_every,
+                atinit = true,
+                save_positions = (false, false),
             ),
         )
     end
+    cond = let output_dir = output_dir
+        (u, t, integrator) -> maybe_graceful_exit(output_dir, integrator)
+    end
     callbacks = (
         callbacks...,
-        call_every_n_steps(
+        SciMLBase.DiscreteCallback(
+            cond,
             terminate!;
-            skip_first = true,
-            condition = let output_dir = output_dir
-                (u, t, integrator) ->
-                    maybe_graceful_exit(output_dir, integrator)
-            end,
+            save_positions = (false, false),
         ),
     )
 
@@ -303,12 +310,14 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     end
 
     if is_distributed(comms_ctx)
+        n_steps = parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000"))
         callbacks = (
             callbacks...,
-            call_every_n_steps(
-                gc_func,
-                parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000")),
-                skip_first = true,
+            EveryXSimulationSteps(
+                AtmosCallback(gc_func, EveryNSteps(n_steps)),
+                n_steps,
+                atinit = false,
+                save_positions = (false, false),
             ),
         )
     end
@@ -316,18 +325,27 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     if parsed_args["check_conservation"]
         callbacks = (
             callbacks...,
-            call_every_n_steps(
-                flux_accumulation!;
-                skip_first = true,
+            EveryXSimulationSteps(
+                AtmosCallback(flux_accumulation!, EveryNSteps(1)),
+                1;
+                atinit = false,
                 call_at_end = true,
+                save_positions = (false, false),
             ),
         )
     end
 
     if !parsed_args["call_cloud_diagnostics_per_stage"]
         dt_cf = ITime(time_to_seconds(parsed_args["dt_cloud_fraction"]))
-        callbacks =
-            (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
+        callbacks = (
+            callbacks...,
+            EveryXSimulationTime(
+                AtmosCallback(cloud_fraction_model_callback!, EveryΔt(dt_cf)),
+                dt_cf,
+                save_positions = (false, false),
+                atinit = true,
+            ),
+        )
     end
 
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
@@ -340,8 +358,15 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
             @warn "This simulation will not be reproducible when restarted"
         end
 
-        callbacks =
-            (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
+        callbacks = (
+            callbacks...,
+            EveryXSimulationTime(
+                AtmosCallback(rrtmgp_model_callback!, EveryΔt(dt_rad)),
+                dt_rad,
+                save_positions = (false, false),
+                atinit = true,
+            ),
+        )
     end
 
     return callbacks
