@@ -3,62 +3,32 @@ import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import SciMLBase as SMB
+import ClimaTimeSteppers.Callbacks as CB
 
 testfun!() = π
-cb_default = CA.call_every_n_steps(testfun!;)
 test_nsteps = 999
 test_dt = 1
 test_tend = 999.0
-
-cb_1 = CA.call_every_n_steps(
-    testfun!,
-    test_nsteps;
-    skip_first = false,
+cb_1 = CB.EveryXSimulationSteps(
+    CA.AtmosCallback(testfun!, CA.EveryNSteps(test_nsteps)),
+    test_nsteps,
+    atinit = true,
     call_at_end = false,
-    condition = nothing,
 )
-cb_2 =
-    CA.call_every_dt(testfun!, test_dt; skip_first = false, call_at_end = false)
-cb_3 = CA.callback_from_affect(cb_2.affect!)
-cb_4 = CA.call_every_n_steps(
-    testfun!,
-    3;
-    skip_first = false,
+cb_2 = CB.EveryXSimulationTime(
+    CA.AtmosCallback(testfun!, CA.EveryΔt(test_dt)),
+    test_dt;
+    atinit = true,
     call_at_end = false,
-    condition = nothing,
+)
+cb_3 = CA.callback_from_affect(cb_2.affect!)
+cb_4 = CB.EveryXSimulationSteps(
+    CA.AtmosCallback(testfun!, CA.EveryNSteps(3)),
+    3,
+    atinit = true,
+    call_at_end = false,
 )
 cb_set = SMB.CallbackSet(cb_1, cb_2, cb_4)
-
-@testset "simple default callback" begin
-    @test cb_default.condition.n == 1
-    @test cb_default.affect!.f!() == π
-end
-
-# per n steps
-@testset "every n-steps callback" begin
-    @test cb_1.initialize.skip_first == false
-    @test cb_1.condition.n == test_nsteps
-    @test cb_1.affect!.f!() == π
-    @test_throws AssertionError CA.call_every_n_steps(
-        testfun!,
-        Inf;
-        skip_first = false,
-        call_at_end = false,
-    )
-end
-
-# per dt interval
-@testset "dt interval callback" begin
-    @test cb_2 isa SMB.DiscreteCallback
-    @test cb_2.affect!.dt == test_dt
-    @test cb_2.affect!.cb!.f!() == π
-    @test_throws AssertionError CA.call_every_dt(
-        testfun!,
-        Inf;
-        skip_first = false,
-        call_at_end = false,
-    )
-end
 
 @testset "atmos callbacks and callback sets" begin
     # atmoscallbacks from discrete callbacks
