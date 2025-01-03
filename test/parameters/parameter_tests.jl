@@ -37,3 +37,25 @@ end
               CA.Parameters.ClimaAtmosParameters
     end
 end
+
+@testset "Test that `override_precip_timescale` is handled properly" begin
+    # precipitation_timescale should NOT be overridden by DT
+    config = CA.AtmosConfig(
+        Dict("dt" => "1secs", "override_precip_timescale" => false),
+    )
+    @test config.parsed_args["override_precip_timescale"] == false
+    @test config.parsed_args["dt"] == "1secs"
+    (; precipitation_timescale) =
+        CP.get_parameter_values(config.toml_dict, "precipitation_timescale")
+    parameters = CA.ClimaAtmosParameters(config)
+    @test parameters.microphysics_0m_params.τ_precip == precipitation_timescale
+
+    # precipitation_timescale should be overridden by DT
+    config = CA.AtmosConfig(Dict("dt" => "1secs"))
+    @test config.parsed_args["override_precip_timescale"] == true
+    @test config.parsed_args["dt"] == "1secs"
+    (; precipitation_timescale) =
+        CP.get_parameter_values(config.toml_dict, "precipitation_timescale")
+    parameters = CA.ClimaAtmosParameters(config)
+    @test parameters.microphysics_0m_params.τ_precip == 1.0
+end
