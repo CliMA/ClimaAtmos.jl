@@ -203,11 +203,6 @@ function reproducibility_results(
                 dict_reference = dict_reference_solution,
             )
         end
-    if debug_reproducibility()
-        println("------ end of reproducibility_results")
-        @show computed_mses
-        println("------")
-    end
     return (dirs, computed_mses, :successful_comparison)
 end
 
@@ -381,11 +376,6 @@ function report_reproducibility_results(
 
     for computed_mse in computed_mses
         all_reproducible = true
-        if debug_reproducibility()
-            println("---- in report_reproducibility_results")
-            @show computed_mse
-            println("----")
-        end
         for (var, reproducible) in CRT.test_mse(; computed_mse)
             if !reproducible
                 all_reproducible = false
@@ -406,6 +396,7 @@ function report_reproducibility_results(
     data_scales = cflatten(map(computed_mses) do computed_mse
         collect(values(computed_mse))
     end)
+    data_scales = map(x -> :not_yet_exported, data_scales)
     statuses = cflatten(map(computed_mses) do computed_mse
         collect(values(CRT.test_mse(; computed_mse)))
     end)
