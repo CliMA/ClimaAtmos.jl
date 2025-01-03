@@ -62,11 +62,6 @@ else
         commit_hashes =
             map(x -> commit_sha_from_mse_file(x), computed_mse_files)
         computed_mses = map(x -> parse_file(x), computed_mse_files)
-        if debug_reproducibility()
-            println("------ in test_mse.jl")
-            @show computed_mses
-            println("------")
-        end
         results = report_reproducibility_results(
             commit_hashes,
             computed_mses;

@@ -693,7 +693,7 @@ steps:
           --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
           --job_id diagnostic_edmfx_aquaplanet
 
-          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl --test_broken_report_flakiness true
           --job_id diagnostic_edmfx_aquaplanet
           --out_dir diagnostic_edmfx_aquaplanet/output_active
         artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"
