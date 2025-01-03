@@ -231,7 +231,7 @@ function radiation_model_cache(
                 kwargs = (;
                     kwargs...,
                     # assuming fixed aerosol radius
-                    center_dust_radius = 0.2,
+                    center_dust_radius = 1.75,
                     center_ss_radius = 11.5,
                     center_dust_column_mass_density = NaN, # initialized in callback
                     center_ss_column_mass_density = NaN, # initialized in callback
