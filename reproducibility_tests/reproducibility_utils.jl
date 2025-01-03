@@ -51,10 +51,9 @@ assist our understanding and reasoning, we let's assume that there are two state
 
 ## state 2: data is saved for future reference
 
- - `commit_hash/job_id/output_dir/`
- - `commit_hash/job_id/output_dir/reproducibility_bundle/`
- - `commit_hash/job_id/output_dir/reproducibility_bundle/ref_counter.jl`
- - `commit_hash/job_id/output_dir/reproducibility_bundle/prog_state.hdf5`
+ - `commit_hash/job_id/reproducibility_bundle/`
+ - `commit_hash/job_id/reproducibility_bundle/ref_counter.jl`
+ - `commit_hash/job_id/reproducibility_bundle/prog_state.hdf5`
 
  - `commit_hash/reproducibility_bundle/ref_counter.jl`
  - `commit_hash/reproducibility_bundle/job_id/`
@@ -458,12 +457,12 @@ print_dir_tree(dir) = print_dir_tree(stdout, dir)
 print_dir_tree(io::IO, dir) = println(io, string_dir_tree(dir))
 
 function string_dir_tree(dir)
-    s = "Files in `$dir`\n:"
+    s = "Files in `$dir`:\n"
     for (root, _, files) in walkdir(dir)
         for file in files
             f = joinpath(root, file)
             isfile(f) || continue # rm symlink folders (included but not files)
-            s *= "  $f\n"
+            s *= "  $(replace(f, dir => ""))\n"
         end
     end
     return s
@@ -480,8 +479,7 @@ end
         ref_counter_PR = read_ref_counter(ref_counter_file_PR),
         skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
         dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
-        commit = get(ENV, "BUILDKITE_COMMIT", nothing),
-        n_hash_characters = 7,
+        commit = get_commit_sha(),
         repro_folder = "reproducibility_bundle",
         strip_folder = strip_output_active_path,
     )
@@ -519,8 +517,7 @@ function move_data_to_save_dir(;
     ref_counter_PR = read_ref_counter(ref_counter_file_PR),
     skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
     dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
-    commit = get(ENV, "BUILDKITE_COMMIT", nothing),
-    n_hash_characters = 7,
+    commit = get_commit_sha(),
     repro_folder = "reproducibility_bundle",
     strip_folder = strip_output_active_path,
 )
@@ -541,36 +538,20 @@ function move_data_to_save_dir(;
             dirs_src,
             dest_root,
             commit,
-            n_hash_characters,
             repro_folder,
             strip_folder,
         )
         if debug_reproducibility()
-            @show repro_folder
-            @show dirs_src
-            @show dest_root
-            @show files_dest
-            @show files_src
-            @show isfile.(files_src)
             println("******")
             foreach(print_dir_tree, dirs_src)
             println("******")
-            print_dir_tree(dest_root)
-            println("******")
         end
         for (src, dest) in zip(files_src, files_dest)
-            @show src
-            @show dest
             @assert isfile(src)
             mkpath(dirname(dest))
             mv(src, dest; force = true)
         end
-        dest_repro = destination_directory(;
-            dest_root,
-            commit,
-            n_hash_characters,
-            repro_folder,
-        )
+        dest_repro = destination_directory(; dest_root, commit, repro_folder)
         ref_counter_file_main = joinpath(dest_repro, "ref_counter.jl")
         debug_reproducibility() &&
             @info "Repro: moving $ref_counter_file_PR to $ref_counter_file_main"
@@ -590,14 +571,40 @@ function move_data_to_save_dir(;
     end
 end
 
+"""
+    get_commit_sha(;
+        n_hash_characters = 7,
+        commit = get(ENV, "BUILDKITE_COMMIT", nothing)
+    )
+
+Returns a string of the commit hash.
+"""
+get_commit_sha(;
+    n_hash_characters = 7,
+    commit = get(ENV, "BUILDKITE_COMMIT", nothing),
+) = return commit[1:min(n_hash_characters, length(commit))]
+
+function commit_sha_from_dir(commit_shas, dir)
+    while true
+        if isempty(dir)
+            error("Unfound commit sha.")
+        else
+            b = basename(dir)
+            if b in commit_shas || any(x -> occursin(b, x), commit_shas)
+                return b
+            else
+                dir = dirname(dir)
+            end
+        end
+    end
+end
 
 """
     save_dir_transform(
         src;
         job_id,
         dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
-        commit = get(ENV, "BUILDKITE_COMMIT", nothing),
-        n_hash_characters = 7,
+        commit = get_commit_sha(),
         repro_folder = "reproducibility_bundle",
         strip_folder = strip_output_active_path,
     )
@@ -607,7 +614,6 @@ Returns the output file, to be saved, given:
  - `job_id` the job ID
  - `dest_root` the destination root directory
  - `commit` the commit hash
- - `n_hash_characters` truncates the commit hash to given number of characters
  - `repro_folder` reproducibility folder
  - `strip_folder` function to strip folders in output path
 """
@@ -615,17 +621,11 @@ function save_dir_transform(
     src;
     job_id,
     dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
-    commit = get(ENV, "BUILDKITE_COMMIT", nothing),
-    n_hash_characters = 7,
+    commit = get_commit_sha(),
     repro_folder = "reproducibility_bundle",
     strip_folder = strip_output_active_path,
 )
-    dest_repro = destination_directory(;
-        dest_root,
-        commit,
-        n_hash_characters,
-        repro_folder,
-    )
+    dest_repro = destination_directory(; dest_root, commit, repro_folder)
     src_filename = basename(src)
     dst = joinpath(dest_repro, job_id, src_filename)
     return strip_output_active_path(dst)
@@ -634,8 +634,7 @@ end
 """
     destination_directory(;
         dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
-        commit = get(ENV, "BUILDKITE_COMMIT", nothing),
-        n_hash_characters = 7,
+        commit = get_commit_sha(),
         repro_folder = "reproducibility_bundle",
     )
 
@@ -643,17 +642,14 @@ Return the reproducibility destination directory:
 `root/commit_sha/repro_folder`, given:
  - `dest_root` the destination root directory
  - `commit` the commit hash
- - `n_hash_characters` truncates the commit hash to given number of characters
  - `repro_folder` reproducibility folder
 """
 function destination_directory(;
     dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
-    commit = get(ENV, "BUILDKITE_COMMIT", nothing),
-    n_hash_characters = 7,
+    commit = get_commit_sha(),
     repro_folder = "reproducibility_bundle",
 )
-    commit_sha = commit[1:min(n_hash_characters, length(commit))]
-    return joinpath(dest_root, commit_sha, repro_folder)
+    return joinpath(dest_root, commit, repro_folder)
 end
 
 """
@@ -683,9 +679,6 @@ function save_dir_in_out_list(; dirs_src, kwargs...)
 end
 
 parse_file(file) = eval(Meta.parse(join(readlines(file))))
-# parse_file(file) = parse_file_json(file) # doesn't work for some reason
-parse_file_json(file) =
-    JSON.parsefile(file; dicttype = OrderedCollections.OrderedDict)
 
 
 #####
@@ -701,7 +694,7 @@ expected filename prefix `expected_filename_prefix`.
 """
 default_is_mse_file(file, expected_filename_prefix::String = "computed_mse") =
     startswith(basename(file), expected_filename_prefix) &&
-    endswith(file, ".json")
+    endswith(file, ".dat")
 
 """
     get_computed_mses(;
@@ -717,12 +710,12 @@ Returns Dict containing either a `Dict` of Dicts containing Mean-Squared-Errors
 given:
 
  - `job_ids` vector of job IDs
- - `subfolder` sub-folder to find json files
+ - `subfolder` sub-folder to find mse files
  - `is_mse_file` a function to determine if a given file is an MSE file. See
    `default_is_mse_file` for the used criteria.
 
 It is expected that files exist in the form: `joinpath(job_ids[1], subfolder,
-json_filename)`
+mse_filename)`
 
 where `is_mse_file` is `true`.
 
@@ -789,7 +782,6 @@ function print_skipped_jobs(io::IO = stdout; mses::AbstractDict)
 end
 
 import OrderedCollections
-import JSON
 import ArgParse
 
 function reproducibility_test_params()

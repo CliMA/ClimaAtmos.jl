@@ -1,5 +1,4 @@
 import OrderedCollections
-import JSON
 
 # Get cases from JobIDs in mse_tables file:
 include(joinpath(@__DIR__, "reproducibility_utils.jl"))

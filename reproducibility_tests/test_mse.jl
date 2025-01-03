@@ -12,11 +12,10 @@ include(joinpath(@__DIR__, "reproducibility_tools.jl"))
 
 debug = true
 repro_dir = joinpath(out_dir, "reproducibility_bundle")
-computed_mse_filenames =
-    map(filter(default_is_mse_file, readdir(repro_dir))) do x
-        joinpath(repro_dir, x)
-    end
-if isempty(computed_mse_filenames)
+computed_mse_files = map(filter(default_is_mse_file, readdir(repro_dir))) do x
+    joinpath(repro_dir, x)
+end
+if isempty(computed_mse_files)
     @warn "No reproducibility tests performed, due to non-existent comparable data."
     debug && @show readdir(out_dir)
     debug && @show readdir(repro_dir)
@@ -61,10 +60,16 @@ if isempty(computed_mse_filenames)
 else
     @testset "Reproducibility tests" begin
         commit_hashes =
-            map(x -> basename(dirname(dirname(x))), computed_mse_filenames)
+            map(x -> commit_sha_from_mse_file(x), computed_mse_files)
+        computed_mses = map(x -> parse_file(x), computed_mse_files)
+        if debug_reproducibility()
+            println("------ in test_mse.jl")
+            @show computed_mses
+            println("------")
+        end
         results = report_reproducibility_results(
             commit_hashes,
-            computed_mse_filenames;
+            computed_mses;
             test_broken_report_flakiness,
         )
 
