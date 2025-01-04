@@ -396,6 +396,9 @@ function report_reproducibility_results(
     data_scales = cflatten(map(computed_mses) do computed_mse
         collect(values(computed_mse))
     end)
+    computed_mse_values = cflatten(map(computed_mses) do computed_mse
+        collect(values(computed_mse))
+    end)
     data_scales = map(x -> :not_yet_exported, data_scales)
     statuses = cflatten(map(computed_mses) do computed_mse
         collect(values(CRT.test_mse(; computed_mse)))
@@ -412,7 +415,7 @@ function report_reproducibility_results(
         scolumn,
         vcolumn,
         data_scales,
-        data_scales,
+        computed_mse_values,
         map(status_emoji, statuses),
     )
 
