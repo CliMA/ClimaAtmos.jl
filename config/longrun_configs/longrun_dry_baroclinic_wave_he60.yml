@@ -6,7 +6,7 @@ t_end: "30days"
 ode_algo: ARS343
 initial_condition: "DryBaroclinicWave"
 dt_save_state_to_disk: "10days"
-netcdf_interpolation_num_points: [1440, 720, 2]
+netcdf_interpolation_num_points: [360, 180, 2]
 diagnostics:
   - short_name: [pfull, wa, va, rv, ke]
     period: 1days
