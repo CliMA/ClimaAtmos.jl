@@ -6,8 +6,8 @@ t_end: "120days"
 ode_algo: ARS343
 initial_condition: "MoistBaroclinicWave"
 moist: "equil"
-precip_model: "0M"
+precip_model: "1M"
 dt_save_state_to_disk: "10days"
 diagnostics:
-  - short_name: [pfull, wa, va, rv, hus, ke]
+  - short_name: [pfull, wa, va, rv, hus, ke, husra, hussn]
     period: 1days

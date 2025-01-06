@@ -155,14 +155,16 @@ function ImplicitEquationJacobian(
         is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
-    tracer_names = (
-        @name(c.ρq_tot),
-        @name(c.ρq_liq),
-        @name(c.ρq_ice),
-        @name(c.ρq_rai),
-        @name(c.ρq_sno),
-    )
-    available_tracer_names = MatrixFields.unrolled_filter(is_in_Y, tracer_names)
+    tracer_names_no_precip = (@name(c.ρq_tot), @name(c.ρq_liq), @name(c.ρq_ice))
+    available_tracer_names_no_precip =
+        MatrixFields.unrolled_filter(is_in_Y, tracer_names_no_precip)
+
+    tracer_names_precip = (@name(c.ρq_rai), @name(c.ρq_sno))
+    available_tracer_names_precip =
+        MatrixFields.unrolled_filter(is_in_Y, tracer_names_precip)
+
+    available_tracer_names =
+        (available_tracer_names_no_precip..., available_tracer_names_precip...)
 
     # Note: We have to use FT(-1) * I instead of -I because inv(-1) == -1.0,
     # which means that multiplying inv(-1) by a Float32 will yield a Float64.
@@ -196,6 +198,12 @@ function ImplicitEquationJacobian(
 
     diffused_scalar_names =
         (@name(c.ρe_tot), available_tracer_names..., ρatke_if_available...)
+    diffused_scalar_names_no_precip = (
+        @name(c.ρe_tot),
+        available_tracer_names_no_precip...,
+        ρatke_if_available...,
+    )
+
     diffusion_blocks = if use_derivative(diffusion_flag)
         (
             MatrixFields.unrolled_map(
@@ -219,9 +227,15 @@ function ImplicitEquationJacobian(
                 similar(Y.c, TridiagonalRow) : FT(-1) * I,
         )
     else
-        MatrixFields.unrolled_map(
-            name -> (name, name) => FT(-1) * I,
-            (diffused_scalar_names..., @name(c.uₕ)),
+        (
+            MatrixFields.unrolled_map(
+                name -> (name, name) => similar(Y.c, TridiagonalRow),
+                available_tracer_names_precip,
+            )...,
+            MatrixFields.unrolled_map(
+                name -> (name, name) => FT(-1) * I,
+                (diffused_scalar_names_no_precip..., @name(c.uₕ)),
+            )...,
         )
     end
 
@@ -299,7 +313,9 @@ function ImplicitEquationJacobian(
 
     alg₂ = MatrixFields.BlockLowerTriangularSolve(@name(c.uₕ))
     alg =
-        if use_derivative(diffusion_flag) || use_derivative(sgs_advection_flag)
+        if use_derivative(diffusion_flag) ||
+           use_derivative(sgs_advection_flag) ||
+           atmos.precip_model isa Microphysics1Moment
             alg₁_subalg₂ =
                 if atmos.turbconv_model isa PrognosticEDMFX &&
                    use_derivative(sgs_advection_flag)
@@ -677,19 +693,26 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             @. ∂ᶜuₕ_err_∂ᶜuₕ =
                 dtγ * DiagonalMatrixRow(1 / ᶜρ) ⋅ ᶜdiffusion_u_matrix - (I,)
         end
+    end
 
+    if p.atmos.precip_model isa Microphysics1Moment
         ᶠlg = Fields.local_geometry_field(Y.f)
         precip_info =
             ((@name(c.ρq_rai), @name(ᶜwᵣ)), (@name(c.ρq_sno), @name(ᶜwₛ)))
         MatrixFields.unrolled_foreach(precip_info) do (ρqₚ_name, wₚ_name)
-            MatrixFields.has_field(Y, ρqₚ_name) || return
             ∂ᶜρqₚ_err_∂ᶜρqₚ = matrix[ρqₚ_name, ρqₚ_name]
             ᶜwₚ = MatrixFields.get_field(p, wₚ_name)
-            ᶠtmp = p.ᶠtemp_CT3
-            @. ᶠtmp = CT3(unit_basis_vector_data(CT3, ᶠlg)) * ᶠwinterp(ᶜJ, ᶜρ)
-            @. ∂ᶜρqₚ_err_∂ᶜρqₚ +=
-                dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠtmp) ⋅
-                ᶠright_bias_matrix() ⋅ DiagonalMatrixRow(-(ᶜwₚ) / ᶜρ)
+            if use_derivative(diffusion_flag)
+                @. ∂ᶜρqₚ_err_∂ᶜρqₚ +=
+                    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
+                    DiagonalMatrixRow(Geometry.WVector(1) * ᶠwinterp(ᶜJ, ᶜρ)) ⋅
+                    ᶠright_bias_matrix() ⋅ DiagonalMatrixRow(-(ᶜwₚ) / ᶜρ)
+            else
+                @. ∂ᶜρqₚ_err_∂ᶜρqₚ =
+                    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
+                    DiagonalMatrixRow(Geometry.WVector(1) * ᶠwinterp(ᶜJ, ᶜρ)) ⋅
+                    ᶠright_bias_matrix() ⋅ DiagonalMatrixRow(-(ᶜwₚ) / ᶜρ) - (I,)
+            end
         end
     end
 
