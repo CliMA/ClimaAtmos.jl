@@ -308,7 +308,7 @@ steps:
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_hightop_sponge.yml
           --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
 
-          julia --color=yes --project=examples reproducibility_tests/test_mse.jl --test_broken_report_flakiness true
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
           --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
           --out_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge/output_active
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/output_active/*"
@@ -324,7 +324,7 @@ steps:
           --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.yml
           --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
 
-          julia --color=yes --project=examples reproducibility_tests/test_mse.jl --test_broken_report_flakiness true
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
           --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
           --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/output_active
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/output_active/*"
@@ -693,7 +693,7 @@ steps:
           --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
           --job_id diagnostic_edmfx_aquaplanet
 
-          julia --color=yes --project=examples reproducibility_tests/test_mse.jl --test_broken_report_flakiness true
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
           --job_id diagnostic_edmfx_aquaplanet
           --out_dir diagnostic_edmfx_aquaplanet/output_active
         artifact_paths: "diagnostic_edmfx_aquaplanet/output_active/*"

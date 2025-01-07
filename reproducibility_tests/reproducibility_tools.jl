@@ -420,8 +420,9 @@ function report_reproducibility_results(
     )
 
     table_data = vcat(computed_data, compare_data)
+    body_hlines = cumsum(map(x -> nv, 1:ns))
 
-    PrettyTables.pretty_table(io, table_data; header, crop = :none)
+    PrettyTables.pretty_table(io, table_data; body_hlines, header, crop = :none)
 
 
     header = ["Source", "Status"]
