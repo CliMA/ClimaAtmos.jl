@@ -1,0 +1,54 @@
+[EDMF_surface_area]
+value = 0.1
+
+[EDMF_min_area]
+value = 1.0e-5
+
+[EDMF_max_area]
+value = 0.7
+
+[entr_inv_tau]
+value = 0.0001
+
+[entr_coeff]
+value = 0.3
+
+[turb_entr_param_vec]
+value = [1e-10, 0.0, 0.0]
+
+[min_area_limiter_scale]
+value = 0
+
+[detr_inv_tau]
+value = 0
+
+[detr_coeff]
+value = 0
+
+[detr_buoy_coeff]
+value = 0
+
+[detr_vertdiv_coeff]
+value = 0
+
+[detr_massflux_vertdiv_coeff]
+value = 1
+
+[max_area_limiter_scale]
+value = 0
+
+[pressure_normalmode_drag_coeff]
+value = 40.0
+
+[zd_rayleigh]
+value = 20000.0
+
+[condensation_evaporation_timescale]
+value = 10
+type = "float"
+description = "Non-equilibrium microphysics condensation/evaporation time scale [s]"
+
+[sublimation_deposition_timescale]
+value = 10
+type = "float"
+description = "Non-equilibrium microphysics deposition/sublimation time scale [s]"
