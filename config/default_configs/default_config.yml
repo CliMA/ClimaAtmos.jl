@@ -150,7 +150,7 @@ smagorinsky_lilly:
   value: false
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
-  value: true
+  value: false
 start_date:
   help: "Start date of the simulation"
   value: "20100101"
