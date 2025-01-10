@@ -6,11 +6,9 @@ struct AtmosCache{
     COR,
     SFC,
     GHOST,
-    SGQ,
     PREC,
     SCRA,
     HYPE,
-    DSS,
     PR,
     LSAD,
     EXTFORCING,
@@ -44,9 +42,6 @@ struct AtmosCache{
     """Center and face ghost buffers used by DSS"""
     ghost_buffer::GHOST
 
-    """Struct with sub-grid sampling quadrature"""
-    SG_quad::SGQ
-
     """Quantities that are updated with set_precomputed_quantities!"""
     precomputed::PREC
 
@@ -56,8 +51,6 @@ struct AtmosCache{
     """Hyperdiffision quantities for grid and subgrid scale quantities, potentially with
        ghost buffers for DSS"""
     hyperdiff::HYPE
-
-    do_dss::DSS
 
     """Additional parameters used by the various tendencies"""
     precipitation::PR
@@ -101,11 +94,8 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
 
     (; ᶜf³, ᶠf¹²) = compute_coriolis(ᶜcoord, ᶠcoord, params)
 
-    quadrature_style =
-        Spaces.quadrature_style(Spaces.horizontal_space(axes(Y.c)))
-    do_dss = quadrature_style isa Quadratures.GLL
     ghost_buffer =
-        !do_dss ? (;) :
+        !do_dss(axes(Y.c)) ? (;) :
         (; c = Spaces.create_dss_buffer(Y.c), f = Spaces.create_dss_buffer(Y.f))
 
     net_energy_flux_toa = [Geometry.WVector(FT(0))]
@@ -144,11 +134,10 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
 
     sfc_setup = surface_setup(params)
     scratch = temporary_quantities(Y, atmos)
-    SG_quad = SGSQuadrature(FT)
 
     precomputed = precomputed_quantities(Y, atmos)
     precomputing_arguments =
-        (; atmos, core, params, sfc_setup, precomputed, scratch, dt, SG_quad)
+        (; atmos, core, params, sfc_setup, precomputed, scratch, dt)
 
     # Coupler compatibility
     isnothing(precomputing_arguments.sfc_setup) &&
@@ -178,11 +167,9 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         core,
         sfc_setup,
         ghost_buffer,
-        SG_quad,
         precomputed,
         scratch,
         hyperdiff,
-        do_dss,
         precipitation,
         large_scale_advection,
         external_forcing,

@@ -2,101 +2,79 @@
 Please see ClimaAtmos.jl/reproducibility_tests/README.md
 for a more detailed information on how reproducibility tests work.
 =#
-@info "##########################################"
 @info "########################################## Reproducibility tests"
-@info "##########################################"
 
-import OrderedCollections
-import JSON
-import ArgParse
+include(joinpath(@__DIR__, "reproducibility_test_job_ids.jl"))
+include(joinpath(@__DIR__, "reproducibility_tools.jl"))
 
-function parse_commandline()
-    s = ArgParse.ArgParseSettings()
-    ArgParse.@add_arg_table! s begin
-        "--job_id"
-        help = "Uniquely identifying string for a particular job"
-        arg_type = String
-        "--out_dir"
-        help = "Output data directory"
-        arg_type = String
-        "--test_broken_report_flakiness"
-        help = "Bool indicating that the job is flaky, use `@test_broken` on flaky job and report flakiness"
-        arg_type = Bool
-        default = false
+(; job_id, out_dir, test_broken_report_flakiness) =
+    reproducibility_test_params()
+
+debug = true
+repro_dir = joinpath(out_dir, "reproducibility_bundle")
+computed_mse_files = map(filter(default_is_mse_file, readdir(repro_dir))) do x
+    joinpath(repro_dir, x)
+end
+if isempty(computed_mse_files)
+    @warn "No reproducibility tests performed, due to non-existent comparable data."
+    debug && @show readdir(out_dir)
+    debug && @show readdir(repro_dir)
+    debug && @show filter(default_is_mse_file, readdir(repro_dir))
+    dirs = latest_comparable_dirs()
+    if isempty(dirs) # no comparable references
+        bins = compute_bins() # all reproducible bins, may or may not be comparable
+        if isempty(bins)
+            @warn "No reproducibility data found"
+        else
+            # Let's assert that the ref counter was incremented
+            newest_saved_dir_new =
+                joinpath(bins[1][1], "reproducibility_bundle")
+            newest_saved_dir_legacy = joinpath(bins[1][1])
+            newest_saved_dir = if ispath(newest_saved_dir_new)
+                newest_saved_dir_new
+            elseif ispath(newest_saved_dir_legacy)
+                newest_saved_dir_legacy
+            else
+                error("Newest saved directory not found.")
+            end
+            newest_saved_ref_counter =
+                read_ref_counter(joinpath(newest_saved_dir, "ref_counter.jl"))
+            ref_counter_PR =
+                read_ref_counter(joinpath(@__DIR__, "ref_counter.jl"))
+            if ref_counter_PR ≠ newest_saved_ref_counter + 1
+                if debug_reproducibility()
+                    @info "    ref_counter_PR=$ref_counter_PR, newest_saved_ref_counter=$newest_saved_ref_counter\n"
+                    @info "newest_saved_dir: $newest_saved_dir\n"
+                    @info "newest_saved_dir_legacy: $newest_saved_dir_legacy\n"
+                    @info "newest_saved_dir_new: $newest_saved_dir_new\n"
+                    print_bins(bins)
+                end
+                error("Reference counter must be incremented by 1.")
+            end
+        end
+    else
+        msg = "There were comparable references, but no computed mse files exist."
+        msg *= "\nPlease open an issue with this message."
+        error(msg)
     end
-    parsed_args = ArgParse.parse_args(ARGS, s)
-    return (s, parsed_args)
-end
-
-function get_params()
-    (s, parsed_args) = parse_commandline()
-    job_id = parsed_args["job_id"]
-    out_dir = parsed_args["out_dir"]
-    test_broken_report_flakiness = parsed_args["test_broken_report_flakiness"]
-    return (; job_id, out_dir, test_broken_report_flakiness)
-end
-
-(; job_id, out_dir, test_broken_report_flakiness) = get_params()
-include(joinpath(@__DIR__, "mse_tables.jl"))
-best_mse = all_best_mse[job_id]
-best_mse_string =
-    Dict(map(x -> string(x) => best_mse[x], collect(keys(best_mse))))
-
-import ClimaReproducibilityTests as CRT
-using Test
-function test_reproducibility_results(
-    computed_mse_filenames;
-    test_broken_report_flakiness,
-)
-    @info "computed_mse_filenames: $computed_mse_filenames"
-    @info "isfile.(computed_mse_filenames): $(isfile.(computed_mse_filenames))"
-    n_passes = 0
-    for computed_mse_filename in computed_mse_filenames
-        computed_mse = JSON.parsefile(
-            computed_mse_filename;
-            dicttype = OrderedCollections.OrderedDict,
+else
+    @testset "Reproducibility tests" begin
+        commit_hashes =
+            map(x -> commit_sha_from_mse_file(x), computed_mse_files)
+        computed_mses = map(x -> parse_file(x), computed_mse_files)
+        results = report_reproducibility_results(
+            commit_hashes,
+            computed_mses;
+            test_broken_report_flakiness,
         )
 
         if test_broken_report_flakiness
-            all_reproducible = true
-            for (var, reproducible) in CRT.test_mse(; computed_mse)
-                reproducible || (all_reproducible = false)
-                @show var, reproducible
-            end
-            all_reproducible && (n_passes += 1)
+            @test results == :not_yet_reproducible
+            @test_broken results == :now_reproducible
         else
-            for (var, reproducible) in CRT.test_mse(; computed_mse)
-                @test reproducible
-            end
-        end
-    end
-
-    n_allowed_passes = 5
-    # If we successfully compare against 5 other jobs,
-    # let's error and tell the user that the job now
-    # seems reproducible.
-    if test_broken_report_flakiness
-        if n_passes > n_allowed_passes
-            now_reproducible = true
-            @test_broken now_reproducible
-        else
-            n_times_reproducible = n_passes
-            n_times_not_reproducible = length(computed_mse_filenames) - n_passes
-            @show n_times_reproducible
-            @show n_times_not_reproducible
+            @test results == :reproducible
         end
     end
 end
-is_mse_file(x) = startswith(basename(x), "computed_mse") && endswith(x, ".json")
-@show readdir(out_dir)
-computed_mse_filenames = filter(is_mse_file, readdir(out_dir))
-computed_mse_filenames =
-    map(fn -> joinpath(out_dir, fn), computed_mse_filenames)
-test_reproducibility_results(
-    computed_mse_filenames;
-    test_broken_report_flakiness,
-)
 
-@info "##########################################"
-@info "##########################################"
 @info "##########################################"

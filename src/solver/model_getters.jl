@@ -10,30 +10,6 @@ function get_moisture_model(parsed_args)
     end
 end
 
-function get_model_config(parsed_args)
-    config = parsed_args["config"]
-
-    valid_configurations = ("sphere", "column", "box", "plane")
-
-    if !(config ∈ valid_configurations)
-        error_message = string(
-            "config = $config is not one of the ",
-            "valid configurations $valid_configurations",
-        )
-        throw(ArgumentError(error_message))
-    end
-
-    return if config == "sphere"
-        SphericalModel()
-    elseif config == "column"
-        SingleColumnModel()
-    elseif config == "box"
-        BoxModel()
-    elseif config == "plane"
-        PlaneModel()
-    end
-end
-
 function get_sfc_temperature_form(parsed_args)
     surface_temperature = parsed_args["surface_temperature"]
     @assert surface_temperature in
@@ -106,12 +82,15 @@ function get_vertical_diffusion_model(
     ::Type{FT},
 ) where {FT}
     vert_diff_name = parsed_args["vert_diff"]
+    vdp = CAP.vert_diff_params(params)
     return if vert_diff_name in ("false", false, "none")
         nothing
     elseif vert_diff_name in ("true", true, "VerticalDiffusion")
-        VerticalDiffusion{diffuse_momentum, FT}(; C_E = params.C_E)
+        VerticalDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
     elseif vert_diff_name in ("FriersonDiffusion",)
-        FriersonDiffusion{diffuse_momentum, FT}(; C_E = params.C_E)
+        FriersonDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
+    elseif vert_diff_name in ("DecayWithHeightDiffusion",)
+        DecayWithHeightDiffusion{diffuse_momentum, FT}(; H = vdp.H, D₀ = vdp.D₀)
     else
         error("Uncaught diffusion model `$vert_diff_name`.")
     end
@@ -181,15 +160,14 @@ end
 
 function get_non_orographic_gravity_wave_model(
     parsed_args,
-    model_config,
     ::Type{FT},
 ) where {FT}
     nogw_name = parsed_args["non_orographic_gravity_wave"]
     @assert nogw_name in (true, false)
     return if nogw_name == true
-        if model_config isa SingleColumnModel
+        if parsed_args["config"] == "column"
             NonOrographyGravityWave{FT}(; Bw = 1.2, Bn = 0.0, Bt_0 = 4e-3)
-        elseif model_config isa SphericalModel
+        elseif parsed_args["config"] == "sphere"
             NonOrographyGravityWave{FT}(;
                 Bw = 0.4,
                 Bn = 0.0,
@@ -313,12 +291,13 @@ end
 
 function get_cloud_model(parsed_args)
     cloud_model = parsed_args["cloud_model"]
+    FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     return if cloud_model == "grid_scale"
         GridScaleCloud()
     elseif cloud_model == "quadrature"
-        QuadratureCloud()
+        QuadratureCloud(SGSQuadrature(FT))
     elseif cloud_model == "quadrature_sgs"
-        SGSQuadratureCloud()
+        SGSQuadratureCloud(SGSQuadrature(FT))
     else
         error("Invalid cloud_model $(cloud_model)")
     end

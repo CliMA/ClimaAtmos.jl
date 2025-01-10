@@ -15,7 +15,6 @@ edmfx_sgs_diffusive_flux: true
 rayleigh_sponge: true
 moist: equil
 precip_model: 0M
-override_precip_timescale: false
 dt: 100secs
 t_end: 12hours
 dt_save_state_to_disk: 12hours

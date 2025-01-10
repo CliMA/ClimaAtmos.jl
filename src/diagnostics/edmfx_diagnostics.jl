@@ -1017,7 +1017,11 @@ function compute_edt!(
     state,
     cache,
     time,
-    vert_diff::Union{VerticalDiffusion, FriersonDiffusion},
+    vert_diff::Union{
+        VerticalDiffusion,
+        FriersonDiffusion,
+        DecayWithHeightDiffusion,
+    },
     turbconv_model::Nothing,
 )
     if isnothing(out)
@@ -1072,7 +1076,11 @@ function compute_evu!(
     state,
     cache,
     time,
-    vert_diff::Union{VerticalDiffusion, FriersonDiffusion},
+    vert_diff::Union{
+        VerticalDiffusion,
+        FriersonDiffusion,
+        DecayWithHeightDiffusion,
+    },
     turbconv_model::Nothing,
 )
     if isnothing(out)

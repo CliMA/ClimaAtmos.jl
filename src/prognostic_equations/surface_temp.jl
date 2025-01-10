@@ -19,10 +19,15 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::PrognosticSurfaceTemperatur
     end
 
     # turbulent surface fluxes: energy (sensible + latent heat)
-    sfc_turb_e_flux =
-        Geometry.WVector.(
-            p.precomputed.sfc_conditions.ρ_flux_h_tot
-        ).components.data.:1
+    # it should only be applied when there is vertical diffusion
+    if !isnothing(p.atmos.vert_diff) || !isnothing(p.atmos.turbconv_model)
+        sfc_turb_e_flux =
+            Geometry.WVector.(
+                p.precomputed.sfc_conditions.ρ_flux_h_tot
+            ).components.data.:1
+    else
+        sfc_turb_e_flux = 0
+    end
 
     # Q-fluxes (parameterization of horizontal ocean mixing of energy)
     # as in Zurita-Gotor et al., 2023
@@ -48,16 +53,21 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::PrognosticSurfaceTemperatur
 
         # WATER
         # turbulent surface fluxes: water (evaporation)
-        sfc_turb_w_flux = p.precomputed.sfc_conditions.ρ_flux_q_tot
+        # it should only be applied when there is vertical diffusion
+        if !isnothing(p.atmos.vert_diff) || !isnothing(p.atmos.turbconv_model)
+            sfc_turb_w_flux =
+                Geometry.WVector.(
+                    p.precomputed.sfc_conditions.ρ_flux_q_tot
+                ).components.data.:1
+        else
+            sfc_turb_w_flux = 0
+        end
 
         # precipitation
         P_liq = p.precipitation.surface_rain_flux
         P_snow = p.precipitation.surface_snow_flux
 
-        @. Yₜ.sfc.water -=
-            P_liq +
-            P_snow +
-            Geometry.WVector.(sfc_turb_w_flux).components.data.:1 # d(water)/dt = P - E [kg/m²/s]
+        @. Yₜ.sfc.water -= P_liq + P_snow + sfc_turb_w_flux # d(water)/dt = P - E [kg/m²/s]
 
     end
 end

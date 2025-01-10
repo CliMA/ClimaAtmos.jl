@@ -2,16 +2,6 @@ using ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 
-@testset "Model config" begin
-    config = CA.AtmosConfig(Dict("config" => "box"), job_id = "model1")
-    parsed_args = config.parsed_args
-    @test CA.get_model_config(parsed_args) isa CA.BoxModel
-
-    config = CA.AtmosConfig(Dict("config" => "plane"), job_id = "model2")
-    parsed_args = config.parsed_args
-    @test CA.get_model_config(parsed_args) isa CA.PlaneModel
-end
-
 @testset "Hyperdiffusion config" begin
     @info "CAM_SE (Special case of ClimaHyperdiffusion)"
     config = CA.AtmosConfig(

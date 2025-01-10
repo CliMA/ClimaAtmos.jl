@@ -1,7 +1,6 @@
 dt_save_state_to_disk: "Inf"
 dt_save_to_sol: "Inf"
-output_default_diagnostics: false
-h_elem: 30
+h_elem: 16
 z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
@@ -17,10 +16,12 @@ vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 surface_setup: "DefaultMoninObukhov"
-rayleigh_sponge: true
-dt: "90secs"
-t_end: "1days"
+dt: "60secs"
+t_end: "1hours"
 toml: [toml/longrun_aquaplanet.toml]
 prescribe_ozone: true
 aerosol_radiation: true
 prescribed_aerosols: ["CB1", "CB2", "DST01", "OC1", "OC2", "SO4", "SSLT03", "SSLT04"]
+start_date: "20160801"
+initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
+topography: "Earth"

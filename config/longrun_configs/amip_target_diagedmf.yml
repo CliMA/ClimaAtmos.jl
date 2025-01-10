@@ -9,14 +9,13 @@ dt_save_state_to_disk: "20days"
 moist: "equil"
 cloud_model: "quadrature_sgs"
 precip_model: "0M"
-override_precip_timescale: false
 rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 insolation: "timevarying"
 prescribe_ozone: true
 aerosol_radiation: true
-prescribed_aerosols: ["CB1", "CB2", "DST01", "OC1", "OC2", "SO4", "SSLT01"]
+prescribed_aerosols: ["CB1", "CB2", "DST01", "OC1", "OC2", "SO4", "SSLT03", "SSLT04"]
 surface_setup: "DefaultMoninObukhov"
 turbconv: "diagnostic_edmfx"
 ode_algo: ARS343
@@ -34,7 +33,7 @@ t_end: "120days"
 toml: [toml/longrun_aquaplanet_diagedmf.toml]
 netcdf_output_at_levels: true
 diagnostics:
-  - short_name: [mmrso4, o3]
+  - short_name: [mmrso4, mmrdust, mmrss, o3]
     reduction_time: average
     period: "1months"
 

@@ -19,6 +19,7 @@ non_orographic_gravity_wave: true
 orographic_gravity_wave: "gfdl_restart"
 surface_setup: "DefaultMoninObukhov"
 prescribe_ozone: true
+reproducibility_test: true
 prescribed_aerosols: ["CB1", "CB2", "SO4"]
 toml: [toml/sphere_aquaplanet.toml]
 diagnostics:

@@ -249,19 +249,26 @@ function check_conservation(sol)
         ) / energy_total
 
     water_surface_change = zero(Spaces.undertype(axes(sol.u[end].c.ρ)))
-    water_total = sum(sol.u[end].c.ρq_tot)
-    water_atmos_change = sum(sol.u[end].c.ρq_tot) - sum(sol.u[1].c.ρq_tot)
-
-    if sfc isa PrognosticSurfaceTemperature
-        water_surface_change = horizontal_integral_at_boundary(
-            sol.u[end].sfc.water .- sol.u[1].sfc.water,
-        )
+    if :ρq_tot in propertynames(sol.u[1].c)
+        water_total = sum(sol.u[end].c.ρq_tot)
+        water_atmos_change = sum(sol.u[end].c.ρq_tot) - sum(sol.u[1].c.ρq_tot)
+        if sfc isa PrognosticSurfaceTemperature
+            water_surface_change = horizontal_integral_at_boundary(
+                sol.u[end].sfc.water .- sol.u[1].sfc.water,
+            )
+        end
     end
+
     mass_conservation =
         (sum(sol.u[end].c.ρ) - sum(sol.u[1].c.ρ) + water_surface_change) /
         sum(sol.u[1].c.ρ)
-    water_conservation =
-        abs(water_atmos_change + water_surface_change) / water_total
+
+    # We set water_conservation to zero for the dry model as there is no water
+    water_conservation = zero(eltype(sol))
+    if :ρq_tot in propertynames(sol.u[1].c)
+        water_conservation =
+            abs(water_atmos_change + water_surface_change) / water_total
+    end
 
     return (; energy_conservation, mass_conservation, water_conservation)
 end

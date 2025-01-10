@@ -1,6 +1,7 @@
 using Dates: DateTime, @dateformat_str
 import Interpolations
 import NCDatasets
+import ClimaCore
 import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
@@ -50,13 +51,11 @@ function get_atmos(config::AtmosConfig, params)
         filter = Val(parsed_args["edmfx_filter"]),
     )
 
-    model_config = get_model_config(parsed_args)
     vert_diff =
         get_vertical_diffusion_model(diffuse_momentum, parsed_args, params, FT)
 
     atmos = AtmosModel(;
         moisture_model,
-        model_config,
         ozone,
         radiation_mode,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
@@ -73,7 +72,6 @@ function get_atmos(config::AtmosConfig, params)
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
             parsed_args,
-            model_config,
             FT,
         ),
         orographic_gravity_wave = get_orographic_gravity_wave_model(
@@ -106,6 +104,19 @@ function get_numerics(parsed_args)
 
     energy_upwinding = Val(Symbol(parsed_args["energy_upwinding"]))
     tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"]))
+
+    # Compat
+    if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
+       energy_upwinding == Val(:vanleer_limiter)
+        energy_upwinding = Val(:none)
+        @warn "energy_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting energy_upwinding to :none"
+    end
+    if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
+       tracer_upwinding == Val(:vanleer_limiter)
+        tracer_upwinding = Val(:none)
+        @warn "tracer_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting tracer_upwinding to :none"
+    end
+
     edmfx_upwinding = Val(Symbol(parsed_args["edmfx_upwinding"]))
     edmfx_sgsflux_upwinding =
         Val(Symbol(parsed_args["edmfx_sgsflux_upwinding"]))
@@ -299,6 +310,8 @@ function get_initial_condition(parsed_args)
         "PrecipitatingColumn",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
+    elseif isfile(parsed_args["initial_condition"])
+        return ICs.MoistFromFile(parsed_args["initial_condition"])
     elseif parsed_args["initial_condition"] == "GCM"
         @assert parsed_args["prognostic_tke"] == true
         return ICs.GCMDriven(
@@ -624,9 +637,8 @@ function silence_non_root_processes(comms_ctx)
 end
 
 function get_simulation(config::AtmosConfig)
-    params = create_parameter_set(config)
+    params = ClimaAtmosParameters(config)
     atmos = get_atmos(config, params)
-
     sim_info = get_sim_info(config)
     job_id = sim_info.job_id
     output_dir = sim_info.output_dir
@@ -655,7 +667,6 @@ function get_simulation(config::AtmosConfig)
 
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
-
     if !sim_info.restart
         s = @timed_str begin
             Y = ICs.atmos_state(
@@ -667,6 +678,17 @@ function get_simulation(config::AtmosConfig)
             t_start = Spaces.undertype(axes(Y.c))(0)
         end
         @info "Allocating Y: $s"
+
+        # In instances where we wish to interpolate existing datasets, e.g.
+        # NetCDF files containing spatially varying thermodynamic properties,
+        # this call to `overwrite_initial_conditions` overwrites the variables
+        # in `Y` (specific to `initial_condition`) with those computed using the
+        # `SpaceVaryingInputs` tool.
+        CA.InitialConditions.overwrite_initial_conditions!(
+            initial_condition,
+            Y,
+            params.thermodynamics_params,
+        )
     end
 
     tracers = get_tracers(config.parsed_args)

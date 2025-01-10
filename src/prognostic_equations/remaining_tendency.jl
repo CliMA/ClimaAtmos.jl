@@ -2,7 +2,7 @@
 NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     prep_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
     prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    if p.do_dss && !isnothing(p.atmos.hyperdiff)
+    if do_dss(axes(Y.c)) && !isnothing(p.atmos.hyperdiff)
         pairs = dss_hyperdiffusion_tendency_pairs(p)
         Spaces.weighted_dss!(pairs...)
     end

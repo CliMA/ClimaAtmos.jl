@@ -148,15 +148,14 @@ function precomputed_quantities(Y, atmos)
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             precipitation_sgs_quantities...,
         ) : (;)
-    vert_diff_quantities = if atmos.vert_diff isa VerticalDiffusion
-        ᶜK_h = similar(Y.c, FT)
-        (; ᶜK_u = ᶜK_h, ᶜK_h) # ᶜK_u aliases ᶜK_h because they are always equal.
-    elseif atmos.vert_diff isa FriersonDiffusion
-        ᶜK_h = similar(Y.c, FT)
-        (; ᶜK_u = ᶜK_h, ᶜK_h) # ᶜK_u aliases ᶜK_h because they are always equal.
-    else
-        (;)
-    end
+    vert_diff_quantities =
+        if atmos.vert_diff isa
+           Union{VerticalDiffusion, DecayWithHeightDiffusion, FriersonDiffusion}
+            ᶜK_h = similar(Y.c, FT)
+            (; ᶜK_u = ᶜK_h, ᶜK_h) # ᶜK_u aliases ᶜK_h because they are always equal.
+        else
+            (;)
+        end
     precipitation_quantities =
         atmos.precip_model isa Microphysics1Moment ?
         (;
@@ -342,6 +341,9 @@ ts_sgs(thermo_params, moisture_model, specific, K, Φ, p) = thermo_state(
     p,
 )
 
+function eddy_diffusivity_coefficient_H(D₀, H, z_sfc, z)
+    return D₀ * exp(-(z - z_sfc) / H)
+end
 function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
     p_pbl = 85000
     p_strato = 10000
@@ -565,7 +567,17 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         )
     end
 
-    if vert_diff isa VerticalDiffusion
+    if vert_diff isa DecayWithHeightDiffusion
+        (; ᶜK_h) = p.precomputed
+        ᶜz = Fields.coordinate_field(Y.c).z
+        ᶠz_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+        @. ᶜK_h = eddy_diffusivity_coefficient_H(
+            p.atmos.vert_diff.D₀,
+            p.atmos.vert_diff.H,
+            ᶠz_sfc,
+            ᶜz,
+        )
+    elseif vert_diff isa VerticalDiffusion
         (; ᶜK_h) = p.precomputed
         interior_uₕ = Fields.level(Y.c.uₕ, 1)
         ᶜΔz_surface = Fields.Δz_field(interior_uₕ)

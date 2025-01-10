@@ -56,11 +56,11 @@ steps:
 
   - wait
 
-  - group: "Reproducibility tests"
+  - group: "Reproducibility infrastructure"
     steps:
 
-      - label: ":computer: Ensure mse tables are reset when necessary"
-        command: "julia --color=yes --project=examples reproducibility_tests/test_reset.jl"
+      - label: ":computer: Test reproducibility infrastructure"
+        command: "julia --color=yes --project=examples test/unit_reproducibility_infra.jl"
 
   - group: "Radiation"
     steps:
@@ -218,17 +218,23 @@ steps:
           --job_id sphere_baroclinic_wave_conservation
         artifact_paths: "sphere_baroclinic_wave_conservation/output_active/*"
 
-      - label: ":computer: baroclinic wave check conservation float64"
+      - label: ":computer: baroclinic wave moist check conservation"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_ft64.yml
-          --job_id sphere_baroclinic_wave_conservation_ft64
-        artifact_paths: "sphere_baroclinic_wave_conservation_ft64/output_active/*"
+          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_equilmoist_conservation.yml
+          --job_id sphere_baroclinic_wave_equilmoist_conservation
+        artifact_paths: "sphere_baroclinic_wave_equilmoist_conservation/output_active/*"
 
-      - label: ":computer: baroclinic wave check conservation with sources"
+      - label: ":computer: baroclinic wave moist check conservation float64"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation_source.yml
-          --job_id sphere_baroclinic_wave_conservation_source
-        artifact_paths: "sphere_baroclinic_wave_conservation_source/output_active/*"
+          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_equilmoist_conservation_ft64.yml
+          --job_id sphere_baroclinic_wave_equilmoist_conservation_ft64
+        artifact_paths: "sphere_baroclinic_wave_equilmoist_conservation_ft64/output_active/*"
+
+      - label: ":computer: baroclinic wave moist check conservation with sources"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_equilmoist_conservation_source.yml
+          --job_id sphere_baroclinic_wave_equilmoist_conservation_source
+        artifact_paths: "sphere_baroclinic_wave_equilmoist_conservation_source/output_active/*"
 
   - group: "Sphere Examples (Dycore)"
     steps:
@@ -318,7 +324,7 @@ steps:
           --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.yml
           --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
 
-          julia --color=yes --project=examples reproducibility_tests/test_mse.jl --test_broken_report_flakiness true
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
           --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
           --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/output_active
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/output_active/*"
@@ -414,6 +420,13 @@ steps:
           --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth.yml
           --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/output_active/*"
+      
+      - label: ":computer: Baroclinic wave (ρe) equilmoist (Hughes2023 double mountain config)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_hughes2023.yml
+          --job_id sphere_baroclinic_wave_rhoe_hughes2023
+        artifact_paths: "sphere_baroclinic_wave_rhoe_hughes2023/output_active/*"
 
   - group: "Restarting"
     steps:
@@ -828,6 +841,15 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":genie: Prognostic EDMFX Soares in a column"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_soares_column.yml
+          --job_id prognostic_edmfx_soares_column
+        artifact_paths: "prognostic_edmfx_soares_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
   - group: "GPU"
     steps:
 
@@ -947,6 +969,18 @@ steps:
             --config_file ${CONFIG_PATH}/gpu_aquaplanet_dyamond.yml
             --job_id gpu_aquaplanet_dyamond
         artifact_paths: "gpu_aquaplanet_dyamond/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+      
+      - label: "GPU: test DYAMOND interpolated initial conditions"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_summer.yml
+          --job_id gpu_aquaplanet_dyamond_summer
+        artifact_paths: "gpu_aquaplanet_dyamond_summer/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
@@ -1186,7 +1220,7 @@ steps:
     continue_on_failure: true
 
   - label: ":robot_face: Print new mse tables"
-    command: "julia --color=yes --project=examples reproducibility_tests/print_new_mse.jl"
+    command: "julia --color=yes --project=examples reproducibility_tests/mse_summary.jl"
 
   - label: ":robot_face: Print new reference counter"
     command: "julia --color=yes --project=examples reproducibility_tests/print_new_ref_counter.jl"

@@ -677,8 +677,13 @@ function make_plots(::DryBaroWavePlots, output_paths::Vector{<:AbstractString})
     )
 end
 
+SphereOrographyPlots = Union{
+    Val{:sphere_baroclinic_wave_rhoe_topography_dcmip_rs},
+    Val{:sphere_baroclinic_wave_rhoe_hughes2023},
+}
+
 function make_plots(
-    ::Val{:sphere_baroclinic_wave_rhoe_topography_dcmip_rs},
+    ::SphereOrographyPlots,
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -822,7 +827,10 @@ function make_plots(
 end
 
 function make_plots(
-    ::Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric},
+    ::Union{
+        Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric},
+        Val{:gpu_aquaplanet_dyamond_summer},
+    },
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -1181,6 +1189,7 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_gcmdriven_column},
     Val{:prognostic_edmfx_bomex_box},
     Val{:rcemipii_box_diagnostic_edmfx},
+    Val{:prognostic_edmfx_soares_column},
 }
 
 EDMFBoxPlotsWithPrecip = Union{

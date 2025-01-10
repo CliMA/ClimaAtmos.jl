@@ -5,28 +5,26 @@ import NVTX
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields, RecursiveApply
 
-NVTX.@annotate function kinetic_energy!(
-    K_level,
+@inline function kinetic_energy(
     uₕ_level,
     u³_halflevel,
     local_geometry_level,
     local_geometry_halflevel,
 )
-    @. K_level =
-        (
-            dot(
-                C123(uₕ_level, local_geometry_level),
-                CT123(uₕ_level, local_geometry_level),
-            ) +
-            dot(
-                C123(u³_halflevel, local_geometry_halflevel),
-                CT123(u³_halflevel, local_geometry_halflevel),
-            ) +
-            2 * dot(
-                CT123(uₕ_level, local_geometry_level),
-                C123(u³_halflevel, local_geometry_halflevel),
-            )
-        ) / 2
+    return (
+        dot(
+            C123(uₕ_level, local_geometry_level),
+            CT123(uₕ_level, local_geometry_level),
+        ) +
+        dot(
+            C123(u³_halflevel, local_geometry_halflevel),
+            CT123(u³_halflevel, local_geometry_halflevel),
+        ) +
+        2 * dot(
+            CT123(uₕ_level, local_geometry_level),
+            C123(u³_halflevel, local_geometry_halflevel),
+        )
+    ) / 2
 end
 
 NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
@@ -71,8 +69,7 @@ NVTX.@annotate function set_diagnostic_edmfx_env_quantities_level!(
         ρ_level,
         turbconv_model,
     )
-    kinetic_energy!(
-        K⁰_level,
+    @. K⁰_level = kinetic_energy(
         uₕ_level,
         u³⁰_halflevel,
         local_geometry_level,
@@ -177,8 +174,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
             local_geometry_int_halflevel,
         )
 
-        kinetic_energy!(
-            Kʲ_int_level,
+        @. Kʲ_int_level = kinetic_energy(
             uₕ_int_level,
             u³ʲ_int_halflevel,
             local_geometry_int_level,
@@ -324,7 +320,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     end
 
     thermo_params = CAP.thermodynamics_params(params)
-    microphys_params = CAP.microphysics_precipitation_params(params)
+    microphys_0m_params = CAP.microphysics_0m_params(params)
+    microphys_1m_params = CAP.microphysics_1m_params(params)
     turbconv_params = CAP.turbconv_params(params)
 
     ᶠΦ = p.scratch.ᶠtemp_scalar
@@ -541,7 +538,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 @. S_q_totʲ_prev_level = q_tot_precipitation_sources(
                     precip_model,
                     thermo_params,
-                    microphys_params,
+                    microphys_0m_params,
                     dt,
                     q_totʲ_prev_level,
                     tsʲ_prev_level,
@@ -560,7 +557,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     tsʲ_prev_level,
                     Φ_prev_level,
                     dt,
-                    microphys_params,
+                    microphys_1m_params,
                     thermo_params,
                 )
             end
@@ -797,8 +794,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 )
             end
 
-            kinetic_energy!(
-                Kʲ_level,
+            @. Kʲ_level = kinetic_energy(
                 uₕ_level,
                 u³ʲ_halflevel,
                 local_geometry_level,
@@ -1032,7 +1028,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     precip_model::Microphysics0Moment,
 )
     thermo_params = CAP.thermodynamics_params(p.params)
-    microphys_params = CAP.microphysics_precipitation_params(p.params)
+    microphys_0m_params = CAP.microphysics_0m_params(p.params)
     (; dt) = p
     (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
@@ -1041,7 +1037,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     @. ᶜSqₜᵖ⁰ = q_tot_precipitation_sources(
         precip_model,
         thermo_params,
-        microphys_params,
+        microphys_0m_params,
         dt,
         q_tot,
         ᶜts,
@@ -1055,7 +1051,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     precip_model::Microphysics1Moment,
 )
     thermo_params = CAP.thermodynamics_params(p.params)
-    microphys_params = CAP.microphysics_precipitation_params(p.params)
+    microphys_1m_params = CAP.microphysics_1m_params(p.params)
 
     (; ᶜts, ᶜSqₜᵖ⁰, ᶜSeₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
@@ -1078,7 +1074,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         ᶜts,
         p.core.ᶜΦ,
         p.dt,
-        microphys_params,
+        microphys_1m_params,
         thermo_params,
     )
     return nothing

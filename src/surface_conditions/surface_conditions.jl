@@ -124,8 +124,6 @@ function set_surface_conditions!(p, surface_conditions, surface_ts)
         surface_conditions,
         surface_ts,
         sfc_local_geometry,
-        atmos,
-        params,
     )
 end
 
@@ -334,8 +332,6 @@ function surface_state_to_conditions(
         SF.surface_conditions(surface_fluxes_params, inputs),
         ts,
         surface_local_geometry,
-        atmos,
-        thermo_params,
     )
 end
 
@@ -414,9 +410,7 @@ end
     atmos_surface_conditions(
         surface_conditions,
         ts,
-        surface_local_geometry,
-        atmos,
-        thermo_params,
+        surface_local_geometry
     )
 
 Adds local geometry information to the `SurfaceFluxes.SurfaceFluxConditions` struct
@@ -427,8 +421,6 @@ function atmos_surface_conditions(
     surface_conditions,
     ts,
     surface_local_geometry,
-    atmos,
-    thermo_params,
 )
     (; ustar, L_MO, buoy_flux, ρτxz, ρτyz, shf, lhf, evaporation) =
         surface_conditions

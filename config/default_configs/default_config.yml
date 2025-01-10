@@ -35,7 +35,7 @@ scalar_hyperdiffusion_coefficient:
   value: 1.5
 # Topography
 topography:
-  help: "Define the surface elevation profile [`NoWarp`,`Earth`,`DCMIP200`,`Agnesi`]"
+  help: "Define the surface elevation profile [`NoWarp` (default),`Earth`,`DCMIP200`,`Agnesi`, `Schar`, `Hughes2023`]"
   value: "NoWarp"
 mesh_warp_type:
   help: "Sets the interior mesh warp method [`Linear`, `SLEVE`]"
@@ -140,7 +140,7 @@ reference_job_id:
     Identifier of job to use as the "reference" solution in the quicklook plot; the current job's results get compared to the results of the quicklook job on the main branch
   value: ~
 vert_diff:
-  help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `FriersonDiffusion`]"
+  help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `FriersonDiffusion`, `DecayWithHeightDiffusion`]"
   value: false
 hyperdiff:
   help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
@@ -182,7 +182,7 @@ surface_temperature:
   help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric', 'RCEMIPII']"
   value: "ZonallySymmetric"
 initial_condition:
-  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `AgnesiHProfile`, `ScharProfile`, `RisingThermalBubbleProfile`, `ISDAC`]"
+  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `AgnesiHProfile`, `ScharProfile`, `RisingThermalBubbleProfile`, `ISDAC`], or a file path for a NetCDF file (read documentation about requirements)."
   value: "DecayingProfile"
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
@@ -206,11 +206,11 @@ viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false
 tracer_upwinding:
-  help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
-  value: none
+  help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`, `vanleer_limiter`]"
+  value: vanleer_limiter
 energy_upwinding:
-  help: "Energy upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
-  value: none
+  help: "Energy upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`, `vanleer_limiter`]"
+  value: vanleer_limiter
 orographic_gravity_wave:
   help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`]"
   value: ~
@@ -259,9 +259,6 @@ implicit_diffusion:
 approximate_linear_solve_iters:
   help: "Number of iterations for the approximate linear solve (used when `implicit_diffusion` is true)"
   value: 1
-override_precip_timescale:
-  help: "If true, sets τ_precip to dt. Otherwise, τ_precip is set to the value in the toml dictionary"
-  value: true
 output_default_diagnostics:
   help: "Output the default diagnostics associated to the selected atmospheric model"
   value: true
