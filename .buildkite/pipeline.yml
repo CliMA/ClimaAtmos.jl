@@ -144,6 +144,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
           --job_id single_column_hydrostatic_balance_ft64
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id single_column_hydrostatic_balance_ft64
+          --out_dir single_column_hydrostatic_balance_ft64/output_active
         artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
 
   - group: "Box Examples"
@@ -420,7 +424,7 @@ steps:
           --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth.yml
           --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/output_active/*"
-      
+
       - label: ":computer: Baroclinic wave (ρe) equilmoist (Hughes2023 double mountain config)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -974,7 +978,7 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
-      
+
       - label: "GPU: test DYAMOND interpolated initial conditions"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
