@@ -27,10 +27,10 @@ function flux_accumulation!(integrator)
         nlevels = Spaces.nlevels(axes(Y.c))
         net_energy_flux_toa[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
-            Δt
+            float(Δt)
         if p.atmos.surface_model isa PrescribedSurfaceTemperature
             net_energy_flux_sfc[] +=
-                horizontal_integral_at_boundary(ᶠradiation_flux, half) * Δt
+                horizontal_integral_at_boundary(ᶠradiation_flux, half) * float(Δt)
         end
     end
     return nothing
@@ -120,8 +120,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             # the fact that we have a very unrealistic initial condition
             max_relative_humidity = FT(0.6)
             t_increasing_humidity = FT(60 * 60 * 24 * 30)
-            if t < t_increasing_humidity
-                max_relative_humidity *= t / t_increasing_humidity
+            if float(t) < t_increasing_humidity
+                max_relative_humidity *= float(t) / t_increasing_humidity
             end
             @. ᶜrh = max_relative_humidity
 

@@ -44,6 +44,7 @@ end
 
 function compute_precipitation_cache!(Y, p, ::Microphysics0Moment, _)
     (; params, dt) = p
+    dt = float(dt)
     (; ᶜts) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precipitation
     (; ᶜΦ) = p.core

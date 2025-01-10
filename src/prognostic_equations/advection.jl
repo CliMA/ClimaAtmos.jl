@@ -116,7 +116,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 Y.c.ρ,
                 ᶠu³,
                 ᶜh_tot,
-                dt,
+                float(dt),
                 upwinding,
             )
         end
@@ -125,7 +125,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         χ_name == :e_tot && continue
         for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
             tracer_upwinding isa Val{:none} && continue
-            vertical_transport!(coeff, ᶜρχₜ, ᶜJ, Y.c.ρ, ᶠu³, ᶜχ, dt, upwinding)
+            vertical_transport!(coeff, ᶜρχₜ, ᶜJ, Y.c.ρ, ᶠu³, ᶜχ, float(dt), upwinding)
         end
     end
 

@@ -22,7 +22,7 @@ cᵥᵢ(thp) = TD.Parameters.cv_i(thp)
 
 # helper function to limit the tendency
 function limit(q, dt, n::Int)
-    return q / dt / n
+    return q / float(dt) / n
 end
 
 """
@@ -88,7 +88,7 @@ function q_tot_precipitation_sources(
     qₜ,
     ts,
 )
-    return -min(max(qₜ, 0) / dt, -CM0.remove_precipitation(cmp, PP(thp, ts)))
+    return -min(max(qₜ, 0) / float(dt), -CM0.remove_precipitation(cmp, PP(thp, ts)))
 end
 
 """

@@ -210,7 +210,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
             )
             @. Yₜ.c.sgs⁰.ρatke -=
                 ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) +
-                tke_dissipation(Y.c.sgs⁰.ρatke, ᶜtke⁰, ᶜmixing_length, c_d, dt)
+                tke_dissipation(Y.c.sgs⁰.ρatke, ᶜtke⁰, ᶜmixing_length, c_d, float(dt))
         end
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
@@ -314,4 +314,4 @@ function edmfx_sgs_diffusive_flux_tendency!(
 end
 
 tke_dissipation(ρatke⁰, tke⁰, mixing_length, c_d, dt) =
-    tke⁰ >= 0 ? c_d * ρatke⁰ * sqrt(tke⁰) / max(mixing_length, 1) : ρatke⁰ / dt
+    tke⁰ >= 0 ? c_d * ρatke⁰ * sqrt(tke⁰) / max(mixing_length, 1) : ρatke⁰ / float(dt)
