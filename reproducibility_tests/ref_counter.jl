@@ -1,4 +1,4 @@
-196
+197
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+197
+- Added single column hydrostatic balance reproducibility test
+
 196
 - Set bubble correction to false as default
 
@@ -52,7 +55,7 @@
 - Change the model top for a few ci cases
 
 186
-- Topography dataset has been modified to the 60 arc-second ETOPO2022 dataset. 
+- Topography dataset has been modified to the 60 arc-second ETOPO2022 dataset.
   This is behaviour changing for the gravity-wave (raw-topo) parameterization
   when computing `hmax` and `T tensor`.
 

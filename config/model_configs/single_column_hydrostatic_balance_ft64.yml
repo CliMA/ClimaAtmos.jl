@@ -7,4 +7,5 @@ config: "column"
 hyperdiff: false
 dt: "3hours"
 FLOAT_TYPE: "Float64"
+reproducibility_test: true
 dt_save_to_sol: "3hours"
