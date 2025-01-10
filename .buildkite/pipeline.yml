@@ -2,7 +2,6 @@ agents:
   queue: new-central
   slurm_mem: 8G
   modules: climacommon/2024_10_08
-  slurm_time: "00:40:00"
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -63,36 +62,17 @@ steps:
       - label: ":computer: Test reproducibility infrastructure"
         command: "julia --color=yes --project=examples test/unit_reproducibility_infra.jl"
 
-  - group: "Radiation"
-    steps:
-
-      - label: ":computer: single column radiative equilibrium gray"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_gray.yml
-          --job_id single_column_radiative_equilibrium_gray
-        artifact_paths: "single_column_radiative_equilibrium_gray/output_active/*"
-
-      - label: ":computer: single column radiative equilibrium clearsky"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky.yml
-          --job_id single_column_radiative_equilibrium_clearsky
-        artifact_paths: "single_column_radiative_equilibrium_clearsky/output_active/*"
-
-      - label: ":computer: single column radiative equilibrium clearsky prognostic surface temperature"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky_prognostic_surface_temp.yml
-          --job_id single_column_radiative_equilibrium_clearsky_prognostic_surface_temp
-        artifact_paths: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/output_active/*"
-
-      - label: ":computer: single column radiative equilibrium allsky idealized clouds varying insolation"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_allsky_idealized_clouds.yml
-          --job_id single_column_radiative_equilibrium_allsky_idealized_clouds
-        artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/output_active/*"
+  - label: "Radiation"
+    command: |
+      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/single_column_radiative_equilibrium_gray.yml --job_id single_column_radiative_equilibrium_gray;
+      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky.yml --job_id single_column_radiative_equilibrium_clearsky;
+      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky_prognostic_surface_temp.yml --job_id single_column_radiative_equilibrium_clearsky_prognostic_surface_temp;
+      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/single_column_radiative_equilibrium_allsky_idealized_clouds.yml --job_id single_column_radiative_equilibrium_allsky_idealized_clouds;
+    artifact_paths:
+      - "single_column_radiative_equilibrium_gray/output_active/*"
+      - "single_column_radiative_equilibrium_clearsky/output_active/*"
+      - "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/output_active/*"
+      - "single_column_radiative_equilibrium_allsky_idealized_clouds/output_active/*"
 
   - group: "Precipitation"
     steps:
@@ -103,39 +83,23 @@ steps:
           --job_id single_column_precipitation_test
         artifact_paths: "single_column_precipitation_test/output_active/*"
 
-  - group: "Gravity wave"
-    steps:
-
-      - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
-        command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_3d/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":computer: non-orographic gravity wave parameterization test with MiMA output"
-        command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_mima/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":computer: non-orographic gravity wave parameterization unit test single column"
-        command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl"
-        artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
-
-      - label: ":computer: orographic gravity wave parameterization unit test for base flux calculation"
-        command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_baseflux.jl"
-        artifact_paths: "orographic_gravity_wave_test_baseflux/*"
-
-      - label: ":computer: orographic gravity wave parameterization unit test for 3d calculation"
-        command: "julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_3d.jl"
-        artifact_paths: "orographic_gravity_wave_test_3d/*"
-
-      - label: ":computer: single column non-orographic gravity wave parameterization"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
-          --job_id single_column_nonorographic_gravity_wave
-        artifact_paths: "single_column_nonorographic_gravity_wave/*"
+  - label: "Gravity wave"
+    command: |
+      julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl;
+      julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl;
+      julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl;
+      julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_baseflux.jl;
+      julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_3d.jl;
+      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml --job_id single_column_nonorographic_gravity_wave;
+    artifact_paths:
+      - "nonorographic_gravity_wave_test_3d/*"
+      - "nonorographic_gravity_wave_test_mima/*"
+      - "nonorographic_gravity_wave_test_single_column/*"
+      - "orographic_gravity_wave_test_baseflux/*"
+      - "orographic_gravity_wave_test_3d/*"
+      - "single_column_nonorographic_gravity_wave/*"
+    agents:
+      slurm_mem: 20GB
 
   - group: "Column Examples"
     steps:
@@ -150,26 +114,15 @@ steps:
   - group: "Box Examples"
     steps:
 
-      - label: ":computer: Box hydrostatic balance (ρe_tot)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/box_hydrostatic_balance_rhoe.yml
-          --job_id box_hydrostatic_balance_rhoe
-        artifact_paths: "box_hydrostatic_balance_rhoe/output_active/*"
-
-      - label: ":computer: 3D density current"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/box_density_current_test.yml
-          --job_id box_density_current_test
-        artifact_paths: "box_density_current_test/output_active/*"
-
-      - label: ":computer: Box (ρe_tot) rcemipii with diagnostic edmf"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/rcemipii_box_diagnostic_edmfx.yml
-          --job_id rcemipii_box_diagnostic_edmfx
-        artifact_paths: "rcemipii_box_diagnostic_edmfx/output_active/*"
+      - label: "Box Examples"
+        command: |
+            julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/box_hydrostatic_balance_rhoe.yml --job_id box_hydrostatic_balance_rhoe;
+            julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/box_density_current_test.yml --job_id box_density_current_test;
+            julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/rcemipii_box_diagnostic_edmfx.yml --job_id rcemipii_box_diagnostic_edmfx;
+        artifact_paths:
+        - "box_hydrostatic_balance_rhoe/output_active/*"
+        - "box_density_current_test/output_active/*"
+        - "rcemipii_box_diagnostic_edmfx/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -186,56 +139,28 @@ steps:
           slurm_gpus: 1
         soft_fail: true
 
-  - group: "Plane Examples"
-    steps:
-      - label: ":computer: Agnesi linear hydrostatic mountain experiment (uniform)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_agnesi_mountain_test_uniform.yml
-          --job_id plane_agnesi_mountain_test_uniform
-        artifact_paths: "plane_agnesi_mountain_test_uniform/output_active/*"
 
-      - label: ":computer: Agnesi linear hydrostatic mountain experiment (stretched)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_agnesi_mountain_test_stretched.yml
-          --job_id plane_agnesi_mountain_test_stretched
-        artifact_paths: "plane_agnesi_mountain_test_stretched/output_active/*"
+  - label: "Plane Examples"
+    command: |
+      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/plane_agnesi_mountain_test_uniform.yml --job_id plane_agnesi_mountain_test_uniform;
+      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/plane_agnesi_mountain_test_stretched.yml --job_id plane_agnesi_mountain_test_stretched;
+      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/plane_density_current_test.yml --job_id plane_density_current_test;
+    artifact_paths:
+      - "plane_agnesi_mountain_test_uniform/output_active/*"
+      - "plane_agnesi_mountain_test_stretched/output_active/*"
+      - "plane_density_current_test/output_active/*"
 
-      - label: ":computer: Density current experiment"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_density_current_test.yml
-          --job_id plane_density_current_test
-        artifact_paths: "plane_density_current_test/output_active/*"
-
-
-  - group: "Conservation check"
-    steps:
-
-      - label: ":computer: baroclinic wave check conservation"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation.yml
-          --job_id sphere_baroclinic_wave_conservation
-        artifact_paths: "sphere_baroclinic_wave_conservation/output_active/*"
-
-      - label: ":computer: baroclinic wave moist check conservation"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_equilmoist_conservation.yml
-          --job_id sphere_baroclinic_wave_equilmoist_conservation
-        artifact_paths: "sphere_baroclinic_wave_equilmoist_conservation/output_active/*"
-
-      - label: ":computer: baroclinic wave moist check conservation float64"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_equilmoist_conservation_ft64.yml
-          --job_id sphere_baroclinic_wave_equilmoist_conservation_ft64
-        artifact_paths: "sphere_baroclinic_wave_equilmoist_conservation_ft64/output_active/*"
-
-      - label: ":computer: baroclinic wave moist check conservation with sources"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_equilmoist_conservation_source.yml
-          --job_id sphere_baroclinic_wave_equilmoist_conservation_source
-        artifact_paths: "sphere_baroclinic_wave_equilmoist_conservation_source/output_active/*"
+  - label: "Conservation check"
+    command: |
+      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation.yml --job_id sphere_baroclinic_wave_conservation;
+      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_equilmoist_conservation.yml --job_id sphere_baroclinic_wave_equilmoist_conservation;
+      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_equilmoist_conservation_ft64.yml --job_id sphere_baroclinic_wave_equilmoist_conservation_ft64;
+      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_equilmoist_conservation_source.yml --job_id sphere_baroclinic_wave_equilmoist_conservation_source;
+    artifact_paths:
+      - "sphere_baroclinic_wave_conservation/output_active/*"
+      - "sphere_baroclinic_wave_equilmoist_conservation/output_active/*"
+      - "sphere_baroclinic_wave_equilmoist_conservation_ft64/output_active/*"
+      - "sphere_baroclinic_wave_equilmoist_conservation_source/output_active/*"
 
   - group: "Sphere Examples (Dycore)"
     steps:
@@ -1197,25 +1122,16 @@ steps:
           slurm_gpus: 1
           gres: "gpu:p100:1"
 
-  - group: "Inference/Invalidations"
-    steps:
-
+  - label: "Inference/Invalidations"
+    command: |
       # Inference
-      - label: ":rocket: JET n-failures (inference)"
-        command: >
-          julia --color=yes --project=perf perf/jet_test_nfailures.jl
-          --config_file $PERF_CONFIG_PATH/jet_n_failures.yml
-          --job_id jet_n_failures
-        agents:
-          slurm_mem: 24GB
-
-      # Latency
-      - label: ":mag::rocket: Invalidations"
-        command: >
-          julia --color=yes --project=perf perf/invalidations.jl
-        artifact_paths: "invalidations/*"
-        agents:
-          slurm_mem: 24GB
+      julia --color=yes --project=perf perf/jet_test_nfailures.jl --config_file $PERF_CONFIG_PATH/jet_n_failures.yml --job_id jet_n_failures;
+      # Invalidations
+      julia --color=yes --project=perf perf/invalidations.jl;
+    agents:
+      slurm_mem: 24GB
+    artifact_paths:
+      - "invalidations/*"
 
   - wait: ~
     continue_on_failure: true
