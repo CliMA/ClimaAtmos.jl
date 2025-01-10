@@ -92,6 +92,8 @@ function set_dummy_surface_conditions!(p)
             TD.PhasePartition(FT(0)),
         )
         @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
+        @. sfc_conditions.ρ_flux_q_liq = C3(FT(0))
+        @. sfc_conditions.ρ_flux_q_ice = C3(FT(0))
     end
     @. sfc_conditions.ρ_flux_h_tot = C3(FT(0))
 end
@@ -428,8 +430,13 @@ function atmos_surface_conditions(
 
     energy_flux = (; ρ_flux_h_tot = vector_from_component(shf + lhf, z))
 
-    # NOTE: Technically, ρ_flux_q_tot is not needed when the model is Dry ...
-    moisture_flux = (; ρ_flux_q_tot = vector_from_component(evaporation, z))
+    moisture_flux =
+        atmos.moisture_model isa DryModel ? (;) :
+        (;
+        ρ_flux_q_tot = vector_from_component(evaporation, z),
+        ρ_flux_q_liq = vector_from_component(0, z),
+        ρ_flux_q_ice = vector_from_component(0, z), # hacky
+        )
 
     return (;
         ts,
@@ -468,9 +475,12 @@ Gets the return type of `surface_conditions` without evaluating the function.
 """
 function surface_conditions_type(atmos, ::Type{FT}) where {FT}
     energy_flux_names = (:ρ_flux_h_tot,)
-    # NOTE: Technically ρ_flux_q_tot is not really needed for a dry model, but
-    # SF always has evaporation
-    moisture_flux_names = (:ρ_flux_q_tot,)
+    moisture_flux_names =
+        atmos.moisture_model isa DryModel ? () : (
+            :ρ_flux_q_tot,
+            :ρ_flux_q_liq,
+            :ρ_flux_q_ice,
+            )
     names = (
         :ts,
         :ustar,
