@@ -125,14 +125,15 @@ function get_diagnostics(
                 period_dates =
                     CA.promote_period.(Dates.Second(period_seconds))
             end
-
-            output_schedule = CAD.EveryCalendarDtSchedule(
-                period_dates;
-                reference_date = start_date,
+            (_, date_last_output) = promote(sim_info.dt, ITime(0, epoch = start_date))
+            (_, date_last_compute) = promote(sim_info.dt, ITime(0, epoch = start_date))
+            output_schedule = CAD.EveryITimeSchedule(
+                date_last_output,
+                period_dates,
             )
-            compute_schedule = CAD.EveryCalendarDtSchedule(
-                period_dates;
-                reference_date = start_date,
+            compute_schedule = CAD.EveryITimeSchedule(
+                date_last_compute,
+                period_dates,
             )
 
             if isnothing(output_name)
@@ -169,7 +170,7 @@ function get_diagnostics(
         diagnostics = [
             CAD.default_diagnostics(
                 atmos_model,
-                float(ITime(time_to_seconds(parsed_args["t_end"])) - t_start),
+                ITime(time_to_seconds(parsed_args["t_end"])) - t_start,
                 start_date;
                 output_writer = netcdf_writer,
             )...,
@@ -280,7 +281,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         schedule = CAD.EveryCalendarDtSchedule(
             dt_save_state_to_disk_dates;
             reference_date = start_date,
-            date_last = start_date + Dates.Second(t_start),
+            date_last = ClimaUtilities.TimeManager.date(t_start),
         )
         cond = let schedule = schedule
             (u, t, integrator) -> schedule(integrator)
@@ -322,7 +323,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         dt_rad = ITime(time_to_seconds(parsed_args["dt_rad"]))
         # We use Millisecond to support fractional seconds, eg. 0.1
-        dt_rad_ms = Dates.Millisecond(1_000 * dt_rad)
+        dt_rad_ms = Dates.Millisecond(1_000 * float(dt_rad))
         if parsed_args["dt_save_state_to_disk"] != "Inf" &&
            !CA.isdivisible(dt_save_state_to_disk_dates, dt_rad_ms)
             @warn "Radiation period ($(dt_rad_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"

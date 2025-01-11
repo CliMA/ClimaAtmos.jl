@@ -321,7 +321,7 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     insolation_params = CAP.insolation_params(params)
     (; insolation_tuple, rrtmgp_model) = p.radiation
 
-    current_datetime = tvi.start_date + Dates.Second(round(Int, t)) # current time
+    current_datetime = ClimaUtilities.TimeManager.date(t) # current time
     max_zenith_angle = FT(π) / 2 - eps(FT)
     irradiance = FT(CAP.tot_solar_irrad(params))
     au = FT(CAP.astro_unit(params))
