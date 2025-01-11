@@ -99,14 +99,14 @@ function set_dummy_surface_conditions!(p)
 end
 
 """
-    set_surface_conditions!(p, surface_conditions, surface_ts)
+    set_surface_conditions!(p, surface_conditions, surface_ts, atmos)
 
 Sets `p.precomputed.sfc_conditions` according to `surface_conditions` and `surface_ts`,
 which are `Field`s of `SurfaceFluxes.SurfaceFluxConditions` and `Thermodynamics.ThermodynamicState`s
 This functions needs to be called by the coupler whenever either field changes
 to ensure that the simulation is properly updated.
 """
-function set_surface_conditions!(p, surface_conditions, surface_ts)
+function set_surface_conditions!(p, surface_conditions, surface_ts, atmos)
     (; params, atmos) = p
     (; sfc_conditions,) = p.precomputed
     (; ᶠtemp_scalar) = p.scratch
@@ -124,6 +124,7 @@ function set_surface_conditions!(p, surface_conditions, surface_ts)
         surface_conditions,
         surface_ts,
         sfc_local_geometry,
+        atmos,
     )
 end
 
@@ -332,6 +333,7 @@ function surface_state_to_conditions(
         SF.surface_conditions(surface_fluxes_params, inputs),
         ts,
         surface_local_geometry,
+        atmos,
     )
 end
 
@@ -410,7 +412,8 @@ end
     atmos_surface_conditions(
         surface_conditions,
         ts,
-        surface_local_geometry
+        surface_local_geometry,
+        atmos
     )
 
 Adds local geometry information to the `SurfaceFluxes.SurfaceFluxConditions` struct
@@ -421,6 +424,7 @@ function atmos_surface_conditions(
     surface_conditions,
     ts,
     surface_local_geometry,
+    atmos,
 )
     (; ustar, L_MO, buoy_flux, ρτxz, ρτyz, shf, lhf, evaporation) =
         surface_conditions
