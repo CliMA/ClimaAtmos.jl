@@ -37,12 +37,12 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         turbconv_model,
     )
     @. ᶜq_tot⁰ = divide_by_ρa(
-     	        Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
-                ᶜρa⁰,
-                Y.c.ρq_tot,
-                Y.c.ρ,
-                turbconv_model,
-            )
+        Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+        ᶜρa⁰,
+        Y.c.ρq_tot,
+        Y.c.ρ,
+        turbconv_model,
+    )
 
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
@@ -67,8 +67,20 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; ᶜΦ,) = p.core
     (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
 
-    (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰) =
-        p.precomputed
+    (;
+        ᶜtke⁰,
+        ᶜρa⁰,
+        ᶠu₃⁰,
+        ᶜu⁰,
+        ᶠu³⁰,
+        ᶜK⁰,
+        ᶜts⁰,
+        ᶜρ⁰,
+        ᶜmse⁰,
+        ᶜq_tot⁰,
+        ᶜq_liq⁰,
+        ᶜq_ice⁰,
+    ) = p.precomputed
 
     @. ᶜρa⁰ = ρa⁰(Y.c)
     @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
@@ -80,26 +92,26 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         turbconv_model,
     )
     @. ᶜq_tot⁰ = divide_by_ρa(
-                Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
-                ᶜρa⁰,
-                Y.c.ρq_tot,
-                Y.c.ρ,
-                turbconv_model,
-            )
+        Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+        ᶜρa⁰,
+        Y.c.ρq_tot,
+        Y.c.ρ,
+        turbconv_model,
+    )
     @. ᶜq_liq⁰ = divide_by_ρa(
-                Y.c.ρq_liq - ρaq_liq⁺(Y.c.sgsʲs),
-                ᶜρa⁰,
-                Y.c.ρq_liq,
-                Y.c.ρ,
-                turbconv_model,
-            )
+        Y.c.ρq_liq - ρaq_liq⁺(Y.c.sgsʲs),
+        ᶜρa⁰,
+        Y.c.ρq_liq,
+        Y.c.ρ,
+        turbconv_model,
+    )
     @. ᶜq_ice⁰ = divide_by_ρa(
-                Y.c.ρq_ice - ρaq_ice⁺(Y.c.sgsʲs),
-                ᶜρa⁰,
-                Y.c.ρq_ice,
-                Y.c.ρ,
-                turbconv_model,
-            )
+        Y.c.ρq_ice - ρaq_ice⁺(Y.c.sgsʲs),
+        ᶜρa⁰,
+        Y.c.ρq_ice,
+        Y.c.ρ,
+        turbconv_model,
+    )
 
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
@@ -112,7 +124,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         ᶜp,
         ᶜmse⁰ - ᶜΦ,
         TD.PhasePartition.(ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰),
-        )
+    )
     @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
     return nothing
 end
@@ -291,7 +303,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
             ᶜp,
             ᶜmseʲ - ᶜΦ,
             TD.PhasePartition.(ᶜq_totʲ, ᶜq_liqʲ, ᶜq_iceʲ),
-            )
+        )
 
         @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
 
@@ -307,8 +319,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         )
         ᶜρ_int_val = Fields.field_values(Fields.level(Y.c.ρ, 1))
         ᶜp_int_val = Fields.field_values(Fields.level(ᶜp, 1))
-        (; ρ_flux_h_tot, ρ_flux_q_tot, ρ_flux_q_liq, ρ_flux_q_ice, ustar, obukhov_length) =
-            p.precomputed.sfc_conditions
+        (;
+            ρ_flux_h_tot,
+            ρ_flux_q_tot,
+            ρ_flux_q_liq,
+            ρ_flux_q_ice,
+            ustar,
+            obukhov_length,
+        ) = p.precomputed.sfc_conditions
         buoyancy_flux_val = Fields.field_values(buoyancy_flux)
         ρ_flux_h_tot_val = Fields.field_values(ρ_flux_h_tot)
         ρ_flux_q_tot_val = Fields.field_values(ρ_flux_q_tot)
@@ -393,7 +411,11 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
             thermo_params,
             ᶜp_int_val,
             ᶜmseʲ_int_val - ᶜΦ_int_val,
-            TD.PhasePartition.(ᶜq_totʲ_int_val, ᶜq_liqʲ_int_val, ᶜq_iceʲ_int_val)
+            TD.PhasePartition.(
+                ᶜq_totʲ_int_val,
+                ᶜq_liqʲ_int_val,
+                ᶜq_iceʲ_int_val,
+            ),
         )
 
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
@@ -474,7 +496,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             ᶜentrʲs.:($$j),
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             dt,
-        ) 
+        )
 
         @. ᶜturb_entrʲs.:($$j) = turbulent_entrainment(
             turbconv_params,

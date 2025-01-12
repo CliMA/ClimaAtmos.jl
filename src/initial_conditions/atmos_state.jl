@@ -39,8 +39,12 @@ for avoiding duplicate computations.
 """
 function atmos_center_variables(ls, atmos_model)
     gs_vars = grid_scale_center_variables(ls, atmos_model)
-    sgs_vars =
-        turbconv_center_variables(ls, atmos_model.turbconv_model, atmos_model.moisture_model, gs_vars)
+    sgs_vars = turbconv_center_variables(
+        ls,
+        atmos_model.turbconv_model,
+        atmos_model.moisture_model,
+        gs_vars,
+    )
     return (; gs_vars..., sgs_vars...)
 end
 
@@ -128,7 +132,12 @@ precip_variables(ls, ::Microphysics1Moment) = (;
 # that there is no TKE when there is no turbconv_model.
 turbconv_center_variables(ls, ::Nothing, _, gs_vars) = (;)
 
-function turbconv_center_variables(ls, turbconv_model::PrognosticEDMFX, moisture_model, gs_vars)
+function turbconv_center_variables(
+    ls,
+    turbconv_model::PrognosticEDMFX,
+    moisture_model,
+    gs_vars,
+)
     n = n_mass_flux_subdomains(turbconv_model)
     a_draft = ls.turbconv_state.draft_area
     sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
@@ -143,7 +152,12 @@ function turbconv_center_variables(ls, turbconv_model::PrognosticEDMFX, moisture
     return (; sgs⁰, sgsʲs)
 end
 
-function turbconv_center_variables(ls, turbconv_model::DiagnosticEDMFX, _, gs_vars)
+function turbconv_center_variables(
+    ls,
+    turbconv_model::DiagnosticEDMFX,
+    _,
+    gs_vars,
+)
     sgs⁰ = (; ρatke = ls.ρ * ls.turbconv_state.tke)
     return (; sgs⁰)
 end

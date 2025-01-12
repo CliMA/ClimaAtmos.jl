@@ -538,14 +538,14 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
             ᶠuₕ³,
             t,
             p.atmos.moisture_model,
-            )
+        )
         set_prognostic_edmf_precomputed_quantities_environment!(
             Y,
             p,
             ᶠuₕ³,
             t,
             p.atmos.moisture_model,
-            )
+        )
         set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_precipitation!(
             Y,

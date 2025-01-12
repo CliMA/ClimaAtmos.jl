@@ -300,16 +300,17 @@ function ImplicitEquationJacobian(
         else
             ()
         end
-    sgs_advection_names_if_available = if atmos.turbconv_model isa PrognosticEDMFX
-        (
-            @name(c.sgsʲs.:(1).q_tot),
-            @name(c.sgsʲs.:(1).mse),
-            @name(c.sgsʲs.:(1).ρa),
-            @name(f.sgsʲs.:(1).u₃),
-        )
-    else
-        ()
-    end
+    sgs_advection_names_if_available =
+        if atmos.turbconv_model isa PrognosticEDMFX
+            (
+                @name(c.sgsʲs.:(1).q_tot),
+                @name(c.sgsʲs.:(1).mse),
+                @name(c.sgsʲs.:(1).ρa),
+                @name(f.sgsʲs.:(1).u₃),
+            )
+        else
+            ()
+        end
     names₁_group₁ = (@name(c.ρ), sfc_if_available...)
     names₁_group₂ = (available_tracer_names..., ρatke_if_available...)
     names₁_group₃ = (@name(c.ρe_tot),)

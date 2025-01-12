@@ -437,9 +437,9 @@ function atmos_surface_conditions(
     moisture_flux =
         atmos.moisture_model isa DryModel ? (;) :
         (;
-        ρ_flux_q_tot = vector_from_component(evaporation, z),
-        ρ_flux_q_liq = vector_from_component(0, z),
-        ρ_flux_q_ice = vector_from_component(0, z), # hacky
+            ρ_flux_q_tot = vector_from_component(evaporation, z),
+            ρ_flux_q_liq = vector_from_component(0, z),
+            ρ_flux_q_ice = vector_from_component(0, z), # hacky
         )
 
     return (;
@@ -480,11 +480,8 @@ Gets the return type of `surface_conditions` without evaluating the function.
 function surface_conditions_type(atmos, ::Type{FT}) where {FT}
     energy_flux_names = (:ρ_flux_h_tot,)
     moisture_flux_names =
-        atmos.moisture_model isa DryModel ? () : (
-            :ρ_flux_q_tot,
-            :ρ_flux_q_liq,
-            :ρ_flux_q_ice,
-            )
+        atmos.moisture_model isa DryModel ? () :
+        (:ρ_flux_q_tot, :ρ_flux_q_liq, :ρ_flux_q_ice)
     names = (
         :ts,
         :ustar,
