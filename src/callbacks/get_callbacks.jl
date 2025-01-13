@@ -125,16 +125,27 @@ function get_diagnostics(
                 period_dates =
                     CA.promote_period.(Dates.Second(period_seconds))
             end
-            (_, date_last_output) = promote(sim_info.dt, ITime(0, epoch = start_date))
-            (_, date_last_compute) = promote(sim_info.dt, ITime(0, epoch = start_date))
-            output_schedule = CAD.EveryITimeSchedule(
-                date_last_output,
-                period_dates,
-            )
-            compute_schedule = CAD.EveryITimeSchedule(
-                date_last_compute,
-                period_dates,
-            )
+            if parsed_args["use_itime"]
+                (_, date_last_output) = promote(sim_info.dt, ITime(0, epoch = start_date))
+                (_, date_last_compute) = promote(sim_info.dt, ITime(0, epoch = start_date))
+                output_schedule = CAD.EveryITimeSchedule(
+                    date_last_output,
+                    period_dates,
+                )
+                compute_schedule = CAD.EveryITimeSchedule(
+                    date_last_compute,
+                    period_dates,
+                )
+            else
+                output_schedule = CAD.EveryCalendarDtSchedule(
+                    period_dates;
+                    reference_date = start_date,
+                )
+                compute_schedule = CAD.EveryCalendarDtSchedule(
+                    period_dates;
+                    reference_date = start_date,
+                )
+            end
 
             if isnothing(output_name)
                 output_short_name = CAD.descriptive_short_name(
@@ -170,7 +181,7 @@ function get_diagnostics(
         diagnostics = [
             CAD.default_diagnostics(
                 atmos_model,
-                ITime(time_to_seconds(parsed_args["t_end"])) - t_start,
+                sim_info.dt isa ITime ? ITime(time_to_seconds(parsed_args["t_end"])) - t_start : FT(time_to_seconds(parsed_args["t_end"]) - t_start),
                 start_date;
                 output_writer = netcdf_writer,
             )...,
@@ -281,7 +292,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         schedule = CAD.EveryCalendarDtSchedule(
             dt_save_state_to_disk_dates;
             reference_date = start_date,
-            date_last = ClimaUtilities.TimeManager.date(t_start),
+            date_last = t_start isa ITime ? ClimaUtilities.TimeManager.date(t_start) : start_date + Dates.Second(t_start),
         )
         cond = let schedule = schedule
             (u, t, integrator) -> schedule(integrator)
@@ -315,13 +326,13 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     end
 
     if !parsed_args["call_cloud_diagnostics_per_stage"]
-        dt_cf = ITime(time_to_seconds(parsed_args["dt_cloud_fraction"]))
+        dt_cf = dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_cloud_fraction"])) : FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
         callbacks =
             (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
     end
 
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
-        dt_rad = ITime(time_to_seconds(parsed_args["dt_rad"]))
+        dt_rad = dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_rad"])) : FT(time_to_seconds(parsed_args["dt_rad"]))
         # We use Millisecond to support fractional seconds, eg. 0.1
         dt_rad_ms = Dates.Millisecond(1_000 * float(dt_rad))
         if parsed_args["dt_save_state_to_disk"] != "Inf" &&

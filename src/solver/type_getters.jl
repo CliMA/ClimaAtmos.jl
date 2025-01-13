@@ -261,12 +261,14 @@ end
 
 function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     (; parsed_args, comms_ctx) = config
+    sim_info = get_sim_info(config)
 
     @assert !isnothing(restart_file)
     reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
     # TODO: Do not use InputOutput.HDF5 directly
     t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
+    t_start = parsed_args["use_itime"] ? ITime(t_start; epoch = sim_info.start_date) : t_start
     if "atmos_model_hash" in keys(InputOutput.HDF5.attrs(reader.file))
         atmos_model_hash_in_restart =
             InputOutput.HDF5.read_attribute(reader.file, "atmos_model_hash")
@@ -540,9 +542,14 @@ function get_sim_info(config::AtmosConfig)
     isnothing(restart_file) ||
         @info "Restarting simulation from file $restart_file"
     epoch = DateTime(parsed_args["start_date"], dateformat"yyyymmdd")
-    dt = ITime(time_to_seconds(parsed_args["dt"]))
-    t_end = ITime(time_to_seconds(parsed_args["t_end"]), epoch = epoch)
-    (dt, t_end) = promote(dt, t_end)
+    if parsed_args["use_itime"]
+        dt = ITime(time_to_seconds(parsed_args["dt"]))
+        t_end = ITime(time_to_seconds(parsed_args["t_end"]), epoch = epoch)
+        (dt, t_end) = promote(dt, t_end)
+    else
+        dt = FT(time_to_seconds(parsed_args["dt"]))
+        t_end = FT(time_to_seconds(parsed_args["t_end"]))
+    end
     sim = (;
         output_dir,
         restart = !isnothing(restart_file),
@@ -567,7 +574,13 @@ end
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; atmos, dt) = p
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
-    dt_save_to_sol = dt_save_to_sol == Inf ? Inf : ITime(dt_save_to_sol)
+    dt_save_to_sol = if dt_save_to_sol == Inf
+         Inf
+    elseif dt isa ITime
+        ITime(dt_save_to_sol)
+    else
+        dt_save_to_sol
+    end
 
     s = @timed_str begin
         func = if parsed_args["split_ode"]
@@ -676,14 +689,12 @@ function get_simulation(config::AtmosConfig)
                 sim_info.restart_file,
                 hash(atmos),
             )
-            t_start = ITime(t_start; epoch = sim_info.start_date)
             spaces = get_spaces_restart(Y)
         end
         @info "Allocating Y: $s"
     else
         spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
     end
-
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
     if !sim_info.restart
@@ -694,7 +705,11 @@ function get_simulation(config::AtmosConfig)
                 spaces.center_space,
                 spaces.face_space,
             )
-            t_start = ITime(Spaces.undertype(axes(Y.c))(0); epoch = sim_info.start_date)
+            if sim_info.dt isa ITime
+                t_start = ITime(Spaces.undertype(axes(Y.c))(0); epoch = sim_info.start_date)
+            else
+                t_start = Spaces.undertype(axes(Y.c))(0)
+            end
         end
         @info "Allocating Y: $s"
 
