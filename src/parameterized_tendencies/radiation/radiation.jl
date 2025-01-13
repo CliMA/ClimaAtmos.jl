@@ -314,6 +314,7 @@ function get_cloud_cache(::PrescribedCloudInRadiation, Y, start_date)
             AA.era5_cloud_file_path(; context = ClimaComms.context(Y.c)),
             name,
             target_space;
+            reference_date = start_date,
             regridder_type = :InterpolationsRegridder,
             regridder_kwargs = (; extrapolation_bc),
             method = LinearInterpolation(PeriodicCalendar(Year(1), Date(2010))),
