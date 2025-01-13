@@ -276,6 +276,25 @@ function gcm_surface_conditions(external_forcing_file, cfsite_number)
     end
 end
 
+struct ERA5Driven
+    external_forcing_file::String
+    cfsite_number::String
+end
+function (surface_setup::ERA5Driven)(params)
+    FT = eltype(params)
+    (; external_forcing_file, cfsite_number) = surface_setup
+    T = FT.(era5_surface_conditions(external_forcing_file, cfsite_number))
+    z0 = FT(1e-4)  # zrough
+    parameterization = MoninObukhov(; z0)
+    return SurfaceState(; parameterization, T)
+end
+
+function era5_surface_conditions(external_forcing_file, cfsite_number)
+    NC.NCDataset(external_forcing_file) do ds
+        mean(era5_driven_timeseries(ds.group[cfsite_number], "ts"))
+    end
+end
+
 struct ISDAC end
 function (::ISDAC)(params)
     FT = eltype(params)
