@@ -1,0 +1,49 @@
+# Was this based on prognostic_edmfx_dycoms_rf01_column.yml?
+initial_condition: "Larcform1" # WIP
+# surface_setup: DefaultExchangeCoefficients #(Default)         
+turbconv: "prognostic_edmfx"
+implicit_diffusion: true
+implicit_sgs_advection: false
+approximate_linear_solve_iters: 2
+edmfx_upwinding: first_order
+rayleigh_sponge: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_filter: true
+prognostic_tke: true
+moist: "equil"
+config: "column"
+z_max: 40e3
+z_elem: 60
+z_stretch: true
+dz_bottom: 30
+perturb_initstate: false
+dt: "10secs"
+dt_rad: "30mins"
+t_end: "6hours"
+dt_save_state_to_disk: "6hours"
+cloud_model: "quadrature_sgs"
+call_cloud_diagnostics_per_stage : true
+toml: [toml/prognostic_edmfx_gcmdriven.toml]
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 60]
+output_default_diagnostics: false
+rad: allskywithclear
+# insolation: "larcform1"         # TODO
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]
+    period: 10mins
+  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
+    period: 10mins
+  - short_name: [rlut, rlutcs, rsut, rsutcs, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv]
+    period: 10mins
+  - reduction_time: max
+    short_name: tke
+    period: 10mins
+ode_algo: ARS343
+foo : "bar"
