@@ -91,9 +91,8 @@ function (::Soares)(params)
     z0 = FT(0.16) # 0.16 is taken from the Nieuwstadt paper.
     θ_flux = FT(0.06)
     q_flux = FT(2.5e-5)
-    ustar::FT = 0.28 # just to initilize grid mean covariances
     parameterization =
-        MoninObukhov(; z0, fluxes = θAndQFluxes(; θ_flux, q_flux), ustar)
+        MoninObukhov(; z0, fluxes = θAndQFluxes(; θ_flux, q_flux))
     return SurfaceState(; parameterization, T, p, q_vap)
 end
 
@@ -248,7 +247,7 @@ function (::SimplePlume)(params)
     T = FT(310)
     p = FT(101500)
     q_vap = FT(0.02245)
-    θ_flux = FT(8e-2)
+    θ_flux = FT(8)
     q_flux = FT(0)
     z0 = FT(1e-4)
     ustar = FT(0.28)
@@ -273,6 +272,25 @@ end
 function gcm_surface_conditions(external_forcing_file, cfsite_number)
     NC.NCDataset(external_forcing_file) do ds
         mean(gcm_driven_timeseries(ds.group[cfsite_number], "ts"))
+    end
+end
+
+struct ERA5Driven
+    external_forcing_file::String
+    cfsite_number::String
+end
+function (surface_setup::ERA5Driven)(params)
+    FT = eltype(params)
+    (; external_forcing_file, cfsite_number) = surface_setup
+    T = FT.(era5_surface_conditions(external_forcing_file, cfsite_number))
+    z0 = FT(1e-4)  # zrough
+    parameterization = MoninObukhov(; z0)
+    return SurfaceState(; parameterization, T)
+end
+
+function era5_surface_conditions(external_forcing_file, cfsite_number)
+    NC.NCDataset(external_forcing_file) do ds
+        mean(era5_driven_timeseries(ds.group[cfsite_number], "ts"))
     end
 end
 

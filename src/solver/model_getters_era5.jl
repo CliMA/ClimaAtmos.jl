@@ -10,6 +10,30 @@ function get_moisture_model(parsed_args)
     end
 end
 
+function get_model_config(parsed_args)
+    config = parsed_args["config"]
+
+    valid_configurations = ("sphere", "column", "box", "plane")
+
+    if !(config ∈ valid_configurations)
+        error_message = string(
+            "config = $config is not one of the ",
+            "valid configurations $valid_configurations",
+        )
+        throw(ArgumentError(error_message))
+    end
+
+    return if config == "sphere"
+        SphericalModel()
+    elseif config == "column"
+        SingleColumnModel()
+    elseif config == "box"
+        BoxModel()
+    elseif config == "plane"
+        PlaneModel()
+    end
+end
+
 function get_sfc_temperature_form(parsed_args)
     surface_temperature = parsed_args["surface_temperature"]
     @assert surface_temperature in
@@ -29,10 +53,7 @@ function get_insolation_form(parsed_args)
     return if insolation == "idealized"
         IdealizedInsolation()
     elseif insolation == "timevarying"
-        # TODO: Remove this argument once we have support for integer time and
-        # we can easily convert from time to date
-        start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd")
-        TimeVaryingInsolation(start_date)
+        TimeVaryingInsolation()
     elseif insolation == "rcemipii"
         RCEMIPIIInsolation()
     elseif insolation == "gcmdriven"
@@ -84,15 +105,12 @@ function get_vertical_diffusion_model(
     ::Type{FT},
 ) where {FT}
     vert_diff_name = parsed_args["vert_diff"]
-    vdp = CAP.vert_diff_params(params)
     return if vert_diff_name in ("false", false, "none")
         nothing
     elseif vert_diff_name in ("true", true, "VerticalDiffusion")
-        VerticalDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
+        VerticalDiffusion{diffuse_momentum, FT}(; C_E = params.C_E)
     elseif vert_diff_name in ("FriersonDiffusion",)
-        FriersonDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
-    elseif vert_diff_name in ("DecayWithHeightDiffusion",)
-        DecayWithHeightDiffusion{diffuse_momentum, FT}(; H = vdp.H, D₀ = vdp.D₀)
+        FriersonDiffusion{diffuse_momentum, FT}(; C_E = params.C_E)
     else
         error("Uncaught diffusion model `$vert_diff_name`.")
     end
@@ -140,12 +158,6 @@ function get_viscous_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     end
 end
 
-function get_smagorinsky_lilly_model(parsed_args)
-    is_model_active = parsed_args["smagorinsky_lilly"]
-    @assert is_model_active in (true, false)
-    return is_model_active ? SmagorinskyLilly() : nothing
-end
-
 function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     rs_name = parsed_args["rayleigh_sponge"]
     return if rs_name in ("false", false)
@@ -162,14 +174,15 @@ end
 
 function get_non_orographic_gravity_wave_model(
     parsed_args,
+    model_config,
     ::Type{FT},
 ) where {FT}
     nogw_name = parsed_args["non_orographic_gravity_wave"]
     @assert nogw_name in (true, false)
     return if nogw_name == true
-        if parsed_args["config"] == "column"
+        if model_config isa SingleColumnModel
             NonOrographyGravityWave{FT}(; Bw = 1.2, Bn = 0.0, Bt_0 = 4e-3)
-        elseif parsed_args["config"] == "sphere"
+        elseif model_config isa SphericalModel
             NonOrographyGravityWave{FT}(;
                 Bw = 0.4,
                 Bn = 0.0,
@@ -210,18 +223,10 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     @assert idealized_h2o in (true, false)
     idealized_clouds = parsed_args["idealized_clouds"]
     @assert idealized_clouds in (true, false)
-    cloud = get_cloud_in_radiation(parsed_args)
-    if idealized_clouds && (cloud isa PrescribedCloudInRadiation)
-        error(
-            "idealized_clouds and prescribe_clouds_in_radiation cannot be true at the same time",
-        )
-    end
     add_isothermal_boundary_layer = parsed_args["add_isothermal_boundary_layer"]
     @assert add_isothermal_boundary_layer in (true, false)
     aerosol_radiation = parsed_args["aerosol_radiation"]
     @assert aerosol_radiation in (true, false)
-    reset_rng_seed = parsed_args["radiation_reset_rng_seed"]
-    @assert reset_rng_seed in (true, false)
     radiation_name = parsed_args["rad"]
     @assert radiation_name in (
         nothing,
@@ -234,13 +239,6 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         "TRMM_LBA",
         "ISDAC",
     )
-    if !(radiation_name in ("allsky", "allskywithclear")) && reset_rng_seed
-        @warn "reset_rng_seed does not have any effect with $radiation_name radiation option"
-    end
-    if !(radiation_name in ("allsky", "allskywithclear")) &&
-       (cloud isa PrescribedCloudInRadiation)
-        @warn "prescribe_clouds_in_radiation does not have any effect with $radiation_name radiation option"
-    end
     return if radiation_name == "gray"
         RRTMGPI.GrayRadiation(add_isothermal_boundary_layer)
     elseif radiation_name == "clearsky"
@@ -253,19 +251,15 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         RRTMGPI.AllSkyRadiation(
             idealized_h2o,
             idealized_clouds,
-            cloud,
             add_isothermal_boundary_layer,
             aerosol_radiation,
-            reset_rng_seed,
         )
     elseif radiation_name == "allskywithclear"
         RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(
             idealized_h2o,
             idealized_clouds,
-            cloud,
             add_isothermal_boundary_layer,
             aerosol_radiation,
-            reset_rng_seed,
         )
     elseif radiation_name == "DYCOMS"
         RadiationDYCOMS{FT}()
@@ -293,11 +287,10 @@ end
 
 function get_cloud_model(parsed_args)
     cloud_model = parsed_args["cloud_model"]
-    FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     return if cloud_model == "grid_scale"
         GridScaleCloud()
     elseif cloud_model == "quadrature"
-        QuadratureCloud(SGSQuadrature(FT))
+        QuadratureCloud()
     elseif cloud_model == "quadrature_sgs"
         SGSQuadratureCloud(SGSQuadrature(FT))
     else
@@ -308,12 +301,6 @@ end
 function get_ozone(parsed_args)
     isnothing(parsed_args["prescribe_ozone"]) && return nothing
     return parsed_args["prescribe_ozone"] ? PrescribedOzone() : IdealizedOzone()
-end
-
-function get_cloud_in_radiation(parsed_args)
-    isnothing(parsed_args["prescribe_clouds_in_radiation"]) && return nothing
-    return parsed_args["prescribe_clouds_in_radiation"] ?
-           PrescribedCloudInRadiation() : InteractiveCloudInRadiation()
 end
 
 function get_forcing_type(parsed_args)
@@ -493,8 +480,8 @@ function get_detrainment_model(parsed_args)
         GeneralizedDetrainment()
     elseif detr_model == "GeneralizedHarmonics"
         GeneralizedHarmonicsDetrainment()
-    elseif detr_model == "SmoothArea"
-        SmoothAreaDetrainment()
+    elseif detr_model == "ConstantArea"
+        ConstantAreaDetrainment()
     else
         error("Invalid detr_model $(detr_model)")
     end

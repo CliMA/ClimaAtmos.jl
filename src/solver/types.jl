@@ -98,6 +98,12 @@ struct TimeVaryingInsolation <: AbstractInsolation
 end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
+struct ERA5DrivenInsolation <: AbstractInsolation end
+
+struct ERA5Forcing{FT}
+    external_forcing_file::String
+    cfsite_number::String
+end
 
 """
     AbstractOzone
