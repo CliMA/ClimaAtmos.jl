@@ -61,3 +61,6 @@ lazy = true
     [[DYAMOND_SUMMER_ICS_p98deg.download]]
     sha256 = "9a5efd20d68d9b954af2fd7803bccdda3fc7ef4ff60421ed13d18f768312d2e3"
     url = "https://caltech.box.com/shared/static/whn01xr83v0s4p8tc59ds3nvfsfe6ebs.gz"
+
+[DYAMOND_SUMMER_ICS_p14deg]
+git-tree-sha1 = "789c8dd160b022a6c714a102c1495530c7a9d20c"
