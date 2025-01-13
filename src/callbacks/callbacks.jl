@@ -207,6 +207,13 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     @. rrtmgp_model.cos_zenith = (1 + FT(0.3) * (1 - 3 * sind(latitude)^2)) * FT(0.5)
 end
 
+function set_insolation_variables!(Y, p, t, ::Larcform1Insolation)
+    FT = Spaces.undertype(axes(Y.c))
+    (; rrtmgp_model) = p.radiation
+    rrtmgp_model.cos_zenith .= cosd(FT(60)) # shouldn't actually matter here.
+    rrtmgp_model.weighted_irradiance .= FT(0)  # for case with zero insolation
+end
+
 function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     FT = Spaces.undertype(axes(Y.c))
     params = p.params

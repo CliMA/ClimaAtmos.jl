@@ -1837,6 +1837,78 @@ function (initial_condition::ISDAC)(params)
     end
 end
 
+
+# Defining Larcform1 case
+Base.@kwdef struct Larcform1 <: InitialCondition
+    #perturb::Bool = false
+    prognostic_tke::Bool = true
+end
+
+# Add Larcform1_T Profile to APL
+# Could we use this sort of code loading & modification to create a way to load in
+# profiles and initial conditions from a user-defined file?
+
+# TODO document + reference
+"""
+    (initial_condition::Larcform1)(params) -> local_state
+
+    Returns a closure `local_state(local_geometry)::LocalState` supplying the Larcform1
+initial atmospheric state.
+
+Profiles:
+- Temperature: `APL.Larcform1_T(FT)`
+- Total specific humidity: `APL.Larcform1_q_tot(FT)`
+- Geostrophic winds: `APL.Larcform1_geostrophic_u(FT)`, `APL.Larcform1_geostrophic_v(FT)`
+
+Pressure is obtained by solving the hydrostatic balance with `hydrostatic_pressure_profile`
+given surface pressure `p_0` and the temperature + moisture profiles.
+
+The returned `LocalState` contains:
+- `thermo_state = TD.PhaseEquil_pTq(thermo_params, p(z), T(z), q_tot(z))`
+- `velocity = Geometry.UVVector(u(z), v(z))`
+- `turbconv_state = EDMFState(tke = 0)` (currently always zero; `prognostic_tke` flag
+  is present but does not change initialization)
+
+Arguments:
+- `params`: model parameter container (must provide thermodynamics parameters)
+
+Example:
+    ic = Larcform1()
+    ls = ic(params)
+    state_z0 = ls(local_geometry)
+
+Notes:
+- Assumes profiles are valid over the model vertical domain.
+- Consider revising the `turbconv_state` logic if nonzero prescribed TKE is desired.
+"""
+function (initial_condition::Larcform1)(params)
+    (; prognostic_tke) = initial_condition
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    p_0 = FT(101300)  # 1020 hPa
+    q_tot = APL.Larcform1_q_tot(FT)
+    T=APL.Larcform1_T(FT)
+    p = hydrostatic_pressure_profile(;
+        thermo_params,
+        p_0,
+        T, # Issue with type here
+        q_tot,
+    )  # Pa
+    u = APL.Larcform1_geostrophic_u(FT)
+    v = APL.Larcform1_geostrophic_v(FT)
+    velocity(z) = Geometry.UVVector(u(z), v(z))
+    function local_state(local_geometry)
+        (; z) = local_geometry.coordinates
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseEquil_pTq(thermo_params, p(z), T(z), q_tot(z)),
+            velocity = velocity(z),
+            turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : FT(0)),
+        )
+    end
+end
+
 """
     ShipwayHill2012
 
@@ -1877,5 +1949,4 @@ function (initial_condition::ShipwayHill2012)(params)
             precip_state = NoPrecipState{typeof(z)}(),
         )
     end
-    return local_state
 end

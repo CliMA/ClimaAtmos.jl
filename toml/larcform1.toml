@@ -1,0 +1,20 @@
+[tracer_vertical_diffusion_factor]
+value = 0
+
+[condensation_evaporation_timescale]
+value = 4
+
+[sublimation_deposition_timescale]
+value = 4
+
+[snow_autoconversion_timescale]
+value = 1e4
+
+[rain_autoconversion_timescale]
+value = 150
+
+[zd_rayleigh]
+value = 40000.0
+
+[zd_viscous]
+value = 40000.0

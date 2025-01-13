@@ -11,6 +11,8 @@ import ..Microphysics2Moment
 import ..Microphysics2MomentP3
 import ..PrescribedSST
 import ..SlabOceanSST
+import ..EisenmanSeaIce
+import ..FixedSeaIceState
 import ..ᶜinterp
 import ..ᶠinterp
 import ..C3
