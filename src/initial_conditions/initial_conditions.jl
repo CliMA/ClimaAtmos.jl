@@ -1830,6 +1830,49 @@ function (initial_condition::ISDAC)(params)
 end
 
 """
+    Larcform1(; temperature = 273)
+
+An `InitialCondition` with a uniform temperature profile.
+"""
+Base.@kwdef struct Larcform1{T} <: InitialCondition
+    prognostic_tke::Bool = false
+    # TODO implement Pithan 2016 profile for T(z)=T₀-γz // T(P)=T₀(P/P₀)^α
+    # α = Rγ/g ~= .24 (Check value)
+end
+
+function (initial_condition::Larcform1Profile)(params)
+    # TODO check if name added to list of valid args to parse
+    (; temperature) = initial_condition
+    function local_state(local_geometry)
+        FT = eltype(params)
+        R_d = CAP.R_d(params)
+        # MSLP = CAP.MSLP(params)
+        grav = CAP.grav(params)
+        thermo_params = CAP.thermodynamics_params(params)
+        T = FT(temperature)
+
+        (; z) = local_geometry.coordinates
+        P₀ = FT(1013) # surface pressure in hPa
+        T₀ = FT(273)  # surface temperature in K
+        α = FT(0.24)  # Rγ/g
+        γ = FT(8E-3)  # Lapse rate in K/m
+        g = FT(9.81) # m/s^2
+        # TODO add conditional logic for ≤300hPa
+        T = T₀-γ*z # Temperature
+
+        velocity = Geometry.UVVector(FT(5), FT(0)) # TODO add conditionals
+
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T), # TODO check if need PhaseDry_pT or alternative
+            # TODO add velocity (See ScharProfile)
+        )
+    end
+    return local_state
+end
+
+"""
     ShipwayHill2012
 
 The `InitialCondition` described in [ShipwayHill2012](@cite), but with a hydrostatically
