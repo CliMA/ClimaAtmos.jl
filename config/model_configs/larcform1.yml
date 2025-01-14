@@ -46,4 +46,3 @@ diagnostics:
     short_name: tke
     period: 10mins
 ode_algo: ARS343
-foo : "bar"
