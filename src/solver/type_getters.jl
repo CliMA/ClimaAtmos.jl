@@ -306,6 +306,7 @@ function get_initial_condition(parsed_args, atmos)
         "Rico",
         "TRMM_LBA",
         "SimplePlume",
+        "Larcform1",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
             parsed_args["prognostic_tke"],
