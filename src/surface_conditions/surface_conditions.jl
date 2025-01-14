@@ -359,6 +359,17 @@ function surface_temperature(
     return T
 end
 
+function surface_temperature(
+    ::RCEMIPIISST,
+    coordinates::Geometry.ZPoint,
+    surface_temp_params,
+)
+    (; z) = coordinates
+    (; SST_mean) = surface_temp_params
+    FT = eltype(z)
+    return FT(SST_mean)
+end
+
 #For non-RCEMIPII box models with prescribed surface temp, assume that the latitude is 0.
 function surface_temperature(
     ::Union{ZonallySymmetricSST, ZonallyAsymmetricSST},
@@ -367,6 +378,16 @@ function surface_temperature(
 )
     (; x) = coordinates
     FT = eltype(x)
+    return FT(300)
+end
+
+function surface_temperature(
+    ::Union{ZonallySymmetricSST, ZonallyAsymmetricSST},
+    coordinates::Geometry.ZPoint,
+    surface_temp_params,
+)
+    (; z) = coordinates
+    FT = eltype(z)
     return FT(300)
 end
 

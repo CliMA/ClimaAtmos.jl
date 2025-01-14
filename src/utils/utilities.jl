@@ -174,11 +174,16 @@ function CTh_vector_type(space)
         Geometry.Contravariant1Vector
     elseif full_CT_axis == Geometry.Contravariant23Axis()
         Geometry.Contravariant2Vector
+    elseif full_CT_axis == Geometry.Contravariant3Axis()
+        # Even though there is no horizontal space, horizontal curl operators return the same
+        # type as if there was a 2d horizontal space
+        # TODO: I have no idea if this is OK
+        Geometry.Contravariant12Vector
     else
         error("$full_CT_axis is missing either vertical or horizontal sub-axes")
     end
 end
-
+has_topography(space::Spaces.FiniteDifferenceSpace) = false
 has_topography(space) = Spaces.grid(space).hypsography != Spaces.Grids.Flat()
 
 """

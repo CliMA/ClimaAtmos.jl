@@ -3,7 +3,7 @@ import Interpolations
 import NCDatasets
 import ClimaCore
 import ClimaUtilities.OutputPathGenerator
-import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
+import ClimaCore: InputOutput, Meshes, Spaces, Quadratures, CommonSpaces
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
 import LinearAlgebra
@@ -172,8 +172,17 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        # make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
-        make_column_spaces(z_max, z_elem, z_stretch, comms_ctx)
+        center_space = CommonSpaces.ColumnSpace(
+            FT;
+            z_elem,
+            z_max,
+            z_min = 0,
+            context = comms_ctx,
+            staggering = Grids.CellCenter(),
+            stretch = z_stretch,
+        )
+        face_space = Spaces.FaceFiniteDifferenceSpace(center_space)
+        (center_space, face_space)
     elseif parsed_args["config"] == "box"
         FT = eltype(params)
         nh_poly = parsed_args["nh_poly"]
