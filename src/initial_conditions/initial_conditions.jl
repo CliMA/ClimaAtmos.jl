@@ -1630,7 +1630,7 @@ Base.@kwdef struct Larcform1{T} <: InitialCondition
     # α = Rγ/g ~= .24 (Check value)
 end
 
-function (initial_condition::Larcform1Profile)(params)
+function (initial_condition::Larcform1)(params)
     # TODO check if name added to list of valid args to parse
     (; temperature) = initial_condition
     function local_state(local_geometry)
