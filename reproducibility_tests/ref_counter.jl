@@ -1,4 +1,4 @@
-197
+198
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+198
+- Added terms to the implicit solver that result in changes in the
+aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment
+
 197
 - Added single column hydrostatic balance reproducibility test
 

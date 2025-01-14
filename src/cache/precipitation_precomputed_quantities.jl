@@ -40,3 +40,23 @@ function set_precipitation_precomputed_quantities!(Y, p, t)
     )
     return nothing
 end
+
+
+"""
+    set_sedimentation_precomputed_quantities!(Y, p, t)
+Updates the sedimentation terminal velocity stored in `p`
+for the non-equilibrium microphysics scheme
+"""
+function set_sedimentation_precomputed_quantities!(Y, p, t)
+    @assert (p.atmos.moisture_model isa NonEquilMoistModel)
+
+    (; ᶜwₗ, ᶜwᵢ) = p.precomputed
+
+    FT = eltype(Y)
+
+    # compute the precipitation terminal velocity [m/s]
+    # TODO - the actual parameterization will be added in the next PR
+    @. ᶜwₗ = FT(0)
+    @. ᶜwᵢ = FT(0)
+    return nothing
+end
