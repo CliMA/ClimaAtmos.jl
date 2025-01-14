@@ -11,7 +11,7 @@ function get_era5_calibration_library()
     ref_paths, months, sites = [], [], []
     for month in [7]#[1,4,7,10]
         for cfsite in [23]#collect(2:23)
-            filename = "../data/era5_cfsite_obs_data.nc"
+            filename = "integrated_cfsite_obs_data.nc"
             site = "site$cfsite"
             push!(ref_paths, filename)
             push!(months, month)
@@ -49,9 +49,14 @@ function get_obs(
 ) where {FT <: AbstractFloat}
     y = []
     for var_name in y_names
-        var_ = vertical_interpolation(month, site, var_name, filename, z_scm)
-        if var_name in log_vars
-            var_ = log10.(var_ .+ 1e-12)
+        println(dims_per_var)
+        if dims_per_var > 1 # if observation series is a vector (e.g. a profile)
+            var_ = vertical_interpolation(month, site, var_name, filename, z_scm)
+            if var_name in log_vars
+                var_ = log10.(var_ .+ 1e-12)
+            end
+        else
+            var_ = nc_fetch_scalar(filename, month, site, var_name)
         end
         if normalize
             # normalize
@@ -113,10 +118,20 @@ end
 
 
 function nc_fetch(filename::String, month::Integer, site::String, var_name::String)
+    """for vector observations like ta and clw"""
     NCDataset(filename, "r") do ds
         # carefully select the correct month index
         month_idx = findfirst(==(month), ds.group[site]["month"][:])
         return ds.group[site][var_name][:, month_idx]
+    end
+end
+
+function nc_fetch_scalar(filename::String, month::Integer, site::String, var_name::String)
+    """for scalar observations like radiation and clwvi"""
+    NCDataset(filename, "r") do ds
+        # carefully select the correct month index
+        month_idx = findfirst(==(month), ds.group[site]["month"][:])
+        return ds.group[site][var_name][month_idx]
     end
 end
 
@@ -136,7 +151,7 @@ function get_z_grid(atmos_config; z_max = nothing)
         CA.get_spaces(atmos_config.parsed_args, params, atmos_config.comms_ctx)
     coord = CA.Fields.coordinate_field(spaces.center_space)
     z_vec = convert(Vector{Float64}, parent(coord.z)[:])
-    if !isnothing(z_max)
+    if z_max != "nothing" # string not type 
         z_vec = filter(x -> x <= z_max, z_vec)
     end
     return z_vec

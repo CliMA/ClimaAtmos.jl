@@ -5,10 +5,6 @@ using ClimaAnalysis
 using JLD2
 using Statistics
 
-# era5 20 year averages data file
-filename = "era5_cfsite_obs_data.nc"
-
-
 function observation_map(iteration; config_dict::Dict)
 
     full_dim =

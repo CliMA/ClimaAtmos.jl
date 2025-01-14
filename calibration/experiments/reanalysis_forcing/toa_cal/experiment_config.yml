@@ -3,23 +3,24 @@ ensemble_size: 100
 n_iterations: 10
 batch_size: 1 # number of cases per iteration
 model_config : prognostic_edmfx_gcmdriven_column.yml 
-output_dir : /scratch/julian/calibrations/exp_4 # output dir
-y_var_names: [ta, hus, clw] # calibration variables clw
-log_vars: ["clw"] # take log(var) when forming y, g
-z_max : 4000 # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
-dims_per_var : 62 # num dimensions per variable (num cells in vertical profile below z_max)
+output_dir : /scratch/julian/calibrations/exp_5 # output dir
+y_var_names: [rsut, rlut, clwvi, ciwvi] # calibration variables clw
+log_vars: [""] # take log(var) when forming y, g
+z_max : nothing # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
+dims_per_var : 1 # num dimensions per variable (num cells in vertical profile below z_max)
 # eki_timestep: 0.1 # timestep of eki, if using default
 # y_t_start_sec : 475200.0 # start time of LES averaging window [s] : 5.5 days
 # y_t_end_sec : 518400.0 # end time of LES averaging window [s] : 6 days (LES length = 6 days)
 g_t_start_sec : 216000.0 # start time of SCM averaging window [s] : 2.5 days
 g_t_end_sec : 259200.0 # end time of SCM averaging window [s] : 3 days (SCM length = 3 days)
 
+# don't need scaling with time averaged covariance matrix
 norm_factors_by_var:
-  ta: [252.8, 31.1699]
-  hus: [0.00203968, 0.00346363]
-  clw: [-9.32234, 3.10897]
+  ta: [1, 1]
+  hus: [1, 1]
+  clw: [1, 1]
 
 const_noise_by_var:
-  thetaa: 0.00005
-  hus: 0.00005
-  clw: 0.00005
+  thetaa: 1
+  hus: 1
+  clw: 1

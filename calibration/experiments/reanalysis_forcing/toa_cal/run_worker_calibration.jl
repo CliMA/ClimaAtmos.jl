@@ -32,7 +32,7 @@ addprocs(SlurmManager(2))
     experiment_config = YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
     experiment_config_nt = NamedTuple(Symbol.(keys(experiment_config)) .=> values(experiment_config))
-    (; output_dir, n_iterations, log_vars, prior_path, model_config, const_noise_by_var, z_max, norm_factors_by_var, ensemble_size) = experiment_config_nt
+    (; output_dir, n_iterations, log_vars, prior_path, model_config, const_noise_by_var, z_max, norm_factors_by_var, ensemble_size, dims_per_var) = experiment_config_nt
 
     prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
@@ -80,12 +80,17 @@ JLD2.jldsave(
             months[i],
             sites[i],
             experiment_config["y_var_names"];
-            normalize = true,
+            normalize = false,
             norm_factors_dict = norm_factors_by_var,
             z_scm = zc_model,
             log_vars = log_vars,
         )
-        Σ_obs = I(length(y_obs))
+        # sample time-covariance matrix by 
+        cov = [[ 1.03252985e+02,  1.07359362e+02, -1.05374958e-01,-1.00355325e-01],
+       [ 1.07359362e+02,  2.01787313e+02, -1.17948726e-01, -1.47077436e-01],
+       [-1.05374958e-01, -1.17948726e-01,  1.62991747e-04, 9.66483339e-05],
+       [-1.00355325e-01, -1.47077436e-01,  9.66483339e-05, 1.50630636e-04]]
+        Σ_obs = 60 .* hcat(cov...)
 
         push!(
             obs_vec,
@@ -108,37 +113,60 @@ JLD2.jldsave(
 end
 @info "Obtained Observations..."
 
-eki = calibrate(
-    WorkerBackend, 
-    ensemble_size,
-    n_iterations,
+# construct ekp object
+initial_ensemble = EKP.construct_initial_ensemble(prior, ensemble_size)
+ekiobj = EKP.EnsembleKalmanProcess(
+    initial_ensemble,
     observations,
-    prior,
-    output_dir;
     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
-    localization_method = EKP.Localizers.NoLocalization(),
+    EKP.Inversion(),
     failure_handler_method = EKP.SampleSuccGauss(),
     accelerator = EKP.DefaultAccelerator(),
 )
 
-eki = calibrate(
-    WorkerBackend,
-    # problem because observations are generated from an observation series so not in ExperimentConfig 
-    ExperimentConfig(joinpath(experiment_dir, "experiment_config.yml")), 
-    scheduler = EKP.DataMisfitController(on_terminate = "continue"),
-    localization_method = EKP.Localizers.NoLocalization(),
-    failure_handler_method = EKP.SampleSuccGauss(),
-    accelerator = EKP.DefaultAccelerator(),
+# use climacalibrate
+calibrate(WorkerBackend, 
+        ekiobj, 
+        ensemble_size,
+        n_iterations,
+        prior,
+        output_dir
 )
 
-eki = calibrate(
-    WorkerBackend, 
-    ensemble_size,
-    n_iterations,
-    observations,
-    prior,
-    output_dir
-)
+
+
+
+# eki = calibrate(
+#     WorkerBackend, 
+#     ensemble_size,
+#     n_iterations,
+#     observations,
+#     prior,
+#     output_dir;
+#     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+#     localization_method = EKP.Localizers.NoLocalization(),
+#     failure_handler_method = EKP.SampleSuccGauss(),
+#     accelerator = EKP.DefaultAccelerator(),
+# )
+
+# eki = calibrate(
+#     WorkerBackend,
+#     # problem because observations are generated from an observation series so not in ExperimentConfig 
+#     ExperimentConfig(joinpath(experiment_dir, "experiment_config.yml")), 
+#     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+#     localization_method = EKP.Localizers.NoLocalization(),
+#     failure_handler_method = EKP.SampleSuccGauss(),
+#     accelerator = EKP.DefaultAccelerator(),
+# )
+
+# eki = calibrate(
+#     WorkerBackend, 
+#     ensemble_size,
+#     n_iterations,
+#     observations,
+#     prior,
+#     output_dir
+# )
 
 
 
