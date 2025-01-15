@@ -2,7 +2,7 @@ h_elem: 120
 z_elem: 43
 dz_bottom: 30.0
 dt: "15secs"
-t_end: "15days"
+t_end: "10days"
 ode_algo: ARS343
 initial_condition: "DryBaroclinicWave"
 dt_save_state_to_disk: "5days"
