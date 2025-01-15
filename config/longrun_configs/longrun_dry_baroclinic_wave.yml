@@ -11,3 +11,6 @@ diagnostics:
   - short_name: [pfull, ps, ua, va, ta, ts, wa, va, rv, ke]
     reduction: inst
     period: 2days
+  - short_name: [massa, energya]
+    period: 6hours
+    writer: dict
