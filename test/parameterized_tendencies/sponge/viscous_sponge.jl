@@ -7,7 +7,7 @@ ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import ClimaCore
 using ClimaCore: Spaces, Grids, Fields
-if pkgversion(ClimaCore) ≥ v"0.14.18"
+if pkgversion(ClimaCore) ≥ v"0.14.20"
     using ClimaCore.CommonGrids
     using Test
 

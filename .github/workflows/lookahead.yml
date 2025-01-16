@@ -23,13 +23,13 @@ jobs:
   test:
     name: ci ${{ matrix.version }} - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         version:
-          - '1.10'
-          - '~1.11.0-0'
+          - '1.11'
+          - 'nightly'
         os:
           - ubuntu-latest
 
