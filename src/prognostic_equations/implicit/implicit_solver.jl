@@ -154,6 +154,7 @@ function ImplicitEquationJacobian(
     ρatke_if_available =
         is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
+    u₃_if_available = is_in_Y(@name(u₃)) ? (@name(f.sgsʲs.:(1).u₃),) : ()
 
     tracer_names = (
         @name(c.ρq_tot),
@@ -295,7 +296,7 @@ function ImplicitEquationJacobian(
     names₁ = (
         names₁_group₁...,
         available_sgs_scalar_names...,
-        @name(f.sgsʲs.:(1).u₃),
+        u₃_if_available,
         names₁_group₂...,
         names₁_group₃...,
     )
