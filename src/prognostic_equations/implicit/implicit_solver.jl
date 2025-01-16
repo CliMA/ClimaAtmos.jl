@@ -195,17 +195,16 @@ function ImplicitEquationJacobian(
         (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
     )
 
-    diffused_scalar_names =
-        (@name(c.ρe_tot), available_tracer_names..., ρatke_if_available...)
+    diffused_scalar_names = (@name(c.ρe_tot), available_tracer_names...)
     diffusion_blocks = if use_derivative(diffusion_flag)
         (
             MatrixFields.unrolled_map(
                 name -> (name, @name(c.ρ)) => similar(Y.c, TridiagonalRow),
-                diffused_scalar_names,
+                (diffused_scalar_names..., ρatke_if_available...),
             )...,
             MatrixFields.unrolled_map(
                 name -> (name, name) => similar(Y.c, TridiagonalRow),
-                diffused_scalar_names,
+                (diffused_scalar_names..., ρatke_if_available...),
             )...,
             (
                 is_in_Y(@name(c.ρq_tot)) ?
@@ -219,11 +218,25 @@ function ImplicitEquationJacobian(
                     diffuse_momentum(atmos.vert_diff) ?
                 similar(Y.c, TridiagonalRow) : FT(-1) * I,
         )
-    else
+    elseif atmos.moisture_model isa DryModel
         MatrixFields.unrolled_map(
             name -> (name, name) => FT(-1) * I,
-            (diffused_scalar_names..., @name(c.uₕ)),
+            (diffused_scalar_names..., ρatke_if_available..., @name(c.uₕ)),
         )
+    else
+        (
+            MatrixFields.unrolled_map(
+                name -> (name, name) => similar(Y.c, TridiagonalRow),
+                diffused_scalar_names,
+            )...,
+            (@name(c.ρe_tot), @name(c.ρq_tot)) =>
+                similar(Y.c, TridiagonalRow),
+            MatrixFields.unrolled_map(
+                name -> (name, name) => FT(-1) * I,
+                (ρatke_if_available..., @name(c.uₕ)),
+            )...,
+        )
+
     end
 
     sgs_tracer_names = (
@@ -304,7 +317,9 @@ function ImplicitEquationJacobian(
     alg₂ = MatrixFields.BlockLowerTriangularSolve(@name(c.uₕ))
     @info(alg₂)
     alg =
-        if use_derivative(diffusion_flag) || use_derivative(sgs_advection_flag)
+        if use_derivative(diffusion_flag) ||
+           use_derivative(sgs_advection_flag) ||
+           !(atmos.moisture_model isa DryModel)
             alg₁_subalg₂ =
                 if atmos.turbconv_model isa PrognosticEDMFX &&
                    use_derivative(sgs_advection_flag)
@@ -407,6 +422,12 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         p.precomputed.ᶜK,
         p.precomputed.ᶜts,
         p.precomputed.ᶜp,
+        p.precomputed.ᶜwₜqₜ,
+        p.precomputed.ᶜwₕhₜ,
+        (
+            p.atmos.moisture_model isa NonEquilMoistModel ?
+            (; p.precomputed.ᶜwₗ, p.precomputed.ᶜwᵢ) : (;)
+        )...,
         (
             p.atmos.precip_model isa Microphysics1Moment ?
             (; p.precomputed.ᶜwᵣ, p.precomputed.ᶜwₛ) : (;)
@@ -468,7 +489,7 @@ end
 
 function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     (; matrix, diffusion_flag, sgs_advection_flag, topography_flag) = A
-    (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ) = p
+    (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜh_tot) = p
     (;
         ᶜtemp_C3,
         ∂ᶜK_∂ᶜuₕ,
@@ -587,6 +608,66 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ∂ᶜK_∂ᶠu₃ - (I_u₃,)
     end
 
+
+    tracer_info = (
+        (@name(c.ρq_liq), @name(q_liq), @name(ᶜwₗ)),
+        (@name(c.ρq_ice), @name(q_ice), @name(ᶜwᵢ)),
+        (@name(c.ρq_rai), @name(q_rai), @name(ᶜwᵣ)),
+        (@name(c.ρq_sno), @name(q_sno), @name(ᶜwₛ)),
+    )
+    if !(p.atmos.moisture_model isa DryModel) || use_derivative(diffusion_flag)
+        ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
+        @. ∂ᶜρe_tot_err_∂ᶜρe_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρe_tot)) - (I,)
+    end
+
+    if !(p.atmos.moisture_model isa DryModel)
+        @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
+            dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
+            DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+            DiagonalMatrixRow(
+                -(1 + ᶜkappa_m) / ᶜρ * ifelse(
+                    ᶜh_tot == 0,
+                    (Geometry.WVector(FT(0)),),
+                    p.ᶜwₕhₜ / ᶜh_tot,
+                ),
+            )
+
+        ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
+        @. ∂ᶜρe_tot_err_∂ᶜρq_tot =
+            dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
+            DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+            DiagonalMatrixRow(
+                -(ᶜkappa_m) * ∂e_int_∂q_tot / ᶜρ * ifelse(
+                    ᶜh_tot == 0,
+                    (Geometry.WVector(FT(0)),),
+                    p.ᶜwₕhₜ / ᶜh_tot,
+                ),
+            )
+
+        ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+        @. ∂ᶜρq_tot_err_∂ᶜρq_tot =
+            dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
+            DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+            DiagonalMatrixRow(
+                -1 / ᶜρ * ifelse(
+                    ᶜspecific.q_tot == 0,
+                    (Geometry.WVector(FT(0)),),
+                    p.ᶜwₜqₜ / ᶜspecific.q_tot,
+                ),
+            ) - (I,)
+
+        MatrixFields.unrolled_foreach(tracer_info) do (ρqₚ_name, _, wₚ_name)
+            MatrixFields.has_field(Y, ρqₚ_name) || return
+            ∂ᶜρqₚ_err_∂ᶜρqₚ = matrix[ρqₚ_name, ρqₚ_name]
+            ᶜwₚ = MatrixFields.get_field(p, wₚ_name)
+            @. ∂ᶜρqₚ_err_∂ᶜρqₚ =
+                dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
+                DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+                DiagonalMatrixRow(-Geometry.WVector(ᶜwₚ) / ᶜρ) - (I,)
+        end
+
+    end
+
     if use_derivative(diffusion_flag)
         (; ᶜK_h, ᶜK_u) = p
         @. ᶜdiffusion_h_matrix =
@@ -603,7 +684,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         end
 
         ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
-        ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
         @. ∂ᶜρe_tot_err_∂ᶜρ =
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(
                 (
@@ -611,32 +691,31 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                     ᶜkappa_m * ∂e_int_∂q_tot * ᶜspecific.q_tot
                 ) / ᶜρ,
             )
-        @. ∂ᶜρe_tot_err_∂ᶜρe_tot =
-            dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((1 + ᶜkappa_m) / ᶜρ) -
-            (I,)
+        @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
+            dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((1 + ᶜkappa_m) / ᶜρ)
+
         if MatrixFields.has_field(Y, @name(c.ρq_tot))
             ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
-            @. ∂ᶜρe_tot_err_∂ᶜρq_tot =
+            ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
+            @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅
                 DiagonalMatrixRow(ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ)
+            @. ∂ᶜρq_tot_err_∂ᶜρ =
+                dtγ * ᶜdiffusion_h_matrix ⋅
+                DiagonalMatrixRow(-(ᶜspecific.q_tot) / ᶜρ)
+            @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
+                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
 
-        tracer_info = (
-            (@name(c.ρq_tot), @name(q_tot)),
-            (@name(c.ρq_liq), @name(q_liq)),
-            (@name(c.ρq_ice), @name(q_ice)),
-            (@name(c.ρq_rai), @name(q_rai)),
-            (@name(c.ρq_sno), @name(q_sno)),
-        )
-        MatrixFields.unrolled_foreach(tracer_info) do (ρq_name, q_name)
+        MatrixFields.unrolled_foreach(tracer_info) do (ρq_name, q_name, _)
             MatrixFields.has_field(Y, ρq_name) || return
             ᶜq = MatrixFields.get_field(ᶜspecific, q_name)
             ∂ᶜρq_err_∂ᶜρ = matrix[ρq_name, @name(c.ρ)]
             ∂ᶜρq_err_∂ᶜρq = matrix[ρq_name, ρq_name]
             @. ∂ᶜρq_err_∂ᶜρ =
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(-(ᶜq) / ᶜρ)
-            @. ∂ᶜρq_err_∂ᶜρq =
-                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ) - (I,)
+            @. ∂ᶜρq_err_∂ᶜρq +=
+                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
 
         if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
@@ -683,19 +762,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 dtγ * DiagonalMatrixRow(1 / ᶜρ) ⋅ ᶜdiffusion_u_matrix - (I,)
         end
 
-        ᶠlg = Fields.local_geometry_field(Y.f)
-        precip_info =
-            ((@name(c.ρq_rai), @name(ᶜwᵣ)), (@name(c.ρq_sno), @name(ᶜwₛ)))
-        MatrixFields.unrolled_foreach(precip_info) do (ρqₚ_name, wₚ_name)
-            MatrixFields.has_field(Y, ρqₚ_name) || return
-            ∂ᶜρqₚ_err_∂ᶜρqₚ = matrix[ρqₚ_name, ρqₚ_name]
-            ᶜwₚ = MatrixFields.get_field(p, wₚ_name)
-            ᶠtmp = p.ᶠtemp_CT3
-            @. ᶠtmp = CT3(unit_basis_vector_data(CT3, ᶠlg)) * ᶠwinterp(ᶜJ, ᶜρ)
-            @. ∂ᶜρqₚ_err_∂ᶜρqₚ +=
-                dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠtmp) ⋅
-                ᶠright_bias_matrix() ⋅ DiagonalMatrixRow(-(ᶜwₚ) / ᶜρ)
-        end
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX

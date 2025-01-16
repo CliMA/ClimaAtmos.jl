@@ -15,6 +15,7 @@ moist: equil
 cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage: true
 precip_model: "0M"
+override_precip_timescale: false
 config: box
 x_max: 1e8
 y_max: 1e8
