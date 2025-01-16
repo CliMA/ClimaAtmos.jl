@@ -106,7 +106,7 @@ which are `Field`s of `SurfaceFluxes.SurfaceFluxConditions` and `Thermodynamics.
 This functions needs to be called by the coupler whenever either field changes
 to ensure that the simulation is properly updated.
 """
-function set_surface_conditions!(p, surface_conditions, surface_ts, atmos)
+function set_surface_conditions!(p, surface_conditions, surface_ts)
     (; params, atmos) = p
     (; sfc_conditions,) = p.precomputed
     (; ᶠtemp_scalar) = p.scratch
