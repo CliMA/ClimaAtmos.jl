@@ -1,7 +1,7 @@
 agents:
   queue: new-central
   slurm_mem: 8G
-  modules: climacommon/2024_10_08
+  modules: climacommon/2024_12_16
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -448,13 +448,13 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
-          slurm_mem: 16G
+          slurm_mem: 20G
 
       - label: ":computer: test restart"
         command: >
           julia --color=yes --project=examples test/restart.jl --manytests true
         agents:
-          slurm_mem: 16GB
+          slurm_mem: 20GB
 
       - label: ":computer: test restart GPU"
         command: >
@@ -463,7 +463,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
-          slurm_mem: 16G
+          slurm_mem: 20G
 
       # This job occasionally times out. We add a soft file when the agent is
       # lost because of timeout
@@ -478,7 +478,7 @@ steps:
           - exit_status: 255
         agents:
           slurm_ntasks: 2
-          slurm_mem: 16G
+          slurm_mem: 20G
 
       # This job occasionally times out. We add a soft file when the agent is
       # lost because of timeout

@@ -19,13 +19,18 @@ jobs:
     name: ClimaCalibrate E2E Test
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      matrix:
+        version:
+          - '1.10'
+          - '1.11'
     steps:
       - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
         with:
-          version: '1.10'
+          version: ${{ matrix.version }}
       - run: |
           julia --project=calibration/test -e 'using Pkg; Pkg.develop(;path="."); Pkg.instantiate(;verbose=true)'
           julia --project=calibration/test calibration/test/e2e_test.jl
