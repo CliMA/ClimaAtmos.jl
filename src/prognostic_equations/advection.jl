@@ -8,7 +8,6 @@ import ClimaCore.Geometry as Geometry
 
 NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜΦ) = p.core
     (; ᶜu, ᶜK, ᶜp) = p.precomputed
     if p.atmos.turbconv_model isa AbstractEDMF
         (; ᶜu⁰) = p.precomputed
@@ -39,7 +38,11 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
     end
 
-    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    grav = TDP.grav(thermo_params)
+    ᶜz = Fields.coordinate_field(axes(Y.c)).z
+    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp) / Y.c.ρ + gradₕ(ᶜK + Φ(grav, ᶜz)))
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end
@@ -66,20 +69,28 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     return nothing
 end
 
+# TODO: move to ClimaCore:
+import ClimaCore.Geometry: CartesianGlobalGeometry
+Base.broadcastable(x::CartesianGlobalGeometry) = tuple(x)
+
 NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; turbconv_model) = p.atmos
+    (; params) = p
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     advect_tke = use_prognostic_tke(turbconv_model)
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; dt) = p
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
+    ᶜlocal_geometry = Fields.local_geometry_field(Y.c)
+    ᶠlocal_geometry = Fields.local_geometry_field(Y.f)
+    ᶜJ = ᶜlocal_geometry.J
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
     (; ᶜspecific) = p.precomputed
+    ᶜcoords = Fields.coordinate_field(Y.c)
+    global_geom = Spaces.global_geometry(axes(ᶜcoords))
 
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
     ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
@@ -129,11 +140,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    if isnothing(ᶠf¹²)
+    if !(global_geom isa Geometry.DeepSphericalGlobalGeometry)
         # shallow atmosphere
         @. Yₜ.c.uₕ -=
             ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
-            (ᶜf³ + ᶜω³) × CT12(ᶜu)
+            (f³(ᶜlocal_geometry, global_geom, params) + ᶜω³) × CT12(ᶜu)
         @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
@@ -143,12 +154,18 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     else
         # deep atmosphere
         @. Yₜ.c.uₕ -=
-            ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
-            (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+            ᶜinterp(
+                (f¹²(ᶠlocal_geometry, global_geom, params) + ᶠω¹²) ×
+                (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³),
+            ) / (Y.c.ρ * ᶜJ) +
+            (f³(ᶜlocal_geometry, global_geom, params) + ᶜω³) × CT12(ᶜu)
+        @. Yₜ.f.u₃ -=
+            (f¹²(ᶠlocal_geometry, global_geom, params) + ᶠω¹²) ×
+            ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
+                (f¹²(ᶠlocal_geometry, global_geom, params) + ᶠω¹²ʲs.:($$j)) ×
+                ᶠinterp(CT12(ᶜuʲs.:($$j))) +
                 ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
         end
     end

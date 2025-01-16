@@ -220,9 +220,16 @@ add_diagnostic_variable!(
     units = "m",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return cache.core.ᶜΦ ./ CAP.grav(cache.params)
+            return Φ.(
+                CAP.grav(cache.params),
+                Fields.coordinate_field(axes(state.c.ρ)).z,
+            ) ./ CAP.grav(cache.params)
         else
-            out .= cache.core.ᶜΦ ./ CAP.grav(cache.params)
+            out .=
+                Φ.(
+                    CAP.grav(cache.params),
+                    Fields.coordinate_field(axes(state.c.ρ)).z,
+                ) ./ CAP.grav(cache.params)
         end
     end,
 )
@@ -1025,6 +1032,8 @@ add_diagnostic_variable!(
 ###
 function compute_dsevi!(out, state, cache, time)
     thermo_params = CAP.thermodynamics_params(cache.params)
+    z = Fields.coordinate_field(axes(state.c.ρ)).z
+    grav = CAP.grav(cache.params)
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         cp = CAP.cp_d(cache.params)
@@ -1032,7 +1041,7 @@ function compute_dsevi!(out, state, cache, time)
         @. dse =
             state.c.ρ * (
                 cp * TD.air_temperature(thermo_params, cache.precomputed.ᶜts) +
-                cache.core.ᶜΦ
+                Φ(grav, z)
             )
         Operators.column_integral_definite!(out, dse)
         return out
@@ -1042,7 +1051,7 @@ function compute_dsevi!(out, state, cache, time)
         @. dse =
             state.c.ρ * (
                 cp * TD.air_temperature(thermo_params, cache.precomputed.ᶜts) +
-                cache.core.ᶜΦ
+                Φ(grav, z)
             )
         Operators.column_integral_definite!(out, dse)
     end

@@ -12,6 +12,7 @@ import ClimaCore.Utilities: half
 import Thermodynamics as TD
 
 import ..AtmosModel
+import ..Φ
 import ..AtmosCallback
 import ..EveryNSteps
 
