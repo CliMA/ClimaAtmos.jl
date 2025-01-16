@@ -12,6 +12,13 @@ Main
 CO2 concentration. This is currently only relevant for radiation transfer with
 RRTGMP.
 
+### Maintenance
+
+### Remove override_precip_timescale config
+![][badge-🔥behavioralΔ] The override_precip_timescale config has been removed.
+To recover the previous behavior, set `precipitation_timescale` to `dt` in the
+toml. PR [3534](https://github.com/CliMA/ClimaAtmos.jl/pull/3534)
+
 v0.28.2
 -------
 ### Features
