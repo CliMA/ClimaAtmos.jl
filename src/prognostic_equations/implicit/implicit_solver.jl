@@ -154,7 +154,7 @@ function ImplicitEquationJacobian(
     ρatke_if_available =
         is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
-    u₃_if_available = is_in_Y(@name(u₃)) ? (@name(f.sgsʲs.:(1).u₃),) : ()
+    u₃ʲ_if_available = is_in_Y(@name(f.sgsʲs.:(1).u₃)) ? (@name(f.sgsʲs.:(1).u₃),) : ()
 
     tracer_names = (
         @name(c.ρq_tot),
@@ -296,12 +296,13 @@ function ImplicitEquationJacobian(
     names₁ = (
         names₁_group₁...,
         available_sgs_scalar_names...,
-        u₃_if_available,
+        u₃ʲ_if_available...,
         names₁_group₂...,
         names₁_group₃...,
     )
 
     alg₂ = MatrixFields.BlockLowerTriangularSolve(@name(c.uₕ))
+    @info(alg₂)
     alg =
         if use_derivative(diffusion_flag) || use_derivative(sgs_advection_flag)
             alg₁_subalg₂ =
