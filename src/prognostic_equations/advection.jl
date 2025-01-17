@@ -180,8 +180,9 @@ function edmfx_sgs_vertical_advection_tendency!(
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶜlg = Fields.local_geometry_field(Y.c)
     (; edmfx_upwinding) = p.atmos.numerics
-    (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs) = p.precomputed
+    (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs, ᶜwₕʲs, ᶜwₜʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
 
     ᶠz = Fields.coordinate_field(Y.f).z
@@ -220,19 +221,44 @@ function edmfx_sgs_vertical_advection_tendency!(
             dt,
             edmfx_upwinding,
         )
-
         vertical_advection!(
             Yₜ.c.sgsʲs.:($j).mse,
-            ᶠu³ʲs.:($j),
+            ᶠu³ʲs.:($j) .- ᶠright_bias.(CT3.(ᶜwₕʲs.:($j))),
             Y.c.sgsʲs.:($j).mse,
             edmfx_upwinding,
         )
-
         vertical_advection!(
             Yₜ.c.sgsʲs.:($j).q_tot,
-            ᶠu³ʲs.:($j),
+            ᶠu³ʲs.:($j) .- ᶠright_bias.(CT3.(ᶜwₜʲs.:($j))),
             Y.c.sgsʲs.:($j).q_tot,
             edmfx_upwinding,
         )
+        # TODO boundary condition for right bias
+        if p.atmos.moisture_model isa NonEquilMoistModel
+            vertical_advection!(
+                Yₜ.c.sgsʲs.:($j).q_liq,
+                ᶠu³ʲs.:($j) .- ᶠright_bias.(CT3.(ᶜwₗʲs.:($j))),
+                Y.c.sgsʲs.:($j).q_liq,
+                edmfx_upwinding,
+            )
+            vertical_advection!(
+                Yₜ.c.sgsʲs.:($j).q_ice,
+                ᶠu³ʲs.:($j) .- ᶠright_bias.(CT3.(ᶜwᵢʲs.:($j))),
+                Y.c.sgsʲs.:($j).q_ice,
+                edmfx_upwinding,
+            )
+            vertical_advection!(
+                Yₜ.c.sgsʲs.:($j).q_rai,
+                ᶠu³ʲs.:($j) .- ᶠright_bias.(CT3.(ᶜwᵣʲs.:($j))),
+                Y.c.sgsʲs.:($j).q_rai,
+                edmfx_upwinding,
+            )
+            vertical_advection!(
+                Yₜ.c.sgsʲs.:($j).q_sno,
+                ᶠu³ʲs.:($j) .- ᶠright_bias.(CT3.(ᶜwₛʲs.:($j))),
+                Y.c.sgsʲs.:($j).q_sno,
+                edmfx_upwinding,
+            )
+        end
     end
 end

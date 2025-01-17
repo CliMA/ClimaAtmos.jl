@@ -2,6 +2,13 @@ import NVTX
 import StaticArrays as SA
 import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 
+"""
+    Helper function to populate the cloud diagnostics named tuple
+"""
+function make_named_tuple(t1, t2, t3)
+    return NamedTuple{(:cf, :q_liq, :q_ice)}(tuple(t1, t2, t3))
+end
+
 # TODO: write a test with scalars that are linear with z
 """
     Diagnose horizontal covariances based on vertical gradients
@@ -24,10 +31,11 @@ NVTX.@annotate function set_cloud_fraction!(Y, p, ::DryModel, _)
     p.precomputed.cloud_diagnostics_tuple .=
         ((; cf = FT(0), q_liq = FT(0), q_ice = FT(0)),)
 end
+
 NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
-    ::Union{EquilMoistModel, NonEquilMoistModel},
+    moist_model::Union{EquilMoistModel, NonEquilMoistModel},
     ::GridScaleCloud,
 )
     (; params) = p
@@ -48,13 +56,24 @@ NVTX.@annotate function set_cloud_fraction!(
         end
         compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     end
-    @. cloud_diagnostics_tuple = NamedTuple{(:cf, :q_liq, :q_ice)}(
-        tuple(
+
+    if moist_model isa EquilMoistModel
+        @. cloud_diagnostics_tuple = make_named_tuple(
             ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0),
             TD.PhasePartition(thermo_params, ᶜts).liq,
             TD.PhasePartition(thermo_params, ᶜts).ice,
-        ),
-    )
+        )
+    else
+        @. cloud_diagnostics_tuple = make_named_tuple(
+            ifelse(
+                p.precomputed.ᶜspecific.q_liq + p.precomputed.ᶜspecific.q_ice > 0,
+                1,
+                0,
+            ),
+            p.precomputed.ᶜspecific.q_liq,
+            p.precomputed.ᶜspecific.q_ice,
+        )
+    end
 end
 NVTX.@annotate function set_cloud_fraction!(
     Y,
@@ -64,7 +83,7 @@ NVTX.@annotate function set_cloud_fraction!(
 )
     SG_quad = qc.SG_quad
     (; params) = p
-
+    #TODO - do we want to substract precipitation for the noneq option?
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜts, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
@@ -103,6 +122,7 @@ NVTX.@annotate function set_cloud_fraction!(
     moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
     cloud_model::SGSQuadratureCloud,
 )
+    #TODO - do we want to substract precipitation for the noneq option?
 
     (; turbconv_model) = p.atmos
     set_cloud_fraction!(Y, p, moisture_model, cloud_model, turbconv_model)
@@ -118,6 +138,8 @@ NVTX.@annotate function set_cloud_fraction!(
 )
     SG_quad = qc.SG_quad
     (; params) = p
+
+    #TODO - do we want to substract precipitation for the noneq option?
 
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
@@ -143,21 +165,18 @@ NVTX.@annotate function set_cloud_fraction!(
     n = n_mass_flux_subdomains(turbconv_model)
 
     for j in 1:n
-        @. cloud_diagnostics_tuple += NamedTuple{(:cf, :q_liq, :q_ice)}(
-            tuple(
-                ifelse(
-                    TD.has_condensate(thermo_params, ᶜtsʲs.:($$j)),
-                    draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)),
-                    0,
-                ),
-                draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)) *
-                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).liq,
-                draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)) *
-                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).ice,
+        @. cloud_diagnostics_tuple += make_named_tuple(
+            ifelse(
+                TD.has_condensate(thermo_params, ᶜtsʲs.:($$j)),
+                draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)),
+                0,
             ),
+            draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)) *
+            TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).liq,
+            draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)) *
+            TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).ice,
         )
     end
-
 end
 
 NVTX.@annotate function set_cloud_fraction!(
@@ -176,6 +195,7 @@ NVTX.@annotate function set_cloud_fraction!(
     (; ᶜρʲs, ᶜtsʲs, ᶜρa⁰, ᶜρ⁰) = p.precomputed
     (; turbconv_model) = p.atmos
 
+    # TODO - do we want to substract precipitation for the noneq option?
     # TODO - we should make this default when using diagnostic edmf
     # environment
     diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
@@ -191,29 +211,25 @@ NVTX.@annotate function set_cloud_fraction!(
     )
 
     # weight cloud diagnostics by environmental area
-    @. cloud_diagnostics_tuple *= NamedTuple{(:cf, :q_liq, :q_ice)}(
-        tuple(
-            draft_area(ᶜρa⁰, ᶜρ⁰),
-            draft_area(ᶜρa⁰, ᶜρ⁰),
-            draft_area(ᶜρa⁰, ᶜρ⁰),
-        ),
+    @. cloud_diagnostics_tuple *= make_named_tuple(
+        draft_area(ᶜρa⁰, ᶜρ⁰),
+        draft_area(ᶜρa⁰, ᶜρ⁰),
+        draft_area(ᶜρa⁰, ᶜρ⁰),
     )
     # updrafts
     n = n_mass_flux_subdomains(turbconv_model)
 
     for j in 1:n
-        @. cloud_diagnostics_tuple += NamedTuple{(:cf, :q_liq, :q_ice)}(
-            tuple(
-                ifelse(
-                    TD.has_condensate(thermo_params, ᶜtsʲs.:($$j)),
-                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-                    0,
-                ),
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)) *
-                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).liq,
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)) *
-                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).ice,
+        @. cloud_diagnostics_tuple += make_named_tuple(
+            ifelse(
+                TD.has_condensate(thermo_params, ᶜtsʲs.:($$j)),
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                0,
             ),
+            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)) *
+            TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).liq,
+            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)) *
+            TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).ice,
         )
     end
 end

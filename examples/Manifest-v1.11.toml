@@ -359,7 +359,9 @@ weakdeps = ["CUDA", "MPI"]
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "61d071cfe584d99a1400a3bf96a122c45c282121"
+git-tree-sha1 = "ce9de8f8c74e523a560b66b067c220438b287974"
+repo-rev = "main"
+repo-url = "https://github.com/CliMA/ClimaCore.jl.git"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
 version = "0.14.24"
 weakdeps = ["CUDA", "Krylov"]
@@ -418,9 +420,11 @@ version = "0.1.1"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "ff967e27a56a938d3e719bb8d2e025b086c3f808"
+git-tree-sha1 = "facfe93769c3343bbe512fb61b19cfdf85804118"
+repo-rev = "main"
+repo-url = "https://github.com/CliMA/ClimaTimeSteppers.jl.git"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
-version = "0.7.39"
+version = "0.8.1"
 
     [deps.ClimaTimeSteppers.extensions]
     ClimaTimeSteppersBenchmarkToolsExt = ["CUDA", "BenchmarkTools", "OrderedCollections", "StatsBase", "PrettyTables"]

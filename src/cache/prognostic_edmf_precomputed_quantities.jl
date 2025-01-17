@@ -5,6 +5,9 @@ import NVTX
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
 
+#TODO - what to do about prognostic and diagnostic edmf precipitation
+#TODO - we only want to support dry + nothing, equil + 0M and nonequil + 1M
+
 """
     set_prognostic_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
 
@@ -19,11 +22,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     @assert !(p.atmos.moisture_model isa DryModel)
 
     thermo_params = CAP.thermodynamics_params(p.params)
-    (; turbconv_model) = p.atmos
+    (; turbconv_model, moisture_model) = p.atmos
     (; ᶜΦ,) = p.core
     (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
     (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
         p.precomputed
+    if moisture_model isa NonEquilMoistModel
+        (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
+    end
 
     @. ᶜρa⁰ = ρa⁰(Y.c)
     @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
@@ -41,10 +47,50 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         Y.c.ρ,
         turbconv_model,
     )
+    if moisture_model isa NonEquilMoistModel
+        @. ᶜq_liq⁰ = divide_by_ρa(
+            Y.c.ρq_liq - ρaq_liq⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρq_liq,
+            Y.c.ρ,
+            turbconv_model,
+        )
+        @. ᶜq_ice⁰ = divide_by_ρa(
+            Y.c.ρq_ice - ρaq_ice⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρq_ice,
+            Y.c.ρ,
+            turbconv_model,
+        )
+        @. ᶜq_rai⁰ = divide_by_ρa(
+            Y.c.ρq_rai - ρaq_rai⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρq_rai,
+            Y.c.ρ,
+            turbconv_model,
+        )
+        @. ᶜq_sno⁰ = divide_by_ρa(
+            Y.c.ρq_sno - ρaq_sno⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρq_sno,
+            Y.c.ρ,
+            turbconv_model,
+        )
+    end
+
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke⁰
-    @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
+    if moisture_model isa EquilMoistModel
+        @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
+    else
+        @. ᶜts⁰ = TD.PhaseNonEquil_phq(
+            thermo_params,
+            ᶜp,
+            ᶜmse⁰ - ᶜΦ,
+            TD.PhasePartition(ᶜq_tot⁰, ᶜq_liq⁰ + ᶜq_rai⁰, ᶜq_ice⁰ + ᶜq_sno⁰),
+        )
+    end
     @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
     return nothing
 end
@@ -87,10 +133,29 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         ᶜρʲ = ᶜρʲs.:($j)
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+        if moisture_model isa NonEquilMoistModel
+            ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
+            ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
+            ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
+            ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
+        end
 
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
-        @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
+        if moisture_model isa EquilMoistModel
+            @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
+        else
+            @. ᶜtsʲ = TD.PhaseNonEquil_phq(
+                thermo_params,
+                ᶜp,
+                ᶜmseʲ - ᶜΦ,
+                TD.PhasePartition(
+                    ᶜq_totʲ,
+                    ᶜq_liqʲ + ᶜq_raiʲ,
+                    ᶜq_iceʲ + ᶜq_snoʲ,
+                ),
+            )
+        end
         @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
 
         # EDMFX boundary condition:
@@ -396,8 +461,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     # Sources from the updrafts
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
-        @. ᶜSqₜᵖʲs.:($$j) = q_tot_precipitation_sources(
-            Microphysics0Moment(),
+        @. ᶜSqₜᵖʲs.:($$j) = q_tot_0M_precipitation_sources(
             thp,
             cmp,
             dt,
@@ -406,14 +470,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         )
     end
     # sources from the environment
-    @. ᶜSqₜᵖ⁰ = q_tot_precipitation_sources(
-        Microphysics0Moment(),
-        thp,
-        cmp,
-        dt,
-        ᶜq_tot⁰,
-        ᶜts⁰,
-    )
+    @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(thp, cmp, dt, ᶜq_tot⁰, ᶜts⁰)
     return nothing
 end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
@@ -428,9 +485,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     thp = CAP.thermodynamics_params(params)
     cmp = CAP.microphysics_1m_params(params)
 
-    (; ᶜSeₜᵖʲs, ᶜSqₜᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
-    (; ᶜSeₜᵖ⁰, ᶜSqₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρ⁰, ᶜts⁰) = p.precomputed
-    (; ᶜqᵣ, ᶜqₛ) = p.precomputed
+    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
+    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρ⁰, ᶜts⁰) = p.precomputed
+    (; ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
+
+    (; ᶜuʲs) = p.precomputed
+
+
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs) = p.precomputed
 
     # TODO - can I re-use them between js and env?
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
@@ -443,34 +505,105 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         compute_precipitation_sources!(
             ᶜSᵖ,
             ᶜSᵖ_snow,
-            ᶜSqₜᵖʲs.:($j),
+            ᶜSqₗᵖʲs.:($j),
+            ᶜSqᵢᵖʲs.:($j),
             ᶜSqᵣᵖʲs.:($j),
             ᶜSqₛᵖʲs.:($j),
-            ᶜSeₜᵖʲs.:($j),
             ᶜρʲs.:($j),
-            ᶜqᵣ,
-            ᶜqₛ,
+            Y.c.sgsʲs.:($j).q_rai,
+            Y.c.sgsʲs.:($j).q_sno,
             ᶜtsʲs.:($j),
-            ᶜΦ,
             dt,
             cmp,
             thp,
         )
+
+        @. ᶜwₗʲs.:($$j) = Geometry.WVector(0) # TODO
+        @. ᶜwᵢʲs.:($$j) = Geometry.WVector(0) # TODO
+        @. ᶜwᵣʲs.:($$j) = Geometry.WVector(0) # TODO
+        @. ᶜwₛʲs.:($$j) = Geometry.WVector(0) # TODO
+
+
+        @. ᶜwₜʲs.:($$j) += ifelse(
+            Y.c.sgsʲs.q_tot.:($$j) == 0,
+            0,
+            (
+                ᶜwₗʲs.:($$j) * Y.c.sgsʲs.q_liq.:($$j) +
+                ᶜwᵢʲs.:($$j) * Y.c.sgsʲs.q_ice.:($$j)
+            ) / Y.c.sgsʲs.q_tot.:($$j),
+        )
+        @. ᶜwₜʲs.:($$j) += ifelse(
+            Y.c.sgsʲs.q_tot.:($$j) == 0,
+            0,
+            (
+                ᶜwᵣʲs.:($$j) * Y.c.sgsʲs.q_rai.:($$j) +
+                ᶜwₛʲs.:($$j) * Y.c.sgsʲs.q_sno.:($$j)
+            ) / Y.c.sgsʲs.q_tot.:($$j),
+        )
+
+        #TODO - what if denominator is zero?
+        @. ᶜwₕʲs +=
+            Geometry.WVector(
+                ᶜwₗʲs.:($$j) *
+                Y.c.sgsʲs.q_liq.:($$j) *
+                (
+                    TD.internal_energy_liquid(thermo_params, ᶜtsʲs.:($$j)) +
+                    p.core.ᶜΦ +
+                    norm_sqr(
+                        Geometry.UVWVector(0, 0, -1 * ᶜwₗʲs.:($$j)) +
+                        Geometry.UVWVector(ᶜuʲs),
+                    ) / 2
+                ) +
+                ᶜwᵢʲs.:($$j) *
+                Y.c.sgsʲs.q_ice.:($$j) *
+                (
+                    TD.internal_energy_ice(thermo_params, ᶜtsʲs.:($$j)) +
+                    p.core.ᶜΦ +
+                    norm_sqr(
+                        Geometry.UVWVector(0, 0, -1 * ᶜwᵢʲs.:($$j)) +
+                        Geometry.UVWVector(ᶜuʲs),
+                    ) / 2
+                ),
+            ) / (Y.c.sgsʲs.:($j).mse - p.coreᶜΦ)
+        @. ᶜwₕʲs +=
+            Geometry.WVector(
+                ᶜwᵣ *
+                Y.c.ρq_rai *
+                (
+                    TD.internal_energy_liquid(thermo_params, ᶜts) +
+                    ᶜΦ +
+                    norm_sqr(
+                        Geometry.UVWVector(0, 0, -1 * ᶜwᵣ) +
+                        Geometry.UVWVector(ᶜuʲs),
+                    ) / 2
+                ) +
+                ᶜwₛ *
+                Y.c.ρq_sno *
+                (
+                    TD.internal_energy_ice(thermo_params, ᶜts) +
+                    ᶜΦ +
+                    norm_sqr(
+                        Geometry.UVWVector(0, 0, -1 * ᶜwₛ) +
+                        Geometry.UVWVector(ᶜuʲs),
+                    ) / 2
+                ),
+            ) / (Y.c.sgsʲs.:($j).mse - p.coreᶜΦ)
+
+
     end
 
     # Sources from the environment
     compute_precipitation_sources!(
         ᶜSᵖ,
         ᶜSᵖ_snow,
-        ᶜSqₜᵖ⁰,
+        ᶜSqₗᵖ⁰,
+        ᶜSqᵢᵖ⁰,
         ᶜSqᵣᵖ⁰,
         ᶜSqₛᵖ⁰,
-        ᶜSeₜᵖ⁰,
         ᶜρ⁰,
-        ᶜqᵣ,
-        ᶜqₛ,
+        ᶜq_rai⁰,
+        ᶜq_sno⁰,
         ᶜts⁰,
-        ᶜΦ,
         dt,
         cmp,
         thp,

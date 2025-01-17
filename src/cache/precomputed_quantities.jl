@@ -64,19 +64,26 @@ function precomputed_quantities(Y, atmos)
     sedimentation_quantities =
         atmos.moisture_model isa NonEquilMoistModel ?
         (; ᶜwₗ = similar(Y.c, FT), ᶜwᵢ = similar(Y.c, FT)) : (;)
+    precipitation_quantities =
+        atmos.precip_model isa Microphysics1Moment ?
+        (; ᶜwᵣ = similar(Y.c, FT), ᶜwₛ = similar(Y.c, FT)) : (;)
     precipitation_sgs_quantities =
         atmos.precip_model isa Microphysics0Moment ?
         (; ᶜSqₜᵖʲs = similar(Y.c, NTuple{n, FT}), ᶜSqₜᵖ⁰ = similar(Y.c, FT)) :
         atmos.precip_model isa Microphysics1Moment ?
         (;
-            ᶜSeₜᵖʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSqₜᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqₗᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqᵢᵖʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqᵣᵖʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqₛᵖʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSeₜᵖ⁰ = similar(Y.c, FT),
-            ᶜSqₜᵖ⁰ = similar(Y.c, FT),
+            ᶜSqₗᵖ⁰ = similar(Y.c, FT),
+            ᶜSqᵢᵖ⁰ = similar(Y.c, FT),
             ᶜSqᵣᵖ⁰ = similar(Y.c, FT),
             ᶜSqₛᵖ⁰ = similar(Y.c, FT),
+            ᶜq_liq⁰ = similar(Y.c, FT),
+            ᶜq_ice⁰ = similar(Y.c, FT),
+            ᶜq_rai⁰ = similar(Y.c, FT),
+            ᶜq_sno⁰ = similar(Y.c, FT),
         ) : (;)
     advective_sgs_quantities =
         atmos.turbconv_model isa PrognosticEDMFX ?
@@ -111,6 +118,8 @@ function precomputed_quantities(Y, atmos)
             ᶜgradᵥ_θ_virt⁰ = Fields.Field(C3{FT}, cspace),
             ᶜgradᵥ_q_tot⁰ = Fields.Field(C3{FT}, cspace),
             ᶜgradᵥ_θ_liq_ice⁰ = Fields.Field(C3{FT}, cspace),
+            ᶜwₜʲs = similar(Y.c, NTuple{n, Geometry.WVector{FT}}),
+            ᶜwₕʲs = similar(Y.c, NTuple{n, Geometry.WVector{FT}}),
             precipitation_sgs_quantities...,
         ) : (;)
     sgs_quantities = (;
@@ -152,14 +161,6 @@ function precomputed_quantities(Y, atmos)
         else
             (;)
         end
-    precipitation_quantities =
-        atmos.precip_model isa Microphysics1Moment ?
-        (;
-            ᶜwᵣ = similar(Y.c, FT),
-            ᶜwₛ = similar(Y.c, FT),
-            ᶜqᵣ = similar(Y.c, FT),
-            ᶜqₛ = similar(Y.c, FT),
-        ) : (;)
     smagorinsky_lilly_quantities =
         if atmos.smagorinsky_lilly isa SmagorinskyLilly
             uvw_vec = UVW(FT(0), FT(0), FT(0))
@@ -313,30 +314,43 @@ function thermo_state(
     return get_ts(ρ, p, θ, e_int, q_tot, q_pt)
 end
 
-function thermo_vars(moisture_model, specific, K, Φ)
+function thermo_vars(moisture_model, precip_model, specific, K, Φ)
     energy_var = (; e_int = specific.e_tot - K - Φ)
     moisture_var = if moisture_model isa DryModel
         (;)
-    elseif moisture_model isa EquilMoistModel
+    elseif moisture_model isa EquilMoistModel &&
+           precip_model isa NoPrecipitation
         (; specific.q_tot)
-    elseif moisture_model isa NonEquilMoistModel
-        q_pt_args = (specific.q_tot, specific.q_liq, specific.q_ice)
+    elseif moisture_model isa EquilMoistModel &&
+           precip_model isa Microphysics0Moment
+        (; specific.q_tot)
+    elseif moisture_model isa NonEquilMoistModel &&
+           precip_model isa Microphysics1Moment
+        q_pt_args = (
+            specific.q_tot,
+            specific.q_liq + specific.q_rai,
+            specific.q_ice + specific.q_sno,
+        )
         (; q_pt = TD.PhasePartition(q_pt_args...))
+    else
+        error("Unsupported moisture and precipitation combination")
     end
     return (; energy_var..., moisture_var...)
 end
 
-ts_gs(thermo_params, moisture_model, specific, K, Φ, ρ) = thermo_state(
-    thermo_params;
-    thermo_vars(moisture_model, specific, K, Φ)...,
-    ρ,
-)
+ts_gs(thermo_params, moisture_model, precip_model, specific, K, Φ, ρ) =
+    thermo_state(
+        thermo_params;
+        thermo_vars(moisture_model, precip_model, specific, K, Φ)...,
+        ρ,
+    )
 
-ts_sgs(thermo_params, moisture_model, specific, K, Φ, p) = thermo_state(
-    thermo_params;
-    thermo_vars(moisture_model, specific, K, Φ)...,
-    p,
-)
+ts_sgs(thermo_params, moisture_model, precip_model, specific, K, Φ, p) =
+    thermo_state(
+        thermo_params;
+        thermo_vars(moisture_model, precip_model, specific, K, Φ)...,
+        p,
+    )
 
 function eddy_diffusivity_coefficient_H(D₀, H, z_sfc, z)
     return D₀ * exp(-(z - z_sfc) / H)
@@ -470,7 +484,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     (; call_cloud_diagnostics_per_stage) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
-    thermo_args = (thermo_params, moisture_model)
+    thermo_args = (thermo_params, moisture_model, precip_model)
     (; ᶜΦ) = p.core
     (; ᶜspecific, ᶜu, ᶠu³, ᶜK, ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
@@ -526,27 +540,23 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     @. ᶜwₜqₜ = Geometry.WVector(0)
     @. ᶜwₕhₜ = Geometry.WVector(0)
-    #
-    # TODO - uncomment in the next PR. Right now for the purpose of testing
-    # we want to merge with 0 sedimentation and precipitation
-    #
     if moisture_model isa NonEquilMoistModel
         set_sedimentation_precomputed_quantities!(Y, p, t)
-        #    (; ᶜwₗ, ᶜwᵢ) = p.precomputed
-        #    @. ᶜwₜqₜ += Geometry.WVector(ᶜwₗ * Y.c.ρq_liq + ᶜwᵢ * Y.c.ρq_ice) / Y.c.ρ
-        #    @. ᶜwₕhₜ += Geometry.WVector(
-        #        ᶜwₗ * Y.c.ρq_liq * (TD.internal_energy_liquid(thermo_params, ᶜts) + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwₗ) + Geometry.UVWVector(ᶜu))/2) +
-        #        ᶜwᵢ * Y.c.ρq_ice * (TD.internal_energy_ice(thermo_params, ᶜts)    + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwᵢ) + Geometry.UVWVector(ᶜu))/2)
-        #    ) / Y.c.ρ
+        #(; ᶜwₗ, ᶜwᵢ) = p.precomputed
+        #@. ᶜwₜqₜ += Geometry.WVector(ᶜwₗ * Y.c.ρq_liq + ᶜwᵢ * Y.c.ρq_ice) / Y.c.ρ
+        #@. ᶜwₕhₜ += Geometry.WVector(
+        #    ᶜwₗ * Y.c.ρq_liq * (TD.internal_energy_liquid(thermo_params, ᶜts) + ᶜΦ - norm_sqr(Geometry.UVWVector(0, 0, ᶜwₗ) + Geometry.UVWVector(ᶜu))/2) +
+        #    ᶜwᵢ * Y.c.ρq_ice * (TD.internal_energy_ice(thermo_params, ᶜts)    + ᶜΦ - norm_sqr(Geometry.UVWVector(0, 0, ᶜwᵢ) + Geometry.UVWVector(ᶜu))/2)
+        #) / Y.c.ρ
     end
     if precip_model isa Microphysics1Moment
         set_precipitation_precomputed_quantities!(Y, p, t)
-        #    (; ᶜwᵣ, ᶜwₛ) = p.precomputed
-        #    @. ᶜwₜqₜ += Geometry.WVector(ᶜwᵣ * Y.c.ρq_rai + ᶜwₛ * Y.c.ρq_sno) / Y.c.ρ
-        #    @. ᶜwₕhₜ += Geometry.WVector(
-        #        ᶜwᵣ * Y.c.ρq_rai * (TD.internal_energy_liquid(thermo_params, ᶜts) + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwᵣ) + Geometry.UVWVector(ᶜu))/2) +
-        #        ᶜwₛ * Y.c.ρq_sno * (TD.internal_energy_ice(thermo_params, ᶜts)    + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwₛ) + Geometry.UVWVector(ᶜu))/2)
-        #    ) / Y.c.ρ
+        (; ᶜwᵣ, ᶜwₛ) = p.precomputed
+        #@. ᶜwₜqₜ += Geometry.WVector(ᶜwᵣ * Y.c.ρq_rai + ᶜwₛ * Y.c.ρq_sno) / Y.c.ρ
+        #@. ᶜwₕhₜ += Geometry.WVector(
+        #    ᶜwᵣ * Y.c.ρq_rai * (TD.internal_energy_liquid(thermo_params, ᶜts) + ᶜΦ - norm_sqr(Geometry.UVWVector(0, 0, ᶜwᵣ) + Geometry.UVWVector(ᶜu))/2) +
+        #    ᶜwₛ * Y.c.ρq_sno * (TD.internal_energy_ice(thermo_params, ᶜts)    + ᶜΦ - norm_sqr(Geometry.UVWVector(0, 0, ᶜwₛ) + Geometry.UVWVector(ᶜu))/2)
+        #) / Y.c.ρ
     end
 
     if turbconv_model isa PrognosticEDMFX

@@ -1,14 +1,17 @@
-h_elem: 30
-z_elem: 43
-dz_bottom: 30.0
-dt: "90secs"
-t_end: "120days"
+h_elem: 6   #30
+z_elem: 10  #43
+dz_bottom: 300.0
+dt: "200secs"
+approximate_linear_solve_iters: 3
+max_newton_iters_ode: 1
+rayleigh_sponge: true
+t_end: "10days"
 ode_algo: ARS343
 initial_condition: "MoistBaroclinicWave"
-moist: "equil"
-precip_model: "0M"
+moist: "nonequil"
+precip_model: "1M"
 dt_save_state_to_disk: "10days"
 toml: [toml/longrun_baroclinic_wave.toml]
 diagnostics:
-  - short_name: [pfull, wa, va, rv, hus, ke]
-    period: 1days
+  - short_name: [pfull, wa, va, ua, ta, rhoa, rv, hus, ke, clw, cli, husra, hussn, ]
+    period: 600secs

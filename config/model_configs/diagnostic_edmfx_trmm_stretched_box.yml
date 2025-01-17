@@ -15,7 +15,7 @@ edmfx_sgs_diffusive_flux: true
 moist: equil
 cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage: true
-precip_model: "1M"
+precip_model: "0M"
 config: box
 x_max: 1e8
 y_max: 1e8
@@ -34,7 +34,5 @@ diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
     period: 10mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
-    period: 10mins
-  - short_name: [husra, hussn]
     period: 10mins
 ode_algo: ARS343

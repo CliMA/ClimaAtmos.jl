@@ -212,6 +212,38 @@ mass-flux subdomain states are stored in `sgsʲs`.
 ρaq_tot⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_tot, +, sgsʲs)
 
 """
+    ρaq_liq⁺(sgsʲs)
+
+Computes the total mass-flux subdomain area-weighted ρq_liq, assuming that the
+mass-flux subdomain states are stored in `sgsʲs`.
+"""
+ρaq_liq⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_liq, +, sgsʲs)
+
+"""
+    ρaq_ice⁺(sgsʲs)
+
+Computes the total mass-flux subdomain area-weighted ρq_ice, assuming that the
+mass-flux subdomain states are stored in `sgsʲs`.
+"""
+ρaq_ice⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_ice, +, sgsʲs)
+
+"""
+    ρaq_rai⁺(sgsʲs)
+
+Computes the total mass-flux subdomain area-weighted ρq_rai, assuming that the
+mass-flux subdomain states are stored in `sgsʲs`.
+"""
+ρaq_rai⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_rai, +, sgsʲs)
+
+"""
+    ρaq_sno⁺(sgsʲs)
+
+Computes the total mass-flux subdomain area-weighted ρq_sno, assuming that the
+mass-flux subdomain states are stored in `sgsʲs`.
+"""
+ρaq_sno⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_sno, +, sgsʲs)
+
+"""
     ρa⁰(gs)
 
 Computes the environment area-weighted density, assuming that the mass-flux
@@ -220,7 +252,7 @@ subdomain states are stored in `gs.sgsʲs`.
 ρa⁰(gs) = gs.ρ - mapreduce_with_init(sgsʲ -> sgsʲ.ρa, +, gs.sgsʲs)
 
 """
-    u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) 
+    u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model)
 
 Computes the average mass-flux subdomain vertical velocity `u₃⁺` by dividing the
 total momentum `ρaw⁺` by the total area-weighted density `ρa⁺`, both of which
