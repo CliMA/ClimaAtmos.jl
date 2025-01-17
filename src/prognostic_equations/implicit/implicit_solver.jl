@@ -154,7 +154,8 @@ function ImplicitEquationJacobian(
     ρatke_if_available =
         is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
-    u₃ʲ_if_available = is_in_Y(@name(f.sgsʲs.:(1).u₃)) ? (@name(f.sgsʲs.:(1).u₃),) : ()
+    u₃ʲ_if_available =
+        is_in_Y(@name(f.sgsʲs.:(1).u₃)) ? (@name(f.sgsʲs.:(1).u₃),) : ()
 
     tracer_names = (
         @name(c.ρq_tot),
@@ -245,15 +246,17 @@ function ImplicitEquationJacobian(
         @name(c.sgsʲs.:(1).q_ice),
     )
 
-    available_sgs_tracer_names = MatrixFields.unrolled_filter(is_in_Y, sgs_tracer_names)
+    available_sgs_tracer_names =
+        MatrixFields.unrolled_filter(is_in_Y, sgs_tracer_names)
 
     sgs_scalar_names = (
         available_sgs_tracer_names...,
         @name(c.sgsʲs.:(1).mse),
-        @name(c.sgsʲs.:(1).ρa), 
+        @name(c.sgsʲs.:(1).ρa),
     )
 
-    available_sgs_scalar_names = MatrixFields.unrolled_filter(is_in_Y, sgs_scalar_names)
+    available_sgs_scalar_names =
+        MatrixFields.unrolled_filter(is_in_Y, sgs_scalar_names)
 
     sgs_advection_blocks = if atmos.turbconv_model isa PrognosticEDMFX
         @assert n_prognostic_mass_flux_subdomains(atmos.turbconv_model) == 1
@@ -787,7 +790,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 TD.cv_m(thermo_params, ᶜtsʲs.:(1))
 
             sgs_tracer_names = (
-                @name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_liq), @name(c.sgsʲs.:(1).q_ice)
+                @name(c.sgsʲs.:(1).q_tot),
+                @name(c.sgsʲs.:(1).q_liq),
+                @name(c.sgsʲs.:(1).q_ice)
             )
             MatrixFields.unrolled_foreach(sgs_tracer_names) do qʲ_name
                 MatrixFields.has_field(Y, qʲ_name) || return
