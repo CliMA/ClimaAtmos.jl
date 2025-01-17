@@ -32,6 +32,13 @@ See the [documentation](https://clima.github.io/ClimaAtmos.jl/dev/contributor_gu
 nonequilibrium + 1-moment microphysics (No precipitation is still supported too).
 PR [3557](https://github.com/CliMA/ClimaAtmos.jl/pull/3557)
 
+### File Logging
+
+`ClimaAtmos` now supports logging to stdout and file simultaneously using
+`ClimaComms.FileLogger`. To enable, set the configuration with `log_to_file = false`. 
+See [ClimaComms documentation](https://clima.github.io/ClimaComms.jl/dev/logging/)
+ for more background on logging.
+
 v0.28.3
 -------
 ### Read CO2 from file
