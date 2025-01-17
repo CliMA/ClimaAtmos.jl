@@ -19,7 +19,6 @@ prognostic_tke: true
 moist: "nonequil"
 precip_model: "1M"
 config: "column"
-output_dir: "/scratch/olivia/noneq_edmf_gcmdriven"
 z_max: 40e3
 z_elem: 60
 z_stretch: true
