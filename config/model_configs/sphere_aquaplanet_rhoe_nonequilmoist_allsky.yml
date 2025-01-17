@@ -9,9 +9,9 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 cloud_model: "grid_scale"
 moist: "nonequil"
-precip_model: "nothing"
+precip_model: "1M"
 rad: "allskywithclear"
 insolation: "timevarying"
 rayleigh_sponge: true
 surface_setup: "DefaultMoninObukhov"
-toml: [toml/sphere_aquaplanet.toml]
+toml: [toml/sphere_aquaplanet_1M.toml]

@@ -406,14 +406,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         )
     end
     # sources from the environment
-    @. ᶜSqₜᵖ⁰ = q_tot_precipitation_sources(
-        Microphysics0Moment(),
-        thp,
-        cmp,
-        dt,
-        ᶜq_tot⁰,
-        ᶜts⁰,
-    )
+    @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(thp, cmp, dt, ᶜq_tot⁰, ᶜts⁰)
     return nothing
 end
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(

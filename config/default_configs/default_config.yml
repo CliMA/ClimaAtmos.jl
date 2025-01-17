@@ -194,7 +194,7 @@ apply_limiter:
   help: "Apply a horizontal limiter to every tracer [`false` (default), `true`]"
   value: false
 precip_model:
-  help: "Precipitation model [`nothing` (default), `0M`]"
+  help: "Precipitation model [`nothing` (default), `0M`, `1M`]"
   value: ~
 cloud_model:
   help: "Cloud model [`grid_scale`, `quadrature` (default), `quadrature_sgs`]"

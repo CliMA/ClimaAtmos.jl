@@ -4,10 +4,9 @@ dz_bottom: 30.0
 dt: "90secs"
 t_end: "120days"
 initial_condition: "MoistBaroclinicWave"
-moist: "equil"
-precip_model: "0M"
+moist: "nonequil"
+precip_model: "1M"
 dt_save_state_to_disk: "10days"
-toml: [toml/longrun_baroclinic_wave.toml]
 diagnostics:
-  - short_name: [pfull, wa, va, rv, hus, ke]
+  - short_name: [pfull, wa, va, ua, ta, rhoa, rv, hus, ke, clw, cli, husra, hussn]
     period: 1days
