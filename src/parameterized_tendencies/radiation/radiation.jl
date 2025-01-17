@@ -176,7 +176,7 @@ function radiation_model_cache(
                 volume_mixing_ratio_hfc32 = input_vmr("hfc32_GM"),
                 volume_mixing_ratio_hfc134a = input_vmr("hfc134a_GM"),
                 volume_mixing_ratio_cf4 = input_vmr("cf4_GM"),
-                volume_mixing_ratio_no2 = 1e-8, # not available in input_data
+                volume_mixing_ratio_no2 = 0, # not available in input_data
                 latitude,
             )
             if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
