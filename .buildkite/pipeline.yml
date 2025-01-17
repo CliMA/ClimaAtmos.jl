@@ -1,7 +1,7 @@
 agents:
   queue: new-central
   slurm_mem: 8G
-  modules: climacommon/2024_10_08
+  modules: climacommon/2024_12_16
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -62,17 +62,15 @@ steps:
       - label: ":computer: Test reproducibility infrastructure"
         command: "julia --color=yes --project=examples test/unit_reproducibility_infra.jl"
 
-  - label: "Radiation"
-    command: |
-      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/single_column_radiative_equilibrium_gray.yml --job_id single_column_radiative_equilibrium_gray;
-      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky.yml --job_id single_column_radiative_equilibrium_clearsky;
-      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky_prognostic_surface_temp.yml --job_id single_column_radiative_equilibrium_clearsky_prognostic_surface_temp;
-      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/single_column_radiative_equilibrium_allsky_idealized_clouds.yml --job_id single_column_radiative_equilibrium_allsky_idealized_clouds;
-    artifact_paths:
-      - "single_column_radiative_equilibrium_gray/output_active/*"
-      - "single_column_radiative_equilibrium_clearsky/output_active/*"
-      - "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/output_active/*"
-      - "single_column_radiative_equilibrium_allsky_idealized_clouds/output_active/*"
+  - group: "Radiation"
+    steps:
+      - label: ":computer: single column radiative equilibrium gray"
+        command: julia --color=yes --project=examples test/groups/radiation.jl
+        artifact_paths:
+          - "single_column_radiative_equilibrium_gray/output_active/*"
+          - "single_column_radiative_equilibrium_clearsky/output_active/*"
+          - "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/output_active/*"
+          - "single_column_radiative_equilibrium_allsky_idealized_clouds/output_active/*"
 
   - group: "Precipitation"
     steps:
@@ -83,23 +81,19 @@ steps:
           --job_id single_column_precipitation_test
         artifact_paths: "single_column_precipitation_test/output_active/*"
 
-  - label: "Gravity wave"
-    command: |
-      julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl;
-      julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl;
-      julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl;
-      julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_baseflux.jl;
-      julia --color=yes --project=examples test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/ogwd_3d.jl;
-      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml --job_id single_column_nonorographic_gravity_wave;
-    artifact_paths:
-      - "nonorographic_gravity_wave_test_3d/*"
-      - "nonorographic_gravity_wave_test_mima/*"
-      - "nonorographic_gravity_wave_test_single_column/*"
-      - "orographic_gravity_wave_test_baseflux/*"
-      - "orographic_gravity_wave_test_3d/*"
-      - "single_column_nonorographic_gravity_wave/*"
-    agents:
-      slurm_mem: 20GB
+  - group: "Gravity wave"
+    steps:
+
+      - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
+        command: julia --color=yes --project=examples test/groups/gravity_wave.jl
+        artifact_paths: 
+          - "nonorographic_gravity_wave_test_3d/*"
+          - "nonorographic_gravity_wave_test_single_column/*"
+          - "orographic_gravity_wave_test_baseflux/*"
+          - "orographic_gravity_wave_test_3d/*"
+          - "single_column_nonorographic_gravity_wave/*" 
+        agents:
+          slurm_mem: 20GB
 
   - group: "Column Examples"
     steps:
@@ -109,22 +103,21 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
           --job_id single_column_hydrostatic_balance_ft64
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id single_column_hydrostatic_balance_ft64
+          --out_dir single_column_hydrostatic_balance_ft64/output_active
         artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
 
   - group: "Box Examples"
     steps:
 
-      - label: "Box Examples"
-        command: |
-            julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/box_hydrostatic_balance_rhoe.yml --job_id box_hydrostatic_balance_rhoe;
-            julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/box_density_current_test.yml --job_id box_density_current_test;
-            julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/rcemipii_box_diagnostic_edmfx.yml --job_id rcemipii_box_diagnostic_edmfx;
-        artifact_paths:
+      - label: ":computer: Box hydrostatic balance (ρe_tot)"
+        command: julia --color=yes --project=examples test/groups/box_examples.jl
+        artifact_paths: 
         - "box_hydrostatic_balance_rhoe/output_active/*"
-        - "box_density_current_test/output_active/*"
         - "rcemipii_box_diagnostic_edmfx/output_active/*"
-        agents:
-          slurm_mem: 20GB
+        - "box_density_current_test/output_active/*"
 
       - label: ":genie: LES ISDAC in a box"
         command: >
@@ -139,12 +132,43 @@ steps:
           slurm_gpus: 1
         soft_fail: true
 
+  - group: "Plane Examples"
+    steps:
+      - label: ":computer: Agnesi linear hydrostatic mountain experiment (uniform)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_agnesi_mountain_test_uniform.yml
+          --job_id plane_agnesi_mountain_test_uniform
+        artifact_paths: "plane_agnesi_mountain_test_uniform/output_active/*"
+
+      - label: ":computer: Agnesi linear hydrostatic mountain experiment (stretched)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_agnesi_mountain_test_stretched.yml
+          --job_id plane_agnesi_mountain_test_stretched
+        artifact_paths: "plane_agnesi_mountain_test_stretched/output_active/*"
+
+      - label: ":computer: Density current experiment"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_density_current_test.yml
+          --job_id plane_density_current_test
+        artifact_paths: "plane_density_current_test/output_active/*"
+
+
+  - group: "Conservation check"
+    steps:
+
+      - label: ":computer: baroclinic wave check conservation"
+        command: >
+          julia --color=yes --project=examples test/groups/conversation_check.jl
+        artifact_paths:
+          - "sphere_baroclinic_wave_conservation/output_active/*"
+          - "sphere_baroclinic_wave_equilmoist_conservation/output_active/*"
 
   - label: "Plane Examples"
     command: |
-      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/plane_agnesi_mountain_test_uniform.yml --job_id plane_agnesi_mountain_test_uniform;
-      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/plane_agnesi_mountain_test_stretched.yml --job_id plane_agnesi_mountain_test_stretched;
-      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/plane_density_current_test.yml --job_id plane_density_current_test;
+      julia --color=yes --project=examples test/groups/plane_examples.jl
     artifact_paths:
       - "plane_agnesi_mountain_test_uniform/output_active/*"
       - "plane_agnesi_mountain_test_stretched/output_active/*"
@@ -152,10 +176,7 @@ steps:
 
   - label: "Conservation check"
     command: |
-      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_conservation.yml --job_id sphere_baroclinic_wave_conservation;
-      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_equilmoist_conservation.yml --job_id sphere_baroclinic_wave_equilmoist_conservation;
-      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_equilmoist_conservation_ft64.yml --job_id sphere_baroclinic_wave_equilmoist_conservation_ft64;
-      julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_equilmoist_conservation_source.yml --job_id sphere_baroclinic_wave_equilmoist_conservation_source;
+      julia --color=yes --project=examples test/groups/conservation_check.jl
     artifact_paths:
       - "sphere_baroclinic_wave_conservation/output_active/*"
       - "sphere_baroclinic_wave_equilmoist_conservation/output_active/*"
@@ -346,7 +367,7 @@ steps:
           --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth.yml
           --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/output_active/*"
-      
+
       - label: ":computer: Baroclinic wave (ρe) equilmoist (Hughes2023 double mountain config)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -370,13 +391,13 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
-          slurm_mem: 16G
+          slurm_mem: 20G
 
       - label: ":computer: test restart"
         command: >
           julia --color=yes --project=examples test/restart.jl --manytests true
         agents:
-          slurm_mem: 16GB
+          slurm_mem: 20GB
 
       - label: ":computer: test restart GPU"
         command: >
@@ -385,7 +406,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
-          slurm_mem: 16G
+          slurm_mem: 20G
 
       # This job occasionally times out. We add a soft file when the agent is
       # lost because of timeout
@@ -400,7 +421,7 @@ steps:
           - exit_status: 255
         agents:
           slurm_ntasks: 2
-          slurm_mem: 16G
+          slurm_mem: 20G
 
       # This job occasionally times out. We add a soft file when the agent is
       # lost because of timeout
@@ -900,7 +921,7 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
-      
+
       - label: "GPU: test DYAMOND interpolated initial conditions"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -1122,16 +1143,25 @@ steps:
           slurm_gpus: 1
           gres: "gpu:p100:1"
 
-  - label: "Inference/Invalidations"
-    command: |
+  - group: "Inference/Invalidations"
+    steps:
+
       # Inference
-      julia --color=yes --project=perf perf/jet_test_nfailures.jl --config_file $PERF_CONFIG_PATH/jet_n_failures.yml --job_id jet_n_failures;
-      # Invalidations
-      julia --color=yes --project=perf perf/invalidations.jl;
-    agents:
-      slurm_mem: 24GB
-    artifact_paths:
-      - "invalidations/*"
+      - label: ":rocket: JET n-failures (inference)"
+        command: >
+          julia --color=yes --project=perf perf/jet_test_nfailures.jl
+          --config_file $PERF_CONFIG_PATH/jet_n_failures.yml
+          --job_id jet_n_failures
+        agents:
+          slurm_mem: 24GB
+
+      # Latency
+      - label: ":mag::rocket: Invalidations"
+        command: >
+          julia --color=yes --project=perf perf/invalidations.jl
+        artifact_paths: "invalidations/*"
+        agents:
+          slurm_mem: 24GB
 
   - wait: ~
     continue_on_failure: true
