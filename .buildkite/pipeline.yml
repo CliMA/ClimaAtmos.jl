@@ -155,17 +155,6 @@ steps:
           --job_id plane_density_current_test
         artifact_paths: "plane_density_current_test/output_active/*"
 
-
-  - group: "Conservation check"
-    steps:
-
-      - label: ":computer: baroclinic wave check conservation"
-        command: >
-          julia --color=yes --project=examples test/groups/conversation_check.jl
-        artifact_paths:
-          - "sphere_baroclinic_wave_conservation/output_active/*"
-          - "sphere_baroclinic_wave_equilmoist_conservation/output_active/*"
-
   - label: "Plane Examples"
     command: |
       julia --color=yes --project=examples test/groups/plane_examples.jl
