@@ -1,4 +1,4 @@
-moist: "equil"
+moist: "nonequil"
 apply_limiter: true
 z_elem: 25
 dt: "1secs"
