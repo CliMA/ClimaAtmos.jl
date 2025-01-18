@@ -1,4 +1,4 @@
-199
+200
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+200
+- Set NO2 in radiation to zero because there is potentially a bug in RRTMGP
+
 199
 - Moved CI to Julia 1.11
 
