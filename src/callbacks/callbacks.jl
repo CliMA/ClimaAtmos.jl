@@ -59,6 +59,13 @@ function update_o3!(p, t, ::PrescribedOzone)
     return nothing
 end
 
+update_co2!(_, _, _) = nothing
+function update_co2!(p, t, ::MaunaLoaCO2)
+    evaluate!(p.tracers.co2, p.tracers.prescribed_co2_timevaryinginput, t)
+    return nothing
+end
+
+
 NVTX.@annotate function rrtmgp_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -71,6 +78,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     # If we have prescribed ozone or aerosols, we need to update them
     update_o3!(p, t, p.atmos.ozone)
+    update_co2!(p, t, p.atmos.co2)
     if :prescribed_aerosols_field in propertynames(p.tracers)
         for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
             field = getproperty(p.tracers.prescribed_aerosols_field, key)
@@ -254,6 +262,13 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 axes(Y.c),
             )
             @. ᶜvmr_o3 = p.tracers.o3
+        end
+        if :co2 in propertynames(p.tracers)
+            if pkgversion(ClimaUtilities) < v"0.1.21"
+                rrtmgp_model.volume_mixing_ratio_co2 .= p.tracers.co2
+            else
+                rrtmgp_model.volume_mixing_ratio_co2 .= p.tracers.co2[]
+            end
         end
     end
 
