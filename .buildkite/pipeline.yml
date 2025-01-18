@@ -132,30 +132,7 @@ steps:
           slurm_gpus: 1
         soft_fail: true
 
-  - group: "Plane Examples"
-    steps:
-      - label: ":computer: Agnesi linear hydrostatic mountain experiment (uniform)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_agnesi_mountain_test_uniform.yml
-          --job_id plane_agnesi_mountain_test_uniform
-        artifact_paths: "plane_agnesi_mountain_test_uniform/output_active/*"
-
-      - label: ":computer: Agnesi linear hydrostatic mountain experiment (stretched)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_agnesi_mountain_test_stretched.yml
-          --job_id plane_agnesi_mountain_test_stretched
-        artifact_paths: "plane_agnesi_mountain_test_stretched/output_active/*"
-
-      - label: ":computer: Density current experiment"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/plane_density_current_test.yml
-          --job_id plane_density_current_test
-        artifact_paths: "plane_density_current_test/output_active/*"
-
-  - label: "Plane Examples"
+  - label: "Plane Examples - Group"
     command: |
       julia --color=yes --project=examples test/groups/plane_examples.jl
     artifact_paths:
