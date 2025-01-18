@@ -1,4 +1,4 @@
-201
+202
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+202
+- Slightly changed CO2 prescription
+
 201
 - Updated ClimaTimeSteppers to 0.7.39, slightly improving conservation properties
 

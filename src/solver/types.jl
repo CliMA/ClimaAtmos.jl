@@ -128,6 +128,42 @@ Refer to ClimaArtifacts for more information on how to obtain the artifact.
 struct PrescribedOzone <: AbstractOzone end
 
 """
+    AbstractCO2
+
+Describe how CO2 concentration should be set.
+"""
+abstract type AbstractCO2 end
+
+"""
+    FixedCO2
+
+Implement a static CO2 profile as read from disk.
+
+The data used is the one distributed with `RRTGMP.jl`.
+
+By default, this is 397.547 parts per million.
+
+This is the volume mixing ratio.
+"""
+struct FixedCO2{FT} <: AbstractCO2
+    value::FT
+
+    function FixedCO2(; FT = Float64, value = FT(397.547e-6))
+        return new{FT}(value)
+    end
+end
+
+"""
+    MuanaLoaCO2
+
+Implement a time-varying CO2 profile as read from disk.
+
+The data from the Mauna Loa CO2 measurements is used. It is a assumed that the
+concentration is constant.
+"""
+struct MaunaLoaCO2 <: AbstractCO2 end
+
+"""
     AbstractCloudInRadiation
 
 Describe how cloud properties should be set in radiation.
@@ -456,6 +492,7 @@ Base.@kwdef struct AtmosModel{
     F,
     S,
     OZ,
+    CO2,
     RM,
     LA,
     EXTFORCING,
@@ -486,8 +523,12 @@ Base.@kwdef struct AtmosModel{
     forcing_type::F = nothing
     subsidence::S = nothing
 
+    # Currently only relevant for RRTGMP, but will hopefully become standalone
+    # in the future
     """What to do with ozone for radiation (when using RRTGMP)"""
     ozone::OZ = nothing
+    """What to do with co2 for radiation (when using RRTGMP)"""
+    co2::CO2 = nothing
 
     radiation_mode::RM = nothing
     ls_adv::LA = nothing

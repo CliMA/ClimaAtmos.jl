@@ -86,12 +86,24 @@ function idealized_ozone(z::FT) where {FT}
     return g1 * p^g2 * exp(-p / g3) * PPMV_TO_VMR
 end
 
+#######
+# CO2 #
+#######
+
+function center_vmr_co2(co2::FixedCO2)
+    return co2.value
+end
+
+# Initialized in callback
+center_vmr_co2(::MaunaLoaCO2) = NaN
+
 function radiation_model_cache(
     Y,
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
     start_date,
     params,
     ozone,
+    co2,
     aerosol_names,
     insolation_mode;
     interpolation = RRTMGPI.BestFit(),
@@ -150,6 +162,10 @@ function radiation_model_cache(
         else
             center_volume_mixing_ratio_o3 = center_vmr_o3(ozone, Y)
 
+            # FT is needed in case FixedCO2 is being used with an inconsistent
+            # floating point type
+            center_volume_mixing_ratio_co2 = FT(center_vmr_co2(co2))
+
             # the first value for each global mean volume mixing ratio is the
             # present-day value
             input_vmr(name) =
@@ -160,7 +176,7 @@ function radiation_model_cache(
                 center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
                 center_relative_humidity = NaN, # initialized in callback
                 center_volume_mixing_ratio_o3,
-                volume_mixing_ratio_co2 = input_vmr("carbon_dioxide_GM"),
+                volume_mixing_ratio_co2 = center_volume_mixing_ratio_co2,
                 volume_mixing_ratio_n2o = input_vmr("nitrous_oxide_GM"),
                 volume_mixing_ratio_co = input_vmr("carbon_monoxide_GM"),
                 volume_mixing_ratio_ch4 = input_vmr("methane_GM"),

@@ -289,6 +289,9 @@ restart_file:
 prescribe_ozone:
   help: "Prescribe time and spatially varying ozone from a file [`false` (default), `true`]"
   value: false
+co2_model:
+  help: "What CO2 concentration to use for RRTGMP. When fixed, it is set to 397.547 parts per million. Otherwise, it is read from the MaunaLoa measuraments. [`nothing` (default), `Fixed`, `MaunaLoa`]"
+  value: ~
 detect_restart_file:
   help: "When true, try finding a restart file and use it to restart the simulation. Only works with ActiveLink."
   value: false

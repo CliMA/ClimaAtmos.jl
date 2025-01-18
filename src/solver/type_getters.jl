@@ -30,6 +30,16 @@ function get_atmos(config::AtmosConfig, params)
         @warn "prescribe_ozone is set to nothing with an RRTMGP model. Resetting to IdealizedOzone. This behavior will stop being supported in some future release"
         ozone = IdealizedOzone()
     end
+    co2 = get_co2(parsed_args)
+    with_rrtgmp = radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+    if with_rrtgmp && isnothing(co2)
+        @warn (
+            "co2_model set to nothing with an RRTGMP model. Resetting to FixedCO2"
+        )
+        co2 = FixedCO2()
+    end
+    (isnothing(co2) && !with_rrtgmp) &&
+        @warn ("$(co2) does nothing if RRTGMP is not used")
 
     diffuse_momentum = !(forcing_type isa HeldSuarezForcing)
 
@@ -57,6 +67,7 @@ function get_atmos(config::AtmosConfig, params)
     atmos = AtmosModel(;
         moisture_model,
         ozone,
+        co2,
         radiation_mode,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
