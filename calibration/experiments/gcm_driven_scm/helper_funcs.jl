@@ -38,17 +38,12 @@ CLIMADIAGNOSTICS_LES_NAME_MAP =
 
 
 """Get z cell centers coordinates for CA run, given config. """
-<<<<<<< HEAD
-<<<<<<< HEAD
 function get_z_grid(atmos_config; z_max = nothing)
     params = CA.ClimaAtmosParameters(atmos_config)
-=======
-function get_z_grid(atmos_config; z_max::AbstractFloat = nothing)
-=======
+end
+
 function get_z_grid(atmos_config::CA.AtmosConfig; z_max = nothing)
->>>>>>> 97d2cbae3 (gcm driven calibration updates: restart, plotting support for variable grids, add plot prior and normalize var scripts, add microphysics cal option)
-    params = CA.create_parameter_set(atmos_config)
->>>>>>> 8c25592ea (Add external forcing types to gcm-driven scm calibration, allowing for both shallow and deep convection. Includes option for defining stretched calibration grid.)
+    params = CA.ClimaAtmosParameters(atmos_config)
     spaces =
         CA.get_spaces(atmos_config.parsed_args, params, atmos_config.comms_ctx)
     coord = CA.Fields.coordinate_field(spaces.center_space)
@@ -67,7 +62,7 @@ Output:
 function create_z_stretch(atmos_config; z_max = nothing, z_elem = nothing, dz_bottom = nothing)
 
     config_tmp = deepcopy(atmos_config)
-    params = CA.create_parameter_set(config_tmp)
+    params = CA.ClimaAtmosParameters(config_tmp)
 
     !isnothing(z_max) ? config_tmp.parsed_args["z_max"] = z_max : nothing
     !isnothing(z_elem) ? config_tmp.parsed_args["z_elem"] = z_elem : nothing
