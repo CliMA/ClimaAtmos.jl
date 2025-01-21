@@ -5,6 +5,7 @@ dt: "15secs"
 t_end: "10days"
 ode_algo: ARS343
 topography: "Hughes2023"
+topo_smoothing: false
 initial_condition: "MoistBaroclinicWave"
 moist: "equil"
 precip_model: "0M"
