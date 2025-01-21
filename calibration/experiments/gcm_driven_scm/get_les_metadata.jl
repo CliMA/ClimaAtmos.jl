@@ -20,38 +20,54 @@ CFSITE_TYPES = Dict("shallow" => (collect(4:15)..., collect(17:23)...),
 # end
 
 
-
-function get_les_calibration_library() # HADGEM, shallow only
+function get_les_calibration_library()
     les_library = get_shallow_LES_library()
-    ref_paths = String[]
-    cfsite_numbers = Int[]
-    models = ["HadGEM2-A"]
-
-    for model in models
-        for month in keys(les_library[model])
-            cfsite_numbers_i = collect(les_library[model][month]["cfsite_numbers"])  # Collect cfsite_numbers without `keys`
-            les_kwargs = (forcing_model = model, month = parse(Int, month), experiment = "amip")
-            
-            for cfsite_number in cfsite_numbers_i
-                println("Processing cfsite_number: $cfsite_number for model: $model, month: $month")
-                try
-                    stats_path = get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...))
-                    println("Successfully retrieved stats_path: $stats_path")
-                    push!(ref_paths, stats_path)
-                    push!(cfsite_numbers, cfsite_number)
-                catch e                    
-                    if isa(e, AssertionError)
-                        println("Skipping due to AssertionError.")
-                        continue
-                    else
-                        rethrow(e)
-                    end
-                end
-            end
-        end
-    end
+    # AMIP data: July, NE Pacific
+    # cfsite_numbers = (17, 18, 22, 23, 30, 94)
+    # cfsite_numbers = (17, 23, 30, 94)
+    cfsite_numbers = (17, 23, 94)
+    les_kwargs = (forcing_model = "HadGEM2-A", month = 7, experiment = "amip")
+    ref_paths = [
+        get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...)) for
+        cfsite_number in cfsite_numbers
+    ]
     return (ref_paths, cfsite_numbers)
 end
+
+
+
+
+# function get_les_calibration_library() # HADGEM, shallow only
+#     les_library = get_shallow_LES_library()
+#     ref_paths = String[]
+#     cfsite_numbers = Int[]
+#     models = ["HadGEM2-A"]
+
+#     for model in models
+#         for month in keys(les_library[model])
+#             cfsite_numbers_i = collect(les_library[model][month]["cfsite_numbers"])  # Collect cfsite_numbers without `keys`
+#             les_kwargs = (forcing_model = model, month = parse(Int, month), experiment = "amip")
+            
+#             for cfsite_number in cfsite_numbers_i
+#                 println("Processing cfsite_number: $cfsite_number for model: $model, month: $month")
+#                 try
+#                     stats_path = get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...))
+#                     println("Successfully retrieved stats_path: $stats_path")
+#                     push!(ref_paths, stats_path)
+#                     push!(cfsite_numbers, cfsite_number)
+#                 catch e                    
+#                     if isa(e, AssertionError)
+#                         println("Skipping due to AssertionError.")
+#                         continue
+#                     else
+#                         rethrow(e)
+#                     end
+#                 end
+#             end
+#         end
+#     end
+#     return (ref_paths, cfsite_numbers)
+# end
 
 
 
