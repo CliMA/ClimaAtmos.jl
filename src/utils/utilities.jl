@@ -271,6 +271,10 @@ function do_dss(space::Spaces.AbstractSpace)
            Quadratures.GLL
 end
 
+function do_dss(space::Spaces.FiniteDifferenceSpace)
+    return false
+end
+
 
 using ClimaComms
 is_distributed(::ClimaComms.SingletonCommsContext) = false
@@ -463,16 +467,7 @@ function promote_period(period::Dates.OtherPeriod)
 end
 
 function iscolumn(space)
-    # TODO: Our columns are 2+1D boxes with one element at the base. Fix this
-    isbox =
-        Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
-        Domains.RectangleDomain
-    isbox || return false
-    has_one_element =
-        Meshes.nelements(
-            Spaces.topology(Spaces.horizontal_space(space)).mesh,
-        ) == 1
-    has_one_element && return true
+    return space isa Spaces.FiniteDifferenceSpace
 end
 
 function issphere(space)

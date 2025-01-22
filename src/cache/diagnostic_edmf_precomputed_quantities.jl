@@ -328,7 +328,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     @. ᶠΦ = CAP.grav(params) * ᶠz
     ᶜ∇Φ³ = p.scratch.ᶜtemp_CT3
     @. ᶜ∇Φ³ = CT3(ᶜgradᵥ(ᶠΦ))
-    @. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
+    if !iscolumn(axes(Y.c))
+        @. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
+    end
     ᶜ∇Φ₃ = p.scratch.ᶜtemp_C3
     @. ᶜ∇Φ₃ = ᶜgradᵥ(ᶠΦ)
 

@@ -13,17 +13,22 @@ end
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     Yₜ .= zero(eltype(Yₜ))
-    horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
-    fill_with_nans!(p)
-    horizontal_advection_tendency!(Yₜ, Y, p, t)
-    hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    # only calulate horizontal tendencies if there is a horizontal space
+    if !iscolumn(axes(Y.c))
+        horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
+        fill_with_nans!(p)
+        horizontal_advection_tendency!(Yₜ, Y, p, t)
+        hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    end
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)
     return Yₜ
 end
 
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
-    viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
+    if !iscolumn(axes(Y.c))
+        viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
+    end
 
     # Vertical tendencies
     rayleigh_sponge_tendency!(Yₜ, Y, p, t, p.atmos.rayleigh_sponge)
@@ -87,7 +92,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     sl = p.atmos.smagorinsky_lilly
-    horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
+    if !iscolumn(axes(Y.c))
+        horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
+    end
     vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
 
     # NOTE: This will zero out all momentum tendencies in the edmfx advection test

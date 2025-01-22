@@ -167,16 +167,6 @@ function core_default_diagnostics(output_writer, duration, start_date)
     end
 
     return [
-        # We need to compute the topography at the beginning of the simulation (and only at
-        # the beginning), so we set output/compute_schedule_func to false. It is still
-        # computed at the very beginning
-        ScheduledDiagnostic(;
-            variable = get_diagnostic_variable("orog"),
-            output_schedule_func = (integrator) -> false,
-            compute_schedule_func = (integrator) -> false,
-            output_writer,
-            output_short_name = "orog_inst",
-        ),
         average_func(core_diagnostics...; output_writer, start_date)...,
         min_func("ts"; output_writer, start_date),
         max_func("ts"; output_writer, start_date),

@@ -353,9 +353,11 @@ weakdeps = ["CUDA", "MPI"]
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "7209c2ed595f535db446709b9d19e22f8b000736"
+git-tree-sha1 = "d7cdfd5268ff76345dfce642a46f2854b2be1bb5"
+repo-rev = "main"
+repo-url = "https://github.com/CliMA/ClimaCore.jl"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.14.22"
+version = "0.14.23"
 weakdeps = ["CUDA", "Krylov"]
 
     [deps.ClimaCore.extensions]
@@ -394,7 +396,9 @@ version = "0.7.6"
 
 [[deps.ClimaDiagnostics]]
 deps = ["Accessors", "ClimaComms", "ClimaCore", "Dates", "NCDatasets", "OrderedCollections", "SciMLBase"]
-git-tree-sha1 = "e9ac94af815dcae2a2ab24e54b53e76cca6258b7"
+git-tree-sha1 = "d2323b7b6a203fd1d364e543c30b5e1caeffb265"
+repo-rev = "tr/point-space-support"
+repo-url = "https://github.com/CliMA/ClimaDiagnostics.jl"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
 version = "0.2.11"
 

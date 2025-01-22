@@ -13,8 +13,6 @@ hyperdiffusion_cache(Y, atmos) =
 hyperdiffusion_cache(Y, hyperdiff::Nothing, _) = (;)
 
 function hyperdiffusion_cache(Y, hyperdiff::ClimaHyperdiffusion, turbconv_model)
-    quadrature_style =
-        Spaces.quadrature_style(Spaces.horizontal_space(axes(Y.c)))
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
 

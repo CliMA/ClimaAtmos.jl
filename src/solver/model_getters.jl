@@ -43,6 +43,10 @@ end
 function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     hyperdiff_name = parsed_args["hyperdiff"]
     if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
+        if parsed_args["config"] == "column"
+            @warn "Hyperdiffusion should not be used with column configuration\
+            The `hyperdiffusion_tendency!` function will not be called."
+        end
         ν₄_vorticity_coeff =
             FT(parsed_args["vorticity_hyperdiffusion_coefficient"])
         ν₄_scalar_coeff = FT(parsed_args["scalar_hyperdiffusion_coefficient"])
@@ -60,6 +64,10 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
         @info "Using CAM_SE hyperdiffusion. vorticity_hyperdiffusion_coefficient, \
                scalar_hyperdiffusion_coefficient and divergence_damping_factor in the config \
                will be ignored."
+        if parsed_args["config"] == "column"
+            @warn "Hyperdiffusion should not be used with column configuration. \
+            The `hyperdiffusion_tendency!` function will not be called."
+        end
         ν₄_vorticity_coeff = FT(0.150 * 1.238)
         ν₄_scalar_coeff = FT(0.751 * 1.238)
         divergence_damping_factor = FT(5)

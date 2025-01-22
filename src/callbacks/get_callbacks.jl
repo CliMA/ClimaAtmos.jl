@@ -175,6 +175,23 @@ function get_diagnostics(
             )...,
             diagnostics...,
         ]
+        if !iscolumn(axes(Y.c))
+            # The topography is only defined when there is a horizontal grid.
+            # We need to compute the topography at the beginning of the simulation (and only at
+            # the beginning), so we set output/compute_schedule_func to false. It is still
+            # computed at the very beginning
+            diagnostics = [
+                CAD.ScheduledDiagnostic(;
+                    variable = CAD.get_diagnostic_variable("orog"),
+                    output_schedule_func = (integrator) -> false,
+                    compute_schedule_func = (integrator) -> false,
+                    output_writer = netcdf_writer,
+                    output_short_name = "orog_inst",
+                ),
+                diagnostics...,
+            ]
+
+        end
     end
     diagnostics = collect(diagnostics)
 

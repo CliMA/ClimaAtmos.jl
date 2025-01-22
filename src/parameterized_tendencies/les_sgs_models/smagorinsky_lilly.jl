@@ -52,11 +52,14 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
     # Gradients
     ## cell centers
     ∇ᶜu_uvw = @. ᶜtemp_UVWxUVW = Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))  # vertical component
-    @. ∇ᶜu_uvw += Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))  # horizontal component
+    if !iscolumn(axes(Y.c))
+        @. ∇ᶜu_uvw += Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))  # horizontal component
+    end
     ## cell faces
     ∇ᶠu_uvw = @. ᶠtemp_UVWxUVW = Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))  # vertical component
-    @. ∇ᶠu_uvw += Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))  # horizontal component
-
+    if !iscolumn(axes(Y.c))
+        @. ∇ᶠu_uvw += Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))  # horizontal component
+    end
     # Strain rate tensor
     ᶜS = @. ᶜtemp_strain = (∇ᶜu_uvw + adjoint(∇ᶜu_uvw)) / 2
     ᶠS = @. ᶠtemp_strain = (∇ᶠu_uvw + adjoint(∇ᶠu_uvw)) / 2
@@ -72,10 +75,14 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
     ᶜfb = @. ᶜtemp_scalar = ifelse(ᶜRi ≤ 0, 1, max(0, 1 - ᶜRi / Pr_t)^(1 / 4))
 
     # filter scale
-    h_space = Spaces.horizontal_space(axes(Y.c))
-    Δ_xy = Spaces.node_horizontal_length_scale(h_space)^2 # Δ_x * Δ_y
-    ᶜΔ_z = Fields.Δz_field(Y.c)
-    ᶜΔ = @. ᶜtemp_scalar = ∛(Δ_xy * ᶜΔ_z) * ᶜfb
+    if !iscolumn(axes(Y.c))
+        h_space = Spaces.horizontal_space(axes(Y.c))
+        Δ_xy = Spaces.node_horizontal_length_scale(h_space)^2 # Δ_x * Δ_y
+        ᶜΔ_z = Fields.Δz_field(Y.c)
+        ᶜΔ = @. ᶜtemp_scalar = ∛(Δ_xy * ᶜΔ_z) * ᶜfb
+    else
+        ᶜΔ = @. ᶜtemp_scalar = FT(0)
+    end
 
     # Smagorinsky-Lilly eddy viscosity
     ᶜνₜ = @. ᶜtemp_scalar = c_smag^2 * ᶜΔ^2 * ᶜS_norm
