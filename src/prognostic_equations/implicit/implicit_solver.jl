@@ -121,6 +121,20 @@ struct ImplicitEquationJacobian{
     dtγ_ref::R
 end
 
+function Base.zero(jac::ImplicitEquationJacobian)
+    return ImplicitEquationJacobian(
+        Base.zero(jac.matrix),
+        jac.solver,
+        jac.diffusion_flag,
+        jac.topography_flag,
+        jac.sgs_advection_flag,
+        jac.temp_b,
+        jac.temp_x,
+        jac.transform_flag,
+        jac.dtγ_ref,
+    )
+end
+
 function ImplicitEquationJacobian(
     Y,
     atmos;
