@@ -11,6 +11,7 @@ moist: "equil"
 precip_model: "0M"
 dt_save_state_to_disk: "10days"
 netcdf_interpolation_num_points: [1440, 720, 43]
+output_dir: "/glade/derecho/scratch/asridhar/moist_bw_hughes_he120"
 diagnostics:
   - short_name: [pfull, ps, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
     reduction: inst

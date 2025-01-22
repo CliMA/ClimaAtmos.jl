@@ -7,6 +7,7 @@ ode_algo: ARS343
 initial_condition: "DryBaroclinicWave"
 dt_save_state_to_disk: "5days"
 netcdf_interpolation_num_points: [1440, 720, 43]
+output_dir: "/glade/derecho/scratch/asridhar/dry_bw_he120"
 diagnostics:
   - short_name: [pfull, ps, ua, va, ta, ts, wa, va, rv, ke]
     reduction: inst
