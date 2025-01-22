@@ -32,7 +32,7 @@ mktempdir() do output_dir
     simulation = ClimaCalibrate.forward_model(iter, member, config_dict)
 
     @testset "Atmos Configuration" begin
-        @test simulation.t_end == 600
+        @test float(simulation.t_end) == 600
         @test simulation.output_dir == joinpath(member_path, "output_0000")
         @test simulation.integrator.p.atmos.moisture_model ==
               CA.EquilMoistModel()
