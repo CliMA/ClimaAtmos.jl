@@ -8,6 +8,7 @@ output_dir: calibration_end_to_end_test
 output_default_diagnostics: false
 dt_rad: 6hours
 rad: clearsky
+co2_model: fixed
 diagnostics:
   - reduction_time: average
     short_name: rsut

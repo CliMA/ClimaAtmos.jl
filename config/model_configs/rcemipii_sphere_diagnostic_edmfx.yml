@@ -1,6 +1,7 @@
 surface_setup: DefaultMoninObukhov
 surface_temperature: RCEMIPII
 rad: allskywithclear
+co2_model: fixed
 turbconv: diagnostic_edmfx
 implicit_diffusion: true
 approximate_linear_solve_iters: 2

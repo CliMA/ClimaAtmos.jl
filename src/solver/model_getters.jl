@@ -308,6 +308,18 @@ function get_ozone(parsed_args)
     return parsed_args["prescribe_ozone"] ? PrescribedOzone() : IdealizedOzone()
 end
 
+function get_co2(parsed_args)
+    if isnothing(parsed_args["co2_model"])
+        return nothing
+    elseif lowercase(parsed_args["co2_model"]) == "fixed"
+        return FixedCO2()
+    elseif lowercase(parsed_args["co2_model"]) == "maunaloa"
+        return MaunaLoaCO2()
+    else
+        error("The CO2 models supported are $(subtypes(AbstractCO2))")
+    end
+end
+
 function get_cloud_in_radiation(parsed_args)
     isnothing(parsed_args["prescribe_clouds_in_radiation"]) && return nothing
     return parsed_args["prescribe_clouds_in_radiation"] ?
