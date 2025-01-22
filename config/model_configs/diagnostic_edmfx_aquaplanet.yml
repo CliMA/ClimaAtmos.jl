@@ -4,6 +4,7 @@ dz_bottom: 50.0
 rayleigh_sponge: true
 surface_setup: DefaultMoninObukhov
 rad: clearsky
+co2_model: fixed
 turbconv: diagnostic_edmfx
 implicit_diffusion: true
 approximate_linear_solve_iters: 2

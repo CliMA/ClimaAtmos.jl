@@ -1,7 +1,7 @@
 agents:
   queue: new-central
   slurm_mem: 8G
-  modules: climacommon/2024_10_08
+  modules: climacommon/2024_12_16
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -144,6 +144,10 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
           --job_id single_column_hydrostatic_balance_ft64
+
+          julia --color=yes --project=examples reproducibility_tests/test_mse.jl
+          --job_id single_column_hydrostatic_balance_ft64
+          --out_dir single_column_hydrostatic_balance_ft64/output_active
         artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
 
   - group: "Box Examples"
@@ -420,7 +424,7 @@ steps:
           --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth.yml
           --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/output_active/*"
-      
+
       - label: ":computer: Baroclinic wave (ρe) equilmoist (Hughes2023 double mountain config)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -444,13 +448,13 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
-          slurm_mem: 16G
+          slurm_mem: 20G
 
       - label: ":computer: test restart"
         command: >
           julia --color=yes --project=examples test/restart.jl --manytests true
         agents:
-          slurm_mem: 16GB
+          slurm_mem: 20GB
 
       - label: ":computer: test restart GPU"
         command: >
@@ -459,7 +463,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
-          slurm_mem: 16G
+          slurm_mem: 20G
 
       # This job occasionally times out. We add a soft file when the agent is
       # lost because of timeout
@@ -474,7 +478,7 @@ steps:
           - exit_status: 255
         agents:
           slurm_ntasks: 2
-          slurm_mem: 16G
+          slurm_mem: 20G
 
       # This job occasionally times out. We add a soft file when the agent is
       # lost because of timeout
@@ -582,8 +586,12 @@ steps:
         command: julia --project=calibration/test calibration/test/interface.jl
       - label: "end to end test"
         command: julia --project=calibration/test calibration/test/e2e_test.jl
+        agents:
+          slurm_ntasks: 10
+          slurm_cpus_per_task: 1
+          slurm_mem: 96GB
+          slurm_time: "00:30:00"
         artifact_paths: "calibration_end_to_end_test/*"
-        soft_fail: true
 
   - group: "Diagnostic EDMFX"
     steps:
@@ -974,7 +982,7 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
-      
+
       - label: "GPU: test DYAMOND interpolated initial conditions"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl

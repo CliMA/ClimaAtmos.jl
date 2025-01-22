@@ -10,6 +10,7 @@ viscous_sponge: true
 moist: equil
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
+co2_model: maunaloa
 insolation: "timevarying"
 dt_rad: 1hours
 dt_cloud_fraction: 1hours

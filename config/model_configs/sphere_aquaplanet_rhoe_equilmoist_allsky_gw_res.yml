@@ -2,7 +2,7 @@ z_max: 60000.0
 z_elem: 31
 dz_bottom: 50.0
 rayleigh_sponge: true
-dt: "400secs"
+dt: "360secs"
 t_end: "1days"
 dt_save_state_to_disk: "24hours"
 vert_diff: "FriersonDiffusion"

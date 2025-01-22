@@ -1,4 +1,4 @@
-196
+202
 
 # **README**
 #
@@ -20,6 +20,25 @@
 
 
 #=
+202
+- Slightly changed CO2 prescription
+
+201
+- Updated ClimaTimeSteppers to 0.7.39, slightly improving conservation properties
+
+200
+- Set NO2 in radiation to zero because there is potentially a bug in RRTMGP
+
+199
+- Moved CI to Julia 1.11
+
+198
+- Added terms to the implicit solver that result in changes in the
+aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment
+
+197
+- Added single column hydrostatic balance reproducibility test
+
 196
 - Set bubble correction to false as default
 
@@ -52,7 +71,7 @@
 - Change the model top for a few ci cases
 
 186
-- Topography dataset has been modified to the 60 arc-second ETOPO2022 dataset. 
+- Topography dataset has been modified to the 60 arc-second ETOPO2022 dataset.
   This is behaviour changing for the gravity-wave (raw-topo) parameterization
   when computing `hmax` and `T tensor`.
 

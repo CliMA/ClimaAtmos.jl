@@ -3,6 +3,7 @@ z_elem: 31
 dz_bottom: 50.0
 surface_setup: DefaultMoninObukhov
 rad: clearsky
+co2_model: fixed
 turbconv: diagnostic_edmfx
 implicit_diffusion: true
 approximate_linear_solve_iters: 2

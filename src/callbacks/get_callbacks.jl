@@ -322,7 +322,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         dt_rad = FT(time_to_seconds(parsed_args["dt_rad"]))
         # We use Millisecond to support fractional seconds, eg. 0.1
-        dt_rad_ms = Dates.Millisecond(dt_rad)
+        dt_rad_ms = Dates.Millisecond(1_000 * dt_rad)
         if parsed_args["dt_save_state_to_disk"] != "Inf" &&
            !CA.isdivisible(dt_save_state_to_disk_dates, dt_rad_ms)
             @warn "Radiation period ($(dt_rad_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"
