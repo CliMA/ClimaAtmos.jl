@@ -1,8 +1,0 @@
-topography: "DCMIP200"
-dt_save_state_to_disk: "3days"
-rayleigh_sponge: true
-topo_smoothing: true
-t_end: "3days"
-forcing: "held_suarez"
-dt: "200secs"
-viscous_sponge: true
