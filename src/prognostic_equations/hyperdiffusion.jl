@@ -74,7 +74,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         C123(wgradₕ(divₕ(p.precomputed.ᶜu))) -
         C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜu))))
 
-    @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.e_tot + ᶜp / Y.c.ρ))
+    @. ᶜ∇²specific_energy = wdivₕ(gradₕ((Y.c.ρe_tot / Y.c.ρ) + (ᶜp / Y.c.ρ)))
 
     if diffuse_tke
         (; ᶜtke⁰) = p.precomputed
