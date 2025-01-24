@@ -393,12 +393,13 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     # Find the values of (z, ρ, q_tot) at the q_tot = 0.008 isoline, i.e., at
     # the level whose value of q_tot is closest to 0.008.
     q_tot_isoline = FT(0.008)
+    @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_tot / Y.c.ρ
     Operators.column_reduce!(
         (nt1, nt2) ->
             abs(nt1.q_tot - q_tot_isoline) < abs(nt2.q_tot - q_tot_isoline) ?
             nt1 : nt2,
         isoline_z_ρ_q,
-        Base.broadcasted(NT ∘ tuple, ᶜz, Y.c.ρ, ᶜspecific.q_tot),
+        Base.broadcasted(NT ∘ tuple, ᶜz, Y.c.ρ, p.scratch.ᶜtemp_scalar_3),
     )
 
     zi = isoline_z_ρ_q.z

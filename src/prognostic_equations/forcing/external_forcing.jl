@@ -224,11 +224,12 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
         ᶜh_tot,
         Val{:first_order}(),
     )
+    @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_tot / Y.c.ρ
     subsidence!(
         Yₜ.c.ρq_tot,
         Y.c.ρ,
         ᶠls_subsidence³,
-        ᶜspecific.q_tot,
+        p.scratch.ᶜtemp_scalar_3,
         Val{:first_order}(),
     )
 
