@@ -109,6 +109,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     u³_int_halflevel = Fields.field_values(Fields.level(ᶠu³, half))
     h_tot_int_level = Fields.field_values(Fields.level(ᶜh_tot, 1))
     K_int_level = Fields.field_values(Fields.level(ᶜK, 1))
+    @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_tot / Y.c.ρ
+    q_tot = p.scratch.ᶜtemp_scalar_3
     q_tot_int_level = Fields.field_values(Fields.level(q_tot, 1))
 
     p_int_level = Fields.field_values(Fields.level(ᶜp, 1))
@@ -336,6 +338,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
 
     # integral
+    @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_tot / Y.c.ρ
+    q_tot = p.scratch.ᶜtemp_scalar_3
     for i in 2:Spaces.nlevels(axes(Y.c))
         ρ_level = Fields.field_values(Fields.level(Y.c.ρ, i))
         uₕ_level = Fields.field_values(Fields.level(Y.c.uₕ, i))
@@ -1038,7 +1042,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         thermo_params,
         microphys_0m_params,
         dt,
-        q_tot,
+        Y.c.ρq_tot / Y.c.ρ,
         ᶜts,
     )
     return nothing
