@@ -6,6 +6,8 @@ Main
 
 ### Features
 
+v0.28.3
+-------
 ### Read CO2 from file
 
 `ClimaAtmos` now support using data from the Mauna Loa CO2 measurements to set
