@@ -521,7 +521,8 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     end
 
     (; ᶜh_tot) = p.precomputed
-    @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
+    @. ᶜh_tot =
+        TD.total_specific_enthalpy(thermo_params, ᶜts, Y.c.ρe_tot / Y.c.ρ)
 
     if !isnothing(p.sfc_setup)
         SurfaceConditions.update_surface_conditions!(Y, p, t)
