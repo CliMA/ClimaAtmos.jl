@@ -659,9 +659,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
             DiagonalMatrixRow(
                 -1 / ᶜρ * ifelse(
-                    ᶜspecific.q_tot == 0,
+                    (Y.c.ρq_tot / Y.c.ρ) == 0,
                     (Geometry.WVector(FT(0)),),
-                    p.ᶜwₜqₜ / ᶜspecific.q_tot,
+                    p.ᶜwₜqₜ / (Y.c.ρq_tot / Y.c.ρ),
                 ),
             ) - (I,)
 
@@ -696,8 +696,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         @. ∂ᶜρe_tot_err_∂ᶜρ =
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(
                 (
-                    -(1 + ᶜkappa_m) * ᶜspecific.e_tot -
-                    ᶜkappa_m * ∂e_int_∂q_tot * ᶜspecific.q_tot
+                    -(1 + ᶜkappa_m) * (Y.c.ρe_tot / Y.c.ρ) -
+                    ᶜkappa_m * ∂e_int_∂q_tot * (Y.c.ρq_tot / Y.c.ρ)
                 ) / ᶜρ,
             )
         @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
@@ -711,7 +711,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 DiagonalMatrixRow(ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ)
             @. ∂ᶜρq_tot_err_∂ᶜρ =
                 dtγ * ᶜdiffusion_h_matrix ⋅
-                DiagonalMatrixRow(-(ᶜspecific.q_tot) / ᶜρ)
+                DiagonalMatrixRow(-(Y.c.ρq_tot / Y.c.ρ) / ᶜρ)
             @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end

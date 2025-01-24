@@ -171,11 +171,11 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed
         @. Yₜ.c.ρq_liq -= ᶜprecipdivᵥ(
             ᶠwinterp(ᶜJ, Y.c.ρ) *
-            ᶠright_bias(Geometry.WVector(-(ᶜwₗ)) * ᶜspecific.q_liq),
+            ᶠright_bias(Geometry.WVector(-(ᶜwₗ)) * (Y.c.ρq_liq / Y.c.ρ)),
         )
         @. Yₜ.c.ρq_ice -= ᶜprecipdivᵥ(
             ᶠwinterp(ᶜJ, Y.c.ρ) *
-            ᶠright_bias(Geometry.WVector(-(ᶜwᵢ)) * ᶜspecific.q_ice),
+            ᶠright_bias(Geometry.WVector(-(ᶜwᵢ)) * (Y.c.ρq_ice / Y.c.ρ)),
         )
     end
 
@@ -187,11 +187,11 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
             ᶠwinterp(ᶜJ, Y.c.ρ) *
-            ᶠright_bias(Geometry.WVector(-(ᶜwᵣ)) * ᶜspecific.q_rai),
+            ᶠright_bias(Geometry.WVector(-(ᶜwᵣ)) * (Y.c.ρq_rai / Y.c.ρ)),
         )
         @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
             ᶠwinterp(ᶜJ, Y.c.ρ) *
-            ᶠright_bias(Geometry.WVector(-(ᶜwₛ)) * ᶜspecific.q_sno),
+            ᶠright_bias(Geometry.WVector(-(ᶜwₛ)) * (Y.c.ρq_sno / Y.c.ρ)),
         )
     end
 
