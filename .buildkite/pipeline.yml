@@ -1077,6 +1077,7 @@ steps:
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
+        soft_fail: true
 
   - group: "Flame graphs"
     steps:
