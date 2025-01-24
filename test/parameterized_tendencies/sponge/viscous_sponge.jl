@@ -5,30 +5,33 @@ using Revise; include("test/parameterized_tendencies/sponge/viscous_sponge.jl")
 using ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
-import ClimaCore
-using ClimaCore: Spaces, Grids, Fields
-if pkgversion(ClimaCore) ≥ v"0.14.20"
-    using ClimaCore.CommonGrids
-    using Test
+using ClimaCore.CommonSpaces
+using ClimaCore: Spaces, Fields, Geometry, ClimaCore
+using Test
+using Base.Broadcast: materialize
 
-    ### Common Objects ###
-    @testset "Viscous-sponge functions" begin
-        grid = ExtrudedCubedSphereGrid(;
-            z_elem = 10,
-            z_min = 0,
-            z_max = 1,
-            radius = 10,
-            h_elem = 10,
-            n_quad_points = 4,
-        )
-        cspace = Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
-        fspace = Spaces.FaceExtrudedFiniteDifferenceSpace(cspace)
-        z = Fields.coordinate_field(cspace).z
-        zmax = maximum(Fields.coordinate_field(fspace).z)
-        FT = typeof(zmax)
-        ### Component test begins here
-        s = CA.ViscousSponge{FT}(; zd = 0, κ₂ = 1)
-        @test CA.β_viscous.(s, z, zmax) == @. ifelse(z > s.zd, s.κ₂, FT(0)) *
-                 sin(FT(π) / 2 * (z - s.zd) / (zmax - s.zd))^2
-    end
+pkgversion(ClimaCore) < v"0.14.20" && exit() # CommonSpaces
+using ClimaCore.CommonSpaces
+
+### Common Objects ###
+@testset "Viscous-sponge functions" begin
+    FT = Float64
+    ᶜspace = ExtrudedCubedSphereSpace(
+        FT;
+        z_elem = 10,
+        z_min = 0,
+        z_max = 1,
+        radius = 10,
+        h_elem = 10,
+        n_quad_points = 4,
+        staggering = CellCenter(),
+    )
+    ᶠspace = Spaces.face_space(ᶜspace)
+    ᶜz = Fields.coordinate_field(ᶜspace).z
+    ᶠz = Fields.coordinate_field(ᶠspace).z
+    zmax = maximum(ᶠz)
+    ### Component test begins here
+    s = CA.ViscousSponge{FT}(; zd = 0, κ₂ = 1)
+    @test CA.β_viscous.(s, ᶜz, zmax) == @. ifelse(ᶜz > s.zd, s.κ₂, FT(0)) *
+             sin(FT(π) / 2 * (ᶜz - s.zd) / (zmax - s.zd))^2
 end
