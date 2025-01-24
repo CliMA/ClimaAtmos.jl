@@ -36,6 +36,9 @@ netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 output_default_diagnostics: false
 rad: allskywithclear
+prescribe_ozone: false
+# aerosol_radiation: true
+# prescribed_aerosols: ["CB1", "CB2", "DST01", "OC1", "OC2", "SO4", "SSLT01"]
 insolation: "era5driven"
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
@@ -44,7 +47,9 @@ diagnostics:
     period: 10mins
   - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
     period: 10mins
-  - short_name: [rlut, rlutcs, rsut, rsutcs, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv]
+  - short_name: [rlut, rlutcs, rsut, rsutcs, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv, rsdt]
+    period: 10mins
+  - short_name: [rsdscs, rldscs, rld, hfes, rsucs, rsu, rsuscs, rsd, rlu, rlucs, rsdcs, rsds, rlds, rlus, rldcs,rsus]
     period: 10mins
   - reduction_time: max
     short_name: tke

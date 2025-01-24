@@ -272,7 +272,7 @@ function ensemble_data(
 
     G_ensemble =
         Array{Float64}(undef, n_vert_levels, config_dict["ensemble_size"])
-
+    println("G_ensemble shape: ", size(G_ensemble))
     for m in 1:config_dict["ensemble_size"]
 
         try

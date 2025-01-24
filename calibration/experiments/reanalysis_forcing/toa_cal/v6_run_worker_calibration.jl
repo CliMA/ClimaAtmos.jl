@@ -1,21 +1,18 @@
-using Distributed, ClusterManagers
+# julia --project=calibration/experiments/gcm_driven_scm calibration/experiments/gcm_driven_scm/run_worker_calibration.jl
+using Distributed
+using ClimaCalibrate
+
 project=dirname(Base.active_project())
 cd(project)
 
-function create_worker_pool()    
-    addprocs(
-        SlurmManager(50),
-        t = "10:30:00",
-        cpus_per_task = 1,
-        exeflags = "--project=$(Base.active_project())"
-    )
-    return WorkerPool(workers())
-end
-worker_pool = create_worker_pool()
+addprocs(SlurmManager(50))
+
+# worker_pool = create_worker_pool()
 
 @info "Running Script..."
 @everywhere begin
-    import ClimaCalibrate as CAL
+    #import ClimaCalibrate as CAL
+    using ClimaCalibrate
     import ClimaAtmos as CA
     
     import EnsembleKalmanProcesses as EKP
@@ -93,7 +90,7 @@ JLD2.jldsave(
        [ 1.07359362e+02,  2.01787313e+02, -1.17948726e-01, -1.47077436e-01],
        [-1.05374958e-01, -1.17948726e-01,  1.62991747e-04, 9.66483339e-05],
        [-1.00355325e-01, -1.47077436e-01,  9.66483339e-05, 1.50630636e-04]]
-        Σ_obs = hcat(cov...) # 60 .* to estimate 12 hour covariance matrix from monthly covariance matrix
+        Σ_obs = 60 .* hcat(cov...)
 
         push!(
             obs_vec,
@@ -115,6 +112,29 @@ JLD2.jldsave(
     observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 end
 @info "Obtained Observations..."
+
+# construct ekp object
+initial_ensemble = EKP.construct_initial_ensemble(prior, ensemble_size)
+ekiobj = EKP.EnsembleKalmanProcess(
+    initial_ensemble,
+    observations,
+    scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+    EKP.Inversion(),
+    failure_handler_method = EKP.SampleSuccGauss(),
+    accelerator = EKP.DefaultAccelerator(),
+)
+
+# use climacalibrate
+calibrate(WorkerBackend, 
+        ekiobj, 
+        ensemble_size,
+        n_iterations,
+        prior,
+        output_dir
+)
+
+
+
 
 
 ###  EKI hyperparameters/settings

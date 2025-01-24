@@ -24,6 +24,3 @@ value = 0.05
 
 [zd_rayleigh]
 value = 20000.0
-
-[mixing_length_eddy_viscosity_coefficient]
-value = 0.12938179994984028

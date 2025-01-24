@@ -12,7 +12,7 @@ name_mapper = {
     "mtnswrfcs": "rsutcs",
     "mtnlwrfcs": "rlutcs",
     "tclw": "clwvi",
-    "tciw": "ciwvi",
+    "tciw": "clivi",
     "mtpr": "pr"
 }
 
