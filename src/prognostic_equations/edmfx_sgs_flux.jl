@@ -56,7 +56,7 @@ function edmfx_sgs_mass_flux_tendency!(
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                 @. ᶜa_scalar =
-                    (Y.c.sgsʲs.:($$j).q_tot - ᶜspecific.q_tot) *
+                    (Y.c.sgsʲs.:($$j).q_tot - (Y.c.ρq_tot / Y.c.ρ)) *
                     draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                 vertical_transport!(
                     Yₜ.c.ρq_tot,
@@ -69,7 +69,8 @@ function edmfx_sgs_mass_flux_tendency!(
                 )
             end
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
-            @. ᶜa_scalar = (ᶜq_tot⁰ - ᶜspecific.q_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
+            @. ᶜa_scalar =
+                (ᶜq_tot⁰ - (Y.c.ρq_tot / Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vertical_transport!(
                 Yₜ.c.ρq_tot,
                 ᶜJ,
@@ -143,7 +144,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 #     draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j))
                 # TODO: remove this filter when mass flux is treated implicitly
                 @. ᶜa_scalar =
-                    (ᶜq_totʲs.:($$j) - ᶜspecific.q_tot) * min(
+                    (ᶜq_totʲs.:($$j) - (Y.c.ρq_tot / Y.c.ρ)) * min(
                         min(draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)), a_max),
                         FT(0.02) / max(
                             Geometry.WVector(
@@ -291,7 +292,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 bottom = Operators.SetValue(sfc_conditions.ρ_flux_q_tot),
             )
             @. ᶜρχₜ_diffusion =
-                ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜspecific.q_tot)))
+                ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ((Y.c.ρq_tot / Y.c.ρ))))
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
         end

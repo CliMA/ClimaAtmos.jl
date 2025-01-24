@@ -190,7 +190,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
     ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
     @. ᶜdTdt_nudging =
         -(TD.air_temperature(thermo_params, ᶜts) - ᶜT_nudge) * ᶜinv_τ_scalar
-    @. ᶜdqtdt_nudging = -(ᶜspecific.q_tot - ᶜqt_nudge) * ᶜinv_τ_scalar
+    @. ᶜdqtdt_nudging = -((Y.c.ρq_tot / Y.c.ρ) - ᶜqt_nudge) * ᶜinv_τ_scalar
 
     ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_sum = p.scratch.ᶜtemp_scalar_2
@@ -278,7 +278,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     @. ᶜdTdt_nudging =
         -(TD.air_temperature(thermo_params, ᶜts) - ta_ISDAC(ᶜp, ᶜz)) *
         ᶜinv_τ_scalar(ᶜz)
-    @. ᶜdqtdt_nudging = -(ᶜspecific.q_tot - q_tot(ᶜz)) * ᶜinv_τ_scalar(ᶜz)
+    @. ᶜdqtdt_nudging = -((Y.c.ρq_tot / Y.c.ρ) - q_tot(ᶜz)) * ᶜinv_τ_scalar(ᶜz)
 
     T_0 = TD.Parameters.T_0(thermo_params)
     Lv_0 = TD.Parameters.LH_v0(thermo_params)
