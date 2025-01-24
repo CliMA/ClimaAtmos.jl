@@ -1,4 +1,4 @@
-203
+204
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+
+204
+- Deep atmosphere config is now default
 
 203
 - Remove `override_precip_timescale`
