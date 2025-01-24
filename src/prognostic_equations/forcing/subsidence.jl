@@ -37,26 +37,26 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
 
     # LS Subsidence
     subsidence!(Yₜ.c.ρe_tot, Y.c.ρ, ᶠsubsidence³, ᶜh_tot, Val{:first_order}())
-    subsidence!(
-        Yₜ.c.ρq_tot,
-        Y.c.ρ,
-        ᶠsubsidence³,
-        ᶜspecific.q_tot,
-        Val{:first_order}(),
-    )
+    @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_tot / Y.c.ρ
+    q_tot = p.scratch.ᶜtemp_scalar_3
+    subsidence!(Yₜ.c.ρq_tot, Y.c.ρ, ᶠsubsidence³, q_tot, Val{:first_order}())
     if moisture_model isa NonEquilMoistModel
+        @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_liq / Y.c.ρ
+        q_liq = p.scratch.ᶜtemp_scalar_3
         subsidence!(
             Yₜ.c.ρq_liq,
             Y.c.ρ,
             ᶠsubsidence³,
-            ᶜspecific.q_liq,
+            q_liq,
             Val{:first_order}(),
         )
+        @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_ice / Y.c.ρ
+        q_ice = p.scratch.ᶜtemp_scalar_3
         subsidence!(
             Yₜ.c.ρq_ice,
             Y.c.ρ,
             ᶠsubsidence³,
-            ᶜspecific.q_ice,
+            q_ice,
             Val{:first_order}(),
         )
     end

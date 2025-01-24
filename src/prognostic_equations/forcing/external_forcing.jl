@@ -224,13 +224,9 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
         ᶜh_tot,
         Val{:first_order}(),
     )
-    subsidence!(
-        Yₜ.c.ρq_tot,
-        Y.c.ρ,
-        ᶠls_subsidence³,
-        ᶜspecific.q_tot,
-        Val{:first_order}(),
-    )
+    @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_tot / Y.c.ρ
+    q_tot = p.scratch.ᶜtemp_scalar_3
+    subsidence!(Yₜ.c.ρq_tot, Y.c.ρ, ᶠls_subsidence³, q_tot, Val{:first_order}())
 
     # needed to address top boundary condition for forcings. Otherwise upper portion of domain is anomalously cold
     ρe_tot_top = Fields.level(Yₜ.c.ρe_tot, Spaces.nlevels(axes(Y.c)))

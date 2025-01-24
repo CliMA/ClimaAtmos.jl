@@ -115,9 +115,10 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     @. Yₜ.c.ρe_tot += vtt
     @. Yₜ.c.ρe_tot -= ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₕhₜ)))
-
     if !(moisture_model isa DryModel)
-        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜspecific.q_tot, dt, Val(:none))
+        @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_tot / Y.c.ρ
+        q_tot = p.scratch.ᶜtemp_scalar_3
+        vtt = vertical_transport(Y.c.ρ, ᶠu³, q_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot += vtt
         @. Yₜ.c.ρq_tot -=
             ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₜqₜ)))

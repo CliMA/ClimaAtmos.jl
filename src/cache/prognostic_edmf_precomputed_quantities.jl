@@ -138,7 +138,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         )
 
         # ... and the first interior point for EDMFX ᶜq_totʲ.
-        ᶜq_tot_int_val = Fields.field_values(Fields.level(ᶜspecific.q_tot, 1))
+        @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_tot / Y.c.ρ
+        q_tot = p.scratch.ᶜtemp_scalar_3
+        ᶜq_tot_int_val = Fields.field_values(Fields.level(q_tot, 1))
         ᶜq_totʲ_int_val = Fields.field_values(Fields.level(ᶜq_totʲ, 1))
         @. ᶜq_totʲ_int_val = sgs_scalar_first_interior_bc(
             ᶜz_int_val - z_sfc_val,

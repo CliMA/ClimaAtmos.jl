@@ -335,14 +335,12 @@ function compute_precipitation_surface_fluxes!(
     ˢρ = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), axes(slg))
     # For density this is equivalent with ᶠwinterp(ᶜJ, Y.c.ρ) and therefore
     # consistent with the way we do vertical advection
-    ˢqᵣ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_rai, 1)),
-        axes(slg),
-    )
-    ˢqₛ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_sno, 1)),
-        axes(slg),
-    )
+    @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_rai / Y.c.ρ
+    q_rai = p.scratch.ᶜtemp_scalar_3
+    ˢqᵣ = Fields.Field(Fields.field_values(Fields.level(q_rai, 1)), axes(slg))
+    @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_sno / Y.c.ρ
+    q_sno = p.scratch.ᶜtemp_scalar_3
+    ˢqₛ = Fields.Field(Fields.field_values(Fields.level(q_sno, 1)), axes(slg))
     ˢwᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), axes(slg))
     ˢwₛ = Fields.Field(Fields.field_values(Fields.level(ᶜwₛ, 1)), axes(slg))
 
