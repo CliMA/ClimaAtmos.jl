@@ -23,10 +23,8 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 end
 
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
-    viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
-
+    sponge_tendencies!(Yₜ, Y, p, t)
     # Vertical tendencies
-    rayleigh_sponge_tendency!(Yₜ, Y, p, t, p.atmos.rayleigh_sponge)
     forcing_tendency!(Yₜ, Y, p, t, p.atmos.forcing_type)
     subsidence_tendency!(Yₜ, Y, p, t, p.atmos.subsidence)
     edmf_coriolis_tendency!(Yₜ, Y, p, t, p.atmos.edmf_coriolis)
