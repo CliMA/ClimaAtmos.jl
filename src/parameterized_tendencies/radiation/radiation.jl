@@ -199,7 +199,7 @@ function radiation_model_cache(
                 kwargs = (;
                     kwargs...,
                     center_cloud_liquid_effective_radius = 12,
-                    center_cloud_ice_effective_radius = 95,
+                    center_cloud_ice_effective_radius = 50, # rrtmgp uses diameter for ice
                     ice_roughness = 2,
                 )
                 ᶜz = Fields.coordinate_field(Y.c).z
