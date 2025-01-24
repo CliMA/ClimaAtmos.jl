@@ -403,7 +403,7 @@ make_plots_generic(
     simulation_path,
     vars,
     time = LAST_SNAP,
-    x = 0.0, # Our columns are still 3D objects...
+    x = 0.0,
     y = 0.0,
     more_kwargs = YLINEARSCALE,
 )
@@ -419,7 +419,7 @@ make_plots_generic(
     simulation_path,
     vars,
     time = LAST_SNAP,
-    x = 0.0, # Our columns are still 3D objects...
+    x = 0.0,
     y = 0.0,
     more_kwargs = YLINEARSCALE,
 )
@@ -486,8 +486,6 @@ function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
         output_paths,
         vars,
         time = LAST_SNAP,
-        x = 0.0, # Our columns are still 3D objects...
-        y = 0.0,
         MAX_NUM_COLS = length(simdirs),
         more_kwargs = YLINEARSCALE,
     )
@@ -521,10 +519,7 @@ function make_plots(
     simdir = simdirs[1]
 
     short_names = ["hus", "clw", "cli", "husra", "hussn", "ta"]
-    vars = [
-        slice(get(simdir; short_name), x = 0.0, y = 0.0) for
-        short_name in short_names
-    ]
+    vars = [get(simdir; short_name) for short_name in short_names]
 
     # We first prepare the axes with all the nice labels with ClimaAnalysis, then we use
     # CairoMakie to add the additional lines.
@@ -565,11 +560,7 @@ function make_plots(
 
     # surface_precipitation
     surface_precip = read_var(simdir.variable_paths["pr"]["inst"]["10s"])
-    viz.line_plot1D!(
-        fig,
-        slice(surface_precip, x = 0.0, y = 0.0);
-        p_loc = [3, 1:3],
-    )
+    viz.line_plot1D!(fig, surface_precip; p_loc = [3, 1:3])
 
     file_path = joinpath(output_paths[1], "summary.pdf")
     CairoMakie.save(file_path, fig)
@@ -1325,13 +1316,16 @@ function make_plots(
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =
         map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
-            return [
-                slice(
-                    get(simdir; short_name, reduction, period),
-                    x = 0.0,
-                    y = 0.0,
-                ) for short_name in name_tuple
-            ]
+            grouped_vars = []
+            for short_name in name_tuple
+                var = get(simdir; short_name, reduction, period)
+                if length(var.dims) > 2
+                    push!(grouped_vars, slice(var, x = 0.0, y = 0.0))
+                else
+                    push!(grouped_vars, var)
+                end
+            end
+            return grouped_vars
         end
 
     var_groups_z = [
