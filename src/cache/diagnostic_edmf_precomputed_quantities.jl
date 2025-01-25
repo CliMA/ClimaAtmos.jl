@@ -94,7 +94,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜΦ) = p.core
     (; ᶜp, ᶠu³, ᶜh_tot, ᶜK) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.precomputed.sfc_conditions
     (; ᶜρaʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
@@ -300,7 +299,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; dt) = p
     (; ᶜΦ) = p.core
     (; ᶜp, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
     (;
         ᶜρaʲs,
         ᶠu³ʲs,
@@ -917,7 +915,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     (; params) = p
     (; dt) = p
     (; ᶜp, ᶜu, ᶜts) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs) = p.precomputed
     (; ᶜtke⁰, ᶠu³⁰, ᶜu⁰) = p.precomputed
@@ -1036,7 +1033,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     microphys_0m_params = CAP.microphysics_0m_params(p.params)
     (; dt) = p
     (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
 
     # Environment precipitation sources (to be applied to grid mean)
     @. p.scratch.ᶜtemp_scalar_3 = Y.c.ρq_tot / Y.c.ρ
@@ -1060,7 +1056,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     microphys_1m_params = CAP.microphysics_1m_params(p.params)
 
     (; ᶜts, ᶜSqₜᵖ⁰, ᶜSeₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
     (; ᶜqᵣ, ᶜqₛ) = p.precomputed
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar

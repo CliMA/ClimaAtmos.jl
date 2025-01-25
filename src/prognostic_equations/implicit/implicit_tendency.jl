@@ -143,7 +143,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜh_tot, ᶜspecific, ᶠu³, ᶜp) = p.precomputed
+    (; ᶜh_tot, ᶠu³, ᶜp) = p.precomputed
     (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠu³)

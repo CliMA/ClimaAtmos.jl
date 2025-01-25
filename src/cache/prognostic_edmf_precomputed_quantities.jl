@@ -73,7 +73,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
     turbconv_params = CAP.turbconv_params(params)
 
     (; ᶜΦ,) = p.core
-    (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK) = p.precomputed
+    (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
     (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 

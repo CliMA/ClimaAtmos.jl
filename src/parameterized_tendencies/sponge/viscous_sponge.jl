@@ -16,7 +16,7 @@ viscous_sponge_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
     αₘ(s, z) * ζ_viscous(s, z, zmax)
 
 function viscous_sponge_tendency!(Yₜ, Y, p, t, s::ViscousSponge)
-    (; ᶜh_tot, ᶜspecific) = p.precomputed
+    (; ᶜh_tot) = p.precomputed
     ᶜuₕ = Y.c.uₕ
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
@@ -32,9 +32,9 @@ function viscous_sponge_tendency!(Yₜ, Y, p, t, s::ViscousSponge)
         β_viscous(s, ᶠz, zmax) * wdivₕ(gradₕ(Y.f.u₃.components.data.:1))
 
     @. Yₜ.c.ρe_tot += β_viscous(s, ᶜz, zmax) * wdivₕ(Y.c.ρ * gradₕ(ᶜh_tot))
-    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
+    for (ᶜρχₜ, Ycρq, χ_name) in matching_ρ(Y, Yₜ.c)
         χ_name == :e_tot && continue
-        @. ᶜρχₜ += β_viscous(s, ᶜz, zmax) * wdivₕ(Y.c.ρ * gradₕ(ᶜχ))
-        @. Yₜ.c.ρ += β_viscous(s, ᶜz, zmax) * wdivₕ(Y.c.ρ * gradₕ(ᶜχ))
+        @. ᶜρχₜ += β_viscous(s, ᶜz, zmax) * wdivₕ(Y.c.ρ * gradₕ(Ycρq / Y.c.ρ))
+        @. Yₜ.c.ρ += β_viscous(s, ᶜz, zmax) * wdivₕ(Y.c.ρ * gradₕ(Ycρq / Y.c.ρ))
     end
 end

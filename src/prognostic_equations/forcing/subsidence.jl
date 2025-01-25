@@ -27,7 +27,7 @@ subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:third_order}) =
 function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
     (; moisture_model) = p.atmos
     subsidence_profile = p.atmos.subsidence.prof
-    (; ᶜh_tot, ᶜspecific) = p.precomputed
+    (; ᶜh_tot) = p.precomputed
 
     ᶠz = Fields.coordinate_field(axes(Y.f)).z
     ᶠlg = Fields.local_geometry_field(Y.f)
