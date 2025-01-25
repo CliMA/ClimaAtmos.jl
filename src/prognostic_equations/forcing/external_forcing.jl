@@ -103,9 +103,7 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
             parent(cc_field) .= ds.group[cfsite_number]["coszen"][1]
         end
 
-        zc_forcing = gcm_height(ds.group[cfsite_number])
-        Fields.bycolumn(axes(Y.c)) do colidx
-
+        function set_column_data(colidx)
             zc_gcm = Fields.coordinate_field(Y.c).z[colidx]
 
             setvar!(ᶜdTdt_hadv, "tntha", colidx, zc_gcm, zc_forcing)
@@ -138,6 +136,15 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
 
             @. ᶜinv_τ_wind[colidx] = 1 / (6 * 3600)
             @. ᶜinv_τ_scalar[colidx] = compute_gcm_driven_scalar_inv_τ(zc_gcm)
+        end
+
+        zc_forcing = gcm_height(ds.group[cfsite_number])
+        if iscolumn(axes(Y.c))
+            set_column_data(:)
+        else
+            Fields.bycolumn(axes(Y.c)) do colidx
+                set_column_data(colidx)
+            end
         end
     end
 
