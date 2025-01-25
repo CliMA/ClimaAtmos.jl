@@ -26,7 +26,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     ::Union{VerticalDiffusion, FriersonDiffusion, DecayWithHeightDiffusion},
 )
     FT = eltype(Y)
-    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h, sfc_conditions) = p.precomputed
+    (; ᶜu, ᶜh_tot, ᶜK_u, ᶜK_h, sfc_conditions) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
     if diffuse_momentum(p.atmos.vert_diff)
@@ -54,7 +54,7 @@ function vertical_diffusion_boundary_layer_tendency!(
 
     ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
     ρ_flux_χ = p.scratch.sfc_temp_C3
-    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
+    for (ᶜρχₜ, Ycρq, χ_name) in matching_ρ(Y.c, Yₜ.c)
         χ_name == :e_tot && continue
         if χ_name == :q_tot
             @. ρ_flux_χ = sfc_conditions.ρ_flux_q_tot
@@ -66,7 +66,7 @@ function vertical_diffusion_boundary_layer_tendency!(
             bottom = Operators.SetValue(ρ_flux_χ),
         )
         @. ᶜρχₜ_diffusion =
-            ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜχ)))
+            ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(Ycρq / Y.c.ρ)))
         @. ᶜρχₜ -= ᶜρχₜ_diffusion
         if !(χ_name in (:q_rai, :q_sno))
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion

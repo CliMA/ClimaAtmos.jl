@@ -180,6 +180,38 @@ out the matching subfields (as of Julia 1.8).
 end
 
 """
+    matching_ρ(Y, tendency_field)
+
+Return a tuple of tuples of the form
+(tendency_field.ρ[quantity], Y.c.ρ[quantity], :[quantity]) or
+(tendency_field.ρa[quantity], Y.c.ρa[quantity], :[quantity]).
+
+This is done by pattern matching in `propertynames(tendency_field)` for names of
+the form `ρ[quantity]` or `ρa[quantity]`.
+"""
+@generated function matching_ρ(Y_c, tendency_field)
+    tendency_names = Base._nt_names(eltype(tendency_field))
+    Y_c_names = Base._nt_names(eltype(Y_c))
+    prefix = :ρa in tendency_names ? :ρa : :ρ
+    relevant_names =
+        filter(x -> has_prefix(x, prefix) && prefix != x, tendency_names)
+    relevant_names = filter(x -> x in Y_c_names, relevant_names)
+    relevant_names = map(
+        relevant_name -> remove_prefix(relevant_name, prefix),
+        relevant_names,
+    )
+    subfield_tuples = map(
+        name -> :((
+            tendency_field.$(Symbol(prefix, name)),
+            Y_c.$(Symbol(prefix, name)),
+            $(QuoteNode(name)),
+        )),
+        relevant_names,
+    )
+    return :(($(subfield_tuples...),))
+end
+
+"""
     ρa⁺(gs)
 
 Computes the total mass-flux subdomain area-weighted density, assuming that the

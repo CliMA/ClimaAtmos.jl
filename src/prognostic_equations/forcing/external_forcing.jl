@@ -164,7 +164,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
     # horizontal advection, vertical fluctuation, nudging, subsidence (need to add),
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜspecific, ᶜts, ᶜh_tot) = p.precomputed
+    (; ᶜts, ᶜh_tot) = p.precomputed
     (;
         ᶜdTdt_fluc,
         ᶜdqtdt_fluc,
@@ -245,7 +245,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜspecific, ᶜts, ᶜh_tot, ᶜp) = p.precomputed
+    (; ᶜts, ᶜh_tot, ᶜp) = p.precomputed
 
     ᶜinv_τ_scalar = APL.ISDAC_inv_τ_scalar(FT)  # s⁻¹
     ᶜinv_τ_wind = APL.ISDAC_inv_τ_wind(FT)  # s⁻¹

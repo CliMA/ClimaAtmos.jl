@@ -36,7 +36,7 @@ end
 
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
-    (; ᶜh_tot, ᶜspecific) = p.precomputed
+    (; ᶜh_tot) = p.precomputed
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Yₜ.f.u₃
     ᶜρ = Y.c.ρ
@@ -63,8 +63,10 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     # TODO: can we write this out explicitly?
     if viscous_sponge isa ViscousSponge
-        for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
+        for (ᶜρχₜ, Ycρq, χ_name) in matching_ρ(Y.c, Yₜ.c)
             χ_name == :e_tot && continue
+            @. p.scratch.ᶜtemp_scalar_3 = Ycρq / Y.c.ρ
+            ᶜχ = p.scratch.ᶜtemp_scalar_3
             vst_tracer = viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, viscous_sponge)
             @. ᶜρχₜ += vst_tracer
             @. Yₜ.c.ρ += vst_tracer

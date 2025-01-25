@@ -2,6 +2,7 @@ using Test
 using ClimaComms
 ClimaComms.@import_required_backends
 import Dates
+import ClimaCore
 using Random
 Random.seed!(1234)
 import ClimaAtmos as CA
@@ -269,4 +270,59 @@ end
     @test CA.promote_period(Dates.Millisecond(1)) == Dates.Millisecond(1)
     @test CA.promote_period(Dates.Minute(120)) == Dates.Hour(2)
     @test CA.promote_period(Dates.Second(3600)) == Dates.Hour(1)
+end
+
+@testset "matching_ρ" begin
+    FT = Float32
+    column_space = ClimaCore.CommonSpaces.ColumnSpace(;
+        z_min = FT(0),
+        z_max = FT(100),
+        z_elem = 10,
+        staggering = ClimaCore.Grids.CellCenter(),
+    )
+    lg_field1 = ClimaCore.Fields.coordinate_field(column_space)
+    lg_field2 = ClimaCore.Fields.coordinate_field(column_space)
+    foo1(x) = (; ρ_a = 1.0, ρ_b = 2.0)
+    foo2(x) = (; ρ_a = 3.0, ρ_b = 4.0)
+    dummy_field = foo1.(lg_field1)
+    Y_field = foo2.(lg_field2)
+    dummy_Y = (; c = Y_field)
+
+    res = CA.matching_ρ(dummy_Y.c, dummy_field)
+
+    # Both dummy_Y.c and dummy_field have ρ_a and ρ_b
+    @test res[1][1] == dummy_field.ρ_a
+    @test res[1][2] == Y_field.ρ_a
+    @test res[1][3] == :_a
+    @test res[2][1] == dummy_field.ρ_b
+    @test res[2][2] == Y_field.ρ_b
+    @test res[2][3] == :_b
+
+    # dummy_Y.c has ρ_a and ρ_b and dummy_field has only ρ_a
+    foo1(x) = (; ρ_a = 1.0)
+    foo2(x) = (; ρ_a = 3.0, ρ_b = 4.0)
+    dummy_field = foo1.(lg_field1)
+    Y_field = foo2.(lg_field2)
+    dummy_Y = (; c = Y_field)
+
+    res = CA.matching_ρ(dummy_Y.c, dummy_field)
+
+    @test length(res) == 1
+    @test res[1][1] == dummy_field.ρ_a
+    @test res[1][2] == Y_field.ρ_a
+    @test res[1][3] == :_a
+
+    # dummy_Y.c has ρ_a and dummy_field has ρ_a and ρ_b
+    foo1(x) = (; ρ_a = 1.0, ρ_b = 2.0)
+    foo2(x) = (; ρ_a = 3.0)
+    dummy_field = foo1.(lg_field1)
+    Y_field = foo2.(lg_field2)
+    dummy_Y = (; c = Y_field)
+
+    res = CA.matching_ρ(dummy_Y.c, dummy_field)
+
+    @test length(res) == 1
+    @test res[1][1] == dummy_field.ρ_a
+    @test res[1][2] == Y_field.ρ_a
+    @test res[1][3] == :_a
 end
