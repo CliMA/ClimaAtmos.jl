@@ -368,7 +368,7 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     @assert !(p.atmos.moisture_model isa DryModel)
 
     (; params) = p
-    (; ᶜspecific, ᶜts) = p.precomputed
+    (; ᶜts) = p.precomputed
     (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_q, ᶠradiation_flux) =
         p.radiation
     thermo_params = CAP.thermodynamics_params(params)

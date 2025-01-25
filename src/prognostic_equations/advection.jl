@@ -79,7 +79,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
-    (; ᶜspecific) = p.precomputed
 
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
     ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
@@ -121,11 +120,21 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             )
         end
     end
-    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
+    for (ᶜρχₜ, Ycρq, χ_name) in matching_ρ(Y, Yₜ.c)
         χ_name == :e_tot && continue
+        @. p.scratch.ᶜtemp_scalar_3 = Ycρq / Y.c.ρ
         for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
             tracer_upwinding isa Val{:none} && continue
-            vertical_transport!(coeff, ᶜρχₜ, ᶜJ, Y.c.ρ, ᶠu³, ᶜχ, dt, upwinding)
+            vertical_transport!(
+                coeff,
+                ᶜρχₜ,
+                ᶜJ,
+                Y.c.ρ,
+                ᶠu³,
+                p.scratch.ᶜtemp_scalar_3,
+                dt,
+                upwinding,
+            )
         end
     end
 
