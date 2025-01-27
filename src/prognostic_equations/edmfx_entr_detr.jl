@@ -124,6 +124,30 @@ function entrainment(
     return max(entr, 0)
 end
 
+function entrainment(
+    thermo_params,
+    turbconv_params,
+    ᶜz,
+    z_sfc,
+    ᶜp,
+    ᶜρ,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜRHʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜRH⁰,
+    ᶜbuoy⁰,
+    ᶜtke⁰,
+    ::SmoothAreaEntrainment,
+)
+    FT = eltype(thermo_params)
+    entr_coeff = CAP.entr_coeff(turbconv_params)
+
+    entr = entr_coeff * ((FT(1) - ᶜaʲ)^FT(1)) * abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc)
+    return max(entr, 0)
+end
+
 function detrainment_from_thermo_state(
     thermo_params,
     turbconv_params,
