@@ -8,8 +8,6 @@ import ClimaCore: Spaces, Fields
     precomputed_quantities(Y, atmos)
 
 Allocates and returns the precomputed quantities:
-    - `ᶜspecific`: the specific quantities on cell centers (for every prognostic
-        quantity `ρχ`, there is a corresponding specific quantity `χ`)
     - `ᶜu`: the covariant velocity on cell centers
     - `ᶠu³`: the third component of contravariant velocity on cell faces
     - `ᶜK`: the kinetic energy on cell centers
@@ -45,7 +43,6 @@ function precomputed_quantities(Y, atmos)
     fspace = axes(Y.f)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     gs_quantities = (;
-        ᶜspecific = specific_gs.(Y.c),
         ᶜu = similar(Y.c, C123{FT}),
         ᶠu³ = similar(Y.f, CT3{FT}),
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
@@ -478,10 +475,9 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_args = (thermo_params, moisture_model)
     (; ᶜΦ) = p.core
-    (; ᶜspecific, ᶜu, ᶠu³, ᶜK, ᶜts, ᶜp) = p.precomputed
+    (; ᶜu, ᶠu³, ᶜK, ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
 
-    @. ᶜspecific = specific_gs(Y.c)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     bc_ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
@@ -508,7 +504,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
+    @. ᶜts = ts_gs(thermo_args..., specific_gs(Y.c), ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
     if turbconv_model isa AbstractEDMF
