@@ -501,6 +501,8 @@ function get_entrainment_model(parsed_args)
         GeneralizedEntrainment()
     elseif entr_model == "GeneralizedHarmonics"
         GeneralizedHarmonicsEntrainment()
+    elseif entr_model == "SmoothArea"
+        SmoothAreaEntrainment()
     else
         error("Invalid entr_model $(entr_model)")
     end

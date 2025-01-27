@@ -124,6 +124,58 @@ function entrainment(
     return max(entr, 0)
 end
 
+function entrainment(
+    thermo_params,
+    turbconv_params,
+    ᶜz,
+    z_sfc,
+    ᶜp,
+    ᶜρ,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜRHʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜRH⁰,
+    ᶜbuoy⁰,
+    ᶜtke⁰,
+    ::SmoothAreaEntrainment,
+)
+    FT = eltype(thermo_params)
+    entr_coeff = CAP.entr_coeff(turbconv_params)
+
+    if ᶜaʲ <= FT(0)
+        return FT(0)
+    else
+        g = TDP.grav(thermo_params)
+        ref_H = ᶜp / (ᶜρ * g)
+
+        entr_param_vec = CAP.entr_param_vec(turbconv_params)
+
+        # non-dimensional pi-groups
+        Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
+        Π₂ = max(ᶜtke⁰, 0) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
+        Π₃ = sqrt(ᶜaʲ)
+        Π₄ = ᶜRHʲ - ᶜRH⁰
+        Π₅ = (ᶜz - z_sfc) / ref_H
+        # Π₁, Π₂ are unbounded, so clip values that blow up
+        Π₁ = min(max(Π₁, -1), 1)
+        Π₂ = min(max(Π₂, -1), 1)
+
+        nondim_entr = (
+                entr_param_vec[1] * abs(Π₁) +
+                entr_param_vec[2] * abs(Π₂) +
+                entr_param_vec[3] * abs(Π₃) +
+                entr_param_vec[4] * abs(Π₄) +
+                entr_param_vec[5] * abs(Π₅) +
+                entr_param_vec[6]
+            )
+
+        entr = nondim_entr * ((FT(1) - ᶜaʲ)^FT(entr_coeff)) * abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc)
+        return max(entr, 0)
+    end
+end
+
 function detrainment_from_thermo_state(
     thermo_params,
     turbconv_params,
