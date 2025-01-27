@@ -1,3 +1,81 @@
+# TEMPORARY METHOD OVERRIDE
+import ClimaTimeSteppers as CTS
+@inline function CTS.update_stage!(integrator, cache::CTS.IMEXARKCache, i::Int)
+    (; u, p, t, dt, alg) = integrator
+    (; f) = integrator.sol.prob
+    (; cache!, cache_imp!) = f
+    (; T_exp_T_lim!, T_lim!, T_exp!, T_imp!, lim!, dss!) = f
+    (; tableau, newtons_method) = alg
+    (; a_exp, b_exp, a_imp, b_imp, c_exp, c_imp) = tableau
+    (; U, T_lim, T_exp, T_imp, temp, γ, newtons_method_cache) = cache
+    s = length(b_exp)
+
+    t_exp = t + dt * c_exp[i]
+    t_imp = t + dt * c_imp[i]
+
+    if CTS.has_T_lim(f) # Update based on limited tendencies from previous stages
+        CTS.assign_fused_increment!(U, u, dt, a_exp, T_lim, Val(i))
+        i ≠ 1 && lim!(U, p, t_exp, u)
+    else
+        @. U = u
+    end
+
+    # Update based on tendencies from previous stages
+    CTS.has_T_exp(f) && CTS.fused_increment!(U, dt, a_exp, T_exp, Val(i))
+    isnothing(T_imp!) || CTS.fused_increment!(U, dt, a_imp, T_imp, Val(i))
+
+    i ≠ 1 && dss!(U, p, t_exp)
+
+    if isnothing(T_imp!) || iszero(a_imp[i, i])
+        i ≠ 1 && cache!(U, p, t_exp)
+        if !all(iszero, a_imp[:, i]) || !iszero(b_imp[i])
+            # If its coefficient is 0, T_imp[i] is being treated explicitly.
+            isnothing(T_imp!) || T_imp!(T_imp[i], U, p, t_imp)
+        end
+    else # Implicit solve
+        @assert !isnothing(newtons_method)
+        i ≠ 1 && cache_imp!(U, p, t_imp)
+        @. temp = U
+        implicit_equation_residual! =
+            (residual, Ui) -> begin
+                T_imp!(residual, Ui, p, t_imp)
+                @. residual = temp + dt * a_imp[i, i] * residual - Ui
+            end
+        implicit_equation_jacobian! =
+            (jacobian, Ui) -> begin
+                T_imp!.Wfact(jacobian, Ui, p, dt * a_imp[i, i], t_imp)
+            end
+        implicit_equation_cache! = Ui -> cache_imp!(Ui, p, t_imp)
+        CTS.solve_newton!(
+            newtons_method,
+            newtons_method_cache,
+            U,
+            implicit_equation_residual!,
+            implicit_equation_jacobian!,
+            implicit_equation_cache!,
+        )
+        # SWAPPING ORDER OF DSS/CACHE AND IMPLICIT TENDENCY APPROXIMATION
+        dss!(U, p, t_imp)
+        cache!(U, p, t_imp)
+        if !all(iszero, a_imp[:, i]) || !iszero(b_imp[i])
+            # If T_imp[i] is being treated implicitly, ensure that it
+            # exactly satisfies the implicit equation before applying DSS.
+            @. T_imp[i] = (U - temp) / (dt * a_imp[i, i])
+        end
+    end
+
+    if !all(iszero, a_exp[:, i]) || !iszero(b_exp[i])
+        if !isnothing(T_exp_T_lim!)
+            T_exp_T_lim!(T_exp[i], T_lim[i], U, p, t_exp)
+        else
+            isnothing(T_lim!) || T_lim!(T_lim[i], U, p, t_exp)
+            isnothing(T_exp!) || T_exp!(T_exp[i], U, p, t_exp)
+        end
+    end
+
+    return nothing
+end
+
 # When Julia 1.10+ is used interactively, stacktraces contain reduced type information to make them shorter.
 # On the other hand, the full type information is printed when julia is not run interactively.
 # Given that ClimaCore objects are heavily parametrized, non-abbreviated stacktraces are hard to read,
