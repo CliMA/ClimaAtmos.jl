@@ -39,8 +39,12 @@ for avoiding duplicate computations.
 """
 function atmos_center_variables(ls, atmos_model)
     gs_vars = grid_scale_center_variables(ls, atmos_model)
-    sgs_vars =
-        turbconv_center_variables(ls, atmos_model.turbconv_model, gs_vars)
+    sgs_vars = turbconv_center_variables(
+        ls,
+        atmos_model.turbconv_model,
+        atmos_model.moisture_model,
+        gs_vars,
+    )
     return (; gs_vars..., sgs_vars...)
 end
 
@@ -126,9 +130,14 @@ precip_variables(ls, ::Microphysics1Moment) = (;
 # We can use paper-based cases for LES type configurations (no TKE)
 # or SGS type configurations (initial TKE needed), so we do not need to assert
 # that there is no TKE when there is no turbconv_model.
-turbconv_center_variables(ls, ::Nothing, gs_vars) = (;)
+turbconv_center_variables(ls, ::Nothing, _, gs_vars) = (;)
 
-function turbconv_center_variables(ls, turbconv_model::PrognosticEDMFX, gs_vars)
+function turbconv_center_variables(
+    ls,
+    turbconv_model::PrognosticEDMFX,
+    moisture_model,
+    gs_vars,
+)
     n = n_mass_flux_subdomains(turbconv_model)
     a_draft = ls.turbconv_state.draft_area
     sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
@@ -136,14 +145,37 @@ function turbconv_center_variables(ls, turbconv_model::PrognosticEDMFX, gs_vars)
     mse =
         TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
         CAP.grav(ls.params) * ls.geometry.coordinates.z
-    q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
-    sgsʲs = ntuple(_ -> (; ρa = ρa, mse = mse, q_tot = q_tot), Val(n))
+    q_vars = turbconv_moisture_variables(ls, moisture_model)
+    #q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
+    #sgsʲs = ntuple(_ -> (; ρa = ρa, mse = mse, q_tot = q_tot), Val(n))
+    sgsʲs = ntuple(_ -> (; ρa = ρa, mse = mse, q_vars...), Val(n))
     return (; sgs⁰, sgsʲs)
 end
 
-function turbconv_center_variables(ls, turbconv_model::DiagnosticEDMFX, gs_vars)
+function turbconv_center_variables(
+    ls,
+    turbconv_model::DiagnosticEDMFX,
+    _,
+    gs_vars,
+)
     sgs⁰ = (; ρatke = ls.ρ * ls.turbconv_state.tke)
     return (; sgs⁰)
+end
+
+function turbconv_moisture_variables(ls, ::EquilMoistModel)
+    @assert !(ls.thermo_state isa TD.AbstractPhaseNonEquil)
+    return (;
+        q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
+    )
+end
+function turbconv_moisture_variables(ls, ::NonEquilMoistModel)
+    #@info(ls.thermo_state)
+    #@assert !(ls.thermo_state isa TD.AbstractPhaseEquil)
+    return (;
+        q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state),
+        q_liq = TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state),
+        q_ice = TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state),
+    )
 end
 
 turbconv_face_variables(ls, ::Nothing) = (;)
