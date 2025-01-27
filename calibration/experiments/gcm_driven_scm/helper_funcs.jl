@@ -4,7 +4,7 @@ using Statistics
 using LinearAlgebra
 import ClimaAtmos as CA
 import ClimaCalibrate as CAL
-import Interpolations
+using Interpolations
 import EnsembleKalmanProcesses as EKP
 using Logging
 using TOML
