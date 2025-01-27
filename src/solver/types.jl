@@ -724,22 +724,7 @@ function AtmosConfig(
         override_file = CP.merge_toml_files(config["toml"]),
     )
     comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
-    device = ClimaComms.device(comms_ctx)
-    silence_non_root_processes(comms_ctx)
-    @info "Running on $(nameof(typeof(device)))"
-    if comms_ctx isa ClimaComms.SingletonCommsContext
-        @info "Setting up single-process ClimaAtmos run"
-    else
-        @info "Setting up distributed ClimaAtmos run" nprocs =
-            ClimaComms.nprocs(comms_ctx)
-    end
-
     config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
-    if device isa ClimaComms.CPUMultiThreaded
-        @info "Running ClimaCore in threaded mode, with $(Threads.nthreads()) threads"
-    else
-        @info "Running ClimaCore in unthreaded mode"
-    end
 
     isempty(job_id) &&
         @warn "`job_id` is empty and likely not passed to AtmosConfig"
