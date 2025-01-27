@@ -1,4 +1,4 @@
-h_elem: 60
+h_elem: 240
 z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
@@ -10,7 +10,7 @@ topography: "Earth"
 start_date: "20160801"
 initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 moist: "equil"
-dt: "60secs"
+dt: "10secs"
 t_end: "30days"
 dt_save_state_to_disk: "10days"
 rad: "allskywithclear"
@@ -20,4 +20,5 @@ dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "DecayWithHeightDiffusion"
 precip_model: "0M"
+output_dir: "/glade/derecho/scratch/asridhar/dyamond_clima"
 toml: [toml/longrun_aquaplanet.toml]
