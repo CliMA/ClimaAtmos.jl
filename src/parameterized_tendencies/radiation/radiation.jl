@@ -199,7 +199,7 @@ function radiation_model_cache(
                 kwargs = (;
                     kwargs...,
                     center_cloud_liquid_effective_radius = 12,
-                    center_cloud_ice_effective_radius = 95,
+                    center_cloud_ice_effective_radius = 50, # rrtmgp uses diameter for ice
                     ice_roughness = 2,
                 )
                 ᶜz = Fields.coordinate_field(Y.c).z
@@ -247,7 +247,7 @@ function radiation_model_cache(
                 kwargs = (;
                     kwargs...,
                     # assuming fixed aerosol radius
-                    center_dust_radius = 0.2,
+                    center_dust_radius = 0.55,
                     center_ss_radius = 11.5,
                     center_dust_column_mass_density = NaN, # initialized in callback
                     center_ss_column_mass_density = NaN, # initialized in callback
@@ -311,10 +311,7 @@ function get_cloud_cache(::PrescribedCloudInRadiation, Y, start_date)
     extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
     timevaryinginputs = [
         TimeVaryingInput(
-            joinpath(
-                @clima_artifact("era5_cloud", ClimaComms.context(Y.c)),
-                "era5_cloud.nc",
-            ),
+            AA.era5_cloud_file_path(; context = ClimaComms.context(Y.c)),
             name,
             target_space;
             reference_date = start_date,

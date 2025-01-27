@@ -48,6 +48,7 @@ known_dependencies = Set([
     "FastGaussQuadrature",
     "Insolation",
     "Interpolations",
+    "LazyBroadcast",
     "LazyArtifacts",
     "LinearAlgebra",
     "Logging",

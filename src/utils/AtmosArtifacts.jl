@@ -68,6 +68,18 @@ function aerosol_concentration_file_path(; context = nothing)
 end
 
 """
+    era5_cloud_file_path(; context = nothing)
+
+Construct the file path for the era5 cloud properties NetCDF file.
+
+When available, use the high resolution artifact. Otherwise, download and use
+the low-resolution one.
+"""
+function era5_cloud_file_path(; context = nothing)
+    return res_file_path("era5_cloud"; context)
+end
+
+"""
     earth_orography_file_path(; context=nothing)
 
 Construct the file path for the 60arcsecond orography data NetCDF file.
