@@ -1,11 +1,14 @@
+using ClimaCalibrate
 import ClimaCalibrate as CAL
 import ClimaAtmos as CA
 import EnsembleKalmanProcesses as EKP
 import YAML
 import TOML
 using Distributions
+using Distributed
 using Random
 using Flux
+using Logging
 
 import JLD2
 using LinearAlgebra
@@ -15,7 +18,7 @@ include("observation_map.jl")
 include("get_les_metadata.jl")
 include("nn_helpers.jl")
 
-
+# load configs
 experiment_dir = dirname(Base.active_project())
 const model_interface = joinpath(experiment_dir, "model_interface.jl")
 const experiment_config =
@@ -27,59 +30,39 @@ for (key, value) in experiment_config
     @eval const $(Symbol(key)) = $value
 end
 
+
+# add workers
+@info "Starting $ensemble_size workers."
+addprocs(CAL.SlurmManager(Int(ensemble_size)), t = "02:00:00", mem_per_cpu = "15G", cpus_per_task = 1)#cpus_per_task = 1)
+
 # load configs and directories 
 model_config_dict = YAML.load_file(model_config)
 atmos_config = CA.AtmosConfig(model_config_dict)
 
+@everywhere begin
+    using ClimaCalibrate
+    import ClimaCalibrate as CAL
+    import ClimaAtmos as CA
+    import JLD2
+    import YAML
 
+    include("observation_map.jl")
 
-# prior_path = joinpath(experiment_dir, prior_path)
+    experiment_dir = dirname(Base.active_project())
+    const model_interface = joinpath(experiment_dir, "model_interface.jl")
+    const experiment_config =
+        YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
-# prior_dict = TOML.parsefile(joinpath(experiment_dir, prior_path))
-# const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
+    include(model_interface)
+    
+end
 
-# parameter_names = keys(prior_dict)
-# # prior_vec = [CAL.get_parameter_distribution(prior_dict, n) for n in parameter_names]
-# prior_vec = Vector{EKP.ParameterDistribution}(undef, length(parameter_names))
-# for (i, n) in enumerate(parameter_names)
-#     prior_vec[i] = CAL.get_parameter_distribution(prior_dict, n)
-# end
-
-# load pretrained weights (prior mean) and nn
-# @load pretrained_nn_path serialized_weights
-# num_nn_params = length(serialized_weights)
-# nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], 0.05) for ii in 1:num_nn_params])
-# nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
-# nn_prior = EKP.ParameterDistribution(nn_mean_std, nn_constraint, "mixing_length_param_vec")
-# push!(prior_vec, nn_prior)
-
-# prior = EKP.combine_distributions(prior_vec)
-
-# @load pretrained_nn_path serialized_weights
-# num_nn_params = length(serialized_weights)
-
-# arc = [8, 20, 15, 10, 1]
-# nn_model = construct_fully_connected_nn(arc, deepcopy(serialized_weights); biases_bool = true, output_layer_activation_function = Flux.identity)
-# serialized_stds = serialize_std_model(nn_model; std_weight = 0.03, std_bias = 0.005)
-
-# nn_mean_std = EKP.VectorOfParameterized([Normal(serialized_weights[ii], serialized_stds[ii]) for ii in 1:num_nn_params])
-# nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
-# nn_prior = EKP.ParameterDistribution(nn_mean_std, nn_constraint, "mixing_length_param_vec")
-# push!(prior_vec, nn_prior)
-
-# prior = EKP.combine_distributions(prior_vec)
-
-
-# const pretrained_nn_path = config_dict["pretrained_nn_path"]
 
 if model_config_dict["mixing_length_model"] == "nn"
     prior = create_prior_with_nn(prior_path, pretrained_nn_path; arc = [8, 20, 15, 10, 1])
 else 
     const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 end
-
-
-
 
 ### create output directories & copy configs
 mkpath(output_dir)
@@ -147,18 +130,6 @@ end
 
 series_names = [ref_paths[i] for i in 1:length(ref_paths)]
 
-
-# function create_minibatches_internal(n_indices::Int, batch_size::Int)
-#     shuffled_indices = shuffle(1:n_indices)
-#     num_full_batches = div(n_indices, batch_size)
-#     remainder = rem(n_indices, batch_size)
-#     batches = [collect(shuffled_indices[(i-1)*batch_size + 1 : i*batch_size]) for i in 1:num_full_batches]
-#     if remainder > 0
-#         batches[num_full_batches] = vcat(batches[num_full_batches], collect(shuffled_indices[num_full_batches * batch_size + 1 : end]))
-#     end
-#     return batches
-# end
-
 function create_minibatches_internal(n_indices::Int, batch_size::Int)
     shuffled_indices = shuffle(1:n_indices)
     num_full_batches = div(n_indices, batch_size)
@@ -185,59 +156,19 @@ observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
 ###  EKI hyperparameters/settings
 @info "Initializing calibration" n_iterations ensemble_size output_dir
-CAL.initialize(
+
+eki = CAL.calibrate(
+    CAL.WorkerBackend,
     ensemble_size,
+    n_iterations,
     observations,
+    nothing, # nothing
     prior,
     output_dir;
     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
     localization_method = EKP.Localizers.NoLocalization(),
-    # localization_method = EKP.Localizers.SECNice(0.01, 0.5), nice_loc_ug
-    # localization_method = EKP.Localizers.SECNice(nice_loc_ug, nice_loc_gg),
-    failure_handler_method = EKP.SampleSuccGauss(),
+    ## localization_method = EKP.Localizers.SECNice(nice_loc_ug, nice_loc_gg),
+    # failure_handler_method = EKP.SampleSuccGauss(),
     accelerator = EKP.DefaultAccelerator(),
-    # accelerator = EKP.NesterovAccelerator(),
+    #     # accelerator = EKP.NesterovAccelerator(),
 )
-
-eki = nothing
-hpc_kwargs = CAL.kwargs(
-    time = 120,
-    mem_per_cpu = "12G",
-    cpus_per_task = min(batch_size + 1, 5),
-    ntasks = 1,
-    nodes = 1,
-    # reservation = "clima",
-)
-module_load_str = CAL.module_load_string(CAL.CaltechHPCBackend)
-for iter in 0:(n_iterations - 1)
-    @info "Iteration $iter"
-    jobids = map(1:ensemble_size) do member
-        @info "Running ensemble member $member"
-        CAL.slurm_model_run(
-            iter,
-            member,
-            output_dir,
-            experiment_dir,
-            model_interface,
-            module_load_str;
-            hpc_kwargs,
-        )
-    end
-
-    statuses = CAL.wait_for_jobs(
-        jobids,
-        output_dir,
-        iter,
-        experiment_dir,
-        model_interface,
-        module_load_str;
-        hpc_kwargs,
-        verbose = false,
-        reruns = 0,
-    )
-    CAL.report_iteration_status(statuses, output_dir, iter)
-    @info "Completed iteration $iter, updating ensemble"
-    G_ensemble = CAL.observation_map(iter; config_dict = experiment_config)
-    CAL.save_G_ensemble(output_dir, iter, G_ensemble)
-    eki = CAL.update_ensemble(output_dir, iter, prior)
-end

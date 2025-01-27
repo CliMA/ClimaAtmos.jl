@@ -1,6 +1,6 @@
 import EnsembleKalmanProcesses as EKP
-import ClimaCalibrate:
-    observation_map, ExperimentConfig, path_to_ensemble_member
+import ClimaCalibrate as CAL
+import ClimaCalibrate: path_to_ensemble_member
 using ClimaAnalysis
 using JLD2
 using Statistics
@@ -13,7 +13,7 @@ function suppress_logs(f, args...; kwargs...)
     end
 end
 
-function observation_map(iteration; config_dict::Dict)
+function CAL.observation_map(iteration; config_dict =  YAML.load_file(joinpath(dirname(Base.active_project()), "experiment_config.yml")))
 
     full_dim =
         config_dict["dims_per_var"] *
