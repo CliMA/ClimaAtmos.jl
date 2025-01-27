@@ -364,6 +364,11 @@ if MANYTESTS
             turbconv_models = ["diagnostic_edmfx"]
             radiations = ["gray", "allskywithclear"]
         end
+        if configuration == "column"
+            hyperdiff = "false"
+        else
+            hyperdiff = "true"
+        end
 
         for turbconv_mode in turbconv_models
             for radiation in radiations
@@ -403,6 +408,7 @@ if MANYTESTS
                             "dt" => "1secs",
                             "bubble" => bubble,
                             "viscous_sponge" => true,
+                            "hyperdiff" => hyperdiff,
                             "rayleigh_sponge" => true,
                             "insolation" => "timevarying",
                             "rad" => radiation,
