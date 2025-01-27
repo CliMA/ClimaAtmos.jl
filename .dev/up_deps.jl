@@ -1,36 +1,12 @@
-#=
-A simple script for updating the manifest
-files in all of our environments.
-=#
+#!/usr/bin/env julia
 
-root = dirname(@__DIR__)
-dirs = (
-    root,
-    joinpath(root, "test"),
-    joinpath(root, ".dev"),
-    joinpath(root, "perf"),
-    joinpath(root, "docs"),
-    joinpath(root, "examples"),
-)
-
-cd(root) do
-    for dir in dirs
-        reldir = relpath(dir, root)
-        @info "Updating environment `$reldir`"
-        cmd = if dir == root
-            `$(Base.julia_cmd()) --project -e """import Pkg; Pkg.update()"""`
-        elseif dir == joinpath(root, ".dev")
-            `$(Base.julia_cmd()) --project=$reldir -e """import Pkg; Pkg.update()"""`
-        else
-            `$(Base.julia_cmd()) --project=$reldir -e """import Pkg; Pkg.develop(;path=\".\"); Pkg.update()"""`
-        end
-        run(cmd)
-    end
-end
-
-# https://github.com/JuliaLang/Pkg.jl/issues/3014
-for dir in dirs
-    cd(dir) do
-        rm("LocalPreferences.toml"; force = true)
-    end
-end
+println("up_dev.jl has been discontinued in favor of PkgDevTools")
+println("To use PkgDevTool, add it to your base environment with: ")
+println()
+println("julia -e 'using Pkg. Pkg.add(\"PkgDevTools\")'")
+println()
+println("Then, update the manifests with")
+println("using PkgDevTools; PkgDevToos.update_deps(\".\")")
+println("in a Julia REPL.")
+println("See documentation to read more about this change")
+println("This file will be removed in future releases")
