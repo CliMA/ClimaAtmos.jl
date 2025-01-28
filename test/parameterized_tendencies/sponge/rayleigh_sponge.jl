@@ -36,12 +36,12 @@ using ClimaCore.CommonSpaces
     ### Component test begins here
     rs = CA.RayleighSponge(; zd = FT(0), α_uₕ = FT(1), α_w = FT(1))
     expected = @. sin(FT(π) / 2 * ᶜz / zmax)^2
-    computed = CA.rayleigh_sponge_tendency_uₕ(ᶜuₕ, ᶠz, ᶜz, rs)
+    computed = CA.rayleigh_sponge_tendency_uₕ(ᶜuₕ, rs)
     @test CA.β_rayleigh_uₕ.(rs, ᶜz, zmax) == expected
     @test materialize(computed) == .-expected .* ᶜuₕ
 
     # Test when not using a Rayleigh sponge.
-    computed = CA.rayleigh_sponge_tendency_uₕ(ᶜuₕ, ᶠz, ᶜz, nothing)
+    computed = CA.rayleigh_sponge_tendency_uₕ(ᶜuₕ, nothing)
     expected = @. ᶜuₕ .* 0
     @test eltype(computed) == eltype(expected)
     @. ᶜuₕ += computed # test that it can broadcast
