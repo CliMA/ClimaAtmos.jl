@@ -112,6 +112,7 @@ include(
 )
 include(joinpath("parameterized_tendencies", "sponge", "rayleigh_sponge.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
+include(joinpath("parameterized_tendencies", "sponge", "sponge_tendencies.jl"))
 include(
     joinpath(
         "parameterized_tendencies",
