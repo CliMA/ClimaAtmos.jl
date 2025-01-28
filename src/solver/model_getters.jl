@@ -25,7 +25,8 @@ end
 
 function get_insolation_form(parsed_args)
     insolation = parsed_args["insolation"]
-    @assert insolation in ("idealized", "timevarying", "rcemipii", "gcmdriven")
+    @assert insolation in
+            ("idealized", "timevarying", "rcemipii", "gcmdriven", "era5driven")
     return if insolation == "idealized"
         IdealizedInsolation()
     elseif insolation == "timevarying"
@@ -37,6 +38,8 @@ function get_insolation_form(parsed_args)
         RCEMIPIIInsolation()
     elseif insolation == "gcmdriven"
         GCMDrivenInsolation()
+    elseif insolation == "era5driven"
+        ERA5DrivenInsolation()
     end
 end
 
@@ -407,12 +410,18 @@ end
 
 function get_external_forcing_model(parsed_args)
     external_forcing = parsed_args["external_forcing"]
-    @assert external_forcing in (nothing, "GCM", "ISDAC")
+    @assert external_forcing in (nothing, "GCM", "ISDAC", "ERA5")
     return if isnothing(external_forcing)
         nothing
     elseif external_forcing == "GCM"
         DType = Float64  # TODO: Read from `parsed_args`
         GCMForcing{DType}(
+            parsed_args["external_forcing_file"],
+            parsed_args["cfsite_number"],
+        )
+    elseif external_forcing == "ERA5"
+        DType = Float64  # TODO: Read from `parsed_args`
+        ERA5Forcing{DType}(
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
