@@ -535,8 +535,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             # To be applied in updraft continuity, moisture and energy
             # for updrafts and grid mean
             if precip_model isa Microphysics0Moment
-                @. S_q_totʲ_prev_level = q_tot_precipitation_sources(
-                    precip_model,
+                @. S_q_totʲ_prev_level = q_tot_0M_precipitation_sources(
                     thermo_params,
                     microphys_0m_params,
                     dt,
@@ -1034,8 +1033,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     (; q_tot) = p.precomputed.ᶜspecific
 
     # Environment precipitation sources (to be applied to grid mean)
-    @. ᶜSqₜᵖ⁰ = q_tot_precipitation_sources(
-        precip_model,
+    @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
         thermo_params,
         microphys_0m_params,
         dt,

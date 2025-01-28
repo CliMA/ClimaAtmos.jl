@@ -381,9 +381,9 @@ end
 """
     overwrite_initial_conditions!(initial_condition, args...)
 
-Do-nothing fallback method for the operation overwriting initial conditions 
-(this functionality required in instances where we interpolate initial conditions from NetCDF files). 
-Future work may revisit this design choice. 
+Do-nothing fallback method for the operation overwriting initial conditions
+(this functionality required in instances where we interpolate initial conditions from NetCDF files).
+Future work may revisit this design choice.
 """
 function overwrite_initial_conditions!(
     initial_condition::InitialCondition,
@@ -419,8 +419,8 @@ function overwrite_initial_conditions!(
     @info "Overwriting initial conditions with data from file $(file_path)"
     center_space = Fields.axes(Y.c)
     face_space = Fields.axes(Y.f)
-    # Using surface pressure, air temperature and specific humidity 
-    # from the dataset, compute air pressure. 
+    # Using surface pressure, air temperature and specific humidity
+    # from the dataset, compute air pressure.
     p_sfc = Fields.level(
         SpaceVaryingInputs.SpaceVaryingInput(file_path, "p", face_space),
         Fields.half,
@@ -428,9 +428,9 @@ function overwrite_initial_conditions!(
     ᶜT = SpaceVaryingInputs.SpaceVaryingInput(file_path, "t", center_space)
     ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(file_path, "q", center_space)
 
-    # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile, 
+    # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile,
     # recompute the pressure levels assuming hydrostatic balance is maintained.
-    # Uses the ClimaCore `column_integral_indefinite!` function to solve 
+    # Uses the ClimaCore `column_integral_indefinite!` function to solve
     # ∂(ln𝑝)/∂z = -g/(Rₘ(q)T), where
     # p is the local pressure
     # g is the gravitational constant
@@ -438,7 +438,7 @@ function overwrite_initial_conditions!(
     # Rₘ is the gas constant for moist air
     # T is the air temperature
     # p is then updated with the integral result, given p_sfc,
-    # following which the thermodynamic state is constructed. 
+    # following which the thermodynamic state is constructed.
     ᶜ∂lnp∂z = @. -thermo_params.grav /
        (TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT)
     ᶠlnp_over_psfc = zeros(face_space)
@@ -1260,7 +1260,7 @@ function (initial_condition::PrecipitatingColumn)(params)
             thermo_params,
             p(z),
             θ(z),
-            TD.PhasePartition(q_tot(z), qₗ(z), qᵢ(z)),
+            TD.PhasePartition(q_tot(z), qₗ(z) + qᵣ(z), qᵢ(z) + qₛ(z)),
         )
         return LocalState(;
             params,

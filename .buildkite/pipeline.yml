@@ -322,16 +322,16 @@ steps:
   - group: "Sphere Examples (Aquaplanet)"
     steps:
 
-      - label: ":umbrella: aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment"
+      - label: ":umbrella: aquaplanet (ρe_tot) nonequil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.yml
-          --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
+          --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_nonequilmoist_allsky_gw_res.yml
+          --job_id sphere_aquaplanet_rhoe_nonequilmoist_allsky_gw_res
 
           julia --color=yes --project=examples reproducibility_tests/test_mse.jl
-          --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
-          --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/output_active
-        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/output_active/*"
+          --job_id sphere_aquaplanet_rhoe_nonequilmoist_allsky_gw_res
+          --out_dir sphere_aquaplanet_rhoe_nonequilmoist_allsky_gw_res/output_active
+        artifact_paths: "sphere_aquaplanet_rhoe_nonequilmoist_allsky_gw_res/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -349,7 +349,7 @@ steps:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: aquaplanet (ρe_tot) nonequilmoist allsky radiation monin_obukhov varying insolation high top 1-moment"
+      - label: ":umbrella: aquaplanet (ρe_tot) nonequilmoist allsky radiation monin_obukhov varying insolation high top 1-moment"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_nonequilmoist_allsky.yml

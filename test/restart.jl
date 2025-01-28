@@ -351,7 +351,7 @@ if MANYTESTS
 
     for configuration in configurations
         if configuration == "sphere"
-            moistures = ["equil", "nonequil"]
+            moistures = ["nonequil"]
             precips = ["1M"]
             topography = "Earth"
             turbconv_models = [nothing, "diagnostic_edmfx"]
