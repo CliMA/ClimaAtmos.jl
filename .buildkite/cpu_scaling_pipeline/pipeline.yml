@@ -33,7 +33,6 @@ steps:
 
     agents:
       slurm_cpus_per_task: 8
-      slurm_gpus: 1
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
       JULIA_MAX_NUM_PRECOMPILE_FILES: 50
@@ -45,13 +44,13 @@ steps:
 
       - label: ":computer: 1 process"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $MBW_SCALING_CONFIG_PATH/moist_baroclinic_wave_helem_30_0M_ss.yml
           --job_id moist_baroclinic_wave_helem_30_0M_ss_1process
 
         artifact_paths: "moist_baroclinic_wave_helem_30_0M_ss_1process/output_active/*"
         agents:
-          slurm_constraint: icelake
+          slurm_constraint: skylake
           slurm_nodes: 1
           slurm_tasks_per_node: 1
           slurm_cpus_per_task: 1
