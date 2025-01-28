@@ -48,24 +48,28 @@ sort_files_by_time(files) =
     permute!(files, sortperm(time_from_filename.(files)))
 
 """
-    compute_kinetic!(κ::Field, uₕ::Field, uᵥ::Field)
+    compute_kinetic!(ᶜκ::Field, ᶜuₕ::Field, ᶠuᵥ::Field)
 
-Compute the specific kinetic energy at cell centers, storing in `κ` from
+Compute the specific kinetic energy at cell centers, storing in `ᶜκ` from
 individual velocity components:
-κ = 1/2 (uₕ⋅uʰ + 2uʰ⋅ᶜI(uᵥ) + ᶜI(uᵥ⋅uᵛ))
-- `uₕ` should be a `Covariant1Vector` or `Covariant12Vector`-valued field at
+ᶜκ = ((ᶜgʰʰ⋅ᶜuₕ)⋅ᶜuₕ + 2(ᶜgᵛʰ⋅ᶜuₕ)⋅ᶜI(ᶠuᵥ) + ᶜg³³*ᶜI(ᶠu₃^2))/2
+- `ᶜuₕ` should be a `Covariant1Vector` or `Covariant12Vector`-valued field at
     cell centers, and
-- `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
+- `ᶠuᵥ` should be a `Covariant3Vector`-valued field at cell faces.
 """
-function compute_kinetic!(κ::Fields.Field, uₕ::Fields.Field, uᵥ::Fields.Field)
-    @assert eltype(uₕ) <: Union{C1, C2, C12}
-    @assert eltype(uᵥ) <: C3
-    @. κ =
-        1 / 2 * (
-            dot(C123(uₕ), CT123(uₕ)) +
-            ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
-            2 * dot(CT123(uₕ), ᶜinterp(C123(uᵥ)))
-        )
+function compute_kinetic!(
+    ᶜκ::Fields.Field,
+    ᶜuₕ::Fields.Field,
+    ᶠuᵥ::Fields.Field,
+)
+    @assert eltype(ᶜuₕ) <: Union{C1, C2, C12}
+    @assert eltype(ᶠuᵥ) <: C3
+    @. ᶜκ =
+        (
+            dot(CT12(ᶜuₕ), C12(ᶜuₕ)) +
+            2 * dot(CT3(ᶜuₕ), ᶜinterp(ᶠuᵥ)) +
+            $g³³_field(ᶜκ) * ᶜinterp((ᶠuᵥ.components.data.:1)^2)
+        ) / 2
 end
 
 """
