@@ -33,8 +33,8 @@ device = ClimaComms.device(config.comms_ctx)
         "T_exp_T_lim!",
         # "lim!",
         "dss!",
-        "post_explicit!",
-        "post_implicit!",
+        "cache!",
+        "cache_imp!",
         "step!",
     ],
 )
@@ -59,8 +59,8 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
         @test compare_mem(trials, "T_exp_T_lim!", 9920)
         @test compare_mem(trials, "lim!", 0)
         @test compare_mem(trials, "dss!", 0)
-        @test compare_mem(trials, "post_explicit!", 120)
-        @test compare_mem(trials, "post_implicit!", 160)
+        @test compare_mem(trials, "cache!", 120)
+        @test compare_mem(trials, "cache_imp!", 160)
 
         # It's difficult to guarantee zero allocations,
         # so let's just leave this as broken for now.
