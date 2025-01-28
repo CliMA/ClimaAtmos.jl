@@ -96,7 +96,7 @@ horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
-    (; ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶜspecific, ᶜh_tot) = p.precomputed
+    (; ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶜh_tot) = p.precomputed
 
     ## Momentum tendencies
     ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(Y.c.ρ)
@@ -107,10 +107,10 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLill
     @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(ᶜh_tot))
 
     ## Tracer diffusion and associated mass changes
-    for (ᶜρχₜ, ᶜχ, χ_name) in CA.matching_subfields(Yₜ.c, ᶜspecific)
+    for (ᶜρχₜ, Ycρq, χ_name) in matching_ρ(Y, Yₜ.c)
         χ_name == :e_tot && continue
-        ᶜρχₜ_diffusion =
-            @. p.scratch.ᶜtemp_scalar = wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(ᶜχ))
+        ᶜρχₜ_diffusion = @. p.scratch.ᶜtemp_scalar =
+            wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(Ycρq / Y.c.ρ))
         @. ᶜρχₜ += ᶜρχₜ_diffusion
         # Rain and snow does not affect the mass
         if χ_name ∉ (:q_rai, :q_sno)
@@ -123,8 +123,7 @@ end
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     FT = eltype(Y)
     (; sfc_temp_C3, ᶠtemp_scalar, ᶜtemp_scalar) = p.scratch
-    (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, ᶜspecific, ᶜh_tot, sfc_conditions) =
-        p.precomputed
+    (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, ᶜh_tot, sfc_conditions) = p.precomputed
     (; ρ_flux_uₕ, ρ_flux_h_tot) = sfc_conditions
 
     # Define operators
@@ -157,15 +156,15 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
 
     ## Tracer diffusion and associated mass changes
     sfc_zero = @. sfc_temp_C3 = C3(FT(0))
-    for (ᶜρχₜ, ᶜχ, χ_name) in CA.matching_subfields(Yₜ.c, ᶜspecific)
+    for (ᶜρχₜ, Ycρq, χ_name) in matching_ρ(Y, Yₜ.c)
         χ_name == :e_tot && continue
 
         bottom = Operators.SetValue(
             χ_name == :q_tot ? sfc_conditions.ρ_flux_q_tot : sfc_zero,
         )
         ᶜdivᵥ_ρχ = Operators.DivergenceF2C(; top, bottom)
-
-        ᶜ∇ᵥρD∇χₜ = @. ᶜtemp_scalar = ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜχ)))
+        ᶜ∇ᵥρD∇χₜ =
+            @. ᶜtemp_scalar = ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(Ycρq / Y.c.ρ)))
         @. ᶜρχₜ -= ᶜ∇ᵥρD∇χₜ
         # Rain and snow does not affect the mass
         if χ_name ∉ (:q_rai, :q_sno)

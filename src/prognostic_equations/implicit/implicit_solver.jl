@@ -427,7 +427,6 @@ _linsolve!(x, A, b, update_matrix = false; kwargs...) = ldiv!(x, A, b)
 NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
     # Remove unnecessary values from p to avoid allocations in bycolumn.
     p′ = (;
-        p.precomputed.ᶜspecific,
         p.precomputed.ᶜK,
         p.precomputed.ᶜts,
         p.precomputed.ᶜp,
@@ -498,7 +497,7 @@ end
 
 function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     (; matrix, diffusion_flag, sgs_advection_flag, topography_flag) = A
-    (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜh_tot) = p
+    (; ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜh_tot) = p
     (;
         ᶜtemp_C3,
         ∂ᶜK_∂ᶜuₕ,
@@ -562,10 +561,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
     @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
 
-    tracer_info = (
-        (@name(c.ρe_tot), @name(ᶜh_tot)),
-        (@name(c.ρq_tot), @name(ᶜspecific.q_tot)),
-    )
+    tracer_info = ((@name(c.ρe_tot), @name(ᶜh_tot)),)
     MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, χ_name)
         MatrixFields.has_field(Y, ρχ_name) || return
         ᶜχ = MatrixFields.get_field(p, χ_name)
@@ -578,6 +574,23 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅ DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
         @. ∂ᶜρχ_err_∂ᶠu₃ =
             dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
+    end
+
+    tracer_info = (@name(c.ρq_tot),)
+    MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name)
+        MatrixFields.has_field(Y, ρχ_name) || return
+        Ycρ_quantity = MatrixFields.get_field(Y, ρχ_name)
+        if use_derivative(topography_flag)
+            ∂ᶜρχ_err_∂ᶜuₕ = matrix[ρχ_name, @name(c.uₕ)]
+        end
+        ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
+        use_derivative(topography_flag) && @. ∂ᶜρχ_err_∂ᶜuₕ =
+            dtγ * ᶜadvection_matrix ⋅
+            DiagonalMatrixRow(ᶠinterp(Ycρ_quantity / Y.c.ρ)) ⋅
+            ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅ DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
+        @. ∂ᶜρχ_err_∂ᶠu₃ =
+            dtγ * ᶜadvection_matrix ⋅
+            DiagonalMatrixRow(ᶠinterp(Ycρ_quantity / Y.c.ρ) * g³³(ᶠgⁱʲ))
     end
 
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
@@ -659,9 +672,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
             DiagonalMatrixRow(
                 -1 / ᶜρ * ifelse(
-                    ᶜspecific.q_tot == 0,
+                    (Y.c.ρq_tot / Y.c.ρ) == 0,
                     (Geometry.WVector(FT(0)),),
-                    p.ᶜwₜqₜ / ᶜspecific.q_tot,
+                    p.ᶜwₜqₜ / (Y.c.ρq_tot / Y.c.ρ),
                 ),
             ) - (I,)
 
@@ -696,8 +709,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         @. ∂ᶜρe_tot_err_∂ᶜρ =
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(
                 (
-                    -(1 + ᶜkappa_m) * ᶜspecific.e_tot -
-                    ᶜkappa_m * ∂e_int_∂q_tot * ᶜspecific.q_tot
+                    -(1 + ᶜkappa_m) * (Y.c.ρe_tot / Y.c.ρ) -
+                    ᶜkappa_m * ∂e_int_∂q_tot * (Y.c.ρq_tot / Y.c.ρ)
                 ) / ᶜρ,
             )
         @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
@@ -711,18 +724,19 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 DiagonalMatrixRow(ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ)
             @. ∂ᶜρq_tot_err_∂ᶜρ =
                 dtγ * ᶜdiffusion_h_matrix ⋅
-                DiagonalMatrixRow(-(ᶜspecific.q_tot) / ᶜρ)
+                DiagonalMatrixRow(-(Y.c.ρq_tot / Y.c.ρ) / ᶜρ)
             @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
 
-        MatrixFields.unrolled_foreach(tracer_info) do (ρq_name, q_name, _)
+        MatrixFields.unrolled_foreach(tracer_info) do (ρq_name, _, _)
             MatrixFields.has_field(Y, ρq_name) || return
-            ᶜq = MatrixFields.get_field(ᶜspecific, q_name)
+            Ycρq_name = MatrixFields.get_field(Y, ρq_name)
             ∂ᶜρq_err_∂ᶜρ = matrix[ρq_name, @name(c.ρ)]
             ∂ᶜρq_err_∂ᶜρq = matrix[ρq_name, ρq_name]
             @. ∂ᶜρq_err_∂ᶜρ =
-                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(-(ᶜq) / ᶜρ)
+                dtγ * ᶜdiffusion_h_matrix ⋅
+                DiagonalMatrixRow(-(Ycρq_name / Y.c.ρ) / ᶜρ)
             @. ∂ᶜρq_err_∂ᶜρq +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end

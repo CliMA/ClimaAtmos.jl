@@ -63,7 +63,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
-    (; ᶜp, ᶜspecific) = p.precomputed
+    (; ᶜp) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
@@ -74,7 +74,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         C123(wgradₕ(divₕ(p.precomputed.ᶜu))) -
         C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜu))))
 
-    @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.e_tot + ᶜp / Y.c.ρ))
+    @. ᶜ∇²specific_energy = wdivₕ(gradₕ((Y.c.ρe_tot + ᶜp) / Y.c.ρ))
 
     if diffuse_tke
         (; ᶜtke⁰) = p.precomputed
@@ -114,7 +114,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     diffuse_tke = use_prognostic_tke(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; ᶜp, ᶜspecific) = p.precomputed
+    (; ᶜp) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜρa⁰) = p.precomputed
@@ -206,11 +206,12 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
 
-    (; ᶜspecific) = p.precomputed
     (; ᶜ∇²specific_tracers) = p.hyperdiff
 
     for χ_name in propertynames(ᶜ∇²specific_tracers)
-        @. ᶜ∇²specific_tracers.:($$χ_name) = wdivₕ(gradₕ(ᶜspecific.:($$χ_name)))
+        ρχ_name = (Symbol(:ρ, χ_name))
+        @. ᶜ∇²specific_tracers.:($$χ_name) =
+            wdivₕ(gradₕ(Y.c.:($$ρχ_name) / Y.c.ρ))
     end
 
     if turbconv_model isa PrognosticEDMFX
