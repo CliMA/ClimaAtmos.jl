@@ -1,6 +1,6 @@
 #=
 # to get a target configuration:
-julia --project=perf
+julia --project=.buildkite
 import ClimaAtmos as CA
 using Revise; include(joinpath(pkgdir(CA), "perf", "common.jl"))
 config = TargetJobConfig("gpu_prognostic_edmfx_aquaplanet")

@@ -172,7 +172,7 @@ locally. From the main directory of your local repository call
 
 ```
 julia --project -e 'using Pkg; Pkg.instantiate()'
-julia --project=docs/ -e 'using Pkg; Pkg.instantiate()'
+julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); develop(PackageSpec(path=pwd()))'
 JULIA_DEBUG=Documenter julia --project=docs/ docs/make.jl
 ```
 
