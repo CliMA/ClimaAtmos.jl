@@ -47,6 +47,7 @@ function precomputed_quantities(Y, atmos)
     gs_quantities = (;
         ᶜspecific = specific_gs.(Y.c),
         ᶜu = similar(Y.c, C123{FT}),
+        ᶠu = similar(Y.f, C123{FT}),
         ᶠu³ = similar(Y.f, CT3{FT}),
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
@@ -238,11 +239,14 @@ function set_velocity_at_top!(Y, turbconv_model)
     return nothing
 end
 
-# This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
-# ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
-function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
-    @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
-    @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
+# Set the grid-scale velocity quantities ᶜu, ᶠu, ᶠu³, and ᶜK based on ᶠu₃, and
+# set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
+function set_velocity_quantities!(ᶜu, ᶠu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³, ᶜρ)
+    ᶜJ = Fields.local_geometry_field(ᶜu).J
+    ᶜgⁱʲ = Fields.local_geometry_field(ᶜu).gⁱʲ
+    @. ᶜu = C123(ᶜuₕ) + C123(ᶜinterp(ᶠu₃))
+    @. ᶠu³ = ᶠuₕ³ + ᶠwinterp(ᶜρ * ᶜJ, g³³(ᶜgⁱʲ)) * ᶠu₃
+    @. ᶠu = CT123(ᶠu³) + CT123(ᶠwinterp(ᶜρ * ᶜJ, CT12(ᶜu)))
     compute_kinetic!(ᶜK, ᶜuₕ, ᶠu₃)
     return nothing
 end
@@ -472,7 +476,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_args = (thermo_params, moisture_model)
     (; ᶜΦ) = p.core
-    (; ᶜspecific, ᶜu, ᶠu³, ᶜK, ᶜts, ᶜp) = p.precomputed
+    (; ᶜspecific, ᶜu, ᶠu, ᶠu³, ᶜK, ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
 
     @. ᶜspecific = specific_gs(Y.c)
@@ -483,7 +487,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     set_velocity_at_top!(Y, turbconv_model)
 
-    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
+    set_velocity_quantities!(ᶜu, ᶠu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³, Y.c.ρ)
     if n > 0
         # TODO: In the following increments to ᶜK, we actually need to add
         # quantities of the form ᶜρaχ⁰ / ᶜρ⁰ and ᶜρaχʲ / ᶜρʲ to ᶜK, rather than
@@ -705,15 +709,16 @@ function output_prognostic_sgs_quantities(Y, p, t)
     (; ᶜρa⁰, ᶜρ⁰, ᶜtsʲs) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     set_ᶠuₕ³!(ᶠuₕ³, Y)
-    (ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺) =
+    (ᶠu₃⁺, ᶜu⁺, ᶠu⁺, ᶠu³⁺, ᶜK⁺) =
         similar.((
             p.precomputed.ᶠu₃⁰,
             p.precomputed.ᶜu⁰,
+            p.precomputed.ᶠu,
             p.precomputed.ᶠu³⁰,
             p.precomputed.ᶜK⁰,
         ))
     set_sgs_ᶠu₃!(u₃⁺, ᶠu₃⁺, Y, turbconv_model)
-    set_velocity_quantities!(ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶠu₃⁺, Y.c.uₕ, ᶠuₕ³)
+    set_velocity_quantities!(ᶜu⁺, ᶠu⁺, ᶠu³⁺, ᶜK⁺, ᶠu₃⁺, Y.c.uₕ, ᶠuₕ³, Y.c.ρ)
     ᶜts⁺ = ᶜtsʲs.:1
     ᶜa⁺ = @. draft_area(ρa⁺(Y.c), TD.air_density(thermo_params, ᶜts⁺))
     ᶜa⁰ = @. draft_area(ᶜρa⁰, ᶜρ⁰)
