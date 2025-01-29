@@ -16,7 +16,15 @@ env:
   MPI_CONFIG_PATH: "config/mpi_configs"
 
 steps:
+  - label: "Skip CI If we are only modifying md or .github files"
+    key: "skip_ci"
+    command:
+      - git diff main --name-only | grep -v ".md" | grep -v ".github" -c && exit -1
+
+  - wait
+
   - label: "init :computer:"
+    depends_on: "skip_ci"
     key: "init_cpu_env"
     concurrency: 1
     concurrency_group: 'depot/climaatmos-ci'
