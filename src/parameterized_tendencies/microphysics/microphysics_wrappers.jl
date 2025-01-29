@@ -66,28 +66,17 @@ function cloud_sources(cm_params::CMP.CloudIce{FT}, thp, ts, dt) where {FT}
 end
 
 """
-    q_tot_precipitation_sources(precip_model, thp, cmp, dt, qₜ, ts)
+    q_tot_0M_precipitation_sources(thp, cmp, dt, qₜ, ts)
 
- - precip_model - a type for precipitation scheme choice
  - thp, cmp - structs with thermodynamic and microphysics parameters
  - dt - model time step
  - qₜ - total water specific humidity
  - ts - thermodynamic state (see Thermodynamics.jl package for details)
 
 Returns the qₜ source term due to precipitation formation
-defined as Δm_tot / (m_dry + m_tot)
+defined as Δm_tot / (m_dry + m_tot) for the 0-moment scheme
 """
-function q_tot_precipitation_sources(::NoPrecipitation, thp, cmp, dt, qₜ, ts)
-    return zero(qₜ)
-end
-function q_tot_precipitation_sources(
-    ::Microphysics0Moment,
-    thp,
-    cmp::CMP.Parameters0M,
-    dt,
-    qₜ,
-    ts,
-)
+function q_tot_0M_precipitation_sources(thp, cmp::CMP.Parameters0M, dt, qₜ, ts)
     return -min(max(qₜ, 0) / dt, -CM0.remove_precipitation(cmp, PP(thp, ts)))
 end
 
