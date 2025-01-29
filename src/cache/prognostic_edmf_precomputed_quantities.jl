@@ -396,8 +396,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     # Sources from the updrafts
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
-        @. ᶜSqₜᵖʲs.:($$j) = q_tot_precipitation_sources(
-            Microphysics0Moment(),
+        @. ᶜSqₜᵖʲs.:($$j) = q_tot_0M_precipitation_sources(
             thp,
             cmp,
             dt,
