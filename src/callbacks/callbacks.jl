@@ -198,41 +198,28 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         if radiation_mode.aerosol_radiation
+            _update_some_aerosol_conc(Y, p)
             ᶜΔz = Fields.Δz_field(Y.c)
 
-            ᶜaero_conc = Fields.array2field(
-                rrtmgp_model.center_dust_column_mass_density,
-                axes(Y.c),
-            )
-            @. ᶜaero_conc = 0
-            for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04]
-                if prescribed_aerosol_name in
-                   propertynames(p.tracers.prescribed_aerosols_field)
-                    aerosol_field = getproperty(
-                        p.tracers.prescribed_aerosols_field,
-                        prescribed_aerosol_name,
-                    )
-                    @. ᶜaero_conc += aerosol_field * Y.c.ρ * ᶜΔz
-                end
-            end
-
-            ᶜaero_conc = Fields.array2field(
-                rrtmgp_model.center_ss_column_mass_density,
-                axes(Y.c),
-            )
-            @. ᶜaero_conc = 0
-            for prescribed_aerosol_name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04]
-                if prescribed_aerosol_name in
-                   propertynames(p.tracers.prescribed_aerosols_field)
-                    aerosol_field = getproperty(
-                        p.tracers.prescribed_aerosols_field,
-                        prescribed_aerosol_name,
-                    )
-                    @. ᶜaero_conc += aerosol_field * Y.c.ρ * ᶜΔz
-                end
+            if pkgversion(RRTMGP) <= v"0.19.2"
+                more_aerosols = ()
+            else
+                more_aerosols = (
+                    (:center_dust1_column_mass_density, :DST01),
+                    (:center_dust2_column_mass_density, :DST02),
+                    (:center_dust3_column_mass_density, :DST03),
+                    (:center_dust4_column_mass_density, :DST04),
+                    (:center_dust5_column_mass_density, :DST05),
+                    (:center_ss1_column_mass_density, :SSLT01),
+                    (:center_ss2_column_mass_density, :SSLT02),
+                    (:center_ss3_column_mass_density, :SSLT03),
+                    (:center_ss4_column_mass_density, :SSLT04),
+                    (:center_ss5_column_mass_density, :SSLT05),
+                )
             end
 
             aerosol_names_pair = [
+                more_aerosols...,
                 (:center_so4_column_mass_density, :SO4),
                 (:center_bcpi_column_mass_density, :CB2),
                 (:center_bcpo_column_mass_density, :CB1),
