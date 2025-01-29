@@ -14,6 +14,8 @@ See the  [documentation](https://clima.github.io/ClimaAtmos.jl/dev/contributor_g
 
 ### Features
 
+v0.28.3
+-------
 ### Read CO2 from file
 
 `ClimaAtmos` now support using data from the Mauna Loa CO2 measurements to set

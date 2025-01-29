@@ -73,8 +73,8 @@ function _error(
     # There are some parameters, e.g. Obukhov length, for which Inf
     # is a reasonable value (implying a stability parameter in the neutral boundary layer
     # regime, for instance). We account for such instances with the `isfinite` function.
-    arr1 .*= isfinite.(arr1)
-    arr2 .*= isfinite.(arr2)
+    arr1 = isfinite.(Array(arr1))
+    arr2 = isfinite.(Array(arr2))
     diff = abs.(arr1 .- arr2)
     denominator = abs.(arr1)
     error = ifelse.(denominator .> ABS_TOL, diff ./ denominator, diff)
