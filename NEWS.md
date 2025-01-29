@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
+### Features
+
+### Allow different sizes of dust and sea salt for radiation
+
+Added functionality to allow five different size bins of dust and sea salt aerosols
+for radiation calculation. This feature requires RRTMGP version v0.20.0 or later.
+PR [3555](https://github.com/CliMA/ClimaAtmos.jl/pull/3555)
 
 v0.28.4
 -------
@@ -12,7 +19,7 @@ The `.dev` was deprecated. The two utilities in this folder can be replaced with
 more established and better developed tools:
 - instead of `clima_format`, use `JuliaFormatter`,
 - instead of `up_deps`, use `PkgDevTools`.
-See the  [documentation](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/#Formatting) for more information.
+See the [documentation](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/#Formatting) for more information.
 
 `ClimaAtmos` now only support equilibrium moisture + 0-moment microphysics and 
 nonequilibrium + 1-moment microphysics (No precipitation is still supported too).

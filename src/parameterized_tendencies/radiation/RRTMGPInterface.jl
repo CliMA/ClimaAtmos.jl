@@ -30,9 +30,9 @@ struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
     """
-    Reset the RNG seed before calling RRTGMP to a known value (the timestep number). 
-    When modeling cloud optics, RRTGMP uses a random number generator. 
-    Resetting the seed every time RRTGMP is called to a deterministic value ensures that 
+    Reset the RNG seed before calling RRTMGP to a known value (the timestep number). 
+    When modeling cloud optics, RRTMGP uses a random number generator. 
+    Resetting the seed every time RRTMGP is called to a deterministic value ensures that 
     the simulation is fully reproducible and can be restarted in a reproducible way. 
     Disable this option when running production runs.
     """
@@ -47,9 +47,9 @@ struct AllSkyRadiationWithClearSkyDiagnostics{
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
     """
-    Reset the RNG seed before calling RRTGMP to a known value (the timestep number). 
-    When modeling cloud optics, RRTGMP uses a random number generator. 
-    Resetting the seed every time RRTGMP is called to a deterministic value ensures that 
+    Reset the RNG seed before calling RRTMGP to a known value (the timestep number). 
+    When modeling cloud optics, RRTMGP uses a random number generator. 
+    Resetting the seed every time RRTMGP is called to a deterministic value ensures that 
     the simulation is fully reproducible and can be restarted in a reproducible way. 
     Disable this option when running production runs.
     """
@@ -831,16 +831,47 @@ function RRTMGPModel(
             # See the lookup table in RRTMGP for the order of aerosols
             aero_size = DA{FT}(undef, n_aerosol_sizes, nlay, ncol)
             aero_mass = DA{FT}(undef, n_aerosols, nlay, ncol)
-            aerosol_size_names = ["dust", "ss"]
-            aerosol_names =
-                ["dust", "ss", "so4", "bcpi", "bcpo", "ocpi", "ocpo"]
-            for (i, name) in enumerate(aerosol_size_names)
-                set_and_save!(
-                    view(aero_size, i, :, :),
-                    "center_$(name)_radius",
-                    t...,
-                    dict,
-                )
+
+            if pkgversion(RRTMGP) <= v"0.19.2"
+                aerosol_size_names = ["dust", "ss"]
+                aerosol_names =
+                    ["dust", "ss", "so4", "bcpi", "bcpo", "ocpi", "ocpo"]
+                for (i, name) in enumerate(aerosol_size_names)
+                    set_and_save!(
+                        view(aero_size, i, :, :),
+                        "center_$(name)_radius",
+                        t...,
+                        dict,
+                    )
+                end
+            else
+                aerosol_names = [
+                    "dust1",
+                    "ss1",
+                    "so4",
+                    "bcpi",
+                    "bcpo",
+                    "ocpi",
+                    "ocpo",
+                    "dust2",
+                    "dust3",
+                    "dust4",
+                    "dust5",
+                    "ss2",
+                    "ss3",
+                    "ss4",
+                    "ss5",
+                ]
+                for (i, name) in enumerate(aerosol_names)
+                    if occursin("dust", name) || occursin("ss", name)
+                        set_and_save!(
+                            view(aero_size, i, :, :),
+                            "center_$(name)_radius",
+                            t...,
+                            dict,
+                        )
+                    end
+                end
             end
             for (i, name) in enumerate(aerosol_names)
                 set_and_save!(

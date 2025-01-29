@@ -139,7 +139,7 @@ abstract type AbstractCO2 end
 
 Implement a static CO2 profile as read from disk.
 
-The data used is the one distributed with `RRTGMP.jl`.
+The data used is the one distributed with `RRTMGP.jl`.
 
 By default, this is 397.547 parts per million.
 
@@ -168,7 +168,7 @@ struct MaunaLoaCO2 <: AbstractCO2 end
 
 Describe how cloud properties should be set in radiation.
 
-This is only relevant for RRTGMP.
+This is only relevant for RRTMGP.
 """
 abstract type AbstractCloudInRadiation end
 
@@ -523,11 +523,11 @@ Base.@kwdef struct AtmosModel{
     forcing_type::F = nothing
     subsidence::S = nothing
 
-    # Currently only relevant for RRTGMP, but will hopefully become standalone
+    # Currently only relevant for RRTMGP, but will hopefully become standalone
     # in the future
-    """What to do with ozone for radiation (when using RRTGMP)"""
+    """What to do with ozone for radiation (when using RRTMGP)"""
     ozone::OZ = nothing
-    """What to do with co2 for radiation (when using RRTGMP)"""
+    """What to do with co2 for radiation (when using RRTMGP)"""
     co2::CO2 = nothing
 
     radiation_mode::RM = nothing

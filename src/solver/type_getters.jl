@@ -31,15 +31,15 @@ function get_atmos(config::AtmosConfig, params)
         ozone = IdealizedOzone()
     end
     co2 = get_co2(parsed_args)
-    with_rrtgmp = radiation_mode isa RRTMGPI.AbstractRRTMGPMode
-    if with_rrtgmp && isnothing(co2)
+    with_rrtmgp = radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+    if with_rrtmgp && isnothing(co2)
         @warn (
-            "co2_model set to nothing with an RRTGMP model. Resetting to FixedCO2"
+            "co2_model set to nothing with an RRTMGP model. Resetting to FixedCO2"
         )
         co2 = FixedCO2()
     end
-    (isnothing(co2) && !with_rrtgmp) &&
-        @warn ("$(co2) does nothing if RRTGMP is not used")
+    (isnothing(co2) && !with_rrtmgp) &&
+        @warn ("$(co2) does nothing if RRTMGP is not used")
 
     diffuse_momentum = !(forcing_type isa HeldSuarezForcing)
 
