@@ -23,21 +23,15 @@ sol_res = CA.solve_atmos!(simulation)
 
 import ClimaCore
 import ClimaCore: Topologies, Quadratures, Spaces
-import ClimaAtmos.InitialConditions as ICs
-using Statistics: mean
-import ClimaAtmos.Parameters as CAP
-import Thermodynamics as TD
 import ClimaComms
 using SciMLBase
 using PrettyTables
 using JLD2
 using NCDatasets
 using ClimaTimeSteppers
-import JSON
 using Test
 import Tar
 import Base.Filesystem: rm
-import OrderedCollections
 include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
 
 ref_job_id = config.parsed_args["reference_job_id"]
