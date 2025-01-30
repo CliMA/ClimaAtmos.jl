@@ -20,4 +20,3 @@ precip_model: 1M
 dt: 120secs
 t_end: 12hours
 toml: [toml/diagnostic_edmfx.toml]
-ode_algo: ARS343

@@ -19,7 +19,6 @@ aerosol_radiation: true
 prescribed_aerosols: ["CB1", "CB2", "DST01", "OC1", "OC2", "SO4", "SSLT03", "SSLT04"]
 surface_setup: "DefaultMoninObukhov"
 turbconv: "diagnostic_edmfx"
-ode_algo: ARS343
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 prognostic_tke: true

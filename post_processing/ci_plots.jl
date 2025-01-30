@@ -1169,6 +1169,7 @@ end
 
 
 EDMFBoxPlots = Union{
+    Val{:diagnostic_edmfx_test_box},
     Val{:diagnostic_edmfx_gabls_box},
     Val{:diagnostic_edmfx_bomex_box},
     Val{:diagnostic_edmfx_bomex_stretched_box},

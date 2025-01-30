@@ -1,4 +1,4 @@
-205
+206
 
 # **README**
 #
@@ -20,6 +20,8 @@
 
 
 #=
+206
+- Change default timestepper to ARS343
 
 205
 - A ClimaTimeSteppers update
