@@ -2,7 +2,7 @@
 
 julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "46f0a9409bb0d3c679674a0d7868d43f74e635c6"
+project_hash = "5a87299be1bfcf39f70f671b6da880a4c0d361df"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "e1ce448a0d7f88168ffe2eeac4549c32d45a42d1"
@@ -373,12 +373,6 @@ weakdeps = ["CUDA", "Krylov"]
     [deps.ClimaCore.extensions]
     ClimaCoreCUDAExt = "CUDA"
     KrylovExt = "Krylov"
-
-[[deps.ClimaCoreMakie]]
-deps = ["ClimaCore", "Makie"]
-git-tree-sha1 = "e1e82d32ba993a18fc760d5cbd7db3bcabd1f3c8"
-uuid = "908f55d8-4145-4867-9c14-5dad1a479e4d"
-version = "0.4.6"
 
 [[deps.ClimaCorePlots]]
 deps = ["ClimaComms", "ClimaCore", "RecipesBase", "StaticArrays", "TriplotBase"]
@@ -1884,12 +1878,6 @@ git-tree-sha1 = "3ca9a356cd2e113c420f2c13bea19f8d3fb1cb18"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
 version = "1.4.3"
 
-[[deps.PoissonRandom]]
-deps = ["Random"]
-git-tree-sha1 = "a0f1159c33f846aa77c3f30ebbc69795e5327152"
-uuid = "e409e4f3-bfea-5376-8464-e040bb5c01ab"
-version = "0.4.4"
-
 [[deps.Polyester]]
 deps = ["ArrayInterface", "BitTwiddlingConvenienceFunctions", "CPUSummary", "IfElse", "ManualMemory", "PolyesterWeave", "Static", "StaticArrayInterface", "StrideArraysCore", "ThreadingUtilities"]
 git-tree-sha1 = "6d38fea02d983051776a856b7df75b30cf9a3c1f"
@@ -1963,12 +1951,6 @@ deps = ["Base64", "JSON", "Pkg", "Profile", "REPL"]
 git-tree-sha1 = "e42571ce9a614c2fbebcaa8aab23bbf8865c624e"
 uuid = "efd6af41-a80b-495e-886c-e51b0c7d77a3"
 version = "0.1.6"
-
-[[deps.ProgressLogging]]
-deps = ["Logging", "SHA", "UUIDs"]
-git-tree-sha1 = "80d919dee55b9c50e8d9e2da5eeafff3fe58b539"
-uuid = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
-version = "0.1.4"
 
 [[deps.ProgressMeter]]
 deps = ["Distributed", "Printf"]
