@@ -54,6 +54,13 @@ git-tree-sha1 = "b42adb958f0b2ba34194e5f5440753be5bb4dc34"
     sha256 = "469d656f94f6e168c559399f9941e09cd16bc47d6fea3de44b511842ba7137b1"
     url = "https://caltech.box.com/shared/static/lr9k1s2pgeqzli8goxq9y2liiy3u6kni.gz"
 
+[topo_drag]
+git-tree-sha1 = "9970989c13c2ad015ab5738d42fd9f5b320f1451"
+
+    [[topo_drag.download]]
+    sha256 = "2960d7ee10b3a15203dfa8b05b1b94c9546212230e5828787577864113829d6e"
+    url = "https://caltech.box.com/shared/static/pflpi9qoay7jknmajlj1uaxqtnp4frj2.gz"
+
 [DYAMOND_SUMMER_ICS_p98deg]
 git-tree-sha1 = "46aa28a9177dd7e4cbb813eeba3e02597c3ba071"
 lazy = true
