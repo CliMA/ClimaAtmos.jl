@@ -13,7 +13,7 @@ use_pbl_from_lock = .true.
 use_uref_4stable = .true.
 Not yet included in our codebase
 =#
-
+using ClimaUtilities.ClimaArtifacts
 using ClimaCore: InputOutput
 
 orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
@@ -22,8 +22,6 @@ orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
 orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 
 orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-
-include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 
 function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
 
@@ -34,7 +32,8 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
     (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) = ogw
 
     if ogw.topo_info == "gfdl_restart"
-        orographic_info_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
+        topo_path = @clima_artifact("topo_drag", ClimaComms.context(Y.c))
+        orographic_info_rll = joinpath(topo_path, "topo_drag.res.nc")
         topo_info = regrid_OGW_info(Y, orographic_info_rll)
     elseif ogw.topo_info == "raw_topo"
         # TODO: right now this option may easily crash

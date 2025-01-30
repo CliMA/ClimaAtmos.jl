@@ -7,6 +7,9 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 using SafeTestsets
 using Test
 
+# Download test artifacts
+include("download_artifacts.jl")
+
 #! format: off
 @safetestset "Aqua" begin @time include("aqua.jl") end
 @safetestset "Dependencies" begin @time include("dependencies.jl") end
