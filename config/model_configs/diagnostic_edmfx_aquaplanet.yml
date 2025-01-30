@@ -22,4 +22,3 @@ dt: 120secs
 t_end: 3hours
 reproducibility_test: true
 toml: [toml/diagnostic_edmfx.toml]
-ode_algo: ARS343
