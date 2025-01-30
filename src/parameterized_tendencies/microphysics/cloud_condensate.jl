@@ -27,9 +27,11 @@ function cloud_condensate_tendency!(
 )
     (; ᶜts) = p.precomputed
     (; params, dt) = p
+    (; q_rai, q_sno) = p.precomputed.ᶜspecific
+    FT = eltype(params)
     thp = CAP.thermodynamics_params(params)
     cmc = CAP.microphysics_cloud_params(params)
 
-    @. Yₜ.c.ρq_liq += cloud_sources(cmc.liquid, thp, ᶜts, dt)
-    @. Yₜ.c.ρq_ice += cloud_sources(cmc.ice, thp, ᶜts, dt)
+    @. Yₜ.c.ρq_liq += cloud_sources(cmc.liquid, thp, ᶜts, max(FT(0), q_rai), dt)
+    @. Yₜ.c.ρq_ice += cloud_sources(cmc.ice, thp, ᶜts, max(FT(0), q_sno), dt)
 end

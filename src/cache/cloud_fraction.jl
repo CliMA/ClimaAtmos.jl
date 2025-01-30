@@ -2,6 +2,13 @@ import NVTX
 import StaticArrays as SA
 import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 
+"""
+    Helper function to populate the cloud diagnostics named tuple
+"""
+function make_named_tuple(t1, t2, t3)
+    return NamedTuple{(:cf, :q_liq, :q_ice)}(tuple(t1, t2, t3))
+end
+
 # TODO: write a test with scalars that are linear with z
 """
     Diagnose horizontal covariances based on vertical gradients
@@ -27,7 +34,7 @@ end
 NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
-    ::Union{EquilMoistModel, NonEquilMoistModel},
+    moist_model::Union{EquilMoistModel, NonEquilMoistModel},
     ::GridScaleCloud,
 )
     (; params) = p
@@ -48,13 +55,19 @@ NVTX.@annotate function set_cloud_fraction!(
         end
         compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     end
-    @. cloud_diagnostics_tuple = NamedTuple{(:cf, :q_liq, :q_ice)}(
-        tuple(
+    if moist_model isa EquilMoistModel
+        @. cloud_diagnostics_tuple = make_named_tuple(
             ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0),
             TD.PhasePartition(thermo_params, ᶜts).liq,
             TD.PhasePartition(thermo_params, ᶜts).ice,
-        ),
-    )
+        )
+    else
+       @. cloud_diagnostics_tuple = make_named_tuple(
+            ifelse(p.precomputed.ᶜspecific.q_liq + p.precomputed.ᶜspecific.q_ice > 0, 1, 0),
+            p.precomputed.ᶜspecific.q_liq,
+            p.precomputed.ᶜspecific.q_ice,
+        )
+    end
 end
 NVTX.@annotate function set_cloud_fraction!(
     Y,

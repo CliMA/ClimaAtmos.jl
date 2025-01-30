@@ -9,6 +9,8 @@ import CloudMicrophysics as CM
 
 include("../../test_helpers.jl")
 
+import Test
+
 @testset "Equilibrium Moisture + 0-moment precipitation RHS terms" begin
 
     ### Boilerplate default integrator objects
@@ -62,7 +64,6 @@ include("../../test_helpers.jl")
     )
     @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
     @test ᶜYₜ.c.ρ == p.precipitation.ᶜS_ρq_tot
-    @assert !any(isnan, ᶜYₜ.c.ρq_tot)
 
     # No cloud condensation tendency for the equilibrium model
     @test CA.cloud_condensate_tendency!(
@@ -84,7 +85,7 @@ end
             "config" => "column",
             "output_default_diagnostics" => false,
         ),
-        job_id = "precipitation1",
+        job_id = "precipitation2",
     )
     (; Y, p, params) = generate_test_simulation(config)
 
@@ -94,17 +95,15 @@ end
     # Set all model choices
     (; turbconv_model, moisture_model, precip_model) = p.atmos
 
+    # Test cache to verify expected variables exist in tendency function
     precip_cache = CA.precipitation_cache(Y, precip_model)
-    ᶜYₜ = Y .* FT(0)
     test_varnames =
-        (:ᶜSqₜᵖ, :ᶜSqᵣᵖ, :ᶜSqₛᵖ, :ᶜSeₜᵖ, :surface_rain_flux, :surface_snow_flux)
+        (:ᶜSqₗᵖ, :ᶜSqᵢᵖ, :ᶜSqᵣᵖ, :ᶜSqₛᵖ, :surface_rain_flux, :surface_snow_flux)
     for var_name in test_varnames
         @test var_name ∈ propertynames(precip_cache)
     end
 
     # test helper functions
-    @test CA.qₚ(FT(10), FT(2)) == FT(5)
-    @test CA.qₚ(FT(-10), FT(2)) == FT(0)
     @test CA.limit(FT(10), FT(2), 5) == FT(1)
 
     # compute source terms based on the last model state
@@ -122,21 +121,18 @@ end
     @assert !any(isnan, ᶜYₜ.c.ρ)
     @assert !any(isnan, ᶜYₜ.c.ρq_tot)
     @assert !any(isnan, ᶜYₜ.c.ρe_tot)
+    @assert !any(isnan, ᶜYₜ.c.ρq_liq)
+    @assert !any(isnan, ᶜYₜ.c.ρq_ice)
     @assert !any(isnan, ᶜYₜ.c.ρq_rai)
     @assert !any(isnan, ᶜYₜ.c.ρq_sno)
+    @assert !any(isnan, p.precomputed.ᶜwₗ)
+    @assert !any(isnan, p.precomputed.ᶜwᵢ)
     @assert !any(isnan, p.precomputed.ᶜwᵣ)
     @assert !any(isnan, p.precomputed.ᶜwₛ)
 
     # test water budget
     @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
-    @test ᶜYₜ.c.ρ == Y.c.ρ .* p.precipitation.ᶜSqₜᵖ
-    @test all(
-        isapprox(
-            .-p.precipitation.ᶜSqₛᵖ .- p.precipitation.ᶜSqᵣᵖ,
-            p.precipitation.ᶜSqᵣᵖ,
-            atol = eps(FT),
-        ),
-    )
+    @assert iszero(ᶜYₜ.c.ρ)
 
     # test nonequilibrium cloud condensate
     CA.cloud_condensate_tendency!(ᶜYₜ, p, moisture_model, precip_model)
@@ -144,6 +140,8 @@ end
     @assert !any(isnan, ᶜYₜ.c.ρq_ice)
 
     # test if terminal velocity is positive
+    @test minimum(p.precomputed.ᶜwₗ) >= FT(0)
+    @test minimum(p.precomputed.ᶜwᵢ) >= FT(0)
     @test minimum(p.precomputed.ᶜwᵣ) >= FT(0)
     @test minimum(p.precomputed.ᶜwₛ) >= FT(0)
 
