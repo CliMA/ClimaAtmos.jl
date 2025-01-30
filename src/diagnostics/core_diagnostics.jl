@@ -514,6 +514,32 @@ add_diagnostic_variable!(
 )
 
 ###
+# Surface pressure (2d)
+###
+add_diagnostic_variable!(
+    short_name = "ps",
+    long_name = "Surface Air Pressure",
+    standard_name = "surface_pressure",
+    units = "Pa",
+    comments = "Pressure of the lower boundary of the atmosphere",
+    compute! = (out, state, cache, time) -> begin
+        thermo_params = CAP.thermodynamics_params(cache.params)
+        if isnothing(out)
+            return TD.air_pressure.(
+                thermo_params,
+                cache.precomputed.sfc_conditions.ts,
+            )
+        else
+            out .=
+                TD.air_pressure.(
+                    thermo_params,
+                    cache.precomputed.sfc_conditions.ts,
+                )
+        end
+    end,
+)
+
+###
 # Near-surface air temperature (2d)
 ###
 add_diagnostic_variable!(
