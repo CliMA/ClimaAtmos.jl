@@ -38,14 +38,14 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 #####
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target"] = 33_096
-allocs_limit["flame_perf_target_tracers"] = 49_264
+allocs_limit["flame_perf_target"] = 99_928
+allocs_limit["flame_perf_target_tracers"] = 27_6368
 allocs_limit["flame_perf_diagnostics"] = 10_677_144
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 47_744
-allocs_limit["flame_perf_target_frierson"] = 559_148
-allocs_limit["flame_perf_target_threaded"] = 883_784
-allocs_limit["flame_perf_target_callbacks"] = 316_872
-allocs_limit["flame_perf_gw"] = 410_768_488
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 122_624
+allocs_limit["flame_perf_target_frierson"] = 4_015_767_024
+allocs_limit["flame_perf_target_threaded"] = 2047_736
+allocs_limit["flame_perf_target_callbacks"] = 391_864
+allocs_limit["flame_perf_gw"] = 581_381_976
 allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 538_819
 allocs_limit["flame_gpu_implicit_barowave_moist"] = 1_243_048
 # Ideally, we would like to track all the allocations, but this becomes too

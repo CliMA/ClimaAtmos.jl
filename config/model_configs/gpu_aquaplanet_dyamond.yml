@@ -1,6 +1,6 @@
 dt_save_state_to_disk: "Inf"
 dt_save_to_sol: "Inf"
-h_elem: 30
+h_elem: 16
 z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0

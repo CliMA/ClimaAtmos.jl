@@ -36,4 +36,3 @@ netcdf_output_at_levels: true
 diagnostics:
   - short_name: [hus, thetaa, clw, arup, tke, entr, detr, waup]
     period: 10mins
-ode_algo: ARS343

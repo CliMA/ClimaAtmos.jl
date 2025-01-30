@@ -1,7 +1,6 @@
 initial_condition: "MoistAdiabaticProfileEDMFX"
 advection_test: true
 turbconv: "prognostic_edmfx"
-ode_algo: "SSP33ShuOsher"
 edmfx_upwinding: "first_order"
 config: "column"
 moist: "equil"
@@ -21,4 +20,3 @@ diagnostics:
     period: 10mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke, lmix]
     period: 10mins
-ode_algo: ARS343
