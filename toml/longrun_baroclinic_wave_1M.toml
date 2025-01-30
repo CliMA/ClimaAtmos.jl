@@ -3,9 +3,3 @@ value = 100
 
 [sublimation_deposition_timescale]
 value = 100
-
-[C_H]
-value = 0.0
-
-[prescribed_cloud_droplet_number_concentration]
-value = 0.0

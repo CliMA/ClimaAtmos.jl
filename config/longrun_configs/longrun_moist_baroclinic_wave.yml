@@ -10,4 +10,4 @@ dt_save_state_to_disk: "10days"
 toml: [toml/longrun_baroclinic_wave.toml]
 diagnostics:
   - short_name: [pfull, wa, va, ua, ta, rhoa, rv, hus, ke, clw, cli]
-    period: 1days
+    period: 10days

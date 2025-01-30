@@ -42,3 +42,9 @@ value = 0
 
 [pressure_normalmode_drag_coeff]
 value = 40.0
+
+[condensation_evaporation_timescale]
+value = 100
+
+[sublimation_deposition_timescale]
+value = 100
