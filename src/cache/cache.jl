@@ -89,8 +89,8 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     grav = FT(CAP.grav(params))
-    ᶜΦ = grav .* ᶜcoord.z
-    ᶠΦ = grav .* ᶠcoord.z
+    ᶜΦ = @lazy grav .* ᶜcoord.z
+    ᶠΦ = @lazy grav .* ᶠcoord.z
 
     (; ᶜf³, ᶠf¹²) = compute_coriolis(ᶜcoord, ᶠcoord, params)
 
