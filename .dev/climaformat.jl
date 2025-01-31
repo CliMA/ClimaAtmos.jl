@@ -3,7 +3,7 @@
 println("climaformat.jl has been discontinued in favor of JuliaFormatter")
 println("To use JuliaFormatter, add it to your base environment with: ")
 println()
-println("julia -e 'using Pkg. Pkg.add(\"JuliaFormatter\")'")
+println("julia -e 'using Pkg; Pkg.add(\"JuliaFormatter\")'")
 println()
 println("Then, format your current package with")
 println()

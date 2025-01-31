@@ -1,4 +1,4 @@
-207
+208
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+208
+- Update RRTMGP to v0.19.2, which changes cloud optics slightly
+
 207
 - Changes in the CI for the working fluid
 

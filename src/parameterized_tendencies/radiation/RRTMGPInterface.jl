@@ -349,8 +349,6 @@ array.
 - `disable_shortwave`: whether to ignore shortwave fluxes
 - `use_one_scalar_mode`: whether to use the one-scalar method for computing
   optical properties instead of the default two-stream method
-- `use_pade_cloud_optics_mode`: whether to use PADE interpolation for computing
-  cloud optical properties instead of the default LUT interpolation
 - `use_global_means_for_well_mixed_gases`: whether to use a scalar value to
   represent the volume mixing ratio of each well-mixed gas (i.e., a gas that is
   not water vapor or ozone), instead of using an array that represents a
@@ -432,7 +430,6 @@ function RRTMGPModel(
     disable_longwave::Bool = false,
     disable_shortwave::Bool = false,
     use_one_scalar_mode::Bool = false,
-    use_pade_cloud_optics_mode::Bool = false,
     use_global_means_for_well_mixed_gases::Bool = false,
     kwargs...,
 )
@@ -448,13 +445,6 @@ function RRTMGPModel(
     if use_one_scalar_mode && !disable_shortwave
         @warn "upward shortwave fluxes are not computed when \
                use_one_scalar_mode is true"
-    end
-    if use_pade_cloud_optics_mode && (
-        radiation_mode isa GrayRadiation ||
-        radiation_mode isa ClearSkyRadiation
-    )
-        @warn "use_pade_cloud_optics_mode is ignored when using GrayRadiation \
-               or ClearSkyRadiation"
     end
     if use_global_means_for_well_mixed_gases && radiation_mode isa GrayRadiation
         @warn "use_global_means_for_well_mixed_gases is ignored when using \
@@ -538,10 +528,7 @@ function RRTMGPModel(
                 data_loader(
                     RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :lw),
                 ) do ds
-                    lookup_lw_cld =
-                        use_pade_cloud_optics_mode ?
-                        RRTMGP.LookUpTables.PadeCld(ds, FT, DA) :
-                        RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
+                    lookup_lw_cld = RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
                 end
                 lookups = (; lookups..., lookup_lw_cld)
             end
@@ -615,10 +602,7 @@ function RRTMGPModel(
                 data_loader(
                     RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :sw),
                 ) do ds
-                    lookup_sw_cld =
-                        use_pade_cloud_optics_mode ?
-                        RRTMGP.LookUpTables.PadeCld(ds, FT, DA) :
-                        RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
+                    lookup_sw_cld = RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
                 end
                 lookups = (; lookups..., lookup_sw_cld)
             end
