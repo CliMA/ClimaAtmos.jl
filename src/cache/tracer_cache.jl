@@ -1,8 +1,7 @@
 import Dates: Year
 import ClimaUtilities
 import ClimaUtilities.TimeVaryingInputs
-import ClimaUtilities.TimeVaryingInputs:
-    TimeVaryingInput, LinearPeriodFillingInterpolation
+import ClimaUtilities.TimeVaryingInputs: TimeVaryingInput, LinearInterpolation
 import Interpolations as Intp
 
 ozone_cache(_, _, _) = (;)
@@ -16,7 +15,7 @@ function ozone_cache(::PrescribedOzone, Y, start_date)
         reference_date = start_date,
         regridder_type = :InterpolationsRegridder,
         regridder_kwargs = (; extrapolation_bc),
-        method = LinearPeriodFillingInterpolation(Year(1)),
+        method = LinearInterpolation(),
     )
     return (; o3, prescribed_o3_timevaryinginput)
 end
@@ -67,7 +66,7 @@ function tracer_cache(Y, atmos, prescribed_aerosol_names, start_date)
         # NamedTuple that uses the same keys and has as values the TimeVaryingInputs
         # for those variables.
         #
-        # The keys in the aerosol_concentrations.nc file have to match the ones passed with the
+        # The keys in the merra2_aerosols.nc file have to match the ones passed with the
         # configuration. The file also has to be defined on the globe and provide
         # time series of lon-lat-z data.
         prescribed_aerosol_names_as_symbols = Symbol.(prescribed_aerosol_names)
@@ -83,7 +82,7 @@ function tracer_cache(Y, atmos, prescribed_aerosol_names, start_date)
                 reference_date = start_date,
                 regridder_type = :InterpolationsRegridder,
                 regridder_kwargs = (; extrapolation_bc),
-                method = LinearPeriodFillingInterpolation(Year(1)),
+                method = LinearInterpolation(),
             ) for name in prescribed_aerosol_names
         ]
 
