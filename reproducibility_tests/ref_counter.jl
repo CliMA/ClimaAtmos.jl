@@ -1,4 +1,4 @@
-208
+209
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+209
+- Floating point changes, with minor adjustments to how to sponge tendencies are
+  added.
+
 208
 - Update RRTMGP to v0.19.2, which changes cloud optics slightly
 
