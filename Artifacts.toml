@@ -1,5 +1,5 @@
-[aerosol_concentrations]
-git-tree-sha1 = "a4bf66aab365d42abe428129457327d5244ed6b0"
+[merra2_aerosols]
+git-tree-sha1 = "6018165de4d718628fafc86a01721a155faa4cb0"
 
 [ozone_concentrations]
 git-tree-sha1 = "235a16e02c24a28b20244c0f2e7f149cc783166f"
@@ -15,12 +15,12 @@ lazy = true
     sha256 = "78f13efcbc71350609c8a73ed66ff28fe3653fb7a0274e34b52d720651c1c2ec"
     url = "https://caltech.box.com/shared/static/elv5ksf3av3kum9552jxhnmlgu7vxr8u.nc"
 
-[aerosol_concentrations_lowres]
-git-tree-sha1 = "261cdd1ee725c99ba80812557543ce967528ed9e"
+[merra2_aerosols_lowres]
+git-tree-sha1 = "1efc90e4955112c3ac9c3c522d6232b770c0f53b"
 
-    [[aerosol_concentrations_lowres.download]]
-    sha256 = "985c354cf884c7b2a850aae1285f89664f581aa6d40582ac2eeaf0387d64415e"
-    url = "https://caltech.box.com/shared/static/0ef34ii505atm8jlsx4jd2ist19p7w6b.gz"
+    [[merra2_aerosols_lowres.download]]
+    sha256 = "ce7df957f950c13db6dcdec4dd09b33631606a98f47eba22d1c29ff0c913be53"
+    url = "https://caltech.box.com/shared/static/c152v3f03l0w745qv7d8td9eguz9glsy.gz"
 
 [ozone_concentrations_lowres]
 git-tree-sha1 = "6693f8451b447543952b3d557d733c7e5c670ed3"

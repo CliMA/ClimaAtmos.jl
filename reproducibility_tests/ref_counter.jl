@@ -1,4 +1,4 @@
-209
+210
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+210
+- Change prescribed aerosol dataset to MERRA2
+
 209
 - Floating point changes, with minor adjustments to how to sponge tendencies are
   added.
