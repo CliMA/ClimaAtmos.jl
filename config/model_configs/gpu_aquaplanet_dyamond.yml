@@ -5,7 +5,7 @@ z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
 moist: "equil"
-precip_model: "1M"
+precip_model: "0M"
 rad: "allskywithclear"
 insolation: "timevarying"
 dt_rad: "1hours"

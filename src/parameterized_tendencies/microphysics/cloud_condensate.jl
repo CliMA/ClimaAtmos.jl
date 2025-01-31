@@ -2,14 +2,29 @@
 ##### DryModel, EquilMoistModel
 #####
 
-cloud_condensate_tendency!(Yₜ, p, _) = nothing
+cloud_condensate_tendency!(Yₜ, p, _, _) = nothing
 
 #####
 ##### NonEquilMoistModel
 #####
 
-function cloud_condensate_tendency!(Yₜ, p, ::NonEquilMoistModel)
+function cloud_condensate_tendency!(
+    Yₜ,
+    p,
+    ::NonEquilMoistModel,
+    ::Union{NoPrecipitation, Microphysics0Moment},
+)
+    error(
+        "NonEquilMoistModel can only be run with Microphysics1Moment precipitation",
+    )
+end
 
+function cloud_condensate_tendency!(
+    Yₜ,
+    p,
+    ::NonEquilMoistModel,
+    ::Microphysics1Moment,
+)
     (; ᶜts) = p.precomputed
     (; params, dt) = p
     thp = CAP.thermodynamics_params(params)

@@ -42,6 +42,3 @@ value = 0
 
 [pressure_normalmode_drag_coeff]
 value = 40.0
-
-[precipitation_timescale]
-value = 10

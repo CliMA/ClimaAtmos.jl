@@ -8,7 +8,7 @@ dt_save_state_to_disk: "24hours"
 vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-moist: "equil"
+moist: "nonequil"
 precip_model: "1M"
 rad: "allskywithclear"
 aerosol_radiation: true
@@ -21,7 +21,7 @@ surface_setup: "DefaultMoninObukhov"
 prescribe_ozone: true
 reproducibility_test: true
 prescribed_aerosols: ["CB1", "CB2", "SO4"]
-toml: [toml/sphere_aquaplanet.toml]
+toml: [toml/sphere_aquaplanet_1M.toml]
 diagnostics:
   - short_name: [edt, evu, mmrso4, mmrbcpo, mmrbcpi, o3]
     reduction_time: average

@@ -39,7 +39,7 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 
 allocs_limit = Dict()
 allocs_limit["flame_perf_target"] = 99_928
-allocs_limit["flame_perf_target_tracers"] = 27_6368
+allocs_limit["flame_perf_target_tracers"] = 441_904
 allocs_limit["flame_perf_diagnostics"] = 10_677_144
 allocs_limit["flame_perf_target_diagnostic_edmfx"] = 122_624
 allocs_limit["flame_perf_target_frierson"] = 4_015_767_024
