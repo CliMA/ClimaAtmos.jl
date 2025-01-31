@@ -589,9 +589,10 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     @info "Define ode function: $s"
     problem = SciMLBase.ODEProblem(func, Y, tspan, p)
     saveat = if dt_save_to_sol == Inf
-        tspan[2]
+        pkgversion(CTS) <= v"0.8.1" ? tspan[2] : [tspan[1], tspan[2]]
     elseif tspan[2] % dt_save_to_sol == 0
-        dt_save_to_sol
+        pkgversion(CTS) <= v"0.8.1" ? dt_save_to_sol :
+        [tspan[1]:dt_save_to_sol:tspan[2]...]
     else
         [tspan[1]:dt_save_to_sol:tspan[2]..., tspan[2]]
     end # ensure that tspan[2] is always saved
