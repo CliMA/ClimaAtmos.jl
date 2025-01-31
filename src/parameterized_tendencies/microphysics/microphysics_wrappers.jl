@@ -43,7 +43,7 @@ function cloud_sources(cm_params::CMP.CloudLiquid{FT}, thp, ts, qᵣ, dt) where 
     q = TD.PhasePartition(thp, ts)
     ρ = TD.air_density(thp, ts)
 
-    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cm_params, thp, q, ρ, Tₐ(thp, ts))
+    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cm_params, thp, q, ρ, Tₐ(thp, ts)) / 10
 
     # keeping the same limiter for now
     return ifelse(
@@ -57,7 +57,7 @@ function cloud_sources(cm_params::CMP.CloudIce{FT}, thp, ts, qₛ, dt) where {FT
     q = TD.PhasePartition(thp, ts)
     ρ = TD.air_density(thp, ts)
 
-    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cm_params, thp, q, ρ, Tₐ(thp, ts))
+    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cm_params, thp, q, ρ, Tₐ(thp, ts)) / 10
 
     # keeping the same limiter for now
     return ifelse(
