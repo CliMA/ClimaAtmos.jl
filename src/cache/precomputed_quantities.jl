@@ -248,7 +248,8 @@ end
 function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
     @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
     @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
-    compute_kinetic!(ᶜK, ᶜuₕ, ᶠu₃)
+    bc_kinetic = compute_kinetic(ᶜuₕ, ᶠu₃)
+    @. ᶜK = bc_kinetic
     return nothing
 end
 
