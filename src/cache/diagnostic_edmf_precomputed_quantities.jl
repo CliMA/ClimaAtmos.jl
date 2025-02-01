@@ -943,7 +943,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     ᶠu⁰ = p.scratch.ᶠtemp_C123
     @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
-    compute_strain_rate_center!(ᶜstrain_rate, ᶠu⁰)
+    bc_strain_rate = compute_strain_rate_center(ᶠu⁰)
+    @. ᶜstrain_rate = bc_strain_rate
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar

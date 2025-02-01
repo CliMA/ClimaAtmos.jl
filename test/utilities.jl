@@ -86,8 +86,12 @@ end
     ᶠu = @. UVW(Geometry.UVector(ᶠu)) +
        UVW(Geometry.VVector(ᶠv)) +
        UVW(Geometry.WVector(ᶠw))
-    CA.compute_strain_rate_center!(ᶜϵ, Geometry.Covariant123Vector.(ᶠu))
-    CA.compute_strain_rate_face!(ᶠϵ, Geometry.Covariant123Vector.(ᶜu))
+    bc_strain_rate =
+        CA.compute_strain_rate_center(Geometry.Covariant123Vector.(ᶠu))
+    @. ᶜϵ = bc_strain_rate
+    bc_strain_rate =
+        CA.compute_strain_rate_face(Geometry.Covariant123Vector.(ᶜu))
+    @. ᶠϵ = bc_strain_rate
 
     # Center valued strain rate
     @test ᶜϵ.components.data.:1 == ᶜϵ.components.data.:1 .* FT(0)
