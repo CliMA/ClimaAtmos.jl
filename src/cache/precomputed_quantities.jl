@@ -187,10 +187,9 @@ function precomputed_quantities(Y, atmos)
 end
 
 # Interpolates the third contravariant component of Y.c.uₕ to cell faces.
-function set_ᶠuₕ³!(ᶠuₕ³, Y)
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    @. ᶠuₕ³ = ᶠwinterp(Y.c.ρ * ᶜJ, CT3(Y.c.uₕ))
-    return nothing
+function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @lazy @. ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ))
 end
 
 """
@@ -203,9 +202,8 @@ the `turbconv_model` is EDMFX, the `Y.f.sgsʲs` are also modified so that each
 """
 function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
-    sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
-    sfc_g³³ = g³³_field(sfc_u₃)
-    @. sfc_u₃ = -sfc_uₕ³ / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
+    bc_sfc_u₃ = surface_velocity(Y.f.u₃, ᶠuₕ³)
+    @. sfc_u₃ = bc_sfc_u₃
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n_mass_flux_subdomains(turbconv_model)
             sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
@@ -213,6 +211,13 @@ function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
         end
     end
     return nothing
+end
+
+function surface_velocity(ᶠu₃, ᶠuₕ³)
+    sfc_u₃ = Fields.level(ᶠu₃.components.data.:1, half)
+    sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
+    sfc_g³³ = g³³_field(sfc_u₃)
+    return @lazy @. -sfc_uₕ³ / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
 end
 
 """
@@ -476,7 +481,10 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
 
     @. ᶜspecific = specific_gs(Y.c)
-    set_ᶠuₕ³!(ᶠuₕ³, Y)
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    bc_ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
+    @. ᶠuₕ³ = bc_ᶠuₕ³
 
     # TODO: We might want to move this to dss! (and rename dss! to something
     # like enforce_constraints!).
@@ -704,7 +712,11 @@ function output_prognostic_sgs_quantities(Y, p, t)
     thermo_params = CAP.thermodynamics_params(p.params)
     (; ᶜρa⁰, ᶜρ⁰, ᶜtsʲs) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
-    set_ᶠuₕ³!(ᶠuₕ³, Y)
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    bc_ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
+    @. ᶠuₕ³ = bc_ᶠuₕ³
+
     (ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺) =
         similar.((
             p.precomputed.ᶠu₃⁰,

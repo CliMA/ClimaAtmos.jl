@@ -2,6 +2,7 @@ module ClimaAtmos
 
 using NVTX
 import LazyBroadcast
+import LazyBroadcast: @lazy
 import Thermodynamics as TD
 
 include("null_broadcasted.jl")
