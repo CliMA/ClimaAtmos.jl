@@ -4,6 +4,8 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+v0.28.4
+-------
 ### Development
 
 The `.dev` was deprecated. The two utilities in this folder can be replaced with
@@ -12,7 +14,9 @@ more established and better developed tools:
 - instead of `up_deps`, use `PkgDevTools`.
 See the  [documentation](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/#Formatting) for more information.
 
-### Features
+`ClimaAtmos` now only support equilibrium moisture + 0-moment microphysics and 
+nonequilibrium + 1-moment microphysics (No precipitation is still supported too).
+PR [3557](https://github.com/CliMA/ClimaAtmos.jl/pull/3557)
 
 v0.28.3
 -------
