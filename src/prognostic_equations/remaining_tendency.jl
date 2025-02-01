@@ -22,10 +22,57 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     return Yₜ
 end
 
+import LazyBroadcast: @lazy
+import ClimaCore.Fields as Fields
+import ClimaCore.Geometry as Geometry
+import ClimaCore.Spaces as Spaces
+
+function z_coordinate_fields(space::Spaces.AbstractSpace)
+    ᶜz = Fields.coordinate_field(Spaces.center_space(space)).z
+    ᶠz = Fields.coordinate_field(Spaces.face_space(space)).z
+    return (; ᶜz, ᶠz)
+end
+
+
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
-    sponge_tendencies!(Yₜ, Y, p, t)
-    # Vertical tendencies
-    forcing_tendency!(Yₜ, Y, p, t, p.atmos.forcing_type)
+
+    (; ᶜh_tot, ᶜspecific) = p.precomputed
+    ᶜuₕ = Y.c.uₕ
+    ᶠu₃ = Yₜ.f.u₃
+    ᶜρ = Y.c.ρ
+    (; forcing_type, moisture_model, rayleigh_sponge, viscous_sponge) = p.atmos
+    (; params) = p
+    (; ᶜp, sfc_conditions) = p.precomputed
+
+    vst_uₕ = viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge)
+    vst_u₃ = viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge)
+    vst_ρe_tot = viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge)
+    rst_uₕ = rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge)
+    hs_args = (ᶜuₕ, ᶜp, params, sfc_conditions.ts, moisture_model, forcing_type)
+    hs_tendency_uₕ = held_suarez_forcing_tendency_uₕ(hs_args...)
+    hs_tendency_ρe_tot = held_suarez_forcing_tendency_ρe_tot(ᶜρ, hs_args...)
+
+    # TODO: fuse, once we fix
+    #       https://github.com/CliMA/ClimaCore.jl/issues/2165
+    @. Yₜ.c.uₕ += vst_uₕ
+    @. Yₜ.c.uₕ += rst_uₕ
+    @. Yₜ.f.u₃.components.data.:1 += vst_u₃
+    @. Yₜ.c.ρe_tot += vst_ρe_tot
+
+    # TODO: can we write this out explicitly?
+    if viscous_sponge isa ViscousSponge
+        for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
+            χ_name == :e_tot && continue
+            vst_tracer = viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, viscous_sponge)
+            @. ᶜρχₜ += vst_tracer
+            @. Yₜ.c.ρ += vst_tracer
+        end
+    end
+
+    # Held Suarez tendencies
+    @. Yₜ.c.uₕ += hs_tendency_uₕ
+    @. Yₜ.c.ρe_tot += hs_tendency_ρe_tot
+
     subsidence_tendency!(Yₜ, Y, p, t, p.atmos.subsidence)
     edmf_coriolis_tendency!(Yₜ, Y, p, t, p.atmos.edmf_coriolis)
     large_scale_advection_tendency!(Yₜ, Y, p, t, p.atmos.ls_adv)
