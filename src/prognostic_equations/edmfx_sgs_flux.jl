@@ -220,7 +220,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         # momentum
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
-        compute_strain_rate_face!(ᶠstrain_rate, ᶜu⁰)
+        bc_strain_rate = compute_strain_rate_face(ᶜu⁰)
+        @. ᶠstrain_rate = bc_strain_rate
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
         # apply boundary condition for momentum flux
         ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
@@ -292,7 +293,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         # momentum
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
-        compute_strain_rate_face!(ᶠstrain_rate, ᶜu)
+        bc_strain_rate = compute_strain_rate_face(ᶜu)
+        @. ᶠstrain_rate = bc_strain_rate
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
         # apply boundary condition for momentum flux
         ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
