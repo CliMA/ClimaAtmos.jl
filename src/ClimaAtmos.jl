@@ -5,6 +5,7 @@ import LazyBroadcast: @lazy
 import LazyBroadcast
 import LazyBroadcast: @lazy
 import Thermodynamics as TD
+import Thermodynamics
 
 include("null_broadcasted.jl")
 include("compat.jl")
@@ -115,7 +116,6 @@ include(
 )
 include(joinpath("parameterized_tendencies", "sponge", "rayleigh_sponge.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
-include(joinpath("parameterized_tendencies", "sponge", "sponge_tendencies.jl"))
 include(
     joinpath(
         "parameterized_tendencies",

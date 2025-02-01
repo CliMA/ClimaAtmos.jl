@@ -8,12 +8,6 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 
 #####
-##### No forcing
-#####
-
-forcing_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-
-#####
 ##### Held-Suarez forcing
 #####
 
@@ -101,12 +95,22 @@ height_factor(
 ) where {FT} =
     height_factor(compute_σ(thermo_params, z_surface, p, ts_surf, s), s.σ_b)
 
-function forcing_tendency!(Yₜ, Y, p, t, ::HeldSuarezForcing)
-    (; params) = p
-    (; ᶜp, sfc_conditions) = p.precomputed
+function held_suarez_forcing_tendency_ρe_tot(
+    ᶜρ,
+    ᶜuₕ,
+    ᶜp,
+    params,
+    ts_surf,
+    moisture_model,
+    forcing,
+)
+    forcing isa Nothing && return NullBroadcasted()
+    ᶜspace = axes(ᶜρ)
+    (; ᶜz, ᶠz) = z_coordinate_fields(ᶜspace)
+    lat = Fields.coordinate_field(ᶜspace).lat
 
     # TODO: Don't need to enforce FT here, it should be done at param creation.
-    FT = Spaces.undertype(axes(Y.c))
+    FT = Spaces.undertype(ᶜspace)
     R_d = FT(CAP.R_d(params))
     κ_d = FT(CAP.kappa_d(params))
     cv_d = FT(CAP.cv_d(params))
@@ -120,9 +124,9 @@ function forcing_tendency!(Yₜ, Y, p, t, ::HeldSuarezForcing)
     σ_b = CAP.σ_b(params)
     k_f = 1 / day
 
-    z_surface = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+    z_surface = Fields.level(ᶠz, Fields.half)
 
-    ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, p.atmos.moisture_model)
+    ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, moisture_model)
 
     hs_params = HeldSuarezForcingParams{FT}(
         ΔT_y,
@@ -138,26 +142,63 @@ function forcing_tendency!(Yₜ, Y, p, t, ::HeldSuarezForcing)
         MSLP,
     )
 
-    lat = Fields.coordinate_field(Y.c).lat
-    @. Yₜ.c.uₕ -=
-        (
-            k_f * height_factor(
-                thermo_params,
-                z_surface,
-                ᶜp,
-                sfc_conditions.ts,
-                hs_params,
-            )
-        ) * Y.c.uₕ
-    @. Yₜ.c.ρe_tot -=
-        compute_ΔρT(
-            thermo_params,
-            sfc_conditions.ts,
-            Y.c.ρ,
-            ᶜp,
-            lat,
-            z_surface,
-            hs_params,
-        ) * cv_d
+    return @lazy @. -compute_ΔρT(
+        thermo_params,
+        ts_surf,
+        ᶜρ,
+        ᶜp,
+        lat,
+        z_surface,
+        hs_params,
+    ) * cv_d
     return nothing
+end
+
+function held_suarez_forcing_tendency_uₕ(
+    ᶜuₕ,
+    ᶜp,
+    params,
+    ts_surf,
+    moisture_model,
+    forcing,
+)
+    forcing isa Nothing && return NullBroadcasted()
+    ᶜspace = axes(ᶜp)
+    (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜp))
+    # TODO: Don't need to enforce FT here, it should be done at param creation.
+    FT = Spaces.undertype(ᶜspace)
+    R_d = FT(CAP.R_d(params))
+    κ_d = FT(CAP.kappa_d(params))
+    cv_d = FT(CAP.cv_d(params))
+    day = FT(CAP.day(params))
+    MSLP = FT(CAP.MSLP(params))
+    p_ref_theta = FT(CAP.p_ref_theta(params))
+    grav = FT(CAP.grav(params))
+    Δθ_z = FT(CAP.Δθ_z(params))
+    T_min = FT(CAP.T_min_hs(params))
+    thermo_params = CAP.thermodynamics_params(params)
+    σ_b = CAP.σ_b(params)
+    k_f = 1 / day
+
+    z_surface = Fields.level(ᶠz, Fields.half)
+
+    ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, moisture_model)
+
+    hs_params = HeldSuarezForcingParams{FT}(
+        ΔT_y,
+        day,
+        σ_b,
+        R_d,
+        T_min,
+        T_equator,
+        Δθ_z,
+        p_ref_theta,
+        κ_d,
+        grav,
+        MSLP,
+    )
+
+    return @lazy @. -(
+        k_f * height_factor(thermo_params, z_surface, ᶜp, ts_surf, hs_params)
+    ) * ᶜuₕ
 end
