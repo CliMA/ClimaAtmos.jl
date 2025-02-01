@@ -146,8 +146,10 @@ function compute_precipitation_surface_fluxes!(
     # update surface precipitation fluxes in cache for coupler's use
     thermo_params = CAP.thermodynamics_params(p.params)
     T_freeze = TD.Parameters.T_freeze(thermo_params)
-    @. ᶜ3d_rain = ifelse(ᶜT >= T_freeze, ᶜS_ρq_tot, 0)
-    @. ᶜ3d_snow = ifelse(ᶜT < T_freeze, ᶜS_ρq_tot, 0)
+    FT = eltype(p.params)
+    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
+    @. ᶜ3d_rain = ifelse(ᶜT >= T_freeze, ᶜS_ρq_tot, FT(0))
+    @. ᶜ3d_snow = ifelse(ᶜT < T_freeze, ᶜS_ρq_tot, FT(0))
     Operators.column_integral_definite!(surface_rain_flux, ᶜ3d_rain)
     Operators.column_integral_definite!(surface_snow_flux, ᶜ3d_snow)
 end
