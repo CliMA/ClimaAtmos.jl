@@ -29,27 +29,25 @@ function edmfx_sgs_mass_flux_tendency!(
             @. ᶜa_scalar =
                 (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j) - ᶜh_tot) *
                 draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-            vertical_transport!(
-                Yₜ.c.ρe_tot,
-                ᶜJ,
+            vtt = vertical_transport(
                 ᶜρʲs.:($j),
                 ᶠu³_diff,
                 ᶜa_scalar,
                 dt,
                 edmfx_sgsflux_upwinding,
             )
+            @. Yₜ.c.ρe_tot += vtt
         end
         @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
         @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
-        vertical_transport!(
-            Yₜ.c.ρe_tot,
-            ᶜJ,
+        vtt = vertical_transport(
             ᶜρ⁰,
             ᶠu³_diff,
             ᶜa_scalar,
             dt,
             edmfx_sgsflux_upwinding,
         )
+        @. Yₜ.c.ρe_tot += vtt
 
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
@@ -58,27 +56,25 @@ function edmfx_sgs_mass_flux_tendency!(
                 @. ᶜa_scalar =
                     (Y.c.sgsʲs.:($$j).q_tot - ᶜspecific.q_tot) *
                     draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-                vertical_transport!(
-                    Yₜ.c.ρq_tot,
-                    ᶜJ,
+                vtt = vertical_transport(
                     ᶜρʲs.:($j),
                     ᶠu³_diff,
                     ᶜa_scalar,
                     dt,
                     edmfx_sgsflux_upwinding,
                 )
+                @. Yₜ.c.ρq_tot += vtt
             end
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar = (ᶜq_tot⁰ - ᶜspecific.q_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
-            vertical_transport!(
-                Yₜ.c.ρq_tot,
-                ᶜJ,
+            vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
                 ᶜa_scalar,
                 dt,
                 edmfx_sgsflux_upwinding,
             )
+            @. Yₜ.c.ρq_tot += vtt
         end
     end
 
@@ -123,15 +119,14 @@ function edmfx_sgs_mass_flux_tendency!(
                         eps(FT),
                     ),
                 )
-            vertical_transport!(
-                Yₜ.c.ρe_tot,
-                ᶜJ,
+            vtt = vertical_transport(
                 ᶜρʲs.:($j),
                 ᶠu³_diff,
                 ᶜa_scalar,
                 dt,
                 edmfx_sgsflux_upwinding,
             )
+            @. Yₜ.c.ρe_tot += vtt
         end
 
         if !(p.atmos.moisture_model isa DryModel)
@@ -152,15 +147,14 @@ function edmfx_sgs_mass_flux_tendency!(
                             eps(FT),
                         ),
                     )
-                vertical_transport!(
-                    Yₜ.c.ρq_tot,
-                    ᶜJ,
+                vtt = vertical_transport(
                     ᶜρʲs.:($j),
                     ᶠu³_diff,
                     ᶜa_scalar,
                     dt,
                     edmfx_sgsflux_upwinding,
                 )
+                @. Yₜ.c.ρq_tot += vtt
             end
         end
     end
