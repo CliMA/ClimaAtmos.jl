@@ -584,24 +584,12 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
 
     if vert_diff isa DecayWithHeightDiffusion
         (; ᶜK_h) = p.precomputed
-        ᶜz = Fields.coordinate_field(Y.c).z
-        ᶠz_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
-        @. ᶜK_h = eddy_diffusivity_coefficient_H(
-            p.atmos.vert_diff.D₀,
-            p.atmos.vert_diff.H,
-            ᶠz_sfc,
-            ᶜz,
-        )
+        bc_K_h = compute_eddy_diffusivity_coefficient(ᶜρ, vert_diff)
+        @. ᶜK_h = bc_K_h
     elseif vert_diff isa VerticalDiffusion
         (; ᶜK_h) = p.precomputed
-        interior_uₕ = Fields.level(Y.c.uₕ, 1)
-        ᶜΔz_surface = Fields.Δz_field(interior_uₕ)
-        @. ᶜK_h = eddy_diffusivity_coefficient(
-            p.atmos.vert_diff.C_E,
-            norm(interior_uₕ),
-            ᶜΔz_surface / 2,
-            ᶜp,
-        )
+        bc_K_h = compute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vert_diff)
+        @. ᶜK_h = bc_K_h
     elseif vert_diff isa FriersonDiffusion
         (; ᶜK_h, sfc_conditions, ᶜts) = p.precomputed
         (; params) = p
