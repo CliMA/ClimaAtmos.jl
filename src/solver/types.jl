@@ -7,9 +7,10 @@ import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
 
 abstract type AbstractMoistureModel end
+abstract type AbstractMoistModel <: AbstractMoistureModel end
 struct DryModel <: AbstractMoistureModel end
-struct EquilMoistModel <: AbstractMoistureModel end
-struct NonEquilMoistModel <: AbstractMoistureModel end
+struct EquilMoistModel <: AbstractMoistModel end
+struct NonEquilMoistModel <: AbstractMoistModel end
 
 abstract type AbstractPrecipitationModel end
 struct NoPrecipitation <: AbstractPrecipitationModel end
