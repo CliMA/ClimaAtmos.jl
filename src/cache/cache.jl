@@ -12,7 +12,6 @@ struct AtmosCache{
     PR,
     LSAD,
     EXTFORCING,
-    EDMFCOR,
     NONGW,
     ORGW,
     RAD,
@@ -56,7 +55,6 @@ struct AtmosCache{
     precipitation::PR
     large_scale_advection::LSAD
     external_forcing::EXTFORCING
-    edmf_coriolis::EDMFCOR
     non_orographic_gravity_wave::NONGW
     orographic_gravity_wave::ORGW
     radiation::RAD
@@ -160,7 +158,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     precipitation = precipitation_cache(Y, atmos)
     large_scale_advection = large_scale_advection_cache(Y, atmos)
     external_forcing = external_forcing_cache(Y, atmos, params)
-    edmf_coriolis = edmf_coriolis_cache(Y, atmos)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
@@ -180,7 +177,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         precipitation,
         large_scale_advection,
         external_forcing,
-        edmf_coriolis,
         non_orographic_gravity_wave,
         orographic_gravity_wave,
         radiation,
