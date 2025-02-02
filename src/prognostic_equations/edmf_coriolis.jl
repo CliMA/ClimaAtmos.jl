@@ -5,31 +5,21 @@
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 
-edmf_coriolis_cache(Y, atmos::AtmosModel) =
-    edmf_coriolis_cache(Y, atmos.edmf_coriolis)
-
-edmf_coriolis_cache(Y, edmf_coriolis::Nothing) = (;)
-function edmf_coriolis_cache(Y, edmf_coriolis::EDMFCoriolis)
-    (; coriolis_param) = edmf_coriolis
-    coords = Fields.coordinate_field(axes(Y.c.ρ))
-    coriolis_fn(coord) = Geometry.WVector(coriolis_param)
-    ᶜf_coriolis = @. Geometry.Contravariant3Vector(coriolis_fn(coords))
-    return (; ᶜuₕ_g = similar(Y.c.uₕ), ᶜf_coriolis)
-end
-
-edmf_coriolis_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-function edmf_coriolis_tendency!(Yₜ, Y, p, t, edmf_coriolis::EDMFCoriolis)
+function edmf_coriolis_tendency_uₕ(ᶜuₕ, edmf_coriolis)
+    edmf_coriolis isa EDMFCoriolis || return NullBroadcasted()
     (; prof_ug, prof_vg) = edmf_coriolis
-    ᶜf_coriolis = p.edmf_coriolis.ᶜf_coriolis
-    ᶜuₕ_g = p.edmf_coriolis.ᶜuₕ_g
-    z = Fields.coordinate_field(axes(ᶜuₕ_g)).z
-    @. ᶜuₕ_g =
-        Geometry.Covariant12Vector(Geometry.UVVector(prof_ug(z), prof_vg(z)))
+    ᶜspace = axes(ᶜuₕ)
+    ᶜz = Fields.coordinate_field(ᶜspace).z
+    (; coriolis_param) = edmf_coriolis
+    coords = Fields.coordinate_field(ᶜspace)
+    coriolis_fn(coord) = Geometry.WVector(coriolis_param)
+    ᶜf_coriolis = @lazy @. Geometry.Contravariant3Vector(coriolis_fn(coords))
+    ᶜuₕ_g = @lazy @. Geometry.Covariant12Vector(
+        Geometry.UVVector(prof_ug(ᶜz), prof_vg(ᶜz)),
+    )
 
     # Coriolis
     C123 = Geometry.Covariant123Vector
     C12 = Geometry.Contravariant12Vector
-    @. Yₜ.c.uₕ -= ᶜf_coriolis × (C12(C123(Y.c.uₕ)) - C12(C123(ᶜuₕ_g)))
-
-    return nothing
+    return @lazy @. - ᶜf_coriolis × (C12(C123(ᶜuₕ)) - C12(C123(ᶜuₕ_g)))
 end
