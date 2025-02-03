@@ -64,7 +64,7 @@ When available, use the high resolution artifact. Otherwise, download and use
 the low-resolution one.
 """
 function aerosol_concentration_file_path(; context = nothing)
-    return res_file_path("aerosol_concentrations"; context)
+    return res_file_path("merra2_aerosols"; context)
 end
 
 """
