@@ -54,9 +54,20 @@ function set_sedimentation_precomputed_quantities!(Y, p, t)
 
     FT = eltype(Y)
 
+    cmc = CAP.microphysics_cloud_params(p.params)
+
     # compute the precipitation terminal velocity [m/s]
-    # TODO - the actual parameterization will be added in the next PR
-    @. ᶜwₗ = FT(0)
-    @. ᶜwᵢ = FT(0)
+    @. ᶜwₗ = CMNe.terminal_velocity(
+        cmc.liquid,
+        cmc.Ch2022.rain,
+        Y.c.ρ,
+        max(zero(Y.c.ρ), Y.c.ρq_liq / Y.c.ρ),
+    )
+    @. ᶜwᵢ = CMNe.terminal_velocity(
+        cmc.ice,
+        cmc.Ch2022.small_ice,
+        Y.c.ρ,
+        max(zero(Y.c.ρ), Y.c.ρq_ice / Y.c.ρ),
+    )
     return nothing
 end

@@ -545,21 +545,21 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     #
     if moisture_model isa NonEquilMoistModel
         set_sedimentation_precomputed_quantities!(Y, p, t)
-        #    (; ᶜwₗ, ᶜwᵢ) = p.precomputed
-        #    @. ᶜwₜqₜ += Geometry.WVector(ᶜwₗ * Y.c.ρq_liq + ᶜwᵢ * Y.c.ρq_ice) / Y.c.ρ
-        #    @. ᶜwₕhₜ += Geometry.WVector(
-        #        ᶜwₗ * Y.c.ρq_liq * (TD.internal_energy_liquid(thermo_params, ᶜts) + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwₗ) + Geometry.UVWVector(ᶜu))/2) +
-        #        ᶜwᵢ * Y.c.ρq_ice * (TD.internal_energy_ice(thermo_params, ᶜts)    + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwᵢ) + Geometry.UVWVector(ᶜu))/2)
-        #    ) / Y.c.ρ
+        (; ᶜwₗ, ᶜwᵢ) = p.precomputed
+        @. ᶜwₜqₜ += Geometry.WVector(ᶜwₗ * Y.c.ρq_liq + ᶜwᵢ * Y.c.ρq_ice) / Y.c.ρ
+        @. ᶜwₕhₜ += Geometry.WVector(
+            ᶜwₗ * Y.c.ρq_liq * (TD.internal_energy_liquid(thermo_params, ᶜts) + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, ᶜwₗ) + Geometry.UVWVector(ᶜu))/2) +
+            ᶜwᵢ * Y.c.ρq_ice * (TD.internal_energy_ice(thermo_params, ᶜts)    + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, ᶜwᵢ) + Geometry.UVWVector(ᶜu))/2)
+        ) / Y.c.ρ
     end
     if precip_model isa Microphysics1Moment
         set_precipitation_precomputed_quantities!(Y, p, t)
-        #    (; ᶜwᵣ, ᶜwₛ) = p.precomputed
-        #    @. ᶜwₜqₜ += Geometry.WVector(ᶜwᵣ * Y.c.ρq_rai + ᶜwₛ * Y.c.ρq_sno) / Y.c.ρ
-        #    @. ᶜwₕhₜ += Geometry.WVector(
-        #        ᶜwᵣ * Y.c.ρq_rai * (TD.internal_energy_liquid(thermo_params, ᶜts) + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwᵣ) + Geometry.UVWVector(ᶜu))/2) +
-        #        ᶜwₛ * Y.c.ρq_sno * (TD.internal_energy_ice(thermo_params, ᶜts)    + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwₛ) + Geometry.UVWVector(ᶜu))/2)
-        #    ) / Y.c.ρ
+        (; ᶜwᵣ, ᶜwₛ) = p.precomputed
+        @. ᶜwₜqₜ += Geometry.WVector(ᶜwᵣ * Y.c.ρq_rai + ᶜwₛ * Y.c.ρq_sno) / Y.c.ρ
+        @. ᶜwₕhₜ += Geometry.WVector(
+            ᶜwᵣ * Y.c.ρq_rai * (TD.internal_energy_liquid(thermo_params, ᶜts) + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, ᶜwᵣ) + Geometry.UVWVector(ᶜu))/2) +
+            ᶜwₛ * Y.c.ρq_sno * (TD.internal_energy_ice(thermo_params, ᶜts)    + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, ᶜwₛ) + Geometry.UVWVector(ᶜu))/2)
+        ) / Y.c.ρ
     end
 
     if turbconv_model isa PrognosticEDMFX
