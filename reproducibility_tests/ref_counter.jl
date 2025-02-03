@@ -1,4 +1,4 @@
-216
+217
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+
+217
+- Change reconstruction of density on cell faces
 
 216
 - Change prescribed aerosols in `aquaplanet_nonequil_allsky_gw_res.yml`
