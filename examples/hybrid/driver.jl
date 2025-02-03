@@ -3,6 +3,7 @@
 # Given that ClimaCore objects are heavily parametrized, non-abbreviated stacktraces are hard to read,
 # so we force abbreviated stacktraces even in non-interactive runs.
 # (See also Base.type_limited_string_from_context())
+# temp comment to check for regression
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import ClimaComms
 ClimaComms.@import_required_backends
