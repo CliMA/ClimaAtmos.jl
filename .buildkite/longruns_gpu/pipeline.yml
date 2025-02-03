@@ -88,7 +88,7 @@ steps:
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_time: 12:00:00
+          slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_moist_baroclinic_wave_he60"
@@ -110,7 +110,7 @@ steps:
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_time: 12:00:00
+          slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_moist_held_suarez"
@@ -124,7 +124,7 @@ steps:
           JOB_NAME: "longrun_moist_held_suarez_deepatmos"
         agents:
           slurm_gpus: 1
-          slurm_time: 12:00:00
+          slurm_time: 24:00:00
 
   - group: "helem 16 aquaplanet"
     steps:
