@@ -630,40 +630,42 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     end
 
     if !(p.atmos.moisture_model isa DryModel)
-        @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
-            dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-            DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
-            DiagonalMatrixRow(
-                -(1 + ᶜkappa_m) / ᶜρ * ifelse(
-                    ᶜh_tot == 0,
-                    (Geometry.WVector(FT(0)),),
-                    p.ᶜwₕhₜ / ᶜh_tot,
-                ),
-            )
+        #@. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
+        #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
+        #    DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(
+        #        -(1 + ᶜkappa_m) / ᶜρ * ifelse(
+        #            ᶜh_tot == 0,
+        #            (Geometry.WVector(FT(0)),),
+        #            p.ᶜwₕhₜ / ᶜh_tot,
+        #        ),
+        #    )
 
         ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
-        @. ∂ᶜρe_tot_err_∂ᶜρq_tot =
-            dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-            DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
-            DiagonalMatrixRow(
-                -(ᶜkappa_m) * ∂e_int_∂q_tot / ᶜρ * ifelse(
-                    ᶜh_tot == 0,
-                    (Geometry.WVector(FT(0)),),
-                    p.ᶜwₕhₜ / ᶜh_tot,
-                ),
-            )
+        @. ∂ᶜρe_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρq_tot))
+        #@. ∂ᶜρe_tot_err_∂ᶜρq_tot =
+        #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
+        #    DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(
+        #        -(ᶜkappa_m) * ∂e_int_∂q_tot / ᶜρ * ifelse(
+        #            ᶜh_tot == 0,
+        #            (Geometry.WVector(FT(0)),),
+        #            p.ᶜwₕhₜ / ᶜh_tot,
+        #        ),
+        #    )
 
         ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
-        @. ∂ᶜρq_tot_err_∂ᶜρq_tot =
-            dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-            DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
-            DiagonalMatrixRow(
-                -1 / ᶜρ * ifelse(
-                    ᶜspecific.q_tot == 0,
-                    (Geometry.WVector(FT(0)),),
-                    p.ᶜwₜqₜ / ᶜspecific.q_tot,
-                ),
-            ) - (I,)
+        @. ∂ᶜρq_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρq_tot_err_∂ᶜρq_tot)) - (I,)
+        #@. ∂ᶜρq_tot_err_∂ᶜρq_tot =
+        #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
+        #    DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(
+        #        -1 / ᶜρ * ifelse(
+        #            ᶜspecific.q_tot == 0,
+        #            (Geometry.WVector(FT(0)),),
+        #            p.ᶜwₜqₜ / ᶜspecific.q_tot,
+        #        ),
+        #    ) - (I,)
 
         MatrixFields.unrolled_foreach(tracer_info) do (ρqₚ_name, _, wₚ_name)
             MatrixFields.has_field(Y, ρqₚ_name) || return

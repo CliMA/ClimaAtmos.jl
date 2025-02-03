@@ -99,6 +99,19 @@ vertical_advection(ᶠu³, ᶜχ, ::Val{:first_order}) =
 vertical_advection(ᶠu³, ᶜχ, ::Val{:third_order}) =
     @lazy @. -(ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³))
 
+function questionable_vertical_advection_tendency!(Yₜ, Y, p, t)
+
+  ᶜJ = Fields.local_geometry_field(Y.c).J
+  (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
+
+  @. Yₜ.c.ρ -= ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₜqₜ)))
+  @. Yₜ.c.ρe_tot -= ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₕhₜ)))
+  if !(p.atmos.moisture_model isa DryModel)
+      @. Yₜ.c.ρq_tot -= ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₜqₜ)))
+  end
+  return nothing
+end
+
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; moisture_model, turbconv_model, rayleigh_sponge, precip_model) = p.atmos
     (; dt) = p
@@ -106,21 +119,18 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜh_tot, ᶜspecific, ᶠu³, ᶜp) = p.precomputed
-    (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠu³)
-    @. Yₜ.c.ρ -= ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₜqₜ)))
 
     # Central advection of active tracers (e_tot and q_tot)
     vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     @. Yₜ.c.ρe_tot += vtt
-    @. Yₜ.c.ρe_tot -= ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₕhₜ)))
+
+    #questionable_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     if !(moisture_model isa DryModel)
         vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜspecific.q_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot += vtt
-        @. Yₜ.c.ρq_tot -=
-            ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₜqₜ)))
     end
 
     if moisture_model isa NonEquilMoistModel
