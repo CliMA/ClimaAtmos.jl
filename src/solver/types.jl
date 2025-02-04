@@ -216,10 +216,6 @@ Base.@kwdef struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
     D₀::FT
 end
 diffuse_momentum(::DecayWithHeightDiffusion{DM}) where {DM} = DM
-Base.@kwdef struct FriersonDiffusion{DM, FT} <: AbstractVerticalDiffusion
-    C_E::FT
-end
-diffuse_momentum(::FriersonDiffusion{DM}) where {DM} = DM
 diffuse_momentum(::Nothing) = false
 
 abstract type AbstractSponge end

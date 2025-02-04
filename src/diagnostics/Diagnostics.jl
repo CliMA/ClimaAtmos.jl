@@ -34,7 +34,6 @@ import ClimaAtmos.RRTMGPInterface as RRTMGPI
 
 # vert_diff
 import ..VerticalDiffusion
-import ..FriersonDiffusion
 import ..DecayWithHeightDiffusion
 
 # turbconv_model
