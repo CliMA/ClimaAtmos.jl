@@ -327,6 +327,9 @@ edmfx_filter:
 edmfx_nh_pressure:
   help: "If set to true, it switches on EDMFX pressure drag closure.  [`true`, `false` (default)]"
   value: false
+edmfx_nh_pressure_type:
+  help: "Type of EDMFX perturbation pressure closure to use.  [`linear`, `physical` (default)]"
+  value: physical
 edmfx_entr_model:
   help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`, `GeneralizedHarmonics`]"
   value: ~

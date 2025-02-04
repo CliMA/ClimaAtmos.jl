@@ -22,6 +22,11 @@ struct PhysicalMixingLengthModel <: AbstractMixingLengthModel end
 struct NeuralNetworkMixingLengthModel <: AbstractMixingLengthModel end
 struct MixingLengthErrorModel <: AbstractMixingLengthModel end
 
+abstract type AbstractPertPressureModel end
+struct PhysicalPertPressureModel <: AbstractPertPressureModel end
+struct LinearPertPressureModel <: AbstractPertPressureModel end
+
+
 """
     AbstractSGSamplingType
 
@@ -462,6 +467,7 @@ Base.@kwdef struct AtmosModel{
     CCDPS,
     F,
     MLM,
+    NHPM,
     S,
     OZ,
     RM,
@@ -493,6 +499,7 @@ Base.@kwdef struct AtmosModel{
     call_cloud_diagnostics_per_stage::CCDPS = nothing
     forcing_type::F = nothing
     mixing_length_model::MLM = nothing
+    nh_pressure_model::NHPM = nothing
     subsidence::S = nothing
 
     """What to do with ozone for radiation (when using RRTGMP)"""
