@@ -1,4 +1,4 @@
-210
+211
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+211
+- Remove `FriersonDiffusion` and use `DecayWithHeightDiffusion` instead.
+
 210
 - Change prescribed aerosol dataset to MERRA2
 

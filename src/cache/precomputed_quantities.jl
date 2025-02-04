@@ -146,7 +146,7 @@ function precomputed_quantities(Y, atmos)
         ) : (;)
     vert_diff_quantities =
         if atmos.vert_diff isa
-           Union{VerticalDiffusion, DecayWithHeightDiffusion, FriersonDiffusion}
+           Union{VerticalDiffusion, DecayWithHeightDiffusion}
             ᶜK_h = similar(Y.c, FT)
             (; ᶜK_u = ᶜK_h, ᶜK_h) # ᶜK_u aliases ᶜK_h because they are always equal.
         else
@@ -359,106 +359,6 @@ function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
     K_E = C_E * norm_v_a * z_a
     return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
 end
-function eddy_diffusivity_coefficient(z, z₀, f_b, h, uₐ, C_E, Ri, Ri_a, Ri_c, κ)
-    # Equations (17), (18)
-    if z <= f_b * h
-        K_b =
-            compute_surface_layer_diffusivity(z, z₀, κ, C_E, Ri, Ri_a, Ri_c, uₐ)
-        return K_b
-    elseif f_b * h < z < h
-        K_b = compute_surface_layer_diffusivity(
-            f_b * h,
-            z₀,
-            κ,
-            C_E,
-            Ri,
-            Ri_a,
-            Ri_c,
-            uₐ,
-        )
-        K = K_b * (z / f_b / h) * (1 - (z - f_b * h) / (1 - f_b) / h)^2
-        return K
-    else
-        return zero(z)
-    end
-end
-
-function compute_boundary_layer_height!(
-    h_boundary_layer,
-    dz,
-    Ri_local,
-    Ri_c,
-    Ri_a,
-)
-    nlevels = Spaces.nlevels(Spaces.axes(Ri_local))
-    for level in 1:(nlevels - 1)
-        h_boundary_layer .=
-            ifelse.(
-                Fields.Field(
-                    Fields.field_values(Fields.level(Ri_local, level)),
-                    axes(h_boundary_layer),
-                ) .< Ri_c,
-                Fields.Field(
-                    Fields.field_values(Fields.level(dz, level + 1)),
-                    axes(h_boundary_layer),
-                ),
-                h_boundary_layer,
-            )
-    end
-end
-
-function compute_bulk_richardson_number(
-    θ_v::FT,
-    θ_v_a,
-    norm_ua,
-    grav,
-    z,
-) where {FT}
-    # TODO Gustiness from ClimaParams
-    return (grav * z) * (θ_v - θ_v_a) / (θ_v_a * (max((norm_ua)^2, FT(10))))
-end
-function compute_exchange_coefficient(
-    Ri_a::FT,
-    Ri_c,
-    zₐ,
-    z₀,
-    κ,
-    C_E_min,
-) where {FT}
-    # Equations (12), (13), (14)
-    if Ri_a <= FT(0)
-        return κ^2 * (log(zₐ / z₀))^(-2)
-    elseif FT(0) < Ri_a < Ri_c
-        return κ^2 * (log(zₐ / z₀))^(-2) * (1 - Ri_a / Ri_c)^2
-    else
-        return FT(C_E_min)
-    end
-end
-
-function compute_surface_layer_diffusivity(
-    z::FT,
-    z₀,
-    κ,
-    C_E,
-    Ri,
-    Ri_a,
-    Ri_c,
-    norm_uₐ,
-) where {FT}
-    # Equations (19), (20)
-    if Ri_a <= FT(0)
-        return max(κ * norm_uₐ * sqrt(C_E) * z, FT(1))
-    else
-        return max(
-            κ *
-            norm_uₐ *
-            sqrt(C_E) *
-            z *
-            (1 + Ri / Ri_c * (log(z / z₀) / (1 - Ri / Ri_c)))^(-1),
-            FT(1),
-        )
-    end
-end
 
 """
     set_precomputed_quantities!(Y, p, t)
@@ -596,92 +496,6 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         (; ᶜK_h) = p.precomputed
         bc_K_h = compute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vert_diff)
         @. ᶜK_h = bc_K_h
-    elseif vert_diff isa FriersonDiffusion
-        (; ᶜK_h, sfc_conditions, ᶜts) = p.precomputed
-        (; params) = p
-        interior_uₕ = Fields.level(Y.c.uₕ, 1)
-        κ = CAP.von_karman_const(params)
-        grav = CAP.grav(params)
-        FT = Spaces.undertype(axes(ᶜK_h))
-        z₀ = FT(1e-5)
-        Ri_c = FT(1.0)
-        f_b = FT(0.1)
-        C_E_min = p.atmos.vert_diff.C_E
-
-        # Prepare scratch vars
-        θ_v = p.scratch.ᶜtemp_scalar
-        Ri = p.scratch.ᶜtemp_scalar_2
-        dz_local = p.scratch.ᶜtemp_scalar_3
-        θ_v_sfc = p.scratch.ᶠtemp_field_level
-        Ri_a = p.scratch.temp_field_level
-        z_local = p.scratch.temp_data
-        z_sfc = p.scratch.temp_data_face_level
-        ᶜθ_v_sfc = C_E = p.scratch.temp_field_level_2
-        h_boundary_layer = p.scratch.temp_field_level_3
-        ᶠts_sfc = sfc_conditions.ts
-        ᶜz = Fields.coordinate_field(Y.c).z
-        interior_uₕ = Fields.level(Y.c.uₕ, 1)
-        ᶜΔz_surface = Fields.Δz_field(interior_uₕ)
-        @. θ_v = TD.virtual_pottemp(thermo_params, ᶜts)
-        @. θ_v_sfc = TD.virtual_pottemp(thermo_params, ᶠts_sfc)
-        θ_v_a = Fields.level(θ_v, 1)
-
-        z_local .= Fields.field_values(Fields.coordinate_field(Y.c).z)
-        z_sfc .= Fields.field_values(
-            Fields.level(Fields.coordinate_field(Y.f).z, half),
-        )
-        @. z_local = z_local - z_sfc
-        dz_local .= Fields.Field(z_local, axes(Y.c))
-        zₐ = Fields.level(dz_local, 1)
-        ᶜθ_v_sfc .=
-            Fields.Field(Fields.field_values(θ_v_sfc), axes(interior_uₕ))
-
-        @. Ri = compute_bulk_richardson_number(
-            θ_v,
-            θ_v_a,
-            norm(Y.c.uₕ),
-            grav,
-            dz_local,
-        )
-        @. Ri_a = compute_bulk_richardson_number(
-            θ_v_a,
-            ᶜθ_v_sfc,
-            norm(interior_uₕ),
-            grav,
-            ᶜΔz_surface / 2,
-        )
-
-        #### Detect 𝒽, boundary layer height per column
-        h_boundary_layer = ᶜΔz_surface ./ 2 .+ FT(1000)
-        compute_boundary_layer_height!(
-            h_boundary_layer,
-            dz_local,
-            Ri,
-            Ri_c,
-            Ri_a,
-        )
-
-        ## Exchange coefficients
-        @. C_E = compute_exchange_coefficient(
-            Ri_a,
-            Ri_c,
-            ᶜΔz_surface ./ 2,
-            z₀,
-            κ,
-            C_E_min,
-        )
-        @. ᶜK_h = eddy_diffusivity_coefficient(
-            dz_local,
-            z₀,
-            f_b,
-            h_boundary_layer,
-            norm(interior_uₕ),
-            C_E,
-            Ri,
-            Ri_a,
-            Ri_c,
-            κ,
-        )
     end
 
     # TODO

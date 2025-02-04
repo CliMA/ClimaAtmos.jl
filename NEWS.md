@@ -11,6 +11,13 @@ Added functionality to allow five different size bins of dust and sea salt aeros
 for radiation calculation. This feature requires RRTMGP version v0.20.0 or later.
 PR [3555](https://github.com/CliMA/ClimaAtmos.jl/pull/3555)
 
+### Maintenance
+
+### Rmove FriersonDiffusion option
+
+The option `FriersonDiffusion` is removed from `vert_diff` config. Use `DecayWithHeightDiffusion` instead.
+PR [3592](https://github.com/CliMA/ClimaAtmos.jl/pull/3592)
+
 v0.28.4
 -------
 ### Development
@@ -36,6 +43,7 @@ RRTGMP.
 ### Maintenance
 
 ### Remove override_precip_timescale config
+
 ![][badge-🔥behavioralΔ] The override_precip_timescale config has been removed.
 To recover the previous behavior, set `precipitation_timescale` to `dt` in the
 toml. PR [3534](https://github.com/CliMA/ClimaAtmos.jl/pull/3534)

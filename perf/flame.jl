@@ -42,7 +42,7 @@ allocs_limit["flame_perf_target"] = 99_928
 allocs_limit["flame_perf_target_tracers"] = 441_904
 allocs_limit["flame_perf_diagnostics"] = 10_677_144
 allocs_limit["flame_perf_target_diagnostic_edmfx"] = 122_624
-allocs_limit["flame_perf_target_frierson"] = 4_015_767_024
+allocs_limit["flame_perf_target_diffusion"] = 4_015_767_024
 allocs_limit["flame_perf_target_threaded"] = 2047_736
 allocs_limit["flame_perf_target_callbacks"] = 391_864
 allocs_limit["flame_perf_gw"] = 581_381_976
@@ -62,7 +62,7 @@ sampling_rate = expected_allocs <= max_allocs_for_full_sampling ? 1 : 0.01
 
 # Some jobs are problematic (the ones with Krylov mostly)
 # https://github.com/pfitzseb/ProfileCanvas.jl/issues/34
-if job_id in ("flame_perf_target_frierson",)
+if job_id in ("flame_perf_target_diffusion",)
     sampling_rate = 0.001
 end
 
