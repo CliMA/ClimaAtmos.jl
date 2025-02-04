@@ -168,6 +168,7 @@ function TurbulenceConvectionParameters(
         :entr_param_vec => :entr_param_vec,
         :turb_entr_param_vec => :turb_entr_param_vec,
         :mixing_length_param_vec => :mixing_length_param_vec,
+        :pressure_normalmode_param_vec => :pressure_normalmode_param_vec,
         :minimum_updraft_top => :min_updraft_top,
         :mixing_length_eddy_viscosity_coefficient => :tke_ed_coeff,
         :mixing_length_smin_ub => :smin_ub,
@@ -191,8 +192,9 @@ function TurbulenceConvectionParameters(
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)
     VFT3 = typeof(parameters.mixing_length_param_vec)
+    VFT4 = typeof(parameters.pressure_normalmode_param_vec)
     FT = CP.float_type(toml_dict)
-    CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2, VFT3}(; parameters...)
+    CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2, VFT3, VFT4}(; parameters...)
 end
 
 SurfaceTemperatureParameters(

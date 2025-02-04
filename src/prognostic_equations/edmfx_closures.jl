@@ -9,6 +9,7 @@ import ClimaCore.Fields as Fields
 using Flux
 
 Base.broadcastable(x::AbstractMixingLengthModel) = tuple(x)
+Base.broadcastable(x::AbstractPertPressureModel) = tuple(x)
 
 """
     Return draft area given ρa and ρ
@@ -55,7 +56,7 @@ function surface_flux_tke(
 end
 
 """
-   Return the nonhydrostatic pressure drag for updrafts [m/s2 * m]
+   Return the nonhydrostatic pressure drag for updrafts [m/s2 * m], following He et al. (2022)
 
    Inputs (everything defined on cell faces):
    - params - set with model parameters
@@ -66,7 +67,7 @@ end
                   velocity is used in diagnostic edmf.
    - updraft top height
 """
-function ᶠupdraft_nh_pressure(params, ᶠlg, ᶠbuoyʲ, ᶠu3ʲ, ᶠu3⁰, plume_height)
+function ᶠupdraft_nh_pressure(params, ᶠlg, ᶠbuoyʲ, ᶠu3ʲ, ᶠu3⁰, plume_height, ᶠz, ᶠbuoy⁰, ᶠtke⁰, ᶠaʲ, nh_pressure_type::PhysicalPertPressureModel)
     turbconv_params = CAP.turbconv_params(params)
     # factor multiplier for pressure buoyancy terms (effective buoyancy is (1-α_b))
     α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
@@ -83,6 +84,50 @@ function ᶠupdraft_nh_pressure(params, ᶠlg, ᶠbuoyʲ, ᶠu3ʲ, ᶠu3⁰, plu
            max(plume_height, H_up_min)
 end
 
+"""
+   Return the data-driven nonhydrostatic pressure drag for updrafts [m/s2 * m]
+
+   Inputs (everything defined on cell faces):
+   - params - set with model parameters
+   - ᶠlg - local geometry (needed to compute the norm inside a local function)
+   - ᶠbuoyʲ - covariant3 or contravariant3 updraft buoyancy
+   - ᶠu3ʲ, ᶠu3⁰ - covariant3 or contravariant3 velocity for updraft and environment.
+                  covariant3 velocity is used in prognostic edmf, and contravariant3
+                  velocity is used in diagnostic edmf.
+   - updraft top height
+"""
+function ᶠupdraft_nh_pressure(params, ᶠlg, ᶠbuoyʲ, ᶠu3ʲ, ᶠu3⁰, plume_height, ᶠz, ᶠbuoy⁰, ᶠtke⁰, ᶠaʲ, w_up, w_en, nh_pressure_type::LinearPertPressureModel)
+    turbconv_params = CAP.turbconv_params(params)
+
+    param_vec = CAP.pressure_normalmode_param_vec(params)
+    H_up_min = CAP.min_updraft_top(turbconv_params)
+    FT = eltype(params)
+
+    Π₁ = ᶠz * ᶠbuoyʲ[1] / ((w_up .- w_en)^2 + eps(FT)) / 100
+
+    Π₂ = max(ᶠtke⁰, 0) / ((w_up - w_en)^2 + eps(FT)) / 2
+
+    Π₃ = sqrt(ᶠaʲ)
+
+    # buoyancy coefficient
+    α_b = param_vec[1] * Π₁^param_vec[7] +
+          param_vec[2] * Π₂^param_vec[8] +
+          param_vec[3] * Π₃^param_vec[9] +
+          param_vec[13]
+
+    # drag coefficient
+    α_d = param_vec[4] * Π₁^param_vec[10] +
+          param_vec[5] * Π₂^param_vec[11] +
+          param_vec[6] * Π₃^param_vec[12] +
+          param_vec[14]
+
+    return α_b * ᶠbuoyʲ +
+        α_d * (ᶠu3ʲ - ᶠu3⁰) * CC.Geometry._norm(ᶠu3ʲ - ᶠu3⁰, ᶠlg) /
+        max(plume_height, H_up_min)
+end
+
+
+
 edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 function edmfx_nh_pressure_tendency!(
     Yₜ,
@@ -95,10 +140,12 @@ function edmfx_nh_pressure_tendency!(
     n = n_mass_flux_subdomains(turbconv_model)
     (; params) = p
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜρʲs, ᶠnh_pressure₃ʲs, ᶠu₃⁰) = p.precomputed
+    (; ᶜtke⁰, ᶜρʲs, ᶠnh_pressure₃ʲs, ᶠu₃⁰, ᶜuʲs,) = p.precomputed
     ᶠlg = Fields.local_geometry_field(Y.f)
+    ᶠz = Fields.coordinate_field(Y.f).z
 
     scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+    FT = eltype(params)
 
     for j in 1:n
         if p.atmos.edmfx_model.nh_pressure isa Val{true}
@@ -109,6 +156,13 @@ function edmfx_nh_pressure_tendency!(
                 Y.f.sgsʲs.:($$j).u₃,
                 ᶠu₃⁰,
                 scale_height,
+                ᶠz,
+                FT(0),
+                max(ᶠinterp(ᶜtke⁰), 0),
+                ᶠinterp(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))),
+                get_physical_w(Y.f.sgsʲs.:($$j).u₃, ᶠlg),
+                get_physical_w(ᶠu₃⁰, ᶠlg),
+                p.atmos.nh_pressure_model,
             )
             @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠnh_pressure₃ʲs.:($$j)
         else

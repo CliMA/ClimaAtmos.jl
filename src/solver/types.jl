@@ -23,6 +23,11 @@ struct PhysicalMixingLengthModel <: AbstractMixingLengthModel end
 struct NeuralNetworkMixingLengthModel <: AbstractMixingLengthModel end
 struct MixingLengthErrorModel <: AbstractMixingLengthModel end
 
+abstract type AbstractPertPressureModel end
+struct PhysicalPertPressureModel <: AbstractPertPressureModel end
+struct LinearPertPressureModel <: AbstractPertPressureModel end
+
+
 """
     AbstractSGSamplingType
 
@@ -507,6 +512,7 @@ Base.@kwdef struct AtmosModel{
     CCDPS,
     F,
     MLM,
+    NHPM,
     S,
     OZ,
     CO2,
@@ -540,6 +546,7 @@ Base.@kwdef struct AtmosModel{
     call_cloud_diagnostics_per_stage::CCDPS = nothing
     forcing_type::F = nothing
     mixing_length_model::MLM = nothing
+    nh_pressure_model::NHPM = nothing
     subsidence::S = nothing
 
     # Currently only relevant for RRTMGP, but will hopefully become standalone

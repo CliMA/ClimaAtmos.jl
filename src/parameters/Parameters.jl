@@ -19,7 +19,7 @@ Base.broadcastable(param_set::ACAP) = tuple(param_set)
 Base.broadcastable(param_set::ATCP) = tuple(param_set)
 Base.broadcastable(param_set::ASTP) = tuple(param_set)
 
-Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VFT3} <: ATCP
+Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VFT3, VFT4} <: ATCP
     surface_area::FT
     max_area::FT
     min_area::FT
@@ -45,6 +45,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VFT3} <: ATCP
     entr_param_vec::VFT1
     turb_entr_param_vec::VFT2
     mixing_length_param_vec::VFT3
+    pressure_normalmode_param_vec::VFT4
     detr_massflux_vertdiv_coeff::FT
     min_area_limiter_scale::FT
     min_area_limiter_power::FT

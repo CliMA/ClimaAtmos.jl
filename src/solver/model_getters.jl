@@ -300,6 +300,17 @@ function get_mixing_length_model(parsed_args)
     end
 end
 
+function get_nh_pressure_model(parsed_args)
+    nh_pressure_model = parsed_args["edmfx_nh_pressure_type"]
+    return if nh_pressure_model == nothing || nh_pressure_model == "physical"
+        PhysicalPertPressureModel()
+    elseif nh_pressure_model == "linear"
+        LinearPertPressureModel()
+    else
+        error("Invalid edmfx_nh_pressure_type $(nh_pressure_model)")
+    end
+end
+
 function get_cloud_model(parsed_args)
     cloud_model = parsed_args["cloud_model"]
     FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
