@@ -200,9 +200,7 @@ add_diagnostic_variable!(
     comments = "Vertical component of relative vorticity",
     compute! = (out, state, cache, time) -> begin
         vort = @. w_component.(Geometry.WVector.(cache.precomputed.ᶜu))
-        curl_uh = @. curlₕ(cache.precomputed.ᶜu)
-        vort = Geometry.WVector.(curl_uh)
-        # We need to ensure smoothness, so we call DSS
+        vort = @. w_component.(Geometry.WVector(curlₕ(cache.precomputed.ᶜu)))
         Spaces.weighted_dss!(vort)
         if isnothing(out)
             return copy(vort)
