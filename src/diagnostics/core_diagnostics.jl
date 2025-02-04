@@ -200,6 +200,8 @@ add_diagnostic_variable!(
     comments = "Vertical component of relative vorticity",
     compute! = (out, state, cache, time) -> begin
         vort = @. w_component.(Geometry.WVector.(cache.precomputed.ᶜu))
+        curl_uh = @. curlₕ(cache.precomputed.ᶜu)
+        vort = Geometry.WVector.(curl_uh)
         # We need to ensure smoothness, so we call DSS
         Spaces.weighted_dss!(vort)
         if isnothing(out)
@@ -506,6 +508,32 @@ add_diagnostic_variable!(
         else
             out .=
                 TD.air_temperature.(
+                    thermo_params,
+                    cache.precomputed.sfc_conditions.ts,
+                )
+        end
+    end,
+)
+
+###
+# Surface pressure (2d)
+###
+add_diagnostic_variable!(
+    short_name = "ps",
+    long_name = "Surface Air Pressure",
+    standard_name = "surface_pressure",
+    units = "Pa",
+    comments = "Pressure of the lower boundary of the atmosphere",
+    compute! = (out, state, cache, time) -> begin
+        thermo_params = CAP.thermodynamics_params(cache.params)
+        if isnothing(out)
+            return TD.air_pressure.(
+                thermo_params,
+                cache.precomputed.sfc_conditions.ts,
+            )
+        else
+            out .=
+                TD.air_pressure.(
                     thermo_params,
                     cache.precomputed.sfc_conditions.ts,
                 )
