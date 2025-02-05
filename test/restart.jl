@@ -246,8 +246,8 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
 
     simulation_restarted = CA.get_simulation(config_should_be_same)
 
-    if pkgversion(CA.RRTMGP) < v"0.20"
-        # Versions of RRTMGP older than 0.20 have a bug and do not set the
+    if pkgversion(CA.RRTMGP) < v"0.21"
+        # Versions of RRTMGP older than 0.21 have a bug and do not set the
         # flux_dn_dir, so that face_clear_sw_direct_flux_dn and
         # face_sw_direct_flux_dn is uninitialized and not deterministic
         rrtmgp_clear_fix =
