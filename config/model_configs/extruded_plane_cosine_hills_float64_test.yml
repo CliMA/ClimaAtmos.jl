@@ -1,0 +1,20 @@
+config: "box"
+FLOAT_TYPE: "Float64"
+initial_condition: "ConstantBuoyancyFrequencyProfile"
+topography: "Cosine2D"
+x_max: 100e3
+y_max: 1e3
+z_max: 21e3
+x_elem: 100
+y_elem: 1
+z_elem: 100
+dz_bottom: 10
+dt: "0.5secs" # CFL is slightly lower than for 2D case
+t_end: "9hours"
+rayleigh_sponge: true
+toml: [toml/steady_state_test.toml]
+check_steady_state: true
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [orog, ua, wa, uapredicted, wapredicted, uaerror, waerror]
+    period: 1hours
