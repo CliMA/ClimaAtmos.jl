@@ -771,7 +771,7 @@ steps:
 
       - label: ":genie: Prognostic EDMFX ERA5 driven in a column"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --color=yes --project=.buildkite examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_era5driven_column.yml
           --job_id prognostic_edmfx_era5driven_column
         artifact_paths: "prognostic_edmfx_era5driven_column/output_active/*"
