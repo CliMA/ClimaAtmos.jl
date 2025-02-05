@@ -231,6 +231,8 @@ steps:
           julia --color=yes --project=.buildkite examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_equilmoist_conservation_source.yml
           --job_id sphere_baroclinic_wave_equilmoist_conservation_source
         artifact_paths: "sphere_baroclinic_wave_equilmoist_conservation_source/output_active/*"
+        agents:
+          slurm_mem: 16GB
 
   - group: "Sphere Examples (Dycore)"
     steps:
@@ -417,13 +419,13 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
-          slurm_mem: 20G
+          slurm_mem: 16G
 
       - label: ":computer: test restart"
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
         agents:
-          slurm_mem: 20GB
+          slurm_mem: 16GB
 
       - label: ":computer: test restart GPU"
         command: >
@@ -432,7 +434,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
-          slurm_mem: 20G
+          slurm_mem: 16G
 
       # This job occasionally times out. We add a soft file when the agent is
       # lost because of timeout
@@ -447,7 +449,7 @@ steps:
           - exit_status: 255
         agents:
           slurm_ntasks: 2
-          slurm_mem: 20G
+          slurm_mem: 24G
 
       # This job occasionally times out. We add a soft file when the agent is
       # lost because of timeout
@@ -464,7 +466,7 @@ steps:
         agents:
           slurm_gpus_per_task: 1
           slurm_ntasks: 2
-          slurm_mem: 20G
+          slurm_mem: 24G
 
   - group: "MPI Examples"
     steps:
