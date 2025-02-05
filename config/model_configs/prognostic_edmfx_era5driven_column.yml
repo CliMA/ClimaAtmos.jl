@@ -19,7 +19,6 @@ prognostic_tke: true
 moist: "equil"
 config: "column"
 z_max: 70e3
-truncation: 40000
 z_elem: 200
 z_stretch: true
 dz_bottom: 30

@@ -18,11 +18,21 @@ import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 import ..EDOnlyEDMFX
 import ..n_mass_flux_subdomains
-import ..gcm_driven_profile
+# import ..gcm_driven_profile
 import ..gcm_height
-import ..gcm_driven_profile_tmean
-import ..era5_driven_profile
 import ..era5_height
+import ..gcm_driven_profile_tmean
+import ..era5_driven_profile_tmean
+import ..gcm_driven_rho_profile_tmean
+import ..era5_driven_rho_profile_tmean
+
+# import ..era5_driven_profile
+# import ..era5_height
+
+# need to take these out of initial conditions.jl and put them back in utils but have to settle circularity issues first
+import ..external_height
+import ..external_driven_profile_tmean
+import ..external_driven_rho_profile_tmean
 
 import Thermodynamics.TemperatureProfiles:
     DecayingTemperatureProfile, DryAdiabaticProfile
