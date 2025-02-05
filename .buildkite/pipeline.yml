@@ -178,19 +178,6 @@ steps:
 
   - group: "Plane Examples"
     steps:
-      - label: ":computer: Agnesi linear hydrostatic mountain experiment (uniform)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/plane_agnesi_mountain_test_uniform.yml
-          --job_id plane_agnesi_mountain_test_uniform
-        artifact_paths: "plane_agnesi_mountain_test_uniform/output_active/*"
-
-      - label: ":computer: Agnesi linear hydrostatic mountain experiment (stretched)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/plane_agnesi_mountain_test_stretched.yml
-          --job_id plane_agnesi_mountain_test_stretched
-        artifact_paths: "plane_agnesi_mountain_test_stretched/output_active/*"
 
       - label: ":computer: Density current experiment"
         command: >
@@ -199,6 +186,86 @@ steps:
           --job_id plane_density_current_test
         artifact_paths: "plane_density_current_test/output_active/*"
 
+  - group: "Analytic Tests"
+    steps:
+      - label: "GPU: No Topography Test (2D, Float64, Discrete Balance)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/plane_no_topography_float64_test.yml
+          --job_id gpu_plane_no_topography_float64_test
+        artifact_paths: "gpu_plane_no_topography_float64_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Cosine Hills Test (2D, Float64)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/plane_cosine_hills_float64_test.yml
+          --job_id gpu_plane_cosine_hills_float64_test
+        artifact_paths: "gpu_plane_cosine_hills_float64_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Cosine Hills Test (Extruded 2D, Float64)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/extruded_plane_cosine_hills_float64_test.yml
+          --job_id gpu_extruded_plane_cosine_hills_float64_test
+        artifact_paths: "gpu_extruded_plane_cosine_hills_float64_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 48GB
+
+      - label: "GPU: Cosine Hills Test (3D, Float64)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/box_cosine_hills_float64_test.yml
+          --job_id gpu_box_cosine_hills_float64_test
+        artifact_paths: "gpu_box_cosine_hills_float64_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 48GB
+
+      - label: "GPU: Agnesi Mountain Test (2D, Float64)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/plane_agnesi_mountain_float64_test.yml
+          --job_id gpu_plane_agnesi_mountain_float64_test
+        artifact_paths: "gpu_plane_agnesi_mountain_float64_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Schar Mountain Test (2D, Float64)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/plane_schar_mountain_float64_test.yml
+          --job_id gpu_plane_schar_mountain_float64_test
+        artifact_paths: "gpu_plane_schar_mountain_float64_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: Schar Mountain Test (2D, Float32)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/plane_schar_mountain_float32_test.yml
+          --job_id gpu_plane_schar_mountain_float32_test
+        artifact_paths: "gpu_plane_schar_mountain_float32_test/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
 
   - group: "Conservation check"
     steps:

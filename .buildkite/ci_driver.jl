@@ -28,7 +28,7 @@ sol_res = CA.solve_atmos!(simulation)
 (; p) = integrator
 
 import ClimaCore
-import ClimaCore: Topologies, Quadratures, Spaces
+import ClimaCore: Topologies, Quadratures, Spaces, Fields
 import ClimaComms
 using SciMLBase
 using PrettyTables
@@ -38,6 +38,8 @@ using ClimaTimeSteppers
 using Test
 import Tar
 import Base.Filesystem: rm
+import Statistics: mean
+import LinearAlgebra: norm_sqr
 include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
 
 ref_job_id = config.parsed_args["reference_job_id"]
@@ -107,6 +109,58 @@ end
 
 # Write diagnostics that are in DictWriter to text files
 CA.write_diagnostics_as_txt(simulation)
+
+if config.parsed_args["check_steady_state"]
+    Y_end = integrator.sol.u[end]
+    t_end = integrator.sol.t[end]
+    (; steady_state_velocity, params) = integrator.p
+    (; zd_rayleigh) = params
+    FT = eltype(Y_end)
+
+    @info "Comparing velocity fields to predicted steady state at t = $t_end"
+    ᶜu_normsqr = norm_sqr.(steady_state_velocity.ᶜu)
+    ᶠu_normsqr = norm_sqr.(steady_state_velocity.ᶠu)
+    ᶜuₕ_err_normsqr = norm_sqr.(Y_end.c.uₕ .- CA.C12.(steady_state_velocity.ᶜu))
+    ᶠu₃_err_normsqr = norm_sqr.(Y_end.f.u₃ .- CA.C3.(steady_state_velocity.ᶠu))
+
+    # Average all errors below the sponge layer.
+    ᶜsponge_mask = FT.(Fields.coordinate_field(Y_end.c).z .< zd_rayleigh)
+    ᶠsponge_mask = FT.(Fields.coordinate_field(Y_end.f).z .< zd_rayleigh)
+    ᶜu_rms = sqrt(sum(ᶜu_normsqr .* ᶜsponge_mask) / sum(ᶜsponge_mask))
+    ᶠu_rms = sqrt(sum(ᶠu_normsqr .* ᶠsponge_mask) / sum(ᶠsponge_mask))
+    ᶜuₕ_rmse = sqrt(sum(ᶜuₕ_err_normsqr .* ᶜsponge_mask) / sum(ᶜsponge_mask))
+    ᶠu₃_rmse = sqrt(sum(ᶠu₃_err_normsqr .* ᶠsponge_mask) / sum(ᶠsponge_mask))
+    ᶜuₕ_rel_err = ᶜuₕ_rmse / ᶜu_rms
+    ᶠu₃_rel_err = ᶠu₃_rmse / ᶠu_rms
+
+    # Average the errors on several levels close to the surface.
+    n_levels = 3
+    level_uₕ_rel_errs = map(1:n_levels) do level
+        level_u_rms = sqrt(mean(Fields.level(ᶜu_normsqr, level)))
+        level_uₕ_rmse = sqrt(mean(Fields.level(ᶜuₕ_err_normsqr, level)))
+        level_uₕ_rmse / level_u_rms
+    end
+    level_u₃_rel_errs = map((1:n_levels) .- Fields.half) do level
+        level_u_rms = sqrt(mean(Fields.level(ᶠu_normsqr, level)))
+        level_u₃_rmse = sqrt(mean(Fields.level(ᶠu₃_err_normsqr, level)))
+        level_u₃_rmse / level_u_rms
+    end
+
+    @info "    Absolute RMSE of uₕ below sponge layer: $ᶜuₕ_rmse"
+    @info "    Absolute RMSE of u₃ below sponge layer: $ᶠu₃_rmse"
+    @info "    Relative RMSE of uₕ below sponge layer: $ᶜuₕ_rel_err"
+    @info "    Relative RMSE of u₃ below sponge layer: $ᶠu₃_rel_err"
+    @info "    Relative RMSE of uₕ on $n_levels levels closest to the surface:"
+    @info "        $level_uₕ_rel_errs"
+    @info "    Relative RMSE of u₃ on $n_levels levels closest to the surface:"
+    @info "        $level_u₃_rel_errs"
+
+    if t_end > 24 * 60 * 60
+        # TODO: Float32 simulations currently show significant divergence of uₕ.
+        @test ᶜuₕ_rel_err < (FT == Float32 ? 0.05 : 0.005)
+        @test ᶠu₃_rel_err < 0.0005
+    end
+end
 
 # Conservation checks
 if config.parsed_args["check_conservation"]
