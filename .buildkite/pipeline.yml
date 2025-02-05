@@ -1047,16 +1047,6 @@ steps:
           slurm_mem: 24GB
           slurm_gpus: 1
 
-      - label: ":computer: Benchmark: CPU perf target (Threaded)"
-        command: >
-          julia --color=yes --threads 8 --project=.buildkite perf/benchmark.jl
-          --config_file $PERF_CONFIG_PATH/bm_perf_target_threaded.yml
-          --job_id bm_perf_target_threaded
-        agents:
-          slurm_mem: 24GB
-          slurm_cpus_per_task: 8
-          slurm_reservation: "false"
-
       - label: ":computer: Benchmark: GPU diag edmf"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
