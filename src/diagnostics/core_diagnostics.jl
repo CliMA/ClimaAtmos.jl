@@ -113,9 +113,9 @@ add_diagnostic_variable!(
     comments = "Vertical wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(w_component.(Geometry.WVector.(cache.precomputed.ᶜu)))
+            return copy(w_component.(Geometry.WVector.(cache.precomputed.ᶠu)))
         else
-            out .= w_component.(Geometry.WVector.(cache.precomputed.ᶜu))
+            out .= w_component.(Geometry.WVector.(cache.precomputed.ᶠu))
         end
     end,
 )
@@ -1243,4 +1243,109 @@ add_diagnostic_variable!(
     units = "kg kg^-1",
     comments = "Mass of water vapor per mass of air",
     compute! = compute_husv!,
+)
+
+###
+# Analytic Steady-State Approximations
+###
+
+# These are only available when `check_steady_state` is `true`.
+
+add_diagnostic_variable!(
+    short_name = "uapredicted",
+    long_name = "Predicted Eastward Wind",
+    standard_name = "predicted_eastward_wind",
+    units = "m s^-1",
+    comments = "Predicted steady-state eastward (zonal) wind component",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            u_component.(cache.steady_state_velocity.ᶜu)
+        else
+            out .= u_component.(cache.steady_state_velocity.ᶜu)
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "vapredicted",
+    long_name = "Predicted Northward Wind",
+    standard_name = "predicted_northward_wind",
+    units = "m s^-1",
+    comments = "Predicted steady-state northward (meridional) wind component",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            v_component.(cache.steady_state_velocity.ᶜu)
+        else
+            out .= v_component.(cache.steady_state_velocity.ᶜu)
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "wapredicted",
+    long_name = "Predicted Upward Air Velocity",
+    standard_name = "predicted_upward_air_velocity",
+    units = "m s^-1",
+    comments = "Predicted steady-state vertical wind component",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            w_component.(cache.steady_state_velocity.ᶠu)
+        else
+            out .= w_component.(cache.steady_state_velocity.ᶠu)
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "uaerror",
+    long_name = "Error of Eastward Wind",
+    standard_name = "error_eastward_wind",
+    units = "m s^-1",
+    comments = "Error of steady-state eastward (zonal) wind component",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            u_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
+            u_component.(cache.steady_state_velocity.ᶜu)
+        else
+            out .=
+                u_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
+                u_component.(cache.steady_state_velocity.ᶜu)
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "vaerror",
+    long_name = "Error of Northward Wind",
+    standard_name = "error_northward_wind",
+    units = "m s^-1",
+    comments = "Error of steady-state northward (meridional) wind component",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            v_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
+            v_component.(cache.steady_state_velocity.ᶜu)
+        else
+            out .=
+                v_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
+                v_component.(cache.steady_state_velocity.ᶜu)
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "waerror",
+    long_name = "Error of Upward Air Velocity",
+    standard_name = "error_upward_air_velocity",
+    units = "m s^-1",
+    comments = "Error of steady-state vertical wind component",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            w_component.(Geometry.UVWVector.(cache.precomputed.ᶠu)) .-
+            w_component.(cache.steady_state_velocity.ᶠu)
+        else
+            out .=
+                w_component.(Geometry.UVWVector.(cache.precomputed.ᶠu)) .-
+                w_component.(cache.steady_state_velocity.ᶠu)
+        end
+    end,
 )

@@ -48,6 +48,7 @@ function precomputed_quantities(Y, atmos)
         ᶜspecific = specific_gs.(Y.c),
         ᶜu = similar(Y.c, C123{FT}),
         ᶠu³ = similar(Y.f, CT3{FT}),
+        ᶠu = similar(Y.f, CT123{FT}),
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜK = similar(Y.c, FT),
@@ -391,7 +392,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_args = (thermo_params, moisture_model, precip_model)
     (; ᶜΦ) = p.core
-    (; ᶜspecific, ᶜu, ᶠu³, ᶜK, ᶜts, ᶜp) = p.precomputed
+    (; ᶜspecific, ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
 
     @. ᶜspecific = specific_gs(Y.c)
@@ -406,6 +407,8 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     set_velocity_at_top!(Y, turbconv_model)
 
     set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    @. ᶠu = CT123(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
     if n > 0
         # TODO: In the following increments to ᶜK, we actually need to add
         # quantities of the form ᶜρaχ⁰ / ᶜρ⁰ and ᶜρaχʲ / ᶜρʲ to ᶜK, rather than
