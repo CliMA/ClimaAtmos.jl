@@ -46,11 +46,12 @@ known_dependencies = Set([
     "FastGaussQuadrature",
     "Insolation",
     "Interpolations",
-    "LazyBroadcast",
+    "LazyBroadcast", # for https://github.com/CliMA/ClimaAtmos.jl/issues/3594
     "LazyArtifacts",
     "LinearAlgebra",
     "Logging",
     # NCDatasets is used to read Earth topography, GCM driven initial conditions, orographic gravity wave data
+    "NullBroadcasts", # works with LazyBroadcast
     "NCDatasets",
     "NVTX",
     "RRTMGP",

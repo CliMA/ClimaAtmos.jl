@@ -1,13 +1,12 @@
 module ClimaAtmos
 
 using NVTX
-import LazyBroadcast: @lazy
+import NullBroadcasts: NullBroadcasted
 import LazyBroadcast
 import LazyBroadcast: @lazy
 import Thermodynamics as TD
 import Thermodynamics
 
-include("null_broadcasted.jl")
 include("compat.jl")
 include(joinpath("parameters", "Parameters.jl"))
 import .Parameters as CAP
