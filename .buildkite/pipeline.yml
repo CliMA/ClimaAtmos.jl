@@ -549,20 +549,6 @@ steps:
         agents:
           slurm_mem: 20GB
 
-  - group: "Calibration"
-    steps:
-      - label: "Calibration interface unit tests"
-        command: julia --project=calibration/test calibration/test/interface.jl
-      - label: "end to end test"
-        command: julia --project=calibration/test calibration/test/e2e_test.jl
-        agents:
-          slurm_ntasks: 10
-          slurm_cpus_per_task: 1
-          slurm_mem: 96GB
-          slurm_reservation: "false"
-          slurm_time: "00:30:00"
-        artifact_paths: "calibration_end_to_end_test/*"
-
   - group: "Diagnostic EDMFX"
     steps:
 
@@ -1047,16 +1033,6 @@ steps:
           slurm_mem: 24GB
           slurm_gpus: 1
 
-      - label: ":computer: Benchmark: CPU perf target (Threaded)"
-        command: >
-          julia --color=yes --threads 8 --project=.buildkite perf/benchmark.jl
-          --config_file $PERF_CONFIG_PATH/bm_perf_target_threaded.yml
-          --job_id bm_perf_target_threaded
-        agents:
-          slurm_mem: 24GB
-          slurm_cpus_per_task: 8
-          slurm_reservation: "false"
-
       - label: ":computer: Benchmark: GPU diag edmf"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
@@ -1117,29 +1093,7 @@ steps:
           --job_id flame_perf_target_prognostic_edmfx_aquaplanet
         artifact_paths: "flame_perf_target_prognostic_edmfx_aquaplanet/*"
         agents:
-          slurm_mem: 48GB
-          slurm_reservation: "false"
-
-      - label: ":fire: Flame graph: perf target (frierson diffusion)"
-        command: >
-          julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_frierson.yml
-          --job_id flame_perf_target_frierson
-        artifact_paths: "flame_perf_target_frierson/*"
-        agents:
-          slurm_mem: 48GB
-          slurm_reservation: "false"
-
-      - label: ":fire: Flame graph: perf target (Threaded)"
-        command: >
-          julia --threads 8 --color=yes --project=.buildkite perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_threaded.yml
-          --job_id flame_perf_target_threaded
-        artifact_paths: "flame_perf_target_threaded/*"
-        agents:
-          slurm_cpus_per_task: 8
-          slurm_mem: 24GB
-          slurm_reservation: "false"
+          slurm_mem: 32GB
 
       - label: ":fire: Flame graph: perf target (Callbacks)"
         command: >
