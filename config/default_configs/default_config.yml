@@ -35,7 +35,7 @@ scalar_hyperdiffusion_coefficient:
   value: 1.5
 # Topography
 topography:
-  help: "Define the surface elevation profile [`NoWarp` (default),`Earth`,`DCMIP200`,`Agnesi`, `Schar`, `Hughes2023`]"
+  help: "Define the surface elevation profile [`NoWarp` (default), `Earth`, `DCMIP200`, `Hughes2023`, `Agnesi`, `Schar`, `Cosine2D`, `Cosine3D`]"
   value: "NoWarp"
 mesh_warp_type:
   help: "Sets the interior mesh warp method [`Linear`, `SLEVE`]"
@@ -225,6 +225,9 @@ reproducibility_test:
   value: false
 check_conservation:
   help: "Check conservation of mass and energy [`false` (default), `true`]"
+  value: false
+check_steady_state:
+  help: "Compare steady-state velocity to analytic solution; only available for certain choices of `topography` [`false` (default), `true`]"
   value: false
 ls_adv:
   help: "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"

@@ -21,6 +21,7 @@ import ..n_mass_flux_subdomains
 import ..gcm_driven_profile
 import ..gcm_height
 import ..gcm_driven_profile_tmean
+import ..constant_buoyancy_frequency_initial_state
 
 import Thermodynamics.TemperatureProfiles:
     DecayingTemperatureProfile, DryAdiabaticProfile
