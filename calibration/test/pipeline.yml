@@ -1,0 +1,46 @@
+agents:
+  queue: new-central
+  slurm_mem: 8G
+  modules: climacommon/2024_12_16
+env:
+  OPENBLAS_NUM_THREADS: 1
+  SLURM_KILL_BAD_EXIT: 1
+  JULIA_NVTX_CALLBACKS: gc
+  JULIA_MAX_NUM_PRECOMPILE_FILES: 100
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/default"
+
+steps:
+  - label: "init :computer:"
+    key: "init_cpu_env"
+    concurrency: 1
+    concurrency_group: 'depot/climaatmos-calibration'
+    command:
+      - "echo $$JULIA_DEPOT_PATH"
+
+      - echo "--- Instantiate calibration/test"
+      - "julia --project=calibration/test -e 'using Pkg; Pkg.develop(;path=\".\"); Pkg.instantiate(;verbose=true)'"
+      - "julia --project=calibration/test -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=calibration/test -e 'using Pkg; Pkg.status()'"
+
+    agents:
+      slurm_cpus_per_task: 8
+      slurm_gpus: 1
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+      JULIA_MAX_NUM_PRECOMPILE_FILES: 50
+
+  - wait
+
+  - group: "Calibration"
+    steps:
+      - label: "Calibration interface unit tests"
+        command: julia --project=calibration/test calibration/test/interface.jl
+      - label: "end to end test"
+        command: julia --project=calibration/test calibration/test/e2e_test.jl
+        agents:
+          slurm_ntasks: 10
+          slurm_cpus_per_task: 1
+          slurm_mem: 96GB
+          slurm_reservation: "false"
+          slurm_time: "00:30:00"
+        artifact_paths: "calibration_end_to_end_test/*"
