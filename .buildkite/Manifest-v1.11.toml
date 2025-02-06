@@ -1975,9 +1975,9 @@ version = "1.11.0"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "Artifacts", "ClimaComms", "DocStringExtensions", "Random"]
-git-tree-sha1 = "56240e81cd9fa6dde6c860509cb88833920d0d99"
+git-tree-sha1 = "bf25b44442e3bedd7ea0b487a863608c7e99a8d4"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.19.2"
+version = "0.20.0"
 weakdeps = ["CUDA", "ClimaParams"]
 
     [deps.RRTMGP.extensions]
