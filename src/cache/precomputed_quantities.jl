@@ -430,7 +430,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
 
     if !isnothing(p.sfc_setup)
-        SurfaceConditions.update_surface_conditions!(Y, p, t)
+        SurfaceConditions.update_surface_conditions!(Y, p, float(t))
     end
 
     # TODO: It is too slow to calculate mixing length at every timestep
