@@ -41,6 +41,7 @@ makedocs(;
         "Configuration" => "config.md",
         "Parameters" => "parameters.md",
         "Longruns" => "longruns.md",
+        "The time type" => "itime.md",
         "API" => "api.md",
         "References" => "references.md",
     ],
