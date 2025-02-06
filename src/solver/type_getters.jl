@@ -9,6 +9,7 @@ import ClimaAtmos as CA
 import LinearAlgebra
 import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
+import Logging
 
 import ClimaDiagnostics
 
@@ -502,7 +503,7 @@ function auto_detect_restart_file(
 end
 
 function get_sim_info(config::AtmosConfig)
-    (; parsed_args) = config
+    (; comms_ctx, parsed_args) = config
     FT = eltype(config)
 
     (; job_id) = config
@@ -531,9 +532,21 @@ function get_sim_info(config::AtmosConfig)
 
     output_dir = OutputPathGenerator.generate_output_path(
         base_output_dir;
-        context = config.comms_ctx,
+        context = comms_ctx,
         style = output_dir_style,
     )
+    if parsed_args["log_to_file"]
+        @info "Logging to $output_dir/output.log"
+        logger = ClimaComms.FileLogger(comms_ctx, output_dir)
+        Logging.global_logger(logger)
+    end
+    @info "Running on $(nameof(typeof(ClimaComms.device(comms_ctx))))"
+    if comms_ctx isa ClimaComms.SingletonCommsContext
+        @info "Setting up single-process ClimaAtmos run"
+    else
+        @info "Setting up distributed ClimaAtmos run" nprocs =
+            ClimaComms.nprocs(comms_ctx)
+    end
 
     isnothing(restart_file) ||
         @info "Restarting simulation from file $restart_file"
@@ -628,30 +641,10 @@ function get_comms_context(parsed_args)
     return comms_ctx
 end
 
-"""
-    silence_non_root_processes(comms_ctx)
-
-Set the logging behavior based on the process rank within the given communication context `comms_ctx`.
-If the process is the root process, logging is set to display messages to the console with `Info` level.
-For all other processes, logging is silenced by setting it to a `NullLogger`.
-
-# Arguments
-- `comms_ctx`: The communication context used to determine the rank of the process.
-
-"""
-function silence_non_root_processes(comms_ctx)
-    # Set logging to only display for the root process
-    if ClimaComms.iamroot(comms_ctx)
-        Logging.global_logger(Logging.ConsoleLogger(stderr, Logging.Info))
-    else
-        Logging.global_logger(Logging.NullLogger())
-    end
-end
-
 function get_simulation(config::AtmosConfig)
+    sim_info = get_sim_info(config)
     params = ClimaAtmosParameters(config)
     atmos = get_atmos(config, params)
-    sim_info = get_sim_info(config)
     job_id = sim_info.job_id
     output_dir = sim_info.output_dir
     @info "Simulation info" job_id output_dir
