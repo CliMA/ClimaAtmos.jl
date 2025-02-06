@@ -1,4 +1,4 @@
-212
+213
 
 # **README**
 #
@@ -20,6 +20,8 @@
 
 
 #=
+213 
+- Update to deep-atmos eqns by default, fix vorticity diagnostic
 
 212
 - Update RRTMGP, which changes aerosol optics calculation

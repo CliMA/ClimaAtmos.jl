@@ -278,8 +278,8 @@ log_progress:
   help: "Log simulation progress, including wall-time estimates"
   value: true
 deep_atmosphere:
-  help: "If true, use deep atmosphere equations and metric terms, otherwise assume columns are cylindrical (shallow atmosphere) [`true`, `false` (default)]"
-  value: false
+  help: "If true, use deep atmosphere equations and metric terms, otherwise assume columns are cylindrical (shallow atmosphere) [`true` (default), `false`]"
+  value: true
 restart_file:
   help: "Path to HDF5 file to use as simulation starting point"
   value: ~
