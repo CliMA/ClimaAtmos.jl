@@ -5,6 +5,11 @@ Main
 -------
 ### Features
 
+### Update default configuration to use deep-atmosphere eqns, fix diagnostic bug
+PR [3422](https://github.com/CliMA/ClimaAtmos.jl/pull/3422)
+Updates the `default_config` to set `deep_atmosphere=true`, and updates the 
+`rv` relative vorticity diagnostic to store the curl of horizontal velocity.
+
 ### Allow different sizes of dust and sea salt for radiation
 
 Added functionality to allow five different size bins of dust and sea salt aerosols
@@ -17,6 +22,7 @@ PR [3555](https://github.com/CliMA/ClimaAtmos.jl/pull/3555)
 
 The option `FriersonDiffusion` is removed from `vert_diff` config. Use `DecayWithHeightDiffusion` instead.
 PR [3592](https://github.com/CliMA/ClimaAtmos.jl/pull/3592)
+
 
 v0.28.4
 -------
