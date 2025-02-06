@@ -382,14 +382,18 @@ end
 # limit entrainment and detrainment rates for prognostic EDMF
 # limit rates approximately below the inverse timescale 1/dt
 limit_entrainment(entr::FT, a, dt) where {FT} = max(
-    min(entr, FT(0.9) * (1 - a) / max(a, eps(FT)) / dt, FT(0.9) * 1 / dt),
+    min(
+        entr,
+        FT(0.9) * (1 - a) / max(a, eps(FT)) / float(dt),
+        FT(0.9) * 1 / float(dt),
+    ),
     0,
 )
 limit_detrainment(detr::FT, a, dt) where {FT} =
-    max(min(detr, FT(0.9) * 1 / dt), 0)
+    max(min(detr, FT(0.9) * 1 / float(dt)), 0)
 
 function limit_turb_entrainment(dyn_entr::FT, turb_entr, dt) where {FT}
-    return max(min((FT(0.9) * 1 / dt) - dyn_entr, turb_entr), 0)
+    return max(min((FT(0.9) * 1 / float(dt)) - dyn_entr, turb_entr), 0)
 end
 
 # limit entrainment and detrainment rates for diagnostic EDMF

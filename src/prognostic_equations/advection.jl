@@ -110,7 +110,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         (; ᶜh_tot) = p.precomputed
         for (coeff, upwinding) in ((1, energy_upwinding), (-1, Val(:none)))
             energy_upwinding isa Val{:none} && continue
-            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, upwinding)
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), upwinding)
             @. Yₜ.c.ρe_tot += coeff * vtt
         end
     end
@@ -118,7 +118,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         χ_name == :e_tot && continue
         for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
             tracer_upwinding isa Val{:none} && continue
-            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, upwinding)
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), upwinding)
             @. ᶜρχₜ += coeff * vtt
         end
     end
