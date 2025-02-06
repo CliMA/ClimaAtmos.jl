@@ -200,9 +200,12 @@ Modifies `Y.f.u₃` so that `ᶠu³` is 0 at the surface. Specifically, since
 the `turbconv_model` is EDMFX, the `Y.f.sgsʲs` are also modified so that each
 `u₃ʲ` is equal to `u₃` at the surface.
 """
-function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
-    sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
-    bc_sfc_u₃ = surface_velocity(Y.f.u₃, ᶠuₕ³)
+function set_velocity_at_surface!(ᶠu₃, ᶜuₕ, ᶜρ, turbconv_model)
+    ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
+    sfc_u₃ = Fields.level(ᶠu₃.components.data.:1, half)
+    sfc_uₕ³(x) = Fields.level(x.components.data.:1, half)
+    sfc_g³³ = g³³_field(axes(sfc_u₃))
+    bc_sfc_u₃ = @lazy @. -sfc_uₕ³(ᶠuₕ³) / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
     @. sfc_u₃ = bc_sfc_u₃
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n_mass_flux_subdomains(turbconv_model)
@@ -211,13 +214,6 @@ function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
         end
     end
     return nothing
-end
-
-function surface_velocity(ᶠu₃, ᶠuₕ³)
-    sfc_u₃ = Fields.level(ᶠu₃.components.data.:1, half)
-    sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
-    sfc_g³³ = g³³_field(sfc_u₃)
-    return @lazy @. -sfc_uₕ³ / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
 end
 
 """
@@ -395,7 +391,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
 
     # TODO: We might want to move this to dss! (and rename dss! to something
     # like enforce_constraints!).
-    set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
+    set_velocity_at_surface!(Y.f.u₃, Y.c.uₕ, Y.c.ρ, turbconv_model)
     set_velocity_at_top!(Y, turbconv_model)
 
     set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)

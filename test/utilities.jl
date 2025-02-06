@@ -170,9 +170,8 @@ end
     (; cent_space, face_space) = get_cartesian_spaces()
     lg_gⁱʲ = cent_space.grid.center_local_geometry.gⁱʲ
     lg_g³³ = lg_gⁱʲ.components.data.:9
-    @test Fields.field_values(
-        CA.g³³_field(Fields.coordinate_field(cent_space).x),
-    ) == lg_g³³
+    (; x) = Fields.coordinate_field(cent_space)
+    @test Fields.field_values(CA.g³³_field(axes(x))) == lg_g³³
     @test maximum(abs.(lg_g³³ .- CA.g³³.(lg_gⁱʲ).components.data.:1)) == 0
     @test maximum(abs.(CA.g³ʰ.(lg_gⁱʲ).components.data.:1)) == 0
     @test maximum(abs.(CA.g³ʰ.(lg_gⁱʲ).components.data.:2)) == 0

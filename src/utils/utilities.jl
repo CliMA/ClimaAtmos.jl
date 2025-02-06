@@ -114,12 +114,12 @@ function compute_strain_rate_face(u::Fields.Field)
 end
 
 """
-    g³³_field(field)
+    g³³_field(space)
 
-Extracts the value of `g³³` from `Fields.local_geometry_field(field)`.
+Extracts the value of `g³³` from `Fields.local_geometry_field(space)`.
 """
-function g³³_field(field)
-    g_field = Fields.local_geometry_field(field).gⁱʲ.components.data
+function g³³_field(space)
+    g_field = Fields.local_geometry_field(space).gⁱʲ.components.data
     end_index = fieldcount(eltype(g_field)) # This will be 4 in 2D and 9 in 3D.
     return g_field.:($end_index) # For both 2D and 3D spaces, g³³ = g[end].
 end
