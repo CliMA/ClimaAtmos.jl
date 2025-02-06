@@ -34,11 +34,6 @@ steps:
       - "julia --project=.buildkite -e 'using CUDA; CUDA.precompile_runtime()'"
       - "julia --project=.buildkite -e 'using Pkg; Pkg.status()'"
 
-      - echo "--- Instantiate calibration/test"
-      - "julia --project=calibration/test -e 'using Pkg; Pkg.develop(;path=\".\"); Pkg.instantiate(;verbose=true)'"
-      - "julia --project=calibration/test -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project=calibration/test -e 'using Pkg; Pkg.status()'"
-
     agents:
       slurm_cpus_per_task: 8
       slurm_gpus: 1

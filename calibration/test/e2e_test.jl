@@ -42,7 +42,7 @@ function process_member_data(simdir::SimDir)
     return slice(average_xy(rsut); time = 30days).data
 end
 
-addprocs(CAL.SlurmManager(10))
+addprocs(CAL.SlurmManager())
 
 @everywhere begin
     import ClimaCalibrate as CAL
