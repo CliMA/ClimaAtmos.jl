@@ -4,7 +4,7 @@ max_newton_iters_ode: 4
 dt: "400secs"
 tracer_upwinding: zalesak
 t_end: "5days"
-ode_algo: "SSP333"
+ode_algo: "ARS343"
 energy_upwinding: zalesak
 precip_model: "0M"
 moist: "equil"
