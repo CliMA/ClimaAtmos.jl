@@ -1911,6 +1911,12 @@ version = "0.4.24"
     [deps.PreallocationTools.weakdeps]
     ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 
+[[deps.PrecompileCI]]
+deps = ["ClimaAtmos", "ClimaComms", "ClimaCore", "ClimaParams", "PrecompileTools"]
+path = "PrecompileCI"
+uuid = "76d61242-8ec2-4c91-8455-3234246697a2"
+version = "0.1.0"
+
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
 git-tree-sha1 = "5aa36f7049a63a1528fe8f7c3f2113413ffd4e1f"

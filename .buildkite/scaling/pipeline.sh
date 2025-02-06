@@ -108,7 +108,7 @@ EOM
     job_id="sphere_held_suarez_${res}_res_rhoe_$nprocs"
     folder_name="${res}_res_${FT}"
     config_file="$parent_folder/$folder_name/${res}_res_${FT}_${nprocs}.yml"
-    command="julia --color=yes --project=.buildkite examples/hybrid/driver.jl --config_file $config_file"
+    command="julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $config_file"
 
     if [[ "$mpi_impl" == "mpich" ]]; then
       rank_env_var="PMI_RANK"
