@@ -5,6 +5,7 @@ using Revise; include("test/parameterized_tendencies/sponge/rayleigh_sponge.jl")
 using ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
+using NullBroadcasts: NullBroadcasted
 using ClimaCore.CommonSpaces
 using ClimaCore: Spaces, Fields, Geometry, ClimaCore
 using Test
@@ -42,6 +43,6 @@ using ClimaCore.CommonSpaces
 
     # Test when not using a Rayleigh sponge.
     computed = CA.rayleigh_sponge_tendency_uₕ(ᶜuₕ, nothing)
-    @test computed isa CA.NullBroadcasted
+    @test computed isa NullBroadcasted
     @. ᶜuₕ += computed # test that it can broadcast
 end
