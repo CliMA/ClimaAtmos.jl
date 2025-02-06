@@ -7,7 +7,7 @@ forcing: "held_suarez"
 dt_save_to_sol: "Inf"
 rad: "allskywithclear"
 log_progress: false
-vert_diff: "FriersonDiffusion"
+vert_diff: "DecayWithHeightDiffusion"
 use_krylov_method: true
 use_dynamic_krylov_rtol: false
 krylov_rtol: 0.99

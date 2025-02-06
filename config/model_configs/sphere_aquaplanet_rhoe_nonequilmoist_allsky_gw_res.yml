@@ -5,7 +5,7 @@ rayleigh_sponge: true
 dt: "360secs"
 t_end: "1days"
 dt_save_state_to_disk: "24hours"
-vert_diff: "FriersonDiffusion"
+vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 moist: "nonequil"

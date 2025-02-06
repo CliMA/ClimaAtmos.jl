@@ -87,8 +87,6 @@ function get_vertical_diffusion_model(
         nothing
     elseif vert_diff_name in ("true", true, "VerticalDiffusion")
         VerticalDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
-    elseif vert_diff_name in ("FriersonDiffusion",)
-        FriersonDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
     elseif vert_diff_name in ("DecayWithHeightDiffusion",)
         DecayWithHeightDiffusion{diffuse_momentum, FT}(; H = vdp.H, D₀ = vdp.D₀)
     else
