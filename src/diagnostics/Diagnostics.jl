@@ -1,6 +1,6 @@
 module Diagnostics
 
-import Dates: Month, DateTime, Period
+import Dates: Month, Day, Hour, DateTime, Period
 
 import ClimaComms
 
