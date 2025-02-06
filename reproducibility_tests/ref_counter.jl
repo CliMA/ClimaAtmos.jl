@@ -1,4 +1,4 @@
-211
+212
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+
+212
+- Update RRTMGP, which changes aerosol optics calculation
+
 211
 - Remove `FriersonDiffusion` and use `DecayWithHeightDiffusion` instead.
 
