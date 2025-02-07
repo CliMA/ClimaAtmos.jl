@@ -154,12 +154,7 @@ function precomputed_quantities(Y, atmos)
         end
     precipitation_quantities =
         atmos.precip_model isa Microphysics1Moment ?
-        (;
-            ᶜwᵣ = similar(Y.c, FT),
-            ᶜwₛ = similar(Y.c, FT),
-            ᶜqᵣ = similar(Y.c, FT),
-            ᶜqₛ = similar(Y.c, FT),
-        ) : (;)
+        (; ᶜwᵣ = similar(Y.c, FT), ᶜwₛ = similar(Y.c, FT)) : (;)
     smagorinsky_lilly_quantities =
         if atmos.smagorinsky_lilly isa SmagorinskyLilly
             uvw_vec = UVW(FT(0), FT(0), FT(0))
@@ -441,27 +436,63 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     @. ᶜwₜqₜ = Geometry.WVector(0)
     @. ᶜwₕhₜ = Geometry.WVector(0)
-    #
-    # TODO - uncomment in the next PR. Right now for the purpose of testing
-    # we want to merge with 0 sedimentation and precipitation
-    #
     if moisture_model isa NonEquilMoistModel
         set_sedimentation_precomputed_quantities!(Y, p, t)
-        #    (; ᶜwₗ, ᶜwᵢ) = p.precomputed
-        #    @. ᶜwₜqₜ += Geometry.WVector(ᶜwₗ * Y.c.ρq_liq + ᶜwᵢ * Y.c.ρq_ice) / Y.c.ρ
-        #    @. ᶜwₕhₜ += Geometry.WVector(
-        #        ᶜwₗ * Y.c.ρq_liq * (TD.internal_energy_liquid(thermo_params, ᶜts) + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwₗ) + Geometry.UVWVector(ᶜu))/2) +
-        #        ᶜwᵢ * Y.c.ρq_ice * (TD.internal_energy_ice(thermo_params, ᶜts)    + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwᵢ) + Geometry.UVWVector(ᶜu))/2)
-        #    ) / Y.c.ρ
+        (; ᶜwₗ, ᶜwᵢ) = p.precomputed
+        @. ᶜwₜqₜ +=
+            Geometry.WVector(ᶜwₗ * Y.c.ρq_liq + ᶜwᵢ * Y.c.ρq_ice) / Y.c.ρ
+        @. ᶜwₕhₜ +=
+            Geometry.WVector(
+                ᶜwₗ *
+                Y.c.ρq_liq *
+                (
+                    TD.internal_energy_liquid(thermo_params, ᶜts) +
+                    ᶜΦ +
+                    norm_sqr(
+                        Geometry.UVWVector(0, 0, -(ᶜwₗ)) +
+                        Geometry.UVWVector(ᶜu),
+                    ) / 2
+                ) +
+                ᶜwᵢ *
+                Y.c.ρq_ice *
+                (
+                    TD.internal_energy_ice(thermo_params, ᶜts) +
+                    ᶜΦ +
+                    norm_sqr(
+                        Geometry.UVWVector(0, 0, -(ᶜwᵢ)) +
+                        Geometry.UVWVector(ᶜu),
+                    ) / 2
+                ),
+            ) / Y.c.ρ
     end
     if precip_model isa Microphysics1Moment
         set_precipitation_precomputed_quantities!(Y, p, t)
-        #    (; ᶜwᵣ, ᶜwₛ) = p.precomputed
-        #    @. ᶜwₜqₜ += Geometry.WVector(ᶜwᵣ * Y.c.ρq_rai + ᶜwₛ * Y.c.ρq_sno) / Y.c.ρ
-        #    @. ᶜwₕhₜ += Geometry.WVector(
-        #        ᶜwᵣ * Y.c.ρq_rai * (TD.internal_energy_liquid(thermo_params, ᶜts) + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwᵣ) + Geometry.UVWVector(ᶜu))/2) +
-        #        ᶜwₛ * Y.c.ρq_sno * (TD.internal_energy_ice(thermo_params, ᶜts)    + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwₛ) + Geometry.UVWVector(ᶜu))/2)
-        #    ) / Y.c.ρ
+        (; ᶜwᵣ, ᶜwₛ) = p.precomputed
+        @. ᶜwₜqₜ +=
+            Geometry.WVector(ᶜwᵣ * Y.c.ρq_rai + ᶜwₛ * Y.c.ρq_sno) / Y.c.ρ
+        @. ᶜwₕhₜ +=
+            Geometry.WVector(
+                ᶜwᵣ *
+                Y.c.ρq_rai *
+                (
+                    TD.internal_energy_liquid(thermo_params, ᶜts) +
+                    ᶜΦ +
+                    norm_sqr(
+                        Geometry.UVWVector(0, 0, -(ᶜwᵣ)) +
+                        Geometry.UVWVector(ᶜu),
+                    ) / 2
+                ) +
+                ᶜwₛ *
+                Y.c.ρq_sno *
+                (
+                    TD.internal_energy_ice(thermo_params, ᶜts) +
+                    ᶜΦ +
+                    norm_sqr(
+                        Geometry.UVWVector(0, 0, -(ᶜwₛ)) +
+                        Geometry.UVWVector(ᶜu),
+                    ) / 2
+                ),
+            ) / Y.c.ρ
     end
 
     if turbconv_model isa PrognosticEDMFX

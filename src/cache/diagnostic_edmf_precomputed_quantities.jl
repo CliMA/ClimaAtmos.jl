@@ -1049,32 +1049,33 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     t,
     precip_model::Microphysics1Moment,
 )
-    thermo_params = CAP.thermodynamics_params(p.params)
-    microphys_1m_params = CAP.microphysics_1m_params(p.params)
+    error("Not implemented yet")
+    #thermo_params = CAP.thermodynamics_params(p.params)
+    #microphys_1m_params = CAP.microphysics_1m_params(p.params)
 
-    (; ᶜts, ᶜSqₜᵖ⁰, ᶜSeₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
-    (; ᶜqᵣ, ᶜqₛ) = p.precomputed
+    #(; ᶜts, ᶜSqₜᵖ⁰, ᶜSeₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+    #(; q_tot) = p.precomputed.ᶜspecific
+    #(; ᶜqᵣ, ᶜqₛ) = p.precomputed
 
-    ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+    #ᶜSᵖ = p.scratch.ᶜtemp_scalar
+    #ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
-    # Environment precipitation sources (to be applied to grid mean)
-    compute_precipitation_sources!(
-        ᶜSᵖ,
-        ᶜSᵖ_snow,
-        ᶜSqₜᵖ⁰,
-        ᶜSqᵣᵖ⁰,
-        ᶜSqₛᵖ⁰,
-        ᶜSeₜᵖ⁰,
-        Y.c.ρ,
-        ᶜqᵣ,
-        ᶜqₛ,
-        ᶜts,
-        p.core.ᶜΦ,
-        p.dt,
-        microphys_1m_params,
-        thermo_params,
-    )
+    ## Environment precipitation sources (to be applied to grid mean)
+    #compute_precipitation_sources!(
+    #    ᶜSᵖ,
+    #    ᶜSᵖ_snow,
+    #    ᶜSqₜᵖ⁰,
+    #    ᶜSqᵣᵖ⁰,
+    #    ᶜSqₛᵖ⁰,
+    #    ᶜSeₜᵖ⁰,
+    #    Y.c.ρ,
+    #    ᶜqᵣ,
+    #    ᶜqₛ,
+    #    ᶜts,
+    #    p.core.ᶜΦ,
+    #    p.dt,
+    #    microphys_1m_params,
+    #    thermo_params,
+    #)
     return nothing
 end
