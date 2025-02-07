@@ -1,5 +1,5 @@
 struct AtmosCache{
-    FT <: AbstractFloat,
+    TT,
     AM,
     NUM,
     CAP,
@@ -21,7 +21,7 @@ struct AtmosCache{
     CONSCHECK,
 }
     """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
-    dt::FT
+    dt::TT
 
     """AtmosModel"""
     atmos::AM

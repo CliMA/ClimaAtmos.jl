@@ -31,7 +31,7 @@ end
 
 # Helper function to limit the tendency
 function limit(q, dt, n::Int)
-    return q / dt / n
+    return q / float(dt) / n
 end
 
 """
@@ -92,7 +92,10 @@ Returns the qₜ source term due to precipitation formation
 defined as Δm_tot / (m_dry + m_tot) for the 0-moment scheme
 """
 function q_tot_0M_precipitation_sources(thp, cmp::CMP.Parameters0M, dt, qₜ, ts)
-    return -min(max(qₜ, 0) / dt, -CM0.remove_precipitation(cmp, PP(thp, ts)))
+    return -min(
+        max(qₜ, 0) / float(dt),
+        -CM0.remove_precipitation(cmp, PP(thp, ts)),
+    )
 end
 
 """

@@ -9,3 +9,4 @@ diagnostics:
   - short_name: [massa, energya]
     period: 1days
     writer: dict
+use_itime: true

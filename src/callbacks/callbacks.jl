@@ -27,10 +27,11 @@ function flux_accumulation!(integrator)
         nlevels = Spaces.nlevels(axes(Y.c))
         net_energy_flux_toa[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
-            Δt
+            float(Δt)
         if p.atmos.surface_model isa PrescribedSurfaceTemperature
             net_energy_flux_sfc[] +=
-                horizontal_integral_at_boundary(ᶠradiation_flux, half) * Δt
+                horizontal_integral_at_boundary(ᶠradiation_flux, half) *
+                float(Δt)
         end
     end
     return nothing
@@ -120,8 +121,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             # the fact that we have a very unrealistic initial condition
             max_relative_humidity = FT(0.6)
             t_increasing_humidity = FT(60 * 60 * 24 * 30)
-            if t < t_increasing_humidity
-                max_relative_humidity *= t / t_increasing_humidity
+            if float(t) < t_increasing_humidity
+                max_relative_humidity *= float(t) / t_increasing_humidity
             end
             @. ᶜrh = max_relative_humidity
 
@@ -319,7 +320,9 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     insolation_params = CAP.insolation_params(params)
     (; insolation_tuple, rrtmgp_model) = p.radiation
 
-    current_datetime = tvi.start_date + Dates.Second(round(Int, t)) # current time
+    current_datetime =
+        t isa ITime ? ClimaUtilities.TimeManager.date(t) :
+        tvi.start_date + Dates.Second(round(Int, t)) # current time
     max_zenith_angle = FT(π) / 2 - eps(FT)
     irradiance = FT(CAP.tot_solar_irrad(params))
     au = FT(CAP.astro_unit(params))
@@ -362,6 +365,8 @@ NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
     Y = u
 
+    # TODO: Use ITime here
+    t = float(t)
     day = floor(Int, t / (60 * 60 * 24))
     sec = floor(Int, t % (60 * 60 * 24))
     @info "Saving state to HDF5 file on day $day second $sec"

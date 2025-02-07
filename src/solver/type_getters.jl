@@ -11,6 +11,8 @@ import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
 import Logging
 
+import ClimaUtilities.TimeManager: ITime
+
 import ClimaDiagnostics
 
 function get_atmos(config::AtmosConfig, params)
@@ -260,12 +262,16 @@ end
 
 function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     (; parsed_args, comms_ctx) = config
+    sim_info = get_sim_info(config)
 
     @assert !isnothing(restart_file)
     reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
     # TODO: Do not use InputOutput.HDF5 directly
     t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
+    t_start =
+        parsed_args["use_itime"] ? ITime(t_start; epoch = sim_info.start_date) :
+        t_start
     if "atmos_model_hash" in keys(InputOutput.HDF5.attrs(reader.file))
         atmos_model_hash_in_restart =
             InputOutput.HDF5.read_attribute(reader.file, "atmos_model_hash")
@@ -550,16 +556,25 @@ function get_sim_info(config::AtmosConfig)
 
     isnothing(restart_file) ||
         @info "Restarting simulation from file $restart_file"
-
+    epoch = DateTime(parsed_args["start_date"], dateformat"yyyymmdd")
+    if parsed_args["use_itime"]
+        dt = ITime(time_to_seconds(parsed_args["dt"]))
+        t_end = ITime(time_to_seconds(parsed_args["t_end"]), epoch = epoch)
+        (dt, t_end) = promote(dt, t_end)
+    else
+        dt = FT(time_to_seconds(parsed_args["dt"]))
+        t_end = FT(time_to_seconds(parsed_args["t_end"]))
+    end
     sim = (;
         output_dir,
         restart = !isnothing(restart_file),
         restart_file,
         job_id,
-        dt = FT(time_to_seconds(parsed_args["dt"])),
-        start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
-        t_end = FT(time_to_seconds(parsed_args["t_end"])),
+        dt = dt,
+        start_date = epoch,
+        t_end = t_end,
     )
+    @show sim.t_end, sim.dt
     n_steps = floor(Int, sim.t_end / sim.dt)
     @info(
         "Time info:",
@@ -574,6 +589,13 @@ end
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; atmos, dt) = p
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+    dt_save_to_sol = if dt_save_to_sol == Inf
+        Inf
+    elseif dt isa ITime
+        ITime(dt_save_to_sol)
+    else
+        dt_save_to_sol
+    end
 
     s = @timed_str begin
         func = if parsed_args["split_ode"]
@@ -601,13 +623,13 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     end
     @info "Define ode function: $s"
     problem = SciMLBase.ODEProblem(func, Y, tspan, p)
+    t_begin, t_end, _ = promote(tspan[1], tspan[2], p.dt)
     saveat = if dt_save_to_sol == Inf
-        pkgversion(CTS) <= v"0.8.1" ? tspan[2] : [tspan[1], tspan[2]]
-    elseif tspan[2] % dt_save_to_sol == 0
-        pkgversion(CTS) <= v"0.8.1" ? dt_save_to_sol :
-        [tspan[1]:dt_save_to_sol:tspan[2]...]
+        promote([t_begin, t_end]...)
+    elseif iszero(tspan[2] % dt_save_to_sol)
+        promote([t_begin:dt_save_to_sol:t_end...]...)
     else
-        [tspan[1]:dt_save_to_sol:tspan[2]..., tspan[2]]
+        promote([t_begin:dt_save_to_sol:t_end..., t_end]...)
     end # ensure that tspan[2] is always saved
     @info "dt_save_to_sol: $dt_save_to_sol, length(saveat): $(length(saveat))"
     args = (problem, ode_algo)
@@ -669,7 +691,6 @@ function get_simulation(config::AtmosConfig)
     else
         spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
     end
-
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
     if !sim_info.restart
@@ -680,7 +701,14 @@ function get_simulation(config::AtmosConfig)
                 spaces.center_space,
                 spaces.face_space,
             )
-            t_start = Spaces.undertype(axes(Y.c))(0)
+            if sim_info.dt isa ITime
+                t_start = ITime(
+                    Spaces.undertype(axes(Y.c))(0);
+                    epoch = sim_info.start_date,
+                )
+            else
+                t_start = Spaces.undertype(axes(Y.c))(0)
+            end
         end
         @info "Allocating Y: $s"
 

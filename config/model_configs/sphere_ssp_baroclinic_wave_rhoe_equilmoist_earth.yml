@@ -4,7 +4,7 @@ topo_smoothing: true
 initial_condition: "MoistBaroclinicWave"
 dt: "450secs"
 t_end: "450secs"
-ode_algo: "SSP333"
+ode_algo: "ARS343"
 precip_model: "0M"
 topography: "Earth"
 moist: "equil"

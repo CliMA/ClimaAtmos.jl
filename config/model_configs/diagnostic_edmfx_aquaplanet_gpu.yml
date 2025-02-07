@@ -20,3 +20,4 @@ precip_model: 0M
 dt: 120secs
 t_end: 12hours
 toml: [toml/diagnostic_edmfx_0M.toml]
+use_itime: true

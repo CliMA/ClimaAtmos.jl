@@ -490,13 +490,14 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
 
     # Convert dtγ from a Float64 to an FT.
     FT = Spaces.undertype(axes(Y.c))
-    dtγ′ = FT(dtγ)
+    dtγ′ = FT(float(dtγ))
 
     A.dtγ_ref[] = dtγ′
     update_implicit_equation_jacobian!(A, Y, p′, dtγ′)
 end
 
 function update_implicit_equation_jacobian!(A, Y, p, dtγ)
+    dtγ = float(dtγ)
     (; matrix, diffusion_flag, sgs_advection_flag, topography_flag) = A
     (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜh_tot) = p
     (;
@@ -740,7 +741,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
             @inline dissipation_rate(tke⁰, mixing_length) =
-                tke⁰ >= 0 ? c_d * sqrt(tke⁰) / max(mixing_length, 1) : 1 / dt
+                tke⁰ >= 0 ? c_d * sqrt(tke⁰) / max(mixing_length, 1) :
+                1 / float(dt)
             @inline ∂dissipation_rate_∂tke⁰(tke⁰, mixing_length) =
                 tke⁰ > 0 ? c_d / (2 * max(mixing_length, 1) * sqrt(tke⁰)) :
                 typeof(tke⁰)(0)
