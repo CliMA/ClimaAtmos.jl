@@ -172,6 +172,14 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 rrtmgp_model.center_cloud_fraction,
                 axes(Y.c),
             )
+            ᶜreliq = Fields.array2field(
+                rrtmgp_model.center_cloud_liquid_effective_radius,
+                axes(Y.c),
+            )
+            ᶜreice = Fields.array2field(
+                rrtmgp_model.center_cloud_ice_effective_radius,
+                axes(Y.c),
+            )
             # RRTMGP needs lwp and iwp in g/m^2
             kg_to_g_factor = 1000
             cloud_liquid_water_content =
@@ -193,6 +201,9 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 kg_to_g_factor * Y.c.ρ * cloud_ice_water_content * ᶜΔz /
                 max(cloud_fraction, eps(FT))
             @. ᶜfrac = cloud_fraction
+            # RRTMGP needs effective radius in microns
+            @. ᶜreliq = FT(12)
+            @. ᶜreice = FT(25)
         end
     end
 

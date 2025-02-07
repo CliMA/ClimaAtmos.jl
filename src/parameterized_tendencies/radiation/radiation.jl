@@ -198,12 +198,7 @@ function radiation_model_cache(
                 latitude,
             )
             if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
-                kwargs = (;
-                    kwargs...,
-                    center_cloud_liquid_effective_radius = 12,
-                    center_cloud_ice_effective_radius = 25,
-                    ice_roughness = 2,
-                )
+                kwargs = (; kwargs..., ice_roughness = 2)
                 ᶜz = Fields.coordinate_field(Y.c).z
                 ᶜΔz = Fields.Δz_field(Y.c)
                 if radiation_mode.idealized_clouds # icy cloud on top and wet cloud on bottom
@@ -221,6 +216,8 @@ function radiation_model_cache(
                     @. ᶜis_top_cloud = ᶜz > 4e3 && ᶜz < 5e3
                     kwargs = (;
                         kwargs...,
+                        center_cloud_liquid_effective_radius = 12,
+                        center_cloud_ice_effective_radius = 25,
                         center_cloud_liquid_water_path = Fields.field2array(
                             @. ifelse(ᶜis_bottom_cloud, FT(0.002) * ᶜΔz, FT(0))
                         ),
@@ -241,6 +238,8 @@ function radiation_model_cache(
                         center_cloud_liquid_water_path = NaN, # initialized in callback
                         center_cloud_ice_water_path = NaN, # initialized in callback
                         center_cloud_fraction = NaN, # initialized in callback
+                        center_cloud_liquid_effective_radius = NaN, # initialized in callback
+                        center_cloud_ice_effective_radius = NaN, # initialized in callback
                     )
                 end
             end
