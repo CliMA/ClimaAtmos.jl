@@ -107,7 +107,9 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜh_tot, ᶜspecific, ᶠu³, ᶜp) = p.precomputed
 
-    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠu³)
+    NVTX.@range "ᶜdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠu³)" begin
+        @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠu³)
+    end
 
     # Central advection of active tracers (e_tot and q_tot)
     vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
