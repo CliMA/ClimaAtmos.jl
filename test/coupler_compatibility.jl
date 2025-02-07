@@ -76,7 +76,6 @@ const T2 = 290
         p.scratch,
         p.hyperdiff,
         p.precipitation,
-        p.large_scale_advection,
         p.external_forcing,
         p.non_orographic_gravity_wave,
         p.orographic_gravity_wave,

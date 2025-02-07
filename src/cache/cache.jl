@@ -10,7 +10,6 @@ struct AtmosCache{
     SCRA,
     HYPE,
     PR,
-    LSAD,
     EXTFORCING,
     NONGW,
     ORGW,
@@ -53,7 +52,6 @@ struct AtmosCache{
 
     """Additional parameters used by the various tendencies"""
     precipitation::PR
-    large_scale_advection::LSAD
     external_forcing::EXTFORCING
     non_orographic_gravity_wave::NONGW
     orographic_gravity_wave::ORGW
@@ -156,7 +154,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
 
     hyperdiff = hyperdiffusion_cache(Y, atmos)
     precipitation = precipitation_cache(Y, atmos)
-    large_scale_advection = large_scale_advection_cache(Y, atmos)
     external_forcing = external_forcing_cache(Y, atmos, params)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
@@ -175,7 +172,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         scratch,
         hyperdiff,
         precipitation,
-        large_scale_advection,
         external_forcing,
         non_orographic_gravity_wave,
         orographic_gravity_wave,
