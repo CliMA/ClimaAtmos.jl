@@ -115,17 +115,6 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_moist_held_suarez"
 
-      - label: ":computer: held-suarez equilmoist + deep-atmosphere eqns"
-        command:
-          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_moist_held_suarez_deepatmos"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-
   - group: "helem 16 aquaplanet"
     steps:
 
