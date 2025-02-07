@@ -5,6 +5,5 @@ dt_save_state_to_disk: "4days"
 t_end: "8days"
 forcing: "held_suarez"
 dt: "400secs"
-deep_atmosphere: true
 rayleigh_sponge: true
 toml: [toml/sphere_held_suarez.toml]

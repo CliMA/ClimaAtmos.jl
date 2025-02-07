@@ -262,19 +262,6 @@ steps:
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":computer: no lim baroclinic wave (ρe) equilmoist (deep sphere)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/deep_sphere_baroclinic_wave_rhoe_equilmoist.yml
-          --job_id deep_sphere_baroclinic_wave_rhoe_equilmoist
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
-          --job_id deep_sphere_baroclinic_wave_rhoe_equilmoist
-          --out_dir deep_sphere_baroclinic_wave_rhoe_equilmoist/output_active
-        artifact_paths: "deep_sphere_baroclinic_wave_rhoe_equilmoist/output_active/*"
-        agents:
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-
       # Add this back when we figure out what to do with SSP and zalesak
       # - label: ":computer: SSP zalesak tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
       #   command: >
@@ -387,9 +374,9 @@ steps:
       - label: ":computer: Diagnostic Earth surface elevation spectra"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth.yml
-          --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth
-        artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/output_active/*"
+          --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_earth.yml
+          --job_id sphere_baroclinic_wave_rhoe_equilmoist_earth
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_earth/output_active/*"
 
       - label: ":computer: Baroclinic wave (ρe) equilmoist (Hughes2023 double mountain config)"
         command: >
