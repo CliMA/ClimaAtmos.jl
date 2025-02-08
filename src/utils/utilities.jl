@@ -62,10 +62,12 @@ individual velocity components:
 function compute_kinetic(uₕ::Fields.Field, uᵥ::Fields.Field)
     @assert eltype(uₕ) <: Union{C1, C2, C12}
     @assert eltype(uᵥ) <: C3
-    return @lazy @. 1 / 2 * (
-        dot(C123(uₕ), CT123(uₕ)) +
-        ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
-        2 * dot(CT123(uₕ), ᶜinterp(C123(uᵥ)))
+    return @. lazy(
+        1 / 2 * (
+            dot(C123(uₕ), CT123(uₕ)) +
+            ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
+            2 * dot(CT123(uₕ), ᶜinterp(C123(uᵥ)))
+        ),
     )
 end
 
@@ -86,10 +88,12 @@ Compute the strain_rate at cell centers from velocity at cell faces.
 function compute_strain_rate_center(u::Fields.Field)
     @assert eltype(u) <: C123
     axis_uvw = Geometry.UVWAxis()
-    return @lazy @. (
-        Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))) +
-        adjoint(Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))))
-    ) / 2
+    return @. lazy(
+        (
+            Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))) +
+            adjoint(Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))))
+        ) / 2,
+    )
 end
 
 """
@@ -107,10 +111,12 @@ function compute_strain_rate_face(u::Fields.Field)
         top = Operators.SetGradient(∇ᵥuvw_boundary),
     )
     axis_uvw = Geometry.UVWAxis()
-    return @lazy @. (
-        Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))) +
-        adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))))
-    ) / 2
+    return @. lazy(
+        (
+            Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))) +
+            adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))))
+        ) / 2,
+    )
 end
 
 """
