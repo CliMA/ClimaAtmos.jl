@@ -23,7 +23,6 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     return Yₜ
 end
 
-import LazyBroadcast: @lazy
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Spaces as Spaces

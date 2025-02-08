@@ -184,7 +184,7 @@ end
 # Interpolates the third contravariant component of Y.c.uₕ to cell faces.
 function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
     ᶜJ = Fields.local_geometry_field(ᶜρ).J
-    return @lazy @. ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ))
+    return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
 end
 
 """
@@ -212,7 +212,7 @@ function surface_velocity(ᶠu₃, ᶠuₕ³)
     sfc_u₃ = Fields.level(ᶠu₃.components.data.:1, half)
     sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
     sfc_g³³ = g³³_field(sfc_u₃)
-    return @lazy @. -sfc_uₕ³ / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
+    return @. lazy(-sfc_uₕ³ / sfc_g³³) # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
 end
 
 """
