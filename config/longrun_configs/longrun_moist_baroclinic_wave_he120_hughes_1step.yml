@@ -1,0 +1,23 @@
+h_elem: 120
+z_elem: 43
+dz_bottom: 30.0
+dt: "40secs"
+t_end: "80secs"
+ode_algo: ARS343
+topography: "Hughes2023"
+initial_condition: "MoistBaroclinicWave"
+rayleigh_sponge: true
+moist: "equil"
+precip_model: "0M"
+mesh_warp_type: SLEVE
+prognostic_surface: PrognosticSurfaceTemperature
+deep_atmosphere: true
+dt_save_state_to_disk: "10days"
+netcdf_interpolation_num_points: [1440, 720, 43]
+output_dir: "/glade/derecho/scratch/asridhar/moist_bw_hughes_0M_1step/"
+toml: [toml/longrun_bw.toml]
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [massa, energya, watera, energyo, watero]
+    period: "40secs"
+    writer: dict

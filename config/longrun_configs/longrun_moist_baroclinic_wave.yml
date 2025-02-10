@@ -1,4 +1,4 @@
-h_elem: 16 #120
+h_elem: 30
 z_elem: 43
 dz_bottom: 30.0
 dt: "40secs" # 200

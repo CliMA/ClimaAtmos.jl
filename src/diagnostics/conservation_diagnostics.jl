@@ -85,10 +85,11 @@ function compute_energyo!(
         surface_model.ρ_ocean *
         surface_model.cp_ocean *
         surface_model.depth_ocean
+    initial_temperature = (state.sfc.T .- state.sfc.T) .+ eltype(state.sfc.T)(273.16)
     if isnothing(out)
-        return [horizontal_integral_at_boundary(state.sfc.T .* sfc_cρh)]
+        return [horizontal_integral_at_boundary(initial_temperature .* sfc_cρh)]
     else
-        out .= [horizontal_integral_at_boundary(state.sfc.T .* sfc_cρh)]
+        out .= [horizontal_integral_at_boundary(initial_temperature .* sfc_cρh)]
     end
 end
 
