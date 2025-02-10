@@ -1,0 +1,11 @@
+[condensation_evaporation_timescale]
+value = 100
+
+[sublimation_deposition_timescale]
+value = 100
+
+[zd_rayleigh]
+value = 40000.0
+
+[zd_viscous]
+value = 40000.0

@@ -490,13 +490,14 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
 
     # Convert dtγ from a Float64 to an FT.
     FT = Spaces.undertype(axes(Y.c))
-    dtγ′ = FT(dtγ)
+    dtγ′ = FT(float(dtγ))
 
     A.dtγ_ref[] = dtγ′
     update_implicit_equation_jacobian!(A, Y, p′, dtγ′)
 end
 
 function update_implicit_equation_jacobian!(A, Y, p, dtγ)
+    dtγ = float(dtγ)
     (; matrix, diffusion_flag, sgs_advection_flag, topography_flag) = A
     (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜh_tot) = p
     (;
@@ -630,40 +631,45 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     end
 
     if !(p.atmos.moisture_model isa DryModel)
-        @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
-            dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-            DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
-            DiagonalMatrixRow(
-                -(1 + ᶜkappa_m) / ᶜρ * ifelse(
-                    ᶜh_tot == 0,
-                    (Geometry.WVector(FT(0)),),
-                    p.ᶜwₕhₜ / ᶜh_tot,
-                ),
-            )
+        #TODO: tetsing explicit vs implicit
+        #@. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
+        #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
+        #    DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(
+        #        -(1 + ᶜkappa_m) / ᶜρ * ifelse(
+        #            ᶜh_tot == 0,
+        #            (Geometry.WVector(FT(0)),),
+        #            p.ᶜwₕhₜ / ᶜh_tot,
+        #        ),
+        #    )
 
         ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
-        @. ∂ᶜρe_tot_err_∂ᶜρq_tot =
-            dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-            DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
-            DiagonalMatrixRow(
-                -(ᶜkappa_m) * ∂e_int_∂q_tot / ᶜρ * ifelse(
-                    ᶜh_tot == 0,
-                    (Geometry.WVector(FT(0)),),
-                    p.ᶜwₕhₜ / ᶜh_tot,
-                ),
-            )
+        @. ∂ᶜρe_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρq_tot))
+        #TODO: tetsing explicit vs implicit
+        #@. ∂ᶜρe_tot_err_∂ᶜρq_tot =
+        #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
+        #    DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(
+        #        -(ᶜkappa_m) * ∂e_int_∂q_tot / ᶜρ * ifelse(
+        #            ᶜh_tot == 0,
+        #            (Geometry.WVector(FT(0)),),
+        #            p.ᶜwₕhₜ / ᶜh_tot,
+        #        ),
+        #    )
 
         ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
-        @. ∂ᶜρq_tot_err_∂ᶜρq_tot =
-            dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-            DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
-            DiagonalMatrixRow(
-                -1 / ᶜρ * ifelse(
-                    ᶜspecific.q_tot == 0,
-                    (Geometry.WVector(FT(0)),),
-                    p.ᶜwₜqₜ / ᶜspecific.q_tot,
-                ),
-            ) - (I,)
+        @. ∂ᶜρq_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρq_tot_err_∂ᶜρq_tot)) - (I,)
+        #TODO: tetsing explicit vs implicit
+        #@. ∂ᶜρq_tot_err_∂ᶜρq_tot =
+        #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
+        #    DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(
+        #        -1 / ᶜρ * ifelse(
+        #            ᶜspecific.q_tot == 0,
+        #            (Geometry.WVector(FT(0)),),
+        #            p.ᶜwₜqₜ / ᶜspecific.q_tot,
+        #        ),
+        #    ) - (I,)
 
         MatrixFields.unrolled_foreach(tracer_info) do (ρqₚ_name, _, wₚ_name)
             MatrixFields.has_field(Y, ρqₚ_name) || return
@@ -735,7 +741,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
             @inline dissipation_rate(tke⁰, mixing_length) =
-                tke⁰ >= 0 ? c_d * sqrt(tke⁰) / max(mixing_length, 1) : 1 / dt
+                tke⁰ >= 0 ? c_d * sqrt(tke⁰) / max(mixing_length, 1) :
+                1 / float(dt)
             @inline ∂dissipation_rate_∂tke⁰(tke⁰, mixing_length) =
                 tke⁰ > 0 ? c_d / (2 * max(mixing_length, 1) * sqrt(tke⁰)) :
                 typeof(tke⁰)(0)

@@ -1,8 +1,8 @@
 dt_save_state_to_disk: "2days"
 initial_condition: "DryBaroclinicWave"
-deep_atmosphere: true
 dt: "400secs"
 t_end: "10days"
+deep_atmosphere: false
 diagnostics:
   - short_name: [pfull, ua, wa, va, rv, ta, ke]
     period: 1days

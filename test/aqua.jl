@@ -2,7 +2,7 @@ using Test
 using ClimaAtmos
 using Aqua
 
-@testset "Aqua tests (performance)" begin
+@testset "Aqua tests (performance-specific)" begin
     # This tests that we don't accidentally run into
     # https://github.com/JuliaLang/julia/issues/29393
     # Aqua.test_unbound_args(ClimaAtmos)
@@ -23,12 +23,8 @@ using Aqua
     @test length(ambs) == 0
 end
 
-@testset "Aqua tests (additional)" begin
-    Aqua.test_undefined_exports(ClimaAtmos)
-    Aqua.test_stale_deps(ClimaAtmos)
-    Aqua.test_deps_compat(ClimaAtmos)
-    Aqua.test_project_extras(ClimaAtmos)
-    Aqua.test_piracies(ClimaAtmos)
+@testset "Aqua tests (all)" begin
+    Aqua.test_all(ClimaAtmos)
 end
 
 nothing

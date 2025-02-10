@@ -110,6 +110,7 @@ atmos_name_map = (;
 cloud_parameters(FT_or_toml) = (;
     liquid = CM.Parameters.CloudLiquid(FT_or_toml),
     ice = CM.Parameters.CloudIce(FT_or_toml),
+    Ch2022 = CM.Parameters.Chen2022VelType(FT_or_toml),
 )
 
 microphys_1m_parameters(::Type{FT}) where {FT <: AbstractFloat} =

@@ -296,6 +296,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
+    dt = float(dt)
     (; ᶜΦ) = p.core
     (; ᶜp, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
@@ -535,8 +536,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             # To be applied in updraft continuity, moisture and energy
             # for updrafts and grid mean
             if precip_model isa Microphysics0Moment
-                @. S_q_totʲ_prev_level = q_tot_precipitation_sources(
-                    precip_model,
+                @. S_q_totʲ_prev_level = q_tot_0M_precipitation_sources(
                     thermo_params,
                     microphys_0m_params,
                     dt,
@@ -944,7 +944,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     ᶠu⁰ = p.scratch.ᶠtemp_C123
     @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
-    compute_strain_rate_center!(ᶜstrain_rate, ᶠu⁰)
+    bc_strain_rate = compute_strain_rate_center(ᶠu⁰)
+    @. ᶜstrain_rate = bc_strain_rate
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
@@ -1034,8 +1035,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     (; q_tot) = p.precomputed.ᶜspecific
 
     # Environment precipitation sources (to be applied to grid mean)
-    @. ᶜSqₜᵖ⁰ = q_tot_precipitation_sources(
-        precip_model,
+    @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
         thermo_params,
         microphys_0m_params,
         dt,
@@ -1050,32 +1050,33 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     t,
     precip_model::Microphysics1Moment,
 )
-    thermo_params = CAP.thermodynamics_params(p.params)
-    microphys_1m_params = CAP.microphysics_1m_params(p.params)
+    error("Not implemented yet")
+    #thermo_params = CAP.thermodynamics_params(p.params)
+    #microphys_1m_params = CAP.microphysics_1m_params(p.params)
 
-    (; ᶜts, ᶜSqₜᵖ⁰, ᶜSeₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
-    (; ᶜqᵣ, ᶜqₛ) = p.precomputed
+    #(; ᶜts, ᶜSqₜᵖ⁰, ᶜSeₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+    #(; q_tot) = p.precomputed.ᶜspecific
+    #(; ᶜqᵣ, ᶜqₛ) = p.precomputed
 
-    ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+    #ᶜSᵖ = p.scratch.ᶜtemp_scalar
+    #ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
-    # Environment precipitation sources (to be applied to grid mean)
-    compute_precipitation_sources!(
-        ᶜSᵖ,
-        ᶜSᵖ_snow,
-        ᶜSqₜᵖ⁰,
-        ᶜSqᵣᵖ⁰,
-        ᶜSqₛᵖ⁰,
-        ᶜSeₜᵖ⁰,
-        Y.c.ρ,
-        ᶜqᵣ,
-        ᶜqₛ,
-        ᶜts,
-        p.core.ᶜΦ,
-        p.dt,
-        microphys_1m_params,
-        thermo_params,
-    )
+    ## Environment precipitation sources (to be applied to grid mean)
+    #compute_precipitation_sources!(
+    #    ᶜSᵖ,
+    #    ᶜSᵖ_snow,
+    #    ᶜSqₜᵖ⁰,
+    #    ᶜSqᵣᵖ⁰,
+    #    ᶜSqₛᵖ⁰,
+    #    ᶜSeₜᵖ⁰,
+    #    Y.c.ρ,
+    #    ᶜqᵣ,
+    #    ᶜqₛ,
+    #    ᶜts,
+    #    p.core.ᶜΦ,
+    #    p.dt,
+    #    microphys_1m_params,
+    #    thermo_params,
+    #)
     return nothing
 end

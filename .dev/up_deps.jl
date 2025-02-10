@@ -3,7 +3,7 @@
 println("up_dev.jl has been discontinued in favor of PkgDevTools")
 println("To use PkgDevTool, add it to your base environment with: ")
 println()
-println("julia -e 'using Pkg. Pkg.add(\"PkgDevTools\")'")
+println("julia -e 'using Pkg; Pkg.add(\"PkgDevTools\")'")
 println()
 println("Then, update the manifests with")
 println("using PkgDevTools; PkgDevToos.update_deps(\".\")")

@@ -121,10 +121,12 @@ function radiation_model_cache(
                 "DST02",
                 "DST03",
                 "DST04",
+                "DST05",
                 "SSLT01",
                 "SSLT02",
                 "SSLT03",
                 "SSLT04",
+                "SSLT05",
                 "SO4",
                 "CB1",
                 "CB2",
@@ -196,12 +198,7 @@ function radiation_model_cache(
                 latitude,
             )
             if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
-                kwargs = (;
-                    kwargs...,
-                    center_cloud_liquid_effective_radius = 12,
-                    center_cloud_ice_effective_radius = 50, # rrtmgp uses diameter for ice
-                    ice_roughness = 2,
-                )
+                kwargs = (; kwargs..., ice_roughness = 2)
                 ᶜz = Fields.coordinate_field(Y.c).z
                 ᶜΔz = Fields.Δz_field(Y.c)
                 if radiation_mode.idealized_clouds # icy cloud on top and wet cloud on bottom
@@ -219,6 +216,8 @@ function radiation_model_cache(
                     @. ᶜis_top_cloud = ᶜz > 4e3 && ᶜz < 5e3
                     kwargs = (;
                         kwargs...,
+                        center_cloud_liquid_effective_radius = 12,
+                        center_cloud_ice_effective_radius = 25,
                         center_cloud_liquid_water_path = Fields.field2array(
                             @. ifelse(ᶜis_bottom_cloud, FT(0.002) * ᶜΔz, FT(0))
                         ),
@@ -239,24 +238,58 @@ function radiation_model_cache(
                         center_cloud_liquid_water_path = NaN, # initialized in callback
                         center_cloud_ice_water_path = NaN, # initialized in callback
                         center_cloud_fraction = NaN, # initialized in callback
+                        center_cloud_liquid_effective_radius = NaN, # initialized in callback
+                        center_cloud_ice_effective_radius = NaN, # initialized in callback
                     )
                 end
             end
 
             if aerosol_radiation
-                kwargs = (;
-                    kwargs...,
-                    # assuming fixed aerosol radius
-                    center_dust_radius = 0.55,
-                    center_ss_radius = 11.5,
-                    center_dust_column_mass_density = NaN, # initialized in callback
-                    center_ss_column_mass_density = NaN, # initialized in callback
-                    center_so4_column_mass_density = NaN, # initialized in callback
-                    center_bcpi_column_mass_density = NaN, # initialized in callback
-                    center_bcpo_column_mass_density = NaN, # initialized in callback
-                    center_ocpi_column_mass_density = NaN, # initialized in callback
-                    center_ocpo_column_mass_density = NaN, # initialized in callback
-                )
+                if pkgversion(RRTMGP) <= v"0.19.2"
+                    kwargs = (;
+                        kwargs...,
+                        # assuming fixed aerosol radius
+                        center_dust_radius = 0.55,
+                        center_ss_radius = 11.5,
+                        center_dust_column_mass_density = NaN, # initialized in callback
+                        center_ss_column_mass_density = NaN, # initialized in callback
+                        center_so4_column_mass_density = NaN, # initialized in callback
+                        center_bcpi_column_mass_density = NaN, # initialized in callback
+                        center_bcpo_column_mass_density = NaN, # initialized in callback
+                        center_ocpi_column_mass_density = NaN, # initialized in callback
+                        center_ocpo_column_mass_density = NaN, # initialized in callback
+                    )
+                else
+                    kwargs = (;
+                        kwargs...,
+                        # assuming fixed aerosol radius
+                        center_dust1_radius = 0.55,
+                        center_dust2_radius = 1.4,
+                        center_dust3_radius = 2.4,
+                        center_dust4_radius = 4.5,
+                        center_dust5_radius = 7.5,
+                        center_ss1_radius = 0.55,
+                        center_ss2_radius = 1.4,
+                        center_ss3_radius = 2.4,
+                        center_ss4_radius = 4.5,
+                        center_ss5_radius = 7.5,
+                        center_dust1_column_mass_density = NaN, # initialized in callback
+                        center_dust2_column_mass_density = NaN, # initialized in callback
+                        center_dust3_column_mass_density = NaN, # initialized in callback
+                        center_dust4_column_mass_density = NaN, # initialized in callback
+                        center_dust5_column_mass_density = NaN, # initialized in callback
+                        center_ss1_column_mass_density = NaN, # initialized in callback
+                        center_ss2_column_mass_density = NaN, # initialized in callback
+                        center_ss3_column_mass_density = NaN, # initialized in callback
+                        center_ss4_column_mass_density = NaN, # initialized in callback
+                        center_ss5_column_mass_density = NaN, # initialized in callback
+                        center_so4_column_mass_density = NaN, # initialized in callback
+                        center_bcpi_column_mass_density = NaN, # initialized in callback
+                        center_bcpo_column_mass_density = NaN, # initialized in callback
+                        center_ocpi_column_mass_density = NaN, # initialized in callback
+                        center_ocpo_column_mass_density = NaN, # initialized in callback
+                    )
+                end
             end
         end
 
@@ -450,7 +483,7 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
     ᶜρ = Y.c.ρ
     ᶜts_gm = p.precomputed.ᶜts
     zc = Fields.coordinate_field(axes(ᶜρ)).z
-    @. ᶜdTdt_rad = rad(FT(t), zc)
+    @. ᶜdTdt_rad = rad(FT(float(t)), zc)
     @. Yₜ.c.ρe_tot += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad
     return nothing
 end

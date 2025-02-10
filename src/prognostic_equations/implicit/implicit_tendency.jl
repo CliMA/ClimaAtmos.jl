@@ -2,6 +2,7 @@
 ##### Implicit tendencies
 #####
 
+import LazyBroadcast: @lazy
 import ClimaCore
 import ClimaCore: Fields, Geometry
 
@@ -46,96 +47,57 @@ end
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
 # TODO: Can we rewrite ᶠfct_boris_book and ᶠfct_zalesak so that their broadcast
 # expressions are less convoluted?
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding::Val, ᶜdivᵥ) =
-    vertical_transport!(1, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding, ᶜdivᵥ)
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding::Val) =
-    vertical_transport!(1, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding, ᶜadvdivᵥ)
-vertical_transport!(
-    coeff::Int,
-    ᶜρχₜ,
-    ᶜJ,
-    ᶜρ,
-    ᶠu³,
-    ᶜχ,
-    dt::Real,
-    upwinding::Val,
-) = vertical_transport!(coeff, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding, ᶜadvdivᵥ)
 
-vertical_transport!(coeff, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none}, ᶜdivᵥ) =
-    @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜχ)))
-vertical_transport!(
-    coeff,
-    ᶜρχₜ,
-    ᶜJ,
-    ᶜρ,
-    ᶠu³,
-    ᶜχ,
-    dt,
-    ::Val{:first_order},
-    ᶜdivᵥ,
-) = @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)))
-@static if pkgversion(ClimaCore) ≥ v"0.14.22"
-    vertical_transport!(
-        coeff,
-        ᶜρχₜ,
-        ᶜJ,
-        ᶜρ,
-        ᶠu³,
-        ᶜχ,
-        dt,
-        ::Val{:vanleer_limiter},
-        ᶜdivᵥ,
-    ) = @. ᶜρχₜ +=
-        -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠlin_vanleer(ᶠu³, ᶜχ, dt)))
+function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @lazy @. -(ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜχ)))
 end
-vertical_transport!(
-    coeff,
-    ᶜρχₜ,
-    ᶜJ,
-    ᶜρ,
-    ᶠu³,
-    ᶜχ,
-    dt,
-    ::Val{:third_order},
-    ᶜdivᵥ,
-) = @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠu³, ᶜχ)))
-vertical_transport!(
-    coeff,
-    ᶜρχₜ,
-    ᶜJ,
-    ᶜρ,
-    ᶠu³,
-    ᶜχ,
-    dt,
-    ::Val{:boris_book},
-    ᶜdivᵥ,
-) = @. ᶜρχₜ +=
-    -coeff * (ᶜdivᵥ(
+function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order})
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @lazy @. -(ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)))
+end
+@static if pkgversion(ClimaCore) ≥ v"0.14.22"
+    function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
+        ᶜJ = Fields.local_geometry_field(ᶜρ).J
+        return @lazy @. -(ᶜadvdivᵥ(
+            ᶠwinterp(ᶜJ, ᶜρ) * ᶠlin_vanleer(ᶠu³, ᶜχ, dt),
+        ))
+    end
+end
+function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @lazy @. -(ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠu³, ᶜχ)))
+end
+function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:boris_book})
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @lazy @. -(ᶜadvdivᵥ(
         ᶠwinterp(ᶜJ, ᶜρ) * (
             ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_boris_book(
                 ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
-                ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
+                ᶜχ / dt - ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
             )
         ),
     ))
-vertical_transport!(coeff, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak}, ᶜdivᵥ) =
-    @. ᶜρχₜ +=
-        -coeff * (ᶜdivᵥ(
-            ᶠwinterp(ᶜJ, ᶜρ) * (
-                ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_zalesak(
-                    ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
-                    ᶜχ / dt,
-                    ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
-                )
-            ),
-        ))
+end
+function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak})
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @lazy @. -(ᶜadvdivᵥ(
+        ᶠwinterp(ᶜJ, ᶜρ) * (
+            ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_zalesak(
+                ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
+                ᶜχ / dt,
+                ᶜχ / dt - ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
+            )
+        ),
+    ))
+end
 
-vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:none}) =
-    @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
-vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:first_order}) =
-    @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠupwind1(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
-vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:third_order}) =
-    @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
+vertical_advection(ᶠu³, ᶜχ, ::Val{:none}) =
+    @lazy @. -(ᶜadvdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³))
+vertical_advection(ᶠu³, ᶜχ, ::Val{:first_order}) =
+    @lazy @. -(ᶜadvdivᵥ(ᶠupwind1(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³))
+vertical_advection(ᶠu³, ᶜχ, ::Val{:third_order}) =
+    @lazy @. -(ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³))
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; moisture_model, turbconv_model, rayleigh_sponge, precip_model) = p.atmos
@@ -144,28 +106,19 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜh_tot, ᶜspecific, ᶠu³, ᶜp) = p.precomputed
-    (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠu³)
-    @. Yₜ.c.ρ -= ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₜqₜ)))
 
     # Central advection of active tracers (e_tot and q_tot)
-    vertical_transport!(Yₜ.c.ρe_tot, ᶜJ, Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
-    @. Yₜ.c.ρe_tot -= ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₕhₜ)))
+    vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
+    @. Yₜ.c.ρe_tot += vtt
 
     if !(moisture_model isa DryModel)
-        vertical_transport!(
-            Yₜ.c.ρq_tot,
-            ᶜJ,
-            Y.c.ρ,
-            ᶠu³,
-            ᶜspecific.q_tot,
-            dt,
-            Val(:none),
-        )
-        @. Yₜ.c.ρq_tot -=
-            ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₜqₜ)))
+        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜspecific.q_tot, dt, Val(:none))
+        @. Yₜ.c.ρq_tot += vtt
     end
+
+    #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
     if moisture_model isa NonEquilMoistModel
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed

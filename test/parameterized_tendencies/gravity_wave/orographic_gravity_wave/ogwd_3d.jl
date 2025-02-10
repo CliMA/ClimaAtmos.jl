@@ -3,8 +3,6 @@ using ClimaCore:
 using NCDatasets
 import ClimaAtmos
 import ClimaAtmos as CA
-import Thermodynamics as TD
-import ClimaParams as CP
 import ClimaComms
 import ClimaAtmos: AtmosArtifacts as AA
 import ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
@@ -28,7 +26,7 @@ config.parsed_args["mesh_warp_type"] = "Linear";
 (; parsed_args) = config
 
 # load gfdl data
-include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
+include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
 ncfile = joinpath(gfdl_ogw_data_path(), "gfdl_ogw.nc")
 nt = NCDataset(ncfile) do ds
     lon = Array(ds["lon"])
@@ -197,12 +195,12 @@ p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
 (; ᶜdTdz) = p.orographic_gravity_wave
 
 # pre-compute thermal vars
-thermo_params = TD.Parameters.ThermodynamicsParameters(FT)
+thermo_params = CA.TD.Parameters.ThermodynamicsParameters(FT)
 
 ᶜT = gfdl_ca_temp
 ᶜp = gfdl_ca_p
-ᶜts = similar(Y.c, TD.PhaseEquil{FT})
-@. ᶜts = TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, ᶜp, Y.c.qt)
+ᶜts = similar(Y.c, CA.TD.PhaseEquil{FT})
+@. ᶜts = CA.TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, ᶜp, Y.c.qt)
 
 # operators
 ᶜgradᵥ = Operators.GradientF2C()
@@ -223,7 +221,7 @@ end
 
 # buoyancy frequency at cell centers
 parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
-ᶜN = @. (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts)) # this is actually ᶜN^2
+ᶜN = @. (grav / ᶜT) * (ᶜdTdz + grav / CA.TD.cp_m(thermo_params, ᶜts)) # this is actually ᶜN^2
 ᶜN = @. ifelse(ᶜN < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜN))) # to avoid small numbers
 
 # prepare physical uv input variables for gravity_wave_forcing()

@@ -105,27 +105,21 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
+    ᶜρ = Y.c.ρ
     if :ρe_tot in propertynames(Yₜ.c)
         (; ᶜh_tot) = p.precomputed
         for (coeff, upwinding) in ((1, energy_upwinding), (-1, Val(:none)))
             energy_upwinding isa Val{:none} && continue
-            vertical_transport!(
-                coeff,
-                Yₜ.c.ρe_tot,
-                ᶜJ,
-                Y.c.ρ,
-                ᶠu³,
-                ᶜh_tot,
-                dt,
-                upwinding,
-            )
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), upwinding)
+            @. Yₜ.c.ρe_tot += coeff * vtt
         end
     end
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
         for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
             tracer_upwinding isa Val{:none} && continue
-            vertical_transport!(coeff, ᶜρχₜ, ᶜJ, Y.c.ρ, ᶠu³, ᶜχ, dt, upwinding)
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), upwinding)
+            @. ᶜρχₜ += coeff * vtt
         end
     end
 
@@ -155,15 +149,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
         @. ᶜa_scalar = ᶜtke⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
-        vertical_transport!(
-            Yₜ.c.sgs⁰.ρatke,
-            ᶜJ,
-            ᶜρ⁰,
-            ᶠu³⁰,
-            ᶜa_scalar,
-            dt,
-            edmfx_upwinding,
-        )
+        vtt = vertical_transport(ᶜρ⁰, ᶠu³⁰, ᶜa_scalar, dt, edmfx_upwinding)
+        @. Yₜ.c.sgs⁰.ρatke += vtt
     end
 end
 
@@ -211,28 +198,27 @@ function edmfx_sgs_vertical_advection_tendency!(
 
     for j in 1:n
         @. ᶜa_scalar = draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-        vertical_transport!(
-            Yₜ.c.sgsʲs.:($j).ρa,
-            ᶜJ,
+        vtt = vertical_transport(
             ᶜρʲs.:($j),
             ᶠu³ʲs.:($j),
             ᶜa_scalar,
             dt,
             edmfx_upwinding,
         )
+        @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
 
-        vertical_advection!(
-            Yₜ.c.sgsʲs.:($j).mse,
+        va = vertical_advection(
             ᶠu³ʲs.:($j),
             Y.c.sgsʲs.:($j).mse,
             edmfx_upwinding,
         )
+        @. Yₜ.c.sgsʲs.:($$j).mse += va
 
-        vertical_advection!(
-            Yₜ.c.sgsʲs.:($j).q_tot,
+        va = vertical_advection(
             ᶠu³ʲs.:($j),
             Y.c.sgsʲs.:($j).q_tot,
             edmfx_upwinding,
         )
+        @. Yₜ.c.sgsʲs.:($$j).q_tot += va
     end
 end

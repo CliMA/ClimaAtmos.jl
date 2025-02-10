@@ -48,58 +48,57 @@ sort_files_by_time(files) =
     permute!(files, sortperm(time_from_filename.(files)))
 
 """
-    compute_kinetic!(κ::Field, uₕ::Field, uᵥ::Field)
+    bc_kinetic = compute_kinetic(uₕ::Field, uᵥ::Field)
+    @. κ = bc_kinetic
 
-Compute the specific kinetic energy at cell centers, storing in `κ` from
+Compute the specific kinetic energy at cell centers, resulting in `κ` from
 individual velocity components:
-κ = 1/2 (uₕ⋅uʰ + 2uʰ⋅ᶜI(uᵥ) + ᶜI(uᵥ⋅uᵛ))
-- `uₕ` should be a `Covariant1Vector` or `Covariant12Vector`-valued field at
+
+ - `κ = 1/2 (uₕ⋅uʰ + 2uʰ⋅ᶜI(uᵥ) + ᶜI(uᵥ⋅uᵛ))`
+ - `uₕ` should be a `Covariant1Vector` or `Covariant12Vector`-valued field at
     cell centers, and
-- `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
+ - `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
 """
-function compute_kinetic!(κ::Fields.Field, uₕ::Fields.Field, uᵥ::Fields.Field)
+function compute_kinetic(uₕ::Fields.Field, uᵥ::Fields.Field)
     @assert eltype(uₕ) <: Union{C1, C2, C12}
     @assert eltype(uᵥ) <: C3
-    @. κ =
-        1 / 2 * (
-            dot(C123(uₕ), CT123(uₕ)) +
-            ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
-            2 * dot(CT123(uₕ), ᶜinterp(C123(uᵥ)))
-        )
+    return @lazy @. 1 / 2 * (
+        dot(C123(uₕ), CT123(uₕ)) +
+        ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
+        2 * dot(CT123(uₕ), ᶜinterp(C123(uᵥ)))
+    )
 end
 
 """
-    compute_kinetic!(κ::Field, Y::FieldVector)
+    compute_kinetic(Y::FieldVector)
 
-Compute the specific kinetic energy at cell centers, storing in `κ`, where `Y`
-is the model state.
+Compute the specific kinetic energy at cell centers, where `Y` is the model
+state.
 """
-compute_kinetic!(κ::Fields.Field, Y::Fields.FieldVector) =
-    compute_kinetic!(κ, Y.c.uₕ, Y.f.u₃)
+compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 
 """
-    compute_strain_rate_center!(ϵ::Field, u::Field)
+    bc_ϵ = compute_strain_rate_center(u::Field)
+    @. ϵ = bc_ϵ
 
-Compute the strain_rate at cell centers, storing in `ϵ` from
-velocity at cell faces.
+Compute the strain_rate at cell centers from velocity at cell faces.
 """
-function compute_strain_rate_center!(ϵ::Fields.Field, u::Fields.Field)
+function compute_strain_rate_center(u::Fields.Field)
     @assert eltype(u) <: C123
     axis_uvw = Geometry.UVWAxis()
-    @. ϵ =
-        (
-            Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))) +
-            adjoint(Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))))
-        ) / 2
+    return @lazy @. (
+        Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))) +
+        adjoint(Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))))
+    ) / 2
 end
 
 """
-    compute_strain_rate_face!(ϵ::Field, u::Field)
+    bc_ϵ = compute_strain_rate_face(u::Field)
+    @. ϵ = bc_ϵ
 
-Compute the strain_rate at cell faces, storing in `ϵ` from
-velocity at cell centers.
+Compute the strain_rate at cell faces from velocity at cell centers.
 """
-function compute_strain_rate_face!(ϵ::Fields.Field, u::Fields.Field)
+function compute_strain_rate_face(u::Fields.Field)
     @assert eltype(u) <: C123
     ∇ᵥuvw_boundary =
         Geometry.outer(Geometry.WVector(0), Geometry.UVWVector(0, 0, 0))
@@ -108,11 +107,10 @@ function compute_strain_rate_face!(ϵ::Fields.Field, u::Fields.Field)
         top = Operators.SetGradient(∇ᵥuvw_boundary),
     )
     axis_uvw = Geometry.UVWAxis()
-    @. ϵ =
-        (
-            Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))) +
-            adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))))
-        ) / 2
+    return @lazy @. (
+        Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))) +
+        adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))))
+    ) / 2
 end
 
 """

@@ -146,7 +146,7 @@ function precomputed_quantities(Y, atmos)
         ) : (;)
     vert_diff_quantities =
         if atmos.vert_diff isa
-           Union{VerticalDiffusion, DecayWithHeightDiffusion, FriersonDiffusion}
+           Union{VerticalDiffusion, DecayWithHeightDiffusion}
             ᶜK_h = similar(Y.c, FT)
             (; ᶜK_u = ᶜK_h, ᶜK_h) # ᶜK_u aliases ᶜK_h because they are always equal.
         else
@@ -154,12 +154,7 @@ function precomputed_quantities(Y, atmos)
         end
     precipitation_quantities =
         atmos.precip_model isa Microphysics1Moment ?
-        (;
-            ᶜwᵣ = similar(Y.c, FT),
-            ᶜwₛ = similar(Y.c, FT),
-            ᶜqᵣ = similar(Y.c, FT),
-            ᶜqₛ = similar(Y.c, FT),
-        ) : (;)
+        (; ᶜwᵣ = similar(Y.c, FT), ᶜwₛ = similar(Y.c, FT)) : (;)
     smagorinsky_lilly_quantities =
         if atmos.smagorinsky_lilly isa SmagorinskyLilly
             uvw_vec = UVW(FT(0), FT(0), FT(0))
@@ -187,10 +182,9 @@ function precomputed_quantities(Y, atmos)
 end
 
 # Interpolates the third contravariant component of Y.c.uₕ to cell faces.
-function set_ᶠuₕ³!(ᶠuₕ³, Y)
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    @. ᶠuₕ³ = ᶠwinterp(Y.c.ρ * ᶜJ, CT3(Y.c.uₕ))
-    return nothing
+function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @lazy @. ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ))
 end
 
 """
@@ -203,9 +197,8 @@ the `turbconv_model` is EDMFX, the `Y.f.sgsʲs` are also modified so that each
 """
 function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
-    sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
-    sfc_g³³ = g³³_field(sfc_u₃)
-    @. sfc_u₃ = -sfc_uₕ³ / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
+    bc_sfc_u₃ = surface_velocity(Y.f.u₃, ᶠuₕ³)
+    @. sfc_u₃ = bc_sfc_u₃
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n_mass_flux_subdomains(turbconv_model)
             sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
@@ -213,6 +206,13 @@ function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
         end
     end
     return nothing
+end
+
+function surface_velocity(ᶠu₃, ᶠuₕ³)
+    sfc_u₃ = Fields.level(ᶠu₃.components.data.:1, half)
+    sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
+    sfc_g³³ = g³³_field(sfc_u₃)
+    return @lazy @. -sfc_uₕ³ / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
 end
 
 """
@@ -243,7 +243,8 @@ end
 function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
     @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
     @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
-    compute_kinetic!(ᶜK, ᶜuₕ, ᶠu₃)
+    bc_kinetic = compute_kinetic(ᶜuₕ, ᶠu₃)
+    @. ᶜK = bc_kinetic
     return nothing
 end
 
@@ -313,30 +314,36 @@ function thermo_state(
     return get_ts(ρ, p, θ, e_int, q_tot, q_pt)
 end
 
-function thermo_vars(moisture_model, specific, K, Φ)
+function thermo_vars(moisture_model, precip_model, specific, K, Φ)
     energy_var = (; e_int = specific.e_tot - K - Φ)
     moisture_var = if moisture_model isa DryModel
         (;)
     elseif moisture_model isa EquilMoistModel
         (; specific.q_tot)
     elseif moisture_model isa NonEquilMoistModel
-        q_pt_args = (specific.q_tot, specific.q_liq, specific.q_ice)
+        q_pt_args = (
+            specific.q_tot,
+            specific.q_liq + specific.q_rai,
+            specific.q_ice + specific.q_sno,
+        )
         (; q_pt = TD.PhasePartition(q_pt_args...))
     end
     return (; energy_var..., moisture_var...)
 end
 
-ts_gs(thermo_params, moisture_model, specific, K, Φ, ρ) = thermo_state(
-    thermo_params;
-    thermo_vars(moisture_model, specific, K, Φ)...,
-    ρ,
-)
+ts_gs(thermo_params, moisture_model, precip_model, specific, K, Φ, ρ) =
+    thermo_state(
+        thermo_params;
+        thermo_vars(moisture_model, precip_model, specific, K, Φ)...,
+        ρ,
+    )
 
-ts_sgs(thermo_params, moisture_model, specific, K, Φ, p) = thermo_state(
-    thermo_params;
-    thermo_vars(moisture_model, specific, K, Φ)...,
-    p,
-)
+ts_sgs(thermo_params, moisture_model, precip_model, specific, K, Φ, p) =
+    thermo_state(
+        thermo_params;
+        thermo_vars(moisture_model, precip_model, specific, K, Φ)...,
+        p,
+    )
 
 function eddy_diffusivity_coefficient_H(D₀, H, z_sfc, z)
     return D₀ * exp(-(z - z_sfc) / H)
@@ -346,106 +353,6 @@ function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
     p_strato = 10000
     K_E = C_E * norm_v_a * z_a
     return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
-end
-function eddy_diffusivity_coefficient(z, z₀, f_b, h, uₐ, C_E, Ri, Ri_a, Ri_c, κ)
-    # Equations (17), (18)
-    if z <= f_b * h
-        K_b =
-            compute_surface_layer_diffusivity(z, z₀, κ, C_E, Ri, Ri_a, Ri_c, uₐ)
-        return K_b
-    elseif f_b * h < z < h
-        K_b = compute_surface_layer_diffusivity(
-            f_b * h,
-            z₀,
-            κ,
-            C_E,
-            Ri,
-            Ri_a,
-            Ri_c,
-            uₐ,
-        )
-        K = K_b * (z / f_b / h) * (1 - (z - f_b * h) / (1 - f_b) / h)^2
-        return K
-    else
-        return zero(z)
-    end
-end
-
-function compute_boundary_layer_height!(
-    h_boundary_layer,
-    dz,
-    Ri_local,
-    Ri_c,
-    Ri_a,
-)
-    nlevels = Spaces.nlevels(Spaces.axes(Ri_local))
-    for level in 1:(nlevels - 1)
-        h_boundary_layer .=
-            ifelse.(
-                Fields.Field(
-                    Fields.field_values(Fields.level(Ri_local, level)),
-                    axes(h_boundary_layer),
-                ) .< Ri_c,
-                Fields.Field(
-                    Fields.field_values(Fields.level(dz, level + 1)),
-                    axes(h_boundary_layer),
-                ),
-                h_boundary_layer,
-            )
-    end
-end
-
-function compute_bulk_richardson_number(
-    θ_v::FT,
-    θ_v_a,
-    norm_ua,
-    grav,
-    z,
-) where {FT}
-    # TODO Gustiness from ClimaParams
-    return (grav * z) * (θ_v - θ_v_a) / (θ_v_a * (max((norm_ua)^2, FT(10))))
-end
-function compute_exchange_coefficient(
-    Ri_a::FT,
-    Ri_c,
-    zₐ,
-    z₀,
-    κ,
-    C_E_min,
-) where {FT}
-    # Equations (12), (13), (14)
-    if Ri_a <= FT(0)
-        return κ^2 * (log(zₐ / z₀))^(-2)
-    elseif FT(0) < Ri_a < Ri_c
-        return κ^2 * (log(zₐ / z₀))^(-2) * (1 - Ri_a / Ri_c)^2
-    else
-        return FT(C_E_min)
-    end
-end
-
-function compute_surface_layer_diffusivity(
-    z::FT,
-    z₀,
-    κ,
-    C_E,
-    Ri,
-    Ri_a,
-    Ri_c,
-    norm_uₐ,
-) where {FT}
-    # Equations (19), (20)
-    if Ri_a <= FT(0)
-        return max(κ * norm_uₐ * sqrt(C_E) * z, FT(1))
-    else
-        return max(
-            κ *
-            norm_uₐ *
-            sqrt(C_E) *
-            z *
-            (1 + Ri / Ri_c * (log(z / z₀) / (1 - Ri / Ri_c)))^(-1),
-            FT(1),
-        )
-    end
 end
 
 """
@@ -470,13 +377,16 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     (; call_cloud_diagnostics_per_stage) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
-    thermo_args = (thermo_params, moisture_model)
+    thermo_args = (thermo_params, moisture_model, precip_model)
     (; ᶜΦ) = p.core
     (; ᶜspecific, ᶜu, ᶠu³, ᶜK, ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
 
     @. ᶜspecific = specific_gs(Y.c)
-    set_ᶠuₕ³!(ᶠuₕ³, Y)
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    bc_ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
+    @. ᶠuₕ³ = bc_ᶠuₕ³
 
     # TODO: We might want to move this to dss! (and rename dss! to something
     # like enforce_constraints!).
@@ -515,7 +425,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
 
     if !isnothing(p.sfc_setup)
-        SurfaceConditions.update_surface_conditions!(Y, p, t)
+        SurfaceConditions.update_surface_conditions!(Y, p, float(t))
     end
 
     # TODO: It is too slow to calculate mixing length at every timestep
@@ -526,27 +436,63 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     @. ᶜwₜqₜ = Geometry.WVector(0)
     @. ᶜwₕhₜ = Geometry.WVector(0)
-    #
-    # TODO - uncomment in the next PR. Right now for the purpose of testing
-    # we want to merge with 0 sedimentation and precipitation
-    #
     if moisture_model isa NonEquilMoistModel
         set_sedimentation_precomputed_quantities!(Y, p, t)
-        #    (; ᶜwₗ, ᶜwᵢ) = p.precomputed
-        #    @. ᶜwₜqₜ += Geometry.WVector(ᶜwₗ * Y.c.ρq_liq + ᶜwᵢ * Y.c.ρq_ice) / Y.c.ρ
-        #    @. ᶜwₕhₜ += Geometry.WVector(
-        #        ᶜwₗ * Y.c.ρq_liq * (TD.internal_energy_liquid(thermo_params, ᶜts) + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwₗ) + Geometry.UVWVector(ᶜu))/2) +
-        #        ᶜwᵢ * Y.c.ρq_ice * (TD.internal_energy_ice(thermo_params, ᶜts)    + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwᵢ) + Geometry.UVWVector(ᶜu))/2)
-        #    ) / Y.c.ρ
+        (; ᶜwₗ, ᶜwᵢ) = p.precomputed
+        @. ᶜwₜqₜ +=
+            Geometry.WVector(ᶜwₗ * Y.c.ρq_liq + ᶜwᵢ * Y.c.ρq_ice) / Y.c.ρ
+        @. ᶜwₕhₜ +=
+            Geometry.WVector(
+                ᶜwₗ *
+                Y.c.ρq_liq *
+                (
+                    TD.internal_energy_liquid(thermo_params, ᶜts) +
+                    ᶜΦ +
+                    norm_sqr(
+                        Geometry.UVWVector(0, 0, -(ᶜwₗ)) +
+                        Geometry.UVWVector(ᶜu),
+                    ) / 2
+                ) +
+                ᶜwᵢ *
+                Y.c.ρq_ice *
+                (
+                    TD.internal_energy_ice(thermo_params, ᶜts) +
+                    ᶜΦ +
+                    norm_sqr(
+                        Geometry.UVWVector(0, 0, -(ᶜwᵢ)) +
+                        Geometry.UVWVector(ᶜu),
+                    ) / 2
+                ),
+            ) / Y.c.ρ
     end
     if precip_model isa Microphysics1Moment
         set_precipitation_precomputed_quantities!(Y, p, t)
-        #    (; ᶜwᵣ, ᶜwₛ) = p.precomputed
-        #    @. ᶜwₜqₜ += Geometry.WVector(ᶜwᵣ * Y.c.ρq_rai + ᶜwₛ * Y.c.ρq_sno) / Y.c.ρ
-        #    @. ᶜwₕhₜ += Geometry.WVector(
-        #        ᶜwᵣ * Y.c.ρq_rai * (TD.internal_energy_liquid(thermo_params, ᶜts) + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwᵣ) + Geometry.UVWVector(ᶜu))/2) +
-        #        ᶜwₛ * Y.c.ρq_sno * (TD.internal_energy_ice(thermo_params, ᶜts)    + ᶜΦ + norm_sqr(Geometry.UVWVector(0, 0, -ᶜwₛ) + Geometry.UVWVector(ᶜu))/2)
-        #    ) / Y.c.ρ
+        (; ᶜwᵣ, ᶜwₛ) = p.precomputed
+        @. ᶜwₜqₜ +=
+            Geometry.WVector(ᶜwᵣ * Y.c.ρq_rai + ᶜwₛ * Y.c.ρq_sno) / Y.c.ρ
+        @. ᶜwₕhₜ +=
+            Geometry.WVector(
+                ᶜwᵣ *
+                Y.c.ρq_rai *
+                (
+                    TD.internal_energy_liquid(thermo_params, ᶜts) +
+                    ᶜΦ +
+                    norm_sqr(
+                        Geometry.UVWVector(0, 0, -(ᶜwᵣ)) +
+                        Geometry.UVWVector(ᶜu),
+                    ) / 2
+                ) +
+                ᶜwₛ *
+                Y.c.ρq_sno *
+                (
+                    TD.internal_energy_ice(thermo_params, ᶜts) +
+                    ᶜΦ +
+                    norm_sqr(
+                        Geometry.UVWVector(0, 0, -(ᶜwₛ)) +
+                        Geometry.UVWVector(ᶜu),
+                    ) / 2
+                ),
+            ) / Y.c.ρ
     end
 
     if turbconv_model isa PrognosticEDMFX
@@ -575,110 +521,12 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
 
     if vert_diff isa DecayWithHeightDiffusion
         (; ᶜK_h) = p.precomputed
-        ᶜz = Fields.coordinate_field(Y.c).z
-        ᶠz_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
-        @. ᶜK_h = eddy_diffusivity_coefficient_H(
-            p.atmos.vert_diff.D₀,
-            p.atmos.vert_diff.H,
-            ᶠz_sfc,
-            ᶜz,
-        )
+        bc_K_h = compute_eddy_diffusivity_coefficient(ᶜρ, vert_diff)
+        @. ᶜK_h = bc_K_h
     elseif vert_diff isa VerticalDiffusion
         (; ᶜK_h) = p.precomputed
-        interior_uₕ = Fields.level(Y.c.uₕ, 1)
-        ᶜΔz_surface = Fields.Δz_field(interior_uₕ)
-        @. ᶜK_h = eddy_diffusivity_coefficient(
-            p.atmos.vert_diff.C_E,
-            norm(interior_uₕ),
-            ᶜΔz_surface / 2,
-            ᶜp,
-        )
-    elseif vert_diff isa FriersonDiffusion
-        (; ᶜK_h, sfc_conditions, ᶜts) = p.precomputed
-        (; params) = p
-        interior_uₕ = Fields.level(Y.c.uₕ, 1)
-        κ = CAP.von_karman_const(params)
-        grav = CAP.grav(params)
-        FT = Spaces.undertype(axes(ᶜK_h))
-        z₀ = FT(1e-5)
-        Ri_c = FT(1.0)
-        f_b = FT(0.1)
-        C_E_min = p.atmos.vert_diff.C_E
-
-        # Prepare scratch vars
-        θ_v = p.scratch.ᶜtemp_scalar
-        Ri = p.scratch.ᶜtemp_scalar_2
-        dz_local = p.scratch.ᶜtemp_scalar_3
-        θ_v_sfc = p.scratch.ᶠtemp_field_level
-        Ri_a = p.scratch.temp_field_level
-        z_local = p.scratch.temp_data
-        z_sfc = p.scratch.temp_data_face_level
-        ᶜθ_v_sfc = C_E = p.scratch.temp_field_level_2
-        h_boundary_layer = p.scratch.temp_field_level_3
-        ᶠts_sfc = sfc_conditions.ts
-        ᶜz = Fields.coordinate_field(Y.c).z
-        interior_uₕ = Fields.level(Y.c.uₕ, 1)
-        ᶜΔz_surface = Fields.Δz_field(interior_uₕ)
-        @. θ_v = TD.virtual_pottemp(thermo_params, ᶜts)
-        @. θ_v_sfc = TD.virtual_pottemp(thermo_params, ᶠts_sfc)
-        θ_v_a = Fields.level(θ_v, 1)
-
-        z_local .= Fields.field_values(Fields.coordinate_field(Y.c).z)
-        z_sfc .= Fields.field_values(
-            Fields.level(Fields.coordinate_field(Y.f).z, half),
-        )
-        @. z_local = z_local - z_sfc
-        dz_local .= Fields.Field(z_local, axes(Y.c))
-        zₐ = Fields.level(dz_local, 1)
-        ᶜθ_v_sfc .=
-            Fields.Field(Fields.field_values(θ_v_sfc), axes(interior_uₕ))
-
-        @. Ri = compute_bulk_richardson_number(
-            θ_v,
-            θ_v_a,
-            norm(Y.c.uₕ),
-            grav,
-            dz_local,
-        )
-        @. Ri_a = compute_bulk_richardson_number(
-            θ_v_a,
-            ᶜθ_v_sfc,
-            norm(interior_uₕ),
-            grav,
-            ᶜΔz_surface / 2,
-        )
-
-        #### Detect 𝒽, boundary layer height per column
-        h_boundary_layer = ᶜΔz_surface ./ 2 .+ FT(1000)
-        compute_boundary_layer_height!(
-            h_boundary_layer,
-            dz_local,
-            Ri,
-            Ri_c,
-            Ri_a,
-        )
-
-        ## Exchange coefficients
-        @. C_E = compute_exchange_coefficient(
-            Ri_a,
-            Ri_c,
-            ᶜΔz_surface ./ 2,
-            z₀,
-            κ,
-            C_E_min,
-        )
-        @. ᶜK_h = eddy_diffusivity_coefficient(
-            dz_local,
-            z₀,
-            f_b,
-            h_boundary_layer,
-            norm(interior_uₕ),
-            C_E,
-            Ri,
-            Ri_a,
-            Ri_c,
-            κ,
-        )
+        bc_K_h = compute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vert_diff)
+        @. ᶜK_h = bc_K_h
     end
 
     # TODO
@@ -691,47 +539,4 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     end
 
     return nothing
-end
-
-"""
-    output_prognostic_sgs_quantities(Y, p, t)
-
-Sets `ᶜu⁺`, `ᶠu³⁺`, `ᶜts⁺` and `ᶜa⁺` to be the same as the
-values of the first updraft.
-"""
-function output_prognostic_sgs_quantities(Y, p, t)
-    (; turbconv_model) = p.atmos
-    thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜρa⁰, ᶜρ⁰, ᶜtsʲs) = p.precomputed
-    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
-    set_ᶠuₕ³!(ᶠuₕ³, Y)
-    (ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺) =
-        similar.((
-            p.precomputed.ᶠu₃⁰,
-            p.precomputed.ᶜu⁰,
-            p.precomputed.ᶠu³⁰,
-            p.precomputed.ᶜK⁰,
-        ))
-    set_sgs_ᶠu₃!(u₃⁺, ᶠu₃⁺, Y, turbconv_model)
-    set_velocity_quantities!(ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶠu₃⁺, Y.c.uₕ, ᶠuₕ³)
-    ᶜts⁺ = ᶜtsʲs.:1
-    ᶜa⁺ = @. draft_area(ρa⁺(Y.c), TD.air_density(thermo_params, ᶜts⁺))
-    ᶜa⁰ = @. draft_area(ᶜρa⁰, ᶜρ⁰)
-    return (; ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰)
-end
-
-"""
-    output_diagnostic_sgs_quantities(Y, p, t)
-
-Sets `ᶜu⁺`, `ᶠu³⁺`, `ᶜts⁺` and `ᶜa⁺` to be the same as the
-values of the first updraft.
-"""
-function output_diagnostic_sgs_quantities(Y, p, t)
-    thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜρaʲs, ᶜtsʲs) = p.precomputed
-    ᶠu³⁺ = p.precomputed.ᶠu³ʲs.:1
-    ᶜu⁺ = @. (C123(Y.c.uₕ) + C123(ᶜinterp(ᶠu³⁺)))
-    ᶜts⁺ = @. ᶜtsʲs.:1
-    ᶜa⁺ = @. draft_area(ᶜρaʲs.:1, TD.air_density(thermo_params, ᶜts⁺))
-    return (; ᶜu⁺, ᶠu³⁺, ᶜts⁺, ᶜa⁺)
 end

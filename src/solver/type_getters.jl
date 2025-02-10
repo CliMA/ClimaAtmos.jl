@@ -9,6 +9,9 @@ import ClimaAtmos as CA
 import LinearAlgebra
 import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
+import Logging
+
+import ClimaUtilities.TimeManager: ITime
 
 import ClimaDiagnostics
 
@@ -31,15 +34,15 @@ function get_atmos(config::AtmosConfig, params)
         ozone = IdealizedOzone()
     end
     co2 = get_co2(parsed_args)
-    with_rrtgmp = radiation_mode isa RRTMGPI.AbstractRRTMGPMode
-    if with_rrtgmp && isnothing(co2)
+    with_rrtmgp = radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+    if with_rrtmgp && isnothing(co2)
         @warn (
-            "co2_model set to nothing with an RRTGMP model. Resetting to FixedCO2"
+            "co2_model set to nothing with an RRTMGP model. Resetting to FixedCO2"
         )
         co2 = FixedCO2()
     end
-    (isnothing(co2) && !with_rrtgmp) &&
-        @warn ("$(co2) does nothing if RRTGMP is not used")
+    (isnothing(co2) && !with_rrtmgp) &&
+        @warn ("$(co2) does nothing if RRTMGP is not used")
 
     diffuse_momentum = !(forcing_type isa HeldSuarezForcing)
 
@@ -259,12 +262,16 @@ end
 
 function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     (; parsed_args, comms_ctx) = config
+    sim_info = get_sim_info(config)
 
     @assert !isnothing(restart_file)
     reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
     # TODO: Do not use InputOutput.HDF5 directly
     t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
+    t_start =
+        parsed_args["use_itime"] ? ITime(t_start; epoch = sim_info.start_date) :
+        t_start
     if "atmos_model_hash" in keys(InputOutput.HDF5.attrs(reader.file))
         atmos_model_hash_in_restart =
             InputOutput.HDF5.read_attribute(reader.file, "atmos_model_hash")
@@ -502,7 +509,7 @@ function auto_detect_restart_file(
 end
 
 function get_sim_info(config::AtmosConfig)
-    (; parsed_args) = config
+    (; comms_ctx, parsed_args) = config
     FT = eltype(config)
 
     (; job_id) = config
@@ -531,22 +538,43 @@ function get_sim_info(config::AtmosConfig)
 
     output_dir = OutputPathGenerator.generate_output_path(
         base_output_dir;
-        context = config.comms_ctx,
+        context = comms_ctx,
         style = output_dir_style,
     )
+    if parsed_args["log_to_file"]
+        @info "Logging to $output_dir/output.log"
+        logger = ClimaComms.FileLogger(comms_ctx, output_dir)
+        Logging.global_logger(logger)
+    end
+    @info "Running on $(nameof(typeof(ClimaComms.device(comms_ctx))))"
+    if comms_ctx isa ClimaComms.SingletonCommsContext
+        @info "Setting up single-process ClimaAtmos run"
+    else
+        @info "Setting up distributed ClimaAtmos run" nprocs =
+            ClimaComms.nprocs(comms_ctx)
+    end
 
     isnothing(restart_file) ||
         @info "Restarting simulation from file $restart_file"
-
+    epoch = DateTime(parsed_args["start_date"], dateformat"yyyymmdd")
+    if parsed_args["use_itime"]
+        dt = ITime(time_to_seconds(parsed_args["dt"]))
+        t_end = ITime(time_to_seconds(parsed_args["t_end"]), epoch = epoch)
+        (dt, t_end) = promote(dt, t_end)
+    else
+        dt = FT(time_to_seconds(parsed_args["dt"]))
+        t_end = FT(time_to_seconds(parsed_args["t_end"]))
+    end
     sim = (;
         output_dir,
         restart = !isnothing(restart_file),
         restart_file,
         job_id,
-        dt = FT(time_to_seconds(parsed_args["dt"])),
-        start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
-        t_end = FT(time_to_seconds(parsed_args["t_end"])),
+        dt = dt,
+        start_date = epoch,
+        t_end = t_end,
     )
+    @show sim.t_end, sim.dt
     n_steps = floor(Int, sim.t_end / sim.dt)
     @info(
         "Time info:",
@@ -561,6 +589,13 @@ end
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; atmos, dt) = p
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+    dt_save_to_sol = if dt_save_to_sol == Inf
+        Inf
+    elseif dt isa ITime
+        ITime(dt_save_to_sol)
+    else
+        dt_save_to_sol
+    end
 
     s = @timed_str begin
         func = if parsed_args["split_ode"]
@@ -576,9 +611,9 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
                     # Can we just pass implicit_tendency! and jac_prototype etc.?
                     lim! = limiters_func!,
                     dss!,
-                    post_explicit! = set_precomputed_quantities!,
-                    post_implicit! = set_precomputed_quantities!,
-                )
+                    cache! = set_precomputed_quantities!,
+                    cache_imp! = set_precomputed_quantities!,
+                ) # TODO: Split implicit precomputed quantities from the rest.
             else
                 SciMLBase.SplitFunction(implicit_func, remaining_tendency!)
             end
@@ -588,12 +623,13 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     end
     @info "Define ode function: $s"
     problem = SciMLBase.ODEProblem(func, Y, tspan, p)
+    t_begin, t_end, _ = promote(tspan[1], tspan[2], p.dt)
     saveat = if dt_save_to_sol == Inf
-        tspan[2]
-    elseif tspan[2] % dt_save_to_sol == 0
-        dt_save_to_sol
+        promote([t_begin, t_end]...)
+    elseif iszero(tspan[2] % dt_save_to_sol)
+        promote([t_begin:dt_save_to_sol:t_end...]...)
     else
-        [tspan[1]:dt_save_to_sol:tspan[2]..., tspan[2]]
+        promote([t_begin:dt_save_to_sol:t_end..., t_end]...)
     end # ensure that tspan[2] is always saved
     @info "dt_save_to_sol: $dt_save_to_sol, length(saveat): $(length(saveat))"
     args = (problem, ode_algo)
@@ -627,30 +663,10 @@ function get_comms_context(parsed_args)
     return comms_ctx
 end
 
-"""
-    silence_non_root_processes(comms_ctx)
-
-Set the logging behavior based on the process rank within the given communication context `comms_ctx`.
-If the process is the root process, logging is set to display messages to the console with `Info` level.
-For all other processes, logging is silenced by setting it to a `NullLogger`.
-
-# Arguments
-- `comms_ctx`: The communication context used to determine the rank of the process.
-
-"""
-function silence_non_root_processes(comms_ctx)
-    # Set logging to only display for the root process
-    if ClimaComms.iamroot(comms_ctx)
-        Logging.global_logger(Logging.ConsoleLogger(stderr, Logging.Info))
-    else
-        Logging.global_logger(Logging.NullLogger())
-    end
-end
-
 function get_simulation(config::AtmosConfig)
+    sim_info = get_sim_info(config)
     params = ClimaAtmosParameters(config)
     atmos = get_atmos(config, params)
-    sim_info = get_sim_info(config)
     job_id = sim_info.job_id
     output_dir = sim_info.output_dir
     @info "Simulation info" job_id output_dir
@@ -675,7 +691,6 @@ function get_simulation(config::AtmosConfig)
     else
         spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
     end
-
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
     if !sim_info.restart
@@ -686,7 +701,14 @@ function get_simulation(config::AtmosConfig)
                 spaces.center_space,
                 spaces.face_space,
             )
-            t_start = Spaces.undertype(axes(Y.c))(0)
+            if sim_info.dt isa ITime
+                t_start = ITime(
+                    Spaces.undertype(axes(Y.c))(0);
+                    epoch = sim_info.start_date,
+                )
+            else
+                t_start = Spaces.undertype(axes(Y.c))(0)
+            end
         end
         @info "Allocating Y: $s"
 

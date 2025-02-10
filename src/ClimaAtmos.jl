@@ -1,8 +1,11 @@
 module ClimaAtmos
 
 using NVTX
+import NullBroadcasts: NullBroadcasted
 import LazyBroadcast
+import LazyBroadcast: @lazy
 import Thermodynamics as TD
+import Thermodynamics
 
 include("compat.jl")
 include(joinpath("parameters", "Parameters.jl"))
@@ -54,6 +57,7 @@ include(joinpath("prognostic_equations", "zero_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))
 
+include(joinpath("prognostic_equations", "water_advection.jl"))
 include(joinpath("prognostic_equations", "remaining_tendency.jl"))
 include(joinpath("prognostic_equations", "forcing", "large_scale_advection.jl")) # TODO: should this be in tendencies/?
 include(joinpath("prognostic_equations", "forcing", "subsidence.jl"))
@@ -124,6 +128,7 @@ include(joinpath("prognostic_equations", "advection.jl"))
 include(joinpath("cache", "temporary_quantities.jl"))
 include(joinpath("cache", "tracer_cache.jl"))
 include(joinpath("cache", "cache.jl"))
+include(joinpath("cache", "eddy_diffusivity_coefficient.jl"))
 include(joinpath("prognostic_equations", "dss.jl"))
 include(joinpath("prognostic_equations", "limited_tendencies.jl"))
 

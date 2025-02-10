@@ -13,7 +13,7 @@ import ..ᶜinterp
 import ..ᶠinterp
 import ..C3
 import ..C12
-import ..compute_kinetic!
+import ..compute_kinetic
 import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 import ..n_mass_flux_subdomains

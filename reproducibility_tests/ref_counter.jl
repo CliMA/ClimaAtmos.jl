@@ -1,4 +1,4 @@
-204
+213
 
 # **README**
 #
@@ -20,6 +20,33 @@
 
 
 #=
+213 
+- Update to deep-atmos eqns by default, fix vorticity diagnostic
+
+212
+- Update RRTMGP, which changes aerosol optics calculation
+
+211
+- Remove `FriersonDiffusion` and use `DecayWithHeightDiffusion` instead.
+
+210
+- Change prescribed aerosol dataset to MERRA2
+
+209
+- Floating point changes, with minor adjustments to how to sponge tendencies are
+  added.
+
+208
+- Update RRTMGP to v0.19.2, which changes cloud optics slightly
+
+207
+- Changes in the CI for the working fluid
+
+206
+- Change default timestepper to ARS343
+
+205
+- A ClimaTimeSteppers update
 
 204
 - Change cloud ice effective radius

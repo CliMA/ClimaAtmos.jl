@@ -32,8 +32,6 @@ direct_dependencies =
 known_dependencies = Set([
     # ArgParse is used to read --config_file and --job_id from command line
     "ArgParse",
-    # ArtifactWrappers is used to topography and gravity wave NetCDF data
-    "ArtifactWrappers",
     "Artifacts",
     "AtmosphericProfilesLibrary",
     "ClimaComms",
@@ -48,15 +46,16 @@ known_dependencies = Set([
     "FastGaussQuadrature",
     "Insolation",
     "Interpolations",
-    "LazyBroadcast",
+    "LazyBroadcast", # for https://github.com/CliMA/ClimaAtmos.jl/issues/3594
     "LazyArtifacts",
     "LinearAlgebra",
     "Logging",
     # NCDatasets is used to read Earth topography, GCM driven initial conditions, orographic gravity wave data
+    "NullBroadcasts", # works with LazyBroadcast
     "NCDatasets",
     "NVTX",
     "RRTMGP",
-    # used to reset seed for random number generator used for cloudy RRTMGP runs to enable bit-wise reproducibility for tests
+    # Random is used to reset seed for random number generator used for cloudy RRTMGP runs to enable bit-wise reproducibility for tests
     "Random",
     "SciMLBase",
     "StaticArrays",

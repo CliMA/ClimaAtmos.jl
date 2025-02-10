@@ -38,12 +38,6 @@ longrun_moist_held_suarez
 Moist Held Suarez. Test the moist dycore with an equilibrium state with sources and sinks.
 ```
 ```
-longrun_moist_held_suarez_deepatmos
-
-Held-Suarez equil-moist. Test with deep-atmosphere equations.
-Use this job to test deep-atmosphere related features.
-```
-```
 longrun_aquaplanet_allsky_0M
 
 Aquaplanet with idealized insolation, all-sky radiation, and 0-moment microphysics.

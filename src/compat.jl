@@ -1,6 +1,7 @@
 import ClimaCore
 import ClimaUtilities
 import ClimaCore: Domains, Spaces, Topologies
+import RRTMGP
 
 # To allow for backwards compatibility of ClimaCore:
 if pkgversion(ClimaCore) < v"0.14.18"
@@ -94,4 +95,48 @@ if pkgversion(ClimaUtilities) < v"0.1.20"
 else
     WallTimeInfo = ClimaUtilities.OnlineLogging.WallTimeInfo
     report_walltime = ClimaUtilities.OnlineLogging.report_walltime
+end
+
+
+if pkgversion(RRTMGP) <= v"0.19.2"
+    function _update_some_aerosol_conc(Y, p)
+        ᶜΔz = Fields.Δz_field(Y.c)
+        rrtmgp_model = p.radiation.rrtmgp_model
+        ᶜaero_conc = Fields.array2field(
+            rrtmgp_model.center_dust_column_mass_density,
+            axes(Y.c),
+        )
+        @. ᶜaero_conc = 0
+        for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04]
+            if prescribed_aerosol_name in
+               propertynames(p.tracers.prescribed_aerosols_field)
+                aerosol_field = getproperty(
+                    p.tracers.prescribed_aerosols_field,
+                    prescribed_aerosol_name,
+                )
+                @. ᶜaero_conc += aerosol_field * Y.c.ρ * ᶜΔz
+            end
+        end
+
+        ᶜaero_conc = Fields.array2field(
+            rrtmgp_model.center_ss_column_mass_density,
+            axes(Y.c),
+        )
+        @. ᶜaero_conc = 0
+        for prescribed_aerosol_name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04]
+            if prescribed_aerosol_name in
+               propertynames(p.tracers.prescribed_aerosols_field)
+                aerosol_field = getproperty(
+                    p.tracers.prescribed_aerosols_field,
+                    prescribed_aerosol_name,
+                )
+                @. ᶜaero_conc += aerosol_field * Y.c.ρ * ᶜΔz
+            end
+        end
+        return nothing
+    end
+else
+    function _update_some_aerosol_conc(_, _)
+        return nothing
+    end
 end

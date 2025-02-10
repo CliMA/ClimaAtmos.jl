@@ -1,5 +1,5 @@
 struct AtmosCache{
-    FT <: AbstractFloat,
+    TT,
     AM,
     NUM,
     CAP,
@@ -10,9 +10,7 @@ struct AtmosCache{
     SCRA,
     HYPE,
     PR,
-    LSAD,
     EXTFORCING,
-    EDMFCOR,
     NONGW,
     ORGW,
     RAD,
@@ -22,7 +20,7 @@ struct AtmosCache{
     CONSCHECK,
 }
     """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
-    dt::FT
+    dt::TT
 
     """AtmosModel"""
     atmos::AM
@@ -54,9 +52,7 @@ struct AtmosCache{
 
     """Additional parameters used by the various tendencies"""
     precipitation::PR
-    large_scale_advection::LSAD
     external_forcing::EXTFORCING
-    edmf_coriolis::EDMFCOR
     non_orographic_gravity_wave::NONGW
     orographic_gravity_wave::ORGW
     radiation::RAD
@@ -158,9 +154,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
 
     hyperdiff = hyperdiffusion_cache(Y, atmos)
     precipitation = precipitation_cache(Y, atmos)
-    large_scale_advection = large_scale_advection_cache(Y, atmos)
     external_forcing = external_forcing_cache(Y, atmos, params)
-    edmf_coriolis = edmf_coriolis_cache(Y, atmos)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
@@ -178,9 +172,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         scratch,
         hyperdiff,
         precipitation,
-        large_scale_advection,
         external_forcing,
-        edmf_coriolis,
         non_orographic_gravity_wave,
         orographic_gravity_wave,
         radiation,

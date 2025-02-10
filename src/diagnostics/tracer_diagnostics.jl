@@ -32,12 +32,12 @@ function compute_dust!(out, state, cache, time)
         error("Aerosols do not exist in the model")
     any(
         x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
-        [:DST01, :DST02, :DST03, :DST04],
+        [:DST01, :DST02, :DST03, :DST04, :DST05],
     ) || error("Dust does not exist in the model")
     if isnothing(out)
         aero_conc = cache.scratch.ᶜtemp_scalar
         @. aero_conc = 0
-        for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04]
+        for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04, :DST05]
             if prescribed_aerosol_name in
                propertynames(cache.tracers.prescribed_aerosols_field)
                 aerosol_field = getproperty(
@@ -51,7 +51,7 @@ function compute_dust!(out, state, cache, time)
     else
         aero_conc = cache.scratch.ᶜtemp_scalar
         @. aero_conc = 0
-        for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04]
+        for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04, :DST05]
             if prescribed_aerosol_name in
                propertynames(cache.tracers.prescribed_aerosols_field)
                 aerosol_field = getproperty(
@@ -70,12 +70,13 @@ function compute_sea_salt!(out, state, cache, time)
         error("Aerosols do not exist in the model")
     any(
         x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
-        [:SSLT01, :SSLT02, :SSLT03, :SSLT04],
+        [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05],
     ) || error("Sea salt does not exist in the model")
     if isnothing(out)
         aero_conc = cache.scratch.ᶜtemp_scalar
         @. aero_conc = 0
-        for prescribed_aerosol_name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04]
+        for prescribed_aerosol_name in
+            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
             if prescribed_aerosol_name in
                propertynames(cache.tracers.prescribed_aerosols_field)
                 aerosol_field = getproperty(
@@ -89,7 +90,8 @@ function compute_sea_salt!(out, state, cache, time)
     else
         aero_conc = cache.scratch.ᶜtemp_scalar
         @. aero_conc = 0
-        for prescribed_aerosol_name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04]
+        for prescribed_aerosol_name in
+            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
             if prescribed_aerosol_name in
                propertynames(cache.tracers.prescribed_aerosols_field)
                 aerosol_field = getproperty(

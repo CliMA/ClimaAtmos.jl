@@ -39,20 +39,17 @@ function make_horizontal_space(
     comms_ctx::ClimaComms.SingletonCommsContext,
     bubble,
 )
-    if mesh isa Meshes.AbstractMesh1D
+
+    space = if mesh isa Meshes.AbstractMesh1D
         topology = Topologies.IntervalTopology(comms_ctx, mesh)
-        space = Spaces.SpectralElementSpace1D(topology, quad)
+        Spaces.SpectralElementSpace1D(topology, quad)
     elseif mesh isa Meshes.AbstractMesh2D
         topology = Topologies.Topology2D(
             comms_ctx,
             mesh,
             Topologies.spacefillingcurve(mesh),
         )
-        space = Spaces.SpectralElementSpace2D(
-            topology,
-            quad;
-            enable_bubble = bubble,
-        )
+        Spaces.SpectralElementSpace2D(topology, quad; enable_bubble = bubble)
     end
     return space
 end
@@ -128,7 +125,6 @@ function make_hybrid_spaces(
         @info "No surface orography warp applied"
     end
 
-    topo_smoothing = parsed_args["topo_smoothing"]
     if topography == "NoWarp"
         hypsography = Hypsography.Flat()
     elseif topography == "Earth"
@@ -166,7 +162,7 @@ function make_hybrid_spaces(
             @error "Undefined mesh-warping option"
         end
     else
-        if topo_smoothing
+        if parsed_args["topo_smoothing"]
             Hypsography.diffuse_surface_elevation!(z_surface)
         end
         if parsed_args["mesh_warp_type"] == "SLEVE"
