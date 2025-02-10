@@ -1829,47 +1829,89 @@ function (initial_condition::ISDAC)(params)
     end
 end
 
-"""
-    Larcform1(; temperature = 273)
 
-An `InitialCondition` with a uniform temperature profile.
-"""
-Base.@kwdef struct Larcform1{T} <: InitialCondition
-    prognostic_tke::Bool = false
-    # TODO implement Pithan 2016 profile for T(z)=T₀-γz // T(P)=T₀(P/P₀)^α
-    # α = Rγ/g ~= .24 (Check value)
+# Defining Larcform1 case
+Base.@kwdef struct Larcform1 <: InitialCondition
+    #perturb::Bool = false
+    prognostic_tke::Bool = true
 end
 
+function Larcform1_T(::Type{FT}) where {FT}
+    z -> FT(
+    if z ≤ 4000
+        273.0 - 8E-3*z # K 
+    else
+        203.1 # K
+    end)  # kg/kg
+end
+# Add Larcform1_T Profile to APL
+# Could we use this sort of code loading & modification to create a way to load in
+# profiles and initial conditions from a user-defined file?
+
+# TODO document + reference
 function (initial_condition::Larcform1)(params)
-    # TODO check if name added to list of valid args to parse
-    (; temperature) = initial_condition
+    (; prognostic_tke) = initial_condition
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    p_0 = FT(101300)  # 1020 hPa
+    #θ = APL.ISDAC_θ_liq_ice(FT) # K
+    q_tot = APL.ISDAC_q_tot(FT) #FT(0) # TODO 
+    #q_tot = APL.ISDAC_q_tot(FT)  # kg/kg
+
+    # TODO change to using appropriate libraries
+    #R = FT(287) # J/kg/K
+    # γ = FT(8E-3) # K/m
+    #g = FT(9.81) # m/s^2
+    #α = FT(R*γ/g) # Rγ/g; R=287 J/kg/K, g = 9.81 m/s^2
+    # K
+    #T300hpa = FT(203.1) # K""" [Pithan2016](@cite) """
+
+
+    #T(z)=Larcform1_T(z)
+    T=Larcform1_T(FT)
+    #= Does not work because of ill-defined *(p_0, exp([...])) operation below
+    function p(z)
+        if z≤FT(4000) && z≥FT(0)
+            return p_0*(FT(1)-γ/T₀*z)^(FT(1)/α)
+        elseif z>FT(4000)
+            return p_0*exp(-g/R/T300hpa*z)
+        else
+            throw(DomainError(z, "Argument must be a non-negative real number"))
+        end        
+    end
+    =#
+    #Main.@infiltrate
+    p = hydrostatic_pressure_profile(;
+    thermo_params,
+    p_0,
+    T, # Issue with type here
+    q_tot
+    )  # Pa
+    velocity = Geometry.UVVector(FT(5), FT(0))
+    #tke(z) = FT(0)*z # TODO implement actual profile
+    #tke = APL.ISDAC_tke(FT)  # m²/s²
+
+    # pseudorandom fluctuations with amplitude 0.1 K
+    # TODO check if we want this // if 825 is appropriate height
+    #θ_pert(z::FT) where {FT} =
+    #    perturb && (z < 825) ? FT(0.1) * randn(FT) : FT(0)
+    #Main.@infiltrate
     function local_state(local_geometry)
-        FT = eltype(params)
-        R_d = CAP.R_d(params)
-        # MSLP = CAP.MSLP(params)
-        grav = CAP.grav(params)
-        thermo_params = CAP.thermodynamics_params(params)
-        T = FT(temperature)
-
         (; z) = local_geometry.coordinates
-        P₀ = FT(1013) # surface pressure in hPa
-        T₀ = FT(273)  # surface temperature in K
-        α = FT(0.24)  # Rγ/g
-        γ = FT(8E-3)  # Lapse rate in K/m
-        g = FT(9.81) # m/s^2
-        # TODO add conditional logic for ≤300hPa
-        T = T₀-γ*z # Temperature
-
-        velocity = Geometry.UVVector(FT(5), FT(0)) # TODO add conditionals
-
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseDry_pT(thermo_params, p, T), # TODO check if need PhaseDry_pT or alternative
-            # TODO add velocity (See ScharProfile)
+            #=thermo_state = TD.PhaseEquil_pθq(
+                thermo_params,
+                p(z),
+                θ, #+ θ_pert(z),
+                q_tot,
+            ),=#
+            thermo_state = TD.PhaseEquil_pTq(thermo_params, p(z), T(z), q_tot(z)), # FIX!
+            velocity = velocity,
+            turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : FT(0)),
         )
     end
-    return local_state
 end
 
 """
