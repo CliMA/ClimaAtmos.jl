@@ -13,17 +13,17 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 edmfx_filter: true
-prognostic_tke: true
+#prognostic_tke: true
 moist: "equil"
 config: "column"
 z_max: 40e3
 z_elem: 60
 z_stretch: true
 dz_bottom: 30
-perturb_initstate: false
+#perturb_initstate: false
 dt: "10secs"
 dt_rad: "30mins"
-t_end: "6hours"
+t_end: "30mins" #"6hours"
 dt_save_state_to_disk: "6hours"
 cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage : true
