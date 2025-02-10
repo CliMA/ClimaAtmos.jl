@@ -677,9 +677,7 @@ function AtmosConfig(
 
     all_config_files =
         normrelpath.(maybe_add_default(config_files, default_config_file))
-
     configs = map(all_config_files) do config_file
-        @info "Loading yaml file $config_file"
         strip_help_messages(load_yaml_file(config_file))
     end
     return AtmosConfig(
@@ -714,13 +712,15 @@ function AtmosConfig(
     # using config_files = [default_config_file] as a default
     # relies on the fact that override_default_config uses
     # default_config_file.
-    config = override_default_config(configs)
+    config = merge(configs...)
+    comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
+    config = override_default_config(config)
+
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     toml_dict = CP.create_toml_dict(
         FT;
         override_file = CP.merge_toml_files(config["toml"]),
     )
-    comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
     config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
 
     isempty(job_id) &&
