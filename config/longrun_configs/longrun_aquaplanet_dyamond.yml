@@ -10,6 +10,7 @@ approximate_linear_solve_iters: 2
 topography: "Earth"
 start_date: "20160801"
 initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p14deg.nc"
+output_dir: "/glade/derecho/scratch/asridhar/dyamond_clima"
 moist: "equil"
 dt: "40secs"
 t_end: "30days"
@@ -22,3 +23,7 @@ surface_setup: "DefaultMoninObukhov"
 vert_diff: "DecayWithHeightDiffusion"
 precip_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]
+diagnostics:
+  - short_name: [pfull, ps, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
+    reduction: inst
+    period: 1days
