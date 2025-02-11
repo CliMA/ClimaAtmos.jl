@@ -131,7 +131,7 @@ NVTX.@annotate function set_cloud_fraction!(
     p,
     ::Union{EquilMoistModel, NonEquilMoistModel},
     qc::SGSQuadratureCloud,
-    ::DiagnosticEDMFX,
+    ::Union{EDOnlyEDMFX, DiagnosticEDMFX},
 )
     SG_quad = qc.SG_quad
     (; params) = p
@@ -139,7 +139,6 @@ NVTX.@annotate function set_cloud_fraction!(
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜts, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
-    (; ᶜρaʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
     (; turbconv_model) = p.atmos
 
     # TODO - we should make this default when using diagnostic edmf
@@ -158,6 +157,9 @@ NVTX.@annotate function set_cloud_fraction!(
 
     # updrafts
     n = n_mass_flux_subdomains(turbconv_model)
+    if n > 0
+        (; ᶜρaʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
+    end
 
     for j in 1:n
         @. cloud_diagnostics_tuple += NamedTuple{(:cf, :q_liq, :q_ice)}(
@@ -296,8 +298,8 @@ function quad_loop(
         θ_hat = μ_c + sqrt(FT(2)) * σ_c * χ2
         q_hat = q_mean + sqrt(FT(2)) * σ_q * χ1
         # The σ_q_lim limits q_tot_hat to be close to zero
-        # for the negative sampling points. However due to numerical erros
-        # we sometimes still get small negative numers here
+        # for the negative sampling points. However due to numerical errors
+        # we sometimes still get small negative numbers here
         return (θ_hat, max(FT(0), q_hat))
     end
 
@@ -315,7 +317,6 @@ function quad_loop(
 
         return (; cf, q_liq, q_ice)
     end
-
     return quad(f, get_x_hat, SG_quad)
 end
 
