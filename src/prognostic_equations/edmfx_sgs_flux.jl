@@ -246,7 +246,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     Y,
     p,
     t,
-    turbconv_model::DiagnosticEDMFX,
+    turbconv_model::Union{EDOnlyEDMFX, DiagnosticEDMFX},
 )
 
     FT = Spaces.undertype(axes(Y.c))

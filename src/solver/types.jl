@@ -333,6 +333,15 @@ end
 
 abstract type AbstractEDMF end
 
+"""
+    Eddy-Diffusivity Only "EDMF"
+
+This is EDMF without mass-flux.
+
+This allows running simulations with TKE-based vertical diffusion.
+"""
+struct EDOnlyEDMFX <: AbstractEDMF end
+
 struct PrognosticEDMFX{N, TKE, FT} <: AbstractEDMF
     a_half::FT # WARNING: this should never be used outside of divide_by_ρa
 end
@@ -347,11 +356,13 @@ DiagnosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
 
 n_mass_flux_subdomains(::PrognosticEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N
+n_mass_flux_subdomains(::EDOnlyEDMFX) = 0
 n_mass_flux_subdomains(::Any) = 0
 
 n_prognostic_mass_flux_subdomains(::PrognosticEDMFX{N}) where {N} = N
 n_prognostic_mass_flux_subdomains(::Any) = 0
 
+use_prognostic_tke(::EDOnlyEDMFX) = true
 use_prognostic_tke(::PrognosticEDMFX{N, TKE}) where {N, TKE} = TKE
 use_prognostic_tke(::DiagnosticEDMFX{N, TKE}) where {N, TKE} = TKE
 use_prognostic_tke(::Any) = false
@@ -383,6 +394,7 @@ Base.broadcastable(x::AbstractSurfaceThermoState) = tuple(x)
 Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
 Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
+Base.broadcastable(x::EDOnlyEDMFX) = tuple(x)
 Base.broadcastable(x::PrognosticEDMFX) = tuple(x)
 Base.broadcastable(x::DiagnosticEDMFX) = tuple(x)
 Base.broadcastable(x::AbstractEntrainmentModel) = tuple(x)

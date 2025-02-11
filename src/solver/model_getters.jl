@@ -454,8 +454,13 @@ end
 
 function get_turbconv_model(FT, parsed_args, turbconv_params)
     turbconv = parsed_args["turbconv"]
-    @assert turbconv in
-            (nothing, "edmfx", "prognostic_edmfx", "diagnostic_edmfx")
+    @assert turbconv in (
+        nothing,
+        "edmfx",
+        "prognostic_edmfx",
+        "diagnostic_edmfx",
+        "edonly_edmfx",
+    )
 
     return if turbconv == "prognostic_edmfx"
         N = parsed_args["updraft_number"]
@@ -465,6 +470,8 @@ function get_turbconv_model(FT, parsed_args, turbconv_params)
         N = parsed_args["updraft_number"]
         TKE = parsed_args["prognostic_tke"]
         DiagnosticEDMFX{N, TKE}(turbconv_params.min_area)
+    elseif turbconv == "edonly_edmfx"
+        EDOnlyEDMFX()
     else
         nothing
     end

@@ -5,6 +5,13 @@ Main
 -------
 ### Features
 
+### Add EDOnlyEDMFX
+
+PR [3622](https://github.com/CliMA/ClimaAtmos.jl/pull/3622) adds a new
+simplified EDMF model that only implements the Eddy-Diffusivity part of the
+scheme (not the Mass-Flux).
+
+
 ### Update default configuration to use deep-atmosphere eqns, fix diagnostic bug
 PR [3422](https://github.com/CliMA/ClimaAtmos.jl/pull/3422)
 Updates the `default_config` to set `deep_atmosphere=true`, and updates the 
