@@ -37,9 +37,7 @@ end
 
 # following PyCLES https://github.com/CliMA/pycles/blob/71c1752a1ef1b43bb90e5817de9126468b4eeba9/ForcingGCMFixed.pyx#L260
 function eddy_vert_fluctuation!(ᶜρχₜ, ᶜχ, ᶜls_subsidence)
-    @. ᶜρχₜ +=
-        Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜχ))).components.data.:1 *
-        ᶜls_subsidence
+    @. ᶜρχₜ += Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜχ))).components.data.:1 * ᶜls_subsidence
 end
 
 external_forcing_cache(Y, atmos::AtmosModel, params) =
@@ -75,27 +73,19 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
             )
         end
 
-        function setvar_subsidence!(
-            cc_field,
-            varname,
-            colidx,
-            zc_gcm,
-            zc_forcing,
-            params,
-        )
+        function setvar_subsidence!(cc_field, varname, colidx, zc_gcm, zc_forcing, params)
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_forcing,
-                gcm_driven_profile_tmean(ds.group[cfsite_number], varname) .* .-(
-                    gcm_driven_profile_tmean(ds.group[cfsite_number], "alpha"),
-                ) ./ CAP.grav(params),
+                gcm_driven_profile_tmean(ds.group[cfsite_number], varname) .*
+                .-(gcm_driven_profile_tmean(ds.group[cfsite_number], "alpha")) ./
+                CAP.grav(params),
             )
         end
 
         function set_insolation!(cc_field)
             parent(cc_field) .= mean(
-                ds.group[cfsite_number]["rsdt"][:] ./
-                ds.group[cfsite_number]["coszen"][:],
+                ds.group[cfsite_number]["rsdt"][:] ./ ds.group[cfsite_number]["coszen"][:],
             )
         end
 
@@ -111,14 +101,7 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
             setvar!(ᶜdTdt_hadv, "tntha", colidx, zc_gcm, zc_forcing)
             setvar!(ᶜdqtdt_hadv, "tnhusha", colidx, zc_gcm, zc_forcing)
             setvar!(ᶜdTdt_rad, "tntr", colidx, zc_gcm, zc_forcing)
-            setvar_subsidence!(
-                ᶜls_subsidence,
-                "wap",
-                colidx,
-                zc_gcm,
-                zc_forcing,
-                params,
-            )
+            setvar_subsidence!(ᶜls_subsidence, "wap", colidx, zc_gcm, zc_forcing, params)
             # GCM states, used for nudging + vertical eddy advection
             setvar!(ᶜT_nudge, "ta", colidx, zc_gcm, zc_forcing)
             setvar!(ᶜqt_nudge, "hus", colidx, zc_gcm, zc_forcing)
@@ -160,7 +143,13 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
 end
 
 external_forcing_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
+function external_forcing_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::Union{GCMForcing,ExternalDrivenTVForcing},
+)
     # horizontal advection, vertical fluctuation, nudging, subsidence (need to add),
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
@@ -188,8 +177,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
     # nudging tendency
     ᶜdTdt_nudging = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
-    @. ᶜdTdt_nudging =
-        -(TD.air_temperature(thermo_params, ᶜts) - ᶜT_nudge) * ᶜinv_τ_scalar
+    @. ᶜdTdt_nudging = -(TD.air_temperature(thermo_params, ᶜts) - ᶜT_nudge) * ᶜinv_τ_scalar
     @. ᶜdqtdt_nudging = -(ᶜspecific.q_tot - ᶜqt_nudge) * ᶜinv_τ_scalar
 
     ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
@@ -205,32 +193,17 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
     @. Yₜ.c.ρe_tot +=
         Y.c.ρ * (
             TD.cv_m(thermo_params, ᶜts) * ᶜdTdt_sum +
-            (
-                cv_v * (TD.air_temperature(thermo_params, ᶜts) - T_0) + Lv_0 -
-                R_v * T_0
-            ) * ᶜdqtdt_sum
+            (cv_v * (TD.air_temperature(thermo_params, ᶜts) - T_0) + Lv_0 - R_v * T_0) *
+            ᶜdqtdt_sum
         )
     # total specific humidity
     @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt_sum
 
     ## subsidence -->
     ᶠls_subsidence³ = p.scratch.ᶠtemp_CT3
-    @. ᶠls_subsidence³ =
-        ᶠinterp(ᶜls_subsidence * CT3(unit_basis_vector_data(CT3, ᶜlg)))
-    subsidence!(
-        Yₜ.c.ρe_tot,
-        Y.c.ρ,
-        ᶠls_subsidence³,
-        ᶜh_tot,
-        Val{:first_order}(),
-    )
-    subsidence!(
-        Yₜ.c.ρq_tot,
-        Y.c.ρ,
-        ᶠls_subsidence³,
-        ᶜspecific.q_tot,
-        Val{:first_order}(),
-    )
+    @. ᶠls_subsidence³ = ᶠinterp(ᶜls_subsidence * CT3(unit_basis_vector_data(CT3, ᶜlg)))
+    subsidence!(Yₜ.c.ρe_tot, Y.c.ρ, ᶠls_subsidence³, ᶜh_tot, Val{:first_order}())
+    subsidence!(Yₜ.c.ρq_tot, Y.c.ρ, ᶠls_subsidence³, ᶜspecific.q_tot, Val{:first_order}())
 
     # needed to address top boundary condition for forcings. Otherwise upper portion of domain is anomalously cold
     ρe_tot_top = Fields.level(Yₜ.c.ρe_tot, Spaces.nlevels(axes(Y.c)))
@@ -242,6 +215,125 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
 
     return nothing
 end
+
+
+function create_external_forcing_cache(Y)
+    FT = Spaces.undertype(axes(Y.c))
+    ᶜdTdt_fluc = similar(Y.c, FT)
+    ᶜdqtdt_fluc = similar(Y.c, FT)
+    ᶜdTdt_hadv = similar(Y.c, FT)
+    ᶜdqtdt_hadv = similar(Y.c, FT)
+    ᶜdTdt_rad = similar(Y.c, FT)
+    ᶜT_nudge = similar(Y.c, FT)
+    ᶜqt_nudge = similar(Y.c, FT)
+    ᶜu_nudge = similar(Y.c, FT)
+    ᶜv_nudge = similar(Y.c, FT)
+    ᶜinv_τ_wind = similar(Y.c, FT)
+    ᶜinv_τ_scalar = similar(Y.c, FT)
+    ᶜls_subsidence = similar(Y.c, FT)
+    insolation = similar(Fields.level(Y.c.ρ, 1), FT)
+    cos_zenith = similar(Fields.level(Y.c.ρ, 1), FT)
+
+    return (;
+        ᶜdTdt_fluc,
+        ᶜdqtdt_fluc,
+        ᶜdTdt_hadv,
+        ᶜdqtdt_hadv,
+        ᶜdTdt_rad,
+        ᶜT_nudge,
+        ᶜqt_nudge,
+        ᶜu_nudge,
+        ᶜv_nudge,
+        ᶜinv_τ_wind,
+        ᶜinv_τ_scalar,
+        ᶜls_subsidence,
+        insolation,
+        cos_zenith,
+    )
+end
+
+
+function external_forcing_cache(Y, external_forcing::ExternalDrivenTVForcing, params)
+    (; external_forcing_file, start_date) = external_forcing
+    start_time = DateTime(start_date, "yyyymmdd")
+    column_tendencies = [
+        "ta",
+        "hus",
+        "tntva",
+        "wa",
+        "tntha",
+        "tnhusha",
+        "ua",
+        "va",
+        "tnhusva",
+        "rho",
+        "wap",
+    ]
+    surface_tendencies = ["coszen", "rsdt", "hfls", "hfss", "ts"]
+    column_target_space = axes(similar(Y.c))
+    surface_target_space = axes(similar(Fields.level(Y.c, 1)))
+
+
+    column_timevaryinginputs = [
+        TimeVaryingInput(
+            # hardcode for now then figure out how to pass in the file path
+            external_forcing_file,
+            name,
+            column_target_space;
+            reference_date = start_time,
+            regridder_type = :InterpolationsRegridder,
+        ) for name in column_tendencies
+    ]
+
+    surface_timevaryinginputs = [
+        TimeVaryingInput(
+            # hardcode for now then figure out how to pass in the file path
+            external_forcing_file,
+            name,
+            surface_target_space;
+            reference_date = start_time,
+            regridder_type = :InterpolationsRegridder,
+        ) for name in surface_tendencies
+    ]
+
+    column_variable_names_as_symbols = Symbol.(column_tendencies)
+    surface_variable_names_as_symbols = Symbol.(surface_tendencies)
+
+    column_inputs = similar(
+        Y.c,
+        NamedTuple{
+            Tuple(column_variable_names_as_symbols),
+            NTuple{length(column_variable_names_as_symbols),eltype(Y.c.ρ)},
+        },
+    )
+
+    surface_inputs = similar(
+        Fields.level(Y.c, 1),
+        NamedTuple{
+            Tuple(surface_variable_names_as_symbols),
+            NTuple{
+                length(surface_variable_names_as_symbols),
+                eltype(Fields.level(Y.c, 1).ρ),
+            },
+        },
+    )
+
+    column_timevaryinginputs =
+        (; zip(column_variable_names_as_symbols, column_timevaryinginputs)...)
+    surface_timevaryinginputs =
+        (; zip(surface_variable_names_as_symbols, surface_timevaryinginputs)...)
+
+    era5_tv_column_cache = (; column_inputs, column_timevaryinginputs)
+    era5_tv_surface_cache = (; surface_inputs, surface_timevaryinginputs)
+
+    era5_cache = create_external_forcing_cache(Y)
+
+    return (; era5_tv_column_cache..., era5_tv_surface_cache..., era5_cache...)
+end
+
+
+
+
 
 # ISDAC external forcing (i.e. nudging)
 external_forcing_cache(Y, external_forcing::ISDACForcing, params) = (;)  # Don't need to cache anything
@@ -276,8 +368,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     ᶜdTdt_nudging = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
     @. ᶜdTdt_nudging =
-        -(TD.air_temperature(thermo_params, ᶜts) - ta_ISDAC(ᶜp, ᶜz)) *
-        ᶜinv_τ_scalar(ᶜz)
+        -(TD.air_temperature(thermo_params, ᶜts) - ta_ISDAC(ᶜp, ᶜz)) * ᶜinv_τ_scalar(ᶜz)
     @. ᶜdqtdt_nudging = -(ᶜspecific.q_tot - q_tot(ᶜz)) * ᶜinv_τ_scalar(ᶜz)
 
     T_0 = TD.Parameters.T_0(thermo_params)
@@ -288,10 +379,8 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     @. Yₜ.c.ρe_tot +=
         Y.c.ρ * (
             TD.cv_m(thermo_params, ᶜts) * ᶜdTdt_nudging +
-            (
-                cv_v * (TD.air_temperature(thermo_params, ᶜts) - T_0) + Lv_0 -
-                R_v * T_0
-            ) * ᶜdqtdt_nudging
+            (cv_v * (TD.air_temperature(thermo_params, ᶜts) - T_0) + Lv_0 - R_v * T_0) *
+            ᶜdqtdt_nudging
         )
 
     # total specific humidity

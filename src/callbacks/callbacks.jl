@@ -39,18 +39,77 @@ function flux_accumulation!(integrator)
     return nothing
 end
 
+function external_driven_single_column!(integrator)
+    Y = integrator.u
+    p = integrator.p
+    t = integrator.t
+
+    # unpack external forcing objects that we can directly set.
+    FT = Spaces.undertype(axes(Y.c))
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜspecific, ᶜts, ᶜh_tot) = p.precomputed
+    (;
+        ᶜdTdt_fluc,
+        ᶜdqtdt_fluc,
+        ᶜdTdt_hadv,
+        ᶜdqtdt_hadv,
+        ᶜdTdt_rad, # we skip radiation because we're using RRTMGP, but this can be changed for simpler setups
+        ᶜT_nudge,
+        ᶜqt_nudge,
+        ᶜu_nudge,
+        ᶜv_nudge,
+        ᶜls_subsidence,
+        ᶜinv_τ_wind,
+        ᶜinv_τ_scalar,
+    ) = p.external_forcing
+    # unpack tv inputs
+    (; hus, rho, ta, tnhusha, tnhusva, tntha, tntva, ua, va, wa, wap) =
+        p.external_forcing.column_timevaryinginputs
+
+    # set the external forcing variables; external tendency is updated in a remaining_tendency! call
+    evaluate!(ᶜdTdt_fluc, tntva, t)
+    evaluate!(ᶜdqtdt_fluc, tnhusva, t)
+    evaluate!(ᶜdTdt_hadv, tntha, t)
+    evaluate!(ᶜdqtdt_hadv, tnhusha, t)
+    evaluate!(ᶜT_nudge, ta, t)
+    evaluate!(ᶜqt_nudge, hus, t)
+    evaluate!(ᶜu_nudge, ua, t)
+    evaluate!(ᶜv_nudge, va, t)
+
+    # subsidence term we need wap / -(rho) / gravity 
+    evaluate!(p.external_forcing.column_inputs.rho, rho, t)
+    evaluate!(ᶜls_subsidence, wap, t)
+    # need space to store rho 
+    ᶜls_subsidence .=
+        ᶜls_subsidence ./ .-(p.external_forcing.column_inputs.rho) ./ FT(CAP.grav(params))
+
+    eddy_vert_fluctuation!(ᶜdTdt_fluc, ᶜT_nudge, ᶜls_subsidence)
+    eddy_vert_fluctuation!(ᶜdqtdt_fluc, ᶜqt_nudge, ᶜls_subsidence)
+
+    @. ᶜinv_τ_wind = 1 / (6 * 3600)
+    # set relaxation profile toward reference state - should find better way than field2array 
+    Fields.field2array(ᶜinv_τ_scalar) .=
+        compute_gcm_driven_scalar_inv_τ.(
+            Fields.field2array(Fields.coordinate_field(ᶜinv_τ_scalar).z)[:]
+        )
+
+    # also update the surface state (just need the temperature) - the 
+    (; ts) = p.external_forcing.surface_timevaryinginputs
+    evaluate!(p.external_forcing.surface_inputs.ts, ts, t)
+end
+
+
+
 NVTX.@annotate function cloud_fraction_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
     (; ᶜts, ᶜgradᵥ_θ_virt, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     if isnothing(p.atmos.turbconv_model)
-        @. ᶜgradᵥ_θ_virt =
-            ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))
-        @. ᶜgradᵥ_q_tot =
-            ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
-        @. ᶜgradᵥ_θ_liq_ice =
-            ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
+        @. ᶜgradᵥ_θ_virt = ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))
+        @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
+        @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
     end
     set_cloud_fraction!(Y, p, p.atmos.moisture_model, p.atmos.cloud_model)
 end
@@ -109,16 +168,12 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     ᶜT = Fields.array2field(rrtmgp_model.center_temperature, axes(Y.c))
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     # TODO: move this to RRTMGP
-    @. ᶜT =
-        min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
+    @. ᶜT = min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
 
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
-        ᶜrh =
-            Fields.array2field(rrtmgp_model.center_relative_humidity, axes(Y.c))
-        ᶜvmr_h2o = Fields.array2field(
-            rrtmgp_model.center_volume_mixing_ratio_h2o,
-            axes(Y.c),
-        )
+        ᶜrh = Fields.array2field(rrtmgp_model.center_relative_humidity, axes(Y.c))
+        ᶜvmr_h2o =
+            Fields.array2field(rrtmgp_model.center_volume_mixing_ratio_h2o, axes(Y.c))
         if radiation_mode.idealized_h2o
             # slowly increase the relative humidity from 0 to 0.6 to account for
             # the fact that we have a very unrealistic initial condition
@@ -131,21 +186,18 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
             # temporarily store ᶜq_tot in ᶜvmr_h2o
             ᶜq_tot = ᶜvmr_h2o
-            @. ᶜq_tot =
-                max_relative_humidity * TD.q_vap_saturation(thermo_params, ᶜts)
+            @. ᶜq_tot = max_relative_humidity * TD.q_vap_saturation(thermo_params, ᶜts)
 
             # filter ᶜq_tot so that it is monotonically decreasing with z
-            for i in 2:Spaces.nlevels(axes(ᶜq_tot))
+            for i = 2:Spaces.nlevels(axes(ᶜq_tot))
                 level = Fields.field_values(Spaces.level(ᶜq_tot, i))
                 prev_level = Fields.field_values(Spaces.level(ᶜq_tot, i - 1))
                 @. level = min(level, prev_level)
             end
 
             # assume that ᶜq_vap = ᶜq_tot when computing ᶜvmr_h2o
-            @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
-                thermo_params,
-                TD.PhasePartition(ᶜq_tot),
-            )
+            @. ᶜvmr_h2o =
+                TD.vol_vapor_mixing_ratio(thermo_params, TD.PhasePartition(ᶜq_tot))
         else
             @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
                 thermo_params,
@@ -189,16 +241,13 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             m_to_um_factor = FT(1e6)
             cloud_liquid_water_content =
                 radiation_mode.cloud isa PrescribedCloudInRadiation ?
-                p.radiation.prescribed_clouds_field.clwc :
-                cloud_diagnostics_tuple.q_liq
+                p.radiation.prescribed_clouds_field.clwc : cloud_diagnostics_tuple.q_liq
             cloud_ice_water_content =
                 radiation_mode.cloud isa PrescribedCloudInRadiation ?
-                p.radiation.prescribed_clouds_field.ciwc :
-                cloud_diagnostics_tuple.q_ice
+                p.radiation.prescribed_clouds_field.ciwc : cloud_diagnostics_tuple.q_ice
             cloud_fraction =
                 radiation_mode.cloud isa PrescribedCloudInRadiation ?
-                p.radiation.prescribed_clouds_field.cc :
-                cloud_diagnostics_tuple.cf
+                p.radiation.prescribed_clouds_field.cc : cloud_diagnostics_tuple.cf
             @. ᶜlwp =
                 kg_to_g_factor * Y.c.ρ * cloud_liquid_water_content * ᶜΔz /
                 max(cloud_fraction, eps(FT))
@@ -253,8 +302,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 (:center_ocpo_column_mass_density, :OC1),
             ]
 
-            for (rrtmgp_aerosol_name, prescribed_aerosol_name) in
-                aerosol_names_pair
+            for (rrtmgp_aerosol_name, prescribed_aerosol_name) in aerosol_names_pair
                 ᶜaero_conc = Fields.array2field(
                     getproperty(rrtmgp_model, rrtmgp_aerosol_name),
                     axes(Y.c),
@@ -273,10 +321,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
         end
         if :o3 in propertynames(p.tracers)
-            ᶜvmr_o3 = Fields.array2field(
-                rrtmgp_model.center_volume_mixing_ratio_o3,
-                axes(Y.c),
-            )
+            ᶜvmr_o3 =
+                Fields.array2field(rrtmgp_model.center_volume_mixing_ratio_o3, axes(Y.c))
             @. ᶜvmr_o3 = p.tracers.o3
         end
         if :co2 in propertynames(p.tracers)
@@ -307,8 +353,22 @@ end
 function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
     (; rrtmgp_model) = p.radiation
     rrtmgp_model.cos_zenith .= Fields.field2array(p.external_forcing.cos_zenith)
-    rrtmgp_model.weighted_irradiance .=
-        Fields.field2array(p.external_forcing.insolation)
+    rrtmgp_model.weighted_irradiance .= Fields.field2array(p.external_forcing.insolation)
+end
+
+function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
+    (; rrtmgp_model) = p.radiation
+    (; coszen, rsdt) = p.external_forcing.surface_inputs
+    coszen_tv = getproperty(p.external_forcing.surface_timevaryinginputs, :coszen)
+    rsdt_tv = getproperty(p.external_forcing.surface_timevaryinginputs, :rsdt)
+
+    evaluate!(coszen, coszen_tv, t)
+    evaluate!(rsdt, rsdt_tv, t)
+
+    # set variables in rrtmgp 
+    # TODO Check arrays have the same 
+    rrtmgp_model.cos_zenith .= Fields.field2array(coszen)
+    rrtmgp_model.weighted_irradiance .= Fields.field2array(rsdt)
 end
 
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
@@ -323,8 +383,7 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     # perpetual equinox with no diurnal cycle
     rrtmgp_model.cos_zenith .= cos(FT(π) / 3)
     weighted_irradiance =
-        @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
-           (4 * cos(FT(π) / 3))
+        @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) / (4 * cos(FT(π) / 3))
     rrtmgp_model.weighted_irradiance .= weighted_irradiance
 end
 
@@ -351,25 +410,16 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
             )
         )
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
-    cos_zenith =
-        Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
-    weighted_irradiance = Fields.array2field(
-        rrtmgp_model.weighted_irradiance,
-        axes(bottom_coords),
-    )
+    cos_zenith = Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
+    weighted_irradiance =
+        Fields.array2field(rrtmgp_model.weighted_irradiance, axes(bottom_coords))
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
-        @. insolation_tuple = instantaneous_zenith_angle(
-            d,
-            δ,
-            η_UTC,
-            bottom_coords.long,
-            bottom_coords.lat,
-        ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
+        @. insolation_tuple =
+            instantaneous_zenith_angle(d, δ, η_UTC, bottom_coords.long, bottom_coords.lat) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
     else
         # assume that the latitude and longitude are both 0 for flat space,
         # so that insolation_tuple is a constant Field
-        insolation_tuple .=
-            Ref(instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0)))
+        insolation_tuple .= Ref(instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0)))
     end
     @. cos_zenith = cos(min(first(insolation_tuple), max_zenith_angle))
     @. weighted_irradiance = irradiance * (au / last(insolation_tuple))^2
@@ -389,11 +439,7 @@ NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     hdfwriter = InputOutput.HDF5Writer(output_file, comms_ctx)
     # TODO: a better way to write metadata
     InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t)
-    InputOutput.HDF5.write_attribute(
-        hdfwriter.file,
-        "atmos_model_hash",
-        hash(p.atmos),
-    )
+    InputOutput.HDF5.write_attribute(hdfwriter.file, "atmos_model_hash", hash(p.atmos))
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)
     return nothing

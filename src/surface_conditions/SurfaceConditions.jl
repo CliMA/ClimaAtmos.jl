@@ -6,6 +6,7 @@ import ..DryModel
 import ..ZonallyAsymmetricSST
 import ..ZonallySymmetricSST
 import ..RCEMIPIISST
+import ..ExternalTVColumnSST
 import ..PrognosticSurfaceTemperature
 import ..PrescribedSurfaceTemperature
 import ..gcm_driven_timeseries
@@ -23,6 +24,7 @@ import Interpolations
 import StaticArrays as SA
 import Statistics: mean
 import NCDatasets as NC
+import Dates
 
 include("surface_state.jl")
 include("surface_conditions.jl")
