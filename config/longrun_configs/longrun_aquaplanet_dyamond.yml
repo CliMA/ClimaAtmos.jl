@@ -8,7 +8,7 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 topography: "Earth"
 start_date: "20160801"
-initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p14deg.nc"
+initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 output_dir: "/glade/derecho/scratch/asridhar/dyamond_clima"
 moist: "equil"
 dt: "40secs"
