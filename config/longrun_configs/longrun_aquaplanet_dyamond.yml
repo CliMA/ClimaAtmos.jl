@@ -2,7 +2,6 @@ h_elem: 60
 z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
-deep_atmosphere: false
 rayleigh_sponge: true
 viscous_sponge: true
 implicit_diffusion: true
@@ -11,7 +10,7 @@ topography: "Earth"
 start_date: "20160801"
 initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 moist: "equil"
-dt: "60secs"
+dt: "40secs"
 t_end: "30days"
 dt_save_state_to_disk: "10days"
 rad: "allskywithclear"
@@ -22,3 +21,11 @@ surface_setup: "DefaultMoninObukhov"
 vert_diff: "DecayWithHeightDiffusion"
 precip_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]
+netcdf_interpolation_num_points:  [720, 360, 63]
+diagnostics:
+ - short_name: [pfull, ps, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
+   reduction: inst
+   period: 10days
+ - short_name: [pfull, ps, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
+   reduction: average
+   period: 30days
