@@ -214,6 +214,17 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "amip_target_diagedmf"
 
+      - label: ":computer: amip target edonly edmf"
+        command:
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+        artifact_paths: "$$JOB_NAME/output_active/*"
+        agents:
+          slurm_gpus: 1
+          slurm_time: 24:00:00
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          JOB_NAME: "amip_target_edonly"
+
   # - group: "Experimental long runs"
 
   #   steps:

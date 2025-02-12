@@ -1,0 +1,32 @@
+h_elem: 16
+z_max: 60000.0
+z_elem: 63
+dz_bottom: 30.0
+deep_atmosphere: false
+rayleigh_sponge: true
+viscous_sponge: true
+dt_save_to_sol: "10days"
+dt_save_state_to_disk: "20days"
+moist: "equil"
+cloud_model: "quadrature_sgs"
+precip_model: "0M"
+rad: "allskywithclear"
+dt_rad: "1hours"
+dt_cloud_fraction: "1hours"
+insolation: "timevarying"
+co2_model: maunaloa
+prescribe_ozone: true
+aerosol_radiation: true
+prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05", "OC1", "OC2", "SO4", "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
+surface_setup: "DefaultMoninObukhov"
+turbconv: "edonly_edmfx"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+dt: "120secs"
+t_end: "120days"
+toml: [toml/longrun_aquaplanet_edonly.toml]
+netcdf_output_at_levels: true
+diagnostics:
+  - short_name: [mmrso4, mmrdust, mmrss, o3]
+    reduction_time: average
+    period: "1months"
