@@ -6,3 +6,6 @@ value = 40000.0
 
 [precipitation_timescale]
 value = 400
+
+[liquid_cloud_effective_radius]
+value = 12e-6

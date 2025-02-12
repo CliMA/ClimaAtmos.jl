@@ -1,6 +1,7 @@
 import ClimaCore.DataLayouts as DL
 import .RRTMGPInterface as RRTMGPI
 import Thermodynamics as TD
+import CloudMicrophysics as CM
 import LinearAlgebra
 import ClimaCore.Fields
 import ClimaComms
@@ -14,6 +15,7 @@ using Insolation: instantaneous_zenith_angle
 import ClimaCore.Fields: ColumnField
 
 import ClimaUtilities.TimeVaryingInputs: evaluate!
+
 
 include("callback_helpers.jl")
 
@@ -95,6 +97,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     FT = Spaces.undertype(axes(Y.c))
     thermo_params = CAP.thermodynamics_params(params)
+    cmc = CAP.microphysics_cloud_params(params)
     T_min = CAP.optics_lookup_temperature_min(params)
     T_max = CAP.optics_lookup_temperature_max(params)
 
@@ -183,6 +186,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             )
             # RRTMGP needs lwp and iwp in g/m^2
             kg_to_g_factor = 1000
+            m_to_um_factor = FT(1e6)
             cloud_liquid_water_content =
                 radiation_mode.cloud isa PrescribedCloudInRadiation ?
                 p.radiation.prescribed_clouds_field.clwc :
@@ -203,8 +207,18 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 max(cloud_fraction, eps(FT))
             @. ᶜfrac = cloud_fraction
             # RRTMGP needs effective radius in microns
-            @. ᶜreliq = FT(12)
-            @. ᶜreice = FT(25)
+            @. ᶜreliq = ifelse(
+                cloud_liquid_water_content > FT(0),
+                CM.CloudDiagnostics.effective_radius_const(cmc.liquid) *
+                m_to_um_factor,
+                FT(0),
+            )
+            @. ᶜreice = ifelse(
+                cloud_ice_water_content > FT(0),
+                CM.CloudDiagnostics.effective_radius_const(cmc.ice) *
+                m_to_um_factor,
+                FT(0),
+            )
         end
     end
 

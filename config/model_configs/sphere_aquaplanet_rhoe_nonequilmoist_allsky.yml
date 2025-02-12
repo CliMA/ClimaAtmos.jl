@@ -15,3 +15,6 @@ insolation: "timevarying"
 rayleigh_sponge: true
 surface_setup: "DefaultMoninObukhov"
 toml: [toml/sphere_aquaplanet_1M.toml]
+diagnostics:
+  - short_name: [reffclw, reffcli]
+    period: 1hours
