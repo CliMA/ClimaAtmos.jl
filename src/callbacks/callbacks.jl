@@ -151,7 +151,12 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 thermo_params,
                 TD.PhasePartition(thermo_params, ᶜts),
             )
-            @. ᶜrh = min(max(TD.relative_humidity(thermo_params, ᶜts), 0), 1)
+
+            if radiation_mode.cloud isa PrescribedCloudInRadiation
+                @. ᶜrh = p.radiation.prescribed_clouds_field.r
+            else
+                @. ᶜrh = min(max(TD.relative_humidity(thermo_params, ᶜts), 0), 1)
+            end
         end
     end
 
