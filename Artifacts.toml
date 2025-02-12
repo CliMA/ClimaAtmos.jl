@@ -48,10 +48,10 @@ git-tree-sha1 = "9c3bd05b68e820fceb43d130ce6b4e86ce788e4e"
     url = "https://caltech.box.com/shared/static/fuwajscgyblccy8y9aq01d0pgy91gwut.gz"
 
 [era5_cloud_lowres]
-git-tree-sha1 = "b42adb958f0b2ba34194e5f5440753be5bb4dc34"
+git-tree-sha1 = "258a2626b6008bf2f926b2711f8cb5273edc3916"
 
     [[era5_cloud_lowres.download]]
-    sha256 = "469d656f94f6e168c559399f9941e09cd16bc47d6fea3de44b511842ba7137b1"
+    sha256 = "c1d29e996fcdc0c263f8b54ca1ddd858c46326fc4cfc3ab3dc71e5e598322de8"
     url = "https://caltech.box.com/shared/static/lr9k1s2pgeqzli8goxq9y2liiy3u6kni.gz"
 
 [topo_drag]
