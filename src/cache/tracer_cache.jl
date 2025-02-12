@@ -82,7 +82,8 @@ function tracer_cache(Y, atmos, prescribed_aerosol_names, start_date)
                 reference_date = start_date,
                 regridder_type = :InterpolationsRegridder,
                 regridder_kwargs = (; extrapolation_bc),
-                method = LinearInterpolation(),
+                #method = LinearInterpolation(),
+                method = LinearInterpolation(PeriodicCalendar(Year(1), Date(2010))),
             ) for name in prescribed_aerosol_names
         ]
 
