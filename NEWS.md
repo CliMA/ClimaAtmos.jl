@@ -1,8 +1,9 @@
 ClimaAtmos.jl Release Notes
 ============================
 
-Main
+v0.28.5
 -------
+
 ### Features
 
 ### Update default configuration to use deep-atmosphere eqns, fix diagnostic bug
@@ -22,7 +23,6 @@ PR [3555](https://github.com/CliMA/ClimaAtmos.jl/pull/3555)
 
 The option `FriersonDiffusion` is removed from `vert_diff` config. Use `DecayWithHeightDiffusion` instead.
 PR [3592](https://github.com/CliMA/ClimaAtmos.jl/pull/3592)
-
 
 v0.28.4
 -------
