@@ -21,8 +21,7 @@ dt_save_state_to_disk: 12hours
 toml: [toml/longrun_aquaplanet.toml]
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-turbconv: "edonly_edmfx"
-edmfx_sgs_diffusive_flux: true
+vert_diff: DecayWithHeightDiffusion
 netcdf_interpolation_num_points:  [360, 180, 63]
 diagnostics:
  - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr, lwp, cl]
