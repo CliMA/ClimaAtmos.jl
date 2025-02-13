@@ -24,9 +24,9 @@ dt_save_state_to_disk: 6hours
 toml: [toml/longrun_aquaplanet.toml]
 netcdf_interpolation_num_points:  [720, 360, 63]
 diagnostics:
- - short_name: [pfull, ps, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
+ - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
    reduction: inst
    period: 3hours
- - short_name: [pfull, ps, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
+ - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
    reduction: average
    period: 30days
