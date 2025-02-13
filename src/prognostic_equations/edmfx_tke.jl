@@ -9,6 +9,10 @@ function edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model::EDOnlyEDMFX)
     (; ᶜK_u, ᶜK_h) = p.precomputed
 
     # shear production
+    if t < eltype(t)(3600.0)
+	ᶜK_u .= ᶜstrain_rate_norm ./ ᶜstrain_rate_norm .* eltype(ᶜstrain_rate_norm)(5)
+	ᶜK_h .= ᶜstrain_rate_norm ./ ᶜstrain_rate_norm .* eltype(ᶜstrain_rate_norm)(5)
+    end
     @. Yₜ.c.sgs⁰.ρatke += 2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate_norm
     # buoyancy production
     @. Yₜ.c.sgs⁰.ρatke -= Y.c.ρ * ᶜK_h * ᶜlinear_buoygrad
