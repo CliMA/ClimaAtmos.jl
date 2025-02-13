@@ -18,14 +18,15 @@ insolation: "timevarying"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
-vert_diff: "DecayWithHeightDiffusion"
 precip_model: "0M"
+turbconv: "edonly_edmfx"
+edmfx_sgs_diffusive_flux: true
 toml: [toml/longrun_aquaplanet.toml]
 netcdf_interpolation_num_points:  [720, 360, 63]
 diagnostics:
- - short_name: [pfull, ps, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
+ - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
    reduction: inst
    period: 10days
- - short_name: [pfull, ps, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
+ - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
    reduction: average
    period: 30days
