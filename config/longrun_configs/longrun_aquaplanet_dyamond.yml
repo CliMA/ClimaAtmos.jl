@@ -26,7 +26,7 @@ netcdf_interpolation_num_points:  [720, 360, 63]
 diagnostics:
  - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
    reduction: inst
-   period: 3hours
+   period: 2days
  - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
    reduction: average
    period: 30days
