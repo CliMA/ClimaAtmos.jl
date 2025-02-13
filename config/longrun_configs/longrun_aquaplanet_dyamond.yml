@@ -10,8 +10,8 @@ topography: "Earth"
 start_date: "20160801"
 initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 moist: "equil"
-dt: "30secs"
-t_end: "30days"
+dt: "20secs"
+t_end: "40days"
 dt_save_state_to_disk: "10days"
 rad: "allskywithclear"
 insolation: "timevarying"
@@ -23,6 +23,8 @@ precip_model: "0M"
 dt_save_state_to_disk: 6hours
 toml: [toml/longrun_aquaplanet.toml]
 netcdf_interpolation_num_points:  [720, 360, 63]
+prescribe_ozone: true
+aerosol_radiation: true
 diagnostics:
  - short_name: [pfull, ps, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
    reduction: inst

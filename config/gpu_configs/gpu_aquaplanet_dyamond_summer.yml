@@ -1,6 +1,6 @@
 dt_save_state_to_disk: "Inf"
 dt_save_to_sol: "Inf"
-h_elem: 16
+h_elem: 60
 z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
@@ -16,7 +16,7 @@ vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 surface_setup: "DefaultMoninObukhov"
-dt: "60secs"
+dt: "20secs"
 t_end: "1hours"
 toml: [toml/longrun_aquaplanet.toml]
 prescribe_ozone: true
