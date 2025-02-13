@@ -950,6 +950,7 @@ function make_plots(
 end
 
 AquaplanetPlots = Union{
+    Val{:edonly_edmfx_aquaplanet},
     Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
     Val{:sphere_aquaplanet_rhoe_nonequilmoist_allsky},
     Val{:rcemipii_sphere_diagnostic_edmfx},

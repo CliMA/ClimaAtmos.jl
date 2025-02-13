@@ -914,8 +914,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     (; ᶜp, ᶜu, ᶜts) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
-    (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs) = p.precomputed
-    (; ᶜtke⁰, ᶠu³⁰, ᶜu⁰) = p.precomputed
+    (; ᶜtke⁰) = p.precomputed
     (;
         ᶜlinear_buoygrad,
         ᶜstrain_rate_norm,
@@ -926,7 +925,13 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
-    @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
+    if p.atmos.turbconv_model isa DiagnosticEDMFX
+        (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs, ᶠu³⁰, ᶜu⁰) = p.precomputed
+    elseif p.atmos.turbconv_model isa EDOnlyEDMFX
+        ᶠu³⁰ = p.precomputed.ᶠu³
+        ᶜu⁰ = ᶜu
+    end
+    @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))  # Set here, but used in a different function
 
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
