@@ -47,43 +47,9 @@ function edmfx_precipitation_tendency!(
 )
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
-
-    ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
-
-    thp = CAP.thermodynamics_params(p.params)
-    cmp = CAP.microphysics_1m_params(params)
+    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs) = p.precomputed
 
     for j in 1:n
-        compute_precipitation_sources!(
-            ᶜSᵖ, # TODO - is it ok to use the normal scalar for edmf column scratch space?
-            ᶜSᵖ_snow,
-            ᶜSqₗᵖʲs.:($$j),
-            ᶜSqᵢᵖʲs.:($$j),
-            ᶜSqᵣᵖʲs.:($$j),
-            ᶜSqₛᵖʲs.:($$j),
-            ᶜρʲs.:($$j),
-            Y.c.sgsʲs.:($$j).q_rai,
-            Y.c.sgsʲs.:($$j).q_sno,
-            ᶜts.:($$j),
-            dt,
-            cmp,
-            thp,
-        )
-        compute_precipitation_sinks!(
-            ᶜSᵖ,
-            ᶜSqᵣᵖʲs.:($$j),
-            ᶜSqₛᵖʲs.:($$j),
-            ᶜρʲs.:($$j),
-            Y.c.sgsʲs.:($$j).q_rai,
-            Y.c.sgsʲs.:($$j).q_sno,
-            ᶜts.:($$j),
-            dt,
-            cmp,
-            thp,
-        )
-
         # TODO - double check if we don't need the (1-Sq)
         # bec of the working fluid update
         @. Yₜ.c.sgsʲs.:($$j).q_liq += ᶜSqₗᵖʲs.:($$j)
