@@ -91,7 +91,16 @@ function set_dummy_surface_conditions!(p)
             FT(300),
             TD.PhasePartition(FT(0)),
         )
+    end
+    if atmos.moisture_model isa EquilMoistModel
         @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
+    elseif atmos.moisture_model isa NonEquilMoistModel
+        @. sfc_conditions.ρ_flux_q_liq = C3(FT(0))
+        @. sfc_conditions.ρ_flux_q_ice = C3(FT(0))
+    end
+    if atmos.precip_model isa Microphysics1M
+        @. sfc_conditions.ρ_flux_q_rai = C3(FT(0))
+        @. sfc_conditions.ρ_flux_q_sno = C3(FT(0))
     end
     @. sfc_conditions.ρ_flux_h_tot = C3(FT(0))
 
@@ -129,6 +138,7 @@ function set_surface_conditions!(p, surface_conditions, surface_ts)
         surface_conditions,
         surface_ts,
         sfc_local_geometry,
+        atmos,
     )
 end
 
@@ -337,6 +347,7 @@ function surface_state_to_conditions(
         SF.surface_conditions(surface_fluxes_params, inputs),
         ts,
         surface_local_geometry,
+        atmos,
     )
 end
 
@@ -415,7 +426,8 @@ end
     atmos_surface_conditions(
         surface_conditions,
         ts,
-        surface_local_geometry
+        surface_local_geometry,
+        atmos,
     )
 
 Adds local geometry information to the `SurfaceFluxes.SurfaceFluxConditions` struct
@@ -426,6 +438,7 @@ function atmos_surface_conditions(
     surface_conditions,
     ts,
     surface_local_geometry,
+    atmos,
 )
     (; ustar, L_MO, buoy_flux, ρτxz, ρτyz, shf, lhf, evaporation) =
         surface_conditions
@@ -435,8 +448,19 @@ function atmos_surface_conditions(
 
     energy_flux = (; ρ_flux_h_tot = vector_from_component(shf + lhf, z))
 
-    # NOTE: Technically, ρ_flux_q_tot is not needed when the model is Dry ...
-    moisture_flux = (; ρ_flux_q_tot = vector_from_component(evaporation, z))
+    if atmos.moisture_model isa DryModel
+        moisture_flux = (;)
+    elseif atmos.moisture_model isa EquilMoistModel
+        moisture_flux = (; ρ_flux_q_tot = vector_from_component(evaporation, z))
+    elseif atmos.moisture_model isa NonEquilMoistModel && atmos.precip_model isa Microphysics1M
+        moisture_flux = (;
+            ρ_flux_q_tot = vector_from_component(evaporation, z),
+            ρ_flux_q_liq = vector_from_component(0, z), # TODO - is it ok to put zeros here?
+            ρ_flux_q_ice = vector_from_component(0, z), # Or should this be computed based on atmos state?
+            ρ_flux_q_rai = vector_from_component(0, z),
+            ρ_flux_q_sno = vector_from_component(0, z),
+        )
+    end
 
     return (;
         ts,
@@ -477,7 +501,13 @@ function surface_conditions_type(atmos, ::Type{FT}) where {FT}
     energy_flux_names = (:ρ_flux_h_tot,)
     # NOTE: Technically ρ_flux_q_tot is not really needed for a dry model, but
     # SF always has evaporation
-    moisture_flux_names = (:ρ_flux_q_tot,)
+    cloud_condensate_flux_names = atmos.moisture_model isa NonEquilMoistModel ? (:ρ_flux_q_liq, :ρ_flux_q_ice) : (;)
+    precipitation_flux_names = atmos.precip_model isa Microphysics1M ? (:ρ_flux_q_rai, :ρ_flux_q_sno) : (;)
+    moisture_flux_names = (
+        :ρ_flux_q_tot,
+        cloud_condensate_flux_names...,
+        precipitation_flux_names...,
+    )
     names = (
         :ts,
         :ustar,

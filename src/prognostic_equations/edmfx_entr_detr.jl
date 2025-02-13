@@ -360,7 +360,6 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     (; ᶜq_tot⁰, ᶜmse⁰, ᶠu₃⁰) = p.precomputed
 
     for j in 1:n
-
         @. Yₜ.c.sgsʲs.:($$j).ρa +=
             Y.c.sgsʲs.:($$j).ρa * (ᶜentrʲs.:($$j) - ᶜdetrʲs.:($$j))
 
@@ -375,6 +374,30 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         @. Yₜ.f.sgsʲs.:($$j).u₃ +=
             (ᶠinterp(ᶜentrʲs.:($$j)) .+ ᶠinterp(ᶜturb_entrʲs.:($$j))) *
             (ᶠu₃⁰ - Y.f.sgsʲs.:($$j).u₃)
+    end
+
+    if p.atmos.moist_model isa NonEquilMoistModel
+        for j in 1:n
+            @. Yₜ.c.sgsʲs.:($$j).q_liq +=
+                (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
+                (ᶜq_liq⁰ - Y.c.sgsʲs.:($$j).q_liq)
+
+            @. Yₜ.c.sgsʲs.:($$j).q_ice +=
+                (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
+                (ᶜq_ice⁰ - Y.c.sgsʲs.:($$j).q_ice)
+        end
+    end
+
+    if p.atmos.precip_model isa Microphysics1M
+        for j in 1:n
+            @. Yₜ.c.sgsʲs.:($$j).q_rai +=
+                (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
+                (ᶜq_rai⁰ - Y.c.sgsʲs.:($$j).q_rai)
+
+            @. Yₜ.c.sgsʲs.:($$j).q_sno +=
+                (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
+                (ᶜq_sno⁰ - Y.c.sgsʲs.:($$j).q_sno)
+        end
     end
     return nothing
 end
