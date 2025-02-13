@@ -18,7 +18,6 @@ insolation: "timevarying"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
-vert_diff: "DecayWithHeightDiffusion"
 precip_model: "0M"
 dt_save_state_to_disk: 6hours
 toml: [toml/longrun_aquaplanet.toml]
