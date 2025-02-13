@@ -533,6 +533,30 @@ steps:
         agents:
           slurm_mem: 20GB
 
+  - group: "EDOnlyEDMFX"
+    steps:
+
+      - label: ":man_in_business_suit_levitating: EDOnlyEDMFX test on a sphere"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/edonly_edmfx_aquaplanet.yml
+          --job_id edonly_edmfx_aquaplanet
+        artifact_paths: "edonly_edmfx_aquaplanet/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":man_in_business_suit_levitating: EDOnlyEDMFX test on a sphere GPU"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/edonly_edmfx_aquaplanet.yml
+          --job_id edonly_edmfx_aquaplanet_gpu
+        artifact_paths: "edonly_edmfx_aquaplanet_gpu/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_mem: 20GB
+          slurm_gpus: 1
+
   - group: "Diagnostic EDMFX"
     steps:
 

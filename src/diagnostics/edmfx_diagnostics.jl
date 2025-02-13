@@ -893,7 +893,7 @@ function compute_tke!(
     state,
     cache,
     time,
-    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
         return copy(cache.precomputed.ᶜtke⁰)
