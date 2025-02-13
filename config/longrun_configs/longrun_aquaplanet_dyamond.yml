@@ -17,16 +17,16 @@ dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
 precip_model: "0M"
-dt_save_state_to_disk: 6hours
+dt_save_state_to_disk: 12hours
 toml: [toml/longrun_aquaplanet.toml]
-vert_diff: DecayWithHeightDiffusion
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-#turbconv: "edonly_edmfx"
-#edmfx_sgs_diffusive_flux: true
+#vert_diff: DecayWithHeightDiffusion
+turbconv: "edonly_edmfx"
+edmfx_sgs_diffusive_flux: true
 netcdf_interpolation_num_points:  [360, 180, 63]
 diagnostics:
- - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
+ - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr, lwp, cl]
    reduction: inst
    period: 3hours
  - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
