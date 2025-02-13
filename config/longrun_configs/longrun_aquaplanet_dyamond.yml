@@ -1,5 +1,5 @@
 h_elem: 60
-z_max: 60000.0
+z_max: 45000.0
 z_elem: 63
 dz_bottom: 30.0
 rayleigh_sponge: true
