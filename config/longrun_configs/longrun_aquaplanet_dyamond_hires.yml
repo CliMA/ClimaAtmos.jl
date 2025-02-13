@@ -1,4 +1,4 @@
-h_elem: 60
+h_elem: 240
 z_max: 45000.0
 z_elem: 63
 dz_bottom: 30.0
@@ -8,7 +8,7 @@ topography: "Earth"
 start_date: "20160801"
 initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 moist: "equil"
-dt: "20secs"
+dt: "6secs"
 t_end: "40days"
 dt_save_state_to_disk: "10days"
 rad: "allskywithclear"
@@ -22,11 +22,9 @@ toml: [toml/longrun_aquaplanet.toml]
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 vert_diff: DecayWithHeightDiffusion
+output_default_diagnostics: false
 netcdf_interpolation_num_points:  [360, 180, 63]
 diagnostics:
- - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr, lwp, cl]
+ - short_name: [clwvi, ua, va, ta, ts, wa, hus, clw, cli, pr, lwp, cl]
    reduction: inst
-   period: 3hours
- - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
-   reduction: average
-   period: 30days
+   period: 1days
