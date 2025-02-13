@@ -1,0 +1,32 @@
+h_elem: 60
+z_max: 45000.0
+z_elem: 63
+dz_bottom: 30.0
+rayleigh_sponge: true
+viscous_sponge: true
+topography: "Earth"
+start_date: "20160801"
+initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
+moist: "equil"
+dt: "20secs"
+t_end: "40days"
+dt_save_state_to_disk: "10days"
+rad: "allskywithclear"
+insolation: "timevarying"
+dt_rad: "1hours"
+dt_cloud_fraction: "1hours"
+surface_setup: "DefaultMoninObukhov"
+precip_model: "0M"
+dt_save_state_to_disk: 12hours
+toml: [toml/longrun_aquaplanet.toml]
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+vert_diff: DecayWithHeightDiffusion
+netcdf_interpolation_num_points:  [360, 180, 63]
+diagnostics:
+ - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr, lwp, cl]
+   reduction: inst
+   period: 3hours
+ - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
+   reduction: average
+   period: 30days
