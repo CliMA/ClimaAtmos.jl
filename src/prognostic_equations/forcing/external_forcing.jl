@@ -46,7 +46,11 @@ external_forcing_cache(Y, atmos::AtmosModel, params) =
     external_forcing_cache(Y, atmos.external_forcing, params)
 
 external_forcing_cache(Y, external_forcing::Nothing, params) = (;)
-function external_forcing_cache(Y, external_forcing::GCMForcing, params)
+function external_forcing_cache(
+    Y,
+    external_forcing::Union{GCMForcing, ERA5Forcing},
+    params,
+)
     FT = Spaces.undertype(axes(Y.c))
     ᶜdTdt_fluc = similar(Y.c, FT)
     ᶜdqtdt_fluc = similar(Y.c, FT)
@@ -64,14 +68,35 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
     cos_zenith = similar(Fields.level(Y.c.ρ, 1), FT)
 
     (; external_forcing_file, cfsite_number) = external_forcing
-
     NC.Dataset(external_forcing_file, "r") do ds
 
-        function setvar!(cc_field, varname, colidx, zc_gcm, zc_forcing)
+        function setvar!(
+            cc_field,
+            varname,
+            colidx,
+            zc_model,
+            zc_forcing,
+            ::GCMForcing,
+        )
             parent(cc_field[colidx]) .= interp_vertical_prof(
-                zc_gcm,
+                zc_model,
                 zc_forcing,
                 gcm_driven_profile_tmean(ds.group[cfsite_number], varname),
+            )
+        end
+
+        function setvar!(
+            cc_field,
+            varname,
+            colidx,
+            zc_model,
+            zc_forcing,
+            ::ERA5Forcing,
+        )
+            parent(cc_field[colidx]) .= interp_vertical_prof(
+                zc_model,
+                zc_forcing,
+                era5_driven_profile_tmean(ds.group[cfsite_number], varname),
             )
         end
 
@@ -82,12 +107,31 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
             zc_gcm,
             zc_forcing,
             params,
+            ::GCMForcing,
         )
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_forcing,
                 gcm_driven_profile_tmean(ds.group[cfsite_number], varname) .* .-(
                     gcm_driven_profile_tmean(ds.group[cfsite_number], "alpha"),
+                ) ./ CAP.grav(params),
+            )
+        end
+
+        function setvar_subsidence!(
+            cc_field,
+            varname,
+            colidx,
+            zc_gcm,
+            zc_forcing,
+            params,
+            ::ERA5Forcing,
+        )
+            parent(cc_field[colidx]) .= interp_vertical_prof(
+                zc_gcm,
+                zc_forcing,
+                era5_driven_profile_tmean(ds.group[cfsite_number], varname) ./ .-(
+                    era5_driven_profile_tmean(ds.group[cfsite_number], "rho"),
                 ) ./ CAP.grav(params),
             )
         end
@@ -103,32 +147,102 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
             parent(cc_field) .= ds.group[cfsite_number]["coszen"][1]
         end
 
-        zc_forcing = gcm_height(ds.group[cfsite_number])
+        zc_forcing = nothing
+        if external_forcing isa GCMForcing
+            zc_forcing = gcm_height(ds.group[cfsite_number])
+        elseif external_forcing isa ERA5Forcing
+            zc_forcing = era5_height(ds.group[cfsite_number])
+        else
+            throw(
+                ArgumentError(
+                    "Unknown external forcing type. Options are GCMForcing or ERA5Forcing.",
+                ),
+            )
+        end
+
+        @info "zc_forcing" zc_forcing
         Fields.bycolumn(axes(Y.c)) do colidx
 
-            zc_gcm = Fields.coordinate_field(Y.c).z[colidx]
+            zc_model = Fields.coordinate_field(Y.c).z[colidx]
 
-            setvar!(ᶜdTdt_hadv, "tntha", colidx, zc_gcm, zc_forcing)
-            setvar!(ᶜdqtdt_hadv, "tnhusha", colidx, zc_gcm, zc_forcing)
-            setvar!(ᶜdTdt_rad, "tntr", colidx, zc_gcm, zc_forcing)
+            setvar!(
+                ᶜdTdt_hadv,
+                "tntha",
+                colidx,
+                zc_model,
+                zc_forcing,
+                external_forcing,
+            )
+            setvar!(
+                ᶜdqtdt_hadv,
+                "tnhusha",
+                colidx,
+                zc_model,
+                zc_forcing,
+                external_forcing,
+            )
+            #setvar!(ᶜdTdt_rad, "tntr", colidx, zc_model, zc_forcing, external_forcing) # don't need to set this when using RRTMGP
             setvar_subsidence!(
                 ᶜls_subsidence,
                 "wap",
                 colidx,
-                zc_gcm,
+                zc_model,
                 zc_forcing,
                 params,
+                external_forcing,
             )
             # GCM states, used for nudging + vertical eddy advection
-            setvar!(ᶜT_nudge, "ta", colidx, zc_gcm, zc_forcing)
-            setvar!(ᶜqt_nudge, "hus", colidx, zc_gcm, zc_forcing)
-            setvar!(ᶜu_nudge, "ua", colidx, zc_gcm, zc_forcing)
-            setvar!(ᶜv_nudge, "va", colidx, zc_gcm, zc_forcing)
+            setvar!(
+                ᶜT_nudge,
+                "ta",
+                colidx,
+                zc_model,
+                zc_forcing,
+                external_forcing,
+            )
+            setvar!(
+                ᶜqt_nudge,
+                "hus",
+                colidx,
+                zc_model,
+                zc_forcing,
+                external_forcing,
+            )
+            setvar!(
+                ᶜu_nudge,
+                "ua",
+                colidx,
+                zc_model,
+                zc_forcing,
+                external_forcing,
+            )
+            setvar!(
+                ᶜv_nudge,
+                "va",
+                colidx,
+                zc_model,
+                zc_forcing,
+                external_forcing,
+            )
 
             # vertical eddy advection (Shen et al., 2022; eqn. 9,10)
             # sum of two terms to give total tendency. First term:
-            setvar!(ᶜdTdt_fluc, "tntva", colidx, zc_gcm, zc_forcing)
-            setvar!(ᶜdqtdt_fluc, "tnhusva", colidx, zc_gcm, zc_forcing)
+            setvar!(
+                ᶜdTdt_fluc,
+                "tntva",
+                colidx,
+                zc_model,
+                zc_forcing,
+                external_forcing,
+            )
+            setvar!(
+                ᶜdqtdt_fluc,
+                "tnhusva",
+                colidx,
+                zc_model,
+                zc_forcing,
+                external_forcing,
+            )
             # second term:
             eddy_vert_fluctuation!(ᶜdTdt_fluc, ᶜT_nudge, ᶜls_subsidence)
             eddy_vert_fluctuation!(ᶜdqtdt_fluc, ᶜqt_nudge, ᶜls_subsidence)
@@ -137,7 +251,7 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
             set_cos_zenith!(cos_zenith)
 
             @. ᶜinv_τ_wind[colidx] = 1 / (6 * 3600)
-            @. ᶜinv_τ_scalar[colidx] = compute_gcm_driven_scalar_inv_τ(zc_gcm)
+            @. ᶜinv_τ_scalar[colidx] = compute_gcm_driven_scalar_inv_τ(zc_model)
         end
     end
 
@@ -160,7 +274,13 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
 end
 
 external_forcing_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
+function external_forcing_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::Union{GCMForcing, ERA5Forcing},
+)
     # horizontal advection, vertical fluctuation, nudging, subsidence (need to add),
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
