@@ -48,8 +48,7 @@ sort_files_by_time(files) =
     permute!(files, sortperm(time_from_filename.(files)))
 
 """
-    bc_kinetic = compute_kinetic(uₕ::Field, uᵥ::Field)
-    @. κ = bc_kinetic
+    κ .= compute_kinetic(uₕ::Field, uᵥ::Field)
 
 Compute the specific kinetic energy at cell centers, resulting in `κ` from
 individual velocity components:
@@ -80,8 +79,7 @@ state.
 compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 
 """
-    bc_ϵ = compute_strain_rate_center(u::Field)
-    @. ϵ = bc_ϵ
+    ϵ .= compute_strain_rate_center(u::Field)
 
 Compute the strain_rate at cell centers from velocity at cell faces.
 """
@@ -97,8 +95,7 @@ function compute_strain_rate_center(u::Fields.Field)
 end
 
 """
-    bc_ϵ = compute_strain_rate_face(u::Field)
-    @. ϵ = bc_ϵ
+    ϵ .= compute_strain_rate_face(u::Field)
 
 Compute the strain_rate at cell faces from velocity at cell centers.
 """
