@@ -14,7 +14,7 @@
 # Consider for example
 # ```julia
 #     function make_plots(
-#         ::Val{:box_hydrostatic_balance_rhoe},
+#         ::Val{:box_hydrostatic_balance},
 #         output_paths::Vector{<:AbstractString},
 #     )
 #         simdirs = SimDir.(output_paths)
@@ -494,7 +494,7 @@ function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
 end
 
 function make_plots(
-    ::Val{:box_hydrostatic_balance_rhoe},
+    ::Val{:box_hydrostatic_balance},
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -627,7 +627,7 @@ function make_plots(
 end
 
 function make_plots(
-    ::Val{:sphere_hydrostatic_balance_rhoe_ft64},
+    ::Val{:hydrostatic_balance_ft64},
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -644,8 +644,8 @@ function make_plots(
 end
 
 DryBaroWavePlots = Union{
-    Val{:sphere_baroclinic_wave_rhoe},
-    Val{:sphere_baroclinic_wave_rhoe_deepatmos},
+    Val{:baroclinic_wave},
+    Val{:baroclinic_wave_deepatmos},
     Val{:longrun_dry_baroclinic_wave},
     Val{:longrun_dry_baroclinic_wave_he60},
 }
@@ -678,8 +678,8 @@ function make_plots(::DryBaroWavePlots, output_paths::Vector{<:AbstractString})
 end
 
 SphereOrographyPlots = Union{
-    Val{:sphere_baroclinic_wave_rhoe_topography_dcmip_rs},
-    Val{:sphere_baroclinic_wave_rhoe_hughes2023},
+    Val{:baroclinic_wave_topography_dcmip_rs},
+    Val{:baroclinic_wave_hughes2023},
 }
 
 function make_plots(
@@ -694,10 +694,8 @@ function make_plots(
     make_plots_generic(output_paths, vars, z_reference = 1500, time = LAST_SNAP)
 end
 
-MoistBaroWavePlots = Union{
-    Val{:sphere_baroclinic_wave_rhoe_equilmoist},
-    Val{:sphere_baroclinic_wave_rhoe_equilmoist_deepatmos},
-}
+MoistBaroWavePlots =
+    Union{Val{:baroclinic_wave_equil}, Val{:baroclinic_wave_equil_deepatmos}}
 
 function make_plots(
     ::MoistBaroWavePlots,
@@ -769,8 +767,8 @@ function make_plots(
 end
 
 DryHeldSuarezPlots = Union{
-    Val{:sphere_held_suarez_rhoe_hightop},
-    Val{:longrun_sphere_hydrostatic_balance_rhoe},
+    Val{:held_suarez},
+    Val{:longrun_hydrostatic_balance},
     Val{:longrun_dry_held_suarez},
 }
 
@@ -793,7 +791,7 @@ function make_plots(
 end
 
 MoistHeldSuarezPlots = Union{
-    Val{:sphere_held_suarez_rhoe_equilmoist_hightop_sponge},
+    Val{:held_suarez_equil},
     Val{:longrun_moist_held_suarez},
     Val{:longrun_moist_held_suarez_deepatmos},
 }
@@ -828,7 +826,7 @@ end
 
 function make_plots(
     ::Union{
-        Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric},
+        Val{:aquaplanet_equil_allsky_gw_raw_zonalasym},
         Val{:gpu_aquaplanet_dyamond_summer},
     },
     output_paths::Vector{<:AbstractString},
@@ -951,8 +949,8 @@ end
 
 AquaplanetPlots = Union{
     Val{:edonly_edmfx_aquaplanet},
-    Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
-    Val{:sphere_aquaplanet_rhoe_nonequilmoist_allsky},
+    Val{:mpi_sphere_aquaplanet_rhoe_equil_clearsky},
+    Val{:aquaplanet_nonequil_allsky_gw_res},
     Val{:rcemipii_sphere_diagnostic_edmfx},
     Val{:longrun_aquaplanet_allsky_0M},
     Val{:longrun_aquaplanet_allsky_diagedmf_0M},
@@ -1017,7 +1015,7 @@ function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
 end
 
 Aquaplanet1MPlots = Union{
-    Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
+    Val{:sphere_aquaplanet_rhoe_equil_allsky_gw_res},
     Val{:longrun_aquaplanet_allsky_1M},
 }
 

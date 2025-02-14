@@ -3,7 +3,7 @@
 Here is a brief description of the buildkite longrun jobs.
 
 ```
-longrun_sphere_hydrostatic_balance_rhoe
+longrun_hydrostatic_balance
 
 Solid body rotation. Test if the dry dycore can maintain the no flow steady state.
 ```
