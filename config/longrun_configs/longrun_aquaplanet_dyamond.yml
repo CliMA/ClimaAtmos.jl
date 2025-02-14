@@ -22,7 +22,7 @@ toml: [toml/longrun_aquaplanet.toml]
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 vert_diff: DecayWithHeightDiffusion
-netcdf_interpolation_num_points:  [360, 180, 63]
+netcdf_interpolation_num_points:  [1440, 720, 63]
 diagnostics:
  - short_name: [clwvi, ua, va, ta, ts, wa, rv, hus, clw, cli, pr, lwp, cl]
    reduction: inst
