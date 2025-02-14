@@ -262,6 +262,8 @@ function radiation_model_cache(
                 else
                     kwargs = (;
                         kwargs...,
+                        aod_sw_extinction = NaN,
+                        aod_sw_scattering = NaN,
                         # assuming fixed aerosol radius
                         center_dust1_radius = 0.55,
                         center_dust2_radius = 1.4,
