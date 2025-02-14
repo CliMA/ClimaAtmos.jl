@@ -1,4 +1,4 @@
-213
+214
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+
+214
+- Rename some config files
+
 213 
 - Update to deep-atmos eqns by default, fix vorticity diagnostic
 
