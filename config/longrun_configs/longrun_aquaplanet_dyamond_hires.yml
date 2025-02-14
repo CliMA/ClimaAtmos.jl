@@ -8,7 +8,7 @@ topography: "Earth"
 start_date: "20160801"
 initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 moist: "equil"
-dt: "6secs"
+dt: "3secs"
 t_end: "40days"
 dt_save_state_to_disk: "10days"
 rad: "allskywithclear"
@@ -17,7 +17,7 @@ dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
 precip_model: "0M"
-dt_save_state_to_disk: 12hours
+dt_save_state_to_disk: 24hours
 toml: [toml/longrun_aquaplanet.toml]
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
