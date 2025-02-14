@@ -8,7 +8,6 @@ viscous_sponge: true
 dt_save_to_sol: "10days"
 dt_save_state_to_disk: "20days"
 moist: "equil"
-cloud_model: "quadrature"
 precip_model: "0M"
 rad: "allskywithclear"
 dt_rad: "1hours"
@@ -25,7 +24,7 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 dt: "120secs"
 t_end: "120days"
-toml: [toml/longrun_aquaplanet_edonly.toml]
+toml: [toml/longrun_aquaplanet.toml]
 netcdf_output_at_levels: true
 diagnostics:
   - short_name: [mmrso4, mmrdust, mmrss, o3]
