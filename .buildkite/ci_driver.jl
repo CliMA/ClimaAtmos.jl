@@ -28,7 +28,7 @@ sol_res = CA.solve_atmos!(simulation)
 (; p) = integrator
 
 import ClimaCore
-import ClimaCore: Topologies, Quadratures, Spaces
+import ClimaCore: Topologies, Quadratures, Spaces, Fields
 import ClimaComms
 using SciMLBase
 using PrettyTables
@@ -38,6 +38,8 @@ using ClimaTimeSteppers
 using Test
 import Tar
 import Base.Filesystem: rm
+import Statistics: mean
+import LinearAlgebra: norm_sqr
 include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
 
 ref_job_id = config.parsed_args["reference_job_id"]
@@ -107,6 +109,42 @@ end
 
 # Write diagnostics that are in DictWriter to text files
 CA.write_diagnostics_as_txt(simulation)
+
+if config.parsed_args["check_steady_state"]
+    @info "Comparing final state to predicted steady-state solution"
+
+    Y_end = integrator.sol.u[end]
+    FT = eltype(Y_end)
+
+    (; steady_state_velocity, params) = integrator.p
+    (; zd_rayleigh) = params
+    @assert !isnothing(steady_state_velocity)
+
+    ᶜuₕ_error_squared =
+        norm_sqr.(Y_end.c.uₕ .- CA.C12.(steady_state_velocity.ᶜu))
+    ᶠu₃_error_squared =
+        norm_sqr.(Y_end.f.u₃ .- CA.C3.(steady_state_velocity.ᶠu))
+
+    # Ignore all errors in the sponge layer.
+    ᶜsponge_mask = FT.(Fields.coordinate_field(Y_end.c).z .< zd_rayleigh)
+    ᶠsponge_mask = FT.(Fields.coordinate_field(Y_end.f).z .< zd_rayleigh)
+    uₕ_rmse = sqrt(sum(ᶜuₕ_error_squared .* ᶜsponge_mask) / sum(ᶜsponge_mask))
+    u₃_rmse = sqrt(sum(ᶠu₃_error_squared .* ᶠsponge_mask) / sum(ᶠsponge_mask))
+
+    uₕ_rmse_by_level = map(1:5) do level
+        sqrt(mean(Fields.level(ᶜuₕ_error_squared, level)))
+    end
+    u₃_rmse_by_level = map(1:5) do level
+        sqrt(mean(Fields.level(ᶠu₃_error_squared, level - Fields.half)))
+    end
+
+    @info "    RMSE of uₕ below sponge layer: $uₕ_rmse"
+    @info "    RMSE of u₃ below sponge layer: $u₃_rmse"
+    @info "    RMSE of uₕ on first 5 levels: $uₕ_rmse_by_level"
+    @info "    RMSE of u₃ on first 5 levels: $u₃_rmse_by_level"
+
+    # TODO: Figure out an appropriate @test for the steady state solution.
+end
 
 # Conservation checks
 if config.parsed_args["check_conservation"]
