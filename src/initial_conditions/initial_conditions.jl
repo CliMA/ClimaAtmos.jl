@@ -484,8 +484,10 @@ function overwrite_initial_conditions!(
                 center_space,
             ) .* Y.c.ρ
     end
-    if hasproperty(Y.c.sgs⁰, :ρatke)
-	fill!(Y.c.sgs⁰.ρatke, 0)
+    if hasproperty(Y.c, :sgs⁰)
+        if hasproperty(Y.c.sgs⁰, :ρatke)
+            fill!(Y.c.sgs⁰.ρatke, 0)
+        end
     end
     return nothing
 end
