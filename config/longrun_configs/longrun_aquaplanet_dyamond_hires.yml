@@ -8,7 +8,7 @@ topography: "Earth"
 start_date: "20160801"
 initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 moist: "equil"
-dt: "3secs"
+dt: "2secs"
 t_end: "40days"
 dt_save_state_to_disk: "10days"
 rad: "allskywithclear"
@@ -25,6 +25,6 @@ vert_diff: DecayWithHeightDiffusion
 output_default_diagnostics: false
 netcdf_interpolation_num_points:  [2880, 1440, 63]
 diagnostics:
- - short_name: [clwvi, ua, va, ta, ts, wa, hus, clw, cli, pr, lwp, cl]
+ - short_name: [clwvi, ua, va, ta, wa, hus, clw, cli, pr, lwp, cl]
    reduction: inst
    period: 1days
