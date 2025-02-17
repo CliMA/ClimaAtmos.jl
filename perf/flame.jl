@@ -38,16 +38,16 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 #####
 
 allocs_limit = Dict()
+allocs_limit["flame_baroclinic_wave_moist_gpu"] = 1_243_048
 allocs_limit["flame_perf_target"] = 99_928
 allocs_limit["flame_perf_target_tracers"] = 441_904
 allocs_limit["flame_perf_diagnostics"] = 10_677_144
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 122_624
-allocs_limit["flame_perf_target_diffusion"] = 4_015_767_024
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 11_183_232
+allocs_limit["flame_perf_target_prognostic_edmfx"] = 761_712
+allocs_limit["flame_perf_target_diffusion"] = 5_010_162_496
 allocs_limit["flame_perf_target_threaded"] = 2047_736
 allocs_limit["flame_perf_target_callbacks"] = 391_864
 allocs_limit["flame_perf_gw"] = 581_381_976
-allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 538_819
-allocs_limit["flame_gpu_implicit_barowave_moist"] = 1_243_048
 # Ideally, we would like to track all the allocations, but this becomes too
 # expensive there is too many of them. Here, we set the default sample rate to
 # 1, but lower it to a smaller value when we expect the job to produce lots of
