@@ -25,3 +25,8 @@ prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05",
 start_date: "20160801"
 initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 topography: "Earth"
+diagnostics:
+  - short_name: [massa, energya]
+    period: 1hours
+    writer: dict
+

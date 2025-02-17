@@ -1,18 +1,17 @@
-moist: "equil"
 apply_limiter: true
+h_elem: 12
 z_elem: 25
 dt: "1secs"
-surface_setup: "DefaultExchangeCoefficients"
 t_end: "10secs"
-vert_diff: true
+dt_save_to_sol: "Inf"
+log_progress: false
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-h_elem: 12
-forcing: "held_suarez"
-precip_model: "0M"
-dt_save_to_sol: "Inf"
+moist: "equil"
+surface_setup: "DefaultMoninObukhov"
 rad: "allskywithclear"
-log_progress: false
+vert_diff: true
+precip_model: "0M"
 diagnostics:
   - reduction_time: "average"
     short_name: "ua"
