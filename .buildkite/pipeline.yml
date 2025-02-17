@@ -508,23 +508,10 @@ steps:
           --data_dir prep_remap/output_active --out_dir remap_pipeline_output
         artifact_paths: "remap_pipeline_output/*"
 
-  - group: "Configs"
-    steps:
-
-      # TODO: we should somehow decouple this unit test from the perf env / scripts
-      - label: ":computer: checkbounds"
-        command: >
-          julia --color=yes --check-bounds=yes --project=.buildkite perf/benchmark.jl
-          --config_file $PERF_CONFIG_PATH/checkbounds.yml
-          --job_id checkbounds
-        artifact_paths: "checkbounds/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
   - group: "EDOnlyEDMFX"
     steps:
 
-      - label: ":man_in_business_suit_levitating: EDOnlyEDMFX test on a sphere"
+      - label: ":man_in_business_suit_levitating: EDOnly EDMFX aquaplanet"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/edonly_edmfx_aquaplanet.yml
@@ -532,18 +519,6 @@ steps:
         artifact_paths: "edonly_edmfx_aquaplanet/output_active/*"
         agents:
           slurm_mem: 20GB
-
-      - label: ":man_in_business_suit_levitating: EDOnlyEDMFX test on a sphere GPU"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/edonly_edmfx_aquaplanet.yml
-          --job_id edonly_edmfx_aquaplanet_gpu
-        artifact_paths: "edonly_edmfx_aquaplanet_gpu/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_mem: 20GB
-          slurm_gpus: 1
 
   - group: "Diagnostic EDMFX"
     steps:
@@ -647,7 +622,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Diagnostic EDMFX aquaplanet with TKE"
+      - label: ":genie: Diagnostic EDMFX aquaplanet"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
@@ -680,6 +655,15 @@ steps:
           --config_file $CONFIG_PATH/prognostic_edmfx_simpleplume_column.yml
           --job_id prognostic_edmfx_simpleplume_column
         artifact_paths: "prognostic_edmfx_simpleplume_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+      
+      - label: ":genie: Prognostic EDMFX Soares in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_soares_column.yml
+          --job_id prognostic_edmfx_soares_column
+        artifact_paths: "prognostic_edmfx_soares_column/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -803,15 +787,6 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX Soares in a column"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_soares_column.yml
-          --job_id prognostic_edmfx_soares_column
-        artifact_paths: "prognostic_edmfx_soares_column/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
   - group: "GPU"
     steps:
 
@@ -923,20 +898,6 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16G
 
-      - label: ":umbrella: GPU: gpu_aquaplanet_dyamond"
-        command:
-          - mkdir -p gpu_aquaplanet_dyamond
-          - >
-            julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-            --config_file ${CONFIG_PATH}/gpu_aquaplanet_dyamond.yml
-            --job_id gpu_aquaplanet_dyamond
-        artifact_paths: "gpu_aquaplanet_dyamond/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16G
-
       - label: "GPU: test DYAMOND interpolated initial conditions"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -948,6 +909,18 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
+
+      - label: "GPU: EDOnly EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/edonly_edmfx_aquaplanet.yml
+          --job_id edonly_edmfx_aquaplanet_gpu
+        artifact_paths: "edonly_edmfx_aquaplanet_gpu/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_mem: 20GB
+          slurm_gpus: 1
 
       - label: "GPU: Diagnostic EDMFX aquaplanet"
         key: "diagnostic_edmfx_aquaplanet_gpu"
@@ -977,39 +950,26 @@ steps:
   - group: "Benchmarks"
     steps:
 
-      - label: ":computer: Benchmark: GPU implicit baro wave"
+      - label: ":computer: Benchmark: CPU baroclinic wave moist"
+        command: >
+          julia --color=yes --project=.buildkite perf/benchmark_step.jl
+          --config_file $PERF_CONFIG_PATH/bm_baroclinic_wave_moist.yml
+          --job_id bm_baroclinic_wave_moist
+        artifact_paths: "bm_baroclinic_wave_moist/output_active/*"
+
+      - label: ":computer: Benchmark: GPU baroclinic wave moist"
         command: >
 
           julia --color=yes --project=.buildkite perf/benchmark_step.jl
-          --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave.yml
-          --job_id gpu_implicit_barowave
-        artifact_paths: "gpu_implicit_barowave/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-
-      - label: ":computer: Benchmark: GPU implicit baro wave moist"
-        command: >
-
-          julia --color=yes --project=.buildkite perf/benchmark_step.jl
-          --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_moist.yml
-          --job_id gpu_implicit_barowave_moist
-        artifact_paths: "gpu_implicit_barowave_moist/output_active/*"
+          --config_file $PERF_CONFIG_PATH/bm_baroclinic_wave_moist.yml
+          --job_id bm_baroclinic_wave_moist_gpu
+        artifact_paths: "bm_baroclinic_wave_moist_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_mem: 16G
           slurm_gpus: 1
 
-      - label: ":computer: Benchmark: CPU implicit baro wave"
-        command: >
-          julia --color=yes --project=.buildkite perf/benchmark_step.jl
-          --config_file $PERF_CONFIG_PATH/cpu_implicit_barowave.yml
-          --job_id cpu_implicit_barowave
-        artifact_paths: "cpu_implicit_barowave/output_active/*"
-
-      # Benchmarks
       - label: ":computer: Benchmark: CPU perf target (default)"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
@@ -1017,7 +977,7 @@ steps:
           --job_id bm_perf_target
         agents:
           slurm_mem: 24GB
-
+      
       - label: ":computer: Benchmark: GPU perf target"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
@@ -1055,6 +1015,19 @@ steps:
   - group: "Flame graphs"
     steps:
 
+      - label: ":fire: Flame graph: gpu job"
+        command: >
+          julia --color=yes --project=.buildkite perf/flame.jl
+          --config_file $PERF_CONFIG_PATH/bm_baroclinic_wave_moist.yml
+          --job_id flame_baroclinic_wave_moist_gpu
+        artifact_paths: "flame_baroclinic_wave_moist_gpu/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_mem: 48GB
+          slurm_gpus: 1
+          gres: "gpu:p100:1"
+
       - label: ":fire: Flame graph: perf target (default)"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
@@ -1072,6 +1045,15 @@ steps:
         artifact_paths: "flame_perf_target_tracers/*"
         agents:
           slurm_mem: 24GB
+      
+      - label: ":fire: Flame graph: perf target (diagnostics)"
+        command: >
+          julia --color=yes --project=.buildkite perf/flame.jl
+          --config_file $PERF_CONFIG_PATH/flame_perf_diagnostics.yml
+          --job_id flame_perf_diagnostics
+        artifact_paths: "flame_perf_diagnostics/*"
+        agents:
+          slurm_mem: 24GB
 
       - label: ":fire: Flame graph: perf target (diagnostic edmfx)"
         command: >
@@ -1082,12 +1064,12 @@ steps:
         agents:
           slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: perf target (prognostic edmfx aquaplanet)"
+      - label: ":fire: Flame graph: perf target (prognostic edmfx)"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_prognostic_edmfx_aquaplanet.yml
-          --job_id flame_perf_target_prognostic_edmfx_aquaplanet
-        artifact_paths: "flame_perf_target_prognostic_edmfx_aquaplanet/*"
+          --config_file $PERF_CONFIG_PATH/flame_perf_target_prognostic_edmfx.yml
+          --job_id flame_perf_target_prognostic_edmfx
+        artifact_paths: "flame_perf_target_prognostic_edmfx/*"
         agents:
           slurm_mem: 32GB
       
@@ -1118,36 +1100,25 @@ steps:
         agents:
           slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: perf target (diagnostics)"
-        command: >
-          julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_diagnostics.yml
-          --job_id flame_perf_diagnostics
-        artifact_paths: "flame_perf_diagnostics/*"
-        agents:
-          slurm_mem: 24GB
-
-      - label: ":fire: Flame graph: gpu job"
-        command: >
-          julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_gpu_implicit_barowave_moist.yml
-          --job_id flame_gpu_implicit_barowave_moist
-        artifact_paths: "flame_gpu_implicit_barowave_moist/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_mem: 48GB
-          slurm_gpus: 1
-          gres: "gpu:p100:1"
-
-  - group: "Inference/Invalidations"
+  - group: "Checkbounds/Inference/Invalidations"
     steps:
+
+      # TODO: we should somehow decouple this unit test from the perf env / scripts
+      # Checkbounds
+      - label: ":computer: checkbounds"
+        command: >
+          julia --color=yes --check-bounds=yes --project=.buildkite perf/benchmark.jl
+          --config_file $PERF_CONFIG_PATH/flame_perf_target.yml
+          --job_id checkbounds
+        artifact_paths: "checkbounds/output_active/*"
+        agents:
+          slurm_mem: 20GB
 
       # Inference
       - label: ":rocket: JET n-failures (inference)"
         command: >
           julia --color=yes --project=.buildkite perf/jet_test_nfailures.jl
-          --config_file $PERF_CONFIG_PATH/jet_n_failures.yml
+          --config_file $PERF_CONFIG_PATH/flame_perf_target.yml
           --job_id jet_n_failures
         agents:
           slurm_mem: 24GB
@@ -1156,6 +1127,7 @@ steps:
       - label: ":mag::rocket: Invalidations"
         command: >
           julia --color=yes --project=.buildkite perf/invalidations.jl
+          --config_file $PERF_CONFIG_PATH/flame_perf_target.yml
         artifact_paths: "invalidations/*"
         agents:
           slurm_mem: 24GB
