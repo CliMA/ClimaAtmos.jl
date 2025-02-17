@@ -800,7 +800,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
-          slurm_mem: 16G
+          slurm_mem: 16GB
 
       - label: "GPU: baroclinic wave"
         key: "baroclinic_wave_gpu"
@@ -812,8 +812,8 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          slurm_mem: 16G
           slurm_gpus: 1
+          slurm_mem: 16GB
 
       - label: "GPU: compare BW with CPU"
         command: >
@@ -830,37 +830,38 @@ steps:
           - "baroclinic_wave_gpu"
 
       - label: "GPU: GPU dry baroclinic wave"
-        key: "target_gpu_implicit_baroclinic_wave"
+        key: "baroclinic_wave_helem30"
         command:
-          - mkdir -p target_gpu_implicit_baroclinic_wave
+          - mkdir -p baroclinic_wave_helem30
           - >
-            nsys profile --delay 100 --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/output_active/report
+            nsys profile --delay 100 --trace=nvtx,cuda --output=baroclinic_wave_helem30/output_active/report
             julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-            --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
-            --job_id target_gpu_implicit_baroclinic_wave
-        artifact_paths: "target_gpu_implicit_baroclinic_wave/output_active/*"
+            --config_file ${GPU_CONFIG_PATH}/baroclinic_wave_helem30.yml
+            --job_id baroclinic_wave_helem30
+        artifact_paths: "baroclinic_wave_helem30/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
+          slurm_mem: 32GB
           slurm_gpus: 1
-          slurm_mem: 32G
+          
 
       - label: "GPU: GPU dry baroclinic wave - 4 gpus"
-        key: "target_gpu_implicit_baroclinic_wave_4process"
+        key: "baroclinic_wave_helem30_4process"
         command:
-          - mkdir -p target_gpu_implicit_baroclinic_wave_4process
+          - mkdir -p baroclinic_wave_helem30_4process
           # - >
           #   srun --cpu-bind=threads --cpus-per-task=4
-          #   nsys profile --delay 100 --trace=nvtx,cuda,mpi --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
+          #   nsys profile --delay 100 --trace=nvtx,cuda,mpi --output=baroclinic_wave_helem30_4process/output_active/report-%q{PMI_RANK}
           #   julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          #   --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
-          #   --job_id target_gpu_implicit_baroclinic_wave_4process
+          #   --config_file ${GPU_CONFIG_PATH}/baroclinic_wave_helem30.yml
+          #   --job_id baroclinic_wave_helem30_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
-            --config_file ${GPU_CONFIG_PATH}/target_gpu_implicit_baroclinic_wave.yml
-            --job_id target_gpu_implicit_baroclinic_wave_4process
-        artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
+            --config_file ${GPU_CONFIG_PATH}/baroclinic_wave_helem30.yml
+            --job_id baroclinic_wave_helem30_4process
+        artifact_paths: "baroclinic_wave_helem30_4process/output_active/*"
         env:
           CLIMACOMMS_CONTEXT: "MPI"
           CLIMACOMMS_DEVICE: "CUDA"
@@ -868,35 +869,7 @@ steps:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 4
-          slurm_mem: 32G
-
-      - label: "GPU: GPU moist Held-Suarez"
-        command:
-          - >
-            nsys profile --delay 100 --trace=nvtx,cuda --output=gpu_hs_equil_0M/output_active/report
-            julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-            --config_file $CONFIG_PATH/gpu_hs_equil_0M.yml
-            --job_id gpu_hs_equil_0M
-        artifact_paths: "gpu_hs_equil_0M/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16G
-
-      - label: "GPU: GPU moist Held-Suarez cloud diagnostics per stage"
-        command:
-          - >
-            nsys profile --delay 100 --trace=nvtx,cuda --output=cloud_diag_gpu_hs_equil_0M/output_active/report
-            julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-            --config_file $CONFIG_PATH/cloud_diag_gpu_hs_equil_0M.yml
-            --job_id cloud_diag_gpu_hs_equil_0M
-        artifact_paths: "cloud_diag_gpu_hs_equil_0M/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 16G
+          slurm_mem: 32GB
 
       - label: "GPU: test DYAMOND interpolated initial conditions"
         command: >
@@ -908,7 +881,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
-          slurm_mem: 16G
+          slurm_mem: 16GB
 
       - label: "GPU: EDOnly EDMFX aquaplanet"
         command: >
@@ -919,9 +892,9 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
-          slurm_mem: 20GB
           slurm_gpus: 1
-
+          slurm_mem: 20GB
+          
       - label: "GPU: Diagnostic EDMFX aquaplanet"
         key: "diagnostic_edmfx_aquaplanet_gpu"
         command: >
@@ -933,7 +906,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
-          slurm_mem: 20G
+          slurm_mem: 20GB
 
       - label: "GPU: Prognostic EDMFX aquaplanet"
         command: >
@@ -945,7 +918,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
-          slurm_mem: 20G
+          slurm_mem: 20GB
 
   - group: "Benchmarks"
     steps:
@@ -959,7 +932,6 @@ steps:
 
       - label: ":computer: Benchmark: GPU baroclinic wave moist"
         command: >
-
           julia --color=yes --project=.buildkite perf/benchmark_step.jl
           --config_file $PERF_CONFIG_PATH/bm_baroclinic_wave_moist.yml
           --job_id bm_baroclinic_wave_moist_gpu
