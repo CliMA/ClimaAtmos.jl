@@ -47,8 +47,7 @@ end
     CT123 = Geometry.Contravariant123Vector
     # Exercise function
     κ = zeros(cent_space)
-    bc_kinetic = CA.compute_kinetic(uₕ, uᵥ)
-    @. κ = bc_kinetic
+    κ .= CA.compute_kinetic(uₕ, uᵥ)
     ᶜκ_exact = @. 1 // 2 *
        cos(z)^2 *
        ((sin(x)^2) * (cos(y)^2) + (cos(x)^2) * (sin(y)^2))
@@ -86,12 +85,8 @@ end
     ᶠu = @. UVW(Geometry.UVector(ᶠu)) +
        UVW(Geometry.VVector(ᶠv)) +
        UVW(Geometry.WVector(ᶠw))
-    bc_strain_rate =
-        CA.compute_strain_rate_center(Geometry.Covariant123Vector.(ᶠu))
-    @. ᶜϵ = bc_strain_rate
-    bc_strain_rate =
-        CA.compute_strain_rate_face(Geometry.Covariant123Vector.(ᶜu))
-    @. ᶠϵ = bc_strain_rate
+    ᶜϵ .= CA.compute_strain_rate_center(Geometry.Covariant123Vector.(ᶠu))
+    ᶠϵ .= CA.compute_strain_rate_face(Geometry.Covariant123Vector.(ᶜu))
 
     # Center valued strain rate
     @test ᶜϵ.components.data.:1 == ᶜϵ.components.data.:1 .* FT(0)
