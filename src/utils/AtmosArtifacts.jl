@@ -68,6 +68,15 @@ function aerosol_concentration_file_path(; context = nothing)
 end
 
 """
+    aerosol_optical_depth_file_path(; context = nothing)
+
+Construct the file path for the aerosol optical depth NetCDF file.
+"""
+function aerosol_optical_depth_file_path(; context = nothing)
+    return joinpath(@clima_artifact("merra2_AOD", context), "MERRA2_AOD.nc")
+end
+
+"""
     era5_cloud_file_path(; context = nothing)
 
 Construct the file path for the era5 cloud properties NetCDF file.
