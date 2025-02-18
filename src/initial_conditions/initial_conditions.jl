@@ -91,6 +91,28 @@ end
 ##
 
 """
+    ConstantBuoyancyFrequencyProfile()
+
+An `InitialCondition` with a constant Brunt-Vaisala frequency and constant wind
+velocity, where the pressure profile is hydrostatically balanced. This is
+currently the only `InitialCondition` that supports the approximation of a
+steady-state solution.
+"""
+struct ConstantBuoyancyFrequencyProfile <: InitialCondition end
+function (::ConstantBuoyancyFrequencyProfile)(params)
+    function local_state(local_geometry)
+        FT = eltype(params)
+        coord = local_geometry.coordinates
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            constant_buoyancy_frequency_initial_state(params, coord)...,
+        )
+    end
+    return local_state
+end
+
+"""
     IsothermalProfile(; temperature = 300)
 
 An `InitialCondition` with a uniform temperature profile.
