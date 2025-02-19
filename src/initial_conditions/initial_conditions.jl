@@ -487,7 +487,7 @@ function overwrite_initial_conditions!(
 
     if hasproperty(Y.c, :sgs⁰) && hasproperty(Y.c.sgs⁰, :ρatke)
         # NOTE: This is not the most consistent, but it is better than NaNs
-        fill!(Y.c.ρatke, 0)
+        fill!(Y.c.sgs⁰.ρatke, 0)
     end
 
     return nothing
