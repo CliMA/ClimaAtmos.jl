@@ -44,7 +44,7 @@ allocs_limit["flame_perf_target_tracers"] = 441_904
 allocs_limit["flame_perf_diagnostics"] = 10_677_144
 allocs_limit["flame_perf_target_diagnostic_edmfx"] = 11_183_232
 allocs_limit["flame_perf_target_prognostic_edmfx"] = 761_712
-allocs_limit["flame_perf_target_diffusion"] = 5_010_162_496
+allocs_limit["flame_perf_target_diffusion"] = 100_360
 allocs_limit["flame_perf_target_threaded"] = 2047_736
 allocs_limit["flame_perf_target_callbacks"] = 391_864
 allocs_limit["flame_perf_gw"] = 581_381_976
@@ -59,12 +59,6 @@ max_allocs_for_full_sampling = 10e6
 # max_allocs_for_full_sampling, which leads to a sampling rate of 1
 expected_allocs = get(allocs_limit, job_id, max_allocs_for_full_sampling)
 sampling_rate = expected_allocs <= max_allocs_for_full_sampling ? 1 : 0.01
-
-# Some jobs are problematic (the ones with Krylov mostly)
-# https://github.com/pfitzseb/ProfileCanvas.jl/issues/34
-if job_id in ("flame_perf_target_diffusion",)
-    sampling_rate = 0.001
-end
 
 # use new allocation profiler
 @info "collecting allocations with sampling rate $sampling_rate"
