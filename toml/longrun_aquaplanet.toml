@@ -6,3 +6,6 @@ value = 40000.0
 
 [precipitation_timescale]
 value = 120
+
+[snow_autoconversion_timescale]
+value = 1e4
