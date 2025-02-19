@@ -334,6 +334,11 @@ function get_initial_condition(parsed_args)
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
+    elseif parsed_args["initial_condition"] == "ExternalTV"
+        return ICs.ExternalTV(
+            parsed_args["external_forcing_file"],
+            parsed_args["start_date"],
+        )
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
@@ -351,6 +356,12 @@ function get_surface_setup(parsed_args)
         return SurfaceConditions.ERA5Driven(
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
+        )
+    
+    parsed_args["surface_setup"] == "ExternalTV" &&
+        return SurfaceConditions.ExternalTV(
+            parsed_args["external_forcing_file"],
+            parsed_args["start_date"],
         )
 
     return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()

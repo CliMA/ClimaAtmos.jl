@@ -99,6 +99,7 @@ end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
 struct ERA5DrivenInsolation <: AbstractInsolation end
+struct ExternalTVInsolation <: AbstractInsolation end
 
 """
     AbstractOzone
@@ -300,6 +301,11 @@ Forcing specified by cfsite number and an external forcing file.
 struct ERA5Forcing{FT}
     external_forcing_file::String
     cfsite_number::String
+end
+
+struct ExternalDrivenTVForcing{FT}
+    external_forcing_file::String
+    start_date::String
 end
 
 struct ISDACForcing end

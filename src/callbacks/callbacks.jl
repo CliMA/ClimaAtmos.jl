@@ -36,6 +36,68 @@ function flux_accumulation!(integrator)
     return nothing
 end
 
+function external_driven_single_column!(integrator)
+    Y = integrator.u
+    p = integrator.p
+    t = integrator.t
+
+    # unpack external forcing objects that we can directly set.
+    FT = Spaces.undertype(axes(Y.c))
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜspecific, ᶜts, ᶜh_tot) = p.precomputed
+    (;
+        ᶜdTdt_fluc,
+        ᶜdqtdt_fluc,
+        ᶜdTdt_hadv,
+        ᶜdqtdt_hadv,
+        ᶜdTdt_rad, # we skip radiation because we're using RRTMGP, but this can be changed for simpler setups
+        ᶜT_nudge,
+        ᶜqt_nudge,
+        ᶜu_nudge,
+        ᶜv_nudge,
+        ᶜls_subsidence,
+        ᶜinv_τ_wind,
+        ᶜinv_τ_scalar,
+    ) = p.external_forcing
+    # unpack spaces for the tv inputs to be evaluated into
+    (; hus, rho, ta, tnhusha, tnhusva, tntha, tntva, ua, va, wa, wap) = p.external_forcing.column_timevaryinginputs
+
+    # set the external forcing variables based on the 
+    evaluate!(ᶜdTdt_fluc, tntva, t)
+    evaluate!(ᶜdqtdt_fluc, tnhusva, t)
+    evaluate!(ᶜdTdt_hadv, tntha, t)
+    evaluate!(ᶜdqtdt_hadv, tnhusha, t)
+    evaluate!(ᶜT_nudge, ta, t)
+    evaluate!(ᶜqt_nudge, hus, t)
+    evaluate!(ᶜu_nudge, ua, t)
+    evaluate!(ᶜv_nudge, va, t)
+
+    # subsidence term we need wap / -(rho) / gravity 
+    evaluate!(p.external_forcing.column_inputs.rho, rho, t)
+    evaluate!(ᶜls_subsidence, wap, t)
+    # need space to store rho 
+    ᶜls_subsidence .= ᶜls_subsidence ./ .-(p.external_forcing.column_inputs.rho) ./ FT(CAP.grav(params))
+
+    eddy_vert_fluctuation!(ᶜdTdt_fluc, ᶜT_nudge, ᶜls_subsidence)
+    eddy_vert_fluctuation!(ᶜdqtdt_fluc, ᶜqt_nudge, ᶜls_subsidence)
+
+    @. ᶜinv_τ_wind = 1 / (6 * 3600)
+
+
+    # z = p.scratch.ᶜtemp_scalar
+    # @. z = Fields.field2array(Fields.coordinate_field((ᶜinv_τ_scalar,)).z)[:]
+    # println(z)
+    #println(typeof(ᶜinv_τ_scalar))
+    # compute_gcm_driven_scalar_inv_τ.(Fields.Field(Fields.field2array(Fields.coordinate_field(ᶜinv_τ_scalar).z)[:]))
+    Fields.field2array(ᶜinv_τ_scalar) .= compute_gcm_driven_scalar_inv_τ.(Fields.field2array(Fields.coordinate_field(ᶜinv_τ_scalar).z)[:])
+
+    # at each step also update the external_forcing_tendency? or is this already in a callback?
+
+end
+
+
+
 NVTX.@annotate function cloud_fraction_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -301,6 +363,26 @@ function set_insolation_variables!(
     rrtmgp_model.cos_zenith .= Fields.field2array(p.external_forcing.cos_zenith)
     rrtmgp_model.weighted_irradiance .=
         Fields.field2array(p.external_forcing.insolation)
+end
+
+function set_insolation_variables!(
+    Y,
+    p,
+    t,
+    ::ExternalTVInsolation,
+)
+    (; rrtmgp_model) = p.radiation
+    (; coszen, rsdt) = p.external_forcing.surface_inputs
+    coszen_tv = getproperty(p.external_forcing.surface_timevaryinginputs, :coszen)    
+    rsdt_tv = getproperty(p.external_forcing.surface_timevaryinginputs, :rsdt)
+
+    evaluate!(coszen, coszen_tv, t)
+    evaluate!(rsdt, rsdt_tv, t)
+
+    # set variables in rrtmgp 
+    # TODO Check arrays have the same 
+    rrtmgp_model.cos_zenith .= Fields.field2array(coszen)
+    rrtmgp_model.weighted_irradiance .= Fields.field2array(rsdt)
 end
 
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)

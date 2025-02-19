@@ -313,6 +313,17 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         )
     end
 
+    if parsed_args["external_forcing"] == "ExternalTV"
+        callbacks = (
+            callbacks...,
+            call_every_n_steps(
+                external_driven_single_column!;
+                skip_first = false, # use the callback to set the initial external forcing; default, but noting for myself for now 
+                call_at_end = true,
+            )
+        )
+    end
+
     if !parsed_args["call_cloud_diagnostics_per_stage"]
         dt_cf = FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
         callbacks =

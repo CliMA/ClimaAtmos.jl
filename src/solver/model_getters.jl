@@ -26,7 +26,7 @@ end
 function get_insolation_form(parsed_args)
     insolation = parsed_args["insolation"]
     @assert insolation in
-            ("idealized", "timevarying", "rcemipii", "gcmdriven", "era5driven")
+            ("idealized", "timevarying", "rcemipii", "gcmdriven", "era5driven", "externaldriventv")
     return if insolation == "idealized"
         IdealizedInsolation()
     elseif insolation == "timevarying"
@@ -40,6 +40,8 @@ function get_insolation_form(parsed_args)
         GCMDrivenInsolation()
     elseif insolation == "era5driven"
         ERA5DrivenInsolation()
+    elseif insolation == "externaldriventv"
+        ExternalTVInsolation()
     end
 end
 
@@ -410,7 +412,7 @@ end
 
 function get_external_forcing_model(parsed_args)
     external_forcing = parsed_args["external_forcing"]
-    @assert external_forcing in (nothing, "GCM", "ISDAC", "ERA5")
+    @assert external_forcing in (nothing, "GCM", "ISDAC", "ERA5", "ExternalTV")
     return if isnothing(external_forcing)
         nothing
     elseif external_forcing == "GCM"
@@ -424,6 +426,12 @@ function get_external_forcing_model(parsed_args)
         ERA5Forcing{DType}(
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
+        )
+    elseif external_forcing == "ExternalTV"
+        DType = Float64  # TODO: Read from `parsed_args`
+        ExternalDrivenTVForcing{DType}(
+            parsed_args["external_forcing_file"],
+            parsed_args["start_date"],
         )
     elseif external_forcing == "ISDAC"
         ISDACForcing()

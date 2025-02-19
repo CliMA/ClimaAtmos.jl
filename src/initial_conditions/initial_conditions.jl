@@ -1386,6 +1386,76 @@ function era5_initial_conditions(external_forcing_file, cfsite_number)
         )
     end
 end
+    
+
+
+struct ColumnInitialCondition <: InitialCondition
+    """Initial data condition for a column model. Stored as a tuple of Interpolation objects"""
+    T
+    u
+    v
+    q_tot
+    ρ₀
+end
+
+function (initial_condition::ColumnInitialCondition)(params)
+    (; T, u, v, q_tot, ρ₀) = initial_condition
+    thermo_params = CAP.thermodynamics_params(params)
+    function local_state(local_geometry)
+        (; z) = local_geometry.coordinates
+        FT = typeof(z)
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = ts = TD.PhaseEquil_ρTq(
+                thermo_params,
+                FT(ρ₀(z)),
+                FT(T(z)),
+                FT(q_tot(z)),
+            ),
+            velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
+            turbconv_state = EDMFState(; tke = FT(0)),
+        )
+    end
+    return local_state
+end
+
+struct ExternalTV <: InitialCondition
+    external_forcing_file::String
+    start_date::String
+end
+
+function read_external_tv_ic(external_forcing_file::String, start_date::String)
+    start_time = Dates.DateTime(start_date, "yyyymmdd")
+    z, T, u, v, q_tot, ρ₀ = NC.NCDataset(external_forcing_file) do ds
+        time_index = argmin(abs.(ds["time"][:] .- start_time))
+        (
+            z = ds["z"][:],
+            T = ds["ta"][1, 1, :, time_index],
+            u = ds["ua"][1, 1, :, time_index],
+            v = ds["va"][1, 1, :, time_index],
+            q_tot = ds["hus"][1, 1, :, time_index],
+            ρ₀ = ds["rho"][1, 1, :, time_index],
+        )
+    end
+    T, u, v, q_tot, ρ₀ = map([T, u, v, q_tot, ρ₀]) do value
+        Intp.extrapolate(
+            Intp.interpolate((z,), value, Intp.Gridded(Intp.Linear())),
+            Intp.Flat(),
+        )
+    end
+    return T, u, v, q_tot, ρ₀
+end
+
+
+function (ic::ExternalTV)(params)
+    (; external_forcing_file, start_date) = ic
+    thermo_params = CAP.thermodynamics_params(params)
+    T, u, v, q_tot, ρ₀ = read_external_tv_ic(external_forcing_file, start_date)
+    return ColumnInitialCondition(T, u, v, q_tot, ρ₀)(params)
+end
+
+
 
 Base.@kwdef struct ISDAC <: InitialCondition
     prognostic_tke::Bool = false
