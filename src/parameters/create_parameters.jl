@@ -107,10 +107,18 @@ atmos_name_map = (;
     :optics_lookup_temperature_max => :optics_lookup_temperature_max,
 )
 
-cloud_parameters(FT_or_toml) = (;
-    liquid = CM.Parameters.CloudLiquid(FT_or_toml),
-    ice = CM.Parameters.CloudIce(FT_or_toml),
-    Ch2022 = CM.Parameters.Chen2022VelType(FT_or_toml),
+cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
+    cloud_parameters(CP.create_toml_dict(FT))
+
+cloud_parameters(toml_dict::CP.AbstractTOMLDict) = (;
+    liquid = CM.Parameters.CloudLiquid(toml_dict),
+    ice = CM.Parameters.CloudIce(toml_dict),
+    Ch2022 = CM.Parameters.Chen2022VelType(toml_dict),
+    N_cloud_liquid_droplets = CP.get_parameter_values(
+        toml_dict,
+        "prescribed_cloud_droplet_number_concentration",
+        "ClimaAtmos",
+    ).prescribed_cloud_droplet_number_concentration,
 )
 
 microphys_1m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
