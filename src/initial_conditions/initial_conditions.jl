@@ -485,18 +485,20 @@ function overwrite_initial_conditions!(
             ) .* Y.c.ρ
     end
     if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
-        Y.c.ρq_sno .=
-            SpaceVaryingInputs.SpaceVaryingInput(
-                file_path,
-                "cswc",
-                center_space,
-            ) .* Y.c.ρ
-        Y.c.ρq_rai .=
-            SpaceVaryingInputs.SpaceVaryingInput(
-                file_path,
-                "crwc",
-                center_space,
-            ) .* Y.c.ρ
+       # Y.c.ρq_sno .=
+       #     SpaceVaryingInputs.SpaceVaryingInput(
+       #         file_path,
+       #         "cswc",
+       #         center_space,
+       #     ) .* Y.c.ρ
+            fill!(Y.c.ρq_sno, 0)
+       # Y.c.ρq_rai .=
+       #     SpaceVaryingInputs.SpaceVaryingInput(
+       #         file_path,
+       #         "crwc",
+       #         center_space,
+       #     ) .* Y.c.ρ
+            fill!(Y.c.ρq_rai, 0)
     end
     if hasproperty(Y.c, :sgs⁰)
         if hasproperty(Y.c.sgs⁰, :ρatke)
