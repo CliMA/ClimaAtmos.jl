@@ -6,7 +6,7 @@ rayleigh_sponge: true
 viscous_sponge: true
 topography: "Earth"
 start_date: "20160801"
-initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p14deg\"/DYAMOND_SUMMER_ICS_p14deg.nc"
+initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 moist: "equil"
 dt: "2secs"
 t_end: "40days"
@@ -25,6 +25,6 @@ vert_diff: DecayWithHeightDiffusion
 output_default_diagnostics: false
 netcdf_interpolation_num_points:  [2880, 1440, 63]
 diagnostics:
- - short_name: [clwvi, pr, lwp, cl]
+ - short_name: [clwvi, pr, lwp, cl, prw, hus, rhoa]
    reduction: inst
    period: 1days
