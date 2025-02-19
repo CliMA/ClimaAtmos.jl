@@ -489,6 +489,12 @@ function overwrite_initial_conditions!(
             fill!(Y.c.sgs⁰.ρatke, 0)
         end
     end
+    if hasproperty(Y.c,:ρq_rai)
+       fill!(Y.c.ρq_rai, 0)
+    end
+    if hasproperty(Y.c,:ρq_sno)
+       fill!(Y.c.ρq_sno, 0)
+    end
     return nothing
 end
 
