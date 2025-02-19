@@ -470,6 +470,20 @@ function overwrite_initial_conditions!(
             "`dry` configurations are incompatible with the interpolated initial conditions.",
         )
     end
+    if hasproperty(Y.c, :ρq_ice) && hasproperty(Y.c, :ρq_liq)
+        Y.c.ρq_liq .=
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "clwc",
+                center_space,
+            ) .* Y.c.ρ
+        Y.c.ρq_ice .=
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "ciwc",
+                center_space,
+            ) .* Y.c.ρ
+    end
     if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
         Y.c.ρq_sno .=
             SpaceVaryingInputs.SpaceVaryingInput(
@@ -488,12 +502,6 @@ function overwrite_initial_conditions!(
         if hasproperty(Y.c.sgs⁰, :ρatke)
             fill!(Y.c.sgs⁰.ρatke, 0)
         end
-    end
-    if hasproperty(Y.c,:ρq_rai)
-       fill!(Y.c.ρq_rai, 0)
-    end
-    if hasproperty(Y.c,:ρq_sno)
-       fill!(Y.c.ρq_sno, 0)
     end
     return nothing
 end
