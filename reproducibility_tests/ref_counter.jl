@@ -1,4 +1,4 @@
-214
+215
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+
+215
+- Update dependencies, including ClimaCore, which updated how metric terms are
+  computed
 
 214
 - Rename some config files
