@@ -17,6 +17,9 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
+    if p.atmos.moisture_model isa NonEquilMoistModel
+        (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    end
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
@@ -64,6 +67,25 @@ function edmfx_sgs_mass_flux_tendency!(
                     edmfx_sgsflux_upwinding,
                 )
                 @. Yₜ.c.ρq_tot += vtt
+
+                # --- is it ok to set everything to the same var names for noneq? ---
+                if p.atmos.moisture_model isa NonEquilMoistModel
+                    @. ᶜa_scalar =
+                    (Y.c.sgsʲs.:($$j).q_liq - ᶜspecific.q_liq) *
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                    vtt = vertical_transport(
+                        ᶜρʲs.:($j),
+                        ᶠu³_diff,
+                        ᶜa_scalar,
+                        dt,
+                        edmfx_sgsflux_upwinding,
+                    )
+                    @. Yₜ.c.ρq_liq += vtt
+                    @. ᶜa_scalar =
+                    (Y.c.sgsʲs.:($$j).q_ice - ᶜspecific.q_ice) *
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                    @. Yₜ.c.ρq_ice += vtt
+                end
             end
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar = (ᶜq_tot⁰ - ᶜspecific.q_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
@@ -75,6 +97,26 @@ function edmfx_sgs_mass_flux_tendency!(
                 edmfx_sgsflux_upwinding,
             )
             @. Yₜ.c.ρq_tot += vtt
+            if p.atmos.moisture_model isa NonEquilMoistModel
+                @. ᶜa_scalar = (ᶜq_liq⁰ - ᶜspecific.q_liq) * draft_area(ᶜρa⁰, ᶜρ⁰)
+                vtt = vertical_transport(
+                    ᶜρ⁰,
+                    ᶠu³_diff,
+                    ᶜa_scalar,
+                    dt,
+                    edmfx_sgsflux_upwinding,
+                )
+                @. Yₜ.c.ρq_liq += vtt
+                @. ᶜa_scalar = (ᶜq_ice⁰ - ᶜspecific.q_ice) * draft_area(ᶜρa⁰, ᶜρ⁰)
+                vtt = vertical_transport(
+                    ᶜρ⁰,
+                    ᶠu³_diff,
+                    ᶜa_scalar,
+                    dt,
+                    edmfx_sgsflux_upwinding,
+                )
+                @. Yₜ.c.ρq_ice += vtt
+            end
         end
     end
 
@@ -180,6 +222,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
     c_d = CAP.tke_diss_coeff(turbconv_params)
     (; sfc_conditions) = p.precomputed
     (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length) = p.precomputed
+    if p.atmos.moisture_model isa NonEquilMoistModel
+        (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    end
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
@@ -221,6 +266,28 @@ function edmfx_sgs_diffusive_flux_tendency!(
             @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_tot⁰)))
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
+
+            if p.atmos.moisture_model isa NonEquilMoistModel
+                #ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
+                ᶜdivᵥ_ρq_liq = Operators.DivergenceF2C(
+                    top = Operators.SetValue(C3(FT(0))),
+                    bottom = Operators.SetValue(sfc_conditions.ρ_flux_q_liq),
+                )
+                @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq_liq(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_liq⁰)))
+                @. Yₜ.c.ρq_liq -= ᶜρχₜ_diffusion
+                @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
+
+                #ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
+                ᶜdivᵥ_ρq_ice = Operators.DivergenceF2C(
+                    top = Operators.SetValue(C3(FT(0))),
+                    bottom = Operators.SetValue(sfc_conditions.ρ_flux_q_ice),
+                )
+                @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq_ice(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_ice⁰)))
+                @. Yₜ.c.ρq_ice -= ᶜρχₜ_diffusion
+                
+                # should this happen for liquid and ice?
+                @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
+            end
         end
 
         # momentum

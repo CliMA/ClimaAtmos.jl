@@ -11,6 +11,14 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
             ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₕhₜ)))
         @. Yₜ.c.ρq_tot -=
             ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₜqₜ)))
+
+        if p.atmos.moisture_model isa NonEquilMoistModel
+            (; ᶜwₗ, ᶜwᵢ) = p.precomputed
+            @. Yₜ.c.ρq_liq -=
+            ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwₗqₗ))) 
+            @. Yₜ.c.ρq_ice -=
+            ᶜprecipdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠright_bias(-(ᶜwᵢqᵢ)))
+        end
     end
     return nothing
 end
