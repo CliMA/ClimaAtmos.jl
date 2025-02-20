@@ -1,4 +1,4 @@
-h_elem: 16
+h_elem: 60
 z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
@@ -21,7 +21,7 @@ surface_setup: "DefaultMoninObukhov"
 turbconv: "edonly_edmfx"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-dt: "120secs"
-t_end: "120days"
+dt: "40secs"
+t_end: "1days"
 toml: [toml/longrun_aquaplanet.toml]
 netcdf_output_at_levels: true

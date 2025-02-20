@@ -1,4 +1,4 @@
-h_elem: 16
+h_elem: 60
 z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
@@ -28,7 +28,7 @@ edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-dt: "120secs"
-t_end: "120days"
+dt: "40secs"
+t_end: "40days"
 toml: [toml/longrun_aquaplanet_diagedmf.toml]
 netcdf_output_at_levels: true
