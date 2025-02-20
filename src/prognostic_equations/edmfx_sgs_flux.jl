@@ -29,27 +29,25 @@ function edmfx_sgs_mass_flux_tendency!(
             @. ᶜa_scalar =
                 (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j) - ᶜh_tot) *
                 draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-            vertical_transport!(
-                Yₜ.c.ρe_tot,
-                ᶜJ,
+            vtt = vertical_transport(
                 ᶜρʲs.:($j),
                 ᶠu³_diff,
                 ᶜa_scalar,
                 dt,
                 edmfx_sgsflux_upwinding,
             )
+            @. Yₜ.c.ρe_tot += vtt
         end
         @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
         @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
-        vertical_transport!(
-            Yₜ.c.ρe_tot,
-            ᶜJ,
+        vtt = vertical_transport(
             ᶜρ⁰,
             ᶠu³_diff,
             ᶜa_scalar,
             dt,
             edmfx_sgsflux_upwinding,
         )
+        @. Yₜ.c.ρe_tot += vtt
 
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
@@ -58,27 +56,25 @@ function edmfx_sgs_mass_flux_tendency!(
                 @. ᶜa_scalar =
                     (Y.c.sgsʲs.:($$j).q_tot - ᶜspecific.q_tot) *
                     draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-                vertical_transport!(
-                    Yₜ.c.ρq_tot,
-                    ᶜJ,
+                vtt = vertical_transport(
                     ᶜρʲs.:($j),
                     ᶠu³_diff,
                     ᶜa_scalar,
                     dt,
                     edmfx_sgsflux_upwinding,
                 )
+                @. Yₜ.c.ρq_tot += vtt
             end
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar = (ᶜq_tot⁰ - ᶜspecific.q_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
-            vertical_transport!(
-                Yₜ.c.ρq_tot,
-                ᶜJ,
+            vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
                 ᶜa_scalar,
                 dt,
                 edmfx_sgsflux_upwinding,
             )
+            @. Yₜ.c.ρq_tot += vtt
         end
     end
 
@@ -123,15 +119,14 @@ function edmfx_sgs_mass_flux_tendency!(
                         eps(FT),
                     ),
                 )
-            vertical_transport!(
-                Yₜ.c.ρe_tot,
-                ᶜJ,
+            vtt = vertical_transport(
                 ᶜρʲs.:($j),
                 ᶠu³_diff,
                 ᶜa_scalar,
                 dt,
                 edmfx_sgsflux_upwinding,
             )
+            @. Yₜ.c.ρe_tot += vtt
         end
 
         if !(p.atmos.moisture_model isa DryModel)
@@ -152,15 +147,14 @@ function edmfx_sgs_mass_flux_tendency!(
                             eps(FT),
                         ),
                     )
-                vertical_transport!(
-                    Yₜ.c.ρq_tot,
-                    ᶜJ,
+                vtt = vertical_transport(
                     ᶜρʲs.:($j),
                     ᶠu³_diff,
                     ᶜa_scalar,
                     dt,
                     edmfx_sgsflux_upwinding,
                 )
+                @. Yₜ.c.ρq_tot += vtt
             end
         end
     end
@@ -209,8 +203,13 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 bottom = Operators.SetValue(ρatke_flux),
             )
             @. Yₜ.c.sgs⁰.ρatke -=
-                ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) +
-                tke_dissipation(Y.c.sgs⁰.ρatke, ᶜtke⁰, ᶜmixing_length, c_d, dt)
+                ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) + tke_dissipation(
+                    Y.c.sgs⁰.ρatke,
+                    ᶜtke⁰,
+                    ᶜmixing_length,
+                    c_d,
+                    float(dt),
+                )
         end
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
@@ -226,7 +225,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         # momentum
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
-        compute_strain_rate_face!(ᶠstrain_rate, ᶜu⁰)
+        bc_strain_rate = compute_strain_rate_face(ᶜu⁰)
+        @. ᶠstrain_rate = bc_strain_rate
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
         # apply boundary condition for momentum flux
         ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
@@ -246,7 +246,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     Y,
     p,
     t,
-    turbconv_model::DiagnosticEDMFX,
+    turbconv_model::Union{EDOnlyEDMFX, DiagnosticEDMFX},
 )
 
     FT = Spaces.undertype(axes(Y.c))
@@ -298,7 +298,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         # momentum
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
-        compute_strain_rate_face!(ᶠstrain_rate, ᶜu)
+        bc_strain_rate = compute_strain_rate_face(ᶜu)
+        @. ᶠstrain_rate = bc_strain_rate
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
         # apply boundary condition for momentum flux
         ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
@@ -314,4 +315,5 @@ function edmfx_sgs_diffusive_flux_tendency!(
 end
 
 tke_dissipation(ρatke⁰, tke⁰, mixing_length, c_d, dt) =
-    tke⁰ >= 0 ? c_d * ρatke⁰ * sqrt(tke⁰) / max(mixing_length, 1) : ρatke⁰ / dt
+    tke⁰ >= 0 ? c_d * ρatke⁰ * sqrt(tke⁰) / max(mixing_length, 1) :
+    ρatke⁰ / float(dt)

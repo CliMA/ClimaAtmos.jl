@@ -11,7 +11,11 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     (; ᶜΦ) = p.core
     (; ᶜu, ᶜK, ᶜp) = p.precomputed
     if p.atmos.turbconv_model isa AbstractEDMF
-        (; ᶜu⁰) = p.precomputed
+        if p.atmos.turbconv_model isa EDOnlyEDMFX
+            ᶜu⁰ = ᶜu
+        else
+            (; ᶜu⁰) = p.precomputed
+        end
     end
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
@@ -77,10 +81,15 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
-    (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
     (; ᶜspecific) = p.precomputed
 
+    ᶠu³⁰ =
+        advect_tke ?
+        (
+            turbconv_model isa EDOnlyEDMFX ? p.precomputed.ᶠu³ :
+            p.precomputed.ᶠu³⁰
+        ) : nothing
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
     ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
     ᶜtke⁰ = advect_tke ? p.precomputed.ᶜtke⁰ : nothing
@@ -105,27 +114,21 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
+    ᶜρ = Y.c.ρ
     if :ρe_tot in propertynames(Yₜ.c)
         (; ᶜh_tot) = p.precomputed
         for (coeff, upwinding) in ((1, energy_upwinding), (-1, Val(:none)))
             energy_upwinding isa Val{:none} && continue
-            vertical_transport!(
-                coeff,
-                Yₜ.c.ρe_tot,
-                ᶜJ,
-                Y.c.ρ,
-                ᶠu³,
-                ᶜh_tot,
-                dt,
-                upwinding,
-            )
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), upwinding)
+            @. Yₜ.c.ρe_tot += coeff * vtt
         end
     end
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
         for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
             tracer_upwinding isa Val{:none} && continue
-            vertical_transport!(coeff, ᶜρχₜ, ᶜJ, Y.c.ρ, ᶠu³, ᶜχ, dt, upwinding)
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), upwinding)
+            @. ᶜρχₜ += coeff * vtt
         end
     end
 
@@ -155,15 +158,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
         @. ᶜa_scalar = ᶜtke⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
-        vertical_transport!(
-            Yₜ.c.sgs⁰.ρatke,
-            ᶜJ,
-            ᶜρ⁰,
-            ᶠu³⁰,
-            ᶜa_scalar,
-            dt,
-            edmfx_upwinding,
-        )
+        vtt = vertical_transport(ᶜρ⁰, ᶠu³⁰, ᶜa_scalar, dt, edmfx_upwinding)
+        @. Yₜ.c.sgs⁰.ρatke += vtt
     end
 end
 
@@ -211,28 +207,27 @@ function edmfx_sgs_vertical_advection_tendency!(
 
     for j in 1:n
         @. ᶜa_scalar = draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-        vertical_transport!(
-            Yₜ.c.sgsʲs.:($j).ρa,
-            ᶜJ,
+        vtt = vertical_transport(
             ᶜρʲs.:($j),
             ᶠu³ʲs.:($j),
             ᶜa_scalar,
             dt,
             edmfx_upwinding,
         )
+        @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
 
-        vertical_advection!(
-            Yₜ.c.sgsʲs.:($j).mse,
+        va = vertical_advection(
             ᶠu³ʲs.:($j),
             Y.c.sgsʲs.:($j).mse,
             edmfx_upwinding,
         )
+        @. Yₜ.c.sgsʲs.:($$j).mse += va
 
-        vertical_advection!(
-            Yₜ.c.sgsʲs.:($j).q_tot,
+        va = vertical_advection(
             ᶠu³ʲs.:($j),
             Y.c.sgsʲs.:($j).q_tot,
             edmfx_upwinding,
         )
+        @. Yₜ.c.sgsʲs.:($$j).q_tot += va
     end
 end

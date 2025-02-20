@@ -1,19 +1,82 @@
 ClimaAtmos.jl Release Notes
 ============================
 
-Main
+v0.28.5
 -------
 
+### Features
 
-v0.28.1
+### Add EDOnlyEDMFX
+
+PR [3622](https://github.com/CliMA/ClimaAtmos.jl/pull/3622) adds a new
+simplified EDMF model that only implements the Eddy-Diffusivity part of the
+scheme (not the Mass-Flux).
+
+
+### Update default configuration to use deep-atmosphere eqns, fix diagnostic bug
+PR [3422](https://github.com/CliMA/ClimaAtmos.jl/pull/3422)
+Updates the `default_config` to set `deep_atmosphere=true`, and updates the 
+`rv` relative vorticity diagnostic to store the curl of horizontal velocity.
+
+### Allow different sizes of dust and sea salt for radiation
+
+Added functionality to allow five different size bins of dust and sea salt aerosols
+for radiation calculation. This feature requires RRTMGP version v0.20.0 or later.
+PR [3555](https://github.com/CliMA/ClimaAtmos.jl/pull/3555)
+
+### Maintenance
+
+### Rmove FriersonDiffusion option
+
+The option `FriersonDiffusion` is removed from `vert_diff` config. Use `DecayWithHeightDiffusion` instead.
+PR [3592](https://github.com/CliMA/ClimaAtmos.jl/pull/3592)
+
+v0.28.4
+-------
+### Development
+
+The `.dev` was deprecated. The two utilities in this folder can be replaced with
+more established and better developed tools:
+- instead of `clima_format`, use `JuliaFormatter`,
+- instead of `up_deps`, use `PkgDevTools`.
+See the [documentation](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/#Formatting) for more information.
+
+`ClimaAtmos` now only support equilibrium moisture + 0-moment microphysics and 
+nonequilibrium + 1-moment microphysics (No precipitation is still supported too).
+PR [3557](https://github.com/CliMA/ClimaAtmos.jl/pull/3557)
+
+### File Logging
+
+`ClimaAtmos` now supports logging to stdout and file simultaneously using
+`ClimaComms.FileLogger`. To enable, set the configuration with `log_to_file = false`. 
+See [ClimaComms documentation](https://clima.github.io/ClimaComms.jl/dev/logging/)
+ for more background on logging.
+
+v0.28.3
+-------
+### Read CO2 from file
+
+`ClimaAtmos` now support using data from the Mauna Loa CO2 measurements to set
+CO2 concentration. This is currently only relevant for radiation transfer with
+RRTGMP.
+
+### Maintenance
+
+### Remove override_precip_timescale config
+
+![][badge-🔥behavioralΔ] The override_precip_timescale config has been removed.
+To recover the previous behavior, set `precipitation_timescale` to `dt` in the
+toml. PR [3534](https://github.com/CliMA/ClimaAtmos.jl/pull/3534)
+
+v0.28.2
 -------
 ### Features
 
 ### Add van Leer class operator
 
-Added a new vertical transport option `vanleer_limiter` (for tracer and energy variables)
-which uses methods described in Lin et al. (1994) to apply slope-limited upwinding. Adds 
-operator 
+Added a new vertical transport option `vanleer_limiter` (for tracer and energy
+variables) which uses methods described in Lin et al. (1994) to apply
+slope-limited upwinding. Adds operator
 
 ### Read initial conditions from NetCDF files
 

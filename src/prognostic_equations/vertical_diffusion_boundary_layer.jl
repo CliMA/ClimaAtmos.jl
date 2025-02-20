@@ -23,7 +23,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     Y,
     p,
     t,
-    ::Union{VerticalDiffusion, FriersonDiffusion, DecayWithHeightDiffusion},
+    ::Union{VerticalDiffusion, DecayWithHeightDiffusion},
 )
     FT = eltype(Y)
     (; ᶜu, ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h, sfc_conditions) = p.precomputed
@@ -31,7 +31,8 @@ function vertical_diffusion_boundary_layer_tendency!(
 
     if diffuse_momentum(p.atmos.vert_diff)
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
-        compute_strain_rate_face!(ᶠstrain_rate, ᶜu)
+        bc_strain_rate = compute_strain_rate_face(ᶜu)
+        @. ᶠstrain_rate = bc_strain_rate
         @. Yₜ.c.uₕ -= C12(
             ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_u) * ᶠstrain_rate) / Y.c.ρ,
         )

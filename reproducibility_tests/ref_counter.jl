@@ -1,4 +1,4 @@
-198
+215
 
 # **README**
 #
@@ -20,6 +20,60 @@
 
 
 #=
+
+215
+- Update dependencies, including ClimaCore, which updated how metric terms are
+  computed
+
+214
+- Rename some config files
+
+213 
+- Update to deep-atmos eqns by default, fix vorticity diagnostic
+
+212
+- Update RRTMGP, which changes aerosol optics calculation
+
+211
+- Remove `FriersonDiffusion` and use `DecayWithHeightDiffusion` instead.
+
+210
+- Change prescribed aerosol dataset to MERRA2
+
+209
+- Floating point changes, with minor adjustments to how to sponge tendencies are
+  added.
+
+208
+- Update RRTMGP to v0.19.2, which changes cloud optics slightly
+
+207
+- Changes in the CI for the working fluid
+
+206
+- Change default timestepper to ARS343
+
+205
+- A ClimaTimeSteppers update
+
+204
+- Change cloud ice effective radius
+
+203
+- Remove `override_precip_timescale`
+
+202
+- Slightly changed CO2 prescription
+
+201
+- Updated ClimaTimeSteppers to 0.7.39, slightly improving conservation properties
+
+200
+- Set NO2 in radiation to zero because there is potentially a bug in RRTMGP
+
+199
+- Moved CI to Julia 1.11
+
 198
 - Added terms to the implicit solver that result in changes in the
 aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment

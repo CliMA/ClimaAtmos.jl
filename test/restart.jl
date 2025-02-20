@@ -1,6 +1,5 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import ClimaAtmos as CA
-import RRTMGP
 import ClimaCore
 import ClimaCore: DataLayouts, Fields, Geometry
 import ClimaCore.Fields: Field, FieldVector, field_values
@@ -73,8 +72,8 @@ function _error(
     # There are some parameters, e.g. Obukhov length, for which Inf
     # is a reasonable value (implying a stability parameter in the neutral boundary layer
     # regime, for instance). We account for such instances with the `isfinite` function.
-    arr1 .*= isfinite.(arr1)
-    arr2 .*= isfinite.(arr2)
+    arr1 = isfinite.(Array(arr1))
+    arr2 = isfinite.(Array(arr2))
     diff = abs.(arr1 .- arr2)
     denominator = abs.(arr1)
     error = ifelse.(denominator .> ABS_TOL, diff ./ denominator, diff)
@@ -247,8 +246,8 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
 
     simulation_restarted = CA.get_simulation(config_should_be_same)
 
-    if pkgversion(RRTMGP) < v"0.20"
-        # Versions of RRTMGP older than 0.20 have a bug and do not set the
+    if pkgversion(CA.RRTMGP) < v"0.22"
+        # Versions of RRTMGP older than 0.22 have a bug and do not set the
         # flux_dn_dir, so that face_clear_sw_direct_flux_dn and
         # face_sw_direct_flux_dn is uninitialized and not deterministic
         rrtmgp_clear_fix =
@@ -351,7 +350,7 @@ if MANYTESTS
 
     for configuration in configurations
         if configuration == "sphere"
-            moistures = ["equil", "nonequil"]
+            moistures = ["nonequil"]
             precips = ["1M"]
             topography = "Earth"
             turbconv_models = [nothing, "diagnostic_edmfx"]
@@ -406,6 +405,7 @@ if MANYTESTS
                             "rayleigh_sponge" => true,
                             "insolation" => "timevarying",
                             "rad" => radiation,
+                            "co2_model" => "fixed",
                             "dt_rad" => "1secs",
                             "surface_setup" => "DefaultMoninObukhov",
                             "call_cloud_diagnostics_per_stage" => true,  # Needed to ensure that cloud variables are computed

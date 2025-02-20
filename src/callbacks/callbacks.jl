@@ -1,6 +1,7 @@
 import ClimaCore.DataLayouts as DL
 import .RRTMGPInterface as RRTMGPI
 import Thermodynamics as TD
+import CloudMicrophysics as CM
 import LinearAlgebra
 import ClimaCore.Fields
 import ClimaComms
@@ -15,6 +16,7 @@ import ClimaCore.Fields: ColumnField
 
 import ClimaUtilities.TimeVaryingInputs: evaluate!
 
+
 include("callback_helpers.jl")
 
 function flux_accumulation!(integrator)
@@ -27,10 +29,11 @@ function flux_accumulation!(integrator)
         nlevels = Spaces.nlevels(axes(Y.c))
         net_energy_flux_toa[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
-            Δt
+            float(Δt)
         if p.atmos.surface_model isa PrescribedSurfaceTemperature
             net_energy_flux_sfc[] +=
-                horizontal_integral_at_boundary(ᶠradiation_flux, half) * Δt
+                horizontal_integral_at_boundary(ᶠradiation_flux, half) *
+                float(Δt)
         end
     end
     return nothing
@@ -59,6 +62,13 @@ function update_o3!(p, t, ::PrescribedOzone)
     return nothing
 end
 
+update_co2!(_, _, _) = nothing
+function update_co2!(p, t, ::MaunaLoaCO2)
+    evaluate!(p.tracers.co2, p.tracers.prescribed_co2_timevaryinginput, t)
+    return nothing
+end
+
+
 NVTX.@annotate function rrtmgp_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -71,6 +81,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     # If we have prescribed ozone or aerosols, we need to update them
     update_o3!(p, t, p.atmos.ozone)
+    update_co2!(p, t, p.atmos.co2)
     if :prescribed_aerosols_field in propertynames(p.tracers)
         for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
             field = getproperty(p.tracers.prescribed_aerosols_field, key)
@@ -86,6 +97,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     FT = Spaces.undertype(axes(Y.c))
     thermo_params = CAP.thermodynamics_params(params)
+    cmc = CAP.microphysics_cloud_params(params)
     T_min = CAP.optics_lookup_temperature_min(params)
     T_max = CAP.optics_lookup_temperature_max(params)
 
@@ -112,8 +124,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             # the fact that we have a very unrealistic initial condition
             max_relative_humidity = FT(0.6)
             t_increasing_humidity = FT(60 * 60 * 24 * 30)
-            if t < t_increasing_humidity
-                max_relative_humidity *= t / t_increasing_humidity
+            if float(t) < t_increasing_humidity
+                max_relative_humidity *= float(t) / t_increasing_humidity
             end
             @. ᶜrh = max_relative_humidity
 
@@ -130,7 +142,10 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             end
 
             # assume that ᶜq_vap = ᶜq_tot when computing ᶜvmr_h2o
-            @. ᶜvmr_h2o = TD.shum_to_mixing_ratio(ᶜq_tot, ᶜq_tot)
+            @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
+                thermo_params,
+                TD.PhasePartition(ᶜq_tot),
+            )
         else
             @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
                 thermo_params,
@@ -161,8 +176,17 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 rrtmgp_model.center_cloud_fraction,
                 axes(Y.c),
             )
+            ᶜreliq = Fields.array2field(
+                rrtmgp_model.center_cloud_liquid_effective_radius,
+                axes(Y.c),
+            )
+            ᶜreice = Fields.array2field(
+                rrtmgp_model.center_cloud_ice_effective_radius,
+                axes(Y.c),
+            )
             # RRTMGP needs lwp and iwp in g/m^2
             kg_to_g_factor = 1000
+            m_to_um_factor = FT(1e6)
             cloud_liquid_water_content =
                 radiation_mode.cloud isa PrescribedCloudInRadiation ?
                 p.radiation.prescribed_clouds_field.clwc :
@@ -182,46 +206,46 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 kg_to_g_factor * Y.c.ρ * cloud_ice_water_content * ᶜΔz /
                 max(cloud_fraction, eps(FT))
             @. ᶜfrac = cloud_fraction
+            # RRTMGP needs effective radius in microns
+            @. ᶜreliq = ifelse(
+                cloud_liquid_water_content > FT(0),
+                CM.CloudDiagnostics.effective_radius_const(cmc.liquid) *
+                m_to_um_factor,
+                FT(0),
+            )
+            @. ᶜreice = ifelse(
+                cloud_ice_water_content > FT(0),
+                CM.CloudDiagnostics.effective_radius_const(cmc.ice) *
+                m_to_um_factor,
+                FT(0),
+            )
         end
     end
 
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         if radiation_mode.aerosol_radiation
+            _update_some_aerosol_conc(Y, p)
             ᶜΔz = Fields.Δz_field(Y.c)
 
-            ᶜaero_conc = Fields.array2field(
-                rrtmgp_model.center_dust_column_mass_density,
-                axes(Y.c),
-            )
-            @. ᶜaero_conc = 0
-            for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04]
-                if prescribed_aerosol_name in
-                   propertynames(p.tracers.prescribed_aerosols_field)
-                    aerosol_field = getproperty(
-                        p.tracers.prescribed_aerosols_field,
-                        prescribed_aerosol_name,
-                    )
-                    @. ᶜaero_conc += aerosol_field * Y.c.ρ * ᶜΔz
-                end
-            end
-
-            ᶜaero_conc = Fields.array2field(
-                rrtmgp_model.center_ss_column_mass_density,
-                axes(Y.c),
-            )
-            @. ᶜaero_conc = 0
-            for prescribed_aerosol_name in [:SSLT01, :SSLT02, :SSLT03, :SSLT04]
-                if prescribed_aerosol_name in
-                   propertynames(p.tracers.prescribed_aerosols_field)
-                    aerosol_field = getproperty(
-                        p.tracers.prescribed_aerosols_field,
-                        prescribed_aerosol_name,
-                    )
-                    @. ᶜaero_conc += aerosol_field * Y.c.ρ * ᶜΔz
-                end
+            if pkgversion(RRTMGP) <= v"0.19.2"
+                more_aerosols = ()
+            else
+                more_aerosols = (
+                    (:center_dust1_column_mass_density, :DST01),
+                    (:center_dust2_column_mass_density, :DST02),
+                    (:center_dust3_column_mass_density, :DST03),
+                    (:center_dust4_column_mass_density, :DST04),
+                    (:center_dust5_column_mass_density, :DST05),
+                    (:center_ss1_column_mass_density, :SSLT01),
+                    (:center_ss2_column_mass_density, :SSLT02),
+                    (:center_ss3_column_mass_density, :SSLT03),
+                    (:center_ss4_column_mass_density, :SSLT04),
+                    (:center_ss5_column_mass_density, :SSLT05),
+                )
             end
 
             aerosol_names_pair = [
+                more_aerosols...,
                 (:center_so4_column_mass_density, :SO4),
                 (:center_bcpi_column_mass_density, :CB2),
                 (:center_bcpo_column_mass_density, :CB1),
@@ -254,6 +278,13 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 axes(Y.c),
             )
             @. ᶜvmr_o3 = p.tracers.o3
+        end
+        if :co2 in propertynames(p.tracers)
+            if pkgversion(ClimaUtilities) < v"0.1.21"
+                rrtmgp_model.volume_mixing_ratio_co2 .= p.tracers.co2
+            else
+                rrtmgp_model.volume_mixing_ratio_co2 .= p.tracers.co2[]
+            end
         end
     end
 
@@ -303,7 +334,9 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     insolation_params = CAP.insolation_params(params)
     (; insolation_tuple, rrtmgp_model) = p.radiation
 
-    current_datetime = tvi.start_date + Dates.Second(round(Int, t)) # current time
+    current_datetime =
+        t isa ITime ? ClimaUtilities.TimeManager.date(t) :
+        tvi.start_date + Dates.Second(round(Int, t)) # current time
     max_zenith_angle = FT(π) / 2 - eps(FT)
     irradiance = FT(CAP.tot_solar_irrad(params))
     au = FT(CAP.astro_unit(params))
@@ -346,6 +379,8 @@ NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
     Y = u
 
+    # TODO: Use ITime here
+    t = float(t)
     day = floor(Int, t / (60 * 60 * 24))
     sec = floor(Int, t % (60 * 60 * 24))
     @info "Saving state to HDF5 file on day $day second $sec"

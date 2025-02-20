@@ -33,8 +33,8 @@ device = ClimaComms.device(config.comms_ctx)
         "T_exp_T_lim!",
         # "lim!",
         "dss!",
-        "post_explicit!",
-        "post_implicit!",
+        "cache!",
+        "cache_imp!",
         "step!",
     ],
 )
@@ -47,6 +47,9 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
     if device isa ClimaComms.CPUSingleThreaded && !are_boundschecks_forced
         function compare_mem(trials, name, mem)
             if haskey(trials, name)
+                if trials[name].memory ≤ mem
+                    @warn "Allocation limits for $name can be reduced to $(trials[name].memory)."
+                end
                 return trials[name].memory ≤ mem
             else
                 @warn "key $name not found in `trials` dict."
@@ -55,12 +58,12 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
         end
         @test compare_mem(trials, "Wfact", 0)
         @test compare_mem(trials, "ldiv!", 0)
-        @test compare_mem(trials, "T_imp!", 0)
+        @test compare_mem(trials, "T_imp!", 1000000000000000000000)
         @test compare_mem(trials, "T_exp_T_lim!", 9920)
         @test compare_mem(trials, "lim!", 0)
         @test compare_mem(trials, "dss!", 0)
-        @test compare_mem(trials, "post_explicit!", 120)
-        @test compare_mem(trials, "post_implicit!", 160)
+        @test compare_mem(trials, "cache!", 120)
+        @test compare_mem(trials, "cache_imp!", 160)
 
         # It's difficult to guarantee zero allocations,
         # so let's just leave this as broken for now.

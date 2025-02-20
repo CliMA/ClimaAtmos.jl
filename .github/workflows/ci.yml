@@ -18,17 +18,17 @@ jobs:
   test:
     name: ci ${{ matrix.version }} - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         version:
           - '1.10'
+          - '1.11'
         os:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
-
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2

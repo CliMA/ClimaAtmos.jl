@@ -154,8 +154,7 @@ end
 
 function turbconv_center_variables(
     ls,
-    turbconv_model::DiagnosticEDMFX,
-    _,
+    turbconv_model::Union{EDOnlyEDMFX, DiagnosticEDMFX},
     gs_vars,
 )
     sgs⁰ = (; ρatke = ls.ρ * ls.turbconv_state.tke)
@@ -186,3 +185,5 @@ turbconv_face_variables(ls, turbconv_model::PrognosticEDMFX) = (;
     )
 )
 turbconv_face_variables(ls, turbconv_model::DiagnosticEDMFX) = (;)
+
+turbconv_face_variables(ls, turbconv_model::EDOnlyEDMFX) = (;)

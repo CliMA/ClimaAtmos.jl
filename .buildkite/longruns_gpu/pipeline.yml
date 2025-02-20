@@ -1,7 +1,7 @@
 agents:
   queue: clima
   slurm_mem: 8G
-  modules: julia/1.10.5 cuda/julia-pref openmpi/4.1.5-mpitrampoline nsight-systems/2024.6.1
+  modules: climacommon/2024_12_16 nsight-systems/2024.6.1
 
 env:
   JULIA_MPI_HAS_CUDA: "true"
@@ -21,13 +21,10 @@ steps:
     key: "init_gpu_env"
     command:
       - echo "--- Instantiate examples"
-      - julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'
-      - julia --project=examples -e 'using Pkg; Pkg.precompile()'
-      - julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'
-      - julia --project=examples -e 'using Pkg; Pkg.status()'
-
-      - echo "--- Download artifacts"
-      - julia --project=examples artifacts/download_artifacts.jl
+      - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'
+      - julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'
+      - julia --project=.buildkite -e 'using CUDA; CUDA.precompile_runtime()'
+      - julia --project=.buildkite -e 'using Pkg; Pkg.status()'
 
     agents:
       slurm_gpus: 1
@@ -41,20 +38,20 @@ steps:
   - group: "helem 30 dycore"
     steps:
 
-      - label: ":computer: hydrostatic balance (ρe_tot)"
+      - label: ":computer: hydrostatic balance"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_sphere_hydrostatic_balance_rhoe"
+          JOB_NAME: "longrun_hydrostatic_balance"
 
       - label: ":computer: dry baroclinic wave"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
@@ -65,7 +62,7 @@ steps:
 
       - label: ":computer: dry baroclinic wave high res"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
@@ -76,7 +73,7 @@ steps:
 
       - label: ":computer: baroclinic wave equilmoist"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
@@ -87,18 +84,18 @@ steps:
 
       - label: ":computer: baroclinic wave equilmoist high res"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_time: 12:00:00
+          slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_moist_baroclinic_wave_he60"
 
       - label: ":computer: dry held-suarez"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
@@ -109,32 +106,21 @@ steps:
 
       - label: ":computer: held-suarez, equilmoist"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_time: 12:00:00
+          slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_moist_held_suarez"
-
-      - label: ":computer: held-suarez equilmoist + deep-atmosphere eqns"
-        command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_moist_held_suarez_deepatmos"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 12:00:00
 
   - group: "helem 16 aquaplanet"
     steps:
 
       - label: ":computer: aquaplanet equilmoist allsky radiation + 0M microphysics"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
@@ -145,7 +131,7 @@ steps:
 
       - label: ":computer: aquaplanet equilmoist allsky radiation + diagnostic edmf + 0M microphysics"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
@@ -156,7 +142,7 @@ steps:
 
       - label: ":computer: aquaplanet equilmoist allsky radiation + prognostic edmf diffusion only + 0M microphysics"
         command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
@@ -167,7 +153,7 @@ steps:
 
       - label: ":computer: aquaplanet equilmoist allsky radiation + 0M microphysics + earth topography"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
@@ -178,7 +164,7 @@ steps:
 
       - label: ":umbrella: aquaplanet equilmoist allsky radiation + 1M microphysics"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
@@ -187,20 +173,9 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_allsky_1M"
 
-      - label: ":umbrella: aquaplanet non-equilmoist allsky radiation + 1M microphysics"
-        command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_1M_noneq"
-
       - label: ":computer: aquaplanet equilmoist allsky radiation + time-varying insolation + 0M microphysics + slab ocean"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
@@ -215,7 +190,7 @@ steps:
 
       - label: ":computer: aquaplanet dyamond"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
@@ -230,7 +205,7 @@ steps:
 
       - label: ":computer: amip target diagnostic edmf"
         command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
         agents:
           slurm_gpus: 1
@@ -239,20 +214,13 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "amip_target_diagedmf"
 
-  # - group: "Experimental long runs"
-
-  #   steps:
-
-  #     TODO: uncomment when zalesak works
-  #     - label: ":computer: lim ARS zalesak baroclinic wave (ρe_tot) equilmoist high resolution"
-  #       command:
-  #         - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-  #       artifact_paths: "$$JOB_NAME/output_active/*"
-  #       env:
-  #         CLIMACOMMS_CONTEXT: "MPI"
-  #       agents:
-  #         slurm_ntasks: 32
-  #         slurm_mem_per_cpu: 32GB
-  #         slurm_time: 24:00:00
-  #       env:
-  #         JOB_NAME: "longrun_zalesak_tracer_energy_bw_rhoe_equil_highres"
+      - label: ":computer: amip target edonly edmf"
+        command:
+          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+        artifact_paths: "$$JOB_NAME/output_active/*"
+        agents:
+          slurm_gpus: 1
+          slurm_time: 24:00:00
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          JOB_NAME: "amip_target_edonly"

@@ -857,3 +857,173 @@ add_diagnostic_variable!(
     comments = "Upwelling clear-sky longwave radiation at the top of the atmosphere",
     compute! = compute_rlutcs!,
 )
+
+
+###
+# Effective radius for liquid clouds (3d)
+###
+compute_reffclw!(out, state, cache, time) =
+    compute_reffclw!(out, state, cache, time, cache.atmos.radiation_mode)
+compute_reffclw!(_, _, _, _, radiation_mode::T) where {T} =
+    error_diagnostic_variable("reffclw", radiation_mode)
+
+function compute_reffclw!(
+    out,
+    state,
+    cache,
+    time,
+    radiation_mode::Union{
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
+        RRTMGPI.AllSkyRadiation,
+    },
+)
+    FT = eltype(state)
+    if isnothing(out)
+        return Fields.array2field(
+            cache.radiation.rrtmgp_model.center_cloud_liquid_effective_radius,
+            axes(state.c),
+        ) .* FT(1e-6) # RRTMGP stores r_eff in microns
+    else
+        out .=
+            Fields.array2field(
+                cache.radiation.rrtmgp_model.center_cloud_liquid_effective_radius,
+                axes(state.c),
+            ) .* FT(1e-6)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "reffclw",
+    long_name = "Effective radius for liquid clouds",
+    standard_name = "effective_radius_of_cloud_liquid_particles",
+    units = "m",
+    comments = "In-cloud ratio of the third moment over the second moment of the particle size distribution. Set to zero outside of clouds.",
+    compute! = compute_reffclw!,
+)
+
+###
+# Effective radius for ice clouds (3d)
+###
+compute_reffcli!(out, state, cache, time) =
+    compute_reffcli!(out, state, cache, time, cache.atmos.radiation_mode)
+compute_reffcli!(_, _, _, _, radiation_mode::T) where {T} =
+    error_diagnostic_variable("reffcli", radiation_mode)
+
+function compute_reffcli!(
+    out,
+    state,
+    cache,
+    time,
+    radiation_mode::Union{
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
+        RRTMGPI.AllSkyRadiation,
+    },
+)
+    FT = eltype(state)
+    if isnothing(out)
+        return Fields.array2field(
+            cache.radiation.rrtmgp_model.center_cloud_ice_effective_radius,
+            axes(state.c),
+        ) .* FT(1e-6) # RRTMGP stores r_eff in microns
+    else
+        out .=
+            Fields.array2field(
+                cache.radiation.rrtmgp_model.center_cloud_ice_effective_radius,
+                axes(state.c),
+            ) .* FT(1e-6)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "reffcli",
+    long_name = "Effective radius for ice clouds",
+    standard_name = "effective_radius_of_cloud_ice_particles",
+    units = "m",
+    comments = "In-cloud ratio of the third moment over the second moment of the particle size distribution. Set to zero outside of clouds.",
+    compute! = compute_reffcli!,
+)
+
+###
+# Aerosol extinction optical depth (2d)
+###
+compute_od550aer!(out, state, cache, time) =
+    compute_od550aer!(out, state, cache, time, cache.atmos.radiation_mode)
+compute_od550aer!(_, _, _, _, radiation_mode::T) where {T} =
+    error_diagnostic_variable("od550aer", radiation_mode)
+
+function compute_od550aer!(
+    out,
+    state,
+    cache,
+    time,
+    radiation_mode::Union{
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
+        RRTMGPI.AllSkyRadiation,
+        RRTMGPI.ClearSkyRadiation,
+    },
+)
+    @assert cache.atmos.radiation_mode.aerosol_radiation "aerosol_radiation must be true to enable aerosol optical depth diagnostics"
+    FT = eltype(state)
+    if isnothing(out)
+        return Fields.array2field(
+            cache.radiation.rrtmgp_model.aod_sw_extinction,
+            axes(Fields.level(state.f, half)),
+        )
+    else
+        out .= Fields.array2field(
+            cache.radiation.rrtmgp_model.aod_sw_extinction,
+            axes(Fields.level(state.f, half)),
+        )
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "od550aer",
+    long_name = "Ambient Aerosol Optical Thickness at 550nm",
+    standard_name = "atmosphere_optical_thickness_due_to_ambient_aerosol_particles",
+    units = "",
+    comments = "Aerosol optical depth from the ambient aerosols at wavelength 550 nm",
+    compute! = compute_od550aer!,
+)
+
+###
+# Aerosol scattering optical depth (2d)
+###
+compute_odsc550aer!(out, state, cache, time) =
+    compute_odsc550aer!(out, state, cache, time, cache.atmos.radiation_mode)
+compute_odsc550aer!(_, _, _, _, radiation_mode::T) where {T} =
+    error_diagnostic_variable("odsc550aer", radiation_mode)
+
+function compute_odsc550aer!(
+    out,
+    state,
+    cache,
+    time,
+    radiation_mode::Union{
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
+        RRTMGPI.AllSkyRadiation,
+        RRTMGPI.ClearSkyRadiation,
+    },
+)
+    @assert cache.atmos.radiation_mode.aerosol_radiation "aerosol_radiation must be true to enable aerosol optical depth diagnostics"
+    FT = eltype(state)
+    if isnothing(out)
+        return Fields.array2field(
+            cache.radiation.rrtmgp_model.aod_sw_scattering,
+            axes(Fields.level(state.f, half)),
+        )
+    else
+        out .= Fields.array2field(
+            cache.radiation.rrtmgp_model.aod_sw_scattering,
+            axes(Fields.level(state.f, half)),
+        )
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "odsc550aer",
+    long_name = "Ambient Scattering Aerosol Optical Thickness at 550nm",
+    units = "",
+    comments = "Aerosol scattering optical depth from the ambient aerosols at wavelength 550 nm",
+    compute! = compute_odsc550aer!,
+)

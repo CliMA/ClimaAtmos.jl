@@ -30,9 +30,9 @@ struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
     """
-    Reset the RNG seed before calling RRTGMP to a known value (the timestep number). 
-    When modeling cloud optics, RRTGMP uses a random number generator. 
-    Resetting the seed every time RRTGMP is called to a deterministic value ensures that 
+    Reset the RNG seed before calling RRTMGP to a known value (the timestep number). 
+    When modeling cloud optics, RRTMGP uses a random number generator. 
+    Resetting the seed every time RRTMGP is called to a deterministic value ensures that 
     the simulation is fully reproducible and can be restarted in a reproducible way. 
     Disable this option when running production runs.
     """
@@ -47,9 +47,9 @@ struct AllSkyRadiationWithClearSkyDiagnostics{
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
     """
-    Reset the RNG seed before calling RRTGMP to a known value (the timestep number). 
-    When modeling cloud optics, RRTGMP uses a random number generator. 
-    Resetting the seed every time RRTGMP is called to a deterministic value ensures that 
+    Reset the RNG seed before calling RRTMGP to a known value (the timestep number). 
+    When modeling cloud optics, RRTMGP uses a random number generator. 
+    Resetting the seed every time RRTMGP is called to a deterministic value ensures that 
     the simulation is fully reproducible and can be restarted in a reproducible way. 
     Disable this option when running production runs.
     """
@@ -349,8 +349,6 @@ array.
 - `disable_shortwave`: whether to ignore shortwave fluxes
 - `use_one_scalar_mode`: whether to use the one-scalar method for computing
   optical properties instead of the default two-stream method
-- `use_pade_cloud_optics_mode`: whether to use PADE interpolation for computing
-  cloud optical properties instead of the default LUT interpolation
 - `use_global_means_for_well_mixed_gases`: whether to use a scalar value to
   represent the volume mixing ratio of each well-mixed gas (i.e., a gas that is
   not water vapor or ozone), instead of using an array that represents a
@@ -432,7 +430,6 @@ function RRTMGPModel(
     disable_longwave::Bool = false,
     disable_shortwave::Bool = false,
     use_one_scalar_mode::Bool = false,
-    use_pade_cloud_optics_mode::Bool = false,
     use_global_means_for_well_mixed_gases::Bool = false,
     kwargs...,
 )
@@ -448,13 +445,6 @@ function RRTMGPModel(
     if use_one_scalar_mode && !disable_shortwave
         @warn "upward shortwave fluxes are not computed when \
                use_one_scalar_mode is true"
-    end
-    if use_pade_cloud_optics_mode && (
-        radiation_mode isa GrayRadiation ||
-        radiation_mode isa ClearSkyRadiation
-    )
-        @warn "use_pade_cloud_optics_mode is ignored when using GrayRadiation \
-               or ClearSkyRadiation"
     end
     if use_global_means_for_well_mixed_gases && radiation_mode isa GrayRadiation
         @warn "use_global_means_for_well_mixed_gases is ignored when using \
@@ -538,10 +528,7 @@ function RRTMGPModel(
                 data_loader(
                     RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :lw),
                 ) do ds
-                    lookup_lw_cld =
-                        use_pade_cloud_optics_mode ?
-                        RRTMGP.LookUpTables.PadeCld(ds, FT, DA) :
-                        RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
+                    lookup_lw_cld = RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
                 end
                 lookups = (; lookups..., lookup_lw_cld)
             end
@@ -615,10 +602,7 @@ function RRTMGPModel(
                 data_loader(
                     RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :sw),
                 ) do ds
-                    lookup_sw_cld =
-                        use_pade_cloud_optics_mode ?
-                        RRTMGP.LookUpTables.PadeCld(ds, FT, DA) :
-                        RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
+                    lookup_sw_cld = RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
                 end
                 lookups = (; lookups..., lookup_sw_cld)
             end
@@ -840,23 +824,58 @@ function RRTMGPModel(
         end
 
         if radiation_mode.aerosol_radiation
+            aod_sw_ext = DA{FT}(undef, ncol)
+            aod_sw_sca = DA{FT}(undef, ncol)
             aero_mask = DA{Bool}(undef, nlay, ncol)
+            set_and_save!(aod_sw_ext, "aod_sw_extinction", t..., dict)
+            set_and_save!(aod_sw_sca, "aod_sw_scattering", t..., dict)
 
             n_aerosol_sizes = maximum(values(idx_aerosize))
             n_aerosols = length(idx_aerosol)
             # See the lookup table in RRTMGP for the order of aerosols
             aero_size = DA{FT}(undef, n_aerosol_sizes, nlay, ncol)
             aero_mass = DA{FT}(undef, n_aerosols, nlay, ncol)
-            aerosol_size_names = ["dust", "ss"]
-            aerosol_names =
-                ["dust", "ss", "so4", "bcpi", "bcpo", "ocpi", "ocpo"]
-            for (i, name) in enumerate(aerosol_size_names)
-                set_and_save!(
-                    view(aero_size, i, :, :),
-                    "center_$(name)_radius",
-                    t...,
-                    dict,
-                )
+
+            if pkgversion(RRTMGP) <= v"0.19.2"
+                aerosol_size_names = ["dust", "ss"]
+                aerosol_names =
+                    ["dust", "ss", "so4", "bcpi", "bcpo", "ocpi", "ocpo"]
+                for (i, name) in enumerate(aerosol_size_names)
+                    set_and_save!(
+                        view(aero_size, i, :, :),
+                        "center_$(name)_radius",
+                        t...,
+                        dict,
+                    )
+                end
+            else
+                aerosol_names = [
+                    "dust1",
+                    "ss1",
+                    "so4",
+                    "bcpi",
+                    "bcpo",
+                    "ocpi",
+                    "ocpo",
+                    "dust2",
+                    "dust3",
+                    "dust4",
+                    "dust5",
+                    "ss2",
+                    "ss3",
+                    "ss4",
+                    "ss5",
+                ]
+                for (i, name) in enumerate(aerosol_names)
+                    if occursin("dust", name) || occursin("ss", name)
+                        set_and_save!(
+                            view(aero_size, i, :, :),
+                            "center_$(name)_radius",
+                            t...,
+                            dict,
+                        )
+                    end
+                end
             end
             for (i, name) in enumerate(aerosol_names)
                 set_and_save!(
@@ -867,6 +886,8 @@ function RRTMGPModel(
                 )
             end
             aerosol_state = RRTMGP.AtmosphericStates.AerosolState(
+                aod_sw_ext,
+                aod_sw_sca,
                 aero_mask,
                 aero_size,
                 aero_mass,

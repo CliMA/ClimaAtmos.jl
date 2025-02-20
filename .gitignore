@@ -30,6 +30,7 @@ docs/src/config.md
 # environment.
 /Manifest*.toml
 test/Manifest*.toml
+.buildkite/PrecompileCI/Manifest*.toml
 calibration/test/Manifest*.toml
 
 Artifacts.toml
@@ -50,6 +51,7 @@ Artifacts.toml
 *.g
 *.lock
 *.loc
+*.out
 
 # misc
 .DS_Store

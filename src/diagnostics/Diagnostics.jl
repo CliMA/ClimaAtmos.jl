@@ -1,6 +1,6 @@
 module Diagnostics
 
-import Dates: Month, DateTime, Period
+import Dates: Month, Day, Hour, DateTime, Period
 
 import ClimaComms
 
@@ -34,10 +34,10 @@ import ClimaAtmos.RRTMGPInterface as RRTMGPI
 
 # vert_diff
 import ..VerticalDiffusion
-import ..FriersonDiffusion
 import ..DecayWithHeightDiffusion
 
 # turbconv_model
+import ..EDOnlyEDMFX
 import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 

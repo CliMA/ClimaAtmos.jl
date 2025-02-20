@@ -7,9 +7,10 @@ import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
 
 abstract type AbstractMoistureModel end
+abstract type AbstractMoistModel <: AbstractMoistureModel end
 struct DryModel <: AbstractMoistureModel end
-struct EquilMoistModel <: AbstractMoistureModel end
-struct NonEquilMoistModel <: AbstractMoistureModel end
+struct EquilMoistModel <: AbstractMoistModel end
+struct NonEquilMoistModel <: AbstractMoistModel end
 
 abstract type AbstractPrecipitationModel end
 struct NoPrecipitation <: AbstractPrecipitationModel end
@@ -128,11 +129,47 @@ Refer to ClimaArtifacts for more information on how to obtain the artifact.
 struct PrescribedOzone <: AbstractOzone end
 
 """
+    AbstractCO2
+
+Describe how CO2 concentration should be set.
+"""
+abstract type AbstractCO2 end
+
+"""
+    FixedCO2
+
+Implement a static CO2 profile as read from disk.
+
+The data used is the one distributed with `RRTMGP.jl`.
+
+By default, this is 397.547 parts per million.
+
+This is the volume mixing ratio.
+"""
+struct FixedCO2{FT} <: AbstractCO2
+    value::FT
+
+    function FixedCO2(; FT = Float64, value = FT(397.547e-6))
+        return new{FT}(value)
+    end
+end
+
+"""
+    MuanaLoaCO2
+
+Implement a time-varying CO2 profile as read from disk.
+
+The data from the Mauna Loa CO2 measurements is used. It is a assumed that the
+concentration is constant.
+"""
+struct MaunaLoaCO2 <: AbstractCO2 end
+
+"""
     AbstractCloudInRadiation
 
 Describe how cloud properties should be set in radiation.
 
-This is only relevant for RRTGMP.
+This is only relevant for RRTMGP.
 """
 abstract type AbstractCloudInRadiation end
 
@@ -180,10 +217,6 @@ Base.@kwdef struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
     D₀::FT
 end
 diffuse_momentum(::DecayWithHeightDiffusion{DM}) where {DM} = DM
-Base.@kwdef struct FriersonDiffusion{DM, FT} <: AbstractVerticalDiffusion
-    C_E::FT
-end
-diffuse_momentum(::FriersonDiffusion{DM}) where {DM} = DM
 diffuse_momentum(::Nothing) = false
 
 abstract type AbstractSponge end
@@ -300,6 +333,15 @@ end
 
 abstract type AbstractEDMF end
 
+"""
+    Eddy-Diffusivity Only "EDMF"
+
+This is EDMF without mass-flux.
+
+This allows running simulations with TKE-based vertical diffusion.
+"""
+struct EDOnlyEDMFX <: AbstractEDMF end
+
 struct PrognosticEDMFX{N, TKE, FT} <: AbstractEDMF
     a_half::FT # WARNING: this should never be used outside of divide_by_ρa
 end
@@ -314,11 +356,13 @@ DiagnosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
 
 n_mass_flux_subdomains(::PrognosticEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N
+n_mass_flux_subdomains(::EDOnlyEDMFX) = 0
 n_mass_flux_subdomains(::Any) = 0
 
 n_prognostic_mass_flux_subdomains(::PrognosticEDMFX{N}) where {N} = N
 n_prognostic_mass_flux_subdomains(::Any) = 0
 
+use_prognostic_tke(::EDOnlyEDMFX) = true
 use_prognostic_tke(::PrognosticEDMFX{N, TKE}) where {N, TKE} = TKE
 use_prognostic_tke(::DiagnosticEDMFX{N, TKE}) where {N, TKE} = TKE
 use_prognostic_tke(::Any) = false
@@ -350,6 +394,7 @@ Base.broadcastable(x::AbstractSurfaceThermoState) = tuple(x)
 Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
 Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
+Base.broadcastable(x::EDOnlyEDMFX) = tuple(x)
 Base.broadcastable(x::PrognosticEDMFX) = tuple(x)
 Base.broadcastable(x::DiagnosticEDMFX) = tuple(x)
 Base.broadcastable(x::AbstractEntrainmentModel) = tuple(x)
@@ -456,6 +501,7 @@ Base.@kwdef struct AtmosModel{
     F,
     S,
     OZ,
+    CO2,
     RM,
     LA,
     EXTFORCING,
@@ -486,8 +532,12 @@ Base.@kwdef struct AtmosModel{
     forcing_type::F = nothing
     subsidence::S = nothing
 
-    """What to do with ozone for radiation (when using RRTGMP)"""
+    # Currently only relevant for RRTMGP, but will hopefully become standalone
+    # in the future
+    """What to do with ozone for radiation (when using RRTMGP)"""
     ozone::OZ = nothing
+    """What to do with co2 for radiation (when using RRTMGP)"""
+    co2::CO2 = nothing
 
     radiation_mode::RM = nothing
     ls_adv::LA = nothing
@@ -639,9 +689,7 @@ function AtmosConfig(
 
     all_config_files =
         normrelpath.(maybe_add_default(config_files, default_config_file))
-
     configs = map(all_config_files) do config_file
-        @info "Loading yaml file $config_file"
         strip_help_messages(load_yaml_file(config_file))
     end
     return AtmosConfig(
@@ -676,29 +724,16 @@ function AtmosConfig(
     # using config_files = [default_config_file] as a default
     # relies on the fact that override_default_config uses
     # default_config_file.
-    config = override_default_config(configs)
+    config = merge(configs...)
+    comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
+    config = override_default_config(config)
+
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     toml_dict = CP.create_toml_dict(
         FT;
         override_file = CP.merge_toml_files(config["toml"]),
     )
-    comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
-    device = ClimaComms.device(comms_ctx)
-    silence_non_root_processes(comms_ctx)
-    @info "Running on $(nameof(typeof(device)))"
-    if comms_ctx isa ClimaComms.SingletonCommsContext
-        @info "Setting up single-process ClimaAtmos run"
-    else
-        @info "Setting up distributed ClimaAtmos run" nprocs =
-            ClimaComms.nprocs(comms_ctx)
-    end
-
     config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
-    if device isa ClimaComms.CPUMultiThreaded
-        @info "Running ClimaCore in threaded mode, with $(Threads.nthreads()) threads"
-    else
-        @info "Running ClimaCore in unthreaded mode"
-    end
 
     isempty(job_id) &&
         @warn "`job_id` is empty and likely not passed to AtmosConfig"

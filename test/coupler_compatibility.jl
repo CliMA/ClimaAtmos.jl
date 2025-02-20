@@ -76,9 +76,7 @@ const T2 = 290
         p.scratch,
         p.hyperdiff,
         p.precipitation,
-        p.large_scale_advection,
         p.external_forcing,
-        p.edmf_coriolis,
         p.non_orographic_gravity_wave,
         p.orographic_gravity_wave,
         p.radiation,
@@ -213,6 +211,7 @@ end
             "surface_setup" => "PrescribedSurface",
             "moist" => "equil",
             "rad" => "clearsky",
+            "co2_model" => "fixed",
             "turbconv" => "diagnostic_edmfx",
             # NOTE: We do not output diagnostics because it leads to problems with Ubuntu on
             # GitHub actions taking too long to run (for unknown reasons). If you need this,

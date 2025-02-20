@@ -1,0 +1,10 @@
+dt_save_state_to_disk: "2days"
+initial_condition: "MoistBaroclinicWave"
+topography: "Hughes2023"
+topo_smoothing: false
+moist: equil
+dt: "200secs"
+t_end: "10days"
+diagnostics:
+  - short_name: [pfull, ua, wa, va, rv, pr, cli, hus, ke]
+    period: 1days

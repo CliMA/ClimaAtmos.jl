@@ -3,6 +3,7 @@ surface_temperature: RCEMIPII
 insolation: rcemipii
 config: box
 rad: allskywithclear
+co2_model: fixed
 turbconv: diagnostic_edmfx
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
@@ -16,7 +17,6 @@ edmfx_sgs_diffusive_flux: true
 rayleigh_sponge: true
 moist: equil
 precip_model: 0M
-override_precip_timescale: false
 dt: 30secs
 t_end: 3600secs
 dt_save_state_to_disk: 12hours
@@ -28,4 +28,3 @@ diagnostics:
     period: 5mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
     period: 5mins
-ode_algo: ARS343

@@ -86,12 +86,24 @@ function idealized_ozone(z::FT) where {FT}
     return g1 * p^g2 * exp(-p / g3) * PPMV_TO_VMR
 end
 
+#######
+# CO2 #
+#######
+
+function center_vmr_co2(co2::FixedCO2)
+    return co2.value
+end
+
+# Initialized in callback
+center_vmr_co2(::MaunaLoaCO2) = NaN
+
 function radiation_model_cache(
     Y,
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
     start_date,
     params,
     ozone,
+    co2,
     aerosol_names,
     insolation_mode;
     interpolation = RRTMGPI.BestFit(),
@@ -109,10 +121,12 @@ function radiation_model_cache(
                 "DST02",
                 "DST03",
                 "DST04",
+                "DST05",
                 "SSLT01",
                 "SSLT02",
                 "SSLT03",
                 "SSLT04",
+                "SSLT05",
                 "SO4",
                 "CB1",
                 "CB2",
@@ -150,6 +164,10 @@ function radiation_model_cache(
         else
             center_volume_mixing_ratio_o3 = center_vmr_o3(ozone, Y)
 
+            # FT is needed in case FixedCO2 is being used with an inconsistent
+            # floating point type
+            center_volume_mixing_ratio_co2 = FT(center_vmr_co2(co2))
+
             # the first value for each global mean volume mixing ratio is the
             # present-day value
             input_vmr(name) =
@@ -160,7 +178,7 @@ function radiation_model_cache(
                 center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
                 center_relative_humidity = NaN, # initialized in callback
                 center_volume_mixing_ratio_o3,
-                volume_mixing_ratio_co2 = input_vmr("carbon_dioxide_GM"),
+                volume_mixing_ratio_co2 = center_volume_mixing_ratio_co2,
                 volume_mixing_ratio_n2o = input_vmr("nitrous_oxide_GM"),
                 volume_mixing_ratio_co = input_vmr("carbon_monoxide_GM"),
                 volume_mixing_ratio_ch4 = input_vmr("methane_GM"),
@@ -176,16 +194,11 @@ function radiation_model_cache(
                 volume_mixing_ratio_hfc32 = input_vmr("hfc32_GM"),
                 volume_mixing_ratio_hfc134a = input_vmr("hfc134a_GM"),
                 volume_mixing_ratio_cf4 = input_vmr("cf4_GM"),
-                volume_mixing_ratio_no2 = 1e-8, # not available in input_data
+                volume_mixing_ratio_no2 = 0, # not available in input_data
                 latitude,
             )
             if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
-                kwargs = (;
-                    kwargs...,
-                    center_cloud_liquid_effective_radius = 12,
-                    center_cloud_ice_effective_radius = 95,
-                    ice_roughness = 2,
-                )
+                kwargs = (; kwargs..., ice_roughness = 2)
                 ᶜz = Fields.coordinate_field(Y.c).z
                 ᶜΔz = Fields.Δz_field(Y.c)
                 if radiation_mode.idealized_clouds # icy cloud on top and wet cloud on bottom
@@ -203,6 +216,8 @@ function radiation_model_cache(
                     @. ᶜis_top_cloud = ᶜz > 4e3 && ᶜz < 5e3
                     kwargs = (;
                         kwargs...,
+                        center_cloud_liquid_effective_radius = 12,
+                        center_cloud_ice_effective_radius = 25,
                         center_cloud_liquid_water_path = Fields.field2array(
                             @. ifelse(ᶜis_bottom_cloud, FT(0.002) * ᶜΔz, FT(0))
                         ),
@@ -223,24 +238,60 @@ function radiation_model_cache(
                         center_cloud_liquid_water_path = NaN, # initialized in callback
                         center_cloud_ice_water_path = NaN, # initialized in callback
                         center_cloud_fraction = NaN, # initialized in callback
+                        center_cloud_liquid_effective_radius = NaN, # initialized in callback
+                        center_cloud_ice_effective_radius = NaN, # initialized in callback
                     )
                 end
             end
 
             if aerosol_radiation
-                kwargs = (;
-                    kwargs...,
-                    # assuming fixed aerosol radius
-                    center_dust_radius = 0.2,
-                    center_ss_radius = 11.5,
-                    center_dust_column_mass_density = NaN, # initialized in callback
-                    center_ss_column_mass_density = NaN, # initialized in callback
-                    center_so4_column_mass_density = NaN, # initialized in callback
-                    center_bcpi_column_mass_density = NaN, # initialized in callback
-                    center_bcpo_column_mass_density = NaN, # initialized in callback
-                    center_ocpi_column_mass_density = NaN, # initialized in callback
-                    center_ocpo_column_mass_density = NaN, # initialized in callback
-                )
+                if pkgversion(RRTMGP) <= v"0.19.2"
+                    kwargs = (;
+                        kwargs...,
+                        # assuming fixed aerosol radius
+                        center_dust_radius = 0.55,
+                        center_ss_radius = 11.5,
+                        center_dust_column_mass_density = NaN, # initialized in callback
+                        center_ss_column_mass_density = NaN, # initialized in callback
+                        center_so4_column_mass_density = NaN, # initialized in callback
+                        center_bcpi_column_mass_density = NaN, # initialized in callback
+                        center_bcpo_column_mass_density = NaN, # initialized in callback
+                        center_ocpi_column_mass_density = NaN, # initialized in callback
+                        center_ocpo_column_mass_density = NaN, # initialized in callback
+                    )
+                else
+                    kwargs = (;
+                        kwargs...,
+                        aod_sw_extinction = NaN,
+                        aod_sw_scattering = NaN,
+                        # assuming fixed aerosol radius
+                        center_dust1_radius = 0.55,
+                        center_dust2_radius = 1.4,
+                        center_dust3_radius = 2.4,
+                        center_dust4_radius = 4.5,
+                        center_dust5_radius = 8,
+                        center_ss1_radius = 0.55,
+                        center_ss2_radius = 1.4,
+                        center_ss3_radius = 2.4,
+                        center_ss4_radius = 4.5,
+                        center_ss5_radius = 8,
+                        center_dust1_column_mass_density = NaN, # initialized in callback
+                        center_dust2_column_mass_density = NaN, # initialized in callback
+                        center_dust3_column_mass_density = NaN, # initialized in callback
+                        center_dust4_column_mass_density = NaN, # initialized in callback
+                        center_dust5_column_mass_density = NaN, # initialized in callback
+                        center_ss1_column_mass_density = NaN, # initialized in callback
+                        center_ss2_column_mass_density = NaN, # initialized in callback
+                        center_ss3_column_mass_density = NaN, # initialized in callback
+                        center_ss4_column_mass_density = NaN, # initialized in callback
+                        center_ss5_column_mass_density = NaN, # initialized in callback
+                        center_so4_column_mass_density = NaN, # initialized in callback
+                        center_bcpi_column_mass_density = NaN, # initialized in callback
+                        center_bcpo_column_mass_density = NaN, # initialized in callback
+                        center_ocpi_column_mass_density = NaN, # initialized in callback
+                        center_ocpo_column_mass_density = NaN, # initialized in callback
+                    )
+                end
             end
         end
 
@@ -295,10 +346,7 @@ function get_cloud_cache(::PrescribedCloudInRadiation, Y, start_date)
     extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
     timevaryinginputs = [
         TimeVaryingInput(
-            joinpath(
-                @clima_artifact("era5_cloud", ClimaComms.context(Y.c)),
-                "era5_cloud.nc",
-            ),
+            AA.era5_cloud_file_path(; context = ClimaComms.context(Y.c)),
             name,
             target_space;
             reference_date = start_date,
@@ -437,7 +485,7 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
     ᶜρ = Y.c.ρ
     ᶜts_gm = p.precomputed.ᶜts
     zc = Fields.coordinate_field(axes(ᶜρ)).z
-    @. ᶜdTdt_rad = rad(FT(t), zc)
+    @. ᶜdTdt_rad = rad(FT(float(t)), zc)
     @. Yₜ.c.ρe_tot += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad
     return nothing
 end

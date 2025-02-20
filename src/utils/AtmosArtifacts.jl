@@ -64,7 +64,19 @@ When available, use the high resolution artifact. Otherwise, download and use
 the low-resolution one.
 """
 function aerosol_concentration_file_path(; context = nothing)
-    return res_file_path("aerosol_concentrations"; context)
+    return res_file_path("merra2_aerosols"; context)
+end
+
+"""
+    era5_cloud_file_path(; context = nothing)
+
+Construct the file path for the era5 cloud properties NetCDF file.
+
+When available, use the high resolution artifact. Otherwise, download and use
+the low-resolution one.
+"""
+function era5_cloud_file_path(; context = nothing)
+    return res_file_path("era5_cloud"; context)
 end
 
 """
@@ -72,7 +84,7 @@ end
 
 Construct the file path for the 60arcsecond orography data NetCDF file.
 
-Downloads the 60arc-second dataset by default. 
+Downloads the 60arc-second dataset by default.
 """
 function earth_orography_file_path(; context = nothing)
     filename = "ETOPO_2022_v1_60s_N90W180_surface.nc"
@@ -80,6 +92,15 @@ function earth_orography_file_path(; context = nothing)
         @clima_artifact("earth_orography_60arcseconds", context),
         filename,
     )
+end
+
+"""
+    co2_concentration_file_path(; context = nothing)
+
+Construct the file path for the co2 concentration CSV file.
+"""
+function co2_concentration_file_path(; context = nothing)
+    return joinpath(@clima_artifact("co2_dataset", context), "co2_mm_mlo.txt")
 end
 
 end

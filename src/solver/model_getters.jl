@@ -87,8 +87,6 @@ function get_vertical_diffusion_model(
         nothing
     elseif vert_diff_name in ("true", true, "VerticalDiffusion")
         VerticalDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
-    elseif vert_diff_name in ("FriersonDiffusion",)
-        FriersonDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
     elseif vert_diff_name in ("DecayWithHeightDiffusion",)
         DecayWithHeightDiffusion{diffuse_momentum, FT}(; H = vdp.H, D₀ = vdp.D₀)
     else
@@ -308,6 +306,18 @@ function get_ozone(parsed_args)
     return parsed_args["prescribe_ozone"] ? PrescribedOzone() : IdealizedOzone()
 end
 
+function get_co2(parsed_args)
+    if isnothing(parsed_args["co2_model"])
+        return nothing
+    elseif lowercase(parsed_args["co2_model"]) == "fixed"
+        return FixedCO2()
+    elseif lowercase(parsed_args["co2_model"]) == "maunaloa"
+        return MaunaLoaCO2()
+    else
+        error("The CO2 models supported are $(subtypes(AbstractCO2))")
+    end
+end
+
 function get_cloud_in_radiation(parsed_args)
     isnothing(parsed_args["prescribe_clouds_in_radiation"]) && return nothing
     return parsed_args["prescribe_clouds_in_radiation"] ?
@@ -444,8 +454,13 @@ end
 
 function get_turbconv_model(FT, parsed_args, turbconv_params)
     turbconv = parsed_args["turbconv"]
-    @assert turbconv in
-            (nothing, "edmfx", "prognostic_edmfx", "diagnostic_edmfx")
+    @assert turbconv in (
+        nothing,
+        "edmfx",
+        "prognostic_edmfx",
+        "diagnostic_edmfx",
+        "edonly_edmfx",
+    )
 
     return if turbconv == "prognostic_edmfx"
         N = parsed_args["updraft_number"]
@@ -455,6 +470,8 @@ function get_turbconv_model(FT, parsed_args, turbconv_params)
         N = parsed_args["updraft_number"]
         TKE = parsed_args["prognostic_tke"]
         DiagnosticEDMFX{N, TKE}(turbconv_params.min_area)
+    elseif turbconv == "edonly_edmfx"
+        EDOnlyEDMFX()
     else
         nothing
     end

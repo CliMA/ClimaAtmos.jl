@@ -25,6 +25,7 @@ z_elem: 60
 z_stretch: true
 dz_bottom: 30
 rad: allskywithclear
+co2_model: fixed
 insolation: "gcmdriven"
 perturb_initstate: false
 dt: "10secs"
@@ -33,7 +34,6 @@ t_end: "72hours"
 dt_save_to_disk: "10mins"
 cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage : true
-ode_algo: "ARS343"
 toml: [scm_tomls/prognostic_edmfx.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]

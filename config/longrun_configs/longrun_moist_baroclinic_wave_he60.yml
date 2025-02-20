@@ -3,12 +3,12 @@ z_elem: 43
 dz_bottom: 30.0
 dt: "30secs"
 t_end: "30days"
-ode_algo: ARS343
 initial_condition: "MoistBaroclinicWave"
 moist: "equil"
 precip_model: "0M"
 dt_save_state_to_disk: "10days"
 netcdf_interpolation_num_points: [360, 180, 2]
+toml: [toml/longrun_baroclinic_wave.toml]
 diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke]
     period: 1days

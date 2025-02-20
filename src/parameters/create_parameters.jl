@@ -8,34 +8,19 @@ import CloudMicrophysics as CM
 import StaticArrays as SA
 
 """
-    ClimaAtmosParameters(FT, dt)
-    ClimaAtmosParameters(toml_dict, dt)
+    ClimaAtmosParameters(FT::AbstractFloat)
+    ClimaAtmosParameters(toml_dict)
     ClimaAtmosParameters(config::AtmosConfig)
 
 Construct the parameter set for any ClimaAtmos configuration.
-
-If dt is passed in, it will be used to override the `precipitation_timescale` parameter.
 """
-function ClimaAtmosParameters(config::AtmosConfig)
-    (; toml_dict, parsed_args) = config
-    FT = CP.float_type(toml_dict)
-    override_dt =
-        parsed_args["override_precip_timescale"] ?
-        FT(CA.time_to_seconds(parsed_args["dt"])) : nothing
+ClimaAtmosParameters(config::AtmosConfig) =
+    ClimaAtmosParameters(config.toml_dict)
 
-    return ClimaAtmosParameters(toml_dict, override_dt)
-end
+ClimaAtmosParameters(::Type{FT}) where {FT <: AbstractFloat} =
+    ClimaAtmosParameters(CP.create_toml_dict(FT))
 
-ClimaAtmosParameters(::Type{FT}, dt = nothing) where {FT} =
-    ClimaAtmosParameters(CP.create_toml_dict(FT), dt)
-
-function ClimaAtmosParameters(
-    toml_dict::TD,
-    dt = nothing,
-) where {TD <: CP.AbstractTOMLDict}
-    if !isnothing(dt)
-        toml_dict["precipitation_timescale"]["value"] = dt
-    end
+function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
     FT = CP.float_type(toml_dict)
 
     turbconv_params = TurbulenceConvectionParameters(toml_dict)
@@ -125,6 +110,7 @@ atmos_name_map = (;
 cloud_parameters(FT_or_toml) = (;
     liquid = CM.Parameters.CloudLiquid(FT_or_toml),
     ice = CM.Parameters.CloudIce(FT_or_toml),
+    Ch2022 = CM.Parameters.Chen2022VelType(FT_or_toml),
 )
 
 microphys_1m_parameters(::Type{FT}) where {FT <: AbstractFloat} =

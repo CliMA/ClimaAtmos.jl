@@ -1,9 +1,0 @@
-dt_save_state_to_disk: "Inf"
-dt_save_to_sol: "Inf"
-output_default_diagnostics: false
-h_elem: 30
-initial_condition: "DryBaroclinicWave"
-t_end: "1days"
-z_elem: 63
-dz_bottom: 30.0
-dt: "90secs"

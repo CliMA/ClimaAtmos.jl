@@ -76,7 +76,7 @@ max_newton_iters_ode:
   value: 1
 ode_algo:
   help: "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, etc.]"
-  value: "SSPKnoth"
+  value: "ARS343"
 krylov_rtol:
   help: "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
   value: 0.1
@@ -140,7 +140,7 @@ reference_job_id:
     Identifier of job to use as the "reference" solution in the quicklook plot; the current job's results get compared to the results of the quicklook job on the main branch
   value: ~
 vert_diff:
-  help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `FriersonDiffusion`, `DecayWithHeightDiffusion`]"
+  help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `DecayWithHeightDiffusion`]"
   value: false
 hyperdiff:
   help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
@@ -194,7 +194,7 @@ apply_limiter:
   help: "Apply a horizontal limiter to every tracer [`false` (default), `true`]"
   value: false
 precip_model:
-  help: "Precipitation model [`nothing` (default), `0M`]"
+  help: "Precipitation model [`nothing` (default), `0M`, `1M`]"
   value: ~
 cloud_model:
   help: "Cloud model [`grid_scale`, `quadrature` (default), `quadrature_sgs`]"
@@ -259,9 +259,6 @@ implicit_diffusion:
 approximate_linear_solve_iters:
   help: "Number of iterations for the approximate linear solve (used when `implicit_diffusion` is true)"
   value: 1
-override_precip_timescale:
-  help: "If true, sets τ_precip to dt. Otherwise, τ_precip is set to the value in the toml dictionary"
-  value: true
 output_default_diagnostics:
   help: "Output the default diagnostics associated to the selected atmospheric model"
   value: true
@@ -281,14 +278,17 @@ log_progress:
   help: "Log simulation progress, including wall-time estimates"
   value: true
 deep_atmosphere:
-  help: "If true, use deep atmosphere equations and metric terms, otherwise assume columns are cylindrical (shallow atmosphere) [`true`, `false` (default)]"
-  value: false
+  help: "If true, use deep atmosphere equations and metric terms, otherwise assume columns are cylindrical (shallow atmosphere) [`true` (default), `false`]"
+  value: true
 restart_file:
   help: "Path to HDF5 file to use as simulation starting point"
   value: ~
 prescribe_ozone:
   help: "Prescribe time and spatially varying ozone from a file [`false` (default), `true`]"
   value: false
+co2_model:
+  help: "What CO2 concentration to use for RRTGMP. When fixed, it is set to 397.547 parts per million. Otherwise, it is read from the MaunaLoa measuraments. [`nothing` (default), `Fixed`, `MaunaLoa`]"
+  value: ~
 detect_restart_file:
   help: "When true, try finding a restart file and use it to restart the simulation. Only works with ActiveLink."
   value: false
@@ -344,4 +344,12 @@ updraft_number:
   value: 1
 radiation_reset_rng_seed:
   help: "Reset the RNG seed before calling RRTGMP to a known value (the timestep number). When modeling cloud optics, RRTGMP uses a random number generator. Resetting the seed every time RRTGMP is called to a deterministic value ensures that the simulation is fully reproducible and can be restarted in a reproducible way. Disable this option when running production runs. Please note that this flag is only used for `AllSkyRadiation` and `AllSkyRadiationWithClearSkyDiagnostics` radiation modes."
+  value: false
+log_to_file:
+  help: "Log to stdout and file simultaneously. The log file is saved within the output directory"
+  value: false
+use_itime:
+  help: "If set to true, ITime (integer time) is used. This should be set to true when precision with time is necessary as floating point time may encounter floating point errors. When converting an ITime back to a float, the float will be Float64. See the examples below where there will be a difference in ITime and Float64:
+  1. Surface conditions that explicitly depend on time (e.g. LifeCycleTan2018, TRMM_LBA, etc.),
+  2. Time dependent forcing/tendencies use time rounded to the nearest unit of time for dt"
   value: false

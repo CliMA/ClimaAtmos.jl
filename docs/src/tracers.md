@@ -39,10 +39,21 @@ We interpolate the data from file in time every time radiation is called. The
 interpolation used is the `LinerPeriodFilling` from `ClimaUtilities`. This is a
 linear period-aware interpolation that preserves the annual cycle.
 
+### Prescribed CO2 Profile
+
+In addition to ozone, `ClimaAtmos` can prescribe CO2 concentration using data
+from [Mauna Loa CO2 measurements](https://gml.noaa.gov/ccgg/trends/data.html).
+This option is enabled with `MaunaLoaCO2`. Alternatively, `FixedCO2`
+utilizes a constant value that can be prescribed (by default, 397.547 ppm).
+
 ### More docstrings
 
 ```@docs
 ClimaAtmos.AbstractOzone
 ClimaAtmos.IdealizedOzone
 ClimaAtmos.PrescribedOzone
+
+ClimaAtmos.AbstractCO2
+ClimaAtmos.FixedCO2
+ClimaAtmos.MaunaLoaCO2
 ```

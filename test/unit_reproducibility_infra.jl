@@ -1021,7 +1021,7 @@ end
 using ClimaComms
 using ClimaCore: Spaces, Fields, Grids, InputOutput
 using ClimaCore
-if pkgversion(ClimaCore) ≥ v"0.14.18"
+if pkgversion(ClimaCore) ≥ v"0.14.20"
 
     using ClimaCore.CommonGrids
     @testset "Reproducibility infrastructure: to_dict" begin

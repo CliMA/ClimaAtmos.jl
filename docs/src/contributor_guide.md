@@ -172,13 +172,66 @@ locally. From the main directory of your local repository call
 
 ```
 julia --project -e 'using Pkg; Pkg.instantiate()'
-julia --project=docs/ -e 'using Pkg; Pkg.instantiate()'
+julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); develop(PackageSpec(path=pwd()))'
 JULIA_DEBUG=Documenter julia --project=docs/ docs/make.jl
 ```
 
 and then open `docs/build/index.html` in your favorite browser. Providing the environment variable 
 `JULIA_DEBUG=Documenter` will provide with more information in the documentation build process and
 thus help figuring out a potential bug.
+
+## Formatting
+
+One of the tests consists in checking that the code is uniformly formatted. We
+use [JuliaFormatter.jl](https://github.com/domluna/JuliaFormatter.jl) to achieve
+consistent formatting. Here's how to use it:
+
+You can install in your base environment with
+``` sh
+julia -e 'using Pkg; Pkg.add("JuliaFormatter")'
+```
+alongside your other development tools.
+
+Then, you can format the package running:
+``` julia
+using JuliaFormatter; format(".")
+```
+or just with `format(".")` if the package is already imported.
+
+The rules for formatting are defined in the `.JuliaFormatter.toml`.
+
+If you are used to formatting from the command line instead of the REPL, you can
+install `JuliaFormatter` in your base environment and call
+``` sh
+julia -e 'using JuliaFormatter; format(".")'
+```
+You could also define a shell alias
+``` sh
+alias julia_format_here="julia -e 'using JuliaFormatter; format(\".\")'"
+```
+
+!!! note
+
+In the past, `ClimaAtmos` used to have a `.dev/climaformat.jl` script. We moved
+away from it to reduce complexity in our repository and to align with the
+general tools used by the Julia community. If you are still using
+`climaformat.jl`, migrate to `JuliaFormatter` (`climaformat.jl` was just a
+wrapper around `JuliaFormatter`).
+
+## Updating environments
+
+The repository for `ClimaAtmos` includes several checked `Manifests.toml`. This
+is to help with reproducing results.
+[PkgDevTools](https://github.com/CliMA/PkgDevTools.jl) provides a convenient
+system to quickly update all the `Manifests.toml`. Please, refer to the
+documentation for more information.
+
+!!! note
+
+In the past, `ClimaAtmos` used to have a `.dev/up_deps.jl` script. We moved away
+from it because `PkgDevTools` provides a much simpler and more efficient way to
+accomplish the same result.
+
 
 ## Credits
 

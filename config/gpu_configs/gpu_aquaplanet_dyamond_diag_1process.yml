@@ -7,8 +7,9 @@ dz_bottom: 30.0
 rayleigh_sponge: true
 viscous_sponge: true
 moist: equil
-precip_model: 1M
+precip_model: 0M
 rad: allskywithclear
+co2_model: fixed
 idealized_insolation: false
 dt_rad: 1hours
 vert_diff: "DecayWithHeightDiffusion"
@@ -25,4 +26,4 @@ diagnostics:
     period: "12hours"
 prescribe_ozone: true
 aerosol_radiation: true
-prescribed_aerosols: ["CB1", "CB2", "DST01", "OC1", "OC2", "SO4", "SSLT03", "SSLT04"]
+prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05", "OC1", "OC2", "SO4", "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]

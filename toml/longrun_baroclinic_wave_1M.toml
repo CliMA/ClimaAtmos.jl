@@ -1,0 +1,5 @@
+[condensation_evaporation_timescale]
+value = 100
+
+[sublimation_deposition_timescale]
+value = 100
