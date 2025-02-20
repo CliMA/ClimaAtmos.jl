@@ -65,6 +65,16 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
                 wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
                 Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
+
+            if p.atmos.moisture_model isa NonEquilMoistModel
+                @. Yₜ.c.sgsʲs.:($$j).q_liq -=
+                wdivₕ(Y.c.sgsʲs.:($$j).q_liq * ᶜuʲs.:($$j)) -
+                Y.c.sgsʲs.:($$j).q_liq * wdivₕ(ᶜuʲs.:($$j))
+    
+                @. Yₜ.c.sgsʲs.:($$j).q_ice -=
+                wdivₕ(Y.c.sgsʲs.:($$j).q_ice * ᶜuʲs.:($$j)) -
+                Y.c.sgsʲs.:($$j).q_ice * wdivₕ(ᶜuʲs.:($$j))
+            end
         end
     end
     return nothing
@@ -229,5 +239,21 @@ function edmfx_sgs_vertical_advection_tendency!(
             edmfx_upwinding,
         )
         @. Yₜ.c.sgsʲs.:($$j).q_tot += va
+
+        if p.atmos.moisture_model isa NonEquilMoistModel
+            va = vertical_advection(
+                ᶠu³ʲs.:($j),
+                Y.c.sgsʲs.:($j).q_liq,
+                edmfx_upwinding,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_liq += va
+
+            va = vertical_advection(
+                ᶠu³ʲs.:($j),
+                Y.c.sgsʲs.:($j).q_ice,
+                edmfx_upwinding,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_ice += va
+        end
     end
 end
