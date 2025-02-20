@@ -60,6 +60,14 @@ function edmfx_precipitation_tendency!(
 
         @. Yₜ.c.sgsʲs.:($$j).q_tot +=
             ᶜSqₜᵖʲs.:($$j) * (1 - Y.c.sgsʲs.:($$j).q_tot)
+
+        if p.atmos.moisture_model isa NonEquilMoistModel
+            @. Yₜ.c.sgsʲs.:($$j).q_liq +=
+            ᶜSqₜᵖʲs.:($$j) * (1 - Y.c.sgsʲs.:($$j).q_liq)
+
+            @. Yₜ.c.sgsʲs.:($$j).q_ice +=
+            ᶜSqₜᵖʲs.:($$j) * (1 - Y.c.sgsʲs.:($$j).q_ice)
+        end
     end
     return nothing
 end
