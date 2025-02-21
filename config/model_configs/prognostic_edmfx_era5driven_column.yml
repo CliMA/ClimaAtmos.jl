@@ -1,7 +1,6 @@
 initial_condition: "ERA5"
 external_forcing: "ERA5"
 external_forcing_file: "/central/groups/esm/jschmitt/era5/forcing/era5_monthly_forcing_1.nc"
-cfsite_number: "site23"
 surface_setup: "ERA5"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
@@ -46,4 +45,3 @@ diagnostics:
   - reduction_time: max
     short_name: tke
     period: 10mins
-ode_algo: ARS343
