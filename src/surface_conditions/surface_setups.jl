@@ -261,18 +261,24 @@ struct GCMDriven
     external_forcing_file::String
     cfsite_number::String
 end
-function (surface_setup::GCMDriven)(params)
+
+struct ERA5Driven
+    external_forcing_file::String
+    cfsite_number::String
+end
+
+function (surface_setup::Union{GCMDriven, ERA5Driven})(params)
     FT = eltype(params)
     (; external_forcing_file, cfsite_number) = surface_setup
-    T = FT.(gcm_surface_conditions(external_forcing_file, cfsite_number))
+    T = FT.(external_surface_conditions(external_forcing_file, cfsite_number))
     z0 = FT(1e-4)  # zrough
     parameterization = MoninObukhov(; z0)
     return SurfaceState(; parameterization, T)
 end
 
-function gcm_surface_conditions(external_forcing_file, cfsite_number)
+function external_surface_conditions(external_forcing_file, cfsite_number)
     NC.NCDataset(external_forcing_file) do ds
-        mean(gcm_driven_timeseries(ds.group[cfsite_number], "ts"))
+        mean(external_driven_timeseries(ds.group[cfsite_number], "ts"))
     end
 end
 

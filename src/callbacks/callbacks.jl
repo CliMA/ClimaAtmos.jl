@@ -304,7 +304,12 @@ function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
     rrtmgp_model.weighted_irradiance .= FT(551.58)
 end
 
-function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
+function set_insolation_variables!(
+    Y,
+    p,
+    t,
+    ::Union{GCMDrivenInsolation, ERA5DrivenInsolation},
+)
     (; rrtmgp_model) = p.radiation
     rrtmgp_model.cos_zenith .= Fields.field2array(p.external_forcing.cos_zenith)
     rrtmgp_model.weighted_irradiance .=

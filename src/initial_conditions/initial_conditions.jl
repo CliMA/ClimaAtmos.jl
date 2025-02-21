@@ -16,6 +16,7 @@ perturb_coeff(p::Geometry.LatLongZPoint{FT}) where {FT} = sind(p.long)
 perturb_coeff(p::Geometry.XZPoint{FT}) where {FT} = sin(p.x)
 perturb_coeff(p::Geometry.XYZPoint{FT}) where {FT} = sin(p.x)
 
+
 """
     ColumnInterpolatableField(::Fields.ColumnField)
 
@@ -1291,18 +1292,38 @@ struct GCMDriven <: InitialCondition
     cfsite_number::String
 end
 
-function (initial_condition::GCMDriven)(params)
+"""
+    ERA5Driven <: InitialCondition
+The `InitialCondition` from a provided ERA5 forcing file, with data type `DType`.
+"""
+struct ERA5Driven <: InitialCondition
+    external_forcing_file::String
+    cfsite_number::String
+end
+
+function (initial_condition::Union{ERA5Driven, GCMDriven})(params)
     (; external_forcing_file, cfsite_number) = initial_condition
     thermo_params = CAP.thermodynamics_params(params)
 
     # Read forcing file
-    z_gcm = NC.NCDataset(external_forcing_file) do ds
-        vec(gcm_height(ds.group[cfsite_number]))
+    if initial_condition isa ERA5Driven
+        z_external = NC.NCDataset(external_forcing_file) do ds
+            vec(era5_height(ds.group[cfsite_number]))
+        end
+    elseif initial_condition isa GCMDriven
+        z_external = NC.NCDataset(external_forcing_file) do ds
+            vec(gcm_height(ds.group[cfsite_number]))
+        end
     end
-    vars = gcm_initial_conditions(external_forcing_file, cfsite_number)
+
+    vars = external_initial_conditions(
+        external_forcing_file,
+        cfsite_number,
+        initial_condition,
+    )
     T, u, v, q_tot, ρ₀ = map(vars) do value
         Intp.extrapolate(
-            Intp.interpolate((z_gcm,), value, Intp.Gridded(Intp.Linear())),
+            Intp.interpolate((z_external,), value, Intp.Gridded(Intp.Linear())),
             Intp.Flat(),
         )
     end
@@ -1326,14 +1347,34 @@ function (initial_condition::GCMDriven)(params)
     return local_state
 end
 
-function gcm_initial_conditions(external_forcing_file, cfsite_number)
+function external_initial_conditions(
+    external_forcing_file,
+    cfsite_number,
+    ::GCMDriven,
+)
     NC.NCDataset(external_forcing_file) do ds
         (  # TODO: Cast to CuVector for GPU compatibility
             gcm_driven_profile_tmean(ds.group[cfsite_number], "ta"),
             gcm_driven_profile_tmean(ds.group[cfsite_number], "ua"),
             gcm_driven_profile_tmean(ds.group[cfsite_number], "va"),
             gcm_driven_profile_tmean(ds.group[cfsite_number], "hus"),
-            vec(mean(1 ./ ds.group[cfsite_number]["alpha"][:, :], dims = 2)), # convert alpha to rho using rho=1/alpha, take average profile
+            gcm_driven_rho_profile_tmean(ds.group[cfsite_number]),
+        )
+    end
+end
+
+function external_initial_conditions(
+    external_forcing_file,
+    cfsite_number,
+    ::ERA5Driven,
+)
+    NC.NCDataset(external_forcing_file) do ds
+        (  # TODO: Cast to CuVector for GPU compatibility
+            era5_driven_profile_tmean(ds.group[cfsite_number], "ta"),
+            era5_driven_profile_tmean(ds.group[cfsite_number], "ua"),
+            era5_driven_profile_tmean(ds.group[cfsite_number], "va"),
+            era5_driven_profile_tmean(ds.group[cfsite_number], "hus"),
+            era5_driven_rho_profile_tmean(ds.group[cfsite_number]),
         )
     end
 end
