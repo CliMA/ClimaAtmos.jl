@@ -91,6 +91,28 @@ end
 ##
 
 """
+    ConstantBuoyancyFrequencyProfile()
+
+An `InitialCondition` with a constant Brunt-Vaisala frequency and constant wind
+velocity, where the pressure profile is hydrostatically balanced. This is
+currently the only `InitialCondition` that supports the approximation of a
+steady-state solution.
+"""
+struct ConstantBuoyancyFrequencyProfile <: InitialCondition end
+function (::ConstantBuoyancyFrequencyProfile)(params)
+    function local_state(local_geometry)
+        FT = eltype(params)
+        coord = local_geometry.coordinates
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            constant_buoyancy_frequency_initial_state(params, coord)...,
+        )
+    end
+    return local_state
+end
+
+"""
     IsothermalProfile(; temperature = 300)
 
 An `InitialCondition` with a uniform temperature profile.
@@ -182,80 +204,6 @@ function (initial_condition::MoistFromFile)(params)
             params,
             geometry = local_geometry,
             thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
-        )
-    end
-    return local_state
-end
-
-"""
-    AgnesiHProfile(; perturb = false)
-
-An `InitialCondition` with a decaying temperature profile
-"""
-struct AgnesiHProfile <: InitialCondition end
-
-function (initial_condition::AgnesiHProfile)(params)
-    function local_state(local_geometry)
-        FT = eltype(params)
-        grav = CAP.grav(params)
-        thermo_params = CAP.thermodynamics_params(params)
-        (; x, z) = local_geometry.coordinates
-        cp_d = CAP.cp_d(params)
-        cv_d = CAP.cv_d(params)
-        p_0 = CAP.p_ref_theta(params)
-        R_d = CAP.R_d(params)
-        T_0 = CAP.T_0(params)
-        # auxiliary quantities
-        T_bar = FT(250)
-        buoy_freq = grav / sqrt(cp_d * T_bar)
-        π_exn = exp(-grav * z / cp_d / T_bar)
-        p = p_0 * π_exn^(cp_d / R_d) # pressure
-        ρ = p / R_d / T_bar # density
-        velocity = @. Geometry.UVVector(FT(20), FT(0))
-        return LocalState(;
-            params,
-            geometry = local_geometry,
-            thermo_state = TD.PhaseDry_pT(thermo_params, p, T_bar),
-            velocity = velocity,
-        )
-    end
-    return local_state
-end
-
-"""
-    ScharProfile(; perturb = false)
-
-An `InitialCondition` with a prescribed Brunt-Vaisala Frequency
-"""
-Base.@kwdef struct ScharProfile <: InitialCondition end
-
-function (initial_condition::ScharProfile)(params)
-    function local_state(local_geometry)
-        FT = eltype(params)
-
-        thermo_params = CAP.thermodynamics_params(params)
-        g = CAP.grav(params)
-        R_d = CAP.R_d(params)
-        cp_d = CAP.cp_d(params)
-        cv_d = CAP.cv_d(params)
-        p₀ = CAP.p_ref_theta(params)
-        (; x, z) = local_geometry.coordinates
-        θ₀ = FT(280.0)
-        buoy_freq = FT(0.01)
-        θ = θ₀ * exp(buoy_freq^2 * z / g)
-        π_exner =
-            1 +
-            g^2 / (cp_d * θ₀ * buoy_freq^2) * (exp(-buoy_freq^2 * z / g) - 1)
-        T = π_exner * θ # temperature
-        ρ = p₀ / (R_d * T) * (π_exner)^(cp_d / R_d)
-        p = ρ * R_d * T
-        velocity = Geometry.UVVector(FT(10), FT(0))
-
-        return LocalState(;
-            params,
-            geometry = local_geometry,
-            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
-            velocity = velocity,
         )
     end
     return local_state

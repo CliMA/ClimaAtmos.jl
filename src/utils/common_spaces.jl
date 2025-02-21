@@ -97,20 +97,19 @@ function make_hybrid_spaces(
     z_grid = Grids.FiniteDifferenceGrid(z_topology)
 
     topography = parsed_args["topography"]
-    @assert topography in
-            ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar", "Hughes2023")
-    if topography == "DCMIP200"
-        z_surface = SpaceVaryingInput(topography_dcmip200, h_space)
-        @info "Computing DCMIP200 orography on spectral horizontal space"
-    elseif topography == "Agnesi"
-        z_surface = SpaceVaryingInput(topography_agnesi, h_space)
-        @info "Computing Agnesi orography on spectral horizontal space"
-    elseif topography == "Schar"
-        z_surface = SpaceVaryingInput(topography_schar, h_space)
-        @info "Computing Schar orography on spectral horizontal space"
-    elseif topography == "Hughes2023"
-        z_surface = SpaceVaryingInput(topography_hughes2023, h_space)
-        @info "Computing Hughes2023 orography on spectral horizontal space"
+    @assert topography in (
+        "NoWarp",
+        "Earth",
+        "DCMIP200",
+        "Hughes2023",
+        "Agnesi",
+        "Schar",
+        "Cosine2D",
+        "Cosine3D",
+    )
+    if topography == "NoWarp"
+        z_surface = zeros(h_space)
+        @info "No surface orography warp applied"
     elseif topography == "Earth"
         z_surface = SpaceVaryingInput(
             AA.earth_orography_file_path(;
@@ -120,9 +119,22 @@ function make_hybrid_spaces(
             h_space,
         )
         @info "Remapping Earth orography from ETOPO2022 data onto horizontal space"
-    elseif topography == "NoWarp"
-        z_surface = zeros(h_space)
-        @info "No surface orography warp applied"
+    else
+        topography_function = if topography == "DCMIP200"
+            topography_dcmip200
+        elseif topography == "Hughes2023"
+            topography_hughes2023
+        elseif topography == "Agnesi"
+            topography_agnesi
+        elseif topography == "Schar"
+            topography_schar
+        elseif topography == "Cosine2D"
+            topography_cosine_2d
+        elseif topography == "Cosine3D"
+            topography_cosine_3d
+        end
+        z_surface = SpaceVaryingInput(topography_function, h_space)
+        @info "Using $topography orography"
     end
 
     if topography == "NoWarp"
