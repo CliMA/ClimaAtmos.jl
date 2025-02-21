@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.6"
+julia_version = "1.10.5"
 manifest_format = "2.0"
 project_hash = "47a889a559efd58359f75417d3ba6a3b925a433e"
 
@@ -433,7 +433,7 @@ version = "0.7.40"
 deps = ["Artifacts", "ClimaComms", "Dates"]
 path = "../../../ClimaUtilities.jl"
 uuid = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
-version = "0.1.22"
+version = "0.1.21"
 weakdeps = ["Adapt", "CUDA", "ClimaCore", "ClimaCoreTempestRemap", "Interpolations", "NCDatasets"]
 
     [deps.ClimaUtilities.extensions]

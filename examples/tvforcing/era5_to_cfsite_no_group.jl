@@ -203,11 +203,11 @@ end
 
 # add coszen 
 coszen_list = get_coszen_inst.(lat, lon, tvforcing["valid_time"][:])
-defVar(ds, "coszen", Float64, ("x", "y", "time"))
-ds["coszen"][:] = repeat(reshape([c[1] for c in coszen_list], 1, 1, :), 2, 2, 1)
+defVar(ds, "coszen", Float64, ("x", "y", "z", "time"))
+ds["coszen"][:] = repeat(reshape([c[1] for c in coszen_list], 1, 1, 1, :), 2, 2, length(ds["z"]), 1)
 
-defVar(ds, "rsdt", Float64, ("x", "y", "time"))
-ds["rsdt"][:] = repeat(reshape([c[2] for c in coszen_list], 1, 1, :), 2, 2, 1)
+defVar(ds, "rsdt", Float64, ("x", "y", "z", "time"))
+ds["rsdt"][:] = repeat(reshape([c[2] for c in coszen_list], 1, 1, 1, :), 2, 2, length(ds["z"]), 1)
 
 
 # add latent and sensitble heat fluxes (I think we'll probably just use ts and prescribed monin obukhov length)
@@ -216,18 +216,18 @@ lon_index_surf = findfirst(tv_site23_surface["longitude"][:] .== lon)
 lat_index_surf = findfirst(tv_site23_surface["latitude"][:] .== lat)
 matching_time_indices = findall(in(tvforcing["valid_time"][:]), tv_site23_surface["valid_time"][:])
 
-defVar(ds, "hfls", Float64, ("x", "y", "time"))
-defVar(ds, "hfss", Float64, ("x", "y", "time"))
+defVar(ds, "hfls", Float64, ("x", "y", "z", "time"))
+defVar(ds, "hfss", Float64, ("x", "y", "z", "time"))
 slhf = -tv_site23_surface["slhf"][lon_index_surf, lat_index_surf, matching_time_indices] / time_resolution
 sshf = -tv_site23_surface["sshf"][lon_index_surf, lat_index_surf, matching_time_indices] / time_resolution
-ds["hfls"][:] = repeat(reshape(slhf, 1, 1, :), 2, 2, 1)
-ds["hfss"][:] = repeat(reshape(sshf, 1, 1, :), 2, 2, 1)
+ds["hfls"][:] = repeat(reshape(slhf, 1, 1, 1, :), 2, 2, length(ds["z"]), 1)
+ds["hfss"][:] = repeat(reshape(sshf, 1, 1, 1, :), 2, 2, length(ds["z"]), 1)
 
 # add temperature data - annoying a different file 
 tv_site23_surface2 = NCDataset("/scratch/julian/ERA5/tv/site23_surface_forcing2.nc")
-defVar(ds, "ts", Float64, ("x", "y", "time"))
+defVar(ds, "ts", Float64, ("x", "y","z", "time"))
 skt = tv_site23_surface2["skt"][lon_index_surf, lat_index_surf, matching_time_indices]
-ds["ts"][:] = repeat(reshape(skt, 1, 1, :), 2, 2, 1)
+ds["ts"][:] = repeat(reshape(skt, 1, 1, 1, :), 2, 2, length(ds["z"]),  1)
 
 
 # Close the dataset
