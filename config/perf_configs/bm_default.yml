@@ -1,4 +1,3 @@
-apply_limiter: true
 h_elem: 12
 z_elem: 25
 dt: "1secs"
@@ -12,3 +11,4 @@ surface_setup: "DefaultMoninObukhov"
 rad: "allskywithclear"
 vert_diff: true
 precip_model: "0M"
+perf_summary: true
