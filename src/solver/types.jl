@@ -36,7 +36,7 @@ struct SGSMean <: AbstractSGSamplingType end
 
 Compute the mean as a weighted sum of the Gauss-Hermite quadrature points.
 """
-struct SGSQuadrature{N, A, W} <: AbstractSGSamplingType
+struct SGSQuadrature{N,A,W} <: AbstractSGSamplingType
     a::A  # values
     w::W  # weights
     function SGSQuadrature(::Type{FT}; quadrature_order = 3) where {FT}
@@ -44,8 +44,8 @@ struct SGSQuadrature{N, A, W} <: AbstractSGSamplingType
         # TODO: double check this python-> julia translation
         # a, w = np.polynomial.hermite.hermgauss(N)
         a, w = FastGaussQuadrature.gausshermite(N)
-        a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
-        return new{N, typeof(a), typeof(w)}(a, w)
+        a, w = SA.SVector{N,FT}(a), SA.SVector{N,FT}(w)
+        return new{N,typeof(a),typeof(w)}(a, w)
     end
 end
 quadrature_order(::SGSQuadrature{N}) where {N} = N
@@ -70,7 +70,7 @@ struct GridScaleCloud <: AbstractCloudModel end
 Compute the cloud fraction by sampling over the quadrature points, but without
 the EDMF sub-grid scale model.
 """
-struct QuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
+struct QuadratureCloud{SGQ<:AbstractSGSamplingType} <: AbstractCloudModel
     SG_quad::SGQ
 end
 
@@ -81,7 +81,7 @@ Compute the cloud fraction as a sum of the EDMF environment and updraft
 contributions. The EDMF environment cloud fraction is computed by sampling over
 the quadrature points.
 """
-struct SGSQuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
+struct SGSQuadratureCloud{SGQ<:AbstractSGSamplingType} <: AbstractCloudModel
     SG_quad::SGQ
 end
 
@@ -89,6 +89,7 @@ abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct ZonallyAsymmetricSST <: AbstractSST end
 struct RCEMIPIISST <: AbstractSST end
+struct ExternalTVColumnSST <: AbstractSST end
 
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
@@ -190,8 +191,7 @@ struct PrescribedCloudInRadiation <: AbstractCloudInRadiation end
 
 abstract type AbstractSurfaceTemperature end
 struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end
-Base.@kwdef struct PrognosticSurfaceTemperature{FT} <:
-                   AbstractSurfaceTemperature
+Base.@kwdef struct PrognosticSurfaceTemperature{FT} <: AbstractSurfaceTemperature
     # optional slab ocean parameters:
     depth_ocean::FT = 40 # ocean mixed layer depth [m]
     ρ_ocean::FT = 1020 # ocean density [kg / m³]
@@ -209,16 +209,16 @@ Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
 end
 
 abstract type AbstractVerticalDiffusion end
-Base.@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
+Base.@kwdef struct VerticalDiffusion{DM,FT} <: AbstractVerticalDiffusion
     C_E::FT
 end
 diffuse_momentum(::VerticalDiffusion{DM}) where {DM} = DM
-Base.@kwdef struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
+Base.@kwdef struct DecayWithHeightDiffusion{DM,FT} <: AbstractVerticalDiffusion
     H::FT
     D₀::FT
 end
 diffuse_momentum(::DecayWithHeightDiffusion{DM}) where {DM} = DM
-Base.@kwdef struct FriersonDiffusion{DM, FT} <: AbstractVerticalDiffusion
+Base.@kwdef struct FriersonDiffusion{DM,FT} <: AbstractVerticalDiffusion
     C_E::FT
 end
 diffuse_momentum(::FriersonDiffusion{DM}) where {DM} = DM
@@ -264,7 +264,7 @@ Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
     dϕ_s::FT = -5
 end
 
-Base.@kwdef struct OrographicGravityWave{FT, S} <: AbstractGravityWave
+Base.@kwdef struct OrographicGravityWave{FT,S} <: AbstractGravityWave
     γ::FT = 0.4
     ϵ::FT = 0.0
     β::FT = 0.5
@@ -283,7 +283,7 @@ struct Subsidence{T} <: AbstractForcing
     prof::T
 end
 # TODO: is this a forcing?
-struct LargeScaleAdvection{PT, PQ}
+struct LargeScaleAdvection{PT,PQ}
     prof_dTdt::PT # Set large-scale cooling
     prof_dqtdt::PQ # Set large-scale drying
 end
@@ -310,7 +310,7 @@ end
 
 struct ISDACForcing end
 
-struct EDMFCoriolis{U, V, FT}
+struct EDMFCoriolis{U,V,FT}
     prof_ug::U
     prof_vg::V
     coriolis_param::FT
@@ -326,17 +326,14 @@ Base.broadcastable(x::BuoyGradMean) = tuple(x)
 
 Variables used in the environmental buoyancy gradient computation.
 """
-Base.@kwdef struct EnvBuoyGradVars{FT, TS}
+Base.@kwdef struct EnvBuoyGradVars{FT,TS}
     ts::TS
     ∂θv∂z_unsat::FT
     ∂qt∂z_sat::FT
     ∂θl∂z_sat::FT
 end
 
-function EnvBuoyGradVars(
-    ts::TD.ThermodynamicState,
-    ∂θv∂z_unsat_∂qt∂z_sat_∂θl∂z_sat,
-)
+function EnvBuoyGradVars(ts::TD.ThermodynamicState, ∂θv∂z_unsat_∂qt∂z_sat_∂θl∂z_sat)
     (; ∂θv∂z_unsat, ∂qt∂z_sat, ∂θl∂z_sat) = ∂θv∂z_unsat_∂qt∂z_sat_∂θl∂z_sat
     return EnvBuoyGradVars(ts, ∂θv∂z_unsat, ∂qt∂z_sat, ∂θl∂z_sat)
 end
@@ -353,17 +350,15 @@ end
 
 abstract type AbstractEDMF end
 
-struct PrognosticEDMFX{N, TKE, FT} <: AbstractEDMF
+struct PrognosticEDMFX{N,TKE,FT} <: AbstractEDMF
     a_half::FT # WARNING: this should never be used outside of divide_by_ρa
 end
-PrognosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
-    PrognosticEDMFX{N, TKE, FT}(a_half)
+PrognosticEDMFX{N,TKE}(a_half::FT) where {N,TKE,FT} = PrognosticEDMFX{N,TKE,FT}(a_half)
 
-struct DiagnosticEDMFX{N, TKE, FT} <: AbstractEDMF
+struct DiagnosticEDMFX{N,TKE,FT} <: AbstractEDMF
     a_half::FT # WARNING: this should never be used outside of divide_by_ρa
 end
-DiagnosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
-    DiagnosticEDMFX{N, TKE, FT}(a_half)
+DiagnosticEDMFX{N,TKE}(a_half::FT) where {N,TKE,FT} = DiagnosticEDMFX{N,TKE,FT}(a_half)
 
 n_mass_flux_subdomains(::PrognosticEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N
@@ -372,8 +367,8 @@ n_mass_flux_subdomains(::Any) = 0
 n_prognostic_mass_flux_subdomains(::PrognosticEDMFX{N}) where {N} = N
 n_prognostic_mass_flux_subdomains(::Any) = 0
 
-use_prognostic_tke(::PrognosticEDMFX{N, TKE}) where {N, TKE} = TKE
-use_prognostic_tke(::DiagnosticEDMFX{N, TKE}) where {N, TKE} = TKE
+use_prognostic_tke(::PrognosticEDMFX{N,TKE}) where {N,TKE} = TKE
+use_prognostic_tke(::DiagnosticEDMFX{N,TKE}) where {N,TKE} = TKE
 use_prognostic_tke(::Any) = false
 
 abstract type AbstractEntrainmentModel end
@@ -443,7 +438,7 @@ struct Implicit <: AbstractTimesteppingMode end
 
 struct QuasiMonotoneLimiter end # For dispatching to use the ClimaCore QuasiMonotoneLimiter.
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM}
+Base.@kwdef struct AtmosNumerics{EN_UP,TR_UP,ED_UP,ED_SG_UP,DYCORE,LIM}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_upwinding::EN_UP
@@ -483,16 +478,9 @@ function Base.summary(io::IO, numerics::AtmosNumerics)
     end
 end
 
-const ValTF = Union{Val{true}, Val{false}}
+const ValTF = Union{Val{true},Val{false}}
 
-Base.@kwdef struct EDMFXModel{
-    EEM,
-    EDM,
-    ESMF <: ValTF,
-    ESDF <: ValTF,
-    ENP <: ValTF,
-    EVR <: ValTF,
-}
+Base.@kwdef struct EDMFXModel{EEM,EDM,ESMF<:ValTF,ESDF<:ValTF,ENP<:ValTF,EVR<:ValTF}
     entr_model::EEM = nothing
     detr_model::EDM = nothing
     sgs_mass_flux::ESMF = Val(false)
@@ -611,7 +599,7 @@ end
 struct EveryΔt{FT} <: AbstractCallbackFrequency
     Δt::FT
 end
-struct AtmosCallback{F, CBF <: AbstractCallbackFrequency, VI <: Vector{Int}}
+struct AtmosCallback{F,CBF<:AbstractCallbackFrequency,VI<:Vector{Int}}
     f!::F
     cbf::CBF
     n_measured_calls::VI
@@ -625,10 +613,8 @@ prescribed_every_Δt_steps(cb::AtmosCallback) = prescribed_every_Δt_steps(cb.cb
 
 # TODO: improve accuracy
 n_expected_calls(cbf::EveryΔt, dt, tspan) = (tspan[2] - tspan[1]) / cbf.Δt
-n_expected_calls(cbf::EveryNSteps, dt, tspan) =
-    ((tspan[2] - tspan[1]) / dt) / cbf.n
-n_expected_calls(cb::AtmosCallback, dt, tspan) =
-    n_expected_calls(cb.cbf, dt, tspan)
+n_expected_calls(cbf::EveryNSteps, dt, tspan) = ((tspan[2] - tspan[1]) / dt) / cbf.n
+n_expected_calls(cb::AtmosCallback, dt, tspan) = n_expected_calls(cb.cbf, dt, tspan)
 
 AtmosCallback(f!, cbf) = AtmosCallback(f!, cbf, Int[0])
 function (cb::AtmosCallback)(integrator)
@@ -638,7 +624,7 @@ function (cb::AtmosCallback)(integrator)
 end
 n_measured_calls(cb::AtmosCallback) = cb.n_measured_calls[]
 
-struct AtmosConfig{FT, TD, PA, C, CF}
+struct AtmosConfig{FT,TD,PA,C,CF}
     toml_dict::TD
     parsed_args::PA
     comms_ctx::C
@@ -648,7 +634,7 @@ end
 
 Base.eltype(::AtmosConfig{FT}) where {FT} = FT
 
-TupleOrVector(T) = Union{Tuple{<:T, Vararg{T}}, Vector{<:T}}
+TupleOrVector(T) = Union{Tuple{<:T,Vararg{T}},Vector{<:T}}
 
 # Use short, relative paths, if possible.
 function normrelpath(file)
@@ -695,19 +681,13 @@ function AtmosConfig(
     comms_ctx = nothing,
 )
 
-    all_config_files =
-        normrelpath.(maybe_add_default(config_files, default_config_file))
+    all_config_files = normrelpath.(maybe_add_default(config_files, default_config_file))
 
     configs = map(all_config_files) do config_file
         @info "Loading yaml file $config_file"
         strip_help_messages(load_yaml_file(config_file))
     end
-    return AtmosConfig(
-        configs;
-        comms_ctx,
-        config_files = all_config_files,
-        job_id,
-    )
+    return AtmosConfig(configs; comms_ctx, config_files = all_config_files, job_id)
 end
 
 """
@@ -721,8 +701,7 @@ end
 Constructs the AtmosConfig from the Dicts passed in. This Dict overrides all of
 the default configurations set in `default_config_dict()`.
 """
-AtmosConfig(configs::AbstractDict; kwargs...) =
-    AtmosConfig((configs,); kwargs...)
+AtmosConfig(configs::AbstractDict; kwargs...) = AtmosConfig((configs,); kwargs...)
 function AtmosConfig(
     configs::TupleOrVector(AbstractDict);
     comms_ctx = nothing,
@@ -736,10 +715,7 @@ function AtmosConfig(
     # default_config_file.
     config = override_default_config(configs)
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
-    toml_dict = CP.create_toml_dict(
-        FT;
-        override_file = CP.merge_toml_files(config["toml"]),
-    )
+    toml_dict = CP.create_toml_dict(FT; override_file = CP.merge_toml_files(config["toml"]))
     comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
     device = ClimaComms.device(comms_ctx)
     silence_non_root_processes(comms_ctx)
@@ -747,8 +723,7 @@ function AtmosConfig(
     if comms_ctx isa ClimaComms.SingletonCommsContext
         @info "Setting up single-process ClimaAtmos run"
     else
-        @info "Setting up distributed ClimaAtmos run" nprocs =
-            ClimaComms.nprocs(comms_ctx)
+        @info "Setting up distributed ClimaAtmos run" nprocs = ClimaComms.nprocs(comms_ctx)
     end
 
     config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
@@ -758,8 +733,7 @@ function AtmosConfig(
         @info "Running ClimaCore in unthreaded mode"
     end
 
-    isempty(job_id) &&
-        @warn "`job_id` is empty and likely not passed to AtmosConfig"
+    isempty(job_id) && @warn "`job_id` is empty and likely not passed to AtmosConfig"
 
     @info "Making AtmosConfig with config files: $(sprint(config_summary, config_files))"
 
@@ -767,13 +741,7 @@ function AtmosConfig(
     TD = typeof(toml_dict)
     PA = typeof(config)
     CF = typeof(config_files)
-    return AtmosConfig{FT, TD, PA, C, CF}(
-        toml_dict,
-        config,
-        comms_ctx,
-        config_files,
-        job_id,
-    )
+    return AtmosConfig{FT,TD,PA,C,CF}(toml_dict, config, comms_ctx, config_files, job_id)
 end
 
 """
@@ -800,10 +768,7 @@ function maybe_resolve_and_acquire_artifacts(
     end
 end
 
-function maybe_resolve_and_acquire_artifacts(
-    input,
-    _::ClimaComms.AbstractCommsContext,
-)
+function maybe_resolve_and_acquire_artifacts(input, _::ClimaComms.AbstractCommsContext)
     return input
 end
 
@@ -817,10 +782,7 @@ function config_with_resolved_and_acquired_artifacts(
     config::AbstractDict,
     context::ClimaComms.AbstractCommsContext,
 )
-    return Dict(
-        k => maybe_resolve_and_acquire_artifacts(v, context) for
-        (k, v) in config
-    )
+    return Dict(k => maybe_resolve_and_acquire_artifacts(v, context) for (k, v) in config)
 end
 
 function config_summary(io::IO, config_files)

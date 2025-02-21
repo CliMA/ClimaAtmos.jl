@@ -13,20 +13,28 @@ end
 function get_sfc_temperature_form(parsed_args)
     surface_temperature = parsed_args["surface_temperature"]
     @assert surface_temperature in
-            ("ZonallyAsymmetric", "ZonallySymmetric", "RCEMIPII")
+            ("ZonallyAsymmetric", "ZonallySymmetric", "RCEMIPII", "ExternalTVColumn")
     return if surface_temperature == "ZonallyAsymmetric"
         ZonallyAsymmetricSST()
     elseif surface_temperature == "ZonallySymmetric"
         ZonallySymmetricSST()
     elseif surface_temperature == "RCEMIPII"
         RCEMIPIISST()
+    elseif surface_temperature == "ExternalTVColumn"
+        ExternalTVColumnSST()
     end
 end
 
 function get_insolation_form(parsed_args)
     insolation = parsed_args["insolation"]
-    @assert insolation in
-            ("idealized", "timevarying", "rcemipii", "gcmdriven", "era5driven", "externaldriventv")
+    @assert insolation in (
+        "idealized",
+        "timevarying",
+        "rcemipii",
+        "gcmdriven",
+        "era5driven",
+        "externaldriventv",
+    )
     return if insolation == "idealized"
         IdealizedInsolation()
     elseif insolation == "timevarying"
@@ -48,8 +56,7 @@ end
 function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     hyperdiff_name = parsed_args["hyperdiff"]
     if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
-        ν₄_vorticity_coeff =
-            FT(parsed_args["vorticity_hyperdiffusion_coefficient"])
+        ν₄_vorticity_coeff = FT(parsed_args["vorticity_hyperdiffusion_coefficient"])
         ν₄_scalar_coeff = FT(parsed_args["scalar_hyperdiffusion_coefficient"])
         divergence_damping_factor = FT(parsed_args["divergence_damping_factor"])
         return ClimaHyperdiffusion(;
@@ -91,11 +98,11 @@ function get_vertical_diffusion_model(
     return if vert_diff_name in ("false", false, "none")
         nothing
     elseif vert_diff_name in ("true", true, "VerticalDiffusion")
-        VerticalDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
+        VerticalDiffusion{diffuse_momentum,FT}(; C_E = vdp.C_E)
     elseif vert_diff_name in ("FriersonDiffusion",)
-        FriersonDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
+        FriersonDiffusion{diffuse_momentum,FT}(; C_E = vdp.C_E)
     elseif vert_diff_name in ("DecayWithHeightDiffusion",)
-        DecayWithHeightDiffusion{diffuse_momentum, FT}(; H = vdp.H, D₀ = vdp.D₀)
+        DecayWithHeightDiffusion{diffuse_momentum,FT}(; H = vdp.H, D₀ = vdp.D₀)
     else
         error("Uncaught diffusion model `$vert_diff_name`.")
     end
@@ -103,11 +110,9 @@ end
 
 function get_surface_model(parsed_args)
     prognostic_surface_name = parsed_args["prognostic_surface"]
-    return if prognostic_surface_name in
-              ("false", false, "PrescribedSurfaceTemperature")
+    return if prognostic_surface_name in ("false", false, "PrescribedSurfaceTemperature")
         PrescribedSurfaceTemperature()
-    elseif prognostic_surface_name in
-           ("true", true, "PrognosticSurfaceTemperature")
+    elseif prognostic_surface_name in ("true", true, "PrognosticSurfaceTemperature")
         PrognosticSurfaceTemperature()
     else
         error("Uncaught surface model `$prognostic_surface_name`.")
@@ -119,9 +124,8 @@ function get_surface_albedo_model(parsed_args, params, ::Type{FT}) where {FT}
     return if albedo_name in ("ConstantAlbedo",)
         ConstantAlbedo{FT}(; α = params.idealized_ocean_albedo)
     elseif albedo_name in ("RegressionFunctionAlbedo",)
-        isnothing(parsed_args["rad"]) && error(
-            "Radiation model not specified, so cannot use RegressionFunctionAlbedo",
-        )
+        isnothing(parsed_args["rad"]) &&
+            error("Radiation model not specified, so cannot use RegressionFunctionAlbedo")
         RegressionFunctionAlbedo{FT}(; n = params.water_refractive_index)
     elseif albedo_name in ("CouplerAlbedo",)
         CouplerAlbedo()
@@ -163,10 +167,7 @@ function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     end
 end
 
-function get_non_orographic_gravity_wave_model(
-    parsed_args,
-    ::Type{FT},
-) where {FT}
+function get_non_orographic_gravity_wave_model(parsed_args, ::Type{FT}) where {FT}
     nogw_name = parsed_args["non_orographic_gravity_wave"]
     @assert nogw_name in (true, false)
     return if nogw_name == true
@@ -200,9 +201,9 @@ function get_orographic_gravity_wave_model(parsed_args, ::Type{FT}) where {FT}
     ogw_name = parsed_args["orographic_gravity_wave"]
     @assert ogw_name in (nothing, "gfdl_restart", "raw_topo")
     return if ogw_name == "gfdl_restart"
-        OrographicGravityWave{FT, String}()
+        OrographicGravityWave{FT,String}()
     elseif ogw_name == "raw_topo"
-        OrographicGravityWave{FT, String}(topo_info = "raw_topo")
+        OrographicGravityWave{FT,String}(topo_info = "raw_topo")
     else
         nothing
     end
@@ -327,8 +328,8 @@ end
 
 function get_cloud_in_radiation(parsed_args)
     isnothing(parsed_args["prescribe_clouds_in_radiation"]) && return nothing
-    return parsed_args["prescribe_clouds_in_radiation"] ?
-           PrescribedCloudInRadiation() : InteractiveCloudInRadiation()
+    return parsed_args["prescribe_clouds_in_radiation"] ? PrescribedCloudInRadiation() :
+           InteractiveCloudInRadiation()
 end
 
 function get_forcing_type(parsed_args)
@@ -395,12 +396,10 @@ function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
     prof_dqtdt = if ls_adv in ("Bomex", "LifeCycleTan2018", "Rico", "GATE_III")
         (thermo_params, ᶜts, t, z) -> prof_dqtdt₀(z)
     elseif ls_adv == "ARM_SGP"
-        (thermo_params, ᶜts, t, z) ->
-            prof_dqtdt₀(TD.exner(thermo_params, ᶜts), t, z)
+        (thermo_params, ᶜts, t, z) -> prof_dqtdt₀(TD.exner(thermo_params, ᶜts), t, z)
     end
     prof_dTdt = if ls_adv in ("Bomex", "LifeCycleTan2018", "Rico")
-        (thermo_params, ᶜts, t, z) ->
-            prof_dTdt₀(TD.exner(thermo_params, ᶜts), z)
+        (thermo_params, ᶜts, t, z) -> prof_dTdt₀(TD.exner(thermo_params, ᶜts), z)
     elseif ls_adv == "ARM_SGP"
         (thermo_params, ᶜts, t, z) -> prof_dTdt₀(t, z)
     elseif ls_adv == "GATE_III"
@@ -473,17 +472,16 @@ end
 
 function get_turbconv_model(FT, parsed_args, turbconv_params)
     turbconv = parsed_args["turbconv"]
-    @assert turbconv in
-            (nothing, "edmfx", "prognostic_edmfx", "diagnostic_edmfx")
+    @assert turbconv in (nothing, "edmfx", "prognostic_edmfx", "diagnostic_edmfx")
 
     return if turbconv == "prognostic_edmfx"
         N = parsed_args["updraft_number"]
         TKE = parsed_args["prognostic_tke"]
-        PrognosticEDMFX{N, TKE}(turbconv_params.min_area)
+        PrognosticEDMFX{N,TKE}(turbconv_params.min_area)
     elseif turbconv == "diagnostic_edmfx"
         N = parsed_args["updraft_number"]
         TKE = parsed_args["prognostic_tke"]
-        DiagnosticEDMFX{N, TKE}(turbconv_params.min_area)
+        DiagnosticEDMFX{N,TKE}(turbconv_params.min_area)
     else
         nothing
     end
