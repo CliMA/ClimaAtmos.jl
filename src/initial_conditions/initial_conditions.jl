@@ -459,8 +459,7 @@ function overwrite_initial_conditions!(
     Y.c.uₕ .= C12.(Geometry.UVVector.(vel))
     Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
     e_kin = similar(ᶜT)
-    bc_kinetic = compute_kinetic(Y.c.uₕ, Y.f.u₃)
-    @. e_kin = bc_kinetic
+    e_kin .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
     e_pot = Fields.coordinate_field(Y.c).z .* thermo_params.grav
     Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
     if hasproperty(Y.c, :ρq_tot)
