@@ -828,48 +828,32 @@ steps:
         depends_on:
           - "baroclinic_wave"
           - "baroclinic_wave_gpu"
-
-      - label: "GPU: GPU dry baroclinic wave"
-        key: "baroclinic_wave_helem30"
-        command:
-          - mkdir -p baroclinic_wave_helem30
-          - >
-            nsys profile --delay 100 --trace=nvtx,cuda --output=baroclinic_wave_helem30/output_active/report
-            julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-            --config_file ${GPU_CONFIG_PATH}/baroclinic_wave_helem30.yml
-            --job_id baroclinic_wave_helem30
-        artifact_paths: "baroclinic_wave_helem30/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_mem: 32GB
-          slurm_gpus: 1
           
 
-      - label: "GPU: GPU dry baroclinic wave - 4 gpus"
-        key: "baroclinic_wave_helem30_4process"
+      - label: "GPU: baroclinic wave - 2 gpus"
+        key: "baroclinic_wave_2gpu"
         command:
-          - mkdir -p baroclinic_wave_helem30_4process
+          - mkdir -p baroclinic_wave_2gpu
           # - >
           #   srun --cpu-bind=threads --cpus-per-task=4
-          #   nsys profile --delay 100 --trace=nvtx,cuda,mpi --output=baroclinic_wave_helem30_4process/output_active/report-%q{PMI_RANK}
+          #   nsys profile --delay 100 --trace=nvtx,cuda,mpi --output=baroclinic_wave_2gpu/output_active/report-%q{PMI_RANK}
           #   julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          #   --config_file ${GPU_CONFIG_PATH}/baroclinic_wave_helem30.yml
-          #   --job_id baroclinic_wave_helem30_4process
+          #   --config_file ${CONFIG_PATH}/baroclinic_wave.yml
+          #   --job_id baroclinic_wave_2gpu
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
-            --config_file ${GPU_CONFIG_PATH}/baroclinic_wave_helem30.yml
-            --job_id baroclinic_wave_helem30_4process
-        artifact_paths: "baroclinic_wave_helem30_4process/output_active/*"
+            --config_file ${CONFIG_PATH}/baroclinic_wave.yml
+            --job_id baroclinic_wave_2gpu
+        artifact_paths: "baroclinic_wave_2gpu/output_active/*"
         env:
           CLIMACOMMS_CONTEXT: "MPI"
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
-          slurm_ntasks: 4
-          slurm_mem: 32GB
+          slurm_ntasks: 2
+          slurm_mem: 16GB
 
       - label: "GPU: test DYAMOND interpolated initial conditions"
         command: >
@@ -942,19 +926,19 @@ steps:
           slurm_mem: 16G
           slurm_gpus: 1
 
-      - label: ":computer: Benchmark: CPU perf target (default)"
+      - label: ":computer: Benchmark: CPU default"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
-          --config_file $PERF_CONFIG_PATH/bm_perf_target.yml
-          --job_id bm_perf_target
+          --config_file $PERF_CONFIG_PATH/bm_default.yml
+          --job_id bm_default
         agents:
           slurm_mem: 24GB
       
-      - label: ":computer: Benchmark: GPU perf target"
+      - label: ":computer: Benchmark: GPU default"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
-          --config_file $PERF_CONFIG_PATH/bm_perf_target.yml
-          --job_id bm_perf_target_gpu
+          --config_file $PERF_CONFIG_PATH/bm_default.yml
+          --job_id bm_default_gpu
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
@@ -964,7 +948,7 @@ steps:
       - label: ":computer: Benchmark: GPU diag edmf"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
-          --config_file ${CONFIG_PATH}/aquaplanet_diagedmf.yml
+          --config_file $PERF_CONFIG_PATH/bm_aquaplanet_diagedmf.yml
           --job_id bm_diag_edmf_gpu
         env:
           CLIMACOMMS_DEVICE: "CUDA"
@@ -975,14 +959,13 @@ steps:
       - label: ":computer: Benchmark: GPU prog edmf"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
-          --config_file ${CONFIG_PATH}/aquaplanet_progedmf.yml
+          --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf.yml
           --job_id bm_prog_edmf_gpu
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_mem: 24GB
           slurm_gpus: 1
-        soft_fail: true
 
   - group: "Flame graphs"
     steps:
@@ -1000,75 +983,75 @@ steps:
           slurm_gpus: 1
           gres: "gpu:p100:1"
 
-      - label: ":fire: Flame graph: perf target (default)"
+      - label: ":fire: Flame graph: perf target "
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target.yml
-          --job_id flame_perf_target
-        artifact_paths: "flame_perf_target/*"
+          --config_file $PERF_CONFIG_PATH/bm_default.yml
+          --job_id flame_default
+        artifact_paths: "flame_default/*"
         agents:
           slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: perf target (with tracers)"
+      - label: ":fire: Flame graph: 1 moment"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_tracers.yml
-          --job_id flame_perf_target_tracers
-        artifact_paths: "flame_perf_target_tracers/*"
+          --config_file $PERF_CONFIG_PATH/bm_default_1m.yml
+          --job_id flame_default_1m
+        artifact_paths: "flame_default_1m/*"
         agents:
           slurm_mem: 24GB
       
-      - label: ":fire: Flame graph: perf target (diagnostics)"
+      - label: ":fire: Flame graph: diagnostics"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_diagnostics.yml
-          --job_id flame_perf_diagnostics
-        artifact_paths: "flame_perf_diagnostics/*"
+          --config_file $PERF_CONFIG_PATH/bm_diagnostics.yml
+          --job_id flame_diagnostics
+        artifact_paths: "flame_diagnostics/*"
         agents:
           slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: perf target (diagnostic edmfx)"
+      - label: ":fire: Flame graph: diagnostics edmf"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_diagnostic_edmfx.yml
-          --job_id flame_perf_target_diagnostic_edmfx
-        artifact_paths: "flame_perf_target_diagnostic_edmfx/*"
+          --config_file $PERF_CONFIG_PATH/bm_aquaplanet_diagedmf.yml
+          --job_id flame_aquaplanet_diagedmf
+        artifact_paths: "flame_aquaplanet_diagedmf/*"
         agents:
           slurm_mem: 24GB
 
-      - label: ":fire: Flame graph: perf target (prognostic edmfx)"
+      - label: ":fire: Flame graph: prognostic edmf"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_prognostic_edmfx.yml
-          --job_id flame_perf_target_prognostic_edmfx
-        artifact_paths: "flame_perf_target_prognostic_edmfx/*"
+          --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf.yml
+          --job_id flame_aquaplanet_progedmf
+        artifact_paths: "flame_aquaplanet_progedmf/*"
         agents:
           slurm_mem: 32GB
       
-      - label: ":fire: Flame graph: perf target (diffusion)"
+      - label: ":fire: Flame graph: diffusion"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_diffusion.yml
-          --job_id flame_perf_target_diffusion
-        artifact_paths: "flame_perf_target_diffusion/*"
+          --config_file $PERF_CONFIG_PATH/bm_diffusion.yml
+          --job_id flame_diffusion
+        artifact_paths: "flame_diffusion/*"
         agents:
           slurm_mem: 24GB
 
       - label: ":fire: Flame graph: perf target (Callbacks)"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target_callbacks.yml
-          --job_id flame_perf_target_callbacks
-        artifact_paths: "flame_perf_target_callbacks/*"
+          --config_file $PERF_CONFIG_PATH/bm_callbacks.yml
+          --job_id flame_callbacks
+        artifact_paths: "flame_callbacks/*"
         agents:
           slurm_mem: 24GB
 
       - label: ":fire: Flame graph: gravity wave"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_gw.yml
-          --job_id flame_perf_gw
-        artifact_paths: "flame_perf_gw/*"
+          --config_file $PERF_CONFIG_PATH/bm_gravity_wave.yml
+          --job_id flame_gravity_wave
+        artifact_paths: "flame_gravity_wave/*"
         agents:
           slurm_mem: 24GB
 
@@ -1080,7 +1063,7 @@ steps:
       - label: ":computer: checkbounds"
         command: >
           julia --color=yes --check-bounds=yes --project=.buildkite perf/benchmark.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target.yml
+          --config_file $PERF_CONFIG_PATH/bm_default.yml
           --job_id checkbounds
         artifact_paths: "checkbounds/output_active/*"
         agents:
@@ -1090,7 +1073,7 @@ steps:
       - label: ":rocket: JET n-failures (inference)"
         command: >
           julia --color=yes --project=.buildkite perf/jet_test_nfailures.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target.yml
+          --config_file $PERF_CONFIG_PATH/bm_default.yml
           --job_id jet_n_failures
         agents:
           slurm_mem: 24GB
@@ -1099,7 +1082,7 @@ steps:
       - label: ":mag::rocket: Invalidations"
         command: >
           julia --color=yes --project=.buildkite perf/invalidations.jl
-          --config_file $PERF_CONFIG_PATH/flame_perf_target.yml
+          --config_file $PERF_CONFIG_PATH/bm_default.yml
         artifact_paths: "invalidations/*"
         agents:
           slurm_mem: 24GB

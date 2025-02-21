@@ -630,6 +630,7 @@ function RRTMGPModel(
         set_and_save!(flux_sw.flux_up, "face_sw_flux_up", t...)
         set_and_save!(flux_sw.flux_dn, "face_sw_flux_dn", t...)
         set_and_save!(flux_sw.flux_net, "face_sw_flux", t...)
+        set_and_save!(flux_sw.flux_dn_dir, "face_sw_direct_flux_dn", t...)
         if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
             flux_sw2 = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
             set_and_save!(flux_sw2.flux_up, "face_clear_sw_flux_up", t...)
@@ -640,7 +641,6 @@ function RRTMGPModel(
                 t...,
             )
             set_and_save!(flux_sw2.flux_net, "face_clear_sw_flux", t...)
-            set_and_save!(flux_sw.flux_dn_dir, "face_sw_direct_flux_dn", t...)
         end
 
         cos_zenith = DA{FT}(undef, ncol)
