@@ -198,7 +198,7 @@ function radiation_model_cache(
                 latitude,
             )
             if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
-                kwargs = (; kwargs..., ice_roughness = 2)
+                kwargs = (; kwargs..., ice_roughness = 3)
                 ᶜz = Fields.coordinate_field(Y.c).z
                 ᶜΔz = Fields.Δz_field(Y.c)
                 if radiation_mode.idealized_clouds # icy cloud on top and wet cloud on bottom
