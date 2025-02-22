@@ -89,7 +89,8 @@ function (::Soares)(params)
     p = FT(1e5)
     q_vap = FT(5e-3)
     z0 = FT(0.16) # 0.16 is taken from the Nieuwstadt paper.
-    θ_flux = FT(0.06)
+    # θ_flux = FT(0.06)
+    θ_flux = FT(0.18)
     q_flux = FT(2.5e-5)
     ustar::FT = 0.28 # just to initilize grid mean covariances
     parameterization =

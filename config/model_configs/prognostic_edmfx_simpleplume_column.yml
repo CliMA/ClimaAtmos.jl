@@ -2,17 +2,22 @@ initial_condition: "SimplePlume"
 surface_setup: "SimplePlume"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: false
+# implicit_diffusion: true
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
 edmfx_upwinding: first_order
-edmfx_entr_model: "Generalized"
+# edmfx_entr_model: "Generalized"
+edmfx_entr_model: "SmoothArea"
 edmfx_detr_model: "SmoothArea"
-edmfx_sgs_mass_flux: false
+# edmfx_sgs_mass_flux: false
+edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: false
+# edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 edmfx_filter: true
 prognostic_tke: false
+# prognostic_tke: true
 moist: "equil"
 cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage: true
@@ -22,9 +27,11 @@ z_elem: 40
 z_stretch: false
 perturb_initstate: false
 dt: 30secs"
+# dt: 60secs"
 t_end: "12hours"
 dt_save_state_to_disk: "10mins"
-toml: [toml/prognostic_edmfx_simpleplume.toml]
+# toml: [toml/prognostic_edmfx_simpleplume.toml]
+toml: [toml/prognostic_edmfx_simpleplume_smooth.toml]
 netcdf_interpolation_num_points: [2, 2, 80]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
