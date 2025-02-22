@@ -171,7 +171,7 @@ function entrainment(
                 entr_param_vec[6]
             )
 
-        entr = nondim_entr * ((FT(1) - ᶜaʲ)^FT(entr_coeff)) * abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc)
+        entr = nondim_entr * ((abs(FT(1) - ᶜaʲ))^FT(entr_coeff)) * abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc)
         return max(entr, 0)
     end
 end
