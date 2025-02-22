@@ -1,3 +1,5 @@
+using ClimaCore.Utilities: half
+
 """
     update_surface_conditions!(Y, p, t)
 
@@ -94,6 +96,11 @@ function set_dummy_surface_conditions!(p)
         @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
     end
     @. sfc_conditions.ρ_flux_h_tot = C3(FT(0))
+
+    # Zero out the surface momentum flux
+    c = p.scratch.ᶠtemp_scalar
+    𝒢 = ClimaCore.Fields.level(ClimaCore.Fields.local_geometry_field(c), half)
+    @. sfc_conditions.ρ_flux_uₕ = tensor_from_components(0, 0, 𝒢)
 end
 
 """
