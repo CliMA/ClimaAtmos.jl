@@ -298,3 +298,43 @@ function edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
         end
     end
 end
+
+"""
+    gaussian_mixing_length(params, ᶜz, z_sfc; A=1.0, σ=100.0, l_min=0.0)
+
+A mixing length function that implements a Gaussian decay profile:
+l(z) = A * exp(-(z-z_sfc)²/(2σ²)) + l_min
+
+where:
+- `params`: set with model parameters
+- `ᶜz`: height
+- `z_sfc`: surface height
+- `A`: amplitude of the Gaussian (maximum mixing length at surface)
+- `σ`: standard deviation controlling decay rate with height
+- `l_min`: minimum mixing length (offset)
+
+Returns mixing length as a Gaussian function that decays with height.
+All component length scales (l_W, l_TKE, l_N) are set to the same value.
+"""
+function mixing_length_guassian(
+    params,
+    ᶜz,
+    z_sfc
+)
+
+    FT = eltype(params)
+    turbconv_params = CAP.turbconv_params(params)
+
+    # Compute height above surface
+    l_z = ᶜz - z_sfc
+
+    # Compute Gaussian decay mixing length
+    l_limited = FT(10.0) * exp(-l_z^2 / (2 * FT(300.0)^2)) #+ FT(0.0)
+
+    # Set all length scales to match l_limited for consistency
+    l_W = l_limited
+    l_TKE = l_limited
+    l_N = l_limited
+
+    return MixingLength{FT}(l_limited, l_W, l_TKE, l_N)
+end

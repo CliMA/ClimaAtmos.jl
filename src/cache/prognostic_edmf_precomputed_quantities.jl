@@ -327,20 +327,22 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
     end
 
     sfc_tke = Fields.level(ᶜtke⁰, 1)
-    @. ᶜmixing_length_tuple = mixing_length(
-        p.params,
-        ustar,
-        ᶜz,
-        z_sfc,
-        ᶜdz,
-        max(sfc_tke, eps(FT)),
-        ᶜlinear_buoygrad,
-        max(ᶜtke⁰, 0),
-        obukhov_length,
-        ᶜstrain_rate_norm,
-        ᶜprandtl_nvec,
-        ᶜtke_exch,
-    )
+    # @. ᶜmixing_length_tuple = mixing_length(
+    #     p.params,
+    #     ustar,
+    #     ᶜz,
+    #     z_sfc,
+    #     ᶜdz,
+    #     max(sfc_tke, eps(FT)),
+    #     ᶜlinear_buoygrad,
+    #     max(ᶜtke⁰, 0),
+    #     obukhov_length,
+    #     ᶜstrain_rate_norm,
+    #     ᶜprandtl_nvec,
+    #     ᶜtke_exch,
+    # )
+
+    @. ᶜmixing_length_tuple =  mixing_length_guassian(p.params, ᶜz, z_sfc)
 
     @. ᶜmixing_length = ᶜmixing_length_tuple.master
 
