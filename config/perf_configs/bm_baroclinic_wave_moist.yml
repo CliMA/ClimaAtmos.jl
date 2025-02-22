@@ -1,0 +1,10 @@
+apply_limiter: true
+h_elem: 12
+z_elem: 25
+dt: "1secs"
+t_end: "1mins"
+dt_save_to_sol: "Inf"
+log_progress: false
+moist: "equil"
+initial_condition: "MoistBaroclinicWave"
+precip_model: "0M"

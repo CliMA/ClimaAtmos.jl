@@ -1,0 +1,9 @@
+h_elem: 30
+z_elem: 63
+dz_bottom: 30.0
+t_end: "1days"
+dt: "90secs"
+dt_save_state_to_disk: "Inf"
+dt_save_to_sol: "Inf"
+output_default_diagnostics: false
+initial_condition: "DryBaroclinicWave"

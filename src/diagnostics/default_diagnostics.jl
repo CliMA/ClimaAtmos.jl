@@ -378,3 +378,13 @@ function default_diagnostics(
         )...,
     ]
 end
+
+function default_diagnostics(::EDOnlyEDMFX, duration, start_date; output_writer)
+    edonly_edmfx_diagnostics = ["tke"]
+
+    average_func = frequency_averages(duration)
+
+    return [
+        average_func(edonly_edmfx_diagnostics...; output_writer, start_date)...,
+    ]
+end

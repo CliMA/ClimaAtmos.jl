@@ -37,6 +37,7 @@ import ..VerticalDiffusion
 import ..DecayWithHeightDiffusion
 
 # turbconv_model
+import ..EDOnlyEDMFX
 import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 

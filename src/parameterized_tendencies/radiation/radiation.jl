@@ -262,17 +262,19 @@ function radiation_model_cache(
                 else
                     kwargs = (;
                         kwargs...,
+                        aod_sw_extinction = NaN,
+                        aod_sw_scattering = NaN,
                         # assuming fixed aerosol radius
                         center_dust1_radius = 0.55,
                         center_dust2_radius = 1.4,
                         center_dust3_radius = 2.4,
                         center_dust4_radius = 4.5,
-                        center_dust5_radius = 7.5,
+                        center_dust5_radius = 8,
                         center_ss1_radius = 0.55,
                         center_ss2_radius = 1.4,
                         center_ss3_radius = 2.4,
                         center_ss4_radius = 4.5,
-                        center_ss5_radius = 7.5,
+                        center_ss5_radius = 8,
                         center_dust1_column_mass_density = NaN, # initialized in callback
                         center_dust2_column_mass_density = NaN, # initialized in callback
                         center_dust3_column_mass_density = NaN, # initialized in callback

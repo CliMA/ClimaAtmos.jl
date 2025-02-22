@@ -4,6 +4,16 @@
 
 edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
+function edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model::EDOnlyEDMFX)
+    (; ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed
+    (; ᶜK_u, ᶜK_h) = p.precomputed
+
+    # shear production
+    @. Yₜ.c.sgs⁰.ρatke += 2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate_norm
+    # buoyancy production
+    @. Yₜ.c.sgs⁰.ρatke -= Y.c.ρ * ᶜK_h * ᶜlinear_buoygrad
+end
+
 function edmfx_tke_tendency!(
     Yₜ,
     Y,
@@ -11,7 +21,6 @@ function edmfx_tke_tendency!(
     t,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
-
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs, ᶠu³ʲs) = p.precomputed
     (; ᶠu³⁰, ᶠu³, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰) = p.precomputed
@@ -32,12 +41,12 @@ function edmfx_tke_tendency!(
             ᶜinterp(C3(nh_pressure3ʲs.:($$j)))
     end
 
-
     if use_prognostic_tke(turbconv_model)
         # shear production
         @. Yₜ.c.sgs⁰.ρatke += 2 * ᶜρa⁰ * ᶜK_u * ᶜstrain_rate_norm
         # buoyancy production
         @. Yₜ.c.sgs⁰.ρatke -= ᶜρa⁰ * ᶜK_h * ᶜlinear_buoygrad
+
         # entrainment and detraiment
         # using ᶜu⁰ and local geometry results in allocation
         for j in 1:n
@@ -60,9 +69,9 @@ function edmfx_tke_tendency!(
                     norm(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³)) - ᶜtke⁰
                 )
         end
+
         # pressure work
         @. Yₜ.c.sgs⁰.ρatke += ᶜtke_press
     end
-
     return nothing
 end

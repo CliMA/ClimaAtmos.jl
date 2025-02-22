@@ -113,6 +113,17 @@ function precomputed_quantities(Y, atmos)
             ᶜgradᵥ_θ_liq_ice⁰ = Fields.Field(C3{FT}, cspace),
             precipitation_sgs_quantities...,
         ) : (;)
+
+    edonly_quantities =
+        atmos.turbconv_model isa EDOnlyEDMFX ?
+        (;
+            ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
+            ᶜtke⁰ = similar(Y.c, FT),
+            ᶜK_u = similar(Y.c, FT),
+            ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
+            ᶜK_h = similar(Y.c, FT),
+        ) : (;)
+
     sgs_quantities = (;
         ᶜgradᵥ_θ_virt = Fields.Field(C3{FT}, cspace),
         ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
@@ -172,6 +183,7 @@ function precomputed_quantities(Y, atmos)
         gs_quantities...,
         sgs_quantities...,
         advective_sgs_quantities...,
+        edonly_quantities...,
         diagnostic_sgs_quantities...,
         vert_diff_quantities...,
         sedimentation_quantities...,
@@ -517,6 +529,10 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
             t,
             p.atmos.precip_model,
         )
+    end
+
+    if turbconv_model isa EDOnlyEDMFX
+        set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
     end
 
     if vert_diff isa DecayWithHeightDiffusion

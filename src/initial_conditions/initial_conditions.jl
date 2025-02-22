@@ -484,6 +484,12 @@ function overwrite_initial_conditions!(
                 center_space,
             ) .* Y.c.ρ
     end
+
+    if hasproperty(Y.c, :sgs⁰) && hasproperty(Y.c.sgs⁰, :ρatke)
+        # NOTE: This is not the most consistent, but it is better than NaNs
+        fill!(Y.c.ρatke, 0)
+    end
+
     return nothing
 end
 

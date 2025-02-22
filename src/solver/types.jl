@@ -333,6 +333,15 @@ end
 
 abstract type AbstractEDMF end
 
+"""
+    Eddy-Diffusivity Only "EDMF"
+
+This is EDMF without mass-flux.
+
+This allows running simulations with TKE-based vertical diffusion.
+"""
+struct EDOnlyEDMFX <: AbstractEDMF end
+
 struct PrognosticEDMFX{N, TKE, FT} <: AbstractEDMF
     a_half::FT # WARNING: this should never be used outside of divide_by_ρa
 end
@@ -347,11 +356,13 @@ DiagnosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
 
 n_mass_flux_subdomains(::PrognosticEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N
+n_mass_flux_subdomains(::EDOnlyEDMFX) = 0
 n_mass_flux_subdomains(::Any) = 0
 
 n_prognostic_mass_flux_subdomains(::PrognosticEDMFX{N}) where {N} = N
 n_prognostic_mass_flux_subdomains(::Any) = 0
 
+use_prognostic_tke(::EDOnlyEDMFX) = true
 use_prognostic_tke(::PrognosticEDMFX{N, TKE}) where {N, TKE} = TKE
 use_prognostic_tke(::DiagnosticEDMFX{N, TKE}) where {N, TKE} = TKE
 use_prognostic_tke(::Any) = false
@@ -383,6 +394,7 @@ Base.broadcastable(x::AbstractSurfaceThermoState) = tuple(x)
 Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
 Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
+Base.broadcastable(x::EDOnlyEDMFX) = tuple(x)
 Base.broadcastable(x::PrognosticEDMFX) = tuple(x)
 Base.broadcastable(x::DiagnosticEDMFX) = tuple(x)
 Base.broadcastable(x::AbstractEntrainmentModel) = tuple(x)
@@ -677,9 +689,7 @@ function AtmosConfig(
 
     all_config_files =
         normrelpath.(maybe_add_default(config_files, default_config_file))
-
     configs = map(all_config_files) do config_file
-        @info "Loading yaml file $config_file"
         strip_help_messages(load_yaml_file(config_file))
     end
     return AtmosConfig(
@@ -714,13 +724,15 @@ function AtmosConfig(
     # using config_files = [default_config_file] as a default
     # relies on the fact that override_default_config uses
     # default_config_file.
-    config = override_default_config(configs)
+    config = merge(configs...)
+    comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
+    config = override_default_config(config)
+
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     toml_dict = CP.create_toml_dict(
         FT;
         override_file = CP.merge_toml_files(config["toml"]),
     )
-    comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
     config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
 
     isempty(job_id) &&

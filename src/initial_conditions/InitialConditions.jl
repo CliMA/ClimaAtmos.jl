@@ -16,6 +16,7 @@ import ..C12
 import ..compute_kinetic
 import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
+import ..EDOnlyEDMFX
 import ..n_mass_flux_subdomains
 import ..gcm_driven_profile
 import ..gcm_height

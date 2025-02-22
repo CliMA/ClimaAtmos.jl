@@ -574,7 +574,6 @@ function get_sim_info(config::AtmosConfig)
         start_date = epoch,
         t_end = t_end,
     )
-    @show sim.t_end, sim.dt
     n_steps = floor(Int, sim.t_end / sim.dt)
     @info(
         "Time info:",
@@ -639,15 +638,17 @@ end
 
 import ClimaComms, Logging, NVTX
 function get_comms_context(parsed_args)
-    device = if parsed_args["device"] == "auto"
-        ClimaComms.device()
-    elseif parsed_args["device"] == "CUDADevice"
-        ClimaComms.CUDADevice()
-    elseif parsed_args["device"] == "CPUMultiThreaded" || Threads.nthreads() > 1
-        ClimaComms.CPUMultiThreaded()
-    else
-        ClimaComms.CPUSingleThreaded()
-    end
+    device =
+        if !haskey(parsed_args, "device") || parsed_args["device"] === "auto"
+            ClimaComms.device()
+        elseif parsed_args["device"] == "CUDADevice"
+            ClimaComms.CUDADevice()
+        elseif parsed_args["device"] == "CPUMultiThreaded" ||
+               Threads.nthreads() > 1
+            ClimaComms.CPUMultiThreaded()
+        else
+            ClimaComms.CPUSingleThreaded()
+        end
     comms_ctx = ClimaComms.context(device)
     ClimaComms.init(comms_ctx)
 

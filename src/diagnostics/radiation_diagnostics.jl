@@ -942,3 +942,88 @@ add_diagnostic_variable!(
     comments = "In-cloud ratio of the third moment over the second moment of the particle size distribution. Set to zero outside of clouds.",
     compute! = compute_reffcli!,
 )
+
+###
+# Aerosol extinction optical depth (2d)
+###
+compute_od550aer!(out, state, cache, time) =
+    compute_od550aer!(out, state, cache, time, cache.atmos.radiation_mode)
+compute_od550aer!(_, _, _, _, radiation_mode::T) where {T} =
+    error_diagnostic_variable("od550aer", radiation_mode)
+
+function compute_od550aer!(
+    out,
+    state,
+    cache,
+    time,
+    radiation_mode::Union{
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
+        RRTMGPI.AllSkyRadiation,
+        RRTMGPI.ClearSkyRadiation,
+    },
+)
+    @assert cache.atmos.radiation_mode.aerosol_radiation "aerosol_radiation must be true to enable aerosol optical depth diagnostics"
+    FT = eltype(state)
+    if isnothing(out)
+        return Fields.array2field(
+            cache.radiation.rrtmgp_model.aod_sw_extinction,
+            axes(Fields.level(state.f, half)),
+        )
+    else
+        out .= Fields.array2field(
+            cache.radiation.rrtmgp_model.aod_sw_extinction,
+            axes(Fields.level(state.f, half)),
+        )
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "od550aer",
+    long_name = "Ambient Aerosol Optical Thickness at 550nm",
+    standard_name = "atmosphere_optical_thickness_due_to_ambient_aerosol_particles",
+    units = "",
+    comments = "Aerosol optical depth from the ambient aerosols at wavelength 550 nm",
+    compute! = compute_od550aer!,
+)
+
+###
+# Aerosol scattering optical depth (2d)
+###
+compute_odsc550aer!(out, state, cache, time) =
+    compute_odsc550aer!(out, state, cache, time, cache.atmos.radiation_mode)
+compute_odsc550aer!(_, _, _, _, radiation_mode::T) where {T} =
+    error_diagnostic_variable("odsc550aer", radiation_mode)
+
+function compute_odsc550aer!(
+    out,
+    state,
+    cache,
+    time,
+    radiation_mode::Union{
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
+        RRTMGPI.AllSkyRadiation,
+        RRTMGPI.ClearSkyRadiation,
+    },
+)
+    @assert cache.atmos.radiation_mode.aerosol_radiation "aerosol_radiation must be true to enable aerosol optical depth diagnostics"
+    FT = eltype(state)
+    if isnothing(out)
+        return Fields.array2field(
+            cache.radiation.rrtmgp_model.aod_sw_scattering,
+            axes(Fields.level(state.f, half)),
+        )
+    else
+        out .= Fields.array2field(
+            cache.radiation.rrtmgp_model.aod_sw_scattering,
+            axes(Fields.level(state.f, half)),
+        )
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "odsc550aer",
+    long_name = "Ambient Scattering Aerosol Optical Thickness at 550nm",
+    units = "",
+    comments = "Aerosol scattering optical depth from the ambient aerosols at wavelength 550 nm",
+    compute! = compute_odsc550aer!,
+)

@@ -824,7 +824,11 @@ function RRTMGPModel(
         end
 
         if radiation_mode.aerosol_radiation
+            aod_sw_ext = DA{FT}(undef, ncol)
+            aod_sw_sca = DA{FT}(undef, ncol)
             aero_mask = DA{Bool}(undef, nlay, ncol)
+            set_and_save!(aod_sw_ext, "aod_sw_extinction", t..., dict)
+            set_and_save!(aod_sw_sca, "aod_sw_scattering", t..., dict)
 
             n_aerosol_sizes = maximum(values(idx_aerosize))
             n_aerosols = length(idx_aerosol)
@@ -882,6 +886,8 @@ function RRTMGPModel(
                 )
             end
             aerosol_state = RRTMGP.AtmosphericStates.AerosolState(
+                aod_sw_ext,
+                aod_sw_sca,
                 aero_mask,
                 aero_size,
                 aero_mass,
