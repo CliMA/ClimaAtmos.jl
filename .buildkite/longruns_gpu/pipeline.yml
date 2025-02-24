@@ -22,6 +22,7 @@ steps:
     command:
       - echo "--- Instantiate examples"
       - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name=\"ClimaCore\", rev=\"dy/autodiff_options\"))'"
       - julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'
       - julia --project=.buildkite -e 'using CUDA; CUDA.precompile_runtime()'
       - julia --project=.buildkite -e 'using Pkg; Pkg.status()'
