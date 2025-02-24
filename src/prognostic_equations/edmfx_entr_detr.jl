@@ -372,6 +372,16 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
             (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
             (ᶜq_tot⁰ - Y.c.sgsʲs.:($$j).q_tot)
 
+        if p.atmos.moisture_model isa NonEquilMoistModel
+            @. Yₜ.c.sgsʲs.:($$j).q_liq +=
+            (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
+            (ᶜq_liq⁰ - Y.c.sgsʲs.:($$j).q_liq)
+
+            @. Yₜ.c.sgsʲs.:($$j).q_ice +=
+            (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
+            (ᶜq_ice⁰ - Y.c.sgsʲs.:($$j).q_ice)
+        end
+
         @. Yₜ.f.sgsʲs.:($$j).u₃ +=
             (ᶠinterp(ᶜentrʲs.:($$j)) .+ ᶠinterp(ᶜturb_entrʲs.:($$j))) *
             (ᶠu₃⁰ - Y.f.sgsʲs.:($$j).u₃)

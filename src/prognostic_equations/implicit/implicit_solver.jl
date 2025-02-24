@@ -168,6 +168,8 @@ function ImplicitEquationJacobian(
     ρatke_if_available =
         is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
+    u₃ʲ_if_available =
+        is_in_Y(@name(f.sgsʲs.:(1).u₃)) ? (@name(f.sgsʲs.:(1).u₃),) : ()
 
     tracer_names = (
         @name(c.ρq_tot),
@@ -252,18 +254,32 @@ function ImplicitEquationJacobian(
 
     end
 
+    sgs_tracer_names = (
+        @name(c.sgsʲs.:(1).q_tot),
+        @name(c.sgsʲs.:(1).q_liq),
+        @name(c.sgsʲs.:(1).q_ice),
+    )
+
+    available_sgs_tracer_names =
+        MatrixFields.unrolled_filter(is_in_Y, sgs_tracer_names)
+
+    sgs_scalar_names = (
+        available_sgs_tracer_names...,
+        @name(c.sgsʲs.:(1).mse),
+        @name(c.sgsʲs.:(1).ρa),
+    )
+
+    available_sgs_scalar_names =
+        MatrixFields.unrolled_filter(is_in_Y, sgs_scalar_names)
+
     sgs_advection_blocks = if atmos.turbconv_model isa PrognosticEDMFX
         @assert n_prognostic_mass_flux_subdomains(atmos.turbconv_model) == 1
-        sgs_scalar_names = (
-            @name(c.sgsʲs.:(1).q_tot),
-            @name(c.sgsʲs.:(1).mse),
-            @name(c.sgsʲs.:(1).ρa)
-        )
+
         if use_derivative(sgs_advection_flag)
             (
                 MatrixFields.unrolled_map(
                     name -> (name, name) => similar(Y.c, TridiagonalRow),
-                    sgs_scalar_names,
+                    available_sgs_scalar_names,
                 )...,
                 (@name(c.sgsʲs.:(1).mse), @name(c.ρ)) =>
                     similar(Y.c, DiagonalRow),
@@ -286,7 +302,7 @@ function ImplicitEquationJacobian(
             (
                 MatrixFields.unrolled_map(
                     name -> (name, name) => FT(-1) * I,
-                    sgs_scalar_names,
+                    available_sgs_scalar_names,
                 )...,
                 (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) =>
                     !isnothing(atmos.rayleigh_sponge) ?
@@ -304,27 +320,19 @@ function ImplicitEquationJacobian(
         diffusion_blocks...,
     )
 
-    sgs_names_if_available = if atmos.turbconv_model isa PrognosticEDMFX
-        (
-            @name(c.sgsʲs.:(1).q_tot),
-            @name(c.sgsʲs.:(1).mse),
-            @name(c.sgsʲs.:(1).ρa),
-            @name(f.sgsʲs.:(1).u₃),
-        )
-    else
-        ()
-    end
     names₁_group₁ = (@name(c.ρ), sfc_if_available...)
     names₁_group₂ = (available_tracer_names..., ρatke_if_available...)
     names₁_group₃ = (@name(c.ρe_tot),)
     names₁ = (
         names₁_group₁...,
-        sgs_names_if_available...,
+        available_sgs_scalar_names...,
+        u₃ʲ_if_available...,
         names₁_group₂...,
         names₁_group₃...,
     )
 
     alg₂ = MatrixFields.BlockLowerTriangularSolve(@name(c.uₕ))
+    @info(alg₂)
     alg =
         if use_derivative(diffusion_flag) ||
            use_derivative(sgs_advection_flag) ||
@@ -341,7 +349,7 @@ function ImplicitEquationJacobian(
                         ) : (;)
                     (;
                         alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                            @name(c.sgsʲs.:(1).q_tot);
+                            available_sgs_tracer_names...;
                             alg₂ = MatrixFields.BlockLowerTriangularSolve(
                                 @name(c.sgsʲs.:(1).mse);
                                 alg₂ = MatrixFields.BlockLowerTriangularSolve(
@@ -801,14 +809,22 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             @. ᶜkappa_mʲ =
                 TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
                 TD.cv_m(thermo_params, ᶜtsʲs.:(1))
-            ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
-                matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
-            @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
-                dtγ * (
-                    DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1))) -
-                    ᶜadvdivᵥ_matrix() ⋅
-                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)))
-                ) - (I,)
+
+            sgs_tracer_names = (
+                @name(c.sgsʲs.:(1).q_tot),
+                @name(c.sgsʲs.:(1).q_liq),
+                @name(c.sgsʲs.:(1).q_ice)
+            )
+            MatrixFields.unrolled_foreach(sgs_tracer_names) do qʲ_name
+                MatrixFields.has_field(Y, qʲ_name) || return
+                ∂ᶜqʲ_err_∂ᶜqʲ = matrix[qʲ_name, qʲ_name]
+                @. ∂ᶜqʲ_err_∂ᶜqʲ =
+                    dtγ * (
+                        DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1))) -
+                        ᶜadvdivᵥ_matrix() ⋅
+                        ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)))
+                    ) - (I,)
+            end
 
             ∂ᶜmseʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot)]
