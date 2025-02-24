@@ -312,6 +312,9 @@ zero_tendency:
 implicit_sgs_advection:
   help: "Whether to treat the subgrid-scale vertical advection tendency implicitly [`false` (default), `true`]"
   value: false
+implicit_sgs_mf:
+  help: "Whether to treat the subgrid-scale mass flux tendency implicitly or explicitly. Currently updraft only. [`Explicit` (default), `Implicit`]"
+  value: false
 edmf_coriolis:
   help: "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
   value: ~
