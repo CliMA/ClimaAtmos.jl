@@ -1,4 +1,4 @@
-215
+216
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+
+216
+- Change prescribed aerosols in `aquaplanet_nonequil_allsky_gw_res.yml`
 
 215
 - Update dependencies, including ClimaCore, which updated how metric terms are
