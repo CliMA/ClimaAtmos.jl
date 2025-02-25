@@ -20,10 +20,10 @@ orographic_gravity_wave: "gfdl_restart"
 surface_setup: "DefaultMoninObukhov"
 prescribe_ozone: true
 reproducibility_test: true
-prescribed_aerosols: ["CB1", "CB2", "SO4"]
+prescribed_aerosols: ["SO4", "CB1", "OC1", "DST01", "SSLT01"]
 toml: [toml/sphere_aquaplanet_1M.toml]
 diagnostics:
-  - short_name: [edt, evu, mmrso4, mmrbcpo, mmrbcpi, o3, od550aer, odsc550aer]
+  - short_name: [edt, evu, mmrso4, mmrbcpo, mmrocpo, mmrdust, mmrss, loadss, o3, od550aer, odsc550aer]
     reduction_time: average
     period: 1days
   - short_name: [reffclw, reffcli]
