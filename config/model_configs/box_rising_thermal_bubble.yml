@@ -1,25 +1,20 @@
+FLOAT_TYPE: Float64
 reference_job_id: "les_box"
 initial_condition: "RisingThermalBubbleProfile"
 config: "box"
 moist: "equil"
-#smagorinsky_lilly: true
 hyperdiff: true
 vert_diff: DecayWithHeightDiffusion
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-discrete_hydrostatic_balance: true
-hyperdiff: "false"
 x_max: 1000.0
 y_max: 1000.0
 z_max: 2000.0
-x_elem: 45
-y_elem: 45
-z_elem: 45
+x_elem: 10
+y_elem: 10
+z_elem: 20
 z_stretch: false
 dt: "0.1secs"
 t_end: "20secs"
 netcdf_interpolation_num_points: [40, 40, 80]
-diagnostics:
-  - short_name: [wa, ua, va, ta, thetaa, ha]
-    period: 5secs
 use_itime: true
