@@ -1,6 +1,17 @@
 ClimaAtmos.jl Release Notes
 ============================
 
+v0.28.6
+-------
+
+### Features
+
+### Automatically determine diagnostic resolution based on model resolution
+
+If `netcdf_interpolation_num_points` is not provided, `ClimaAtmos` will
+determine it automatically by matching approximately the same number of points
+as the model grid.
+
 v0.28.5
 -------
 
