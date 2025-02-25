@@ -124,7 +124,7 @@ function compute_sea_salt_column!(out, state, cache, time)
                     cache.tracers.prescribed_aerosols_field,
                     prescribed_aerosol_name,
                 )
-                @. aero_conc += aerosol_field
+                @. aero_conc += aerosol_field * state.c.ρ
             end
         end
         Operators.column_integral_definite!(out, aero_conc)
@@ -140,7 +140,7 @@ function compute_sea_salt_column!(out, state, cache, time)
                     cache.tracers.prescribed_aerosols_field,
                     prescribed_aerosol_name,
                 )
-                @. aero_conc += aerosol_field
+                @. aero_conc += aerosol_field * state.c.ρ
             end
         end
         Operators.column_integral_definite!(out, aero_conc)
