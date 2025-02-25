@@ -158,22 +158,22 @@ function compute_precipitation_sources!(
 
     #! format: off
     # rain autoconversion: q_liq -> q_rain
-    @. Sᵖ = ifelse(
-        mp.Ndp <= 0,
-        CM1.conv_q_liq_to_q_rai(mp.pr.acnv1M, qₗ(thp, ts, qₚ(qᵣ)), true),
-        CM2.conv_q_liq_to_q_rai(mp.var, qₗ(thp, ts, qₚ(qᵣ)), ρ, mp.Ndp),
-    )
-    @. Sᵖ = min(limit(qₗ(thp, ts, qₚ(qᵣ)), dt, 5), Sᵖ)
-    @. Sqₗᵖ -= Sᵖ
-    @. Sqᵣᵖ += Sᵖ
+    #@. Sᵖ = ifelse(
+    #    mp.Ndp <= 0,
+    #    CM1.conv_q_liq_to_q_rai(mp.pr.acnv1M, qₗ(thp, ts, qₚ(qᵣ)), true),
+    #    CM2.conv_q_liq_to_q_rai(mp.var, qₗ(thp, ts, qₚ(qᵣ)), ρ, mp.Ndp),
+    #)
+    #@. Sᵖ = min(limit(qₗ(thp, ts, qₚ(qᵣ)), dt, 5), Sᵖ)
+    #@. Sqₗᵖ -= Sᵖ
+    #@. Sqᵣᵖ += Sᵖ
 
-    # snow autoconversion assuming no supersaturation: q_ice -> q_snow
-    @. Sᵖ = min(
-        limit(qᵢ(thp, ts, qₚ(qₛ)), dt, 5),
-        CM1.conv_q_ice_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ(thp, ts, qₚ(qₛ)), true),
-    )
-    @. Sqᵢᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
+    ## snow autoconversion assuming no supersaturation: q_ice -> q_snow
+    #@. Sᵖ = min(
+    #    limit(qᵢ(thp, ts, qₚ(qₛ)), dt, 5),
+    #    CM1.conv_q_ice_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ(thp, ts, qₚ(qₛ)), true),
+    #)
+    #@. Sqᵢᵖ -= Sᵖ
+    #@. Sqₛᵖ += Sᵖ
 
     ## accretion: q_liq + q_rain -> q_rain
     #@. Sᵖ = min(
