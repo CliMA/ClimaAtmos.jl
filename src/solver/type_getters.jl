@@ -55,6 +55,9 @@ function get_atmos(config::AtmosConfig, params)
     implicit_sgs_advection = parsed_args["implicit_sgs_advection"]
     @assert implicit_sgs_advection in (true, false)
 
+    implicit_sgs_mass_flux = parsed_args["implicit_sgs_mass_flux"]
+    @assert implicit_sgs_mass_flux in (true, false)
+
     edmfx_model = EDMFXModel(;
         entr_model = get_entrainment_model(parsed_args),
         detr_model = get_detrainment_model(parsed_args),
@@ -96,6 +99,7 @@ function get_atmos(config::AtmosConfig, params)
         vert_diff,
         diff_mode = implicit_diffusion ? Implicit() : Explicit(),
         sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
+        sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
         smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),

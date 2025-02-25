@@ -98,6 +98,7 @@ struct ImplicitEquationJacobian{
     F1 <: DerivativeFlag,
     F2 <: DerivativeFlag,
     F3 <: DerivativeFlag,
+    F4 <: DerivativeFlag,
     T <: Fields.FieldVector,
     R <: Base.RefValue,
 }
@@ -111,6 +112,7 @@ struct ImplicitEquationJacobian{
     diffusion_flag::F1
     topography_flag::F2
     sgs_advection_flag::F3
+    sgs_mass_flux_flag::F4
 
     # required by Krylov.jl to evaluate ldiv! with AbstractVector inputs
     temp_b::T
@@ -128,6 +130,7 @@ function Base.zero(jac::ImplicitEquationJacobian)
         jac.diffusion_flag,
         jac.topography_flag,
         jac.sgs_advection_flag,
+        jac.sgs_mass_flux_flag,
         jac.temp_b,
         jac.temp_x,
         jac.transform_flag,
@@ -144,6 +147,8 @@ function ImplicitEquationJacobian(
     topography_flag = has_topography(axes(Y.c)) ? UseDerivative() :
                       IgnoreDerivative(),
     sgs_advection_flag = atmos.sgs_adv_mode == Implicit() ? UseDerivative() :
+                         IgnoreDerivative(),
+    sgs_mass_flux_flag = atmos.sgs_mf_mode == Implicit() ? UseDerivative() :
                          IgnoreDerivative(),
     transform_flag = false,
 )
@@ -297,11 +302,28 @@ function ImplicitEquationJacobian(
         ()
     end
 
+    sgs_massflux_blocks = if atmos.turbconv_model isa PrognosticEDMFX
+        @assert n_prognostic_mass_flux_subdomains(atmos.turbconv_model) == 1
+        if use_derivative(sgs_mass_flux_flag)
+            (
+                (@name(c.ρe_tot), @name(c.sgsʲs.:(1).mse)) =>
+                    similar(Y.c, TridiagonalRow),
+                (@name(c.ρq_tot), @name(c.sgsʲs.:(1).q_tot)) =>
+                    similar(Y.c, TridiagonalRow),
+            )
+        else
+            ()
+        end
+    else
+        ()
+    end
+
     matrix = MatrixFields.FieldMatrix(
         identity_blocks...,
         sgs_advection_blocks...,
         advection_blocks...,
         diffusion_blocks...,
+        sgs_massflux_blocks...,
     )
 
     sgs_names_if_available = if atmos.turbconv_model isa PrognosticEDMFX
@@ -381,6 +403,7 @@ function ImplicitEquationJacobian(
         diffusion_flag,
         topography_flag,
         sgs_advection_flag,
+        sgs_mass_flux_flag,
         similar(Y),
         similar(Y),
         transform_flag,
@@ -498,7 +521,13 @@ end
 
 function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     dtγ = float(dtγ)
-    (; matrix, diffusion_flag, sgs_advection_flag, topography_flag) = A
+    (;
+        matrix,
+        diffusion_flag,
+        sgs_advection_flag,
+        topography_flag,
+        sgs_mass_flux_flag,
+    ) = A
     (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜh_tot) = p
     (;
         ᶜtemp_C3,
@@ -945,6 +974,42 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                     dtγ * ᶠtridiagonal_matrix_c3 ⋅
                     DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) - (I_u₃,)
             end
+            # add updraft mass flux contributions to grid-mean
+            if use_derivative(sgs_mass_flux_flag)
+
+                (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs) = p
+                (; bdmr_l, bdmr_r, bdmr) = p
+                is_third_order = edmfx_upwinding == Val(:third_order)
+                ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
+                ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
+                    top = Operators.SetValue(zero(CT3{FT})),
+                    bottom = Operators.SetValue(zero(CT3{FT})),
+                ) # Need to wrap ᶠupwind in this for well-defined boundaries.
+                UpwindMatrixRowType =
+                    is_third_order ? QuaddiagonalMatrixRow : BidiagonalMatrixRow
+                ᶠupwind_matrix =
+                    is_third_order ? ᶠupwind3_matrix : ᶠupwind1_matrix
+
+                ᶜkappa_mʲ = p.ᶜtemp_scalar
+                @. ᶜkappa_mʲ =
+                    TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
+                    TD.cv_m(thermo_params, ᶜtsʲs.:(1))
+
+                # Placeholders for jacobian contributions of updraft massflux to grid-mean
+                # Initialize all derivatives to zero
+
+                ## grid-mean ρρe_tot
+                ∂ᶜρe_tot_err_∂ᶜmseʲ =
+                    matrix[@name(c.ρe_tot), @name(c.sgsʲs.:(1).mse)]
+                ∂ᶜρe_tot_err_∂ᶜmseʲ .= (zero(eltype(∂ᶜρe_tot_err_∂ᶜmseʲ)),)
+
+                ## grid-mean ρq_tot
+                ∂ᶜρq_tot_err_∂ᶜq_totʲ =
+                    matrix[@name(c.ρq_tot), @name(c.sgsʲs.:(1).q_tot)]
+                ∂ᶜρq_tot_err_∂ᶜq_totʲ .= (zero(eltype(∂ᶜρq_tot_err_∂ᶜq_totʲ)),)
+
+            end
+
         elseif rs isa RayleighSponge
             ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
@@ -955,5 +1020,4 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 ) - (I_u₃,)
         end
     end
-
 end

@@ -516,6 +516,7 @@ Base.@kwdef struct AtmosModel{
     VD,
     DM,
     SAM,
+    SMM,
     VS,
     SL,
     RS,
@@ -553,6 +554,7 @@ Base.@kwdef struct AtmosModel{
     vert_diff::VD = nothing
     diff_mode::DM = nothing
     sgs_adv_mode::SAM = nothing
+    sgs_mf_mode::SMM = nothing
     viscous_sponge::VS = nothing
     smagorinsky_lilly::SL = nothing
     rayleigh_sponge::RS = nothing
