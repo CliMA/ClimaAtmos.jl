@@ -560,6 +560,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
 
@@ -581,7 +582,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix()
 
     @. ᶜadvection_matrix =
-        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ))
+        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
 
     if use_derivative(topography_flag)
         ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
@@ -663,7 +664,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         #TODO: tetsing explicit vs implicit
         #@. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
         #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-        #    DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
         #    DiagonalMatrixRow(
         #        -(1 + ᶜkappa_m) / ᶜρ * ifelse(
         #            ᶜh_tot == 0,
@@ -677,7 +678,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         #TODO: tetsing explicit vs implicit
         #@. ∂ᶜρe_tot_err_∂ᶜρq_tot =
         #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-        #    DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
         #    DiagonalMatrixRow(
         #        -(ᶜkappa_m) * ∂e_int_∂q_tot / ᶜρ * ifelse(
         #            ᶜh_tot == 0,
@@ -691,7 +692,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         #TODO: tetsing explicit vs implicit
         #@. ∂ᶜρq_tot_err_∂ᶜρq_tot =
         #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-        #    DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
         #    DiagonalMatrixRow(
         #        -1 / ᶜρ * ifelse(
         #            ᶜspecific.q_tot == 0,
@@ -706,7 +707,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ᶜwₚ = MatrixFields.get_field(p, wₚ_name)
             @. ∂ᶜρqₚ_err_∂ᶜρqₚ =
                 dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-                DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+                DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅
+                ᶠright_bias_matrix() ⋅
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwₚ) / ᶜρ) - (I,)
         end
 
@@ -881,13 +883,13 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                             ᶠu³ʲs.:(1),
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
                         ),
-                    ),
-                ) ⋅ ᶠwinterp_matrix(ᶜJ) ⋅ DiagonalMatrixRow(
-                    ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp) *
+                    ) / ᶠJ,
+                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
+                    ᶜJ * ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp) *
                     ∂e_int_∂q_tot,
                 )
             @. ᶠbidiagonal_matrix_ct3_2 =
-                DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρʲs.:(1))) ⋅
+                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
                 ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
                 DiagonalMatrixRow(
                     Y.c.sgsʲs.:(1).ρa * ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp) *
@@ -906,12 +908,12 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                             ᶠu³ʲs.:(1),
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
                         ),
-                    ),
-                ) ⋅ ᶠwinterp_matrix(ᶜJ) ⋅ DiagonalMatrixRow(
-                    ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
+                    ) / ᶠJ,
+                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
+                    ᶜJ * ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
                 )
             @. ᶠbidiagonal_matrix_ct3_2 =
-                DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρʲs.:(1))) ⋅
+                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
                 ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
                 DiagonalMatrixRow(
                     Y.c.sgsʲs.:(1).ρa * ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp),
@@ -923,7 +925,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).ρa)]
             @. ᶜadvection_matrix =
                 -(ᶜadvdivᵥ_matrix()) ⋅
-                DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρʲs.:(1)))
+                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ)
             @. ∂ᶜρaʲ_err_∂ᶜρaʲ =
                 dtγ * ᶜadvection_matrix ⋅
                 ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅

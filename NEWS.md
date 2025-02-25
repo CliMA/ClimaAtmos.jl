@@ -12,6 +12,13 @@ If `netcdf_interpolation_num_points` is not provided, `ClimaAtmos` will
 determine it automatically by matching approximately the same number of points
 as the model grid.
 
+### Change reconstruction of density on cell faces for stretched grids
+
+PR [3584](https://github.com/CliMA/ClimaAtmos.jl/pull/3584) changes the weighted
+interpolation of density from centers to faces so that it uses `ᶜJ` and `ᶠJ`,
+rather than `ᶜJ` and `ᶠint(ᶜJ)`. As of ClimaCore v0.14.25, `ᶠJ` is no longer
+equivalent to `ᶠint(ᶜJ)` for stretched grids.
+
 v0.28.5
 -------
 
