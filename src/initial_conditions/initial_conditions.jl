@@ -368,7 +368,7 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
         T = π_exn * θ # temperature
         p = p_0 * π_exn^(cp_d / R_d) # pressure
         ρ = p / R_d / T # density
-        q_tot = ρ * FT(0)
+        q_tot = ρ * FT(0.001)
 
         return LocalState(;
             params,

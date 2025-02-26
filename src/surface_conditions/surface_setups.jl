@@ -32,6 +32,7 @@ struct DefaultExchangeCoefficients <: SurfaceSetup end
 function (::DefaultExchangeCoefficients)(params)
     FT = eltype(params)
     C = params.C_H
+    #C = FT(0)
     return SurfaceState(; parameterization = ExchangeCoefficients(C))
 end
 

@@ -249,7 +249,6 @@ function ImplicitEquationJacobian(
                 (ρatke_if_available..., @name(c.uₕ)),
             )...,
         )
-
     end
 
     sgs_advection_blocks = if atmos.turbconv_model isa PrognosticEDMFX
