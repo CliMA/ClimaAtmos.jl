@@ -253,9 +253,12 @@ function check_conservation(sol)
         water_total = sum(sol.u[end].c.ρq_tot)
         water_atmos_change = sum(sol.u[end].c.ρq_tot) - sum(sol.u[1].c.ρq_tot)
         if sfc isa PrognosticSurfaceTemperature
+            water_total += sum(sol.u[1].sfc.water)
             water_surface_change = horizontal_integral_at_boundary(
                 sol.u[end].sfc.water .- sol.u[1].sfc.water,
             )
+            @show water_atmos_change
+            @show water_surface_change
         end
     end
 

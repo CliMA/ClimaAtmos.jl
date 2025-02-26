@@ -1,8 +1,10 @@
 FLOAT_TYPE: Float64
 reference_job_id: "les_box"
 initial_condition: "RisingThermalBubbleProfile"
+prognostic_surface: "PrognosticSurfaceTemperature"
 config: "box"
 moist: "equil"
+precip_model: "0M"
 hyperdiff: true
 vert_diff: DecayWithHeightDiffusion
 implicit_diffusion: true
