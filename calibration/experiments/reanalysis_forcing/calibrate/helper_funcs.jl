@@ -11,7 +11,7 @@ function get_era5_calibration_library()
     locations = [(-20, 285 - 360), (17, 211 - 360), (10, -135)]
     ref_paths, latitudes, longitudes = [], [], []
     for (lat, lon) in locations
-        filename = "/scratch/julian/ERA5/tv/july_forcing/sim_forcing_loc_$(lat)_$(lon).nc"
+        filename = "/central/groups/esm/jschmitt/era5/tv/july_forcing/sim_forcing_loc_$(lat)_$(lon).nc"
         push!(ref_paths, filename)
         push!(latitudes, lat)
         push!(longitudes, lon)
@@ -19,13 +19,13 @@ function get_era5_calibration_library()
     ref_paths, latitudes, longitudes
 end
 
-function get_forcing_file(i, months)
-    return "../data/era5_monthly_forcing_$(months[i]).nc"
-end
+# function get_forcing_file(i, months)
+#     return "../data/era5_monthly_forcing_$(months[i]).nc"
+# end
 
-function get_cfsite_id(i, cfsites)
-    return cfsites[i]
-end
+# function get_cfsite_id(i, cfsites)
+#     return cfsites[i]
+# end
 
 function get_batch_indicies_in_iteration(iteration, output_dir::AbstractString)
     iter_path = CAL.path_to_iteration(output_dir, iteration)

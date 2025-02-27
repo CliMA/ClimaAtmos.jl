@@ -47,7 +47,7 @@ function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
     ref_paths, _, _ = get_era5_calibration_library()
     atmos_configs = map(EKP.get_current_minibatch(eki)) do i
         config = deepcopy(config_dict)
-        config["external_forcing_file"] = ref_paths[i] # forcing file a function of months
+        config["external_forcing_file"] = ref_paths[i] # forcing file a function of location
         #config["cfsite_number"] = get_cfsite_id(i, sites) # specify which site to run
         config["output_dir"] = joinpath(member_path, "config_$i")
         comms_ctx = ClimaComms.SingletonCommsContext()

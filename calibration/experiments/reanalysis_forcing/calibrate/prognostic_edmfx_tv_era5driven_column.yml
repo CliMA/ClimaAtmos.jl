@@ -1,7 +1,7 @@
 initial_condition: "ExternalTV"
 external_forcing: "ExternalTV"
 # external_forcing_file: "/Users/julianschmitt/Documents/Research/loss/ClimaAtmos.jl/examples/tvforcing/sim_forcing_site23_ng_xyz.nc"
-external_forcing_file: "/home/jschmitt/ClimaAtmos.jl/sim_forcing_site23_ng_xyz.nc"
+external_forcing_file: "" # initialize empty to ensure it is set by calibration batching
 surface_setup: "ExternalTV"
 surface_temperature: "ExternalTVColumn"
 start_date: "20070701"
@@ -23,7 +23,7 @@ prescribe_ozone: false
 moist: "equil"
 config: "column"
 z_max: 70e3
-truncation: 40000
+# truncation: 40000
 z_elem: 200
 z_stretch: true
 dz_bottom: 30
@@ -34,7 +34,7 @@ t_end: "120hours"
 cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage : true
 #toml: [/Users/julianschmitt/Documents/Research/loss/ClimaAtmos.jl/toml/prognostic_edmfx_era5driven_calibrated.toml]
-toml: [/home/jschmitt/ClimaAtmos.jl/toml/prognostic_edmfx_era5driven_calibrated.toml]
+toml: [toml/cal_additional_params.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
 output_default_diagnostics: false

@@ -3,7 +3,7 @@ ensemble_size: 50
 n_iterations: 10
 batch_size: 1 # number of cases per iteration
 model_config : prognostic_edmfx_tv_era5driven_column.yml
-output_dir : /scratch/julian/calibrations/tv_profiles_1 # output dir
+output_dir : /central/groups/esm/jschmitt/calibrations/tv_profiles_1 # output dir
 y_var_names: [ta, hus, clw] # calibration variables clw
 log_vars: [""] # take log(var) when forming y, g
 z_max : 4000 # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration

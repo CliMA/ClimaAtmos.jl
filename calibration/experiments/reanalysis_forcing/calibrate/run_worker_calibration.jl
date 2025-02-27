@@ -12,7 +12,7 @@ cd(project)
 function create_worker_pool()    
     addprocs(
         SlurmManager(50),
-        t = "10:00:00",
+        t = "02:00:00",
         cpus_per_task = 1,
         exeflags = "--project=$(Base.active_project())"
     )
@@ -32,6 +32,7 @@ using Pkg; Pkg.instantiate()
     import JLD2
     using LinearAlgebra
     using Dates
+    using ClimaAnalysis
 
     import ClimaComms
     ENV["CLIMACOMMS_CONTEXT"] = "SINGLETON"

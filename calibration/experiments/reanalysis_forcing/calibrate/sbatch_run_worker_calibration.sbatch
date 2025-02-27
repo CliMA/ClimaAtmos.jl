@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --ntasks=50
-#SBATCH --time=10:10:00
+#SBATCH --time=02:00:00
 #SBATCH --mem-per-cpu=8000
 #SBATCH -o workers.txt
 #SBATCH -e workers_error.txt
