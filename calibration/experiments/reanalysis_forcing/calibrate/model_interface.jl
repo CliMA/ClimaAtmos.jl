@@ -44,11 +44,11 @@ function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
     end
     config_dict["output_default_diagnostics"] = false
 
-    ref_paths, months, sites = get_era5_calibration_library()
+    ref_paths, _, _ = get_era5_calibration_library()
     atmos_configs = map(EKP.get_current_minibatch(eki)) do i
         config = deepcopy(config_dict)
-        config["external_forcing_file"] = get_forcing_file(i, months) # forcing file a function of months
-        config["cfsite_number"] = get_cfsite_id(i, sites) # specify which site to run
+        config["external_forcing_file"] = ref_paths[i] # forcing file a function of months
+        #config["cfsite_number"] = get_cfsite_id(i, sites) # specify which site to run
         config["output_dir"] = joinpath(member_path, "config_$i")
         comms_ctx = ClimaComms.SingletonCommsContext()
         CA.AtmosConfig(config; comms_ctx)

@@ -8,17 +8,15 @@ using JLD2
 
 
 function get_era5_calibration_library()
-    ref_paths, months, sites = [], [], []
-    for month in [7]#[1,4,7,10]
-        for cfsite in [23]#collect(2:23)
-            filename = "../data/era5_cfsite_obs_data.nc"
-            site = "site$cfsite"
-            push!(ref_paths, filename)
-            push!(months, month)
-            push!(sites, site)
-        end
+    locations = [(-20, 285 - 360), (17, 211 - 360), (10, -135)]
+    ref_paths, latitudes, longitudes = [], [], []
+    for (lat, lon) in locations
+        filename = "/scratch/julian/ERA5/tv/july_forcing/sim_forcing_loc_$(lat)_$(lon).nc"
+        push!(ref_paths, filename)
+        push!(latitudes, lat)
+        push!(longitudes, lon)
     end
-    ref_paths, months, sites
+    ref_paths, latitudes, longitudes
 end
 
 function get_forcing_file(i, months)
@@ -39,17 +37,17 @@ norm_factors_dict = JLD2.load("../data/norm_factors_dict.jld2")["norm_factors_di
 
 function get_obs(
     filename::String,
-    month::Integer,
-    site::String,
-    y_names::Vector{String};
+    y_names::Vector{String},
+    obs_start::DateTime,
+    obs_end::DateTime;
     normalize::Bool = true,
     norm_factors_dict = norm_factors_dict,
     z_scm::Vector{FT} = z_scm,
-    log_vars::Vector{String} = ["clw"],
+    log_vars::Vector{String} = [""],
 ) where {FT <: AbstractFloat}
     y = []
     for var_name in y_names
-        var_ = vertical_interpolation(month, site, var_name, filename, z_scm)
+        var_ = vertical_interpolation(obs_start, obs_end, var_name, filename, z_scm)
         if var_name in log_vars
             var_ = log10.(var_ .+ 1e-12)
         end
@@ -67,16 +65,16 @@ end
 
 
 function vertical_interpolation(
-    month::Integer,
-    site::String,
+    obs_start::DateTime,
+    obs_end::DateTime,
     var_name::String,
     filename::String,
     z_scm::Vector{FT};
 ) where {FT <: AbstractFloat}
     # get height of ERA5 data 
-    z_ref =get_height(filename, month, site)
+    z_ref =get_height(filename)
     # get ERA5 variable
-    var_ = nc_fetch(filename, month, site, var_name)
+    var_ = nc_fetch(filename, var_name, obs_start, obs_end)
     if ndims(var_) == 2
         # Create interpolant
         nodes = (z_ref, 1:size(var_, 2))
@@ -120,6 +118,15 @@ function nc_fetch(filename::String, month::Integer, site::String, var_name::Stri
     end
 end
 
+function nc_fetch(filename::String, var::String, obs_start::DateTime, obs_end::DateTime)
+    NCDataset(filename, "r") do ds
+        time = ds["time"][:]
+        time_idx = findall(x -> x >= obs_start && x <= obs_end, time)
+        return mean(ds[var][1, 1, :, time_idx], dims = 2)[:]
+    end
+
+end
+
 # get height 
 function get_height(filename::String, month::Integer, site::String)
     NCDataset(filename, "r") do ds
@@ -129,9 +136,15 @@ function get_height(filename::String, month::Integer, site::String)
     end
 end
 
+function get_height(filename::String)
+    NCDataset(filename, "r") do ds
+        return ds["z"][:]
+    end
+end
+
 
 function get_z_grid(atmos_config; z_max = nothing)
-    params = CA.create_parameter_set(atmos_config)
+    params = CA.ClimaAtmosParameters(atmos_config)
     spaces =
         CA.get_spaces(atmos_config.parsed_args, params, atmos_config.comms_ctx)
     coord = CA.Fields.coordinate_field(spaces.center_space)

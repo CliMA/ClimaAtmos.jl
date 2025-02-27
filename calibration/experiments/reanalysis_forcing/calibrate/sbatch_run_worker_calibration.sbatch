@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --ntasks=100
+#SBATCH --ntasks=50
 #SBATCH --time=10:10:00
 #SBATCH --mem-per-cpu=8000
 #SBATCH -o workers.txt

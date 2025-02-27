@@ -11,7 +11,7 @@ cd(project)
 #         mem_per_cpu=8000)
 function create_worker_pool()    
     addprocs(
-        SlurmManager(100),
+        SlurmManager(50),
         t = "10:00:00",
         cpus_per_task = 1,
         exeflags = "--project=$(Base.active_project())"
@@ -20,6 +20,7 @@ function create_worker_pool()
 end
 
 worker_pool = create_worker_pool()
+using Pkg; Pkg.instantiate()
 
 @info "Running Script..."
 @everywhere begin
@@ -30,10 +31,11 @@ worker_pool = create_worker_pool()
     import YAML
     import JLD2
     using LinearAlgebra
+    using Dates
 
     import ClimaComms
     ENV["CLIMACOMMS_CONTEXT"] = "SINGLETON"
-    using Revise
+    #using Revise
     include("helper_funcs.jl")
     include("observation_map.jl")
     # include("get_les_metadata.jl")
@@ -44,7 +46,7 @@ worker_pool = create_worker_pool()
         YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
     experiment_config_nt = NamedTuple(Symbol.(keys(experiment_config)) .=> values(experiment_config))
-    (; output_dir, n_iterations, log_vars, prior_path, model_config, const_noise_by_var, z_max, norm_factors_by_var, ensemble_size) = experiment_config_nt
+    (; output_dir, n_iterations, log_vars, prior_path, model_config, const_noise_by_var, z_max, norm_factors_by_var, ensemble_size, start_time, g_t_start_sec, g_t_end_sec) = experiment_config_nt
 
     prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
@@ -52,6 +54,10 @@ worker_pool = create_worker_pool()
     model_config_dict = YAML.load_file(model_config)
     atmos_config = CA.AtmosConfig(model_config_dict)
     zc_model = get_z_grid(atmos_config; z_max)
+
+    # compute times
+    start_datetime = Dates.DateTime(start_time, "yyyymmdd")
+    obs_start, obs_end = start_datetime + Dates.Second(g_t_start_sec), start_datetime + Dates.Second(g_t_end_sec)
 end
 
 ### create output directories & copy configs
@@ -82,16 +88,16 @@ JLD2.jldsave(
 ### get ERA5 obs (Y) and norm factors
 @everywhere begin
     #include("get_les_metadata.jl")
-    ref_paths, months, sites = get_era5_calibration_library()
+    ref_paths, latitudes, longitudes = get_era5_calibration_library()
     obs_vec = []
 
     for i in 1:length(ref_paths)
         
         y_obs = get_obs(
             ref_paths[i],
-            months[i],
-            sites[i],
-            experiment_config["y_var_names"];
+            experiment_config["y_var_names"],
+            obs_start,
+            obs_end;
             normalize = true,
             norm_factors_dict = norm_factors_by_var,
             z_scm = zc_model,
@@ -105,7 +111,7 @@ JLD2.jldsave(
                 Dict(
                     "samples" => y_obs,
                     "covariances" => Σ_obs,
-                    "names" => join([months[i], sites[i]], "_"),
+                    "names" => join([latitudes[i], longitudes[i]], "_"),
                 ),
             ),
         )
