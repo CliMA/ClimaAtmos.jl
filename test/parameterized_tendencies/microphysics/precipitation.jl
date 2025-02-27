@@ -68,6 +68,7 @@ import Test
     # No cloud condensation tendency for the equilibrium model
     @test CA.cloud_condensate_tendency!(
         ᶜYₜ,
+        Y,
         p,
         moisture_model,
         precip_model,
@@ -135,7 +136,7 @@ end
     @assert iszero(ᶜYₜ.c.ρ)
 
     # test nonequilibrium cloud condensate
-    CA.cloud_condensate_tendency!(ᶜYₜ, p, moisture_model, precip_model)
+    CA.cloud_condensate_tendency!(ᶜYₜ, Y, p, moisture_model, precip_model)
     @assert !any(isnan, ᶜYₜ.c.ρq_liq)
     @assert !any(isnan, ᶜYₜ.c.ρq_ice)
 

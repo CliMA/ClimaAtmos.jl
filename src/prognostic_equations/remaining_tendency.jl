@@ -120,6 +120,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     # Non-equilibrium cloud formation
     cloud_condensate_tendency!(
         Yₜ,
+        Y,
         p,
         p.atmos.moisture_model,
         p.atmos.precip_model,
