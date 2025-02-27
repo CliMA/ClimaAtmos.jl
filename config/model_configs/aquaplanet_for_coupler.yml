@@ -7,6 +7,7 @@ topography: "Earth"
 rayleigh_sponge: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
+max_newton_iters_ode: 2
 moist: "equil"
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "DecayWithHeightDiffusion"
