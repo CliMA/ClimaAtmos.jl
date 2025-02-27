@@ -410,10 +410,22 @@ function get_external_forcing_model(parsed_args)
         nothing
     elseif external_forcing == "GCM"
         DType = Float64  # TODO: Read from `parsed_args`
-        GCMForcing{DType}(
+        if parsed_args["external_forcing_type"] == "shallow"
+            external_forcing_type = ShallowGCMForcingType()
+
+        elseif parsed_args["external_forcing_type"] == "deep"
+            external_forcing_type = DeepGCMForcingType()
+
+        else
+            error("Invalid external_forcing_type")
+        end
+
+        GCMForcing{DType, AbstractGCMDrivenForcingType}(
             parsed_args["external_forcing_file"],
+            external_forcing_type,
             parsed_args["cfsite_number"],
         )
+
     elseif external_forcing == "ISDAC"
         ISDACForcing()
     end
