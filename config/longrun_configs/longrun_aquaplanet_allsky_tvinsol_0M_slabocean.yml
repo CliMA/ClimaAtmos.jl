@@ -6,6 +6,7 @@ deep_atmosphere: false
 rayleigh_sponge: true
 viscous_sponge: true
 implicit_diffusion: true
+max_newton_iters_ode: 2
 approximate_linear_solve_iters: 2
 dt: "120secs"
 t_end: "360days"
