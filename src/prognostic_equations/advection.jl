@@ -57,11 +57,11 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     end
 
     for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
-        if ρχ_name in (:ρq_rai, :ρq_sno, :ρq_liq, :ρq_ice)
-            nothing
-        else
-            @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.:($$ρχ_name) * ᶜu)
-        end
+        #if ρχ_name in (:ρq_rai, :ρq_sno, :ρq_liq, :ρq_ice)
+        #    nothing
+        #else
+        @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.:($$ρχ_name) * ᶜu)
+        #end
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
