@@ -5,6 +5,7 @@ surface_setup: Rico
 turbconv: diagnostic_edmfx
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
+max_newton_iters_ode: 2
 prognostic_tke: true
 edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"

@@ -9,6 +9,7 @@ dt_save_to_sol: "Inf"
 dt_save_state_to_disk: "1secs"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
+max_newton_iters_ode: 2
 log_progress: false
 moist: "equil"
 surface_setup: "DefaultMoninObukhov"

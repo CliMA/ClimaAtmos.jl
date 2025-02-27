@@ -14,6 +14,7 @@ precip_model: "1M"
 vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
+max_newton_iters_ode: 2
 reproducibility_test: false
 toml: [toml/single_column_precipitation_test.toml]
 diagnostics:

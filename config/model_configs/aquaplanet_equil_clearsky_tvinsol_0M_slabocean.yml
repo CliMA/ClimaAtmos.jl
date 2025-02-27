@@ -7,8 +7,9 @@ surface_setup: "DefaultMoninObukhov"
 vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
+max_newton_iters_ode: 2
 rad: "clearsky"
 insolation: "timevarying"
 dt_rad: "1hours"
 prognostic_surface: "PrognosticSurfaceTemperature"
-#check_conservation: true
+check_conservation: true

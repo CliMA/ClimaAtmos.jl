@@ -3,6 +3,7 @@ rad: allskywithclear
 co2_model: fixed
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
+max_newton_iters_ode: 2
 edmfx_sgs_diffusive_flux: true
 turbconv: edonly_edmfx
 moist: equil

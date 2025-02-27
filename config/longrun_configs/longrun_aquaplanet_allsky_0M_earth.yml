@@ -9,6 +9,7 @@ topography: "Earth"
 topo_smoothing: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
+max_newton_iters_ode: 2
 dt: "120secs"
 t_end: "360days"
 dt_save_state_to_disk: "30days"

@@ -459,8 +459,12 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
     elseif !is_implicit_type(alg_or_tableau)
         return alg_or_tableau()
     elseif is_imex_CTS_algo_type(alg_or_tableau)
+        max_iters = parsed_args["max_newton_iters_ode"]
+        (max_iters == 1 && parsed_args["implicit_diffusion"]) &&
+            @warn "Implicit diffusion typically requires at least 2 Newton \
+                   iterations to avoid conservation errors!"
         newtons_method = CTS.NewtonsMethod(;
-            max_iters = parsed_args["max_newton_iters_ode"],
+            max_iters,
             krylov_method = if parsed_args["use_krylov_method"]
                 CTS.KrylovMethod(;
                     jacobian_free_jvp = CTS.ForwardDiffJVP(;

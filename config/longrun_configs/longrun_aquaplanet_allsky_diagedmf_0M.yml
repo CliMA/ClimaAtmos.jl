@@ -7,6 +7,7 @@ rayleigh_sponge: true
 viscous_sponge: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
+max_newton_iters_ode: 2
 dt: "120secs"
 t_end: "240days"
 dt_save_state_to_disk: "30days"
