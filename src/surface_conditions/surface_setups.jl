@@ -303,21 +303,6 @@ function external_tv_surface_conditions(
     return T
 end
 
-
-# function external_tv_surface_conditions(external_forcing_file, start_date)
-#     start_date = Dates.DateTime(start_date, "yyyymmdd")
-#     tv = TimeVaryingInputs.TimeVaryingInput(
-#         [external_forcing_file],
-#         ["ts"],
-#         axes(similar(Fields.level(Y.c.ρ, 1), FT)),
-#         reference_date = start_date,
-#         regridder_type = :InterpolationsRegridder,
-#     )
-#     F1 = zero(Fields.level(Y.c.ρ, 1))
-
-#     TimeVaryingInputs.evaluate!(F1, tv, start_date)
-# end
-
 struct ISDAC end
 function (::ISDAC)(params)
     FT = eltype(params)
