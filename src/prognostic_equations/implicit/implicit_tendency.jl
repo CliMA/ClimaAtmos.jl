@@ -126,18 +126,18 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
-    # Central advection of active tracers (e_tot and all the q_...)
+    # Central vertical advection of active tracers (e_tot and q_tot)
     vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     @. Yₜ.c.ρe_tot += vtt
-
-    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
-        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜχ, dt, Val(:none))
-        @. ᶜρχₜ += vtt
+    if !(moisture_model isa DryModel)
+        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜspecific.q_tot, dt, Val(:none))
+        @. Yₜ.c.ρq_tot += vtt
     end
 
-    #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
-
+    # Vertical advection of passive tracers with the mean flow
+    # is done in the explicit tendency.
+    # Here we add the vertical advection with precipitation terminal velocity
+    # using downward biasing and free outflow bottom boundary condition
     if moisture_model isa NonEquilMoistModel
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed
         @. Yₜ.c.ρq_liq -= ᶜprecipdivᵥ(
@@ -149,12 +149,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶠright_bias(Geometry.WVector(-(ᶜwᵢ)) * ᶜspecific.q_ice),
         )
     end
-
     if precip_model isa Microphysics1Moment
-        # Advection of precipitation with the mean flow
-        # is done with other passive tracers in the explicit tendency.
-        # Here we add the advection with precipitation terminal velocity
-        # using downward biasing and free outflow bottom boundary condition
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ *
@@ -165,6 +160,9 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶠright_bias(Geometry.WVector(-(ᶜwₛ)) * ᶜspecific.q_sno),
         )
     end
+
+    # TODO - decide if this needs to be explicit or implicit
+    #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
     @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜp) / ᶠinterp(Y.c.ρ) + ᶠgradᵥ_ᶜΦ
 
