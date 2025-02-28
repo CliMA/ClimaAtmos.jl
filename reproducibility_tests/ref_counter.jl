@@ -1,4 +1,4 @@
-218
+219
 
 # **README**
 #
@@ -20,6 +20,8 @@
 
 
 #=
+219
+- Change the operations order in vertical advection upwinding
 
 218
 - Change surface flux tendency to fully explicit
@@ -37,7 +39,7 @@
 214
 - Rename some config files
 
-213 
+213
 - Update to deep-atmos eqns by default, fix vorticity diagnostic
 
 212
