@@ -74,7 +74,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    (; ᶜts, cloud_diagnostics_tuple, sfc_conditions) = p.precomputed
+    (; ᶜts, ᶜp, cloud_diagnostics_tuple, sfc_conditions) = p.precomputed
     (; params) = p
     (; ᶠradiation_flux, rrtmgp_model) = p.radiation
     (; radiation_mode) = p.atmos
@@ -105,9 +105,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     sfc_T = Fields.array2field(rrtmgp_model.surface_temperature, axes(sfc_ts))
     @. sfc_T = TD.air_temperature(thermo_params, sfc_ts)
 
-    ᶜp = Fields.array2field(rrtmgp_model.center_pressure, axes(Y.c))
+    rrtmgp_model.center_pressure .= Fields.field2array(ᶜp)
     ᶜT = Fields.array2field(rrtmgp_model.center_temperature, axes(Y.c))
-    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     # TODO: move this to RRTMGP
     @. ᶜT =
         min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
