@@ -1,4 +1,4 @@
-219
+220
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+220
+- Split out cached variables that should be treated implicitly, so that all
+  other cached variables are no longer updated by the implicit solver
+
 219
 - Change the operations order in vertical advection upwinding
 
