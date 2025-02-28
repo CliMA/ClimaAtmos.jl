@@ -962,7 +962,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     )
     ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
-    @. ᶜtke⁰ = Y.c.sgs⁰.ρatke / Y.c.ρ
     # using ᶜu⁰ would be more correct, but this is more consistent with the
     # TKE equation, where using ᶜu⁰ results in allocation
     for j in 1:n

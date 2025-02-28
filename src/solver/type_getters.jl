@@ -654,8 +654,8 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
                     lim! = limiters_func!,
                     dss!,
                     cache! = set_precomputed_quantities!,
-                    cache_imp! = set_precomputed_quantities!,
-                ) # TODO: Split implicit precomputed quantities from the rest.
+                    cache_imp! = set_implicit_precomputed_quantities!,
+                )
             else
                 SciMLBase.SplitFunction(implicit_func, remaining_tendency!)
             end
