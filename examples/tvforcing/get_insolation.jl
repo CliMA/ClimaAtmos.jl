@@ -2,7 +2,7 @@ using Dates
 using Statistics
 
 using Insolation
-import Insolation.Parameters as IP 
+import Insolation.Parameters as IP
 import ClimaParams as CP
 
 using NCDatasets
@@ -12,15 +12,22 @@ FT = Float64
 geo = NCDataset("data_processing/geolocation.nc")
 
 
-function get_weighted_coszen(lat, lon, month, timezone=-10., year = 2008, ndays = 31;
+function get_weighted_coszen(
+    lat,
+    lon,
+    month,
+    timezone = -10.0,
+    year = 2008,
+    ndays = 31;
     param_set = IP.InsolationParameters(FT),
-    od = Insolation.OrbitalData())
+    od = Insolation.OrbitalData(),
+)
 
     date = DateTime(year, month, 01)
 
     ntimes = ndays * 24 * 60 # sample every minute
     hours = collect(range(0, 24 * ndays, length = ntimes))
-    insol = zeros(ntimes) 
+    insol = zeros(ntimes)
     sza = zeros(ntimes)
     date0 = DateTime("2000-01-01T11:58:56.816")
 
@@ -29,12 +36,19 @@ function get_weighted_coszen(lat, lon, month, timezone=-10., year = 2008, ndays 
         m = Int(round((hr + timezone - h) * 60))
 
         datetime = date + Dates.Hour(h) + Dates.Minute(m)
-        S, mu = solar_flux_and_cos_sza(datetime, date0, od, FT(lon), FT(lat), param_set)
-        insol[i] = S * mu 
+        S, mu = solar_flux_and_cos_sza(
+            datetime,
+            date0,
+            od,
+            FT(lon),
+            FT(lat),
+            param_set,
+        )
+        insol[i] = S * mu
         sza[i] = rad2deg(acos(mu))
     end
 
-    v = cos.(deg2rad.(sza)) .* insol/ sum(insol)
+    v = cos.(deg2rad.(sza)) .* insol / sum(insol)
 
     return sum(v)
 end
@@ -44,7 +58,8 @@ end
 # july = get_weighted_coszen.(geo["lat"][:], geo["lon"][:], 7)
 # oct = get_weighted_coszen.(geo["lat"][:], geo["lon"][:], 10)
 
-coszen_sites = map(x -> get_weighted_coszen.(geo["lat"][:], geo["lon"][:], x), 1:12)
+coszen_sites =
+    map(x -> get_weighted_coszen.(geo["lat"][:], geo["lon"][:], x), 1:12)
 
 # make a NCdataset indexed by geo site lat and lon with cozsen data for each of the 4 selected months
 using NCDatasets

@@ -290,7 +290,10 @@ function (surface_setup::ExternalTV)(params)
     return SurfaceState(; parameterization, T)
 end
 
-function external_tv_surface_conditions(external_forcing_file::String, start_date::String)
+function external_tv_surface_conditions(
+    external_forcing_file::String,
+    start_date::String,
+)
     """Set initial surface conditions"""
     start_time = Dates.DateTime(start_date, "yyyymmdd")
     T = NC.NCDataset(external_forcing_file) do ds

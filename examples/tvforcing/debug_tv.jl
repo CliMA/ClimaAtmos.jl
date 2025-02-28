@@ -7,7 +7,8 @@ import ClimaCore.Fields
 using NCDatasets
 
 cd("../../")
-config = CA.AtmosConfig("config/model_configs/prognostic_edmfx_gcmdriven_column.yml")
+config =
+    CA.AtmosConfig("config/model_configs/prognostic_edmfx_gcmdriven_column.yml")
 simulation = CA.get_simulation(config)
 
 
@@ -15,20 +16,22 @@ simulation = CA.get_simulation(config)
 
 
 start_time = DateTime(2007, 7, 1)
-tv = TimeVaryingInputs.TimeVaryingInput(["examples/tvforcing/sim_forcing_site23_ng_xyz.nc"],
-                                ["ta"],
-                                axes(similar(simulation.integrator.u.c.ρ));
-                                reference_date = start_time,
-                                regridder_type = :InterpolationsRegridder,
+tv = TimeVaryingInputs.TimeVaryingInput(
+    ["examples/tvforcing/sim_forcing_site23_ng_xyz.nc"],
+    ["ta"],
+    axes(similar(simulation.integrator.u.c.ρ));
+    reference_date = start_time,
+    regridder_type = :InterpolationsRegridder,
 );
 
 import ClimaCore: Fields
 FT = Float32
-tv = TimeVaryingInputs.TimeVaryingInput(["examples/tvforcing/sim_forcing_site23_ng_xyz.nc"],
-                                ["coszen"],
-                                axes(similar(Fields.level(simulation.integrator.u.c.ρ, 1), FT));
-                                reference_date = start_time,
-                                regridder_type = :InterpolationsRegridder,
+tv = TimeVaryingInputs.TimeVaryingInput(
+    ["examples/tvforcing/sim_forcing_site23_ng_xyz.nc"],
+    ["coszen"],
+    axes(similar(Fields.level(simulation.integrator.u.c.ρ, 1), FT));
+    reference_date = start_time,
+    regridder_type = :InterpolationsRegridder,
 );
 F1 = zero(Fields.level(simulation.integrator.u.c.ρ, 1))
 next_t = start_time + Dates.Second(1000)

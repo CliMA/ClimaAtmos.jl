@@ -6,15 +6,15 @@ using Printf
 
 # for radiation calculation 
 using Insolation
-import Insolation.Parameters as IP 
+import Insolation.Parameters as IP
 import ClimaParams as CP
 
 # ta, hus, ua, va, zg, z, wap, rsdt, tntha, tnhusha, tntva, tnhusva
 
 time_resolution = 3600 # switch to 86400 for monthly data 
 # pick location, site 17 to start with 
-lat = 17.
-lon = 211. - 360. # convert to -180, 180
+lat = 17.0
+lon = 211.0 - 360.0 # convert to -180, 180
 
 # parameters 
 R_d = 287.05
@@ -74,22 +74,35 @@ function get_vertical_tendencies(column_ds, var, vertvar = "wap")
 
     for i in 1:size(sim_forcing["wap"])[1]
         if i == 1
-            deriv[1, :] = sim_forcing["wap"][1, :] .* (sim_forcing[var][2, :] .- sim_forcing[var][1, :]) ./ (sim_forcing["zg"][2, :] .- sim_forcing["zg"][1, :])
+            deriv[1, :] =
+                sim_forcing["wap"][1, :] .*
+                (sim_forcing[var][2, :] .- sim_forcing[var][1, :]) ./
+                (sim_forcing["zg"][2, :] .- sim_forcing["zg"][1, :])
         elseif i == size(sim_forcing["wap"])[1]
-            deriv[end, :] = sim_forcing["wap"][end, :] .* (sim_forcing[var][end, :] .- sim_forcing[var][end-1, :]) ./ (sim_forcing["zg"][end, :] .- sim_forcing["zg"][end-1, :])
+            deriv[end, :] =
+                sim_forcing["wap"][end, :] .*
+                (sim_forcing[var][end, :] .- sim_forcing[var][end - 1, :]) ./
+                (sim_forcing["zg"][end, :] .- sim_forcing["zg"][end - 1, :])
         else # centered FD 
-            deriv[i, :] = sim_forcing["wap"][i, :] .* (sim_forcing[var][i+1, :] .- sim_forcing[var][i-1, :]) ./ (sim_forcing["zg"][i+1, :] .- sim_forcing["zg"][i-1, :])
+            deriv[i, :] =
+                sim_forcing["wap"][i, :] .*
+                (sim_forcing[var][i + 1, :] .- sim_forcing[var][i - 1, :]) ./
+                (sim_forcing["zg"][i + 1, :] .- sim_forcing["zg"][i - 1, :])
         end
     end
-    
-    deriv 
+
+    deriv
 end
 
 FT = Float64
 
-function get_coszen_inst(lat, lon, date,
+function get_coszen_inst(
+    lat,
+    lon,
+    date,
     param_set = IP.InsolationParameters(FT),
-    od = Insolation.OrbitalData())
+    od = Insolation.OrbitalData(),
+)
 
     date = DateTime(date)
 
@@ -106,7 +119,8 @@ end
 lon_index = findfirst(tvforcing["longitude"][:] .== lon)
 lat_index = findfirst(tvforcing["latitude"][:] .== lat)
 
-sim_forcing["tntha"], sim_forcing["tnhusha"] = get_horizontal_tendencies(lon_index, lat_index, tvforcing)
+sim_forcing["tntha"], sim_forcing["tnhusha"] =
+    get_horizontal_tendencies(lon_index, lat_index, tvforcing)
 
 
 # temperature = tvforcing["t"]
@@ -120,8 +134,8 @@ sim_forcing = Dict()
 sim_forcing["time"] = tvforcing["valid_time"][:]
 sim_forcing["pressure_level"] = tvforcing["pressure_level"][:]
 
-lat = 17.
-lon = 211. - 360. # convert to -180, 180
+lat = 17.0
+lon = 211.0 - 360.0 # convert to -180, 180
 lon_index = findfirst(tvforcing["longitude"][:] .== lon)
 lat_index = findfirst(tvforcing["latitude"][:] .== lat)
 
@@ -142,7 +156,8 @@ sim_forcing["wap"] = sim_forcing["wa"] .* ρ
 # compute vertical advection terms - for these terms we don't need horizontal gradients so can pass sim_forcing directly
 sim_forcing["tntva"] = get_vertical_tendencies(sim_forcing, "ta", "wap")
 sim_forcing["tnhusva"] = get_vertical_tendencies(sim_forcing, "hus", "wap")
-sim_forcing["tntha"], sim_forcing["tnhusha"] = get_horizontal_tendencies(lon_index, lat_index, tvforcing)
+sim_forcing["tntha"], sim_forcing["tnhusha"] =
+    get_horizontal_tendencies(lon_index, lat_index, tvforcing)
 
 sim_forcing["rho"] = ρ # pressure 
 sim_forcing["z"] = tvforcing["z"][lon_index, lat_index, :, :] / (-g) # height in meters
@@ -159,14 +174,21 @@ defDim(group, "pressure_level", length(sim_forcing["pressure_level"]))
 
 # Convert DateTime to numeric values
 time_ref = DateTime(1970, 1, 1)  # Reference time (Unix epoch)
-time_values = Float64.(Dates.value.(sim_forcing["time"] .- sim_forcing["time"][1]) ./ 1000)
+time_values =
+    Float64.(
+        Dates.value.(sim_forcing["time"] .- sim_forcing["time"][1]) ./ 1000
+    )
 
 # Define time variable with attributes
-defVar(group, "time", Float64, ("time",),
+defVar(
+    group,
+    "time",
+    Float64,
+    ("time",),
     attrib = [
         "units" => "hours since 1970-01-01 00:00:00",
-        "calendar" => "proleptic_gregorian"
-    ]
+        "calendar" => "proleptic_gregorian",
+    ],
 )
 group["time"][:] = time_values
 
@@ -176,7 +198,21 @@ group["pressure_level"][:] = sim_forcing["pressure_level"]
 
 # Define the variables and add them to the group
 for (name, data) in sim_forcing
-    if name in ["tnhusha", "tntha", "hus", "tntva", "zg", "wa", "ua", "va", "ta", "tnhusva", "wap", "z", "rho"]
+    if name in [
+        "tnhusha",
+        "tntha",
+        "hus",
+        "tntva",
+        "zg",
+        "wa",
+        "ua",
+        "va",
+        "ta",
+        "tnhusva",
+        "wap",
+        "z",
+        "rho",
+    ]
         defVar(group, name, Float64, ("pressure_level", "time"))
         group[name][:, :] = data
     elseif name ∉ ["time", "pressure_level"]
@@ -193,20 +229,37 @@ defVar(group, "rsdt", Float64, ("time",))
 group["rsdt"][:] = [c[2] for c in coszen_list]
 
 # add latent and sensitble heat fluxes (I think we'll probably just use ts and prescribed monin obukhov length)
-tv_site23_surface = NCDataset("/scratch/julian/ERA5/tv/site23_surface_forcing1.nc")
+tv_site23_surface =
+    NCDataset("/scratch/julian/ERA5/tv/site23_surface_forcing1.nc")
 lon_index_surf = findfirst(tv_site23_surface["longitude"][:] .== lon)
 lat_index_surf = findfirst(tv_site23_surface["latitude"][:] .== lat)
-matching_time_indices = findall(in(tvforcing["valid_time"][:]), tv_site23_surface["valid_time"][:])
+matching_time_indices =
+    findall(in(tvforcing["valid_time"][:]), tv_site23_surface["valid_time"][:])
 
 defVar(group, "hfls", Float64, ("time",))
 defVar(group, "hfss", Float64, ("time",))
-group["hfls"][:] = - tv_site23_surface["slhf"][lon_index_surf, lat_index_surf, matching_time_indices] / time_resolution
-group["hfss"][:] = - tv_site23_surface["sshf"][lon_index_surf, lat_index_surf, matching_time_indices] / time_resolution
+group["hfls"][:] =
+    -tv_site23_surface["slhf"][
+        lon_index_surf,
+        lat_index_surf,
+        matching_time_indices,
+    ] / time_resolution
+group["hfss"][:] =
+    -tv_site23_surface["sshf"][
+        lon_index_surf,
+        lat_index_surf,
+        matching_time_indices,
+    ] / time_resolution
 
 # add temperature data - annoying a different file 
-tv_site23_surface2 = NCDataset("/scratch/julian/ERA5/tv/site23_surface_forcing2.nc")
+tv_site23_surface2 =
+    NCDataset("/scratch/julian/ERA5/tv/site23_surface_forcing2.nc")
 defVar(group, "ts", Float64, ("time",))
-group["ts"][:] = tv_site23_surface2["skt"][lon_index_surf, lat_index_surf, matching_time_indices]
+group["ts"][:] = tv_site23_surface2["skt"][
+    lon_index_surf,
+    lat_index_surf,
+    matching_time_indices,
+]
 
 
 # Close the dataset
