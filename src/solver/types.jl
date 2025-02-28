@@ -100,7 +100,6 @@ struct TimeVaryingInsolation <: AbstractInsolation
 end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
-struct ERA5DrivenInsolation <: AbstractInsolation end
 struct ExternalTVInsolation <: AbstractInsolation end
 
 """
@@ -291,15 +290,10 @@ struct GCMForcing{FT}
 end
 
 """
-    ERA5Forcing
+    ExternalDrivenTVForcing
     
-Forcing specified by cfsite number and an external forcing file.
+Forcing specified by external forcing file and a start date.
 """
-struct ERA5Forcing{FT}
-    external_forcing_file::String
-    cfsite_number::String
-end
-
 struct ExternalDrivenTVForcing{FT}
     external_forcing_file::String
     start_date::String

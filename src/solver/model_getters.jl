@@ -32,7 +32,6 @@ function get_insolation_form(parsed_args)
         "timevarying",
         "rcemipii",
         "gcmdriven",
-        "era5driven",
         "externaldriventv",
     )
     return if insolation == "idealized"
@@ -46,8 +45,6 @@ function get_insolation_form(parsed_args)
         RCEMIPIIInsolation()
     elseif insolation == "gcmdriven"
         GCMDrivenInsolation()
-    elseif insolation == "era5driven"
-        ERA5DrivenInsolation()
     elseif insolation == "externaldriventv"
         ExternalTVInsolation()
     end
@@ -407,26 +404,18 @@ function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
 
-function get_external_forcing_model(parsed_args)
+function get_external_forcing_model(parsed_args, FT)
     external_forcing = parsed_args["external_forcing"]
-    @assert external_forcing in (nothing, "GCM", "ISDAC", "ERA5", "ExternalTV")
+    @assert external_forcing in (nothing, "GCM", "ExternalTV", "ISDAC")
     return if isnothing(external_forcing)
         nothing
     elseif external_forcing == "GCM"
-        DType = Float64  # TODO: Read from `parsed_args`
-        GCMForcing{DType}(
-            parsed_args["external_forcing_file"],
-            parsed_args["cfsite_number"],
-        )
-    elseif external_forcing == "ERA5"
-        DType = Float64  # TODO: Read from `parsed_args`
-        ERA5Forcing{DType}(
+        GCMForcing{FT}(
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
     elseif external_forcing == "ExternalTV"
-        DType = Float64  # TODO: Read from `parsed_args`
-        ExternalDrivenTVForcing{DType}(
+        ExternalDrivenTVForcing{FT}(
             parsed_args["external_forcing_file"],
             parsed_args["start_date"],
         )
