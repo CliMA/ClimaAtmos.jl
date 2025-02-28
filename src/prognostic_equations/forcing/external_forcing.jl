@@ -273,26 +273,27 @@ function external_forcing_cache(Y, external_forcing::ExternalDrivenTVForcing, pa
     column_target_space = axes(similar(Y.c))
     surface_target_space = axes(similar(Fields.level(Y.c, 1)))
 
+    extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Linear())
 
     column_timevaryinginputs = [
         TimeVaryingInput(
-            # hardcode for now then figure out how to pass in the file path
             external_forcing_file,
             name,
             column_target_space;
             reference_date = start_time,
             regridder_type = :InterpolationsRegridder,
+            regridder_kwargs = (; extrapolation_bc),
         ) for name in column_tendencies
     ]
 
     surface_timevaryinginputs = [
         TimeVaryingInput(
-            # hardcode for now then figure out how to pass in the file path
             external_forcing_file,
             name,
             surface_target_space;
             reference_date = start_time,
             regridder_type = :InterpolationsRegridder,
+            regridder_kwargs = (; extrapolation_bc),
         ) for name in surface_tendencies
     ]
 
@@ -330,10 +331,6 @@ function external_forcing_cache(Y, external_forcing::ExternalDrivenTVForcing, pa
 
     return (; era5_tv_column_cache..., era5_tv_surface_cache..., era5_cache...)
 end
-
-
-
-
 
 # ISDAC external forcing (i.e. nudging)
 external_forcing_cache(Y, external_forcing::ISDACForcing, params) = (;)  # Don't need to cache anything
