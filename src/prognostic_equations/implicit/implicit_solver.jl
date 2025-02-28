@@ -452,6 +452,7 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
     p′ = (;
         p.precomputed.ᶜspecific,
         p.precomputed.ᶜK,
+        p.precomputed.ᶠu³,
         p.precomputed.ᶜts,
         p.precomputed.ᶜp,
         p.precomputed.ᶜwₜqₜ,
@@ -979,7 +980,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             # add updraft mass flux contributions to grid-mean
             if use_derivative(sgs_mass_flux_flag)
 
-                (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs) = p
+                (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs, ᶠu³) = p
                 (; bdmr_l, bdmr_r, bdmr) = p
                 is_third_order = edmfx_upwinding == Val(:third_order)
                 ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
@@ -997,18 +998,55 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                     TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
                     TD.cv_m(thermo_params, ᶜtsʲs.:(1))
 
-                # Placeholders for jacobian contributions of updraft massflux to grid-mean
-                # Initialize all derivatives to zero
+                # Jacobian contributions of updraft massflux to grid-mean
 
-                ## grid-mean ρρe_tot
+                ∂ᶜupdraft_mass_flux_∂ᶜh_tot = ᶠbidiagonal_matrix_ct3
+                @. ∂ᶜupdraft_mass_flux_∂ᶜh_tot =
+                    DiagonalMatrixRow(
+                        (ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) * (ᶠu³ʲs.:(1) - ᶠu³),
+                    ) ⋅ ᶠinterp_matrix() ⋅
+                    DiagonalMatrixRow(Y.c.sgsʲs.:(1).ρa / ᶜρʲs.:(1))
+
+                # Derivative of total energy tendency with respect to updraft MSE
+                ## grid-mean ρe_tot
+                @. ∂ᶜρe_tot_err_∂ᶜρ +=
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜh_tot ⋅
+                    DiagonalMatrixRow(
+                        (
+                            -(1 + ᶜkappa_m) * ᶜspecific.e_tot -
+                            ᶜkappa_m * ∂e_int_∂q_tot * ᶜspecific.q_tot
+                        ) / ᶜρ,
+                    )
+
+                @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜh_tot ⋅
+                    DiagonalMatrixRow(ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ)
+
+                @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜh_tot ⋅
+                    DiagonalMatrixRow((1 + ᶜkappa_m) / ᶜρ)
+
                 ∂ᶜρe_tot_err_∂ᶜmseʲ =
                     matrix[@name(c.ρe_tot), @name(c.sgsʲs.:(1).mse)]
-                ∂ᶜρe_tot_err_∂ᶜmseʲ .= (zero(eltype(∂ᶜρe_tot_err_∂ᶜmseʲ)),)
+                @. ∂ᶜρe_tot_err_∂ᶜmseʲ =
+                    -(dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜh_tot)
 
                 ## grid-mean ρq_tot
+                ∂ᶜupdraft_mass_flux_∂ᶜqtot = ∂ᶜupdraft_mass_flux_∂ᶜh_tot
+                ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
+                @. ∂ᶜρq_tot_err_∂ᶜρ +=
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜqtot ⋅
+                    DiagonalMatrixRow(-(ᶜspecific.q_tot) / ᶜρ)
+
+                ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+                @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜqtot ⋅
+                    DiagonalMatrixRow(1 / ᶜρ)
+
                 ∂ᶜρq_tot_err_∂ᶜq_totʲ =
                     matrix[@name(c.ρq_tot), @name(c.sgsʲs.:(1).q_tot)]
-                ∂ᶜρq_tot_err_∂ᶜq_totʲ .= (zero(eltype(∂ᶜρq_tot_err_∂ᶜq_totʲ)),)
+                @. ∂ᶜρq_tot_err_∂ᶜq_totʲ =
+                    -(dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜqtot)
 
             end
 
