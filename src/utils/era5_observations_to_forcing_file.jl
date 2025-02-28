@@ -9,21 +9,16 @@ using Insolation
 import Insolation.Parameters as IP 
 import ClimaParams as CP
 
-# ta, hus, ua, va, zg, z, wap, rsdt, tntha, tnhusha, tntva, tnhusva
-
 time_resolution = 3600 # switch to 86400 for monthly data 
-# pick location, site 17 to start with 
-# lat = 17.
-# lon = 211. - 360. # convert to -180, 180
+FT = Float64
 
 # parameters 
 R_d = 287.05
 g = -9.81
 
-tvforcing = NCDataset("/scratch/julian/ERA5/data_download/july2007_forcing_and_cloud_hourly_profiles.nc")
+tvforcing = NCDataset("/scratch/julian/ERA5/data_download/july2007_forcing_and_cloud_hourly_profiles.nc") # profile data
 tv_inst = NCDataset("/scratch/julian/ERA5/data_download/july2007_hourly_inst.nc") # skt
-tv_accum = NCDataset("/scratch/julian/ERA5/data_download/july2007_hourly_accum.nc")
-# copy values we don't directly need to compute
+tv_accum = NCDataset("/scratch/julian/ERA5/data_download/july2007_hourly_accum.nc") # slhf, sshf
 
 function get_horizontal_tendencies(lat, lon_index, lat_index, column_ds)
     """
@@ -35,9 +30,6 @@ function get_horizontal_tendencies(lat, lon_index, lat_index, column_ds)
     dx = 2 * π * rearth * coslat / 360 * 0.25
     dy = 2 * π * rearth / 360 * 0.25
 
-    # lon_index = findfirst(column_ds["longitude"][:] .== lon)
-    # lat_index = findfirst(column_ds["latitude"][:] .== lat)
-    # println(lon_index, lat_index)
     # get velocities at site location
     ᶜu = column_ds["u"][lon_index, lat_index, :, :]
     ᶜv = column_ds["v"][lon_index, lat_index, :, :]
@@ -81,8 +73,6 @@ function get_vertical_tendencies(sim_forcing, var, vertvar = "wap")
     
     deriv 
 end
-
-FT = Float64
 
 function get_coszen_inst(lat, lon, date,
     param_set = IP.InsolationParameters(FT),
