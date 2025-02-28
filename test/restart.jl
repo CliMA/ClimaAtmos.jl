@@ -225,9 +225,7 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
 
     local_success = true
 
-    config = CA.AtmosConfig(test_dict; job_id, comms_ctx)
-
-    simulation = CA.get_simulation(config)
+    simulation = CA.AtmosSimulation(test_dict; job_id, comms_ctx)
     CA.solve_atmos!(simulation)
 
     # Check re-importing the same state
@@ -244,7 +242,7 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
         comms_ctx,
     )
 
-    simulation_restarted = CA.get_simulation(config_should_be_same)
+    simulation_restarted = CA.AtmosSimulation(config_should_be_same)
 
     if pkgversion(CA.RRTMGP) < v"0.22"
         # Versions of RRTMGP older than 0.22 have a bug and do not set the
@@ -303,7 +301,7 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
         comms_ctx,
     )
 
-    simulation_restarted2 = CA.get_simulation(config2)
+    simulation_restarted2 = CA.AtmosSimulation(config2)
     CA.fill_with_nans!(simulation_restarted2.integrator.p)
 
     CA.solve_atmos!(simulation_restarted2)

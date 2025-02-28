@@ -23,3 +23,19 @@ function Base.show(io::IO, sim::AtmosSimulation)
         "└── Stop time: $(sim.t_end) seconds",
     )
 end
+
+
+"""
+    AtmosSimulation(config::AtmosConfig)
+    AtmosSimulation(config_file_path)
+    AtmosSimulation(config_dict)
+
+Construct a simulation.
+"""
+function AtmosSimulation(config::AtmosConfig)
+    return get_simulation(config)
+end
+
+function AtmosSimulation(args...; kwargs...)
+    return AtmosSimulation(AtmosConfig(args...; kwargs...))
+end
