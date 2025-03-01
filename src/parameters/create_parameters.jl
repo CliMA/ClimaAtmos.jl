@@ -36,7 +36,7 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
     IP = typeof(insolation_params)
 
     surface_fluxes_params =
-        SF.Parameters.SurfaceFluxesParameters(toml_dict, UF.BusingerParams)
+        SurfaceFluxesParameters(toml_dict, UF.BusingerParams)
     SFP = typeof(surface_fluxes_params)
 
     surface_temp_params = SurfaceTemperatureParameters(toml_dict)

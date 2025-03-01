@@ -4,4 +4,5 @@ t_end: "8days"
 discrete_hydrostatic_balance: true
 hyperdiff: false
 perturb_initstate: false
+disable_surface_flux_tendency: true
 FLOAT_TYPE: "Float64"

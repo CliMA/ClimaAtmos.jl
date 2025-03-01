@@ -211,13 +211,16 @@ abstract type AbstractVerticalDiffusion end
 Base.@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
     C_E::FT
 end
-diffuse_momentum(::VerticalDiffusion{DM}) where {DM} = DM
+disable_momentum_vertical_diffusion(::VerticalDiffusion{DM}) where {DM} = DM
 Base.@kwdef struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
     H::FT
     D₀::FT
 end
-diffuse_momentum(::DecayWithHeightDiffusion{DM}) where {DM} = DM
-diffuse_momentum(::Nothing) = false
+disable_momentum_vertical_diffusion(::DecayWithHeightDiffusion{DM}) where {DM} =
+    DM
+disable_momentum_vertical_diffusion(::Nothing) = false
+
+struct SurfaceFlux end
 
 abstract type AbstractSponge end
 Base.Broadcast.broadcastable(x::AbstractSponge) = tuple(x)
@@ -560,6 +563,8 @@ Base.@kwdef struct AtmosModel{
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
     insolation::IN = nothing
+    """Whether to apply surface flux tendency (independent of surface conditions)"""
+    disable_surface_flux_tendency::Bool = false
     surface_model::SM = nothing
     surface_albedo::SA = nothing
     numerics::NUM = nothing

@@ -2,6 +2,7 @@ initial_condition: "MoistBaroclinicWave"
 dt: "400secs"
 t_end: "5days"
 moist: "equil"
+disable_surface_flux_tendency: true
 dt_save_state_to_disk: "5days"
 check_conservation: true
 diagnostics:

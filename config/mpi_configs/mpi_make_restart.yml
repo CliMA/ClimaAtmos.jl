@@ -1,2 +1,3 @@
 dt_save_state_to_disk: "5days"
 initial_condition: "DryBaroclinicWave"
+disable_surface_flux_tendency: true

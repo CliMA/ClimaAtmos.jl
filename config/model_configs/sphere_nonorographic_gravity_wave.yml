@@ -1,3 +1,4 @@
 t_end: "1500secs"
 dt: "400secs"
+disable_surface_flux_tendency: true
 non_orographic_gravity_wave: true
