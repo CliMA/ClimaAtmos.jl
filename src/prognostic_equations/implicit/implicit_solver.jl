@@ -233,7 +233,7 @@ function ImplicitEquationJacobian(
             )...,
             (@name(c.uₕ), @name(c.uₕ)) =>
                 !isnothing(atmos.turbconv_model) ||
-                    diffuse_momentum(atmos.vert_diff) ?
+                    !disable_momentum_vertical_diffusion(atmos.vert_diff) ?
                 similar(Y.c, TridiagonalRow) : FT(-1) * I,
         )
     elseif atmos.moisture_model isa DryModel
@@ -723,7 +723,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         if (
             MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke)) ||
             !isnothing(p.atmos.turbconv_model) ||
-            diffuse_momentum(p.atmos.vert_diff)
+            !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
         )
             @. ᶜdiffusion_u_matrix =
                 ᶜadvdivᵥ_matrix() ⋅
@@ -803,7 +803,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
 
         if (
             !isnothing(p.atmos.turbconv_model) ||
-            diffuse_momentum(p.atmos.vert_diff)
+            !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
         )
             ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
             @. ∂ᶜuₕ_err_∂ᶜuₕ =

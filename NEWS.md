@@ -1,10 +1,16 @@
 ClimaAtmos.jl Release Notes
 ============================
 
-v0.28.6
+main
 -------
 
 ### Features
+
+### Add a flag for disabling surface flux tendency
+Surface flux tendency is not controlled by `vert_diff` or `edmfx_sgs_diffusive_flux` anymore.
+Instead, it is controlled by the new flag `disable_surface_flux_tendency`. When it is set to 
+true, no surface flux tendency is applied, no matter what `surface_setup` is.
+This flag is set to false by default. PR [3670](https://github.com/CliMA/ClimaAtmos.jl/pull/3670).
 
 ### Automatically determine diagnostic resolution based on model resolution
 

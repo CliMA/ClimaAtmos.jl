@@ -175,6 +175,9 @@ divergence_damping_factor:
 rayleigh_sponge:
   help: "Rayleigh sponge [`true`, `false` (default)]"
   value: false
+disable_surface_flux_tendency:
+  help: "(Bool) Whether to disable surface flux tendencies of momentum, energy, and tracers [`true`, `false` (default)]. When this flag is true, the surface flux tendency is not applied, no matter how surface conditions are computed."
+  value: false
 surface_setup:
   help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
   value: "DefaultExchangeCoefficients"

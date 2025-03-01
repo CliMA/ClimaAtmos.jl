@@ -178,7 +178,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; sfc_conditions) = p.precomputed
     (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length) = p.precomputed
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
@@ -192,7 +191,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
         # energy
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(sfc_conditions.ρ_flux_h_tot),
+            bottom = Operators.SetValue(C3(FT(0))),
         )
         @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜmse⁰ + ᶜK⁰)))
         if use_prognostic_tke(turbconv_model)
@@ -216,7 +215,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
-                bottom = Operators.SetValue(sfc_conditions.ρ_flux_q_tot),
+                bottom = Operators.SetValue(C3(FT(0))),
             )
             @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_tot⁰)))
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
@@ -228,12 +227,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
         bc_strain_rate = compute_strain_rate_face(ᶜu⁰)
         @. ᶠstrain_rate = bc_strain_rate
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
-        # apply boundary condition for momentum flux
-        ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
-            bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ),
-        )
-        @. Yₜ.c.uₕ -= ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ))) / Y.c.ρ
     end
 
     # TODO: Add tracer flux
@@ -253,7 +246,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; sfc_conditions) = p.precomputed
     (; ᶜu, ᶜh_tot, ᶜspecific, ᶜtke⁰, ᶜmixing_length) = p.precomputed
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
@@ -267,7 +259,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
         # energy
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(sfc_conditions.ρ_flux_h_tot),
+            bottom = Operators.SetValue(C3(FT(0))),
         )
         @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜh_tot)))
 
@@ -288,7 +280,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
-                bottom = Operators.SetValue(sfc_conditions.ρ_flux_q_tot),
+                bottom = Operators.SetValue(C3(FT(0))),
             )
             @. ᶜρχₜ_diffusion =
                 ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜspecific.q_tot)))
@@ -301,12 +293,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
         bc_strain_rate = compute_strain_rate_face(ᶜu)
         @. ᶠstrain_rate = bc_strain_rate
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
-        # apply boundary condition for momentum flux
-        ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
-            bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ),
-        )
-        @. Yₜ.c.uₕ -= ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ))) / Y.c.ρ
     end
 
     # TODO: Add tracer flux

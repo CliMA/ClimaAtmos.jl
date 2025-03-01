@@ -7,4 +7,5 @@ dt_save_to_sol: "Inf"
 log_progress: false
 moist: "equil"
 initial_condition: "MoistBaroclinicWave"
+disable_surface_flux_tendency: true
 precip_model: "0M"

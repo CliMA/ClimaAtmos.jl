@@ -7,3 +7,4 @@ dt: "90secs"
 t_end: "360days"
 perturb_initstate: false
 discrete_hydrostatic_balance: true
+disable_surface_flux_tendency: true
