@@ -44,7 +44,7 @@ function get_atmos(config::AtmosConfig, params)
     (isnothing(co2) && !with_rrtmgp) &&
         @warn ("$(co2) does nothing if RRTMGP is not used")
 
-    diffuse_momentum = !(forcing_type isa HeldSuarezForcing)
+    disable_momentum_vertical_diffusion = forcing_type isa HeldSuarezForcing
 
     advection_test = parsed_args["advection_test"]
     @assert advection_test in (false, true)
@@ -67,8 +67,12 @@ function get_atmos(config::AtmosConfig, params)
         filter = Val(parsed_args["edmfx_filter"]),
     )
 
-    vert_diff =
-        get_vertical_diffusion_model(diffuse_momentum, parsed_args, params, FT)
+    vert_diff = get_vertical_diffusion_model(
+        disable_momentum_vertical_diffusion,
+        parsed_args,
+        params,
+        FT,
+    )
 
     atmos = AtmosModel(;
         moisture_model,
@@ -105,6 +109,7 @@ function get_atmos(config::AtmosConfig, params)
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         insolation = get_insolation_form(parsed_args),
+        disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
         surface_model = get_surface_model(parsed_args),
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
         numerics = get_numerics(parsed_args),

@@ -12,6 +12,7 @@ dz_bottom: 10
 dt: "0.5secs" # CFL is slightly lower than for 2D case
 t_end: "9hours"
 rayleigh_sponge: true
+disable_surface_flux_tendency: true
 toml: [toml/steady_state_test.toml]
 check_steady_state: true
 output_default_diagnostics: false

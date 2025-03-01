@@ -3,6 +3,7 @@ initial_condition: "MoistBaroclinicWave"
 topography: "Hughes2023"
 topo_smoothing: false
 moist: equil
+disable_surface_flux_tendency: true
 dt: "200secs"
 t_end: "10days"
 diagnostics:

@@ -1,4 +1,5 @@
 initial_condition: "SimplePlume"
+disable_surface_flux_tendency: true
 surface_setup: "SimplePlume"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: false
