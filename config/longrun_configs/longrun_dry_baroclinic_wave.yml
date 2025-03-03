@@ -7,4 +7,4 @@ initial_condition: "DryBaroclinicWave"
 dt_save_state_to_disk: "10days"
 diagnostics:
   - short_name: [pfull, wa, va, rv, ke]
-    period: 1days
+    period: 10days

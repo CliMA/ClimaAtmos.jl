@@ -8,4 +8,4 @@ dt_save_state_to_disk: "10days"
 netcdf_interpolation_num_points: [360, 180, 2]
 diagnostics:
   - short_name: [pfull, wa, va, rv, ke]
-    period: 1days
+    period: 10days
