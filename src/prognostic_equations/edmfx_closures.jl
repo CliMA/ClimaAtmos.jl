@@ -67,7 +67,7 @@ end
                   velocity is used in diagnostic edmf.
    - updraft top height
 """
-function ᶠupdraft_nh_pressure(params, ᶠlg, ᶠbuoyʲ, ᶠu3ʲ, ᶠu3⁰, plume_height, ᶠz, ᶠbuoy⁰, ᶠtke⁰, ᶠaʲ, nh_pressure_type::PhysicalPertPressureModel)
+function ᶠupdraft_nh_pressure(params, ᶠlg, ᶠbuoyʲ, ᶠu3ʲ, ᶠu3⁰, plume_height, ᶠz, ᶠbuoy⁰, ᶠtke⁰, ᶠaʲ, w_up, w_en, nh_pressure_type::PhysicalPertPressureModel)
     turbconv_params = CAP.turbconv_params(params)
     # factor multiplier for pressure buoyancy terms (effective buoyancy is (1-α_b))
     α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
@@ -103,29 +103,55 @@ function ᶠupdraft_nh_pressure(params, ᶠlg, ᶠbuoyʲ, ᶠu3ʲ, ᶠu3⁰, plu
     H_up_min = CAP.min_updraft_top(turbconv_params)
     FT = eltype(params)
 
+    # @show ᶠbuoyʲ
+    # @show ᶠbuoyʲ[1]
+    # @show ᶠtke⁰
     Π₁ = ᶠz * ᶠbuoyʲ[1] / ((w_up .- w_en)^2 + eps(FT)) / 100
 
     Π₂ = max(ᶠtke⁰, 0) / ((w_up - w_en)^2 + eps(FT)) / 2
 
     Π₃ = sqrt(ᶠaʲ)
 
+    Π₁ = min(max(Π₁, -10), 10)
+    Π₂ = min(max(Π₂, -10), 10)
+
+    # @show Π₁ Π₂ Π₃
+
+    # # Print α_d terms and their corresponding param_vec values
+    # @show param_vec[4] sign(Π₁) abs(Π₁) param_vec[10]  # term 1
+    # @show param_vec[5] sign(Π₂) abs(Π₂) param_vec[11]  # term 2
+    # @show param_vec[6] Π₃ param_vec[12]                # term 3
+    # @show param_vec[14]
+
+
     # buoyancy coefficient
-    α_b = param_vec[1] * Π₁^param_vec[7] +
-          param_vec[2] * Π₂^param_vec[8] +
-          param_vec[3] * Π₃^param_vec[9] +
-          param_vec[13]
+    α_b = max(
+        # param_vec[1] * sign(Π₁) * (abs(Π₁) + eps(FT))^abs(param_vec[7]) +
+        # param_vec[2] * sign(Π₂) * (abs(Π₂) + eps(FT))^abs(param_vec[8]) +
+        # param_vec[3] * (abs(Π₃) + eps(FT))^abs(param_vec[9]) +
+        param_vec[13],
+        0.0,
+    )
 
     # drag coefficient
-    α_d = param_vec[4] * Π₁^param_vec[10] +
-          param_vec[5] * Π₂^param_vec[11] +
-          param_vec[6] * Π₃^param_vec[12] +
-          param_vec[14]
+    α_d = max(
+        # param_vec[4] * sign(Π₁) * (abs(Π₁) + eps(FT))^abs(param_vec[10]) +
+        # param_vec[5] * sign(Π₂) * (abs(Π₂) + eps(FT))^abs(param_vec[11]) +
+        # param_vec[6] * (abs(Π₃) + eps(FT))^abs(param_vec[12]) +
+        param_vec[14],
+        0.0,
+    )
 
+    # @show "here123"
+    # @show α_b
+    # @show α_d
+    # @show ᶠbuoyʲ
+    # @show α_b * ᶠbuoyʲ + α_d * (ᶠu3ʲ - ᶠu3⁰) * CC.Geometry._norm(ᶠu3ʲ - ᶠu3⁰, ᶠlg) / max(plume_height, H_up_min)
+    
     return α_b * ᶠbuoyʲ +
         α_d * (ᶠu3ʲ - ᶠu3⁰) * CC.Geometry._norm(ᶠu3ʲ - ᶠu3⁰, ᶠlg) /
         max(plume_height, H_up_min)
 end
-
 
 
 edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing

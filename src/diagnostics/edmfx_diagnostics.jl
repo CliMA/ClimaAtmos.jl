@@ -500,6 +500,50 @@ add_diagnostic_variable!(
 )
 
 ###
+# Perturbation pressure (3d)
+###
+compute_nh_pressure!(out, state, cache, time) =
+    compute_nh_pressure!(out, state, cache, time, cache.atmos.turbconv_model)
+compute_nh_pressure!(_, _, _, _, turbconv_model::T) where {T} =
+    error_diagnostic_variable("nh_pressure", turbconv_model)
+
+function compute_nh_pressure!(
+    out,
+    state,
+    cache,
+    time,
+    turbconv_model::PrognosticEDMFX,
+)
+    if isnothing(out)
+        return copy(w_component.(Geometry.WVector.(cache.precomputed.ᶠnh_pressure₃ʲs.:1)))
+    else
+        out .= w_component.(Geometry.WVector.(cache.precomputed.ᶠnh_pressure₃ʲs.:1))
+    end
+end
+
+function compute_nh_pressure!(
+    out,
+    state,
+    cache,
+    time,
+    turbconv_model::DiagnosticEDMFX,
+)
+    if isnothing(out)
+        return copy(cache.precomputed.ᶠnh_pressure³ʲs.:1)
+    else
+        out .= cache.precomputed.ᶠnh_pressure³ʲs.:1
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "nh_pressure",
+    long_name = "Perturbation pressure",
+    units = "m s^-2",
+    comments = "Perturbation pressure of the first updraft",
+    compute! = compute_nh_pressure!,
+)
+
+###
 # Environment area fraction (3d)
 ###
 compute_aren!(out, state, cache, time) =
