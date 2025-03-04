@@ -32,3 +32,6 @@ dt: "120secs"
 t_end: "120days"
 toml: [toml/longrun_aquaplanet_diagedmf.toml]
 netcdf_output_at_levels: true
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr, rv, ke]
+    period: 3hours
