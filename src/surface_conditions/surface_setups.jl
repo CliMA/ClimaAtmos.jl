@@ -1,6 +1,14 @@
 abstract type SurfaceSetup end
 
 """
+    NoSurface()
+
+Used to indicate that there is no surface flux.
+"""
+struct NoSurface <: SurfaceSetup end
+(surface_setup::NoSurface)(params) = nothing
+
+"""
     PrescribedSurface()
 
 Used to indicate that there is no surface parameterization and

@@ -5,5 +5,6 @@ t_end: "1days"
 dt: "90secs"
 dt_save_state_to_disk: "Inf"
 dt_save_to_sol: "Inf"
+disable_surface_flux_tendency: true
 output_default_diagnostics: false
 initial_condition: "DryBaroclinicWave"
