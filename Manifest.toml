@@ -214,7 +214,7 @@ version = "0.6.6"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "UnrolledUtilities"]
-git-tree-sha1 = "d939ab1124d57307cbc4682521d83fdc3aa4a5ae"
+git-tree-sha1 = "fc1ab441769c8ad7a20335e10c7aab7048bca2fb"
 repo-rev = "tr/support-atmos-single-column"
 repo-url = "https://github.com/CliMA/ClimaCore.jl"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
