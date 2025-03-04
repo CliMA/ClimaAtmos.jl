@@ -16,6 +16,7 @@ include("helper_funcs.jl")
 # const z_max = experiment_config_dict["z_max"]
 # const output_dir = experiment_config_dict["output_dir"]
 
+# output_dir = "output_prior_and_entr_exp/exp_8"
 output_dir = "output_prior_and_entr_exp/exp_8"
 
 model_config_dict = YAML.load_file(joinpath(output_dir, "configs", "model_config.yml"))

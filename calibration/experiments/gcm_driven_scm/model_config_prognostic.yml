@@ -9,12 +9,16 @@ approximate_linear_solve_iters: 2
 max_newton_iters_ode: 1
 edmfx_upwinding: "first_order"
 rayleigh_sponge: true
-edmfx_entr_model: "PiGroups"
-edmfx_detr_model: "PiGroups"
+# edmfx_entr_model: "PiGroups"
+# edmfx_detr_model: "PiGroups"
+edmfx_entr_model : "SmoothArea"
+edmfx_detr_model : "SmoothArea"
 precip_model: 1M
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
+edmfx_nh_pressure_type : physical
+# edmfx_nh_pressure_type : linear
 edmfx_filter: false
 prognostic_tke: true
 moist: "equil"
@@ -42,5 +46,5 @@ netcdf_interpolation_num_points: [2, 2, 60]
 diagnostics:
 - short_name: [thetaa, hus, cl, clw, cli, pr]
   period: 10mins
-- short_name: [entr, detr, lmix, turbentr, tke, arup, waup, edt]
+- short_name: [entr, detr, lmix, turbentr, tke, arup, waup, edt, nh_pressure]
   period: 10mins

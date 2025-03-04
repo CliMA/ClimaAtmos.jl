@@ -14,12 +14,17 @@ using Statistics
 include("helper_funcs.jl")
 
 
-output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_43" # path to calibration output
-iteration = 10
+# output_dir = "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_43" # path to calibration output
+output_dir = "/central/scratch/cchristo/output_ml_mix2/exp_8" # path to calibration output
+iteration = 5
 prefix = ""
 
-write_optimal_toml_dir = "./scm_runner/optimal_tomls"
+
+write_optimal_toml_dir = "./calibrated_tomls/pert_pres"
 param_overrides_path = "./scm_tomls/prognostic_edmfx.toml"
+
+# write_optimal_toml_dir = "./scm_runner/optimal_tomls"
+# param_overrides_path = "./scm_tomls/prognostic_edmfx.toml"
 
 
 const config_dict =
@@ -28,9 +33,12 @@ const pretrained_nn_path = config_dict["pretrained_nn_path"]
 
 
 prior_path = joinpath(output_dir, "configs", "prior.toml")
-prior = create_prior_with_nn(prior_path, pretrained_nn_path)
 
+# if no nn
+const prior = CAL.get_prior(prior_path)
 
+# if nn
+# prior = create_prior_with_nn(prior_path, pretrained_nn_path)
 
 iter_path = CAL.path_to_iteration(output_dir, iteration)
 eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
