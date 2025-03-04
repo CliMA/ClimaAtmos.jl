@@ -162,7 +162,7 @@ eki = CAL.calibrate(
     ensemble_size,
     n_iterations,
     observations,
-    nothing, # nothing
+    nothing, # noise alread sprecified in observations
     prior,
     output_dir;
     scheduler = EKP.DataMisfitController(on_terminate = "continue"),

@@ -25,7 +25,8 @@ function get_les_calibration_library()
     # AMIP data: July, NE Pacific
     # cfsite_numbers = (17, 18, 22, 23, 30, 94)
     # cfsite_numbers = (17, 23, 30, 94)
-    cfsite_numbers = (17, 23, 94)
+    cfsite_numbers = (23, 30, 94)
+    # cfsite_numbers = (23, 30)
     les_kwargs = (forcing_model = "HadGEM2-A", month = 7, experiment = "amip")
     ref_paths = [
         get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...)) for
@@ -33,6 +34,22 @@ function get_les_calibration_library()
     ]
     return (ref_paths, cfsite_numbers)
 end
+
+
+
+# function get_les_calibration_library()
+#     les_library = get_shallow_LES_library()
+#     # AMIP data: July, NE Pacific
+#     # cfsite_numbers = (17, 18, 22, 23, 30, 94)
+#     # cfsite_numbers = (17, 23, 30, 94)
+#     cfsite_numbers = (17, 23, 94)
+#     les_kwargs = (forcing_model = "HadGEM2-A", month = 7, experiment = "amip")
+#     ref_paths = [
+#         get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...)) for
+#         cfsite_number in cfsite_numbers
+#     ]
+#     return (ref_paths, cfsite_numbers)
+# end
 
 
 

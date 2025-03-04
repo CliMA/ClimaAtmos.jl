@@ -10,8 +10,10 @@ using LinearAlgebra
 using DataFrames
 
 # output_dir = "output/exp_1"
-output_dir= "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_40"
-iterations = 0:2
+# output_dir= "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_40"
+# output_dir= "/central/scratch/cchristo/output_ml_mix2/exp_6"
+output_dir= "/central/scratch/cchristo/output_ml_mix2/exp_8"
+iterations = 0:5
 # iterations = nothing
 
 include("helper_funcs.jl")
@@ -31,13 +33,12 @@ if isnothing(iterations)
     iterations = collect(0:(n_iterations - 1))
 end
 
-# const prior = CAL.get_prior(joinpath(output_dir, "configs", "prior.toml"))
+const prior = CAL.get_prior(joinpath(output_dir, "configs", "prior.toml"))
 
 
-const pretrained_nn_path = config_dict["pretrained_nn_path"]
-
-prior_path = joinpath(output_dir, "configs", "prior.toml")
-prior = create_prior_with_nn(prior_path, pretrained_nn_path)
+# const pretrained_nn_path = config_dict["pretrained_nn_path"]
+# prior_path = joinpath(output_dir, "configs", "prior.toml")
+# prior = create_prior_with_nn(prior_path, pretrained_nn_path)
 
 
 function inv_variance_weighted_loss(
