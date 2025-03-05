@@ -1,6 +1,7 @@
 module ClimaAtmos
 
 using NVTX
+import Adapt
 import NullBroadcasts: NullBroadcasted
 import LazyBroadcast
 import LazyBroadcast: lazy
