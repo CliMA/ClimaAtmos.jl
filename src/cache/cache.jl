@@ -70,6 +70,9 @@ struct AtmosCache{
     conservation_check::CONSCHECK
 end
 
+# Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
+Adapt.@adapt_structure AtmosCache
+
 # Functions on which the model depends:
 # CAP.R_d(params)         # dry specific gas constant
 # CAP.kappa_d(params)     # dry adiabatic exponent

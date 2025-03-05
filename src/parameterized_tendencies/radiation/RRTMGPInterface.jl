@@ -5,6 +5,7 @@ import ..AbstractCloudInRadiation
 using RRTMGP
 import RRTMGP.AtmosphericStates as AS
 using ClimaCore: DataLayouts, Spaces, Fields
+import Adapt
 import ClimaComms
 using NVTX
 using Random
@@ -272,6 +273,9 @@ struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V}
     as::AS  # Atmospheric state
     views::V  # user-friendly views into the solver
 end
+
+# Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
+Adapt.@adapt_structure RRTMGPModel
 
 function Base.getproperty(model::RRTMGPModel, s::Symbol)
     if s in fieldnames(typeof(model))

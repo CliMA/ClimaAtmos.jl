@@ -30,6 +30,8 @@ direct_dependencies =
     keys(Pkg.dependencies(identity, atmos_uuid).dependencies) |> Set
 
 known_dependencies = Set([
+    # Adapt is used to move the AtmosCache to CPU for checkpointing
+    "Adapt",
     # ArgParse is used to read --config_file and --job_id from command line
     "ArgParse",
     "Artifacts",
