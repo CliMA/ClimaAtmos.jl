@@ -10,4 +10,5 @@ idealized_h2o: true
 t_end: "654days"
 config: "column"
 dt_save_to_sol: "30hours"
+disable_surface_flux_tendency: true
 rad: "clearsky"

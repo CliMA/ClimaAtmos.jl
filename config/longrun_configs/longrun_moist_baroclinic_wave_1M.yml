@@ -10,6 +10,7 @@ initial_condition: "MoistBaroclinicWave"
 moist: "nonequil"
 precip_model: "1M"
 dt_save_state_to_disk: "15days"
+disable_surface_flux_tendency: true
 toml: [toml/longrun_baroclinic_wave_1M.toml]
 diagnostics:
   - short_name: [pfull, wa, va, ua, ta, rhoa, rv, hus, ke, clw, cli, husra, hussn]

@@ -1,4 +1,4 @@
-217
+218
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+
+218
+- Change surface flux tendency to fully explicit
 
 217
 - Change reconstruction of density on cell faces

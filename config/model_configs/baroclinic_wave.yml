@@ -3,6 +3,7 @@ initial_condition: "DryBaroclinicWave"
 dt: "400secs"
 t_end: "10days"
 deep_atmosphere: false
+disable_surface_flux_tendency: true
 diagnostics:
   - short_name: [pfull, ua, wa, va, rv, ta, ke]
     period: 1days
