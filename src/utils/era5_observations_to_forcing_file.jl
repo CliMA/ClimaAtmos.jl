@@ -15,10 +15,11 @@ FT = Float64
 # parameters 
 R_d = 287.05
 g = -9.81
-
-tvforcing = NCDataset("/scratch/julian/ERA5/data_download/july2007_forcing_and_cloud_hourly_profiles.nc") # profile data
-tv_inst = NCDataset("/scratch/julian/ERA5/data_download/july2007_hourly_inst.nc") # skt
-tv_accum = NCDataset("/scratch/julian/ERA5/data_download/july2007_hourly_accum.nc") # slhf, sshf
+rootdir = "/scratch/julian/ERA5/data_download/"
+rootdir = "/Users/julianschmitt/Downloads/era5/"
+tvforcing = NCDataset(rootdir * "july2007_forcing_and_cloud_hourly_profiles.nc") # profile data
+tv_inst = NCDataset(rootdir * "july2007_hourly_inst.nc") # skt
+tv_accum = NCDataset(rootdir * "july2007_hourly_accum.nc") # slhf, sshf
 
 function get_horizontal_tendencies(lat, lon_index, lat_index, column_ds)
     """
@@ -53,25 +54,46 @@ function get_horizontal_tendencies(lat, lon_index, lat_index, column_ds)
     return tntha, tnhusha
 end
 
+# # compute vertical advection terms
+# function get_vertical_tendencies(sim_forcing, var, vertvar = "wap")
+#     """
+#     Calculate the temperature and specific humidity vertical tendencies as a function of levels
+#     using vertical advection. Here we take the tendency over the geopotential height not the height in meters
+#     """
+#     deriv = zeros(size(sim_forcing["wap"]))
+
+#     for i in 1:size(sim_forcing["wap"])[1]
+#         if i == 1
+#             deriv[1, :] = sim_forcing["wap"][1, :] .* (sim_forcing[var][2, :] .- sim_forcing[var][1, :]) ./ (sim_forcing["zg"][2, :] .- sim_forcing["zg"][1, :])
+#         elseif i == size(sim_forcing["wap"])[1]
+#             deriv[end, :] = sim_forcing["wap"][end, :] .* (sim_forcing[var][end, :] .- sim_forcing[var][end-1, :]) ./ (sim_forcing["zg"][end, :] .- sim_forcing["zg"][end-1, :])
+#         else # centered FD 
+#             deriv[i, :] = sim_forcing["wap"][i, :] .* (sim_forcing[var][i+1, :] .- sim_forcing[var][i-1, :]) ./ (sim_forcing["zg"][i+1, :] .- sim_forcing["zg"][i-1, :])
+#         end
+#     end
+    
+#     deriv 
+# end
+
 # compute vertical advection terms
-function get_vertical_tendencies(sim_forcing, var, vertvar = "wap")
+function get_vertical_tendencies(sim_forcing, var)
     """
     Calculate the temperature and specific humidity vertical tendencies as a function of levels
     using vertical advection. Here we take the tendency over the geopotential height not the height in meters
     """
-    deriv = zeros(size(sim_forcing["wap"]))
+    deriv = zeros(size(sim_forcing["wa"]))
 
-    for i in 1:size(sim_forcing["wap"])[1]
+    for i in 1:size(sim_forcing["wa"])[1]
         if i == 1
-            deriv[1, :] = sim_forcing["wap"][1, :] .* (sim_forcing[var][2, :] .- sim_forcing[var][1, :]) ./ (sim_forcing["zg"][2, :] .- sim_forcing["zg"][1, :])
-        elseif i == size(sim_forcing["wap"])[1]
-            deriv[end, :] = sim_forcing["wap"][end, :] .* (sim_forcing[var][end, :] .- sim_forcing[var][end-1, :]) ./ (sim_forcing["zg"][end, :] .- sim_forcing["zg"][end-1, :])
+            deriv[1, :] = sim_forcing["wa"][1, :] .* (sim_forcing[var][2, :] .- sim_forcing[var][1, :]) ./ (sim_forcing["z"][2, :] .- sim_forcing["z"][1, :])
+        elseif i == size(sim_forcing["wa"])[1]
+            deriv[end, :] = sim_forcing["wa"][end, :] .* (sim_forcing[var][end, :] .- sim_forcing[var][end-1, :]) ./ (sim_forcing["z"][end, :] .- sim_forcing["z"][end-1, :])
         else # centered FD 
-            deriv[i, :] = sim_forcing["wap"][i, :] .* (sim_forcing[var][i+1, :] .- sim_forcing[var][i-1, :]) ./ (sim_forcing["zg"][i+1, :] .- sim_forcing["zg"][i-1, :])
+            deriv[i, :] = sim_forcing["wa"][i, :] .* (sim_forcing[var][i+1, :] .- sim_forcing[var][i-1, :]) ./ (sim_forcing["z"][i+1, :] .- sim_forcing["z"][i-1, :])
         end
     end
-    
-    deriv 
+    # return minus version because we move the tendency to the RHS 
+    return -deriv 
 end
 
 function get_coszen_inst(lat, lon, date,
@@ -108,10 +130,11 @@ function compute_forcing(lat, lon, tvforcing, tv_inst, tv_accum)
 
     sim_forcing["ua"] = tvforcing["u"][lon_index, lat_index, :, :]
     sim_forcing["va"] = tvforcing["v"][lon_index, lat_index, :, :]
-    sim_forcing["wa"] = tvforcing["w"][lon_index, lat_index, :, :]
+    sim_forcing["wap"] = tvforcing["w"][lon_index, lat_index, :, :]
     sim_forcing["hus"] = tvforcing["q"][lon_index, lat_index, :, :]
     sim_forcing["ta"] = tvforcing["t"][lon_index, lat_index, :, :]
     sim_forcing["zg"] = tvforcing["z"][lon_index, lat_index, :, :]
+    sim_forcing["z"] = tvforcing["z"][lon_index, lat_index, :, :] / (-g) # height in meters
 
     # add cloud information - this is used for profile calibration and not for the forcing but saves multiple files for profile calibration
     sim_forcing["clw"] = tvforcing["clwc"][lon_index, lat_index, :, :]
@@ -119,18 +142,20 @@ function compute_forcing(lat, lon, tvforcing, tv_inst, tv_accum)
 
 
     # compute subsidence
-    pressure = tvforcing["pressure_level"] .* 100
+    pressure = tvforcing["pressure_level"] .* 100 # convert hPa to Pa
     ρ = reshape(pressure, 37, 1) ./ (R_d .* sim_forcing["ta"])
-    sim_forcing["wap"] = sim_forcing["wa"] .* ρ
+    sim_forcing["rho"] = ρ # pressure 
+    println("rho: ", size(ρ))
+    println("ta: ", size(sim_forcing["ta"]))
+    println("wap", size(sim_forcing["wap"]))
+    #sim_forcing["wap"] = sim_forcing["wa"] .* ρ
+    sim_forcing["wa"] = sim_forcing["wap"] ./ (ρ .* g) # g is already negative
 
 
     # compute vertical advection terms - for these terms we don't need horizontal gradients so can pass sim_forcing directly
-    sim_forcing["tntva"] = get_vertical_tendencies(sim_forcing, "ta", "wap")
-    sim_forcing["tnhusva"] = get_vertical_tendencies(sim_forcing, "hus", "wap")
+    sim_forcing["tntva"] = get_vertical_tendencies(sim_forcing, "ta")
+    sim_forcing["tnhusva"] = get_vertical_tendencies(sim_forcing, "hus")
     sim_forcing["tntha"], sim_forcing["tnhusha"] = get_horizontal_tendencies(lat, lon_index, lat_index, tvforcing)
-
-    sim_forcing["rho"] = ρ # pressure 
-    sim_forcing["z"] = tvforcing["z"][lon_index, lat_index, :, :] / (-g) # height in meters
 
     ds = Dataset("sim_forcing_loc_$(lat)_$(lon).nc", "c")
 
@@ -174,6 +199,7 @@ function compute_forcing(lat, lon, tvforcing, tv_inst, tv_accum)
 
     # Define the variables and add them to the ds
     for (name, data) in sim_forcing
+        println(name)
         if name in ["tnhusha", "tntha", "hus", "tntva", "zg", "wa", "ua", "va", "ta", "tnhusva", "wap", "rho", "clw", "cli"]
             defVar(ds, name, Float64, ("x", "y", "z", "time"))
             ds[name][:] = repeat(reshape(data, 1, 1, size(data)...), 2, 2, 1, 1)

@@ -79,14 +79,7 @@ function external_driven_single_column!(integrator)
 
     # subsidence term we need wap / -(rho) / gravity 
     evaluate!(p.external_forcing.column_inputs.rho, rho, t)
-    evaluate!(ᶜls_subsidence, wap, t)
-    # need space to store rho 
-    ᶜls_subsidence .=
-        ᶜls_subsidence ./ .-(p.external_forcing.column_inputs.rho) ./
-        FT(CAP.grav(params))
-
-    eddy_vert_fluctuation!(ᶜdTdt_fluc, ᶜT_nudge, ᶜls_subsidence)
-    eddy_vert_fluctuation!(ᶜdqtdt_fluc, ᶜqt_nudge, ᶜls_subsidence)
+    evaluate!(ᶜls_subsidence, wa, t)
 
     @. ᶜinv_τ_wind = 1 / (6 * 3600)
     # set relaxation profile toward reference state - should find better way than field2array 

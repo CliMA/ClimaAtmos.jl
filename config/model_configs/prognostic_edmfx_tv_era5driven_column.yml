@@ -1,6 +1,6 @@
 initial_condition: "ExternalTV"
 external_forcing: "ExternalTV"
-external_forcing_file: "/Users/julianschmitt/Documents/Research/loss/ClimaAtmos.jl/examples/tvforcing/sim_forcing_site23_ng_xyz.nc"
+external_forcing_file: "/Users/julianschmitt/Documents/Research/loss/ClimaAtmos.jl/sim_forcing_loc_17_-149.nc"
 # external_forcing_file: "sim_forcing_site23_ng_xyz.nc"
 surface_setup: "ExternalTV"
 surface_temperature: "ExternalTVColumn"
@@ -25,7 +25,7 @@ precip_model: "0M"
 prescribe_ozone: false
 moist: "equil"
 config: "column"
-z_max: 70e3
+z_max: 45e3
 truncation: 40000
 z_elem: 200
 z_stretch: true
