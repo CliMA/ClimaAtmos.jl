@@ -563,6 +563,7 @@ Base.@kwdef struct AtmosModel{
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
     insolation::IN = nothing
+    """Whether to apply surface flux tendency (independent of surface conditions)"""
     disable_surface_flux_tendency::Bool = false
     surface_model::SM = nothing
     surface_albedo::SA = nothing

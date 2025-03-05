@@ -1,6 +1,6 @@
 import ClimaAtmos as CA
 
-simulation = CA.get_simulation(
+simulation = CA.AtmosSimulation(
     CA.AtmosConfig(
         Dict(
             "initial_condition" => "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc",
