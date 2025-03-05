@@ -44,7 +44,7 @@ jobs:
           julia --project=test -e "using Pkg; Pkg.develop(path=\".\"); Pkg.instantiate()"
       - name: Checkout RRTMGP
         run: |
-          julia --project=test -e "Pkg.add(url=\"https://github.com/CliMA/RRTMGP.jl\", rev=\"tr/julia-nightly-fix\")"
+          julia --project=test -e "using Pkg; Pkg.add(url=\"https://github.com/CliMA/RRTMGP.jl\", rev=\"tr/julia-nightly-fix\")"
       - name: Run test_env.yml
         continue-on-error: true
         run: |
