@@ -14,7 +14,7 @@ if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()
     config = CA.AtmosConfig(config_file; job_id)
 end
-simulation = CA.get_simulation(config)
+simulation = CA.AtmosSimulation(config)
 sol_res = CA.solve_atmos!(simulation)
 
 include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
