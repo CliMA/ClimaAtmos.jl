@@ -29,7 +29,7 @@ NVTX.@annotate function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
 
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
-    (; ᶜts, ᶠu³, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ᶜts, ᶠu, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
     (; obukhov_length) = p.precomputed.sfc_conditions
 
     @. ᶜlinear_buoygrad = buoyancy_gradients(
@@ -44,11 +44,8 @@ NVTX.@annotate function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
         ᶜlg,
     )
 
-    ᶠu = p.scratch.ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
-    bc_strain_rate = compute_strain_rate_center(ᶠu)
-    @. ᶜstrain_rate = bc_strain_rate
+    @. ᶜstrain_rate = $compute_strain_rate_center(ᶠu)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_2
