@@ -7,6 +7,8 @@ struct AtmosSimulation{TT, S1 <: AbstractString, S2 <: AbstractString, OW, OD}
     integrator::OD
 end
 
+Base.summary(::AtmosSimulation) = "AtmosSimulation"
+
 ClimaComms.context(sim::AtmosSimulation) =
     ClimaComms.context(sim.integrator.u.c)
 ClimaComms.device(sim::AtmosSimulation) = ClimaComms.device(sim.integrator.u.c)
