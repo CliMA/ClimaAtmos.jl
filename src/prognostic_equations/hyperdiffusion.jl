@@ -245,7 +245,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # triggers allocations.
     for (ᶜρχₜ, ᶜ∇²χ, χ_name) in matching_subfields(Yₜ.c, ᶜ∇²specific_tracers)
         # No precip hyperdiffusion
-        ν₄_scalar = ifelse(χ_name in (:q_rai, :q_sno), 0 * ν₄_scalar, ν₄_scalar)
+        #ν₄_scalar = ifelse(χ_name in (:q_rai, :q_sno), 0 * ν₄_scalar, ν₄_scalar)
         @. ᶜρχₜ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
         @. Yₜ.c.ρ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
     end
