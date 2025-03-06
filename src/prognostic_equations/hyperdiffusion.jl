@@ -244,11 +244,10 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # TODO: Figure out why caching the duplicated tendencies in ᶜtemp_scalar
     # triggers allocations.
     for (ᶜρχₜ, ᶜ∇²χ, χ_name) in matching_subfields(Yₜ.c, ᶜ∇²specific_tracers)
+        # No precip hyperdiffusion
         ν₄_scalar = ifelse(χ_name in (:q_rai, :q_sno), 0 * ν₄_scalar, ν₄_scalar)
         @. ᶜρχₜ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
-        if !(χ_name in (:q_rai, :q_sno))
-            @. Yₜ.c.ρ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
-        end
+        @. Yₜ.c.ρ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
     end
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²q_totʲs) = p.hyperdiff
