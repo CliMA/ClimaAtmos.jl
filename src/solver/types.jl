@@ -375,6 +375,7 @@ struct NoEntrainment <: AbstractEntrainmentModel end
 struct PiGroupsEntrainment <: AbstractEntrainmentModel end
 struct GeneralizedEntrainment <: AbstractEntrainmentModel end
 struct GeneralizedHarmonicsEntrainment <: AbstractEntrainmentModel end
+struct SmoothAreaEntrainment <: AbstractEntrainmentModel end
 
 abstract type AbstractDetrainmentModel end
 
