@@ -87,6 +87,7 @@ function precomputed_quantities(Y, atmos)
             ᶠu₃⁰ = similar(Y.f, C3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
+            ᶠu⁰ = similar(Y.f, CT123{FT}),
             ᶜK⁰ = similar(Y.c, FT),
             ᶜmse⁰ = similar(Y.c, FT),
             ᶜq_tot⁰ = similar(Y.c, FT),
@@ -98,6 +99,7 @@ function precomputed_quantities(Y, atmos)
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
             ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
+            ᶠuʲs = similar(Y.f, NTuple{n, CT123{FT}}),
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
             ᶠKᵥʲs = similar(Y.f, NTuple{n, FT}),
             ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
@@ -194,38 +196,28 @@ function precomputed_quantities(Y, atmos)
     )
 end
 
-# Interpolates the third contravariant component of Y.c.uₕ to cell faces.
-function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
-    ᶜJ = Fields.local_geometry_field(ᶜρ).J
-    return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
-end
-
 """
-    set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
+    set_velocity_at_surface!(Y, turbconv_model)
 
 Modifies `Y.f.u₃` so that `ᶠu³` is 0 at the surface. Specifically, since
-`u³ = uₕ³ + u³ = uₕ³ + u₃ * g³³`, setting `u³` to 0 gives `u₃ = -uₕ³ / g³³`. If
-the `turbconv_model` is EDMFX, the `Y.f.sgsʲs` are also modified so that each
-`u₃ʲ` is equal to `u₃` at the surface.
+`u³ = g³ʰ uₕ + g³³ u₃`, setting `u³` to 0 gives `u₃ = -(g³³)⁻¹ g³ʰ uₕ`. If the
+`turbconv_model` is EDMFX, the `Y.f.sgsʲs` are also modified so that each `u₃ʲ`
+is equal to `u₃` at the surface.
 """
-function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
-    sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
-    bc_sfc_u₃ = surface_velocity(Y.f.u₃, ᶠuₕ³)
-    @. sfc_u₃ = bc_sfc_u₃
+function set_velocity_at_surface!(Y, turbconv_model)
+    bot_uₕ = Fields.level(Y.c.uₕ, 1)
+    sfc_u₃ = Fields.level(Y.f.u₃, half)
+    sfc_gⁱʲ = Fields.local_geometry_field(sfc_u₃).gⁱʲ
+    shifted_sfc_u₃ = Fields.Field(Fields.field_values(sfc_u₃), axes(bot_uₕ))
+    shifted_sfc_gⁱʲ = Fields.Field(Fields.field_values(sfc_gⁱʲ), axes(bot_uₕ))
+    @. shifted_sfc_u₃ = -inv(g³³(shifted_sfc_gⁱʲ)) * CT3(bot_uₕ)
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n_mass_flux_subdomains(turbconv_model)
-            sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
+            sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃, half)
             @. sfc_u₃ʲ = sfc_u₃
         end
     end
     return nothing
-end
-
-function surface_velocity(ᶠu₃, ᶠuₕ³)
-    sfc_u₃ = Fields.level(ᶠu₃.components.data.:1, half)
-    sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
-    sfc_g³³ = g³³_field(sfc_u₃)
-    return @. lazy(-sfc_uₕ³ / sfc_g³³) # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
 end
 
 """
@@ -234,15 +226,12 @@ end
 Modifies `Y.f.u₃` so that `u₃` is 0 at the model top.
 """
 function set_velocity_at_top!(Y, turbconv_model)
-    top_u₃ = Fields.level(
-        Y.f.u₃.components.data.:1,
-        Spaces.nlevels(axes(Y.c)) + half,
-    )
-    @. top_u₃ = 0
+    top_u₃ = Fields.level(Y.f.u₃, Spaces.nlevels(axes(Y.c)) + half)
+    @. top_u₃ = C3(0)
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n_mass_flux_subdomains(turbconv_model)
             top_u₃ʲ = Fields.level(
-                Y.f.sgsʲs.:($j).u₃.components.data.:1,
+                Y.f.sgsʲs.:($j).u₃,
                 Spaces.nlevels(axes(Y.c)) + half,
             )
             @. top_u₃ʲ = top_u₃
@@ -251,14 +240,28 @@ function set_velocity_at_top!(Y, turbconv_model)
     return nothing
 end
 
-# This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
-# ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
-function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
-    @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
-    @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
-    bc_kinetic = compute_kinetic(ᶜuₕ, ᶠu₃)
-    @. ᶜK = bc_kinetic
-    return nothing
+"""
+    center_velocity(ᶜuₕ, ᶠu₃)
+
+Reconstruction of the velocity on cell centers from the prognostic velocity
+components `ᶜuₕ` and `ᶠu₃`, where `ᶠu₃` is either a grid-scale or SGS quantity.
+"""
+center_velocity(ᶜuₕ, ᶠu₃) = @. lazy(C123(ᶜuₕ) + C123(ᶜinterp(ᶠu₃)))
+
+"""
+    face_velocity(ᶜρ, ᶜu, ᶠu₃)
+
+Reconstruction of the velocity on cell faces from the grid-scale density `ᶜρ`,
+the reconstructed center velocity `ᶜu`, and the prognostic vertical velocity
+component `ᶠu₃`, where `ᶜu` and `ᶠu₃` are either grid-scale or SGS quantities.
+"""
+function face_velocity(ᶜρ, ᶜu, ᶠu₃)
+    ᶜJ = Fields.local_geometry_field(ᶜu).J
+    ᶜgⁱʲ = Fields.local_geometry_field(ᶜu).gⁱʲ
+    ᶠuʰ = @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT12(ᶜu)))
+    ᶠu³_from_uₕ = @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(C12(ᶜu))))
+    ᶠu³_from_u₃ = @. lazy(ᶠwinterp(ᶜρ * ᶜJ, g³³(ᶜgⁱʲ)) * ᶠu₃)
+    return @. lazy(CT123(ᶠuʰ) + CT123(ᶠu³_from_uₕ + ᶠu³_from_u₃))
 end
 
 function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
@@ -393,22 +396,18 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     thermo_args = (thermo_params, moisture_model, precip_model)
     (; ᶜΦ) = p.core
     (; ᶜspecific, ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp) = p.precomputed
-    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
 
     @. ᶜspecific = specific_gs(Y.c)
-    ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
-    bc_ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
-    @. ᶠuₕ³ = bc_ᶠuₕ³
 
     # TODO: We might want to move this to dss! (and rename dss! to something
     # like enforce_constraints!).
-    set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
+    set_velocity_at_surface!(Y, turbconv_model)
     set_velocity_at_top!(Y, turbconv_model)
 
-    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    @. ᶠu = CT123(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
+    @. ᶜK = $compute_kinetic(Y.c.uₕ, Y.f.u₃)
+    @. ᶜu = $center_velocity(Y.c.uₕ, Y.f.u₃)
+    @. ᶠu = $face_velocity(Y.c.ρ, ᶜu, Y.f.u₃)
+    @. ᶠu³ = CT3(ᶠu) # TODO: Use ᶠu instead of ᶠu³ throughout ClimaAtmos.
     if n > 0
         # TODO: In the following increments to ᶜK, we actually need to add
         # quantities of the form ᶜρaχ⁰ / ᶜρ⁰ and ᶜρaχʲ / ᶜρʲ to ᶜK, rather than
@@ -511,8 +510,8 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     end
 
     if turbconv_model isa PrognosticEDMFX
-        set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
-        set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
+        set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, t)
+        set_prognostic_edmf_precomputed_quantities_environment!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_precipitation!(
             Y,
@@ -540,12 +539,10 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
 
     if vert_diff isa DecayWithHeightDiffusion
         (; ᶜK_h) = p.precomputed
-        bc_K_h = compute_eddy_diffusivity_coefficient(ᶜρ, vert_diff)
-        @. ᶜK_h = bc_K_h
+        @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.ρ, vert_diff)
     elseif vert_diff isa VerticalDiffusion
         (; ᶜK_h) = p.precomputed
-        bc_K_h = compute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vert_diff)
-        @. ᶜK_h = bc_K_h
+        @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vert_diff)
     end
 
     # TODO

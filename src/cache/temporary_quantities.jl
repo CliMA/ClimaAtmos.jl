@@ -46,6 +46,7 @@ function temporary_quantities(Y, atmos)
             face_space,
         ), # ᶠω¹²ʲs
         ᶠtemp_C123 = Fields.Field(C123{FT}, face_space), # χ₁₂₃
+        ᶠtemp_CT123 = Fields.Field(CT123{FT}, face_space), # ᶠu⁰
         ᶜtemp_UVW = Fields.Field(typeof(uvw_vec), center_space), # UVW(ᶜu)
         ᶠtemp_UVW = Fields.Field(typeof(uvw_vec), face_space), # UVW(ᶠu³)
         ᶜtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
