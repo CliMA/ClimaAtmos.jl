@@ -1,11 +1,12 @@
-precip_model: "0M"
+precip_model: "1M"
 dt_save_state_to_disk: "2days"
 reproducibility_test: true
 initial_condition: "MoistBaroclinicWave"
-output_dir: "/scratch/olivia/baroclinic_wave_equil"
+output_dir: "/scratch/olivia/baroclinic_wave_nonequil"
 dt: "450secs"
 t_end: "10days"
-moist: "equil"
+moist: "nonequil"
+toml: [toml/baroclinic_wave_nonequil.toml]
 disable_surface_flux_tendency: true
 diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke]
