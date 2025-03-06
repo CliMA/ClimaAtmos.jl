@@ -30,14 +30,15 @@ for (key, value) in experiment_config
     @eval const $(Symbol(key)) = $value
 end
 
+# load configs and directories 
+model_config_dict = YAML.load_file(model_config)
+atmos_config = CA.AtmosConfig(model_config_dict)
 
 # add workers
 @info "Starting $ensemble_size workers."
 addprocs(CAL.SlurmManager(Int(ensemble_size)), t = "02:00:00", mem_per_cpu = "15G", cpus_per_task = 1)#cpus_per_task = 1)
 
-# load configs and directories 
-model_config_dict = YAML.load_file(model_config)
-atmos_config = CA.AtmosConfig(model_config_dict)
+
 
 @everywhere begin
     using ClimaCalibrate
@@ -130,27 +131,24 @@ end
 
 series_names = [ref_paths[i] for i in 1:length(ref_paths)]
 
-function create_minibatches_internal(n_indices::Int, batch_size::Int)
-    shuffled_indices = shuffle(1:n_indices)
-    num_full_batches = div(n_indices, batch_size)
-    batches = [collect(shuffled_indices[(i-1)*batch_size + 1 : i*batch_size]) for i in 1:num_full_batches]
-    return batches
-end
+# function create_minibatches_internal(n_indices::Int, batch_size::Int)
+#     shuffled_indices = shuffle(1:n_indices)
+#     num_full_batches = div(n_indices, batch_size)
+#     batches = [collect(shuffled_indices[(i-1)*batch_size + 1 : i*batch_size]) for i in 1:num_full_batches]
+#     return batches
+# end
 
-minibatch_inds = create_minibatches_internal(length(series_names), experiment_config["batch_size"])
+# minibatch_inds = create_minibatches_internal(length(series_names), experiment_config["batch_size"])
 
-@show minibatch_inds
+# @show minibatch_inds
 
 rfs_minibatcher =
-    EKP.FixedMinibatcher(minibatch_inds)
+    EKP.FixedMinibatcher(collect(1:experiment_config["batch_size"]))
 
-
-# for (i, batch) in enumerate(rfs_minibatcher)
-#     println("Batch $i: ", batch)
-# end
-    
 # rfs_minibatcher =
 #     EKP.FixedMinibatcher(collect(1:experiment_config["batch_size"]))
+
+# rfs_minibatcher = EKP.no_minibatcher(experiment_config["batch_size"])
 
 observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
