@@ -15,20 +15,23 @@ function set_precipitation_precomputed_quantities!(Y, p, t)
 
     (; ᶜwᵣ, ᶜwₛ) = p.precomputed
     cmp = CAP.microphysics_1m_params(p.params)
+    FT = eltype(p.params)
 
     # compute the precipitation terminal velocity [m/s]
-    @. ᶜwᵣ = CM1.terminal_velocity(
-        cmp.pr,
-        cmp.tv.rain,
-        Y.c.ρ,
-        max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
-    )
-    @. ᶜwₛ = CM1.terminal_velocity(
-        cmp.ps,
-        cmp.tv.snow,
-        Y.c.ρ,
-        max(zero(Y.c.ρ), Y.c.ρq_sno / Y.c.ρ),
-    )
+    @. ᶜwᵣ = FT(1)
+    #CM1.terminal_velocity(
+    #    cmp.pr,
+    #    cmp.tv.rain,
+    #    Y.c.ρ,
+    #    max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
+    #)
+    @. ᶜwₛ = FT(0.1)
+    #CM1.terminal_velocity(
+    #    cmp.ps,
+    #    cmp.tv.snow,
+    #    Y.c.ρ,
+    #    max(zero(Y.c.ρ), Y.c.ρq_sno / Y.c.ρ),
+    #)
     return nothing
 end
 
