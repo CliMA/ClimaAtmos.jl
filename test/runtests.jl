@@ -8,7 +8,7 @@ using SafeTestsets
 using Test
 
 # Download test artifacts
-include("download_artifacts.jl")
+@time include("download_artifacts.jl")
 
 #! format: off
 @safetestset "Aqua" begin @time include("aqua.jl") end

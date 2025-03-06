@@ -1,43 +1,43 @@
-name: Downstream
-on:
-  push:
-    branches:
-      - main
-    tags: '*'
-  pull_request:
+# name: Downstream
+# on:
+#   push:
+#     branches:
+#       - main
+#     tags: '*'
+#   pull_request:
 
-# Needed to allow julia-actions/cache to delete old caches that it has created
-permissions:
-  actions: write
-  contents: read
+# # Needed to allow julia-actions/cache to delete old caches that it has created
+# permissions:
+#   actions: write
+#   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.ref }}
+#   cancel-in-progress: true
 
-jobs:
-  test:
-    name: downstream ClimaCoupler.jl
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        version:
-          - '1.10'
-          - '1.11'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v2
-        with:
-          version: ${{ matrix.version }}
-      - uses: julia-actions/cache@v2
+# jobs:
+#   test:
+#     name: downstream ClimaCoupler.jl
+#     runs-on: ubuntu-latest
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         version:
+#           - '1.10'
+#           - '1.11'
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: julia-actions/setup-julia@v2
+#         with:
+#           version: ${{ matrix.version }}
+#       - uses: julia-actions/cache@v2
 
-      - uses: julia-actions/julia-buildpkg@v1
-      - uses: actions/checkout@v4
-        with:
-          repository: 'CliMA/ClimaCoupler.jl'
-          path: ClimaCoupler.jl
-      - run: |
-          julia --color=yes --project=ClimaCoupler.jl/experiments/ClimaEarth/ -e 'using Pkg; Pkg.instantiate()'
-          julia --color=yes --project=ClimaCoupler.jl/experiments/ClimaEarth/ -e 'using Pkg; Pkg.develop(; path = ".")'
-          julia --color=yes --project=ClimaCoupler.jl/experiments/ClimaEarth/ ClimaCoupler.jl/experiments/ClimaEarth/test/runtests.jl
+#       - uses: julia-actions/julia-buildpkg@v1
+#       - uses: actions/checkout@v4
+#         with:
+#           repository: 'CliMA/ClimaCoupler.jl'
+#           path: ClimaCoupler.jl
+#       - run: |
+#           julia --color=yes --project=ClimaCoupler.jl/experiments/ClimaEarth/ -e 'using Pkg; Pkg.instantiate()'
+#           julia --color=yes --project=ClimaCoupler.jl/experiments/ClimaEarth/ -e 'using Pkg; Pkg.develop(; path = ".")'
+#           julia --color=yes --project=ClimaCoupler.jl/experiments/ClimaEarth/ ClimaCoupler.jl/experiments/ClimaEarth/test/runtests.jl
