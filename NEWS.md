@@ -4,11 +4,15 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+
+v0.28.6
+-------
+
 ### Features
 
 ### Add a flag for disabling surface flux tendency
 Surface flux tendency is not controlled by `vert_diff` or `edmfx_sgs_diffusive_flux` anymore.
-Instead, it is controlled by the new flag `disable_surface_flux_tendency`. When it is set to 
+Instead, it is controlled by the new flag `disable_surface_flux_tendency`. When it is set to
 true, no surface flux tendency is applied, no matter what `surface_setup` is.
 This flag is set to false by default. PR [3670](https://github.com/CliMA/ClimaAtmos.jl/pull/3670).
 
@@ -39,7 +43,7 @@ scheme (not the Mass-Flux).
 
 ### Update default configuration to use deep-atmosphere eqns, fix diagnostic bug
 PR [3422](https://github.com/CliMA/ClimaAtmos.jl/pull/3422)
-Updates the `default_config` to set `deep_atmosphere=true`, and updates the 
+Updates the `default_config` to set `deep_atmosphere=true`, and updates the
 `rv` relative vorticity diagnostic to store the curl of horizontal velocity.
 
 ### Allow different sizes of dust and sea salt for radiation
@@ -65,14 +69,14 @@ more established and better developed tools:
 - instead of `up_deps`, use `PkgDevTools`.
 See the [documentation](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/#Formatting) for more information.
 
-`ClimaAtmos` now only support equilibrium moisture + 0-moment microphysics and 
+`ClimaAtmos` now only support equilibrium moisture + 0-moment microphysics and
 nonequilibrium + 1-moment microphysics (No precipitation is still supported too).
 PR [3557](https://github.com/CliMA/ClimaAtmos.jl/pull/3557)
 
 ### File Logging
 
 `ClimaAtmos` now supports logging to stdout and file simultaneously using
-`ClimaComms.FileLogger`. To enable, set the configuration with `log_to_file = false`. 
+`ClimaComms.FileLogger`. To enable, set the configuration with `log_to_file = false`.
 See [ClimaComms documentation](https://clima.github.io/ClimaComms.jl/dev/logging/)
  for more background on logging.
 
