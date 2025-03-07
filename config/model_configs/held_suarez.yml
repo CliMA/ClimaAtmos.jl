@@ -1,0 +1,9 @@
+z_max: 55000.0
+z_elem: 31
+dz_bottom: 50.0
+dt_save_state_to_disk: "4days"
+t_end: "8days"
+forcing: "held_suarez"
+dt: "400secs"
+rayleigh_sponge: true
+toml: [toml/sphere_held_suarez.toml]

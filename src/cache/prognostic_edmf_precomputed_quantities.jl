@@ -50,27 +50,22 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
 end
 
 """
-    set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
+    set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
 
-Updates the draft thermo state and boundary conditions
-precomputed quantities stored in `p` for edmfx.
+Updates velocity and thermodynamics quantities in each SGS draft.
 """
-NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     Y,
     p,
     ᶠuₕ³,
     t,
 )
     (; moisture_model, turbconv_model) = p.atmos
-    #EDMFX BCs only support total energy as state variable
     @assert !(moisture_model isa DryModel)
 
-    FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
-
-    (; params) = p
-    thermo_params = CAP.thermodynamics_params(params)
-    turbconv_params = CAP.turbconv_params(params)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    turbconv_params = CAP.turbconv_params(p.params)
 
     (; ᶜΦ,) = p.core
     (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK) = p.precomputed
@@ -92,8 +87,36 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
         @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
         @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
+    end
+    return nothing
+end
 
-        # EDMFX boundary condition:
+"""
+    set_prognostic_edmf_precomputed_quantities_bottom_bc!(Y, p, ᶠuₕ³, t)
+
+Updates velocity and thermodynamics quantities at the surface in each SGS draft.
+"""
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
+    Y,
+    p,
+    t,
+)
+    (; moisture_model, turbconv_model) = p.atmos
+    @assert !(moisture_model isa DryModel)
+
+    FT = Spaces.undertype(axes(Y.c))
+    n = n_mass_flux_subdomains(turbconv_model)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    turbconv_params = CAP.turbconv_params(p.params)
+
+    (; ᶜΦ,) = p.core
+    (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
+
+    for j in 1:n
+        ᶜtsʲ = ᶜtsʲs.:($j)
+        ᶜmseʲ = Y.c.sgsʲs.:($j).mse
+        ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
 
         # We need field_values everywhere because we are mixing
         # information from surface and first interior inside the
@@ -414,59 +437,60 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     p,
     ::Microphysics1Moment,
 )
-    @assert !(p.atmos.moisture_model isa DryModel)
+    error("Not implemented yet")
+    #@assert !(p.atmos.moisture_model isa DryModel)
 
-    (; params, dt) = p
-    (; ᶜΦ,) = p.core
-    thp = CAP.thermodynamics_params(params)
-    cmp = CAP.microphysics_1m_params(params)
+    #(; params, dt) = p
+    #(; ᶜΦ,) = p.core
+    #thp = CAP.thermodynamics_params(params)
+    #cmp = CAP.microphysics_1m_params(params)
 
-    (; ᶜSeₜᵖʲs, ᶜSqₜᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
-    (; ᶜSeₜᵖ⁰, ᶜSqₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρ⁰, ᶜts⁰) = p.precomputed
-    (; ᶜqᵣ, ᶜqₛ) = p.precomputed
+    #(; ᶜSeₜᵖʲs, ᶜSqₜᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
+    #(; ᶜSeₜᵖ⁰, ᶜSqₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρ⁰, ᶜts⁰) = p.precomputed
+    #(; ᶜqᵣ, ᶜqₛ) = p.precomputed
 
-    # TODO - can I re-use them between js and env?
-    ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+    ## TODO - can I re-use them between js and env?
+    #ᶜSᵖ = p.scratch.ᶜtemp_scalar
+    #ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
-    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    #n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
-    # Sources from the updrafts
-    for j in 1:n
-        compute_precipitation_sources!(
-            ᶜSᵖ,
-            ᶜSᵖ_snow,
-            ᶜSqₜᵖʲs.:($j),
-            ᶜSqᵣᵖʲs.:($j),
-            ᶜSqₛᵖʲs.:($j),
-            ᶜSeₜᵖʲs.:($j),
-            ᶜρʲs.:($j),
-            ᶜqᵣ,
-            ᶜqₛ,
-            ᶜtsʲs.:($j),
-            ᶜΦ,
-            dt,
-            cmp,
-            thp,
-        )
-    end
+    ## Sources from the updrafts
+    #for j in 1:n
+    #    compute_precipitation_sources!(
+    #        ᶜSᵖ,
+    #        ᶜSᵖ_snow,
+    #        ᶜSqₜᵖʲs.:($j),
+    #        ᶜSqᵣᵖʲs.:($j),
+    #        ᶜSqₛᵖʲs.:($j),
+    #        ᶜSeₜᵖʲs.:($j),
+    #        ᶜρʲs.:($j),
+    #        ᶜqᵣ,
+    #        ᶜqₛ,
+    #        ᶜtsʲs.:($j),
+    #        ᶜΦ,
+    #        dt,
+    #        cmp,
+    #        thp,
+    #    )
+    #end
 
-    # Sources from the environment
-    compute_precipitation_sources!(
-        ᶜSᵖ,
-        ᶜSᵖ_snow,
-        ᶜSqₜᵖ⁰,
-        ᶜSqᵣᵖ⁰,
-        ᶜSqₛᵖ⁰,
-        ᶜSeₜᵖ⁰,
-        ᶜρ⁰,
-        ᶜqᵣ,
-        ᶜqₛ,
-        ᶜts⁰,
-        ᶜΦ,
-        dt,
-        cmp,
-        thp,
-    )
+    ## Sources from the environment
+    #compute_precipitation_sources!(
+    #    ᶜSᵖ,
+    #    ᶜSᵖ_snow,
+    #    ᶜSqₜᵖ⁰,
+    #    ᶜSqᵣᵖ⁰,
+    #    ᶜSqₛᵖ⁰,
+    #    ᶜSeₜᵖ⁰,
+    #    ᶜρ⁰,
+    #    ᶜqᵣ,
+    #    ᶜqₛ,
+    #    ᶜts⁰,
+    #    ᶜΦ,
+    #    dt,
+    #    cmp,
+    #    thp,
+    #)
     return nothing
 end

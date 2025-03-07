@@ -13,7 +13,7 @@ dt_save_state_to_disk: "10days"
 output_dir: "/glade/derecho/scratch/asridhar/moist_bw_1M/"
 toml: [toml/longrun_baroclinic_wave.toml]
 diagnostics:
-  - short_name: [pfull, ua, va, ta, ts, wa, va, rv, ke, hus, clw, cli, pr]
+  - short_name: [pfull, ua, va, ta, ts, wa, va, rv, ke, hus, clw, cli, pr, husra, hussn, ]
     reduction: inst
     period: 2days
   - short_name: [massa, energya, watera]

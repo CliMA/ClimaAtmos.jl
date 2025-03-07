@@ -11,7 +11,11 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     (; ᶜΦ) = p.core
     (; ᶜu, ᶜK, ᶜp) = p.precomputed
     if p.atmos.turbconv_model isa AbstractEDMF
-        (; ᶜu⁰) = p.precomputed
+        if p.atmos.turbconv_model isa EDOnlyEDMFX
+            ᶜu⁰ = ᶜu
+        else
+            (; ᶜu⁰) = p.precomputed
+        end
     end
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
@@ -77,10 +81,15 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
-    (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
     (; ᶜspecific) = p.precomputed
 
+    ᶠu³⁰ =
+        advect_tke ?
+        (
+            turbconv_model isa EDOnlyEDMFX ? p.precomputed.ᶠu³ :
+            p.precomputed.ᶠu³⁰
+        ) : nothing
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
     ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
     ᶜtke⁰ = advect_tke ? p.precomputed.ᶜtke⁰ : nothing
@@ -106,21 +115,27 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
     ᶜρ = Y.c.ρ
-    if :ρe_tot in propertynames(Yₜ.c)
-        (; ᶜh_tot) = p.precomputed
-        for (coeff, upwinding) in ((1, energy_upwinding), (-1, Val(:none)))
-            energy_upwinding isa Val{:none} && continue
-            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, upwinding)
-            @. Yₜ.c.ρe_tot += coeff * vtt
-        end
-    end
+
+    # Full vertical advection of passive tracers (like liq, rai, etc) ...
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
-        for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
-            tracer_upwinding isa Val{:none} && continue
-            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, upwinding)
-            @. ᶜρχₜ += coeff * vtt
-        end
+        χ_name in (:e_tot, :q_tot) && continue
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), tracer_upwinding)
+        @. ᶜρχₜ += vtt
+    end
+    # ... and upwinding correction of energy and total water.
+    # (The central advection of energy and total water is done implicitly.)
+    if energy_upwinding != Val(:none)
+        (; ᶜh_tot) = p.precomputed
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
+        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
+        @. Yₜ.c.ρe_tot += vtt - vtt_central
+    end
+
+    if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
+        ᶜq_tot = ᶜspecific.q_tot
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
+        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
+        @. Yₜ.c.ρq_tot += vtt - vtt_central
     end
 
     if isnothing(ᶠf¹²)

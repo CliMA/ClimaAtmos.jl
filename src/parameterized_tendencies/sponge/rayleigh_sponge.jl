@@ -2,7 +2,6 @@
 ##### Rayleigh sponge
 #####
 
-import LazyBroadcast: @lazy
 import ClimaCore.Fields as Fields
 
 αₘ(s::RayleighSponge{FT}, z, α) where {FT} = ifelse(z > s.zd, α, FT(0))
@@ -17,5 +16,5 @@ function rayleigh_sponge_tendency_uₕ(ᶜuₕ, s)
     s isa Nothing && return NullBroadcasted()
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜuₕ))
     zmax = z_max(axes(ᶠz))
-    return @lazy @. -β_rayleigh_uₕ(s, ᶜz, zmax) * ᶜuₕ
+    return @. lazy(-β_rayleigh_uₕ(s, ᶜz, zmax) * ᶜuₕ)
 end

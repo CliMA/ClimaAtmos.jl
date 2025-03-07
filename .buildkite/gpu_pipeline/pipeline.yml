@@ -38,15 +38,15 @@ steps:
     steps:
 
       - label: "dry baroclinic wave"
-        key: "target_gpu_implicit_baroclinic_wave"
+        key: "baroclinic_wave_helem30"
         command:
-          - mkdir -p target_gpu_implicit_baroclinic_wave
+          - mkdir -p baroclinic_wave_helem30
           - >
-            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=target_gpu_implicit_baroclinic_wave/output_active/report
-            julia --threads=3 --color=yes --project=.buildkite examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
-            --job_id target_gpu_implicit_baroclinic_wave
-        artifact_paths: "target_gpu_implicit_baroclinic_wave/output_active/*"
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=baroclinic_wave_helem30/output_active/report
+            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${GPU_CONFIG_PATH}baroclinic_wave_helem30.yml
+            --job_id baroclinic_wave_helem30
+        artifact_paths: "baroclinic_wave_helem30/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
@@ -54,34 +54,17 @@ steps:
           slurm_cpus_per_task: 4
           slurm_exclusive:
 
-      - label: "moist Held-Suarez"
-        key: "gpu_hs_rhoe_equil_55km_nz63_0M"
+      - label: "dry baroclinic wave - 4 gpus"
+        key: "baroclinic_wave_helem30_4process"
         command:
-          - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M
-          - >
-            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
-            julia --threads=3 --color=yes --project=.buildkite examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_0M.yml
-            --job_id gpu_hs_rhoe_equil_55km_nz63_0M
-        artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-          slurm_cpus_per_task: 4
-          slurm_exclusive:
-
-      - label: "moist Held-Suarez - 4 gpus"
-        key: "gpu_hs_rhoe_equil_55km_nz63_0M_4process"
-        command:
-          - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M_4process
+          - mkdir -p baroclinic_wave_helem30_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/report-%q{PMI_RANK}
-            julia --threads=3 --color=yes --project=.buildkite examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_0M.yml
-            --job_id gpu_hs_rhoe_equil_55km_nz63_0M_4process
-        artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/*"
+            nsys profile --delay 100 --trace=osrt,nvtx,cuda,mpi,ucx --output=baroclinic_wave_helem30_4process/output_active/report-%q{PMI_RANK}
+            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${GPU_CONFIG_PATH}baroclinic_wave_helem30.yml
+            --job_id baroclinic_wave_helem30_4process
+        artifact_paths: "baroclinic_wave_helem30_4process/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           CLIMACOMMS_CONTEXT: "MPI"
@@ -90,18 +73,35 @@ steps:
           slurm_cpus_per_task: 4
           slurm_ntasks: 4
           slurm_exclusive:
-
-      - label: "dry baroclinic wave - 4 gpus"
-        key: "target_gpu_implicit_baroclinic_wave_4process"
+          
+      - label: "moist Held-Suarez"
+        key: "held_suarez_equil_helem30"
         command:
-          - mkdir -p target_gpu_implicit_baroclinic_wave_4process
+          - mkdir -p held_suarez_equil_helem30
+          - >
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=held_suarez_equil_helem30/output_active/report
+            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${GPU_CONFIG_PATH}held_suarez_equil_helem30.yml
+            --job_id held_suarez_equil_helem30
+        artifact_paths: "held_suarez_equil_helem30/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_cpus_per_task: 4
+          slurm_exclusive:
+
+      - label: "moist Held-Suarez - 4 gpus"
+        key: "held_suarez_equil_helem30_4process"
+        command:
+          - mkdir -p held_suarez_equil_helem30_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            nsys profile --delay 100 --trace=osrt,nvtx,cuda,mpi,ucx --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
-            julia --threads=3 --color=yes --project=.buildkite examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
-            --job_id target_gpu_implicit_baroclinic_wave_4process
-        artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=held_suarez_equil_helem30_4process/output_active/report-%q{PMI_RANK}
+            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${GPU_CONFIG_PATH}held_suarez_equil_helem30.yml
+            --job_id held_suarez_equil_helem30_4process
+        artifact_paths: "held_suarez_equil_helem30_4process/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           CLIMACOMMS_CONTEXT: "MPI"
@@ -119,7 +119,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_diag_1process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_diag_1process/output_active/report julia --threads=3 --color=yes --project=.buildkite examples/hybrid/driver.jl
+            nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_diag_1process/output_active/report julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_diag_1process.yml
             --job_id gpu_aquaplanet_dyamond_diag_1process
         artifact_paths: "gpu_aquaplanet_dyamond_diag_1process/output_active/*"
@@ -140,7 +140,7 @@ steps:
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_ss_1process/output_active/report
-            julia --threads=3 --color=yes --project=.buildkite examples/hybrid/driver.jl
+            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_1process
         artifact_paths: "gpu_aquaplanet_dyamond_ss_1process/output_active/*"
@@ -160,7 +160,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ss_2process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            julia --threads=3 --color=yes --project=.buildkite examples/hybrid/driver.jl
+            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_2process
         artifact_paths: "gpu_aquaplanet_dyamond_ss_2process/output_active/*"
@@ -180,7 +180,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ss_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            julia --threads=3 --color=yes --project=.buildkite examples/hybrid/driver.jl
+            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_4process
         artifact_paths: "gpu_aquaplanet_dyamond_ss_4process/output_active/*"
@@ -218,7 +218,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ws_1process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            julia --threads=3 --color=yes --project=.buildkite examples/hybrid/driver.jl
+            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_1process.yml
             --job_id gpu_aquaplanet_dyamond_ws_1process
         artifact_paths: "gpu_aquaplanet_dyamond_ws_1process/output_active/*"
@@ -238,7 +238,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ws_2process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            julia --threads=3 --color=yes --project=.buildkite examples/hybrid/driver.jl
+            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_2process.yml
             --job_id gpu_aquaplanet_dyamond_ws_2process
         artifact_paths: "gpu_aquaplanet_dyamond_ws_2process/output_active/*"
@@ -258,7 +258,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ws_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            julia --threads=3 --color=yes --project=.buildkite examples/hybrid/driver.jl
+            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_4process.yml
             --job_id gpu_aquaplanet_dyamond_ws_4process
         artifact_paths: "gpu_aquaplanet_dyamond_ws_4process/output_active/*"
@@ -299,7 +299,7 @@ steps:
           - mkdir -p gpu_aquaplanet_diagedmf
           - >
             nsys profile --delay 200 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_diagedmf/output_active/report
-            julia --threads=3 --color=yes --project=.buildkite examples/hybrid/driver.jl
+            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${MODEL_CONFIG_PATH}aquaplanet_diagedmf.yml
             --job_id gpu_aquaplanet_diagedmf
         artifact_paths: "gpu_aquaplanet_diagedmf/output_active/*"
@@ -333,7 +333,7 @@ steps:
           - mkdir -p gpu_aquaplanet_progedmf
           - >
             nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_progedmf/output_active/report
-            julia --threads=3 --color=yes --project=.buildkite examples/hybrid/driver.jl
+            julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${MODEL_CONFIG_PATH}aquaplanet_progedmf.yml
             --job_id gpu_aquaplanet_progedmf
         artifact_paths: "gpu_aquaplanet_progedmf/output_active/*"

@@ -3,7 +3,7 @@
 Here is a brief description of the buildkite longrun jobs.
 
 ```
-longrun_sphere_hydrostatic_balance_rhoe
+longrun_hydrostatic_balance
 
 Solid body rotation. Test if the dry dycore can maintain the no flow steady state.
 ```
@@ -36,12 +36,6 @@ Dry Held Suarez. Test the dry dycore with an equilibrium state with sources and 
 longrun_moist_held_suarez
 
 Moist Held Suarez. Test the moist dycore with an equilibrium state with sources and sinks.
-```
-```
-longrun_moist_held_suarez_deepatmos
-
-Held-Suarez equil-moist. Test with deep-atmosphere equations.
-Use this job to test deep-atmosphere related features.
 ```
 ```
 longrun_aquaplanet_allsky_0M

@@ -16,6 +16,7 @@ ClimaAtmos.jl
 [![codecov][codecov-img]][codecov-url]
 [![discussions][discussions-img]][discussions-url]
 [![col-prac][col-prac-img]][col-prac-url]
+[![downloads][downloads-img]][downloads-url]
 
 [docs-bld-img]: https://github.com/CliMA/ClimaAtmos.jl/workflows/Documentation/badge.svg
 [docs-bld-url]: https://github.com/CliMA/ClimaAtmos.jl/actions?query=workflow%3ADocumentation
@@ -38,6 +39,8 @@ ClimaAtmos.jl
 [discussions-img]: https://img.shields.io/badge/Ask%20us-anything-1abc9c.svg?style=flat-square
 [discussions-url]: https://github.com/CliMA/ClimaAtmos.jl/discussions
 
+[downloads-img]: https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FClimaAtmos&query=total_requests&suffix=%2Ftotal&label=Downloads
+[downloads-url]: http://juliapkgstats.com/pkg/ClimaAtmos
 
 ClimaAtmos.jl is the atmosphere components of the CliMA software stack. We strive for a user interface that makes ClimaAtmos.jl as friendly and intuitive to use as possible, allowing users to focus on the science.
 

@@ -1,13 +1,13 @@
 module ClimaAtmos
 
 using NVTX
-import LazyBroadcast: @lazy
+import Adapt
+import NullBroadcasts: NullBroadcasted
 import LazyBroadcast
-import LazyBroadcast: @lazy
+import LazyBroadcast: lazy
 import Thermodynamics as TD
 import Thermodynamics
 
-include("null_broadcasted.jl")
 include("compat.jl")
 include(joinpath("parameters", "Parameters.jl"))
 import .Parameters as CAP
@@ -19,12 +19,14 @@ include(joinpath("solver", "types.jl"))
 include(joinpath("solver", "cli_options.jl"))
 include(joinpath("utils", "utilities.jl"))
 include(joinpath("utils", "debug_utils.jl"))
-include(joinpath("topography", "topography.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
 include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
 
 include(joinpath("utils", "AtmosArtifacts.jl"))
 import .AtmosArtifacts as AA
+
+include(joinpath("topography", "topography.jl"))
+include(joinpath("topography", "steady_state_solutions.jl"))
 
 include(
     joinpath("parameterized_tendencies", "radiation", "radiation_utilities.jl"),
@@ -58,6 +60,7 @@ include(joinpath("prognostic_equations", "zero_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))
 
+include(joinpath("prognostic_equations", "water_advection.jl"))
 include(joinpath("prognostic_equations", "remaining_tendency.jl"))
 include(joinpath("prognostic_equations", "forcing", "large_scale_advection.jl")) # TODO: should this be in tendencies/?
 include(joinpath("prognostic_equations", "forcing", "subsidence.jl"))
@@ -114,6 +117,7 @@ include(
 include(
     joinpath("prognostic_equations", "vertical_diffusion_boundary_layer.jl"),
 )
+include(joinpath("prognostic_equations", "surface_flux.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "rayleigh_sponge.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
 include(

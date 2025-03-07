@@ -11,6 +11,7 @@ function get_diagnostics(
     (; dt, start_date) = sim_info
 
     FT = Spaces.undertype(axes(Y.c))
+    context = ClimaComms.context(axes(Y.c))
 
     # We either get the diagnostics section in the YAML file, or we return an empty list
     # (which will result in an empty list being created by the map below)
@@ -40,9 +41,26 @@ function get_diagnostics(
         num_netcdf_points =
             tuple(parsed_args["netcdf_interpolation_num_points"]...)
     else
-        # TODO: Once https://github.com/CliMA/ClimaCore.jl/pull/1567 is merged,
-        # dispatch over the Grid type
-        num_netcdf_points = (180, 90, 50)
+        # Estimate the number of points we need to cover the entire domain
+        # ncolumns is the number of local columns
+        tot_num_columns =
+            ClimaComms.nprocs(context) * Fields.ncolumns(axes(Y.c))
+        if parsed_args["config"] == "plane"
+            num1, num2 = tot_num_columns, 0
+        elseif parsed_args["config"] == "sphere"
+            num2 = round(Int, sqrt(tot_num_columns / 2))
+            num1 = 2num2
+        elseif parsed_args["config"] == "box"
+            num2 = round(Int, sqrt(tot_num_columns))
+            num1 = num2
+        elseif parsed_args["config"] == "column"
+            # We need at least two points horizontally because our column is
+            # actually a box
+            num1, num2 = 2, 2
+        else
+            error("Uncaught case")
+        end
+        num_netcdf_points = (num1, num2, Spaces.nlevels(axes(Y.c)))
     end
 
     z_sampling_method =
@@ -169,6 +187,8 @@ function get_diagnostics(
         diagnostics = [
             CAD.default_diagnostics(
                 atmos_model,
+                sim_info.dt isa ITime ?
+                ITime(time_to_seconds(parsed_args["t_end"])) - t_start :
                 FT(time_to_seconds(parsed_args["t_end"]) - t_start),
                 start_date;
                 output_writer = netcdf_writer,
@@ -280,7 +300,9 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         schedule = CAD.EveryCalendarDtSchedule(
             dt_save_state_to_disk_dates;
             reference_date = start_date,
-            date_last = start_date + Dates.Second(t_start),
+            date_last = t_start isa ITime ?
+                        ClimaUtilities.TimeManager.date(t_start) :
+                        start_date + Dates.Second(t_start),
         )
         cond = let schedule = schedule
             (u, t, integrator) -> schedule(integrator)
@@ -314,15 +336,22 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     end
 
     if !parsed_args["call_cloud_diagnostics_per_stage"]
-        dt_cf = FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
+        dt_cf =
+            dt isa ITime ?
+            ITime(time_to_seconds(parsed_args["dt_cloud_fraction"])) :
+            FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
+        dt_cf, _, _, _ = promote(dt_cf, t_start, dt, sim_info.t_end)
         callbacks =
             (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
     end
 
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
-        dt_rad = FT(time_to_seconds(parsed_args["dt_rad"]))
+        dt_rad =
+            dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_rad"])) :
+            FT(time_to_seconds(parsed_args["dt_rad"]))
+        dt_rad, _, _, _ = promote(dt_rad, t_start, dt, sim_info.t_end)
         # We use Millisecond to support fractional seconds, eg. 0.1
-        dt_rad_ms = Dates.Millisecond(1_000 * dt_rad)
+        dt_rad_ms = Dates.Millisecond(1_000 * float(dt_rad))
         if parsed_args["dt_save_state_to_disk"] != "Inf" &&
            !CA.isdivisible(dt_save_state_to_disk_dates, dt_rad_ms)
             @warn "Radiation period ($(dt_rad_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"

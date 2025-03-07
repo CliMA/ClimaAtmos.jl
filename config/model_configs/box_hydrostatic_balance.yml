@@ -1,0 +1,9 @@
+t_end: "1days"
+config: "box"
+hyperdiff: false
+dt: "20secs"
+perturb_initstate: false
+disable_surface_flux_tendency: true
+diagnostics:
+  - short_name: [wa, ua]
+    period: 1days

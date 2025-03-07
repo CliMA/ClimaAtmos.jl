@@ -1,4 +1,4 @@
-209
+221
 
 # **README**
 #
@@ -20,6 +20,44 @@
 
 
 #=
+221
+- Change the way cloud liquid effective radius is computed for radiation
+
+220
+- Split out cached variables that should be treated implicitly, so that all
+  other cached variables are no longer updated by the implicit solver
+
+219
+- Change the operations order in vertical advection upwinding
+
+218
+- Change surface flux tendency to fully explicit
+
+217
+- Change reconstruction of density on cell faces
+
+216
+- Change prescribed aerosols in `aquaplanet_nonequil_allsky_gw_res.yml`
+
+215
+- Update dependencies, including ClimaCore, which updated how metric terms are
+  computed
+
+214
+- Rename some config files
+
+213
+- Update to deep-atmos eqns by default, fix vorticity diagnostic
+
+212
+- Update RRTMGP, which changes aerosol optics calculation
+
+211
+- Remove `FriersonDiffusion` and use `DecayWithHeightDiffusion` instead.
+
+210
+- Change prescribed aerosol dataset to MERRA2
+
 209
 - Floating point changes, with minor adjustments to how to sponge tendencies are
   added.

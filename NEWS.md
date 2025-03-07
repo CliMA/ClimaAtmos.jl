@@ -1,8 +1,63 @@
 ClimaAtmos.jl Release Notes
 ============================
 
-Main
+main
 -------
+
+
+v0.28.6
+-------
+
+### Features
+
+### Add a flag for disabling surface flux tendency
+Surface flux tendency is not controlled by `vert_diff` or `edmfx_sgs_diffusive_flux` anymore.
+Instead, it is controlled by the new flag `disable_surface_flux_tendency`. When it is set to
+true, no surface flux tendency is applied, no matter what `surface_setup` is.
+This flag is set to false by default. PR [3670](https://github.com/CliMA/ClimaAtmos.jl/pull/3670).
+
+### Automatically determine diagnostic resolution based on model resolution
+
+If `netcdf_interpolation_num_points` is not provided, `ClimaAtmos` will
+determine it automatically by matching approximately the same number of points
+as the model grid.
+
+### Change reconstruction of density on cell faces for stretched grids
+
+PR [3584](https://github.com/CliMA/ClimaAtmos.jl/pull/3584) changes the weighted
+interpolation of density from centers to faces so that it uses `ᶜJ` and `ᶠJ`,
+rather than `ᶜJ` and `ᶠint(ᶜJ)`. As of ClimaCore v0.14.25, `ᶠJ` is no longer
+equivalent to `ᶠint(ᶜJ)` for stretched grids.
+
+v0.28.5
+-------
+
+### Features
+
+### Add EDOnlyEDMFX
+
+PR [3622](https://github.com/CliMA/ClimaAtmos.jl/pull/3622) adds a new
+simplified EDMF model that only implements the Eddy-Diffusivity part of the
+scheme (not the Mass-Flux).
+
+
+### Update default configuration to use deep-atmosphere eqns, fix diagnostic bug
+PR [3422](https://github.com/CliMA/ClimaAtmos.jl/pull/3422)
+Updates the `default_config` to set `deep_atmosphere=true`, and updates the
+`rv` relative vorticity diagnostic to store the curl of horizontal velocity.
+
+### Allow different sizes of dust and sea salt for radiation
+
+Added functionality to allow five different size bins of dust and sea salt aerosols
+for radiation calculation. This feature requires RRTMGP version v0.20.0 or later.
+PR [3555](https://github.com/CliMA/ClimaAtmos.jl/pull/3555)
+
+### Maintenance
+
+### Rmove FriersonDiffusion option
+
+The option `FriersonDiffusion` is removed from `vert_diff` config. Use `DecayWithHeightDiffusion` instead.
+PR [3592](https://github.com/CliMA/ClimaAtmos.jl/pull/3592)
 
 v0.28.4
 -------
@@ -12,11 +67,18 @@ The `.dev` was deprecated. The two utilities in this folder can be replaced with
 more established and better developed tools:
 - instead of `clima_format`, use `JuliaFormatter`,
 - instead of `up_deps`, use `PkgDevTools`.
-See the  [documentation](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/#Formatting) for more information.
+See the [documentation](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/#Formatting) for more information.
 
-`ClimaAtmos` now only support equilibrium moisture + 0-moment microphysics and 
+`ClimaAtmos` now only support equilibrium moisture + 0-moment microphysics and
 nonequilibrium + 1-moment microphysics (No precipitation is still supported too).
 PR [3557](https://github.com/CliMA/ClimaAtmos.jl/pull/3557)
+
+### File Logging
+
+`ClimaAtmos` now supports logging to stdout and file simultaneously using
+`ClimaComms.FileLogger`. To enable, set the configuration with `log_to_file = false`.
+See [ClimaComms documentation](https://clima.github.io/ClimaComms.jl/dev/logging/)
+ for more background on logging.
 
 v0.28.3
 -------
@@ -29,6 +91,7 @@ RRTGMP.
 ### Maintenance
 
 ### Remove override_precip_timescale config
+
 ![][badge-🔥behavioralΔ] The override_precip_timescale config has been removed.
 To recover the previous behavior, set `precipitation_timescale` to `dt` in the
 toml. PR [3534](https://github.com/CliMA/ClimaAtmos.jl/pull/3534)

@@ -16,17 +16,17 @@ simulated_years_per_day(es::EfficiencyStats) =
     simulated_years(es) / walltime_in_days(es)
 
 simulated_years(es::EfficiencyStats) =
-    (es.tspan[2] - es.tspan[1]) * (1 / (365 * 24 * 3600)) #=seconds * years per second=#
+    float(es.tspan[2] - es.tspan[1]) * (1 / (365 * 24 * 3600)) #=seconds * years per second=#
 walltime_in_days(es::EfficiencyStats) = es.walltime * (1 / (24 * 3600)) #=seconds * days per second=#
 
 function timed_solve!(integrator)
     device = ClimaComms.device(integrator.u.c)
+    comms_ctx = ClimaComms.context(device)
     local sol
-    @time "solve!:" begin
-        walltime = ClimaComms.elapsed(device) do
-            sol = SciMLBase.solve!(integrator)
-        end
+    walltime = ClimaComms.elapsed(device) do
+        sol = SciMLBase.solve!(integrator)
     end
+    @info "solve! walltime = $(round(walltime, digits = 3))"
     (; tspan) = integrator.sol.prob
     es = EfficiencyStats(tspan, walltime)
     _sypd = simulated_years_per_day(es)

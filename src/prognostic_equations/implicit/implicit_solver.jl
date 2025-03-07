@@ -98,6 +98,7 @@ struct ImplicitEquationJacobian{
     F1 <: DerivativeFlag,
     F2 <: DerivativeFlag,
     F3 <: DerivativeFlag,
+    F4 <: DerivativeFlag,
     T <: Fields.FieldVector,
     R <: Base.RefValue,
 }
@@ -111,6 +112,7 @@ struct ImplicitEquationJacobian{
     diffusion_flag::F1
     topography_flag::F2
     sgs_advection_flag::F3
+    sgs_mass_flux_flag::F4
 
     # required by Krylov.jl to evaluate ldiv! with AbstractVector inputs
     temp_b::T
@@ -128,6 +130,7 @@ function Base.zero(jac::ImplicitEquationJacobian)
         jac.diffusion_flag,
         jac.topography_flag,
         jac.sgs_advection_flag,
+        jac.sgs_mass_flux_flag,
         jac.temp_b,
         jac.temp_x,
         jac.transform_flag,
@@ -144,6 +147,8 @@ function ImplicitEquationJacobian(
     topography_flag = has_topography(axes(Y.c)) ? UseDerivative() :
                       IgnoreDerivative(),
     sgs_advection_flag = atmos.sgs_adv_mode == Implicit() ? UseDerivative() :
+                         IgnoreDerivative(),
+    sgs_mass_flux_flag = atmos.sgs_mf_mode == Implicit() ? UseDerivative() :
                          IgnoreDerivative(),
     transform_flag = false,
 )
@@ -228,7 +233,7 @@ function ImplicitEquationJacobian(
             )...,
             (@name(c.uₕ), @name(c.uₕ)) =>
                 !isnothing(atmos.turbconv_model) ||
-                    diffuse_momentum(atmos.vert_diff) ?
+                    !disable_momentum_vertical_diffusion(atmos.vert_diff) ?
                 similar(Y.c, TridiagonalRow) : FT(-1) * I,
         )
     elseif atmos.moisture_model isa DryModel
@@ -297,11 +302,28 @@ function ImplicitEquationJacobian(
         ()
     end
 
+    sgs_massflux_blocks = if atmos.turbconv_model isa PrognosticEDMFX
+        @assert n_prognostic_mass_flux_subdomains(atmos.turbconv_model) == 1
+        if use_derivative(sgs_mass_flux_flag)
+            (
+                (@name(c.ρe_tot), @name(c.sgsʲs.:(1).mse)) =>
+                    similar(Y.c, TridiagonalRow),
+                (@name(c.ρq_tot), @name(c.sgsʲs.:(1).q_tot)) =>
+                    similar(Y.c, TridiagonalRow),
+            )
+        else
+            ()
+        end
+    else
+        ()
+    end
+
     matrix = MatrixFields.FieldMatrix(
         identity_blocks...,
         sgs_advection_blocks...,
         advection_blocks...,
         diffusion_blocks...,
+        sgs_massflux_blocks...,
     )
 
     sgs_names_if_available = if atmos.turbconv_model isa PrognosticEDMFX
@@ -381,6 +403,7 @@ function ImplicitEquationJacobian(
         diffusion_flag,
         topography_flag,
         sgs_advection_flag,
+        sgs_mass_flux_flag,
         similar(Y),
         similar(Y),
         transform_flag,
@@ -429,6 +452,7 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
     p′ = (;
         p.precomputed.ᶜspecific,
         p.precomputed.ᶜK,
+        p.precomputed.ᶠu³,
         p.precomputed.ᶜts,
         p.precomputed.ᶜp,
         p.precomputed.ᶜwₜqₜ,
@@ -490,14 +514,21 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
 
     # Convert dtγ from a Float64 to an FT.
     FT = Spaces.undertype(axes(Y.c))
-    dtγ′ = FT(dtγ)
+    dtγ′ = FT(float(dtγ))
 
     A.dtγ_ref[] = dtγ′
     update_implicit_equation_jacobian!(A, Y, p′, dtγ′)
 end
 
 function update_implicit_equation_jacobian!(A, Y, p, dtγ)
-    (; matrix, diffusion_flag, sgs_advection_flag, topography_flag) = A
+    dtγ = float(dtγ)
+    (;
+        matrix,
+        diffusion_flag,
+        sgs_advection_flag,
+        topography_flag,
+        sgs_mass_flux_flag,
+    ) = A
     (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜh_tot) = p
     (;
         ᶜtemp_C3,
@@ -530,6 +561,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
 
@@ -551,7 +583,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix()
 
     @. ᶜadvection_matrix =
-        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ))
+        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
 
     if use_derivative(topography_flag)
         ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
@@ -630,9 +662,10 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     end
 
     if !(p.atmos.moisture_model isa DryModel)
+        #TODO: tetsing explicit vs implicit
         #@. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
         #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-        #    DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
         #    DiagonalMatrixRow(
         #        -(1 + ᶜkappa_m) / ᶜρ * ifelse(
         #            ᶜh_tot == 0,
@@ -643,9 +676,10 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
 
         ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
         @. ∂ᶜρe_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρq_tot))
+        #TODO: tetsing explicit vs implicit
         #@. ∂ᶜρe_tot_err_∂ᶜρq_tot =
         #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-        #    DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
         #    DiagonalMatrixRow(
         #        -(ᶜkappa_m) * ∂e_int_∂q_tot / ᶜρ * ifelse(
         #            ᶜh_tot == 0,
@@ -656,9 +690,10 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
 
         ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
         @. ∂ᶜρq_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρq_tot_err_∂ᶜρq_tot)) - (I,)
+        #TODO: tetsing explicit vs implicit
         #@. ∂ᶜρq_tot_err_∂ᶜρq_tot =
         #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-        #    DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
         #    DiagonalMatrixRow(
         #        -1 / ᶜρ * ifelse(
         #            ᶜspecific.q_tot == 0,
@@ -673,7 +708,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ᶜwₚ = MatrixFields.get_field(p, wₚ_name)
             @. ∂ᶜρqₚ_err_∂ᶜρqₚ =
                 dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-                DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ ᶠright_bias_matrix() ⋅
+                DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅
+                ᶠright_bias_matrix() ⋅
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwₚ) / ᶜρ) - (I,)
         end
 
@@ -687,7 +723,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         if (
             MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke)) ||
             !isnothing(p.atmos.turbconv_model) ||
-            diffuse_momentum(p.atmos.vert_diff)
+            !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
         )
             @. ᶜdiffusion_u_matrix =
                 ᶜadvdivᵥ_matrix() ⋅
@@ -737,7 +773,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
             @inline dissipation_rate(tke⁰, mixing_length) =
-                tke⁰ >= 0 ? c_d * sqrt(tke⁰) / max(mixing_length, 1) : 1 / dt
+                tke⁰ >= 0 ? c_d * sqrt(tke⁰) / max(mixing_length, 1) :
+                1 / float(dt)
             @inline ∂dissipation_rate_∂tke⁰(tke⁰, mixing_length) =
                 tke⁰ > 0 ? c_d / (2 * max(mixing_length, 1) * sqrt(tke⁰)) :
                 typeof(tke⁰)(0)
@@ -766,7 +803,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
 
         if (
             !isnothing(p.atmos.turbconv_model) ||
-            diffuse_momentum(p.atmos.vert_diff)
+            !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
         )
             ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
             @. ∂ᶜuₕ_err_∂ᶜuₕ =
@@ -847,13 +884,13 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                             ᶠu³ʲs.:(1),
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
                         ),
-                    ),
-                ) ⋅ ᶠwinterp_matrix(ᶜJ) ⋅ DiagonalMatrixRow(
-                    ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp) *
+                    ) / ᶠJ,
+                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
+                    ᶜJ * ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp) *
                     ∂e_int_∂q_tot,
                 )
             @. ᶠbidiagonal_matrix_ct3_2 =
-                DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρʲs.:(1))) ⋅
+                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
                 ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
                 DiagonalMatrixRow(
                     Y.c.sgsʲs.:(1).ρa * ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp) *
@@ -872,12 +909,12 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                             ᶠu³ʲs.:(1),
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
                         ),
-                    ),
-                ) ⋅ ᶠwinterp_matrix(ᶜJ) ⋅ DiagonalMatrixRow(
-                    ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
+                    ) / ᶠJ,
+                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
+                    ᶜJ * ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
                 )
             @. ᶠbidiagonal_matrix_ct3_2 =
-                DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρʲs.:(1))) ⋅
+                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
                 ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
                 DiagonalMatrixRow(
                     Y.c.sgsʲs.:(1).ρa * ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp),
@@ -889,7 +926,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).ρa)]
             @. ᶜadvection_matrix =
                 -(ᶜadvdivᵥ_matrix()) ⋅
-                DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρʲs.:(1)))
+                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ)
             @. ∂ᶜρaʲ_err_∂ᶜρaʲ =
                 dtγ * ᶜadvection_matrix ⋅
                 ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
@@ -940,6 +977,79 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                     dtγ * ᶠtridiagonal_matrix_c3 ⋅
                     DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) - (I_u₃,)
             end
+            # add updraft mass flux contributions to grid-mean
+            if use_derivative(sgs_mass_flux_flag)
+
+                (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs, ᶠu³) = p
+                (; bdmr_l, bdmr_r, bdmr) = p
+                is_third_order = edmfx_upwinding == Val(:third_order)
+                ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
+                ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
+                    top = Operators.SetValue(zero(CT3{FT})),
+                    bottom = Operators.SetValue(zero(CT3{FT})),
+                ) # Need to wrap ᶠupwind in this for well-defined boundaries.
+                UpwindMatrixRowType =
+                    is_third_order ? QuaddiagonalMatrixRow : BidiagonalMatrixRow
+                ᶠupwind_matrix =
+                    is_third_order ? ᶠupwind3_matrix : ᶠupwind1_matrix
+
+                ᶜkappa_mʲ = p.ᶜtemp_scalar
+                @. ᶜkappa_mʲ =
+                    TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
+                    TD.cv_m(thermo_params, ᶜtsʲs.:(1))
+
+                # Jacobian contributions of updraft massflux to grid-mean
+
+                ∂ᶜupdraft_mass_flux_∂ᶜh_tot = ᶠbidiagonal_matrix_ct3
+                @. ∂ᶜupdraft_mass_flux_∂ᶜh_tot =
+                    DiagonalMatrixRow(
+                        (ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) * (ᶠu³ʲs.:(1) - ᶠu³),
+                    ) ⋅ ᶠinterp_matrix() ⋅
+                    DiagonalMatrixRow(Y.c.sgsʲs.:(1).ρa / ᶜρʲs.:(1))
+
+                # Derivative of total energy tendency with respect to updraft MSE
+                ## grid-mean ρe_tot
+                @. ∂ᶜρe_tot_err_∂ᶜρ +=
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜh_tot ⋅
+                    DiagonalMatrixRow(
+                        (
+                            -(1 + ᶜkappa_m) * ᶜspecific.e_tot -
+                            ᶜkappa_m * ∂e_int_∂q_tot * ᶜspecific.q_tot
+                        ) / ᶜρ,
+                    )
+
+                @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜh_tot ⋅
+                    DiagonalMatrixRow(ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ)
+
+                @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜh_tot ⋅
+                    DiagonalMatrixRow((1 + ᶜkappa_m) / ᶜρ)
+
+                ∂ᶜρe_tot_err_∂ᶜmseʲ =
+                    matrix[@name(c.ρe_tot), @name(c.sgsʲs.:(1).mse)]
+                @. ∂ᶜρe_tot_err_∂ᶜmseʲ =
+                    -(dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜh_tot)
+
+                ## grid-mean ρq_tot
+                ∂ᶜupdraft_mass_flux_∂ᶜqtot = ∂ᶜupdraft_mass_flux_∂ᶜh_tot
+                ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
+                @. ∂ᶜρq_tot_err_∂ᶜρ +=
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜqtot ⋅
+                    DiagonalMatrixRow(-(ᶜspecific.q_tot) / ᶜρ)
+
+                ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+                @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜqtot ⋅
+                    DiagonalMatrixRow(1 / ᶜρ)
+
+                ∂ᶜρq_tot_err_∂ᶜq_totʲ =
+                    matrix[@name(c.ρq_tot), @name(c.sgsʲs.:(1).q_tot)]
+                @. ∂ᶜρq_tot_err_∂ᶜq_totʲ =
+                    -(dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜqtot)
+
+            end
+
         elseif rs isa RayleighSponge
             ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
@@ -950,5 +1060,4 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 ) - (I_u₃,)
         end
     end
-
 end

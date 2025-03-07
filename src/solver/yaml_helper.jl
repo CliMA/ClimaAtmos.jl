@@ -59,7 +59,6 @@ override_default_config(config_dicts::ContainerType(AbstractDict)) =
     override_default_config(merge(config_dicts...))
 
 function override_default_config(::Nothing)
-    @info "Using default configuration"
     return default_config_dict()
 end
 

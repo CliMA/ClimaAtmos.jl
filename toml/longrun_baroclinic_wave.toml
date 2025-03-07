@@ -1,2 +1,14 @@
 [precipitation_timescale]
 value = 120
+
+[snow_autoconversion_timescale]
+value = 1e4
+
+[rain_autoconversion_timescale]
+value = 1e3
+
+[condensation_evaporation_timescale]
+value = 50
+
+[sublimation_deposition_timescale]
+value = 50

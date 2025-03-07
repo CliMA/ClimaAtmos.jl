@@ -76,7 +76,7 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
 end
 
 function get_vertical_diffusion_model(
-    diffuse_momentum,
+    disable_momentum_vertical_diffusion,
     parsed_args,
     params,
     ::Type{FT},
@@ -86,11 +86,14 @@ function get_vertical_diffusion_model(
     return if vert_diff_name in ("false", false, "none")
         nothing
     elseif vert_diff_name in ("true", true, "VerticalDiffusion")
-        VerticalDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
-    elseif vert_diff_name in ("FriersonDiffusion",)
-        FriersonDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
+        VerticalDiffusion{disable_momentum_vertical_diffusion, FT}(;
+            C_E = vdp.C_E,
+        )
     elseif vert_diff_name in ("DecayWithHeightDiffusion",)
-        DecayWithHeightDiffusion{diffuse_momentum, FT}(; H = vdp.H, D₀ = vdp.D₀)
+        DecayWithHeightDiffusion{disable_momentum_vertical_diffusion, FT}(;
+            H = vdp.H,
+            D₀ = vdp.D₀,
+        )
     else
         error("Uncaught diffusion model `$vert_diff_name`.")
     end
@@ -456,8 +459,13 @@ end
 
 function get_turbconv_model(FT, parsed_args, turbconv_params)
     turbconv = parsed_args["turbconv"]
-    @assert turbconv in
-            (nothing, "edmfx", "prognostic_edmfx", "diagnostic_edmfx")
+    @assert turbconv in (
+        nothing,
+        "edmfx",
+        "prognostic_edmfx",
+        "diagnostic_edmfx",
+        "edonly_edmfx",
+    )
 
     return if turbconv == "prognostic_edmfx"
         N = parsed_args["updraft_number"]
@@ -467,6 +475,8 @@ function get_turbconv_model(FT, parsed_args, turbconv_params)
         N = parsed_args["updraft_number"]
         TKE = parsed_args["prognostic_tke"]
         DiagnosticEDMFX{N, TKE}(turbconv_params.min_area)
+    elseif turbconv == "edonly_edmfx"
+        EDOnlyEDMFX()
     else
         nothing
     end

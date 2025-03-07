@@ -1,8 +1,0 @@
-t_end: "1days"
-config: "box"
-hyperdiff: false
-dt: "20secs"
-perturb_initstate: false
-diagnostics:
-  - short_name: [wa, ua]
-    period: 1days

@@ -44,6 +44,7 @@ end
 
 function compute_precipitation_cache!(Y, p, ::Microphysics0Moment, _)
     (; params, dt) = p
+    dt = float(dt)
     (; ᶜts) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precipitation
     (; ᶜΦ) = p.core
@@ -324,30 +325,31 @@ function compute_precipitation_surface_fluxes!(
     (; surface_rain_flux, surface_snow_flux) = p.precipitation
     (; col_integrated_precip_energy_tendency,) = p.conservation_check
     (; ᶜwᵣ, ᶜwₛ, ᶜspecific) = p.precomputed
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    sfc_J = Fields.level(ᶠJ, Fields.half)
+    sfc_space = axes(sfc_J)
 
-    (; ᶠtemp_scalar) = p.scratch
-    slg = Fields.level(Fields.local_geometry_field(ᶠtemp_scalar), Fields.half)
+    # Jacobian-weighted extrapolation from interior to surface, consistent with
+    # the reconstruction of density on cell faces, ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
+    int_J = Fields.Field(Fields.field_values(Fields.level(ᶜJ, 1)), sfc_space)
+    int_ρ = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), sfc_space)
+    sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
 
-    # Constant extrapolation: - put values from bottom cell center to bottom cell face
-    ˢρ = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), axes(slg))
-    # For density this is equivalent with ᶠwinterp(ᶜJ, Y.c.ρ) and therefore
-    # consistent with the way we do vertical advection
-    ˢqᵣ = Fields.Field(
+    # Constant extrapolation to surface, consistent with simple downwinding
+    sfc_qᵣ = Fields.Field(
         Fields.field_values(Fields.level(ᶜspecific.q_rai, 1)),
-        axes(slg),
+        sfc_space,
     )
-    ˢqₛ = Fields.Field(
+    sfc_qₛ = Fields.Field(
         Fields.field_values(Fields.level(ᶜspecific.q_sno, 1)),
-        axes(slg),
+        sfc_space,
     )
-    ˢwᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), axes(slg))
-    ˢwₛ = Fields.Field(Fields.field_values(Fields.level(ᶜwₛ, 1)), axes(slg))
+    sfc_wᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), sfc_space)
+    sfc_wₛ = Fields.Field(Fields.field_values(Fields.level(ᶜwₛ, 1)), sfc_space)
 
-    # Project the flux to CT3 vector and convert to physical units.
-    @. surface_rain_flux =
-        -projected_vector_data(CT3, ˢρ * ˢqᵣ * Geometry.WVector(ˢwᵣ), slg)
-    @. surface_snow_flux =
-        -projected_vector_data(CT3, ˢρ * ˢqₛ * Geometry.WVector(ˢwₛ), slg)
+    @. surface_rain_flux = sfc_ρ * sfc_qᵣ * (-sfc_wᵣ)
+    @. surface_snow_flux = sfc_ρ * sfc_qₛ * (-sfc_wₛ)
 end
 
 function precipitation_tendency!(

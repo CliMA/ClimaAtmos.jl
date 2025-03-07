@@ -296,6 +296,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
+    dt = float(dt)
     (; ᶜΦ) = p.core
     (; ᶜp, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
@@ -913,8 +914,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     (; ᶜp, ᶜu, ᶜts) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
-    (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs) = p.precomputed
-    (; ᶜtke⁰, ᶠu³⁰, ᶜu⁰) = p.precomputed
+    (; ᶜtke⁰) = p.precomputed
     (;
         ᶜlinear_buoygrad,
         ᶜstrain_rate_norm,
@@ -925,7 +925,13 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
-    @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
+    if p.atmos.turbconv_model isa DiagnosticEDMFX
+        (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs, ᶠu³⁰, ᶜu⁰) = p.precomputed
+    elseif p.atmos.turbconv_model isa EDOnlyEDMFX
+        ᶠu³⁰ = p.precomputed.ᶠu³
+        ᶜu⁰ = ᶜu
+    end
+    @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))  # Set here, but used in a different function
 
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
@@ -956,7 +962,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     )
     ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
-    @. ᶜtke⁰ = Y.c.sgs⁰.ρatke / Y.c.ρ
     # using ᶜu⁰ would be more correct, but this is more consistent with the
     # TKE equation, where using ᶜu⁰ results in allocation
     for j in 1:n
@@ -1049,32 +1054,33 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     t,
     precip_model::Microphysics1Moment,
 )
-    thermo_params = CAP.thermodynamics_params(p.params)
-    microphys_1m_params = CAP.microphysics_1m_params(p.params)
+    error("Not implemented yet")
+    #thermo_params = CAP.thermodynamics_params(p.params)
+    #microphys_1m_params = CAP.microphysics_1m_params(p.params)
 
-    (; ᶜts, ᶜSqₜᵖ⁰, ᶜSeₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
-    (; ᶜqᵣ, ᶜqₛ) = p.precomputed
+    #(; ᶜts, ᶜSqₜᵖ⁰, ᶜSeₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+    #(; q_tot) = p.precomputed.ᶜspecific
+    #(; ᶜqᵣ, ᶜqₛ) = p.precomputed
 
-    ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+    #ᶜSᵖ = p.scratch.ᶜtemp_scalar
+    #ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
-    # Environment precipitation sources (to be applied to grid mean)
-    compute_precipitation_sources!(
-        ᶜSᵖ,
-        ᶜSᵖ_snow,
-        ᶜSqₜᵖ⁰,
-        ᶜSqᵣᵖ⁰,
-        ᶜSqₛᵖ⁰,
-        ᶜSeₜᵖ⁰,
-        Y.c.ρ,
-        ᶜqᵣ,
-        ᶜqₛ,
-        ᶜts,
-        p.core.ᶜΦ,
-        p.dt,
-        microphys_1m_params,
-        thermo_params,
-    )
+    ## Environment precipitation sources (to be applied to grid mean)
+    #compute_precipitation_sources!(
+    #    ᶜSᵖ,
+    #    ᶜSᵖ_snow,
+    #    ᶜSqₜᵖ⁰,
+    #    ᶜSqᵣᵖ⁰,
+    #    ᶜSqₛᵖ⁰,
+    #    ᶜSeₜᵖ⁰,
+    #    Y.c.ρ,
+    #    ᶜqᵣ,
+    #    ᶜqₛ,
+    #    ᶜts,
+    #    p.core.ᶜΦ,
+    #    p.dt,
+    #    microphys_1m_params,
+    #    thermo_params,
+    #)
     return nothing
 end

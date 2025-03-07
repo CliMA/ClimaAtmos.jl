@@ -30,6 +30,8 @@ direct_dependencies =
     keys(Pkg.dependencies(identity, atmos_uuid).dependencies) |> Set
 
 known_dependencies = Set([
+    # Adapt is used to move the AtmosCache to CPU for checkpointing
+    "Adapt",
     # ArgParse is used to read --config_file and --job_id from command line
     "ArgParse",
     "Artifacts",
@@ -46,11 +48,12 @@ known_dependencies = Set([
     "FastGaussQuadrature",
     "Insolation",
     "Interpolations",
-    "LazyBroadcast",
+    "LazyBroadcast", # for https://github.com/CliMA/ClimaAtmos.jl/issues/3594
     "LazyArtifacts",
     "LinearAlgebra",
     "Logging",
     # NCDatasets is used to read Earth topography, GCM driven initial conditions, orographic gravity wave data
+    "NullBroadcasts", # works with LazyBroadcast
     "NCDatasets",
     "NVTX",
     "RRTMGP",

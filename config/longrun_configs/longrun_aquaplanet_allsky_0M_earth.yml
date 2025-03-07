@@ -2,6 +2,7 @@ h_elem: 16
 z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
+deep_atmosphere: false
 rayleigh_sponge: true
 viscous_sponge: true
 topography: "Earth"
@@ -16,6 +17,7 @@ rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
-vert_diff: "DecayWithHeightDiffusion"
+turbconv: "edonly_edmfx"
+edmfx_sgs_diffusive_flux: true
 precip_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]

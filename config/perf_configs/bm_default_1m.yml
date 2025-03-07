@@ -1,0 +1,14 @@
+apply_limiter: true
+h_elem: 12
+z_elem: 25
+dt: "1secs"
+t_end: "10secs"
+dt_save_to_sol: "Inf"
+log_progress: false
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+moist: "nonequil"
+surface_setup: "DefaultMoninObukhov"
+rad: "allskywithclear"
+vert_diff: true
+precip_model: "1M"

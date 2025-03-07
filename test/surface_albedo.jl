@@ -14,7 +14,7 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
     config.parsed_args["rad"] = "clearsky"
     config.parsed_args["FLOAT_TYPE"] = string(FT)
     config.parsed_args["output_default_diagnostics"] = false
-    simulation = ClimaAtmos.get_simulation(config)
+    simulation = ClimaAtmos.AtmosSimulation(config)
     (; u, p, t) = simulation.integrator
     ClimaAtmos.set_surface_albedo!(u, p, t, p.atmos.surface_albedo)
 
@@ -24,7 +24,7 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
     # test set_surface_albedo!(Y, p, t, α_type::RegressionFunctionAlbedo)
     config.parsed_args["rad"] = "clearsky"
     config.parsed_args["albedo_model"] = "RegressionFunctionAlbedo"
-    simulation = ClimaAtmos.get_simulation(config)
+    simulation = ClimaAtmos.AtmosSimulation(config)
     (; u, p, t) = simulation.integrator
 
     ClimaAtmos.set_surface_albedo!(u, p, t, p.atmos.surface_albedo)
@@ -36,7 +36,7 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
     # test set_surface_albedo!(Y, p, t, α_type::CouplerAlbedo)
     config.parsed_args["rad"] = "clearsky"
     config.parsed_args["albedo_model"] = "CouplerAlbedo"
-    simulation = ClimaAtmos.get_simulation(config)
+    simulation = ClimaAtmos.AtmosSimulation(config)
     (; u, p) = simulation.integrator
 
     ClimaAtmos.set_surface_albedo!(u, p, Float64(0), p.atmos.surface_albedo)

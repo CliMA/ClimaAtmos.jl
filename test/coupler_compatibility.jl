@@ -44,7 +44,7 @@ const T2 = 290
         );
         job_id = "coupler_compatibility1",
     )
-    simulation = CA.get_simulation(config)
+    simulation = CA.AtmosSimulation(config)
     (; integrator) = simulation
     (; p, t) = integrator
     Y = integrator.u
@@ -76,7 +76,6 @@ const T2 = 290
         p.scratch,
         p.hyperdiff,
         p.precipitation,
-        p.large_scale_advection,
         p.external_forcing,
         p.non_orographic_gravity_wave,
         p.orographic_gravity_wave,
@@ -84,6 +83,7 @@ const T2 = 290
         p.tracers,
         p.net_energy_flux_toa,
         p.net_energy_flux_sfc,
+        p.steady_state_velocity,
         p.conservation_check,
     )
 
@@ -111,7 +111,14 @@ end
         );
         job_id = "coupler_compatibility2",
     )
-    simulation = CA.get_simulation(config)
+    simulation = CA.AtmosSimulation(config)
+
+    # Check: ρ_flux_uₕ is initialized to zero
+    @test all(
+        iszero,
+        parent(simulation.integrator.p.precomputed.sfc_conditions.ρ_flux_uₕ),
+    )
+
     (; integrator) = simulation
     (; p, t) = integrator
     Y = integrator.u
@@ -222,5 +229,5 @@ end
         );
         job_id = "coupler_compatibility3",
     )
-    simulation = CA.get_simulation(config)
+    simulation = CA.AtmosSimulation(config)
 end

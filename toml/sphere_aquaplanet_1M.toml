@@ -1,5 +1,17 @@
+[condensation_evaporation_timescale]
+value = 400
+
+[sublimation_deposition_timescale]
+value = 400
+
+[snow_autoconversion_timescale]
+value = 1e4
+
 [zd_viscous]
 value = 40000.0
 
 [zd_rayleigh]
 value = 40000.0
+
+[liquid_cloud_effective_radius]
+value = 12e-6

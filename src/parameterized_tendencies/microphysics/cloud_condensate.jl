@@ -2,7 +2,7 @@
 ##### DryModel, EquilMoistModel
 #####
 
-cloud_condensate_tendency!(Yₜ, p, _, _) = nothing
+cloud_condensate_tendency!(Yₜ, Y, p, _, _) = nothing
 
 #####
 ##### NonEquilMoistModel
@@ -10,6 +10,7 @@ cloud_condensate_tendency!(Yₜ, p, _, _) = nothing
 
 function cloud_condensate_tendency!(
     Yₜ,
+    Y,
     p,
     ::NonEquilMoistModel,
     ::Union{NoPrecipitation, Microphysics0Moment},
@@ -21,6 +22,7 @@ end
 
 function cloud_condensate_tendency!(
     Yₜ,
+    Y,
     p,
     ::NonEquilMoistModel,
     ::Microphysics1Moment,
@@ -32,6 +34,6 @@ function cloud_condensate_tendency!(
     thp = CAP.thermodynamics_params(params)
     cmc = CAP.microphysics_cloud_params(params)
 
-    @. Yₜ.c.ρq_liq += cloud_sources(cmc.liquid, thp, ᶜts, max(FT(0), q_rai), dt)
-    @. Yₜ.c.ρq_ice += cloud_sources(cmc.ice, thp, ᶜts, max(FT(0), q_sno), dt)
+    @. Yₜ.c.ρq_liq += Y.c.ρ * cloud_sources(cmc.liquid, thp, ᶜts, q_rai, dt)
+    @. Yₜ.c.ρq_ice += Y.c.ρ * cloud_sources(cmc.ice, thp, ᶜts, q_sno, dt)
 end

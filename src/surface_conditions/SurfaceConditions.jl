@@ -16,6 +16,7 @@ import ..get_wstar
 
 import ClimaCore: DataLayouts, Geometry, Fields
 import ClimaCore.Geometry: ⊗
+import ClimaCore.Utilities: half
 import SurfaceFluxes as SF
 import Thermodynamics as TD
 

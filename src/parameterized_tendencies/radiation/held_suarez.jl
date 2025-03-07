@@ -142,16 +142,17 @@ function held_suarez_forcing_tendency_ρe_tot(
         MSLP,
     )
 
-    return @lazy @. -compute_ΔρT(
-        thermo_params,
-        ts_surf,
-        ᶜρ,
-        ᶜp,
-        lat,
-        z_surface,
-        hs_params,
-    ) * cv_d
-    return nothing
+    return @. lazy(
+        -compute_ΔρT(
+            thermo_params,
+            ts_surf,
+            ᶜρ,
+            ᶜp,
+            lat,
+            z_surface,
+            hs_params,
+        ) * cv_d,
+    )
 end
 
 function held_suarez_forcing_tendency_uₕ(
@@ -198,7 +199,10 @@ function held_suarez_forcing_tendency_uₕ(
         MSLP,
     )
 
-    return @lazy @. -(
-        k_f * height_factor(thermo_params, z_surface, ᶜp, ts_surf, hs_params)
-    ) * ᶜuₕ
+    return @. lazy(
+        -(
+            k_f *
+            height_factor(thermo_params, z_surface, ᶜp, ts_surf, hs_params)
+        ) * ᶜuₕ,
+    )
 end
