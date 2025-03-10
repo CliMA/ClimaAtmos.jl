@@ -1136,7 +1136,9 @@ AquaplanetPlots = Union{
     Val{:longrun_aquaplanet_allsky_progedmf_diffonly_0M},
     Val{:longrun_aquaplanet_allsky_0M_earth},
     Val{:longrun_aquaplanet_dyamond},
+    Val{:longrun_aquaplanet_allsky_tvinsol_0M_slabocean},
     Val{:amip_target_diagedmf},
+    Val{:amip_target_edonly},
 }
 
 function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
