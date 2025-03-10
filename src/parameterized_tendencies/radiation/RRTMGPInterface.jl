@@ -5,6 +5,7 @@ import ..AbstractCloudInRadiation
 using RRTMGP
 import RRTMGP.AtmosphericStates as AS
 using ClimaCore: DataLayouts, Spaces, Fields
+import Adapt
 import ClimaComms
 using NVTX
 using Random
@@ -263,8 +264,6 @@ struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V}
     interpolation::I
     bottom_extrapolation::B
     implied_values::Symbol
-    disable_longwave::Bool
-    disable_shortwave::Bool
     lookups::L
     params::P
     lw_solver::LWS
@@ -272,6 +271,9 @@ struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V}
     as::AS  # Atmospheric state
     views::V  # user-friendly views into the solver
 end
+
+# Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
+Adapt.@adapt_structure RRTMGPModel
 
 function Base.getproperty(model::RRTMGPModel, s::Symbol)
     if s in fieldnames(typeof(model))
@@ -306,10 +308,6 @@ values. If only the values at cell centers are specified, the values at cell
 faces are "implied values". Likewise, if only the values at faces are specified,
 the values at centers are "implied values".
 
-If the keyword argument `extension_nlay` is not 0, then, for every keyword
-argument of the form `center_...`/`face_...`, one must also specify a
-corresponding keyword argument `extension_center_...`/`extension_face_...`.
-
 Every keyword argument that corresponds to an array of cell center or cell face
 values can be specified as a scalar (corresponding to a constant value
 throughout the atmosphere), or as a 1D array (corresponding to the values in
@@ -333,7 +331,6 @@ array.
 # Keyword Arguments
 - `ncol`: number of vertical columns in the domain/extension
 - `domain_nlay`: number of cells (layers) in the domain
-- `extension_nlay`: number of cells (layers) in the extension
 - `radiation_mode`: overall mode for running `RRTMGP`; available options are
     - `GrayRadiation`: uniform absorption across all frequencies
     - `ClearSkyRadiation`: full RRTMGP model, but without clouds
@@ -345,10 +342,6 @@ array.
 - `bottom_extrapolation`: method for determining implied values at the bottom
   cell face (only used when the cell face values are implied); see documentation
   for `AbstractInterpolation` for available options
-- `disable_longwave`: whether to ignore longwave fluxes
-- `disable_shortwave`: whether to ignore shortwave fluxes
-- `use_one_scalar_mode`: whether to use the one-scalar method for computing
-  optical properties instead of the default two-stream method
 - `use_global_means_for_well_mixed_gases`: whether to use a scalar value to
   represent the volume mixing ratio of each well-mixed gas (i.e., a gas that is
   not water vapor or ozone), instead of using an array that represents a
@@ -360,21 +353,19 @@ array.
   `center_temperature` must also be specified, and, if `face_pressure` is
   specified, then `face_temperature` must also be specified)
 - `surface_temperature`: temperature of the surface in K (required)
-- arguments only available when `!disable_longwave`:
-    - `surface_emissivity`: longwave emissivity of the surface (required)
-    - `top_of_atmosphere_lw_flux_dn`: incoming longwave radiation in W/m^2
-      (assumed to be 0 by default)
-- arguments only available when `!disable_shortwave`:
-    - `direct_sw_surface_albedo`: direct shortwave albedo of the surface
-      (required)
-    - `diffuse_sw_surface_albedo`: diffuse shortwave albedo of the surface
-      (required)
-    - `cos_zenith`: cosine of the zenith angle of sun in radians (required)
-    - `weighted_irradiance`: irradiance of sun in W/m^2 (required); the incoming
-      direct shortwave radiation is given by
-      `model.weighted_irradiance .* model.cos_zenith`
-    - `top_of_atmosphere_diffuse_sw_flux_dn`: incoming diffuse shortwave
-      radiation in W/m^2 (assumed to be 0 by default)
+- `surface_emissivity`: longwave emissivity of the surface (required)
+- `top_of_atmosphere_lw_flux_dn`: incoming longwave radiation in W/m^2
+  (assumed to be 0 by default)
+- `direct_sw_surface_albedo`: direct shortwave albedo of the surface
+  (required)
+- `diffuse_sw_surface_albedo`: diffuse shortwave albedo of the surface
+  (required)
+- `cos_zenith`: cosine of the zenith angle of sun in radians (required)
+- `weighted_irradiance`: irradiance of sun in W/m^2 (required); the incoming
+  direct shortwave radiation is given by
+  `model.weighted_irradiance .* model.cos_zenith`
+- `top_of_atmosphere_diffuse_sw_flux_dn`: incoming diffuse shortwave
+  radiation in W/m^2 (assumed to be 0 by default)
 - arguments only available when `radiation_mode isa GrayRadiation`:
     - `lapse_rate`: a scalar value that specifies the lapse rate throughout the
       atmosphere (required); this is a constant that can't be modified after the
@@ -423,13 +414,9 @@ function RRTMGPModel(
     context;
     ncol::Int,
     domain_nlay::Int,
-    extension_nlay::Int = 0,
     radiation_mode::AbstractRRTMGPMode = ClearSkyRadiation(),
     interpolation::AbstractInterpolation = NoInterpolation(),
     bottom_extrapolation::AbstractBottomExtrapolation = SameAsInterpolation(),
-    disable_longwave::Bool = false,
-    disable_shortwave::Bool = false,
-    use_one_scalar_mode::Bool = false,
     use_global_means_for_well_mixed_gases::Bool = false,
     kwargs...,
 )
@@ -439,13 +426,6 @@ function RRTMGPModel(
     # turn kwargs into a Dict, so that values can be dynamically popped from it
     dict = Dict(kwargs)
 
-    if disable_longwave && disable_shortwave
-        error("either longwave or shortwave fluxes must be enabled")
-    end
-    if use_one_scalar_mode && !disable_shortwave
-        @warn "upward shortwave fluxes are not computed when \
-               use_one_scalar_mode is true"
-    end
     if use_global_means_for_well_mixed_gases && radiation_mode isa GrayRadiation
         @warn "use_global_means_for_well_mixed_gases is ignored when using \
                GrayRadiation"
@@ -499,196 +479,168 @@ function RRTMGPModel(
     lookups = NamedTuple()
     views = []
 
-    nlay =
-        domain_nlay +
-        extension_nlay +
-        Int(radiation_mode.add_isothermal_boundary_layer)
-    op_symbol = use_one_scalar_mode ? :OneScalar : :TwoStream
-    t = (views, domain_nlay, extension_nlay)
+    nlay = domain_nlay + Int(radiation_mode.add_isothermal_boundary_layer)
+    t = (views, domain_nlay)
 
-    if disable_longwave
-        src_lw = flux_lw = fluxb_lw = bcs_lw = nothing
+    if radiation_mode isa GrayRadiation
+        nbnd_lw = 1
     else
-        if radiation_mode isa GrayRadiation
-            nbnd_lw = 1
-        else
-            local lookup_lw, idx_gases
+        local lookup_lw, idx_gases
+        data_loader(RRTMGP.ArtifactPaths.get_lookup_filename(:gas, :lw)) do ds
+            lookup_lw, idx_gases = RRTMGP.LookUpTables.LookUpLW(ds, FT, DA)
+        end
+        lookups = (; lookups..., lookup_lw, idx_gases)
+
+        nbnd_lw = RRTMGP.LookUpTables.get_n_bnd(lookup_lw)
+        ngas = RRTMGP.LookUpTables.get_n_gases(lookup_lw)
+
+        if !(radiation_mode isa ClearSkyRadiation)
+            local lookup_lw_cld
             data_loader(
-                RRTMGP.ArtifactPaths.get_lookup_filename(:gas, :lw),
+                RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :lw),
             ) do ds
-                lookup_lw, idx_gases = RRTMGP.LookUpTables.LookUpLW(ds, FT, DA)
+                lookup_lw_cld = RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
             end
-            lookups = (; lookups..., lookup_lw, idx_gases)
-
-            nbnd_lw = RRTMGP.LookUpTables.get_n_bnd(lookup_lw)
-            ngas = RRTMGP.LookUpTables.get_n_gases(lookup_lw)
-
-            if !(radiation_mode isa ClearSkyRadiation)
-                local lookup_lw_cld
-                data_loader(
-                    RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :lw),
-                ) do ds
-                    lookup_lw_cld = RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
-                end
-                lookups = (; lookups..., lookup_lw_cld)
-            end
-            if radiation_mode.aerosol_radiation
-                local lookup_lw_aero, idx_aerosol, idx_aerosize
-                data_loader(
-                    RRTMGP.ArtifactPaths.get_lookup_filename(:aerosol, :lw),
-                ) do ds
-                    lookup_lw_aero, idx_aerosol, idx_aerosize =
-                        RRTMGP.LookUpTables.LookUpAerosolMerra(ds, FT, DA)
-                end
-            else
-                lookup_lw_aero = nothing
-            end
-            lookups = (; lookups..., lookup_lw_aero)
+            lookups = (; lookups..., lookup_lw_cld)
         end
-
-        src_lw = RRTMGP.Sources.source_func_longwave(
-            params,
-            FT,
-            ncol,
-            nlay,
-            op_symbol,
-            DA,
-        )
-        flux_lw = RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
-        fluxb_lw =
-            radiation_mode isa GrayRadiation ? nothing :
-            RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
-        set_and_save!(flux_lw.flux_up, "face_lw_flux_up", t...)
-        set_and_save!(flux_lw.flux_dn, "face_lw_flux_dn", t...)
-        set_and_save!(flux_lw.flux_net, "face_lw_flux", t...)
-        if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-            flux_lw2 = RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
-            set_and_save!(flux_lw2.flux_up, "face_clear_lw_flux_up", t...)
-            set_and_save!(flux_lw2.flux_dn, "face_clear_lw_flux_dn", t...)
-            set_and_save!(flux_lw2.flux_net, "face_clear_lw_flux", t...)
-        end
-
-        sfc_emis = DA{FT}(undef, nbnd_lw, ncol)
-        set_and_save!(sfc_emis, "surface_emissivity", t..., dict)
-        name = "top_of_atmosphere_lw_flux_dn"
-        if Symbol(name) in keys(dict)
-            inc_flux = DA{FT}(undef, ncol)
-            set_and_save!(transpose(inc_flux), name, t..., dict)
+        if radiation_mode.aerosol_radiation
+            local lookup_lw_aero, idx_aerosol, idx_aerosize
+            data_loader(
+                RRTMGP.ArtifactPaths.get_lookup_filename(:aerosol, :lw),
+            ) do ds
+                lookup_lw_aero, idx_aerosol, idx_aerosize =
+                    RRTMGP.LookUpTables.LookUpAerosolMerra(ds, FT, DA)
+            end
         else
-            inc_flux = nothing
+            lookup_lw_aero = nothing
         end
-        bcs_lw = RRTMGP.BCs.LwBCs(sfc_emis, inc_flux)
+        lookups = (; lookups..., lookup_lw_aero)
     end
 
-    if disable_shortwave
-        src_sw = flux_sw = fluxb_sw = bcs_sw = nothing
-    else
-        if radiation_mode isa GrayRadiation
-            nbnd_sw = 1
-        else
-            local lookup_sw, idx_gases
-            data_loader(
-                RRTMGP.ArtifactPaths.get_lookup_filename(:gas, :sw),
-            ) do ds
-                lookup_sw, idx_gases = RRTMGP.LookUpTables.LookUpSW(ds, FT, DA)
-            end
-            lookups = (; lookups..., lookup_sw, idx_gases)
-
-            nbnd_sw = RRTMGP.LookUpTables.get_n_bnd(lookup_sw)
-            ngas = RRTMGP.LookUpTables.get_n_gases(lookup_sw)
-
-            if !(radiation_mode isa ClearSkyRadiation)
-                local lookup_sw_cld
-                data_loader(
-                    RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :sw),
-                ) do ds
-                    lookup_sw_cld = RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
-                end
-                lookups = (; lookups..., lookup_sw_cld)
-            end
-
-            if radiation_mode.aerosol_radiation
-                local lookup_sw_aero, idx_aerosol, idx_aerosize
-                data_loader(
-                    RRTMGP.ArtifactPaths.get_lookup_filename(:aerosol, :sw),
-                ) do ds
-                    lookup_sw_aero, idx_aerosol, idx_aerosize =
-                        RRTMGP.LookUpTables.LookUpAerosolMerra(ds, FT, DA)
-                end
-            else
-                lookup_sw_aero = nothing
-            end
-            lookups = (; lookups..., lookup_sw_aero)
-        end
-
-        src_sw =
-            RRTMGP.Sources.source_func_shortwave(FT, ncol, nlay, op_symbol, DA)
-        flux_sw = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
-        fluxb_sw =
-            radiation_mode isa GrayRadiation ? nothing :
-            RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
-        set_and_save!(flux_sw.flux_up, "face_sw_flux_up", t...)
-        set_and_save!(flux_sw.flux_dn, "face_sw_flux_dn", t...)
-        set_and_save!(flux_sw.flux_net, "face_sw_flux", t...)
-        set_and_save!(flux_sw.flux_dn_dir, "face_sw_direct_flux_dn", t...)
-        if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-            flux_sw2 = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
-            set_and_save!(flux_sw2.flux_up, "face_clear_sw_flux_up", t...)
-            set_and_save!(flux_sw2.flux_dn, "face_clear_sw_flux_dn", t...)
-            set_and_save!(
-                flux_sw2.flux_dn_dir,
-                "face_clear_sw_direct_flux_dn",
-                t...,
-            )
-            set_and_save!(flux_sw2.flux_net, "face_clear_sw_flux", t...)
-        end
-
-        cos_zenith = DA{FT}(undef, ncol)
-        set_and_save!(cos_zenith, "cos_zenith", t..., dict)
-        toa_flux = DA{FT}(undef, ncol)
-        set_and_save!(toa_flux, "weighted_irradiance", t..., dict)
-        sfc_alb_direct = DA{FT}(undef, nbnd_sw, ncol)
-        set_and_save!(sfc_alb_direct, "direct_sw_surface_albedo", t..., dict)
-        sfc_alb_diffuse = DA{FT}(undef, nbnd_sw, ncol)
-        set_and_save!(sfc_alb_diffuse, "diffuse_sw_surface_albedo", t..., dict)
-        name = "top_of_atmosphere_diffuse_sw_flux_dn"
-        if Symbol(name) in keys(dict)
-            @warn "incoming diffuse shortwave fluxes are not yet implemented \
-                   in RRTMGP.jl; the value of $name will be ignored"
-            inc_flux_diffuse = DA{FT}(undef, ncol, ngpt_sw)
-            set_and_save!(transpose(inc_flux_diffuse), name, t..., dict)
-        else
-            inc_flux_diffuse = nothing
-        end
-        bcs_sw = RRTMGP.BCs.SwBCs(
-            cos_zenith,
-            toa_flux,
-            sfc_alb_direct,
-            inc_flux_diffuse,
-            sfc_alb_diffuse,
-        )
+    src_lw = RRTMGP.Sources.source_func_longwave(
+        params,
+        FT,
+        ncol,
+        nlay,
+        :TwoStream,
+        DA,
+    )
+    flux_lw = RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
+    fluxb_lw =
+        radiation_mode isa GrayRadiation ? nothing :
+        RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
+    set_and_save!(flux_lw.flux_up, "face_lw_flux_up", t...)
+    set_and_save!(flux_lw.flux_dn, "face_lw_flux_dn", t...)
+    set_and_save!(flux_lw.flux_net, "face_lw_flux", t...)
+    if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
+        flux_lw2 = RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
+        set_and_save!(flux_lw2.flux_up, "face_clear_lw_flux_up", t...)
+        set_and_save!(flux_lw2.flux_dn, "face_clear_lw_flux_dn", t...)
+        set_and_save!(flux_lw2.flux_net, "face_clear_lw_flux", t...)
     end
 
-    if disable_longwave
-        set_and_save!(flux_sw.flux_net, "face_flux", t...)
-        if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-            set_and_save!(flux_sw2.flux_net, "face_clear_flux", t...)
-        end
-    elseif disable_shortwave
-        set_and_save!(flux_lw.flux_net, "face_flux", t...)
-        if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-            set_and_save!(flux_lw2.flux_net, "face_clear_flux", t...)
-        end
+    sfc_emis = DA{FT}(undef, nbnd_lw, ncol)
+    set_and_save!(sfc_emis, "surface_emissivity", t..., dict)
+    name = "top_of_atmosphere_lw_flux_dn"
+    if Symbol(name) in keys(dict)
+        inc_flux = DA{FT}(undef, ncol)
+        set_and_save!(transpose(inc_flux), name, t..., dict)
     else
-        set_and_save!(similar(flux_lw.flux_net), "face_flux", t...)
-        if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-            set_and_save!(similar(flux_lw2.flux_net), "face_clear_flux", t...)
+        inc_flux = nothing
+    end
+    bcs_lw = RRTMGP.BCs.LwBCs(sfc_emis, inc_flux)
+
+    if radiation_mode isa GrayRadiation
+        nbnd_sw = 1
+    else
+        local lookup_sw, idx_gases
+        data_loader(RRTMGP.ArtifactPaths.get_lookup_filename(:gas, :sw)) do ds
+            lookup_sw, idx_gases = RRTMGP.LookUpTables.LookUpSW(ds, FT, DA)
         end
-        if !(radiation_mode isa GrayRadiation)
-            @assert RRTMGP.LookUpTables.get_n_gases(lookup_lw) ==
-                    RRTMGP.LookUpTables.get_n_gases(lookup_sw)
-            @assert lookup_lw.p_ref_min == lookup_sw.p_ref_min
+        lookups = (; lookups..., lookup_sw, idx_gases)
+
+        nbnd_sw = RRTMGP.LookUpTables.get_n_bnd(lookup_sw)
+        ngas = RRTMGP.LookUpTables.get_n_gases(lookup_sw)
+
+        if !(radiation_mode isa ClearSkyRadiation)
+            local lookup_sw_cld
+            data_loader(
+                RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :sw),
+            ) do ds
+                lookup_sw_cld = RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
+            end
+            lookups = (; lookups..., lookup_sw_cld)
         end
+
+        if radiation_mode.aerosol_radiation
+            local lookup_sw_aero, idx_aerosol, idx_aerosize
+            data_loader(
+                RRTMGP.ArtifactPaths.get_lookup_filename(:aerosol, :sw),
+            ) do ds
+                lookup_sw_aero, idx_aerosol, idx_aerosize =
+                    RRTMGP.LookUpTables.LookUpAerosolMerra(ds, FT, DA)
+            end
+        else
+            lookup_sw_aero = nothing
+        end
+        lookups = (; lookups..., lookup_sw_aero)
+    end
+
+    src_sw =
+        RRTMGP.Sources.source_func_shortwave(FT, ncol, nlay, :TwoStream, DA)
+    flux_sw = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
+    fluxb_sw =
+        radiation_mode isa GrayRadiation ? nothing :
+        RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
+    set_and_save!(flux_sw.flux_up, "face_sw_flux_up", t...)
+    set_and_save!(flux_sw.flux_dn, "face_sw_flux_dn", t...)
+    set_and_save!(flux_sw.flux_net, "face_sw_flux", t...)
+    set_and_save!(flux_sw.flux_dn_dir, "face_sw_direct_flux_dn", t...)
+    if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
+        flux_sw2 = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
+        set_and_save!(flux_sw2.flux_up, "face_clear_sw_flux_up", t...)
+        set_and_save!(flux_sw2.flux_dn, "face_clear_sw_flux_dn", t...)
+        set_and_save!(
+            flux_sw2.flux_dn_dir,
+            "face_clear_sw_direct_flux_dn",
+            t...,
+        )
+        set_and_save!(flux_sw2.flux_net, "face_clear_sw_flux", t...)
+    end
+
+    cos_zenith = DA{FT}(undef, ncol)
+    set_and_save!(cos_zenith, "cos_zenith", t..., dict)
+    toa_flux = DA{FT}(undef, ncol)
+    set_and_save!(toa_flux, "weighted_irradiance", t..., dict)
+    sfc_alb_direct = DA{FT}(undef, nbnd_sw, ncol)
+    set_and_save!(sfc_alb_direct, "direct_sw_surface_albedo", t..., dict)
+    sfc_alb_diffuse = DA{FT}(undef, nbnd_sw, ncol)
+    set_and_save!(sfc_alb_diffuse, "diffuse_sw_surface_albedo", t..., dict)
+    name = "top_of_atmosphere_diffuse_sw_flux_dn"
+    if Symbol(name) in keys(dict)
+        @warn "incoming diffuse shortwave fluxes are not yet implemented \
+               in RRTMGP.jl; the value of $name will be ignored"
+        inc_flux_diffuse = DA{FT}(undef, ncol, ngpt_sw)
+        set_and_save!(transpose(inc_flux_diffuse), name, t..., dict)
+    else
+        inc_flux_diffuse = nothing
+    end
+    bcs_sw = RRTMGP.BCs.SwBCs(
+        cos_zenith,
+        toa_flux,
+        sfc_alb_direct,
+        inc_flux_diffuse,
+        sfc_alb_diffuse,
+    )
+
+    set_and_save!(similar(flux_lw.flux_net), "face_flux", t...)
+    if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
+        set_and_save!(similar(flux_lw2.flux_net), "face_clear_flux", t...)
+    end
+    if !(radiation_mode isa GrayRadiation)
+        @assert RRTMGP.LookUpTables.get_n_gases(lookup_lw) ==
+                RRTMGP.LookUpTables.get_n_gases(lookup_sw)
+        @assert lookup_lw.p_ref_min == lookup_sw.p_ref_min
     end
 
     if !(:latitude in keys(dict))
@@ -911,40 +863,23 @@ function RRTMGPModel(
 
     end
 
-    if use_one_scalar_mode
-        op = RRTMGP.Optics.OneScalar(FT, ncol, nlay, DA)
-        sw_solver =
-            RRTMGP.RTE.NoScatSWRTE(context, op, bcs_sw, fluxb_sw, flux_sw)
-        ad = RRTMGP.AngularDiscretizations.AngularDiscretization(FT, DA, 1)
-        lw_solver = RRTMGP.RTE.NoScatLWRTE(
-            context,
-            op,
-            src_lw,
-            bcs_lw,
-            fluxb_lw,
-            flux_lw,
-            ad,
-        )
-    else
-        op = RRTMGP.Optics.TwoStream(FT, ncol, nlay, DA)
-        sw_solver = RRTMGP.RTE.TwoStreamSWRTE(
-            context,
-            op,
-            src_sw,
-            bcs_sw,
-            fluxb_sw,
-            flux_sw,
-        )
-        lw_solver = RRTMGP.RTE.TwoStreamLWRTE(
-            context,
-            op,
-            src_lw,
-            bcs_lw,
-            fluxb_lw,
-            flux_lw,
-        )
-    end
-
+    op = RRTMGP.Optics.TwoStream(FT, ncol, nlay, DA)
+    sw_solver = RRTMGP.RTE.TwoStreamSWRTE(
+        context,
+        op,
+        src_sw,
+        bcs_sw,
+        fluxb_sw,
+        flux_sw,
+    )
+    lw_solver = RRTMGP.RTE.TwoStreamLWRTE(
+        context,
+        op,
+        src_lw,
+        bcs_lw,
+        fluxb_lw,
+        flux_lw,
+    )
 
     if requires_z(interpolation) || requires_z(bottom_extrapolation)
         z_lay = DA{FT}(undef, nlay, ncol)
@@ -966,8 +901,6 @@ function RRTMGPModel(
         interpolation,
         bottom_extrapolation,
         implied_values,
-        disable_longwave,
-        disable_shortwave,
         lookups,
         params,
         lw_solver,
@@ -1007,16 +940,8 @@ function set_array!(array, value::AbstractArray{<:Real}, symbol)
     end
 end
 
-function set_and_save!(
-    array,
-    name,
-    views,
-    domain_nlay,
-    extension_nlay,
-    dict = nothing,
-)
+function set_and_save!(array, name, views, domain_nlay, dict = nothing)
     domain_symbol = Symbol(name)
-    extension_symbol = Symbol("extension_$name")
 
     if isnothing(dict)
         domain_value = NaN
@@ -1034,29 +959,6 @@ function set_and_save!(
         domain_view = view(array, domain_range, :)
         set_array!(domain_view, domain_value, domain_symbol)
         push!(views, (domain_symbol, domain_view))
-
-        if extension_nlay > 0
-            if isnothing(dict)
-                extension_value = NaN
-            else
-                if !(extension_symbol in keys(dict))
-                    if domain_value isa Real
-                        extension_value = domain_value
-                    else
-                        throw(UndefKeywordError(extension_symbol))
-                    end
-                end
-                extension_value = pop!(dict, extension_symbol)
-            end
-
-            extension_range =
-                startswith(name, "center_") ?
-                ((domain_nlay + 1):(domain_nlay + extension_nlay)) :
-                ((domain_nlay + 2):(domain_nlay + extension_nlay + 1))
-            extension_view = view(array, extension_range, :)
-            set_array!(extension_view, extension_value, extension_symbol)
-            push!(views, (extension_symbol, extension_view))
-        end
     else
         set_array!(array, domain_value, domain_symbol)
         push!(views, (domain_symbol, array))
@@ -1070,19 +972,14 @@ Updates the fluxes in the `RRTMGPModel` based on its internal state. Returns the
 net flux at cell faces in the domain, `model.face_flux`. The full set of fluxes
 available in the model after calling this function is
 - `face_flux`
-- `face_lw_flux`, `face_lw_flux_dn`, `face_lw_flux_up` (if `!disable_longwave`)
+- `face_lw_flux`, `face_lw_flux_dn`, `face_lw_flux_up`
 - `face_sw_flux`, `face_sw_flux_dn`, `face_sw_flux_up`, `face_sw_direct_flux_dn`
-  (if `!disable_shortwave`)
 If `radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics`, the set of
 available fluxes also includes
 - `face_clear_flux`
-- `face_clear_lw_flux`, `face_clear_lw_flux_dn`, `face_clear_lw_flux_up` (if
-  `!disable_longwave`)
+- `face_clear_lw_flux`, `face_clear_lw_flux_dn`, `face_clear_lw_flux_up`
 - `face_clear_sw_flux`, `face_clear_sw_flux_dn`, `face_clear_sw_flux_up`,
-  `face_clear_sw_direct_flux_dn` (if `!disable_shortwave`)
-If `extension_nlay > 0`, the set of available fluxes also includes all of the
-aforementioned values prefixed by `extension_`, corresponding to the values at
-cell faces in the extension.
+  `face_clear_sw_direct_flux_dn`
 """
 NVTX.@annotate function update_fluxes!(model, seedval)
     (; radiation_mode) = model
@@ -1097,10 +994,9 @@ NVTX.@annotate function update_fluxes!(model, seedval)
         update_boundary_layer!(model)
     clip_values!(model)
     update_concentrations!(model.radiation_mode, model)
-    !model.disable_longwave && update_lw_fluxes!(model.radiation_mode, model)
-    !model.disable_shortwave && update_sw_fluxes!(model.radiation_mode, model)
-    !(model.disable_longwave || model.disable_shortwave) &&
-        update_net_fluxes!(model.radiation_mode, model)
+    update_lw_fluxes!(model.radiation_mode, model)
+    update_sw_fluxes!(model.radiation_mode, model)
+    update_net_fluxes!(model.radiation_mode, model)
     return model.face_flux
 end
 

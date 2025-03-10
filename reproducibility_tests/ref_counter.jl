@@ -1,4 +1,4 @@
-218
+221
 
 # **README**
 #
@@ -20,6 +20,15 @@
 
 
 #=
+221
+- Change the way cloud liquid effective radius is computed for radiation
+
+220
+- Split out cached variables that should be treated implicitly, so that all
+  other cached variables are no longer updated by the implicit solver
+
+219
+- Change the operations order in vertical advection upwinding
 
 218
 - Change surface flux tendency to fully explicit
@@ -37,7 +46,7 @@
 214
 - Rename some config files
 
-213 
+213
 - Update to deep-atmos eqns by default, fix vorticity diagnostic
 
 212

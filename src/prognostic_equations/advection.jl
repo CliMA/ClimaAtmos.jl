@@ -115,21 +115,27 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
     ᶜρ = Y.c.ρ
-    if :ρe_tot in propertynames(Yₜ.c)
-        (; ᶜh_tot) = p.precomputed
-        for (coeff, upwinding) in ((1, energy_upwinding), (-1, Val(:none)))
-            energy_upwinding isa Val{:none} && continue
-            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), upwinding)
-            @. Yₜ.c.ρe_tot += coeff * vtt
-        end
-    end
+
+    # Full vertical advection of passive tracers (like liq, rai, etc) ...
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
-        for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
-            tracer_upwinding isa Val{:none} && continue
-            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), upwinding)
-            @. ᶜρχₜ += coeff * vtt
-        end
+        χ_name in (:e_tot, :q_tot) && continue
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), tracer_upwinding)
+        @. ᶜρχₜ += vtt
+    end
+    # ... and upwinding correction of energy and total water.
+    # (The central advection of energy and total water is done implicitly.)
+    if energy_upwinding != Val(:none)
+        (; ᶜh_tot) = p.precomputed
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
+        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
+        @. Yₜ.c.ρe_tot += vtt - vtt_central
+    end
+
+    if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
+        ᶜq_tot = ᶜspecific.q_tot
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
+        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
+        @. Yₜ.c.ρq_tot += vtt - vtt_central
     end
 
     if isnothing(ᶠf¹²)
