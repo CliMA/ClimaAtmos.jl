@@ -135,7 +135,9 @@ function get_viscous_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     elseif vs_name in ("true", true, "ViscousSponge")
         zd = params.zd_viscous
         κ₂ = params.kappa_2_sponge
-        ViscousSponge{FT}(; zd, κ₂)
+        dcfl = FT(0.1)
+        κ₂ = dcfl * eltype(zd)(2π*6371e3/parsed_args["h_elem"]/4/parsed_args["nh_poly"]) / eltype(zd)(parsed_args["dt"])/
+        ViscousSponge{FT}(; zd, κ₂) 
     else
         error("Uncaught viscous sponge model `$vs_name`.")
     end
