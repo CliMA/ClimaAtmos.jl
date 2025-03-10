@@ -87,3 +87,9 @@ amip_target_diagedmf
 Aquaplanet setup for AMIP (atmosphere-land simulation). This job includes all the
 working atmosphere components required for AMIP. It will be updated whenever new components are ready.
 ```
+```
+amip_target_edonly
+
+Aquaplanet setup for AMIP (atmosphere-land simulation) without convection. This job includes all the
+working atmosphere components required for AMIP without convection. It will be updated whenever new components are ready.
+```
