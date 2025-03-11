@@ -134,7 +134,7 @@ function get_viscous_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
         nothing
     elseif vs_name in ("true", true, "ViscousSponge")
         zd = params.zd_viscous
-        κ₂ = params.kappa_2_sponge
+        #κ₂ = params.kappa_2_sponge
         κ₂ = FT(8e5)
         #dcfl = FT(0.05)
         #h_elem = parsed_args["h_elem"]
