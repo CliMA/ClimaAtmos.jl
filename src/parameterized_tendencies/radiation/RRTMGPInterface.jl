@@ -529,14 +529,22 @@ function RRTMGPModel(
     fluxb_lw =
         radiation_mode isa GrayRadiation ? nothing :
         RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
-    set_and_save!(flux_lw.flux_up, "face_lw_flux_up", t...)
-    set_and_save!(flux_lw.flux_dn, "face_lw_flux_dn", t...)
-    set_and_save!(flux_lw.flux_net, "face_lw_flux", t...)
+    set_and_save!(transpose(flux_lw.flux_up), "face_lw_flux_up", t...)
+    set_and_save!(transpose(flux_lw.flux_dn), "face_lw_flux_dn", t...)
+    set_and_save!(transpose(flux_lw.flux_net), "face_lw_flux", t...)
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
         flux_lw2 = RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
-        set_and_save!(flux_lw2.flux_up, "face_clear_lw_flux_up", t...)
-        set_and_save!(flux_lw2.flux_dn, "face_clear_lw_flux_dn", t...)
-        set_and_save!(flux_lw2.flux_net, "face_clear_lw_flux", t...)
+        set_and_save!(
+            transpose(flux_lw2.flux_up),
+            "face_clear_lw_flux_up",
+            t...,
+        )
+        set_and_save!(
+            transpose(flux_lw2.flux_dn),
+            "face_clear_lw_flux_dn",
+            t...,
+        )
+        set_and_save!(transpose(flux_lw2.flux_net), "face_clear_lw_flux", t...)
     end
 
     sfc_emis = DA{FT}(undef, nbnd_lw, ncol)
@@ -592,20 +600,32 @@ function RRTMGPModel(
     fluxb_sw =
         radiation_mode isa GrayRadiation ? nothing :
         RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
-    set_and_save!(flux_sw.flux_up, "face_sw_flux_up", t...)
-    set_and_save!(flux_sw.flux_dn, "face_sw_flux_dn", t...)
-    set_and_save!(flux_sw.flux_net, "face_sw_flux", t...)
-    set_and_save!(flux_sw.flux_dn_dir, "face_sw_direct_flux_dn", t...)
+    set_and_save!(transpose(flux_sw.flux_up), "face_sw_flux_up", t...)
+    set_and_save!(transpose(flux_sw.flux_dn), "face_sw_flux_dn", t...)
+    set_and_save!(transpose(flux_sw.flux_net), "face_sw_flux", t...)
+    set_and_save!(
+        transpose(flux_sw.flux_dn_dir),
+        "face_sw_direct_flux_dn",
+        t...,
+    )
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
         flux_sw2 = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
-        set_and_save!(flux_sw2.flux_up, "face_clear_sw_flux_up", t...)
-        set_and_save!(flux_sw2.flux_dn, "face_clear_sw_flux_dn", t...)
         set_and_save!(
-            flux_sw2.flux_dn_dir,
+            transpose(flux_sw2.flux_up),
+            "face_clear_sw_flux_up",
+            t...,
+        )
+        set_and_save!(
+            transpose(flux_sw2.flux_dn),
+            "face_clear_sw_flux_dn",
+            t...,
+        )
+        set_and_save!(
+            transpose(flux_sw2.flux_dn_dir),
             "face_clear_sw_direct_flux_dn",
             t...,
         )
-        set_and_save!(flux_sw2.flux_net, "face_clear_sw_flux", t...)
+        set_and_save!(transpose(flux_sw2.flux_net), "face_clear_sw_flux", t...)
     end
 
     cos_zenith = DA{FT}(undef, ncol)
@@ -633,9 +653,13 @@ function RRTMGPModel(
         sfc_alb_diffuse,
     )
 
-    set_and_save!(similar(flux_lw.flux_net), "face_flux", t...)
+    set_and_save!(similar(transpose(flux_lw.flux_net)), "face_flux", t...)
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-        set_and_save!(similar(flux_lw2.flux_net), "face_clear_flux", t...)
+        set_and_save!(
+            similar(transpose(flux_lw2.flux_net)),
+            "face_clear_flux",
+            t...,
+        )
     end
     if !(radiation_mode isa GrayRadiation)
         @assert RRTMGP.LookUpTables.get_n_gases(lookup_lw) ==
