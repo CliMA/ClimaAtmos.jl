@@ -208,13 +208,13 @@ function compute_coriolis(ᶜcoord, ᶠcoord, params)
         global_geom = Spaces.global_geometry(axes(ᶜcoord))
         if global_geom isa Geometry.DeepSphericalGlobalGeometry
             @info "using deep atmosphere"
-            coriolis_deep(coord::Geometry.LatLongZPoint) = Geometry.LocalVector(
-                Geometry.Cartesian123Vector(zero(Ω), zero(Ω), 2 * Ω),
-                global_geom,
-                coord,
+            coriolis_deep(coord::Geometry.LatLongZPoint) = Geometry.UVWVector(
+                zero(Ω),
+                2 * Ω * cosd(coord.lat),
+                2 * Ω * sind(coord.lat),
             )
-            ᶜf³ = @. CT3(CT123(coriolis_deep(ᶜcoord)))
-            ᶠf¹² = @. CT12(CT123(coriolis_deep(ᶠcoord)))
+            ᶜf³ = @. CT3(coriolis_deep(ᶜcoord))
+            ᶠf¹² = @. CT12(coriolis_deep(ᶠcoord))
         else
             coriolis_shallow(coord::Geometry.LatLongZPoint) =
                 Geometry.WVector(2 * Ω * sind(coord.lat))
