@@ -7,6 +7,7 @@ dt: "450secs"
 t_end: "10days"
 moist: "equil"
 disable_surface_flux_tendency: true
+toml: [toml/baroclinic_wave_equil.toml]
 diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke]
     period: 1days
