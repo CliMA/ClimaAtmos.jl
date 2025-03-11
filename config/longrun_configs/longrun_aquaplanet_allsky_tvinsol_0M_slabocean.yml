@@ -22,3 +22,7 @@ dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 precip_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]
+diagnostics:
+  - short_name: [massa, energya, watera, energyo, watero]
+    period: 1days
+    writer: dict
