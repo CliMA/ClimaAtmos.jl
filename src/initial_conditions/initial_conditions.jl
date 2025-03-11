@@ -1140,7 +1140,7 @@ function (initial_condition::TRMM_LBA)(params)
 
     # Set q_tot to the value implied by the measured pressure and relative
     # humidity profiles (see the definition of relative humidity and equation 37
-    # in Pressel et al.). Note that the measured profiles are different from the
+    # in Pressel et al., 2015). Note that the measured profiles are different from the
     # ones required for hydrostatic balance.
     # TODO: Move this to APL.
     molmass_ratio = TD.Parameters.molmass_ratio(thermo_params)
