@@ -404,12 +404,35 @@ array.
     - `center_z`: z-coordinate in m at cell centers
     - `face_z`: z-coordinate in m at cell faces
 """
-function RRTMGPModel(
+RRTMGPModel(
     params::RRTMGP.Parameters.ARP,
     context;
     ncol::Int,
     domain_nlay::Int,
     radiation_mode::AbstractRRTMGPMode = ClearSkyRadiation(),
+    interpolation::AbstractInterpolation = NoInterpolation(),
+    bottom_extrapolation::AbstractBottomExtrapolation = SameAsInterpolation(),
+    use_global_means_for_well_mixed_gases::Bool = false,
+    kwargs...,
+) = _RRTMGPModel(
+    params,
+    context,
+    radiation_mode;
+    ncol,
+    domain_nlay,
+    interpolation,
+    bottom_extrapolation,
+    use_global_means_for_well_mixed_gases,
+    kwargs...,
+)
+
+# TODO: make this the new interface for the next breaking release.
+function _RRTMGPModel(
+    params::RRTMGP.Parameters.ARP,
+    context,
+    radiation_mode::AbstractRRTMGPMode = ClearSkyRadiation();
+    ncol::Int,
+    domain_nlay::Int,
     interpolation::AbstractInterpolation = NoInterpolation(),
     bottom_extrapolation::AbstractBottomExtrapolation = SameAsInterpolation(),
     use_global_means_for_well_mixed_gases::Bool = false,
