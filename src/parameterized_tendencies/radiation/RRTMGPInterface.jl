@@ -2,6 +2,7 @@ module RRTMGPInterface
 
 import ..AbstractCloudInRadiation
 
+import NCDatasets as NC
 using RRTMGP
 import RRTMGP.AtmosphericStates as AS
 using ClimaCore: DataLayouts, Spaces, Fields
@@ -318,8 +319,7 @@ top/bottom of the atmosphere can be specified as a scalar, or as the full 1D
 array.
 
 # Positional Arguments
-- `data_loader(callback::Function, file_name)`: a function for
-   loading RRTMGP.jl artifacts, stored in `RRTMGPReferenceData/<file_name>`.
+- Artifacts stored in `RRTMGPReferenceData/<file_name>`.
    Should be callable with filenames:
   - `lookup_tables/clearsky_lw.nc`
   - `lookup_tables/cloudysky_lw.nc`
@@ -410,7 +410,6 @@ array.
 """
 function RRTMGPModel(
     params::RRTMGP.Parameters.ARP,
-    data_loader::Function,
     context;
     ncol::Int,
     domain_nlay::Int,
@@ -486,7 +485,7 @@ function RRTMGPModel(
         nbnd_lw = 1
     else
         local lookup_lw, idx_gases
-        data_loader(RRTMGP.ArtifactPaths.get_lookup_filename(:gas, :lw)) do ds
+        NC.Dataset(RRTMGP.ArtifactPaths.get_lookup_filename(:gas, :lw)) do ds
             lookup_lw, idx_gases = RRTMGP.LookUpTables.LookUpLW(ds, FT, DA)
         end
         lookups = (; lookups..., lookup_lw, idx_gases)
@@ -496,7 +495,7 @@ function RRTMGPModel(
 
         if !(radiation_mode isa ClearSkyRadiation)
             local lookup_lw_cld
-            data_loader(
+            NC.Dataset(
                 RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :lw),
             ) do ds
                 lookup_lw_cld = RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
@@ -505,7 +504,7 @@ function RRTMGPModel(
         end
         if radiation_mode.aerosol_radiation
             local lookup_lw_aero, idx_aerosol, idx_aerosize
-            data_loader(
+            NC.Dataset(
                 RRTMGP.ArtifactPaths.get_lookup_filename(:aerosol, :lw),
             ) do ds
                 lookup_lw_aero, idx_aerosol, idx_aerosize =
@@ -554,7 +553,7 @@ function RRTMGPModel(
         nbnd_sw = 1
     else
         local lookup_sw, idx_gases
-        data_loader(RRTMGP.ArtifactPaths.get_lookup_filename(:gas, :sw)) do ds
+        NC.Dataset(RRTMGP.ArtifactPaths.get_lookup_filename(:gas, :sw)) do ds
             lookup_sw, idx_gases = RRTMGP.LookUpTables.LookUpSW(ds, FT, DA)
         end
         lookups = (; lookups..., lookup_sw, idx_gases)
@@ -564,7 +563,7 @@ function RRTMGPModel(
 
         if !(radiation_mode isa ClearSkyRadiation)
             local lookup_sw_cld
-            data_loader(
+            NC.Dataset(
                 RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :sw),
             ) do ds
                 lookup_sw_cld = RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
@@ -574,7 +573,7 @@ function RRTMGPModel(
 
         if radiation_mode.aerosol_radiation
             local lookup_sw_aero, idx_aerosol, idx_aerosize
-            data_loader(
+            NC.Dataset(
                 RRTMGP.ArtifactPaths.get_lookup_filename(:aerosol, :sw),
             ) do ds
                 lookup_sw_aero, idx_aerosol, idx_aerosize =
