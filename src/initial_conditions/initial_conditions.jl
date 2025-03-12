@@ -449,8 +449,9 @@ function shallow_atmos_baroclinic_wave_values(z, ϕ, λ, params, perturb)
     R_d = CAP.R_d(params)
     MSLP = CAP.MSLP(params)
     grav = CAP.grav(params)
-    Ω = CAP.Omega(params)
-    R = CAP.planet_radius(params)
+    𝒳 = FT(20)
+    Ω = CAP.Omega(params) * 𝒳
+    R = CAP.planet_radius(params) / 𝒳 
 
     # Constants from paper
     k = 3

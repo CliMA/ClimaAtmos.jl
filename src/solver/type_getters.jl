@@ -170,7 +170,8 @@ function get_spaces(parsed_args, params, comms_ctx)
     deep = parsed_args["deep_atmosphere"]
 
     h_elem = parsed_args["h_elem"]
-    radius = CAP.planet_radius(params)
+    𝒳 = 20 # Ulrich small planet experiment
+    radius = CAP.planet_radius(params) ./ 𝒳 
     center_space, face_space = if parsed_args["config"] == "sphere"
         nh_poly = parsed_args["nh_poly"]
         quad = Quadratures.GLL{nh_poly + 1}()
