@@ -1,6 +1,8 @@
 initial_condition: "DryBaroclinicWave"
 dt: "10secs"
 t_end: "43200secs"
+h_elem: 8 
+z_elem: 39
 deep_atmosphere: false
 disable_surface_flux_tendency: true
 diagnostics:
