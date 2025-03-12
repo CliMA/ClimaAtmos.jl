@@ -6,6 +6,7 @@ import ClimaComms
 import ClimaCore: DataLayouts, Geometry, Spaces, Fields, Operators
 import Insolation
 import Thermodynamics as TD
+import NCDatasets as NC
 import .Parameters as CAP
 import RRTMGP
 import .RRTMGPInterface as RRTMGPI
@@ -108,7 +109,6 @@ function radiation_model_cache(
     insolation_mode;
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
-    data_loader = rrtmgp_data_loader,
 )
     context = ClimaComms.context(axes(Y.c))
     device = context.device
@@ -150,9 +150,7 @@ function radiation_model_cache(
         latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
     local rrtmgp_model
-    data_loader(
-        RRTMGP.ArtifactPaths.get_input_filename(:gas, :lw),
-    ) do input_data
+    NC.Dataset(RRTMGP.ArtifactPaths.get_input_filename(:gas, :lw)) do input_data
         if radiation_mode isa RRTMGPI.GrayRadiation
             kwargs = (;
                 lapse_rate = 3.5,
@@ -308,7 +306,6 @@ function radiation_model_cache(
 
         rrtmgp_model = RRTMGPI.RRTMGPModel(
             rrtmgp_params,
-            data_loader,
             context;
             ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
             domain_nlay = Spaces.nlevels(axes(Y.c)),
