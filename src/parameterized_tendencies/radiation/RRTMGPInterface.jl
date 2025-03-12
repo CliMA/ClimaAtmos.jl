@@ -264,7 +264,6 @@ struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V}
     radiation_mode::R
     interpolation::I
     bottom_extrapolation::B
-    implied_values::Symbol
     lookups::L
     params::P
     lw_solver::LWS
@@ -303,11 +302,8 @@ After constructing an `RRTMGPModel`, use it as follows:
 - use the values of any fluxes of interest; e.g.,
   `field2array(face_flux_field) .= model.face_flux`
 
-To construct the `RRTMGPModel`, one must specify `center_pressure` and
-`center_temperature`, or `face_pressure` and `face_temperature`, or all four
-values. If only the values at cell centers are specified, the values at cell
-faces are "implied values". Likewise, if only the values at faces are specified,
-the values at centers are "implied values".
+The `RRTMGPModel` assumes that pressure and temperature live on cell centers,
+and internally interpolates data to cell faces when needed.
 
 Every keyword argument that corresponds to an array of cell center or cell face
 values can be specified as a scalar (corresponding to a constant value
@@ -430,49 +426,9 @@ function RRTMGPModel(
                GrayRadiation"
     end
 
-    if (
-        :center_pressure in keys(dict) &&
-        :center_temperature in keys(dict) &&
-        :face_pressure in keys(dict) &&
-        :face_temperature in keys(dict)
-    )
-        if !(interpolation isa NoInterpolation)
-            @warn "interpolation is ignored if both center and face pressures/\
-                   temperatures are specified"
-        end
-        implied_values = :none
-    elseif (
-        :center_pressure in keys(dict) &&
-        :center_temperature in keys(dict) &&
-        !(:face_pressure in keys(dict)) &&
-        !(:face_temperature in keys(dict))
-    )
-        if interpolation isa NoInterpolation
-            error("interpolation cannot be NoInterpolation if only center \
-                   pressures/temperatures are specified")
-        end
-        implied_values = :face
-    elseif (
-        !(:center_pressure in keys(dict)) &&
-        !(:center_temperature in keys(dict)) &&
-        :face_pressure in keys(dict) &&
-        :face_temperature in keys(dict)
-    )
-        if interpolation isa NoInterpolation
-            error("interpolation cannot be NoInterpolation if only face \
-                   pressures/temperatures are specified")
-        end
-        implied_values = :center
-    else
-        error("please specify either center_pressure and center_temperature, \
-               or face_pressure and face_temperature, or all four values")
-    end
-
-    if implied_values != :face
-        if !(bottom_extrapolation isa SameAsInterpolation)
-            @warn "bottom_extrapolation is ignored if face_pressure and \
-                   face_temperature are specified"
-        end
+    if interpolation isa NoInterpolation
+        error("interpolation cannot be NoInterpolation if only center \
+               pressures/temperatures are specified")
     end
 
     lookups = NamedTuple()
@@ -652,20 +608,14 @@ function RRTMGPModel(
 
     p_lev = DA{FT}(undef, nlay + 1, ncol)
     t_lev = DA{FT}(undef, nlay + 1, ncol)
-    if implied_values != :face
-        set_and_save!(p_lev, "face_pressure", t..., dict)
-        set_and_save!(t_lev, "face_temperature", t..., dict)
-    end
     t_sfc = DA{FT}(undef, ncol)
     set_and_save!(t_sfc, "surface_temperature", t..., dict)
 
     if radiation_mode isa GrayRadiation
         p_lay = DA{FT}(undef, nlay, ncol)
         t_lay = DA{FT}(undef, nlay, ncol)
-        if implied_values != :center
-            set_and_save!(p_lay, "center_pressure", t..., dict)
-            set_and_save!(t_lay, "center_temperature", t..., dict)
-        end
+        set_and_save!(p_lay, "center_pressure", t..., dict)
+        set_and_save!(t_lay, "center_temperature", t..., dict)
 
         z_lev = DA{FT}(undef, nlay + 1, ncol) # TODO: z_lev required but unused
 
@@ -696,11 +646,9 @@ function RRTMGPModel(
         p_lay = view(layerdata, 2, :, :)
         t_lay = view(layerdata, 3, :, :)
         rh_lay = view(layerdata, 4, :, :)
-        if implied_values != :center
-            set_and_save!(p_lay, "center_pressure", t..., dict)
-            set_and_save!(t_lay, "center_temperature", t..., dict)
-            set_and_save!(rh_lay, "center_relative_humidity", t..., dict)
-        end
+        set_and_save!(p_lay, "center_pressure", t..., dict)
+        set_and_save!(t_lay, "center_temperature", t..., dict)
+        set_and_save!(rh_lay, "center_relative_humidity", t..., dict)
         vmr_str = "volume_mixing_ratio_"
         gas_names = filter(
             gas_name ->
@@ -899,7 +847,6 @@ function RRTMGPModel(
         radiation_mode,
         interpolation,
         bottom_extrapolation,
-        implied_values,
         lookups,
         params,
         lw_solver,
@@ -988,7 +935,7 @@ NVTX.@annotate function update_fluxes!(model, seedval)
     )
         radiation_mode.reset_rng_seed && Random.seed!(seedval)
     end
-    model.implied_values != :none && update_implied_values!(model)
+    update_implied_values!(model)
     model.radiation_mode.add_isothermal_boundary_layer &&
         update_boundary_layer!(model)
     clip_values!(model)
@@ -1015,25 +962,18 @@ function update_implied_values!(model)
         z_lay = parent(model.center_z)
         z_lev = parent(model.face_z)
     end
-    if model.implied_values == :center
-        mode = model.interpolation
-        outs = requires_z(mode) ? (p_lay, t_lay, z_lay) : (p_lay, t_lay)
-        ins = requires_z(mode) ? (p_lev, t_lev, z_lev) : (p_lev, t_lev)
-        update_views(interp!, mode, outs, ins, (), 1:nlay, 1:nlay, 2:(nlay + 1))
-    else # model.implied_values == :face
-        mode = model.interpolation
-        outs = requires_z(mode) ? (p_lev, t_lev, z_lev) : (p_lev, t_lev)
-        ins = requires_z(mode) ? (p_lay, t_lay, z_lay) : (p_lay, t_lay)
-        update_views(interp!, mode, outs, ins, (), 2:nlay, 1:(nlay - 1), 2:nlay)
-        others = (t_sfc, model.params)
-        update_views(extrap!, mode, outs, ins, others, nlay + 1, nlay, nlay - 1)
-        mode =
-            model.bottom_extrapolation isa SameAsInterpolation ?
-            model.interpolation : model.bottom_extrapolation
-        outs = requires_z(mode) ? (p_lev, t_lev, z_lev) : (p_lev, t_lev)
-        ins = requires_z(mode) ? (p_lay, t_lay, z_lay) : (p_lay, t_lay)
-        update_views(extrap!, mode, outs, ins, others, 1, 1, 2)
-    end
+    mode = model.interpolation
+    outs = requires_z(mode) ? (p_lev, t_lev, z_lev) : (p_lev, t_lev)
+    ins = requires_z(mode) ? (p_lay, t_lay, z_lay) : (p_lay, t_lay)
+    update_views(interp!, mode, outs, ins, (), 2:nlay, 1:(nlay - 1), 2:nlay)
+    others = (t_sfc, model.params)
+    update_views(extrap!, mode, outs, ins, others, nlay + 1, nlay, nlay - 1)
+    mode =
+        model.bottom_extrapolation isa SameAsInterpolation ?
+        model.interpolation : model.bottom_extrapolation
+    outs = requires_z(mode) ? (p_lev, t_lev, z_lev) : (p_lev, t_lev)
+    ins = requires_z(mode) ? (p_lay, t_lay, z_lay) : (p_lay, t_lay)
+    update_views(extrap!, mode, outs, ins, others, 1, 1, 2)
 end
 
 update_views(f, mode, outs, ins, others, out_range, in_range1, in_range2) = f(
