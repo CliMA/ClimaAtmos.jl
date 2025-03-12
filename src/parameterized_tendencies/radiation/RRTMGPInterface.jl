@@ -934,9 +934,17 @@ function RRTMGPModel(
     )
 end
 
+import LinearAlgebra
+import ClimaCore.DataLayouts: parent_array_type
+parent_array_type(::Type{<:LinearAlgebra.Transpose{T, P}}) where {T, P} =
+    parent_array_type(P)
+
+safe_fill!(array::LinearAlgebra.Transpose, value) =
+    fill!(transpose(array), value)
+safe_fill!(array, value) = fill!(array, value)
 # This sets `array .= value`, but it allows `array` to be to be a `CuArray`
 # while `value` is an `Array` (in which case broadcasting throws an error).
-set_array!(array, value::Real, symbol) = fill!(array, value)
+set_array!(array, value::Real, symbol) = safe_fill!(array, value)
 function set_array!(array, value::AbstractArray{<:Real}, symbol)
     if ndims(array) == 2
         if size(value) == size(array)
@@ -947,7 +955,7 @@ function set_array!(array, value::AbstractArray{<:Real}, symbol)
             end
         elseif size(value) == (1, size(array, 2))
             for (icol, col) in enumerate(eachcol(array))
-                fill!(col, value[1, icol])
+                safe_fill!(col, value[1, icol])
             end
         else
             error("expected $symbol to be an array of size $(size(array)), \
@@ -963,11 +971,6 @@ function set_array!(array, value::AbstractArray{<:Real}, symbol)
         end
     end
 end
-
-import LinearAlgebra
-import ClimaCore.DataLayouts: parent_array_type
-parent_array_type(::Type{<:LinearAlgebra.Transpose{T, P}}) where {T, P} =
-    parent_array_type(P)
 
 function set_and_save!(array, name, views, domain_nlay, dict = nothing)
     domain_symbol = Symbol(name)
