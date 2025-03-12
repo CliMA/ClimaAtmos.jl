@@ -4,6 +4,11 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+v0.28.7
+-------
+
+### Remove precipitation from cache
+And move all the fields into precomputed
 
 v0.28.6
 -------
