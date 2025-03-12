@@ -1,12 +1,11 @@
-dt_save_state_to_disk: "2days"
 initial_condition: "DryBaroclinicWave"
-dt: "400secs"
-t_end: "10days"
+dt: "10secs"
+t_end: "43200secs"
 deep_atmosphere: false
 disable_surface_flux_tendency: true
 diagnostics:
   - short_name: [pfull, ua, wa, va, rv, ta, ke]
-    period: 1days
+    period: 4320secs
   - short_name: [pfull, ua, wa, va, rv, ta, ke]
     period: 1days
     writer: h5
