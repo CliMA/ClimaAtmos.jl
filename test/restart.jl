@@ -276,7 +276,6 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :ghost_buffer,
             # Computed in tendencies (which are not computed in this case)
             :hyperdiff,
-            :precipitation,
             # rc is some CUDA/CuArray internal object that we don't care about
             :rc,
             # DataHandlers contains caches, so they are stateful

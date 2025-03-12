@@ -710,12 +710,12 @@ function compute_pr!(
     },
 )
     if isnothing(out)
-        return cache.precipitation.surface_rain_flux .+
-               cache.precipitation.surface_snow_flux
+        return cache.precomputed.surface_rain_flux .+
+               cache.precomputed.surface_snow_flux
     else
         out .=
-            cache.precipitation.surface_rain_flux .+
-            cache.precipitation.surface_snow_flux
+            cache.precomputed.surface_rain_flux .+
+            cache.precomputed.surface_snow_flux
     end
 end
 
@@ -745,9 +745,9 @@ function compute_prra!(
     },
 )
     if isnothing(out)
-        return cache.precipitation.surface_rain_flux
+        return cache.precomputed.surface_rain_flux
     else
-        out .= cache.precipitation.surface_rain_flux
+        out .= cache.precomputed.surface_rain_flux
     end
 end
 
@@ -777,9 +777,9 @@ function compute_prsn!(
     },
 )
     if isnothing(out)
-        return cache.precipitation.surface_snow_flux
+        return cache.precomputed.surface_snow_flux
     else
-        out .= cache.precipitation.surface_snow_flux
+        out .= cache.precomputed.surface_snow_flux
     end
 end
 
@@ -933,7 +933,7 @@ add_diagnostic_variable!(
     standard_name = "atmosphere_mass_content_of_cloud_condensed_water",
     units = "kg m-2",
     comments = """
-    Mass of condensed (liquid + ice) water in the column divided by the area of the column 
+    Mass of condensed (liquid + ice) water in the column divided by the area of the column
     (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
     """,
     compute! = compute_clwvi!,
