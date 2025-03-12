@@ -964,6 +964,11 @@ function set_array!(array, value::AbstractArray{<:Real}, symbol)
     end
 end
 
+import LinearAlgebra
+import ClimaCore.DataLayouts: parent_array_type
+parent_array_type(::Type{<:LinearAlgebra.Transpose{T, P}}) where {T, P} =
+    parent_array_type(P)
+
 function set_and_save!(array, name, views, domain_nlay, dict = nothing)
     domain_symbol = Symbol(name)
 
