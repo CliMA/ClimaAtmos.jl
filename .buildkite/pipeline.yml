@@ -23,16 +23,14 @@ steps:
     command:
       - "echo $$JULIA_DEPOT_PATH"
 
+      - echo "--- Check that ClimaAtmos is developed in Manifest"
+      - julia --check-bounds=yes -e 'using TOML; @assert TOML.parsefile(".buildkite/Manifest-v1.11.toml")["deps"]["ClimaAtmos"][1]["path"] == ".."'
+
       - echo "--- Instantiate project"
-      - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - "julia --project -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project -e 'using Pkg; Pkg.status()'"
+      - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.precompile(); Pkg.status()'"
 
       - echo "--- Instantiate .buildkite"
-      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - "julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project=.buildkite -e 'using CUDA; CUDA.precompile_runtime()'"
-      - "julia --project=.buildkite -e 'using Pkg; Pkg.status()'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.precompile(;strict=true); using CUDA; CUDA.precompile_runtime(); Pkg.status()'"
 
     agents:
       slurm_cpus_per_task: 8
