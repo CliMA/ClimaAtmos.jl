@@ -102,20 +102,23 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     T_max = CAP.optics_lookup_temperature_max(params)
 
     sfc_ts = sfc_conditions.ts
-    sfc_T = Fields.array2field(rrtmgp_model.surface_temperature, axes(sfc_ts))
+    sfc_T =
+        Fields.array2field(rrtmgp_model.views.surface_temperature, axes(sfc_ts))
     @. sfc_T = TD.air_temperature(thermo_params, sfc_ts)
 
-    rrtmgp_model.center_pressure .= Fields.field2array(ᶜp)
-    ᶜT = Fields.array2field(rrtmgp_model.center_temperature, axes(Y.c))
+    rrtmgp_model.views.center_pressure .= Fields.field2array(ᶜp)
+    ᶜT = Fields.array2field(rrtmgp_model.views.center_temperature, axes(Y.c))
     # TODO: move this to RRTMGP
     @. ᶜT =
         min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
 
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
-        ᶜrh =
-            Fields.array2field(rrtmgp_model.center_relative_humidity, axes(Y.c))
+        ᶜrh = Fields.array2field(
+            rrtmgp_model.views.center_relative_humidity,
+            axes(Y.c),
+        )
         ᶜvmr_h2o = Fields.array2field(
-            rrtmgp_model.center_volume_mixing_ratio_h2o,
+            rrtmgp_model.views.center_volume_mixing_ratio_h2o,
             axes(Y.c),
         )
         if radiation_mode.idealized_h2o
@@ -164,23 +167,23 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         if !radiation_mode.idealized_clouds
             ᶜΔz = Fields.Δz_field(Y.c)
             ᶜlwp = Fields.array2field(
-                rrtmgp_model.center_cloud_liquid_water_path,
+                rrtmgp_model.views.center_cloud_liquid_water_path,
                 axes(Y.c),
             )
             ᶜiwp = Fields.array2field(
-                rrtmgp_model.center_cloud_ice_water_path,
+                rrtmgp_model.views.center_cloud_ice_water_path,
                 axes(Y.c),
             )
             ᶜfrac = Fields.array2field(
-                rrtmgp_model.center_cloud_fraction,
+                rrtmgp_model.views.center_cloud_fraction,
                 axes(Y.c),
             )
             ᶜreliq = Fields.array2field(
-                rrtmgp_model.center_cloud_liquid_effective_radius,
+                rrtmgp_model.views.center_cloud_liquid_effective_radius,
                 axes(Y.c),
             )
             ᶜreice = Fields.array2field(
-                rrtmgp_model.center_cloud_ice_effective_radius,
+                rrtmgp_model.views.center_cloud_ice_effective_radius,
                 axes(Y.c),
             )
             # RRTMGP needs lwp and iwp in g/m^2
@@ -274,16 +277,16 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         end
         if :o3 in propertynames(p.tracers)
             ᶜvmr_o3 = Fields.array2field(
-                rrtmgp_model.center_volume_mixing_ratio_o3,
+                rrtmgp_model.views.center_volume_mixing_ratio_o3,
                 axes(Y.c),
             )
             @. ᶜvmr_o3 = p.tracers.o3
         end
         if :co2 in propertynames(p.tracers)
             if pkgversion(ClimaUtilities) < v"0.1.21"
-                rrtmgp_model.volume_mixing_ratio_co2 .= p.tracers.co2
+                rrtmgp_model.views.volume_mixing_ratio_co2 .= p.tracers.co2
             else
-                rrtmgp_model.volume_mixing_ratio_co2 .= p.tracers.co2[]
+                rrtmgp_model.views.volume_mixing_ratio_co2 .= p.tracers.co2[]
             end
         end
     end
@@ -291,7 +294,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
     RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(t / integrator.p.dt))
-    Fields.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
+    Fields.field2array(ᶠradiation_flux) .= rrtmgp_model.views.face_flux
     return nothing
 end
 
@@ -300,14 +303,15 @@ end
 function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
     FT = Spaces.undertype(axes(Y.c))
     (; rrtmgp_model) = p.radiation
-    rrtmgp_model.cos_zenith .= cosd(FT(42.05))
-    rrtmgp_model.weighted_irradiance .= FT(551.58)
+    rrtmgp_model.views.cos_zenith .= cosd(FT(42.05))
+    rrtmgp_model.views.weighted_irradiance .= FT(551.58)
 end
 
 function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
     (; rrtmgp_model) = p.radiation
-    rrtmgp_model.cos_zenith .= Fields.field2array(p.external_forcing.cos_zenith)
-    rrtmgp_model.weighted_irradiance .=
+    rrtmgp_model.views.cos_zenith .=
+        Fields.field2array(p.external_forcing.cos_zenith)
+    rrtmgp_model.views.weighted_irradiance .=
         Fields.field2array(p.external_forcing.insolation)
 end
 
@@ -321,11 +325,11 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     end
     (; rrtmgp_model) = p.radiation
     # perpetual equinox with no diurnal cycle
-    rrtmgp_model.cos_zenith .= cos(FT(π) / 3)
+    rrtmgp_model.views.cos_zenith .= cos(FT(π) / 3)
     weighted_irradiance =
         @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
            (4 * cos(FT(π) / 3))
-    rrtmgp_model.weighted_irradiance .= weighted_irradiance
+    rrtmgp_model.views.weighted_irradiance .= weighted_irradiance
 end
 
 function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
@@ -352,9 +356,9 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
         )
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     cos_zenith =
-        Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
+        Fields.array2field(rrtmgp_model.views.cos_zenith, axes(bottom_coords))
     weighted_irradiance = Fields.array2field(
-        rrtmgp_model.weighted_irradiance,
+        rrtmgp_model.views.weighted_irradiance,
         axes(bottom_coords),
     )
     if eltype(bottom_coords) <: Geometry.LatLongZPoint

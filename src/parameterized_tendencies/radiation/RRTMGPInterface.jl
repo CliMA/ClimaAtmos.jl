@@ -275,19 +275,6 @@ end
 # Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
 Adapt.@adapt_structure RRTMGPModel
 
-function Base.getproperty(model::RRTMGPModel, s::Symbol)
-    if s in fieldnames(typeof(model))
-        return getfield(model, s)
-    else
-        return getproperty(getfield(model, :views), s)
-    end
-end
-
-function Base.propertynames(model::RRTMGPModel, private::Bool = false)
-    names = propertynames(getfield(model, :views))
-    return private ? (names..., fieldnames(typeof(model))...) : names
-end
-
 """
     lookup_tables(::AbstractRRTMGPMode, device, FloatType)
 
@@ -427,16 +414,12 @@ end
 """
     RRTMGPModel(params; kwargs...)
 
-A user-friendly interface for `RRTMGP.jl`. Stores an `RRTMGP.RTE.Solver`, along
-with all of the data required to use it. Provides easy access to `RRTMGP`'s
-inputs and outputs (e.g., `model.center_temperature` and `model.face_flux`).
-
 After constructing an `RRTMGPModel`, use it as follows:
 - update all the inputs that have changed since it was constructed; e.g.,
   `model.center_temperature .= field2array(current_center_temperature_field)`
 - call `update_fluxes!(model)`
 - use the values of any fluxes of interest; e.g.,
-  `field2array(face_flux_field) .= model.face_flux`
+  `field2array(face_flux_field) .= model.views.face_flux`
 
 The `RRTMGPModel` assumes that pressure and temperature live on cell centers,
 and internally interpolates data to cell faces when needed.
@@ -979,8 +962,8 @@ end
     update_fluxes!(model, seedval)
 
 Updates the fluxes in the `RRTMGPModel` based on its internal state. Returns the
-net flux at cell faces in the domain, `model.face_flux`. The full set of fluxes
-available in the model after calling this function is
+net flux at cell faces in the domain, `model.views.face_flux`. The full set of
+fluxes available in the model after calling this function is
 - `face_flux`
 - `face_lw_flux`, `face_lw_flux_dn`, `face_lw_flux_up`
 - `face_sw_flux`, `face_sw_flux_dn`, `face_sw_flux_up`, `face_sw_direct_flux_dn`
@@ -1003,11 +986,11 @@ NVTX.@annotate function update_fluxes!(model, seedval)
     model.radiation_mode.add_isothermal_boundary_layer &&
         update_boundary_layer!(model)
     clip_values!(model)
-    update_concentrations!(model.radiation_mode, model)
-    update_lw_fluxes!(model.radiation_mode, model)
-    update_sw_fluxes!(model.radiation_mode, model)
+    update_concentrations!(model.radiation_mode, model) # call RRTMGP
+    update_lw_fluxes!(model.radiation_mode, model)      # call RRTMGP
+    update_sw_fluxes!(model.radiation_mode, model)      # call RRTMGP
     update_net_fluxes!(model.radiation_mode, model)
-    return model.face_flux
+    return model.views.face_flux
 end
 
 get_p_min(model) = get_p_min(model.as, model.lookups)
@@ -1023,8 +1006,8 @@ function update_implied_values!(model)
     nlay =
         size(p_lay, 1) - Int(model.radiation_mode.add_isothermal_boundary_layer)
     if requires_z(model.interpolation) || requires_z(model.bottom_extrapolation)
-        z_lay = parent(model.center_z)
-        z_lev = parent(model.face_z)
+        z_lay = parent(model.views.center_z)
+        z_lev = parent(model.views.face_z)
     end
     mode = model.interpolation
     outs = requires_z(mode) ? (p_lev, t_lev, z_lev) : (p_lev, t_lev)
@@ -1058,14 +1041,12 @@ are the same as in the layer below it)
 function update_boundary_layer!(model)
     as = model.as
     p_min = get_p_min(model)
-    @views AS.getview_p_lay(model.as)[end, :] .=
-        (as.p_lev[end - 1, :] .+ p_min) ./ 2
+    @views AS.getview_p_lay(model.as)[end, :] .= (as.p_lev[end - 1, :] .+ p_min) ./ 2
     @views as.p_lev[end, :] .= p_min
     @views AS.getview_t_lay(model.as)[end, :] .= as.t_lev[end - 1, :]
     @views as.t_lev[end, :] .= as.t_lev[end - 1, :]
     if !(model.radiation_mode isa GrayRadiation)
-        @views AS.getview_rel_hum(model.as)[end, :] .=
-            AS.getview_rel_hum(model.as)[end - 1, :]
+        @views AS.getview_rel_hum(model.as)[end, :] .= AS.getview_rel_hum(model.as)[end - 1, :]
     end
     update_boundary_layer_vmr!(model.radiation_mode, as)
     update_boundary_layer_cloud!(model.radiation_mode, as)
@@ -1089,14 +1070,10 @@ update_boundary_layer_cloud!(
 ) = update_boundary_layer_cloud!(as.cloud_state)
 
 function update_boundary_layer_cloud!(cloud_state)
-    @views cloud_state.cld_r_eff_liq[end, :] .=
-        cloud_state.cld_r_eff_liq[end - 1, :]
-    @views cloud_state.cld_r_eff_ice[end, :] .=
-        cloud_state.cld_r_eff_ice[end - 1, :]
-    @views cloud_state.cld_path_liq[end, :] .=
-        cloud_state.cld_path_liq[end - 1, :]
-    @views cloud_state.cld_path_ice[end, :] .=
-        cloud_state.cld_path_ice[end - 1, :]
+    @views cloud_state.cld_r_eff_liq[end, :] .= cloud_state.cld_r_eff_liq[end - 1, :]
+    @views cloud_state.cld_r_eff_ice[end, :] .= cloud_state.cld_r_eff_ice[end - 1, :]
+    @views cloud_state.cld_path_liq[end, :] .= cloud_state.cld_path_liq[end - 1, :]
+    @views cloud_state.cld_path_ice[end, :] .= cloud_state.cld_path_ice[end - 1, :]
     @views cloud_state.cld_frac[end, :] .= cloud_state.cld_frac[end - 1, :]
 end
 
@@ -1107,10 +1084,8 @@ update_boundary_layer_aerosol!(::Nothing) = nothing
 function update_boundary_layer_aerosol!(
     aerosol_state::RRTMGP.AtmosphericStates.AerosolState,
 )
-    @views aerosol_state.aero_size[:, end, :] .=
-        aerosol_state.aero_size[:, end - 1, :]
-    @views aerosol_state.aero_mass[:, end, :] .=
-        aerosol_state.aero_mass[:, end - 1, :]
+    @views aerosol_state.aero_size[:, end, :] .= aerosol_state.aero_size[:, end - 1, :]
+    @views aerosol_state.aero_mass[:, end, :] .= aerosol_state.aero_mass[:, end - 1, :]
 end
 
 function clip_values!(model)
@@ -1167,9 +1142,9 @@ NVTX.@annotate function update_lw_fluxes!(
         nothing,
         model.lookups.lookup_lw_aero,
     )
-    parent(model.face_clear_lw_flux_up) .= parent(model.face_lw_flux_up)
-    parent(model.face_clear_lw_flux_dn) .= parent(model.face_lw_flux_dn)
-    parent(model.face_clear_lw_flux) .= parent(model.face_lw_flux)
+    parent(model.views.face_clear_lw_flux_up) .= parent(model.views.face_lw_flux_up)
+    parent(model.views.face_clear_lw_flux_dn) .= parent(model.views.face_lw_flux_dn)
+    parent(model.views.face_clear_lw_flux) .= parent(model.views.face_lw_flux)
     RRTMGP.RTESolver.solve_lw!(
         model.lw_solver,
         model.as,
@@ -1208,11 +1183,13 @@ NVTX.@annotate function update_sw_fluxes!(
         nothing,
         model.lookups.lookup_sw_aero,
     )
-    parent(model.face_clear_sw_flux_up) .= parent(model.face_sw_flux_up)
-    parent(model.face_clear_sw_flux_dn) .= parent(model.face_sw_flux_dn)
-    parent(model.face_clear_sw_direct_flux_dn) .=
-        parent(model.face_sw_direct_flux_dn)
-    parent(model.face_clear_sw_flux) .= parent(model.face_sw_flux)
+    parent(model.views.face_clear_sw_flux_up) .=
+        parent(model.views.face_sw_flux_up)
+    parent(model.views.face_clear_sw_flux_dn) .=
+        parent(model.views.face_sw_flux_dn)
+    parent(model.views.face_clear_sw_direct_flux_dn) .=
+        parent(model.views.face_sw_direct_flux_dn)
+    parent(model.views.face_clear_sw_flux) .= parent(model.views.face_sw_flux)
     RRTMGP.RTESolver.solve_sw!(
         model.sw_solver,
         model.as,
@@ -1223,13 +1200,15 @@ NVTX.@annotate function update_sw_fluxes!(
 end
 
 function update_net_fluxes!(_, model)
-    model.face_flux .= model.face_lw_flux .+ model.face_sw_flux
+    model.views.face_flux .=
+        model.views.face_lw_flux .+ model.views.face_sw_flux
 
 end
 function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
-    model.face_clear_flux .=
-        model.face_clear_lw_flux .+ model.face_clear_sw_flux
-    model.face_flux .= model.face_lw_flux .+ model.face_sw_flux
+    model.views.face_clear_flux .=
+        model.views.face_clear_lw_flux .+ model.views.face_clear_sw_flux
+    model.views.face_flux .=
+        model.views.face_lw_flux .+ model.views.face_sw_flux
 end
 
 end # end module

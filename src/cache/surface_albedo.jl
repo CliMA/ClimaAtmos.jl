@@ -56,7 +56,7 @@ Set the surface albedo to a constant value.
 function set_surface_albedo!(Y, p, t, α_model::ConstantAlbedo{FT}) where {FT}
 
     (; direct_sw_surface_albedo, diffuse_sw_surface_albedo) =
-        p.radiation.rrtmgp_model
+        p.radiation.rrtmgp_model.views
 
     @. direct_sw_surface_albedo = α_model.α
     @. diffuse_sw_surface_albedo = α_model.α
@@ -75,7 +75,7 @@ function set_surface_albedo!(
 ) where {FT}
 
     (; direct_sw_surface_albedo, diffuse_sw_surface_albedo, cos_zenith) =
-        p.radiation.rrtmgp_model
+        p.radiation.rrtmgp_model.views
 
     λ = FT(0) # spectral wavelength (not used for now)
     μ = cos_zenith
@@ -117,8 +117,8 @@ function set_surface_albedo!(Y, p, t, ::CouplerAlbedo)
             set_insolation_variables!(Y, p, t, p.atmos.insolation)
         # set surface albedo to 0.38
         @warn "Setting surface albedo to 0.38 at the beginning of the simulation"
-        p.radiation.rrtmgp_model.direct_sw_surface_albedo .= FT(0.38)
-        p.radiation.rrtmgp_model.diffuse_sw_surface_albedo .= FT(0.38)
+        p.radiation.rrtmgp_model.views.direct_sw_surface_albedo .= FT(0.38)
+        p.radiation.rrtmgp_model.views.diffuse_sw_surface_albedo .= FT(0.38)
     else
         nothing
     end
