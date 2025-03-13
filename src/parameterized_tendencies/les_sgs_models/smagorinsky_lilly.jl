@@ -9,14 +9,14 @@ import ClimaCore: Geometry
 """
     set_smagorinsky_lilly_precomputed_quantities!(Y, p)
 
-Compute the Smagorinsky-Lilly diffusivity tensors, `ᶜτ_smag`, `ᶠτ_smag`, `ᶜD_smag`, and `ᶠD_smag`. 
+Compute the Smagorinsky-Lilly diffusivity tensors, `ᶜτ_smag`, `ᶠτ_smag`, `ᶜD_smag`, and `ᶠD_smag`.
 Store in the precomputed quantities `p.precomputed`.
 
-The subgrid-scale momentum flux tensor is defined by `τ = -2 νₜ ∘ S`, where `νₜ` is the Smagorinsky-Lilly eddy viscosity 
-and `S` is the strain rate tensor. 
+The subgrid-scale momentum flux tensor is defined by `τ = -2 νₜ ∘ S`, where `νₜ` is the Smagorinsky-Lilly eddy viscosity
+and `S` is the strain rate tensor.
 
-The turbulent diffusivity is defined as `D = νₜ / Pr_t`, where `Pr_t` is the turbulent Prandtl number for neutral 
-stratification. 
+The turbulent diffusivity is defined as `D = νₜ / Pr_t`, where `Pr_t` is the turbulent Prandtl number for neutral
+stratification.
 
 These quantities are computed for both cell centers and faces, with prefixes `ᶜ` and `ᶠ`, respectively.
 
@@ -163,13 +163,22 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
         bottom = Operators.SetValue(
             χ_name == :q_tot ? sfc_conditions.ρ_flux_q_tot : sfc_zero,
         )
+        bottom = Operators.SetValue(
+            χ_name == :q_liq ? sfc_conditions.ρ_flux_q_liq : sfc_zero,
+        )
+        bottom = Operators.SetValue(
+            χ_name == :q_ice ? sfc_conditions.ρ_flux_q_ice : sfc_zero,
+        )
+        bottom = Operators.SetValue(
+            χ_name == :q_rai ? sfc_conditions.ρ_flux_q_rai : sfc_zero,
+        )
+        bottom = Operators.SetValue(
+            χ_name == :q_sno ? sfc_conditions.ρ_flux_q_sno : sfc_zero,
+        )
         ᶜdivᵥ_ρχ = Operators.DivergenceF2C(; top, bottom)
 
         ᶜ∇ᵥρD∇χₜ = @. ᶜtemp_scalar = ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜχ)))
         @. ᶜρχₜ -= ᶜ∇ᵥρD∇χₜ
-        # Rain and snow does not affect the mass
-        if χ_name ∉ (:q_rai, :q_sno)
-            @. Yₜ.c.ρ -= ᶜ∇ᵥρD∇χₜ
-        end
+        @. Yₜ.c.ρ -= ᶜ∇ᵥρD∇χₜ
     end
 end

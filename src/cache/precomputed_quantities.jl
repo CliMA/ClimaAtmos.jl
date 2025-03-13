@@ -59,6 +59,10 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜρa⁰ = similar(Y.c, FT),
             ᶜmse⁰ = similar(Y.c, FT),
             ᶜq_tot⁰ = similar(Y.c, FT),
+            ᶜq_liq⁰ = similar(Y.c, FT),
+            ᶜq_ice⁰ = similar(Y.c, FT),
+            ᶜq_rai⁰ = similar(Y.c, FT),
+            ᶜq_sno⁰ = similar(Y.c, FT),
             ᶠu₃⁰ = similar(Y.f, C3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
@@ -135,12 +139,12 @@ function precomputed_quantities(Y, atmos)
         (; ᶜSqₜᵖʲs = similar(Y.c, NTuple{n, FT}), ᶜSqₜᵖ⁰ = similar(Y.c, FT)) :
         atmos.precip_model isa Microphysics1Moment ?
         (;
-            ᶜSeₜᵖʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSqₜᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqₗᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqᵢᵖʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqᵣᵖʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqₛᵖʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSeₜᵖ⁰ = similar(Y.c, FT),
-            ᶜSqₜᵖ⁰ = similar(Y.c, FT),
+            ᶜSqₗᵖ⁰ = similar(Y.c, FT),
+            ᶜSqᵢᵖ⁰ = similar(Y.c, FT),
             ᶜSqᵣᵖ⁰ = similar(Y.c, FT),
             ᶜSqₛᵖ⁰ = similar(Y.c, FT),
         ) : (;)

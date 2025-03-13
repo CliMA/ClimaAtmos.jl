@@ -92,6 +92,12 @@ function set_dummy_surface_conditions!(p)
             TD.PhasePartition(FT(0)),
         )
         @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
+        if atmos.moisture_model isa NonEquilMoistModel and atmos.precip_model isa Microphysics1M
+            @. sfc_conditions.ρ_flux_q_liq = C3(FT(0))
+            @. sfc_conditions.ρ_flux_q_ice = C3(FT(0))
+            @. sfc_conditions.ρ_flux_q_rai = C3(FT(0))
+            @. sfc_conditions.ρ_flux_q_sno = C3(FT(0))
+        end
     end
     @. sfc_conditions.ρ_flux_h_tot = C3(FT(0))
 
@@ -436,7 +442,17 @@ function atmos_surface_conditions(
     energy_flux = (; ρ_flux_h_tot = vector_from_component(shf + lhf, z))
 
     # NOTE: Technically, ρ_flux_q_tot is not needed when the model is Dry ...
-    moisture_flux = (; ρ_flux_q_tot = vector_from_component(evaporation, z))
+    if atmos.moisture_model isa NonEquilMoistModel and atmos.precip_model isa Microphysics1M
+        moisture_flux = (;
+            ρ_flux_q_tot = vector_from_component(evaporation, z),
+            ρ_flux_q_liq = C3(FT(0)), #TODO sedimentation vel * q?
+            ρ_flux_q_ice = C3(FT(0)), #TODO
+            ρ_flux_q_rai = C3(FT(0)), #TODO
+            ρ_flux_q_sno = C3(FT(0)), #TODO
+        )
+    else
+        moisture_flux = (; ρ_flux_q_tot = vector_from_component(evaporation, z))
+    end
 
     return (;
         ts,
@@ -477,7 +493,11 @@ function surface_conditions_type(atmos, ::Type{FT}) where {FT}
     energy_flux_names = (:ρ_flux_h_tot,)
     # NOTE: Technically ρ_flux_q_tot is not really needed for a dry model, but
     # SF always has evaporation
-    moisture_flux_names = (:ρ_flux_q_tot,)
+    if atmos.moisture_model isa NonEquilMoistModel and atmos.precip_model isa Microphysics1M
+         moisture_flux_names = (:ρ_flux_q_tot, ρ_flux_q_liq, ρ_flux_q_ice, ρ_flux_q_rai, ρ_flux_q_sno)
+    else
+         moisture_flux_names = (:ρ_flux_q_tot,)
+    end
     names = (
         :ts,
         :ustar,

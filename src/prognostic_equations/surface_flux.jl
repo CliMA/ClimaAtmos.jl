@@ -60,6 +60,14 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
         χ_name == :e_tot && continue
         if χ_name == :q_tot
             @. ρ_flux_χ = sfc_conditions.ρ_flux_q_tot
+        elseif χ_name == :q_liq
+            @. ρ_flux_χ = sfc_conditions.ρ_flux_q_liq
+        elseif χ_name == :q_ice
+            @. ρ_flux_χ = sfc_conditions.ρ_flux_q_ice
+        elseif χ_name == :q_rai
+            @. ρ_flux_χ = sfc_conditions.ρ_flux_q_rai
+        elseif χ_name == :q_sno
+            @. ρ_flux_χ = sfc_conditions.ρ_flux_q_sno
         else
             @. ρ_flux_χ = C3(FT(0))
         end

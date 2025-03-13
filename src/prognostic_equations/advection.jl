@@ -65,6 +65,7 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
                 wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
                 Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
+        # TODO - advection
         end
     end
     return nothing
