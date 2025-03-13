@@ -398,7 +398,7 @@ steps:
         artifact_paths: "aquaplanet_equil_clearsky_tvinsol_0M_slabocean_ft64/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":computer: aquaplanet for coupler"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -725,7 +725,7 @@ steps:
         artifact_paths: "prognostic_edmfx_simpleplume_column/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":genie: Prognostic EDMFX Soares in a column"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -811,7 +811,6 @@ steps:
         artifact_paths: "prognostic_edmfx_rico_column/output_active/*"
         agents:
           slurm_mem: 20GB
-        soft_fail: true
 
       - label: ":umbrella: Prognostic EDMFX TRMM in a column"
         command: >
@@ -906,7 +905,7 @@ steps:
         depends_on:
           - "baroclinic_wave"
           - "baroclinic_wave_gpu"
-          
+
 
       - label: "GPU: baroclinic wave - 2 gpus"
         key: "baroclinic_wave_2gpu"
@@ -956,7 +955,7 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_mem: 20GB
-          
+
       - label: "GPU: Diagnostic EDMFX aquaplanet"
         key: "diagnostic_edmfx_aquaplanet_gpu"
         command: >
@@ -1011,7 +1010,7 @@ steps:
           --job_id bm_default
         agents:
           slurm_mem: 24GB
-      
+
       - label: ":computer: Benchmark: GPU default"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
@@ -1078,7 +1077,7 @@ steps:
         artifact_paths: "flame_default_1m/*"
         agents:
           slurm_mem: 24GB
-      
+
       - label: ":fire: Flame graph: diagnostics"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl
@@ -1105,7 +1104,7 @@ steps:
         artifact_paths: "flame_aquaplanet_progedmf/*"
         agents:
           slurm_mem: 32GB
-      
+
       - label: ":fire: Flame graph: diffusion"
         command: >
           julia --color=yes --project=.buildkite perf/flame.jl

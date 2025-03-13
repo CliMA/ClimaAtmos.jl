@@ -1460,7 +1460,9 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
 
-    precip_names = sim_type isa EDMFBoxPlotsWithPrecip ? ("husra", "hussn") : ()
+    precip_names =
+        sim_type isa EDMFBoxPlotsWithPrecip ?
+        ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen") : ()
 
     short_names = [
         "wa",

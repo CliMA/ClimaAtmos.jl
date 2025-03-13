@@ -3,7 +3,7 @@ subsidence: "Rico"
 ls_adv: "Rico"
 surface_setup: "Rico"
 turbconv: "prognostic_edmfx"
-implicit_diffusion: true
+implicit_diffusion: false
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
 edmfx_upwinding: first_order
@@ -33,7 +33,7 @@ netcdf_interpolation_num_points: [8, 8, 100]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
     period: 10mins
-  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, husraup, hussnup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, husraen, hussnen, tke]
     period: 10mins
   - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
     period: 10mins
