@@ -289,6 +289,142 @@ function Base.propertynames(model::RRTMGPModel, private::Bool = false)
 end
 
 """
+    lookup_tables(::AbstractRRTMGPMode, device, FloatType)
+
+Return a NamedTuple, containing
+ - RRTMGP lookup tables (varies by radiation mode)
+ - nbnd_lw
+ - nbnd_sw
+ - ngas_lw (absent for GrayRadiation)
+ - ngas_sw (absent for GrayRadiation)
+
+TODO:
+ - We should add type annotations for the data read from NC files as this will
+   improve inference and the return type of `lookup_tables`.
+"""
+function lookup_tables end
+
+lookup_tables(
+    radiation_mode::GrayRadiation,
+    device::ClimaComms.AbstractDevice,
+    ::Type{FT},
+) where {FT} = (; lookups = (;), lu_kwargs = (; nbnd_lw = 1, nbnd_sw = 1))
+
+function lookup_tables(
+    radiation_mode::ClearSkyRadiation,
+    device::ClimaComms.AbstractDevice,
+    ::Type{FT},
+) where {FT}
+    DA = ClimaComms.array_type(device)
+    # turn kwargs into a Dict, so that values can be dynamically popped from it
+
+    artifact(t, b, n) =
+        NC.Dataset(RRTMGP.ArtifactPaths.get_lookup_filename(t, b)) do ds
+            getproperty(RRTMGP.LookUpTables, n)(ds, FT, DA)
+        end
+    lookup_lw, idx_gases_lw = artifact(:gas, :lw, :LookUpLW)
+
+    nbnd_lw = RRTMGP.LookUpTables.get_n_bnd(lookup_lw)
+    ngas_lw = RRTMGP.LookUpTables.get_n_gases(lookup_lw)
+
+    lookup_lw_aero, idx_aerosol_lw, idx_aerosize_lw =
+        if radiation_mode.aerosol_radiation
+            artifact(:aerosol, :lw, :LookUpAerosolMerra)
+        else
+            (nothing, nothing, nothing)
+        end
+
+    lookup_sw, idx_gases_sw = artifact(:gas, :sw, :LookUpSW)
+
+    nbnd_sw = RRTMGP.LookUpTables.get_n_bnd(lookup_sw)
+    ngas_sw = RRTMGP.LookUpTables.get_n_gases(lookup_sw)
+
+    lookup_sw_aero, idx_aerosol_sw, idx_aerosize_sw =
+        if radiation_mode.aerosol_radiation
+            artifact(:aerosol, :sw, :LookUpAerosolMerra)
+        else
+            (nothing, nothing, nothing)
+        end
+
+    lookups = (;
+        idx_aerosize_lw,
+        idx_aerosize_sw,
+        idx_aerosol_lw,
+        idx_aerosol_sw,
+        idx_gases_lw,
+        idx_gases_sw,
+        lookup_lw,
+        lookup_lw_aero,
+        lookup_sw,
+        lookup_sw_aero,
+    )
+
+    @assert RRTMGP.LookUpTables.get_n_gases(lookup_lw) ==
+            RRTMGP.LookUpTables.get_n_gases(lookup_sw)
+    @assert lookup_lw.p_ref_min == lookup_sw.p_ref_min
+    return (; lookups, lu_kwargs = (; nbnd_lw, ngas_lw, nbnd_sw, ngas_sw))
+end
+
+function lookup_tables(
+    radiation_mode::Union{
+        AllSkyRadiation,
+        AllSkyRadiationWithClearSkyDiagnostics,
+    },
+    device::ClimaComms.AbstractDevice,
+    ::Type{FT},
+) where {FT}
+    DA = ClimaComms.array_type(device)
+    # turn kwargs into a Dict, so that values can be dynamically popped from it
+
+    artifact(t, b, n) =
+        NC.Dataset(RRTMGP.ArtifactPaths.get_lookup_filename(t, b)) do ds
+            getproperty(RRTMGP.LookUpTables, n)(ds, FT, DA)
+        end
+    lookup_lw, idx_gases_lw = artifact(:gas, :lw, :LookUpLW)
+    lookup_lw_cld = artifact(:cloud, :lw, :LookUpCld)
+    lookup_lw_aero, idx_aerosol_lw, idx_aerosize_lw =
+        if radiation_mode.aerosol_radiation
+            artifact(:aerosol, :lw, :LookUpAerosolMerra)
+        else
+            (nothing, nothing, nothing)
+        end
+    lookup_sw, idx_gases_sw = artifact(:gas, :sw, :LookUpSW)
+    lookup_sw_cld = artifact(:cloud, :sw, :LookUpCld)
+
+    lookup_sw_aero, idx_aerosol_sw, idx_aerosize_sw =
+        if radiation_mode.aerosol_radiation
+            artifact(:aerosol, :sw, :LookUpAerosolMerra)
+        else
+            (nothing, nothing, nothing)
+        end
+
+    nbnd_lw = RRTMGP.LookUpTables.get_n_bnd(lookup_lw)
+    ngas_lw = RRTMGP.LookUpTables.get_n_gases(lookup_lw)
+    nbnd_sw = RRTMGP.LookUpTables.get_n_bnd(lookup_sw)
+    ngas_sw = RRTMGP.LookUpTables.get_n_gases(lookup_sw)
+
+    lookups = (;
+        idx_aerosize_lw,
+        idx_aerosize_sw,
+        idx_aerosol_lw,
+        idx_aerosol_sw,
+        idx_gases_lw,
+        idx_gases_sw,
+        lookup_lw,
+        lookup_lw_aero,
+        lookup_lw_cld,
+        lookup_sw,
+        lookup_sw_aero,
+        lookup_sw_cld,
+    )
+
+    @assert RRTMGP.LookUpTables.get_n_gases(lookup_lw) ==
+            RRTMGP.LookUpTables.get_n_gases(lookup_sw)
+    @assert lookup_lw.p_ref_min == lookup_sw.p_ref_min
+    return (; lookups, lu_kwargs = (; nbnd_lw, ngas_lw, nbnd_sw, ngas_sw))
+end
+
+"""
     RRTMGPModel(params; kwargs...)
 
 A user-friendly interface for `RRTMGP.jl`. Stores an `RRTMGP.RTE.Solver`, along
@@ -454,46 +590,11 @@ function _RRTMGPModel(
                pressures/temperatures are specified")
     end
 
-    lookups = NamedTuple()
+    (; lookups, lu_kwargs) = lookup_tables(radiation_mode, device, FT)
     views = []
 
     nlay = domain_nlay + Int(radiation_mode.add_isothermal_boundary_layer)
     t = (views, domain_nlay)
-
-    if radiation_mode isa GrayRadiation
-        nbnd_lw = 1
-    else
-        local lookup_lw, idx_gases
-        NC.Dataset(RRTMGP.ArtifactPaths.get_lookup_filename(:gas, :lw)) do ds
-            lookup_lw, idx_gases = RRTMGP.LookUpTables.LookUpLW(ds, FT, DA)
-        end
-        lookups = (; lookups..., lookup_lw, idx_gases)
-
-        nbnd_lw = RRTMGP.LookUpTables.get_n_bnd(lookup_lw)
-        ngas = RRTMGP.LookUpTables.get_n_gases(lookup_lw)
-
-        if !(radiation_mode isa ClearSkyRadiation)
-            local lookup_lw_cld
-            NC.Dataset(
-                RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :lw),
-            ) do ds
-                lookup_lw_cld = RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
-            end
-            lookups = (; lookups..., lookup_lw_cld)
-        end
-        if radiation_mode.aerosol_radiation
-            local lookup_lw_aero, idx_aerosol, idx_aerosize
-            NC.Dataset(
-                RRTMGP.ArtifactPaths.get_lookup_filename(:aerosol, :lw),
-            ) do ds
-                lookup_lw_aero, idx_aerosol, idx_aerosize =
-                    RRTMGP.LookUpTables.LookUpAerosolMerra(ds, FT, DA)
-            end
-        else
-            lookup_lw_aero = nothing
-        end
-        lookups = (; lookups..., lookup_lw_aero)
-    end
 
     src_lw = RRTMGP.Sources.source_func_longwave(
         params,
@@ -517,7 +618,7 @@ function _RRTMGPModel(
         set_and_save!(flux_lw2.flux_net, "face_clear_lw_flux", t...)
     end
 
-    sfc_emis = DA{FT}(undef, nbnd_lw, ncol)
+    sfc_emis = DA{FT}(undef, lu_kwargs.nbnd_lw, ncol)
     set_and_save!(sfc_emis, "surface_emissivity", t..., dict)
     name = "top_of_atmosphere_lw_flux_dn"
     if Symbol(name) in keys(dict)
@@ -527,43 +628,6 @@ function _RRTMGPModel(
         inc_flux = nothing
     end
     bcs_lw = RRTMGP.BCs.LwBCs(sfc_emis, inc_flux)
-
-    if radiation_mode isa GrayRadiation
-        nbnd_sw = 1
-    else
-        local lookup_sw, idx_gases
-        NC.Dataset(RRTMGP.ArtifactPaths.get_lookup_filename(:gas, :sw)) do ds
-            lookup_sw, idx_gases = RRTMGP.LookUpTables.LookUpSW(ds, FT, DA)
-        end
-        lookups = (; lookups..., lookup_sw, idx_gases)
-
-        nbnd_sw = RRTMGP.LookUpTables.get_n_bnd(lookup_sw)
-        ngas = RRTMGP.LookUpTables.get_n_gases(lookup_sw)
-
-        if !(radiation_mode isa ClearSkyRadiation)
-            local lookup_sw_cld
-            NC.Dataset(
-                RRTMGP.ArtifactPaths.get_lookup_filename(:cloud, :sw),
-            ) do ds
-                lookup_sw_cld = RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
-            end
-            lookups = (; lookups..., lookup_sw_cld)
-        end
-
-        if radiation_mode.aerosol_radiation
-            local lookup_sw_aero, idx_aerosol, idx_aerosize
-            NC.Dataset(
-                RRTMGP.ArtifactPaths.get_lookup_filename(:aerosol, :sw),
-            ) do ds
-                lookup_sw_aero, idx_aerosol, idx_aerosize =
-                    RRTMGP.LookUpTables.LookUpAerosolMerra(ds, FT, DA)
-            end
-        else
-            lookup_sw_aero = nothing
-        end
-        lookups = (; lookups..., lookup_sw_aero)
-    end
-
     src_sw =
         RRTMGP.Sources.source_func_shortwave(FT, ncol, nlay, :TwoStream, DA)
     flux_sw = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
@@ -590,9 +654,9 @@ function _RRTMGPModel(
     set_and_save!(cos_zenith, "cos_zenith", t..., dict)
     toa_flux = DA{FT}(undef, ncol)
     set_and_save!(toa_flux, "weighted_irradiance", t..., dict)
-    sfc_alb_direct = DA{FT}(undef, nbnd_sw, ncol)
+    sfc_alb_direct = DA{FT}(undef, lu_kwargs.nbnd_sw, ncol)
     set_and_save!(sfc_alb_direct, "direct_sw_surface_albedo", t..., dict)
-    sfc_alb_diffuse = DA{FT}(undef, nbnd_sw, ncol)
+    sfc_alb_diffuse = DA{FT}(undef, lu_kwargs.nbnd_sw, ncol)
     set_and_save!(sfc_alb_diffuse, "diffuse_sw_surface_albedo", t..., dict)
     name = "top_of_atmosphere_diffuse_sw_flux_dn"
     if Symbol(name) in keys(dict)
@@ -614,11 +678,6 @@ function _RRTMGPModel(
     set_and_save!(similar(flux_lw.flux_net), "face_flux", t...)
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
         set_and_save!(similar(flux_lw2.flux_net), "face_clear_flux", t...)
-    end
-    if !(radiation_mode isa GrayRadiation)
-        @assert RRTMGP.LookUpTables.get_n_gases(lookup_lw) ==
-                RRTMGP.LookUpTables.get_n_gases(lookup_sw)
-        @assert lookup_lw.p_ref_min == lookup_sw.p_ref_min
     end
 
     if !(:latitude in keys(dict))
@@ -643,13 +702,9 @@ function _RRTMGPModel(
         z_lev = DA{FT}(undef, nlay + 1, ncol) # TODO: z_lev required but unused
 
         # lapse_rate is a constant, so don't use set_and_save! to get it
-        if !(:lapse_rate in keys(dict))
-            throw(UndefKeywordError(:lapse_rate))
-        end
+        :lapse_rate in keys(dict) || throw(UndefKeywordError(:lapse_rate))
         α = pop!(dict, :lapse_rate)
-        if !(α isa Real)
-            error("lapse_rate must be a Real")
-        end
+        α isa Real || error("lapse_rate must be a Real")
 
         d0 = DA{FT}(undef, ncol)
         set_and_save!(d0, "optical_thickness_parameter", t..., dict)
@@ -676,7 +731,7 @@ function _RRTMGPModel(
         gas_names = filter(
             gas_name ->
                 !(gas_name in ("h2o", "h2o_frgn", "h2o_self", "o3")),
-            keys(idx_gases),
+            keys(lookups.idx_gases_sw),
         )
         # TODO: This gives the wrong types for CUDA 3.4 and above.
         # gm = use_global_means_for_well_mixed_gases
@@ -685,19 +740,19 @@ function _RRTMGPModel(
             vmr = RRTMGP.Vmrs.VmrGM(
                 DA{FT}(undef, nlay, ncol),
                 DA{FT}(undef, nlay, ncol),
-                DA{FT}(undef, ngas),
+                DA{FT}(undef, lu_kwargs.ngas_sw),
             )
             vmr.vmr .= 0 # TODO: do we need this?
             set_and_save!(vmr.vmr_h2o, "center_$(vmr_str)h2o", t..., dict)
             set_and_save!(vmr.vmr_o3, "center_$(vmr_str)o3", t..., dict)
             for gas_name in gas_names
-                gas_view = view(vmr.vmr, idx_gases[gas_name])
+                gas_view = view(vmr.vmr, lookups.idx_gases_sw[gas_name])
                 set_and_save!(gas_view, "$vmr_str$gas_name", t..., dict)
             end
         else
-            vmr = RRTMGP.Vmrs.Vmr(DA{FT}(undef, ngas, nlay, ncol))
+            vmr = RRTMGP.Vmrs.Vmr(DA{FT}(undef, lu_kwargs.ngas_sw, nlay, ncol))
             for gas_name in ["h2o", "o3", gas_names...]
-                gas_view = view(vmr.vmr, idx_gases[gas_name], :, :)
+                gas_view = view(vmr.vmr, lookups.idx_gases_sw[gas_name], :, :)
                 set_and_save!(gas_view, "center_$vmr_str$gas_name", t..., dict)
             end
         end
@@ -752,8 +807,8 @@ function _RRTMGPModel(
             set_and_save!(aod_sw_ext, "aod_sw_extinction", t..., dict)
             set_and_save!(aod_sw_sca, "aod_sw_scattering", t..., dict)
 
-            n_aerosol_sizes = maximum(values(idx_aerosize))
-            n_aerosols = length(idx_aerosol)
+            n_aerosol_sizes = maximum(values(lookups.idx_aerosize_sw)) # TODO: verify correctness
+            n_aerosols = length(lookups.idx_aerosol_sw) # TODO: verify correctness
             # See the lookup table in RRTMGP for the order of aerosols
             aero_size = DA{FT}(undef, n_aerosol_sizes, nlay, ncol)
             aero_mass = DA{FT}(undef, n_aerosols, nlay, ncol)
@@ -973,7 +1028,7 @@ get_p_min(model) = get_p_min(model.as, model.lookups)
 get_p_min(as::RRTMGP.AtmosphericStates.GrayAtmosphericState, lookups) =
     zero(eltype(as.p_lay))
 get_p_min(as::RRTMGP.AtmosphericStates.AtmosphericState, lookups) =
-    lookups[1].p_ref_min
+    lookups.lookup_lw.p_ref_min # TODO: verify correctness
 
 function update_implied_values!(model)
     (; p_lev, t_lev, t_sfc) = model.as
@@ -1090,12 +1145,12 @@ update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_gas!(
     model.as.p_lev,
     AS.getview_col_dry(model.as),
     model.params,
-    get_vmr_h2o(model.as.vmr, model.lookups.idx_gases),
+    get_vmr_h2o(model.as.vmr, model.lookups.idx_gases_sw),
     model.as.lat,
 )
-get_vmr_h2o(vmr::RRTMGP.Vmrs.VmrGM, idx_gases) = vmr.vmr_h2o
-get_vmr_h2o(vmr::RRTMGP.Vmrs.Vmr, idx_gases) =
-    view(vmr.vmr, idx_gases["h2o"], :, :)
+get_vmr_h2o(vmr::RRTMGP.Vmrs.VmrGM, idx_gases_sw) = vmr.vmr_h2o
+get_vmr_h2o(vmr::RRTMGP.Vmrs.Vmr, idx_gases_sw) =
+    view(vmr.vmr, idx_gases_sw["h2o"], :, :)
 
 NVTX.@annotate update_lw_fluxes!(::GrayRadiation, model) =
     RRTMGP.RTESolver.solve_lw!(model.lw_solver, model.as)
