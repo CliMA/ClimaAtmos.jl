@@ -229,25 +229,20 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         if radiation_mode.aerosol_radiation
-            _update_some_aerosol_conc(Y, p)
             ᶜΔz = Fields.Δz_field(Y.c)
 
-            if pkgversion(RRTMGP) <= v"0.19.2"
-                more_aerosols = ()
-            else
-                more_aerosols = (
-                    (:center_dust1_column_mass_density, :DST01),
-                    (:center_dust2_column_mass_density, :DST02),
-                    (:center_dust3_column_mass_density, :DST03),
-                    (:center_dust4_column_mass_density, :DST04),
-                    (:center_dust5_column_mass_density, :DST05),
-                    (:center_ss1_column_mass_density, :SSLT01),
-                    (:center_ss2_column_mass_density, :SSLT02),
-                    (:center_ss3_column_mass_density, :SSLT03),
-                    (:center_ss4_column_mass_density, :SSLT04),
-                    (:center_ss5_column_mass_density, :SSLT05),
-                )
-            end
+            more_aerosols = (
+                (:center_dust1_column_mass_density, :DST01),
+                (:center_dust2_column_mass_density, :DST02),
+                (:center_dust3_column_mass_density, :DST03),
+                (:center_dust4_column_mass_density, :DST04),
+                (:center_dust5_column_mass_density, :DST05),
+                (:center_ss1_column_mass_density, :SSLT01),
+                (:center_ss2_column_mass_density, :SSLT02),
+                (:center_ss3_column_mass_density, :SSLT03),
+                (:center_ss4_column_mass_density, :SSLT04),
+                (:center_ss5_column_mass_density, :SSLT05),
+            )
 
             aerosol_names_pair = [
                 more_aerosols...,
