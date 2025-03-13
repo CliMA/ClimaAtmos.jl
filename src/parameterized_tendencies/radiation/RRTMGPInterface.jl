@@ -941,6 +941,14 @@ parent_array_type(::Type{<:LinearAlgebra.Transpose{T, P}}) where {T, P} =
 
 safe_fill!(array::LinearAlgebra.Transpose, value) =
     fill!(transpose(array), value)
+function safe_fill!(
+    array::SubArray{T, 2, <:LinearAlgebra.Transpose},
+    value,
+) where {T}
+    subarray = view(transpose(parent(array)), reverse(array.indices)...)
+    fill!(subarray, value)
+    return nothing
+end
 safe_fill!(array, value) = fill!(array, value)
 # This sets `array .= value`, but it allows `array` to be to be a `CuArray`
 # while `value` is an `Array` (in which case broadcasting throws an error).
