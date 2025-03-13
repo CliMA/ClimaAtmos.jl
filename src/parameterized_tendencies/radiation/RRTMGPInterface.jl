@@ -528,14 +528,22 @@ function RRTMGPModel(
     fluxb_lw =
         radiation_mode isa GrayRadiation ? nothing :
         RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
-    set_and_save!(flux_lw.flux_up, "face_lw_flux_up", t...)
-    set_and_save!(flux_lw.flux_dn, "face_lw_flux_dn", t...)
-    set_and_save!(flux_lw.flux_net, "face_lw_flux", t...)
+    set_and_save!(transpose(flux_lw.flux_up), "face_lw_flux_up", t...)
+    set_and_save!(transpose(flux_lw.flux_dn), "face_lw_flux_dn", t...)
+    set_and_save!(transpose(flux_lw.flux_net), "face_lw_flux", t...)
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
         flux_lw2 = RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
-        set_and_save!(flux_lw2.flux_up, "face_clear_lw_flux_up", t...)
-        set_and_save!(flux_lw2.flux_dn, "face_clear_lw_flux_dn", t...)
-        set_and_save!(flux_lw2.flux_net, "face_clear_lw_flux", t...)
+        set_and_save!(
+            transpose(flux_lw2.flux_up),
+            "face_clear_lw_flux_up",
+            t...,
+        )
+        set_and_save!(
+            transpose(flux_lw2.flux_dn),
+            "face_clear_lw_flux_dn",
+            t...,
+        )
+        set_and_save!(transpose(flux_lw2.flux_net), "face_clear_lw_flux", t...)
     end
 
     sfc_emis = DA{FT}(undef, nbnd_lw, ncol)
@@ -591,20 +599,32 @@ function RRTMGPModel(
     fluxb_sw =
         radiation_mode isa GrayRadiation ? nothing :
         RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
-    set_and_save!(flux_sw.flux_up, "face_sw_flux_up", t...)
-    set_and_save!(flux_sw.flux_dn, "face_sw_flux_dn", t...)
-    set_and_save!(flux_sw.flux_net, "face_sw_flux", t...)
-    set_and_save!(flux_sw.flux_dn_dir, "face_sw_direct_flux_dn", t...)
+    set_and_save!(transpose(flux_sw.flux_up), "face_sw_flux_up", t...)
+    set_and_save!(transpose(flux_sw.flux_dn), "face_sw_flux_dn", t...)
+    set_and_save!(transpose(flux_sw.flux_net), "face_sw_flux", t...)
+    set_and_save!(
+        transpose(flux_sw.flux_dn_dir),
+        "face_sw_direct_flux_dn",
+        t...,
+    )
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
         flux_sw2 = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
-        set_and_save!(flux_sw2.flux_up, "face_clear_sw_flux_up", t...)
-        set_and_save!(flux_sw2.flux_dn, "face_clear_sw_flux_dn", t...)
         set_and_save!(
-            flux_sw2.flux_dn_dir,
+            transpose(flux_sw2.flux_up),
+            "face_clear_sw_flux_up",
+            t...,
+        )
+        set_and_save!(
+            transpose(flux_sw2.flux_dn),
+            "face_clear_sw_flux_dn",
+            t...,
+        )
+        set_and_save!(
+            transpose(flux_sw2.flux_dn_dir),
             "face_clear_sw_direct_flux_dn",
             t...,
         )
-        set_and_save!(flux_sw2.flux_net, "face_clear_sw_flux", t...)
+        set_and_save!(transpose(flux_sw2.flux_net), "face_clear_sw_flux", t...)
     end
 
     cos_zenith = DA{FT}(undef, ncol)
@@ -632,9 +652,13 @@ function RRTMGPModel(
         sfc_alb_diffuse,
     )
 
-    set_and_save!(similar(flux_lw.flux_net), "face_flux", t...)
+    set_and_save!(similar(transpose(flux_lw.flux_net)), "face_flux", t...)
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-        set_and_save!(similar(flux_lw2.flux_net), "face_clear_flux", t...)
+        set_and_save!(
+            similar(transpose(flux_lw2.flux_net)),
+            "face_clear_flux",
+            t...,
+        )
     end
     if !(radiation_mode isa GrayRadiation)
         @assert RRTMGP.LookUpTables.get_n_gases(lookup_lw) ==
@@ -909,9 +933,25 @@ function RRTMGPModel(
     )
 end
 
+import LinearAlgebra
+import ClimaCore.DataLayouts: parent_array_type
+parent_array_type(::Type{<:LinearAlgebra.Transpose{T, P}}) where {T, P} =
+    parent_array_type(P)
+
+safe_fill!(array::LinearAlgebra.Transpose, value) =
+    fill!(transpose(array), value)
+function safe_fill!(
+    array::SubArray{T, 2, <:LinearAlgebra.Transpose},
+    value,
+) where {T}
+    subarray = view(transpose(parent(array)), reverse(array.indices)...)
+    fill!(subarray, value)
+    return nothing
+end
+safe_fill!(array, value) = fill!(array, value)
 # This sets `array .= value`, but it allows `array` to be to be a `CuArray`
 # while `value` is an `Array` (in which case broadcasting throws an error).
-set_array!(array, value::Real, symbol) = fill!(array, value)
+set_array!(array, value::Real, symbol) = safe_fill!(array, value)
 function set_array!(array, value::AbstractArray{<:Real}, symbol)
     if ndims(array) == 2
         if size(value) == size(array)
@@ -922,7 +962,7 @@ function set_array!(array, value::AbstractArray{<:Real}, symbol)
             end
         elseif size(value) == (1, size(array, 2))
             for (icol, col) in enumerate(eachcol(array))
-                fill!(col, value[1, icol])
+                safe_fill!(col, value[1, icol])
             end
         else
             error("expected $symbol to be an array of size $(size(array)), \
