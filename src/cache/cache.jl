@@ -9,7 +9,6 @@ struct AtmosCache{
     PREC,
     SCRA,
     HYPE,
-    PR,
     EXTFORCING,
     NONGW,
     ORGW,
@@ -52,7 +51,6 @@ struct AtmosCache{
     hyperdiff::HYPE
 
     """Additional parameters used by the various tendencies"""
-    precipitation::PR
     external_forcing::EXTFORCING
     non_orographic_gravity_wave::NONGW
     orographic_gravity_wave::ORGW
@@ -147,8 +145,16 @@ function build_cache(
     scratch = temporary_quantities(Y, atmos)
 
     precomputed = precomputed_quantities(Y, atmos)
-    precomputing_arguments =
-        (; atmos, core, params, sfc_setup, precomputed, scratch, dt)
+    precomputing_arguments = (;
+        atmos,
+        core,
+        params,
+        sfc_setup,
+        precomputed,
+        scratch,
+        dt,
+        conservation_check,
+    )
 
     # Coupler compatibility
     isnothing(precomputing_arguments.sfc_setup) &&
@@ -168,7 +174,6 @@ function build_cache(
         ) : ()
 
     hyperdiff = hyperdiffusion_cache(Y, atmos)
-    precipitation = precipitation_cache(Y, atmos)
     external_forcing = external_forcing_cache(Y, atmos, params)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
@@ -186,7 +191,6 @@ function build_cache(
         precomputed,
         scratch,
         hyperdiff,
-        precipitation,
         external_forcing,
         non_orographic_gravity_wave,
         orographic_gravity_wave,

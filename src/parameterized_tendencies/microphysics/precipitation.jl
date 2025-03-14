@@ -1,159 +1,12 @@
 #####
-##### Precipitation models
-#####
-
-import CloudMicrophysics.Microphysics1M as CM1
-import CloudMicrophysics as CM
-import Thermodynamics as TD
-import ClimaCore.Spaces as Spaces
-import ClimaCore.Operators as Operators
-import ClimaCore.Fields as Fields
-import ClimaCore.Utilities: half
-
-precipitation_cache(Y, atmos::AtmosModel) =
-    precipitation_cache(Y, atmos.precip_model)
-
-#####
 ##### No Precipitation
 #####
 
-function precipitation_cache(Y, precip_model::NoPrecipitation)
-    FT = Spaces.undertype(axes(Y.c))
-    return (;
-        surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
-        surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
-    )
-end
 precipitation_tendency!(Yₜ, Y, p, t, _, ::NoPrecipitation, _) = nothing
 
 #####
-##### 0-Moment without sgs scheme or with diagnostic/prognostic edmf
+##### 0-moment microphysics w/wo sgs model
 #####
-
-function precipitation_cache(Y, precip_model::Microphysics0Moment)
-    FT = Spaces.undertype(axes(Y.c))
-    return (;
-        ᶜS_ρq_tot = similar(Y.c, FT),
-        ᶜS_ρe_tot = similar(Y.c, FT),
-        ᶜ3d_rain = similar(Y.c, FT),
-        ᶜ3d_snow = similar(Y.c, FT),
-        surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
-        surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
-    )
-end
-
-function compute_precipitation_cache!(Y, p, ::Microphysics0Moment, _)
-    (; params, dt) = p
-    dt = float(dt)
-    (; ᶜts) = p.precomputed
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precipitation
-    (; ᶜΦ) = p.core
-    cm_params = CAP.microphysics_0m_params(params)
-    thermo_params = CAP.thermodynamics_params(params)
-    @. ᶜS_ρq_tot =
-        Y.c.ρ * q_tot_0M_precipitation_sources(
-            thermo_params,
-            cm_params,
-            dt,
-            Y.c.ρq_tot / Y.c.ρ,
-            ᶜts,
-        )
-    @. ᶜS_ρe_tot =
-        ᶜS_ρq_tot *
-        e_tot_0M_precipitation_sources_helper(thermo_params, ᶜts, ᶜΦ)
-end
-function compute_precipitation_cache!(
-    Y,
-    p,
-    ::Microphysics0Moment,
-    ::DiagnosticEDMFX,
-)
-    # For environment we multiply by grid mean ρ and not byᶜρa⁰
-    # assuming a⁰=1
-    (; ᶜΦ) = p.core
-    (; ᶜSqₜᵖ⁰, ᶜSqₜᵖʲs, ᶜρaʲs) = p.precomputed
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precipitation
-    (; ᶜts, ᶜtsʲs) = p.precomputed
-    thermo_params = CAP.thermodynamics_params(p.params)
-
-    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    ρ = Y.c.ρ
-
-    @. ᶜS_ρq_tot = ᶜSqₜᵖ⁰ * ρ
-    @. ᶜS_ρe_tot =
-        ᶜSqₜᵖ⁰ *
-        ρ *
-        e_tot_0M_precipitation_sources_helper(thermo_params, ᶜts, ᶜΦ)
-    for j in 1:n
-        @. ᶜS_ρq_tot += ᶜSqₜᵖʲs.:($$j) * ᶜρaʲs.:($$j)
-        @. ᶜS_ρe_tot +=
-            ᶜSqₜᵖʲs.:($$j) *
-            ᶜρaʲs.:($$j) *
-            e_tot_0M_precipitation_sources_helper(
-                thermo_params,
-                ᶜtsʲs.:($$j),
-                ᶜΦ,
-            )
-    end
-end
-function compute_precipitation_cache!(
-    Y,
-    p,
-    ::Microphysics0Moment,
-    ::PrognosticEDMFX,
-)
-    (; ᶜΦ) = p.core
-    (; ᶜSqₜᵖ⁰, ᶜSqₜᵖʲs, ᶜρa⁰) = p.precomputed
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precipitation
-    (; ᶜts⁰, ᶜtsʲs) = p.precomputed
-    thermo_params = CAP.thermodynamics_params(p.params)
-
-    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-
-    @. ᶜS_ρq_tot = ᶜSqₜᵖ⁰ * ᶜρa⁰
-    @. ᶜS_ρe_tot =
-        ᶜSqₜᵖ⁰ *
-        ᶜρa⁰ *
-        e_tot_0M_precipitation_sources_helper(thermo_params, ᶜts⁰, ᶜΦ)
-    for j in 1:n
-        @. ᶜS_ρq_tot += ᶜSqₜᵖʲs.:($$j) * Y.c.sgsʲs.:($$j).ρa
-        @. ᶜS_ρe_tot +=
-            ᶜSqₜᵖʲs.:($$j) *
-            Y.c.sgsʲs.:($$j).ρa *
-            e_tot_0M_precipitation_sources_helper(
-                thermo_params,
-                ᶜtsʲs.:($$j),
-                ᶜΦ,
-            )
-    end
-end
-
-function compute_precipitation_surface_fluxes!(
-    Y,
-    p,
-    precip_model::Microphysics0Moment,
-)
-    ᶜT = p.scratch.ᶜtemp_scalar
-    (; ᶜts) = p.precomputed  # assume ᶜts has been updated
-    (; ᶜ3d_rain, ᶜ3d_snow, ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precipitation
-    (; surface_rain_flux, surface_snow_flux) = p.precipitation
-    (; col_integrated_precip_energy_tendency,) = p.conservation_check
-
-    # update total column energy source for surface energy balance
-    Operators.column_integral_definite!(
-        col_integrated_precip_energy_tendency,
-        ᶜS_ρe_tot,
-    )
-    # update surface precipitation fluxes in cache for coupler's use
-    thermo_params = CAP.thermodynamics_params(p.params)
-    T_freeze = TD.Parameters.T_freeze(thermo_params)
-    FT = eltype(p.params)
-    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
-    @. ᶜ3d_rain = ifelse(ᶜT >= T_freeze, ᶜS_ρq_tot, FT(0))
-    @. ᶜ3d_snow = ifelse(ᶜT < T_freeze, ᶜS_ρq_tot, FT(0))
-    Operators.column_integral_definite!(surface_rain_flux, ᶜ3d_rain)
-    Operators.column_integral_definite!(surface_snow_flux, ᶜ3d_snow)
-end
 
 function precipitation_tendency!(
     Yₜ,
@@ -175,12 +28,7 @@ function precipitation_tendency!(
     precip_model::Microphysics0Moment,
     turbconv_model,
 )
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precipitation
-
-    # Compute the ρq_tot and ρe_tot precipitation source terms
-    compute_precipitation_cache!(Y, p, precip_model, turbconv_model)
-    # Compute surface precipitation flux
-    compute_precipitation_surface_fluxes!(Y, p, precip_model)
+    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
 
     # Add the source terms to the tendencies
     @. Yₜ.c.ρq_tot += ᶜS_ρq_tot
@@ -204,153 +52,8 @@ function precipitation_tendency!(
 end
 
 #####
-##### 1-Moment without sgs scheme
+##### 1-moment microphysics without sgs scheme
 #####
-
-function precipitation_cache(Y, precip_model::Microphysics1Moment)
-    FT = Spaces.undertype(axes(Y.c))
-    return (;
-        ᶜSqₗᵖ = similar(Y.c, FT),
-        ᶜSqᵢᵖ = similar(Y.c, FT),
-        ᶜSqᵣᵖ = similar(Y.c, FT),
-        ᶜSqₛᵖ = similar(Y.c, FT),
-        surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
-        surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
-    )
-end
-
-function compute_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
-    FT = Spaces.undertype(axes(Y.c))
-    (; dt) = p
-    (; ᶜts, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
-    (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precipitation
-
-    (; q_rai, q_sno) = p.precomputed.ᶜspecific
-
-    ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
-    ᶜ∇T = p.scratch.ᶜtemp_CT123
-
-    # get thermodynamics and 1-moment microphysics params
-    (; params) = p
-    cmp = CAP.microphysics_1m_params(params)
-    thp = CAP.thermodynamics_params(params)
-
-    # compute precipitation source terms on the grid mean
-    compute_precipitation_sources!(
-        ᶜSᵖ,
-        ᶜSᵖ_snow,
-        ᶜSqₗᵖ,
-        ᶜSqᵢᵖ,
-        ᶜSqᵣᵖ,
-        ᶜSqₛᵖ,
-        Y.c.ρ,
-        q_rai,
-        q_sno,
-        ᶜts,
-        dt,
-        cmp,
-        thp,
-    )
-
-    # compute precipitation sinks
-    # (For now only done on the grid mean)
-    compute_precipitation_sinks!(
-        ᶜSᵖ,
-        ᶜSqᵣᵖ,
-        ᶜSqₛᵖ,
-        Y.c.ρ,
-        q_rai,
-        q_sno,
-        ᶜts,
-        dt,
-        cmp,
-        thp,
-    )
-end
-function compute_precipitation_cache!(
-    Y,
-    p,
-    ::Microphysics1Moment,
-    ::Union{DiagnosticEDMFX, PrognosticEDMFX},
-)
-    error("Not implemented yet")
-
-    #FT = Spaces.undertype(axes(Y.c))
-    #(; dt) = p
-    #(; ᶜts, ᶜqᵣ, ᶜqₛ, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
-    #(; ᶜΦ) = p.core
-    ## Grid mean precipitation sinks
-    #(; ᶜSqₜᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜSeₜᵖ) = p.precipitation
-    ## additional scratch storage
-    #ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    #ᶜ∇T = p.scratch.ᶜtemp_CT123
-
-    ## get thermodynamics and 1-moment microphysics params
-    #(; params) = p
-    #cmp = CAP.microphysics_1m_params(params)
-    #thp = CAP.thermodynamics_params(params)
-
-    ## zero out the helper source terms
-    #@. ᶜSqₜᵖ = FT(0)
-    #@. ᶜSqᵣᵖ = FT(0)
-    #@. ᶜSqₛᵖ = FT(0)
-    #@. ᶜSeₜᵖ = FT(0)
-    ## compute precipitation sinks
-    ## (For now only done on the grid mean)
-    #compute_precipitation_sinks!(
-    #    ᶜSᵖ,
-    #    ᶜSqₜᵖ,
-    #    ᶜSqᵣᵖ,
-    #    ᶜSqₛᵖ,
-    #    ᶜSeₜᵖ,
-    #    Y.c.ρ,
-    #    ᶜqᵣ,
-    #    ᶜqₛ,
-    #    ᶜts,
-    #    ᶜΦ,
-    #    dt,
-    #    cmp,
-    #    thp,
-    #)
-    ## first term of eq 36 from Raymond 2013
-    #compute_precipitation_heating!(ᶜSeₜᵖ, ᶜwᵣ, ᶜwₛ, ᶜu, ᶜqᵣ, ᶜqₛ, ᶜts, ᶜ∇T, thp)
-end
-
-function compute_precipitation_surface_fluxes!(
-    Y,
-    p,
-    precip_model::Microphysics1Moment,
-)
-    (; surface_rain_flux, surface_snow_flux) = p.precipitation
-    (; col_integrated_precip_energy_tendency,) = p.conservation_check
-    (; ᶜwᵣ, ᶜwₛ, ᶜspecific) = p.precomputed
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶠJ = Fields.local_geometry_field(Y.f).J
-    sfc_J = Fields.level(ᶠJ, Fields.half)
-    sfc_space = axes(sfc_J)
-
-    # Jacobian-weighted extrapolation from interior to surface, consistent with
-    # the reconstruction of density on cell faces, ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
-    int_J = Fields.Field(Fields.field_values(Fields.level(ᶜJ, 1)), sfc_space)
-    int_ρ = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), sfc_space)
-    sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
-
-    # Constant extrapolation to surface, consistent with simple downwinding
-    sfc_qᵣ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_rai, 1)),
-        sfc_space,
-    )
-    sfc_qₛ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_sno, 1)),
-        sfc_space,
-    )
-    sfc_wᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), sfc_space)
-    sfc_wₛ = Fields.Field(Fields.field_values(Fields.level(ᶜwₛ, 1)), sfc_space)
-
-    @. surface_rain_flux = sfc_ρ * sfc_qᵣ * (-sfc_wᵣ)
-    @. surface_snow_flux = sfc_ρ * sfc_qₛ * (-sfc_wₛ)
-end
 
 function precipitation_tendency!(
     Yₜ,
@@ -386,11 +89,7 @@ function precipitation_tendency!(
     _,
 )
     (; turbconv_model) = p.atmos
-    (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precipitation
-
-    # Populate the cache and precipitation surface fluxes
-    compute_precipitation_cache!(Y, p, precip_model, turbconv_model)
-    compute_precipitation_surface_fluxes!(Y, p, precip_model)
+    (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
 
     # Update grid mean tendencies
     @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜSqₗᵖ
