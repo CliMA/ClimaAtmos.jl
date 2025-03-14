@@ -65,6 +65,8 @@ function temporary_quantities(Y, atmos)
             BidiagonalMatrixRow{Adjoint{FT, C3{FT}}},
         ),
         ᶜdiffusion_h_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
+        ᶜdiffusion_h_matrix_scaled = similar(Y.c, TridiagonalMatrixRow{FT}),
+        ᶜtridiagonal_matrix_scalar = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶠtridiagonal_matrix_c3 = similar(Y.f, TridiagonalMatrixRow{C3{FT}}),
     )

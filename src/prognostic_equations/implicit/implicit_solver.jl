@@ -503,6 +503,8 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         p.scratch.ᶠp_grad_matrix,
         p.scratch.ᶜadvection_matrix,
         p.scratch.ᶜdiffusion_h_matrix,
+        p.scratch.ᶜdiffusion_h_matrix_scaled,
+        p.scratch.ᶜtridiagonal_matrix_scalar,
         p.scratch.ᶜdiffusion_u_matrix,
         p.scratch.ᶠbidiagonal_matrix_ct3,
         p.scratch.ᶠbidiagonal_matrix_ct3_2,
@@ -540,7 +542,13 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         ᶠbidiagonal_matrix_ct3_2,
         ᶠtridiagonal_matrix_c3,
     ) = p
-    (; ᶜdiffusion_h_matrix, ᶜdiffusion_u_matrix, params) = p
+    (;
+        ᶜdiffusion_h_matrix,
+        ᶜdiffusion_h_matrix_scaled,
+        ᶜtridiagonal_matrix_scalar,
+        ᶜdiffusion_u_matrix,
+        params,
+    ) = p
     (; edmfx_upwinding) = p.atmos.numerics
 
     FT = Spaces.undertype(axes(Y.c))
@@ -716,10 +724,15 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     end
 
     if use_derivative(diffusion_flag)
+        α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
         (; ᶜK_h, ᶜK_u) = p
         @. ᶜdiffusion_h_matrix =
             ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅
             ᶠgradᵥ_matrix()
+        @. ᶜdiffusion_h_matrix_scaled =
+            ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(
+                ᶠinterp(ᶜρ) * ᶠinterp(α_vert_diff_tracer * ᶜK_h),
+            ) ⋅ ᶠgradᵥ_matrix()
         if (
             MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke)) ||
             !isnothing(p.atmos.turbconv_model) ||
@@ -759,10 +772,15 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ᶜq = MatrixFields.get_field(ᶜspecific, q_name)
             ∂ᶜρq_err_∂ᶜρ = matrix[ρq_name, @name(c.ρ)]
             ∂ᶜρq_err_∂ᶜρq = matrix[ρq_name, ρq_name]
+            ᶜtridiagonal_matrix_scalar = ifelse(
+                q_name in (:q_rai, :q_sno),
+                ᶜdiffusion_h_matrix_scaled,
+                ᶜdiffusion_h_matrix,
+            )
             @. ∂ᶜρq_err_∂ᶜρ =
-                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(-(ᶜq) / ᶜρ)
+                dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(-(ᶜq) / ᶜρ)
             @. ∂ᶜρq_err_∂ᶜρq +=
-                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
+                dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
 
         if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
