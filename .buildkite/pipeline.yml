@@ -588,6 +588,16 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":man_in_business_suit_levitating: AMIP Target EDOnly nonequil"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/amip_target_edonly_nonequil.yml
+          --job_id amip_target_edonly_nonequil
+        artifact_paths: "amip_target_edonly_nonequil/output_active/*"
+        agents:
+          slurm_mem: 20GB
+      
+
   - group: "Diagnostic EDMFX"
     steps:
 
