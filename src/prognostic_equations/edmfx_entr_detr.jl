@@ -57,6 +57,8 @@ function entrainment(
     ::PiGroupsEntrainment,
 )
     FT = eltype(thermo_params)
+    entr_coeff = CAP.entr_coeff(turbconv_params)
+
     if ᶜaʲ <= FT(0)
         return FT(0)
     else
@@ -76,7 +78,7 @@ function entrainment(
         Π₂ = min(max(Π₂, -1), 1)
 
         entr =
-            abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) * (
+            (abs(FT(1) - ᶜaʲ))^FT(abs(entr_coeff)) * abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) * (
                 entr_param_vec[1] * abs(Π₁) +
                 entr_param_vec[2] * abs(Π₂) +
                 entr_param_vec[3] * abs(Π₃) +
@@ -245,7 +247,7 @@ function detrainment(
         # non-dimensional pi-groups
         Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
         Π₂ = max(ᶜtke⁰, 0) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
-        Π₃ = sqrt(ᶜaʲ)
+        Π₃ = sqrt(max(ᶜaʲ, 0))
         Π₄ = ᶜRHʲ - ᶜRH⁰
         Π₅ = (ᶜz - z_sfc) / ref_H
         # Π₁, Π₂ are unbounded, so clip values that blow up
@@ -338,10 +340,14 @@ function detrainment(
     ᶜtke⁰,
     ::SmoothAreaDetrainment,
 )
-    if (ᶜρaʲ <= 0) || (ᶜw_vert_div >= 0)
+    FT = eltype(thermo_params)
+    max_area_limiter = FT(0.01)*exp(-FT(30.0) * (FT(1.0) - ᶜaʲ))
+    if ᶜρaʲ <= 0
         detr = 0
+    elseif ᶜw_vert_div >= 0
+        detr = max_area_limiter
     else
-        detr = ᶜentr - ᶜw_vert_div
+        detr = ᶜentr - ᶜw_vert_div + max_area_limiter
     end
     return max(detr, 0)
 end
@@ -350,6 +356,11 @@ function turbulent_entrainment(turbconv_params, ᶜaʲ)
     turb_entr_param_vec = CAP.turb_entr_param_vec(turbconv_params)
     return max(turb_entr_param_vec[1] * exp(-turb_entr_param_vec[2] * ᶜaʲ), 0)
 end
+
+# function turbulent_entrainment(turbconv_params, ᶜaʲ)
+#     turb_entr_param_vec = CAP.turb_entr_param_vec(turbconv_params)
+#     return max(0.001 * exp(-5000.0 * ᶜaʲ), 0)
+# end
 
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
