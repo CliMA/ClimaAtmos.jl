@@ -5,10 +5,14 @@ import ClimaAtmos as CA
 import ClimaCalibrate as CAL
 import Interpolations
 using JLD2
+using Dates
 
 
 function get_era5_calibration_library()
-    locations = [(-20, 285 - 360), (17, 211 - 360), (10, -135)]
+    # locations = [(-20, 285 - 360), (17, 211 - 360), (10, -135)]
+    # convection_type = ["shallow", "shallow", "deep"]
+    locations = [(17, 211 - 360)] # just calibrate to 23
+    convection_type = ["shallow"]
     ref_paths, latitudes, longitudes = [], [], []
     for (lat, lon) in locations
         filename = "/central/groups/esm/jschmitt/era5/tv/july_forcing/sim_forcing_loc_$(lat)_$(lon).nc"
@@ -16,7 +20,7 @@ function get_era5_calibration_library()
         push!(latitudes, lat)
         push!(longitudes, lon)
     end
-    ref_paths, latitudes, longitudes
+    ref_paths, latitudes, longitudes, convection_type
 end
 
 # function get_forcing_file(i, months)

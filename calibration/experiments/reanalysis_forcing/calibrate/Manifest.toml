@@ -2,7 +2,7 @@
 
 julia_version = "1.10.5"
 manifest_format = "2.0"
-project_hash = "8296b2eda986945d90fba9e9c3676b5db9d13e97"
+project_hash = "68d8237bd09b660e2ef4e2ab94d11ee159adbf86"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "fb97701c117c8162e84dfcf80215caa904aef44f"
@@ -466,9 +466,9 @@ weakdeps = ["BenchmarkTools", "CUDA", "OrderedCollections", "PrettyTables", "Sta
 
 [[deps.ClimaUtilities]]
 deps = ["Artifacts", "ClimaComms", "Dates"]
-path = "../../../../../ClimaUtilities.jl"
+git-tree-sha1 = "572b0dcd062e9d38668177129d7a47d1532f7164"
 uuid = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
-version = "0.1.21"
+version = "0.1.23"
 weakdeps = ["Adapt", "CUDA", "ClimaCore", "ClimaCoreTempestRemap", "Interpolations", "NCDatasets"]
 
     [deps.ClimaUtilities.extensions]

@@ -11,8 +11,8 @@ cd(project)
 #         mem_per_cpu=8000)
 function create_worker_pool()    
     addprocs(
-        SlurmManager(50),
-        t = "02:00:00",
+        SlurmManager(100),
+        t = "05:00:00",
         cpus_per_task = 1,
         exeflags = "--project=$(Base.active_project())"
     )
@@ -89,7 +89,7 @@ JLD2.jldsave(
 ### get ERA5 obs (Y) and norm factors
 @everywhere begin
     #include("get_les_metadata.jl")
-    ref_paths, latitudes, longitudes = get_era5_calibration_library()
+    ref_paths, latitudes, longitudes, convection_type = get_era5_calibration_library()
     obs_vec = []
 
     for i in 1:length(ref_paths)
@@ -112,7 +112,7 @@ JLD2.jldsave(
                 Dict(
                     "samples" => y_obs,
                     "covariances" => Σ_obs,
-                    "names" => join([latitudes[i], longitudes[i]], "_"),
+                    "names" => join([latitudes[i], longitudes[i], convection_type[i]], "_"),
                 ),
             ),
         )

@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --ntasks=50
-#SBATCH --time=02:00:00
-#SBATCH --mem-per-cpu=8000
+#SBATCH --ntasks=100
+#SBATCH --time=05:00:00
+#SBATCH --mem-per-cpu=8G
 #SBATCH -o workers.txt
 #SBATCH -e workers_error.txt
 

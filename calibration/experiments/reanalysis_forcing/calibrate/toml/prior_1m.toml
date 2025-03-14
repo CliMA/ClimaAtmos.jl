@@ -43,11 +43,3 @@ type = "float"
 [EDMF_surface_area]
 prior = "constrained_gaussian(EDMF_surface_area, 0.09964843547415161, 0.03, 0, Inf)"
 type = "float"
-
-[rain_autoconversion_timescale]
-prior = "constrained_gaussian(rain_autoconversion_timescale, 5777.697315577852, 300.0, 0, Inf)"
-type = "float"
-
-[snow_autoconversion_timescale]
-prior = "constrained_gaussian(snow_autoconversion_timescale, 145.68541447981468, 12.0, 0, Inf)"
-type = "float"

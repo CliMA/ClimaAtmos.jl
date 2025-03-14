@@ -8,8 +8,9 @@ import ClimaCalibrate as CAL
 using Plots
 using LinearAlgebra
 using DataFrames
+using Dates
 
-output_dir = "/scratch/julian/calibrations/exp_3_cf23_no_eddy_visc"
+output_dir = "/central/groups/esm/jschmitt/calibrations/tv_profiles_6"
 iterations = nothing
 
 include("helper_funcs.jl")
@@ -113,7 +114,7 @@ for iteration in iterations
         color = :gray,
     )
 
-    ylims!(plt, -3.0, 3.0)
+    ylims!(plt, -5.0, 5.0)
     savefig(plt, joinpath(plot_dir_y_vec, "eki_y_vs_g_iter_$(iteration).png"))
 
 end

@@ -8,13 +8,14 @@ using Plots
 using JLD2
 using Statistics
 using YAML
+using Dates
 
 include("helper_funcs.jl")
 include("observation_map.jl")
 
 
-output_dir = "/scratch/julian/calibrations/$(ARGS[1])" # output directory
-config_i = parse(Int64, ARGS[2]) # config to plot
+output_dir = "/central/groups/esm/jschmitt/calibrations/tv_profiles_6/" # output directory
+config_i = 1 # config to plot
 ylims = (0, 4000) # y limits for plotting (`z` coord)
 iterations = nothing # iterations to plot (i.e., 0:2). default is all iterations
 var_names =
@@ -30,8 +31,13 @@ const n_vert_levels = config_dict["dims_per_var"]
 model_config_dict =
     YAML.load_file(joinpath(output_dir, "configs", "model_config.yml"))
 
-ref_paths, months, sites = get_era5_calibration_library()
+ref_paths, latitudes, longitudes, convection_type = get_era5_calibration_library()
 atmos_config = CA.AtmosConfig(model_config_dict)
+
+startdate = Dates.DateTime(config_dict["start_time"], "yyyymmdd")
+
+obs_start = startdate + Dates.Second(config_dict["g_t_start_sec"])
+obs_end = startdate + Dates.Second(config_dict["g_t_end_sec"])
 
 # get/store LES obs and norm factors 
 zc_model = get_z_grid(atmos_config, z_max = z_max)
@@ -91,9 +97,9 @@ for iteration in iterations
         if in(var_name, cal_var_names)
             y_truth = get_obs(
                 ref_paths[config_i],
-                months[config_i],
-                sites[config_i],
-                [var_name];
+                [var_name],
+                obs_start, 
+                obs_end;
                 normalize = false,
                 z_scm = zc_model,
                 log_vars = [""], #["clw]

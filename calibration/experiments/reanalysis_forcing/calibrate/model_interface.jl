@@ -44,10 +44,13 @@ function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
     end
     config_dict["output_default_diagnostics"] = false
 
-    ref_paths, _, _ = get_era5_calibration_library()
+    ref_paths, _, _, convection_type = get_era5_calibration_library()
     atmos_configs = map(EKP.get_current_minibatch(eki)) do i
         config = deepcopy(config_dict)
         config["external_forcing_file"] = ref_paths[i] # forcing file a function of location
+        config["forcing_type"] = convection_type[i] # forcing type a function of location, currently hard coded in get_era5_calibration_library
+        println("external_forcing_file: ", config["external_forcing_file"])
+        println("forcing_type: ", config["forcing_type"])
         #config["cfsite_number"] = get_cfsite_id(i, sites) # specify which site to run
         config["output_dir"] = joinpath(member_path, "config_$i")
         comms_ctx = ClimaComms.SingletonCommsContext()
