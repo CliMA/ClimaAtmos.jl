@@ -1,7 +1,7 @@
+FLOAT_TYPE: "Float64"
 h_elem: 16
 z_elem: 43
 dz_bottom: 30.0
-deep_atmosphere: false
 dt: "120secs"
 t_end: "360days"
 initial_condition: "DryBaroclinicWave"
