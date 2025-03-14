@@ -37,7 +37,7 @@ For every other `AbstractEDMF`, only `ᶜtke⁰` is added as a precomputed quant
 TODO: Rename `ᶜK` to `ᶜκ`.
 """
 function implicit_precomputed_quantities(Y, atmos)
-    (; moisture_model, turbconv_model) = atmos
+    (; moisture_model, turbconv_model, precip_model) = atmos
     FT = eltype(Y)
     TST = thermo_state_type(moisture_model, FT)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -53,16 +53,14 @@ function implicit_precomputed_quantities(Y, atmos)
     )
     sgs_quantities =
         turbconv_model isa AbstractEDMF ? (; ᶜtke⁰ = similar(Y.c, FT)) : (;)
+    moisture_sgs_quantities = (moisture_model isa NonEqulMoistureModel && precip_model isa Micoprhysics1M) ?
+        (; ᶜq_liq⁰ = similar(Y.c, FT), ᶜq_ice⁰ = similar(Y.c, FT), ᶜq_rai⁰ = similar(Y.c, FT), ᶜq_sno⁰ = similar(Y.c, FT)) : (;)
     prognostic_sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
             ᶜρa⁰ = similar(Y.c, FT),
             ᶜmse⁰ = similar(Y.c, FT),
             ᶜq_tot⁰ = similar(Y.c, FT),
-            ᶜq_liq⁰ = similar(Y.c, FT),
-            ᶜq_ice⁰ = similar(Y.c, FT),
-            ᶜq_rai⁰ = similar(Y.c, FT),
-            ᶜq_sno⁰ = similar(Y.c, FT),
             ᶠu₃⁰ = similar(Y.f, C3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
@@ -75,6 +73,7 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶠKᵥʲs = similar(Y.f, NTuple{n, FT}),
             ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
+             moisture_sgs_quantities...,
         ) : (;)
     return (; gs_quantities..., sgs_quantities..., prognostic_sgs_quantities...)
 end

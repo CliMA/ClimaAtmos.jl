@@ -17,6 +17,9 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
+    if (p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1M)
+         (; ᶜq_liq⁰, ᶜq_liq⁰, ᶜq_liq⁰, ᶜq_liq⁰, ) = p.precomputed
+    end
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
@@ -76,13 +79,104 @@ function edmfx_sgs_mass_flux_tendency!(
             )
             @. Yₜ.c.ρq_tot += vtt
         end
-        # TODO - add tracer advection
+
+        if (p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1M)
+            for j in 1:n
+                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
+
+                @. ᶜa_scalar =
+                    (Y.c.sgsʲs.:($$j).q_liq - ᶜspecific.q_liq) *
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                vtt = vertical_transport(
+                    ᶜρʲs.:($j),
+                    ᶠu³_diff,
+                    ᶜa_scalar,
+                    dt,
+                    edmfx_sgsflux_upwinding,
+                )
+                @. Yₜ.c.ρq_liq += vtt
+
+                @. ᶜa_scalar =
+                    (Y.c.sgsʲs.:($$j).q_ice - ᶜspecific.q_ice) *
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                vtt = vertical_transport(
+                    ᶜρʲs.:($j),
+                    ᶠu³_diff,
+                    ᶜa_scalar,
+                    dt,
+                    edmfx_sgsflux_upwinding,
+                )
+                @. Yₜ.c.ρq_ice += vtt
+
+                @. ᶜa_scalar =
+                    (Y.c.sgsʲs.:($$j).q_rai - ᶜspecific.q_rai) *
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                vtt = vertical_transport(
+                    ᶜρʲs.:($j),
+                    ᶠu³_diff,
+                    ᶜa_scalar,
+                    dt,
+                    edmfx_sgsflux_upwinding,
+                )
+                @. Yₜ.c.ρq_rai += vtt
+
+                @. ᶜa_scalar =
+                    (Y.c.sgsʲs.:($$j).q_sno - ᶜspecific.q_sno) *
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                vtt = vertical_transport(
+                    ᶜρʲs.:($j),
+                    ᶠu³_diff,
+                    ᶜa_scalar,
+                    dt,
+                    edmfx_sgsflux_upwinding,
+                )
+                @. Yₜ.c.ρq_sno += vtt
+            end
+            @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
+
+            @. ᶜa_scalar = (ᶜq_liq⁰ - ᶜspecific.q_liq) * draft_area(ᶜρa⁰, ᶜρ⁰)
+            vtt = vertical_transport(
+                ᶜρ⁰,
+                ᶠu³_diff,
+                ᶜa_scalar,
+                dt,
+                edmfx_sgsflux_upwinding,
+            )
+            @. Yₜ.c.ρq_liq += vtt
+
+            @. ᶜa_scalar = (ᶜq_ice⁰ - ᶜspecific.q_ice) * draft_area(ᶜρa⁰, ᶜρ⁰)
+            vtt = vertical_transport(
+                ᶜρ⁰,
+                ᶠu³_diff,
+                ᶜa_scalar,
+                dt,
+                edmfx_sgsflux_upwinding,
+            )
+            @. Yₜ.c.ρq_ice += vtt
+
+            @. ᶜa_scalar = (ᶜq_rai⁰ - ᶜspecific.q_rai) * draft_area(ᶜρa⁰, ᶜρ⁰)
+            vtt = vertical_transport(
+                ᶜρ⁰,
+                ᶠu³_diff,
+                ᶜa_scalar,
+                dt,
+                edmfx_sgsflux_upwinding,
+            )
+            @. Yₜ.c.ρq_rai += vtt
+
+            @. ᶜa_scalar = (ᶜq_sno⁰ - ᶜspecific.q_sno) * draft_area(ᶜρa⁰, ᶜρ⁰)
+            vtt = vertical_transport(
+                ᶜρ⁰,
+                ᶠu³_diff,
+                ᶜa_scalar,
+                dt,
+                edmfx_sgsflux_upwinding,
+            )
+            @. Yₜ.c.ρq_sno += vtt
+        end
         # TODO - compute sedimentation and terminal velocities
         # TODO - add w q_tot, w h_tot terms
     end
-
-    # TODO: Add tracer flux
-
     return nothing
 end
 
@@ -329,12 +423,12 @@ function edmfx_sgs_diffusive_flux_tendency!(
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
         end
         if (p.atmos.moisture_model isa NonEquilMoistureModel && p.atmos.precip_model isa Microphysics1M)
+            # TODO - we don't want that for rain and snow most likely. Have a parameter
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
-                bottom = Operators.SetValue(C3(FT(0))),  #TODO - is that a good BC?
+                bottom = Operators.SetValue(C3(FT(0))),
             )
-
             @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_liq⁰)))
             @. Yₜ.c.ρq_liq -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion

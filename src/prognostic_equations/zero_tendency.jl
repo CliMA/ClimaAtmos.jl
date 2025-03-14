@@ -31,6 +31,12 @@ function zero_tendency!(
         @. Yₜ.f.sgsʲs.:($$j).u₃ = C3(0)
         @. Yₜ.c.sgsʲs.:($$j).mse = 0
         @. Yₜ.c.sgsʲs.:($$j).q_tot = 0
+        if p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1M
+            @. Yₜ.c.sgsʲs.:($$j).q_liq = 0
+            @. Yₜ.c.sgsʲs.:($$j).q_ice = 0
+            @. Yₜ.c.sgsʲs.:($$j).q_rai = 0
+            @. Yₜ.c.sgsʲs.:($$j).q_sno = 0
+        end
     end
     return nothing
 end
