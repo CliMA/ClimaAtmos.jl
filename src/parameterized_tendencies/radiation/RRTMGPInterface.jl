@@ -963,10 +963,7 @@ function set_and_save!(array, name, views, domain_nlay, dict = nothing)
     end
 
     if startswith(name, "center_") || startswith(name, "face_")
-        domain_range =
-            startswith(name, "center_") ? (1:domain_nlay) :
-            (1:(domain_nlay + 1))
-        domain_view = view(array, domain_range, :)
+        domain_view = view(array, :, :)
         set_array!(domain_view, domain_value, domain_symbol)
         push!(views, (domain_symbol, domain_view))
     else
