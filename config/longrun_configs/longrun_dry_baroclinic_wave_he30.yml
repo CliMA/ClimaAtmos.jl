@@ -1,7 +1,6 @@
-h_elem: 16
+h_elem: 30
 z_elem: 43
 dz_bottom: 30.0
-deep_atmosphere: false
 dt: "120secs"
 t_end: "360days"
 initial_condition: "DryBaroclinicWave"
