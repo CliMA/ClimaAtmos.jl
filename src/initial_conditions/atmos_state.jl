@@ -144,20 +144,32 @@ function turbconv_center_variables(
     a_draft = ls.turbconv_state.draft_area
     sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
     ρa = ls.ρ * a_draft / n
+    mse = TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
+        CAP.grav(ls.params) * ls.geometry.coordinates.z
+    q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
+    sgsʲs = ntuple(_ -> (; ρa = ρa, mse = mse, q_tot = q_tot), Val(n))
+    return (; sgs⁰, sgsʲs)
+end
+function turbconv_center_variables(
+    ls,
+    turbconv_model::PrognosticEDMFX,
+    moisture_model::NonEquilMoistModel,
+    precip_model::Microphysics1Moment,
+    gs_vars
+)
+    n = n_mass_flux_subdomains(turbconv_model)
+    a_draft = ls.turbconv_state.draft_area
+    sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
+    ρa = ls.ρ * a_draft / n
     mse =
         TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
         CAP.grav(ls.params) * ls.geometry.coordinates.z
-    if mositure_model isa EquilMoistModel && precip_model isa Microphysics1M
-        q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
-        q_liq = TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state)
-        q_ice = TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state)
-        q_rai = ls.precip_state.q_rai
-        q_sno = ls.precip_state.q_sno
-        sgsʲs = ntuple(_ -> (; ρa = ρa, mse = mse, q_tot = q_tot, q_liq = q_liq, q_ice = q_ice, q_rai = q_rai, q_sno = q_sno), Val(n))
-    else
-        q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
-        sgsʲs = ntuple(_ -> (; ρa = ρa, mse = mse, q_tot = q_tot), Val(n))
-    end
+    q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
+    q_liq = TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state)
+    q_ice = TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state)
+    q_rai = ls.precip_state.q_rai
+    q_sno = ls.precip_state.q_sno
+    sgsʲs = ntuple(_ -> (; ρa = ρa, mse = mse, q_tot = q_tot, q_liq = q_liq, q_ice = q_ice, q_rai = q_rai, q_sno = q_sno), Val(n))
     return (; sgs⁰, sgsʲs)
 end
 

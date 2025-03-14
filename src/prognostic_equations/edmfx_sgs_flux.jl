@@ -17,8 +17,8 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
-    if (p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1M)
-         (; ᶜq_liq⁰, ᶜq_liq⁰, ᶜq_liq⁰, ᶜq_liq⁰, ) = p.precomputed
+    if (p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1Moment)
+         (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
     end
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -80,7 +80,7 @@ function edmfx_sgs_mass_flux_tendency!(
             @. Yₜ.c.ρq_tot += vtt
         end
 
-        if (p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1M)
+        if (p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1Moment)
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
 
@@ -194,7 +194,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
     (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs) = p.precomputed
-    if (p.atmos.moisture_model isa NonEquilMoistureModel && p.atmos.precip_model isa Microphysics1M)
+    if (p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1Moment)
         (; ᶜq_liqʲs, ᶜq_iceʲs, ᶜq_raiʲs, ᶜq_snoʲs) = p.precomputed
     end
     (; dt) = p
@@ -258,7 +258,7 @@ function edmfx_sgs_mass_flux_tendency!(
             end
         end
 
-        if (p.atmos.moisture_model isa NonEquilMoistureModel && p.atmos.precip_model isa Microphysics1M)
+        if (p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1Moment)
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                 # @. ᶜa_scalar =
@@ -377,7 +377,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
     (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length) = p.precomputed
-    if (p.atmos.moisture_model isa NonEquilMoistureModel && p.atmos.precip_model isa Microphysics1M)
+    if (p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1Moment)
         (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
     end
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
@@ -422,7 +422,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
         end
-        if (p.atmos.moisture_model isa NonEquilMoistureModel && p.atmos.precip_model isa Microphysics1M)
+        if (p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1Moment)
             # TODO - we don't want that for rain and snow most likely. Have a parameter
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq = Operators.DivergenceF2C(

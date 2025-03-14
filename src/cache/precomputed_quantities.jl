@@ -53,7 +53,7 @@ function implicit_precomputed_quantities(Y, atmos)
     )
     sgs_quantities =
         turbconv_model isa AbstractEDMF ? (; ᶜtke⁰ = similar(Y.c, FT)) : (;)
-    moisture_sgs_quantities = (moisture_model isa NonEqulMoistureModel && precip_model isa Micoprhysics1M) ?
+    moisture_sgs_quantities = (moisture_model isa NonEquilMoistModel && precip_model isa Microphysics1Moment) ?
         (; ᶜq_liq⁰ = similar(Y.c, FT), ᶜq_ice⁰ = similar(Y.c, FT), ᶜq_rai⁰ = similar(Y.c, FT), ᶜq_sno⁰ = similar(Y.c, FT)) : (;)
     prognostic_sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?

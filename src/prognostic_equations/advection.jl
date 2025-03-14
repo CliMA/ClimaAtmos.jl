@@ -65,7 +65,7 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
                 wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
                 Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
-            if p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1M
+            if p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1Moment
                 # TODO - add precipitation terminal velocity
                 # TODO - add cloud sedimentation velocity
                 # TODO - add their contributions to mean energy and mass
@@ -252,7 +252,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             edmfx_upwinding,
         )
         @. Yₜ.c.sgsʲs.:($$j).q_tot += va
-        if p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1M
+        if p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.precip_model isa Microphysics1Moment
             # TODO - add precipitation terminal velocity
             # TODO - add cloud sedimentation velocity
             # TODO - add their contributions to mean energy and mass
