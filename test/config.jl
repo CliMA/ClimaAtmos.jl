@@ -3,7 +3,17 @@ import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 
-include(joinpath("..", "perf", "common.jl"))
+include(joinpath(pkgdir(CA), "perf", "common.jl"))
+
+@testset "TargetJobConfig" begin
+    dry_barowave_file =
+        joinpath(pkgdir(CA), "config", "model_configs", "baroclinic_wave.yml")
+    target_job_config = TargetJobConfig("baroclinic_wave")
+    file_config = CA.AtmosConfig(dry_barowave_file)
+    @test file_config.parsed_args == target_job_config.parsed_args
+    @test file_config.toml_dict.data == target_job_config.toml_dict.data
+    @test file_config.comms_ctx == target_job_config.comms_ctx
+end
 
 function extract_job_ids(folder_path)
     job_id_dict = Dict()

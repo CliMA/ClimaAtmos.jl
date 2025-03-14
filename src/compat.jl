@@ -96,4 +96,3 @@ else
     WallTimeInfo = ClimaUtilities.OnlineLogging.WallTimeInfo
     report_walltime = ClimaUtilities.OnlineLogging.report_walltime
 end
-
