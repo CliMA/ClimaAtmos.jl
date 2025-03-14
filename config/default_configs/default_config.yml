@@ -238,6 +238,9 @@ external_forcing_file:
 cfsite_number:
   help: "cfsite identifier for single column forcing from  `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
   value: "site23"
+forcing_type:
+  help: "For single column models sets appropriate relaxation scales [`shallow` (default), `deep`]"
+  value: "shallow"
 subsidence:
   help: "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`, `ISDAC`]"
   value: ~

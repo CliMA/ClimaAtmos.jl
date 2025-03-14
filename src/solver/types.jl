@@ -102,6 +102,10 @@ struct GCMDrivenInsolation <: AbstractInsolation end
 struct ERA5DrivenInsolation <: AbstractInsolation end
 struct ExternalTVInsolation <: AbstractInsolation end
 
+abstract type AbstractDrivenForcingType end
+struct ShallowDrivenForcingType <: AbstractDrivenForcingType end
+struct DeepDrivenForcingType <: AbstractDrivenForcingType end
+
 """
     AbstractOzone
 
@@ -501,6 +505,7 @@ Base.@kwdef struct AtmosModel{
     RM,
     LA,
     EXTFORCING,
+    DFT,
     EC,
     AT,
     TM,
@@ -538,6 +543,7 @@ Base.@kwdef struct AtmosModel{
     radiation_mode::RM = nothing
     ls_adv::LA = nothing
     external_forcing::EXTFORCING = nothing
+    driven_forcing_type::DFT = nothing
     edmf_coriolis::EC = nothing
     advection_test::AT = nothing
     tendency_model::TM = nothing

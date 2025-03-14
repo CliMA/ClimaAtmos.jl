@@ -314,6 +314,18 @@ function get_ozone(parsed_args)
     return parsed_args["prescribe_ozone"] ? PrescribedOzone() : IdealizedOzone()
 end
 
+function get_driven_forcing_model(parsed_args)
+    if isnothing(parsed_args["forcing_type"]) && return nothing
+    elseif lowercase(parsed_args["forcing_type"]) == "shallow"
+        return ShallowDrivenForcingType()
+    elseif lowercase(parsed_args["forcing_type"]) == "deep"
+        return DeepDrivenForcingType()
+    else
+        error("The forcing types supported are $(subtypes(AbstractForcingType))")
+    end
+end
+    
+
 function get_co2(parsed_args)
     if isnothing(parsed_args["co2_model"])
         return nothing
@@ -428,9 +440,17 @@ function get_external_forcing_model(parsed_args)
         )
     elseif external_forcing == "ExternalTV"
         DType = Float64  # TODO: Read from `parsed_args`
+        # if parsed_args["external_forcing_type"] == "shallow"
+        #     external_forcing_type = ShallowForcingType()
+        # elseif parsed_args["external_forcing_type"] == "deep"
+        #     external_forcing_type = DeepForcingType()
+        # else
+        #     error("Invalid external_forcing_type $(parsed_args["external_forcing_type"])")
+        # end
         ExternalDrivenTVForcing{DType}(
             parsed_args["external_forcing_file"],
             parsed_args["start_date"],
+            #external_forcing_type,
         )
     elseif external_forcing == "ISDAC"
         ISDACForcing()

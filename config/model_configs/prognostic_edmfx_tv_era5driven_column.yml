@@ -1,9 +1,10 @@
 initial_condition: "ExternalTV"
 external_forcing: "ExternalTV"
 # external_forcing_file: "/Users/julianschmitt/Documents/Research/loss/ClimaAtmos.jl/examples/tvforcing/sim_forcing_site23_ng_xyz.nc"
-external_forcing_file: "sim_forcing_site23_ng_xyz.nc"
+external_forcing_file: "/central/groups/esm/jschmitt/era5/tv/july_forcing/sim_forcing_loc_17_-149.nc"
 surface_setup: "ExternalTV"
 surface_temperature: "ExternalTVColumn"
+forcing_type: "shallow"
 start_date: "20070701"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
