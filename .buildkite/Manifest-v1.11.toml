@@ -2,7 +2,7 @@
 
 julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "04945e2a7116cfacb2d57340f477dbe23e208227"
+project_hash = "dbb001c3c134c9962d9a283b94c060c2d2eb8b6a"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "fb97701c117c8162e84dfcf80215caa904aef44f"
@@ -394,9 +394,11 @@ version = "0.2.12"
 
 [[deps.ClimaParams]]
 deps = ["TOML"]
-git-tree-sha1 = "5f624b24e522ce61bbe0b63ce6fb1c7381b9fa91"
+git-tree-sha1 = "c8468da9e2e9d2a8786a0ce925181ae6cd8b8aee"
+repo-rev = "zs/diffusion_scaling_params"
+repo-url = "https://github.com/CliMA/ClimaParams.jl.git"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "0.10.21"
+version = "0.10.23"
 
 [[deps.ClimaReproducibilityTests]]
 deps = ["OrderedCollections", "PrettyTables"]

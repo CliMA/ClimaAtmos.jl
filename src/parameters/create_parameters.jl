@@ -105,6 +105,7 @@ atmos_name_map = (;
     :water_refractive_index => :water_refractive_index,
     :optics_lookup_temperature_min => :optics_lookup_temperature_min,
     :optics_lookup_temperature_max => :optics_lookup_temperature_max,
+    :tracer_hyperdiffusion_factor => :α_hyperdiff_tracer,
 )
 
 cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
@@ -141,7 +142,12 @@ microphys_1m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
 )
 
 function vert_diff_parameters(toml_dict)
-    name_map = (; :C_E => :C_E, :H_diffusion => :H, :D_0_diffusion => :D₀)
+    name_map = (;
+        :C_E => :C_E,
+        :H_diffusion => :H,
+        :D_0_diffusion => :D₀,
+        :tracer_vertical_diffusion_factor => :α_vert_diff_tracer,
+    )
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
 end
 

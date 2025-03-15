@@ -230,6 +230,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
 
+    α_hyperdiff_tracer = CAP.α_hyperdiff_tracer(p.params)
     (; ν₄_scalar_coeff) = hyperdiff
     h_space = Spaces.horizontal_space(axes(Y.c))
     h_length_scale = Spaces.node_horizontal_length_scale(h_space) # mean nodal distance
@@ -244,11 +245,13 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # TODO: Figure out why caching the duplicated tendencies in ᶜtemp_scalar
     # triggers allocations.
     for (ᶜρχₜ, ᶜ∇²χ, χ_name) in matching_subfields(Yₜ.c, ᶜ∇²specific_tracers)
-        ν₄_scalar = ifelse(χ_name in (:q_rai, :q_sno), 0 * ν₄_scalar, ν₄_scalar)
+        ν₄_scalar = ifelse(
+            χ_name in (:q_rai, :q_sno),
+            α_hyperdiff_tracer * ν₄_scalar,
+            ν₄_scalar,
+        )
         @. ᶜρχₜ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
-        if !(χ_name in (:q_rai, :q_sno))
-            @. Yₜ.c.ρ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
-        end
+        @. Yₜ.c.ρ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
     end
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²q_totʲs) = p.hyperdiff
