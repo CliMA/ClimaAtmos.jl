@@ -3,7 +3,7 @@ z_elem: 43
 dz_bottom: 30.0
 dt: "240secs"
 dt_save_to_sol: "Inf"
-t_end: "2196days"
+t_end: "3660days"
 initial_condition: "DryBaroclinicWave"
 check_conservation: true
 disable_surface_flux_tendency: true
