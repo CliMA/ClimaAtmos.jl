@@ -1,5 +1,5 @@
-h_elem: 30
-z_elem: 43
+h_elem: 16
+z_elem: 31
 dz_bottom: 30.0
 deep_atmosphere: false
 dt: "120secs"
