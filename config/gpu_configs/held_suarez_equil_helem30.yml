@@ -6,8 +6,6 @@ rayleigh_sponge: true
 viscous_sponge: true
 dt: "90secs"
 t_end: "1days"
-dt_save_state_to_disk: "Inf"
-dt_save_to_sol: "Inf"
 output_default_diagnostics: false
 moist: "equil"
 vert_diff: true

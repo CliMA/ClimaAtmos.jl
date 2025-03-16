@@ -165,7 +165,7 @@ dt_save_state_to_disk:
   value: "Inf"
 dt_save_to_sol:
   help: "Time between saving solution. Examples: [`10days`, `1hours`, `Inf` (do not save)]"
-  value: "1days"
+  value: "Inf"
 moist:
   help: "Moisture model [`dry` (default), `equil`, `nonequil`]"
   value: "dry"

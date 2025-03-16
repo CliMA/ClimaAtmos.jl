@@ -2,6 +2,7 @@ dt_save_state_to_disk: "2days"
 initial_condition: "DryBaroclinicWave"
 dt: "400secs"
 t_end: "10days"
+dt_save_to_sol: "1days"
 deep_atmosphere: false
 disable_surface_flux_tendency: true
 diagnostics:

@@ -2,8 +2,6 @@ h_elem: 12
 z_elem: 25
 dt: 90secs
 t_end: 61mins
-dt_save_state_to_disk: "Inf"
-dt_save_to_sol: "Inf"
 log_progress: false
 rayleigh_sponge: true
 viscous_sponge: true
