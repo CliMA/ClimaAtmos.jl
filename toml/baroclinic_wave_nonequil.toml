@@ -3,6 +3,3 @@ value = 600
 
 [sublimation_deposition_timescale]
 value = 600
-
-[snow_autoconversion_timescale]
-value = 1e4

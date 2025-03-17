@@ -2,11 +2,11 @@ precip_model: "1M"
 dt_save_state_to_disk: "2days"
 reproducibility_test: true
 initial_condition: "MoistBaroclinicWave"
-output_dir: "/scratch/olivia/baroclinic_wave_nonequil"
+output_dir: "/glade/derecho/scratch/oalcabes/baroclinic_wave_nonequil"
 dt: "450secs"
 t_end: "10days"
 moist: "nonequil"
-toml: [toml/baroclinic_wave_nonequil.toml]
+toml: [/glade/u/home/oalcabes/ClimaAtmos.jl/toml/baroclinic_wave_nonequil.toml]
 disable_surface_flux_tendency: true
 diagnostics:
   - short_name: [pfull, wa, va, rv, hus, ke]
