@@ -4,6 +4,15 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+v0.29.1
+-------
+
+### Add support for non-zero `t_start`
+
+Passing a non zero `t_start` is useful in conditions where one wants to have a
+specific `start_date`, but start the simulation from a different point. This is
+used by `ClimaCoupler` to restart simulations.
+
 v0.29.0
 -------
 

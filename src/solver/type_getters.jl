@@ -604,12 +604,19 @@ function get_sim_info(config::AtmosConfig)
     isnothing(restart_file) ||
         @info "Restarting simulation from file $restart_file"
     epoch = DateTime(parsed_args["start_date"], dateformat"yyyymmdd")
+    t_start_int = time_to_seconds(parsed_args["t_start"])
+    if !isnothing(restart_file) && t_start_int != 0
+        @warn "Non zero `t_start` passed with a restarting simulation. The provided `t_start` will be ignored."
+    end
     if parsed_args["use_itime"]
         dt = ITime(time_to_seconds(parsed_args["dt"]))
+        t_start = ITime(time_to_seconds(parsed_args["t_start"]), epoch = epoch)
         t_end = ITime(time_to_seconds(parsed_args["t_end"]), epoch = epoch)
-        (dt, t_end) = promote(dt, t_end)
+        # ITime(0) is added for backward compatibility (since t_start used to always be 0)
+        (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
     else
         dt = FT(time_to_seconds(parsed_args["dt"]))
+        t_start = FT(time_to_seconds(parsed_args["t_start"]))
         t_end = FT(time_to_seconds(parsed_args["t_end"]))
     end
     sim = (;
@@ -619,12 +626,14 @@ function get_sim_info(config::AtmosConfig)
         job_id,
         dt = dt,
         start_date = epoch,
+        t_start = t_start,
         t_end = t_end,
     )
-    n_steps = floor(Int, sim.t_end / sim.dt)
+    n_steps = floor(Int, (sim.t_end - sim.t_start) / sim.dt)
     @info(
         "Time info:",
         dt = parsed_args["dt"],
+        t_start = parsed_args["t_start"],
         t_end = parsed_args["t_end"],
         floor_n_steps = n_steps,
     )
@@ -734,6 +743,8 @@ function get_simulation(config::AtmosConfig)
                 hash(atmos),
             )
             spaces = get_spaces_restart(Y)
+            # Fix the t_start in sim_info with the one from the restart
+            sim_info = merge(sim_info, (; t_start))
         end
         @info "Allocating Y: $s"
     else
@@ -749,14 +760,6 @@ function get_simulation(config::AtmosConfig)
                 spaces.center_space,
                 spaces.face_space,
             )
-            if sim_info.dt isa ITime
-                t_start = ITime(
-                    Spaces.undertype(axes(Y.c))(0);
-                    epoch = sim_info.start_date,
-                )
-            else
-                t_start = Spaces.undertype(axes(Y.c))(0)
-            end
         end
         @info "Allocating Y: $s"
 
@@ -800,7 +803,7 @@ function get_simulation(config::AtmosConfig)
     @info "ode_configuration: $s"
 
     s = @timed_str begin
-        callback = get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
+        callback = get_callbacks(config, sim_info, atmos, params, Y, p)
     end
     @info "get_callbacks: $s"
 
@@ -814,7 +817,6 @@ function get_simulation(config::AtmosConfig)
                     Y,
                     p,
                     sim_info,
-                    t_start,
                     output_dir,
                 )
         end
@@ -853,7 +855,7 @@ function get_simulation(config::AtmosConfig)
     @info "n_steps_per_cycle_per_cb (non diagnostics): $steps_cycle_non_diag"
     @info "n_steps_per_cycle (non diagnostics): $steps_cycle"
 
-    tspan = (t_start, sim_info.t_end)
+    tspan = (sim_info.t_start, sim_info.t_end)
     s = @timed_str begin
         integrator_args, integrator_kwargs = args_integrator(
             config.parsed_args,
