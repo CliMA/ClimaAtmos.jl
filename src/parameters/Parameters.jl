@@ -44,6 +44,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2} <: ATCP
     detr_vertdiv_coeff::FT
     entr_param_vec::VFT1
     turb_entr_param_vec::VFT2
+    entr_mult_limiter_coeff::FT
     detr_massflux_vertdiv_coeff::FT
     min_area_limiter_scale::FT
     min_area_limiter_power::FT

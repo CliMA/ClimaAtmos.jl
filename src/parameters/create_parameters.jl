@@ -175,6 +175,7 @@ function TurbulenceConvectionParameters(
         :EDMF_surface_area => :surface_area,
         :entr_param_vec => :entr_param_vec,
         :turb_entr_param_vec => :turb_entr_param_vec,
+        :entr_mult_limiter_coeff => :entr_mult_limiter_coeff,
         :minimum_updraft_top => :min_updraft_top,
         :mixing_length_eddy_viscosity_coefficient => :tke_ed_coeff,
         :mixing_length_smin_ub => :smin_ub,

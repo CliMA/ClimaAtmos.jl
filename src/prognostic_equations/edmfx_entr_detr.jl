@@ -64,18 +64,19 @@ function entrainment(
         ref_H = ᶜp / (ᶜρ * g)
 
         entr_param_vec = CAP.entr_param_vec(turbconv_params)
+        entr_mult_limiter_coeff = CAP.entr_mult_limiter_coeff(turbconv_params)
 
         # non-dimensional pi-groups
         Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
         Π₂ = max(ᶜtke⁰, 0) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
-        Π₃ = sqrt(ᶜaʲ)
+        Π₃ = sqrt(max(ᶜaʲ, 0))
         Π₄ = ᶜRHʲ - ᶜRH⁰
         Π₅ = (ᶜz - z_sfc) / ref_H
         # Π₁, Π₂ are unbounded, so clip values that blow up
         Π₁ = min(max(Π₁, -1), 1)
         Π₂ = min(max(Π₂, -1), 1)
 
-        entr =
+        entr = ((FT(1) - min(ᶜaʲ, FT(1)))^entr_mult_limiter_coeff) *
             abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) * (
                 entr_param_vec[1] * abs(Π₁) +
                 entr_param_vec[2] * abs(Π₂) +
