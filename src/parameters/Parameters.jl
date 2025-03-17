@@ -106,6 +106,10 @@ Base.@kwdef struct ClimaAtmosParameters{
     water_refractive_index::FT
     optics_lookup_temperature_min::FT
     optics_lookup_temperature_max::FT
+    # Hyperdiffusion
+    α_hyperdiff_tracer::FT
+    # Vertical diffusion
+    α_vert_diff_tracer::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
