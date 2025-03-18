@@ -1,7 +1,7 @@
 agents:
   queue: new-central
   slurm_mem: 8G
-  modules: climacommon/2025_01_27
+  modules: climacommon/2025_03_18
 env:
   OPENBLAS_NUM_THREADS: 1
   SLURM_KILL_BAD_EXIT: 1
