@@ -20,6 +20,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     end
 
     edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     if p.atmos.diff_mode == Implicit()
         vertical_diffusion_boundary_layer_tendency!(
