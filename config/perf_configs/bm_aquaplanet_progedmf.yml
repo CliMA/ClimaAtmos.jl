@@ -9,6 +9,7 @@ rayleigh_sponge: true
 viscous_sponge: true
 implicit_diffusion: true
 implicit_sgs_advection: true
+implicit_sgs_entr_detr: true
 implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 moist: equil

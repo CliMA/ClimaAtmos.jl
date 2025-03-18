@@ -30,6 +30,11 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 
+
+    if p.atmos.sgs_entr_detr_mode == Implicit()
+        edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    end
+
     if p.atmos.sgs_mf_mode == Implicit()
         edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
