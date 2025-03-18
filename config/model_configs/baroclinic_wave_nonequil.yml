@@ -6,10 +6,12 @@ output_dir: "/glade/derecho/scratch/oalcabes/baroclinic_wave_nonequil"
 cloud_model: "grid_scale"
 dt: "450secs"
 t_end: "10days"
-FLOAT_TYPE: "Float64"
+y_elem: 12
+x_elem: 12
+z_elem: 20
 moist: "nonequil"
 toml: [/glade/u/home/oalcabes/ClimaAtmos.jl/toml/baroclinic_wave_nonequil.toml]
 disable_surface_flux_tendency: true
 diagnostics:
-  - short_name: [pfull, wa, va, rv, hus, ke]
+  - short_name: [hus, ta, cl, clw, cli]
     period: 1days
