@@ -513,7 +513,6 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         p.scratch.ᶜadvection_matrix,
         p.scratch.ᶜdiffusion_h_matrix,
         p.scratch.ᶜdiffusion_h_matrix_scaled,
-        p.scratch.ᶜtridiagonal_matrix_scalar,
         p.scratch.ᶜdiffusion_u_matrix,
         p.scratch.ᶠbidiagonal_matrix_ct3,
         p.scratch.ᶠbidiagonal_matrix_ct3_2,
@@ -555,7 +554,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     (;
         ᶜdiffusion_h_matrix,
         ᶜdiffusion_h_matrix_scaled,
-        ᶜtridiagonal_matrix_scalar,
         ᶜdiffusion_u_matrix,
         params,
     ) = p
