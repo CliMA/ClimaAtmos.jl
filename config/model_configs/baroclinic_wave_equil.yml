@@ -3,8 +3,10 @@ dt_save_state_to_disk: "2days"
 reproducibility_test: true
 initial_condition: "MoistBaroclinicWave"
 output_dir: "/glade/derecho/scratch/oalcabes/baroclinic_wave_equil"
+cloud_model: "grid_scale"
 dt: "450secs"
 t_end: "10days"
+FLOAT_TYPE: "Float64"
 moist: "equil"
 disable_surface_flux_tendency: true
 toml: [/glade/u/home/oalcabes/ClimaAtmos.jl/toml/baroclinic_wave_equil.toml]
