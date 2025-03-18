@@ -491,6 +491,9 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
                 p.precomputed.bdmr_l,
                 p.precomputed.bdmr_r,
                 p.precomputed.bdmr,
+                p.precomputed.ᶜentrʲs,
+                p.precomputed.ᶜdetrʲs,
+                p.precomputed.ᶜturb_entrʲs,
             ) : (;)
         )...,
         p.core.ᶜΦ,
@@ -816,6 +819,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         if use_derivative(sgs_advection_flag)
             (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs) = p
             (; bdmr_l, bdmr_r, bdmr) = p
+            (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p
             is_third_order = edmfx_upwinding == Val(:third_order)
             ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
             ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
@@ -833,6 +837,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             @. ᶜkappa_mʲ =
                 TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
                 TD.cv_m(thermo_params, ᶜtsʲs.:(1))
+            
             ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
             @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
@@ -841,6 +846,10 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                     ᶜadvdivᵥ_matrix() ⋅
                     ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)))
                 ) - (I,)
+            
+            # entrainment
+            @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -=
+                dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
 
             ∂ᶜmseʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot)]
@@ -874,6 +883,10 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                         ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp),
                     )
                 ) - (I,)
+
+            # entrainment
+            @. ∂ᶜmseʲ_err_∂ᶜmseʲ -=
+                dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
 
             ∂ᶜρaʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).q_tot)]
@@ -931,6 +944,10 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 dtγ * ᶜadvection_matrix ⋅
                 ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
                 DiagonalMatrixRow(1 / ᶜρʲs.:(1)) - (I,)
+            
+            # entrainment
+            @. ∂ᶜρaʲ_err_∂ᶜρaʲ +=
+                dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) - ᶜdetrʲs.:(1))
 
             ∂ᶠu₃ʲ_err_∂ᶜρ = matrix[@name(f.sgsʲs.:(1).u₃), @name(c.ρ)]
             @. ∂ᶠu₃ʲ_err_∂ᶜρ =
@@ -977,6 +994,11 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                     dtγ * ᶠtridiagonal_matrix_c3 ⋅
                     DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) - (I_u₃,)
             end
+
+            # entrainment
+            @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ -=
+                dtγ * (DiagonalMatrixRow((ᶠinterp(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))) * (one_C3xACT3,)))
+
             # add updraft mass flux contributions to grid-mean
             if use_derivative(sgs_mass_flux_flag)
 

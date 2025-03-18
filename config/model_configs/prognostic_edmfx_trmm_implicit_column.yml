@@ -26,7 +26,7 @@ y_elem: 2
 z_elem: 82
 z_stretch: false
 dz_bottom: 30
-dt: 50secs
+dt: 100secs
 t_end: 6hours
 dt_save_state_to_disk: 10mins
 toml: [toml/prognostic_edmfx_implicit_les_calibrated_shallow_deep.toml]
