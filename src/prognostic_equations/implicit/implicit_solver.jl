@@ -494,6 +494,7 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
                 p.precomputed.ᶜentrʲs,
                 p.precomputed.ᶜdetrʲs,
                 p.precomputed.ᶜturb_entrʲs,
+                p.precomputed.ᶠu₃⁰,
             ) : (;)
         )...,
         p.core.ᶜΦ,
@@ -567,6 +568,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
+    ᶠlg = Fields.local_geometry_field(Y.f)
 
     ᶜkappa_m = p.ᶜtemp_scalar
     @. ᶜkappa_m =
@@ -819,7 +821,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         if use_derivative(sgs_advection_flag)
             (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs) = p
             (; bdmr_l, bdmr_r, bdmr) = p
-            (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p
+            (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs, ᶠu₃⁰) = p
             is_third_order = edmfx_upwinding == Val(:third_order)
             ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
             ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
@@ -998,6 +1000,15 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             # entrainment
             @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ -=
                 dtγ * (DiagonalMatrixRow((ᶠinterp(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))) * (one_C3xACT3,)))
+            
+            # nh pressure
+            turbconv_params = CAP.turbconv_params(params)
+            α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
+            scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+            H_up_min = CAP.min_updraft_top(turbconv_params)
+            @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ -=
+                dtγ * (DiagonalMatrixRow(2 * α_d * Geometry._norm((Y.f.sgsʲs.:(1).u₃ - ᶠu₃⁰), ᶠlg) /
+                max(scale_height, H_up_min) * (one_C3xACT3,)))
 
             # add updraft mass flux contributions to grid-mean
             if use_derivative(sgs_mass_flux_flag)
