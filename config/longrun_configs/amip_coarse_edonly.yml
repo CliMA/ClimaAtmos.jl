@@ -5,6 +5,7 @@ checkpoint_dt: "720hours"
 coupler_toml: ["toml/amip.toml"]
 cloud_model: "grid_scale"
 moist: "equil"
+precip_model: "1M"
 dt: "240secs"
 dt_cpl: "240secs"
 dt_save_state_to_disk: "30days"
@@ -33,4 +34,4 @@ extra_atmos_diagnostics:
   - short_name: [ta, ua, wa, va, rhoa, hur, hus, hussn, husra, clw, cli]
     reduction_time: average
     period: "1months"
-coupler_output_dir: "/glade/derecho/scratch/oalcabes/amip_nonequil"
+coupler_output_dir: "/glade/derecho/scratch/oalcabes/amip_equil"
