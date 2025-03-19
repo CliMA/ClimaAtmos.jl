@@ -99,6 +99,7 @@ struct ImplicitEquationJacobian{
     F2 <: DerivativeFlag,
     F3 <: DerivativeFlag,
     F4 <: DerivativeFlag,
+    F5 <: DerivativeFlag,
     T <: Fields.FieldVector,
     R <: Base.RefValue,
 }
@@ -112,7 +113,8 @@ struct ImplicitEquationJacobian{
     diffusion_flag::F1
     topography_flag::F2
     sgs_advection_flag::F3
-    sgs_mass_flux_flag::F4
+    sgs_entr_detr_flag::F4
+    sgs_mass_flux_flag::F5
 
     # required by Krylov.jl to evaluate ldiv! with AbstractVector inputs
     temp_b::T
@@ -130,6 +132,7 @@ function Base.zero(jac::ImplicitEquationJacobian)
         jac.diffusion_flag,
         jac.topography_flag,
         jac.sgs_advection_flag,
+        jac.sgs_entr_detr_flag,
         jac.sgs_mass_flux_flag,
         jac.temp_b,
         jac.temp_x,
@@ -148,6 +151,8 @@ function ImplicitEquationJacobian(
                       IgnoreDerivative(),
     sgs_advection_flag = atmos.sgs_adv_mode == Implicit() ? UseDerivative() :
                          IgnoreDerivative(),
+    sgs_entr_detr_flag = atmos.sgs_entr_detr_mode == Implicit() ?
+                         UseDerivative() : IgnoreDerivative(),
     sgs_mass_flux_flag = atmos.sgs_mf_mode == Implicit() ? UseDerivative() :
                          IgnoreDerivative(),
     transform_flag = false,
@@ -403,6 +408,7 @@ function ImplicitEquationJacobian(
         diffusion_flag,
         topography_flag,
         sgs_advection_flag,
+        sgs_entr_detr_flag,
         sgs_mass_flux_flag,
         similar(Y),
         similar(Y),
@@ -491,6 +497,9 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
                 p.precomputed.bdmr_l,
                 p.precomputed.bdmr_r,
                 p.precomputed.bdmr,
+                p.precomputed.ᶜentrʲs,
+                p.precomputed.ᶜdetrʲs,
+                p.precomputed.ᶜturb_entrʲs,
             ) : (;)
         )...,
         p.core.ᶜΦ,
@@ -504,7 +513,6 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         p.scratch.ᶜadvection_matrix,
         p.scratch.ᶜdiffusion_h_matrix,
         p.scratch.ᶜdiffusion_h_matrix_scaled,
-        p.scratch.ᶜtridiagonal_matrix_scalar,
         p.scratch.ᶜdiffusion_u_matrix,
         p.scratch.ᶠbidiagonal_matrix_ct3,
         p.scratch.ᶠbidiagonal_matrix_ct3_2,
@@ -528,6 +536,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         matrix,
         diffusion_flag,
         sgs_advection_flag,
+        sgs_entr_detr_flag,
         topography_flag,
         sgs_mass_flux_flag,
     ) = A
@@ -545,7 +554,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     (;
         ᶜdiffusion_h_matrix,
         ᶜdiffusion_h_matrix_scaled,
-        ᶜtridiagonal_matrix_scalar,
         ᶜdiffusion_u_matrix,
         params,
     ) = p
@@ -851,6 +859,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             @. ᶜkappa_mʲ =
                 TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
                 TD.cv_m(thermo_params, ᶜtsʲs.:(1))
+
             ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
             @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
@@ -995,6 +1004,22 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                     dtγ * ᶠtridiagonal_matrix_c3 ⋅
                     DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) - (I_u₃,)
             end
+
+            # entrainment and detrainment
+            (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p
+            # This assumes entrainment and detrainment rates are constant in the Jacobian
+            @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -=
+                dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
+            @. ∂ᶜmseʲ_err_∂ᶜmseʲ -=
+                dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
+            @. ∂ᶜρaʲ_err_∂ᶜρaʲ +=
+                dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) - ᶜdetrʲs.:(1))
+            @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ -=
+                dtγ * (DiagonalMatrixRow(
+                    (ᶠinterp(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))) *
+                    (one_C3xACT3,),
+                ))
+
             # add updraft mass flux contributions to grid-mean
             if use_derivative(sgs_mass_flux_flag)
 

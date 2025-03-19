@@ -519,6 +519,7 @@ Base.@kwdef struct AtmosModel{
     VD,
     DM,
     SAM,
+    SEDM,
     SMM,
     VS,
     SL,
@@ -557,6 +558,9 @@ Base.@kwdef struct AtmosModel{
     vert_diff::VD = nothing
     diff_mode::DM = nothing
     sgs_adv_mode::SAM = nothing
+    """sgs_entr_detr_mode == Implicit() only works if sgs_adv_mode == Implicit()"""
+    sgs_entr_detr_mode::SEDM = nothing
+    """sgs_mf_mode == Implicit() only works if sgs_adv_mode == Implicit() and diff_mode == Implicit()"""
     sgs_mf_mode::SMM = nothing
     viscous_sponge::VS = nothing
     smagorinsky_lilly::SL = nothing
