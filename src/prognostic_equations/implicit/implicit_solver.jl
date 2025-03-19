@@ -164,6 +164,7 @@ function ImplicitEquationJacobian(
     TridiagonalRow = TridiagonalMatrixRow{FT}
     BidiagonalRow_C3 = BidiagonalMatrixRow{C3{FT}}
     TridiagonalRow_ACTh = TridiagonalMatrixRow{Adjoint{FT, CTh{FT}}}
+    TridiagonalRow_ACT3 = TridiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
     BidiagonalRow_ACT3 = BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
     BidiagonalRow_C3xACTh =
         BidiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CTh{FT})')}
@@ -314,6 +315,14 @@ function ImplicitEquationJacobian(
                 (@name(c.ρe_tot), @name(c.sgsʲs.:(1).mse)) =>
                     similar(Y.c, TridiagonalRow),
                 (@name(c.ρq_tot), @name(c.sgsʲs.:(1).q_tot)) =>
+                    similar(Y.c, TridiagonalRow),
+                (@name(c.ρe_tot), @name(f.sgsʲs.:(1).u₃)) =>
+                    similar(Y.c, BidiagonalRow_ACT3),
+                (@name(c.ρq_tot), @name(f.sgsʲs.:(1).u₃)) =>
+                    similar(Y.c, BidiagonalRow_ACT3),
+                (@name(c.ρe_tot), @name(c.sgsʲs.:(1).ρa)) =>
+                    similar(Y.c, TridiagonalRow),
+                (@name(c.ρq_tot), @name(c.sgsʲs.:(1).ρa)) =>
                     similar(Y.c, TridiagonalRow),
             )
         else
@@ -501,6 +510,11 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
                 p.precomputed.ᶜdetrʲs,
                 p.precomputed.ᶜturb_entrʲs,
             ) : (;)
+        )...,
+        (
+            use_derivative(A.sgs_mass_flux_flag) &&
+            p.atmos.turbconv_model isa PrognosticEDMFX ?
+            (; p.precomputed.ᶜKʲs) : (;)
         )...,
         p.core.ᶜΦ,
         p.core.ᶠgradᵥ_ᶜΦ,
@@ -839,6 +853,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
+
         if use_derivative(sgs_advection_flag)
             (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs) = p
             (; bdmr_l, bdmr_r, bdmr) = p
@@ -1023,7 +1038,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             # add updraft mass flux contributions to grid-mean
             if use_derivative(sgs_mass_flux_flag)
 
-                (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs, ᶠu³) = p
+                (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs, ᶠu³, ᶜKʲs) = p
                 (; bdmr_l, bdmr_r, bdmr) = p
                 is_third_order = edmfx_upwinding == Val(:third_order)
                 ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
@@ -1090,6 +1105,30 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                     matrix[@name(c.ρq_tot), @name(c.sgsʲs.:(1).q_tot)]
                 @. ∂ᶜρq_tot_err_∂ᶜq_totʲ =
                     -(dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜqtot)
+
+                # grid-mean ∂/∂(u₃ʲ)
+                ∂ᶜρe_tot_err_∂ᶠu₃ʲ = matrix[@name(c.ρe_tot), @name(f.sgsʲs.:(1).u₃)]
+                @. ∂ᶜρe_tot_err_∂ᶠu₃ʲ =
+                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow((ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ)) ⋅
+                    DiagonalMatrixRow(ᶠinterp((Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - ᶜh_tot) * Y.c.sgsʲs.:(1).ρa / ᶜρʲs.:(1)) *  (g³³(ᶠgⁱʲ)))
+
+                ∂ᶜρq_tot_err_∂ᶠu₃ʲ = matrix[@name(c.ρq_tot), @name(f.sgsʲs.:(1).u₃)]
+                @. ∂ᶜρq_tot_err_∂ᶠu₃ʲ =
+                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow((ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ)) ⋅
+                    DiagonalMatrixRow(ᶠinterp((Y.c.sgsʲs.:(1).q_tot - ᶜspecific.q_tot) * Y.c.sgsʲs.:(1).ρa / ᶜρʲs.:(1)) *  (g³³(ᶠgⁱʲ)))
+    
+                # grid-mean ∂/∂(rho*a)
+                ∂ᶜρe_tot_err_∂ᶜρa = matrix[@name(c.ρe_tot), @name(c.sgsʲs.:(1).ρa)]
+                @. ∂ᶜρe_tot_err_∂ᶜρa =
+                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅
+                    DiagonalMatrixRow((ᶠu³ʲs.:(1) - ᶠu³) * ᶠinterp((Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - ᶜh_tot)) / ᶠJ) ⋅ ᶠinterp_matrix() ⋅
+                    DiagonalMatrixRow(ᶜJ)
+
+                ∂ᶜρq_tot_err_∂ᶜρa = matrix[@name(c.ρq_tot), @name(c.sgsʲs.:(1).ρa)]
+                @. ∂ᶜρq_tot_err_∂ᶜρa =
+                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅
+                    DiagonalMatrixRow((ᶠu³ʲs.:(1) - ᶠu³) * ᶠinterp((Y.c.sgsʲs.:(1).q_tot - ᶜspecific.q_tot)) / ᶠJ) ⋅ ᶠinterp_matrix() ⋅
+                    DiagonalMatrixRow(ᶜJ)
 
             end
 
