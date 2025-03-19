@@ -324,6 +324,9 @@ implicit_sgs_advection:
 implicit_sgs_entr_detr:
   help: "Whether to treat the subgrid-scale entrainment and detrainment tendency implicitly [`false` (default), `true`]. Setting it to true only works if implicit_sgs_advection is set to true."
   value: false
+implicit_sgs_nh_pressure:
+  help: "Whether to treat the subgrid-scale nonhydrostatic pressure drag tendency implicitly [`false` (default), `true`]. Setting it to true only works if implicit_sgs_advection is set to true."
+  value: false
 implicit_sgs_mass_flux:
   help: "Whether to treat the subgrid-scale mass flux tendency implicitly or explicitly in grid-mean equations. Currently updraft only with Jacobian terms 0. [`false` (default), `true`]. Setting it to true only works if both implicit_sgs_advection and implicit_diffusion are set to true."
   value: false

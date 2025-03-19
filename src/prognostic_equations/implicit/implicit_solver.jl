@@ -100,6 +100,7 @@ struct ImplicitEquationJacobian{
     F3 <: DerivativeFlag,
     F4 <: DerivativeFlag,
     F5 <: DerivativeFlag,
+    F6 <: DerivativeFlag,
     T <: Fields.FieldVector,
     R <: Base.RefValue,
 }
@@ -114,7 +115,8 @@ struct ImplicitEquationJacobian{
     topography_flag::F2
     sgs_advection_flag::F3
     sgs_entr_detr_flag::F4
-    sgs_mass_flux_flag::F5
+    sgs_nh_pressure_flag::F5
+    sgs_mass_flux_flag::F6
 
     # required by Krylov.jl to evaluate ldiv! with AbstractVector inputs
     temp_b::T
@@ -133,6 +135,7 @@ function Base.zero(jac::ImplicitEquationJacobian)
         jac.topography_flag,
         jac.sgs_advection_flag,
         jac.sgs_entr_detr_flag,
+        jac.sgs_nh_pressure_flag,
         jac.sgs_mass_flux_flag,
         jac.temp_b,
         jac.temp_x,
@@ -153,6 +156,8 @@ function ImplicitEquationJacobian(
                          IgnoreDerivative(),
     sgs_entr_detr_flag = atmos.sgs_entr_detr_mode == Implicit() ?
                          UseDerivative() : IgnoreDerivative(),
+    sgs_nh_pressure_flag = atmos.sgs_nh_pressure_mode == Implicit() ?
+                           UseDerivative() : IgnoreDerivative(),
     sgs_mass_flux_flag = atmos.sgs_mf_mode == Implicit() ? UseDerivative() :
                          IgnoreDerivative(),
     transform_flag = false,
@@ -409,6 +414,7 @@ function ImplicitEquationJacobian(
         topography_flag,
         sgs_advection_flag,
         sgs_entr_detr_flag,
+        sgs_nh_pressure_flag,
         sgs_mass_flux_flag,
         similar(Y),
         similar(Y),
@@ -497,10 +503,21 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
                 p.precomputed.bdmr_l,
                 p.precomputed.bdmr_r,
                 p.precomputed.bdmr,
+            ) : (;)
+        )...,
+        (
+            use_derivative(A.sgs_entr_detr_flag) &&
+            p.atmos.turbconv_model isa PrognosticEDMFX ?
+            (;
                 p.precomputed.ᶜentrʲs,
                 p.precomputed.ᶜdetrʲs,
                 p.precomputed.ᶜturb_entrʲs,
             ) : (;)
+        )...,
+        (
+            use_derivative(A.sgs_nh_pressure_flag) &&
+            p.atmos.turbconv_model isa PrognosticEDMFX ?
+            (; p.precomputed.ᶠu₃⁰,) : (;)
         )...,
         p.core.ᶜΦ,
         p.core.ᶠgradᵥ_ᶜΦ,
@@ -537,6 +554,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
         diffusion_flag,
         sgs_advection_flag,
         sgs_entr_detr_flag,
+        sgs_nh_pressure_flag,
         topography_flag,
         sgs_mass_flux_flag,
     ) = A
@@ -580,6 +598,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
     ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
+    ᶠlg = Fields.local_geometry_field(Y.f)
 
     ᶜkappa_m = p.ᶜtemp_scalar
     @. ᶜkappa_m =
@@ -1006,19 +1025,39 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             end
 
             # entrainment and detrainment
-            (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p
-            # This assumes entrainment and detrainment rates are constant in the Jacobian
-            @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -=
-                dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
-            @. ∂ᶜmseʲ_err_∂ᶜmseʲ -=
-                dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
-            @. ∂ᶜρaʲ_err_∂ᶜρaʲ +=
-                dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) - ᶜdetrʲs.:(1))
-            @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ -=
-                dtγ * (DiagonalMatrixRow(
-                    (ᶠinterp(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))) *
-                    (one_C3xACT3,),
-                ))
+            if use_derivative(sgs_entr_detr_flag)
+                (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p
+                # This assumes entrainment and detrainment rates are constant in the Jacobian
+                @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -=
+                    dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
+                @. ∂ᶜmseʲ_err_∂ᶜmseʲ -=
+                    dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
+                @. ∂ᶜρaʲ_err_∂ᶜρaʲ +=
+                    dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) - ᶜdetrʲs.:(1))
+                @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ -=
+                    dtγ * (DiagonalMatrixRow(
+                        (ᶠinterp(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))) *
+                        (one_C3xACT3,),
+                    ))
+            end
+
+            # non-hydrostatic pressure drag
+            # Only the quadratic drag term is considered in the Jacobian, the buoyancy term is ignored
+            if use_derivative(sgs_nh_pressure_flag)
+                (; ᶠu₃⁰) = p
+                turbconv_params = CAP.turbconv_params(params)
+                α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
+                scale_height =
+                    CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+                H_up_min = CAP.min_updraft_top(turbconv_params)
+                @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ -=
+                    dtγ * (DiagonalMatrixRow(
+                        2 *
+                        α_d *
+                        Geometry._norm((Y.f.sgsʲs.:(1).u₃ - ᶠu₃⁰), ᶠlg) /
+                        max(scale_height, H_up_min) * (one_C3xACT3,),
+                    ))
+            end
 
             # add updraft mass flux contributions to grid-mean
             if use_derivative(sgs_mass_flux_flag)
