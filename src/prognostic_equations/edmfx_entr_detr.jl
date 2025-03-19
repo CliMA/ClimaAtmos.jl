@@ -57,6 +57,8 @@ function entrainment(
     ::PiGroupsEntrainment,
 )
     FT = eltype(thermo_params)
+    entr_mult_limiter_coeff = CAP.entr_mult_limiter_coeff(turbconv_params)
+
     if ᶜaʲ <= FT(0)
         return FT(0)
     else
@@ -68,7 +70,7 @@ function entrainment(
         # non-dimensional pi-groups
         Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
         Π₂ = max(ᶜtke⁰, 0) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
-        Π₃ = sqrt(ᶜaʲ)
+        Π₃ = sqrt(max(ᶜaʲ, 0))
         Π₄ = ᶜRHʲ - ᶜRH⁰
         Π₅ = (ᶜz - z_sfc) / ref_H
         # Π₁, Π₂ are unbounded, so clip values that blow up
@@ -76,6 +78,7 @@ function entrainment(
         Π₂ = min(max(Π₂, -1), 1)
 
         entr =
+            ((FT(1) - min(ᶜaʲ, FT(1)))^entr_mult_limiter_coeff) *
             abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) * (
                 entr_param_vec[1] * abs(Π₁) +
                 entr_param_vec[2] * abs(Π₂) +
@@ -107,6 +110,7 @@ function entrainment(
     ::GeneralizedEntrainment,
 )
     FT = eltype(thermo_params)
+    entr_mult_limiter_coeff = CAP.entr_mult_limiter_coeff(turbconv_params)
     entr_inv_tau = CAP.entr_tau(turbconv_params)
     entr_coeff = CAP.entr_coeff(turbconv_params)
     min_area_limiter_scale = CAP.min_area_limiter_scale(turbconv_params)
@@ -117,9 +121,11 @@ function entrainment(
         min_area_limiter_scale *
         exp(-min_area_limiter_power * (max(ᶜaʲ, 0) - a_min))
     entr =
-        entr_inv_tau +
-        entr_coeff * abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) +
-        min_area_limiter
+        ((FT(1) - min(ᶜaʲ, FT(1)))^entr_mult_limiter_coeff) * (
+            entr_inv_tau +
+            entr_coeff * abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) +
+            min_area_limiter
+        )
 
     return max(entr, 0)
 end
@@ -245,7 +251,7 @@ function detrainment(
         # non-dimensional pi-groups
         Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
         Π₂ = max(ᶜtke⁰, 0) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
-        Π₃ = sqrt(ᶜaʲ)
+        Π₃ = sqrt(max(ᶜaʲ, 0))
         Π₄ = ᶜRHʲ - ᶜRH⁰
         Π₅ = (ᶜz - z_sfc) / ref_H
         # Π₁, Π₂ are unbounded, so clip values that blow up
