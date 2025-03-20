@@ -643,14 +643,6 @@ end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; atmos, dt) = p
-    dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
-    dt_save_to_sol = if dt_save_to_sol == Inf
-        Inf
-    elseif dt isa ITime
-        ITime(dt_save_to_sol)
-    else
-        dt_save_to_sol
-    end
 
     s = @timed_str begin
         func = if parsed_args["split_ode"]
@@ -679,14 +671,8 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     @info "Define ode function: $s"
     problem = SciMLBase.ODEProblem(func, Y, tspan, p)
     t_begin, t_end, _ = promote(tspan[1], tspan[2], p.dt)
-    saveat = if dt_save_to_sol == Inf
-        promote([t_begin, t_end]...)
-    elseif iszero(tspan[2] % dt_save_to_sol)
-        promote([t_begin:dt_save_to_sol:t_end...]...)
-    else
-        promote([t_begin:dt_save_to_sol:t_end..., t_end]...)
-    end # ensure that tspan[2] is always saved
-    @info "dt_save_to_sol: $dt_save_to_sol, length(saveat): $(length(saveat))"
+    # Save solution to integrator.sol at the beginning and end
+    saveat = [t_begin, t_end]
     args = (problem, ode_algo)
     kwargs = (; saveat, callback, dt, additional_integrator_kwargs(ode_algo)...)
     return (args, kwargs)

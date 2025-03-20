@@ -9,4 +9,3 @@ disable_surface_flux_tendency: true
 dt: "3hours"
 FLOAT_TYPE: "Float64"
 reproducibility_test: true
-dt_save_to_sol: "3hours"
