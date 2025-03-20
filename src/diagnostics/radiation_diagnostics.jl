@@ -20,13 +20,13 @@ function compute_rsd!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_sw_flux_dn,
+                copy(transpose(cache.radiation.rrtmgp_model.face_sw_flux_dn)),
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            cache.radiation.rrtmgp_model.face_sw_flux_dn,
+            copy(transpose(cache.radiation.rrtmgp_model.face_sw_flux_dn)),
             axes(state.f),
         )
     end
@@ -61,7 +61,9 @@ function compute_rsdt!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    cache.radiation.rrtmgp_model.face_sw_flux_dn,
+                    copy(
+                        transpose(cache.radiation.rrtmgp_model.face_sw_flux_dn),
+                    ),
                     axes(state.f),
                 ),
                 nlevels + half,
@@ -70,7 +72,7 @@ function compute_rsdt!(
     else
         out .= Fields.level(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_sw_flux_dn,
+                copy(transpose(cache.radiation.rrtmgp_model.face_sw_flux_dn)),
                 axes(state.f),
             ),
             nlevels + half,
@@ -106,7 +108,9 @@ function compute_rsds!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    cache.radiation.rrtmgp_model.face_sw_flux_dn,
+                    copy(
+                        transpose(cache.radiation.rrtmgp_model.face_sw_flux_dn),
+                    ),
                     axes(state.f),
                 ),
                 half,
@@ -115,7 +119,7 @@ function compute_rsds!(
     else
         out .= Fields.level(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_sw_flux_dn,
+                copy(transpose(cache.radiation.rrtmgp_model.face_sw_flux_dn)),
                 axes(state.f),
             ),
             half,
@@ -150,13 +154,13 @@ function compute_rsu!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_sw_flux_up,
+                copy(transpose(cache.radiation.rrtmgp_model.face_sw_flux_up)),
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            cache.radiation.rrtmgp_model.face_sw_flux_up,
+            copy(transpose(cache.radiation.rrtmgp_model.face_sw_flux_up)),
             axes(state.f),
         )
     end
@@ -191,7 +195,9 @@ function compute_rsut!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    cache.radiation.rrtmgp_model.face_sw_flux_up,
+                    copy(
+                        transpose(cache.radiation.rrtmgp_model.face_sw_flux_up),
+                    ),
                     axes(state.f),
                 ),
                 nlevels + half,
@@ -200,7 +206,7 @@ function compute_rsut!(
     else
         out .= Fields.level(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_sw_flux_up,
+                copy(transpose(cache.radiation.rrtmgp_model.face_sw_flux_up)),
                 axes(state.f),
             ),
             nlevels + half,
@@ -236,7 +242,9 @@ function compute_rsus!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    cache.radiation.rrtmgp_model.face_sw_flux_up,
+                    copy(
+                        transpose(cache.radiation.rrtmgp_model.face_sw_flux_up),
+                    ),
                     axes(state.f),
                 ),
                 half,
@@ -245,7 +253,7 @@ function compute_rsus!(
     else
         out .= Fields.level(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_sw_flux_up,
+                copy(transpose(cache.radiation.rrtmgp_model.face_sw_flux_up)),
                 axes(state.f),
             ),
             half,
@@ -280,13 +288,13 @@ function compute_rld!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_lw_flux_dn,
+                copy(transpose(cache.radiation.rrtmgp_model.face_lw_flux_dn)),
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            cache.radiation.rrtmgp_model.face_lw_flux_dn,
+            copy(transpose(cache.radiation.rrtmgp_model.face_lw_flux_dn)),
             axes(state.f),
         )
     end
@@ -320,7 +328,9 @@ function compute_rlds!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    cache.radiation.rrtmgp_model.face_lw_flux_dn,
+                    copy(
+                        transpose(cache.radiation.rrtmgp_model.face_lw_flux_dn),
+                    ),
                     axes(state.f),
                 ),
                 half,
@@ -329,7 +339,7 @@ function compute_rlds!(
     else
         out .= Fields.level(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_lw_flux_dn,
+                copy(transpose(cache.radiation.rrtmgp_model.face_lw_flux_dn)),
                 axes(state.f),
             ),
             half,
@@ -364,13 +374,13 @@ function compute_rlu!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_lw_flux_up,
+                copy(transpose(cache.radiation.rrtmgp_model.face_lw_flux_up)),
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            cache.radiation.rrtmgp_model.face_lw_flux_up,
+            copy(transpose(cache.radiation.rrtmgp_model.face_lw_flux_up)),
             axes(state.f),
         )
     end
@@ -405,7 +415,9 @@ function compute_rlut!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    cache.radiation.rrtmgp_model.face_lw_flux_up,
+                    copy(
+                        transpose(cache.radiation.rrtmgp_model.face_lw_flux_up),
+                    ),
                     axes(state.f),
                 ),
                 nlevels + half,
@@ -414,7 +426,7 @@ function compute_rlut!(
     else
         out .= Fields.level(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_lw_flux_up,
+                copy(transpose(cache.radiation.rrtmgp_model.face_lw_flux_up)),
                 axes(state.f),
             ),
             nlevels + half,
@@ -450,7 +462,9 @@ function compute_rlus!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    cache.radiation.rrtmgp_model.face_lw_flux_up,
+                    copy(
+                        transpose(cache.radiation.rrtmgp_model.face_lw_flux_up),
+                    ),
                     axes(state.f),
                 ),
                 half,
@@ -459,7 +473,7 @@ function compute_rlus!(
     else
         out .= Fields.level(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_lw_flux_up,
+                copy(transpose(cache.radiation.rrtmgp_model.face_lw_flux_up)),
                 axes(state.f),
             ),
             half,
@@ -493,12 +507,12 @@ function compute_rsdcs!(
 )
     if isnothing(out)
         return Fields.array2field(
-            cache.radiation.rrtmgp_model.face_clear_sw_flux_dn,
+            copy(transpose(cache.radiation.rrtmgp_model.face_clear_sw_flux_dn)),
             axes(state.f),
         )
     else
         out .= Fields.array2field(
-            cache.radiation.rrtmgp_model.face_clear_sw_flux_dn,
+            copy(transpose(cache.radiation.rrtmgp_model.face_clear_sw_flux_dn)),
             axes(state.f),
         )
     end
@@ -532,7 +546,11 @@ function compute_rsdscs!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    cache.radiation.rrtmgp_model.face_clear_sw_flux_dn,
+                    copy(
+                        transpose(
+                            cache.radiation.rrtmgp_model.face_clear_sw_flux_dn,
+                        ),
+                    ),
                     axes(state.f),
                 ),
                 half,
@@ -541,7 +559,11 @@ function compute_rsdscs!(
     else
         out .= Fields.level(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_clear_sw_flux_dn,
+                copy(
+                    transpose(
+                        cache.radiation.rrtmgp_model.face_clear_sw_flux_dn,
+                    ),
+                ),
                 axes(state.f),
             ),
             half,
@@ -576,13 +598,17 @@ function compute_rsucs!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
+                copy(
+                    transpose(
+                        cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
+                    ),
+                ),
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
+            copy(transpose(cache.radiation.rrtmgp_model.face_clear_sw_flux_up)),
             axes(state.f),
         )
     end
@@ -617,7 +643,11 @@ function compute_rsutcs!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
+                    copy(
+                        transpose(
+                            cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
+                        ),
+                    ),
                     axes(state.f),
                 ),
                 nlevels + half,
@@ -626,7 +656,11 @@ function compute_rsutcs!(
     else
         out .= Fields.level(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
+                copy(
+                    transpose(
+                        cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
+                    ),
+                ),
                 axes(state.f),
             ),
             nlevels + half,
@@ -662,7 +696,11 @@ function compute_rsuscs!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
+                    copy(
+                        transpose(
+                            cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
+                        ),
+                    ),
                     axes(state.f),
                 ),
                 half,
@@ -671,7 +709,11 @@ function compute_rsuscs!(
     else
         out .= Fields.level(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
+                copy(
+                    transpose(
+                        cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
+                    ),
+                ),
                 axes(state.f),
             ),
             half,
@@ -707,13 +749,17 @@ function compute_rldcs!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_clear_lw_flux_dn,
+                copy(
+                    transpose(
+                        cache.radiation.rrtmgp_model.face_clear_lw_flux_dn,
+                    ),
+                ),
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            cache.radiation.rrtmgp_model.face_clear_lw_flux_dn,
+            copy(transpose(cache.radiation.rrtmgp_model.face_clear_lw_flux_dn)),
             axes(state.f),
         )
     end
@@ -747,7 +793,11 @@ function compute_rldscs!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    cache.radiation.rrtmgp_model.face_clear_lw_flux_dn,
+                    copy(
+                        transpose(
+                            cache.radiation.rrtmgp_model.face_clear_lw_flux_dn,
+                        ),
+                    ),
                     axes(state.f),
                 ),
                 half,
@@ -756,7 +806,11 @@ function compute_rldscs!(
     else
         out .= Fields.level(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_clear_lw_flux_dn,
+                copy(
+                    transpose(
+                        cache.radiation.rrtmgp_model.face_clear_lw_flux_dn,
+                    ),
+                ),
                 axes(state.f),
             ),
             half,
@@ -791,13 +845,17 @@ function compute_rlucs!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
+                copy(
+                    transpose(
+                        cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
+                    ),
+                ),
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
+            copy(transpose(cache.radiation.rrtmgp_model.face_clear_lw_flux_up)),
             axes(state.f),
         )
     end
@@ -832,7 +890,11 @@ function compute_rlutcs!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
+                    copy(
+                        transpose(
+                            cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
+                        ),
+                    ),
                     axes(state.f),
                 ),
                 nlevels + half,
@@ -841,7 +903,11 @@ function compute_rlutcs!(
     else
         out .= Fields.level(
             Fields.array2field(
-                cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
+                copy(
+                    transpose(
+                        cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
+                    ),
+                ),
                 axes(state.f),
             ),
             nlevels + half,
