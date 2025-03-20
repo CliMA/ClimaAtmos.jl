@@ -52,7 +52,7 @@ function vertical_diffusion_boundary_layer_tendency!(
             bottom = Operators.SetValue(C3(FT(0))),
         )
         @. ᶜρχₜ_diffusion =
-            ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜχ)))
+            ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h_scaled) * ᶠgradᵥ(ᶜχ)))
         @. ᶜρχₜ -= ᶜρχₜ_diffusion
         @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
     end

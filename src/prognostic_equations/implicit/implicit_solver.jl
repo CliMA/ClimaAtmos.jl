@@ -781,7 +781,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
             ∂ᶜρq_err_∂ᶜρ = matrix[ρq_name, @name(c.ρ)]
             ∂ᶜρq_err_∂ᶜρq = matrix[ρq_name, ρq_name]
             ᶜtridiagonal_matrix_scalar = ifelse(
-                q_name in (:q_rai, :q_sno),
+                q_name in (@name(q_rai), @name(q_sno)),
                 ᶜdiffusion_h_matrix_scaled,
                 ᶜdiffusion_h_matrix,
             )
