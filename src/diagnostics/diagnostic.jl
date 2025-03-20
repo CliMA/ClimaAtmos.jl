@@ -16,7 +16,8 @@ const ALL_DIAGNOSTICS = Dict{String, DiagnosticVariable}()
                                standard_name,
                                units,
                                description,
-                               compute!)
+                               compute!,
+                               compute,)
 
 
 Add a new variable to the `ALL_DIAGNOSTICS` dictionary (this function mutates the state of
@@ -43,14 +44,10 @@ Keyword arguments
 - `comments`: More verbose explanation of what the variable is, or comments related to how
               it is defined or computed.
 
-- `compute!`: Function that compute the diagnostic variable from the state.
-                             It has to take two arguments: the `integrator`, and a
-                             pre-allocated area of memory where to write the result of the
-                             computation. It the no pre-allocated area is available, a new
-                             one will be allocated. To avoid extra allocations, this
-                             function should perform the calculation in-place (i.e., using
-                             `.=`).
-
+- `compute`: Function that computes the diagnostic variable from the state, cache, and time.
+             It should return a `Field` or a `Base.Broadcast.Broadcasted` expression. For
+             best performance, it should not allocate. If the function contains at `@.`,
+             that is a good indication that it should also contain a `@lazy`.
 """
 function add_diagnostic_variable!(;
     short_name,
@@ -58,16 +55,16 @@ function add_diagnostic_variable!(;
     standard_name = "",
     units,
     comments = "",
-    compute!,
+    compute! = nothing,
+    compute = nothing,
 )
     haskey(ALL_DIAGNOSTICS, short_name) && @warn(
         "overwriting diagnostic `$short_name` entry containing fields\n" *
         "$(map(
             field -> "$(getfield(ALL_DIAGNOSTICS[short_name], field))",
-            filter(field -> field != :compute!, fieldnames(DiagnosticVariable)),
+            filter(field -> !(field in (:compute!, :compute)), fieldnames(DiagnosticVariable)),
         ))"
     )
-
 
     ALL_DIAGNOSTICS[short_name] = DiagnosticVariable(;
         short_name,
@@ -76,6 +73,7 @@ function add_diagnostic_variable!(;
         units,
         comments,
         compute!,
+        compute,
     )
 end
 

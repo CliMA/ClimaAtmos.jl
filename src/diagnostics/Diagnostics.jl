@@ -70,6 +70,8 @@ import ClimaDiagnostics.Writers:
     LevelsMethod,
     FakePressureLevelsMethod
 
+import LazyBroadcast: lazy
+
 include("diagnostic.jl")
 
 end

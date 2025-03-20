@@ -24,6 +24,19 @@
 #     out .= TD.relative_humidity.(thermo_params, cache.ᶜts)
 # end
 #
+# Alternatively, you can use `@lazy` to remove the need to pass a `out`
+#
+# function compute_hur!(
+#     out,
+#     state,
+#     cache,
+#     time,
+#     ::T,
+# ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+#     thermo_params = CAP.thermodynamics_params(cache.params)
+#     return lazy(TD.relative_humidity.(thermo_params, cache.ᶜts))
+# end
+#
 # 2. Define a function that has the correct signature and calls this function
 #
 # compute_hur!(out, state, cache, time) =
@@ -54,13 +67,7 @@ add_diagnostic_variable!(
     long_name = "Air Density",
     standard_name = "air_density",
     units = "kg m^-3",
-    compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(state.c.ρ)
-        else
-            out .= state.c.ρ
-        end
-    end,
+    compute = (state, cache, time) -> state.c.ρ,
 )
 
 ###
@@ -72,12 +79,8 @@ add_diagnostic_variable!(
     standard_name = "eastward_wind",
     units = "m s^-1",
     comments = "Eastward (zonal) wind component",
-    compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(u_component.(Geometry.UVector.(cache.precomputed.ᶜu)))
-        else
-            out .= u_component.(Geometry.UVector.(cache.precomputed.ᶜu))
-        end
+    compute = (state, cache, time) -> begin
+        return @. lazy(u_component.(Geometry.UVector.(cache.precomputed.ᶜu)))
     end,
 )
 
@@ -90,12 +93,8 @@ add_diagnostic_variable!(
     standard_name = "northward_wind",
     units = "m s^-1",
     comments = "Northward (meridional) wind component",
-    compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(v_component.(Geometry.VVector.(cache.precomputed.ᶜu)))
-        else
-            out .= v_component.(Geometry.VVector.(cache.precomputed.ᶜu))
-        end
+    compute = (state, cache, time) -> begin
+        return @. lazy(v_component.(Geometry.VVector.(cache.precomputed.ᶜu)))
     end,
 )
 
@@ -111,12 +110,8 @@ add_diagnostic_variable!(
     standard_name = "upward_air_velocity",
     units = "m s^-1",
     comments = "Vertical wind component",
-    compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(w_component.(Geometry.WVector.(cache.precomputed.ᶠu)))
-        else
-            out .= w_component.(Geometry.WVector.(cache.precomputed.ᶠu))
-        end
+    compute = (state, cache, time) -> begin
+        return @. lazy(w_component.(Geometry.WVector.(cache.precomputed.ᶠu)))
     end,
 )
 
@@ -128,13 +123,11 @@ add_diagnostic_variable!(
     long_name = "Air Temperature",
     standard_name = "air_temperature",
     units = "K",
-    compute! = (out, state, cache, time) -> begin
+    compute = (state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
-        if isnothing(out)
-            return TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
-        else
-            out .= TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
-        end
+        return @. lazy(
+            TD.air_temperature.(thermo_params, cache.precomputed.ᶜts),
+        )
     end,
 )
 
@@ -146,13 +139,9 @@ add_diagnostic_variable!(
     long_name = "Air Potential Temperature",
     standard_name = "air_potential_temperature",
     units = "K",
-    compute! = (out, state, cache, time) -> begin
+    compute = (state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
-        if isnothing(out)
-            return TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts)
-        else
-            out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts)
-        end
+        return @. lazy(TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts))
     end,
 )
 
@@ -163,13 +152,11 @@ add_diagnostic_variable!(
     short_name = "ha",
     long_name = "Air Specific Enthalpy",
     units = "m^2 s^-2",
-    compute! = (out, state, cache, time) -> begin
+    compute = (state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
-        if isnothing(out)
-            return TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜts)
-        else
-            out .= TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜts)
-        end
+        return @. lazy(
+            TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜts),
+        )
     end,
 )
 
@@ -180,13 +167,7 @@ add_diagnostic_variable!(
     short_name = "pfull",
     long_name = "Pressure at Model Full-Levels",
     units = "Pa",
-    compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.ᶜp)
-        else
-            out .= cache.precomputed.ᶜp
-        end
-    end,
+    compute = (state, cache, time) -> cache.precomputed.ᶜp,
 )
 
 ###
@@ -198,15 +179,11 @@ add_diagnostic_variable!(
     standard_name = "relative_vorticity",
     units = "s^-1",
     comments = "Vertical component of relative vorticity",
-    compute! = (out, state, cache, time) -> begin
+    compute = (state, cache, time) -> begin
         vort = @. w_component.(Geometry.WVector(curlₕ(cache.precomputed.ᶜu)))
         # We need to ensure smoothness, so we call DSS
         Spaces.weighted_dss!(vort)
-        if isnothing(out)
-            return copy(vort)
-        else
-            out .= vort
-        end
+        return @. lazy(vort)
     end,
 )
 
@@ -218,12 +195,8 @@ add_diagnostic_variable!(
     long_name = "Geopotential Height",
     standard_name = "geopotential_height",
     units = "m",
-    compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return cache.core.ᶜΦ ./ CAP.grav(cache.params)
-        else
-            out .= cache.core.ᶜΦ ./ CAP.grav(cache.params)
-        end
+    compute = (state, cache, time) -> begin
+        return @. lazy(cache.core.ᶜΦ ./ CAP.grav(cache.params))
     end,
 )
 
@@ -234,12 +207,8 @@ add_diagnostic_variable!(
     short_name = "cl",
     long_name = "Cloud fraction",
     units = "%",
-    compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.cloud_diagnostics_tuple.cf) .* 100
-        else
-            out .= cache.precomputed.cloud_diagnostics_tuple.cf .* 100
-        end
+    compute = (state, cache, time) -> begin
+        return @. lazy(cache.precomputed.cloud_diagnostics_tuple.cf .* 100)
     end,
 )
 
@@ -252,13 +221,7 @@ add_diagnostic_variable!(
     standard_name = "total_kinetic_energy",
     units = "m^2 s^-2",
     comments = "The kinetic energy on cell centers",
-    compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.ᶜK)
-        else
-            out .= cache.precomputed.ᶜK
-        end
-    end,
+    compute = (state, cache, time) -> cache.precomputed.ᶜK,
 )
 
 ###
@@ -272,13 +235,7 @@ add_diagnostic_variable!(
     Calculated as smagorinsky length scale without EDMF SGS model,
     or from mixing length closure with EDMF SGS model.
     """,
-    compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.ᶜmixing_length)
-        else
-            out .= cache.precomputed.ᶜmixing_length
-        end
-    end,
+    compute = (state, cache, time) -> cache.precomputed.ᶜmixing_length,
 )
 
 ###
@@ -288,13 +245,7 @@ add_diagnostic_variable!(
     short_name = "bgrad",
     long_name = "Linearized Buoyancy Gradient",
     units = "s^-2",
-    compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.ᶜlinear_buoygrad)
-        else
-            out .= cache.precomputed.ᶜlinear_buoygrad
-        end
-    end,
+    compute = (state, cache, time) -> cache.precomputed.ᶜlinear_buoygrad,
 )
 
 ###
@@ -304,36 +255,26 @@ add_diagnostic_variable!(
     short_name = "strain",
     long_name = "String Rate Magnitude",
     units = "s^-2",
-    compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.ᶜstrain_rate_norm)
-        else
-            out .= cache.precomputed.ᶜstrain_rate_norm
-        end
-    end,
+    compute = (state, cache, time) -> cache.precomputed.ᶜstrain_rate_norm,
 )
 
 ###
 # Relative humidity (3d)
 ###
-compute_hur!(out, state, cache, time) =
-    compute_hur!(out, state, cache, time, cache.atmos.moisture_model)
-compute_hur!(_, _, _, _, model::T) where {T} =
+compute_hur(_1, state, cache, time) =
+    compute_hur(_1, state, cache, time, cache.atmos.moisture_model)
+compute_hur(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hur", model)
 
-function compute_hur!(
-    out,
+function compute_hur(
+    _,
     state,
     cache,
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
-    if isnothing(out)
-        return TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts)
-    else
-        out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts)
-    end
+    return @. lazy(TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts))
 end
 
 add_diagnostic_variable!(
@@ -342,7 +283,7 @@ add_diagnostic_variable!(
     standard_name = "relative_humidity",
     units = "",
     comments = "Total amount of water vapor in the air relative to the amount achievable by saturation at the current temperature",
-    compute! = compute_hur!,
+    compute! = compute_hur,
 )
 
 ###
