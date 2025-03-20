@@ -123,6 +123,9 @@ FLOAT_TYPE:
 dt:
   help: "Simulation time step. Examples: [`10secs`, `1hours`]"
   value: "600secs"
+t_start:
+  help: "Simulation start time. This is typically useful in the context of manually restarting a simulation (e.g., but reinitializing the initial state). It is overwritten when the simulation is restarted with the checkpointing system. Examples: [`0secs`, `40secs`]"
+  value: "0secs"
 t_end:
   help: "Simulation end time. Examples: [`1200days`, `40secs`]"
   value: "10days"
