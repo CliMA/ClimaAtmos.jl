@@ -431,6 +431,8 @@ steps:
           --config_file $CONFIG_PATH/baroclinic_wave_equil_earth.yml
           --job_id baroclinic_wave_equil_earth
         artifact_paths: "baroclinic_wave_equil_earth/output_active/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":computer: Baroclinic wave equilmoist (Hughes2023 double mountain config)"
         command: >
