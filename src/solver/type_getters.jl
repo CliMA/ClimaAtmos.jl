@@ -58,6 +58,9 @@ function get_atmos(config::AtmosConfig, params)
     implicit_sgs_entr_detr = parsed_args["implicit_sgs_entr_detr"]
     @assert implicit_sgs_entr_detr in (true, false)
 
+    implicit_sgs_nh_pressure = parsed_args["implicit_sgs_nh_pressure"]
+    @assert implicit_sgs_nh_pressure in (true, false)
+
     implicit_sgs_mass_flux = parsed_args["implicit_sgs_mass_flux"]
     @assert implicit_sgs_mass_flux in (true, false)
 
@@ -107,6 +110,8 @@ function get_atmos(config::AtmosConfig, params)
         diff_mode = implicit_diffusion ? Implicit() : Explicit(),
         sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
         sgs_entr_detr_mode = implicit_sgs_entr_detr ? Implicit() : Explicit(),
+        sgs_nh_pressure_mode = implicit_sgs_nh_pressure ? Implicit() :
+                               Explicit(),
         sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
         smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),

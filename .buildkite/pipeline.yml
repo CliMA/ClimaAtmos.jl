@@ -134,6 +134,8 @@ steps:
           --job_id single_column_hydrostatic_balance_ft64
           --out_dir single_column_hydrostatic_balance_ft64/output_active
         artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
+        agents:
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
   - group: "Box Examples"
     steps:
@@ -363,6 +365,7 @@ steps:
         artifact_paths: "aquaplanet_nonequil_allsky_gw_res/output_active/*"
         agents:
           slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":computer: aquaplanet equil allsky monin_obukhov varying insol gravity wave (raw_topo) high top zonally asymmetric"
         command: >
