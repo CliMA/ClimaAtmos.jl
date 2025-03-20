@@ -1,4 +1,4 @@
-221
+222
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+222
+- We don't know why, but aquaplanet_nonequil_allsky_gw_res and aquaplanet_equil_allsky_gw_raw_zonalasym
+  seemed to not produce the same result between the merge-queue branch and the main branch.
+
 221
 - Change the way cloud liquid effective radius is computed for radiation
 
