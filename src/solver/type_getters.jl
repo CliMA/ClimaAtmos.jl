@@ -41,7 +41,7 @@ function get_atmos(config::AtmosConfig, params)
         )
         co2 = FixedCO2()
     end
-    (isnothing(co2) && !with_rrtmgp) &&
+    (!isnothing(co2) && !with_rrtmgp) &&
         @warn ("$(co2) does nothing if RRTMGP is not used")
 
     disable_momentum_vertical_diffusion = forcing_type isa HeldSuarezForcing
