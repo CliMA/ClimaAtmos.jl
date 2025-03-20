@@ -708,7 +708,7 @@ function get_comms_context(parsed_args)
     comms_ctx = ClimaComms.context(device)
     ClimaComms.init(comms_ctx)
 
-    if NVTX.isactive()
+    if NVTX.isactive() && get(ENV, "BUILDKITE", "") == "true"
         # makes output on buildkite a bit nicer
         if ClimaComms.iamroot(comms_ctx)
             atexit() do
