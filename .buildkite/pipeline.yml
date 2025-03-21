@@ -785,9 +785,14 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
           --job_id prognostic_edmfx_bomex_column_implicit
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_bomex_column_implicit
+          --out_dir prognostic_edmfx_bomex_column_implicit/output_active
         artifact_paths: "prognostic_edmfx_bomex_column_implicit/output_active/*"
         agents:
           slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":genie: Prognostic EDMFX Dycoms RF01 in a column"
         command: >
@@ -851,9 +856,14 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
           --job_id prognostic_edmfx_aquaplanet
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          --job_id prognostic_edmfx_aquaplanet
+          --out_dir prognostic_edmfx_aquaplanet/output_active
         artifact_paths: "prognostic_edmfx_aquaplanet/output_active/*"
         agents:
           slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
   - group: "GPU"
     steps:
