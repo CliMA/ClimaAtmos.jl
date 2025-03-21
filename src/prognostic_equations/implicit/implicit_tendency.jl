@@ -46,7 +46,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
-    # NOTE: This will zero out all monmentum tendencies in the edmfx advection test
+    # NOTE: This will zero out all momentum tendencies in the edmfx advection test
     # please DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)
 
