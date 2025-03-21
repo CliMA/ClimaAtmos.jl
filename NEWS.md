@@ -4,6 +4,11 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+### Remove `dt_save_to_sol`
+
+The option to save the solution to the integrator object (`dt_save_to_sol`) was
+removed from the configurable options.
+
 v0.29.1
 -------
 
