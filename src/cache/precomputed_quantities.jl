@@ -37,7 +37,7 @@ For every other `AbstractEDMF`, only `ᶜtke⁰` is added as a precomputed quant
 TODO: Rename `ᶜK` to `ᶜκ`.
 """
 function implicit_precomputed_quantities(Y, atmos)
-    (; moisture_model, turbconv_model) = atmos
+    (; moisture_model, turbconv_model, precip_model) = atmos
     FT = eltype(Y)
     TST = thermo_state_type(moisture_model, FT)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -53,6 +53,17 @@ function implicit_precomputed_quantities(Y, atmos)
     )
     sgs_quantities =
         turbconv_model isa AbstractEDMF ? (; ᶜtke⁰ = similar(Y.c, FT)) : (;)
+    moisture_sgs_quantities =
+        (
+            moisture_model isa NonEquilMoistModel &&
+            precip_model isa Microphysics1Moment
+        ) ?
+        (;
+            ᶜq_liq⁰ = similar(Y.c, FT),
+            ᶜq_ice⁰ = similar(Y.c, FT),
+            ᶜq_rai⁰ = similar(Y.c, FT),
+            ᶜq_sno⁰ = similar(Y.c, FT),
+        ) : (;)
     prognostic_sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
@@ -71,6 +82,7 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶠKᵥʲs = similar(Y.f, NTuple{n, FT}),
             ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
+            moisture_sgs_quantities...,
         ) : (;)
     return (; gs_quantities..., sgs_quantities..., prognostic_sgs_quantities...)
 end
@@ -133,12 +145,12 @@ function precomputed_quantities(Y, atmos)
         (; ᶜSqₜᵖʲs = similar(Y.c, NTuple{n, FT}), ᶜSqₜᵖ⁰ = similar(Y.c, FT)) :
         atmos.precip_model isa Microphysics1Moment ?
         (;
-            ᶜSeₜᵖʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSqₜᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqₗᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqᵢᵖʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqᵣᵖʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqₛᵖʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜSeₜᵖ⁰ = similar(Y.c, FT),
-            ᶜSqₜᵖ⁰ = similar(Y.c, FT),
+            ᶜSqₗᵖ⁰ = similar(Y.c, FT),
+            ᶜSqᵢᵖ⁰ = similar(Y.c, FT),
             ᶜSqᵣᵖ⁰ = similar(Y.c, FT),
             ᶜSqₛᵖ⁰ = similar(Y.c, FT),
         ) : (;)

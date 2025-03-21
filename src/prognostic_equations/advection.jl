@@ -65,6 +65,21 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
                 wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
                 Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
+            if p.atmos.moisture_model isa NonEquilMoistModel &&
+               p.atmos.precip_model isa Microphysics1Moment
+                @. Yₜ.c.sgsʲs.:($$j).q_liq -=
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_liq * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).q_liq * wdivₕ(ᶜuʲs.:($$j))
+                @. Yₜ.c.sgsʲs.:($$j).q_ice -=
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_ice * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).q_ice * wdivₕ(ᶜuʲs.:($$j))
+                @. Yₜ.c.sgsʲs.:($$j).q_rai -=
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_rai * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).q_rai * wdivₕ(ᶜuʲs.:($$j))
+                @. Yₜ.c.sgsʲs.:($$j).q_sno -=
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_sno * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).q_sno * wdivₕ(ᶜuʲs.:($$j))
+            end
         end
     end
     return nothing
@@ -235,5 +250,35 @@ function edmfx_sgs_vertical_advection_tendency!(
             edmfx_upwinding,
         )
         @. Yₜ.c.sgsʲs.:($$j).q_tot += va
+        if p.atmos.moisture_model isa NonEquilMoistModel &&
+           p.atmos.precip_model isa Microphysics1Moment
+            # TODO - add precipitation terminal velocity
+            # TODO - add cloud sedimentation velocity
+            # TODO - add their contributions to mean energy and mass
+            va = vertical_advection(
+                ᶠu³ʲs.:($j),
+                Y.c.sgsʲs.:($j).q_liq,
+                edmfx_upwinding,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_liq += va
+            va = vertical_advection(
+                ᶠu³ʲs.:($j),
+                Y.c.sgsʲs.:($j).q_ice,
+                edmfx_upwinding,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_ice += va
+            va = vertical_advection(
+                ᶠu³ʲs.:($j),
+                Y.c.sgsʲs.:($j).q_rai,
+                edmfx_upwinding,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_rai += va
+            va = vertical_advection(
+                ᶠu³ʲs.:($j),
+                Y.c.sgsʲs.:($j).q_sno,
+                edmfx_upwinding,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_sno += va
+        end
     end
 end

@@ -330,7 +330,7 @@ function compute_clwup!(
     state,
     cache,
     time,
-    moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    moisture_model::EquilMoistModel,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
@@ -345,6 +345,20 @@ function compute_clwup!(
                 thermo_params,
                 cache.precomputed.ᶜtsʲs.:1,
             )
+    end
+end
+function compute_clwup!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+    turbconv_model::PrognosticEDMFX,
+)
+    if isnothing(out)
+        return (state.c.sgsʲs.:1).q_liq
+    else
+        out .= (state.c.sgsʲs.:1).q_liq
     end
 end
 
@@ -386,7 +400,7 @@ function compute_cliup!(
     state,
     cache,
     time,
-    moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    moisture_model::EquilMoistModel,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
@@ -400,6 +414,20 @@ function compute_cliup!(
             TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     end
 end
+function compute_cliup!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+    turbconv_model::PrognosticEDMFX,
+)
+    if isnothing(out)
+        return (state.c.sgsʲs.:1).q_ice
+    else
+        out .= (state.c.sgsʲs.:1).q_ice
+    end
+end
 
 add_diagnostic_variable!(
     short_name = "cliup",
@@ -410,6 +438,102 @@ add_diagnostic_variable!(
     the mass of air (including the water in all phases) in the first updraft.
     """,
     compute! = compute_cliup!,
+)
+
+###
+# Updraft rain water specific humidity (3d)
+###
+compute_husraup!(out, state, cache, time) = compute_husraup!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.precip_model,
+    cache.atmos.turbconv_model,
+)
+compute_husraup!(
+    _,
+    _,
+    _,
+    _,
+    precip_model::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute updraft rain water specific humidity with a 1M precip model and with EDMFX",
+)
+
+function compute_husraup!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Microphysics1Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    if isnothing(out)
+        return (state.c.sgsʲs.:1).q_rai
+    else
+        out .= (state.c.sgsʲs.:1).q_rai
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "husraup",
+    long_name = "Updraft Mass Fraction of Rain",
+    units = "kg kg^-1",
+    comments = """
+    This is calculated as the mass of rain in the first updraft divided by
+    the mass of air (including the water in all phases) in the first updraft.
+    """,
+    compute! = compute_husraup!,
+)
+
+###
+# Updraft snow specific humidity (3d)
+###
+compute_hussnup!(out, state, cache, time) = compute_hussnup!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.precip_model,
+    cache.atmos.turbconv_model,
+)
+compute_hussnup!(
+    _,
+    _,
+    _,
+    _,
+    precip_model::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute updraft snow specific humidity with a 1M precip model and with EDMFX",
+)
+
+function compute_hussnup!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Microphysics1Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    if isnothing(out)
+        return (state.c.sgsʲs.:1).q_sno
+    else
+        out .= (state.c.sgsʲs.:1).q_sno
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "hussnup",
+    long_name = "Updraft Mass Fraction of Snow",
+    units = "kg kg^-1",
+    comments = """
+    This is calculated as the mass of snow in the first updraft divided by
+    the mass of air (including the water in all phases) in the first updraft.
+    """,
+    compute! = compute_hussnup!,
 )
 
 ###
@@ -805,7 +929,7 @@ function compute_clwen!(
     state,
     cache,
     time,
-    moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    moisture_model::EquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
@@ -817,6 +941,21 @@ function compute_clwen!(
     else
         out .=
             TD.liquid_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
+    end
+end
+function compute_clwen!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+    turbconv_model::PrognosticEDMFX,
+)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return cache.precomputed.ᶜq_liq⁰
+    else
+        out .= cache.precomputed.ᶜq_liq⁰
     end
 end
 
@@ -858,7 +997,7 @@ function compute_clien!(
     state,
     cache,
     time,
-    moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    moisture_model::EquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
@@ -866,6 +1005,21 @@ function compute_clien!(
         return TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     else
         out .= TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
+    end
+end
+function compute_clien!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+    turbconv_model::PrognosticEDMFX,
+)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return cache.precomputed.ᶜq_ice⁰
+    else
+        out .= cache.precomputed.ᶜq_ice⁰
     end
 end
 
@@ -878,6 +1032,104 @@ add_diagnostic_variable!(
     the mass of air (including the water in all phases) in the environment.
     """,
     compute! = compute_clien!,
+)
+
+###
+# Environment rain water specific humidity (3d)
+###
+compute_husraen!(out, state, cache, time) = compute_husraen!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.precip_model,
+    cache.atmos.turbconv_model,
+)
+compute_husraen!(
+    _,
+    _,
+    _,
+    _,
+    precip_model::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute updraft rain specific humidity and with a 1M model and with EDMFX",
+)
+
+function compute_husraen!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model_model::Microphysics1Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return cache.precomputed.ᶜq_rai⁰
+    else
+        out .= cache.precomputed.ᶜq_rai⁰
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "husraen",
+    long_name = "Environment Mass Fraction of Rain",
+    units = "kg kg^-1",
+    comments = """
+    This is calculated as the mass of rain in the environment divided by
+    the mass of air (including the water in all phases) in the environment.
+    """,
+    compute! = compute_husraen!,
+)
+
+###
+# Environment snow water specific humidity (3d)
+###
+compute_hussnen!(out, state, cache, time) = compute_hussnen!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.precip_model,
+    cache.atmos.turbconv_model,
+)
+compute_hussnen!(
+    _,
+    _,
+    _,
+    _,
+    precip_model::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute updraft snow specific humidity and with a 1M model and with EDMFX",
+)
+
+function compute_hussnen!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model_model::Microphysics1Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return cache.precomputed.ᶜq_sno⁰
+    else
+        out .= cache.precomputed.ᶜq_sno⁰
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "hussnen",
+    long_name = "Environment Mass Fraction of Snow",
+    units = "kg kg^-1",
+    comments = """
+    This is calculated as the mass of snow in the environment divided by
+    the mass of air (including the water in all phases) in the environment.
+    """,
+    compute! = compute_hussnen!,
 )
 
 ###

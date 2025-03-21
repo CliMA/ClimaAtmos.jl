@@ -228,8 +228,7 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         thp,
     )
 
-    # compute precipitation sinks
-    # (For now only done on the grid mean)
+    # compute precipitation sinks on the grid mean
     compute_precipitation_sinks!(
         ᶜSᵖ,
         ᶜSqᵣᵖ,
@@ -248,47 +247,19 @@ function set_precipitation_cache!(
     Y,
     p,
     ::Microphysics1Moment,
-    ::Union{DiagnosticEDMFX, PrognosticEDMFX},
+    ::DiagnosticEDMFX,
 )
     error("Not implemented yet")
-
-    #FT = Spaces.undertype(axes(Y.c))
-    #(; dt) = p
-    #(; ᶜts, ᶜqᵣ, ᶜqₛ, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
-    #(; ᶜΦ) = p.core
-    ## Grid mean precipitation sinks
-    #(; ᶜSqₜᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜSeₜᵖ) = p.precipitation
-    ## additional scratch storage
-    #ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    #ᶜ∇T = p.scratch.ᶜtemp_CT123
-
-    ## get thermodynamics and 1-moment microphysics params
-    #(; params) = p
-    #cmp = CAP.microphysics_1m_params(params)
-    #thp = CAP.thermodynamics_params(params)
-
-    ## zero out the helper source terms
-    #@. ᶜSqₜᵖ = FT(0)
-    #@. ᶜSqᵣᵖ = FT(0)
-    #@. ᶜSqₛᵖ = FT(0)
-    #@. ᶜSeₜᵖ = FT(0)
-    ## compute precipitation sinks
-    ## (For now only done on the grid mean)
-    #compute_precipitation_sinks!(
-    #    ᶜSᵖ,
-    #    ᶜSqₜᵖ,
-    #    ᶜSqᵣᵖ,
-    #    ᶜSqₛᵖ,
-    #    ᶜSeₜᵖ,
-    #    Y.c.ρ,
-    #    ᶜqᵣ,
-    #    ᶜqₛ,
-    #    ᶜts,
-    #    ᶜΦ,
-    #    dt,
-    #    cmp,
-    #    thp,
-    #)
+    return nothing
+end
+function set_precipitation_cache!(
+    Y,
+    p,
+    ::Microphysics1Moment,
+    ::PrognosticEDMFX,
+)
+    # Nothing needs to be done on the grid mean. The Sources are computed
+    # in edmf sub-domains.
     return nothing
 end
 
