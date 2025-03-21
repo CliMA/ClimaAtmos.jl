@@ -50,9 +50,6 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     # please DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)
 
-    # NOTE: This will zero out all tendencies
-    # please DO NOT add additional tendencies after this function
-    zero_tendency!(Yₜ, Y, p, t, p.atmos.tendency_model, p.atmos.turbconv_model)
     return nothing
 end
 
