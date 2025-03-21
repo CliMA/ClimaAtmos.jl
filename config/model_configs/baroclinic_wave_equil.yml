@@ -6,9 +6,9 @@ output_dir: "/glade/derecho/scratch/oalcabes/baroclinic_wave_equil"
 cloud_model: "grid_scale"
 dt: "450secs"
 t_end: "10days"
-y_elem: 12
-x_elem: 12
-z_elem: 20
+y_elem: 36
+x_elem: 36
+z_elem: 60
 moist: "equil"
 disable_surface_flux_tendency: true
 toml: [/glade/u/home/oalcabes/ClimaAtmos.jl/toml/baroclinic_wave_equil.toml]
