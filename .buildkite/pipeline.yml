@@ -973,7 +973,7 @@ steps:
       - label: "GPU: Prognostic EDMFX aquaplanet"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
           --job_id prognostic_edmfx_aquaplanet_gpu
         artifact_paths: "prognostic_edmfx_aquaplanet_gpu/output_active/*"
         env:
