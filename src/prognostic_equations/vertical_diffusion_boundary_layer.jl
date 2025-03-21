@@ -54,6 +54,10 @@ function vertical_diffusion_boundary_layer_tendency!(
         @. ᶜρχₜ_diffusion =
             ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h_scaled) * ᶠgradᵥ(ᶜχ)))
         @. ᶜρχₜ -= ᶜρχₜ_diffusion
-        @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
+        # Exclude contributions from diffusion of condensate, precipitation 
+        # in mass tendency
+        if χ_name == :q_tot
+            @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
+        end
     end
 end

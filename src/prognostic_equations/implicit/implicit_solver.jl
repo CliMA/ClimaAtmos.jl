@@ -264,7 +264,6 @@ function ImplicitEquationJacobian(
                 (ρatke_if_available..., @name(c.uₕ)),
             )...,
         )
-
     end
 
     sgs_advection_blocks = if atmos.turbconv_model isa PrognosticEDMFX
@@ -794,6 +793,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
 
+
         MatrixFields.unrolled_foreach(tracer_info) do (ρq_name, q_name, _)
             MatrixFields.has_field(Y, ρq_name) || return
             ᶜq = MatrixFields.get_field(ᶜspecific, q_name)
@@ -804,8 +804,13 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 ᶜdiffusion_h_matrix_scaled,
                 ᶜdiffusion_h_matrix,
             )
-            @. ∂ᶜρq_err_∂ᶜρ =
-                dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(-(ᶜq) / ᶜρ)
+            if ρq_name == @name(c.ρq_tot)
+                @. ∂ᶜρq_err_∂ᶜρ =
+                    dtγ * ᶜtridiagonal_matrix_scalar ⋅
+                    DiagonalMatrixRow(-(ᶜq) / ᶜρ)
+            else
+                @. ∂ᶜρq_err_∂ᶜρ = zero(typeof(∂ᶜρq_err_∂ᶜρ))
+            end
             @. ∂ᶜρq_err_∂ᶜρq +=
                 dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
