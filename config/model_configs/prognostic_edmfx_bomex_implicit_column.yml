@@ -31,7 +31,6 @@ perturb_initstate: false
 dt: "50secs"
 t_end: "6hours"
 dt_save_state_to_disk: "10mins"
-reproducibility_test: true
 toml: [toml/prognostic_edmfx_bomex.toml]
 netcdf_interpolation_num_points: [2, 2, 60]
 diagnostics:

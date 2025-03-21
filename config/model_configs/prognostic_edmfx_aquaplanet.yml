@@ -18,9 +18,9 @@ edmfx_sgs_diffusive_flux: true
 implicit_diffusion: true
 implicit_sgs_advection: true
 # This job crashes when setting the following to true. There is potentially a bug.
-# implicit_sgs_entr_detr: true
-# implicit_sgs_nh_pressure: true
-# implicit_sgs_mass_flux: true
+implicit_sgs_entr_detr: true
+implicit_sgs_nh_pressure: true
+implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
 moist: equil
@@ -31,7 +31,6 @@ t_end: 1hours
 dt_save_state_to_disk: 600secs
 toml: [toml/prognostic_edmfx.toml]
 output_default_diagnostics: false
-reproducibility_test: true
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfes, hur, hus, cl, clw, cli, evspsbl, pr, rsd, rsu, rld, rlu]
     reduction_time: average
