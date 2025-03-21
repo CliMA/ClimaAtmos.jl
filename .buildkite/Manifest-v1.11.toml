@@ -365,10 +365,10 @@ weakdeps = ["CUDA", "MPI"]
     ClimaCommsMPIExt = "MPI"
 
 [[deps.ClimaCore]]
-deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "5ab63b77f54c2a2f79cb43a1fd37e086427a8cf1"
+deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "UnrolledUtilities"]
+git-tree-sha1 = "302ac45b7e534f3067a889f6a7487b5301063c78"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.14.26"
+version = "0.14.28"
 weakdeps = ["CUDA", "Krylov"]
 
     [deps.ClimaCore.extensions]
@@ -2251,9 +2251,9 @@ version = "0.1.3"
 
 [[deps.SnoopCompile]]
 deps = ["AbstractTrees", "FlameGraphs", "InteractiveUtils", "OrderedCollections", "Printf", "Profile", "Serialization", "SnoopCompileCore", "YAML"]
-git-tree-sha1 = "386c27e2a9aab4252b14fb6e0df15550ff538e2a"
+git-tree-sha1 = "6b56dbffdb077585e54e99f16723524327789e90"
 uuid = "aa65fe97-06da-5843-b5b1-d5d13cad87d2"
-version = "3.0.3"
+version = "3.1.0"
 
     [deps.SnoopCompile.extensions]
     CthulhuExt = "Cthulhu"
@@ -2572,12 +2572,6 @@ weakdeps = ["ConstructionBase", "InverseFunctions"]
     [deps.Unitful.extensions]
     ConstructionBaseUnitfulExt = "ConstructionBase"
     InverseFunctionsUnitfulExt = "InverseFunctions"
-
-[[deps.Unrolled]]
-deps = ["MacroTools"]
-git-tree-sha1 = "6cc9d682755680e0f0be87c56392b7651efc2c7b"
-uuid = "9602ed7d-8fef-5bc8-8597-8f21381861e8"
-version = "0.1.5"
 
 [[deps.UnrolledUtilities]]
 git-tree-sha1 = "a9ebeb4308eaacfe49f71594c0fe38c0c655734f"
