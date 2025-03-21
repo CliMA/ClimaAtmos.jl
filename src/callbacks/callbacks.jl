@@ -13,6 +13,7 @@ import ClimaCore: InputOutput
 using Dates
 using Insolation: instantaneous_zenith_angle
 import ClimaCore.Fields: ColumnField
+using ClimaCore.DataLayouts
 
 import ClimaUtilities.TimeVaryingInputs: evaluate!
 
@@ -291,7 +292,11 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
     RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(t / integrator.p.dt))
-    Fields.field2array(ᶠradiation_flux) .= transpose(rrtmgp_model.face_flux)
+    DataLayouts.array2data_rrtmgp!(
+        Fields.field_values(ᶠradiation_flux),
+        rrtmgp_model.face_flux,
+        Val(true),
+    )
     return nothing
 end
 
