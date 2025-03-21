@@ -510,7 +510,6 @@ Base.@kwdef struct AtmosModel{
     EXTFORCING,
     EC,
     AT,
-    TM,
     EDMFX,
     TCM,
     NOGW,
@@ -549,7 +548,6 @@ Base.@kwdef struct AtmosModel{
     external_forcing::EXTFORCING = nothing
     edmf_coriolis::EC = nothing
     advection_test::AT = nothing
-    tendency_model::TM = nothing
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     non_orographic_gravity_wave::NOGW = nothing

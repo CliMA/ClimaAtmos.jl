@@ -179,7 +179,4 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         t,
         p.atmos.orographic_gravity_wave,
     )
-    # NOTE: This will zero out all tendencies
-    # please DO NOT add additional tendencies after this function
-    zero_tendency!(Yₜ, Y, p, t, p.atmos.tendency_model, p.atmos.turbconv_model)
 end

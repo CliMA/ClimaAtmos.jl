@@ -90,7 +90,6 @@ function get_atmos(config::AtmosConfig, params)
         external_forcing = get_external_forcing_model(parsed_args),
         edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
         advection_test,
-        tendency_model = get_tendency_model(parsed_args),
         edmfx_model,
         precip_model,
         cloud_model,
