@@ -10,6 +10,7 @@ import Adapt
 import ClimaComms
 using NVTX
 using Random
+using LinearAlgebra
 
 # TODO: Move this file to RRTMGP.jl, once the interface has been settled.
 # It will be faster to do interface development in the same repo as experiment
@@ -608,14 +609,29 @@ function _RRTMGPModel(
     fluxb_lw =
         radiation_mode isa GrayRadiation ? nothing :
         RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
-    set_and_save!(flux_lw.flux_up, "face_lw_flux_up", t...)
-    set_and_save!(flux_lw.flux_dn, "face_lw_flux_dn", t...)
-    set_and_save!(flux_lw.flux_net, "face_lw_flux", t...)
+    set_and_save!(flux_lw.flux_up, "face_lw_flux_up", t..., trans = true)
+    set_and_save!(flux_lw.flux_dn, "face_lw_flux_dn", t..., trans = true)
+    set_and_save!(flux_lw.flux_net, "face_lw_flux", t..., trans = true)
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
         flux_lw2 = RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
-        set_and_save!(flux_lw2.flux_up, "face_clear_lw_flux_up", t...)
-        set_and_save!(flux_lw2.flux_dn, "face_clear_lw_flux_dn", t...)
-        set_and_save!(flux_lw2.flux_net, "face_clear_lw_flux", t...)
+        set_and_save!(
+            flux_lw2.flux_up,
+            "face_clear_lw_flux_up",
+            t...,
+            trans = true,
+        )
+        set_and_save!(
+            flux_lw2.flux_dn,
+            "face_clear_lw_flux_dn",
+            t...,
+            trans = true,
+        )
+        set_and_save!(
+            flux_lw2.flux_net,
+            "face_clear_lw_flux",
+            t...,
+            trans = true,
+        )
     end
 
     sfc_emis = DA{FT}(undef, lu_kwargs.nbnd_lw, ncol)
@@ -634,20 +650,41 @@ function _RRTMGPModel(
     fluxb_sw =
         radiation_mode isa GrayRadiation ? nothing :
         RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
-    set_and_save!(flux_sw.flux_up, "face_sw_flux_up", t...)
-    set_and_save!(flux_sw.flux_dn, "face_sw_flux_dn", t...)
-    set_and_save!(flux_sw.flux_net, "face_sw_flux", t...)
-    set_and_save!(flux_sw.flux_dn_dir, "face_sw_direct_flux_dn", t...)
+    set_and_save!(flux_sw.flux_up, "face_sw_flux_up", t..., trans = true)
+    set_and_save!(flux_sw.flux_dn, "face_sw_flux_dn", t..., trans = true)
+    set_and_save!(flux_sw.flux_net, "face_sw_flux", t..., trans = true)
+    set_and_save!(
+        flux_sw.flux_dn_dir,
+        "face_sw_direct_flux_dn",
+        t...,
+        trans = true,
+    )
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
         flux_sw2 = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
-        set_and_save!(flux_sw2.flux_up, "face_clear_sw_flux_up", t...)
-        set_and_save!(flux_sw2.flux_dn, "face_clear_sw_flux_dn", t...)
+        set_and_save!(
+            flux_sw2.flux_up,
+            "face_clear_sw_flux_up",
+            t...,
+            trans = true,
+        )
+        set_and_save!(
+            flux_sw2.flux_dn,
+            "face_clear_sw_flux_dn",
+            t...,
+            trans = true,
+        )
         set_and_save!(
             flux_sw2.flux_dn_dir,
             "face_clear_sw_direct_flux_dn",
             t...,
+            trans = true,
         )
-        set_and_save!(flux_sw2.flux_net, "face_clear_sw_flux", t...)
+        set_and_save!(
+            flux_sw2.flux_net,
+            "face_clear_sw_flux",
+            t...,
+            trans = true,
+        )
     end
 
     cos_zenith = DA{FT}(undef, ncol)
@@ -675,9 +712,14 @@ function _RRTMGPModel(
         sfc_alb_diffuse,
     )
 
-    set_and_save!(similar(flux_lw.flux_net), "face_flux", t...)
+    set_and_save!(similar(flux_lw.flux_net), "face_flux", t..., trans = true)
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-        set_and_save!(similar(flux_lw2.flux_net), "face_clear_flux", t...)
+        set_and_save!(
+            similar(flux_lw2.flux_net),
+            "face_clear_flux",
+            t...,
+            trans = true,
+        )
     end
 
     if !(:latitude in keys(dict))
@@ -950,7 +992,14 @@ function set_array!(array, value::AbstractArray{<:Real}, symbol)
     end
 end
 
-function set_and_save!(array, name, views, domain_nlay, dict = nothing)
+function set_and_save!(
+    array,
+    name,
+    views,
+    domain_nlay,
+    dict = nothing;
+    trans = false,
+)
     domain_symbol = Symbol(name)
 
     if isnothing(dict)
@@ -966,7 +1015,8 @@ function set_and_save!(array, name, views, domain_nlay, dict = nothing)
         domain_range =
             startswith(name, "center_") ? (1:domain_nlay) :
             (1:(domain_nlay + 1))
-        domain_view = view(array, domain_range, :)
+        domain_view =
+            trans ? view(array, :, domain_range) : view(array, domain_range, :)
         set_array!(domain_view, domain_value, domain_symbol)
         push!(views, (domain_symbol, domain_view))
     else
