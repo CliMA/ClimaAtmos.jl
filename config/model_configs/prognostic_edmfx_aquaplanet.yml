@@ -17,16 +17,15 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 implicit_diffusion: true
 implicit_sgs_advection: true
-# This job crashes when setting the following to true. There is potentially a bug.
-# implicit_sgs_entr_detr: true
-# implicit_sgs_nh_pressure: true
-# implicit_sgs_mass_flux: true
+implicit_sgs_entr_detr: true
+implicit_sgs_nh_pressure: true
+implicit_sgs_mass_flux: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
 moist: equil
 cloud_model: "quadrature_sgs"
 precip_model: 0M
-dt: 10secs
+dt: 20secs
 t_end: 1hours
 dt_save_state_to_disk: 600secs
 toml: [toml/prognostic_edmfx.toml]
