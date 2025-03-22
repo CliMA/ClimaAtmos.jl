@@ -15,8 +15,12 @@ function ClimaCore.DebugOnly.post_op_callback(result, args...; kwargs...)
     has_nans = result isa Number ? isnan(result) : any(isnan, parent(result))
     has_inf = result isa Number ? isinf(result) : any(isinf, parent(result))
     if has_nans || has_inf
-        has_nans && error("NaNs found!")
-        has_inf && error("Infs found!")
+        has_nans && println("NaNs found!")
+        has_inf && println("Infs found!")
+        @show result
+        @show args
+        @show kwargs
+        error("Halting execution.")
     end
 end
 using PrecompileCI
