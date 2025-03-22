@@ -145,7 +145,7 @@ function Base.zero(jac::ImplicitEquationJacobian)
 end
 
 function my_zero(f, T, i)
-    # println("Debugging my_zero at $i")
+    println("Debugging my_zero at $i")
     z = similar(f, T)
     fill!(parent(z), 0)
     z
