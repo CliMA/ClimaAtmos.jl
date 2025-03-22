@@ -264,6 +264,126 @@ steps:
         agents:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
+      
+      - label: "GPU: Prognostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+      
+      - label: "GPU: Prognostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu2
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu2/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+      
+      - label: "GPU: Prognostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu3
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu3/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+      
+      - label: "GPU: Prognostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu4
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu4/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+      
+      - label: "GPU: Prognostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu5
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu5/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+      
+      - label: "GPU: Prognostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu6
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu6/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+      
+      - label: "GPU: Prognostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu7
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu7/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+
+      - label: "GPU: Prognostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu8
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu8/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+
+      - label: "GPU: Prognostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu9
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu9/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+
+      - label: "GPU: Prognostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu10
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu10/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
 
   - wait: ~
     continue_on_failure: true
