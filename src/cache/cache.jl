@@ -8,6 +8,7 @@ struct AtmosCache{
     GHOST,
     PREC,
     SCRA,
+    J,
     HYPE,
     EXTFORCING,
     NONGW,
@@ -46,6 +47,9 @@ struct AtmosCache{
     """Pre-allocated areas of memory to store temporary values"""
     scratch::SCRA
 
+    """Jacobian matrix for residual of implicit solve"""
+    jacobian::J
+
     """Hyperdiffision quantities for grid and subgrid scale quantities, potentially with
        ghost buffers for DSS"""
     hyperdiff::HYPE
@@ -71,6 +75,11 @@ end
 # Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
 Adapt.@adapt_structure AtmosCache
 
+# When we call SciMLBase.init, DiffEqBase.jl promotes Y and t to Dual numbers
+# when anything in p has a Dual eltype, unless we define the following method.
+DiffEqBase.anyeltypedual(::AtmosCache, ::Type{Val{counter}}) where {counter} =
+    Any
+
 # Functions on which the model depends:
 # CAP.R_d(params)         # dry specific gas constant
 # CAP.kappa_d(params)     # dry adiabatic exponent
@@ -91,6 +100,7 @@ function build_cache(
     sim_info,
     aerosol_names,
     steady_state_velocity,
+    jacobian,
 )
     (; dt, start_date, output_dir) = sim_info
     FT = eltype(params)
@@ -190,6 +200,7 @@ function build_cache(
         ghost_buffer,
         precomputed,
         scratch,
+        jacobian,
         hyperdiff,
         external_forcing,
         non_orographic_gravity_wave,
