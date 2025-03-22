@@ -29,6 +29,32 @@ function edmfx_tke_tendency!(
     nh_pressure3ʲs =
         turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶠnh_pressure₃ʲs :
         p.precomputed.ᶠnh_pressure³ʲs
+        
+    if turbconv_model isa PrognosticEDMFX
+        (; params) = p
+        (; ᶠgradᵥ_ᶜΦ) = p.core
+        (; ᶜρʲs, ᶠnh_pressure₃ʲs, ᶠu₃⁰) = p.precomputed
+        ᶠlg = Fields.local_geometry_field(Y.f)
+    
+        scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+    
+        for j in 1:n
+            if p.atmos.edmfx_model.nh_pressure isa Val{true}
+                @. ᶠnh_pressure₃ʲs.:($$j) = ᶠupdraft_nh_pressure(
+                    params,
+                    ᶠlg,
+                    ᶠbuoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
+                    Y.f.sgsʲs.:($$j).u₃,
+                    ᶠu₃⁰,
+                    scale_height,
+                )
+            else
+                @. ᶠnh_pressure₃ʲs.:($$j) = C3(0)
+            end
+        end
+        nh_pressure3ʲs = p.precomputed.ᶠnh_pressure₃ʲs
+    end
+
     ᶜtke_press = p.scratch.ᶜtemp_scalar
     @. ᶜtke_press = 0
     for j in 1:n
