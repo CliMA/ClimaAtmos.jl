@@ -144,13 +144,6 @@ function Base.zero(jac::ImplicitEquationJacobian)
     )
 end
 
-function my_zero(f, T, i)
-    println("Debugging my_zero at $i")
-    z = similar(f, T)
-    fill!(parent(z), 0)
-    z
-end
-
 function ImplicitEquationJacobian(
     Y,
     atmos;
@@ -214,44 +207,44 @@ function ImplicitEquationJacobian(
             MatrixFields.unrolled_map(
                 name ->
                     (name, @name(c.uₕ)) =>
-                        my_zero(Y.c, TridiagonalRow_ACTh, 1),
+                        similar(Y.c, TridiagonalRow_ACTh),
                 active_scalar_names,
             ) : ()
         )...,
         MatrixFields.unrolled_map(
-            name -> (name, @name(f.u₃)) => my_zero(Y.c, BidiagonalRow_ACT3, 2),
+            name -> (name, @name(f.u₃)) => similar(Y.c, BidiagonalRow_ACT3),
             active_scalar_names,
         )...,
         MatrixFields.unrolled_map(
-            name -> (@name(f.u₃), name) => my_zero(Y.f, BidiagonalRow_C3, 3),
+            name -> (@name(f.u₃), name) => similar(Y.f, BidiagonalRow_C3),
             active_scalar_names,
         )...,
-        (@name(f.u₃), @name(c.uₕ)) => my_zero(Y.f, BidiagonalRow_C3xACTh, 4),
-        (@name(f.u₃), @name(f.u₃)) => my_zero(Y.f, TridiagonalRow_C3xACT3, 5),
+        (@name(f.u₃), @name(c.uₕ)) => similar(Y.f, BidiagonalRow_C3xACTh),
+        (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
     )
 
     diffused_scalar_names = (@name(c.ρe_tot), available_tracer_names...)
     diffusion_blocks = if use_derivative(diffusion_flag)
         (
             MatrixFields.unrolled_map(
-                name -> (name, @name(c.ρ)) => my_zero(Y.c, TridiagonalRow, 6),
+                name -> (name, @name(c.ρ)) => similar(Y.c, TridiagonalRow),
                 (diffused_scalar_names..., ρatke_if_available...),
             )...,
             MatrixFields.unrolled_map(
-                name -> (name, name) => my_zero(Y.c, TridiagonalRow, 7),
+                name -> (name, name) => similar(Y.c, TridiagonalRow),
                 (diffused_scalar_names..., ρatke_if_available...),
             )...,
             (
                 is_in_Y(@name(c.ρq_tot)) ?
                 (
                     (@name(c.ρe_tot), @name(c.ρq_tot)) =>
-                        my_zero(Y.c, TridiagonalRow, 8),
+                        similar(Y.c, TridiagonalRow),
                 ) : ()
             )...,
             (@name(c.uₕ), @name(c.uₕ)) =>
                 !isnothing(atmos.turbconv_model) ||
                     !disable_momentum_vertical_diffusion(atmos.vert_diff) ?
-                my_zero(Y.c, TridiagonalRow, 9) : FT(-1) * I,
+                similar(Y.c, TridiagonalRow) : FT(-1) * I,
         )
     elseif atmos.moisture_model isa DryModel
         MatrixFields.unrolled_map(
@@ -261,11 +254,11 @@ function ImplicitEquationJacobian(
     else
         (
             MatrixFields.unrolled_map(
-                name -> (name, name) => my_zero(Y.c, TridiagonalRow, 10),
+                name -> (name, name) => similar(Y.c, TridiagonalRow),
                 diffused_scalar_names,
             )...,
             (@name(c.ρe_tot), @name(c.ρq_tot)) =>
-                my_zero(Y.c, TridiagonalRow, 11),
+                similar(Y.c, TridiagonalRow),
             MatrixFields.unrolled_map(
                 name -> (name, name) => FT(-1) * I,
                 (ρatke_if_available..., @name(c.uₕ)),
@@ -292,25 +285,25 @@ function ImplicitEquationJacobian(
         if use_derivative(sgs_advection_flag)
             (
                 MatrixFields.unrolled_map(
-                    name -> (name, name) => my_zero(Y.c, TridiagonalRow, 12),
+                    name -> (name, name) => similar(Y.c, TridiagonalRow),
                     available_sgs_scalar_names,
                 )...,
                 (@name(c.sgsʲs.:(1).mse), @name(c.ρ)) =>
-                    my_zero(Y.c, DiagonalRow, 13),
+                    similar(Y.c, DiagonalRow),
                 (@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot)) =>
-                    my_zero(Y.c, DiagonalRow, 14),
+                    similar(Y.c, DiagonalRow),
                 (@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).q_tot)) =>
-                    my_zero(Y.c, TridiagonalRow, 15),
+                    similar(Y.c, TridiagonalRow),
                 (@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).mse)) =>
-                    my_zero(Y.c, TridiagonalRow, 16),
+                    similar(Y.c, TridiagonalRow),
                 (@name(f.sgsʲs.:(1).u₃), @name(c.ρ)) =>
-                    my_zero(Y.f, BidiagonalRow_C3, 17),
+                    similar(Y.f, BidiagonalRow_C3),
                 (@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).q_tot)) =>
-                    my_zero(Y.f, BidiagonalRow_C3, 18),
+                    similar(Y.f, BidiagonalRow_C3),
                 (@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).mse)) =>
-                    my_zero(Y.f, BidiagonalRow_C3, 19),
+                    similar(Y.f, BidiagonalRow_C3),
                 (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) =>
-                    my_zero(Y.f, TridiagonalRow_C3xACT3, 20),
+                    similar(Y.f, TridiagonalRow_C3xACT3),
             )
         else
             (
@@ -320,7 +313,7 @@ function ImplicitEquationJacobian(
                 )...,
                 (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) =>
                     !isnothing(atmos.rayleigh_sponge) ?
-                    my_zero(Y.f, DiagonalRow_C3xACT3, 21) : FT(-1) * I,
+                    similar(Y.f, DiagonalRow_C3xACT3) : FT(-1) * I,
             )
         end
     else
@@ -332,9 +325,9 @@ function ImplicitEquationJacobian(
         if use_derivative(sgs_mass_flux_flag)
             (
                 (@name(c.ρe_tot), @name(c.sgsʲs.:(1).mse)) =>
-                    my_zero(Y.c, TridiagonalRow, 22),
+                    similar(Y.c, TridiagonalRow),
                 (@name(c.ρq_tot), @name(c.sgsʲs.:(1).q_tot)) =>
-                    my_zero(Y.c, TridiagonalRow, 23),
+                    similar(Y.c, TridiagonalRow),
             )
         else
             ()
@@ -429,8 +422,8 @@ function ImplicitEquationJacobian(
         sgs_entr_detr_flag,
         sgs_nh_pressure_flag,
         sgs_mass_flux_flag,
-        my_zero(Y, 24),
-        my_zero(Y, 25),
+        similar(Y),
+        similar(Y),
         transform_flag,
         Ref{FT}(),
     )
