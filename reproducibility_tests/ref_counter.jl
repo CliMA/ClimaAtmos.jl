@@ -1,4 +1,4 @@
-224
+225
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+
+225
+- Move nonhydrostatic pressure drag calculation to precomputed quantities and 
+  remove one reproducibility job
 
 224
 - Machine precision differences due to https://github.com/CliMA/ClimaCore.jl/pull/2232

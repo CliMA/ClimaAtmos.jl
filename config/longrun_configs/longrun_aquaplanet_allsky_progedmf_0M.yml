@@ -25,7 +25,6 @@ edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
 edmfx_filter: true
-prognostic_tke: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 precip_model: "0M"

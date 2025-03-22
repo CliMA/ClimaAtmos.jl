@@ -330,7 +330,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶠgradᵥ_ᶜΦ) = p.core
+    (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶠu₃⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
     (;
         ᶜmixing_length_tuple,
         ᶜmixing_length,
@@ -340,13 +341,23 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         ᶜK_h,
         ρatke_flux,
     ) = p.precomputed
-    (; ᶜuʲs, ᶜtsʲs, ᶠu³ʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p.precomputed
+    (;
+        ᶜuʲs,
+        ᶜtsʲs,
+        ᶠu³ʲs,
+        ᶜρʲs,
+        ᶜentrʲs,
+        ᶜdetrʲs,
+        ᶜturb_entrʲs,
+        ᶠnh_pressure₃ʲs,
+    ) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶠlg = Fields.local_geometry_field(Y.f)
 
     ᶜvert_div = p.scratch.ᶜtemp_scalar
     ᶜmassflux_vert_div = p.scratch.ᶜtemp_scalar_2
@@ -417,6 +428,24 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             dt,
         )
+
+        # nonhydrostatic pressure drag
+        scale_height =
+            CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+        for j in 1:n
+            if p.atmos.edmfx_model.nh_pressure isa Val{true}
+                @. ᶠnh_pressure₃ʲs.:($$j) = ᶠupdraft_nh_pressure(
+                    params,
+                    ᶠlg,
+                    ᶠbuoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
+                    Y.f.sgsʲs.:($$j).u₃,
+                    ᶠu₃⁰,
+                    scale_height,
+                )
+            else
+                @. ᶠnh_pressure₃ʲs.:($$j) = C3(0)
+            end
+        end
     end
 
     (; ᶜgradᵥ_θ_virt⁰, ᶜgradᵥ_q_tot⁰, ᶜgradᵥ_θ_liq_ice⁰) = p.precomputed
