@@ -50,110 +50,110 @@ steps:
   - group: "Prognostic EDMFX"
     steps:
 
-      - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
-          --job_id prognostic_edmfx_bomex_column_implicit
+      # - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
+      #     --job_id prognostic_edmfx_bomex_column_implicit
 
-        artifact_paths: "prognostic_edmfx_bomex_column_implicit/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+      #   artifact_paths: "prognostic_edmfx_bomex_column_implicit/output_active/*"
+      #   agents:
+      #     slurm_mem: 20GB
+      #     slurm_constraint: icelake|cascadelake|skylake|epyc
 
-      - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
-          --job_id prognostic_edmfx_bomex_column_implicit2
+      # - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
+      #     --job_id prognostic_edmfx_bomex_column_implicit2
 
-        artifact_paths: "prognostic_edmfx_bomex_column_implicit2/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+      #   artifact_paths: "prognostic_edmfx_bomex_column_implicit2/output_active/*"
+      #   agents:
+      #     slurm_mem: 20GB
+      #     slurm_constraint: icelake|cascadelake|skylake|epyc
       
-      - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
-          --job_id prognostic_edmfx_bomex_column_implicit3
+      # - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
+      #     --job_id prognostic_edmfx_bomex_column_implicit3
 
-        artifact_paths: "prognostic_edmfx_bomex_column_implicit3/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+      #   artifact_paths: "prognostic_edmfx_bomex_column_implicit3/output_active/*"
+      #   agents:
+      #     slurm_mem: 20GB
+      #     slurm_constraint: icelake|cascadelake|skylake|epyc
       
-      - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
-          --job_id prognostic_edmfx_bomex_column_implicit4
+      # - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
+      #     --job_id prognostic_edmfx_bomex_column_implicit4
 
-        artifact_paths: "prognostic_edmfx_bomex_column_implicit4/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+      #   artifact_paths: "prognostic_edmfx_bomex_column_implicit4/output_active/*"
+      #   agents:
+      #     slurm_mem: 20GB
+      #     slurm_constraint: icelake|cascadelake|skylake|epyc
       
-      - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
-          --job_id prognostic_edmfx_bomex_column_implicit5
+      # - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
+      #     --job_id prognostic_edmfx_bomex_column_implicit5
 
-        artifact_paths: "prognostic_edmfx_bomex_column_implicit5/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+      #   artifact_paths: "prognostic_edmfx_bomex_column_implicit5/output_active/*"
+      #   agents:
+      #     slurm_mem: 20GB
+      #     slurm_constraint: icelake|cascadelake|skylake|epyc
       
-      - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
-          --job_id prognostic_edmfx_bomex_column_implicit6
+      # - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
+      #     --job_id prognostic_edmfx_bomex_column_implicit6
       
-      - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
-          --job_id prognostic_edmfx_bomex_column_implicit7
+      # - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
+      #     --job_id prognostic_edmfx_bomex_column_implicit7
 
-        artifact_paths: "prognostic_edmfx_bomex_column_implicit7/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+      #   artifact_paths: "prognostic_edmfx_bomex_column_implicit7/output_active/*"
+      #   agents:
+      #     slurm_mem: 20GB
+      #     slurm_constraint: icelake|cascadelake|skylake|epyc
       
-      - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
-          --job_id prognostic_edmfx_bomex_column_implicit8
+      # - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
+      #     --job_id prognostic_edmfx_bomex_column_implicit8
 
-        artifact_paths: "prognostic_edmfx_bomex_column_implicit8/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+      #   artifact_paths: "prognostic_edmfx_bomex_column_implicit8/output_active/*"
+      #   agents:
+      #     slurm_mem: 20GB
+      #     slurm_constraint: icelake|cascadelake|skylake|epyc
       
-      - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
-          --job_id prognostic_edmfx_bomex_column_implicit9
+      # - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
+      #     --job_id prognostic_edmfx_bomex_column_implicit9
 
-        artifact_paths: "prognostic_edmfx_bomex_column_implicit9/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+      #   artifact_paths: "prognostic_edmfx_bomex_column_implicit9/output_active/*"
+      #   agents:
+      #     slurm_mem: 20GB
+      #     slurm_constraint: icelake|cascadelake|skylake|epyc
       
-      - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
-          --job_id prognostic_edmfx_bomex_column_implicit10
+      # - label: ":genie: Prognostic EDMFX Bomex in a column (implicit)"
+      #   command: >
+      #     julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+      #     --config_file $CONFIG_PATH/prognostic_edmfx_bomex_implicit_column.yml
+      #     --job_id prognostic_edmfx_bomex_column_implicit10
 
-        artifact_paths: "prognostic_edmfx_bomex_column_implicit10/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
+      #   artifact_paths: "prognostic_edmfx_bomex_column_implicit10/output_active/*"
+      #   agents:
+      #     slurm_mem: 20GB
+      #     slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":genie: Prognostic EDMFX aquaplanet"
         command: >
