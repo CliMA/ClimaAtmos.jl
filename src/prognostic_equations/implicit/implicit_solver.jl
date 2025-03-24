@@ -550,10 +550,10 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
     dtγ′ = FT(float(dtγ))
 
     A.dtγ_ref[] = dtγ′
-    update_implicit_equation_jacobian!(A, Y, p′, dtγ′)
+    update_implicit_equation_jacobian!(A, Y, p′, dtγ′, t)
 end
 
-function update_implicit_equation_jacobian!(A, Y, p, dtγ)
+function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     dtγ = float(dtγ)
     (;
         matrix,
@@ -1148,4 +1148,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ)
                 ) - (I_u₃,)
         end
     end
+
+    # NOTE: All velocity tendency derivatives should be set BEFORE this call.
+    zero_velocity_jacobian!(matrix, Y, p, t)
 end
