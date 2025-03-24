@@ -88,29 +88,10 @@ function edmfx_nh_pressure_tendency!(
     t,
     turbconv_model::PrognosticEDMFX,
 )
-
+    (; ᶠnh_pressure₃ʲs) = p.precomputed
     n = n_mass_flux_subdomains(turbconv_model)
-    (; params) = p
-    (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜρʲs, ᶠnh_pressure₃ʲs, ᶠu₃⁰) = p.precomputed
-    ᶠlg = Fields.local_geometry_field(Y.f)
-
-    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-
     for j in 1:n
-        if p.atmos.edmfx_model.nh_pressure isa Val{true}
-            @. ᶠnh_pressure₃ʲs.:($$j) = ᶠupdraft_nh_pressure(
-                params,
-                ᶠlg,
-                ᶠbuoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
-                Y.f.sgsʲs.:($$j).u₃,
-                ᶠu₃⁰,
-                scale_height,
-            )
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠnh_pressure₃ʲs.:($$j)
-        else
-            @. ᶠnh_pressure₃ʲs.:($$j) = C3(0)
-        end
+        @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠnh_pressure₃ʲs.:($$j)
     end
 end
 
