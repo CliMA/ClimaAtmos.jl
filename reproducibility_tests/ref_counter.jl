@@ -1,4 +1,4 @@
-227
+228
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+
+228
+- Only treat the drag term in edmf pressure closure implicitly
 
 227
 - Move nonhydrostatic pressure drag calculation to implicit precomputed quantities
