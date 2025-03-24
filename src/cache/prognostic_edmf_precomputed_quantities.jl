@@ -309,11 +309,54 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
 end
 
 """
-    set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
+    set_prognostic_edmf_precomputed_quantities_implicit_closures!(Y, p, t)
 
-Updates the precomputed quantities stored in `p` for edmfx closures.
+Updates the precomputed quantities stored in `p` for edmfx implicit closures.
 """
-NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_implicit_closures!(
+    Y,
+    p,
+    t,
+)
+
+    (; moisture_model, turbconv_model) = p.atmos
+    @assert !(moisture_model isa DryModel)
+
+    (; params) = p
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    (; ᶠgradᵥ_ᶜΦ) = p.core
+    (; ᶠu₃⁰, ᶜρʲs, ᶠnh_pressure₃ʲs) = p.precomputed
+    ᶠlg = Fields.local_geometry_field(Y.f)
+
+    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+    for j in 1:n
+        # nonhydrostatic pressure drag
+        for j in 1:n
+            if p.atmos.edmfx_model.nh_pressure isa Val{true}
+                @. ᶠnh_pressure₃ʲs.:($$j) = ᶠupdraft_nh_pressure(
+                    params,
+                    ᶠlg,
+                    ᶠbuoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
+                    Y.f.sgsʲs.:($$j).u₃,
+                    ᶠu₃⁰,
+                    scale_height,
+                )
+            else
+                @. ᶠnh_pressure₃ʲs.:($$j) = C3(0)
+            end
+        end
+    end
+
+    return nothing
+end
+
+"""
+    set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
+
+Updates the precomputed quantities stored in `p` for edmfx explicit closures.
+"""
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_closures!(
     Y,
     p,
     t,
@@ -330,8 +373,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶠu₃⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
     (;
         ᶜmixing_length_tuple,
         ᶜmixing_length,
@@ -341,16 +383,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         ᶜK_h,
         ρatke_flux,
     ) = p.precomputed
-    (;
-        ᶜuʲs,
-        ᶜtsʲs,
-        ᶠu³ʲs,
-        ᶜρʲs,
-        ᶜentrʲs,
-        ᶜdetrʲs,
-        ᶜturb_entrʲs,
-        ᶠnh_pressure₃ʲs,
-    ) = p.precomputed
+    (; ᶜuʲs, ᶜtsʲs, ᶠu³ʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -428,24 +461,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             dt,
         )
-
-        # nonhydrostatic pressure drag
-        scale_height =
-            CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-        for j in 1:n
-            if p.atmos.edmfx_model.nh_pressure isa Val{true}
-                @. ᶠnh_pressure₃ʲs.:($$j) = ᶠupdraft_nh_pressure(
-                    params,
-                    ᶠlg,
-                    ᶠbuoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
-                    Y.f.sgsʲs.:($$j).u₃,
-                    ᶠu₃⁰,
-                    scale_height,
-                )
-            else
-                @. ᶠnh_pressure₃ʲs.:($$j) = C3(0)
-            end
-        end
     end
 
     (; ᶜgradᵥ_θ_virt⁰, ᶜgradᵥ_q_tot⁰, ᶜgradᵥ_θ_liq_ice⁰) = p.precomputed

@@ -1,4 +1,4 @@
-226
+227
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+
+227
+- Move nonhydrostatic pressure drag calculation to implicit precomputed quantities
 
 226
 - Add updraft rho*a and u_{3,m} jacobian terms
