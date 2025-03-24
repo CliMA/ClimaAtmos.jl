@@ -1,7 +1,7 @@
 agents:
   queue: clima
   slurm_mem: 8G
-  modules: climacommon/2024_12_16 nsight-systems/2024.6.1
+  modules: climacommon/2025_03_18 nsight-systems/2024.6.1
 
 env:
   JULIA_MPI_HAS_CUDA: "true"
