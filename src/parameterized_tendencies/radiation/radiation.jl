@@ -106,6 +106,9 @@ function rrtmgp_model_kwargs(
     ᶠspace = Spaces.face_space(space)
     ᶜz = Fields.coordinate_field(ᶜspace).z
     ᶠz = Fields.coordinate_field(ᶠspace).z
+    if ᶜspace.grid.global_geometry isa Geometry.AbstractSphericalGlobalGeometry
+        planet_radius = ᶜspace.grid.global_geometry.radius
+    end
     bottom_coords = Fields.coordinate_field(Spaces.level(ᶜspace, 1))
     latitude = if eltype(bottom_coords) <: Geometry.LatLongZPoint
         Fields.field2array(bottom_coords.lat)
@@ -117,8 +120,18 @@ function rrtmgp_model_kwargs(
         optical_thickness_parameter = (@. 7.2 + (1.8 - 7.2) * sind(latitude)^2),
         latitude,
     )
-    zkwargs =
-        (; center_z = Fields.field2array(ᶜz), face_z = Fields.field2array(ᶠz))
+    if ᶜspace.grid.global_geometry isa Geometry.AbstractSphericalGlobalGeometry
+        zkwargs = (;
+            center_z = Fields.field2array(ᶜz),
+            face_z = Fields.field2array(ᶠz),
+            planet_radius = planet_radius,
+        )
+    else
+        zkwargs = (;
+            center_z = Fields.field2array(ᶜz),
+            face_z = Fields.field2array(ᶠz),
+        )
+    end
     return include_z ? (; kwargs..., zkwargs...) : kwargs
 end
 
@@ -137,6 +150,9 @@ function rrtmgp_model_kwargs(
     ᶜΔz = Fields.Δz_field(ᶜspace)
     ᶜz = Fields.coordinate_field(ᶜspace).z
     ᶠz = Fields.coordinate_field(ᶠspace).z
+    if ᶜspace.grid.global_geometry isa Geometry.AbstractSphericalGlobalGeometry
+        planet_radius = ᶜspace.grid.global_geometry.radius
+    end
     latitude = if eltype(bottom_coords) <: Geometry.LatLongZPoint
         Fields.field2array(bottom_coords.lat)
     else
@@ -256,11 +272,21 @@ function rrtmgp_model_kwargs(
         end
 
         if include_z
-            kwargs = (;
-                kwargs...,
-                center_z = Fields.field2array(ᶜz),
-                face_z = Fields.field2array(ᶠz),
-            )
+            if ᶜspace.grid.global_geometry isa
+               Geometry.AbstractSphericalGlobalGeometry
+                kwargs = (;
+                    kwargs...,
+                    center_z = Fields.field2array(ᶜz),
+                    face_z = Fields.field2array(ᶠz),
+                    planet_radius = planet_radius,
+                )
+            else
+                kwargs = (;
+                    kwargs...,
+                    center_z = Fields.field2array(ᶜz),
+                    face_z = Fields.field2array(ᶠz),
+                )
+            end
         end
     end
     return kwargs
