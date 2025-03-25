@@ -2,7 +2,7 @@
 
 julia_version = "1.11.4"
 manifest_format = "2.0"
-project_hash = "04945e2a7116cfacb2d57340f477dbe23e208227"
+project_hash = "dbb001c3c134c9962d9a283b94c060c2d2eb8b6a"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "e2478490447631aedba0823d4d7a80b2cc8cdb32"
@@ -395,9 +395,9 @@ version = "0.2.12"
 
 [[deps.ClimaParams]]
 deps = ["TOML"]
-git-tree-sha1 = "bf8fdee01cf5ea7e5e9fa00ac32367f65448484e"
+git-tree-sha1 = "8bf3c3ca9073ae455682eb4f011f94a86a0f88a4"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "0.10.23"
+version = "0.10.24"
 
 [[deps.ClimaReproducibilityTests]]
 deps = ["OrderedCollections", "PrettyTables"]
