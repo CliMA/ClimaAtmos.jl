@@ -483,6 +483,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
+        set_prognostic_edmf_precomputed_quantities_implicit_closures!(Y, p, t)
     elseif turbconv_model isa AbstractEDMF
         (; ᶜtke⁰) = p.precomputed
         @. ᶜtke⁰ = Y.c.sgs⁰.ρatke / Y.c.ρ
@@ -526,7 +527,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
-        set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
+        set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_precipitation!(
             Y,
             p,
