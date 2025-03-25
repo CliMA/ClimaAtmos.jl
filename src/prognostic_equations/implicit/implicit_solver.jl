@@ -293,6 +293,12 @@ function ImplicitEquationJacobian(
                     similar(Y.c, TridiagonalRow),
                 (@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).mse)) =>
                     similar(Y.c, TridiagonalRow),
+                (@name(c.sgsʲs.:(1).ρa), @name(f.sgsʲs.:(1).u₃)) =>
+                    similar(Y.c, BidiagonalRow_ACT3),
+                (@name(c.sgsʲs.:(1).mse), @name(f.sgsʲs.:(1).u₃)) =>
+                    similar(Y.c, BidiagonalRow_ACT3),
+                (@name(c.sgsʲs.:(1).q_tot), @name(f.sgsʲs.:(1).u₃)) =>
+                    similar(Y.c, BidiagonalRow_ACT3),
                 (@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).q_tot)) =>
                     similar(Y.f, BidiagonalRow_C3),
                 (@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).mse)) =>
@@ -359,12 +365,14 @@ function ImplicitEquationJacobian(
     names₁ = (
         names₁_group₁...,
         available_sgs_scalar_names...,
-        sgs_u³_names_if_available...,
         names₁_group₂...,
         names₁_group₃...,
     )
 
-    alg₂ = MatrixFields.BlockLowerTriangularSolve(@name(c.uₕ))
+    alg₂ = MatrixFields.BlockLowerTriangularSolve(
+        @name(c.uₕ),
+        sgs_u³_names_if_available...,
+    )
     alg =
         if use_derivative(diffusion_flag) ||
            use_derivative(sgs_advection_flag) ||
@@ -386,8 +394,7 @@ function ImplicitEquationJacobian(
                             alg₂ = MatrixFields.BlockLowerTriangularSolve(
                                 @name(c.sgsʲs.:(1).mse);
                                 alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                                    @name(c.sgsʲs.:(1).ρa),
-                                    @name(f.sgsʲs.:(1).u₃);
+                                    @name(c.sgsʲs.:(1).ρa);
                                     diff_subalg...,
                                 ),
                             ),
@@ -889,6 +896,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 top = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
                 bottom = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
             ) # Need to wrap ᶠupwind_matrix in this for well-defined boundaries.
+
+            ᶠu³ʲ_data = ᶠu³ʲs.:(1).components.data.:1
             ᶜkappa_mʲ = p.ᶜtemp_scalar
             @. ᶜkappa_mʲ =
                 TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
@@ -903,6 +912,20 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                     ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)))
                 ) - (I,)
 
+            ∂ᶜq_totʲ_err_∂ᶠu₃ʲ =
+                matrix[@name(c.sgsʲs.:(1).q_tot), @name(f.sgsʲs.:(1).u₃)]
+
+            @. ∂ᶜq_totʲ_err_∂ᶠu₃ʲ =
+                dtγ * (
+                    -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                        ᶠset_upwind_bcs(
+                            ᶠupwind(CT3(sign(ᶠu³ʲ_data)), Y.c.sgsʲs.:(1).q_tot),
+                        ) * adjoint(C3(sign(ᶠu³ʲ_data))),
+                    ) +
+                    DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot) ⋅ ᶜadvdivᵥ_matrix()
+                ) ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+
+
             ∂ᶜmseʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot)]
             @. ∂ᶜmseʲ_err_∂ᶜq_totʲ =
@@ -914,6 +937,18 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                         ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp) * ∂e_int_∂q_tot,
                     )
                 )
+
+            ∂ᶜmseʲ_err_∂ᶠu₃ʲ =
+                matrix[@name(c.sgsʲs.:(1).mse), @name(f.sgsʲs.:(1).u₃)]
+            @. ∂ᶜmseʲ_err_∂ᶠu₃ʲ =
+                dtγ * (
+                    -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                        ᶠset_upwind_bcs(
+                            ᶠupwind(CT3(sign(ᶠu³ʲ_data)), Y.c.sgsʲs.:(1).mse),
+                        ) * adjoint(C3(sign(ᶠu³ʲ_data))),
+                    ) +
+                    DiagonalMatrixRow(Y.c.sgsʲs.:(1).mse) ⋅ ᶜadvdivᵥ_matrix()
+                ) ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
 
             ∂ᶜmseʲ_err_∂ᶜmseʲ =
                 matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
@@ -986,6 +1021,22 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 dtγ * ᶜadvection_matrix ⋅
                 ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
                 DiagonalMatrixRow(1 / ᶜρʲs.:(1)) - (I,)
+
+
+            ∂ᶜρaʲ_err_∂ᶠu₃ʲ =
+                matrix[@name(c.sgsʲs.:(1).ρa), @name(f.sgsʲs.:(1).u₃)]
+            @. ∂ᶜρaʲ_err_∂ᶠu₃ʲ =
+                dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                    ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ *
+                    ᶠset_upwind_bcs(
+                        ᶠupwind(
+                            CT3(sign(ᶠu³ʲ_data)),
+                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                        ),
+                    ) *
+                    adjoint(C3(sign(ᶠu³ʲ_data))) *
+                    g³³(ᶠgⁱʲ),
+                )
 
             ∂ᶠu₃ʲ_err_∂ᶜq_totʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).q_tot)]

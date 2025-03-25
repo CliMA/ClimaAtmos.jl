@@ -1,4 +1,4 @@
-229
+230
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+
+230
+- Add u_{3,m} (updraft) Jacobians to updraft MSE, rho*a, and q_tot prognostic equations. Move sgs ∂ᶠu₃ʲ derivatives to BlockLowerTriangularSolve.
 
 229
   remove derivatives with respect to grid mean rho in edmf implicit solver
