@@ -389,14 +389,12 @@ end
 
 function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     (; ᶠradiation_flux) = p.radiation
-    (; aux_spaces) = p.core
-    ᶠaux_radiation_flux = Fields.Field(Fields.field_values(ᶠradiation_flux), 
-                                       p.core.aux_spaces.face_space)
-    aux_flux = @. ᶜdivᵥ(ᶠaux_radiation_flux)    
-    #def_flux = @. ᶜdivᵥ(ᶠradiation_flux)
-    #diff_flux = Fields.field_values(aux_flux) .- Fields.field_values(def_flux)
-    #@. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
-    Fields.field2array(Yₜ.c.ρe_tot) .-= Fields.field2array(aux_flux)
+    (; ᶠaux_radiation_flux) = p.core
+    # Replace radiative flux with shallow global-geometry approximation
+    Fields.field2array(ᶠaux_radiation_flux) .= 
+        Fields.field2array(ᶠradiation_flux)
+    Fields.field2array(Yₜ.c.ρe_tot) .-= 
+        Fields.field2array(ᶜdivᵥ.(ᶠaux_radiation_flux))
     return nothing
 end
 

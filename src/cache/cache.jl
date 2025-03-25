@@ -130,6 +130,10 @@ function build_cache(
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
 
+    ᶠaux_radiation_flux = similar(Geometry.WVector.(
+                                  Fields.Field(Fields.field_values(Y.f.u₃),
+                                  aux_spaces.face_space)))
+
     core = (
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
@@ -140,7 +144,7 @@ function build_cache(
         surface_ct3_unit = CT3.(
             unit_basis_vector_data.(CT3, sfc_local_geometry)
         ),
-        aux_spaces
+        ᶠaux_radiation_flux,
     )
 
     sfc_setup = surface_setup(params)
