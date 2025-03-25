@@ -1,8 +1,8 @@
 dt_save_state_to_disk: "Inf"
 output_default_diagnostics: false
-h_elem: 30
+h_elem: 28
 z_max: 60000.0
-z_elem: 63
+z_elem: 72
 dz_bottom: 30.0
 rayleigh_sponge: true
 viscous_sponge: true
