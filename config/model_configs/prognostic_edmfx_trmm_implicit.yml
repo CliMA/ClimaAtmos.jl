@@ -1,0 +1,42 @@
+initial_condition: TRMM_LBA
+rad: TRMM_LBA
+surface_setup: TRMM_LBA
+turbconv: prognostic_edmfx
+implicit_diffusion: true
+implicit_sgs_advection: true
+implicit_sgs_entr_detr: true
+implicit_sgs_nh_pressure: true
+implicit_sgs_mass_flux: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 3
+edmfx_upwinding: first_order
+edmfx_entr_model: "PiGroups"
+edmfx_detr_model: "SmoothArea"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_filter: true
+prognostic_tke: true
+precip_model: 0M
+cloud_model: "grid_scale"
+moist: equil
+call_cloud_diagnostics_per_stage: true
+config: "column"
+z_max: 16400
+x_elem: 2
+y_elem: 2
+z_elem: 82
+z_stretch: false
+dz_bottom: 30
+dt: 100secs
+t_end: 48hours
+dt_save_state_to_disk: 10mins
+toml: [toml/prognostic_edmfx_implicit_calibrated_v1.toml]
+netcdf_interpolation_num_points: [8, 8, 82]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]
+    period: 10mins
+  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
+    period: 10mins
