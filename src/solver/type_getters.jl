@@ -738,6 +738,9 @@ function get_simulation(config::AtmosConfig)
         end
         @info "Allocating Y: $s"
     else
+        aux_parsed_args = copy(config.parsed_args)
+        aux_parsed_args["deep_atmosphere"]=false
+        aux_spaces = get_spaces(aux_parsed_args, params, config.comms_ctx)
         spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
     end
     initial_condition = get_initial_condition(config.parsed_args)
@@ -778,6 +781,7 @@ function get_simulation(config::AtmosConfig)
             sim_info,
             tracers.aerosol_names,
             steady_state_velocity,
+            aux_spaces,
         )
     end
     @info "Allocating cache (p): $s"

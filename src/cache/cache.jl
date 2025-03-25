@@ -91,6 +91,7 @@ function build_cache(
     sim_info,
     aerosol_names,
     steady_state_velocity,
+    aux_spaces,
 )
     (; dt, start_date, output_dir) = sim_info
     FT = eltype(params)
@@ -139,6 +140,7 @@ function build_cache(
         surface_ct3_unit = CT3.(
             unit_basis_vector_data.(CT3, sfc_local_geometry)
         ),
+        aux_spaces
     )
 
     sfc_setup = surface_setup(params)
