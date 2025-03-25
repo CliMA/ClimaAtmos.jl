@@ -117,8 +117,9 @@ function set_surface_albedo!(Y, p, t, ::CouplerAlbedo)
             set_insolation_variables!(Y, p, t, p.atmos.insolation)
         # set surface albedo to 0.38
         @warn "Setting surface albedo to 0.38 at the beginning of the simulation"
-        p.radiation.rrtmgp_model.direct_sw_surface_albedo .= FT(0.38)
-        p.radiation.rrtmgp_model.diffuse_sw_surface_albedo .= FT(0.38)
+        s = rrtmgp_solver(p)
+        RRTMGP.direct_sw_surface_albedo(s) .= FT(0.38)
+        RRTMGP.diffuse_sw_surface_albedo(s) .= FT(0.38)
     else
         nothing
     end

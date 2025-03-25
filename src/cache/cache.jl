@@ -204,7 +204,7 @@ function build_cache(
 
     return AtmosCache{map(typeof, args)...}(args...)
 end
-
+rrtmgp_solver(c::AtmosCache) = c.radiation.rrtmgp_model.solver
 
 function compute_coriolis(ᶜcoord, ᶠcoord, params)
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
