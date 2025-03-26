@@ -83,7 +83,7 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶠKᵥʲs = similar(Y.f, NTuple{n, FT}),
             ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
-            ᶠnh_pressure₃ʲs = similar(Y.f, NTuple{n, C3{FT}}),
+            ᶠnh_pressure₃_dragʲs = similar(Y.f, NTuple{n, C3{FT}}),
             moisture_sgs_quantities...,
         ) : (;)
     return (; gs_quantities..., sgs_quantities..., prognostic_sgs_quantities...)
@@ -172,6 +172,7 @@ function precomputed_quantities(Y, atmos)
             ᶜgradᵥ_θ_virt⁰ = Fields.Field(C3{FT}, cspace),
             ᶜgradᵥ_q_tot⁰ = Fields.Field(C3{FT}, cspace),
             ᶜgradᵥ_θ_liq_ice⁰ = Fields.Field(C3{FT}, cspace),
+            ᶠnh_pressure₃_buoyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             precipitation_sgs_quantities...,
         ) : (;)
 
@@ -205,7 +206,8 @@ function precomputed_quantities(Y, atmos)
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
-            ᶠnh_pressure³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
+            ᶠnh_pressure³_buoyʲs = similar(Y.f, NTuple{n, CT3{FT}}),
+            ᶠnh_pressure³_dragʲs = similar(Y.f, NTuple{n, CT3{FT}}),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶜK⁰ = similar(Y.c, FT),
