@@ -1994,9 +1994,7 @@ version = "1.11.0"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "Artifacts", "ClimaComms", "DocStringExtensions", "Random"]
-git-tree-sha1 = "21fa4627b59e88cdc1cf98c321ab3660bc5fd851"
-repo-rev = "ck/api"
-repo-url = "https://github.com/CliMA/RRTMGP.jl.git"
+path = "../../RRTMGPRepos/RRTMGP.jl"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
 version = "0.21.1"
 weakdeps = ["CUDA", "ClimaParams", "NCDatasets"]

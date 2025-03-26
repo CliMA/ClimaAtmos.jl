@@ -20,13 +20,13 @@ function compute_rsd!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                RRTMGP.face_sw_flux_dn(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_sw_flux_dn,
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            RRTMGP.face_sw_flux_dn(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.face_sw_flux_dn,
             axes(state.f),
         )
     end
@@ -61,7 +61,7 @@ function compute_rsdt!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    RRTMGP.face_sw_flux_dn(rrtmgp_solver(cache)),
+                    cache.radiation.rrtmgp_model.face_sw_flux_dn,
                     axes(state.f),
                 ),
                 nlevels + half,
@@ -70,7 +70,7 @@ function compute_rsdt!(
     else
         out .= Fields.level(
             Fields.array2field(
-                RRTMGP.face_sw_flux_dn(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_sw_flux_dn,
                 axes(state.f),
             ),
             nlevels + half,
@@ -106,7 +106,7 @@ function compute_rsds!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    RRTMGP.face_sw_flux_dn(rrtmgp_solver(cache)),
+                    cache.radiation.rrtmgp_model.face_sw_flux_dn,
                     axes(state.f),
                 ),
                 half,
@@ -115,7 +115,7 @@ function compute_rsds!(
     else
         out .= Fields.level(
             Fields.array2field(
-                RRTMGP.face_sw_flux_dn(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_sw_flux_dn,
                 axes(state.f),
             ),
             half,
@@ -150,13 +150,13 @@ function compute_rsu!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                RRTMGP.face_sw_flux_up(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_sw_flux_up,
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            RRTMGP.face_sw_flux_up(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.face_sw_flux_up,
             axes(state.f),
         )
     end
@@ -191,7 +191,7 @@ function compute_rsut!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    RRTMGP.face_sw_flux_up(rrtmgp_solver(cache)),
+                    cache.radiation.rrtmgp_model.face_sw_flux_up,
                     axes(state.f),
                 ),
                 nlevels + half,
@@ -200,7 +200,7 @@ function compute_rsut!(
     else
         out .= Fields.level(
             Fields.array2field(
-                RRTMGP.face_sw_flux_up(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_sw_flux_up,
                 axes(state.f),
             ),
             nlevels + half,
@@ -236,7 +236,7 @@ function compute_rsus!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    RRTMGP.face_sw_flux_up(rrtmgp_solver(cache)),
+                    cache.radiation.rrtmgp_model.face_sw_flux_up,
                     axes(state.f),
                 ),
                 half,
@@ -245,7 +245,7 @@ function compute_rsus!(
     else
         out .= Fields.level(
             Fields.array2field(
-                RRTMGP.face_sw_flux_up(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_sw_flux_up,
                 axes(state.f),
             ),
             half,
@@ -280,13 +280,13 @@ function compute_rld!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                RRTMGP.face_lw_flux_dn(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_lw_flux_dn,
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            RRTMGP.face_lw_flux_dn(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.face_lw_flux_dn,
             axes(state.f),
         )
     end
@@ -320,7 +320,7 @@ function compute_rlds!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    RRTMGP.face_lw_flux_dn(rrtmgp_solver(cache)),
+                    cache.radiation.rrtmgp_model.face_lw_flux_dn,
                     axes(state.f),
                 ),
                 half,
@@ -329,7 +329,7 @@ function compute_rlds!(
     else
         out .= Fields.level(
             Fields.array2field(
-                RRTMGP.face_lw_flux_dn(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_lw_flux_dn,
                 axes(state.f),
             ),
             half,
@@ -364,13 +364,13 @@ function compute_rlu!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                RRTMGP.face_lw_flux_up(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_lw_flux_up,
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            RRTMGP.face_lw_flux_up(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.face_lw_flux_up,
             axes(state.f),
         )
     end
@@ -405,7 +405,7 @@ function compute_rlut!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    RRTMGP.face_lw_flux_up(rrtmgp_solver(cache)),
+                    cache.radiation.rrtmgp_model.face_lw_flux_up,
                     axes(state.f),
                 ),
                 nlevels + half,
@@ -414,7 +414,7 @@ function compute_rlut!(
     else
         out .= Fields.level(
             Fields.array2field(
-                RRTMGP.face_lw_flux_up(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_lw_flux_up,
                 axes(state.f),
             ),
             nlevels + half,
@@ -450,7 +450,7 @@ function compute_rlus!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    RRTMGP.face_lw_flux_up(rrtmgp_solver(cache)),
+                    cache.radiation.rrtmgp_model.face_lw_flux_up,
                     axes(state.f),
                 ),
                 half,
@@ -459,7 +459,7 @@ function compute_rlus!(
     else
         out .= Fields.level(
             Fields.array2field(
-                RRTMGP.face_lw_flux_up(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_lw_flux_up,
                 axes(state.f),
             ),
             half,
@@ -493,12 +493,12 @@ function compute_rsdcs!(
 )
     if isnothing(out)
         return Fields.array2field(
-            RRTMGP.face_clear_sw_flux_dn(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.face_clear_sw_flux_dn,
             axes(state.f),
         )
     else
         out .= Fields.array2field(
-            RRTMGP.face_clear_sw_flux_dn(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.face_clear_sw_flux_dn,
             axes(state.f),
         )
     end
@@ -532,7 +532,7 @@ function compute_rsdscs!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    RRTMGP.face_clear_sw_flux_dn(rrtmgp_solver(cache)),
+                    cache.radiation.rrtmgp_model.face_clear_sw_flux_dn,
                     axes(state.f),
                 ),
                 half,
@@ -541,7 +541,7 @@ function compute_rsdscs!(
     else
         out .= Fields.level(
             Fields.array2field(
-                RRTMGP.face_clear_sw_flux_dn(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_clear_sw_flux_dn,
                 axes(state.f),
             ),
             half,
@@ -576,13 +576,13 @@ function compute_rsucs!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                RRTMGP.face_clear_sw_flux_up(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            RRTMGP.face_clear_sw_flux_up(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
             axes(state.f),
         )
     end
@@ -617,7 +617,7 @@ function compute_rsutcs!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    RRTMGP.face_clear_sw_flux_up(rrtmgp_solver(cache)),
+                    cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
                     axes(state.f),
                 ),
                 nlevels + half,
@@ -626,7 +626,7 @@ function compute_rsutcs!(
     else
         out .= Fields.level(
             Fields.array2field(
-                RRTMGP.face_clear_sw_flux_up(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
                 axes(state.f),
             ),
             nlevels + half,
@@ -662,7 +662,7 @@ function compute_rsuscs!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    RRTMGP.face_clear_sw_flux_up(rrtmgp_solver(cache)),
+                    cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
                     axes(state.f),
                 ),
                 half,
@@ -671,7 +671,7 @@ function compute_rsuscs!(
     else
         out .= Fields.level(
             Fields.array2field(
-                RRTMGP.face_clear_sw_flux_up(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
                 axes(state.f),
             ),
             half,
@@ -707,13 +707,13 @@ function compute_rldcs!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                RRTMGP.face_clear_lw_flux_dn(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_clear_lw_flux_dn,
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            RRTMGP.face_clear_lw_flux_dn(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.face_clear_lw_flux_dn,
             axes(state.f),
         )
     end
@@ -747,7 +747,7 @@ function compute_rldscs!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    RRTMGP.face_clear_lw_flux_dn(rrtmgp_solver(cache)),
+                    cache.radiation.rrtmgp_model.face_clear_lw_flux_dn,
                     axes(state.f),
                 ),
                 half,
@@ -756,7 +756,7 @@ function compute_rldscs!(
     else
         out .= Fields.level(
             Fields.array2field(
-                RRTMGP.face_clear_lw_flux_dn(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_clear_lw_flux_dn,
                 axes(state.f),
             ),
             half,
@@ -791,13 +791,13 @@ function compute_rlucs!(
     if isnothing(out)
         return copy(
             Fields.array2field(
-                RRTMGP.face_clear_lw_flux_up(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
                 axes(state.f),
             ),
         )
     else
         out .= Fields.array2field(
-            RRTMGP.face_clear_lw_flux_up(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
             axes(state.f),
         )
     end
@@ -832,7 +832,7 @@ function compute_rlutcs!(
         return copy(
             Fields.level(
                 Fields.array2field(
-                    RRTMGP.face_clear_lw_flux_up(rrtmgp_solver(cache)),
+                    cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
                     axes(state.f),
                 ),
                 nlevels + half,
@@ -841,7 +841,7 @@ function compute_rlutcs!(
     else
         out .= Fields.level(
             Fields.array2field(
-                RRTMGP.face_clear_lw_flux_up(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
                 axes(state.f),
             ),
             nlevels + half,
@@ -880,13 +880,13 @@ function compute_reffclw!(
     FT = eltype(state)
     if isnothing(out)
         return Fields.array2field(
-            RRTMGP.center_cloud_liquid_effective_radius(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.center_cloud_liquid_effective_radius,
             axes(state.c),
         ) .* FT(1e-6) # RRTMGP stores r_eff in microns
     else
         out .=
             Fields.array2field(
-                RRTMGP.center_cloud_liquid_effective_radius(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.center_cloud_liquid_effective_radius,
                 axes(state.c),
             ) .* FT(1e-6)
     end
@@ -922,13 +922,13 @@ function compute_reffcli!(
     FT = eltype(state)
     if isnothing(out)
         return Fields.array2field(
-            RRTMGP.center_cloud_ice_effective_radius(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.center_cloud_ice_effective_radius,
             axes(state.c),
         ) .* FT(1e-6) # RRTMGP stores r_eff in microns
     else
         out .=
             Fields.array2field(
-                RRTMGP.center_cloud_ice_effective_radius(rrtmgp_solver(cache)),
+                cache.radiation.rrtmgp_model.center_cloud_ice_effective_radius,
                 axes(state.c),
             ) .* FT(1e-6)
     end
@@ -966,12 +966,12 @@ function compute_od550aer!(
     FT = eltype(state)
     if isnothing(out)
         return Fields.array2field(
-            RRTMGP.aod_sw_extinction(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.aod_sw_extinction,
             axes(Fields.level(state.f, half)),
         )
     else
         out .= Fields.array2field(
-            RRTMGP.aod_sw_extinction(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.aod_sw_extinction,
             axes(Fields.level(state.f, half)),
         )
     end
@@ -1009,12 +1009,12 @@ function compute_odsc550aer!(
     FT = eltype(state)
     if isnothing(out)
         return Fields.array2field(
-            RRTMGP.aod_sw_scattering(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.aod_sw_scattering,
             axes(Fields.level(state.f, half)),
         )
     else
         out .= Fields.array2field(
-            RRTMGP.aod_sw_scattering(rrtmgp_solver(cache)),
+            cache.radiation.rrtmgp_model.aod_sw_scattering,
             axes(Fields.level(state.f, half)),
         )
     end
