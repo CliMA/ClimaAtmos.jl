@@ -20,18 +20,14 @@ abstract type AbstractRRTMGPMode end
 struct GrayRadiation <: AbstractRRTMGPMode
     add_isothermal_boundary_layer::Bool
 end
-get_radiation_method(m::GrayRadiation) =
-    RRTMGP.GrayRadiation(m.add_isothermal_boundary_layer)
+get_radiation_method(m::GrayRadiation) = RRTMGP.GrayRadiation()
 struct ClearSkyRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
 end
 get_radiation_method(m::ClearSkyRadiation) =
-    RRTMGP.ClearSkyRadiation(
-        m.add_isothermal_boundary_layer,
-        m.aerosol_radiation
-    )
+    RRTMGP.ClearSkyRadiation(m.aerosol_radiation)
 struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
     idealized_h2o::Bool
     idealized_clouds::Bool
@@ -49,7 +45,6 @@ struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
 end
 get_radiation_method(m::AllSkyRadiation) =
     RRTMGP.AllSkyRadiation(
-        m.add_isothermal_boundary_layer,
         m.aerosol_radiation,
         m.reset_rng_seed
     )
@@ -71,9 +66,8 @@ struct AllSkyRadiationWithClearSkyDiagnostics{
     reset_rng_seed::Bool
 end
 
-get_radiation_method(m::AllSkyRadiation) =
-    RRTMGP.AllSkyRadiation(
-        m.add_isothermal_boundary_layer,
+get_radiation_method(m::AllSkyRadiationWithClearSkyDiagnostics) =
+    RRTMGP.AllSkyRadiationWithClearSkyDiagnostics(
         m.aerosol_radiation,
         m.reset_rng_seed
     )
@@ -614,9 +608,10 @@ function _RRTMGPModel(
     (; lookups, lu_kwargs) = lookup_tables(radiation_mode, device, FT)
     views = []
 
-    nlay = domain_nlay + Int(radiation_mode.add_isothermal_boundary_layer)
+    (; add_isothermal_boundary_layer) = radiation_mode
+    nlay = domain_nlay + Int(add_isothermal_boundary_layer)
     t = (views, domain_nlay)
-    grid_params = RRTMGP.RRTMGPGridParams(FT; context, nlay, ncol)
+    grid_params = RRTMGP.RRTMGPGridParams(FT; context, nlay, ncol, extra_layer = add_isothermal_boundary_layer)
     op = RRTMGP.Optics.TwoStream(grid_params)
     src_lw = if op isa RRTMGP.Optics.OneScalar
         RRTMGP.Sources.SourceLWNoScat(grid_params; params)
@@ -894,29 +889,11 @@ function _RRTMGPModel(
     )
     radiation_method = get_radiation_method(radiation_mode)
     @assert radiation_method isa RRTMGP.AbstractRRTMGPMethod
-    z_lay = RRTMGP.face_variable(grid_params)
-    z_lev = RRTMGP.center_variable(grid_params)
-    # @show get(kwargs, :center_z, NaN)
-    array = view(z_lay, 1:(domain_nlay), :)
-    set_cols!(array, get(kwargs, :center_z, NaN))
-    array = view(z_lev, 1:(domain_nlay+1), :)
-    set_cols!(array, get(kwargs, :face_z, NaN))
-    # view(z_lev, 1:(domain_nlay+1)) .= get(kwargs, :face_z, NaN)
+    z_lay = RRTMGP.VCData(grid_params; nlay)
+    RRTMGP.set_domain!(z_lay, get(kwargs, :center_z, NaN), grid_params)
+    z_lev = RRTMGP.VCData(grid_params; nlay=nlay+1)
+    RRTMGP.set_domain!(z_lev, get(kwargs, :face_z, NaN), grid_params)
 
-# function RRTMGPSolver(
-#     grid_params::RRTMGPGridParams,
-#     radiation_method::AbstractRRTMGPMethod,
-#     params::RP.ARP,
-#     bcs_lw::BCs.LwBCs,
-#     bcs_sw::SwBCs,
-#     as::AtmosphericState,
-#     op_lw::Optics.AbstractOpticalProps = Optics.TwoStream(grid_params),
-#     op_sw::Optics.AbstractOpticalProps = Optics.TwoStream(grid_params),
-#     center_z = nothing,
-#     face_z = nothing,
-# )
-    @show typeof(z_lay)
-    @show typeof(z_lev)
     solver = RRTMGP.RRTMGPSolver(
         grid_params,
         radiation_method,
@@ -984,34 +961,6 @@ function set_array!(array, value::AbstractArray{<:Real}, symbol)
             copyto!(array, value)
         else
             error("expected $symbol to be an array of size $(size(array)); \
-                   received an array of size $(size(value))")
-        end
-    end
-end
-
-set_cols!(array, value::Real) = fill!(array, value)
-function set_cols!(array, value::AbstractArray{<:Real})
-    if ndims(array) == 2
-        if size(value) == size(array)
-            copyto!(array, value)
-        elseif size(value) == (size(array, 1),)
-            for col in eachcol(array)
-                copyto!(col, value)
-            end
-        elseif size(value) == (1, size(array, 2))
-            for (icol, col) in enumerate(eachcol(array))
-                fill!(col, value[1, icol])
-            end
-        else
-            error("expected lhs to be an array of size $(size(array)), \
-                   ($(size(array, 1)),), or (1, $(size(array, 2))); received \
-                   an array of size $(size(value))")
-        end
-    else
-        if size(value) == size(array)
-            copyto!(array, value)
-        else
-            error("expected lhs to be an array of size $(size(array)); \
                    received an array of size $(size(value))")
         end
     end
@@ -1094,6 +1043,7 @@ function update_implied_values!(model)
         z_lev = RRTMGP.face_z(model.solver)
         # z_lay = parent(model.center_z)
         # z_lev = parent(model.face_z)
+        @info "requires_z!!!"
     end
     mode = model.interpolation
     outs = requires_z(mode) ? (p_lev, t_lev, z_lev) : (p_lev, t_lev)
