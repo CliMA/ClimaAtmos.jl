@@ -44,7 +44,6 @@ known_dependencies = Set([
     "ClimaUtilities",
     "CloudMicrophysics",
     "Dates",
-    "DiffEqBase",
     "FastGaussQuadrature",
     "Insolation",
     "Interpolations",
