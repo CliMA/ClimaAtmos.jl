@@ -44,7 +44,6 @@ known_dependencies = Set([
     "ClimaUtilities",
     "CloudMicrophysics",
     "Dates",
-    "FastGaussQuadrature",
     "Insolation",
     "Interpolations",
     "LazyBroadcast", # for https://github.com/CliMA/ClimaAtmos.jl/issues/3594
