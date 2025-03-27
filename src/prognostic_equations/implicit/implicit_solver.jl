@@ -819,7 +819,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 ᶜdiffusion_h_matrix_scaled,
                 ᶜdiffusion_h_matrix,
             )
-            @. ∂ᶜρq_err_∂ᶜρ = zero(typeof(∂ᶜρq_err_∂ᶜρ))
+            @. ∂ᶜρq_err_∂ᶜρ =
+                dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(-(ᶜq) / ᶜρ)
             @. ∂ᶜρq_err_∂ᶜρq +=
                 dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
