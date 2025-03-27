@@ -287,16 +287,12 @@ function ImplicitEquationJacobian(
                     name -> (name, name) => similar(Y.c, TridiagonalRow),
                     available_sgs_scalar_names,
                 )...,
-                (@name(c.sgsʲs.:(1).mse), @name(c.ρ)) =>
-                    similar(Y.c, DiagonalRow),
                 (@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot)) =>
                     similar(Y.c, DiagonalRow),
                 (@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).q_tot)) =>
                     similar(Y.c, TridiagonalRow),
                 (@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).mse)) =>
                     similar(Y.c, TridiagonalRow),
-                (@name(f.sgsʲs.:(1).u₃), @name(c.ρ)) =>
-                    similar(Y.f, BidiagonalRow_C3),
                 (@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).q_tot)) =>
                     similar(Y.f, BidiagonalRow_C3),
                 (@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).mse)) =>
@@ -918,13 +914,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                         ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp) * ∂e_int_∂q_tot,
                     )
                 )
-            ∂ᶜmseʲ_err_∂ᶜρ = matrix[@name(c.sgsʲs.:(1).mse), @name(c.ρ)]
-            @. ∂ᶜmseʲ_err_∂ᶜρ =
-                dtγ * (
-                    -DiagonalMatrixRow(
-                        adjoint(ᶜinterp(ᶠu³ʲs.:(1))) * ᶜgradᵥ_ᶠΦ / ᶜρʲs.:(1),
-                    )
-                )
+
             ∂ᶜmseʲ_err_∂ᶜmseʲ =
                 matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
             @. ∂ᶜmseʲ_err_∂ᶜmseʲ =
@@ -997,10 +987,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
                 DiagonalMatrixRow(1 / ᶜρʲs.:(1)) - (I,)
 
-            ∂ᶠu₃ʲ_err_∂ᶜρ = matrix[@name(f.sgsʲs.:(1).u₃), @name(c.ρ)]
-            @. ∂ᶠu₃ʲ_err_∂ᶜρ =
-                dtγ * DiagonalMatrixRow(ᶠgradᵥ_ᶜΦ / ᶠinterp(ᶜρʲs.:(1))) ⋅
-                ᶠinterp_matrix()
             ∂ᶠu₃ʲ_err_∂ᶜq_totʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).q_tot)]
             @. ∂ᶠu₃ʲ_err_∂ᶜq_totʲ =

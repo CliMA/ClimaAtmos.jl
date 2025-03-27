@@ -1,4 +1,4 @@
-228
+229
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+
+229
+  remove derivatives with respect to grid mean rho in edmf implicit solver
 
 228
 - Only treat the drag term in edmf pressure closure implicitly
