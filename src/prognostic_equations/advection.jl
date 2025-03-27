@@ -57,6 +57,7 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     end
 
     for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
+        ρχ_name in (:ρq_rai, :ρq_sno) && continue
         @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.:($$ρχ_name) * ᶜu)
     end
 

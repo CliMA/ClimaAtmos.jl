@@ -296,8 +296,8 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         )
         @. ᶜρχₜ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
 
-        # Exclude contributions from hyperdiffusion of condensate, 
-        # precipitating species from mass tendency. 
+        # Exclude contributions from hyperdiffusion of condensate,
+        # precipitating species from mass tendency.
         if χ_name == :q_tot
             @. Yₜ.c.ρ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
         end
