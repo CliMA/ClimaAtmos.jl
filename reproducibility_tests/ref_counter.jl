@@ -1,4 +1,4 @@
-232
+233
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+
+233
+- modify the derivative of p and \rho with respect to qt
 
 232
 - Use lazy broadcasting instead of temp scalar in implicit solver for kappa_m vars,

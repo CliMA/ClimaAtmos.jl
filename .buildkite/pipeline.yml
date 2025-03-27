@@ -816,7 +816,6 @@ steps:
         artifact_paths: "prognostic_edmfx_trmm_column/output_active/*"
         agents:
           slurm_mem: 20GB
-        soft_fail: true
 
       - label: ":genie: Prognostic EDMFX TRMM with 0-moment in a column"
         command: >
