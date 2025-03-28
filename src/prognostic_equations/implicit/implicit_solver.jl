@@ -543,6 +543,7 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         p.core.ᶜΦ,
         p.core.ᶠgradᵥ_ᶜΦ,
         p.scratch.ᶜtemp_scalar,
+        p.scratch.ᶜtemp_scalar_2,
         p.scratch.ᶜtemp_C3,
         p.scratch.ᶠtemp_CT3,
         p.scratch.∂ᶜK_∂ᶜuₕ,
@@ -606,6 +607,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     Δcv_v = FT(CAP.cv_v(params)) - cv_d
     T_0 = FT(CAP.T_0(params))
     R_d = FT(CAP.R_d(params))
+    ΔR_v = FT(CAP.R_v(params)) - R_d
     cp_d = FT(CAP.cp_d(params))
     # This term appears a few times in the Jacobian, and is technically
     # minus ∂e_int_∂q_tot
@@ -624,6 +626,13 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     ᶜkappa_m = p.ᶜtemp_scalar
     @. ᶜkappa_m =
         TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts)
+
+    ᶜdkappa_m = p.ᶜtemp_scalar_2
+    @. ᶜdkappa_m =
+        (
+            ΔR_v * TD.cv_m(thermo_params, ᶜts) -
+            Δcv_v * TD.gas_constant_air(thermo_params, ᶜts)
+        ) / (TD.cv_m(thermo_params, ᶜts)^2)
 
     if use_derivative(topography_flag)
         @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
@@ -681,7 +690,10 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
         ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
         @. ∂ᶠu₃_err_∂ᶜρq_tot =
-            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m * ∂e_int_∂q_tot)
+            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow((
+                ᶜkappa_m * ∂e_int_∂q_tot +
+                ᶜdkappa_m * (cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ)
+            ))
     end
 
     ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
