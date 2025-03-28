@@ -26,9 +26,12 @@ function edmfx_tke_tendency!(
     (; ᶠu³⁰, ᶠu³, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰) = p.precomputed
     (; ᶜK_u, ᶜK_h) = p.precomputed
     ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
-    nh_pressure3ʲs =
-        turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶠnh_pressure₃ʲs :
-        p.precomputed.ᶠnh_pressure³ʲs
+    nh_pressure3_buoyʲs =
+        turbconv_model isa PrognosticEDMFX ?
+        p.precomputed.ᶠnh_pressure₃_buoyʲs : p.precomputed.ᶠnh_pressure³_buoyʲs
+    nh_pressure3_dragʲs =
+        turbconv_model isa PrognosticEDMFX ?
+        p.precomputed.ᶠnh_pressure₃_dragʲs : p.precomputed.ᶠnh_pressure³_dragʲs
     ᶜtke_press = p.scratch.ᶜtemp_scalar
     @. ᶜtke_press = 0
     for j in 1:n
@@ -38,7 +41,9 @@ function edmfx_tke_tendency!(
         @. ᶜtke_press +=
             ᶜρaʲ *
             adjoint(ᶜinterp.(ᶠu³ʲs.:($$j) - ᶠu³⁰)) *
-            ᶜinterp(C3(nh_pressure3ʲs.:($$j)))
+            ᶜinterp(
+                C3((nh_pressure3_buoyʲs.:($$j)) + nh_pressure3_dragʲs.:($$j)),
+            )
     end
 
     if use_prognostic_tke(turbconv_model)

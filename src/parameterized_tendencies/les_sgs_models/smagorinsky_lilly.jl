@@ -166,7 +166,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
         ᶜ∇ᵥρD∇χₜ = @. ᶜtemp_scalar = ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜχ)))
         @. ᶜρχₜ -= ᶜ∇ᵥρD∇χₜ
         # Rain and snow does not affect the mass
-        if χ_name ∉ (:q_rai, :q_sno)
+        if χ_name == :q_tot
             @. Yₜ.c.ρ -= ᶜ∇ᵥρD∇χₜ
         end
     end

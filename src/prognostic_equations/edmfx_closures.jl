@@ -52,46 +52,69 @@ function surface_flux_tke(
 end
 
 """
-   Return the nonhydrostatic pressure drag for updrafts [m/s2 * m]
+   Return the virtual mass term of the pressure closure for updrafts [m/s2 * m]
+
+   Inputs (everything defined on cell faces):
+   - params - set with model parameters
+   - ᶠbuoyʲ - covariant3 or contravariant3 updraft buoyancy
+"""
+function ᶠupdraft_nh_pressure_buoyancy(params, ᶠbuoyʲ)
+    turbconv_params = CAP.turbconv_params(params)
+    # factor multiplier for pressure buoyancy terms (effective buoyancy is (1-α_b))
+    α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
+    return α_b * ᶠbuoyʲ
+end
+
+"""
+   Return the drag term of the pressure closure for updrafts [m/s2 * m]
 
    Inputs (everything defined on cell faces):
    - params - set with model parameters
    - ᶠlg - local geometry (needed to compute the norm inside a local function)
-   - ᶠbuoyʲ - covariant3 or contravariant3 updraft buoyancy
    - ᶠu3ʲ, ᶠu3⁰ - covariant3 or contravariant3 velocity for updraft and environment.
                   covariant3 velocity is used in prognostic edmf, and contravariant3
                   velocity is used in diagnostic edmf.
-   - updraft top height
+   - scale height - an approximation for updraft top height
 """
-function ᶠupdraft_nh_pressure(params, ᶠlg, ᶠbuoyʲ, ᶠu3ʲ, ᶠu3⁰, plume_height)
+function ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰, scale_height)
     turbconv_params = CAP.turbconv_params(params)
-    # factor multiplier for pressure buoyancy terms (effective buoyancy is (1-α_b))
-    α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     # factor multiplier for pressure drag
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
-
-    # Independence of aspect ratio hardcoded: α₂_asp_ratio² = FT(0)
-
     H_up_min = CAP.min_updraft_top(turbconv_params)
 
+    # Independence of aspect ratio hardcoded: α₂_asp_ratio² = FT(0)
     # We also used to have advection term here: α_a * w_up * div_w_up
-    return α_b * ᶠbuoyʲ +
-           α_d * (ᶠu3ʲ - ᶠu3⁰) * CC.Geometry._norm(ᶠu3ʲ - ᶠu3⁰, ᶠlg) /
-           max(plume_height, H_up_min)
+    return α_d * (ᶠu3ʲ - ᶠu3⁰) * CC.Geometry._norm(ᶠu3ʲ - ᶠu3⁰, ᶠlg) /
+           max(scale_height, H_up_min)
 end
 
-edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
-function edmfx_nh_pressure_tendency!(
+edmfx_nh_pressure_buoyancy_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+function edmfx_nh_pressure_buoyancy_tendency!(
     Yₜ,
     Y,
     p,
     t,
     turbconv_model::PrognosticEDMFX,
 )
-    (; ᶠnh_pressure₃ʲs) = p.precomputed
+    (; ᶠnh_pressure₃_buoyʲs) = p.precomputed
     n = n_mass_flux_subdomains(turbconv_model)
     for j in 1:n
-        @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠnh_pressure₃ʲs.:($$j)
+        @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠnh_pressure₃_buoyʲs.:($$j)
+    end
+end
+
+edmfx_nh_pressure_drag_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+function edmfx_nh_pressure_drag_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    turbconv_model::PrognosticEDMFX,
+)
+    (; ᶠnh_pressure₃_dragʲs) = p.precomputed
+    n = n_mass_flux_subdomains(turbconv_model)
+    for j in 1:n
+        @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠnh_pressure₃_dragʲs.:($$j)
     end
 end
 

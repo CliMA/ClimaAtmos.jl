@@ -18,7 +18,7 @@ jobs:
   test:
     name: ci ${{ matrix.version }} - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
       matrix:
@@ -29,6 +29,11 @@ jobs:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
+        include:
+          - version: '1.10'
+            timeout: 45
+          - version: '1.11'
+            timeout: 60
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2

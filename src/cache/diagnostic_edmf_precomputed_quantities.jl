@@ -223,7 +223,8 @@ function compute_u³ʲ_u³ʲ(
     entrʲ_prev_level,
     turb_entrʲ_prev_level,
     u³⁰_data_prev_halflevel,
-    nh_pressure³ʲ_data_prev_halflevel,
+    nh_pressure³_buoyʲ_data_prev_halflevel,
+    nh_pressure³_dragʲ_data_prev_halflevel,
 )
     u³ʲ_u³ʲ =
         (1 / (J_halflevel^2)) *
@@ -251,8 +252,14 @@ function compute_u³ʲ_u³ʲ(
         )
 
     u³ʲ_u³ʲ -=
-        (1 / (J_halflevel^2)) *
-        (J_prev_level^2 * 2 * nh_pressure³ʲ_data_prev_halflevel)
+        (1 / (J_halflevel^2)) * (
+            J_prev_level^2 *
+            2 *
+            (
+                nh_pressure³_buoyʲ_data_prev_halflevel +
+                nh_pressure³_dragʲ_data_prev_halflevel
+            )
+        )
     return u³ʲ_u³ʲ
 end
 
@@ -311,7 +318,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         ᶜentrʲs,
         ᶜdetrʲs,
         ᶜturb_entrʲs,
-        ᶠnh_pressure³ʲs,
+        ᶠnh_pressure³_buoyʲs,
+        ᶠnh_pressure³_dragʲs,
     ) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜtke⁰) = p.precomputed
 
@@ -396,7 +404,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ᶜentrʲ = ᶜentrʲs.:($j)
             ᶜdetrʲ = ᶜdetrʲs.:($j)
             ᶜturb_entrʲ = ᶜturb_entrʲs.:($j)
-            ᶠnh_pressure³ʲ = ᶠnh_pressure³ʲs.:($j)
+            ᶠnh_pressure³_buoyʲ = ᶠnh_pressure³_buoyʲs.:($j)
+            ᶠnh_pressure³_dragʲ = ᶠnh_pressure³_dragʲs.:($j)
 
             if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
                 ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵖʲs.:($j)
@@ -430,8 +439,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             detrʲ_prev_level = Fields.field_values(Fields.level(ᶜdetrʲ, i - 1))
             turb_entrʲ_prev_level =
                 Fields.field_values(Fields.level(ᶜturb_entrʲ, i - 1))
-            nh_pressure³ʲ_prev_halflevel =
-                Fields.field_values(Fields.level(ᶠnh_pressure³ʲ, i - 1 - half))
+            nh_pressure³_buoyʲ_prev_halflevel = Fields.field_values(
+                Fields.level(ᶠnh_pressure³_buoyʲ, i - 1 - half),
+            )
+            nh_pressure³_dragʲ_prev_halflevel = Fields.field_values(
+                Fields.level(ᶠnh_pressure³_dragʲ, i - 1 - half),
+            )
             scale_height =
                 CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
 
@@ -516,21 +529,29 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
             # TODO: use updraft top instead of scale height
             if p.atmos.edmfx_model.nh_pressure isa Val{true}
-                @. nh_pressure³ʲ_prev_halflevel = ᶠupdraft_nh_pressure(
-                    params,
-                    local_geometry_prev_halflevel,
-                    -∇Φ³_prev_level * (ρʲ_prev_level - ρ_prev_level) /
-                    ρʲ_prev_level,
-                    u³ʲ_prev_halflevel,
-                    u³⁰_prev_halflevel,
-                    scale_height,
-                )
+                @. nh_pressure³_buoyʲ_prev_halflevel =
+                    ᶠupdraft_nh_pressure_buoyancy(
+                        params,
+                        -∇Φ³_prev_level * (ρʲ_prev_level - ρ_prev_level) /
+                        ρʲ_prev_level,
+                    )
+                @. nh_pressure³_dragʲ_prev_halflevel =
+                    ᶠupdraft_nh_pressure_drag(
+                        params,
+                        local_geometry_prev_halflevel,
+                        u³ʲ_prev_halflevel,
+                        u³⁰_prev_halflevel,
+                        scale_height,
+                    )
             else
-                @. nh_pressure³ʲ_prev_halflevel = CT3(0)
+                @. nh_pressure³_buoyʲ_prev_halflevel = CT3(0)
+                @. nh_pressure³_dragʲ_prev_halflevel = CT3(0)
             end
 
-            nh_pressure³ʲ_data_prev_halflevel =
-                nh_pressure³ʲ_prev_halflevel.components.data.:1
+            nh_pressure³_buoyʲ_data_prev_halflevel =
+                nh_pressure³_buoyʲ_prev_halflevel.components.data.:1
+            nh_pressure³_dragʲ_data_prev_halflevel =
+                nh_pressure³_dragʲ_prev_halflevel.components.data.:1
 
             # Updraft q_tot sources from precipitation formation
             # To be applied in updraft continuity, moisture and energy
@@ -574,7 +595,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 entrʲ_prev_level,
                 turb_entrʲ_prev_level,
                 u³⁰_data_prev_halflevel,
-                nh_pressure³ʲ_data_prev_halflevel,
+                nh_pressure³_buoyʲ_data_prev_halflevel,
+                nh_pressure³_dragʲ_data_prev_halflevel,
             )
 
             # get u³ʲ to calculate divergence term for detrainment,
@@ -842,7 +864,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
 )
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p.precomputed
-    (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs, ᶠnh_pressure³ʲs) = p.precomputed
+    (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs, ᶠnh_pressure³_buoyʲs, ᶠnh_pressure³_dragʲs) =
+        p.precomputed
     (; precip_model) = p.atmos
 
     # set values for the top level
@@ -853,19 +876,26 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
     for j in 1:n
         ᶜuʲ = ᶜuʲs.:($j)
         ᶠu³ʲ = ᶠu³ʲs.:($j)
-        ᶠnh_pressure³ʲ = ᶠnh_pressure³ʲs.:($j)
+        ᶠnh_pressure³_buoyʲ = ᶠnh_pressure³_buoyʲs.:($j)
+        ᶠnh_pressure³_dragʲ = ᶠnh_pressure³_dragʲs.:($j)
         ᶜentrʲ = ᶜentrʲs.:($j)
         ᶜdetrʲ = ᶜdetrʲs.:($j)
         ᶜturb_entrʲ = ᶜturb_entrʲs.:($j)
 
         u³ʲ_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, i_top + half))
         @. u³ʲ_halflevel = CT3(0)
-        nh_pressure³ʲ_halflevel =
-            Fields.field_values(Fields.level(ᶠnh_pressure³ʲ, i_top - half))
-        @. nh_pressure³ʲ_halflevel = CT3(0)
-        nh_pressure³ʲ_halflevel =
-            Fields.field_values(Fields.level(ᶠnh_pressure³ʲ, i_top + half))
-        @. nh_pressure³ʲ_halflevel = CT3(0)
+        nh_pressure³_buoyʲ_halflevel =
+            Fields.field_values(Fields.level(ᶠnh_pressure³_buoyʲ, i_top - half))
+        @. nh_pressure³_buoyʲ_halflevel = CT3(0)
+        nh_pressure³_buoyʲ_halflevel =
+            Fields.field_values(Fields.level(ᶠnh_pressure³_buoyʲ, i_top + half))
+        @. nh_pressure³_buoyʲ_halflevel = CT3(0)
+        nh_pressure³_dragʲ_halflevel =
+            Fields.field_values(Fields.level(ᶠnh_pressure³_dragʲ, i_top - half))
+        @. nh_pressure³_dragʲ_halflevel = CT3(0)
+        nh_pressure³_dragʲ_halflevel =
+            Fields.field_values(Fields.level(ᶠnh_pressure³_dragʲ, i_top + half))
+        @. nh_pressure³_dragʲ_halflevel = CT3(0)
 
         entrʲ_level = Fields.field_values(Fields.level(ᶜentrʲ, i_top))
         detrʲ_level = Fields.field_values(Fields.level(ᶜdetrʲ, i_top))
