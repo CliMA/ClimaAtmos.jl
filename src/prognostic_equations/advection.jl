@@ -255,9 +255,13 @@ function edmfx_sgs_vertical_advection_tendency!(
         @. Yₜ.c.sgsʲs.:($$j).q_tot += va
         if p.atmos.moisture_model isa NonEquilMoistModel &&
            p.atmos.precip_model isa Microphysics1Moment
-            # TODO - add precipitation terminal velocity
-            # TODO - add cloud sedimentation velocity
-            # TODO - add their contributions to mean energy and mass
+           # TODO - add precipitation terminal velocity in implicit solver/tendency with if/else
+           # TODO - add cloud sedimentation velocity in implicit solver/tendency with if/else
+           # TODO - add their contributions to mean energy and mass
+
+            #(; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs) = p.precomputed
+            #@. lazy(ᶠu³ʲs.:($$j) + CT3(WVector(ᶠinterp(ᶜwₗʲs.:($$j)))),
+
             va = vertical_advection(
                 ᶠu³ʲs.:($j),
                 Y.c.sgsʲs.:($j).q_liq,

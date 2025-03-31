@@ -613,6 +613,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρ⁰, ᶜts⁰) = p.precomputed
     (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
 
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs) = p.precomputed
+    (; ᶜwₗ⁰, ᶜwᵢ⁰, ᶜwᵣ⁰, ᶜwₛ⁰) = p.precomputed
+
     # TODO - can I re-use them between js and env?
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
@@ -620,6 +623,34 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
     for j in 1:n
+
+        # compute terminal velocity for precipitation
+        @. ᶜwᵣʲs.:($$j) = CM1.terminal_velocity(
+            cmp.pr,
+            cmp.tv.rain,
+            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
+        )
+        @. ᶜwₛʲs.:($$j) = CM1.terminal_velocity(
+            cmp.ps,
+            cmp.tv.snow,
+            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_sno),
+        )
+        # compute sedimentation velocity for cloud condensate [m/s]
+        @. ᶜwₗʲs.:($$j) = CMNe.terminal_velocity(
+            cmc.liquid,
+            cmc.Ch2022.rain,
+            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_liq),
+        )
+        @. ᶜwᵢʲs.:($$j) = CMNe.terminal_velocity(
+            cmc.ice,
+            cmc.Ch2022.small_ice,
+            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_ice),
+        )
+
         # Precipitation sources and sinks from the updrafts
         compute_precipitation_sources!(
             ᶜSᵖ,
@@ -664,6 +695,33 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             dt,
         )
     end
+
+    # compute terminal velocity for precipitation
+    @. ᶜwᵣ⁰ = CM1.terminal_velocity(
+        cmp.pr,
+        cmp.tv.rain,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_rai⁰),
+    )
+    @. ᶜwₛ⁰ = CM1.terminal_velocity(
+        cmp.ps,
+        cmp.tv.snow,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_sno⁰),
+    )
+    # compute sedimentation velocity for cloud condensate [m/s]
+    @. ᶜwₗ⁰ = CMNe.terminal_velocity(
+        cmc.liquid,
+        cmc.Ch2022.rain,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_liq⁰),
+    )
+    @. ᶜwᵢ⁰ = CMNe.terminal_velocity(
+        cmc.ice,
+        cmc.Ch2022.small_ice,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_ice⁰),
+    )
 
     # Precipitation sources and sinks from the environment
     compute_precipitation_sources!(
