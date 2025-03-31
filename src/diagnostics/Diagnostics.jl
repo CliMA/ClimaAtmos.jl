@@ -41,6 +41,10 @@ import ..EDOnlyEDMFX
 import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 
+# gravitywave_models
+import ..NonOrographyGravityWave
+import ..OrographicGravityWave
+
 # surface_model
 import ..PrognosticSurfaceTemperature
 
