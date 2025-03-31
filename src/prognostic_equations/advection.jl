@@ -10,7 +10,7 @@ import ClimaCore.Geometry as Geometry
     horizontal_dynamics_tendency!(Yₜ, Y, p, t)
 
 Computes tendencies due to horizontal advection for prognostic variables of the
-grid mean and EDMFX subdomains, and also applies horizontal pressure gradient and 
+grid mean and EDMFX subdomains, and also applies horizontal pressure gradient and
 gravitational acceleration terms for horizontal momentum.
 
 Specifically, this function calculates:
@@ -344,7 +344,6 @@ function edmfx_sgs_vertical_advection_tendency!(
     turbconv_params = CAP.turbconv_params(params)
     α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     ᶠz = Fields.coordinate_field(Y.f).z
-    ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜu₃ʲ = p.scratch.ᶜtemp_C3
     ᶜKᵥʲ = p.scratch.ᶜtemp_scalar_2
     for j in 1:n
@@ -370,58 +369,127 @@ function edmfx_sgs_vertical_advection_tendency!(
     end
 
     for j in 1:n
-        @. ᶜa_scalar = draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-        vtt = vertical_transport(
-            ᶜρʲs.:($j),
-            ᶠu³ʲs.:($j),
-            ᶜa_scalar,
-            dt,
-            edmfx_upwinding,
-        )
+        ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
+        edmf_upwnd = edmfx_upwinding
+
+        # Flux form vertical advection of area farction with the grid mean velocity
+        vtt = vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmf_upwnd)
         @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
 
-        va = vertical_advection(
-            ᶠu³ʲs.:($j),
-            Y.c.sgsʲs.:($j).mse,
-            edmfx_upwinding,
-        )
-        @. Yₜ.c.sgsʲs.:($$j).mse += va
+        # Advective form advection of mse and q_tot with the grid mean velocity
+        # TODO - make it work for multiple updrafts
+        if j > 1
+            error("Below code doesn't work for multiple updrafts")
+        end
+        sgs_q_tot_mse = (@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot))
+        MatrixFields.unrolled_foreach(sgs_q_tot_mse) do χʲ_name
+            MatrixFields.has_field(Y, χʲ_name) || return
+            ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+            ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
 
-        va = vertical_advection(
-            ᶠu³ʲs.:($j),
-            Y.c.sgsʲs.:($j).q_tot,
-            edmfx_upwinding,
-        )
-        @. Yₜ.c.sgsʲs.:($$j).q_tot += va
+            va = vertical_advection(ᶠu³ʲs.:($j), ᶜχʲ, edmf_upwnd)
+            @. ᶜχʲₜ += va
+        end
+
         if p.atmos.moisture_model isa NonEquilMoistModel &&
            p.atmos.microphysics_model isa Microphysics1Moment
-            # TODO - add precipitation terminal velocity
-            # TODO - add cloud sedimentation velocity
-            # TODO - add their contributions to mean energy and mass
-            va = vertical_advection(
-                ᶠu³ʲs.:($j),
-                Y.c.sgsʲs.:($j).q_liq,
-                edmfx_upwinding,
+            # TODO - add contibutions to sgs mass flux from tracer sedimentation
+            # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
+
+            FT = eltype(params)
+            thp = CAP.thermodynamics_params(params)
+            (; ᶜΦ) = p.core
+            (; ᶜtsʲs) = p.precomputed
+
+            # Sedimentation velocities for microphysics tracers
+            # TODO - lazify ᶜwₗʲs computation. No need to cache it.
+            sgs_microphysics_tracers = (
+                (@name(c.sgsʲs.:(1).q_liq), @name(q_liq), @name(ᶜwₗʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_ice), @name(q_ice), @name(ᶜwᵢʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_rai), @name(q_rai), @name(ᶜwᵣʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_sno), @name(q_sno), @name(ᶜwₛʲs.:(1))),
             )
-            @. Yₜ.c.sgsʲs.:($$j).q_liq += va
-            va = vertical_advection(
-                ᶠu³ʲs.:($j),
-                Y.c.sgsʲs.:($j).q_ice,
-                edmfx_upwinding,
-            )
-            @. Yₜ.c.sgsʲs.:($$j).q_ice += va
-            va = vertical_advection(
-                ᶠu³ʲs.:($j),
-                Y.c.sgsʲs.:($j).q_rai,
-                edmfx_upwinding,
-            )
-            @. Yₜ.c.sgsʲs.:($$j).q_rai += va
-            va = vertical_advection(
-                ᶠu³ʲs.:($j),
-                Y.c.sgsʲs.:($j).q_sno,
-                edmfx_upwinding,
-            )
-            @. Yₜ.c.sgsʲs.:($$j).q_sno += va
+
+            MatrixFields.unrolled_foreach(
+                sgs_microphysics_tracers,
+            ) do (qʲ_name, name, wʲ_name)
+                MatrixFields.has_field(Y, qʲ_name) || return
+
+                ᶜqʲ = MatrixFields.get_field(Y, qʲ_name)
+                ᶜqʲₜ = MatrixFields.get_field(Yₜ, qʲ_name)
+                ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
+                ᶠw³ʲ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwʲ)))))
+                ᶜw³ʲ = (@. lazy(CT3(Geometry.WVector(-1 * ᶜwʲ))))
+                ᶜaqʲ = (@. lazy(ᶜa * ᶜqʲ))
+
+                # Flux form vertical advection of rho * area with sedimentation velocities
+                # Eq (4) term (3) in the writeup
+                vtt = vertical_transport(ᶜρʲs.:($j), ᶠw³ʲ, ᶜaqʲ, dt, edmf_upwnd)
+                @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
+
+                # Advective form advection of moisture tracers with the grid mean velocity
+                # Eq (2) term (1) in the writeup
+                va = vertical_advection(ᶠu³ʲs.:($j), ᶜqʲ, edmf_upwnd)
+                @. ᶜqʲₜ += va
+
+                # Advective form advection of q_tot and moisture tracers with sedimentation velocities
+                # Eq (1-2) term (2)
+                va = vertical_advection(ᶠw³ʲ, ᶜqʲ, edmf_upwnd)
+                @. Yₜ.c.sgsʲs.:($$j).q_tot += (1 - Y.c.sgsʲs.:($$j).q_tot) * va
+                @. ᶜqʲₜ += va
+                # Advective form advection of mse with sedimentation velocity
+                # Eq (3) term (2)
+                if name in (@name(q_liq), @name(q_rai))
+                    ᶜmse_li = (@. lazy(
+                        TD.internal_energy_liquid(thp, ᶜtsʲs.:($$j)) + ᶜΦ,
+                    ))
+                elseif name in (@name(q_ice), @name(q_sno))
+                    ᶜmse_li = (@. lazy(
+                        TD.internal_energy_ice(thp, ᶜtsʲs.:($$j)) + ᶜΦ,
+                    ))
+                else
+                    error("Unsupported moisture tracer variable")
+                end
+                va = vertical_advection(ᶠw³ʲ, ᶜqʲ .* ᶜmse_li, edmf_upwnd)
+                @. Yₜ.c.sgsʲs.:($$j).mse += va
+                va = vertical_advection(ᶠw³ʲ, ᶜqʲ, edmf_upwnd)
+                @. Yₜ.c.sgsʲs.:($$j).mse -= Y.c.sgsʲs.:($$j).mse * va
+
+                # mse, q_tot and moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
+                # Eq (1-3) term (3)
+                ᶜinv_ρ̂ = (@. lazy(
+                    specific(
+                        FT(1),
+                        Y.c.sgsʲs.:($$j).ρa,
+                        FT(0),
+                        Y.c.ρ,
+                        turbconv_model,
+                    ),
+                ))
+                ᶜ∂ρ̂∂z = (@. lazy(
+                    upwind_biased_grad(
+                        -1 * Geometry.WVector(ᶜwʲ),
+                        Y.c.sgsʲs.:($$j).ρa,
+                    ),
+                ))
+                @. Yₜ.c.sgsʲs.:($$j).mse -=
+                    dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂z, ᶜw³ʲ) *
+                    ᶜqʲ *
+                    (ᶜmse_li - Y.c.sgsʲs.:($$j).mse)
+                @. Yₜ.c.sgsʲs.:($$j).q_tot -=
+                    dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂z, ᶜw³ʲ) *
+                    ᶜqʲ *
+                    (1 - Y.c.sgsʲs.:($$j).q_tot)
+                @. ᶜqʲₜ -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂z, ᶜw³ʲ) * ᶜqʲ
+
+                # mse, q_tot and moisture tracer terms proportional to velocity gradients
+                # Eq (1-3) term (4)
+                @. Yₜ.c.sgsʲs.:($$j).mse -=
+                    ᶜdivᵥ(ᶠw³ʲ) * ᶜqʲ * (ᶜmse_li - Y.c.sgsʲs.:($$j).mse)
+                @. Yₜ.c.sgsʲs.:($$j).q_tot -=
+                    ᶜdivᵥ(ᶠw³ʲ) * ᶜqʲ * (1 - Y.c.sgsʲs.:($$j).q_tot)
+                @. ᶜqʲₜ -= ᶜdivᵥ(ᶠw³ʲ) * ᶜqʲ
+            end
         end
     end
 end

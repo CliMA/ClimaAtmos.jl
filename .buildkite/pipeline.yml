@@ -88,7 +88,7 @@ steps:
           --config_file $CONFIG_PATH/single_column_precipitation_test.yml
           --job_id single_column_precipitation_test
         artifact_paths: "single_column_precipitation_test/output_active/*"
-      
+
       - label: ":umbrella: 2-moment precipitation sanity test single column"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -916,6 +916,15 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":genie: Prognostic EDMFX Dycoms RF02 in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf02_column.yml
+          --job_id prognostic_edmfx_dycoms_rf02_column
+        artifact_paths: "prognostic_edmfx_dycoms_rf02_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":umbrella: Prognostic EDMFX Rico in a column"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -1127,9 +1136,9 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_mem: 16GB
-      
+
       - label: ":earth_americas: GPU: Diagnostic EDMFX ERA5 Weather Model Initial Condition"
-        command: > 
+        command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
           --config_file $CONFIG_PATH/diagnostic_edmfx_era5_initial_condition.yml
