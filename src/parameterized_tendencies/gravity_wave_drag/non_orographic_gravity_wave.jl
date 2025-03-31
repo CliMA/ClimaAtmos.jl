@@ -15,7 +15,7 @@ non_orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
 non_orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 
 
-function non_orographic_gravity_wave_cache(Y, gw::NonOrographyGravityWave)
+function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
     if iscolumn(axes(Y.c))
         FT = Spaces.undertype(axes(Y.c))
         (; source_height, Bw, Bn, Bt_0, dc, cmax, c0, nk, cw, cn) = gw
@@ -140,7 +140,7 @@ function non_orographic_gravity_wave_tendency!(
     Y,
     p,
     t,
-    ::NonOrographyGravityWave,
+    ::NonOrographicGravityWave,
 )
     #unpack
     ᶜT = p.scratch.ᶜtemp_scalar
