@@ -39,6 +39,75 @@ function flux_accumulation!(integrator)
     return nothing
 end
 
+"""
+    external_driven_single_column!(integrator)
+
+Evaluate external time-varying forcing inputs for a single-column atmospheric model onto
+objects in the cache.
+
+This callback function evaluates external forcing variables at the current simulation time and
+updates the corresponding fields in the model state. It handles various forcing components:
+
+- Temperature and specific humidity tendencies (vertical eddy terms, horizontal advection)
+- Nudging fields for temperature, humidity, and horizontal wind components
+- Large-scale subsidence computed from vertical velocity
+
+# Arguments
+- `integrator`: The ODE integrator containing the current model state (`u`),
+  cache (`p`), and time (`t`)
+
+# Notes
+The function extracts time-varying inputs from the `column_timevaryinginputs` structure
+and evaluates them at the current time using the `evaluate!` function, which updates
+the corresponding model fields in place.
+"""
+function external_driven_single_column!(integrator)
+    Y = integrator.u
+    p = integrator.p
+    t = integrator.t
+
+    @assert p.atmos.sfc_temperature isa ExternalTVColumnSST (
+        "SCM reanalysis timevarying setup requires `initial_condition`, " *
+        "`external_forcing`, `surface_setup`, and `surface_temperature` " *
+        "to be set to `ReanalysisTimeVarying`"
+    )
+
+    FT = Spaces.undertype(axes(Y.c))
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    # unpack external forcing objects that we can directly set.
+    (;
+        ᶜdTdt_fluc,
+        ᶜdqtdt_fluc,
+        ᶜdTdt_hadv,
+        ᶜdqtdt_hadv,
+        ᶜdTdt_rad, # we skip radiation because we're using RRTMGP, but this can be changed for simpler setups
+        ᶜT_nudge,
+        ᶜqt_nudge,
+        ᶜu_nudge,
+        ᶜv_nudge,
+        ᶜls_subsidence,
+    ) = p.external_forcing
+    # unpack tv inputs
+    (; hus, rho, ta, tnhusha, tnhusva, tntha, tntva, ua, va, wa, wap) =
+        p.external_forcing.column_timevaryinginputs
+
+    # set the external forcing variables; external tendency is updated in a remaining_tendency! call
+    evaluate!(ᶜdTdt_fluc, tntva, t)
+    evaluate!(ᶜdqtdt_fluc, tnhusva, t)
+    evaluate!(ᶜdTdt_hadv, tntha, t)
+    evaluate!(ᶜdqtdt_hadv, tnhusha, t)
+    evaluate!(ᶜT_nudge, ta, t)
+    evaluate!(ᶜqt_nudge, hus, t)
+    evaluate!(ᶜu_nudge, ua, t)
+    evaluate!(ᶜv_nudge, va, t)
+
+    # subsidence
+    evaluate!(ᶜls_subsidence, wa, t)
+end
+
+
+
 NVTX.@annotate function cloud_fraction_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -344,6 +413,21 @@ function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
     rrtmgp_model.cos_zenith .= Fields.field2array(p.external_forcing.cos_zenith)
     rrtmgp_model.weighted_irradiance .=
         Fields.field2array(p.external_forcing.insolation)
+end
+
+function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
+    # unpack objects with time varying data
+    (; rrtmgp_model) = p.radiation
+    (; coszen, rsdt) = p.external_forcing.surface_inputs
+    coszen_tv = p.external_forcing.surface_timevaryinginputs.coszen
+    rsdt_tv = p.external_forcing.surface_timevaryinginputs.rsdt
+    # evaluate time varying data onto temporary fields
+    evaluate!(coszen, coszen_tv, t)
+    evaluate!(rsdt, rsdt_tv, t)
+
+    # set insolation variables from the values within the fields
+    rrtmgp_model.cos_zenith .= Fields.field2array(coszen)
+    rrtmgp_model.weighted_irradiance .= Fields.field2array(rsdt)
 end
 
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)

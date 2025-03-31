@@ -179,13 +179,13 @@ disable_surface_flux_tendency:
   help: "(Bool) Whether to disable surface flux tendencies of momentum, energy, and tracers [`true`, `false` (default)]. When this flag is true, the surface flux tendency is not applied, no matter how surface conditions are computed."
   value: false
 surface_setup:
-  help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
+  help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`]"
   value: "DefaultExchangeCoefficients"
 surface_temperature:
-  help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric', 'RCEMIPII']"
+  help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric', 'RCEMIPII', `Reanalysis`, `ReanalysisTimeVarying`]"
   value: "ZonallySymmetric"
 initial_condition:
-  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`], or a file path for a NetCDF file (read documentation about requirements)."
+  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
   value: "DecayingProfile"
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
@@ -236,7 +236,7 @@ ls_adv:
   help: "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"
   value: ~
 external_forcing:
-  help: "External forcing for single column experiments [`nothing` (default), `GCM`]"
+  help: "External forcing for single column experiments [`nothing` (default), `GCM`, `Reanalysis`, `ReanalysisTimeVarying`]"
   value: ~
 external_forcing_file:
   help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions. Used for GCM-driven SCM and ISDAC setup [`nothing` (default), `path/to/file`]"
@@ -244,6 +244,12 @@ external_forcing_file:
 cfsite_number:
   help: "cfsite identifier for single column forcing from  `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
   value: "site23"
+site_latitude:
+  help: "Site latitude for single column model. Used for externally driven time varying forcing model to generate the forcing file. Artifact support is currently for eastern Pacific region in July 2007 only. [`17.0` (default)]"
+  value: 17.0
+site_longitude:
+  help: "Site longitude for single column model. Used for externally driven time varying forcing model to generate the forcing file. Artifact support is currently for eastern Pacific region in July 2007 only. [`-149.0` (default)]"
+  value: -149.0
 subsidence:
   help: "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`, `ISDAC`]"
   value: ~

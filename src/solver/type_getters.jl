@@ -299,7 +299,7 @@ function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     return (Y, t_start)
 end
 
-function get_initial_condition(parsed_args)
+function get_initial_condition(parsed_args, atmos)
     if parsed_args["initial_condition"] in [
         "DryBaroclinicWave",
         "MoistBaroclinicWave",
@@ -351,6 +351,11 @@ function get_initial_condition(parsed_args)
         return ICs.GCMDriven(
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
+        )
+    elseif parsed_args["initial_condition"] == "ReanalysisTimeVarying"
+        return ICs.external_tv_initial_condition(
+            atmos.external_forcing.external_forcing_file,
+            parsed_args["start_date"],
         )
     else
         error(
@@ -739,7 +744,7 @@ function get_simulation(config::AtmosConfig)
     else
         spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
     end
-    initial_condition = get_initial_condition(config.parsed_args)
+    initial_condition = get_initial_condition(config.parsed_args, atmos)
     surface_setup = get_surface_setup(config.parsed_args)
     if !sim_info.restart
         s = @timed_str begin
