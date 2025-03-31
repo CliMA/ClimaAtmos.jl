@@ -1286,6 +1286,63 @@ function gcm_initial_conditions(external_forcing_file, cfsite_number)
     end
 end
 
+struct InterpolatedColumnProfile{I} <: InitialCondition
+    """Initial data condition for a column model. Stored as a tuple of Interpolation objects"""
+    T::I
+    u::I
+    v::I
+    q_tot::I
+    ρ₀::I
+end
+
+function (initial_condition::InterpolatedColumnProfile)(params)
+    (; T, u, v, q_tot, ρ₀) = initial_condition
+    thermo_params = CAP.thermodynamics_params(params)
+    function local_state(local_geometry)
+        (; z) = local_geometry.coordinates
+        FT = typeof(z)
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = ts = TD.PhaseEquil_ρTq(
+                thermo_params,
+                FT(ρ₀(z)),
+                FT(T(z)),
+                FT(q_tot(z)),
+            ),
+            velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
+            turbconv_state = EDMFState(; tke = FT(0)),
+        )
+    end
+    return local_state
+end
+
+"""
+    ExternalTV <: InitialCondition
+The `InitialCondition` from a provided ERA5 forcing file, with data type `DType`.
+"""
+function ExternalTV(external_forcing_file, start_date)
+    start_time = Dates.DateTime(start_date, "yyyymmdd")
+    z, T, u, v, q_tot, ρ₀ = NC.NCDataset(external_forcing_file) do ds
+        time_index = argmin(abs.(ds["time"][:] .- start_time))
+        (
+            z = ds["z"][:],
+            T = ds["ta"][1, 1, :, time_index],
+            u = ds["ua"][1, 1, :, time_index],
+            v = ds["va"][1, 1, :, time_index],
+            q_tot = ds["hus"][1, 1, :, time_index],
+            ρ₀ = ds["rho"][1, 1, :, time_index],
+        )
+    end
+    T, u, v, q_tot, ρ₀ = map((T, u, v, q_tot, ρ₀)) do value
+        Intp.extrapolate(
+            Intp.interpolate((z,), value, Intp.Gridded(Intp.Linear())),
+            Intp.Flat(),
+        )
+    end
+    return InterpolatedColumnProfile(T, u, v, q_tot, ρ₀)
+end
+
 Base.@kwdef struct ISDAC <: InitialCondition
     prognostic_tke::Bool = false
     perturb::Bool = false

@@ -87,7 +87,7 @@ function get_atmos(config::AtmosConfig, params)
         radiation_mode,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
-        external_forcing = get_external_forcing_model(parsed_args),
+        external_forcing = get_external_forcing_model(parsed_args, FT),
         edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
         advection_test,
         edmfx_model,
@@ -352,6 +352,11 @@ function get_initial_condition(parsed_args)
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
+    elseif parsed_args["initial_condition"] == "ExternalTV"
+        return ICs.ExternalTV(
+            parsed_args["external_forcing_file"],
+            parsed_args["start_date"],
+        )
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
@@ -399,6 +404,12 @@ function get_surface_setup(parsed_args)
         parsed_args["external_forcing_file"],
         parsed_args["cfsite_number"],
     )
+
+    parsed_args["surface_setup"] == "ExternalTV" &&
+        return SurfaceConditions.ExternalTV(
+            parsed_args["external_forcing_file"],
+            parsed_args["start_date"],
+        )
 
     return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
 end

@@ -26,9 +26,7 @@ function update_surface_conditions!(Y, p, t)
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
     sfc_conditions_values = Fields.field_values(sfc_conditions)
     wrapped_sfc_setup = sfc_setup_wrapper(sfc_setup)
-    sfc_temp_var =
-        p.atmos.surface_model isa PrognosticSurfaceTemperature ?
-        Fields.field_values(Y.sfc.T) : nothing
+    sfc_temp_var = get_sfc_temp_var(atmos, t, params, p, Y)
     @. sfc_conditions_values = surface_state_to_conditions(
         wrapped_sfc_setup,
         sfc_local_geometry_values,
@@ -44,6 +42,23 @@ function update_surface_conditions!(Y, p, t)
         t,
     )
     return nothing
+end
+
+"""
+    get_sfc_temp_var(atmos, t, params, p, Y)
+
+Returns the surface temperature variable to be used in the
+surface conditions calculation based on the simulation type.
+"""
+function get_sfc_temp_var(atmos, t, params, p, Y)
+    if atmos.sfc_temperature isa ExternalTVColumnSST && t > 0.0
+        FT = eltype(params)
+        return FT(Fields.field2array(p.external_forcing.surface_inputs.ts)[1])
+    elseif atmos.surface_model isa PrognosticSurfaceTemperature
+        return Fields.field_values(Y.sfc.T)
+    else
+        return nothing
+    end
 end
 
 # default case
@@ -165,7 +180,7 @@ function surface_state_to_conditions(
     surface_fluxes_params,
     surface_temp_params,
     atmos,
-    sfc_prognostic_temp,
+    sfc_temp_var,
     t,
 ) where {WSS}
     surf_state =
@@ -177,7 +192,9 @@ function surface_state_to_conditions(
     (!isnothing(surf_state.q_vap) && atmos.moisture_model isa DryModel) &&
         error("surface q_vap cannot be specified when using a DryModel")
 
-    T = if isnothing(sfc_prognostic_temp)
+    T = if atmos.sfc_temperature isa ExternalTVColumnSST && t > 0.0
+        FT(sfc_temp_var)
+    elseif isnothing(sfc_temp_var)
         if isnothing(surf_state.T)
             surface_temperature(
                 atmos.sfc_temperature,
@@ -188,7 +205,7 @@ function surface_state_to_conditions(
             surf_state.T
         end
     else
-        sfc_prognostic_temp
+        sfc_temp_var
     end
     u = ifelsenothing(surf_state.u, FT(0))
     v = ifelsenothing(surf_state.v, FT(0))

@@ -12,20 +12,32 @@ end
 
 function get_sfc_temperature_form(parsed_args)
     surface_temperature = parsed_args["surface_temperature"]
-    @assert surface_temperature in
-            ("ZonallyAsymmetric", "ZonallySymmetric", "RCEMIPII")
+    @assert surface_temperature in (
+        "ZonallyAsymmetric",
+        "ZonallySymmetric",
+        "RCEMIPII",
+        "ExternalTVColumn",
+    )
     return if surface_temperature == "ZonallyAsymmetric"
         ZonallyAsymmetricSST()
     elseif surface_temperature == "ZonallySymmetric"
         ZonallySymmetricSST()
     elseif surface_temperature == "RCEMIPII"
         RCEMIPIISST()
+    elseif surface_temperature == "ExternalTVColumn"
+        ExternalTVColumnSST()
     end
 end
 
 function get_insolation_form(parsed_args)
     insolation = parsed_args["insolation"]
-    @assert insolation in ("idealized", "timevarying", "rcemipii", "gcmdriven")
+    @assert insolation in (
+        "idealized",
+        "timevarying",
+        "rcemipii",
+        "gcmdriven",
+        "externaldriventv",
+    )
     return if insolation == "idealized"
         IdealizedInsolation()
     elseif insolation == "timevarying"
@@ -37,6 +49,8 @@ function get_insolation_form(parsed_args)
         RCEMIPIIInsolation()
     elseif insolation == "gcmdriven"
         GCMDrivenInsolation()
+    elseif insolation == "externaldriventv"
+        ExternalTVInsolation()
     end
 end
 
@@ -408,16 +422,20 @@ function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
 
-function get_external_forcing_model(parsed_args)
+function get_external_forcing_model(parsed_args, FT)
     external_forcing = parsed_args["external_forcing"]
-    @assert external_forcing in (nothing, "GCM", "ISDAC")
+    @assert external_forcing in (nothing, "GCM", "ExternalTV", "ISDAC")
     return if isnothing(external_forcing)
         nothing
     elseif external_forcing == "GCM"
-        DType = Float64  # TODO: Read from `parsed_args`
-        GCMForcing{DType}(
+        GCMForcing{FT}(
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
+        )
+    elseif external_forcing == "ExternalTV"
+        ExternalDrivenTVForcing{FT}(
+            parsed_args["external_forcing_file"],
+            parsed_args["start_date"],
         )
     elseif external_forcing == "ISDAC"
         ISDACForcing()
