@@ -14,7 +14,6 @@ non_orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
 
 non_orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 
-non_orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 function non_orographic_gravity_wave_cache(Y, gw::NonOrographyGravityWave)
     if iscolumn(axes(Y.c))
@@ -133,6 +132,8 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographyGravityWave)
         error("Only sphere and columns are supported")
     end
 end
+
+non_orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 function non_orographic_gravity_wave_tendency!(
     Yₜ,
