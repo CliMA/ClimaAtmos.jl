@@ -4,5 +4,9 @@ t_end: "1500secs"
 config: "column"
 hyperdiff: false
 dt: "400secs"
+output_default_diagnostics: true
 disable_surface_flux_tendency: true
 non_orographic_gravity_wave: true
+# diagnostics:
+#   - short_name: [ta, rhoa]
+#     period: 400secs

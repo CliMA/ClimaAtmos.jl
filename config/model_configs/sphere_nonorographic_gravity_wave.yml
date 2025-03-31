@@ -1,4 +1,8 @@
-t_end: "1500secs"
+t_end: "12hours"
 dt: "400secs"
+deep_atmosphere: false
 disable_surface_flux_tendency: true
 non_orographic_gravity_wave: true
+diagnostics:
+  - short_name: [ta, thetaa, ua, va, wa, zg, utendnogw, vtendnogw]
+    period: 1hours
