@@ -1,4 +1,4 @@
-230
+231
 
 # **README**
 #
@@ -20,12 +20,14 @@
 
 
 #=
+231
+- Add mass flux derivatives with respect to grid-mean u_3
 
 230
 - Add u_{3,m} (updraft) Jacobians to updraft MSE, rho*a, and q_tot prognostic equations. Move sgs ∂ᶠu₃ʲ derivatives to BlockLowerTriangularSolve.
 
 229
-  remove derivatives with respect to grid mean rho in edmf implicit solver
+- Remove derivatives with respect to grid mean rho in edmf implicit solver
 
 228
 - Only treat the drag term in edmf pressure closure implicitly

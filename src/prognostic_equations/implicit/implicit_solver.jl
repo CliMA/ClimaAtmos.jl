@@ -1171,12 +1171,10 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                     -(dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar)
 
                 ## grid-mean ρq_tot
-                ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
                 @. ∂ᶜρq_tot_err_∂ᶜρ +=
                     dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar ⋅
                     DiagonalMatrixRow(-(ᶜspecific.q_tot) / ᶜρ)
 
-                ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
                 @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                     dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar ⋅
                     DiagonalMatrixRow(1 / ᶜρ)
@@ -1187,6 +1185,17 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                     -(dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar)
 
                 # grid-mean ∂/∂(u₃ʲ)
+                ∂ᶜρe_tot_err_∂ᶠu₃ = matrix[@name(c.ρe_tot), @name(f.u₃)]
+                @. ∂ᶜρe_tot_err_∂ᶠu₃ +=
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(
+                        ᶠinterp(
+                            (Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - ᶜh_tot) *
+                            ᶜρʲs.:(1) *
+                            ᶜJ *
+                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                        ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+                    )
+
                 ∂ᶜρe_tot_err_∂ᶠu₃ʲ =
                     matrix[@name(c.ρe_tot), @name(f.sgsʲs.:(1).u₃)]
                 @. ∂ᶜρe_tot_err_∂ᶠu₃ʲ =
@@ -1199,6 +1208,16 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                         ) / ᶠJ * (g³³(ᶠgⁱʲ)),
                     )
 
+                ∂ᶜρq_tot_err_∂ᶠu₃ = matrix[@name(c.ρq_tot), @name(f.u₃)]
+                @. ∂ᶜρq_tot_err_∂ᶠu₃ +=
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(
+                        ᶠinterp(
+                            (Y.c.sgsʲs.:(1).q_tot - ᶜspecific.q_tot) *
+                            ᶜρʲs.:(1) *
+                            ᶜJ *
+                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                        ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+                    )
 
                 ∂ᶜρq_tot_err_∂ᶠu₃ʲ =
                     matrix[@name(c.ρq_tot), @name(f.sgsʲs.:(1).u₃)]
