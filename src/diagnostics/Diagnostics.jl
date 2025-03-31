@@ -42,7 +42,7 @@ import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 
 # gravitywave_models
-import ..NonOrographyGravityWave
+import ..NonOrographicGravityWave
 import ..OrographicGravityWave
 
 # surface_model

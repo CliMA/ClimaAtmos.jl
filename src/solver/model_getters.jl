@@ -183,9 +183,9 @@ function get_non_orographic_gravity_wave_model(
     @assert nogw_name in (true, false)
     return if nogw_name == true
         if parsed_args["config"] == "column"
-            NonOrographyGravityWave{FT}(; Bw = 1.2, Bn = 0.0, Bt_0 = 4e-3)
+            NonOrographicGravityWave{FT}(; Bw = 1.2, Bn = 0.0, Bt_0 = 4e-3)
         elseif parsed_args["config"] == "sphere"
-            NonOrographyGravityWave{FT}(;
+            NonOrographicGravityWave{FT}(;
                 Bw = 0.4,
                 Bn = 0.0,
                 cw = 35.0,

@@ -16,7 +16,7 @@ function compute_utendnogw!(
     cache,
     time,
     ::T,
-) where {T <: NonOrographyGravityWave}
+) where {T <: NonOrographicGravityWave}
     if isnothing(out)
         # u_waveforcing is not a field:
         # return Fields.array2field(
@@ -53,7 +53,7 @@ function compute_vtendnogw!(
     cache,
     time,
     ::T,
-) where {T <: NonOrographyGravityWave}
+) where {T <: NonOrographicGravityWave}
     if isnothing(out)
         # v_waveforcing is not a Field:
         # return Fields.array2field(

@@ -241,7 +241,7 @@ Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
 end
 
 abstract type AbstractGravityWave end
-Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
+Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
     source_pressure::FT = 31500
     damp_pressure::FT = 85
     source_height::FT = 15000
