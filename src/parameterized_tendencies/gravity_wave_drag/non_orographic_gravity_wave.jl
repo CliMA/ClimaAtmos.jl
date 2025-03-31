@@ -368,49 +368,50 @@ function non_orographic_gravity_wave_forcing(
     #StaticBitVector stores 8 boolean values in a UInt8, allowing efficient storage for up to 256 gravity wave break data.
     level_end = Spaces.nlevels(axes(ᶜρ))
 
+    # Collect all required fields in a broadcasted object
+    input_u = Base.Broadcast.broadcasted(
+        tuple,
+        ᶜu_p1,
+        ᶜu_source,
+        ᶜbf_p1,
+        ᶜρ,
+        ᶜρ_p1,
+        ᶜρ_source,
+        ᶜz_p1,
+        ᶜz,
+        source_level,
+        gw_Bw,
+        gw_Bn,
+        gw_cw,
+        gw_cn,
+        gw_flag,
+        ᶜlevel,
+        gw_source_ampl,
+    )
+
+    input_v = Base.Broadcast.broadcasted(
+        tuple,
+        ᶜv_p1,
+        ᶜv_source,
+        ᶜbf_p1,
+        ᶜρ,
+        ᶜρ_p1,
+        ᶜρ_source,
+        ᶜz_p1,
+        ᶜz,
+        source_level,
+        gw_Bw,
+        gw_Bn,
+        gw_cw,
+        gw_cn,
+        gw_flag,
+        ᶜlevel,
+        gw_source_ampl,
+    )
+
+
     # loop over all wave lengths
     for ink in 1:gw_nk
-
-        # Collect all required fields in a broadcasted object
-        input_u = Base.Broadcast.broadcasted(
-            tuple,
-            ᶜu_p1,
-            ᶜu_source,
-            ᶜbf_p1,
-            ᶜρ,
-            ᶜρ_p1,
-            ᶜρ_source,
-            ᶜz_p1,
-            ᶜz,
-            source_level,
-            gw_Bw,
-            gw_Bn,
-            gw_cw,
-            gw_cn,
-            gw_flag,
-            ᶜlevel,
-            gw_source_ampl,
-        )
-
-        input_v = Base.Broadcast.broadcasted(
-            tuple,
-            ᶜv_p1,
-            ᶜv_source,
-            ᶜbf_p1,
-            ᶜρ,
-            ᶜρ_p1,
-            ᶜρ_source,
-            ᶜz_p1,
-            ᶜz,
-            source_level,
-            gw_Bw,
-            gw_Bn,
-            gw_cw,
-            gw_cn,
-            gw_flag,
-            ᶜlevel,
-            gw_source_ampl,
-        )
 
         # Accumulate zonal wave forcing in every column
         waveforcing_column_accumulate!(
