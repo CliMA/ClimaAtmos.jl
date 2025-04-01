@@ -1,31 +1,28 @@
 # This file is included in diagnostics.jl
-
 # Gravity-wave related diagnostics
 
 ###
 # Eastward Non-Orographic Gravity-Wave Tendency 
 ###
-compute_utendnogw!(out, state, cache, time) =
-    compute_utendnogw!(out, state, cache, time, cache.atmos.non_orographic_gravity_wave)
-compute_utendnogw!(_, _, _, _, non_orographic_gravity_wave::T) where {T} =
-    error_diagnostic_variable("utendnogw", non_orographic_gravity_wave)
-
-function compute_utendnogw!(
+compute_utendnogw!(out, state, cache, time) = compute_utendnogw!(
     out,
     state,
     cache,
     time,
-    ::T,
-) where {T <: NonOrographicGravityWave}
-    if isnothing(out)
-        # u_waveforcing is not a field:
-        # return Fields.array2field(
-        #     cache.non_orographic_gravity_wave.u_waveforcing,
-        #     axes(state.c),
-        # )
-        return copy(cache.non_orographic_gravity_wave.u_waveforcing)
+    cache.atmos.non_orographic_gravity_wave,
+)
+compute_utendnogw!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("utendnogw", non_orographic_gravity_wave)
+
+function compute_utendnogw!(out, state, cache, time, ::NonOrographicGravityWave)
+    if pkgversion(ClimaDiagnostics) >= v"0.2.13"
+        return cache.non_orographic_gravity_wave.uforcing
     else
-        out .= cache.non_orographic_gravity_wave.u_waveforcing
+        if isnothing(out)
+            return copy(cache.non_orographic_gravity_wave.uforcing)
+        else
+            out .= cache.non_orographic_gravity_wave.uforcing
+        end
     end
 end
 
@@ -38,31 +35,28 @@ add_diagnostic_variable!(
     compute! = compute_utendnogw!,
 )
 
-
 ###
 # Northward Non-Orographic Gravity-Wave Tendency 
 ###
-compute_vtendnogw!(out, state, cache, time) =
-    compute_vtendnogw!(out, state, cache, time, cache.atmos.non_orographic_gravity_wave)
-compute_vtendnogw!(_, _, _, _, non_orographic_gravity_wave::T) where {T} =
-    error_diagnostic_variable("vtendnogw", non_orographic_gravity_wave)
-
-function compute_vtendnogw!(
+compute_vtendnogw!(out, state, cache, time) = compute_vtendnogw!(
     out,
     state,
     cache,
     time,
-    ::T,
-) where {T <: NonOrographicGravityWave}
-    if isnothing(out)
-        # v_waveforcing is not a Field:
-        # return Fields.array2field(
-        #     cache.non_orographic_gravity_wave.v_waveforcing,
-        #     axes(state.c),
-        # )
-        return copy(cache.non_orographic_gravity_wave.v_waveforcing)
+    cache.atmos.non_orographic_gravity_wave,
+)
+compute_vtendnogw!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("vtendnogw", non_orographic_gravity_wave)
+
+function compute_vtendnogw!(out, state, cache, time, ::NonOrographicGravityWave)
+    if pkgversion(ClimaDiagnostics) >= v"0.2.13"
+        return cache.non_orographic_gravity_wave.vforcing
     else
-        out .= cache.non_orographic_gravity_wave.v_waveforcing
+        if isnothing(out)
+            return copy(cache.non_orographic_gravity_wave.vforcing)
+        else
+            out .= cache.non_orographic_gravity_wave.vforcing
+        end
     end
 end
 

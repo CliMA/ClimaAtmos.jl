@@ -14,7 +14,6 @@ non_orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
 
 non_orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 
-
 function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
     if iscolumn(axes(Y.c))
         FT = Spaces.undertype(axes(Y.c))
@@ -79,7 +78,6 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             fill!(Fields.level(ᶜlevel, i), i)
         end
 
-
         # This is GFDL source specs -> a smooth function
         # source_ampl = @. Bt_0 +
         #     Bt_n * FT(0.5) * (FT(1) + tanh((lat - ϕ0_n) / dϕ_n)) +
@@ -133,10 +131,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
     end
 end
 
-function non_orographic_gravity_wave_compute_tendency!(
-    Y,
-    p
-)
+function non_orographic_gravity_wave_compute_tendency!(Y, p)
     #unpack
     ᶜT = p.scratch.ᶜtemp_scalar
     (; ᶜts) = p.precomputed
@@ -272,12 +267,6 @@ function non_orographic_gravity_wave_compute_tendency!(
         p,
     )
 
-    # # update cache after computation
-    # # do I need to do this? Since these attributes were
-    # # unpacked via reference?
-    # p.non_orographic_gravity_wave.uforcing .= uforcing
-    # p.non_orographic_gravity_wave.vforcing .= vforcing
-
 end
 
 non_orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
@@ -290,20 +279,12 @@ function non_orographic_gravity_wave_tendency!(
     ::NonOrographicGravityWave,
 )
 
-    #unpack
-    (;
-        uforcing,
-        vforcing,
-    ) = p.non_orographic_gravity_wave
+    (; uforcing, vforcing) = p.non_orographic_gravity_wave
 
     @. Yₜ.c.uₕ +=
         Geometry.Covariant12Vector.(Geometry.UVVector.(uforcing, vforcing))
 
 end
-
-
-
-
 
 function non_orographic_gravity_wave_forcing(
     ᶜu,
@@ -393,50 +374,50 @@ function non_orographic_gravity_wave_forcing(
     level_end = Spaces.nlevels(axes(ᶜρ))
 
     # Collect all required fields in a broadcasted object
-    input_u = Base.Broadcast.broadcasted(
-        tuple,
-        ᶜu_p1,
-        ᶜu_source,
-        ᶜbf_p1,
-        ᶜρ,
-        ᶜρ_p1,
-        ᶜρ_source,
-        ᶜz_p1,
-        ᶜz,
-        source_level,
-        gw_Bw,
-        gw_Bn,
-        gw_cw,
-        gw_cn,
-        gw_flag,
-        ᶜlevel,
-        gw_source_ampl,
+    input_u = @. lazy(
+        tuple(
+            ᶜu_p1,
+            ᶜu_source,
+            ᶜbf_p1,
+            ᶜρ,
+            ᶜρ_p1,
+            ᶜρ_source,
+            ᶜz_p1,
+            ᶜz,
+            source_level,
+            gw_Bw,
+            gw_Bn,
+            gw_cw,
+            gw_cn,
+            gw_flag,
+            ᶜlevel,
+            gw_source_ampl,
+        ),
     )
 
-    input_v = Base.Broadcast.broadcasted(
-        tuple,
-        ᶜv_p1,
-        ᶜv_source,
-        ᶜbf_p1,
-        ᶜρ,
-        ᶜρ_p1,
-        ᶜρ_source,
-        ᶜz_p1,
-        ᶜz,
-        source_level,
-        gw_Bw,
-        gw_Bn,
-        gw_cw,
-        gw_cn,
-        gw_flag,
-        ᶜlevel,
-        gw_source_ampl,
+    input_v = @. lazy(
+        tuple(
+            ᶜv_p1,
+            ᶜv_source,
+            ᶜbf_p1,
+            ᶜρ,
+            ᶜρ_p1,
+            ᶜρ_source,
+            ᶜz_p1,
+            ᶜz,
+            source_level,
+            gw_Bw,
+            gw_Bn,
+            gw_cw,
+            gw_cn,
+            gw_flag,
+            ᶜlevel,
+            gw_source_ampl,
+        ),
     )
-
 
     # loop over all wave lengths
     for ink in 1:gw_nk
-
         # Accumulate zonal wave forcing in every column
         waveforcing_column_accumulate!(
             u_waveforcing,
@@ -449,6 +430,7 @@ function non_orographic_gravity_wave_forcing(
             level_end,
             gw_ncval,
         )
+
         # Accumulate meridional wave forcing in every column
         waveforcing_column_accumulate!(
             v_waveforcing,
@@ -559,7 +541,6 @@ function waveforcing_column_accumulate!(
         level,
         source_ampl,
     )
-
         FT1 = typeof(u_kp1)
         kwv = 2.0 * π / ((30.0 * (10.0^ink)) * 1.e3) # wave number of gravity waves
         k2 = kwv * kwv
@@ -663,7 +644,6 @@ function gw_average!(wave_forcing, wave_forcing_m1)
     wave_forcing_m1 .= L2.(L1.(wave_forcing))
     @. wave_forcing = FT(0.5) * (wave_forcing + wave_forcing_m1)
 end
-
 
 function gw_deposit(wave_forcing_top, wave_forcing, damp_level, level, height)
     if level >= damp_level

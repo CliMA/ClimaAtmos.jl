@@ -399,15 +399,13 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     return nothing
 end
 
-
-
 NVTX.@annotate function nogw_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
 
-    non_orographic_gravity_wave_compute_tendency!(Y,p)
+    non_orographic_gravity_wave_compute_tendency!(Y, p)
+    return nothing
 end
-
 
 #Uniform insolation, magnitudes from Wing et al. (2018)
 #Note that the TOA downward shortwave fluxes won't be the same as the values in the paper if add_isothermal_boundary_layer is true
