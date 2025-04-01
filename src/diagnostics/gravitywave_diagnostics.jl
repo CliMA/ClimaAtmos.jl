@@ -5,8 +5,13 @@
 ###
 # Eastward Non-Orographic Gravity-Wave Tendency 
 ###
-compute_utendnogw!(out, state, cache, time) =
-    compute_utendnogw!(out, state, cache, time, cache.atmos.non_orographic_gravity_wave)
+compute_utendnogw!(out, state, cache, time) = compute_utendnogw!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.non_orographic_gravity_wave,
+)
 compute_utendnogw!(_, _, _, _, non_orographic_gravity_wave::T) where {T} =
     error_diagnostic_variable("utendnogw", non_orographic_gravity_wave)
 
@@ -42,8 +47,13 @@ add_diagnostic_variable!(
 ###
 # Northward Non-Orographic Gravity-Wave Tendency 
 ###
-compute_vtendnogw!(out, state, cache, time) =
-    compute_vtendnogw!(out, state, cache, time, cache.atmos.non_orographic_gravity_wave)
+compute_vtendnogw!(out, state, cache, time) = compute_vtendnogw!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.non_orographic_gravity_wave,
+)
 compute_vtendnogw!(_, _, _, _, non_orographic_gravity_wave::T) where {T} =
     error_diagnostic_variable("vtendnogw", non_orographic_gravity_wave)
 

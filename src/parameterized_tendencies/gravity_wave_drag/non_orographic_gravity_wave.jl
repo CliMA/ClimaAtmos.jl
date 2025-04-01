@@ -133,10 +133,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
     end
 end
 
-function non_orographic_gravity_wave_compute_tendency!(
-    Y,
-    p
-)
+function non_orographic_gravity_wave_compute_tendency!(Y, p)
     #unpack
     ᶜT = p.scratch.ᶜtemp_scalar
     (; ᶜts) = p.precomputed
@@ -291,10 +288,7 @@ function non_orographic_gravity_wave_tendency!(
 )
 
     #unpack
-    (;
-        uforcing,
-        vforcing,
-    ) = p.non_orographic_gravity_wave
+    (; uforcing, vforcing) = p.non_orographic_gravity_wave
 
     @. Yₜ.c.uₕ +=
         Geometry.Covariant12Vector.(Geometry.UVVector.(uforcing, vforcing))
