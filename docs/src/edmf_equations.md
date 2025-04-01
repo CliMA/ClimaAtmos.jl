@@ -22,7 +22,7 @@ This describes the EDMF scheme equations and its discretizations. Where possible
 * ``\boldsymbol{u}^j`` _velocity_, a vector in m/s. This is discretized via ``\boldsymbol{u}^j = \boldsymbol{u}_h + \boldsymbol{u}_v^j`` where
   - ``\boldsymbol{u}_v^j = u_3^j \boldsymbol{e}^3`` is the projection onto the vertical covariant components, stored at cell faces.
 * ``\hat{\rho}^j e^j``: _total energy_ in J/m³. This is discretized at cell centers.
-* ``\hat{\rho}^j q^j``: moisture tracers. ``q^j`` stands for the sub-domain total (liquid, ice, rain, snow) specific humidity in kg/kg. This is stored at cell centers.
+* ``\hat{\rho}^j q^j``: moisture tracers. ``q^j`` stands for the sub-domain total condensate (liquid, ice, rain, snow) specific content in kg/kg. This is stored at cell centers.
 * ``\hat{\rho}^j \chi^j``: other tracers (aerosol, ...), again stored at cell centers.
 
 ## Operators

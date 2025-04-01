@@ -210,7 +210,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
                 R_v * T_0
             ) * ᶜdqtdt_sum
         )
-    # total specific humidity
+    # total water specific content
     @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt_sum
 
     ## subsidence -->
@@ -294,6 +294,6 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
             ) * ᶜdqtdt_nudging
         )
 
-    # total specific humidity
+    # total water specific content
     @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt_nudging
 end

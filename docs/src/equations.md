@@ -283,7 +283,7 @@ Sources from cloud microphysics ``\mathcal{S}`` represent the transfer of mass
 
 The scalars ``\rho q_{rai}`` and ``\rho q_{sno}`` are part of the state vector
   when running simulations with 1-moment microphysics scheme,
-  and represent the specific humidity of liquid and solid precipitation
+  and represent the specific content of liquid and solid precipitation
   (i.e. rain and snow).
 
 ```math
@@ -391,7 +391,7 @@ The corresponding energy sink associated with heat transfer
 ```math
 \frac{d}{dt} \rho e = - \rho q_p (\boldsymbol{u} - v_p) c_p \nabla T_a
 ```
-where ``q_p``, ``\boldsymbol{u}``, ``v_p``, ``c_p `` are the precipitation specific humidity,
+where ``q_p``, ``\boldsymbol{u}``, ``v_p``, ``c_p `` are the precipitation specific content,
 air velocity, precipitation terminal velocity assumed to be along the gravity axis,
 specific heat of precipitating species.
 
@@ -402,7 +402,7 @@ specific heat of precipitating species.
 ### Stability and positivity
 
 All source terms are individually limited such that they don't exceed the
-  available tracer specific humidity divided by a coefficient ``a``.
+  available tracer specific content divided by a coefficient ``a``.
 ```math
 \mathcal{S}_{x \rightarrow y} = min(\mathcal{S}_{x \rightarrow y}, \frac{q_{x}}{a \; dt})
 ```
@@ -410,7 +410,7 @@ This will not ensure positivity because the sum of all source terms,
   combined with the advection tendency,
   could still drive the solution to negative numbers.
 It should however help mitigate some of the problems.
-The source terms functions treat negative specific humidities as zeros,
+The source terms functions treat negative specific contents as zeros,
   so the simulations should be stable even with small negative numbers.
 
 We do not apply hyperdiffusion for precipitation tracers.

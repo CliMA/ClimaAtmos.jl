@@ -353,7 +353,7 @@ levels assuming hydrostatic balance, given the surface pressure.
 We expect the file to contain the following variables:
 - `p`, for pressure,
 - `t`, for temperature,
-- `q`, for humidity,
+- `q`, for specific humidity,
 - `u, v, w`, for velocity,
 - `cswc, crwc` for snow and rain water content (for 1 moment microphysics).
 """
