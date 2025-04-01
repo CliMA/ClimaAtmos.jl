@@ -133,14 +133,9 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
     end
 end
 
-non_orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-
-function non_orographic_gravity_wave_tendency!(
-    Yₜ,
+function non_orographic_gravity_wave_compute_tendency!(
     Y,
-    p,
-    t,
-    ::NonOrographicGravityWave,
+    p
 )
     #unpack
     ᶜT = p.scratch.ᶜtemp_scalar
@@ -277,10 +272,38 @@ function non_orographic_gravity_wave_tendency!(
         p,
     )
 
+    # # update cache after computation
+    # # do I need to do this? Since these attributes were
+    # # unpacked via reference?
+    # p.non_orographic_gravity_wave.uforcing .= uforcing
+    # p.non_orographic_gravity_wave.vforcing .= vforcing
+
+end
+
+non_orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+
+function non_orographic_gravity_wave_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::NonOrographicGravityWave,
+)
+
+    #unpack
+    (;
+        uforcing,
+        vforcing,
+    ) = p.non_orographic_gravity_wave
+
     @. Yₜ.c.uₕ +=
         Geometry.Covariant12Vector.(Geometry.UVVector.(uforcing, vforcing))
 
 end
+
+
+
+
 
 function non_orographic_gravity_wave_forcing(
     ᶜu,
