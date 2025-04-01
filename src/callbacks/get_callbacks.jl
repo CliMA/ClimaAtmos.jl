@@ -378,8 +378,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
             @warn "This simulation will not be reproducible when restarted"
         end
 
-        callbacks =
-            (callbacks..., call_every_dt(nogw_model_callback!, dt_nogw))
+        callbacks = (callbacks..., call_every_dt(nogw_model_callback!, dt_nogw))
     end
 
     return callbacks

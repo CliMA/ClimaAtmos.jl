@@ -1,4 +1,4 @@
-234
+235
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+235
+- Related to #3775, the computation and update of non-orographic gravity wave (NOGW) 
+  are now separated into callback and tendencies update, affecting the NOGW-related
+  tests.
 
 234
 - Move the virtual mass term in pressure closure to prognostic edmf momentum equation

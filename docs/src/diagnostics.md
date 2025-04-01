@@ -209,7 +209,6 @@ were computed differently for `EquilMoistModel` and `NonEquilMoistModel`.
 In `ClimaAtmos`, we define some helper functions to produce error messages, so
 the above code can be written as
 ```julia
-
 function compute_relative_humidity!(
     out,
     state,
@@ -227,7 +226,7 @@ end
 
 compute_relative_humidity!(out, state, cache, time) =
     compute_relative_humidity!(out, state, cache, time, cache.atmos.moisture_model)
-compute_relative_humidity!(_, _, _, _, model::T) where {T} =
+compute_relative_humidity!(_, _, _, _, model) =
     error_diagnostic_variable("relative_humidity", model)
 ```
 
