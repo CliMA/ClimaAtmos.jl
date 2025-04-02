@@ -287,7 +287,6 @@ function non_orographic_gravity_wave_tendency!(
     ::NonOrographicGravityWave,
 )
 
-    #unpack
     (; uforcing, vforcing) = p.non_orographic_gravity_wave
 
     @. Yₜ.c.uₕ +=
@@ -387,44 +386,46 @@ function non_orographic_gravity_wave_forcing(
     level_end = Spaces.nlevels(axes(ᶜρ))
 
     # Collect all required fields in a broadcasted object
-    input_u = Base.Broadcast.broadcasted(
-        tuple,
-        ᶜu_p1,
-        ᶜu_source,
-        ᶜbf_p1,
-        ᶜρ,
-        ᶜρ_p1,
-        ᶜρ_source,
-        ᶜz_p1,
-        ᶜz,
-        source_level,
-        gw_Bw,
-        gw_Bn,
-        gw_cw,
-        gw_cn,
-        gw_flag,
-        ᶜlevel,
-        gw_source_ampl,
+    input_u = @. lazy(
+        tuple(
+            ᶜu_p1,
+            ᶜu_source,
+            ᶜbf_p1,
+            ᶜρ,
+            ᶜρ_p1,
+            ᶜρ_source,
+            ᶜz_p1,
+            ᶜz,
+            source_level,
+            gw_Bw,
+            gw_Bn,
+            gw_cw,
+            gw_cn,
+            gw_flag,
+            ᶜlevel,
+            gw_source_ampl,
+        ),
     )
 
-    input_v = Base.Broadcast.broadcasted(
-        tuple,
-        ᶜv_p1,
-        ᶜv_source,
-        ᶜbf_p1,
-        ᶜρ,
-        ᶜρ_p1,
-        ᶜρ_source,
-        ᶜz_p1,
-        ᶜz,
-        source_level,
-        gw_Bw,
-        gw_Bn,
-        gw_cw,
-        gw_cn,
-        gw_flag,
-        ᶜlevel,
-        gw_source_ampl,
+    input_v = @. lazy(
+        tuple(
+            ᶜv_p1,
+            ᶜv_source,
+            ᶜbf_p1,
+            ᶜρ,
+            ᶜρ_p1,
+            ᶜρ_source,
+            ᶜz_p1,
+            ᶜz,
+            source_level,
+            gw_Bw,
+            gw_Bn,
+            gw_cw,
+            gw_cn,
+            gw_flag,
+            ᶜlevel,
+            gw_source_ampl,
+        ),
     )
 
 

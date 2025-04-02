@@ -227,7 +227,7 @@ end
 
 compute_relative_humidity!(out, state, cache, time) =
     compute_relative_humidity!(out, state, cache, time, cache.atmos.moisture_model)
-compute_relative_humidity!(_, _, _, _, model::T) where {T} =
+compute_relative_humidity!(_, _, _, _, model) =
     error_diagnostic_variable("relative_humidity", model)
 ```
 
