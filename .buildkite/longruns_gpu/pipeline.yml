@@ -1,7 +1,7 @@
 agents:
   queue: clima
   slurm_mem: 8G
-  modules: climacommon/2024_12_16 nsight-systems/2024.6.1
+  modules: climacommon/2025_03_18 nsight-systems/2024.6.1
 
 env:
   JULIA_MPI_HAS_CUDA: "true"
@@ -140,7 +140,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_allsky_diagedmf_0M"
 
-      - label: ":computer: aquaplanet equilmoist allsky radiation + prognostic edmf diffusion only + 0M microphysics"
+      - label: ":computer: aquaplanet equilmoist allsky radiation + prognostic edmf + 0M microphysics"
         command:
           - srun julia --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
@@ -149,7 +149,7 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_aquaplanet_allsky_progedmf_diffonly_0M"
+          JOB_NAME: "longrun_aquaplanet_allsky_progedmf_0M"
 
       - label: ":computer: aquaplanet equilmoist allsky radiation + 0M microphysics + earth topography"
         command:

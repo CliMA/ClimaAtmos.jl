@@ -411,12 +411,10 @@ if MANYTESTS
                             "enable_diagnostics" => false,
                             "output_dir" => joinpath(output_loc, job_id),
                         )
-                        more_ignore = Symbol[]
-
-                        if turbconv_mode == "prognostic_edmf"
-                            more_ignore = [:ᶠnh_pressure₃ʲs]
-                        end
-                        push!(TESTING, (; test_dict, job_id, more_ignore))
+                        push!(
+                            TESTING,
+                            (; test_dict, job_id, more_ignore = Symbol[]),
+                        )
                     end
                 end
             end

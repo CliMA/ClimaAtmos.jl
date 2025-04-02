@@ -1,4 +1,4 @@
-import FastGaussQuadrature
+import ClimaCore.Quadratures.GaussQuadrature as GQ
 import StaticArrays as SA
 import Thermodynamics as TD
 import Dates
@@ -44,7 +44,7 @@ struct SGSQuadrature{N, A, W} <: AbstractSGSamplingType
         N = quadrature_order
         # TODO: double check this python-> julia translation
         # a, w = np.polynomial.hermite.hermgauss(N)
-        a, w = FastGaussQuadrature.gausshermite(N)
+        a, w = GQ.hermite(FT, N)
         a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
         return new{N, typeof(a), typeof(w)}(a, w)
     end
@@ -510,7 +510,6 @@ Base.@kwdef struct AtmosModel{
     EXTFORCING,
     EC,
     AT,
-    TM,
     EDMFX,
     TCM,
     NOGW,
@@ -519,6 +518,8 @@ Base.@kwdef struct AtmosModel{
     VD,
     DM,
     SAM,
+    SEDM,
+    SNPM,
     SMM,
     VS,
     SL,
@@ -548,7 +549,6 @@ Base.@kwdef struct AtmosModel{
     external_forcing::EXTFORCING = nothing
     edmf_coriolis::EC = nothing
     advection_test::AT = nothing
-    tendency_model::TM = nothing
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     non_orographic_gravity_wave::NOGW = nothing
@@ -557,6 +557,11 @@ Base.@kwdef struct AtmosModel{
     vert_diff::VD = nothing
     diff_mode::DM = nothing
     sgs_adv_mode::SAM = nothing
+    """sgs_entr_detr_mode == Implicit() only works if sgs_adv_mode == Implicit()"""
+    sgs_entr_detr_mode::SEDM = nothing
+    """sgs_nh_pressure_mode == Implicit() only works if sgs_adv_mode == Implicit()"""
+    sgs_nh_pressure_mode::SNPM = nothing
+    """sgs_mf_mode == Implicit() only works if sgs_adv_mode == Implicit() and diff_mode == Implicit()"""
     sgs_mf_mode::SMM = nothing
     viscous_sponge::VS = nothing
     smagorinsky_lilly::SL = nothing

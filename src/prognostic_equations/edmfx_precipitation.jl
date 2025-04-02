@@ -46,20 +46,23 @@ function edmfx_precipitation_tendency!(
     precip_model::Microphysics1Moment,
 )
     n = n_mass_flux_subdomains(turbconv_model)
-    (; ᶜSeₜᵖʲs, ᶜSqₜᵖʲs, ᶜtsʲs) = p.precomputed
-    thp = CAP.thermodynamics_params(p.params)
-    (; ᶜΦ) = p.core
+
+    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs) = p.precomputed
+
+    # TODO what about the mass end energy outflow via bottom boundary?
 
     for j in 1:n
+        @. Yₜ.c.sgsʲs.:($$j).q_liq +=
+            ᶜSqₗᵖʲs.:($$j) * (1 - Y.c.sgsʲs.:($$j).q_liq)
 
-        @. Yₜ.c.sgsʲs.:($$j).ρa += Y.c.sgsʲs.:($$j).ρa * ᶜSqₜᵖʲs.:($$j)
+        @. Yₜ.c.sgsʲs.:($$j).q_ice +=
+            ᶜSqᵢᵖʲs.:($$j) * (1 - Y.c.sgsʲs.:($$j).q_ice)
 
-        @. Yₜ.c.sgsʲs.:($$j).mse +=
-            ᶜSeₜᵖʲs.:($$j) -
-            ᶜSqₜᵖʲs.:($$j) * TD.internal_energy(thp, ᶜtsʲs.:($$j))
+        @. Yₜ.c.sgsʲs.:($$j).q_rai +=
+            ᶜSqᵣᵖʲs.:($$j) * (1 - Y.c.sgsʲs.:($$j).q_rai)
 
-        @. Yₜ.c.sgsʲs.:($$j).q_tot +=
-            ᶜSqₜᵖʲs.:($$j) * (1 - Y.c.sgsʲs.:($$j).q_tot)
+        @. Yₜ.c.sgsʲs.:($$j).q_sno +=
+            ᶜSqₛᵖʲs.:($$j) * (1 - Y.c.sgsʲs.:($$j).q_sno)
     end
     return nothing
 end

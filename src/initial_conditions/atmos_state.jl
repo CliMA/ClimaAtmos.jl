@@ -39,8 +39,13 @@ for avoiding duplicate computations.
 """
 function atmos_center_variables(ls, atmos_model)
     gs_vars = grid_scale_center_variables(ls, atmos_model)
-    sgs_vars =
-        turbconv_center_variables(ls, atmos_model.turbconv_model, gs_vars)
+    sgs_vars = turbconv_center_variables(
+        ls,
+        atmos_model.turbconv_model,
+        atmos_model.moisture_model,
+        atmos_model.precip_model,
+        gs_vars,
+    )
     return (; gs_vars..., sgs_vars...)
 end
 
@@ -126,9 +131,15 @@ precip_variables(ls, ::Microphysics1Moment) = (;
 # We can use paper-based cases for LES type configurations (no TKE)
 # or SGS type configurations (initial TKE needed), so we do not need to assert
 # that there is no TKE when there is no turbconv_model.
-turbconv_center_variables(ls, ::Nothing, gs_vars) = (;)
+turbconv_center_variables(ls, ::Nothing, _, _, gs_vars) = (;)
 
-function turbconv_center_variables(ls, turbconv_model::PrognosticEDMFX, gs_vars)
+function turbconv_center_variables(
+    ls,
+    turbconv_model::PrognosticEDMFX,
+    moisture_model,
+    precip_model,
+    gs_vars,
+)
     n = n_mass_flux_subdomains(turbconv_model)
     a_draft = ls.turbconv_state.draft_area
     sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
@@ -140,10 +151,46 @@ function turbconv_center_variables(ls, turbconv_model::PrognosticEDMFX, gs_vars)
     sgsʲs = ntuple(_ -> (; ρa = ρa, mse = mse, q_tot = q_tot), Val(n))
     return (; sgs⁰, sgsʲs)
 end
+function turbconv_center_variables(
+    ls,
+    turbconv_model::PrognosticEDMFX,
+    moisture_model::NonEquilMoistModel,
+    precip_model::Microphysics1Moment,
+    gs_vars,
+)
+    # TODO - Instead of dispatching, should we unify this with the above function?
+    n = n_mass_flux_subdomains(turbconv_model)
+    a_draft = ls.turbconv_state.draft_area
+    sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
+    ρa = ls.ρ * a_draft / n
+    mse =
+        TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
+        CAP.grav(ls.params) * ls.geometry.coordinates.z
+    q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
+    q_liq = TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state)
+    q_ice = TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state)
+    q_rai = ls.precip_state.q_rai
+    q_sno = ls.precip_state.q_sno
+    sgsʲs = ntuple(
+        _ -> (;
+            ρa = ρa,
+            mse = mse,
+            q_tot = q_tot,
+            q_liq = q_liq,
+            q_ice = q_ice,
+            q_rai = q_rai,
+            q_sno = q_sno,
+        ),
+        Val(n),
+    )
+    return (; sgs⁰, sgsʲs)
+end
 
 function turbconv_center_variables(
     ls,
     turbconv_model::Union{EDOnlyEDMFX, DiagnosticEDMFX},
+    _,
+    _,
     gs_vars,
 )
     sgs⁰ = (; ρatke = ls.ρ * ls.turbconv_state.tke)

@@ -1,0 +1,65 @@
+[zd_rayleigh]
+value = 20000.0
+
+[min_area_limiter_scale]
+value = 0
+
+[max_area_limiter_scale]
+value = 0
+
+[mixing_length_tke_surf_scale]
+value = 1.1402470659472088
+
+[mixing_length_diss_coeff]
+value = 0.12492989143864316
+
+[detr_buoy_coeff]
+value = 0
+
+[specific_humidity_precipitation_threshold]
+value = 4.370519093651743e-6
+
+[EDMF_max_area]
+value = 0.7
+
+[precipitation_timescale]
+value = 1919.9324772692971
+
+[entr_mult_limiter_coeff]
+value = 1.092018003548091
+
+[entr_param_vec]
+value = [20.79875221707495, -11.596790112748911, -21.483515589802018, 16.504290885216815, -5.100320549520367, 0.023669853693880992, 0.00010636352628825227, 3098.4007223962226]
+
+[detr_coeff]
+value = 0
+
+[EDMF_surface_area]
+value = 0.07485284402727316
+
+[mixing_length_eddy_viscosity_coefficient]
+value = 0.1202718388572739
+
+[EDMF_min_area]
+value = 1.0e-5
+
+[turb_entr_param_vec]
+value = [0.027824111769192167, 2294.9318189901137]
+
+[detr_vertdiv_coeff]
+value = 0
+
+[pressure_normalmode_drag_coeff]
+value = 35.63930801272878
+
+[mixing_length_Prandtl_number_0]
+value = 0.7050537783880338
+
+[detr_inv_tau]
+value = 0
+
+[mixing_length_static_stab_coeff]
+value = 0.2841967194320584
+
+[pressure_normalmode_buoy_coeff1]
+value = 0.29145613813882526

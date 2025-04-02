@@ -44,6 +44,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2} <: ATCP
     detr_vertdiv_coeff::FT
     entr_param_vec::VFT1
     turb_entr_param_vec::VFT2
+    entr_mult_limiter_coeff::FT
     detr_massflux_vertdiv_coeff::FT
     min_area_limiter_scale::FT
     min_area_limiter_power::FT
@@ -106,6 +107,10 @@ Base.@kwdef struct ClimaAtmosParameters{
     water_refractive_index::FT
     optics_lookup_temperature_min::FT
     optics_lookup_temperature_max::FT
+    # Hyperdiffusion
+    α_hyperdiff_tracer::FT
+    # Vertical diffusion
+    α_vert_diff_tracer::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT

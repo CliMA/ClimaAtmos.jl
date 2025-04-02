@@ -17,6 +17,12 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
+    if (
+        p.atmos.moisture_model isa NonEquilMoistModel &&
+        p.atmos.precip_model isa Microphysics1Moment
+    )
+        (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
+    end
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
@@ -76,10 +82,107 @@ function edmfx_sgs_mass_flux_tendency!(
             )
             @. Yₜ.c.ρq_tot += vtt
         end
+
+        if (
+            p.atmos.moisture_model isa NonEquilMoistModel &&
+            p.atmos.precip_model isa Microphysics1Moment
+        )
+            for j in 1:n
+                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
+
+                @. ᶜa_scalar =
+                    (Y.c.sgsʲs.:($$j).q_liq - ᶜspecific.q_liq) *
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                vtt = vertical_transport(
+                    ᶜρʲs.:($j),
+                    ᶠu³_diff,
+                    ᶜa_scalar,
+                    dt,
+                    edmfx_sgsflux_upwinding,
+                )
+                @. Yₜ.c.ρq_liq += vtt
+
+                @. ᶜa_scalar =
+                    (Y.c.sgsʲs.:($$j).q_ice - ᶜspecific.q_ice) *
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                vtt = vertical_transport(
+                    ᶜρʲs.:($j),
+                    ᶠu³_diff,
+                    ᶜa_scalar,
+                    dt,
+                    edmfx_sgsflux_upwinding,
+                )
+                @. Yₜ.c.ρq_ice += vtt
+
+                @. ᶜa_scalar =
+                    (Y.c.sgsʲs.:($$j).q_rai - ᶜspecific.q_rai) *
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                vtt = vertical_transport(
+                    ᶜρʲs.:($j),
+                    ᶠu³_diff,
+                    ᶜa_scalar,
+                    dt,
+                    edmfx_sgsflux_upwinding,
+                )
+                @. Yₜ.c.ρq_rai += vtt
+
+                @. ᶜa_scalar =
+                    (Y.c.sgsʲs.:($$j).q_sno - ᶜspecific.q_sno) *
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                vtt = vertical_transport(
+                    ᶜρʲs.:($j),
+                    ᶠu³_diff,
+                    ᶜa_scalar,
+                    dt,
+                    edmfx_sgsflux_upwinding,
+                )
+                @. Yₜ.c.ρq_sno += vtt
+            end
+            @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
+
+            @. ᶜa_scalar = (ᶜq_liq⁰ - ᶜspecific.q_liq) * draft_area(ᶜρa⁰, ᶜρ⁰)
+            vtt = vertical_transport(
+                ᶜρ⁰,
+                ᶠu³_diff,
+                ᶜa_scalar,
+                dt,
+                edmfx_sgsflux_upwinding,
+            )
+            @. Yₜ.c.ρq_liq += vtt
+
+            @. ᶜa_scalar = (ᶜq_ice⁰ - ᶜspecific.q_ice) * draft_area(ᶜρa⁰, ᶜρ⁰)
+            vtt = vertical_transport(
+                ᶜρ⁰,
+                ᶠu³_diff,
+                ᶜa_scalar,
+                dt,
+                edmfx_sgsflux_upwinding,
+            )
+            @. Yₜ.c.ρq_ice += vtt
+
+            @. ᶜa_scalar = (ᶜq_rai⁰ - ᶜspecific.q_rai) * draft_area(ᶜρa⁰, ᶜρ⁰)
+            vtt = vertical_transport(
+                ᶜρ⁰,
+                ᶠu³_diff,
+                ᶜa_scalar,
+                dt,
+                edmfx_sgsflux_upwinding,
+            )
+            @. Yₜ.c.ρq_rai += vtt
+
+            @. ᶜa_scalar = (ᶜq_sno⁰ - ᶜspecific.q_sno) * draft_area(ᶜρa⁰, ᶜρ⁰)
+            vtt = vertical_transport(
+                ᶜρ⁰,
+                ᶠu³_diff,
+                ᶜa_scalar,
+                dt,
+                edmfx_sgsflux_upwinding,
+            )
+            @. Yₜ.c.ρq_sno += vtt
+        end
+        # TODO - compute sedimentation and terminal velocities
+        # TODO - add w q_tot, w h_tot terms
     end
-
-    # TODO: Add tracer flux
-
     return nothing
 end
 
@@ -158,9 +261,6 @@ function edmfx_sgs_mass_flux_tendency!(
             end
         end
     end
-
-    # TODO: Add tracer flux
-
     return nothing
 end
 
@@ -173,12 +273,17 @@ function edmfx_sgs_diffusive_flux_tendency!(
     t,
     turbconv_model::PrognosticEDMFX,
 )
-
     FT = Spaces.undertype(axes(Y.c))
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
     (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length) = p.precomputed
+    if (
+        p.atmos.moisture_model isa NonEquilMoistModel &&
+        p.atmos.precip_model isa Microphysics1Moment
+    )
+        (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
+    end
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
@@ -221,6 +326,33 @@ function edmfx_sgs_diffusive_flux_tendency!(
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
         end
+        if (
+            p.atmos.moisture_model isa NonEquilMoistModel &&
+            p.atmos.precip_model isa Microphysics1Moment
+        )
+            α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
+
+            ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
+            ᶜdivᵥ_ρq = Operators.DivergenceF2C(
+                top = Operators.SetValue(C3(FT(0))),
+                bottom = Operators.SetValue(C3(FT(0))),
+            )
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_liq⁰)))
+            @. Yₜ.c.ρq_liq -= ᶜρχₜ_diffusion
+
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_ice⁰)))
+            @. Yₜ.c.ρq_ice -= ᶜρχₜ_diffusion
+
+            # TODO - do I need to change anything in the implicit solver
+            # to include the α_vert_diff_tracer?
+            @. ᶜρχₜ_diffusion =
+                ᶜdivᵥ_ρq(-(ᶠρaK_h * α_vert_diff_tracer * ᶠgradᵥ(ᶜq_rai⁰)))
+            @. Yₜ.c.ρq_rai -= ᶜρχₜ_diffusion
+
+            @. ᶜρχₜ_diffusion =
+                ᶜdivᵥ_ρq(-(ᶠρaK_h * α_vert_diff_tracer * ᶠgradᵥ(ᶜq_sno⁰)))
+            @. Yₜ.c.ρq_sno -= ᶜρχₜ_diffusion
+        end
 
         # momentum
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
@@ -228,9 +360,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
         @. ᶠstrain_rate = bc_strain_rate
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
     end
-
-    # TODO: Add tracer flux
-
     return nothing
 end
 

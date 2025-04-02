@@ -525,18 +525,6 @@ function get_tracers(parsed_args)
     return (; aerosol_names)
 end
 
-function get_tendency_model(parsed_args)
-    zero_tendency_name = parsed_args["zero_tendency"]
-    @assert zero_tendency_name in (nothing, "grid_scale", "subgrid_scale")
-    return if zero_tendency_name == "grid_scale"
-        NoGridScaleTendency()
-    elseif zero_tendency_name == "subgrid_scale"
-        NoSubgridScaleTendency()
-    elseif isnothing(zero_tendency_name)
-        UseAllTendency()
-    end
-end
-
 function check_case_consistency(parsed_args)
     # if any flags is ISDAC, check that all are ISDAC
     ic = parsed_args["initial_condition"]

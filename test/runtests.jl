@@ -11,7 +11,13 @@ using Test
 include("download_artifacts.jl")
 
 #! format: off
-@safetestset "Aqua" begin @time include("aqua.jl") end
+
+# Skip Aqua tests due to precompilation failures in old versions of SciMLBase
+import SciMLBase
+if pkgversion(SciMLBase) > v"2.12.1"
+    @safetestset "Aqua" begin @time include("aqua.jl") end
+end
+
 @safetestset "Dependencies" begin @time include("dependencies.jl") end
 @safetestset "Callbacks" begin @time include("callbacks.jl") end
 @safetestset "Utilities" begin @time include("utilities.jl") end

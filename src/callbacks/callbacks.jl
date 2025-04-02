@@ -206,18 +206,53 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 max(cloud_fraction, eps(FT))
             @. ᶜfrac = cloud_fraction
             # RRTMGP needs effective radius in microns
+
+            seasalt_aero_conc = p.scratch.ᶜtemp_scalar
+            dust_aero_conc = p.scratch.ᶜtemp_scalar_2
+            SO4_aero_conc = p.scratch.ᶜtemp_scalar_3
+            @. seasalt_aero_conc = 0
+            @. dust_aero_conc = 0
+            @. SO4_aero_conc = 0
+            # Get aerosol mass concentrations if available
+            seasalt_names = [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+            dust_names = [:DST01, :DST02, :DST03, :DST04, :DST05]
+            SO4_names = [:SO4]
+            if :prescribed_aerosols_field in propertynames(p.tracers)
+                aerosol_field = p.tracers.prescribed_aerosols_field
+                for aerosol_name in propertynames(aerosol_field)
+                    if aerosol_name in seasalt_names
+                        data = getproperty(aerosol_field, aerosol_name)
+                        @. seasalt_aero_conc += data
+                    elseif aerosol_name in dust_names
+                        data = getproperty(aerosol_field, aerosol_name)
+                        @. dust_aero_conc += data
+                    elseif aerosol_name in SO4_names
+                        data = getproperty(aerosol_field, aerosol_name)
+                        @. SO4_aero_conc += data
+                    end
+                end
+            end
+
             @. ᶜreliq = ifelse(
                 cloud_liquid_water_content > FT(0),
                 CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
                     cmc.liquid,
                     Y.c.ρ,
                     cloud_liquid_water_content / max(eps(FT), cloud_fraction),
-                    cmc.N_cloud_liquid_droplets,
+                    ml_N_cloud_liquid_droplets(
+                        (cmc,),
+                        dust_aero_conc,
+                        seasalt_aero_conc,
+                        SO4_aero_conc,
+                        cloud_liquid_water_content /
+                        max(eps(FT), cloud_fraction),
+                    ),
                     FT(0),
                     FT(0),
                 ) * m_to_um_factor,
                 FT(0),
             )
+
             @. ᶜreice = ifelse(
                 cloud_ice_water_content > FT(0),
                 CM.CloudDiagnostics.effective_radius_const(cmc.ice) *
@@ -290,7 +325,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
-    RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(t / integrator.p.dt))
+    RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(floor(t / integrator.p.dt)))
     Fields.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
     return nothing
 end

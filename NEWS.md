@@ -4,6 +4,26 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+### Remove `dt_save_to_sol`
+
+The option to save the solution to the integrator object (`dt_save_to_sol`) was
+removed from the configurable options.
+
+v0.29.1
+-------
+
+### Remove contribution from condensate, precip diffusion in mass tendency
+PR[#3721](https://github.com/CliMA/ClimaAtmos.jl/pull/3721)
+Diffusion of condensate (liq, ice) and precip (rai, sno) vars no longer 
+contributes to the mass tendency terms (updates in vert diffusion boundary layer,
+smag-lilly, implicit solver terms)
+
+### Add support for non-zero `t_start`
+
+Passing a non zero `t_start` is useful in conditions where one wants to have a
+specific `start_date`, but start the simulation from a different point. This is
+used by `ClimaCoupler` to restart simulations.
+
 v0.29.0
 -------
 

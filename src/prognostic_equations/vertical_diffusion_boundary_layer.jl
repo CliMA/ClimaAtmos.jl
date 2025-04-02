@@ -18,7 +18,8 @@ function vertical_diffusion_boundary_layer_tendency!(
     ::Union{VerticalDiffusion, DecayWithHeightDiffusion},
 )
     FT = eltype(Y)
-    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h, sfc_conditions) = p.precomputed
+    α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
+    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
     if !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
@@ -38,15 +39,25 @@ function vertical_diffusion_boundary_layer_tendency!(
         ᶜdivᵥ_ρe_tot(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜh_tot)))
 
     ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
+    ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_2
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
+        if χ_name in (:q_rai, :q_sno)
+            @. ᶜK_h_scaled = α_vert_diff_tracer * ᶜK_h
+        else
+            @. ᶜK_h_scaled = ᶜK_h
+        end
         ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
         @. ᶜρχₜ_diffusion =
-            ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜχ)))
+            ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h_scaled) * ᶠgradᵥ(ᶜχ)))
         @. ᶜρχₜ -= ᶜρχₜ_diffusion
-        @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
+        # Exclude contributions from diffusion of condensate, precipitation 
+        # in mass tendency
+        if χ_name == :q_tot
+            @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
+        end
     end
 end
