@@ -226,6 +226,15 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         dt,
         cmp,
         thp,
+        p.scratch.tmp_accr_sno_ice,
+        p.scratch.tmp_accr_rai_liq,
+        p.scratch.tmp_acnv_ice_sno,
+        p.scratch.tmp_acnv_liq_rai,
+        p.scratch.tmp_accr_sno_liq_sno_part,
+        p.scratch.tmp_accr_sno_liq_liq_part,
+        p.scratch.tmp_accr_rai_ice_sno_part,
+        p.scratch.tmp_accr_rai_ice_rai_part,
+        p.scratch.tmp_accr_rai_sno, #9
     )
 
     # compute precipitation sinks on the grid mean
@@ -240,6 +249,9 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         dt,
         cmp,
         thp,
+        p.scratch.tmp_evap,
+        p.scratch.tmp_melt,
+        p.scratch.tmp_dep_sub, #3
     )
     return nothing
 end
