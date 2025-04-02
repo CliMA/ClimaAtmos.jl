@@ -1,4 +1,4 @@
-231
+232
 
 # **README**
 #
@@ -20,6 +20,11 @@
 
 
 #=
+
+232
+- Use lazy broadcasting instead of temp scalar in implicit solver for kappa_m vars,
+  which fixes a bug that the temp scalar is updated before it is reused.
+
 231
 - Add mass flux derivatives with respect to grid-mean u_3
 
