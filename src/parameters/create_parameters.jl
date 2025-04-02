@@ -53,6 +53,9 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
     vert_diff_params = vert_diff_parameters(toml_dict)
     VDP = typeof(vert_diff_params)
 
+    external_forcing_params = external_forcing_parameters(toml_dict)
+    EFP = typeof(external_forcing_params)
+
     parameters =
         CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
     return CAP.ClimaAtmosParameters{
@@ -67,6 +70,7 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
         TCP,
         STP,
         VDP,
+        EFP,
     }(;
         parameters...,
         thermodynamics_params,
@@ -79,6 +83,7 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
         turbconv_params,
         surface_temp_params,
         vert_diff_params,
+        external_forcing_params,
     )
 end
 
@@ -145,6 +150,28 @@ microphys_1m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
 
 function vert_diff_parameters(toml_dict)
     name_map = (; :C_E => :C_E, :H_diffusion => :H, :D_0_diffusion => :D₀)
+    return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+end
+
+function external_forcing_parameters(toml_dict)
+    name_map = (;
+        :gcmdriven_shallow_momentum_relaxation_timescale =>
+            :gcmdriven_shallow_momentum_relaxation_timescale,
+        :gcmdriven_shallow_scalar_relaxation_timescale =>
+            :gcmdriven_shallow_scalar_relaxation_timescale,
+        :gcmdriven_deep_momentum_relaxation_timescale =>
+            :gcmdriven_deep_momentum_relaxation_timescale,
+        :gcmdriven_deep_scalar_relaxation_timescale =>
+            :gcmdriven_deep_scalar_relaxation_timescale,
+        :gcmdriven_shallow_relaxation_minimum_height =>
+            :gcmdriven_shallow_relaxation_minimum_height,
+        :gcmdriven_shallow_relaxation_maximum_height =>
+            :gcmdriven_shallow_relaxation_maximum_height,
+        :gcmdriven_deep_relaxation_minimum_height =>
+            :gcmdriven_deep_relaxation_minimum_height,
+        :gcmdriven_deep_relaxation_maximum_height =>
+            :gcmdriven_deep_relaxation_maximum_height,
+    )
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
 end
 

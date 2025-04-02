@@ -408,17 +408,48 @@ function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
 
-function get_external_forcing_model(parsed_args)
+function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
     external_forcing = parsed_args["external_forcing"]
     @assert external_forcing in (nothing, "GCM", "ISDAC")
     return if isnothing(external_forcing)
         nothing
     elseif external_forcing == "GCM"
-        DType = Float64  # TODO: Read from `parsed_args`
-        GCMForcing{DType}(
+        external_forcing_type_str = parsed_args["external_forcing_type"]
+        cfsite_number_str = parsed_args["cfsite_number"]
+
+        # Extract integer site number
+        site_num_match = match(r"\d+", cfsite_number_str)
+        if isnothing(site_num_match)
+            error(
+                "Could not parse site number from cfsite_number: $cfsite_number_str",
+            )
+        end
+        site_num = parse(Int, site_num_match.match)
+
+        if external_forcing_type_str == "shallow"
+            external_forcing_type = ShallowGCMForcingType()
+            if site_num >= FT(30)
+                error(
+                    "Using 'shallow' external_forcing_type for site $site_num (>= 30), which are typically deep. Use 'deep' instead.",
+                )
+            end
+        elseif external_forcing_type_str == "deep"
+            external_forcing_type = DeepGCMForcingType()
+            if site_num < FT(30)
+                error(
+                    "Using 'deep' external_forcing_type for site $site_num (< 30), which are typically shallow. Use 'shallow' instead.",
+                )
+            end
+        else
+            error("Invalid external_forcing_type: $external_forcing_type_str")
+        end
+
+        GCMForcing{FT, AbstractGCMDrivenForcingType}(
             parsed_args["external_forcing_file"],
-            parsed_args["cfsite_number"],
+            external_forcing_type,
+            cfsite_number_str,
         )
+
     elseif external_forcing == "ISDAC"
         ISDACForcing()
     end
