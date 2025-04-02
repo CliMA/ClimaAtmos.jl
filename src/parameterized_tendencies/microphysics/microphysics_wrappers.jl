@@ -172,6 +172,15 @@ function compute_precipitation_sources!(
     dt,
     mp,
     thp,
+    tmp_accr_sno_ice,
+    tmp_accr_rai_liq,
+    tmp_acnv_ice_sno,
+    tmp_acnv_liq_rai,
+    tmp_accr_sno_liq_sno_part,
+    tmp_accr_sno_liq_liq_part,
+    tmp_accr_rai_ice_sno_part,
+    tmp_accr_rai_ice_rai_part,
+    tmp_accr_rai_sno, #9
 )
     FT = eltype(thp)
     # @. Sqₜᵖ = FT(0) should work after fixing
@@ -191,6 +200,7 @@ function compute_precipitation_sources!(
     @. Sᵖ = min(limit(qₗ(thp, ts, qₚ(qᵣ)), dt, 5), Sᵖ)
     @. Sqₗᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
+    @. tmp_acnv_liq_rai = Sᵖ
 
     # snow autoconversion assuming no supersaturation: q_ice -> q_snow
     @. Sᵖ = min(
@@ -199,6 +209,7 @@ function compute_precipitation_sources!(
     )
     @. Sqᵢᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ
+    @. tmp_acnv_ice_sno = Sᵖ
 
     # accretion: q_liq + q_rain -> q_rain
     @. Sᵖ = min(
@@ -207,6 +218,7 @@ function compute_precipitation_sources!(
     )
     @. Sqₗᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
+    @. tmp_accr_rai_liq = Sᵖ
 
     # accretion: q_ice + q_snow -> q_snow
     @. Sᵖ = min(
@@ -215,6 +227,7 @@ function compute_precipitation_sources!(
     )
     @. Sqᵢᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ
+    @. tmp_accr_sno_ice = Sᵖ
 
     # accretion: q_liq + q_sno -> q_sno or q_rai
     # sink of cloud water via accretion cloud water + snow
@@ -233,6 +246,8 @@ function compute_precipitation_sources!(
     @. Sqₛᵖ += Sᵖ_snow
     @. Sqₗᵖ -= Sᵖ
     @. Sqᵣᵖ += ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ - Sᵖ_snow)
+    @. tmp_accr_sno_liq_sno_part = Sᵖ_snow
+    @. tmp_accr_sno_liq_liq_part = Sᵖ
 
     # accretion: q_ice + q_rai -> q_sno
     @. Sᵖ = min(
@@ -241,6 +256,7 @@ function compute_precipitation_sources!(
     )
     @. Sqᵢᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ
+    @. tmp_accr_rai_ice_sno_part = Sᵖ
     # sink of rain via accretion cloud ice - rain
     @. Sᵖ = min(
         limit(qₚ(qᵣ), dt, 5),
@@ -248,6 +264,7 @@ function compute_precipitation_sources!(
     )
     @. Sqᵣᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ
+    @. tmp_accr_rai_ice_rai_part = Sᵖ
 
     # accretion: q_rai + q_sno -> q_rai or q_sno
     @. Sᵖ = ifelse(
@@ -263,6 +280,7 @@ function compute_precipitation_sources!(
     )
     @. Sqₛᵖ += Sᵖ
     @. Sqᵣᵖ -= Sᵖ
+    @. tmp_accr_rai_sno = Sᵖ
     #! format: on
 end
 
@@ -293,6 +311,9 @@ function compute_precipitation_sinks!(
     dt,
     mp,
     thp,
+    tmp_evap,
+    tmp_melt,
+    tmp_dep_sub, #3
 )
     FT = eltype(thp)
     sps = (mp.ps, mp.tv.snow, mp.aps, thp)
@@ -305,6 +326,7 @@ function compute_precipitation_sinks!(
         -CM1.evaporation_sublimation(rps..., PP(thp, ts), qₚ(qᵣ), ρ, Tₐ(thp, ts)),
     )
     @. Sqᵣᵖ += Sᵖ
+    @. tmp_evap = Sᵖ
 
     # melting: q_sno -> q_rai
     @. Sᵖ = min(
@@ -313,6 +335,7 @@ function compute_precipitation_sinks!(
     )
     @. Sqᵣᵖ += Sᵖ
     @. Sqₛᵖ -= Sᵖ
+    @. tmp_melt = Sᵖ
 
     # deposition/sublimation: q_vap <-> q_sno
     @. Sᵖ = CM1.evaporation_sublimation(sps..., PP(thp, ts), qₚ(qₛ), ρ, Tₐ(thp, ts))
@@ -322,5 +345,6 @@ function compute_precipitation_sinks!(
         -min(limit(qₚ(qₛ), dt, 5), FT(-1) * Sᵖ),
     )
     @. Sqₛᵖ += Sᵖ
+    @. tmp_dep_sub = Sᵖ
     #! format: on
 end
