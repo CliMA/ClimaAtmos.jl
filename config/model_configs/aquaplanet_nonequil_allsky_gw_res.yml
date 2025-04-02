@@ -28,3 +28,11 @@ diagnostics:
     period: 1days
   - short_name: [reffclw, reffcli]
     period: 6hours
+  - short_name: [accr_sno_ice, accr_rai_liq, acnv_ice_sno, acnv_liq_rai, accr_sno_liq_sno_part]
+    period: 6hours
+  - short_name: [accr_sno_liq_liq_part, accr_rai_ice_sno_part, accr_rai_ice_rai_part]
+    period: 6hours
+  - short_name: [accr_rai_sno, evap, melt, dep_sub]
+    period: 6hours
+  - short_name: [w_rai, w_sno, w_liq, w_ice]
+    period: 6hours
