@@ -1286,8 +1286,12 @@ function gcm_initial_conditions(external_forcing_file, cfsite_number)
     end
 end
 
+"""
+    InterpolatedColumnProfile
+
+Initial data condition for a column model. Stored as a tuple of Interpolation objects
+"""
 struct InterpolatedColumnProfile{I} <: InitialCondition
-    """Initial data condition for a column model. Stored as a tuple of Interpolation objects"""
     T::I
     u::I
     v::I
