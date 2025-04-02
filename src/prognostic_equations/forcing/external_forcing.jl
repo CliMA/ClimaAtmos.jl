@@ -16,15 +16,26 @@ function interp_vertical_prof(x, xp, fp)
     return spl(vec(x))
 end
 
-"""
-Calculate height-dependent scalar relaxation timescale following from eqn. 11, Shen et al., 2022.
-"""
-function compute_gcm_driven_scalar_inv_τ(z::FT) where {FT}
 
-    # TODO add to ClimaParameters
-    τᵣ = FT(24.0 * 3600.0)
-    zᵢ = FT(3000.0)
-    zᵣ = FT(3500.0)
+"""
+Compute eddy flucuation tendency (from resolved GCM eddies), following Shen et al., 2022.
+"""
+# following PyCLES https://github.com/CliMA/pycles/blob/71c1752a1ef1b43bb90e5817de9126468b4eeba9/ForcingGCMFixed.pyx#L260
+function eddy_vert_fluctuation!(ᶜρχₜ, ᶜχ, ᶜls_subsidence)
+    @. ᶜρχₜ +=
+        Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜχ))).components.data.:1 *
+        ᶜls_subsidence
+end
+
+"""
+Calculate height-dependent scalar relaxation timescale following eqn. 11, Shen et al., 2022.
+"""
+
+function compute_gcm_driven_scalar_inv_τ(z::FT, params) where {FT}
+    τᵣ = CAP.gcmdriven_scalar_relaxation_timescale(params)
+    zᵢ = CAP.gcmdriven_relaxation_minimum_height(params)
+    zᵣ = CAP.gcmdriven_relaxation_maximum_height(params)
+
     if z < zᵢ
         return FT(0)
     elseif zᵢ <= z <= zᵣ
@@ -35,17 +46,16 @@ function compute_gcm_driven_scalar_inv_τ(z::FT) where {FT}
     end
 end
 
-# following PyCLES https://github.com/CliMA/pycles/blob/71c1752a1ef1b43bb90e5817de9126468b4eeba9/ForcingGCMFixed.pyx#L260
-function eddy_vert_fluctuation!(ᶜρχₜ, ᶜχ, ᶜls_subsidence)
-    @. ᶜρχₜ +=
-        Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜχ))).components.data.:1 *
-        ᶜls_subsidence
+function compute_gcm_driven_momentum_inv_τ(z::FT, params) where {FT}
+    τᵣ = CAP.gcmdriven_momentum_relaxation_timescale(params)
+    return FT(1) / τᵣ
 end
 
 external_forcing_cache(Y, atmos::AtmosModel, params) =
     external_forcing_cache(Y, atmos.external_forcing, params)
 
 external_forcing_cache(Y, external_forcing::Nothing, params) = (;)
+
 function external_forcing_cache(Y, external_forcing::GCMForcing, params)
     FT = Spaces.undertype(axes(Y.c))
     ᶜdTdt_fluc = similar(Y.c, FT)
@@ -136,8 +146,10 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
             set_insolation!(insolation)
             set_cos_zenith!(cos_zenith)
 
-            @. ᶜinv_τ_wind[colidx] = 1 / (6 * 3600)
-            @. ᶜinv_τ_scalar[colidx] = compute_gcm_driven_scalar_inv_τ(zc_gcm)
+            @. ᶜinv_τ_wind[colidx] =
+                compute_gcm_driven_momentum_inv_τ(zc_gcm, params)
+            @. ᶜinv_τ_scalar[colidx] =
+                compute_gcm_driven_scalar_inv_τ(zc_gcm, params)
         end
     end
 
@@ -158,6 +170,10 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params)
         cos_zenith,
     )
 end
+
+"""
+Apply external (prescibed) GCM tendencies: horizontal advection, vertical fluctuation, nudging, and subsidence.
+"""
 
 external_forcing_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
