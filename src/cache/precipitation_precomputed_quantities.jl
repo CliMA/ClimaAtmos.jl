@@ -56,13 +56,13 @@ function set_precipitation_velocities!(
     # compute the precipitation terminal velocity [m/s]
     @. ᶜwᵣ = CM1.terminal_velocity(
         cmp.pr,
-        cmp.tv.rain,
+        cmc.Ch2022.rain,
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
     )
     @. ᶜwₛ = CM1.terminal_velocity(
         cmp.ps,
-        cmp.tv.snow,
+        cmc.Ch2022.small_ice,
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_sno / Y.c.ρ),
     )
