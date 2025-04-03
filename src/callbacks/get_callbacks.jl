@@ -283,28 +283,6 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         ),
     )
 
-    # Save dt_save_state_to_disk as a Dates.Period object. This is used to check
-    # if it is an integer multiple of other frequencies.
-    dt_save_state_to_disk_dates = checkpoint_frequency_from_parsed_args(
-        parsed_args["dt_save_state_to_disk"],
-    )
-    if dt_save_state_to_disk_dates != Inf
-        schedule = CAD.EveryCalendarDtSchedule(
-            dt_save_state_to_disk_dates;
-            reference_date = start_date,
-            date_last = t_start isa ITime ?
-                        ClimaUtilities.TimeManager.date(t_start) :
-                        start_date + Dates.Second(t_start),
-        )
-        cond = let schedule = schedule
-            (u, t, integrator) -> schedule(integrator)
-        end
-        affect! = let output_dir = output_dir
-            (integrator) -> save_state_to_disk_func(integrator, output_dir)
-        end
-        callbacks = (callbacks..., SciMLBase.DiscreteCallback(cond, affect!))
-    end
-
     if is_distributed(comms_ctx)
         callbacks = (
             callbacks...,
@@ -337,6 +315,11 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
             (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
     end
 
+    # Save dt_save_state_to_disk as a Dates.Period object. This is used to check
+    # if it is an integer multiple of other frequencies.
+    dt_save_state_to_disk_dates = checkpoint_frequency_from_parsed_args(
+        parsed_args["dt_save_state_to_disk"],
+    )
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         dt_rad =
             dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_rad"])) :
@@ -352,6 +335,23 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
 
         callbacks =
             (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
+    end
+
+    if dt_save_state_to_disk_dates != Inf
+        schedule = CAD.EveryCalendarDtSchedule(
+            dt_save_state_to_disk_dates;
+            reference_date = start_date,
+            date_last = t_start isa ITime ?
+                        ClimaUtilities.TimeManager.date(t_start) :
+                        start_date + Dates.Second(t_start),
+        )
+        cond = let schedule = schedule
+            (u, t, integrator) -> schedule(integrator)
+        end
+        affect! = let output_dir = output_dir
+            (integrator) -> save_state_to_disk_func(integrator, output_dir)
+        end
+        callbacks = (callbacks..., SciMLBase.DiscreteCallback(cond, affect!))
     end
 
     return callbacks
