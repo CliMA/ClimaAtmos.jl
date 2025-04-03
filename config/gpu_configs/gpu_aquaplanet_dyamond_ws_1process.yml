@@ -17,7 +17,6 @@ vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 surface_setup: "DefaultMoninObukhov"
-rayleigh_sponge: true
 dt: "90secs"
 t_end: "1days"
 toml: [toml/longrun_aquaplanet.toml]

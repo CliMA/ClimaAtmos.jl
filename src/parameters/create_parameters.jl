@@ -105,6 +105,8 @@ atmos_name_map = (;
     :water_refractive_index => :water_refractive_index,
     :optics_lookup_temperature_min => :optics_lookup_temperature_min,
     :optics_lookup_temperature_max => :optics_lookup_temperature_max,
+    :tracer_hyperdiffusion_factor => :α_hyperdiff_tracer,
+    :tracer_vertical_diffusion_factor => :α_vert_diff_tracer,
 )
 
 cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
