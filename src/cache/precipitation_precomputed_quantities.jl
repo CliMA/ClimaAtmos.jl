@@ -53,10 +53,12 @@ function set_precipitation_velocities!(
     cmp = CAP.microphysics_1m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
 
+    FT = eltype(p.params)
+
     # compute the precipitation terminal velocity [m/s]
-    @. ᶜwᵣ = CM1.terminal_velocity(
+    @. ᶜwᵣ = FT(0.1) * CM1.terminal_velocity(
         cmp.pr,
-        cmc.Ch2022.rain,
+        cmp.tv.rain, #cmc.Ch2022.rain,
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
     )
