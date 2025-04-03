@@ -9,8 +9,12 @@ using Plots
 using LinearAlgebra
 using DataFrames
 
-output_dir = "output/exp_1"
-iterations = nothing
+# output_dir = "output/exp_1"
+# output_dir= "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_40"
+# output_dir= "/central/scratch/cchristo/output_ml_mix2/exp_6"
+output_dir = "/central/scratch/cchristo/output_ml_mix2/exp_8"
+iterations = 0:5
+# iterations = nothing
 
 include("helper_funcs.jl")
 
@@ -30,6 +34,12 @@ if isnothing(iterations)
 end
 
 const prior = CAL.get_prior(joinpath(output_dir, "configs", "prior.toml"))
+
+
+# const pretrained_nn_path = config_dict["pretrained_nn_path"]
+# prior_path = joinpath(output_dir, "configs", "prior.toml")
+# prior = create_prior_with_nn(prior_path, pretrained_nn_path)
+
 
 function inv_variance_weighted_loss(
     y_diff::Matrix{Float64},
@@ -111,10 +121,11 @@ for iteration in iterations
         fillalpha = 0.2,
         label = "Noise range",
         color = :gray,
+        linewidth = 0.1,
     )
 
-    ylims!(plt, -3.0, 3.0)
-    savefig(plt, joinpath(plot_dir_y_vec, "eki_y_vs_g_iter_$(iteration).png"))
+    ylims!(plt, -5.0, 8.0)
+    savefig(plt, joinpath(plot_dir_y_vec, "eki_y_vs_g_iter_$(iteration).pdf"))
 
 end
 
