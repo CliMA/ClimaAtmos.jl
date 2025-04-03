@@ -295,7 +295,12 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             ν₄_scalar,
         )
         @. ᶜρχₜ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
-        @. Yₜ.c.ρ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
+
+        # Exclude contributions from hyperdiffusion of condensate, 
+        # precipitating species from mass tendency. 
+        if χ_name == :q_tot
+            @. Yₜ.c.ρ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
+        end
     end
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²q_totʲs) = p.hyperdiff

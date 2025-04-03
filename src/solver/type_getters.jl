@@ -41,7 +41,7 @@ function get_atmos(config::AtmosConfig, params)
         )
         co2 = FixedCO2()
     end
-    (isnothing(co2) && !with_rrtmgp) &&
+    (!isnothing(co2) && !with_rrtmgp) &&
         @warn ("$(co2) does nothing if RRTMGP is not used")
 
     disable_momentum_vertical_diffusion = forcing_type isa HeldSuarezForcing
@@ -426,9 +426,8 @@ additional_integrator_kwargs(::SciMLBase.AbstractODEAlgorithm) = (;
     progress = isinteractive(),
     progress_steps = isinteractive() ? 1 : 1000,
 )
-import DiffEqBase
 additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
-    kwargshandle = DiffEqBase.KeywordArgSilent, # allow custom kwargs
+    kwargshandle = CTS.DiffEqBase.KeywordArgSilent, # allow custom kwargs
     adjustfinal = true,
     # TODO: enable progress bars in ClimaTimeSteppers
 )

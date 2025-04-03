@@ -1,4 +1,4 @@
-225
+232
 
 # **README**
 #
@@ -20,6 +20,28 @@
 
 
 #=
+
+232
+- Use lazy broadcasting instead of temp scalar in implicit solver for kappa_m vars,
+  which fixes a bug that the temp scalar is updated before it is reused.
+
+231
+- Add mass flux derivatives with respect to grid-mean u_3
+
+230
+- Add u_{3,m} (updraft) Jacobians to updraft MSE, rho*a, and q_tot prognostic equations. Move sgs ∂ᶠu₃ʲ derivatives to BlockLowerTriangularSolve.
+
+229
+- Remove derivatives with respect to grid mean rho in edmf implicit solver
+
+228
+- Only treat the drag term in edmf pressure closure implicitly
+
+227
+- Move nonhydrostatic pressure drag calculation to implicit precomputed quantities
+
+226
+- Add updraft rho*a and u_{3,m} jacobian terms
 
 225
 - Move nonhydrostatic pressure drag calculation to precomputed quantities and 

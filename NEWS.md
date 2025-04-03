@@ -12,6 +12,12 @@ removed from the configurable options.
 v0.29.1
 -------
 
+### Remove contribution from condensate, precip diffusion in mass tendency
+PR[#3721](https://github.com/CliMA/ClimaAtmos.jl/pull/3721)
+Diffusion of condensate (liq, ice) and precip (rai, sno) vars no longer 
+contributes to the mass tendency terms (updates in vert diffusion boundary layer,
+smag-lilly, implicit solver terms)
+
 ### Add support for non-zero `t_start`
 
 Passing a non zero `t_start` is useful in conditions where one wants to have a

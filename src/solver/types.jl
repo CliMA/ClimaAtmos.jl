@@ -1,4 +1,4 @@
-import FastGaussQuadrature
+import ClimaCore.Quadratures.GaussQuadrature as GQ
 import StaticArrays as SA
 import Thermodynamics as TD
 import Dates
@@ -44,7 +44,7 @@ struct SGSQuadrature{N, A, W} <: AbstractSGSamplingType
         N = quadrature_order
         # TODO: double check this python-> julia translation
         # a, w = np.polynomial.hermite.hermgauss(N)
-        a, w = FastGaussQuadrature.gausshermite(N)
+        a, w = GQ.hermite(FT, N)
         a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
         return new{N, typeof(a), typeof(w)}(a, w)
     end
