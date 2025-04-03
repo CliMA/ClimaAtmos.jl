@@ -62,7 +62,7 @@ function set_precipitation_velocities!(
     )
     @. ᶜwₛ = CM1.terminal_velocity(
         cmp.ps,
-        cmc.Ch2022.small_ice,
+        cmc.Ch2022.large_ice,
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_sno / Y.c.ρ),
     )
