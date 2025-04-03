@@ -391,9 +391,11 @@ function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     (; ᶠradiation_flux) = p.radiation
     radius = CAP.planet_radius(p.params)
     face_z = p.radiation.rrtmgp_model.face_z
+    center_z = p.radiation.rrtmgp_model.center_z
     ᶠmetric_scaling = ((face_z .+ radius) ./ radius) .^ 2 
+    ᶜmetric_scaling = ((center_z .+ radius) ./ radius) .^ 2 
     Fields.field2array(p.radiation.ᶠradiation_flux) ./= ᶠmetric_scaling
-    @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
+    Fields.field2array(Yₜ.c.ρe_tot) .-= Fields.field2array(ᶜdivᵥ(ᶠradiation_flux)) .* ᶜmetric_scaling
     return nothing
 end
 
