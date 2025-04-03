@@ -191,9 +191,9 @@ add_diagnostic_variable!(
     units = "m/s",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(cache.precomputed.ᶜwₛ)
+            return copy(abs.(cache.precomputed.ᶜwₛ))
         else
-            out .= cache.precomputed.ᶜwₛ
+            out .= abs.(cache.precomputed.ᶜwₛ)
         end
     end,
 )
