@@ -1,0 +1,11 @@
+[gcmdriven_momentum_relaxation_timescale]
+value = 3600.0
+
+[gcmdriven_scalar_relaxation_timescale]
+value = 7200.0
+
+[gcmdriven_relaxation_minimum_height]
+value = 16000.0
+
+[gcmdriven_relaxation_maximum_height]
+value = 20000.0
