@@ -7,12 +7,14 @@ using Insolation
 import Insolation.Parameters as IP
 import ClimaParams as CP
 
+param_dict = CP.create_toml_dict(Float64)
+params = CP.get_parameter_values(param_dict, ["gravitational_acceleration", "planet_radius", "gas_constant", "molar_mass_dry_air"])
+
+
 time_resolution = 3600 # switch to 86400 for monthly data
 FT = Float64
 
 # parameters 
-R_d = 287.05
-g = -9.81
 rootdir = "/scratch/julian/ERA5/data_download/" # clima
 rootdir = "/Users/julianschmitt/Downloads/era5/" # local
 rootdir = "/central/groups/esm/jschmitt/era5/tv/july_forcing/" # hpc
@@ -20,11 +22,14 @@ tvforcing = NCDataset(rootdir * "july2007_forcing_and_cloud_hourly_profiles.nc")
 tv_inst = NCDataset(rootdir * "july2007_hourly_inst.nc") # skt
 tv_accum = NCDataset(rootdir * "july2007_hourly_accum.nc") # slhf, sshf
 
+"""
+    get_horizontal_tendencies(lat, lon_index, lat_index, column_ds)
+
+Calculate the horizontal advective tendencies for temperature and specific humidity
+using a second-order finite difference approximation.
+"""
 function get_horizontal_tendencies(lat, lon_index, lat_index, column_ds)
-    """
-    Computes horizontal tendencies for temperature and specific humidity at a given location.
-    """
-    rearth = 6378e3
+    rearth = params.planet_radius
     lat_rad = deg2rad(lat)
     coslat = cos(lat_rad)
     dx = 2 * π * rearth * coslat / 360 * 0.25
@@ -53,21 +58,24 @@ function get_horizontal_tendencies(lat, lon_index, lat_index, column_ds)
     return tntha, tnhusha
 end
 
-# compute vertical advection terms
-function get_vertical_tendencies(sim_forcing, var)
-    """
-    Calculate the temperature and specific humidity vertical tendencies as a function of levels
-    using vertical advection. Here we take the tendency over the geopotential height not the height in meters
-    """
-    deriv = zeros(size(sim_forcing["wa"]))
+"""
+    get_vertical_tendencies(sim_forcing, var)
 
-    for i in 1:size(sim_forcing["wa"])[1]
-        if i == 1
+Calculate the temperature and specific humidity vertical tendencies as a function of levels
+using vertical advection using second-order finite difference at interior points and 
+first-order finite difference at the top and bottom levels.
+"""
+function get_vertical_tendencies(sim_forcing, var)
+
+    deriv = zeros(size(sim_forcing["wa"]))
+    num_vertical_levels = size(sim_forcing["wa"])[1]
+    for i in 1:num_vertical_levels
+        if i == 1 # bottom boundary
             deriv[1, :] =
                 sim_forcing["wa"][1, :] .*
                 (sim_forcing[var][2, :] .- sim_forcing[var][1, :]) ./
                 (sim_forcing["z"][2, :] .- sim_forcing["z"][1, :])
-        elseif i == size(sim_forcing["wa"])[1]
+        elseif i == size(sim_forcing["wa"])[1] # top boundary
             deriv[end, :] =
                 sim_forcing["wa"][end, :] .*
                 (sim_forcing[var][end, :] .- sim_forcing[var][end - 1, :]) ./
@@ -131,9 +139,10 @@ function compute_forcing(lat, lon, tvforcing, tv_inst, tv_accum)
 
     # compute subsidence
     pressure = tvforcing["pressure_level"] .* 100 # convert hPa to Pa
+    R_d = params.gas_constant / params.molar_mass_dry_air # J/(kg*K)
     ρ = reshape(pressure, 37, 1) ./ (R_d .* sim_forcing["ta"])
     sim_forcing["rho"] = ρ # pressure 
-    sim_forcing["wa"] = sim_forcing["wap"] ./ (ρ .* g) # g is already negative
+    sim_forcing["wa"] = .-sim_forcing["wap"] ./ (ρ .* params.gravitational_acceleration)
 
 
     # compute vertical advection terms - zero for time varying forcing, nonzero for steady state
