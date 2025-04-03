@@ -204,9 +204,10 @@ function (surface_setup::GCMDriven)(params)
     FT = eltype(params)
     (; external_forcing_file, cfsite_number) = surface_setup
     T = FT.(gcm_surface_conditions(external_forcing_file, cfsite_number))
-    z0 = FT(1e-4)  # zrough
-    parameterization = MoninObukhov(; z0)
-    return SurfaceState(; parameterization, T)
+    # z0 = FT(1e-4)  # zrough
+    # parameterization = MoninObukhov(; z0)
+    parameterization = MoninObukhov(; z0m = FT(1e-4), z0b = FT(3e-6))
+    return SurfaceState(; parameterization, T, gustiness = FT(1.0))
 end
 
 function gcm_surface_conditions(external_forcing_file, cfsite_number)

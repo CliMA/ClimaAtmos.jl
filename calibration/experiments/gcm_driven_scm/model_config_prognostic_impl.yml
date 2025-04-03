@@ -1,22 +1,22 @@
 initial_condition: "GCM"
 external_forcing: "GCM"
-external_forcing_file: "/resnick/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
+external_forcing_file: "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
 surface_setup: "GCM"
 turbconv: "prognostic_edmfx"
 rayleigh_sponge: true
 viscous_sponge: true
 implicit_diffusion: true
+implicit_sgs_advection: true
+implicit_sgs_mass_flux: true
+implicit_sgs_entr_detr: true
+implicit_sgs_nh_pressure: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
 edmfx_upwinding: "first_order"
-rayleigh_sponge: true
-# edmfx_entr_model: "Generalized"
-# edmfx_detr_model: "Generalized"
-edmfx_entr_model: "PiGroups"
-edmfx_detr_model: "SmoothArea"
+edmfx_entr_model : "PiGroups"
+edmfx_detr_model : "SmoothArea"
 precip_model: 0M
 cloud_model: "quadrature_sgs"
-# cloud_model : "grid_scale" 
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
@@ -29,23 +29,22 @@ config: "column"
 hyperdiff: "false"
 z_max: 40e3
 z_elem: 60
-# mixing_length_model: "nn"
-# mixing_length_model: "physical"
 z_stretch: true
 dz_bottom: 30
 rad: allskywithclear
+co2_model: fixed
 insolation: "gcmdriven"
 perturb_initstate: false
-dt: "10secs"
-dt_rad: "30mins"
+dt: "40secs"
+dt_rad: "1hours"
 t_end: "72hours"
-dt_save_to_disk: "10mins"
 call_cloud_diagnostics_per_stage : true
 toml: [scm_tomls/prognostic_edmfx.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
+dt_save_state_to_disk: "Inf"
 diagnostics:
 - short_name: [thetaa, hus, cl, clw, cli, pr]
   period: 10mins
-- short_name: [entr, detr, lmix, turbentr, tke, arup, waup, edt]
+- short_name: [entr, detr, lmix, turbentr, tke, arup, waup, edt] #nh_pressure]
   period: 10mins
