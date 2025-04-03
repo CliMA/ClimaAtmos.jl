@@ -1,14 +1,10 @@
 initial_condition: "ExternalTV"
 external_forcing: "ExternalTV"
-# external_forcing_file: "/central/groups/esm/jschmitt/era5/tv/july_forcing/sim_forcing_loc_17_-149.nc"
 surface_setup: "ExternalTV"
 surface_temperature: "ExternalTVColumn"
 start_date: "20070701"
-site_latitude: 17.0
+site_latitude: 13.0
 site_longitude: -149.0
-external_era5_data: ["/Users/julianschmitt/Downloads/era5/july2007_forcing_and_cloud_hourly_profiles.nc",
-                    "/Users/julianschmitt/Downloads/era5/july2007_hourly_inst.nc",
-                    "/Users/julianschmitt/Downloads/era5/july2007_hourly_accum.nc"]
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false

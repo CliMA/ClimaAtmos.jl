@@ -17,7 +17,6 @@ using Insolation
 import Insolation.Parameters as IP
 import ClimaParams as CP
 
-
 time_resolution = 3600 # switch to 86400 for monthly data
 
 external_tv_params = CP.get_parameter_values(CP.create_toml_dict(Float64), ["gravitational_acceleration", "planet_radius", "gas_constant", "molar_mass_dry_air"])
@@ -28,8 +27,15 @@ function get_external_forcing_file_path(parsed_args)
     site_latitude = round(parsed_args["site_latitude"] * 4) / 4
     site_longitude = round(parsed_args["site_longitude"] * 4) /4
 
-    #TODO: Change this to an artifact location
-    return "/Users/julianschmitt/Downloads/era5/tv_forcing_$(site_latitude)_$(site_longitude)_$(start_date).nc"
+    if get(ENV, "BUILDKITE", "") == "true"
+        temp_dir = joinpath(tempdir(), "era5_hourly_atmos_processed")
+        if !isdir(temp_dir)
+            mkdir(tempdir)
+        end
+        return joinpath(temp_dir, "tv_forcing_$(site_latitude)_$(site_longitude)_$(start_date).nc")
+    else
+        return joinpath(@clima_artifact("era5_hourly_atmos_processed"),"tv_forcing_$(site_latitude)_$(site_longitude)_$(start_date).nc")
+    end
 end
 
 
@@ -106,6 +112,7 @@ function get_coszen_inst(
     lat,
     lon,
     date,
+    FT,
     param_set = IP.InsolationParameters(FT),
     od = Insolation.OrbitalData(),
 )
@@ -120,13 +127,14 @@ function get_coszen_inst(
 end
 
 
-function generate_external_era5_forcing_file(lat, lon, external_era5_data, forcing_file_path)
+function generate_external_era5_forcing_file(lat, lon, start_date, forcing_file_path, FT)
 
     # load datasets
-    @assert length(external_era5_data) == 3 # Need all 3 datasets to compute forcing
-    tvforcing = NCDataset(external_era5_data[1])
-    tv_inst = NCDataset(external_era5_data[2])
-    tv_accum = NCDataset(external_era5_data[3])
+    artifact_data_directory = @clima_artifact("era5_hourly_atmos_raw")
+    tvforcing = NCDataset(joinpath(artifact_data_directory, "forcing_and_cloud_hourly_profiles_$(start_date).nc"))
+    tv_inst = NCDataset(joinpath(artifact_data_directory, "hourly_inst_$(start_date).nc"))
+    tv_accum = NCDataset(joinpath(artifact_data_directory, "hourly_accum_$(start_date).nc"))
+
 
     sim_forcing = Dict()
     sim_forcing["time"] = tvforcing["valid_time"][:]
@@ -243,7 +251,7 @@ function generate_external_era5_forcing_file(lat, lon, external_era5_data, forci
     end
 
     # add coszen 
-    coszen_list = get_coszen_inst.(lat, lon, tvforcing["valid_time"][:])
+    coszen_list = get_coszen_inst.(lat, lon, tvforcing["valid_time"][:], FT)
     defVar(ds, "coszen", Float64, ("x", "y", "z", "time"))
     ds["coszen"][:] = repeat(
         reshape([c[1] for c in coszen_list], 1, 1, 1, :),

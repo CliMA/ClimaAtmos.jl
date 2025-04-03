@@ -1291,11 +1291,16 @@ end
 
 Initial data condition for a column model. Stored as a tuple of Interpolation objects
 """
-struct InterpolatedColumnProfile{I} <: InitialCondition
+struct InterpolatedColumnProfile{I <: Intp.Extrapolation} <: InitialCondition
+    "temperature"
     T::I
+    "zonal wind velocity"
     u::I
+    "meridional wind velocity"
     v::I
+    "total specific humidity"
     q_tot::I
+    "enthalpy"
     ρ₀::I
 end
 
@@ -1344,6 +1349,7 @@ function ExternalTV(external_forcing_file, start_date)
             Intp.Flat(),
         )
     end
+    @info "Interpolation Variables are type: " typeof(T)
     return InterpolatedColumnProfile(T, u, v, q_tot, ρ₀)
 end
 
