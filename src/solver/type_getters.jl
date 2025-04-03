@@ -354,10 +354,7 @@ function get_initial_condition(parsed_args)
         )
     elseif parsed_args["initial_condition"] == "ExternalTV"
         external_forcing_file = get_external_forcing_file_path(parsed_args)
-        return ICs.ExternalTV(
-            external_forcing_file,
-            parsed_args["start_date"],
-        )
+        return ICs.ExternalTV(external_forcing_file, parsed_args["start_date"])
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",

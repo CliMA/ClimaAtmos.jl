@@ -433,14 +433,23 @@ function get_external_forcing_model(parsed_args, FT)
             parsed_args["cfsite_number"],
         )
     elseif external_forcing == "ExternalTV"
-
+        # when running on buildkite, we want to always generate the forcing, so we don't use
+        # the `era5_hourly_atmos_processed` artifact
+        if get(ENV, "BUILDKITE", "") == "true"
+            buildkite_processed_forcing_dir =
+                joinpath(tempdir(), "era5_hourly_atmos_processed")
+            # clear the directory if it exists to regenerate the forcing
+            isdir(buildkite_processed_forcing_dir) &&
+                rm(buildkite_processed_forcing_dir, recursive = true)
+            mkpath(buildkite_processed_forcing_dir)
+        end
         external_forcing_file = get_external_forcing_file_path(parsed_args)
         if !isfile(external_forcing_file)
             @info "External forcing file $(external_forcing_file) does not exist. Generating it now."
             # generate forcing from provided era5 data paths
             generate_external_era5_forcing_file(
                 parsed_args["site_latitude"],
-                parsed_args["site_longitude"], 
+                parsed_args["site_longitude"],
                 parsed_args["start_date"],
                 external_forcing_file,
                 FT,
@@ -449,7 +458,7 @@ function get_external_forcing_model(parsed_args, FT)
 
         ExternalDrivenTVForcing{FT}(
             external_forcing_file,
-            parsed_args["start_date"]
+            parsed_args["start_date"],
         )
     elseif external_forcing == "ISDAC"
         ISDACForcing()
