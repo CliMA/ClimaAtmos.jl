@@ -1,0 +1,61 @@
+[entr_param_vec]
+prior = "VectorOfParameterized([Normal(0.0, 10.0), Normal(0.0, 10.0), Normal(0.0, 10.0), Normal(0.0, 10.0), Normal(0.0, 10.0), Normal(0.3, 0.15)])"
+constraint = "repeat([no_constraint()], 6)"
+type = "float"
+
+[entr_mult_limiter_coeff]
+prior = "constrained_gaussian(entr_mult_limiter_coeff, 0.7, 0.2, 0, Inf)"
+type = "float"
+
+[max_area_limiter_scale]
+prior = "constrained_gaussian(max_area_limiter_scale, 0.01, 0.002, 0, Inf)"
+type = "float"
+
+[max_area_limiter_power]
+prior = "constrained_gaussian(max_area_limiter_power, 25.0, 6.0, 0, Inf)"
+type = "float"
+
+[turb_entr_param_vec]
+prior = "VectorOfParameterized([Normal(-3.6137, 0.554), Normal(8.1871, 0.362)])"
+constraint = "[bounded_below(0.0), bounded_below(0.0)]"
+type = "float"
+
+[mixing_length_eddy_viscosity_coefficient]
+prior = "constrained_gaussian(mixing_length_eddy_viscosity_coefficient, 0.14, 0.07, 0, Inf)"
+type = "float"
+
+[mixing_length_diss_coeff]
+prior = "constrained_gaussian(mixing_length_diss_coeff, 0.22, 0.15, 0, Inf)"
+type = "float"
+
+[mixing_length_tke_surf_flux_coeff]
+prior = "constrained_gaussian(mixing_length_tke_surf_flux_coeff, 3.0, 1.5, 0, Inf)"
+type = "float"
+
+[mixing_length_static_stab_coeff]
+prior = "constrained_gaussian(mixing_length_static_stab_coeff, 0.4, 0.2, 0, Inf)"
+type = "float"
+
+[mixing_length_Prandtl_number_0]
+prior = "constrained_gaussian(mixing_length_Prandtl_number_0, 0.74, 0.2, 0, Inf)"
+type = "float"
+
+[pressure_normalmode_buoy_coeff1]
+prior = "constrained_gaussian(pressure_normalmode_buoy_coeff1, 0.12, 0.08, 0, Inf)"
+type = "float"
+
+[pressure_normalmode_drag_coeff]
+prior = "constrained_gaussian(pressure_normalmode_drag_coeff, 40.0, 10.0, 0, Inf)"
+type = "float"
+
+[EDMF_surface_area]
+prior = "constrained_gaussian(EDMF_surface_area, 0.1, 0.03, 0, Inf)"
+type = "float"
+
+[precipitation_timescale]
+prior = "constrained_gaussian(precipitation_timescale, 1000.0, 200.0, 0, Inf)"
+type = "float"
+
+[specific_humidity_precipitation_threshold]
+prior = "constrained_gaussian(specific_humidity_precipitation_threshold, 5e-6, 2e-6, 0, Inf)"
+type = "float"
