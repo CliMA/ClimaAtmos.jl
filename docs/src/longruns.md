@@ -50,10 +50,9 @@ Aquaplanet with idealized insolation, all-sky radiation, diagnostic edmf
 and 0-moment microphysics.
 ```
 ```
-longrun_aquaplanet_allsky_progedmf_diffonly_0M
+longrun_aquaplanet_allsky_progedmf_0M
 
-Aquaplanet with idealized insolation, all-sky radiation, prognostic edmf with diffusion only
-and 0-moment microphysics.
+Aquaplanet with idealized insolation, all-sky radiation, prognostic edmf with 0-moment microphysics.
 ```
 ```
 longrun_aquaplanet_allsky_tvinsol_0M_slabocean

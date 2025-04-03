@@ -25,7 +25,7 @@ y_elem: 2
 z_elem: 82
 z_stretch: false
 dt: 10secs
-t_end: 6hours
+t_end: 285mins
 dt_save_state_to_disk: 10mins
 FLOAT_TYPE: "Float64"
 toml: [toml/prognostic_edmfx_1M.toml]
@@ -37,5 +37,5 @@ diagnostics:
     period: 10mins
   - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
     period: 10mins
-  - short_name: [husra, hussn]
+  - short_name: [husra, hussn, husraup, hussnup, husraen, hussnen]
     period: 10mins

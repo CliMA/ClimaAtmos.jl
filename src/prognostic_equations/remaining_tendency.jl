@@ -112,11 +112,16 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     surface_flux_tendency!(Yₜ, Y, p, t)
 
     radiation_tendency!(Yₜ, Y, p, t, p.atmos.radiation_mode)
-    edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    if p.atmos.sgs_entr_detr_mode == Explicit()
+        edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    end
     if p.atmos.sgs_mf_mode == Explicit()
         edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
-    edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    edmfx_nh_pressure_buoyancy_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    if p.atmos.sgs_nh_pressure_mode == Explicit()
+        edmfx_nh_pressure_drag_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    end
     edmfx_filter_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     edmfx_tke_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     # Non-equilibrium cloud formation
@@ -175,7 +180,4 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         t,
         p.atmos.orographic_gravity_wave,
     )
-    # NOTE: This will zero out all tendencies
-    # please DO NOT add additional tendencies after this function
-    zero_tendency!(Yₜ, Y, p, t, p.atmos.tendency_model, p.atmos.turbconv_model)
 end

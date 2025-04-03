@@ -131,16 +131,15 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
     ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
         top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
-        bottom = Operators.SetValue(ρ_flux_uₕ),
+        bottom = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
     )
     ᶠdivᵥ = Operators.DivergenceC2F(
         bottom = Operators.SetDivergence(FT(0)),
         top = Operators.SetDivergence(FT(0)),
     )
-    top = Operators.SetValue(C3(FT(0)))
     ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(;
-        top,
-        bottom = Operators.SetValue(ρ_flux_h_tot),
+        top = Operators.SetValue(C3(FT(0))),
+        bottom = Operators.SetValue(C3(FT(0))),
     )
 
     # Apply to tendencies
@@ -156,19 +155,18 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜh_tot)))
 
     ## Tracer diffusion and associated mass changes
-    sfc_zero = @. sfc_temp_C3 = C3(FT(0))
     for (ᶜρχₜ, ᶜχ, χ_name) in CA.matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
 
-        bottom = Operators.SetValue(
-            χ_name == :q_tot ? sfc_conditions.ρ_flux_q_tot : sfc_zero,
+        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(;
+            top = Operators.SetValue(C3(FT(0))),
+            bottom = Operators.SetValue(C3(FT(0))),
         )
-        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(; top, bottom)
 
         ᶜ∇ᵥρD∇χₜ = @. ᶜtemp_scalar = ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜχ)))
         @. ᶜρχₜ -= ᶜ∇ᵥρD∇χₜ
         # Rain and snow does not affect the mass
-        if χ_name ∉ (:q_rai, :q_sno)
+        if χ_name == :q_tot
             @. Yₜ.c.ρ -= ᶜ∇ᵥρD∇χₜ
         end
     end
