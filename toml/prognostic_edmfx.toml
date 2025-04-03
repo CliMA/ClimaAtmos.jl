@@ -14,7 +14,7 @@ value = 1.0e-5
 value = 0.7
 
 [entr_inv_tau]
-value = 0.0001
+value = 0
 
 [entr_coeff]
 value = 0.1

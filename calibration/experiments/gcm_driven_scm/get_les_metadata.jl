@@ -3,16 +3,113 @@ using Glob
 """
 """
 
-function get_les_calibration_library()
+# cfSite numbers
+CFSITE_TYPES = Dict(
+    "shallow" => (collect(4:15)..., collect(17:23)...),
+    "deep" =>
+        (collect(30:33)..., collect(66:70)..., 82, 92, 94, 96, 99, 100),
+)
+
+function get_les_calibration_library_tmp()
     les_library = get_shallow_LES_library()
-    # AMIP4K data: July, NE Pacific
-    cfsite_numbers = (17, 23)
+    # AMIP data: July, NE Pacific
+    # cfsite_numbers = (17, 18, 22, 23, 30, 94)
+    # cfsite_numbers = (17, 22, 23, 30, 33, 94)
+    # cfsite_numbers = (17, 21, 23, 30, 33)# 94)
+    # cfsite_numbers = (17, 23, 94) #baseline run
+    # cfsite_numbers = (17, 18, 21, 22, 23, 30, 94) #baseline run
+    # cfsite_numbers = (17, 18, 19, 21, 22, 23, 30, 33, 94)# 94)
+
+    cfsite_numbers = (18, 23, 33) #baseline run
+
+    # cfsite_numbers = (17, 30,)# 94)
     les_kwargs = (forcing_model = "HadGEM2-A", month = 7, experiment = "amip")
     ref_paths = [
         get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...)) for
         cfsite_number in cfsite_numbers
     ]
     return (ref_paths, cfsite_numbers)
+end
+
+"""
+    get_les_calibration_library(; max_cases = nothing, models = nothing)
+
+Collect AMIP LES stats paths and cfSite numbers across shallow and deep cases.
+Returns a tuple `(ref_dirs, cfsite_numbers)` where `ref_dirs::Vector{String}`
+are paths to stats files and `cfsite_numbers::Vector{Int}` are corresponding
+site IDs. Optionally limit to the first `max_cases` and/or a subset of models.
+
+Arguments:
+- max_cases: Optional `Int`. If provided, only the first N cases are returned.
+- models: Optional `String` or iterable of `String`. Restrict to these models.
+
+Examples:
+```julia
+# All models
+paths, sites = get_les_calibration_library()
+
+# Limit number of cases
+paths, sites = get_les_calibration_library(max_cases = 50)
+
+# Single model
+paths, sites = get_les_calibration_library(models = "HadGEM2-A")
+
+# Multiple models
+paths, sites = get_les_calibration_library(models = ["HadGEM2-A", "CNRM-CM5"])
+```
+"""
+function get_les_calibration_library(; max_cases = 120, models = "HadGEM2-A")
+    les_library = get_LES_library()
+
+    models_iter = models === nothing ? collect(keys(les_library)) :
+                 (isa(models, AbstractString) ? [models] : collect(models))
+    for m in models_iter
+        @assert haskey(les_library, m) "Model $(m) not found in LES library."
+    end
+
+    ref_dirs = []
+    cfsite_numbers = Int[]
+    for model in models_iter
+        for month in keys(les_library[model])
+            cfsite_numbers_month = map(
+                k -> parse(Int, k),
+                collect(keys(les_library[model][month]["cfsite_numbers"])),
+            )
+            les_kwargs = (
+                forcing_model = model,
+                month = parse(Int, month),
+                experiment = "amip",
+            )
+            paths_for_month = [
+                get_stats_path(
+                    get_cfsite_les_dir(cfsite_number; les_kwargs...),
+                ) for cfsite_number in cfsite_numbers_month
+            ]
+            append!(ref_dirs, paths_for_month)
+            append!(cfsite_numbers, cfsite_numbers_month)
+        end
+    end
+
+    if max_cases !== nothing
+        n = min(max_cases, length(ref_dirs))
+        ref_dirs = ref_dirs[1:n]
+        cfsite_numbers = cfsite_numbers[1:n]
+    end
+    return (ref_dirs, cfsite_numbers)
+end
+
+function get_cfsite_type(i, cfsite_numbers)
+    return get_cfsite_type(cfsite_numbers[i])
+end
+
+function get_cfsite_type(cfsite_number::Int)
+    if cfsite_number in CFSITE_TYPES["shallow"]
+        return "shallow"
+    elseif cfsite_number in CFSITE_TYPES["deep"]
+        return "deep"
+    else
+        @error "cfSite number $(cfsite_number) not found in available sites."
+    end
 end
 
 """
@@ -25,7 +122,18 @@ and experiments.
 """
 function get_LES_library()
     LES_library = get_shallow_LES_library()
-    deep_sites = (collect(30:33)..., collect(66:70)..., 82, 92, 94, 96, 99, 100)
+    deep_sites = deepcopy(CFSITE_TYPES["deep"])
+
+
+    # remove <0 ql/cli cases 
+    # sites_07 = deepcopy(setdiff(deep_sites, [92, 99, 100]))
+    # append!(LES_library["HadGEM2-A"]["07"]["cfsite_numbers"], sites_07)
+    # sites_01 = deepcopy(setdiff(deep_sites, [99,]))
+    # append!(LES_library["HadGEM2-A"]["01"]["cfsite_numbers"], sites_01)
+    # sites_04 = deepcopy(setdiff(deep_sites, [32, 92, 94, 96, 99, 100]))
+    # append!(LES_library["HadGEM2-A"]["04"]["cfsite_numbers"], sites_04)
+    # sites_10 = deepcopy(setdiff(deep_sites, [92, 94, 99, 100]))
+    # append!(LES_library["HadGEM2-A"]["10"]["cfsite_numbers"], sites_10)
 
     append!(LES_library["HadGEM2-A"]["07"]["cfsite_numbers"], deep_sites)
     append!(LES_library["HadGEM2-A"]["01"]["cfsite_numbers"], deep_sites)
@@ -33,6 +141,7 @@ function get_LES_library()
     append!(LES_library["HadGEM2-A"]["04"]["cfsite_numbers"], sites_04)
     sites_10 = deepcopy(setdiff(deep_sites, [94, 100]))
     append!(LES_library["HadGEM2-A"]["10"]["cfsite_numbers"], sites_10)
+
 
     LES_library_full = deepcopy(LES_library)
     for model in keys(LES_library_full)
@@ -103,8 +212,7 @@ function get_shallow_LES_library()
         "CNRM-CM5" => Dict(),
         "CNRM-CM6-1" => Dict(),
     )
-    Shen_et_al_sites = collect(4:15)
-    append!(Shen_et_al_sites, collect(17:23))
+    Shen_et_al_sites = collect(deepcopy(CFSITE_TYPES["shallow"]))
 
     # HadGEM2-A model (76 AMIP-AMIP4K pairs)
     LES_library["HadGEM2-A"]["10"] = Dict()
@@ -251,6 +359,7 @@ end
 
 function get_all_les_paths()
     NUM_LES_CASES = 176
+
     les_library = get_shallow_LES_library()
 
     ref_dirs = []
