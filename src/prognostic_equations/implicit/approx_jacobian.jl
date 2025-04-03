@@ -5,25 +5,22 @@ abstract type DerivativeFlag end
 struct UseDerivative <: DerivativeFlag end
 struct IgnoreDerivative <: DerivativeFlag end
 
+DerivativeFlag(value) = value ? UseDerivative() : IgnoreDerivative()
+DerivativeFlag(mode::AbstractTimesteppingMode) =
+    DerivativeFlag(mode == Implicit())
+
 use_derivative(::UseDerivative) = true
 use_derivative(::IgnoreDerivative) = false
 
-default_derivative_flag(value) = value ? UseDerivative() : IgnoreDerivative()
-default_derivative_flag(mode::AbstractTimesteppingMode) =
-    default_derivative_flag(mode == Implicit())
-
-derivative_flag(maybe_flag, default_value) =
-    isnothing(maybe_flag) ? default_derivative_flag(default_value) : maybe_flag
-
 """
-    ApproxJacobian(;
-        [topography_flag],
-        [diffusion_flag],
-        [sgs_advection_flag],
-        [sgs_entr_detr_flag],
-        [sgs_mass_flux_flag],
-        [sgs_nh_pressure_flag],
-        [approximate_solve_iters],
+    ApproxJacobian(
+        topography_flag,
+        diffusion_flag,
+        sgs_advection_flag,
+        sgs_entr_detr_flag,
+        sgs_mass_flux_flag,
+        sgs_nh_pressure_flag,
+        approximate_solve_iters,
     )
 
 A `JacobianAlgorithm` that approximates the `ImplicitEquationJacobian` using
@@ -31,7 +28,7 @@ analytically derived tendency derivatives and inverts it using a specialized
 nested linear solver. Certain groups of derivatives can be toggled on or off by
 setting their `DerivativeFlag`s to either `UseDerivative` or `IgnoreDerivative`.
 
-# Keyword Arguments
+# Arguments
 
 - `topography_flag::DerivativeFlag`: whether the derivative of vertical
   contravariant velocity with respect to horizontal covariant velocity should be
@@ -49,29 +46,23 @@ setting their `DerivativeFlag`s to either `UseDerivative` or `IgnoreDerivative`.
 - `approximate_solve_iters::Int`: number of iterations to take for the
   approximate linear solve required when the `diffusion_flag` is `UseDerivative`
 """
-@kwdef struct ApproxJacobian{F1, F2, F3, F4, F5, F6} <: JacobianAlgorithm
-    topography_flag::F1 = nothing
-    diffusion_flag::F2 = nothing
-    sgs_advection_flag::F3 = nothing
-    sgs_entr_detr_flag::F4 = nothing
-    sgs_mass_flux_flag::F5 = nothing
-    sgs_nh_pressure_flag::F6 = nothing
-    approximate_solve_iters::Int = 1
+struct ApproxJacobian{F1, F2, F3, F4, F5, F6} <: JacobianAlgorithm
+    topography_flag::F1
+    diffusion_flag::F2
+    sgs_advection_flag::F3
+    sgs_entr_detr_flag::F4
+    sgs_mass_flux_flag::F5
+    sgs_nh_pressure_flag::F6
+    approximate_solve_iters::Int
 end
 
 function jacobian_cache(alg::ApproxJacobian, Y, atmos)
-    topography_flag =
-        derivative_flag(alg.topography_flag, has_topography(axes(Y.c)))
-    diffusion_flag = derivative_flag(alg.diffusion_flag, atmos.diff_mode)
-    sgs_advection_flag =
-        derivative_flag(alg.sgs_advection_flag, atmos.sgs_adv_mode)
-    sgs_entr_detr_flag =
-        derivative_flag(alg.sgs_entr_detr_flag, atmos.sgs_entr_detr_mode)
-    sgs_mass_flux_flag =
-        derivative_flag(alg.sgs_mass_flux_flag, atmos.sgs_mf_mode)
-    sgs_nh_pressure_flag =
-        derivative_flag(alg.sgs_mass_flux_flag, atmos.sgs_nh_pressure_mode)
-
+    (;
+        topography_flag,
+        diffusion_flag,
+        sgs_advection_flag,
+        sgs_mass_flux_flag,
+    ) = alg
     FT = Spaces.undertype(axes(Y.c))
     CTh = CTh_vector_type(axes(Y.c))
 
@@ -332,22 +323,35 @@ function jacobian_cache(alg::ApproxJacobian, Y, atmos)
             MatrixFields.BlockArrowheadSolve(names₁...; alg₂)
         end
 
+    # TODO: Fix bug in ClimaCore's column function, so that we can use
+    # lazy.((matrix .+ identity_matrix(Y)) ./ dtγ) instead of preallocating.
+    temp_matrix = (matrix .+ identity_matrix(matrix, Y)) ./ FT(1)
+
     return (;
-        topography_flag,
-        diffusion_flag,
-        sgs_advection_flag,
-        sgs_entr_detr_flag,
-        sgs_mass_flux_flag,
-        sgs_nh_pressure_flag,
         matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, solver_alg),
+        temp_matrix,
     )
 end
 
-always_update_exact_jacobian(::ApproxJacobian) = false
+# TODO: Replace some scalar matrix entries with tensor entries so that we can
+# use MatrixFields.identity_field_matrix(Y) instead of identity_matrix(Y).
+function identity_matrix(matrix, Y)
+    I_matrix = MatrixFields.identity_field_matrix(Y)
+    new_pairs = MatrixFields.unrolled_map(pairs(I_matrix)) do (key, value)
+        replace_tensor_value_with_scalar_value =
+            key == (@name(c.uₕ), @name(c.uₕ)) || (
+                key == (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) &&
+                matrix[key] isa LinearAlgebra.UniformScaling
+            )
+        key => (replace_tensor_value_with_scalar_value ? I : value)
+    end
+    return MatrixFields.replace_name_tree(
+        MatrixFields.FieldMatrix(new_pairs...),
+        MatrixFields.FieldNameTree(Y),
+    )
+end
 
-factorize_exact_jacobian!(::ApproxJacobian, _, _, _, _, _) = nothing
-
-function approximate_jacobian!(::ApproxJacobian, cache, Y, p, dtγ, t)
+function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
     (;
         topography_flag,
         diffusion_flag,
@@ -355,8 +359,8 @@ function approximate_jacobian!(::ApproxJacobian, cache, Y, p, dtγ, t)
         sgs_entr_detr_flag,
         sgs_nh_pressure_flag,
         sgs_mass_flux_flag,
-        matrix,
-    ) = cache
+    ) = alg
+    (; matrix) = cache
     (; params) = p
     (; ᶜΦ, ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜspecific, ᶠu³, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
@@ -382,7 +386,6 @@ function approximate_jacobian!(::ApproxJacobian, cache, Y, p, dtγ, t)
     Δcv_v = FT(CAP.cv_v(params)) - cv_d
     T_0 = FT(CAP.T_0(params))
     R_d = FT(CAP.R_d(params))
-    ΔR_v = FT(CAP.R_v(params)) - R_d
     cp_d = FT(CAP.cp_d(params))
     # This term appears a few times in the Jacobian, and is technically
     # minus ∂e_int_∂q_tot
@@ -402,13 +405,6 @@ function approximate_jacobian!(::ApproxJacobian, cache, Y, p, dtγ, t)
     ᶜkappa_m = p.scratch.ᶜtemp_scalar
     @. ᶜkappa_m =
         TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts)
-
-    ᶜdkappa_m = p.scratch.ᶜtemp_scalar_2
-    @. ᶜdkappa_m =
-        (
-            ΔR_v * TD.cv_m(thermo_params, ᶜts) -
-            Δcv_v * TD.gas_constant_air(thermo_params, ᶜts)
-        ) / (TD.cv_m(thermo_params, ᶜts)^2)
 
     if use_derivative(topography_flag)
         @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
@@ -466,10 +462,7 @@ function approximate_jacobian!(::ApproxJacobian, cache, Y, p, dtγ, t)
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
         ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
         @. ∂ᶠu₃_err_∂ᶜρq_tot =
-            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(
-                ᶜkappa_m * ∂e_int_∂q_tot +
-                ᶜdkappa_m * (cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ),
-            )
+            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m * ∂e_int_∂q_tot)
     end
 
     ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
@@ -1003,5 +996,162 @@ function approximate_jacobian!(::ApproxJacobian, cache, Y, p, dtγ, t)
     zero_velocity_jacobian!(matrix, Y, p, t)
 end
 
-invert_jacobian!(::ApproxJacobian, cache, x, b) =
-    LinearAlgebra.ldiv!(x, cache.matrix, b)
+invert_jacobian!(::ApproxJacobian, cache, ΔY, R) =
+    LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
+
+# TODO: Rewrite the plotting infrastructure to handle `FieldMatrix`, so that we
+# can avoid inefficiently converting the approximate Jacobian to a dense matrix.
+function save_jacobian(alg::ApproxJacobian, cache, Y, dtγ, t)
+    (; matrix, temp_matrix, column_matrix) = cache
+    temp_matrix .= (matrix .+ identity_matrix(matrix, Y)) ./ dtγ
+    one_column = length(column_iterator(Y)) == 1
+
+    field_matrix_to_dense_matrix!(column_matrix, temp_matrix, Y, :first)
+    file_name = "approx_jacobian" * (one_column ? "" : "_first")
+    description =
+        "Approximate ∂Yₜ/∂Y matrix" *
+        (one_column ? "" : " at $(first_column_coordinate_string(Y))")
+    save_column_matrix(cache, file_name, description, Y, t)
+
+    if !one_column
+        field_matrix_to_dense_matrix!(column_matrix, temp_matrix, Y, :abs_max)
+        file_name = "approx_jacobian_max"
+        description = "Maximum of approximate ∂Yₜ/∂Y matrix over all columns"
+        save_column_matrix(cache, file_name, description, Y, t)
+
+        field_matrix_to_dense_matrix!(column_matrix, temp_matrix, Y, :abs_avg)
+        file_name = "approx_jacobian_avg"
+        description = "Average of approximate ∂Yₜ/∂Y matrix over all columns"
+        save_column_matrix(cache, file_name, description, Y, t)
+    end
+end
+
+# TODO: Remove all of the following code after extending ClimaCore.MatrixFields.
+
+tensor_axes_tuple(::Type{T}) where {T} =
+    T <: Geometry.AxisTensor ?
+    map(axis -> typeof(axis).parameters[1], axes(T)) : ()
+
+primitive_value_at_index(value, (row_axes, col_axes)) =
+    if isprimitivetype(typeof(value)) # same as a LinearAlgebra.UniformScaling
+        row_axes == col_axes ? value : zero(value)
+    elseif value isa Geometry.AxisVector
+        @assert isprimitivetype(eltype(value))
+        @assert length(row_axes) == 1 && length(col_axes) == 0
+        value_axes = tensor_axes_tuple(typeof(value))
+        row_axis_index = findfirst(==(row_axes[1]), value_axes[1])
+        isnothing(row_axis_index) ? zero(eltype(value)) : value[row_axis_index]
+    elseif value isa Geometry.AxisTensor
+        @assert isprimitivetype(eltype(value))
+        @assert length(row_axes) == 1 && length(col_axes) == 1
+        value_axes = tensor_axes_tuple(typeof(value))
+        row_axis_index = findfirst(==(row_axes[1]), value_axes[1])
+        col_axis_index = findfirst(==(col_axes[1]), value_axes[2])
+        isnothing(row_axis_index) || isnothing(col_axis_index) ?
+        zero(eltype(value)) : value[row_axis_index, col_axis_index]
+    elseif value isa LinearAlgebra.Adjoint
+        primitive_value_at_index(parent(value), (col_axes, row_axes))
+    else
+        sub_names = fieldnames(typeof(value))
+        sub_values =
+            MatrixFields.unrolled_map(Base.Fix1(getfield, value), sub_names)
+        nonempty_sub_values =
+            MatrixFields.unrolled_filter(x -> sizeof(x) > 0, sub_values)
+        @assert length(nonempty_sub_values) == 1
+        primitive_value_at_index(nonempty_sub_values[1], (row_axes, col_axes))
+    end
+
+@static if hasfield(Method, :recursion_relation)
+    for method in methods(primitive_value_at_index)
+        method.recursion_relation = Returns(true)
+    end
+end
+
+function field_matrix_to_dense_matrix!(out, matrix, Y, column_reduce_flag)
+    device = ClimaComms.device(Y.c) # ClimaComms.device(Y)
+    field_names = scalar_field_names(Y)
+    index_ranges = scalar_field_index_ranges(Y)
+    out .= 0
+
+    for ((block_row, block_col), matrix_block) in matrix
+        is_child_name_of_row = Base.Fix2(MatrixFields.is_child_name, block_row)
+        is_child_name_of_col = Base.Fix2(MatrixFields.is_child_name, block_col)
+        subblock_row_indices = findall(is_child_name_of_row, field_names)
+        subblock_col_indices = findall(is_child_name_of_col, field_names)
+        block_row_field = MatrixFields.get_field(Y, block_row)
+        block_col_field = MatrixFields.get_field(Y, block_col)
+
+        for (sub_row, subblock_row_index) in enumerate(subblock_row_indices)
+            for (sub_col, subblock_col_index) in enumerate(subblock_col_indices)
+                row_index_range = index_ranges[subblock_row_index]
+                col_index_range = index_ranges[subblock_col_index]
+                out_subblock = view(out, row_index_range, col_index_range)
+
+                if matrix_block isa LinearAlgebra.UniformScaling
+                    view(out_subblock, LinearAlgebra.diagind(out_subblock)) .=
+                        sub_row == sub_col ? matrix_block.λ :
+                        zero(matrix_block.λ)
+                else
+                    subblock_row_axes = map(
+                        Base.Fix2(getindex, sub_row),
+                        tensor_axes_tuple(eltype(block_row_field)),
+                    )
+                    subblock_col_axes = map(
+                        Base.Fix2(getindex, sub_col),
+                        tensor_axes_tuple(eltype(block_col_field)),
+                    )
+                    @assert length(subblock_row_axes) in (0, 1)
+                    @assert length(subblock_col_axes) in (0, 1)
+                    value_in_subblock = Base.Fix2(
+                        primitive_value_at_index,
+                        (subblock_row_axes, subblock_col_axes),
+                    )
+
+                    column_blocks = column_iterator(matrix_block)
+                    if column_reduce_flag == :first
+                        column_subblock =
+                            map.(value_in_subblock, first(column_blocks))
+                    else
+                        column_subblock =
+                            map.(abs ∘ value_in_subblock, first(column_blocks))
+                        column_subblock_data = Fields.todata(column_subblock)
+                        if column_reduce_flag == :abs_max
+                            for new_column_block in Base.rest(column_blocks)
+                                new_column_block_data =
+                                    Fields.todata(new_column_block)
+                                column_subblock_data .=
+                                    map.(
+                                        max,
+                                        map.(abs, column_subblock_data),
+                                        map.(
+                                            abs ∘ value_in_subblock,
+                                            new_column_block_data,
+                                        ),
+                                    )
+                            end
+                        else
+                            @assert column_reduce_flag == :abs_avg
+                            for new_column_block in Base.rest(column_blocks)
+                                new_column_block_data =
+                                    Fields.todata(new_column_block)
+                                column_subblock_data .+=
+                                    map.(
+                                        abs ∘ value_in_subblock,
+                                        new_column_block_data,
+                                    )
+                            end
+                            column_subblock ./= length(column_blocks)
+                        end
+                    end
+
+                    ClimaComms.allowscalar(
+                        copyto!,
+                        device,
+                        out_subblock,
+                        MatrixFields.column_field2array_view(column_subblock),
+                    ) # BandedMatrices.jl does not properly support CuArrays.
+                end
+            end
+        end
+    end
+end

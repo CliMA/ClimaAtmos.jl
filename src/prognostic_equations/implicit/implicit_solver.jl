@@ -1,5 +1,6 @@
 import ForwardDiff
 import ClimaCore.MatrixFields: @name
+import ClimaCore.InputOutput: HDF5, HDF5Writer
 
 """
     JacobianAlgorithm
@@ -7,11 +8,12 @@ import ClimaCore.MatrixFields: @name
 A description of how to compute the matrix ``∂R/∂Y``, where ``R(Y)`` denotes the
 residual of an implicit step with the state ``Y``. Concrete implementations of
 this abstract type should define 4 methods:
- - `jacobian_cache(alg::JacobianAlgorithm, Y, p)`
- - `always_update_exact_jacobian(alg::JacobianAlgorithm)`
- - `factorize_exact_jacobian!(alg::JacobianAlgorithm, cache, Y, p, dtγ, t)`
- - `approximate_jacobian!(alg::JacobianAlgorithm, cache, Y, p, dtγ, t)`
- - `invert_jacobian!(alg::JacobianAlgorithm, cache, x, b)`
+ - `jacobian_cache(alg::JacobianAlgorithm, Y, atmos)`
+ - `update_jacobian!(alg::JacobianAlgorithm, cache, Y, p, dtγ, t)`
+ - `invert_jacobian!(alg::JacobianAlgorithm, cache, ΔY, R)`
+ - `save_jacobian(alg::JacobianAlgorithm, cache, Y, p, dtγ, t)`
+An additional method can also be defined to enable debugging of the Jacobian:
+ - `update_and_check_jacobian!(alg::JacobianAlgorithm, cache, Y, p, dtγ, t)`
 
 # Background
 
@@ -69,67 +71,100 @@ iterations is reached.
 abstract type JacobianAlgorithm end
 
 """
-    ImplicitEquationJacobian(alg, Y, atmos)
+    ImplicitEquationJacobian(alg, Y, atmos, output_dir)
 
 Wrapper for a `JacobianAlgorithm` and its cache, which it uses to update and
-invert the Jacobian.
+invert the Jacobian. The `output_dir` is the directory used for saving plots.
 """
 struct ImplicitEquationJacobian{A <: JacobianAlgorithm, C}
     alg::A
     cache::C
 end
-function ImplicitEquationJacobian(alg, Y, atmos)
-    cache = (;
-        jacobian_cache(alg, Y, atmos)...,
-        x_krylov = similar(Y),
-        b_krylov = similar(Y),
-    )
+function ImplicitEquationJacobian(alg, Y, atmos, output_dir)
+    FT = eltype(Y)
+    DA = ClimaComms.array_type(Y)
+    n_εs = length(first(column_iterator(Y)))
+    column_matrix = DA{FT}(undef, n_εs, n_εs)
+    cpu_column_matrix = DA <: Array ? nothing : Array{FT}(undef, n_εs, n_εs)
+    plotting_cache = (; column_matrix, cpu_column_matrix, output_dir)
+    krylov_cache = (; ΔY_krylov = similar(Y), R_krylov = similar(Y))
+    cache =
+        (; jacobian_cache(alg, Y, atmos)..., plotting_cache..., krylov_cache...)
     return ImplicitEquationJacobian(alg, cache)
 end
 
-# ClimaTimeSteppers.jl requires us to pass jac_prototype and internally calls
-# zero(jac_prototype), but we don't have to allocate a second Jacobian.
-Base.zero(A::ImplicitEquationJacobian) = A
+# ClimaTimeSteppers.jl calls zero(jac_prototype) to initialize the Jacobian, but
+# we don't need to allocate a second Jacobian for this (in particular, the exact
+# Jacobian can be very expensive to allocate).
+Base.zero(jacobian::ImplicitEquationJacobian) = jacobian
 
-# This is called from a callback when always_update_exact_jacobian is false.
-NVTX.@annotate function update_exact_jacobian!(A, Y, p, dtγ, t)
-    @assert !always_update_exact_jacobian(A.alg)
-    FT = eltype(Y)
-    factorize_exact_jacobian!(A.alg, A.cache, Y, p, FT(dtγ), t)
-end
+# These are either called by ClimaTimeSteppers.jl before each linear solve, or
+# by a callback once every dt_update_exact_jacobian.
+NVTX.@annotate update_jacobian!(jacobian, Y, p, dtγ, t) =
+    update_jacobian!(jacobian.alg, jacobian.cache, Y, p, eltype(Y)(dtγ), t)
+NVTX.@annotate update_and_check_jacobian!(jacobian, Y, p, dtγ, t) =
+    update_and_check_jacobian!(
+        jacobian.alg,
+        jacobian.cache,
+        Y,
+        p,
+        eltype(Y)(dtγ),
+        t,
+    )
 
-# This is called directly when the Jacobian must be saved to output at t = 0.
-NVTX.@annotate function update_jacobian_init!(A, Y, p, dtγ, t)
-    @assert iszero(t)
-    FT = eltype(Y)
-    factorize_exact_jacobian!(A.alg, A.cache, Y, p, FT(dtγ), t)
-    approximate_jacobian!(A.alg, A.cache, Y, p, FT(dtγ), t)
-end
-
-# This is passed to ClimaTimeSteppers.jl and called on each Newton iteration.
-NVTX.@annotate function update_jacobian!(A, Y, p, dtγ, t)
-    FT = eltype(Y)
-    always_update_exact_jacobian(A.alg) &&
-        factorize_exact_jacobian!(A.alg, A.cache, Y, p, FT(dtγ), t)
-    approximate_jacobian!(A.alg, A.cache, Y, p, FT(dtγ), t)
-end
-
-# This is called by ClimaTimeSteppers.jl on each Newton iteration.
+# This is called by ClimaTimeSteppers.jl before each linear solve.
 NVTX.@annotate LinearAlgebra.ldiv!(
-    x::Fields.FieldVector,
-    A::ImplicitEquationJacobian,
-    b::Fields.FieldVector,
-) = invert_jacobian!(A.alg, A.cache, x, b)
+    ΔY::Fields.FieldVector,
+    jacobian::ImplicitEquationJacobian,
+    R::Fields.FieldVector,
+) = invert_jacobian!(jacobian.alg, jacobian.cache, ΔY, R)
 
 # This is called by Krylov.jl from inside ClimaTimeSteppers.jl. See
 # https://github.com/JuliaSmoothOptimizers/Krylov.jl/issues/605 for a related
 # issue that requires the same workaround.
 function LinearAlgebra.ldiv!(
-    x::AbstractVector,
-    A::ImplicitEquationJacobian,
-    b::AbstractVector,
+    ΔY::AbstractVector,
+    jacobian::ImplicitEquationJacobian,
+    R::AbstractVector,
 )
-    A.cache.b_krylov .= b
-    LinearAlgebra.ldiv!(A.cache.x_krylov, A, A.cache.b_krylov)
-    x .= A.cache.x_krylov
+    (; ΔY_krylov, R_krylov) = jacobian.cache
+    R_krylov .= R
+    LinearAlgebra.ldiv!(ΔY_krylov, jacobian, R_krylov)
+    ΔY .= ΔY_krylov
+end
+
+# This is called by a callback once every dt_save_jacobian.
+NVTX.@annotate save_jacobian(jacobian, Y, dtγ, t) =
+    save_jacobian(jacobian.alg, jacobian.cache, Y, eltype(Y)(dtγ), t)
+
+# Helper functions used to implement save_jacobian.
+function first_column_coordinate_string(Y)
+    coord_field =
+        Fields.coordinate_field(Fields.level(Fields.column(Y.c, 1, 1, 1), 1))
+    coord =
+        ClimaComms.allowscalar(getindex, ClimaComms.device(Y.c), coord_field)
+    round_value(value) = round(value; sigdigits = 3)
+    return if coord isa Geometry.XZPoint
+        "x = $(round_value(coord.x)) Meters"
+    elseif coord isa Geometry.XYZPoint
+        "x = $(round_value(coord.x)) Meters, y = $(round_value(coord.y)) Meters"
+    elseif coord isa Geometry.LatLongZPoint
+        "lat = $(round_value(coord.lat))°, long = $(round_value(coord.long))°"
+    else
+        error("Unrecognized coordinate type $(typeof(coord))")
+    end
+end
+function save_column_matrix(cache, file_name, description, Y, t)
+    (; column_matrix, cpu_column_matrix, output_dir) = cache
+    matrix_to_save =
+        column_matrix isa Array ? column_matrix :
+        copyto!(cpu_column_matrix, column_matrix)
+    file_name = joinpath(output_dir, file_name * ".hdf5")
+    HDF5Writer(file_name, ClimaComms.context(Y.c); overwrite = false) do writer
+        writer.file[string(float(t))] = matrix_to_save
+        attributes = HDF5.attributes(writer.file)
+        if !(haskey(attributes, "description"))
+            attributes["description"] = description
+        end
+    end
 end

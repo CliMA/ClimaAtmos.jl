@@ -1,6 +1,7 @@
 using Dates: DateTime, @dateformat_str
 import Interpolations
 import NCDatasets
+import DiffEqBase
 import ClimaCore
 import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
@@ -10,7 +11,7 @@ import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
 import Logging
 
-import ClimaUtilities.TimeManager: ITime, seconds
+import ClimaUtilities.TimeManager: ITime
 
 import ClimaDiagnostics
 
@@ -402,27 +403,38 @@ function get_surface_setup(parsed_args)
     return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
 end
 
-get_jacobian(ode_algo, Y, atmos, parsed_args) =
+get_jacobian(ode_algo, Y, atmos, parsed_args, output_dir) =
     if ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm}
+        approx_jacobian_algorithm = ApproxJacobian(
+            DerivativeFlag(has_topography(axes(Y.c))),
+            DerivativeFlag(atmos.diff_mode),
+            DerivativeFlag(atmos.sgs_adv_mode),
+            DerivativeFlag(atmos.sgs_entr_detr_mode),
+            DerivativeFlag(atmos.sgs_mf_mode),
+            DerivativeFlag(atmos.sgs_nh_pressure_mode),
+            parsed_args["approximate_linear_solve_iters"],
+        )
         use_exact_jacobian = parsed_args["use_exact_jacobian"]
-        only_first_column = parsed_args["debug_approximate_jacobian"]
-        always_update_exact_jacobian =
-            parsed_args["n_steps_update_exact_jacobian"] == 0
-        exact_jacobian_alg =
-            ExactJacobian(; only_first_column, always_update_exact_jacobian)
-        approximate_solve_iters = parsed_args["approximate_linear_solve_iters"]
-        approx_jacobian_alg = ApproxJacobian(; approximate_solve_iters)
-        jacobian_algorithm = if parsed_args["debug_approximate_jacobian"]
+        debug_approximate_jacobian = parsed_args["debug_approximate_jacobian"]
+        jacobian_algorithm = if debug_approximate_jacobian
+            # Debug one column when using GPUs or when there are many columns.
+            only_debug_first_column_jacobian =
+                isnothing(parsed_args["only_debug_first_column_jacobian"]) ?
+                ClimaComms.device(Y.c) isa ClimaComms.CUDADevice ||
+                Fields.ncolumns(axes(Y.c)) > 10000 :
+                parsed_args["only_debug_first_column_jacobian"]
             DebugJacobian(
-                exact_jacobian_alg,
-                approx_jacobian_alg;
+                approx_jacobian_algorithm,
                 use_exact_jacobian,
+                only_debug_first_column_jacobian,
             )
+        elseif use_exact_jacobian
+            ExactJacobian()
         else
-            use_exact_jacobian ? exact_jacobian_alg : approx_jacobian_alg
+            approx_jacobian_algorithm
         end
-        @info "Jacobian algorithm: $(dump_string(jacobian_algorithm))"
-        ImplicitEquationJacobian(jacobian_algorithm, Y, atmos)
+        @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
+        ImplicitEquationJacobian(jacobian_algorithm, Y, atmos, output_dir)
     else
         nothing
     end
@@ -608,13 +620,41 @@ function get_sim_info(config::AtmosConfig)
     return sim
 end
 
-function args_integrator(parsed_args, Y, p, tspan, ode_algo, jacobian, callback)
-    (; dt) = p
+function args_integrator(parsed_args, Y, p, sim_info, ode_algo, callback)
+    (; dt, atmos) = p
+    (; t_start, t_end, output_dir) = sim_info
+    use_exact_jacobian = parsed_args["use_exact_jacobian"]
+    debug_approximate_jacobian = parsed_args["debug_approximate_jacobian"]
+    need_to_update_exact_jacobian_before_each_solve =
+        (
+            use_exact_jacobian &&
+            isnothing(parsed_args["dt_update_exact_jacobian"])
+        ) || (
+            (debug_approximate_jacobian || use_exact_jacobian) &&
+            !isnothing(parsed_args["dt_update_exact_jacobian"]) &&
+            time_to_seconds(parsed_args["dt_update_exact_jacobian"]) <
+            time_to_seconds(parsed_args["dt"])
+        )
+    update_jacobian_before_each_solve! =
+        if need_to_update_exact_jacobian_before_each_solve
+            debug_approximate_jacobian ? update_and_check_jacobian! :
+            update_jacobian!
+        elseif !use_exact_jacobian
+            update_jacobian!
+        else
+            Returns(nothing) # Update the exact Jacobian in a separate callback.
+        end
     s = @timed_str begin
         T_imp! = SciMLBase.ODEFunction(
             implicit_tendency!;
-            jac_prototype = jacobian,
-            Wfact = update_jacobian!,
+            jac_prototype = get_jacobian(
+                ode_algo,
+                Y,
+                atmos,
+                parsed_args,
+                output_dir,
+            ),
+            Wfact = update_jacobian_before_each_solve!,
         )
         tendency_function = CTS.ClimaODEFunction(;
             T_exp_T_lim! = remaining_tendency!,
@@ -626,10 +666,10 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, jacobian, callback)
         )
     end
     @info "Define ode function: $s"
-    problem = SciMLBase.ODEProblem(tendency_function, Y, tspan, p)
-    t_begin, t_end, _ = promote(tspan[1], tspan[2], dt)
+    problem = SciMLBase.ODEProblem(tendency_function, Y, (t_start, t_end), p)
+    t_start, t_end, _ = promote(t_start, t_end, dt)
     # Save solution to integrator.sol at the beginning and end
-    saveat = [t_begin, t_end]
+    saveat = [t_start, t_end]
     args = (problem, ode_algo)
     kwargs = (;
         saveat,
@@ -724,21 +764,9 @@ function get_simulation(config::AtmosConfig)
         )
     end
 
-    FT = Spaces.undertype(axes(Y.c))
-
     tracers = get_tracers(config.parsed_args)
     steady_state_velocity =
         get_steady_state_velocity(params, Y, config.parsed_args)
-
-    s = @timed_str begin
-        ode_algo = ode_configuration(FT, config.parsed_args)
-    end
-    @info "ode_configuration: $s"
-
-    s = @timed_str begin
-        jacobian = get_jacobian(ode_algo, Y, atmos, config.parsed_args)
-    end
-    @info "Allocating jacobian: $s"
 
     s = @timed_str begin
         p = build_cache(
@@ -749,7 +777,6 @@ function get_simulation(config::AtmosConfig)
             sim_info,
             tracers.aerosol_names,
             steady_state_velocity,
-            jacobian,
         )
     end
     @info "Allocating cache (p): $s"
@@ -757,6 +784,12 @@ function get_simulation(config::AtmosConfig)
     if config.parsed_args["discrete_hydrostatic_balance"]
         set_discrete_hydrostatic_balanced_state!(Y, p)
     end
+
+    FT = Spaces.undertype(axes(Y.c))
+    s = @timed_str begin
+        ode_algo = ode_configuration(FT, config.parsed_args)
+    end
+    @info "ode_configuration: $s"
 
     s = @timed_str begin
         callback = get_callbacks(config, sim_info, atmos, params, Y, p)
@@ -811,15 +844,13 @@ function get_simulation(config::AtmosConfig)
     @info "n_steps_per_cycle_per_cb (non diagnostics): $steps_cycle_non_diag"
     @info "n_steps_per_cycle (non diagnostics): $steps_cycle"
 
-    tspan = (sim_info.t_start, sim_info.t_end)
     s = @timed_str begin
         integrator_args, integrator_kwargs = args_integrator(
             config.parsed_args,
             Y,
             p,
-            tspan,
+            sim_info,
             ode_algo,
-            jacobian,
             all_callbacks,
         )
     end
@@ -830,13 +861,6 @@ function get_simulation(config::AtmosConfig)
     @info "init integrator: $s"
 
     if config.parsed_args["enable_diagnostics"]
-        short_names =
-            map(diag -> diag.variable.short_name, scheduled_diagnostics)
-        if "ejac1" in short_names || "ajac1" in short_names
-            # TODO: Only do this if the Jacobian needs to be saved at t = 0.
-            update_jacobian_init!(integrator)
-        end
-
         s = @timed_str begin
             integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
                 integrator,

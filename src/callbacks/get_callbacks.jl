@@ -175,63 +175,18 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
     # Flatten the array of arrays of diagnostics
     diagnostics = vcat(diagnostics_ragged...)
 
-    t_span =
-        dt isa ITime ? ITime(time_to_seconds(parsed_args["t_end"])) - t_start :
-        FT(time_to_seconds(parsed_args["t_end"]) - t_start)
-
     if parsed_args["output_default_diagnostics"]
         diagnostics = [
             CAD.default_diagnostics(
                 atmos_model,
-                t_span,
+                sim_info.dt isa ITime ?
+                ITime(time_to_seconds(parsed_args["t_end"])) - t_start :
+                FT(time_to_seconds(parsed_args["t_end"]) - t_start),
                 start_date;
                 output_writer = netcdf_writer,
             )...,
             diagnostics...,
         ]
-    end
-    if parsed_args["output_default_diagnostics"] && (
-        parsed_args["use_exact_jacobian"] ||
-        parsed_args["debug_approximate_jacobian"]
-    )
-        t_span_seconds = dt isa ITime ? seconds(t_span) : t_span
-        dt_seconds = dt isa ITime ? seconds(dt) : dt
-        save_jac_period =
-            min(
-                max(
-                    1,
-                    parsed_args["n_steps_update_exact_jacobian"],
-                    floor(Int, t_span_seconds / (5 * dt_seconds)),
-                ),
-                floor(Int, t_span_seconds / dt_seconds),
-            ) * dt # Save at least 2 Jacobians, and no more than 6.
-        schedule = CAD.EveryDtSchedule(save_jac_period)
-        exact_jacobian_diagnostic = CAD.ScheduledDiagnostic(;
-            variable = CAD.get_diagnostic_variable("ejac1"),
-            output_schedule_func = schedule,
-            compute_schedule_func = deepcopy(schedule),
-            output_writer = dict_writer,
-        )
-        diagnostics = [diagnostics..., exact_jacobian_diagnostic]
-        if parsed_args["debug_approximate_jacobian"]
-            approx_jacobian_diagnostic = CAD.ScheduledDiagnostic(;
-                variable = CAD.get_diagnostic_variable("ajac1"),
-                output_schedule_func = deepcopy(schedule),
-                compute_schedule_func = deepcopy(schedule),
-                output_writer = dict_writer,
-            )
-            approx_jacobian_error_diagnostic = CAD.ScheduledDiagnostic(;
-                variable = CAD.get_diagnostic_variable("ajacerr1"),
-                output_schedule_func = deepcopy(schedule),
-                compute_schedule_func = deepcopy(schedule),
-                output_writer = dict_writer,
-            )
-            diagnostics = [
-                diagnostics...,
-                approx_jacobian_diagnostic,
-                approx_jacobian_error_diagnostic,
-            ]
-        end
     end
 
     periods_reductions = Set()
@@ -381,30 +336,6 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
             (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
     end
 
-    if (
-        parsed_args["use_exact_jacobian"] ||
-        parsed_args["debug_approximate_jacobian"]
-    ) && parsed_args["n_steps_update_exact_jacobian"] != 0
-        t_span =
-            dt isa ITime ?
-            ITime(time_to_seconds(parsed_args["t_end"])) - t_start :
-            FT(time_to_seconds(parsed_args["t_end"]) - t_start)
-        t_span_seconds = dt isa ITime ? seconds(t_span) : t_span
-        dt_seconds = dt isa ITime ? seconds(dt) : dt
-        update_jac_steps = min(
-            max(
-                1,
-                parsed_args["n_steps_update_exact_jacobian"],
-                floor(Int, t_span_seconds / (5 * dt_seconds)),
-            ),
-            floor(Int, t_span_seconds / dt_seconds),
-        ) # TODO: Get rid of this.
-        callbacks = (
-            callbacks...,
-            call_every_n_steps(update_exact_jacobian!, update_jac_steps),
-        )
-    end
-
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         dt_rad =
             dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_rad"])) :
@@ -420,6 +351,49 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
 
         callbacks =
             (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
+    end
+
+    use_exact_jacobian = parsed_args["use_exact_jacobian"]
+    debug_approximate_jacobian = parsed_args["debug_approximate_jacobian"]
+    need_to_update_exact_jacobian_in_callback =
+        (
+            (debug_approximate_jacobian && !use_exact_jacobian) &&
+            isnothing(parsed_args["dt_update_exact_jacobian"])
+        ) || (
+            (debug_approximate_jacobian || use_exact_jacobian) &&
+            !isnothing(parsed_args["dt_update_exact_jacobian"]) &&
+            time_to_seconds(parsed_args["dt_update_exact_jacobian"]) >=
+            time_to_seconds(parsed_args["dt"])
+        )
+    need_to_save_jacobian =
+        isnothing(parsed_args["plot_jacobian"]) ? debug_approximate_jacobian :
+        parsed_args["plot_jacobian"]
+    dt_save_jacobian = if isnothing(parsed_args["dt_save_jacobian"])
+        (t_end - t_start) ÷ 5
+    else
+        dt isa ITime ?
+        ITime(time_to_seconds(parsed_args["dt_save_jacobian"])) :
+        FT(time_to_seconds(parsed_args["dt_save_jacobian"]))
+    end
+    dt_update_jacobian = if isnothing(parsed_args["dt_update_exact_jacobian"])
+        dt_save_jacobian
+    else
+        dt isa ITime ?
+        ITime(time_to_seconds(parsed_args["dt_update_exact_jacobian"])) :
+        FT(time_to_seconds(parsed_args["dt_update_exact_jacobian"]))
+    end
+    if need_to_update_exact_jacobian_in_callback
+        update_jacobian_in_callback! =
+            debug_approximate_jacobian ? update_and_check_jacobian! :
+            update_jacobian!
+        callbacks = (
+            callbacks...,
+            call_every_dt(update_jacobian_in_callback!, dt_update_jacobian),
+        )
+    end
+    if need_to_save_jacobian
+        callbacks =
+            (callbacks..., call_every_dt(save_jacobian, dt_save_jacobian))
     end
 
     return callbacks

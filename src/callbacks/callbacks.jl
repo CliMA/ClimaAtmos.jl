@@ -455,13 +455,26 @@ function gc_func(integrator)
     return nothing
 end
 
-# TODO: Move this function to ClimaTimeSteppers.jl
-function get_dtγ(integrator)
+# TODO: Move these functions to ClimaTimeSteppers.jl
+is_implicit_timestepper(integrator) =
+    integrator.alg isa CTS.RosenbrockAlgorithm || (
+        integrator.alg.name isa CTS.IMEXARKAlgorithmName &&
+        !isnothing(integrator.cache.newtons_method_cache)
+    )
+jacobian(integrator) =
+    if integrator.alg isa CTS.RosenbrockAlgorithm
+        integrator.cache.W
+    elseif (
+        integrator.alg.name isa CTS.IMEXARKAlgorithmName &&
+        !isnothing(integrator.cache.newtons_method_cache)
+    )
+        integrator.cache.newtons_method_cache.j
+    else
+        error("Jacobian is not available")
+    end
+function dtγ(integrator)
+    is_implicit_timestepper(integrator) || error("dtγ is not available")
     (; dt, alg) = integrator
-    is_implicit =
-        alg isa CTS.RosenbrockAlgorithm || alg.name isa CTS.IMEXARKAlgorithmName
-    is_implicit || return nothing
-    dt_seconds = dt isa ITime ? seconds(dt) : dt
     tableau_coefficients =
         alg isa CTS.RosenbrockAlgorithm ? alg.tableau.Γ : alg.tableau.a_imp
     γs = unique(filter(!iszero, LinearAlgebra.diag(tableau_coefficients)))
@@ -471,21 +484,25 @@ function get_dtγ(integrator)
          algorithm has implicit stages with distinct tableau coefficients \
          (i.e., it is not an SDIRK algorithm).",
     )
-    return dt_seconds * γs[1]
+    return float(dt) * γs[1]
 end
 
-function update_exact_jacobian!(integrator)
-    dtγ = get_dtγ(integrator)
-    isnothing(dtγ) && return
+function update_jacobian!(integrator)
+    is_implicit_timestepper(integrator) || return # TODO: Remove this check.
     (; u, p, t) = integrator
-    update_exact_jacobian!(p.jacobian, u, p, dtγ, t)
+    update_jacobian!(jacobian(integrator), u, p, dtγ(integrator), t)
 end
 
-function update_jacobian_init!(integrator)
-    dtγ = get_dtγ(integrator)
-    isnothing(dtγ) && return
+function update_and_check_jacobian!(integrator)
+    is_implicit_timestepper(integrator) || return # TODO: Remove this check.
     (; u, p, t) = integrator
-    update_jacobian_init!(p.jacobian, u, p, dtγ, t)
+    update_and_check_jacobian!(jacobian(integrator), u, p, dtγ(integrator), t)
+end
+
+function save_jacobian(integrator)
+    is_implicit_timestepper(integrator) || return # TODO: Remove this check.
+    (; u, t) = integrator
+    save_jacobian(jacobian(integrator), u, dtγ(integrator), t)
 end
 
 """

@@ -293,14 +293,14 @@ end
 import Dates
 
 """
-    time_and_units_str(time)
+    time_and_units_str(seconds)
 
 Converts the given number of seconds into a string that contains a numerical
 value (rounded to the nearest 2 decimal digits) and its corresponding units.
 """
-function time_and_units_str(time::Float64)
-    # The time should be specified as a Float64 to avoid round-off errors.
-    full_period = compound_period(time)
+function time_and_units_str(seconds)
+    # Convert the time to a Float64 in order to avoid round-off errors.
+    full_period = compound_period(Float64(seconds))
     isempty(Dates.periods(full_period)) && return "0 Seconds"
     whole_period = Dates.periods(full_period)[1]
     whole_period_value = Dates.value(whole_period)
@@ -317,9 +317,6 @@ function time_and_units_str(time::Float64)
     remaining_digits = lpad(round(Int, remaining_period_value * 100), 2, '0')
     return "$whole_period_value.$remaining_digits $period_units"
 end
-time_and_units_str(time::Real) = time_and_units_str(Float64(time))
-time_and_units_str(time::ClimaUtilities.TimeManager.ITime) =
-    time_and_units_str(seconds(time))
 
 """
     compound_period(seconds)
@@ -357,17 +354,22 @@ macro timed_str(ex)
 end
 
 """
-    dump_string(x)
+    summary_string(x)
 
-Returns a string that contains the output of `dump(x)`.
+Returns a string that is similar to the output of `dump(x)`, but without any
+type parameters.
 """
-function dump_string(x)
-    buffer = IOBuffer()
-    dump(buffer, x)
-    result = String(take!(buffer))
-    close(buffer)
-    return result
-end
+summary_string(x) = summary_string(x, 0)
+summary_string(x, depth) =
+    fieldcount(typeof(x)) == 0 ? repr(x) :
+    (string(nameof(typeof(x))) * '(') *
+    mapreduce(*, 1:fieldcount(typeof(x))) do i
+        field =
+            x isa Tuple ? ':' * string(i) : string(fieldname(typeof(x), i))
+        ('\n' * "  "^(depth + 1) * field * " = ") *
+        (summary_string(getfield(x, i), depth + 1) * ',')
+    end *
+    ('\n' * "  "^depth * ')')
 
 struct AllNothing end
 const all_nothing = AllNothing()

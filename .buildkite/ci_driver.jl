@@ -41,6 +41,7 @@ import Base.Filesystem: rm
 import Statistics: mean
 import LinearAlgebra: norm_sqr
 include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
+include(joinpath(pkgdir(CA), "post_processing", "jacobian_plots.jl"))
 
 ref_job_id = config.parsed_args["reference_job_id"]
 reference_job_id = isnothing(ref_job_id) ? simulation.job_id : ref_job_id
@@ -188,16 +189,10 @@ if ClimaComms.iamroot(config.comms_ctx)
         ),
     )
 
-    # TODO: Improve design of Diagnostics to make Jacobian plotting less clunky.
-    dict_writer = simulation.output_writers[1]
-    Yₜ_end = similar(integrator.u)
-    CA.implicit_tendency!(Yₜ_end, integrator.u, integrator.p, integrator.t)
-
     @info "Plotting"
     paths = latest_comparable_dirs() # __build__ path (not job path)
     if isempty(paths)
-        paths = [simulation.output_dir]
-        make_plots(Val(Symbol(reference_job_id)), paths, dict_writer, Yₜ_end)
+        make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
     else
         main_job_path = joinpath(first(paths), reference_job_id)
         nc_dir = joinpath(main_job_path, "nc_files")
@@ -219,11 +214,20 @@ if ClimaComms.iamroot(config.comms_ctx)
         end
 
         paths = if isempty(readdir(nc_dir))
-            [simulation.output_dir]
+            simulation.output_dir
         else
             [simulation.output_dir, nc_dir]
         end
-        make_plots(Val(Symbol(reference_job_id)), paths, dict_writer, Yₜ_end)
+        make_plots(Val(Symbol(reference_job_id)), paths)
+    end
+    if (
+        isnothing(config.parsed_args["plot_jacobian"]) ?
+        config.parsed_args["debug_approximate_jacobian"] :
+        config.parsed_args["plot_jacobian"]
+    )
+        Yₜ_end = similar(integrator.u)
+        CA.implicit_tendency!(Yₜ_end, integrator.u, integrator.p, integrator.t)
+        make_jacobian_plots(simulation.output_dir, Yₜ_end, float(integrator.dt))
     end
     @info "Plotting done"
 

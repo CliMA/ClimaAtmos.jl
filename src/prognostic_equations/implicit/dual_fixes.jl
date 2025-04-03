@@ -25,8 +25,44 @@ TD.PhasePartition_equil_given_p(param_set, T, p, q_tot, type) =
 
 # TODO: Move all of the following to ClimaCore.jl
 
+using ClimaCore: Adapt, Grids
+Adapt.@adapt_structure Grids.ColumnGrid
+
+# Fix broadcasting bug.
+# column_style(::Type{S}) where {DS, S <: Fields.FieldStyle{DS}} =
+#     Fields.FieldStyle{column_style(DS)}
+# column_style(
+#     ::Type{S},
+# ) where {Nv, Ni, A, S <: DataLayouts.VIJFHStyle{Nv, Ni, A}} =
+#     DataLayouts.VFStyle{Nv, A}
+# column_style(::Type{S}) where {Ni, A, S <: DataLayouts.IJFHStyle{Ni, A}} =
+#     DataLayouts.DataFStyle{A}
+# Base.@propagate_inbounds function Fields.column(
+#     bc::Base.Broadcast.Broadcasted{Style},
+#     i,
+#     j,
+#     h,
+# ) where {Style <: Fields.AbstractFieldStyle}
+#     _args = Fields.column_args(bc.args, i, j, h)
+#     _axes = Fields.column(axes(bc), i, j, h)
+#     Base.Broadcast.Broadcasted{column_style(Style)}(bc.f, _args, _axes)
+# end
+# Base.@propagate_inbounds function Fields.column(
+#     bc::DataLayouts.NonExtrudedBroadcasted{Style},
+#     i,
+#     j,
+#     h,
+# ) where {Style <: Fields.AbstractFieldStyle}
+#     _args = Fields.column_args(bc.args, i, j, h)
+#     _axes = Fields.column(axes(bc), i, j, h)
+#     DataLayouts.NonExtrudedBroadcasted{column_style(Style)}(bc.f, _args, _axes)
+# end
+
+# Add missing methods.
 # ClimaComms.device(fv::Fields.FieldVector) =
-#     ClimaComms.device(first(Fields._values(fv))) # Avoid type piracy.
+#     ClimaComms.device(first(Fields._values(fv)))
+# ClimaComms.context(fv::Fields.FieldVector) =
+#     ClimaComms.context(first(Fields._values(fv)))
 
 # import ClimaCore.DataLayouts: array2data # Avoid breaking precompilation.
 import ClimaCore.DataLayouts: replace_basetype, union_all, singleton
@@ -89,22 +125,22 @@ function scalar_level_iterator(field_vector)
     end
 end
 
-function column_iterator(field_vector)
-    example_field = field_vector.c # TODO: Generalize this.
-    horz_space = Spaces.horizontal_space(axes(example_field))
+function column_iterator_indices(field)
+    axes(field) isa Union{Spaces.PointSpace, Spaces.FiniteDifferenceSpace} &&
+        return ((1, 1, 1),)
+    horz_space = Spaces.horizontal_space(axes(field))
     qs = 1:Quadratures.degrees_of_freedom(Spaces.quadrature_style(horz_space))
     hs = Spaces.eachslabindex(horz_space)
-    return if Fields.field_values(example_field) isa DataLayouts.VIFH
-        Iterators.map(Iterators.product(qs, hs)) do (i, h)
-            field_vector[Fields.ColumnIndex((i,), h)]
-        end
-    else
-        @assert Fields.field_values(example_field) isa DataLayouts.VIJFH
-        Iterators.map(Iterators.product(qs, qs, hs)) do (i, j, h)
-            field_vector[Fields.ColumnIndex((i, j), h)]
-        end
-    end
+    return horz_space isa Spaces.SpectralElementSpace1D ?
+           Iterators.product(qs, hs) : Iterators.product(qs, qs, hs)
 end
+column_iterator_indices(field_vector::Fields.FieldVector) =
+    column_iterator_indices(first(Fields._values(field_vector)))
+
+column_iterator(iterable) =
+    Iterators.map(column_iterator_indices(iterable)) do (indices...,)
+        Fields.column(iterable, indices...)
+    end
 
 function scalar_field_index_ranges(field_vector)
     field_names = scalar_field_names(field_vector)
@@ -118,8 +154,3 @@ function scalar_field_index_ranges(field_vector)
     first_level_indices = (1, (last_level_indices[1:(end - 1)] .+ 1)...)
     return map(UnitRange, first_level_indices, last_level_indices)
 end
-
-import ClimaUtilities.TimeManager: ITime
-import ClimaDiagnostics: seconds_to_str_short, seconds_to_str_long
-seconds_to_str_short(time::ITime) = seconds_to_str_short(seconds(time))
-seconds_to_str_long(time::ITime) = seconds_to_str_long(seconds(time))

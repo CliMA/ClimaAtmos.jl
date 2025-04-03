@@ -2,7 +2,6 @@ module ClimaAtmos
 
 using NVTX
 import Adapt
-import DiffEqBase # TODO: Get rid of this dependency.
 import LinearAlgebra
 import NullBroadcasts: NullBroadcasted
 import LazyBroadcast
