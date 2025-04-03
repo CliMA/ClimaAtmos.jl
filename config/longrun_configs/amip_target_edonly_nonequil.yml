@@ -26,9 +26,9 @@ approximate_linear_solve_iters: 2
 dt: "120secs"
 t_end: "120days"
 toml: [/home/oalcabes/ClimaAtmos.jl/toml/longrun_aquaplanet_nonequil.toml]
-extra_atmos_diagnostics:
+diagnostics:
   - short_name: [ta, ua, wa, va, rhoa, hur, hus, hussn, husra, clw, cli]
     reduction_time: average
-    period: "1days"
+    period: 1days
 netcdf_output_at_levels: true
 
