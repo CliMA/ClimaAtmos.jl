@@ -4,7 +4,25 @@ using Statistics
 using LinearAlgebra
 import ClimaAtmos as CA
 import ClimaCalibrate as CAL
-import Interpolations
+using Interpolations
+import EnsembleKalmanProcesses as EKP
+using Logging
+using TOML
+using Flux
+using JLD2
+
+include("nn_helpers.jl")
+
+import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
+
+
+"""Suppress Info and Warnings for any function"""
+function suppress_logs(f, args...; kwargs...)
+    Logging.with_logger(Logging.SimpleLogger(stderr, Logging.Error)) do
+        f(args...; kwargs...)
+    end
+end
 
 "Optional vector"
 const OptVec{T} = Union{Nothing, Vector{T}}
@@ -15,22 +33,70 @@ const OptReal = Union{Real, Nothing}
 "Optional dictionary"
 const OptDict = Union{Nothing, Dict}
 
-CLIMADIAGNOSTICS_LES_NAME_MAP =
-    Dict("thetaa" => "theta_mean", "hus" => "qt_mean", "clw" => "ql_mean")
-
+CLIMADIAGNOSTICS_LES_NAME_MAP = Dict(
+    "thetaa" => "theta_mean",
+    "hus" => "qt_mean",
+    "clw" => "ql_mean",
+    "cli" => "qi_mean",
+    "wap " => "w_core",
+)
 
 
 """Get z cell centers coordinates for CA run, given config. """
 function get_z_grid(atmos_config; z_max = nothing)
     params = CA.ClimaAtmosParameters(atmos_config)
-    grid = CA.get_grid(atmos_config.parsed_args, params, atmos_config.comms_ctx)
-    spaces = CA.get_spaces(grid, atmos_config.comms_ctx)
+end
+
+function get_z_grid(atmos_config::CA.AtmosConfig; z_max = nothing)
+    params = CA.ClimaAtmosParameters(atmos_config)
+    spaces =
+        CA.get_spaces(atmos_config.parsed_args, params, atmos_config.comms_ctx)
     coord = CA.Fields.coordinate_field(spaces.center_space)
     z_vec = convert(Vector{Float64}, parent(coord.z)[:])
     if !isnothing(z_max)
         z_vec = filter(x -> x <= z_max, z_vec)
     end
     return z_vec
+end
+
+"""Creates stretched vertical grid using ClimaCore utils, given `z_max`, `z_elem`, and `dz_bottom`.
+
+Output:
+ - `z_vec` :: Vector of `z` coordinates.
+"""
+function create_z_stretch(
+    atmos_config;
+    z_max = nothing,
+    z_elem = nothing,
+    dz_bottom = nothing,
+)
+
+    config_tmp = deepcopy(atmos_config)
+    params = CA.ClimaAtmosParameters(config_tmp)
+
+    !isnothing(z_max) ? config_tmp.parsed_args["z_max"] = z_max : nothing
+    !isnothing(z_elem) ? config_tmp.parsed_args["z_elem"] = z_elem : nothing
+    !isnothing(dz_bottom) ? config_tmp.parsed_args["dz_bottom"] = dz_bottom :
+    nothing
+
+    spaces = CA.get_spaces(config_tmp.parsed_args, params, config_tmp.comms_ctx)
+
+    coord = CA.Fields.coordinate_field(spaces.center_space);
+    z_vec = convert(Vector{Float64}, parent(coord.z)[:])
+    return z_vec
+end
+
+function get_cal_z_grid(atmos_config, z_cal_grid::Dict, forcing_type::String)
+    if forcing_type in keys(z_cal_grid)
+        return create_z_stretch(
+            atmos_config;
+            z_max = z_cal_grid[forcing_type]["z_max"],
+            z_elem = z_cal_grid[forcing_type]["z_elem"],
+            dz_bottom = z_cal_grid[forcing_type]["dz_bottom"],
+        )
+    else
+        return get_z_grid(atmos_config)
+    end
 end
 
 
@@ -238,6 +304,11 @@ function fetch_interpolate_transform(
     else
         var_ = nc_fetch_interpolate(var_name, filename, z_scm)
     end
+
+    if var_name == "ql_mean" || var_name == "qi_mean"
+        var_ = max.(var_, 0.0)
+    end
+
     return var_
 end
 
@@ -422,6 +493,11 @@ function vertical_interpolation(
     end
 end
 
+function interp_prof_1D(var_data, z_ref, z_interp)
+    nodes = (z_ref,)
+    var_itp = LinearInterpolation(nodes, var_data; extrapolation_bc = Line())
+    return var_itp(z_interp)
+end
 
 """
     get_profile(
@@ -798,18 +874,36 @@ function ensemble_data(
     output_dir = nothing,
     z_max = nothing,
     n_vert_levels,
+    return_z_interp = false,
 )
 
     G_ensemble =
         Array{Float64}(undef, n_vert_levels, config_dict["ensemble_size"])
+    z_interp = nothing
 
     for m in 1:config_dict["ensemble_size"]
-
         try
             member_path =
                 TOMLInterface.path_to_ensemble_member(output_dir, iteration, m)
-            simdir =
-                SimDir(joinpath(member_path, "config_$config_i", "output_0000"))
+            simulation_dir =
+                joinpath(member_path, "config_$config_i", "output_0000")
+
+            model_config_dict = YAML.load_file(joinpath(simulation_dir, ".yml"))
+            # suppress logs when creating model config, z grids to avoid cluttering output
+            model_config = suppress_logs(
+                CA.AtmosConfig,
+                model_config_dict;
+                comms_ctx = ClimaComms.SingletonCommsContext(),
+            )
+            if !isnothing(config_dict["z_cal_grid"])
+                z_interp = suppress_logs(
+                    get_cal_z_grid,
+                    model_config,
+                    config_dict["z_cal_grid"],
+                )
+            end
+
+            simdir = SimDir(simulation_dir)
 
             G_ensemble[:, m] .= process_profile_func(
                 simdir,
@@ -818,13 +912,26 @@ function ensemble_data(
                 t_start = config_dict["g_t_start_sec"],
                 t_end = config_dict["g_t_end_sec"],
                 z_max = z_max,
+                z_interp = z_interp,
             )
+
+            # catch file i/o errors -> ensemble member crashed
         catch err
-            @info "Error during observation map for ensemble member $m" err
-            G_ensemble[:, m] .= NaN
+            err_str = string(err)
+            if occursin("Simulation failed at:", err_str) ||
+               occursin("opening file", err_str)
+                @info "Simulation failed at a specific time for ensemble member $m" err
+                G_ensemble[:, m] .= NaN
+            elseif occursin("HDF error", err_str)
+                @info "NetCDF HDF error encountered for ensemble member $m" err
+                G_ensemble[:, m] .= NaN
+            else
+                rethrow(err)
+            end
         end
+
     end
-    return G_ensemble
+    return return_z_interp ? (G_ensemble, z_interp) : G_ensemble
 end
 
 """Get minimum loss (RMSE) from EKI obj for a given iteration."""
@@ -864,15 +971,92 @@ function lowest_loss_rmse(
 end
 
 function get_forcing_file(i, ref_paths)
-    return "/resnick/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
+    ref_path = ref_paths[i]
+    cfsite_info = get_cfsite_info_from_path(ref_path)
+
+    forcing_model = cfsite_info["forcing_model"]
+    experiment = cfsite_info["experiment"]
+    month = cfsite_info["month"]
+
+    forcing_file_path = "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/$(forcing_model)_$(experiment).2004-2008.$(month).nc"
+
+    return forcing_file_path
 end
 
 function get_cfsite_id(i, cfsite_numbers)
     return string("site", cfsite_numbers[i])
 end
 
+function get_cfsite_info_from_path(input_string::String)
+    pattern =
+        r"cfsite/(\d+)/([^/]+)/([^/]+)/.*cfsite(\d+)_([^_]+)_([^_]+)_.*\.(\d{2})\..*nc"
+    m = match(pattern, input_string)
+    if m !== nothing
+        return Dict(
+            "forcing_model" => m.captures[2],
+            "cfsite_number" => m.captures[4],
+            "month" => m.captures[7],
+            "experiment" => m.captures[3],
+        )
+    else
+        return Dict{String, String}()
+    end
+end
+
+
 function get_batch_indicies_in_iteration(iteration, output_dir::AbstractString)
     iter_path = CAL.path_to_iteration(output_dir, iteration)
     eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
     return EKP.get_current_minibatch(eki)
+end
+
+
+
+
+function create_prior_with_nn(
+    prior_path,
+    pretrained_nn_path;
+    arc = [8, 20, 15, 10, 1],
+)
+
+    prior_dict = TOML.parsefile(prior_path)
+    parameter_names = keys(prior_dict)
+
+    prior_vec =
+        Vector{EKP.ParameterDistribution}(undef, length(parameter_names))
+    for (i, n) in enumerate(parameter_names)
+        prior_vec[i] = CAL.get_parameter_distribution(prior_dict, n)
+    end
+
+    @load pretrained_nn_path serialized_weights
+    num_nn_params = length(serialized_weights)
+
+
+    # nn_model = construct_fully_connected_nn(arc, deepcopy(serialized_weights); biases_bool = true, output_layer_activation_function = Flux.identity)
+    nn_model = construct_fully_connected_nn(
+        arc,
+        deepcopy(serialized_weights);
+        biases_bool = true,
+        activation_function = Flux.leakyrelu,
+        output_layer_activation_function = Flux.identity,
+    )
+
+    # serialized_stds = serialize_std_model(nn_model; std_weight = 0.05, std_bias = 0.005)
+    serialized_stds =
+        serialize_std_model(nn_model; std_weight = 0.1, std_bias = 0.00001)
+
+    nn_mean_std = EKP.VectorOfParameterized([
+        Normal(serialized_weights[ii], serialized_stds[ii]) for
+        ii in 1:num_nn_params
+    ])
+    nn_constraint = repeat([EKP.no_constraint()], num_nn_params)
+    nn_prior = EKP.ParameterDistribution(
+        nn_mean_std,
+        nn_constraint,
+        "mixing_length_param_vec",
+    )
+    push!(prior_vec, nn_prior)
+
+    prior = EKP.combine_distributions(prior_vec)
+    return prior
 end

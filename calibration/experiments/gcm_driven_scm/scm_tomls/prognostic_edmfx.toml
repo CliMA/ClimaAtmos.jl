@@ -4,6 +4,12 @@ value = 1.0e-5
 [EDMF_max_area]
 value = 0.7
 
+[entr_inv_tau]
+value = 0.00001
+
+[tracer_vertical_diffusion_factor]
+value = 0.0
+
 [min_area_limiter_scale]
 value = 0
 
@@ -19,8 +25,8 @@ value = 0
 [detr_vertdiv_coeff]
 value = 0
 
-[max_area_limiter_scale]
-value = 0
-
 [zd_rayleigh]
-value = 20000.0
+value = 30000.0
+
+[zd_viscous]
+value = 30000.0

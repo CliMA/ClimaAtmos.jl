@@ -1,12 +1,8 @@
 #!/usr/bin/env julia
 
-import ClimaComms
-@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
-
 using ArgParse
 using Distributed
-addprocs()
-
+addprocs(1)
 
 @everywhere begin
     using EnsembleKalmanProcesses: TOMLInterface
@@ -60,6 +56,13 @@ function parse_args()
     return parse_with_settings(s)
 end
 
+@everywhere function validate_ensemble_member(iteration_dir, batch_size)
+    config_dirs =
+        filter(x -> isdir(joinpath(iteration_dir, x)), readdir(iteration_dir))
+    num_configs = count(x -> startswith(x, "config_"), config_dirs)
+    return num_configs == batch_size
+end
+
 function main()
     args = parse_args()
 
@@ -87,6 +90,7 @@ function main()
     cal_vars = config_dict["y_var_names"]
     const_noise_by_var = config_dict["const_noise_by_var"]
     n_iterations = config_dict["n_iterations"]
+    batch_size = config_dict["batch_size"]
     model_config_dict =
         YAML.load_file(joinpath(output_dir, "configs", "model_config.yml"))
 
@@ -95,9 +99,6 @@ function main()
     end
 
     ref_paths, _ = get_les_calibration_library()
-    comms_ctx = ClimaComms.SingletonCommsContext()
-    atmos_config = CA.AtmosConfig(model_config_dict; comms_ctx)
-    zc_model = get_z_grid(atmos_config, z_max = z_max)
 
     @everywhere function calculate_statistics(y_var)
         non_nan_values = y_var[.!isnan.(y_var)]
@@ -124,9 +125,9 @@ function main()
         cal_vars,
         const_noise_by_var,
         ref_paths,
-        zc_model,
         reduction,
         ensemble_size,
+        batch_size,
     )
         println("Processing Iteration: $iteration")
         stats_df = DataFrame(
@@ -141,13 +142,25 @@ function main()
             rmse_std = Union{Missing, Float64}[],
         )
         config_indices = get_batch_indicies_in_iteration(iteration, output_dir)
+        iteration_dir =
+            joinpath(output_dir, "iteration_$(lpad(iteration, 3, '0'))")
+
+        valid_ensemble_members = filter(
+            config_i -> validate_ensemble_member(
+                joinpath(iteration_dir, "member_$(lpad(config_i, 3, '0'))"),
+                batch_size,
+            ),
+            config_indices,
+        )
+
         for var_name in var_names
             means = Float64[]
             maxs = Float64[]
             mins = Float64[]
             sum_squared_errors = zeros(Float64, ensemble_size)
-            for config_i in config_indices
-                data = ensemble_data(
+
+            for config_i in valid_ensemble_members
+                data, zc_model = ensemble_data(
                     process_profile_variable,
                     iteration,
                     config_i,
@@ -157,6 +170,7 @@ function main()
                     output_dir = output_dir,
                     z_max = z_max,
                     n_vert_levels = n_vert_levels,
+                    return_z_interp = true,
                 )
                 for i in 1:size(data, 2)
                     y_var = data[:, i]
@@ -166,12 +180,21 @@ function main()
                     push!(mins, col_min)
                 end
                 if in(var_name, cal_vars)
+                    ref_path = ref_paths[config_i]
+                    cfsite_number, _, _, _ = parse_les_path(ref_path)
+                    forcing_type = get_cfsite_type(cfsite_number)
+
+                    ti = config_dict["y_t_start_sec"]
+                    ti = isa(ti, AbstractFloat) ? ti : ti[forcing_type]
+                    tf = config_dict["y_t_end_sec"]
+                    tf = isa(tf, AbstractFloat) ? tf : tf[forcing_type]
+
                     y_true, Σ_obs, norm_vec_obs = get_obs(
-                        ref_paths[config_i],
+                        ref_path,
                         [var_name],
                         zc_model;
-                        ti = config_dict["y_t_start_sec"],
-                        tf = config_dict["y_t_end_sec"],
+                        ti = ti,
+                        tf = tf,
                         Σ_const = const_noise_by_var,
                         z_score_norm = false,
                     )
@@ -179,12 +202,10 @@ function main()
                         compute_ensemble_squared_error(data, y_true)
                 end
             end
+
             if in(var_name, cal_vars)
-                # Compute RMSE per ensemble member
                 rmse_per_member = sqrt.(sum_squared_errors / n_vert_levels)
-                # Filter out NaNs (failed simulations)
                 valid_rmse = rmse_per_member[.!isnan.(rmse_per_member)]
-                non_nan_simulation_count = length(valid_rmse)
                 mean_rmse = mean(valid_rmse)
                 min_rmse = minimum(valid_rmse)
                 max_rmse = maximum(valid_rmse)
@@ -226,9 +247,9 @@ function main()
                 cal_vars,
                 const_noise_by_var,
                 ref_paths,
-                zc_model,
                 reduction,
                 ensemble_size,
+                batch_size,
             ),
             iterations_list,
         )
