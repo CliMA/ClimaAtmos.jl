@@ -8,24 +8,30 @@ approximate_linear_solve_iters: 2
 prognostic_tke: true
 rayleigh_sponge: true
 edmfx_entr_model: "PiGroups"
-edmfx_detr_model: "PiGroups"
-# precip_model: 1M
+edmfx_detr_model : "SmoothArea"
 edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-moist: "equil"
+precip_model: 1M
+moist: "nonequil"
+# precip_model: 0M
+# moist: "equil"
+# call_cloud_diagnostics_per_stage: true
 config: "column"
 cloud_model: "quadrature_sgs"
 hyperdiff: "false"
-z_max: 40e3
+z_max: 45000
 z_elem: 60
 z_stretch: true
 dz_bottom: 30
 rad: allskywithclear
+dt_rad: "1hours"
+dt_cloud_fraction: "1hours"
+co2_model: fixed
 insolation: "gcmdriven"
 dt: "100secs"
 t_end: "72hours"
-dt_save_state_to_disk: "10mins"
+dt_save_state_to_disk: "Inf"
 toml: [scm_tomls/diagnostic_edmfx.toml]
 netcdf_interpolation_num_points: [2, 2, 60]
 netcdf_output_at_levels: true

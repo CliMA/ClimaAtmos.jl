@@ -1,0 +1,50 @@
+initial_condition: "GCM"
+external_forcing: "GCM"
+external_forcing_file: "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
+surface_setup: "GCM"
+turbconv: "prognostic_edmfx"
+implicit_diffusion: true
+implicit_sgs_advection: false
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+edmfx_upwinding: "first_order"
+rayleigh_sponge: true
+edmfx_entr_model: "PiGroups"
+edmfx_detr_model: "PiGroups"
+precip_model: 1M
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_filter: false
+prognostic_tke: true
+moist: "equil"
+config: "column"
+hyperdiff: "false"
+z_max: 40e3
+z_elem: 60
+# mixing_length_model: "physical" # physical
+mixing_length_model: "nn"
+z_stretch: true
+dz_bottom: 30
+rad: allskywithclear
+insolation: "gcmdriven"
+perturb_initstate: false
+dt: "10secs"
+dt_rad: "30mins"
+t_end: "72hours"
+dt_save_to_disk: "10mins"
+cloud_model: "quadrature_sgs"
+call_cloud_diagnostics_per_stage : true
+ode_algo: "ARS343"
+toml: [scm_tomls/prognostic_edmfx.toml]
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 60]
+diagnostics:
+- short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+  period: 10mins
+- short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]
+  period: 10mins
+- short_name: [entr, detr, lmix, bgrad, strain, edt, evu, turbentr, obulen]
+  period: 10mins
+- short_name: [rlut, rlutcs, rsut, rsutcs, rsdt, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv]
+  period: 10mins

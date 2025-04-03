@@ -1,25 +1,84 @@
-prior_path: prior_prognostic_pi_entr.toml
-ensemble_size: 100
-n_iterations: 12
-batch_size: 2 # number of cases per iteration
-model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
-output_dir : output/exp_1 # output dir
-y_var_names: [thetaa, hus, clw] # calibration variables clw
+# prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_0M_v1.toml
+# prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_dev.toml
+# prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_dev_lmix_eqn1.toml
+# prior_path: prior_prognostic.toml
+# prior_path: prior_diagnostic_linreg_entr_detr.toml # diagnostic EDMF with linreg 
+# prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_0M_v4.toml
+prior_path: prior_prognostic_pi_entr_smooth_entr_detr_1M_v1.toml
+# prior_path: prior_diagnostic_linreg_entr_detr_1M.toml
+ensemble_size: 200
+n_iterations: 8
+# batch_size: 18 # number of cases per iteration
+batch_size: 10 # number of cases per iteration
+# batch_size: 10 # number of cases per iteration
+# batch_size: 9 # number of cases per iteration
+# model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
+# model_config : model_config_prognostic.yml
+# model_config : model_config_prognostic_impl.yml
+# model_config : model_config_diagnostic.yml
+model_config : model_config_prognostic_1M.yml
+
+# output_dir : /central/scratch/cchristo/debug/exp36_eqn1_tke
+# output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v3/exp36_eqn1_tke
+# output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v3/debug_exp1
+# output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v4/exp1_baseline
+output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_progedmf_cal_v1/exp14
+# output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_diagedmf_cal_v1/exp16
+
+# Slurm resource configuration
+slurm_time: "10:00:00"
+slurm_mem_per_cpu: "25G"
+slurm_cpus_per_task: 1
+
+y_var_names: [thetaa, hus, clw]  # calibration variables clw clw]
+# y_var_names: [thetaa, hus]  # calibration variables clw clw]
 log_vars: ["clw"] # take log(var) when forming y, g
-z_max : 4000 # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
-dims_per_var : 29 # num dimensions per variable (num cells in vertical profile below z_max)
+# log_vars: []
+
+nice_loc_ug: 0.01
+nice_loc_gg: 0.5
+
+z_max: null
+z_cal_grid: # calibration grid (stretch-grid parameters). In general, `z_elem` should be the same for all types
+  shallow:
+    z_max: 4000.0
+    z_elem: 30
+    dz_bottom: 30
+  deep:
+    z_max: 15000.0
+    z_elem: 30
+    dz_bottom: 30
+dims_per_var : 30 # num dimensions per variable (num cells in vertical profile below z_max)
 # eki_timestep: 0.1 # timestep of eki, if using default
-y_t_start_sec : 475200.0 # start time of LES averaging window [s] : 5.5 days
-y_t_end_sec : 518400.0 # end time of LES averaging window [s] : 6 days (LES length = 6 days)
-g_t_start_sec : 216000.0 # start time of SCM averaging window [s] : 2.5 days
-g_t_end_sec : 259200.0 # end time of SCM averaging window [s] : 3 days (SCM length = 3 days)
+
+y_t_start_sec: # start time of LES averaging window [s]
+  shallow: 475200.0 # 5.5 days
+  deep: 302400.0 # 3.5 days
+y_t_end_sec: # end time of LES averaging window [s]
+  shallow: 518400.0 # 6 days (LES length = 6 days)
+  deep: 345600.0 # 4 days (LES length = 4 days)
+g_t_start_sec: 216000.0 # start time of SCM averaging window [s] : 2.5 days
+g_t_end_sec: 259200.0 # end time of SCM averaging window [s] : 3 days (SCM length = 3 days)
 
 norm_factors_by_var:
-  thetaa: [298.828, 8.617]
-  hus: [0.00676, 0.00423]
-  clw: [-9.808, 3.116] # log norm factors
+  thetaa: [301.218, 15.235]
+  hus: [0.00672, 0.00477]
+  clw: [-9.579, 3.164] # log norm factors
+  # cli: [-11.697, 1.304] # log norm factors
 
 const_noise_by_var:
-  thetaa: 0.00005
-  hus: 0.00005
-  clw: 0.00005
+  thetaa: 0.0016
+  hus: 0.0016
+  clw: 0.0045
+  # clw: 0.0016
+  # cli: 0.01
+  # thetaa: 0.0008
+  # hus: 0.0008
+  # clw: 0.0035
+
+pretrained_nn_path: "/home/cchristo/ml_mixing_length/nn_666p_leaky_relu.jld2"
+
+# Config files for deep and shallow cases
+forcing_toml_files:
+  shallow: "scm_tomls/gcmdriven_relaxation_shallow_forcing.toml"
+  deep: "scm_tomls/gcmdriven_relaxation_deep_forcing.toml"

@@ -8,8 +8,10 @@ implicit_diffusion: true
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
 rayleigh_sponge: true
-edmfx_entr_model: "Generalized"
-edmfx_detr_model: "Generalized"
+# edmfx_entr_model: "Generalized"
+# edmfx_detr_model: "Generalized"
+edmfx_entr_model : "PiGroups"
+edmfx_detr_model : "SmoothArea"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
@@ -25,7 +27,7 @@ dz_bottom: 30
 perturb_initstate: false
 dt: "10secs"
 dt_rad: "30mins"
-t_end: "6hours"
+t_end: "3days"
 dt_save_state_to_disk: "6hours"
 toml: [toml/prognostic_edmfx_gcmdriven.toml]
 netcdf_output_at_levels: true

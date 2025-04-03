@@ -27,8 +27,8 @@ type = "float"
 prior = "constrained_gaussian(mixing_length_diss_coeff, 0.22, 0.15, 0, Inf)"
 type = "float"
 
-[mixing_length_tke_surf_scale]
-prior = "constrained_gaussian(mixing_length_tke_surf_scale, 3.75, 1.5, 0, Inf)"
+[mixing_length_tke_surf_flux_coeff]
+prior = "constrained_gaussian(mixing_length_tke_surf_flux_coeff, 7.0, 3.0, 0, Inf)"
 type = "float"
 
 [mixing_length_static_stab_coeff]

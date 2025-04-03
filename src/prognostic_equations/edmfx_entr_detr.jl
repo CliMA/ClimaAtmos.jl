@@ -465,14 +465,33 @@ function detrainment(
     FT = eltype(thermo_params)
     a_min = CAP.min_area(turbconv_params)
     limit_inv_tau = CAP.entr_detr_limit_inv_tau(turbconv_params)
+
+    # detr_inv_tau = CAP.detr_inv_tau(turbconv_params)
+    detr_inv_tau = CAP.entr_inv_tau(turbconv_params)
+
+    max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
+    max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
+    a_max = CAP.max_area(turbconv_params)
+
+    # If ᶜρaʲ (updraft effective density) is zero or negligible, detrainment is not well defined.
+    # Fix at detr_inv_tau to ensure some mixing with the environment.
     # If ᶜaʲ is negligible detrainment is fixed at limit_inv_tau.
     if (ᶜaʲ <= a_min) # Consistent check for ᶜaʲ
         detr = limit_inv_tau
+    end
+
+    # max_area_limiter =
+    #     max_area_limiter_scale *
+    #     exp(-max_area_limiter_power * (a_max - min(ᶜaʲ, 1)))
+    max_area_limiter = FT(0)
+    # If ᶜρaʲ is negligible detrainment is fixed at detr_inv_tau.
+    if (ᶜaʲ <= eps(FT)) # Consistent check for ᶜaʲ
+        detr = limit_inv_tau
         # If vertical velocity divergence term is non-negative detrainment is zero.
     elseif (ᶜw_vert_div >= 0)
-        detr = FT(0)
+        detr = FT(0) + max_area_limiter
     else
-        detr = ᶜentr - ᶜw_vert_div
+        detr = ᶜentr - ᶜw_vert_div + max_area_limiter
     end
     return max(detr, 0)
 end
