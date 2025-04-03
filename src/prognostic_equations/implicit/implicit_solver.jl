@@ -621,9 +621,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
     ᶠlg = Fields.local_geometry_field(Y.f)
 
-    ᶜkappa_m = p.ᶜtemp_scalar
-    @. ᶜkappa_m =
-        TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts)
+    ᶜkappa_m = @. lazy(
+        TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts),
+    )
 
     if use_derivative(topography_flag)
         @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
@@ -899,10 +899,10 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
             ) # Need to wrap ᶠupwind_matrix in this for well-defined boundaries.
 
             ᶠu³ʲ_data = ᶠu³ʲs.:(1).components.data.:1
-            ᶜkappa_mʲ = p.ᶜtemp_scalar
-            @. ᶜkappa_mʲ =
+            ᶜkappa_mʲ = @. lazy(
                 TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
-                TD.cv_m(thermo_params, ᶜtsʲs.:(1))
+                TD.cv_m(thermo_params, ᶜtsʲs.:(1)),
+            )
 
             ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
@@ -1131,11 +1131,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                     is_third_order ? QuaddiagonalMatrixRow : BidiagonalMatrixRow
                 ᶠupwind_matrix =
                     is_third_order ? ᶠupwind3_matrix : ᶠupwind1_matrix
-
-                ᶜkappa_mʲ = p.ᶜtemp_scalar
-                @. ᶜkappa_mʲ =
-                    TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
-                    TD.cv_m(thermo_params, ᶜtsʲs.:(1))
 
                 # Jacobian contributions of updraft massflux to grid-mean
 
