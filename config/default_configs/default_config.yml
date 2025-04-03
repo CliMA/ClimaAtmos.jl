@@ -244,6 +244,15 @@ external_forcing_file:
 cfsite_number:
   help: "cfsite identifier for single column forcing from  `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
   value: "site23"
+site_latitude:
+  help: "Site latitude for single column model. Used for externally driven time varying forcing model to generate the forcing file. Artifact support is currently for eastern Pacific region in July 2007 only. [`17.0` (default)]" 
+  value: 17.0
+site_longitude:
+  help: "Site longitude for single column model. Used for externally driven time varying forcing model to generate the forcing file. Artifact support is currently for eastern Pacific region in July 2007 only. [`-149.0` (default)]"
+  value: -149.0
+external_era5_data:
+  help: "Path's to ERA5 files which contain the data to generate external forcing for the time varying single column model. 3 files are needed: 1) Column profiles 2) surface temperature `skt`, and 3) latent and sensible heat fluxes `hfls` and `hfss`. Artifact is used as default. [`nothing` (default), [`path/to/column`, `path/to/skt`, `path/to/heat_fluxes`]]"
+  value: ~
 subsidence:
   help: "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`, `ISDAC`]"
   value: ~

@@ -1,3 +1,13 @@
+# This file converts ERA5 observational data to forcing data for ClimaAtmos
+# single column model runs. For some terms we use the ERA5 data directly, 
+# including air temperature, specific humidity, and wind. For advective tendencies
+# we need to compute gradient terms in the vertical and horizontal which is 
+# computed in separate helper functions. ERA5 data is available from ECMWF 
+# split over different files for variables available at levels, surface variables
+# measured instantaneously (surface temperature), and variables that are reported 
+#as accumulated (sensible and latent heat fluxes), which must be divided by
+# the accumulation period (typically 1 hour or 1 day in seconds).
+
 using NCDatasets
 using Statistics
 using Dates
@@ -7,20 +17,21 @@ using Insolation
 import Insolation.Parameters as IP
 import ClimaParams as CP
 
-param_dict = CP.create_toml_dict(Float64)
-params = CP.get_parameter_values(param_dict, ["gravitational_acceleration", "planet_radius", "gas_constant", "molar_mass_dry_air"])
-
 
 time_resolution = 3600 # switch to 86400 for monthly data
-FT = Float64
 
-# parameters 
-rootdir = "/scratch/julian/ERA5/data_download/" # clima
-rootdir = "/Users/julianschmitt/Downloads/era5/" # local
-rootdir = "/central/groups/esm/jschmitt/era5/tv/july_forcing/" # hpc
-tvforcing = NCDataset(rootdir * "july2007_forcing_and_cloud_hourly_profiles.nc") # profile data
-tv_inst = NCDataset(rootdir * "july2007_hourly_inst.nc") # skt
-tv_accum = NCDataset(rootdir * "july2007_hourly_accum.nc") # slhf, sshf
+external_tv_params = CP.get_parameter_values(CP.create_toml_dict(Float64), ["gravitational_acceleration", "planet_radius", "gas_constant", "molar_mass_dry_air"])
+
+function get_external_forcing_file_path(parsed_args)
+    start_date = parsed_args["start_date"]
+    # round to era5 quarter degree resolution for site selection
+    site_latitude = round(parsed_args["site_latitude"] * 4) / 4
+    site_longitude = round(parsed_args["site_longitude"] * 4) /4
+
+    #TODO: Change this to an artifact location
+    return "/Users/julianschmitt/Downloads/era5/tv_forcing_$(site_latitude)_$(site_longitude)_$(start_date).nc"
+end
+
 
 """
     get_horizontal_tendencies(lat, lon_index, lat_index, column_ds)
@@ -29,7 +40,7 @@ Calculate the horizontal advective tendencies for temperature and specific humid
 using a second-order finite difference approximation.
 """
 function get_horizontal_tendencies(lat, lon_index, lat_index, column_ds)
-    rearth = params.planet_radius
+    rearth = external_tv_params.planet_radius
     lat_rad = deg2rad(lat)
     coslat = cos(lat_rad)
     dx = 2 * π * rearth * coslat / 360 * 0.25
@@ -109,7 +120,13 @@ function get_coszen_inst(
 end
 
 
-function compute_forcing(lat, lon, tvforcing, tv_inst, tv_accum)
+function generate_external_era5_forcing_file(lat, lon, external_era5_data, forcing_file_path)
+
+    # load datasets
+    @assert length(external_era5_data) == 3 # Need all 3 datasets to compute forcing
+    tvforcing = NCDataset(external_era5_data[1])
+    tv_inst = NCDataset(external_era5_data[2])
+    tv_accum = NCDataset(external_era5_data[3])
 
     sim_forcing = Dict()
     sim_forcing["time"] = tvforcing["valid_time"][:]
@@ -118,20 +135,16 @@ function compute_forcing(lat, lon, tvforcing, tv_inst, tv_accum)
     lon_index = findfirst(tvforcing["longitude"][:] .== lon)
     lat_index = findfirst(tvforcing["latitude"][:] .== lat)
 
-    sim_forcing["tntha"], sim_forcing["tnhusha"] =
-        get_horizontal_tendencies(lat, lon_index, lat_index, tvforcing)
-
     sim_forcing = Dict()
     sim_forcing["time"] = tvforcing["valid_time"][:]
     sim_forcing["pressure_level"] = tvforcing["pressure_level"][:]
-
     sim_forcing["ua"] = tvforcing["u"][lon_index, lat_index, :, :]
     sim_forcing["va"] = tvforcing["v"][lon_index, lat_index, :, :]
     sim_forcing["wap"] = tvforcing["w"][lon_index, lat_index, :, :] # era5 w is in Pa/s, this is confusing notation
     sim_forcing["hus"] = tvforcing["q"][lon_index, lat_index, :, :]
     sim_forcing["ta"] = tvforcing["t"][lon_index, lat_index, :, :]
     sim_forcing["zg"] = tvforcing["z"][lon_index, lat_index, :, :]
-    sim_forcing["z"] = tvforcing["z"][lon_index, lat_index, :, :] / (-g) # height in meters
+    sim_forcing["z"] = tvforcing["z"][lon_index, lat_index, :, :] / external_tv_params.gravitational_acceleration # height in meters
 
     # add cloud information - this is used for profile calibration and not for the forcing but saves multiple files for profile calibration
     sim_forcing["clw"] = tvforcing["clwc"][lon_index, lat_index, :, :]
@@ -139,10 +152,10 @@ function compute_forcing(lat, lon, tvforcing, tv_inst, tv_accum)
 
     # compute subsidence
     pressure = tvforcing["pressure_level"] .* 100 # convert hPa to Pa
-    R_d = params.gas_constant / params.molar_mass_dry_air # J/(kg*K)
+    R_d = external_tv_params.gas_constant / external_tv_params.molar_mass_dry_air # J/(kg*K)
     ρ = reshape(pressure, 37, 1) ./ (R_d .* sim_forcing["ta"])
     sim_forcing["rho"] = ρ # pressure 
-    sim_forcing["wa"] = .-sim_forcing["wap"] ./ (ρ .* params.gravitational_acceleration)
+    sim_forcing["wa"] = .-sim_forcing["wap"] ./ (ρ .* external_tv_params.gravitational_acceleration)
 
 
     # compute vertical advection terms - zero for time varying forcing, nonzero for steady state
@@ -155,14 +168,15 @@ function compute_forcing(lat, lon, tvforcing, tv_inst, tv_accum)
     sim_forcing["tntha"], sim_forcing["tnhusha"] =
         get_horizontal_tendencies(lat, lon_index, lat_index, tvforcing)
 
-    ds = Dataset("sim_forcing_loc_$(lat)_$(lon).nc", "c")
-
+    # create the dataset to store the forcing data - it needs to have expanded dimensions because 
+    # in ClimaAtmos all column simulations are actually boxes
+    ds = Dataset(forcing_file_path, "c")
 
     # Define the dimensions
     defDim(ds, "time", length(sim_forcing["time"]))
     defDim(ds, "z", length(sim_forcing["pressure_level"]))
 
-    # add ghost dims for box
+    # expand dimensions for box
     defDim(ds, "x", 2)
     defDim(ds, "y", 2)
 
@@ -198,8 +212,7 @@ function compute_forcing(lat, lon, tvforcing, tv_inst, tv_accum)
 
     # Define other variables
     defVar(ds, "pressure_level", Float64, ("x", "y", "z"))
-    # note the repeat is for downstream where we have to interpolate back 
-    # the 2 by 2 grid allows that to happen until those issues are fixed
+    # again repeating dimensions because single column model is a box
     ds["pressure_level"][:] =
         repeat(reshape(sim_forcing["pressure_level"], 1, 1, :), 2, 2, 1)
 
@@ -249,7 +262,6 @@ function compute_forcing(lat, lon, tvforcing, tv_inst, tv_accum)
         1,
     )
 
-
     # add latent and sensitble heat fluxes (currently we just set surface conditions based on temperature)
     lon_index_surf = findfirst(tv_accum["longitude"][:] .== lon)
     lat_index_surf = findfirst(tv_accum["latitude"][:] .== lat)
@@ -285,12 +297,9 @@ function compute_forcing(lat, lon, tvforcing, tv_inst, tv_accum)
         tv_inst["skt"][lon_index_surf2, lat_index_surf2, matching_time_indices]
     ds["ts"][:] = repeat(reshape(skt, 1, 1, 1, :), 2, 2, length(ds["z"]), 1)
 
-    # Close the dataset
+    # Close the datasets
     close(ds)
-end
-
-# generate the forcing files for site 2, 23, and a deep convection case
-for (lat, lon) in [(-20, 285 - 360), (17, 211 - 360), (10, -135)]
-    compute_forcing(lat, lon, tvforcing, tv_inst, tv_accum)
-    println("sim_forcing_loc_$(lat)_$(lon).nc")
+    close(tvforcing)
+    close(tv_inst)
+    close(tv_accum)
 end

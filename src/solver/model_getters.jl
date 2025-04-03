@@ -433,9 +433,28 @@ function get_external_forcing_model(parsed_args, FT)
             parsed_args["cfsite_number"],
         )
     elseif external_forcing == "ExternalTV"
+
+        external_forcing_file = get_external_forcing_file_path(parsed_args)
+        if !isfile(external_forcing_file)
+            @info "External forcing file $(external_forcing_file) does not exist. Generating it now."
+            if isnothing(parsed_args["external_era5_data"])
+                # generate forcing from artifact 
+                #throw"Artifact Support Coming!"
+            else
+                # generate forcing from provided era5 data paths
+                generate_external_era5_forcing_file(
+                    site_latitude,
+                    site_longitude, 
+                    parsed_args["external_era5_data"],
+                    external_forcing_file
+                )
+                # add external forcing file to the toml
+            end
+        end
+
         ExternalDrivenTVForcing{FT}(
-            parsed_args["external_forcing_file"],
-            parsed_args["start_date"],
+            external_forcing_file,
+            parsed_args["start_date"]
         )
     elseif external_forcing == "ISDAC"
         ISDACForcing()

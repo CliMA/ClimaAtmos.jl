@@ -291,7 +291,13 @@ function external_forcing_cache(
     external_forcing::ExternalDrivenTVForcing,
     params,
 )
+    # current support is for time varying era5 data which does not require vertical advective tendencies
+    # or surface latent and sensible heat fluxes, i.e., the surface state is set with surface temperature 
+    # only. This could be modified to include these terms if needed.
     (; external_forcing_file, start_date) = external_forcing
+
+    # generate forcing files 
+
     start_time = DateTime(start_date, "yyyymmdd")
     column_tendencies = [
         "ta",
@@ -318,7 +324,6 @@ function external_forcing_cache(
             name,
             column_target_space;
             reference_date = start_time,
-            regridder_type = :InterpolationsRegridder,
             regridder_kwargs = (; extrapolation_bc),
         ) for name in column_tendencies
     ]
@@ -329,7 +334,6 @@ function external_forcing_cache(
             name,
             surface_target_space;
             reference_date = start_time,
-            regridder_type = :InterpolationsRegridder,
             regridder_kwargs = (; extrapolation_bc),
         ) for name in surface_tendencies
     ]
