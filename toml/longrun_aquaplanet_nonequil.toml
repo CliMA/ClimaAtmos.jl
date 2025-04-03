@@ -4,15 +4,6 @@ value = 600
 [sublimation_deposition_timescale]
 value = 600
 
-[tracer_vertical_diffusion_factor]
-value = 0
-
-[condensation_evaporation_timescale]
-value = 150
-
-[sublimation_deposition_timescale]
-value = 150
-
 [snow_autoconversion_timescale]
 value = 1e4
 
@@ -24,3 +15,6 @@ value = 40000.0
 
 [zd_viscous]
 value = 40000.0
+
+[precipitation_timescale]
+value = 120

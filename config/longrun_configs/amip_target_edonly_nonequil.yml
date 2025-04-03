@@ -25,5 +25,5 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 dt: "120secs"
 t_end: "120days"
-toml: [toml/longrun_aquaplanet_nonequil.toml]
+toml: [/glade/u/home/oalcabes/ClimaAtmos.jl/toml/longrun_aquaplanet_nonequil.toml]
 netcdf_output_at_levels: true
