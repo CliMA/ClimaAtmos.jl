@@ -777,7 +777,6 @@ function get_simulation(config::AtmosConfig)
             sim_info,
             tracers.aerosol_names,
             steady_state_velocity,
-            aux_spaces,
         )
     end
     @info "Allocating cache (p): $s"
