@@ -389,12 +389,11 @@ end
 
 function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     (; ᶠradiation_flux) = p.radiation
-    (; ᶠaux_radiation_flux) = p.core
-    # Replace radiative flux with shallow global-geometry approximation
-    Fields.field2array(ᶠaux_radiation_flux) .= 
-        Fields.field2array(ᶠradiation_flux)
-    Fields.field2array(Yₜ.c.ρe_tot) .-= 
-        Fields.field2array(ᶜdivᵥ.(ᶠaux_radiation_flux))
+    radius = CAP.planet_radius(p.params)
+    face_z = p.radiation.rrtmgp_model.face_z
+    ᶠmetric_scaling = ((face_z + radius) ./ radius) .^ 2 
+    Fields.field2array(p.radiation.ᶠradiation_flux) ./= ᶠmetric_scaling
+    Yₜ.c.ρe_tot .-= ᶜdivᵥ.(ᶠradiation_flux)
     return nothing
 end
 
