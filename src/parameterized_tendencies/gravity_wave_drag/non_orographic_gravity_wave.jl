@@ -14,9 +14,8 @@ non_orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
 
 non_orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 
-non_orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
-function non_orographic_gravity_wave_cache(Y, gw::NonOrographyGravityWave)
+function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
     if iscolumn(axes(Y.c))
         FT = Spaces.undertype(axes(Y.c))
         (; source_height, Bw, Bn, Bt_0, dc, cmax, c0, nk, cw, cn) = gw
@@ -134,13 +133,7 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographyGravityWave)
     end
 end
 
-function non_orographic_gravity_wave_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::NonOrographyGravityWave,
-)
+function non_orographic_gravity_wave_compute_tendency!(Y, p)
     #unpack
     ᶜT = p.scratch.ᶜtemp_scalar
     (; ᶜts) = p.precomputed
@@ -276,10 +269,28 @@ function non_orographic_gravity_wave_tendency!(
         p,
     )
 
+end
+
+non_orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+
+function non_orographic_gravity_wave_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::NonOrographicGravityWave,
+)
+
+    (; uforcing, vforcing) = p.non_orographic_gravity_wave
+
     @. Yₜ.c.uₕ +=
         Geometry.Covariant12Vector.(Geometry.UVVector.(uforcing, vforcing))
 
 end
+
+
+
+
 
 function non_orographic_gravity_wave_forcing(
     ᶜu,
@@ -368,12 +379,9 @@ function non_orographic_gravity_wave_forcing(
     #StaticBitVector stores 8 boolean values in a UInt8, allowing efficient storage for up to 256 gravity wave break data.
     level_end = Spaces.nlevels(axes(ᶜρ))
 
-    # loop over all wave lengths
-    for ink in 1:gw_nk
-
-        # Collect all required fields in a broadcasted object
-        input_u = Base.Broadcast.broadcasted(
-            tuple,
+    # Collect all required fields in a broadcasted object
+    input_u = @. lazy(
+        tuple(
             ᶜu_p1,
             ᶜu_source,
             ᶜbf_p1,
@@ -390,10 +398,11 @@ function non_orographic_gravity_wave_forcing(
             gw_flag,
             ᶜlevel,
             gw_source_ampl,
-        )
+        ),
+    )
 
-        input_v = Base.Broadcast.broadcasted(
-            tuple,
+    input_v = @. lazy(
+        tuple(
             ᶜv_p1,
             ᶜv_source,
             ᶜbf_p1,
@@ -410,7 +419,12 @@ function non_orographic_gravity_wave_forcing(
             gw_flag,
             ᶜlevel,
             gw_source_ampl,
-        )
+        ),
+    )
+
+
+    # loop over all wave lengths
+    for ink in 1:gw_nk
 
         # Accumulate zonal wave forcing in every column
         waveforcing_column_accumulate!(

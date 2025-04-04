@@ -220,6 +220,9 @@ orographic_gravity_wave:
 non_orographic_gravity_wave:
   help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
   value: false
+dt_nogw:
+  help: "Time between calling non-orographic gravity wave update"
+  value: "1800secs"
 nh_poly:
   help: "Horizontal polynomial degree. Note: The number of quadrature points in 1D within each horizontal element is then Nq = <--nh_poly> + 1"
   value: 3
