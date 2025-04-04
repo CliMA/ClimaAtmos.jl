@@ -402,17 +402,18 @@ function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
 end
 
 function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
+    # unpack objects with time varying data
     (; rrtmgp_model) = p.radiation
     (; coszen, rsdt) = p.external_forcing.surface_inputs
     coszen_tv =
         getproperty(p.external_forcing.surface_timevaryinginputs, :coszen)
     rsdt_tv = getproperty(p.external_forcing.surface_timevaryinginputs, :rsdt)
 
+    # evaluate time varying data onto temporary fields 
     evaluate!(coszen, coszen_tv, t)
     evaluate!(rsdt, rsdt_tv, t)
 
-    # set variables in rrtmgp 
-    # TODO Check arrays have the same 
+    # set insolation variables from the values within the fields
     rrtmgp_model.cos_zenith .= Fields.field2array(coszen)
     rrtmgp_model.weighted_irradiance .= Fields.field2array(rsdt)
 end

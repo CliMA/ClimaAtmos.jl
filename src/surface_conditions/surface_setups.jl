@@ -276,12 +276,12 @@ function gcm_surface_conditions(external_forcing_file, cfsite_number)
     end
 end
 
-struct ExternalTV
+struct ExternalTVSurfaceConditions
     external_forcing_file::String
     start_date::String
 end
 
-function (surface_setup::ExternalTV)(params)
+function (surface_setup::ExternalTVSurfaceConditions)(params)
     FT = eltype(params)
     (; external_forcing_file, start_date) = surface_setup
     T = FT.(external_tv_surface_conditions(external_forcing_file, start_date))
@@ -290,11 +290,16 @@ function (surface_setup::ExternalTV)(params)
     return SurfaceState(; parameterization, T)
 end
 
+"""
+    external_tv_surface_conditions(external_forcing_file::String, start_date::String)
+
+Gets the surface temperature from the external forcing file at the given start date 
+which is used to construct the surface state.
+"""
 function external_tv_surface_conditions(
     external_forcing_file::String,
     start_date::String,
 )
-    """Set initial surface conditions"""
     start_time = Dates.DateTime(start_date, "yyyymmdd")
     T = NC.NCDataset(external_forcing_file) do ds
         time_index = argmin(abs.(ds["time"][:] .- start_time))

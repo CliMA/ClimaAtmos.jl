@@ -1287,9 +1287,12 @@ function gcm_initial_conditions(external_forcing_file, cfsite_number)
 end
 
 """
-    InterpolatedColumnProfile
+    InterpolatedColumnProfile <: InitialCondition
 
-Initial data condition for a column model. Stored as a tuple of Interpolation objects
+Initial data condition for a column model. Stored as a tuple of Interpolation
+objects. Temperature, zonal wind velocity, meridional wind velocity, 
+total specific humidity, and density are all needed to construct the initial 
+condition.
 """
 struct InterpolatedColumnProfile{I <: Intp.Extrapolation} <: InitialCondition
     "temperature"
@@ -1300,7 +1303,7 @@ struct InterpolatedColumnProfile{I <: Intp.Extrapolation} <: InitialCondition
     v::I
     "total specific humidity"
     q_tot::I
-    "enthalpy"
+    "air density"
     ρ₀::I
 end
 
@@ -1327,10 +1330,15 @@ function (initial_condition::InterpolatedColumnProfile)(params)
 end
 
 """
-    ExternalTV <: InitialCondition
-The `InitialCondition` from a provided ERA5 forcing file, with data type `DType`.
+    external_tv_initial_condition(external_forcing_file, start_date)
+
+Returns an `InterpolatedColumnProfile` object with the initial conditions
+from the external forcing file for time varying data. The 
+`external_forcing_file` is a NetCDF file containing the external forcing 
+data, and `start_date` is a string in the format "yyyymmdd" that specifies 
+the date to use for the initial conditions.
 """
-function ExternalTV(external_forcing_file, start_date)
+function external_tv_initial_condition(external_forcing_file, start_date)
     start_time = Dates.DateTime(start_date, "yyyymmdd")
     z, T, u, v, q_tot, ρ₀ = NC.NCDataset(external_forcing_file) do ds
         time_index = argmin(abs.(ds["time"][:] .- start_time))
