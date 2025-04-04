@@ -211,76 +211,85 @@ function compute_precipitation_sources!(
     @. Sqₛᵖ += Sᵖ
     @. tmp_acnv_ice_sno = Sᵖ
 
-    # accretion: q_liq + q_rain -> q_rain
-    @. Sᵖ = min(
-        limit(qₗ(thp, ts, qₚ(qᵣ)), dt, 5),
-        CM1.accretion(mp.cl, mp.pr, mp.tv.rain, mp.ce, qₗ(thp, ts, qₚ(qᵣ)), qₚ(qᵣ), ρ),
-    )
-    @. Sqₗᵖ -= Sᵖ
-    @. Sqᵣᵖ += Sᵖ
+    @. Sᵖ = ρ * FT(0)
     @. tmp_accr_rai_liq = Sᵖ
-
-    # accretion: q_ice + q_snow -> q_snow
-    @. Sᵖ = min(
-        limit(qᵢ(thp, ts, qₚ(qₛ)), dt, 5),
-        CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ(thp, ts, qₚ(qₛ)), qₚ(qₛ), ρ),
-    )
-    @. Sqᵢᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
     @. tmp_accr_sno_ice = Sᵖ
-
-    # accretion: q_liq + q_sno -> q_sno or q_rai
-    # sink of cloud water via accretion cloud water + snow
-    @. Sᵖ = min(
-        limit(qₗ(thp, ts, qₚ(qᵣ)), dt, 5),
-        CM1.accretion(mp.cl, mp.ps, mp.tv.snow, mp.ce, qₗ(thp, ts, qₚ(qᵣ)), qₚ(qₛ), ρ),
-    )
-    # if T < T_freeze cloud droplets freeze to become snow
-    # else the snow melts and both cloud water and snow become rain
-    α(thp, ts) = TD.Parameters.cv_l(thp) / TD.latent_heat_fusion(thp, ts) * (Tₐ(thp, ts) - mp.ps.T_freeze)
-    @. Sᵖ_snow = ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
-        Sᵖ,
-        FT(-1) * min(Sᵖ * α(thp, ts), limit(qₚ(qₛ), dt, 5)),
-    )
-    @. Sqₛᵖ += Sᵖ_snow
-    @. Sqₗᵖ -= Sᵖ
-    @. Sqᵣᵖ += ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ - Sᵖ_snow)
     @. tmp_accr_sno_liq_sno_part = Sᵖ_snow
     @. tmp_accr_sno_liq_liq_part = Sᵖ
-
-    # accretion: q_ice + q_rai -> q_sno
-    @. Sᵖ = min(
-        limit(qᵢ(thp, ts, qₚ(qₛ)), dt, 5),
-        CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ(thp, ts, qₚ(qₛ)), qₚ(qᵣ), ρ),
-    )
-    @. Sqᵢᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
     @. tmp_accr_rai_ice_sno_part = Sᵖ
-    # sink of rain via accretion cloud ice - rain
-    @. Sᵖ = min(
-        limit(qₚ(qᵣ), dt, 5),
-        CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ(thp, ts, qₚ(qₛ)), qₚ(qᵣ), ρ),
-    )
-    @. Sqᵣᵖ -= Sᵖ
-    @. Sqₛᵖ += Sᵖ
     @. tmp_accr_rai_ice_rai_part = Sᵖ
-
-    # accretion: q_rai + q_sno -> q_rai or q_sno
-    @. Sᵖ = ifelse(
-        Tₐ(thp, ts) < mp.ps.T_freeze,
-        min(
-            limit(qₚ(qᵣ), dt, 5),
-            CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₚ(qₛ), qₚ(qᵣ), ρ),
-        ),
-        -min(
-            limit(qₚ(qₛ), dt, 5),
-            CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qₚ(qᵣ), qₚ(qₛ), ρ),
-        ),
-    )
-    @. Sqₛᵖ += Sᵖ
-    @. Sqᵣᵖ -= Sᵖ
     @. tmp_accr_rai_sno = Sᵖ
+
+    ## accretion: q_liq + q_rain -> q_rain
+    #@. Sᵖ = min(
+    #    limit(qₗ(thp, ts, qₚ(qᵣ)), dt, 5),
+    #    CM1.accretion(mp.cl, mp.pr, mp.tv.rain, mp.ce, qₗ(thp, ts, qₚ(qᵣ)), qₚ(qᵣ), ρ),
+    #)
+    #@. Sqₗᵖ -= Sᵖ
+    #@. Sqᵣᵖ += Sᵖ
+    #@. tmp_accr_rai_liq = Sᵖ
+
+    ## accretion: q_ice + q_snow -> q_snow
+    #@. Sᵖ = min(
+    #    limit(qᵢ(thp, ts, qₚ(qₛ)), dt, 5),
+    #    CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ(thp, ts, qₚ(qₛ)), qₚ(qₛ), ρ),
+    #)
+    #@. Sqᵢᵖ -= Sᵖ
+    #@. Sqₛᵖ += Sᵖ
+    #@. tmp_accr_sno_ice = Sᵖ
+
+    ## accretion: q_liq + q_sno -> q_sno or q_rai
+    ## sink of cloud water via accretion cloud water + snow
+    #@. Sᵖ = min(
+    #    limit(qₗ(thp, ts, qₚ(qᵣ)), dt, 5),
+    #    CM1.accretion(mp.cl, mp.ps, mp.tv.snow, mp.ce, qₗ(thp, ts, qₚ(qᵣ)), qₚ(qₛ), ρ),
+    #)
+    ## if T < T_freeze cloud droplets freeze to become snow
+    ## else the snow melts and both cloud water and snow become rain
+    #α(thp, ts) = TD.Parameters.cv_l(thp) / TD.latent_heat_fusion(thp, ts) * (Tₐ(thp, ts) - mp.ps.T_freeze)
+    #@. Sᵖ_snow = ifelse(
+    #    Tₐ(thp, ts) < mp.ps.T_freeze,
+    #    Sᵖ,
+    #    FT(-1) * min(Sᵖ * α(thp, ts), limit(qₚ(qₛ), dt, 5)),
+    #)
+    #@. Sqₛᵖ += Sᵖ_snow
+    #@. Sqₗᵖ -= Sᵖ
+    #@. Sqᵣᵖ += ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ - Sᵖ_snow)
+    #@. tmp_accr_sno_liq_sno_part = Sᵖ_snow
+    #@. tmp_accr_sno_liq_liq_part = Sᵖ
+
+    ## accretion: q_ice + q_rai -> q_sno
+    #@. Sᵖ = min(
+    #    limit(qᵢ(thp, ts, qₚ(qₛ)), dt, 5),
+    #    CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ(thp, ts, qₚ(qₛ)), qₚ(qᵣ), ρ),
+    #)
+    #@. Sqᵢᵖ -= Sᵖ
+    #@. Sqₛᵖ += Sᵖ
+    #@. tmp_accr_rai_ice_sno_part = Sᵖ
+    ## sink of rain via accretion cloud ice - rain
+    #@. Sᵖ = min(
+    #    limit(qₚ(qᵣ), dt, 5),
+    #    CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ(thp, ts, qₚ(qₛ)), qₚ(qᵣ), ρ),
+    #)
+    #@. Sqᵣᵖ -= Sᵖ
+    #@. Sqₛᵖ += Sᵖ
+    #@. tmp_accr_rai_ice_rai_part = Sᵖ
+
+    ## accretion: q_rai + q_sno -> q_rai or q_sno
+    #@. Sᵖ = ifelse(
+    #    Tₐ(thp, ts) < mp.ps.T_freeze,
+    #    min(
+    #        limit(qₚ(qᵣ), dt, 5),
+    #        CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₚ(qₛ), qₚ(qᵣ), ρ),
+    #    ),
+    #    -min(
+    #        limit(qₚ(qₛ), dt, 5),
+    #        CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qₚ(qᵣ), qₚ(qₛ), ρ),
+    #    ),
+    #)
+    #@. Sqₛᵖ += Sᵖ
+    #@. Sqᵣᵖ -= Sᵖ
+    #@. tmp_accr_rai_sno = Sᵖ
     #! format: on
 end
 
@@ -319,32 +328,37 @@ function compute_precipitation_sinks!(
     sps = (mp.ps, mp.tv.snow, mp.aps, thp)
     rps = (mp.pr, mp.tv.rain, mp.aps, thp)
 
+    @. Sᵖ = ρ * FT(0)
+    @. tmp_evap = Sᵖ
+    @. tmp_melt = Sᵖ
+    @. tmp_dep_sub = Sᵖ
+
     #! format: off
     # evaporation: q_rai -> q_vap
-    @. Sᵖ = -min(
-        limit(qₚ(qᵣ), dt, 5),
-        -CM1.evaporation_sublimation(rps..., PP(thp, ts), qₚ(qᵣ), ρ, Tₐ(thp, ts)),
-    )
-    @. Sqᵣᵖ += Sᵖ
-    @. tmp_evap = Sᵖ
+    #@. Sᵖ = -min(
+    #    limit(qₚ(qᵣ), dt, 5),
+    #    -CM1.evaporation_sublimation(rps..., PP(thp, ts), qₚ(qᵣ), ρ, Tₐ(thp, ts)),
+    #)
+    #@. Sqᵣᵖ += Sᵖ
+    #@. tmp_evap = Sᵖ
 
-    # melting: q_sno -> q_rai
-    @. Sᵖ = min(
-        limit(qₚ(qₛ), dt, 5),
-        CM1.snow_melt(sps..., qₚ(qₛ), ρ, Tₐ(thp, ts)),
-    )
-    @. Sqᵣᵖ += Sᵖ
-    @. Sqₛᵖ -= Sᵖ
-    @. tmp_melt = Sᵖ
+    ## melting: q_sno -> q_rai
+    #@. Sᵖ = min(
+    #    limit(qₚ(qₛ), dt, 5),
+    #    CM1.snow_melt(sps..., qₚ(qₛ), ρ, Tₐ(thp, ts)),
+    #)
+    #@. Sqᵣᵖ += Sᵖ
+    #@. Sqₛᵖ -= Sᵖ
+    #@. tmp_melt = Sᵖ
 
-    # deposition/sublimation: q_vap <-> q_sno
-    @. Sᵖ = CM1.evaporation_sublimation(sps..., PP(thp, ts), qₚ(qₛ), ρ, Tₐ(thp, ts))
-    @. Sᵖ = ifelse(
-        Sᵖ > FT(0),
-        min(limit(qᵥ(thp, ts), dt, 5), Sᵖ),
-        -min(limit(qₚ(qₛ), dt, 5), FT(-1) * Sᵖ),
-    )
-    @. Sqₛᵖ += Sᵖ
-    @. tmp_dep_sub = Sᵖ
+    ## deposition/sublimation: q_vap <-> q_sno
+    #@. Sᵖ = CM1.evaporation_sublimation(sps..., PP(thp, ts), qₚ(qₛ), ρ, Tₐ(thp, ts))
+    #@. Sᵖ = ifelse(
+    #    Sᵖ > FT(0),
+    #    min(limit(qᵥ(thp, ts), dt, 5), Sᵖ),
+    #    -min(limit(qₚ(qₛ), dt, 5), FT(-1) * Sᵖ),
+    #)
+    #@. Sqₛᵖ += Sᵖ
+    #@. tmp_dep_sub = Sᵖ
     #! format: on
 end
