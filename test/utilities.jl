@@ -3,6 +3,7 @@ using ClimaComms
 ClimaComms.@import_required_backends
 import Dates
 using Random
+using NCDatasets
 Random.seed!(1234)
 import ClimaAtmos as CA
 
@@ -269,4 +270,30 @@ end
     @test CA.promote_period(Dates.Millisecond(1)) == Dates.Millisecond(1)
     @test CA.promote_period(Dates.Minute(120)) == Dates.Hour(2)
     @test CA.promote_period(Dates.Second(3600)) == Dates.Hour(1)
+end
+
+@testset "era5_observations_to_forcing_file" begin
+    # generate a forcing file using sample data in era5_hourly_atmos_raw
+    # then compare to sample in era5_hourly_atmos_processed
+    parsed_args = Dict(
+        "start_date" => "20070701",
+        "site_latitude" => 17.0,
+        "site_longitude" => -149.0,
+    )
+    data_dir = mktempdir()
+    external_forcing_file =
+        CA.get_external_forcing_file_path(parsed_args; data_dir)
+    CA.generate_external_era5_forcing_file(
+        parsed_args["site_latitude"],
+        parsed_args["site_longitude"],
+        parsed_args["start_date"],
+        external_forcing_file,
+        Float64,
+    )
+    ds_generated = NCDataset(external_forcing_file)
+    ds_expected = NCDataset(CA.get_external_forcing_file_path(parsed_args))
+    for (varname, var) in ds_expected
+        @test var[:] == ds_generated[varname][:]
+    end
+    @test ds_generated.dim == ds_expected.dim
 end

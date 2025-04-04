@@ -7,6 +7,12 @@ git-tree-sha1 = "235a16e02c24a28b20244c0f2e7f149cc783166f"
 [era5_cloud]
 git-tree-sha1 = "8bad412ada94be95a2e11c794b499c49d746be50"
 
+[era5_hourly_atmos_raw]
+git-tree-sha1 = "8234def2ead82e385a330a48ed2f0c030e434065"
+
+[era5_hourly_atmos_processed]
+git-tree-sha1 = "a1a465e8d237d78bef1e6d346054da395787a9f9"
+
 [cfsite_gcm_forcing]
 git-tree-sha1 = "2f196bcac8950f8cb79ead41821f423d092b8951"
 lazy = true

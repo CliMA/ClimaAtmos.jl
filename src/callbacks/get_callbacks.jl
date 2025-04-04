@@ -327,6 +327,17 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         )
     end
 
+    if lowercase(parsed_args["external_forcing"]) == "externaltv" && lowercase(parsed_args["config"]) == "column"
+        callbacks = (
+            callbacks...,
+            call_every_n_steps(
+                external_driven_single_column!;
+                skip_first = false, # use the callback to set the initial external forcing; default, but important
+                call_at_end = true,
+            ),
+        )
+    end
+
     if !parsed_args["call_cloud_diagnostics_per_stage"]
         dt_cf =
             dt isa ITime ?

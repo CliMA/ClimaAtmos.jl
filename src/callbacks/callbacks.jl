@@ -39,6 +39,61 @@ function flux_accumulation!(integrator)
     return nothing
 end
 
+function external_driven_single_column!(integrator)
+    Y = integrator.u
+    p = integrator.p
+    t = integrator.t
+
+    FT = Spaces.undertype(axes(Y.c))
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜspecific, ᶜts, ᶜh_tot) = p.precomputed
+    # unpack external forcing objects that we can directly set.
+    (;
+        ᶜdTdt_fluc,
+        ᶜdqtdt_fluc,
+        ᶜdTdt_hadv,
+        ᶜdqtdt_hadv,
+        ᶜdTdt_rad, # we skip radiation because we're using RRTMGP, but this can be changed for simpler setups
+        ᶜT_nudge,
+        ᶜqt_nudge,
+        ᶜu_nudge,
+        ᶜv_nudge,
+        ᶜls_subsidence,
+        ᶜinv_τ_wind,
+        ᶜinv_τ_scalar,
+    ) = p.external_forcing
+    # unpack tv inputs
+    (; hus, rho, ta, tnhusha, tnhusva, tntha, tntva, ua, va, wa, wap) =
+        p.external_forcing.column_timevaryinginputs
+
+    # set the external forcing variables; external tendency is updated in a remaining_tendency! call
+    evaluate!(ᶜdTdt_fluc, tntva, t)
+    evaluate!(ᶜdqtdt_fluc, tnhusva, t)
+    evaluate!(ᶜdTdt_hadv, tntha, t)
+    evaluate!(ᶜdqtdt_hadv, tnhusha, t)
+    evaluate!(ᶜT_nudge, ta, t)
+    evaluate!(ᶜqt_nudge, hus, t)
+    evaluate!(ᶜu_nudge, ua, t)
+    evaluate!(ᶜv_nudge, va, t)
+
+    # subsidence
+    evaluate!(ᶜls_subsidence, wa, t)
+
+    @. ᶜinv_τ_wind = 1 / (6 * 3600)
+    # set relaxation profile toward reference state - should find better way than field2array 
+    Fields.field2array(ᶜinv_τ_scalar) .=
+        compute_gcm_driven_scalar_inv_τ.(
+            Fields.field2array(Fields.coordinate_field(ᶜinv_τ_scalar).z)[:]
+        )
+
+    # surface temperature for surface state
+    (; ts) = p.external_forcing.surface_timevaryinginputs
+    evaluate!(p.external_forcing.surface_inputs.ts, ts, t)
+end
+
+
+
 NVTX.@annotate function cloud_fraction_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -344,6 +399,23 @@ function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
     rrtmgp_model.cos_zenith .= Fields.field2array(p.external_forcing.cos_zenith)
     rrtmgp_model.weighted_irradiance .=
         Fields.field2array(p.external_forcing.insolation)
+end
+
+function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
+    # unpack objects with time varying data
+    (; rrtmgp_model) = p.radiation
+    (; coszen, rsdt) = p.external_forcing.surface_inputs
+    coszen_tv =
+        getproperty(p.external_forcing.surface_timevaryinginputs, :coszen)
+    rsdt_tv = getproperty(p.external_forcing.surface_timevaryinginputs, :rsdt)
+
+    # evaluate time varying data onto temporary fields 
+    evaluate!(coszen, coszen_tv, t)
+    evaluate!(rsdt, rsdt_tv, t)
+
+    # set insolation variables from the values within the fields
+    rrtmgp_model.cos_zenith .= Fields.field2array(coszen)
+    rrtmgp_model.weighted_irradiance .= Fields.field2array(rsdt)
 end
 
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
