@@ -269,12 +269,6 @@ function non_orographic_gravity_wave_compute_tendency!(Y, p)
         p,
     )
 
-    # # update cache after computation
-    # # do I need to do this? Since these attributes were
-    # # unpacked via reference?
-    # p.non_orographic_gravity_wave.uforcing .= uforcing
-    # p.non_orographic_gravity_wave.vforcing .= vforcing
-
 end
 
 non_orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing

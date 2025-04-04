@@ -6,4 +6,3 @@ dt_nogw: "450secs"
 diagnostics:
   - short_name: [ta, thetaa, ua, va, wa, zg, utendnogw, vtendnogw]
     period: 1hours
-    

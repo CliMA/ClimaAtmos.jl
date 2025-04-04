@@ -167,7 +167,7 @@ Similar to the base flux calculation but for the 3D fields, we computed ``N`` an
 ```math
 ^f V_{\tau}[k] = \max(\epsilon_0, - V[k] \cdot \frac{\tau}{|\tau|}),
 ```
-where where ``\epsilon_0`` denotes a measure of floating-point precision.
+where ``\epsilon_0`` denotes a measure of floating-point precision.
 
 Let ``L_1 = L_0 * \max(0.5, \min(2.0, 1.0-samp*V_\tau*d^2V_{\tau}/N^2))`` where ``samp=1.0`` is the correction for coarse sampling of ``d^2V/dz^2``, and
 ```math
