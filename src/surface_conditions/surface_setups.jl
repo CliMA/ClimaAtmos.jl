@@ -276,37 +276,16 @@ function gcm_surface_conditions(external_forcing_file, cfsite_number)
     end
 end
 
-struct ExternalTVSurfaceConditions
-    external_forcing_file::String
-    start_date::String
-end
+struct ReanalysisTimeVarying end
 
-function (surface_setup::ExternalTVSurfaceConditions)(params)
+
+function (surface_setup::ReanalysisTimeVarying)(params)
     FT = eltype(params)
-    (; external_forcing_file, start_date) = surface_setup
-    T = FT.(external_tv_surface_conditions(external_forcing_file, start_date))
     z0 = FT(1e-4)  # zrough
     parameterization = MoninObukhov(; z0)
-    return SurfaceState(; parameterization, T)
+    return SurfaceState(; parameterization)
 end
 
-"""
-    external_tv_surface_conditions(external_forcing_file::String, start_date::String)
-
-Gets the surface temperature from the external forcing file at the given start date 
-which is used to construct the surface state.
-"""
-function external_tv_surface_conditions(
-    external_forcing_file::String,
-    start_date::String,
-)
-    start_time = Dates.DateTime(start_date, "yyyymmdd")
-    T = NC.NCDataset(external_forcing_file) do ds
-        time_index = argmin(abs.(ds["time"][:] .- start_time))
-        ds["ts"][1, 1, 1, time_index]
-    end
-    return T
-end
 
 struct ISDAC end
 function (::ISDAC)(params)

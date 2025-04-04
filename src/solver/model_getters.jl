@@ -427,7 +427,7 @@ function get_external_forcing_model(parsed_args, FT)
     @assert external_forcing in
             (nothing, "GCM", "ReanalysisTimeVarying", "ISDAC")
     reanalysis_required_fields = map(
-        x -> lowercase(parsed_args[x]),
+        x -> parsed_args[x],
         [
             "external_forcing",
             "surface_setup",
@@ -435,8 +435,8 @@ function get_external_forcing_model(parsed_args, FT)
             "initial_condition",
         ],
     )
-    if any(reanalysis_required_fields .== "reanalysistimevarying")
-        @assert all(reanalysis_required_fields .== "reanalysistimevarying") "All of external_forcing, surface_setup, surface_temperature and initial_condition must be set to ReanalysisTimeVarying."
+    if any(reanalysis_required_fields .== "ReanalysisTimeVarying")
+        @assert all(reanalysis_required_fields .== "ReanalysisTimeVarying") "All of external_forcing, surface_setup, surface_temperature and initial_condition must be set to ReanalysisTimeVarying."
     end
     return if isnothing(external_forcing)
         nothing

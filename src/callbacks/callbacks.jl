@@ -47,7 +47,6 @@ function external_driven_single_column!(integrator)
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜspecific, ᶜts, ᶜh_tot) = p.precomputed
     # unpack external forcing objects that we can directly set.
     (;
         ᶜdTdt_fluc,

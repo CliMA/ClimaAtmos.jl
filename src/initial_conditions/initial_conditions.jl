@@ -1357,7 +1357,6 @@ function external_tv_initial_condition(external_forcing_file, start_date)
             Intp.Flat(),
         )
     end
-    @info "Interpolation Variables are type: " typeof(T)
     return InterpolatedColumnProfile(T, u, v, q_tot, ρ₀)
 end
 

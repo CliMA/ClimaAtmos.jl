@@ -202,7 +202,7 @@ function surface_state_to_conditions(
     (!isnothing(surf_state.q_vap) && atmos.moisture_model isa DryModel) &&
         error("surface q_vap cannot be specified when using a DryModel")
 
-    T = if atmos.sfc_temperature isa ExternalTVColumnSST && t > 0.0
+    T = if atmos.sfc_temperature isa ExternalTVColumnSST
         FT(sfc_temp_var)
     elseif isnothing(sfc_temp_var)
         if isnothing(surf_state.T)
