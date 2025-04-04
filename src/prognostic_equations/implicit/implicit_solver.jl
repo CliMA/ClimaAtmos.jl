@@ -606,7 +606,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     Δcv_v = FT(CAP.cv_v(params)) - cv_d
     T_0 = FT(CAP.T_0(params))
     R_d = FT(CAP.R_d(params))
+    ΔR_v = FT(CAP.R_v(params)) - R_d
     cp_d = FT(CAP.cp_d(params))
+    Δcp_v = FT(CAP.cp_v(params)) - cp_d
     # This term appears a few times in the Jacobian, and is technically
     # minus ∂e_int_∂q_tot
     ∂e_int_∂q_tot = T_0 * (Δcv_v - R_d) - FT(CAP.e_int_v0(params))
@@ -623,6 +625,14 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
 
     ᶜkappa_m = @. lazy(
         TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts),
+    )
+
+    # Using abs2 because ^2 results in allocation
+    ᶜ∂kappa_m∂q_tot = @. lazy(
+        (
+            ΔR_v * TD.cv_m(thermo_params, ᶜts) -
+            Δcv_v * TD.gas_constant_air(thermo_params, ᶜts)
+        ) / abs2(TD.cv_m(thermo_params, ᶜts)),
     )
 
     if use_derivative(topography_flag)
@@ -681,7 +691,13 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
         ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
         @. ∂ᶠu₃_err_∂ᶜρq_tot =
-            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m * ∂e_int_∂q_tot)
+            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow((
+                ᶜkappa_m * ∂e_int_∂q_tot +
+                ᶜ∂kappa_m∂q_tot * (
+                    cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
+                    ∂e_int_∂q_tot * ᶜspecific.q_tot
+                )
+            ))
     end
 
     ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
@@ -806,8 +822,13 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
             ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
             ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
             @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
-                dtγ * ᶜdiffusion_h_matrix ⋅
-                DiagonalMatrixRow(ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ)
+                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((
+                    ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ +
+                    ᶜ∂kappa_m∂q_tot * (
+                        cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
+                        ∂e_int_∂q_tot * ᶜspecific.q_tot
+                    )
+                ))
             @. ∂ᶜρq_tot_err_∂ᶜρ =
                 dtγ * ᶜdiffusion_h_matrix ⋅
                 DiagonalMatrixRow(-(ᶜspecific.q_tot) / ᶜρ)
@@ -904,6 +925,15 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 TD.cv_m(thermo_params, ᶜtsʲs.:(1)),
             )
 
+            # Note this is the derivative of R_m / cp_m with respect to q_tot
+            # but we call it ∂kappa_m∂q_totʲ
+            ᶜ∂kappa_m∂q_totʲ = @. lazy(
+                (
+                    ΔR_v * TD.cp_m(thermo_params, ᶜtsʲs.:(1)) -
+                    Δcp_v * TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1))
+                ) / abs2(TD.cp_m(thermo_params, ᶜtsʲs.:(1))),
+            )
+
             ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
             @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
@@ -932,10 +962,15 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
             @. ∂ᶜmseʲ_err_∂ᶜq_totʲ =
                 dtγ * (
                     -DiagonalMatrixRow(
-                        adjoint(ᶜinterp(ᶠu³ʲs.:(1))) *
-                        ᶜgradᵥ_ᶠΦ *
-                        Y.c.ρ *
-                        ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp) * ∂e_int_∂q_tot,
+                        adjoint(ᶜinterp(ᶠu³ʲs.:(1))) * ᶜgradᵥ_ᶠΦ * Y.c.ρ / ᶜp *
+                        (
+                            (ᶜkappa_mʲ / (ᶜkappa_mʲ + 1) * ∂e_int_∂q_tot) +
+                            ᶜ∂kappa_m∂q_totʲ * (
+                                Y.c.sgsʲs.:(1).mse - ᶜΦ +
+                                cp_d * T_0 +
+                                ∂e_int_∂q_tot * Y.c.sgsʲs.:(1).q_tot
+                            )
+                        ),
                     )
                 )
 
@@ -977,8 +1012,14 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                         ),
                     ) / ᶠJ,
                 ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
-                    ᶜJ * ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp) *
-                    ∂e_int_∂q_tot,
+                    ᶜJ * (ᶜρʲs.:(1))^2 / ᶜp * (
+                        ᶜkappa_mʲ / (ᶜkappa_mʲ + 1) * ∂e_int_∂q_tot +
+                        ᶜ∂kappa_m∂q_totʲ * (
+                            Y.c.sgsʲs.:(1).mse - ᶜΦ +
+                            cp_d * T_0 +
+                            ∂e_int_∂q_tot * Y.c.sgsʲs.:(1).q_tot
+                        )
+                    ),
                 )
             @. ᶠbidiagonal_matrix_ct3_2 =
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
@@ -1045,8 +1086,14 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 dtγ * DiagonalMatrixRow(
                     ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) / (ᶠinterp(ᶜρʲs.:(1)))^2,
                 ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
-                    ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp) *
-                    ∂e_int_∂q_tot,
+                    (ᶜρʲs.:(1))^2 / ᶜp * (
+                        ᶜkappa_mʲ / (ᶜkappa_mʲ + 1) * ∂e_int_∂q_tot +
+                        ᶜ∂kappa_m∂q_totʲ * (
+                            Y.c.sgsʲs.:(1).mse - ᶜΦ +
+                            cp_d * T_0 +
+                            ∂e_int_∂q_tot * Y.c.sgsʲs.:(1).q_tot
+                        )
+                    ),
                 )
             ∂ᶠu₃ʲ_err_∂ᶜmseʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).mse)]
@@ -1154,7 +1201,13 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
 
                 @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
                     dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar ⋅
-                    DiagonalMatrixRow(ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ)
+                    DiagonalMatrixRow((
+                        ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ +
+                        ᶜ∂kappa_m∂q_tot * (
+                            cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
+                            ∂e_int_∂q_tot * ᶜspecific.q_tot
+                        )
+                    ))
 
                 @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
                     dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar ⋅
