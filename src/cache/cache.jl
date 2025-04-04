@@ -154,6 +154,7 @@ function build_cache(
         scratch,
         dt,
         conservation_check,
+        external_forcing,
     )
 
     # Coupler compatibility

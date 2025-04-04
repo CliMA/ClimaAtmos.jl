@@ -16,7 +16,7 @@ function get_sfc_temperature_form(parsed_args)
         "ZonallyAsymmetric",
         "ZonallySymmetric",
         "RCEMIPII",
-        "ExternalTVColumn",
+        "ReanalysisTimeVarying",
     )
     return if surface_temperature == "ZonallyAsymmetric"
         ZonallyAsymmetricSST()
@@ -24,7 +24,7 @@ function get_sfc_temperature_form(parsed_args)
         ZonallySymmetricSST()
     elseif surface_temperature == "RCEMIPII"
         RCEMIPIISST()
-    elseif surface_temperature == "ExternalTVColumn"
+    elseif surface_temperature == "ReanalysisTimeVarying"
         ExternalTVColumnSST()
     end
 end
@@ -424,7 +424,20 @@ end
 
 function get_external_forcing_model(parsed_args, FT)
     external_forcing = parsed_args["external_forcing"]
-    @assert external_forcing in (nothing, "GCM", "ExternalTV", "ISDAC")
+    @assert external_forcing in
+            (nothing, "GCM", "ReanalysisTimeVarying", "ISDAC")
+    reanalysis_required_fields = map(
+        x -> lowercase(parsed_args[x]),
+        [
+            "external_forcing",
+            "surface_setup",
+            "surface_temperature",
+            "initial_condition",
+        ],
+    )
+    if any(reanalysis_required_fields .== "reanalysistimevarying")
+        @assert all(reanalysis_required_fields .== "reanalysistimevarying") "All of external_forcing, surface_setup, surface_temperature and initial_condition must be set to ReanalysisTimeVarying."
+    end
     return if isnothing(external_forcing)
         nothing
     elseif external_forcing == "GCM"
@@ -432,7 +445,7 @@ function get_external_forcing_model(parsed_args, FT)
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
-    elseif external_forcing == "ExternalTV"
+    elseif external_forcing == "ReanalysisTimeVarying"
         # when running on buildkite, we want to always generate the forcing, so we don't use
         # the `era5_hourly_atmos_processed` artifact
         if get(ENV, "BUILDKITE", "") == "true"

@@ -26,7 +26,17 @@ function update_surface_conditions!(Y, p, t)
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
     sfc_conditions_values = Fields.field_values(sfc_conditions)
     wrapped_sfc_setup = sfc_setup_wrapper(sfc_setup)
-    sfc_temp_var = get_sfc_temp_var(atmos, t, params, p, Y)
+    #sfc_temp_var = get_sfc_temp_var(atmos, t, params, p, Y)
+    #@Main.infiltrate
+    if p.atmos.sfc_temperature isa ExternalTVColumnSST
+        evaluate!(p.external_forcing.surface_inputs.ts, p.external_forcing.surface_timevaryinginputs.ts, t)
+        sfc_temp_var = Fields.field2array(p.external_forcing.surface_inputs.ts)[1]
+    elseif p.atmos.surface_model isa PrognosticSurfaceTemperature
+        sfc_temp_var = Fields.field_values(Y.sfc.T)
+    else
+        sfc_temp_var = nothing
+    end
+
     @. sfc_conditions_values = surface_state_to_conditions(
         wrapped_sfc_setup,
         sfc_local_geometry_values,

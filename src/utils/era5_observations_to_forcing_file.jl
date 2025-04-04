@@ -77,8 +77,8 @@ function get_horizontal_tendencies(lat, lon_index, lat_index, column_ds)
     ᵉq = column_ds["q"][lon_index + 1, lat_index, :, :]
 
     # temperature and specific humidity advective tendency at center
-    tntha = -(ᶜu .* (ᵉT .- ʷT) ./ (2dx) .+ ᶜv .* (ⁿT .- ˢT) ./ (2dy))
-    tnhusha = -(ᶜu .* (ᵉq .- ʷq) ./ (2dx) .+ ᶜv .* (ⁿq .- ˢq) ./ (2dy))
+    tntha = -(ᶜu .* (ᵉT .- ʷT) ./ (2 * dx) .+ ᶜv .* (ⁿT .- ˢT) ./ (2 * dy))
+    tnhusha = -(ᶜu .* (ᵉq .- ʷq) ./ (2 * dx) .+ ᶜv .* (ⁿq .- ˢq) ./ (2 * dy))
 
     return tntha, tnhusha
 end
@@ -158,10 +158,6 @@ function generate_external_era5_forcing_file(
         joinpath(artifact_data_directory, "hourly_accum_$(start_date).nc"),
     )
 
-
-    sim_forcing = Dict()
-    sim_forcing["time"] = tvforcing["valid_time"][:]
-
     # find indexes for site location in pressure file
     lon_index = findfirst(tvforcing["longitude"][:] .== lon)
     lat_index = findfirst(tvforcing["latitude"][:] .== lat)
@@ -187,18 +183,22 @@ function generate_external_era5_forcing_file(
     pressure = tvforcing["pressure_level"] .* 100 # convert hPa to Pa
     R_d =
         external_tv_params.gas_constant / external_tv_params.molar_mass_dry_air # J/(kg*K)
+
     ρ = reshape(pressure, 37, 1) ./ (R_d .* sim_forcing["ta"])
     sim_forcing["rho"] = ρ # pressure
     sim_forcing["wa"] =
         .-sim_forcing["wap"] ./
         (ρ .* external_tv_params.gravitational_acceleration)
 
+    # compute vertical advection terms 
 
-    # compute vertical advection terms - zero for time varying forcing, nonzero for steady state
-    sim_forcing["tntva"] =
-        zeros(size(get_vertical_tendencies(sim_forcing, "ta")))
-    sim_forcing["tnhusva"] =
-        zeros(size(get_vertical_tendencies(sim_forcing, "hus")))
+    # for steady forcing we need to prescribe vertical eddy tendencies
+    # sim_forcing["tntva"] = get_vertical_tendencies(sim_forcing, "ta")
+    # sim_forcing["tnhusva"] = get_vertical_tendencies(sim_forcing, "hus")
+
+    # for time-varying forcing we set these tendencies to zero 
+    sim_forcing["tntva"] = zeros(size(sim_forcing["ta"]))
+    sim_forcing["tnhusva"] = zeros(size(sim_forcing["hus"]))
 
     # compute horizontal advection terms - we need the spatial profile to compute horizontal gradients
     sim_forcing["tntha"], sim_forcing["tnhusha"] =

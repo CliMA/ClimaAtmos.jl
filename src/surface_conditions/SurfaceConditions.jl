@@ -20,6 +20,7 @@ import ClimaCore.Geometry: ⊗
 import ClimaCore.Utilities: half
 import SurfaceFluxes as SF
 import Thermodynamics as TD
+import ClimaUtilities.TimeVaryingInputs: evaluate!
 
 import Interpolations
 import StaticArrays as SA

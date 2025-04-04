@@ -327,7 +327,8 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         )
     end
 
-    if lowercase(parsed_args["external_forcing"]) == "externaltv" && lowercase(parsed_args["config"]) == "column"
+    if lowercase(parsed_args["external_forcing"]) == "reanalysistimevarying" &&
+       lowercase(parsed_args["config"]) == "column"
         callbacks = (
             callbacks...,
             call_every_n_steps(

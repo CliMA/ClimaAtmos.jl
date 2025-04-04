@@ -352,9 +352,13 @@ function get_initial_condition(parsed_args)
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
-    elseif lowercase(parsed_args["initial_condition"]) == "externaltv"
+    elseif lowercase(parsed_args["initial_condition"]) ==
+           "reanalysistimevarying"
         external_forcing_file = get_external_forcing_file_path(parsed_args)
-        return ICs.external_tv_initial_condition(external_forcing_file, parsed_args["start_date"])
+        return ICs.external_tv_initial_condition(
+            external_forcing_file,
+            parsed_args["start_date"],
+        )
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
@@ -403,7 +407,7 @@ function get_surface_setup(parsed_args)
         parsed_args["cfsite_number"],
     )
 
-    parsed_args["surface_setup"] == "ExternalTV" &&
+    parsed_args["surface_setup"] == "ReanalysisTimeVarying" &&
         return SurfaceConditions.ExternalTVSurfaceConditions(
             get_external_forcing_file_path(parsed_args),
             parsed_args["start_date"],

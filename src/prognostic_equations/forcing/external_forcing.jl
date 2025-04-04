@@ -250,42 +250,6 @@ function external_forcing_tendency!(
 end
 
 
-function create_external_forcing_cache(Y)
-    FT = Spaces.undertype(axes(Y.c))
-    ᶜdTdt_fluc = similar(Y.c, FT)
-    ᶜdqtdt_fluc = similar(Y.c, FT)
-    ᶜdTdt_hadv = similar(Y.c, FT)
-    ᶜdqtdt_hadv = similar(Y.c, FT)
-    ᶜdTdt_rad = similar(Y.c, FT)
-    ᶜT_nudge = similar(Y.c, FT)
-    ᶜqt_nudge = similar(Y.c, FT)
-    ᶜu_nudge = similar(Y.c, FT)
-    ᶜv_nudge = similar(Y.c, FT)
-    ᶜinv_τ_wind = similar(Y.c, FT)
-    ᶜinv_τ_scalar = similar(Y.c, FT)
-    ᶜls_subsidence = similar(Y.c, FT)
-    insolation = similar(Fields.level(Y.c.ρ, 1), FT)
-    cos_zenith = similar(Fields.level(Y.c.ρ, 1), FT)
-
-    return (;
-        ᶜdTdt_fluc,
-        ᶜdqtdt_fluc,
-        ᶜdTdt_hadv,
-        ᶜdqtdt_hadv,
-        ᶜdTdt_rad,
-        ᶜT_nudge,
-        ᶜqt_nudge,
-        ᶜu_nudge,
-        ᶜv_nudge,
-        ᶜinv_τ_wind,
-        ᶜinv_τ_scalar,
-        ᶜls_subsidence,
-        insolation,
-        cos_zenith,
-    )
-end
-
-
 function external_forcing_cache(
     Y,
     external_forcing::ExternalDrivenTVForcing,
@@ -313,8 +277,8 @@ function external_forcing_cache(
         "wap",
     ]
     surface_tendencies = ["coszen", "rsdt", "hfls", "hfss", "ts"]
-    column_target_space = axes(similar(Y.c))
-    surface_target_space = axes(similar(Fields.level(Y.c, 1)))
+    column_target_space = axes(Y.c)
+    surface_target_space = axes(Fields.level(Y.f.u₃, ClimaCore.Utilities.half))
 
     extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Linear())
 
@@ -350,13 +314,10 @@ function external_forcing_cache(
     )
 
     surface_inputs = similar(
-        Fields.level(Y.c, 1),
+        Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
         NamedTuple{
             Tuple(surface_variable_names_as_symbols),
-            NTuple{
-                length(surface_variable_names_as_symbols),
-                eltype(Fields.level(Y.c, 1).ρ),
-            },
+            NTuple{length(surface_variable_names_as_symbols), eltype(params)},
         },
     )
 
@@ -368,7 +329,30 @@ function external_forcing_cache(
     era5_tv_column_cache = (; column_inputs, column_timevaryinginputs)
     era5_tv_surface_cache = (; surface_inputs, surface_timevaryinginputs)
 
-    era5_cache = create_external_forcing_cache(Y)
+    # create cache for external forcing data that will be populated in callbacks
+    FT = Spaces.undertype(axes(Y.c))
+    era5_cache = (;
+        ᶜdTdt_fluc = similar(Y.c, FT),
+        ᶜdqtdt_fluc = similar(Y.c, FT),
+        ᶜdTdt_hadv = similar(Y.c, FT),
+        ᶜdqtdt_hadv = similar(Y.c, FT),
+        ᶜdTdt_rad = similar(Y.c, FT),
+        ᶜT_nudge = similar(Y.c, FT),
+        ᶜqt_nudge = similar(Y.c, FT),
+        ᶜu_nudge = similar(Y.c, FT),
+        ᶜv_nudge = similar(Y.c, FT),
+        ᶜinv_τ_wind = similar(Y.c, FT),
+        ᶜinv_τ_scalar = similar(Y.c, FT),
+        ᶜls_subsidence = similar(Y.c, FT),
+        insolation = similar(
+            Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
+            FT,
+        ),
+        cos_zenith = similar(
+            Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
+            FT,
+        ),
+    )
 
     return (; era5_tv_column_cache..., era5_tv_surface_cache..., era5_cache...)
 end
