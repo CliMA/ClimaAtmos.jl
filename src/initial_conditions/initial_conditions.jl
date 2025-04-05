@@ -1626,14 +1626,6 @@ Base.@kwdef struct Larcform1 <: InitialCondition
     prognostic_tke::Bool = true
 end
 
-function Larcform1_T(::Type{FT}) where {FT}
-    z -> FT(
-    if z ≤ 4000
-        273.0 - 8E-3*z # K 
-    else
-        203.1 # K
-    end)  # kg/kg
-end
 # Add Larcform1_T Profile to APL
 # Could we use this sort of code loading & modification to create a way to load in
 # profiles and initial conditions from a user-defined file?
@@ -1644,33 +1636,8 @@ function (initial_condition::Larcform1)(params)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     p_0 = FT(101300)  # 1020 hPa
-    #θ = APL.ISDAC_θ_liq_ice(FT) # K
-    q_tot = APL.ISDAC_q_tot(FT) #FT(0) # TODO 
-    #q_tot = APL.ISDAC_q_tot(FT)  # kg/kg
-
-    # TODO change to using appropriate libraries
-    #R = FT(287) # J/kg/K
-    # γ = FT(8E-3) # K/m
-    #g = FT(9.81) # m/s^2
-    #α = FT(R*γ/g) # Rγ/g; R=287 J/kg/K, g = 9.81 m/s^2
-    # K
-    #T300hpa = FT(203.1) # K""" [Pithan2016](@cite) """
-
-
-    #T(z)=Larcform1_T(z)
-    T=Larcform1_T(FT)
-    #= Does not work because of ill-defined *(p_0, exp([...])) operation below
-    function p(z)
-        if z≤FT(4000) && z≥FT(0)
-            return p_0*(FT(1)-γ/T₀*z)^(FT(1)/α)
-        elseif z>FT(4000)
-            return p_0*exp(-g/R/T300hpa*z)
-        else
-            throw(DomainError(z, "Argument must be a non-negative real number"))
-        end        
-    end
-    =#
-    #Main.@infiltrate
+    q_tot = APL.Larcform1_q_tot(FT) #FT(0) # TODO 
+    T=APL.Larcform1_T(FT)
     p = hydrostatic_pressure_profile(;
     thermo_params,
     p_0,
@@ -1685,7 +1652,6 @@ function (initial_condition::Larcform1)(params)
     # TODO check if we want this // if 825 is appropriate height
     #θ_pert(z::FT) where {FT} =
     #    perturb && (z < 825) ? FT(0.1) * randn(FT) : FT(0)
-    #Main.@infiltrate
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
         return LocalState(;
