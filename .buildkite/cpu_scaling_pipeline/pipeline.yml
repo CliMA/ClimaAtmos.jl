@@ -18,7 +18,8 @@ steps:
       JULIA_MAX_NUM_PRECOMPILE_FILES: 50
   - "wait"
   - steps:
-      - label: ":computer: 1 node, 16 processes per node, helem = 30"
+      - label: ":computer: MBW weak scaling, 1 nodes, 16 processes per node, helem = 30"
+        key: "ws_1_nodes"
         agents:
           slurm_time: "1:00:00"
           slurm_cpus_per_task: 1
@@ -28,9 +29,11 @@ steps:
           slurm_exclusive: true
           slurm_mem: 0
           slurm_constraint: "icelake"
+          slurm_reservation: "false"
         command: "srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file config/mbw_scaling_configs/moist_baroclinic_wave_helem_30_0M_ws.yml --job_id moist_baroclinic_wave_helem_30_0M_ws"
         artifact_paths: "moist_baroclinic_wave_helem_30_0M_ws/output_active/*"
-      - label: ":computer: 2 node, 16 processes per node, helem = 42"
+      - label: ":computer: MBW weak scaling, 2 nodes, 16 processes per node, helem = 42"
+        key: "ws_2_nodes"
         agents:
           slurm_time: "1:00:00"
           slurm_cpus_per_task: 1
@@ -40,9 +43,11 @@ steps:
           slurm_exclusive: true
           slurm_mem: 0
           slurm_constraint: "icelake"
+          slurm_reservation: "false"
         command: "srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file config/mbw_scaling_configs/moist_baroclinic_wave_helem_42_0M_ws.yml --job_id moist_baroclinic_wave_helem_42_0M_ws"
         artifact_paths: "moist_baroclinic_wave_helem_42_0M_ws/output_active/*"
-      - label: ":computer: 4 node, 16 processes per node, helem = 60"
+      - label: ":computer: MBW weak scaling, 4 nodes, 16 processes per node, helem = 60"
+        key: "ws_4_nodes"
         agents:
           slurm_time: "1:00:00"
           slurm_cpus_per_task: 1
@@ -52,9 +57,54 @@ steps:
           slurm_exclusive: true
           slurm_mem: 0
           slurm_constraint: "icelake"
+          slurm_reservation: "false"
         command: "srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file config/mbw_scaling_configs/moist_baroclinic_wave_helem_60_0M_ws.yml --job_id moist_baroclinic_wave_helem_60_0M_ws"
         artifact_paths: "moist_baroclinic_wave_helem_60_0M_ws/output_active/*"
     group: "Moist Baroclinic Wave, weak scaling"
+  - steps:
+      - label: ":computer: MBW strong scaling, 1 nodes, 16 processes per node, helem = 30"
+        key: "ss_1_nodes"
+        agents:
+          slurm_time: "1:00:00"
+          slurm_cpus_per_task: 1
+          slurm_tasks_per_node: 16
+          queue: "new-central"
+          slurm_nodes: 1
+          slurm_exclusive: true
+          slurm_mem: 0
+          slurm_constraint: "icelake"
+          slurm_reservation: "false"
+        command: "srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file config/mbw_scaling_configs/moist_baroclinic_wave_helem_30_0M_ss.yml --job_id moist_baroclinic_wave_helem_30_0M_ss"
+        artifact_paths: "moist_baroclinic_wave_helem_30_0M_ss/output_active/*"
+      - label: ":computer: MBW strong scaling, 2 nodes, 16 processes per node, helem = 60"
+        key: "ss_2_nodes"
+        agents:
+          slurm_time: "1:00:00"
+          slurm_cpus_per_task: 1
+          slurm_tasks_per_node: 16
+          queue: "new-central"
+          slurm_nodes: 2
+          slurm_exclusive: true
+          slurm_mem: 0
+          slurm_constraint: "icelake"
+          slurm_reservation: "false"
+        command: "srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file config/mbw_scaling_configs/moist_baroclinic_wave_helem_60_0M_ss.yml --job_id moist_baroclinic_wave_helem_60_0M_ss"
+        artifact_paths: "moist_baroclinic_wave_helem_60_0M_ss/output_active/*"
+      - label: ":computer: MBW strong scaling, 4 nodes, 16 processes per node, helem = 120"
+        key: "ss_4_nodes"
+        agents:
+          slurm_time: "1:00:00"
+          slurm_cpus_per_task: 1
+          slurm_tasks_per_node: 16
+          queue: "new-central"
+          slurm_nodes: 4
+          slurm_exclusive: true
+          slurm_mem: 0
+          slurm_constraint: "icelake"
+          slurm_reservation: "false"
+        command: "srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file config/mbw_scaling_configs/moist_baroclinic_wave_helem_120_0M_ss.yml --job_id moist_baroclinic_wave_helem_120_0M_ss"
+        artifact_paths: "moist_baroclinic_wave_helem_120_0M_ss/output_active/*"
+    group: "Moist Baroclinic Wave, strong scaling"
 env:
   SLURM_KILL_BAD_EXIT: 1
   OPENBLAS_NUM_THREADS: 1
