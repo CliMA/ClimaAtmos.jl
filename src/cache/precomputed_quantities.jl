@@ -28,7 +28,7 @@ In addition, there are several other SGS quantities for `PrognosticEDMFX`:
     - `ᶜtke⁰`: turbulent kinetic energy of the environment on cell centers
     - `ᶜρa⁰`: area-weighted air density of the environment on cell centers
     - `ᶜmse⁰`: moist static energy of the environment on cell centers
-    - `ᶜq_tot⁰`: total specific humidity of the environment on cell centers
+    - `ᶜq_tot⁰`: total water specific content of the environment on cell centers
     - `ᶜρ⁰`: air density of the environment on cell centers
     - `ᶜρʲs`: a tuple of the air densities of the mass-flux subdomains on cell
         centers
@@ -516,7 +516,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         @. p.precomputed.ᶜgradᵥ_θ_virt =
             ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))
         @. p.precomputed.ᶜgradᵥ_q_tot =
-            ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
+            ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts))) # TODO: rename to "total_water_specific_content"
         @. p.precomputed.ᶜgradᵥ_θ_liq_ice =
             ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
     end

@@ -39,7 +39,7 @@ end
 
  - cmc - a struct with cloud and aerosol parameters
  - c_dust, c_seasalt, c_SO4 - dust, seasalt and ammonium sulfate mass concentrations [kg/kg]
- - q_liq - liquid water specific humidity
+ - q_liq - liquid water specific content
 
 Returns the liquid cloud droplet number concentration diagnosed based on the
 aerosol loading and cloud liquid water.
@@ -110,7 +110,7 @@ end
 
  - thp, cmp - structs with thermodynamic and microphysics parameters
  - dt - model time step
- - qₜ - total water specific humidity
+ - qₜ - total water specific content
  - ts - thermodynamic state (see Thermodynamics.jl package for details)
 
 Returns the qₜ source term due to precipitation formation
@@ -148,13 +148,13 @@ end
  - Sᵖ, Sᵖ_snow - temporary containters to help compute precipitation source terms
  - Sqₗᵖ, Sqᵢᵖ, Sqᵣᵖ, Sqₛᵖ - cached storage for precipitation source terms
  - ρ - air density
- - qᵣ, qₛ - precipitation (rain and snow) specific humidity
+ - qᵣ, qₛ - precipitation (rain and snow) specific content
  - ts - thermodynamic state (see td package for details)
  - dt - model time step
  - thp, cmp - structs with thermodynamic and microphysics parameters
 
 Returns the q source terms due to precipitation formation from the 1-moment scheme.
-The specific humidity source terms are defined as defined as Δmᵢ / (m_dry + m_tot)
+The water specific content source terms are defined as Δmᵢ / (m_dry + m_tot)
 where i stands for total, rain or snow.
 Also returns the total energy source term due to the microphysics processes.
 """
@@ -272,13 +272,13 @@ end
  - Sᵖ - a temporary containter to help compute precipitation source terms
  - Sqᵣᵖ, Sqₛᵖ - cached storage for precipitation source terms
  - ρ - air density
- - qᵣ, qₛ - precipitation (rain and snow) specific humidities
+ - qᵣ, qₛ - precipitation (rain and snow) specific contents
  - ts - thermodynamic state (see td package for details)
  - dt - model time step
  - thp, cmp - structs with thermodynamic and microphysics parameters
 
 Returns the q source terms due to precipitation sinks from the 1-moment scheme.
-The specific humidity source terms are defined as defined as Δmᵢ / (m_dry + m_tot)
+The water specific content source terms are defined as Δmᵢ / (m_dry + m_tot)
 where i stands for total, rain or snow.
 Also returns the total energy source term due to the microphysics processes.
 """
