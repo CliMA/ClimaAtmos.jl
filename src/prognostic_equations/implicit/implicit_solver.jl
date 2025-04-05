@@ -543,6 +543,7 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         p.core.ᶜΦ,
         p.core.ᶠgradᵥ_ᶜΦ,
         p.scratch.ᶜtemp_scalar,
+        p.scratch.ᶜtemp_scalar_2,
         p.scratch.ᶜtemp_C3,
         p.scratch.ᶠtemp_CT3,
         p.scratch.∂ᶜK_∂ᶜuₕ,
@@ -623,17 +624,17 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
     ᶠlg = Fields.local_geometry_field(Y.f)
 
-    ᶜkappa_m = @. lazy(
-        TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts),
-    )
+    ᶜkappa_m = p.ᶜtemp_scalar
+    @. ᶜkappa_m =
+        TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts)
 
+    ᶜ∂kappa_m∂q_tot = p.ᶜtemp_scalar_2
     # Using abs2 because ^2 results in allocation
-    ᶜ∂kappa_m∂q_tot = @. lazy(
+    @. ᶜ∂kappa_m∂q_tot =
         (
             ΔR_v * TD.cv_m(thermo_params, ᶜts) -
             Δcv_v * TD.gas_constant_air(thermo_params, ᶜts)
-        ) / abs2(TD.cv_m(thermo_params, ᶜts)),
-    )
+        ) / abs2(TD.cv_m(thermo_params, ᶜts))
 
     if use_derivative(topography_flag)
         @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
@@ -920,19 +921,19 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
             ) # Need to wrap ᶠupwind_matrix in this for well-defined boundaries.
 
             ᶠu³ʲ_data = ᶠu³ʲs.:(1).components.data.:1
-            ᶜkappa_mʲ = @. lazy(
+            ᶜkappa_mʲ = p.ᶜtemp_scalar
+            @. ᶜkappa_mʲ =
                 TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
-                TD.cv_m(thermo_params, ᶜtsʲs.:(1)),
-            )
+                TD.cv_m(thermo_params, ᶜtsʲs.:(1))
 
             # Note this is the derivative of R_m / cp_m with respect to q_tot
             # but we call it ∂kappa_m∂q_totʲ
-            ᶜ∂kappa_m∂q_totʲ = @. lazy(
+            ᶜ∂kappa_m∂q_totʲ = p.ᶜtemp_scalar_2
+            @. ᶜ∂kappa_m∂q_totʲ =
                 (
                     ΔR_v * TD.cp_m(thermo_params, ᶜtsʲs.:(1)) -
                     Δcp_v * TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1))
-                ) / abs2(TD.cp_m(thermo_params, ᶜtsʲs.:(1))),
-            )
+                ) / abs2(TD.cp_m(thermo_params, ᶜtsʲs.:(1)))
 
             ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
@@ -1190,6 +1191,18 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
 
                 # Derivative of total energy tendency with respect to updraft MSE
                 ## grid-mean ρe_tot
+                ᶜkappa_m = p.ᶜtemp_scalar
+                @. ᶜkappa_m =
+                    TD.gas_constant_air(thermo_params, ᶜts) /
+                    TD.cv_m(thermo_params, ᶜts)
+
+                ᶜ∂kappa_m∂q_tot = p.ᶜtemp_scalar_2
+                @. ᶜ∂kappa_m∂q_tot =
+                    (
+                        ΔR_v * TD.cv_m(thermo_params, ᶜts) -
+                        Δcv_v * TD.gas_constant_air(thermo_params, ᶜts)
+                    ) / abs2(TD.cv_m(thermo_params, ᶜts))
+
                 @. ∂ᶜρe_tot_err_∂ᶜρ +=
                     dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar ⋅
                     DiagonalMatrixRow(
