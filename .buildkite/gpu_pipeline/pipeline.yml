@@ -114,6 +114,25 @@ steps:
   - group: "DYAMOND GPU strong scaling"
     steps:
 
+      - label: "gpu_aquaplanet_dyamond - strong scaling - 1 GPU - No MPI"
+        command:
+          - mkdir -p gpu_aquaplanet_dyamond_ss_1GPU_no_mpi
+          - >
+            srun --cpu-bind=threads --cpus-per-task=4
+            nsys profile --delay 100 --trace=nvtx,cuda,osrt --output=gpu_aquaplanet_dyamond_ss_1GPU_no_mpi/output_active/report julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
+            --job_id gpu_aquaplanet_dyamond_ss_1GPU_no_mpi
+        artifact_paths: "gpu_aquaplanet_dyamond_ss_1GPU_no_mpi/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_ntasks: 1
+          slurm_cpus_per_task: 4
+          slurm_gres: "gpu:1"
+          slurm_mem: 32G
+          slurm_time: 00:45:00
+          slurm_exclusive:
+
       - label: "gpu_aquaplanet_dyamond with diagnostics - strong scaling - 1 GPU"
         command:
           - mkdir -p gpu_aquaplanet_dyamond_diag_1process
