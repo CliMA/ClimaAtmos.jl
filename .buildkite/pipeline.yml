@@ -31,6 +31,7 @@ steps:
 
       - echo "--- Instantiate .buildkite"
       - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.precompile(;strict=true); using CUDA; CUDA.precompile_runtime(); Pkg.status()'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name=\"ClimaCore\", rev=\"dy/matrix_mul_symbol\"))'"
 
     agents:
       slurm_cpus_per_task: 8
