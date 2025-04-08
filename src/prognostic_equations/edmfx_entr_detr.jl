@@ -344,17 +344,24 @@ function detrainment(
     ᶜtke⁰,
     ::SmoothAreaDetrainment,
 )
-    if (ᶜρaʲ <= 0) || (ᶜw_vert_div >= 0)
+    FT = eltype(thermo_params)
+    max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
+    max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
+    max_area_limiter = FT(max_area_limiter_scale)*exp(-FT(max_area_limiter_power) * (FT(1.0) - ᶜaʲ))
+    
+    if ᶜρaʲ <= 0
         detr = 0
+    elseif ᶜw_vert_div >= 0
+        detr = max_area_limiter
     else
-        detr = ᶜentr - ᶜw_vert_div
+        detr = ᶜentr - ᶜw_vert_div + max_area_limiter
     end
     return max(detr, 0)
 end
 
 function turbulent_entrainment(turbconv_params, ᶜaʲ)
     turb_entr_param_vec = CAP.turb_entr_param_vec(turbconv_params)
-    return max(turb_entr_param_vec[1] * exp(-turb_entr_param_vec[2] * ᶜaʲ), 0)
+    return max(turb_entr_param_vec[1] * exp(-turb_entr_param_vec[2] * ᶜaʲ), 0) #0.001 +
 end
 
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
@@ -420,7 +427,8 @@ limit_detrainment(detr::FT, a, dt) where {FT} =
     max(min(detr, FT(0.9) * 1 / float(dt)), 0)
 
 function limit_turb_entrainment(dyn_entr::FT, turb_entr, dt) where {FT}
-    return max(min((FT(0.9) * 1 / float(dt)) - dyn_entr, turb_entr), 0)
+    # return max(min((FT(0.9) * 1 / float(dt)) - dyn_entr, turb_entr), 0)
+    return max(min(FT(0.01), turb_entr), 0)
 end
 
 # limit entrainment and detrainment rates for diagnostic EDMF
