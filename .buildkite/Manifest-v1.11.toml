@@ -395,9 +395,9 @@ version = "0.2.12"
 
 [[deps.ClimaParams]]
 deps = ["TOML"]
-git-tree-sha1 = "4af2dbc0f82c09dd5b514960c7be1c0bad260bfa"
+git-tree-sha1 = "98f8b50fcd3efe21e79c3b98a93457d994bb3cde"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "0.10.26"
+version = "0.10.27"
 
 [[deps.ClimaReproducibilityTests]]
 deps = ["OrderedCollections", "PrettyTables"]
