@@ -539,6 +539,7 @@ array.
   `requires_z(interpolation) || requires_z(bottom_extrapolation)`:
     - `center_z`: z-coordinate in m at cell centers
     - `face_z`: z-coordinate in m at cell faces
+    - `planet_radius`: planet radius (used to compute metric scaling factor)
 """
 RRTMGPModel(
     params::RRTMGP.Parameters.ARP,
@@ -872,7 +873,6 @@ function _RRTMGPModel(
             cloud_state,
             aerosol_state,
         )
-
     end
 
     op = RRTMGP.Optics.TwoStream(FT, ncol, nlay, DA)
@@ -898,6 +898,8 @@ function _RRTMGPModel(
         set_and_save!(z_lay, "center_z", t..., dict)
         z_lev = DA{FT}(undef, nlay + 1, ncol)
         set_and_save!(z_lev, "face_z", t..., dict)
+        planet_radius = pop!(dict, :planet_radius)
+        as.metric_scaling .= ((z_lev .+ planet_radius) ./ planet_radius) .^ 2
     end
 
     if length(dict) > 0
@@ -1026,9 +1028,6 @@ function update_implied_values!(model)
     if requires_z(model.interpolation) || requires_z(model.bottom_extrapolation)
         z_lay = parent(model.center_z)
         z_lev = parent(model.face_z)
-        planet_radius = eltype(z_lev)(6371000)
-        metric_scaling .= ((z_lev .+ planet_radius) ./ planet_radius) .^ 2
-        metric_scaling[end,:] .= metric_scaling[end-1,:]
     end
     mode = model.interpolation
     outs = requires_z(mode) ? (p_lev, t_lev, z_lev) : (p_lev, t_lev)

@@ -106,6 +106,8 @@ function rrtmgp_model_kwargs(
     ᶠspace = Spaces.face_space(space)
     ᶜz = Fields.coordinate_field(ᶜspace).z
     ᶠz = Fields.coordinate_field(ᶠspace).z
+    planet_radius = ᶜspace.grid.global_geometry.radius
+    metric_scaling = ((ᶠz .+ planet_radius) ./ planet_radius) .^ 2
     bottom_coords = Fields.coordinate_field(Spaces.level(ᶜspace, 1))
     latitude = if eltype(bottom_coords) <: Geometry.LatLongZPoint
         Fields.field2array(bottom_coords.lat)
@@ -118,7 +120,7 @@ function rrtmgp_model_kwargs(
         latitude,
     )
     zkwargs =
-        (; center_z = Fields.field2array(ᶜz), face_z = Fields.field2array(ᶠz))
+        (; center_z = Fields.field2array(ᶜz), face_z = Fields.field2array(ᶠz), planet_radius = planet_radius)
     return include_z ? (; kwargs..., zkwargs...) : kwargs
 end
 
@@ -137,6 +139,7 @@ function rrtmgp_model_kwargs(
     ᶜΔz = Fields.Δz_field(ᶜspace)
     ᶜz = Fields.coordinate_field(ᶜspace).z
     ᶠz = Fields.coordinate_field(ᶠspace).z
+    planet_radius = ᶜspace.grid.global_geometry.radius
     latitude = if eltype(bottom_coords) <: Geometry.LatLongZPoint
         Fields.field2array(bottom_coords.lat)
     else
@@ -260,6 +263,7 @@ function rrtmgp_model_kwargs(
                 kwargs...,
                 center_z = Fields.field2array(ᶜz),
                 face_z = Fields.field2array(ᶠz),
+                planet_radius=planet_radius,
             )
         end
     end
@@ -389,12 +393,7 @@ end
 
 function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     (; ᶠradiation_flux) = p.radiation
-    radius = CAP.planet_radius(p.params)
-    face_z = p.radiation.rrtmgp_model.face_z
-    center_z = p.radiation.rrtmgp_model.center_z
-    ᶠmetric_scaling = ((face_z .+ radius) ./ radius) .^ 2 
-    ᶜmetric_scaling = ((center_z .+ radius) ./ radius) .^ 2
-    Fields.field2array(Yₜ.c.ρe_tot) .-= Fields.field2array(ᶜdivᵥ.(ᶠradiation_flux))
+    @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
     return nothing
 end
 
