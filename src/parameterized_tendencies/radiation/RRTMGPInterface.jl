@@ -689,7 +689,7 @@ function _RRTMGPModel(
     end
 
     p_lev = DA{FT}(undef, nlay + 1, ncol)
-    scale_lev = DA{FT}(undef, nlay + 1, ncol)
+    metric_scaling = DA{FT}(undef, nlay + 1, ncol)
     t_lev = DA{FT}(undef, nlay + 1, ncol)
     t_sfc = DA{FT}(undef, ncol)
     set_and_save!(t_sfc, "surface_temperature", t..., dict)
@@ -865,7 +865,7 @@ function _RRTMGPModel(
             # layerdata contains `col_dry`, `p_lay`, and `t_lay`
             layerdata,
             p_lev,
-            scale_lev,
+            metric_scaling,
             t_lev,
             t_sfc,
             vmr,
@@ -1018,7 +1018,7 @@ get_p_min(as::RRTMGP.AtmosphericStates.AtmosphericState, lookups) =
     lookups.lookup_lw.p_ref_min # TODO: verify correctness
 
 function update_implied_values!(model)
-    (; p_lev, t_lev, t_sfc, scale_lev) = model.as
+    (; p_lev, t_lev, t_sfc, metric_scaling) = model.as
     p_lay = AS.getview_p_lay(model.as)
     t_lay = AS.getview_t_lay(model.as)
     nlay =
@@ -1027,8 +1027,8 @@ function update_implied_values!(model)
         z_lay = parent(model.center_z)
         z_lev = parent(model.face_z)
         planet_radius = eltype(z_lev)(6371000)
-        scale_lev .= ((z_lev .+ planet_radius) ./ planet_radius) .^ 2
-        scale_lev[end,:] .= scale_lev[end-1,:]
+        metric_scaling .= ((z_lev .+ planet_radius) ./ planet_radius) .^ 2
+        metric_scaling[end,:] .= metric_scaling[end-1,:]
     end
     mode = model.interpolation
     outs = requires_z(mode) ? (p_lev, t_lev, z_lev) : (p_lev, t_lev)
@@ -1133,7 +1133,6 @@ update_concentrations!(::GrayRadiation, model) = nothing
 update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_gas!(
     ClimaComms.device(model.sw_solver.context),
     model.as.p_lev,
-    model.as.scale_lev,
     AS.getview_col_dry(model.as),
     model.params,
     get_vmr_h2o(model.as.vmr, model.lookups.idx_gases_sw),
