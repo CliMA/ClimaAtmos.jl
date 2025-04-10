@@ -29,6 +29,9 @@ function temporary_quantities(Y, atmos)
         tmp_accr_sno_liq_liq_part = Fields.Field(FT, center_space),
         tmp_accr_rai_ice_sno_part = Fields.Field(FT, center_space),
         tmp_accr_rai_ice_rai_part = Fields.Field(FT, center_space),
+        tmp_rain_lambda =  Fields.Field(FT, center_space),
+        tmp_cloud_liquid_src =  Fields.Field(FT, center_space),
+        tmp_cloud_ice_src = Fields.Field(FT, center_space),
         tmp_accr_rai_sno = Fields.Field(FT, center_space), # tmp tendecy diagnostics for debugging
         ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
         temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),
