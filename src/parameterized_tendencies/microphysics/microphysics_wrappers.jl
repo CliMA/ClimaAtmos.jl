@@ -174,6 +174,7 @@ function compute_precipitation_sources!(
     dt,
     mp,
     thp,
+    tmp_rain_lambda,
     tmp_accr_sno_ice,
     tmp_accr_rai_liq,
     tmp_acnv_ice_sno,
@@ -191,6 +192,8 @@ function compute_precipitation_sources!(
     @. Sqᵢᵖ = ρ * FT(0)
     @. Sqᵣᵖ = ρ * FT(0)
     @. Sqₛᵖ = ρ * FT(0)
+
+    @. tmp_rain_lambda = CM1.lambda(mp.pr.pdf, mp.pr.mass, qₚ(qᵣ), ρ)
 
     #! format: off
     # rain autoconversion: q_liq -> q_rain

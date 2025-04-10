@@ -225,3 +225,45 @@ add_diagnostic_variable!(
         end
     end,
 )
+
+add_diagnostic_variable!(
+    short_name = "lambda_rain",
+    long_name = "lambda_rain",
+    standard_name = "lambda_rain",
+    units = "1/m",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.scratch.tmp_rain_lambda)
+        else
+            out .= cache.scratch.tmp_rain_lambda
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "cloud_cond_evap",
+    long_name = "cloud_cond_evap",
+    standard_name = "cloud_cond_evap",
+    units = "1/s",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.scratch.tmp_cloud_liquid_src)
+        else
+            out .= cache.scratch.tmp_cloud_liquid_src
+        end
+    end,
+)
+
+add_diagnostic_variable!(
+    short_name = "cloud_dep_sub",
+    long_name = "cloud_dep_sub",
+    standard_name = "cloud_dep_sub",
+    units = "1/s",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.scratch.tmp_cloud_ice_src)
+        else
+            out .= cache.scratch.tmp_cloud_ice_src
+        end
+    end,
+)

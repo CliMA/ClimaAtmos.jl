@@ -228,6 +228,7 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         dt,
         cmp,
         thp,
+        p.scratch.tmp_rain_lambda,
         p.scratch.tmp_accr_sno_ice,
         p.scratch.tmp_accr_rai_liq,
         p.scratch.tmp_acnv_ice_sno,
