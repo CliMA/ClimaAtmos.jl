@@ -173,6 +173,7 @@ function aerosol_ml_parameters(toml_dict)
         :reference_dust_aerosol_mass_concentration => :c₀_dust,
         :reference_seasalt_aerosol_mass_concentration => :c₀_seasalt,
         :reference_ammonium_sulfate_mass_concentration => :c₀_SO4,
+        :reference_liquid_water_specific_humidity => :q₀_liq,
     )
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
 end

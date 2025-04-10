@@ -48,15 +48,17 @@ function ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
     # We can also add w, T, RH, w' ...
     # Also consider lookind only at around cloud base height
     (; α_dust, α_seasalt, α_SO4, α_q_liq) = cmc.aml
-    (; c₀_dust, c₀_seasalt, c₀_SO4) = cmc.aml
+    (; c₀_dust, c₀_seasalt, c₀_SO4, q₀_liq) = cmc.aml
     N₀ = cmc.N_cloud_liquid_droplets
 
     FT = eltype(N₀)
-    return N₀ +
-           α_dust * log(max(c_dust, eps(FT)) / c₀_dust) +
-           α_seasalt * log(max(c_seasalt, eps(FT)) / c₀_seasalt) +
-           α_SO4 * log(max(c_SO4, eps(FT)) / c₀_SO4) +
-           α_q_liq * log(max(q_liq, eps(FT)))
+    return N₀ * (
+        FT(1) +
+        α_dust * log(max(c_dust, eps(FT)) / c₀_dust) +
+        α_seasalt * log(max(c_seasalt, eps(FT)) / c₀_seasalt) +
+        α_SO4 * log(max(c_SO4, eps(FT)) / c₀_SO4) +
+        α_q_liq * log(max(q_liq, eps(FT)) / q₀_liq)
+    )
 end
 
 """
