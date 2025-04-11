@@ -20,12 +20,8 @@ include("model_interface.jl")
 
 # load configs
 experiment_dir = dirname(Base.active_project())
-const model_interface = joinpath(experiment_dir, "model_interface.jl")
 const experiment_config =
     YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
-experiment_config_nt = NamedTuple(Symbol.(keys(experiment_config)) .=> values(experiment_config))
-(; output_dir, n_iterations, log_vars, prior_path, model_config, const_noise_by_var, z_max, norm_factors_by_var, ensemble_size, start_time, g_t_start_sec, g_t_end_sec) = experiment_config_nt
-
 
 # unpack experiment_config vars into scope
 for (key, value) in experiment_config
@@ -36,37 +32,17 @@ end
 model_config_dict = YAML.load_file(model_config)
 atmos_config = CA.AtmosConfig(model_config_dict)
 
+# start_datetime = Dates.DateTime(start_time, "yyyymmdd")
+# obs_start, obs_end = start_datetime + Dates.Second(g_t_start_sec), start_datetime + Dates.Second(g_t_end_sec)
+
 # add workers
-@info "Starting $ensemble_size workers."
-addprocs(
-    CAL.SlurmManager(Int(ensemble_size)),
-    t = experiment_config["slurm_time"],
-    mem_per_cpu = experiment_config["slurm_mem_per_cpu"],
-    cpus_per_task = experiment_config["slurm_cpus_per_task"],
-)
-
-
-# @everywhere begin
-#     using ClimaCalibrate
-#     import ClimaCalibrate as CAL
-#     import ClimaAtmos as CA
-#     import JLD2
-#     import YAML
-
-#     include("observation_map.jl")
-
-#     experiment_dir = dirname(Base.active_project())
-#     const model_interface = joinpath(experiment_dir, "model_interface.jl")
-#     const experiment_config =
-#         YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
-
-#     experiment_config_nt = NamedTuple(Symbol.(keys(experiment_config)) .=> values(experiment_config))
-#     (; output_dir, n_iterations, log_vars, prior_path, model_config, const_noise_by_var, z_max, norm_factors_by_var, ensemble_size, start_time, g_t_start_sec, g_t_end_sec) = experiment_config_nt
-
-#     include(model_interface)
-
-# end
-
+# @info "Starting $ensemble_size workers."
+# addprocs(
+#     CAL.SlurmManager(Int(ensemble_size)),
+#     t = experiment_config["slurm_time"],
+#     mem_per_cpu = experiment_config["slurm_mem_per_cpu"],
+#     cpus_per_task = experiment_config["slurm_cpus_per_task"],
+# )
 
 if get(model_config_dict, "mixing_length_model", "") == "nn"
     prior = create_prior_with_nn(
@@ -139,14 +115,30 @@ JLD2.jldsave(
     norm_factors_dict = norm_factors_by_var,
 )
 
-### get LES obs (Y) and norm factors
-ref_paths, latitudes, longitudes, convection_type = get_era5_calibration_library()
+### get LES obs (Y) and norm factors - also ensures all forcing files are created
+start_dates, lats, lons, convection_type, num_sites = get_era5_calibration_library()
+ref_paths = []
 obs_vec = []
 
-for i in 1:length(ref_paths)
+zc_model = get_z_grid(atmos_config; z_max)
 
+for i in 1:num_sites
+    # get forcing file path 
+    forcing_file_path = CA.get_external_forcing_file_path(
+        Dict(
+            "start_date" => start_dates[i],
+            "site_latitude" => lats[i],
+            "site_longitude" => lons[i],
+        ),
+    )
+    push!(ref_paths, forcing_file_path)
+    # get obs_start, obs_end from start_date, more flexible for when we batch over months
+    obs_start = Dates.DateTime(start_dates[i], "yyyymmdd") +
+        Dates.Second(g_t_start_sec)
+    obs_end = Dates.DateTime(start_dates[i], "yyyymmdd") +
+        Dates.Second(g_t_end_sec)
     y_obs = get_obs(
-        ref_paths[i],
+        forcing_file_path,
         experiment_config["y_var_names"],
         obs_start,
         obs_end;
@@ -163,7 +155,7 @@ for i in 1:length(ref_paths)
             Dict(
                 "samples" => y_obs,
                 "covariances" => Σ_obs,
-                "names" => join([latitudes[i], longitudes[i], convection_type[i]], "_"),
+                "names" => join([lats[i], lons[i], convection_type[i]], "_"),
             ),
         ),
     )

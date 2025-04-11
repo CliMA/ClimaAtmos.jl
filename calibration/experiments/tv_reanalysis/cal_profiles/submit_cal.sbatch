@@ -6,7 +6,7 @@
 #SBATCH -e workers_error.txt
 
 mv julia*.out juliaout/
-
+module purge
 module load climacommon/2024_10_08
 
-julia --project=. run_worker_calibration.jl 2>&1 | tee -a workers.txt
+julia --project=. run_calibration.jl 2>&1 | tee -a workers.txt
