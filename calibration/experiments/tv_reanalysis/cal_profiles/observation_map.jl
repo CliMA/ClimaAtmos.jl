@@ -4,6 +4,7 @@ import ClimaCalibrate: path_to_ensemble_member
 using ClimaAnalysis
 using JLD2
 using Statistics
+using YAML
 
 
 

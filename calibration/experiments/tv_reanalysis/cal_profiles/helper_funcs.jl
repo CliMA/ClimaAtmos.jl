@@ -7,40 +7,58 @@ import Interpolations
 using JLD2
 using Dates
 
+FT = Float64
 # batch over locations
 lats = [
-    -20.0, -20.0, -20.0, -20.0, -20.0, -20.0, -20.0, -18.5, -17.0,
+    -20.0, -20.0, -20.0, -20.0, -20.0, -20.0, -18.5, -17.0,
     -15.5, -14.0, -12.5, -11.0, -9.5, -8.0, 38.09999847, 35.0, 32.0,
     29.0, 26.0, 23.0, 20.0, 17.0
 ]
 
 lons = [
-    -70.0, -72.5, -75.0, -77.5, -80.0, -82.5, -85.0, -90.0, -95.0,
+    -72.5, -75.0, -77.5, -80.0, -82.5, -85.0, -90.0, -95.0,
     -100.0, -105.0, -110.0, -115.0, -120.0, -125.1000061, -123.0,
     -125.0, -129.0, -133.0, -137.0, -141.0, -145.0, -149.0
 ]
 
+start_dates = fill("20070701", length(lats))
 convection_type = fill("shallow", length(lats))
 
-function get_era5_calibration_library(lats = lats, lons = lons, convection_type = convection_type)
-    ref_paths, latitudes, longitudes = [], [], []
+function get_era5_calibration_library(lats = lats, lons = lons, convection_type = convection_type, start_dates=start_dates)
+    # test if forcing files have already been created 
     for i in 1:length(lats)
-        lat = lats[i]
-        lon = lons[i]
-        conv_type = convection_type[i]
-        filename = "/central/groups/esm/jschmitt/era5/tv/july_forcing/sim_forcing_loc_$(lat)_$(lon).nc"
-        push!(ref_paths, filename)
+        site_info = Dict(
+            "start_date" => get_startdate(i, start_dates),
+            "site_latitude" => get_latitude(i, lats),
+            "site_longitude" => get_longitude(i, lons),
+        )
+        fpath = CA.get_external_forcing_file_path(site_info)
+
+        if !isfile(fpath)
+            @info "Creating forcing file at $fpath ..."
+            CA.generate_external_era5_forcing_file(site_info["site_latitude"], 
+                                                site_info["site_longitude"], 
+                                                site_info["start_date"], 
+                                                fpath,
+                                                FT,
+            )
+        end
     end
-    ref_paths, latitudes, longitudes, convection_type
+    
+    start_dates, lats, lons, convection_type
 end
 
-# function get_forcing_file(i, months)
-#     return "../data/era5_monthly_forcing_$(months[i]).nc"
-# end
+function get_latitude(i, lats)
+    return lats[i]
+end
 
-# function get_cfsite_id(i, cfsites)
-#     return cfsites[i]
-# end
+function get_longitude(i, lons)
+    return lons[i]
+end
+
+function get_startdate(i, dates)
+    return "20070701"
+end
 
 function get_batch_indicies_in_iteration(iteration, output_dir::AbstractString)
     iter_path = CAL.path_to_iteration(output_dir, iteration)
@@ -48,7 +66,7 @@ function get_batch_indicies_in_iteration(iteration, output_dir::AbstractString)
     return EKP.get_current_minibatch(eki)
 end
 
-norm_factors_dict = JLD2.load("../data/norm_factors_dict.jld2")["norm_factors_dict"]
+#norm_factors_dict = JLD2.load("../data/norm_factors_dict.jld2")["norm_factors_dict"]
 
 function get_obs(
     filename::String,
