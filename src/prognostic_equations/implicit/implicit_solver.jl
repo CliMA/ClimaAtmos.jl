@@ -784,6 +784,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅
                 ᶠright_bias_matrix() ⋅
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwₚ) / ᶜρ) - (I,)
+            #@assert sum(isnan, ∂ᶜρqₚ_err_∂ᶜρqₚ) == 0
         end
 
     end
@@ -852,6 +853,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(-(ᶜq) / ᶜρ)
             @. ∂ᶜρq_err_∂ᶜρq +=
                 dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(1 / ᶜρ)
+            #@assert sum(isnan, ∂ᶜρq_err_∂ᶜρ) == 0
+            #@assert sum(isnan, ∂ᶜρq_err_∂ᶜρq) == 0
         end
 
         if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))

@@ -144,6 +144,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # is done in the explicit tendency.
     # Here we add the vertical advection with precipitation terminal velocity
     # using downward biasing and free outflow bottom boundary condition
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
     if moisture_model isa NonEquilMoistModel
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed
         @. Yₜ.c.ρq_liq -= ᶜprecipdivᵥ(
@@ -166,6 +167,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶠright_bias(Geometry.WVector(-(ᶜwₛ)) * max(zero(Y.c.ρ), Y.c.ρq_sno / Y.c.ρ)),
         )
     end
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
 
     # TODO - decide if this needs to be explicit or implicit
     #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
