@@ -1,4 +1,4 @@
-233
+234
 
 # **README**
 #
@@ -21,34 +21,46 @@
 
 #=
 
+234
+- Move the virtual mass term in pressure closure to prognostic edmf momentum equation
+  (This only affects prognostic edmf)
+
 233
 - modify the derivative of p and \rho with respect to qt
 
 232
 - Use lazy broadcasting instead of temp scalar in implicit solver for kappa_m vars,
   which fixes a bug that the temp scalar is updated before it is reused.
+  (This only affects prognostic edmf)
 
 231
 - Add mass flux derivatives with respect to grid-mean u_3
+  (This only affects prognostic edmf)
 
 230
 - Add u_{3,m} (updraft) Jacobians to updraft MSE, rho*a, and q_tot prognostic equations. Move sgs ∂ᶠu₃ʲ derivatives to BlockLowerTriangularSolve.
+  (This only affects prognostic edmf)
 
 229
 - Remove derivatives with respect to grid mean rho in edmf implicit solver
+  (This only affects prognostic edmf)
 
 228
 - Only treat the drag term in edmf pressure closure implicitly
+  (This only affects prognostic edmf)
 
 227
 - Move nonhydrostatic pressure drag calculation to implicit precomputed quantities
+  (This only affects prognostic edmf)
 
 226
 - Add updraft rho*a and u_{3,m} jacobian terms
+  (This only affects prognostic edmf)
 
 225
 - Move nonhydrostatic pressure drag calculation to precomputed quantities and 
   remove one reproducibility job
+  (This only affects prognostic edmf)
 
 224
 - Machine precision differences due to https://github.com/CliMA/ClimaCore.jl/pull/2232

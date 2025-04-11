@@ -935,6 +935,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                     Δcp_v * TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1))
                 ) / abs2(TD.cp_m(thermo_params, ᶜtsʲs.:(1)))
 
+            turbconv_params = CAP.turbconv_params(params)
+            α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
+
             ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
             @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
@@ -1085,7 +1088,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).q_tot)]
             @. ∂ᶠu₃ʲ_err_∂ᶜq_totʲ =
                 dtγ * DiagonalMatrixRow(
-                    ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) / (ᶠinterp(ᶜρʲs.:(1)))^2,
+                    (1 - α_b) * ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) /
+                    (ᶠinterp(ᶜρʲs.:(1)))^2,
                 ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
                     (ᶜρʲs.:(1))^2 / ᶜp * (
                         ᶜkappa_mʲ / (ᶜkappa_mʲ + 1) * ∂e_int_∂q_tot +
@@ -1100,7 +1104,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).mse)]
             @. ∂ᶠu₃ʲ_err_∂ᶜmseʲ =
                 dtγ * DiagonalMatrixRow(
-                    ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) / (ᶠinterp(ᶜρʲs.:(1)))^2,
+                    (1 - α_b) * ᶠgradᵥ_ᶜΦ * ᶠinterp(Y.c.ρ) /
+                    (ᶠinterp(ᶜρʲs.:(1)))^2,
                 ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
                     ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
                 )
