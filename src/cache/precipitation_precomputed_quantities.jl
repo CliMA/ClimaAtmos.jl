@@ -61,7 +61,7 @@ function set_precipitation_velocities!(
         max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
         Y.c.ρ
     )
-    @. assert minimum(p.scratch.tmp_rain_lambda) >= FT(1e-8)
+    @assert minimum(p.scratch.tmp_rain_lambda) >= FT(1e-8)
 
     # compute the precipitation terminal velocity [m/s]
     @. ᶜwᵣ = CM1.terminal_velocity(
@@ -70,7 +70,7 @@ function set_precipitation_velocities!(
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
     )
-    @. assert minimum(ᶜwᵣ) >= FT(0)
+    @assert minimum(ᶜwᵣ) >= FT(0)
 
     @. ᶜwₛ = CM1.terminal_velocity(
         cmp.ps,
