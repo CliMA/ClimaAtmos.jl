@@ -41,7 +41,7 @@ function compute_gcm_driven_scalar_inv_τ(z::FT, params) where {FT}
     elseif zᵢ <= z <= zᵣ
         cos_arg = pi * ((z - zᵢ) / (zᵣ - zᵢ))
         return (FT(0.5) / τᵣ) * (1 - cos(cos_arg))
-    elseif z > zᵣ
+    else
         return (1 / τᵣ)
     end
 end
@@ -51,12 +51,12 @@ function compute_gcm_driven_momentum_inv_τ(z::FT, params) where {FT}
     return FT(1) / τᵣ
 end
 
-external_forcing_cache(Y, atmos::AtmosModel, params) =
-    external_forcing_cache(Y, atmos.external_forcing, params)
+external_forcing_cache(Y, atmos::AtmosModel, params, start_date) =
+    external_forcing_cache(Y, atmos.external_forcing, params, start_date)
 
-external_forcing_cache(Y, external_forcing::Nothing, params) = (;)
+external_forcing_cache(Y, external_forcing::Nothing, params, _) = (;)
 
-function external_forcing_cache(Y, external_forcing::GCMForcing, params)
+function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
     FT = Spaces.undertype(axes(Y.c))
     ᶜdTdt_fluc = similar(Y.c, FT)
     ᶜdqtdt_fluc = similar(Y.c, FT)
@@ -176,7 +176,13 @@ Apply external (prescibed) GCM tendencies: horizontal advection, vertical fluctu
 """
 
 external_forcing_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
+function external_forcing_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::Union{GCMForcing, ExternalDrivenTVForcing},
+)
     # horizontal advection, vertical fluctuation, nudging, subsidence (need to add),
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
@@ -257,6 +263,118 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
     # <-- subsidence
 
     return nothing
+end
+
+
+function external_forcing_cache(
+    Y,
+    external_forcing::ExternalDrivenTVForcing,
+    params,
+    start_date,
+)
+    # current support is for time varying era5 data which does not require vertical advective tendencies
+    # or surface latent and sensible heat fluxes, i.e., the surface state is set with surface temperature
+    # only. This could be modified to include these terms if needed.
+    (; external_forcing_file) = external_forcing
+
+    # generate forcing files
+
+    column_tendencies = [
+        "ta",
+        "hus",
+        "tntva",
+        "wa",
+        "tntha",
+        "tnhusha",
+        "ua",
+        "va",
+        "tnhusva",
+        "rho",
+        "wap",
+    ]
+    surface_tendencies = ["coszen", "rsdt", "hfls", "hfss", "ts"]
+    column_target_space = axes(Y.c)
+    surface_target_space = axes(Fields.level(Y.f.u₃, ClimaCore.Utilities.half))
+
+    extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Linear())
+
+    column_timevaryinginputs = [
+        TimeVaryingInput(
+            external_forcing_file,
+            name,
+            column_target_space;
+            reference_date = start_date,
+            regridder_kwargs = (; extrapolation_bc),
+        ) for name in column_tendencies
+    ]
+
+    surface_timevaryinginputs = [
+        TimeVaryingInput(
+            external_forcing_file,
+            name,
+            surface_target_space;
+            reference_date = start_date,
+            regridder_kwargs = (; extrapolation_bc),
+        ) for name in surface_tendencies
+    ]
+
+    column_variable_names_as_symbols = Symbol.(column_tendencies)
+    surface_variable_names_as_symbols = Symbol.(surface_tendencies)
+
+    column_inputs = similar(
+        Y.c,
+        NamedTuple{
+            Tuple(column_variable_names_as_symbols),
+            NTuple{length(column_variable_names_as_symbols), eltype(Y.c.ρ)},
+        },
+    )
+
+    surface_inputs = similar(
+        Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
+        NamedTuple{
+            Tuple(surface_variable_names_as_symbols),
+            NTuple{length(surface_variable_names_as_symbols), eltype(params)},
+        },
+    )
+
+    column_timevaryinginputs =
+        (; zip(column_variable_names_as_symbols, column_timevaryinginputs)...)
+    surface_timevaryinginputs =
+        (; zip(surface_variable_names_as_symbols, surface_timevaryinginputs)...)
+
+    era5_tv_column_cache = (; column_inputs, column_timevaryinginputs)
+    era5_tv_surface_cache = (; surface_inputs, surface_timevaryinginputs)
+
+    # create cache for external forcing data that will be populated in callbacks
+    FT = Spaces.undertype(axes(Y.c))
+    era5_cache = (;
+        ᶜdTdt_fluc = similar(Y.c, FT),
+        ᶜdqtdt_fluc = similar(Y.c, FT),
+        ᶜdTdt_hadv = similar(Y.c, FT),
+        ᶜdqtdt_hadv = similar(Y.c, FT),
+        ᶜdTdt_rad = similar(Y.c, FT),
+        ᶜT_nudge = similar(Y.c, FT),
+        ᶜqt_nudge = similar(Y.c, FT),
+        ᶜu_nudge = similar(Y.c, FT),
+        ᶜv_nudge = similar(Y.c, FT),
+        ᶜinv_τ_wind = FT(1 / (6 * 3600)),
+        # set relaxation profile toward reference state
+        ᶜinv_τ_scalar = compute_gcm_driven_scalar_inv_τ.(
+            Fields.coordinate_field(Y.c).z,
+            params,
+        ),
+        ᶜls_subsidence = similar(Y.c, FT),
+        insolation = similar(
+            Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
+            FT,
+        ),
+        cos_zenith = similar(
+            Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
+            FT,
+        ),
+    )
+
+    return (; era5_tv_column_cache..., era5_tv_surface_cache..., era5_cache...)
 end
 
 # ISDAC external forcing (i.e. nudging)

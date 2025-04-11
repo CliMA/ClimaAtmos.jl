@@ -26,9 +26,19 @@ function update_surface_conditions!(Y, p, t)
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
     sfc_conditions_values = Fields.field_values(sfc_conditions)
     wrapped_sfc_setup = sfc_setup_wrapper(sfc_setup)
-    sfc_temp_var =
-        p.atmos.surface_model isa PrognosticSurfaceTemperature ?
-        Fields.field_values(Y.sfc.T) : nothing
+    if p.atmos.sfc_temperature isa ExternalTVColumnSST
+        evaluate!(
+            p.external_forcing.surface_inputs.ts,
+            p.external_forcing.surface_timevaryinginputs.ts,
+            t,
+        )
+        sfc_temp_var = Fields.field_values(p.external_forcing.surface_inputs.ts)
+    elseif p.atmos.surface_model isa PrognosticSurfaceTemperature
+        sfc_temp_var = Fields.field_values(Y.sfc.T)
+    else
+        sfc_temp_var = nothing
+    end
+
     @. sfc_conditions_values = surface_state_to_conditions(
         wrapped_sfc_setup,
         sfc_local_geometry_values,
@@ -45,6 +55,7 @@ function update_surface_conditions!(Y, p, t)
     )
     return nothing
 end
+
 
 # default case
 sfc_setup_wrapper(sfc_setup::SurfaceState) = (sfc_setup,)
@@ -165,7 +176,7 @@ function surface_state_to_conditions(
     surface_fluxes_params,
     surface_temp_params,
     atmos,
-    sfc_prognostic_temp,
+    sfc_temp_var,
     t,
 ) where {WSS}
     surf_state =
@@ -177,7 +188,7 @@ function surface_state_to_conditions(
     (!isnothing(surf_state.q_vap) && atmos.moisture_model isa DryModel) &&
         error("surface q_vap cannot be specified when using a DryModel")
 
-    T = if isnothing(sfc_prognostic_temp)
+    T = if isnothing(sfc_temp_var)
         if isnothing(surf_state.T)
             surface_temperature(
                 atmos.sfc_temperature,
@@ -188,7 +199,7 @@ function surface_state_to_conditions(
             surf_state.T
         end
     else
-        sfc_prognostic_temp
+        sfc_temp_var
     end
     u = ifelsenothing(surf_state.u, FT(0))
     v = ifelsenothing(surf_state.v, FT(0))

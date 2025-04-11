@@ -90,6 +90,7 @@ abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct ZonallyAsymmetricSST <: AbstractSST end
 struct RCEMIPIISST <: AbstractSST end
+struct ExternalTVColumnSST <: AbstractSST end
 
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
@@ -99,6 +100,7 @@ struct TimeVaryingInsolation <: AbstractInsolation
 end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
+struct ExternalTVInsolation <: AbstractInsolation end
 
 """
     AbstractOzone
@@ -289,6 +291,15 @@ end
 struct GCMForcing{FT}
     external_forcing_file::String
     cfsite_number::String
+end
+
+"""
+    ExternalDrivenTVForcing
+    
+Forcing specified by external forcing file and a start date.
+"""
+struct ExternalDrivenTVForcing{FT}
+    external_forcing_file::String
 end
 
 struct ISDACForcing end

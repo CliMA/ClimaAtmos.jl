@@ -4,6 +4,9 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+### Add support for reanalysis-driven single column model with time-varying forcing
+PR [#3758](https://github.com/CliMA/ClimaAtmos.jl/pull/3758) adds support for driving single-column model (SCM) simulations with time-varying ERA5 reanalysis data. This extends the existing GCM-driven SCM interface to allow site-specific simulations that resolve the diurnal cycle and are suited for calibration against observations. Users can now run reanalysis-driven cases globally using only a date and lat/lon, thanks to integrated data handling via ClimaArtifacts.jl. See the updated “Single Column Model” docs page for details on setup, variable requirements, and how to prepare ERA5 input files.
+
 ### Remove `dt_save_to_sol`
 
 The option to save the solution to the integrator object (`dt_save_to_sol`) was
