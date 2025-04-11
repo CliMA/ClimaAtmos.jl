@@ -91,11 +91,17 @@ function precipitation_tendency!(
     (; turbconv_model) = p.atmos
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
 
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_rai) == 0
+
     # Update grid mean tendencies
     @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜSqₗᵖ
     @. Yₜ.c.ρq_ice += Y.c.ρ * ᶜSqᵢᵖ
     @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜSqᵣᵖ
     @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜSqₛᵖ
+
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_rai) == 0
 
     return nothing
 end
