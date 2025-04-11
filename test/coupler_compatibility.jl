@@ -44,7 +44,7 @@ const T2 = 290
         );
         job_id = "coupler_compatibility1",
     )
-    simulation = CA.get_simulation(config)
+    simulation = CA.AtmosSimulation(config)
     (; integrator) = simulation
     (; p, t) = integrator
     Y = integrator.u
@@ -75,7 +75,6 @@ const T2 = 290
         p.precomputed,
         p.scratch,
         p.hyperdiff,
-        p.precipitation,
         p.external_forcing,
         p.non_orographic_gravity_wave,
         p.orographic_gravity_wave,
@@ -83,6 +82,7 @@ const T2 = 290
         p.tracers,
         p.net_energy_flux_toa,
         p.net_energy_flux_sfc,
+        p.steady_state_velocity,
         p.conservation_check,
     )
 
@@ -110,7 +110,14 @@ end
         );
         job_id = "coupler_compatibility2",
     )
-    simulation = CA.get_simulation(config)
+    simulation = CA.AtmosSimulation(config)
+
+    # Check: ρ_flux_uₕ is initialized to zero
+    @test all(
+        iszero,
+        parent(simulation.integrator.p.precomputed.sfc_conditions.ρ_flux_uₕ),
+    )
+
     (; integrator) = simulation
     (; p, t) = integrator
     Y = integrator.u
@@ -206,6 +213,8 @@ end
     # Verify that using PrescribedSurface does not break the initialization of
     # RRTMGP or diagnostic EDMF. We currently need a moisture model in order to
     # use diagnostic EDMF.
+    #
+    # Also verify we can start with a different t_start than 0
     config = CA.AtmosConfig(
         Dict(
             "surface_setup" => "PrescribedSurface",
@@ -218,8 +227,9 @@ end
             # remove the following line and check that the test runs in less than a few
             # minutes on GitHub
             "output_default_diagnostics" => false,
+            "t_start" => "1secs",
         );
         job_id = "coupler_compatibility3",
     )
-    simulation = CA.get_simulation(config)
+    simulation = CA.AtmosSimulation(config)
 end

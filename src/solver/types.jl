@@ -1,4 +1,4 @@
-import FastGaussQuadrature
+import ClimaCore.Quadratures.GaussQuadrature as GQ
 import StaticArrays as SA
 import Thermodynamics as TD
 import Dates
@@ -44,7 +44,7 @@ struct SGSQuadrature{N, A, W} <: AbstractSGSamplingType
         N = quadrature_order
         # TODO: double check this python-> julia translation
         # a, w = np.polynomial.hermite.hermgauss(N)
-        a, w = FastGaussQuadrature.gausshermite(N)
+        a, w = GQ.hermite(FT, N)
         a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
         return new{N, typeof(a), typeof(w)}(a, w)
     end
@@ -211,13 +211,16 @@ abstract type AbstractVerticalDiffusion end
 Base.@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
     C_E::FT
 end
-diffuse_momentum(::VerticalDiffusion{DM}) where {DM} = DM
+disable_momentum_vertical_diffusion(::VerticalDiffusion{DM}) where {DM} = DM
 Base.@kwdef struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
     H::FT
     D₀::FT
 end
-diffuse_momentum(::DecayWithHeightDiffusion{DM}) where {DM} = DM
-diffuse_momentum(::Nothing) = false
+disable_momentum_vertical_diffusion(::DecayWithHeightDiffusion{DM}) where {DM} =
+    DM
+disable_momentum_vertical_diffusion(::Nothing) = false
+
+struct SurfaceFlux end
 
 abstract type AbstractSponge end
 Base.Broadcast.broadcastable(x::AbstractSponge) = tuple(x)
@@ -507,7 +510,6 @@ Base.@kwdef struct AtmosModel{
     EXTFORCING,
     EC,
     AT,
-    TM,
     EDMFX,
     TCM,
     NOGW,
@@ -516,6 +518,9 @@ Base.@kwdef struct AtmosModel{
     VD,
     DM,
     SAM,
+    SEDM,
+    SNPM,
+    SMM,
     VS,
     SL,
     RS,
@@ -544,7 +549,6 @@ Base.@kwdef struct AtmosModel{
     external_forcing::EXTFORCING = nothing
     edmf_coriolis::EC = nothing
     advection_test::AT = nothing
-    tendency_model::TM = nothing
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     non_orographic_gravity_wave::NOGW = nothing
@@ -553,11 +557,19 @@ Base.@kwdef struct AtmosModel{
     vert_diff::VD = nothing
     diff_mode::DM = nothing
     sgs_adv_mode::SAM = nothing
+    """sgs_entr_detr_mode == Implicit() only works if sgs_adv_mode == Implicit()"""
+    sgs_entr_detr_mode::SEDM = nothing
+    """sgs_nh_pressure_mode == Implicit() only works if sgs_adv_mode == Implicit()"""
+    sgs_nh_pressure_mode::SNPM = nothing
+    """sgs_mf_mode == Implicit() only works if sgs_adv_mode == Implicit() and diff_mode == Implicit()"""
+    sgs_mf_mode::SMM = nothing
     viscous_sponge::VS = nothing
     smagorinsky_lilly::SL = nothing
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
     insolation::IN = nothing
+    """Whether to apply surface flux tendency (independent of surface conditions)"""
+    disable_surface_flux_tendency::Bool = false
     surface_model::SM = nothing
     surface_albedo::SA = nothing
     numerics::NUM = nothing
@@ -689,9 +701,7 @@ function AtmosConfig(
 
     all_config_files =
         normrelpath.(maybe_add_default(config_files, default_config_file))
-
     configs = map(all_config_files) do config_file
-        @info "Loading yaml file $config_file"
         strip_help_messages(load_yaml_file(config_file))
     end
     return AtmosConfig(
@@ -726,13 +736,15 @@ function AtmosConfig(
     # using config_files = [default_config_file] as a default
     # relies on the fact that override_default_config uses
     # default_config_file.
-    config = override_default_config(configs)
+    config = merge(configs...)
+    comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
+    config = override_default_config(config)
+
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     toml_dict = CP.create_toml_dict(
         FT;
         override_file = CP.merge_toml_files(config["toml"]),
     )
-    comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
     config = config_with_resolved_and_acquired_artifacts(config, comms_ctx)
 
     isempty(job_id) &&

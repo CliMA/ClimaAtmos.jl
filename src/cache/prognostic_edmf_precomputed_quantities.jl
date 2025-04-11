@@ -24,6 +24,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
     (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
         p.precomputed
+    if p.atmos.moisture_model isa NonEquilMoistModel &&
+       p.atmos.precip_model isa Microphysics1Moment
+        (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
+    end
 
     @. ᶜρa⁰ = ρa⁰(Y.c)
     @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
@@ -41,36 +45,72 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         Y.c.ρ,
         turbconv_model,
     )
+    if p.atmos.moisture_model isa NonEquilMoistModel &&
+       p.atmos.precip_model isa Microphysics1Moment
+        @. ᶜq_liq⁰ = divide_by_ρa(
+            Y.c.ρq_liq - ρaq_liq⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρq_liq,
+            Y.c.ρ,
+            turbconv_model,
+        )
+        @. ᶜq_ice⁰ = divide_by_ρa(
+            Y.c.ρq_ice - ρaq_ice⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρq_ice,
+            Y.c.ρ,
+            turbconv_model,
+        )
+        @. ᶜq_rai⁰ = divide_by_ρa(
+            Y.c.ρq_rai - ρaq_rai⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρq_rai,
+            Y.c.ρ,
+            turbconv_model,
+        )
+        @. ᶜq_sno⁰ = divide_by_ρa(
+            Y.c.ρq_sno - ρaq_sno⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρq_sno,
+            Y.c.ρ,
+            turbconv_model,
+        )
+    end
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke⁰
-    @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
+    if p.atmos.moisture_model isa NonEquilMoistModel &&
+       p.atmos.precip_model isa Microphysics1Moment
+        @. ᶜts⁰ = TD.PhaseNonEquil_phq(
+            thermo_params,
+            ᶜp,
+            ᶜmse⁰ - ᶜΦ,
+            TD.PhasePartition(ᶜq_tot⁰, ᶜq_liq⁰ + ᶜq_rai⁰, ᶜq_ice⁰ + ᶜq_sno⁰),
+        )
+    else
+        @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
+    end
     @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
     return nothing
 end
 
 """
-    set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
+    set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
 
-Updates the draft thermo state and boundary conditions
-precomputed quantities stored in `p` for edmfx.
+Updates velocity and thermodynamics quantities in each SGS draft.
 """
-NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     Y,
     p,
     ᶠuₕ³,
     t,
 )
     (; moisture_model, turbconv_model) = p.atmos
-    #EDMFX BCs only support total energy as state variable
     @assert !(moisture_model isa DryModel)
 
-    FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
-
-    (; params) = p
-    thermo_params = CAP.thermodynamics_params(params)
-    turbconv_params = CAP.turbconv_params(params)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    turbconv_params = CAP.turbconv_params(p.params)
 
     (; ᶜΦ,) = p.core
     (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK) = p.precomputed
@@ -87,13 +127,69 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         ᶜρʲ = ᶜρʲs.:($j)
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+        if p.atmos.moisture_model isa NonEquilMoistModel &&
+           p.atmos.precip_model isa Microphysics1Moment
+            ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
+            ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
+            ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
+            ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
+        end
 
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
-        @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
+        if p.atmos.moisture_model isa NonEquilMoistModel &&
+           p.atmos.precip_model isa Microphysics1Moment
+            @. ᶜtsʲ = TD.PhaseNonEquil_phq(
+                thermo_params,
+                ᶜp,
+                ᶜmseʲ - ᶜΦ,
+                TD.PhasePartition(
+                    ᶜq_totʲ,
+                    ᶜq_liqʲ + ᶜq_raiʲ,
+                    ᶜq_iceʲ + ᶜq_snoʲ,
+                ),
+            )
+        else
+            @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
+        end
         @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
+    end
+    return nothing
+end
 
-        # EDMFX boundary condition:
+"""
+    set_prognostic_edmf_precomputed_quantities_bottom_bc!(Y, p, ᶠuₕ³, t)
+
+Updates velocity and thermodynamics quantities at the surface in each SGS draft.
+"""
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
+    Y,
+    p,
+    t,
+)
+    (; moisture_model, turbconv_model) = p.atmos
+    @assert !(moisture_model isa DryModel)
+
+    FT = Spaces.undertype(axes(Y.c))
+    n = n_mass_flux_subdomains(turbconv_model)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    turbconv_params = CAP.turbconv_params(p.params)
+
+    (; ᶜΦ,) = p.core
+    (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
+
+    for j in 1:n
+        ᶜtsʲ = ᶜtsʲs.:($j)
+        ᶜmseʲ = Y.c.sgsʲs.:($j).mse
+        ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+        if p.atmos.moisture_model isa NonEquilMoistModel &&
+           p.atmos.precip_model isa Microphysics1Moment
+            ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
+            ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
+            ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
+            ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
+        end
 
         # We need field_values everywhere because we are mixing
         # information from surface and first interior inside the
@@ -107,9 +203,11 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         ᶜp_int_val = Fields.field_values(Fields.level(ᶜp, 1))
         (; ρ_flux_h_tot, ρ_flux_q_tot, ustar, obukhov_length) =
             p.precomputed.sfc_conditions
+
         buoyancy_flux_val = Fields.field_values(buoyancy_flux)
         ρ_flux_h_tot_val = Fields.field_values(ρ_flux_h_tot)
         ρ_flux_q_tot_val = Fields.field_values(ρ_flux_q_tot)
+
         ustar_val = Fields.field_values(ustar)
         obukhov_length_val = Fields.field_values(obukhov_length)
         sfc_local_geometry_val = Fields.field_values(
@@ -151,16 +249,53 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
             obukhov_length_val,
             sfc_local_geometry_val,
         )
+        if p.atmos.moisture_model isa NonEquilMoistModel &&
+           p.atmos.precip_model isa Microphysics1Moment
+            # TODO - any better way to define the cloud and precip tracer flux?
+            ᶜq_liq_int_val =
+                Fields.field_values(Fields.level(ᶜspecific.q_liq, 1))
+            ᶜq_liqʲ_int_val = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
+            @. ᶜq_liqʲ_int_val = ᶜq_liq_int_val
+
+            ᶜq_ice_int_val =
+                Fields.field_values(Fields.level(ᶜspecific.q_ice, 1))
+            ᶜq_iceʲ_int_val = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
+            @. ᶜq_iceʲ_int_val = ᶜq_ice_int_val
+
+            ᶜq_rai_int_val =
+                Fields.field_values(Fields.level(ᶜspecific.q_rai, 1))
+            ᶜq_raiʲ_int_val = Fields.field_values(Fields.level(ᶜq_raiʲ, 1))
+            @. ᶜq_raiʲ_int_val = ᶜq_rai_int_val
+
+            ᶜq_sno_int_val =
+                Fields.field_values(Fields.level(ᶜspecific.q_sno, 1))
+            ᶜq_snoʲ_int_val = Fields.field_values(Fields.level(ᶜq_snoʲ, 1))
+            @. ᶜq_snoʲ_int_val = ᶜq_sno_int_val
+        end
 
         # Then overwrite the prognostic variables at first inetrior point.
         ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
         ᶜtsʲ_int_val = Fields.field_values(Fields.level(ᶜtsʲ, 1))
-        @. ᶜtsʲ_int_val = TD.PhaseEquil_phq(
-            thermo_params,
-            ᶜp_int_val,
-            ᶜmseʲ_int_val - ᶜΦ_int_val,
-            ᶜq_totʲ_int_val,
-        )
+        if p.atmos.moisture_model isa NonEquilMoistModel &&
+           p.atmos.precip_model isa Microphysics1Moment
+            @. ᶜtsʲ_int_val = TD.PhaseNonEquil_phq(
+                thermo_params,
+                ᶜp_int_val,
+                ᶜmseʲ_int_val - ᶜΦ_int_val,
+                TD.PhasePartition(
+                    ᶜq_totʲ_int_val,
+                    ᶜq_liqʲ_int_val + ᶜq_raiʲ_int_val,
+                    ᶜq_iceʲ_int_val + ᶜq_snoʲ_int_val,
+                ),
+            )
+        else
+            @. ᶜtsʲ_int_val = TD.PhaseEquil_phq(
+                thermo_params,
+                ᶜp_int_val,
+                ᶜmseʲ_int_val - ᶜΦ_int_val,
+                ᶜq_totʲ_int_val,
+            )
+        end
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
         sgsʲs_ρa_int_val =
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
@@ -174,11 +309,50 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
 end
 
 """
-    set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
+    set_prognostic_edmf_precomputed_quantities_implicit_closures!(Y, p, t)
 
-Updates the precomputed quantities stored in `p` for edmfx closures.
+Updates the precomputed quantities stored in `p` for edmfx implicit closures.
 """
-NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_implicit_closures!(
+    Y,
+    p,
+    t,
+)
+
+    (; moisture_model, turbconv_model) = p.atmos
+    @assert !(moisture_model isa DryModel)
+
+    (; params) = p
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    (; ᶠu₃⁰, ᶠnh_pressure₃_dragʲs) = p.precomputed
+    ᶠlg = Fields.local_geometry_field(Y.f)
+
+    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+    # nonhydrostatic pressure closure drag term
+    for j in 1:n
+        if p.atmos.edmfx_model.nh_pressure isa Val{true}
+            @. ᶠnh_pressure₃_dragʲs.:($$j) = ᶠupdraft_nh_pressure_drag(
+                params,
+                ᶠlg,
+                Y.f.sgsʲs.:($$j).u₃,
+                ᶠu₃⁰,
+                scale_height,
+            )
+        else
+            @. ᶠnh_pressure₃_dragʲs.:($$j) = C3(0)
+        end
+    end
+
+    return nothing
+end
+
+"""
+    set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
+
+Updates the precomputed quantities stored in `p` for edmfx explicit closures.
+"""
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_closures!(
     Y,
     p,
     t,
@@ -189,6 +363,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
 
     (; params) = p
     (; dt) = p
+    (; ᶠgradᵥ_ᶜΦ) = p.core
     thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
 
@@ -205,13 +380,23 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         ᶜK_h,
         ρatke_flux,
     ) = p.precomputed
-    (; ᶜuʲs, ᶜtsʲs, ᶠu³ʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p.precomputed
+    (;
+        ᶜuʲs,
+        ᶜtsʲs,
+        ᶠu³ʲs,
+        ᶜρʲs,
+        ᶜentrʲs,
+        ᶜdetrʲs,
+        ᶜturb_entrʲs,
+        ᶠnh_pressure₃_buoyʲs,
+    ) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶠlg = Fields.local_geometry_field(Y.f)
 
     ᶜvert_div = p.scratch.ᶜtemp_scalar
     ᶜmassflux_vert_div = p.scratch.ᶜtemp_scalar_2
@@ -282,6 +467,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             dt,
         )
+
+        # nonhydrostatic pressure closure buoyancy term
+        if p.atmos.edmfx_model.nh_pressure isa Val{true}
+            @. ᶠnh_pressure₃_buoyʲs.:($$j) = ᶠupdraft_nh_pressure_buoyancy(
+                params,
+                ᶠbuoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
+            )
+        else
+            @. ᶠnh_pressure₃_buoyʲs.:($$j) = C3(0)
+        end
     end
 
     (; ᶜgradᵥ_θ_virt⁰, ᶜgradᵥ_q_tot⁰, ᶜgradᵥ_θ_liq_ice⁰) = p.precomputed
@@ -290,7 +485,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
     @. ᶜgradᵥ_q_tot⁰ = ᶜgradᵥ(ᶠinterp(ᶜq_tot⁰))                                        # ∂qt∂z_sat
     @. ᶜgradᵥ_θ_liq_ice⁰ =
         ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰)))                    # ∂θl∂z_sat
-    @. ᶜlinear_buoygrad = buoyancy_gradients(
+    @. ᶜlinear_buoygrad = buoyancy_gradients( # TODO - do we need to modify buoyancy gradients based on NonEq + 1M tracers?
         BuoyGradMean(),
         thermo_params,
         moisture_model,
@@ -414,60 +609,100 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     p,
     ::Microphysics1Moment,
 )
-    error("Not implemented yet")
-    #@assert !(p.atmos.moisture_model isa DryModel)
+    @assert (p.atmos.moisture_model isa NonEquilMoistModel)
 
-    #(; params, dt) = p
-    #(; ᶜΦ,) = p.core
-    #thp = CAP.thermodynamics_params(params)
-    #cmp = CAP.microphysics_1m_params(params)
+    (; params, dt) = p
+    (; ᶜΦ,) = p.core
+    thp = CAP.thermodynamics_params(params)
+    cmp = CAP.microphysics_1m_params(params)
+    cmc = CAP.microphysics_cloud_params(params)
 
-    #(; ᶜSeₜᵖʲs, ᶜSqₜᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
-    #(; ᶜSeₜᵖ⁰, ᶜSqₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρ⁰, ᶜts⁰) = p.precomputed
-    #(; ᶜqᵣ, ᶜqₛ) = p.precomputed
+    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
+    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρ⁰, ᶜts⁰) = p.precomputed
+    (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
 
-    ## TODO - can I re-use them between js and env?
-    #ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    #ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+    # TODO - can I re-use them between js and env?
+    ᶜSᵖ = p.scratch.ᶜtemp_scalar
+    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
-    #n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
-    ## Sources from the updrafts
-    #for j in 1:n
-    #    compute_precipitation_sources!(
-    #        ᶜSᵖ,
-    #        ᶜSᵖ_snow,
-    #        ᶜSqₜᵖʲs.:($j),
-    #        ᶜSqᵣᵖʲs.:($j),
-    #        ᶜSqₛᵖʲs.:($j),
-    #        ᶜSeₜᵖʲs.:($j),
-    #        ᶜρʲs.:($j),
-    #        ᶜqᵣ,
-    #        ᶜqₛ,
-    #        ᶜtsʲs.:($j),
-    #        ᶜΦ,
-    #        dt,
-    #        cmp,
-    #        thp,
-    #    )
-    #end
+    for j in 1:n
+        # Precipitation sources and sinks from the updrafts
+        compute_precipitation_sources!(
+            ᶜSᵖ,
+            ᶜSᵖ_snow,
+            ᶜSqₗᵖʲs.:($j),
+            ᶜSqᵢᵖʲs.:($j),
+            ᶜSqᵣᵖʲs.:($j),
+            ᶜSqₛᵖʲs.:($j),
+            ᶜρʲs.:($j),
+            Y.c.sgsʲs.:($j).q_rai,
+            Y.c.sgsʲs.:($j).q_sno,
+            ᶜtsʲs.:($j),
+            dt,
+            cmp,
+            thp,
+        )
+        compute_precipitation_sinks!(
+            ᶜSᵖ,
+            ᶜSqᵣᵖʲs.:($j),
+            ᶜSqₛᵖʲs.:($j),
+            ᶜρʲs.:($j),
+            Y.c.sgsʲs.:($j).q_rai,
+            Y.c.sgsʲs.:($j).q_sno,
+            ᶜtsʲs.:($j),
+            dt,
+            cmp,
+            thp,
+        )
+        # Cloud formation from the updrafts
+        @. ᶜSqₗᵖʲs.:($$j) += cloud_sources(
+            cmc.liquid,
+            thp,
+            ᶜtsʲs.:($$j),
+            Y.c.sgsʲs.:($$j).q_rai,
+            dt,
+        )
+        @. ᶜSqᵢᵖʲs.:($$j) += cloud_sources(
+            cmc.ice,
+            thp,
+            ᶜtsʲs.:($$j),
+            Y.c.sgsʲs.:($$j).q_sno,
+            dt,
+        )
+    end
 
-    ## Sources from the environment
-    #compute_precipitation_sources!(
-    #    ᶜSᵖ,
-    #    ᶜSᵖ_snow,
-    #    ᶜSqₜᵖ⁰,
-    #    ᶜSqᵣᵖ⁰,
-    #    ᶜSqₛᵖ⁰,
-    #    ᶜSeₜᵖ⁰,
-    #    ᶜρ⁰,
-    #    ᶜqᵣ,
-    #    ᶜqₛ,
-    #    ᶜts⁰,
-    #    ᶜΦ,
-    #    dt,
-    #    cmp,
-    #    thp,
-    #)
+    # Precipitation sources and sinks from the environment
+    compute_precipitation_sources!(
+        ᶜSᵖ,
+        ᶜSᵖ_snow,
+        ᶜSqₗᵖ⁰,
+        ᶜSqᵢᵖ⁰,
+        ᶜSqᵣᵖ⁰,
+        ᶜSqₛᵖ⁰,
+        ᶜρ⁰,
+        ᶜq_rai⁰,
+        ᶜq_sno⁰,
+        ᶜts⁰,
+        dt,
+        cmp,
+        thp,
+    )
+    compute_precipitation_sinks!(
+        ᶜSᵖ,
+        ᶜSqᵣᵖ⁰,
+        ᶜSqₛᵖ⁰,
+        ᶜρ⁰,
+        ᶜq_rai⁰,
+        ᶜq_sno⁰,
+        ᶜts⁰,
+        dt,
+        cmp,
+        thp,
+    )
+    # Cloud formation from the environment
+    @. ᶜSqₗᵖ⁰ += cloud_sources(cmc.liquid, thp, ᶜts⁰, ᶜq_rai⁰, dt)
+    @. ᶜSqᵢᵖ⁰ += cloud_sources(cmc.ice, thp, ᶜts⁰, ᶜq_sno⁰, dt)
     return nothing
 end

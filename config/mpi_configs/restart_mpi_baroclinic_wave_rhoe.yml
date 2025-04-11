@@ -1,3 +1,0 @@
-t_end: "20days"
-initial_condition: "DryBaroclinicWave"
-restart_file: "mpi_make_restart/output_active/day5.0.hdf5"

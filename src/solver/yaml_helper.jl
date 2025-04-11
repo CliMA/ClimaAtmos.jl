@@ -33,12 +33,10 @@ Given a job id string, returns the configuration for that job.
 Does not include the default configuration dictionary.
 """
 function config_from_target_job(target_job)
-    for (job_id, config) in configs_per_config_id()
-        if job_id == target_job
-            return config
-        end
+    # get(configs_per_config_id(), target_job, error("")) doesn't work for some reason
+    for (job_id, config_tuple) in configs_per_config_id()
+        job_id == target_job && return config_tuple.config
     end
-    error("Could not find job with id $target_job")
 end
 
 ContainerType(T) = Union{Tuple{<:T, Vararg{T}}, Vector{<:T}}
@@ -59,7 +57,6 @@ override_default_config(config_dicts::ContainerType(AbstractDict)) =
     override_default_config(merge(config_dicts...))
 
 function override_default_config(::Nothing)
-    @info "Using default configuration"
     return default_config_dict()
 end
 

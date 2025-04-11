@@ -41,10 +41,10 @@ function get_atmos(config::AtmosConfig, params)
         )
         co2 = FixedCO2()
     end
-    (isnothing(co2) && !with_rrtmgp) &&
+    (!isnothing(co2) && !with_rrtmgp) &&
         @warn ("$(co2) does nothing if RRTMGP is not used")
 
-    diffuse_momentum = !(forcing_type isa HeldSuarezForcing)
+    disable_momentum_vertical_diffusion = forcing_type isa HeldSuarezForcing
 
     advection_test = parsed_args["advection_test"]
     @assert advection_test in (false, true)
@@ -55,6 +55,15 @@ function get_atmos(config::AtmosConfig, params)
     implicit_sgs_advection = parsed_args["implicit_sgs_advection"]
     @assert implicit_sgs_advection in (true, false)
 
+    implicit_sgs_entr_detr = parsed_args["implicit_sgs_entr_detr"]
+    @assert implicit_sgs_entr_detr in (true, false)
+
+    implicit_sgs_nh_pressure = parsed_args["implicit_sgs_nh_pressure"]
+    @assert implicit_sgs_nh_pressure in (true, false)
+
+    implicit_sgs_mass_flux = parsed_args["implicit_sgs_mass_flux"]
+    @assert implicit_sgs_mass_flux in (true, false)
+
     edmfx_model = EDMFXModel(;
         entr_model = get_entrainment_model(parsed_args),
         detr_model = get_detrainment_model(parsed_args),
@@ -64,8 +73,12 @@ function get_atmos(config::AtmosConfig, params)
         filter = Val(parsed_args["edmfx_filter"]),
     )
 
-    vert_diff =
-        get_vertical_diffusion_model(diffuse_momentum, parsed_args, params, FT)
+    vert_diff = get_vertical_diffusion_model(
+        disable_momentum_vertical_diffusion,
+        parsed_args,
+        params,
+        FT,
+    )
 
     atmos = AtmosModel(;
         moisture_model,
@@ -77,7 +90,6 @@ function get_atmos(config::AtmosConfig, params)
         external_forcing = get_external_forcing_model(parsed_args),
         edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
         advection_test,
-        tendency_model = get_tendency_model(parsed_args),
         edmfx_model,
         precip_model,
         cloud_model,
@@ -96,11 +108,16 @@ function get_atmos(config::AtmosConfig, params)
         vert_diff,
         diff_mode = implicit_diffusion ? Implicit() : Explicit(),
         sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
+        sgs_entr_detr_mode = implicit_sgs_entr_detr ? Implicit() : Explicit(),
+        sgs_nh_pressure_mode = implicit_sgs_nh_pressure ? Implicit() :
+                               Explicit(),
+        sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
         smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         insolation = get_insolation_form(parsed_args),
+        disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
         surface_model = get_surface_model(parsed_args),
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
         numerics = get_numerics(parsed_args),
@@ -320,11 +337,10 @@ function get_initial_condition(parsed_args)
             parsed_args["perturb_initstate"],
         )
     elseif parsed_args["initial_condition"] in [
+        "ConstantBuoyancyFrequencyProfile",
         "IsothermalProfile",
-        "AgnesiHProfile",
         "DryDensityCurrentProfile",
         "RisingThermalBubbleProfile",
-        "ScharProfile",
         "PrecipitatingColumn",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
@@ -341,6 +357,41 @@ function get_initial_condition(parsed_args)
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
         )
     end
+end
+
+function get_steady_state_velocity(params, Y, parsed_args)
+    parsed_args["check_steady_state"] || return nothing
+    parsed_args["initial_condition"] == "ConstantBuoyancyFrequencyProfile" &&
+        parsed_args["mesh_warp_type"] == "Linear" ||
+        error("The steady-state velocity can currently be computed only for a \
+               ConstantBuoyancyFrequencyProfile with Linear mesh warping")
+    topography = parsed_args["topography"]
+    steady_state_velocity = if topography == "NoWarp"
+        steady_state_velocity_no_warp
+    elseif topography == "Cosine2D"
+        steady_state_velocity_cosine_2d
+    elseif topography == "Cosine3D"
+        steady_state_velocity_cosine_3d
+    elseif topography == "Agnesi"
+        steady_state_velocity_agnesi
+    elseif topography == "Schar"
+        steady_state_velocity_schar
+    else
+        error("The steady-state velocity for $topography topography cannot \
+               be computed analytically")
+    end
+    top_level = Spaces.nlevels(axes(Y.c)) + Fields.half
+    z_top = Fields.level(Fields.coordinate_field(Y.f).z, top_level)
+
+    # TODO: This can be very expensive! It should be moved to a separate CI job.
+    @info "Approximating steady-state velocity"
+    s = @timed_str begin
+        ᶜu = steady_state_velocity.(params, Fields.coordinate_field(Y.c), z_top)
+        ᶠu =
+            steady_state_velocity.(params, Fields.coordinate_field(Y.f), z_top)
+    end
+    @info "Steady-state velocity approximation completed: $s"
+    return (; ᶜu, ᶠu)
 end
 
 function get_surface_setup(parsed_args)
@@ -375,9 +426,8 @@ additional_integrator_kwargs(::SciMLBase.AbstractODEAlgorithm) = (;
     progress = isinteractive(),
     progress_steps = isinteractive() ? 1 : 1000,
 )
-import DiffEqBase
 additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
-    kwargshandle = DiffEqBase.KeywordArgSilent, # allow custom kwargs
+    kwargshandle = CTS.DiffEqBase.KeywordArgSilent, # allow custom kwargs
     adjustfinal = true,
     # TODO: enable progress bars in ClimaTimeSteppers
 )
@@ -557,12 +607,19 @@ function get_sim_info(config::AtmosConfig)
     isnothing(restart_file) ||
         @info "Restarting simulation from file $restart_file"
     epoch = DateTime(parsed_args["start_date"], dateformat"yyyymmdd")
+    t_start_int = time_to_seconds(parsed_args["t_start"])
+    if !isnothing(restart_file) && t_start_int != 0
+        @warn "Non zero `t_start` passed with a restarting simulation. The provided `t_start` will be ignored."
+    end
     if parsed_args["use_itime"]
         dt = ITime(time_to_seconds(parsed_args["dt"]))
+        t_start = ITime(time_to_seconds(parsed_args["t_start"]), epoch = epoch)
         t_end = ITime(time_to_seconds(parsed_args["t_end"]), epoch = epoch)
-        (dt, t_end) = promote(dt, t_end)
+        # ITime(0) is added for backward compatibility (since t_start used to always be 0)
+        (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
     else
         dt = FT(time_to_seconds(parsed_args["dt"]))
+        t_start = FT(time_to_seconds(parsed_args["t_start"]))
         t_end = FT(time_to_seconds(parsed_args["t_end"]))
     end
     sim = (;
@@ -572,13 +629,14 @@ function get_sim_info(config::AtmosConfig)
         job_id,
         dt = dt,
         start_date = epoch,
+        t_start = t_start,
         t_end = t_end,
     )
-    @show sim.t_end, sim.dt
-    n_steps = floor(Int, sim.t_end / sim.dt)
+    n_steps = floor(Int, (sim.t_end - sim.t_start) / sim.dt)
     @info(
         "Time info:",
         dt = parsed_args["dt"],
+        t_start = parsed_args["t_start"],
         t_end = parsed_args["t_end"],
         floor_n_steps = n_steps,
     )
@@ -588,14 +646,6 @@ end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; atmos, dt) = p
-    dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
-    dt_save_to_sol = if dt_save_to_sol == Inf
-        Inf
-    elseif dt isa ITime
-        ITime(dt_save_to_sol)
-    else
-        dt_save_to_sol
-    end
 
     s = @timed_str begin
         func = if parsed_args["split_ode"]
@@ -612,8 +662,8 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
                     lim! = limiters_func!,
                     dss!,
                     cache! = set_precomputed_quantities!,
-                    cache_imp! = set_precomputed_quantities!,
-                ) # TODO: Split implicit precomputed quantities from the rest.
+                    cache_imp! = set_implicit_precomputed_quantities!,
+                )
             else
                 SciMLBase.SplitFunction(implicit_func, remaining_tendency!)
             end
@@ -624,14 +674,8 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     @info "Define ode function: $s"
     problem = SciMLBase.ODEProblem(func, Y, tspan, p)
     t_begin, t_end, _ = promote(tspan[1], tspan[2], p.dt)
-    saveat = if dt_save_to_sol == Inf
-        promote([t_begin, t_end]...)
-    elseif iszero(tspan[2] % dt_save_to_sol)
-        promote([t_begin:dt_save_to_sol:t_end...]...)
-    else
-        promote([t_begin:dt_save_to_sol:t_end..., t_end]...)
-    end # ensure that tspan[2] is always saved
-    @info "dt_save_to_sol: $dt_save_to_sol, length(saveat): $(length(saveat))"
+    # Save solution to integrator.sol at the beginning and end
+    saveat = [t_begin, t_end]
     args = (problem, ode_algo)
     kwargs = (; saveat, callback, dt, additional_integrator_kwargs(ode_algo)...)
     return (args, kwargs)
@@ -639,19 +683,21 @@ end
 
 import ClimaComms, Logging, NVTX
 function get_comms_context(parsed_args)
-    device = if parsed_args["device"] == "auto"
-        ClimaComms.device()
-    elseif parsed_args["device"] == "CUDADevice"
-        ClimaComms.CUDADevice()
-    elseif parsed_args["device"] == "CPUMultiThreaded" || Threads.nthreads() > 1
-        ClimaComms.CPUMultiThreaded()
-    else
-        ClimaComms.CPUSingleThreaded()
-    end
+    device =
+        if !haskey(parsed_args, "device") || parsed_args["device"] === "auto"
+            ClimaComms.device()
+        elseif parsed_args["device"] == "CUDADevice"
+            ClimaComms.CUDADevice()
+        elseif parsed_args["device"] == "CPUMultiThreaded" ||
+               Threads.nthreads() > 1
+            ClimaComms.CPUMultiThreaded()
+        else
+            ClimaComms.CPUSingleThreaded()
+        end
     comms_ctx = ClimaComms.context(device)
     ClimaComms.init(comms_ctx)
 
-    if NVTX.isactive()
+    if NVTX.isactive() && get(ENV, "BUILDKITE", "") == "true"
         # makes output on buildkite a bit nicer
         if ClimaComms.iamroot(comms_ctx)
             atexit() do
@@ -686,6 +732,8 @@ function get_simulation(config::AtmosConfig)
                 hash(atmos),
             )
             spaces = get_spaces_restart(Y)
+            # Fix the t_start in sim_info with the one from the restart
+            sim_info = merge(sim_info, (; t_start))
         end
         @info "Allocating Y: $s"
     else
@@ -701,14 +749,6 @@ function get_simulation(config::AtmosConfig)
                 spaces.center_space,
                 spaces.face_space,
             )
-            if sim_info.dt isa ITime
-                t_start = ITime(
-                    Spaces.undertype(axes(Y.c))(0);
-                    epoch = sim_info.start_date,
-                )
-            else
-                t_start = Spaces.undertype(axes(Y.c))(0)
-            end
         end
         @info "Allocating Y: $s"
 
@@ -725,6 +765,8 @@ function get_simulation(config::AtmosConfig)
     end
 
     tracers = get_tracers(config.parsed_args)
+    steady_state_velocity =
+        get_steady_state_velocity(params, Y, config.parsed_args)
 
     s = @timed_str begin
         p = build_cache(
@@ -734,6 +776,7 @@ function get_simulation(config::AtmosConfig)
             surface_setup,
             sim_info,
             tracers.aerosol_names,
+            steady_state_velocity,
         )
     end
     @info "Allocating cache (p): $s"
@@ -749,7 +792,7 @@ function get_simulation(config::AtmosConfig)
     @info "ode_configuration: $s"
 
     s = @timed_str begin
-        callback = get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
+        callback = get_callbacks(config, sim_info, atmos, params, Y, p)
     end
     @info "get_callbacks: $s"
 
@@ -763,7 +806,6 @@ function get_simulation(config::AtmosConfig)
                     Y,
                     p,
                     sim_info,
-                    t_start,
                     output_dir,
                 )
         end
@@ -802,7 +844,7 @@ function get_simulation(config::AtmosConfig)
     @info "n_steps_per_cycle_per_cb (non diagnostics): $steps_cycle_non_diag"
     @info "n_steps_per_cycle (non diagnostics): $steps_cycle"
 
-    tspan = (t_start, sim_info.t_end)
+    tspan = (sim_info.t_start, sim_info.t_end)
     s = @timed_str begin
         integrator_args, integrator_kwargs = args_integrator(
             config.parsed_args,

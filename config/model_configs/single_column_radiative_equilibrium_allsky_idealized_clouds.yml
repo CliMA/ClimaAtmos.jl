@@ -11,7 +11,7 @@ t_end: "654days"
 idealized_clouds: true
 config: "column"
 insolation: "timevarying"
-dt_save_to_sol: "30hours"
+disable_surface_flux_tendency: true
 rad: "allskywithclear"
 diagnostics:
   - short_name: rhoa

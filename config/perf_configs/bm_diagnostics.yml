@@ -1,0 +1,23 @@
+apply_limiter: true
+h_elem: 12
+z_elem: 25
+dt: "1secs"
+t_end: "10secs"
+log_progress: false
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+moist: "equil"
+surface_setup: "DefaultMoninObukhov"
+rad: "allskywithclear"
+vert_diff: true
+precip_model: "0M"
+diagnostics:
+  - reduction_time: "average"
+    short_name: "ua"
+    period: "1secs"
+  - reduction_time: "max"
+    short_name: "va"
+    period: "1secs"
+  - reduction_time: "max"
+    short_name: "ta"
+    period: "1secs"

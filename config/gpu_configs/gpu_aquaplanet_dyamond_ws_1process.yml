@@ -1,5 +1,4 @@
 dt_save_state_to_disk: "Inf"
-dt_save_to_sol: "Inf"
 output_default_diagnostics: false
 h_elem: 30
 z_max: 60000.0
@@ -17,7 +16,6 @@ vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 surface_setup: "DefaultMoninObukhov"
-rayleigh_sponge: true
 dt: "90secs"
 t_end: "1days"
 toml: [toml/longrun_aquaplanet.toml]

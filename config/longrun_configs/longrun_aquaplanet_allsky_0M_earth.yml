@@ -17,6 +17,10 @@ rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
-vert_diff: "DecayWithHeightDiffusion"
+turbconv: "edonly_edmfx"
+edmfx_sgs_diffusive_flux: true
 precip_model: "0M"
 toml: [toml/longrun_aquaplanet.toml]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    period: 1days

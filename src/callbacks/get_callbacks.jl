@@ -1,16 +1,9 @@
-function get_diagnostics(
-    parsed_args,
-    atmos_model,
-    Y,
-    p,
-    sim_info,
-    t_start,
-    output_dir,
-)
+function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
 
-    (; dt, start_date) = sim_info
+    (; dt, t_start, start_date) = sim_info
 
     FT = Spaces.undertype(axes(Y.c))
+    context = ClimaComms.context(axes(Y.c))
 
     # We either get the diagnostics section in the YAML file, or we return an empty list
     # (which will result in an empty list being created by the map below)
@@ -40,9 +33,26 @@ function get_diagnostics(
         num_netcdf_points =
             tuple(parsed_args["netcdf_interpolation_num_points"]...)
     else
-        # TODO: Once https://github.com/CliMA/ClimaCore.jl/pull/1567 is merged,
-        # dispatch over the Grid type
-        num_netcdf_points = (180, 90, 50)
+        # Estimate the number of points we need to cover the entire domain
+        # ncolumns is the number of local columns
+        tot_num_columns =
+            ClimaComms.nprocs(context) * Fields.ncolumns(axes(Y.c))
+        if parsed_args["config"] == "plane"
+            num1, num2 = tot_num_columns, 0
+        elseif parsed_args["config"] == "sphere"
+            num2 = round(Int, sqrt(tot_num_columns / 2))
+            num1 = 2num2
+        elseif parsed_args["config"] == "box"
+            num2 = round(Int, sqrt(tot_num_columns))
+            num1 = num2
+        elseif parsed_args["config"] == "column"
+            # We need at least two points horizontally because our column is
+            # actually a box
+            num1, num2 = 2, 2
+        else
+            error("Uncaught case")
+        end
+        num_netcdf_points = (num1, num2, Spaces.nlevels(axes(Y.c)))
     end
 
     z_sampling_method =
@@ -231,16 +241,16 @@ function checkpoint_frequency_from_parsed_args(dt_save_state_to_disk::String)
 end
 
 
-function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
+function get_callbacks(config, sim_info, atmos, params, Y, p)
     (; parsed_args, comms_ctx) = config
     FT = eltype(params)
-    (; dt, output_dir, start_date) = sim_info
+    (; dt, output_dir, start_date, t_start, t_end) = sim_info
 
     callbacks = ()
     if parsed_args["log_progress"]
         @info "Progress logging enabled"
         walltime_info = WallTimeInfo()
-        tot_steps = ceil(Int, (sim_info.t_end - t_start) / dt)
+        tot_steps = ceil(Int, (t_end - t_start) / dt)
         five_percent_steps = ceil(Int, 0.05 * tot_steps)
         cond = let schedule = CappedGeometricSeriesSchedule(five_percent_steps)
             (u, t, integrator) -> schedule(integrator)
@@ -322,7 +332,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
             dt isa ITime ?
             ITime(time_to_seconds(parsed_args["dt_cloud_fraction"])) :
             FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
-        dt_cf, _, _, _ = promote(dt_cf, t_start, dt, sim_info.t_end)
+        dt_cf, _, _, _ = promote(dt_cf, t_start, dt, t_end)
         callbacks =
             (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
     end
@@ -331,7 +341,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         dt_rad =
             dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_rad"])) :
             FT(time_to_seconds(parsed_args["dt_rad"]))
-        dt_rad, _, _, _ = promote(dt_rad, t_start, dt, sim_info.t_end)
+        dt_rad, _, _, _ = promote(dt_rad, t_start, dt, t_end)
         # We use Millisecond to support fractional seconds, eg. 0.1
         dt_rad_ms = Dates.Millisecond(1_000 * float(dt_rad))
         if parsed_args["dt_save_state_to_disk"] != "Inf" &&

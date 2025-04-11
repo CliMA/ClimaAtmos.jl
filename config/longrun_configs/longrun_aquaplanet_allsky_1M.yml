@@ -15,6 +15,7 @@ rad: "allskywithclear"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
-vert_diff: "DecayWithHeightDiffusion"
+turbconv: "edonly_edmfx"
+edmfx_sgs_diffusive_flux: true
 precip_model: "1M"
 toml: [toml/longrun_aquaplanet_1M.toml]

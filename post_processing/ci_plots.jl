@@ -14,7 +14,7 @@
 # Consider for example
 # ```julia
 #     function make_plots(
-#         ::Val{:box_hydrostatic_balance_rhoe},
+#         ::Val{:box_hydrostatic_balance},
 #         output_paths::Vector{<:AbstractString},
 #     )
 #         simdirs = SimDir.(output_paths)
@@ -49,6 +49,7 @@ import ClimaCoreSpectra: power_spectrum_2d
 
 using Poppler_jll: pdfunite
 import Base.Filesystem
+import Statistics: mean
 
 const days = 86400
 
@@ -105,6 +106,7 @@ YLINEARSCALE = Dict(
 
 long_name(var) = var.attributes["long_name"]
 short_name(var) = var.attributes["short_name"]
+z_dim_name(var) = haskey(var.dims, "z_reference") ? "z_reference" : "z"
 
 """
     parse_var_attributes(var)
@@ -212,8 +214,7 @@ function make_plots_generic(
 
     # Default plotting function needs access to kwargs
     if isnothing(plot_fn)
-        plot_fn =
-            (grid_loc, var) -> viz.plot!(grid_loc, var, args...; kwargs...)
+        plot_fn = viz.plot!
     end
 
     MAX_PLOTS_PER_PAGE = MAX_NUM_ROWS * MAX_NUM_COLS
@@ -254,7 +255,7 @@ function make_plots_generic(
             grid_pos = 1
         end
 
-        plot_fn(grid[grid_pos], var)
+        plot_fn(grid[grid_pos], var, args...; kwargs...)
         grid_pos += 1
 
         # Flush current page
@@ -277,6 +278,39 @@ function make_plots_generic(
     # Cleanup
     Filesystem.rm.(summary_files, force = true)
     return output_file
+end
+
+"""
+    horizontal_average(var)
+
+A `ClimaAnalysis.OutputVar` with a horizontal RMS average of the data in `var`.
+"""
+function horizontal_average(var)
+    rms(var; dims) = sqrt.(mean(var .^ 2; dims))
+    reduced_var = ClimaAnalysis.Var._reduce_over(rms, "x", var)
+    if haskey(var.dims, "y")
+        reduced_var = ClimaAnalysis.Var._reduce_over(rms, "y", reduced_var)
+    end
+    if haskey(var.attributes, "long_name")
+        long_name = reduced_var.attributes["long_name"]
+        reduced_var.attributes["long_name"] = long_name * ", Horizontal Average"
+    end
+    return reduced_var
+end
+
+"""
+    vertical_average(var)
+
+A `ClimaAnalysis.OutputVar` with a vertical RMS average of the data in `var`.
+"""
+function vertical_average(var)
+    rms(var; dims) = sqrt.(mean(var .^ 2; dims))
+    reduced_var = ClimaAnalysis.Var._reduce_over(rms, z_dim_name(var), var)
+    if haskey(var.attributes, "long_name")
+        long_name = reduced_var.attributes["long_name"]
+        reduced_var.attributes["long_name"] = long_name * ", Vertical Average"
+    end
+    return reduced_var
 end
 
 """
@@ -469,6 +503,81 @@ function plot_spectrum_with_line!(grid_loc, spectrum; exponent = -3.0)
     return nothing
 end
 
+"""
+    plot_contours!(place, var; [n_contours], [kwargs]...)
+
+Generic alternative to the default plotting function provided in ClimaAnalysis,
+which uses a semi-transparent color scheme with appropriately centered contours.
+Data with a small but nonempty range is centered around 0 before being plotted.
+For constant data, a heatmap is used instead of a contour plot.
+
+The number of contours is 22 by default, but can also be specified manually. Any
+additional keyword arguments are passed to the `CairoMakie` plotting function.
+"""
+function plot_contours!(place, var; n_contours = 22, kwargs...)
+    length(var.dims) == 2 || error("Can only plot 2D variables")
+
+    var_name = var.attributes["short_name"]
+    var_units = var.attributes["units"]
+    dim1_name, dim2_name = var.index2dim
+    dim1_units = var.dim_attributes[dim1_name]["units"]
+    dim2_units = var.dim_attributes[dim2_name]["units"]
+    dim1 = var.dims[dim1_name]
+    dim2 = var.dims[dim2_name]
+
+    CairoMakie.Axis(
+        place[1, 1];
+        title = var.attributes["long_name"],
+        xlabel = "$dim1_name [$dim1_units]",
+        ylabel = "$dim2_name [$dim2_units]",
+        limits = (extrema(dim1), extrema(dim2)),
+    )
+
+    # Interpolate between the 11 Spectral colors, with the middle color replaced
+    # by transparent white.
+    spectral_colors = CairoMakie.to_colormap(:Spectral)
+    colormap = setindex!(spectral_colors, CairoMakie.RGBA(1, 1, 1, 0), 6)
+    highclip = extendhigh = spectral_colors[11]
+    lowclip = extendlow = spectral_colors[1]
+
+    # Center the contour levels around either 0, the average of the data, or the
+    # nearest integer that falls into the data range.
+    data_avg = mean(var.data)
+    data_avg_int = round(Int, data_avg)
+    data_min, data_max = extrema(var.data)
+    data_mid = if data_min < 0 < data_max
+        0
+    elseif data_min < data_avg_int < data_max
+        data_avg_int
+    else
+        data_avg
+    end
+    data_delta = maximum(value -> abs(value - data_mid), var.data)
+
+    if data_delta == 0
+        # For constant data, use a heatmap to avoid Colorbar's LineAxis error.
+        plot_kwargs = (; colormap, highclip, lowclip, kwargs...)
+        label = "$var_name [$var_units]"
+        plot = CairoMakie.heatmap!(dim1, dim2, var.data; plot_kwargs...)
+    else
+        plot_kwargs = (; colormap, extendhigh, extendlow, kwargs...)
+        if data_delta > abs(data_mid) / 1e6
+            # Center contours around data_mid when data_delta >> |data_mid|.
+            data = var.data
+            label = "$var_name [$var_units]"
+            levels =
+                range(data_mid - data_delta, data_mid + data_delta, n_contours)
+        else
+            # Recenter data and contours around 0 when data_delta << |data_mid|.
+            data = var.data .- data_mid
+            label = "$var_name - $data_mid [$var_units]"
+            levels = range(-data_delta, data_delta, n_contours)
+        end
+        plot = CairoMakie.contourf!(dim1, dim2, data; levels, plot_kwargs...)
+    end
+    CairoMakie.Colorbar(place[1, 2], plot; label)
+end
+
 ColumnPlots = Union{
     Val{:single_column_hydrostatic_balance_ft64},
     Val{:single_column_radiative_equilibrium_gray},
@@ -494,7 +603,7 @@ function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
 end
 
 function make_plots(
-    ::Val{:box_hydrostatic_balance_rhoe},
+    ::Val{:box_hydrostatic_balance},
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -590,25 +699,95 @@ function make_plots(
     make_plots_generic(output_paths, vars, y = 0.0, time = LAST_SNAP)
 end
 
-MountainPlots = Union{
-    Val{:plane_agnesi_mountain_test_uniform},
-    Val{:plane_agnesi_mountain_test_stretched},
-    Val{:plane_schar_mountain_test_uniform},
-    Val{:plane_schar_mountain_test_stretched},
+const PeriodicTopographyTest2D = Union{
+    Val{:gpu_plane_no_topography_float64_test},
+    Val{:gpu_plane_cosine_hills_float64_test},
 }
+const PeriodicTopographyTest3D = Union{
+    Val{:gpu_extruded_plane_cosine_hills_float64_test},
+    Val{:gpu_box_cosine_hills_float64_test},
+}
+const MountainTest2D = Union{
+    Val{:gpu_plane_agnesi_mountain_float64_test},
+    Val{:gpu_plane_schar_mountain_float64_test},
+    Val{:gpu_plane_schar_mountain_float32_test},
+}
+const SteadyStateTest =
+    Union{PeriodicTopographyTest2D, PeriodicTopographyTest3D, MountainTest2D}
 
-function make_plots(::MountainPlots, output_paths::Vector{<:AbstractString})
+function make_plots(
+    val::SteadyStateTest,
+    output_paths::Vector{<:AbstractString},
+)
     simdirs = SimDir.(output_paths)
-    short_names, reduction = ["wa"], "average"
-    vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return get(simdir; short_name, reduction)
+    is_mountain_test = val isa MountainTest2D
+    is_3d = val isa PeriodicTopographyTest3D
+    zd_rayleigh = 13e3 # Values inside the Rayleigh sponge shouldn't be plotted.
+
+    rms_error_vars =
+        Iterators.flatmap((horizontal_average, vertical_average)) do average
+            Iterators.flatmap(("uaerror", "waerror")) do short_name
+                Iterators.map(simdirs) do simdir
+                    var = get(simdir; short_name)
+                    var = window(var, z_dim_name(var); right = zd_rayleigh)
+                    var = slice(var; time = Inf)
+                    average(var)
+                end
+            end
+        end
+    orog_vars = Iterators.map(simdirs) do simdir
+        slice(get(simdir; short_name = "orog"); time = Inf)
     end
     make_plots_generic(
         output_paths,
-        vars,
-        time = LAST_SNAP,
-        more_kwargs = YLINEARSCALE,
+        [rms_error_vars..., orog_vars...];
+        output_name = "final_rms_errors",
     )
+
+    make_contour_plots(get_vars, short_names, output_name) = make_plots_generic(
+        output_paths,
+        [Iterators.flatmap(get_vars, short_names)...];
+        output_name,
+        plot_fn = plot_contours!,
+    )
+
+    for velocity_component in ("ua", "wa")
+        short_names = velocity_component .* ("error", "", "predicted")
+        mountain_output_name = "final_mountain_closeup_" * velocity_component
+        time_series_output_name = "slice_time_series_" * velocity_component
+        is_mountain_test &&
+            make_contour_plots(short_names, mountain_output_name) do short_name
+                Iterators.flatmap(simdirs) do simdir
+                    var = get(simdir; short_name)
+                    var = window(var, "x"; left = 35e3, right = 65e3)
+                    var = is_3d ? slice(var; y = 0) : var
+                    var = slice(var; time = Inf)
+                    z_max_values =
+                        endswith(short_name, "error") ? (1e3, zd_rayleigh) :
+                        (zd_rayleigh,) # Add closeup view of errors below 1 km.
+                    Iterators.map(z_max_values) do z_max
+                        window(var, z_dim_name(var); right = z_max)
+                    end
+                end
+            end
+        make_contour_plots(short_names, time_series_output_name) do short_name
+            Iterators.flatmap(simdirs) do simdir
+                var = get(simdir; short_name)
+                var = window(var, z_dim_name(var); right = zd_rayleigh)
+                var = is_3d ? slice(var; y = 0) : var
+                time_values = if endswith(short_name, "predicted")
+                    (Inf,) # Predicted values are constant and only need 1 plot.
+                elseif var.dims["time"][end] > 24 * 3600
+                    (1, 2, 24, Inf) .* 3600
+                elseif var.dims["time"][end] > 3 * 3600
+                    (1, 2, 4, Inf) .* 3600
+                else
+                    (5, 10, 20, Inf) .* 60
+                end
+                Iterators.map(time -> slice(var; time), time_values)
+            end
+        end
+    end
 end
 
 function make_plots(
@@ -627,7 +806,7 @@ function make_plots(
 end
 
 function make_plots(
-    ::Val{:sphere_hydrostatic_balance_rhoe_ft64},
+    ::Val{:hydrostatic_balance_ft64},
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -644,8 +823,8 @@ function make_plots(
 end
 
 DryBaroWavePlots = Union{
-    Val{:sphere_baroclinic_wave_rhoe},
-    Val{:sphere_baroclinic_wave_rhoe_deepatmos},
+    Val{:baroclinic_wave},
+    Val{:baroclinic_wave_deepatmos},
     Val{:longrun_dry_baroclinic_wave},
     Val{:longrun_dry_baroclinic_wave_he60},
 }
@@ -678,8 +857,8 @@ function make_plots(::DryBaroWavePlots, output_paths::Vector{<:AbstractString})
 end
 
 SphereOrographyPlots = Union{
-    Val{:sphere_baroclinic_wave_rhoe_topography_dcmip_rs},
-    Val{:sphere_baroclinic_wave_rhoe_hughes2023},
+    Val{:baroclinic_wave_topography_dcmip_rs},
+    Val{:baroclinic_wave_hughes2023},
 }
 
 function make_plots(
@@ -694,10 +873,8 @@ function make_plots(
     make_plots_generic(output_paths, vars, z_reference = 1500, time = LAST_SNAP)
 end
 
-MoistBaroWavePlots = Union{
-    Val{:sphere_baroclinic_wave_rhoe_equilmoist},
-    Val{:sphere_baroclinic_wave_rhoe_equilmoist_deepatmos},
-}
+MoistBaroWavePlots =
+    Union{Val{:baroclinic_wave_equil}, Val{:baroclinic_wave_equil_deepatmos}}
 
 function make_plots(
     ::MoistBaroWavePlots,
@@ -769,8 +946,8 @@ function make_plots(
 end
 
 DryHeldSuarezPlots = Union{
-    Val{:sphere_held_suarez_rhoe_hightop},
-    Val{:longrun_sphere_hydrostatic_balance_rhoe},
+    Val{:held_suarez},
+    Val{:longrun_hydrostatic_balance},
     Val{:longrun_dry_held_suarez},
 }
 
@@ -793,7 +970,7 @@ function make_plots(
 end
 
 MoistHeldSuarezPlots = Union{
-    Val{:sphere_held_suarez_rhoe_equilmoist_hightop_sponge},
+    Val{:held_suarez_equil},
     Val{:longrun_moist_held_suarez},
     Val{:longrun_moist_held_suarez_deepatmos},
 }
@@ -828,7 +1005,7 @@ end
 
 function make_plots(
     ::Union{
-        Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric},
+        Val{:aquaplanet_equil_allsky_gw_raw_zonalasym},
         Val{:gpu_aquaplanet_dyamond_summer},
     },
     output_paths::Vector{<:AbstractString},
@@ -951,16 +1128,17 @@ end
 
 AquaplanetPlots = Union{
     Val{:edonly_edmfx_aquaplanet},
-    Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
-    Val{:sphere_aquaplanet_rhoe_nonequilmoist_allsky},
+    Val{:mpi_sphere_aquaplanet_rhoe_equil_clearsky},
+    Val{:aquaplanet_nonequil_allsky_gw_res},
     Val{:rcemipii_sphere_diagnostic_edmfx},
     Val{:longrun_aquaplanet_allsky_0M},
     Val{:longrun_aquaplanet_allsky_diagedmf_0M},
-    Val{:longrun_aquaplanet_allsky_progedmf_diffonly_0M},
+    Val{:longrun_aquaplanet_allsky_progedmf_0M},
     Val{:longrun_aquaplanet_allsky_0M_earth},
     Val{:longrun_aquaplanet_dyamond},
+    Val{:longrun_aquaplanet_allsky_tvinsol_0M_slabocean},
     Val{:amip_target_diagedmf},
-    Val{:gpu_aquaplanet_dyamond},
+    Val{:amip_target_edonly},
 }
 
 function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
@@ -1017,7 +1195,7 @@ function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
 end
 
 Aquaplanet1MPlots = Union{
-    Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
+    Val{:sphere_aquaplanet_rhoe_equil_allsky_gw_res},
     Val{:longrun_aquaplanet_allsky_1M},
 }
 
@@ -1282,7 +1460,9 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
 
-    precip_names = sim_type isa EDMFBoxPlotsWithPrecip ? ("husra", "hussn") : ()
+    precip_names =
+        sim_type isa EDMFBoxPlotsWithPrecip ?
+        ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen") : ()
 
     short_names = [
         "wa",

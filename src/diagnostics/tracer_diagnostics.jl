@@ -105,6 +105,48 @@ function compute_sea_salt!(out, state, cache, time)
     end
 end
 
+function compute_sea_salt_column!(out, state, cache, time)
+    :prescribed_aerosols_field in propertynames(cache.tracers) ||
+        error("Aerosols do not exist in the model")
+    any(
+        x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
+        [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05],
+    ) || error("Sea salt does not exist in the model")
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        aero_conc = cache.scratch.ᶜtemp_scalar
+        @. aero_conc = 0
+        for prescribed_aerosol_name in
+            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+            if prescribed_aerosol_name in
+               propertynames(cache.tracers.prescribed_aerosols_field)
+                aerosol_field = getproperty(
+                    cache.tracers.prescribed_aerosols_field,
+                    prescribed_aerosol_name,
+                )
+                @. aero_conc += aerosol_field * state.c.ρ
+            end
+        end
+        Operators.column_integral_definite!(out, aero_conc)
+        return out
+    else
+        aero_conc = cache.scratch.ᶜtemp_scalar
+        @. aero_conc = 0
+        for prescribed_aerosol_name in
+            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+            if prescribed_aerosol_name in
+               propertynames(cache.tracers.prescribed_aerosols_field)
+                aerosol_field = getproperty(
+                    cache.tracers.prescribed_aerosols_field,
+                    prescribed_aerosol_name,
+                )
+                @. aero_conc += aerosol_field * state.c.ρ
+            end
+        end
+        Operators.column_integral_definite!(out, aero_conc)
+    end
+end
+
 ###
 # Ozone concentration (3d)
 ###
@@ -194,4 +236,16 @@ add_diagnostic_variable!(
     units = "kg kg^-1",
     comments = "Prescribed dry mass fraction of hydrophilic organic carbon aerosol particles in air.",
     compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, :OC2),
+)
+
+###
+# Sea salt column mass (2d)
+###
+add_diagnostic_variable!(
+    short_name = "loadss",
+    long_name = "Load of Sea-Salt Aerosol",
+    standard_name = "atmosphere_mass_content_of_sea_salt_dry_aerosol _particles",
+    units = "kg m^-2",
+    comments = "The total dry mass of sea salt aerosol particles per unit area.",
+    compute! = (out, u, p, t) -> compute_sea_salt_column!(out, u, p, t),
 )

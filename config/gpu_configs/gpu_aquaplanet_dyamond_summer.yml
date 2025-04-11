@@ -1,5 +1,4 @@
 dt_save_state_to_disk: "Inf"
-dt_save_to_sol: "Inf"
 h_elem: 60
 z_max: 60000.0
 z_elem: 63
@@ -12,7 +11,8 @@ rad: "allskywithclear"
 insolation: "timevarying"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
-vert_diff: "DecayWithHeightDiffusion"
+turbconv: "edonly_edmfx"
+edmfx_sgs_diffusive_flux: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 surface_setup: "DefaultMoninObukhov"
@@ -25,3 +25,8 @@ prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05",
 start_date: "20160801"
 initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 topography: "Earth"
+diagnostics:
+  - short_name: [massa, energya]
+    period: 1hours
+    writer: dict
+

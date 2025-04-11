@@ -74,7 +74,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    (; ᶜts, cloud_diagnostics_tuple, sfc_conditions) = p.precomputed
+    (; ᶜts, ᶜp, cloud_diagnostics_tuple, sfc_conditions) = p.precomputed
     (; params) = p
     (; ᶠradiation_flux, rrtmgp_model) = p.radiation
     (; radiation_mode) = p.atmos
@@ -105,9 +105,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     sfc_T = Fields.array2field(rrtmgp_model.surface_temperature, axes(sfc_ts))
     @. sfc_T = TD.air_temperature(thermo_params, sfc_ts)
 
-    ᶜp = Fields.array2field(rrtmgp_model.center_pressure, axes(Y.c))
+    rrtmgp_model.center_pressure .= Fields.field2array(ᶜp)
     ᶜT = Fields.array2field(rrtmgp_model.center_temperature, axes(Y.c))
-    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     # TODO: move this to RRTMGP
     @. ᶜT =
         min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
@@ -207,12 +206,53 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 max(cloud_fraction, eps(FT))
             @. ᶜfrac = cloud_fraction
             # RRTMGP needs effective radius in microns
+
+            seasalt_aero_conc = p.scratch.ᶜtemp_scalar
+            dust_aero_conc = p.scratch.ᶜtemp_scalar_2
+            SO4_aero_conc = p.scratch.ᶜtemp_scalar_3
+            @. seasalt_aero_conc = 0
+            @. dust_aero_conc = 0
+            @. SO4_aero_conc = 0
+            # Get aerosol mass concentrations if available
+            seasalt_names = [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+            dust_names = [:DST01, :DST02, :DST03, :DST04, :DST05]
+            SO4_names = [:SO4]
+            if :prescribed_aerosols_field in propertynames(p.tracers)
+                aerosol_field = p.tracers.prescribed_aerosols_field
+                for aerosol_name in propertynames(aerosol_field)
+                    if aerosol_name in seasalt_names
+                        data = getproperty(aerosol_field, aerosol_name)
+                        @. seasalt_aero_conc += data
+                    elseif aerosol_name in dust_names
+                        data = getproperty(aerosol_field, aerosol_name)
+                        @. dust_aero_conc += data
+                    elseif aerosol_name in SO4_names
+                        data = getproperty(aerosol_field, aerosol_name)
+                        @. SO4_aero_conc += data
+                    end
+                end
+            end
+
             @. ᶜreliq = ifelse(
                 cloud_liquid_water_content > FT(0),
-                CM.CloudDiagnostics.effective_radius_const(cmc.liquid) *
-                m_to_um_factor,
+                CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
+                    cmc.liquid,
+                    Y.c.ρ,
+                    cloud_liquid_water_content / max(eps(FT), cloud_fraction),
+                    ml_N_cloud_liquid_droplets(
+                        (cmc,),
+                        dust_aero_conc,
+                        seasalt_aero_conc,
+                        SO4_aero_conc,
+                        cloud_liquid_water_content /
+                        max(eps(FT), cloud_fraction),
+                    ),
+                    FT(0),
+                    FT(0),
+                ) * m_to_um_factor,
                 FT(0),
             )
+
             @. ᶜreice = ifelse(
                 cloud_ice_water_content > FT(0),
                 CM.CloudDiagnostics.effective_radius_const(cmc.ice) *
@@ -224,25 +264,20 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         if radiation_mode.aerosol_radiation
-            _update_some_aerosol_conc(Y, p)
             ᶜΔz = Fields.Δz_field(Y.c)
 
-            if pkgversion(RRTMGP) <= v"0.19.2"
-                more_aerosols = ()
-            else
-                more_aerosols = (
-                    (:center_dust1_column_mass_density, :DST01),
-                    (:center_dust2_column_mass_density, :DST02),
-                    (:center_dust3_column_mass_density, :DST03),
-                    (:center_dust4_column_mass_density, :DST04),
-                    (:center_dust5_column_mass_density, :DST05),
-                    (:center_ss1_column_mass_density, :SSLT01),
-                    (:center_ss2_column_mass_density, :SSLT02),
-                    (:center_ss3_column_mass_density, :SSLT03),
-                    (:center_ss4_column_mass_density, :SSLT04),
-                    (:center_ss5_column_mass_density, :SSLT05),
-                )
-            end
+            more_aerosols = (
+                (:center_dust1_column_mass_density, :DST01),
+                (:center_dust2_column_mass_density, :DST02),
+                (:center_dust3_column_mass_density, :DST03),
+                (:center_dust4_column_mass_density, :DST04),
+                (:center_dust5_column_mass_density, :DST05),
+                (:center_ss1_column_mass_density, :SSLT01),
+                (:center_ss2_column_mass_density, :SSLT02),
+                (:center_ss3_column_mass_density, :SSLT03),
+                (:center_ss4_column_mass_density, :SSLT04),
+                (:center_ss5_column_mass_density, :SSLT05),
+            )
 
             aerosol_names_pair = [
                 more_aerosols...,
@@ -290,7 +325,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
-    RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(t / integrator.p.dt))
+    RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(floor(t / integrator.p.dt)))
     Fields.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
     return nothing
 end

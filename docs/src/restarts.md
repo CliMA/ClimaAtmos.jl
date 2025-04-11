@@ -47,6 +47,12 @@ is started.
 If is also possible to manually specify a restart file. In this case, this will
 override any file automatically detected.
 
+`ClimaAtmos` also comes with a configuration,` t_start`, to change the initial
+time of the simulation without changing the start date. This option can be
+useful manually restarting a simulation (e.g., by overwriting the initial
+conditions). When a simulation is restarted from a checkpoint, this option
+becomes redundant.
+
 ### Accumulated Diagnostics
 
 At the moment, `ClimaAtmos` does not support working with accumulated

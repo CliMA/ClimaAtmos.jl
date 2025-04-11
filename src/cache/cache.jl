@@ -9,7 +9,6 @@ struct AtmosCache{
     PREC,
     SCRA,
     HYPE,
-    PR,
     EXTFORCING,
     NONGW,
     ORGW,
@@ -17,6 +16,7 @@ struct AtmosCache{
     TRAC,
     NETFLUXTOA,
     NETFLUXSFC,
+    SSV,
     CONSCHECK,
 }
     """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
@@ -51,7 +51,6 @@ struct AtmosCache{
     hyperdiff::HYPE
 
     """Additional parameters used by the various tendencies"""
-    precipitation::PR
     external_forcing::EXTFORCING
     non_orographic_gravity_wave::NONGW
     orographic_gravity_wave::ORGW
@@ -62,9 +61,15 @@ struct AtmosCache{
     net_energy_flux_toa::NETFLUXTOA
     net_energy_flux_sfc::NETFLUXSFC
 
+    """Predicted steady-state velocity, if `check_steady_state` is `true`"""
+    steady_state_velocity::SSV
+
     """Conservation check for prognostic surface temperature"""
     conservation_check::CONSCHECK
 end
+
+# Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
+Adapt.@adapt_structure AtmosCache
 
 # Functions on which the model depends:
 # CAP.R_d(params)         # dry specific gas constant
@@ -78,7 +83,15 @@ end
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
-function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
+function build_cache(
+    Y,
+    atmos,
+    params,
+    surface_setup,
+    sim_info,
+    aerosol_names,
+    steady_state_velocity,
+)
     (; dt, start_date, output_dir) = sim_info
     FT = eltype(params)
 
@@ -132,8 +145,16 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     scratch = temporary_quantities(Y, atmos)
 
     precomputed = precomputed_quantities(Y, atmos)
-    precomputing_arguments =
-        (; atmos, core, params, sfc_setup, precomputed, scratch, dt)
+    precomputing_arguments = (;
+        atmos,
+        core,
+        params,
+        sfc_setup,
+        precomputed,
+        scratch,
+        dt,
+        conservation_check,
+    )
 
     # Coupler compatibility
     isnothing(precomputing_arguments.sfc_setup) &&
@@ -153,7 +174,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         ) : ()
 
     hyperdiff = hyperdiffusion_cache(Y, atmos)
-    precipitation = precipitation_cache(Y, atmos)
     external_forcing = external_forcing_cache(Y, atmos, params)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
@@ -171,7 +191,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         precomputed,
         scratch,
         hyperdiff,
-        precipitation,
         external_forcing,
         non_orographic_gravity_wave,
         orographic_gravity_wave,
@@ -179,6 +198,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         tracers,
         net_energy_flux_toa,
         net_energy_flux_sfc,
+        steady_state_velocity,
         conservation_check,
     )
 

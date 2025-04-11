@@ -76,7 +76,7 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
 end
 
 function get_vertical_diffusion_model(
-    diffuse_momentum,
+    disable_momentum_vertical_diffusion,
     parsed_args,
     params,
     ::Type{FT},
@@ -86,9 +86,14 @@ function get_vertical_diffusion_model(
     return if vert_diff_name in ("false", false, "none")
         nothing
     elseif vert_diff_name in ("true", true, "VerticalDiffusion")
-        VerticalDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
+        VerticalDiffusion{disable_momentum_vertical_diffusion, FT}(;
+            C_E = vdp.C_E,
+        )
     elseif vert_diff_name in ("DecayWithHeightDiffusion",)
-        DecayWithHeightDiffusion{diffuse_momentum, FT}(; H = vdp.H, D₀ = vdp.D₀)
+        DecayWithHeightDiffusion{disable_momentum_vertical_diffusion, FT}(;
+            H = vdp.H,
+            D₀ = vdp.D₀,
+        )
     else
         error("Uncaught diffusion model `$vert_diff_name`.")
     end
@@ -518,18 +523,6 @@ end
 function get_tracers(parsed_args)
     aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
     return (; aerosol_names)
-end
-
-function get_tendency_model(parsed_args)
-    zero_tendency_name = parsed_args["zero_tendency"]
-    @assert zero_tendency_name in (nothing, "grid_scale", "subgrid_scale")
-    return if zero_tendency_name == "grid_scale"
-        NoGridScaleTendency()
-    elseif zero_tendency_name == "subgrid_scale"
-        NoSubgridScaleTendency()
-    elseif isnothing(zero_tendency_name)
-        UseAllTendency()
-    end
 end
 
 function check_case_consistency(parsed_args)

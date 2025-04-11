@@ -14,8 +14,7 @@ ClimaAtmos.InitialConditions.hydrostatic_pressure_profile
 ### Plane / Box
 
 ```@docs
-ClimaAtmos.InitialConditions.AgnesiHProfile
-ClimaAtmos.InitialConditions.ScharProfile
+ClimaAtmos.InitialConditions.ConstantBuoyancyFrequencyProfile
 ClimaAtmos.InitialConditions.DryDensityCurrentProfile
 ClimaAtmos.InitialConditions.RisingThermalBubbleProfile
 ```
