@@ -1,0 +1,45 @@
+[entr_param_vec]
+prior = "VectorOfParameterized([Normal(0.8232451844623447, 0.5), Normal(0.058776909570673115, 0.5), Normal(0.3812876963832981, 0.5), Normal(1.7521400508808318, 0.5), Normal(-0.32149828410236075, 0.5), Normal(-0.019764881527468917, 0.1), Normal(-0.05926889361439075, 0.5), Normal(0.3610260801159997, 0.5), Normal(0.5411236315642174, 0.5), Normal(-0.4681505113638351, 0.5), Normal(1.0674945161351919, 0.5), Normal(0.38794618444184004, 0.15)])"
+constraint = "repeat([no_constraint()], 12)"
+type = "float"
+
+[turb_entr_param_vec]
+prior = "VectorOfParameterized([Normal(-3.6137, 0.554), Normal(8.1871, 0.362)])"
+constraint = "[bounded_below(0.0), bounded_below(0.0)]"
+type = "float"
+
+[mixing_length_eddy_viscosity_coefficient]
+prior = "constrained_gaussian(mixing_length_eddy_viscosity_coefficient, 0.12938179994984028, 0.07, 0, Inf)"
+type = "float"
+
+[mixing_length_diss_coeff]
+prior = "constrained_gaussian(mixing_length_diss_coeff, 0.13515021886991527, 0.07, 0, Inf)"
+type = "float"
+
+[mixing_length_tke_surf_scale]
+prior = "constrained_gaussian(mixing_length_tke_surf_scale, 0.5507468907407347, 0.5, 0, Inf)"
+type = "float"
+
+[mixing_length_static_stab_coeff]
+prior = "constrained_gaussian(mixing_length_static_stab_coeff, 0.21375280743443664, 0.1, 0, Inf)"
+type = "float"
+
+[mixing_length_Prandtl_number_0]
+prior = "constrained_gaussian(mixing_length_Prandtl_number_0, 1.0831106562777666, 0.2, 0, Inf)"
+type = "float"
+
+[pressure_normalmode_buoy_coeff1]
+prior = "constrained_gaussian(pressure_normalmode_buoy_coeff1, 0.17622092079471174, 0.08, 0, Inf)"
+type = "float"
+
+[pressure_normalmode_drag_coeff]
+prior = "constrained_gaussian(pressure_normalmode_drag_coeff, 25.872050045766862, 10.0, 0, Inf)"
+type = "float"
+
+[diagnostic_covariance_coeff]
+prior = "constrained_gaussian(diagnostic_covariance_coeff, 1.858712542728056, 0.3, 0, Inf)"
+type = "float"
+
+[EDMF_surface_area]
+prior = "constrained_gaussian(EDMF_surface_area, 0.09964843547415161, 0.03, 0, Inf)"
+type = "float"
