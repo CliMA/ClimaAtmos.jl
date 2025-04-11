@@ -17,11 +17,18 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 end
 
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
-    @assert sum(isnan, Y.c.ρq_rai) == 0
 
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     Yₜ .= zero(eltype(Yₜ))
+
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info(name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info(name)
+        end
+    end
 
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
     fill_with_nans!(p)
@@ -31,8 +38,15 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)
 
-    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
-    @assert sum(isnan, Y.c.ρq_rai) == 0
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info(name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info(name)
+        end
+    end
+
     return Yₜ
 end
 

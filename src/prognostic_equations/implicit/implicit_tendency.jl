@@ -6,12 +6,21 @@ import ClimaCore
 import ClimaCore: Fields, Geometry
 
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
-    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
-    @assert sum(isnan, Y.c.ρq_rai) == 0
-
-
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
+
+    #@assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    #@assert sum(isnan, Y.c.ρq_rai) == 0
+
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info(name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info(name)
+        end
+    end
+
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     if p.atmos.sgs_adv_mode == Implicit()
         edmfx_sgs_vertical_advection_tendency!(
@@ -54,8 +63,18 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     # please DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)
 
-    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
-    @assert sum(isnan, Y.c.ρq_rai) == 0
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info(name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info(name)
+        end
+    end
+
+
+    #@assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    #@assert sum(isnan, Y.c.ρq_rai) == 0
 
     return nothing
 end

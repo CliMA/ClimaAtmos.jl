@@ -454,6 +454,12 @@ NVTX.@annotate function ldiv!(
     if A.transform_flag
         @. x *= -A.dtγ_ref[]
     end
+
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(x, name))) != 0
+            @info(name)
+        end
+    end
 end
 
 # This method for ldiv! is called by Krylov.jl from inside ClimaTimeSteppers.jl.
@@ -1332,4 +1338,11 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
 
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
     zero_velocity_jacobian!(matrix, Y, p, t)
+
+    for (key, value) in pairs(matrix)
+        value isa Fields.Field || continue
+        if sum(isnan, parent(value)) != 0
+            @info(key)
+        end
+    end
 end
