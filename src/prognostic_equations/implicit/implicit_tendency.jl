@@ -6,6 +6,10 @@ import ClimaCore
 import ClimaCore: Fields, Geometry
 
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_rai) == 0
+
+
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
@@ -49,6 +53,9 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     # NOTE: This will zero out all momentum tendencies in the edmfx advection test
     # please DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)
+
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_rai) == 0
 
     return nothing
 end
@@ -122,6 +129,9 @@ vertical_advection(ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. lazy(-(ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_rai) == 0
+
     (; moisture_model, turbconv_model, rayleigh_sponge, precip_model) = p.atmos
     (; dt) = p
     n = n_mass_flux_subdomains(turbconv_model)

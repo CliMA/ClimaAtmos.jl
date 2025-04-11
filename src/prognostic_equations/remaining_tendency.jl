@@ -17,10 +17,11 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 end
 
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    Yₜ_lim .= zero(eltype(Yₜ_lim))
-    Yₜ .= zero(eltype(Yₜ))
     @assert sum(isnan, Yₜ.c.ρq_rai) == 0
     @assert sum(isnan, Y.c.ρq_rai) == 0
+
+    Yₜ_lim .= zero(eltype(Yₜ_lim))
+    Yₜ .= zero(eltype(Yₜ))
 
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
     fill_with_nans!(p)
@@ -47,6 +48,8 @@ end
 
 
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_rai) == 0
 
     (; ᶜh_tot, ᶜspecific) = p.precomputed
     ᶜuₕ = Y.c.uₕ
@@ -58,9 +61,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜp, sfc_conditions, ᶜts) = p.precomputed
 
-    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
-    @assert sum(isnan, Y.c.ρq_rai) == 0
-
     vst_uₕ = viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge)
     vst_u₃ = viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge)
     vst_ρe_tot = viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge)
@@ -71,9 +71,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     edmf_cor_tend_uₕ = edmf_coriolis_tendency_uₕ(ᶜuₕ, edmf_coriolis)
     lsa_args = (ᶜρ, thermo_params, ᶜts, t, ls_adv)
     bc_lsa_tend_ρe_tot = large_scale_advection_tendency_ρe_tot(lsa_args...)
-
-    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
-    @assert sum(isnan, Y.c.ρq_rai) == 0
 
     # TODO: fuse, once we fix
     #       https://github.com/CliMA/ClimaCore.jl/issues/2165
