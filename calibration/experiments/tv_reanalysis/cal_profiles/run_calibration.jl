@@ -16,12 +16,15 @@ using LinearAlgebra
 
 include("helper_funcs.jl")
 include("observation_map.jl")
+include("model_interface.jl")
 
 # load configs
 experiment_dir = dirname(Base.active_project())
 const model_interface = joinpath(experiment_dir, "model_interface.jl")
 const experiment_config =
     YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
+experiment_config_nt = NamedTuple(Symbol.(keys(experiment_config)) .=> values(experiment_config))
+(; output_dir, n_iterations, log_vars, prior_path, model_config, const_noise_by_var, z_max, norm_factors_by_var, ensemble_size, start_time, g_t_start_sec, g_t_end_sec) = experiment_config_nt
 
 
 # unpack experiment_config vars into scope
@@ -43,26 +46,26 @@ addprocs(
 )
 
 
-@everywhere begin
-    using ClimaCalibrate
-    import ClimaCalibrate as CAL
-    import ClimaAtmos as CA
-    import JLD2
-    import YAML
+# @everywhere begin
+#     using ClimaCalibrate
+#     import ClimaCalibrate as CAL
+#     import ClimaAtmos as CA
+#     import JLD2
+#     import YAML
 
-    include("observation_map.jl")
+#     include("observation_map.jl")
 
-    experiment_dir = dirname(Base.active_project())
-    const model_interface = joinpath(experiment_dir, "model_interface.jl")
-    const experiment_config =
-        YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
+#     experiment_dir = dirname(Base.active_project())
+#     const model_interface = joinpath(experiment_dir, "model_interface.jl")
+#     const experiment_config =
+#         YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
-    experiment_config_nt = NamedTuple(Symbol.(keys(experiment_config)) .=> values(experiment_config))
-    (; output_dir, n_iterations, log_vars, prior_path, model_config, const_noise_by_var, z_max, norm_factors_by_var, ensemble_size, start_time, g_t_start_sec, g_t_end_sec) = experiment_config_nt
+#     experiment_config_nt = NamedTuple(Symbol.(keys(experiment_config)) .=> values(experiment_config))
+#     (; output_dir, n_iterations, log_vars, prior_path, model_config, const_noise_by_var, z_max, norm_factors_by_var, ensemble_size, start_time, g_t_start_sec, g_t_end_sec) = experiment_config_nt
 
-    include(model_interface)
+#     include(model_interface)
 
-end
+# end
 
 
 if get(model_config_dict, "mixing_length_model", "") == "nn"
