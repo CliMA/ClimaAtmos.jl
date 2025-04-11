@@ -9,15 +9,14 @@ import ClimaCalibrate as CAL
 import EnsembleKalmanProcesses as EKP
 using JLD2
 
-include("get_les_metadata.jl")
 include("helper_funcs.jl")
 
-using Distributed
+# using Distributed
 const experiment_config_dict =
     YAML.load_file(joinpath(@__DIR__, "experiment_config.yml"))
-const output_dir = experiment_config_dict["output_dir"]
-const model_config = experiment_config_dict["model_config"]
-const batch_size = experiment_config_dict["batch_size"]
+# const output_dir = experiment_config_dict["output_dir"]
+# const model_config = experiment_config_dict["model_config"]
+# const batch_size = experiment_config_dict["batch_size"]
 
 @everywhere function run_atmos_simulation(atmos_config)
     simulation = CA.get_simulation(atmos_config)
@@ -55,7 +54,7 @@ function CAL.forward_model(iteration, member)
     end
     config_dict["output_default_diagnostics"] = false
 
-    start_dates, latitudes, longitudes, convection_type = get_era5_calibration_library()
+    start_dates, latitudes, longitudes, convection_types, _ = get_era5_calibration_library()
     atmos_configs = map(EKP.get_current_minibatch(eki)) do i
         config = deepcopy(config_dict)
         config["site_latitude"] = get_latitude(i, latitudes)

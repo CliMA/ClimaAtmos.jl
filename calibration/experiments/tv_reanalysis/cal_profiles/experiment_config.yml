@@ -3,7 +3,14 @@ ensemble_size: 100
 n_iterations: 10
 batch_size: 10 # number of cases per iteration
 model_config : prognostic_edmfx_tv_era5driven_column.yml
-output_dir : /scratch/julian/calibrations/tv_profiles_1 # output dir
+output_dir : /central/groups/esm/jschmitt/calibrations/tv_profiles_8 # output dir
+
+# Slurm resource configuration
+slurm_time: "02:00:00"
+slurm_mem_per_cpu: "25G"
+slurm_cpus_per_task: 1
+
+
 y_var_names: [ta, hus, clw] # calibration variables clw
 log_vars: [""] # take log(var) when forming y, g
 z_max : 4000 # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
@@ -38,5 +45,5 @@ const_noise_by_var:
   clw: 0.00005
 
 forcing_toml_files:
-  shallow: "scm_tomls/gcmdriven_relaxation_shallow_forcing.toml"
-  deep: "scm_tomls/gcmdriven_relaxation_deep_forcing.toml"
+  shallow: "scm_tomls/era5driven_relaxation_shallow_forcing.toml"
+  deep: "scm_tomls/era5driven_relaxation_deep_forcing.toml"

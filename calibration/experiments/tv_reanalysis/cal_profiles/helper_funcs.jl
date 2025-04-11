@@ -45,7 +45,7 @@ function get_era5_calibration_library(lats = lats, lons = lons, convection_type 
         end
     end
     
-    start_dates, lats, lons, convection_type
+    start_dates, lats, lons, convection_type, length(lats) # also return number of locations
 end
 
 function get_latitude(i, lats)
@@ -58,6 +58,10 @@ end
 
 function get_startdate(i, dates)
     return "20070701"
+end
+
+function get_forcing_type(i, convection_types)
+    return convection_types[i]
 end
 
 function get_batch_indicies_in_iteration(iteration, output_dir::AbstractString)
