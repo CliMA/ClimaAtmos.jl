@@ -720,6 +720,7 @@ function _RRTMGPModel(
             z_lev,
             t_sfc,
             otp,
+            metric_scaling, 
         )
     else
         layerdata = DA{FT}(undef, 4, nlay, ncol)
