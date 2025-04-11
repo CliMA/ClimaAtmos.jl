@@ -55,6 +55,14 @@ function set_precipitation_velocities!(
 
     FT = eltype(p.params)
 
+    @. p.scratch.tmp_rain_lambda = CM1.lambda_inverse(
+        cmp.pr.pdf,
+        cmp.pr.mass,
+        max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
+        Y.c.ρ
+    )
+    @. assert minimum(p.scratch.tmp_rain_lambda) >= FT(1e-8)
+
     # compute the precipitation terminal velocity [m/s]
     @. ᶜwᵣ = CM1.terminal_velocity(
         cmp.pr,
@@ -62,6 +70,8 @@ function set_precipitation_velocities!(
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
     )
+    @. assert minimum(ᶜwᵣ) >= FT(0)
+
     @. ᶜwₛ = CM1.terminal_velocity(
         cmp.ps,
         cmp.tv.snow, #cmc.Ch2022.large_ice,
@@ -85,17 +95,17 @@ function set_precipitation_velocities!(
     # compute their contributions to energy and total water advection
     @. ᶜwₜqₜ =
         Geometry.WVector(
-            ᶜwₗ * Y.c.ρq_liq +
-            ᶜwᵢ * Y.c.ρq_ice +
-            ᶜwᵣ * Y.c.ρq_rai +
-            ᶜwₛ * Y.c.ρq_sno,
+                         ᶜwₗ * max(zero(Y.c.ρ), Y.c.ρq_liq) +
+                         ᶜwᵢ * max(zero(Y.c.ρ), Y.c.ρq_ice) +
+                         ᶜwᵣ * max(zero(Y.c.ρ), Y.c.ρq_rai) +
+                         ᶜwₛ * max(zero(Y.c.ρ), Y.c.ρq_sno),
         ) / Y.c.ρ
     @. ᶜwₕhₜ =
         Geometry.WVector(
-            ᶜwₗ * Y.c.ρq_liq * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
-            ᶜwᵢ * Y.c.ρq_ice * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
-            ᶜwᵣ * Y.c.ρq_rai * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))) +
-            ᶜwₛ * Y.c.ρq_sno * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu))),
+                         ᶜwₗ * max(zero(Y.c.ρ), Y.c.ρq_liq) * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
+                         ᶜwᵢ * max(zero(Y.c.ρ), Y.c.ρq_ice) * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
+                         ᶜwᵣ * max(zero(Y.c.ρ), Y.c.ρq_rai) * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))) +
+                         ᶜwₛ * max(zero(Y.c.ρ), Y.c.ρq_sno) * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu))),
         ) / Y.c.ρ
     return nothing
 end
