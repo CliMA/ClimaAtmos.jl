@@ -1,5 +1,8 @@
 
 NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_rai) == 0
+
     prep_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
     prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if do_dss(axes(Y.c)) && !isnothing(p.atmos.hyperdiff)
@@ -8,11 +11,17 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     end
     apply_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
     apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_rai) == 0
 end
 
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     Yₜ .= zero(eltype(Yₜ))
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_rai) == 0
+
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
     fill_with_nans!(p)
     horizontal_advection_tendency!(Yₜ, Y, p, t)
@@ -20,6 +29,9 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)
+
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_rai) == 0
     return Yₜ
 end
 
@@ -46,6 +58,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜp, sfc_conditions, ᶜts) = p.precomputed
 
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_rai) == 0
+
     vst_uₕ = viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge)
     vst_u₃ = viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge)
     vst_ρe_tot = viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge)
@@ -56,6 +71,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     edmf_cor_tend_uₕ = edmf_coriolis_tendency_uₕ(ᶜuₕ, edmf_coriolis)
     lsa_args = (ᶜρ, thermo_params, ᶜts, t, ls_adv)
     bc_lsa_tend_ρe_tot = large_scale_advection_tendency_ρe_tot(lsa_args...)
+
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_rai) == 0
 
     # TODO: fuse, once we fix
     #       https://github.com/CliMA/ClimaCore.jl/issues/2165
@@ -179,4 +197,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         t,
         p.atmos.orographic_gravity_wave,
     )
+    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_rai) == 0
 end
