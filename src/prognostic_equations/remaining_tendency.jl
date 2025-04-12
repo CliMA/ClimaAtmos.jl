@@ -1,3 +1,4 @@
+import ClimaCore.MatrixFields: @name
 
 NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     @assert sum(isnan, Yₜ.c.ρq_rai) == 0
