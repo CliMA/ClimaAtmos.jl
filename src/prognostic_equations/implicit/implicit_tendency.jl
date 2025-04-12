@@ -5,6 +5,9 @@
 import ClimaCore
 import ClimaCore: Fields, Geometry
 
+import ClimaCore.MatrixFields: @name
+
+
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
