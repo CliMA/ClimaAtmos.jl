@@ -171,12 +171,12 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             if point_type <: Geometry.Abstract3DPoint
                 # only need curl-curl part
                 @. ᶜ∇²uᵥʲs.:($$j) = C3(wcurlₕ(C123(curlₕ(ᶜ∇²uʲs.:($$j)))))
-                @. Yₜ.f.sgsʲs.:($$j).u₃ +=
-                    ν₄_vorticity * ᶠwinterp(ᶜJ * Y.c.ρ, ᶜ∇²uᵥʲs.:($$j))
+                # @. Yₜ.f.sgsʲs.:($$j).u₃ +=
+                #     ν₄_vorticity * ᶠwinterp(ᶜJ * Y.c.ρ, ᶜ∇²uᵥʲs.:($$j))
             end
             # Note: It is more correct to have ρa inside and outside the divergence
-            @. Yₜ.c.sgsʲs.:($$j).mse -=
-                ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²mseʲs.:($$j)))
+            # @. Yₜ.c.sgsʲs.:($$j).mse -=
+            #     ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²mseʲs.:($$j)))
         end
     end
 
@@ -308,28 +308,28 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
            p.atmos.precip_model isa Microphysics1Moment
             (; ᶜ∇²q_liqʲs, ᶜ∇²q_iceʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs) = p.hyperdiff
         end
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -=
-                ν₄_scalar *
-                wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²q_totʲs.:($$j)))
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
-            if p.atmos.moisture_model isa NonEquilMoistModel &&
-               p.atmos.precip_model isa Microphysics1Moment
-                @. Yₜ.c.sgsʲs.:($$j).q_liq -=
-                    ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_liqʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).q_ice -=
-                    ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_iceʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).q_rai -=
-                    α_hyperdiff_tracer *
-                    ν₄_scalar *
-                    wdivₕ(gradₕ(ᶜ∇²q_raiʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).q_sno -=
-                    α_hyperdiff_tracer *
-                    ν₄_scalar *
-                    wdivₕ(gradₕ(ᶜ∇²q_snoʲs.:($$j)))
-            end
-        end
+        # for j in 1:n
+            # @. Yₜ.c.sgsʲs.:($$j).ρa -=
+            #     ν₄_scalar *
+            #     wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²q_totʲs.:($$j)))
+            # @. Yₜ.c.sgsʲs.:($$j).q_tot -=
+            #     ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
+            # if p.atmos.moisture_model isa NonEquilMoistModel &&
+            #    p.atmos.precip_model isa Microphysics1Moment
+            #     @. Yₜ.c.sgsʲs.:($$j).q_liq -=
+            #         ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_liqʲs.:($$j)))
+            #     @. Yₜ.c.sgsʲs.:($$j).q_ice -=
+            #         ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_iceʲs.:($$j)))
+            #     @. Yₜ.c.sgsʲs.:($$j).q_rai -=
+            #         α_hyperdiff_tracer *
+            #         ν₄_scalar *
+            #         wdivₕ(gradₕ(ᶜ∇²q_raiʲs.:($$j)))
+            #     @. Yₜ.c.sgsʲs.:($$j).q_sno -=
+            #         α_hyperdiff_tracer *
+            #         ν₄_scalar *
+            #         wdivₕ(gradₕ(ᶜ∇²q_snoʲs.:($$j)))
+            # end
+        # end
     end
     return nothing
 end
