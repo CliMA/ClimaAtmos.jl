@@ -22,22 +22,22 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     end
 
     @. Yₜ.c.ρ -= wdivₕ(Y.c.ρ * ᶜu)
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= wdivₕ(Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j))
-        end
-    end
+    # if p.atmos.turbconv_model isa PrognosticEDMFX
+    #     for j in 1:n
+    #         @. Yₜ.c.sgsʲs.:($$j).ρa -= wdivₕ(Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j))
+    #     end
+    # end
 
     (; ᶜh_tot) = p.precomputed
     @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
 
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).mse -=
-                wdivₕ(Y.c.sgsʲs.:($$j).mse * ᶜuʲs.:($$j)) -
-                Y.c.sgsʲs.:($$j).mse * wdivₕ(ᶜuʲs.:($$j))
-        end
-    end
+    # if p.atmos.turbconv_model isa PrognosticEDMFX
+    #     for j in 1:n
+    #         @. Yₜ.c.sgsʲs.:($$j).mse -=
+    #             wdivₕ(Y.c.sgsʲs.:($$j).mse * ᶜuʲs.:($$j)) -
+    #             Y.c.sgsʲs.:($$j).mse * wdivₕ(ᶜuʲs.:($$j))
+    #     end
+    # end
 
     if use_prognostic_tke(p.atmos.turbconv_model)
         @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
@@ -60,28 +60,28 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.:($$ρχ_name) * ᶜu)
     end
 
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
-                Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
-            if p.atmos.moisture_model isa NonEquilMoistModel &&
-               p.atmos.precip_model isa Microphysics1Moment
-                @. Yₜ.c.sgsʲs.:($$j).q_liq -=
-                    wdivₕ(Y.c.sgsʲs.:($$j).q_liq * ᶜuʲs.:($$j)) -
-                    Y.c.sgsʲs.:($$j).q_liq * wdivₕ(ᶜuʲs.:($$j))
-                @. Yₜ.c.sgsʲs.:($$j).q_ice -=
-                    wdivₕ(Y.c.sgsʲs.:($$j).q_ice * ᶜuʲs.:($$j)) -
-                    Y.c.sgsʲs.:($$j).q_ice * wdivₕ(ᶜuʲs.:($$j))
-                @. Yₜ.c.sgsʲs.:($$j).q_rai -=
-                    wdivₕ(Y.c.sgsʲs.:($$j).q_rai * ᶜuʲs.:($$j)) -
-                    Y.c.sgsʲs.:($$j).q_rai * wdivₕ(ᶜuʲs.:($$j))
-                @. Yₜ.c.sgsʲs.:($$j).q_sno -=
-                    wdivₕ(Y.c.sgsʲs.:($$j).q_sno * ᶜuʲs.:($$j)) -
-                    Y.c.sgsʲs.:($$j).q_sno * wdivₕ(ᶜuʲs.:($$j))
-            end
-        end
-    end
+    # if p.atmos.turbconv_model isa PrognosticEDMFX
+    #     for j in 1:n
+    #         @. Yₜ.c.sgsʲs.:($$j).q_tot -=
+    #             wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
+    #             Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
+    #         if p.atmos.moisture_model isa NonEquilMoistModel &&
+    #            p.atmos.precip_model isa Microphysics1Moment
+    #             @. Yₜ.c.sgsʲs.:($$j).q_liq -=
+    #                 wdivₕ(Y.c.sgsʲs.:($$j).q_liq * ᶜuʲs.:($$j)) -
+    #                 Y.c.sgsʲs.:($$j).q_liq * wdivₕ(ᶜuʲs.:($$j))
+    #             @. Yₜ.c.sgsʲs.:($$j).q_ice -=
+    #                 wdivₕ(Y.c.sgsʲs.:($$j).q_ice * ᶜuʲs.:($$j)) -
+    #                 Y.c.sgsʲs.:($$j).q_ice * wdivₕ(ᶜuʲs.:($$j))
+    #             @. Yₜ.c.sgsʲs.:($$j).q_rai -=
+    #                 wdivₕ(Y.c.sgsʲs.:($$j).q_rai * ᶜuʲs.:($$j)) -
+    #                 Y.c.sgsʲs.:($$j).q_rai * wdivₕ(ᶜuʲs.:($$j))
+    #             @. Yₜ.c.sgsʲs.:($$j).q_sno -=
+    #                 wdivₕ(Y.c.sgsʲs.:($$j).q_sno * ᶜuʲs.:($$j)) -
+    #                 Y.c.sgsʲs.:($$j).q_sno * wdivₕ(ᶜuʲs.:($$j))
+    #         end
+    #     end
+    # end
     return nothing
 end
 
@@ -159,22 +159,22 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
             (ᶜf³ + ᶜω³) × CT12(ᶜu)
         @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        end
+        # for j in 1:n
+        #     @. Yₜ.f.sgsʲs.:($$j).u₃ -=
+        #         ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
+        #         ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
+        # end
     else
         # deep atmosphere
         @. Yₜ.c.uₕ -=
             ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
             (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
         @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        end
+        # for j in 1:n
+        #     @. Yₜ.f.sgsʲs.:($$j).u₃ -=
+        #         (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
+        #         ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
+        # end
     end
 
     if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
