@@ -39,6 +39,27 @@ function cloud_condensate_tendency!(
     @assert sum(isnan, Yₜ.c.ρq_liq) == 0
     @assert sum(isnan, Yₜ.c.ρq_ice) == 0
 
+    T = p.scratch.ᶜtemp_scalar
+    pᵥ_sat_liq = p.scratch.ᶜtemp_scalar_2
+    qᵥ_sat_liq = p.scratch.ᶜtemp_scalar_3
+    dqsldT = p.scratch.ᶜtemp_scalar_4
+    Γₗ = p.scratch.ᶜtemp_scalar_5
+
+    @. T = TD.air_temperature(thp, ᶜts)
+    @assert sum(isnan, T) == 0
+
+    @. pᵥ_sat_liq = TD.saturation_vapor_pressure(thp, T, TD.Liquid())
+    @assert sum(isnan, pᵥ_sat_liq) == 0
+
+    @. qᵥ_sat_liq = TD.q_vap_saturation_from_density(thp, T, TD.air_density(thp, ᶜts), pᵥ_sat_liq)
+    @assert sum(isnan, qᵥ_sat_liq) == 0
+
+    @. dqsldT = qᵥ_sat_liq * (TD.latent_heat_vapor(thp, T) / (TD.Parameters.R_v(thp) * T^2) - 1 / T)
+    @assert sum(isnan, dqsldT) == 0
+
+    @. Γₗ = FT(1) + (TD.latent_heat_vapor(thp, T) / TD.cp_m(thp, TD.PhasePartition(thp, ᶜts))) * dqsldT
+    @assert sum(isnan, Γₗ) == 0
+
     @. p.scratch.tmp_cloud_liquid_src = Y.c.ρ * cloud_sources(cmc.liquid, thp, ᶜts, q_rai, dt)
     @. p.scratch.tmp_cloud_ice_src = Y.c.ρ * cloud_sources(cmc.ice, thp, ᶜts, q_sno, dt)
 
