@@ -6,7 +6,7 @@ deep_atmosphere: false
 rayleigh_sponge: true
 viscous_sponge: true
 dt_save_state_to_disk: "30days"
-output_dir: "/glade/derecho/scratch/oalcabes/amip_nonequil_explicit_atmosonly"
+output_dir: "/scratch/olivia/amip_noneq_explicit_atmosonly"
 cloud_model: "grid_scale"
 moist: "nonequil"
 precip_model: "1M"
@@ -25,9 +25,10 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 dt: "1secs"
 t_end: "120days"
-toml: [/glade/u/home/oalcabes/ClimaAtmos.jl/toml/longrun_aquaplanet_nonequil.toml]
+toml: [/home/oalcabes/ClimaAtmos.jl/toml/longrun_aquaplanet_nonequil.toml]
 diagnostics:
   - short_name: [ta, ua, wa, va, rhoa, hur, hus, hussn, husra, clw, cli]
     period: 1hours
 netcdf_output_at_levels: true
+detect_restart_file: true
 
