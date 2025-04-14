@@ -2,10 +2,17 @@ precip_model: "0M"
 dt_save_state_to_disk: "2days"
 reproducibility_test: true
 initial_condition: "MoistBaroclinicWave"
+output_dir: "/Users/oliviaalcabes/Documents/research/microphysics/bw_sims"
+cloud_model: "grid_scale"
 dt: "450secs"
 t_end: "10days"
+y_elem: 36
+x_elem: 36
+z_elem: 60
 moist: "equil"
 disable_surface_flux_tendency: true
+toml: [baroclinic_wave_equil.toml]
 diagnostics:
-  - short_name: [pfull, wa, va, rv, hus, ke]
+  - short_name: [hus, ta, cl, clw, cli]
+    reduction: average
     period: 1days
