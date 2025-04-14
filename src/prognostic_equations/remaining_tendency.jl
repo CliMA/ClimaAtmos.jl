@@ -24,27 +24,87 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 
     for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
         if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
-            @info(name)
+            @info("beginning of remaining tendency: ", name)
         end
         if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
-            @info(name)
+            @info("beginnng of remaining tendency: ", name)
         end
     end
 
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info("remaining tendency 1: ", name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info("remaining tendency 1: ", name)
+        end
+    end
+
+
     fill_with_nans!(p)
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info("remaining tendency 2: ", name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info("remaining tendency 2: ", name)
+        end
+    end
+
+
     horizontal_advection_tendency!(Yₜ, Y, p, t)
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info("remaining tendency 3: ", name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info("remaining tendency 3: ", name)
+        end
+    end
+
+
     hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info("remaining tendency 4: ", name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info("remaining tendency 4: ", name)
+        end
+    end
+
+
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info("remaining tendency 5: ", name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info("remaining tendency 5: ", name)
+        end
+    end
+
+
     vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info("remaining tendency 6: ", name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info("remaining tendency 6: ", name)
+        end
+    end
+
+
     additional_tendency!(Yₜ, Y, p, t)
 
     for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
         if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
-            @info(name)
+            @info("end of remaining tendency: ", name)
         end
         if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
-            @info(name)
+            @info("end of remaining tendency: ", name)
         end
     end
 
