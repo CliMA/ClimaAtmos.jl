@@ -86,11 +86,28 @@ function cloud_sources(
     S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cm_params, thp, q, ρ, Tₐ(thp, ts))
 
     # keeping the same limiter for now
-    return ifelse(
-        S > FT(0),
-        min(S, limit(qᵥ(thp, ts), dt, 2)),
-        -min(abs(S), limit(qₗ(thp, ts, qₚ(qᵣ)), dt, 2)),
-    )
+    ret = S > FT(0) ? min(S, limit(qᵥ(thp, ts), dt, 2)) : -min(abs(S), limit(qₗ(thp, ts, qₚ(qᵣ)), dt, 2))
+
+    if isnan(ret)
+        T = Tₐ(thp, ts)
+        Rᵥ = TD.Parameters.R_v(thp)
+        cₚ_air = TD.cp_m(thp, q)
+        Lᵥ = TD.latent_heat_vapor(thp, T)
+        qᵥ = TD.vapor_specific_humidity(q)
+
+        pᵥ_sat_liq = TD.saturation_vapor_pressure(thp, T, TD.Liquid())
+        qᵥ_sat_liq = TD.q_vap_saturation_from_density(thp, T, ρ, pᵥ_sat_liq)
+
+        dqsldT = qᵥ_sat_liq * (Lᵥ / (Rᵥ * T^2) - 1 / T)
+        Γₗ = FT(1) + (Lᵥ / cₚ_air) * dqsldT
+
+        @info("in cloud sources ", S)
+        @info(" ", ρ, T)
+        @info(" ", qᵥ(thp, ts), qᵥ, qₚ(qᵣ), qᵣ, qₗ(thp, ts, qₚ(qᵣ)))
+        @info(" ", Rᵥ, cₚ_air, Lᵥ)
+        @info(" ", pᵥ_sat_liq, qᵥ_sat_liq, dqsldT, Γₗ)
+
+    return ret
 end
 function cloud_sources(cm_params::CMP.CloudIce{FT}, thp, ts, qₛ, dt) where {FT}
 
