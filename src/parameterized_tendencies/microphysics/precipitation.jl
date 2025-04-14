@@ -92,7 +92,11 @@ function precipitation_tendency!(
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
 
     @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Yₜ.c.ρq_liq) == 0
+    @assert sum(isnan, Yₜ.c.ρq_ice) == 0
     @assert sum(isnan, Y.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_liq) == 0
+    @assert sum(isnan, Y.c.ρq_ice) == 0
 
     # Update grid mean tendencies
     @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜSqₗᵖ
@@ -101,7 +105,11 @@ function precipitation_tendency!(
     @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜSqₛᵖ
 
     @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    @assert sum(isnan, Yₜ.c.ρq_liq) == 0
+    @assert sum(isnan, Yₜ.c.ρq_ice) == 0
     @assert sum(isnan, Y.c.ρq_rai) == 0
+    @assert sum(isnan, Y.c.ρq_liq) == 0
+    @assert sum(isnan, Y.c.ρq_ice) == 0
 
     return nothing
 end

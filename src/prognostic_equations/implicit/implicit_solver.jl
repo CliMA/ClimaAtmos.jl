@@ -457,7 +457,7 @@ NVTX.@annotate function ldiv!(
 
     for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
         if sum(isnan, parent(MatrixFields.get_field(x, name))) != 0
-            @info(name)
+            @info("ldiv: ", name)
         end
     end
 end
@@ -1342,7 +1342,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     for (key, value) in pairs(matrix)
         value isa Fields.Field || continue
         if sum(isnan, parent(value)) != 0
-            @info(key)
+            @info("update_implicit_equation_jacobian: ", key)
         end
     end
 end

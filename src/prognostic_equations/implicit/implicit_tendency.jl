@@ -17,10 +17,10 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
 
     for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
         if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
-            @info(name)
+            @info("beginning of implicit_tendency! ", name)
         end
         if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
-            @info(name)
+            @info("beginning of implicit_tendency! ", name)
         end
     end
 
@@ -34,6 +34,15 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             p.atmos.turbconv_model,
         )
     end
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info("1: ", name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info("1: ", name)
+        end
+    end
+
 
     if p.atmos.diff_mode == Implicit()
         vertical_diffusion_boundary_layer_tendency!(
@@ -46,21 +55,66 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info("2: ", name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info("2: ", name)
+        end
+    end
+
 
     if p.atmos.sgs_entr_detr_mode == Implicit()
         edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info("3: ", name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info("3: ", name)
+        end
+    end
+
 
     if p.atmos.sgs_mf_mode == Implicit()
         edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info("4: ", name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info("4: ", name)
+        end
+    end
+
 
     if p.atmos.sgs_nh_pressure_mode == Implicit()
         edmfx_nh_pressure_drag_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info("5: ", name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info("5: ", name)
+        end
+    end
+
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+        if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
+            @info("6: ", name)
+        end
+        if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
+            @info("6: ", name)
+        end
+    end
+
 
     # NOTE: This will zero out all momentum tendencies in the edmfx advection test
     # please DO NOT add additional velocity tendencies after this function
@@ -68,10 +122,10 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
 
     for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
         if sum(isnan, parent(MatrixFields.get_field(Yₜ, name))) != 0
-            @info(name)
+            @info("end of implicit_tendency! ", name)
         end
         if sum(isnan, parent(MatrixFields.get_field(Y, name))) != 0
-            @info(name)
+            @info("end of implicit_tendency! ", name)
         end
     end
 
