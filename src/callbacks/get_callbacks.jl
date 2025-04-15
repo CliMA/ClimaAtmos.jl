@@ -33,26 +33,9 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
         num_netcdf_points =
             tuple(parsed_args["netcdf_interpolation_num_points"]...)
     else
-        # Estimate the number of points we need to cover the entire domain
-        # ncolumns is the number of local columns
-        tot_num_columns =
-            ClimaComms.nprocs(context) * Fields.ncolumns(axes(Y.c))
-        if parsed_args["config"] == "plane"
-            num1, num2 = tot_num_columns, 0
-        elseif parsed_args["config"] == "sphere"
-            num2 = round(Int, sqrt(tot_num_columns / 2))
-            num1 = 2num2
-        elseif parsed_args["config"] == "box"
-            num2 = round(Int, sqrt(tot_num_columns))
-            num1 = num2
-        elseif parsed_args["config"] == "column"
-            # We need at least two points horizontally because our column is
-            # actually a box
-            num1, num2 = 2, 2
-        else
-            error("Uncaught case")
-        end
-        num_netcdf_points = (num1, num2, Spaces.nlevels(axes(Y.c)))
+        # From the given space, calculate the number of diagnostic grid points if not
+        # specified by the user
+        num_netcdf_points = default_netcdf_points(axes(Y.c), parsed_args)
     end
 
     z_sampling_method =
