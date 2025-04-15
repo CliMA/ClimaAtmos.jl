@@ -110,12 +110,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
-    turbconv_params = CAP.turbconv_params(p.params)
 
     (; ᶜΦ,) = p.core
-    (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK) = p.precomputed
-    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
-    (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
+    (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
 
     for j in 1:n
         ᶜuʲ = ᶜuʲs.:($j)
@@ -468,15 +465,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             dt,
         )
 
-        # nonhydrostatic pressure closure buoyancy term
-        if p.atmos.edmfx_model.nh_pressure isa Val{true}
-            @. ᶠnh_pressure₃_buoyʲs.:($$j) = ᶠupdraft_nh_pressure_buoyancy(
-                params,
-                ᶠbuoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
-            )
-        else
-            @. ᶠnh_pressure₃_buoyʲs.:($$j) = C3(0)
-        end
+        # The buoyancy term in the nonhydrostatic pressure closure is always applied
+        # for prognostic edmf. The tendency is combined with the buoyancy term in the 
+        # updraft momentum equation in `edmfx_sgs_vertical_advection_tendency!`. This
+        # term is still calculated here as it is used explicitly in the TKE equation.
+        @. ᶠnh_pressure₃_buoyʲs.:($$j) = ᶠupdraft_nh_pressure_buoyancy(
+            params,
+            ᶠbuoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
+        )
     end
 
     (; ᶜgradᵥ_θ_virt⁰, ᶜgradᵥ_q_tot⁰, ᶜgradᵥ_θ_liq_ice⁰) = p.precomputed
