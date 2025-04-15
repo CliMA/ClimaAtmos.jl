@@ -13,26 +13,33 @@ const experiment_config_dict =
 const output_dir = experiment_config_dict["output_dir"]
 const model_config = experiment_config_dict["model_config"]
 
-function set_up_forward_model(iteration, member)
+function CAL.forward_model(iteration, member)
+    base_config_dict = YAML.load_file(joinpath(@__DIR__, model_config))
 
-    # to do:
-    #   - change toml to the updated parameter value (???)
-    #   - otherwise looks mostly correct?
-
-    experiment_config_dict = YAML.load_file(joinpath(experiment_dir, model_config))
-    config_dict = YAML.load_file(joinpath(experiment_dir, model_config))
     iter_path = CAL.path_to_iteration(output_dir, iteration)
     eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))
     member_path = path_to_ensemble_member(output_dir, iteration, member)
+
+    config_dict = deepcopy(base_config_dict)
     config_dict["output_dir"] = member_path
     parameter_path = joinpath(member_path, "parameters.toml")
     if haskey(config_dict, "toml")
+        config_dict["toml"] = abspath.(config_dict["toml"])
         push!(config_dict["toml"], parameter_path)
     else
         config_dict["toml"] = [parameter_path]
     end
     config_dict["output_default_diagnostics"] = false
+
+    # ADD JULIANS VERSION ITS MORE UP TO DATE
+
 end
+
+
+
+
+
+
 
 @everywhere function run_atmos_simulation(atmos_config)
     simulation = CA.get_simulation(atmos_config)

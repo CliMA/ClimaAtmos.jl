@@ -10,8 +10,15 @@ Random.seed!(1234)
 using NCDatasets
 using Dates
 using Statistics
+using LinearAlgebra
+using Distributions
+using Random
+import EnsembleKalmanProcesses as EKP
+using ClimaCalibrate
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
+
+FT = Float64
 
 """
 Generate perfect model simulation. In initial test case, run baroclinic wave
@@ -40,19 +47,20 @@ function synthetic_observed_y(sim_path, reduction)
     # - load the model output
 
     simdir = ClimaAnalysis.SimDir(sim_path)  
-    cli = get(simdir; short_name = "cli", reduction = reduction) 
+    cli = get(simdir; short_name = "cli", reduction = reduction)
     clw = get(simdir; short_name = "clw", reduction = reduction)
 
     # liquid fraction loss function
-    y = clw ./ (clw .+ cli)
+    y = clw / (clw + cli)
 
     # - create noise (I need to remember how to make this Gamma.)
-    Γ = FT(0.003)^2 * I * (maximum(y) - minimum(y))
+    Γ = FT(0.003)^2 * I * (maximum(y.data) - minimum(y.data))
 
     noise_dist = MvNormal(zeros(1), Γ)
-    apply_noise!(y, noise_dist) = y + rand(noise_dist)[1]
+    #rand(noise_dist)
+    apply_noise!(y, noise_dist) = y.data + rand(noise_dist)[1]
     # broadcast the noise to each element of y
-    y_noisy = apply_noise!.(y, Ref(noise_dist))
+    y_noisy = apply_noise!(y, noise_dist)
 
     # my old version of this
     #Γy = 0.01 * (maximum(y_t) - minimum(y_t)) + 0.0001# * sol[2,:] .+ I(size(sol[2,:], 1))*0.001
@@ -90,10 +98,10 @@ end
 write script to run the baroclinic wave model and generate noise
 """
 
-config_file = "baroclinic_wave_equil.yml"
-job_id = "baroclinic_wave_equil"
+#config_file = "baroclinic_wave_equil.yml"
+#job_id = "baroclinic_wave_equil"
 
-generate_bw(config_file, job_id)
+#generate_bw(config_file, job_id)
 
-#sim_path = ""
-#y, y_noisy = synthetic_observed_y(sim_path, "average")
+sim_path = "/Users/oliviaalcabes/Documents/research/microphysics/bw_sims/output_0000"
+y, y_noisy = synthetic_observed_y(sim_path, "average")
