@@ -365,9 +365,9 @@ version = "0.30.1"
 
 [[deps.ClimaComms]]
 deps = ["Adapt", "Logging", "LoggingExtras"]
-git-tree-sha1 = "40ad44466dfe0092e18c04bc02c849fe8e095d30"
+git-tree-sha1 = "2a96bdd5339bdcd903867a46d1f00110f7b890cc"
 uuid = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
-version = "0.6.6"
+version = "0.6.7"
 weakdeps = ["CUDA", "MPI"]
 
     [deps.ClimaComms.extensions]
@@ -399,9 +399,9 @@ version = "0.3.18"
 
 [[deps.ClimaDiagnostics]]
 deps = ["Accessors", "ClimaComms", "ClimaCore", "ClimaUtilities", "Dates", "NCDatasets", "OrderedCollections", "SciMLBase"]
-git-tree-sha1 = "ec2ee9e870e51a9d8b76decf941f6c9d3d3b1365"
+git-tree-sha1 = "e931fd003740b97fa525246a6ea7c14143d12051"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
-version = "0.2.13"
+version = "0.2.14"
 
 [[deps.ClimaParams]]
 deps = ["TOML"]
@@ -417,9 +417,9 @@ version = "0.1.1"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "DataStructures", "DiffEqBase", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "f71d6c31fdfeaa66516ccf904a916e99904e5078"
+git-tree-sha1 = "23c8346606e165aa8805f25063f24e39bd8e148d"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
-version = "0.8.4"
+version = "0.8.5"
 weakdeps = ["BenchmarkTools", "CUDA", "OrderedCollections", "PrettyTables", "StatsBase"]
 
     [deps.ClimaTimeSteppers.extensions]
@@ -2153,9 +2153,9 @@ version = "0.1.0"
 
 [[deps.SciMLBase]]
 deps = ["ADTypes", "Accessors", "ArrayInterface", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "Moshi", "PrecompileTools", "Preferences", "Printf", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "SciMLStructures", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface"]
-git-tree-sha1 = "44397dee277159f224492bcf99c442d2a907c6f5"
+git-tree-sha1 = "846e89af4ec4ba471d3050a70405978cbdf70681"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "2.91.0"
+version = "2.91.1"
 
     [deps.SciMLBase.extensions]
     SciMLBaseChainRulesCoreExt = "ChainRulesCore"
@@ -2505,9 +2505,9 @@ version = "1.0.2"
 
 [[deps.Thermodynamics]]
 deps = ["DocStringExtensions", "KernelAbstractions", "Random", "RootSolvers"]
-git-tree-sha1 = "efe74e0344fd7fb68b831316055290d80a62d9c1"
+git-tree-sha1 = "f708faaf347760e9dcd82beb1a9455c86bdf9911"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-version = "0.12.11"
+version = "0.12.12"
 weakdeps = ["ClimaParams"]
 
     [deps.Thermodynamics.extensions]
