@@ -47,6 +47,7 @@ function cloud_condensate_tendency!(
 
     @. T = TD.air_temperature(thp, ᶜts)
     @assert sum(isnan, T) == 0
+    @assert minimum(T) > FT(0)
 
     @. pᵥ_sat_liq = TD.saturation_vapor_pressure(thp, T, TD.Liquid())
     @assert sum(isnan, pᵥ_sat_liq) == 0
