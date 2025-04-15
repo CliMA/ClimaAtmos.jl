@@ -17,8 +17,9 @@ import EnsembleKalmanProcesses as EKP
 using ClimaCalibrate
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
+import JLD2
 
-FT = Float64
+FT = Float32
 
 """
 Generate perfect model simulation. In initial test case, run baroclinic wave
@@ -37,7 +38,6 @@ function generate_bw(config_file, job_id)
     # return sol_res?
 
 end
-
 
 """
 Add noise to model truth
@@ -58,7 +58,7 @@ function synthetic_observed_y(sim_path, reduction)
 
     noise_dist = MvNormal(zeros(1), Γ)
     #rand(noise_dist)
-    apply_noise!(y, noise_dist) = y.data + rand(noise_dist)[1]
+    apply_noise!(y, noise_dist) = y.data .+ rand(noise_dist, size(y.data))[1]
     # broadcast the noise to each element of y
     y_noisy = apply_noise!(y, noise_dist)
 
