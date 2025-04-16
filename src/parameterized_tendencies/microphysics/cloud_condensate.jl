@@ -58,10 +58,10 @@ function cloud_condensate_tendency!(
     @assert sum(isnan, Yₜ.c.ρq_liq) == 0
     @assert sum(isnan, Yₜ.c.ρq_ice) == 0
 
-
-    T = p.scratch.ᶜtemp_scalar
-    @. T = TD.air_temperature(thp, ᶜts)
-    @assert sum(isnan, T) == 0
+    #T = p.scratch.ᶜtemp_scalar
+    #@. T = TD.air_temperature(thp, ᶜts)
+    #@assert sum(isnan, T) == 0
+    #@assert minimum(T) > FT(0)
 
     #if minimum(T) < FT(200)
     #    ρ = p.scratch.ᶜtemp_scalar_2
@@ -80,23 +80,22 @@ function cloud_condensate_tendency!(
     #    @info(" ", extrema(q_tot), extrema(q_liq), extrema(q_ice))
     #    @info(" ", extrema(q_rai), extrema(q_sno))
     #end
-    @assert minimum(T) > FT(0)
 
-    pᵥ_sat_liq = p.scratch.ᶜtemp_scalar_2
-    @. pᵥ_sat_liq = TD.saturation_vapor_pressure(thp, T, TD.Liquid())
-    @assert sum(isnan, pᵥ_sat_liq) == 0
+    #pᵥ_sat_liq = p.scratch.ᶜtemp_scalar_2
+    #@. pᵥ_sat_liq = TD.saturation_vapor_pressure(thp, T, TD.Liquid())
+    #@assert sum(isnan, pᵥ_sat_liq) == 0
 
-    qᵥ_sat_liq = p.scratch.ᶜtemp_scalar_3
-    @. qᵥ_sat_liq = TD.q_vap_saturation_from_density(thp, T, TD.air_density(thp, ᶜts), pᵥ_sat_liq)
-    @assert sum(isnan, qᵥ_sat_liq) == 0
+    #qᵥ_sat_liq = p.scratch.ᶜtemp_scalar_3
+    #@. qᵥ_sat_liq = TD.q_vap_saturation_from_density(thp, T, TD.air_density(thp, ᶜts), pᵥ_sat_liq)
+    #@assert sum(isnan, qᵥ_sat_liq) == 0
 
-    dqsldT = p.scratch.ᶜtemp_scalar_4
-    @. dqsldT = qᵥ_sat_liq * (TD.latent_heat_vapor(thp, T) / (TD.Parameters.R_v(thp) * T^2) - 1 / T)
-    @assert sum(isnan, dqsldT) == 0
+    #dqsldT = p.scratch.ᶜtemp_scalar_4
+    #@. dqsldT = qᵥ_sat_liq * (TD.latent_heat_vapor(thp, T) / (TD.Parameters.R_v(thp) * T^2) - 1 / T)
+    #@assert sum(isnan, dqsldT) == 0
 
-    Γₗ = p.scratch.ᶜtemp_scalar_5
-    @. Γₗ = FT(1) + (TD.latent_heat_vapor(thp, T) / TD.cp_m(thp, TD.PhasePartition(thp, ᶜts))) * dqsldT
-    @assert sum(isnan, Γₗ) == 0
+    #Γₗ = p.scratch.ᶜtemp_scalar_5
+    #@. Γₗ = FT(1) + (TD.latent_heat_vapor(thp, T) / TD.cp_m(thp, TD.PhasePartition(thp, ᶜts))) * dqsldT
+    #@assert sum(isnan, Γₗ) == 0
 
     @. p.scratch.tmp_cloud_liquid_src = Y.c.ρ * cloud_sources(cmc.liquid, thp, ᶜts, q_rai, dt)
     @. p.scratch.tmp_cloud_ice_src = Y.c.ρ * cloud_sources(cmc.ice, thp, ᶜts, q_sno, dt)
@@ -108,22 +107,26 @@ function cloud_condensate_tendency!(
         column_iterator(ᶜts),
         column_iterator(p.precomputed.ᶜspecific),
    )
-       if minimum(TD.air_temperature.(thp, ts_col)) < FT(170)
-          @show(Fields.coordinate_field(Y_col.c.ρ))
-          @show(TD.air_temperature.(thp, ts_col))
-          @show(TD.air_density.(thp, ts_col))
-          @show(TD.PhasePartition.(thp, ts_col).tot)
-          @show(TD.PhasePartition.(thp, ts_col).liq)
-          @show(TD.PhasePartition.(thp, ts_col).ice)
-          @show(c_spec_col.q_rai)
-          @show(c_spec_col.q_sno)
-          @show(ql_src_col)
-          @show(qi_src_col)
+       if minimum(TD.air_temperature.(thp, ts_col)) < FT(100)
+          @show(IOContext(stdout, :limit => false), Fields.coordinate_field(Y_col.c.ρ))
+          @show(IOContext(stdout, :limit => false), TD.air_temperature.(thp, ts_col))
+          @show(IOContext(stdout, :limit => false), TD.air_density.(thp, ts_col))
+          @show(IOContext(stdout, :limit => false), TD.PhasePartition.(thp, ts_col).tot)
+          @show(IOContext(stdout, :limit => false), TD.PhasePartition.(thp, ts_col).liq)
+          @show(IOContext(stdout, :limit => false), TD.PhasePartition.(thp, ts_col).ice)
+          @show(IOContext(stdout, :limit => false), c_spec_col.q_rai)
+          @show(IOContext(stdout, :limit => false), c_spec_col.q_sno)
+          @show(IOContext(stdout, :limit => false), ql_src_col)
+          @show(IOContext(stdout, :limit => false), qi_src_col)
       end
     end
 
     @. Yₜ.c.ρq_liq += Y.c.ρ * cloud_sources(cmc.liquid, thp, ᶜts, q_rai, dt)
     @. Yₜ.c.ρq_ice += Y.c.ρ * cloud_sources(cmc.ice, thp, ᶜts, q_sno, dt)
+
+    T = p.scratch.ᶜtemp_scalar
+    @. T = TD.air_temperature(thp, ᶜts)
+    @assert minimum(T) > FT(0)
 
     @assert sum(isnan, Y.c.ρq_liq) == 0
     @assert sum(isnan, Y.c.ρq_ice) == 0
