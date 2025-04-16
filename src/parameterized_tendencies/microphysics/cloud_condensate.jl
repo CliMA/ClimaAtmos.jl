@@ -39,30 +39,42 @@ function cloud_condensate_tendency!(
     @assert sum(isnan, Yₜ.c.ρq_liq) == 0
     @assert sum(isnan, Yₜ.c.ρq_ice) == 0
 
-    T = p.scratch.ᶜtemp_scalar
-    pᵥ_sat_liq = p.scratch.ᶜtemp_scalar_2
-    qᵥ_sat_liq = p.scratch.ᶜtemp_scalar_3
-    dqsldT = p.scratch.ᶜtemp_scalar_4
-    Γₗ = p.scratch.ᶜtemp_scalar_5
 
+    T = p.scratch.ᶜtemp_scalar
     @. T = TD.air_temperature(thp, ᶜts)
     @assert sum(isnan, T) == 0
     if minimum(T) < FT(200)
-        @info(" ", TD.air_density(thp, ᶜts), extrema(T))
-        @info(" ", extrema(TD.PhasePartition(thp, ᶜts).tot), extrema(TD.PhasePartition(thp, ᶜts).liq), extrema(TD.PhasePartition(thp, ᶜts).ice))
+        ρ = p.scratch.ᶜtemp_scalar_2
+        @. ρ = TD.air_density(thp, ᶜts)
+
+        q_tot = p.scratch.ᶜtemp_scalar_3
+        @. q_tot = TD.PhasePartition(thp, ᶜts).tot
+
+        q_liq = p.scratch.ᶜtemp_scalar_4
+        @. q_liq = TD.PhasePartition(thp, ᶜts).liq
+
+        q_ice = p.scratch.ᶜtemp_scalar_5
+        @. q_ice = TD.PhasePartition(thp, ᶜts).ice
+
+        @info(" ", extrema(ρ), extrema(T))
+        @info(" ", extrema(q_tot), extrema(q_liq), extrema(q_ice))
         @info(" ", extrema(q_rai), extrema(q_sno))
     end
     @assert minimum(T) > FT(0)
 
+    pᵥ_sat_liq = p.scratch.ᶜtemp_scalar_2
     @. pᵥ_sat_liq = TD.saturation_vapor_pressure(thp, T, TD.Liquid())
     @assert sum(isnan, pᵥ_sat_liq) == 0
 
+    qᵥ_sat_liq = p.scratch.ᶜtemp_scalar_3
     @. qᵥ_sat_liq = TD.q_vap_saturation_from_density(thp, T, TD.air_density(thp, ᶜts), pᵥ_sat_liq)
     @assert sum(isnan, qᵥ_sat_liq) == 0
 
+    dqsldT = p.scratch.ᶜtemp_scalar_4
     @. dqsldT = qᵥ_sat_liq * (TD.latent_heat_vapor(thp, T) / (TD.Parameters.R_v(thp) * T^2) - 1 / T)
     @assert sum(isnan, dqsldT) == 0
 
+    Γₗ = p.scratch.ᶜtemp_scalar_5
     @. Γₗ = FT(1) + (TD.latent_heat_vapor(thp, T) / TD.cp_m(thp, TD.PhasePartition(thp, ᶜts))) * dqsldT
     @assert sum(isnan, Γₗ) == 0
 
