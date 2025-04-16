@@ -180,8 +180,8 @@ function ImplicitEquationJacobian(
     is_in_Y(name) = MatrixFields.has_field(Y, name)
 
     ρq_tot_if_available = is_in_Y(@name(c.ρq_tot)) ? (@name(c.ρq_tot),) : ()
-    ρatke_if_available =
-        is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
+    # ρatke_if_available = is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
+    ρatke_if_available = ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
     tracer_names = (
@@ -197,7 +197,7 @@ function ImplicitEquationJacobian(
     # which means that multiplying inv(-1) by a Float32 will yield a Float64.
     identity_blocks = MatrixFields.unrolled_map(
         name -> (name, name) => FT(-1) * I,
-        (@name(c.ρ), sfc_if_available...),
+        (@name(c.ρ), @name(c.sgs⁰.ρatke), sfc_if_available...),
     )
 
     active_scalar_names = (@name(c.ρ), @name(c.ρe_tot), ρq_tot_if_available...)
@@ -854,41 +854,41 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
 
-        if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
-            turbconv_params = CAP.turbconv_params(params)
-            c_d = CAP.tke_diss_coeff(turbconv_params)
-            (; ᶜtke⁰, ᶜmixing_length, dt) = p
-            ᶜρa⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? p.ᶜρa⁰ : ᶜρ
-            ᶜρatke⁰ = Y.c.sgs⁰.ρatke
+        # if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
+            # turbconv_params = CAP.turbconv_params(params)
+        #     c_d = CAP.tke_diss_coeff(turbconv_params)
+        #     (; ᶜtke⁰, ᶜmixing_length, dt) = p
+        #     ᶜρa⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? p.ᶜρa⁰ : ᶜρ
+        #     ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
-            @inline dissipation_rate(tke⁰, mixing_length) =
-                tke⁰ >= 0 ? c_d * sqrt(tke⁰) / max(mixing_length, 1) :
-                1 / float(dt)
-            @inline ∂dissipation_rate_∂tke⁰(tke⁰, mixing_length) =
-                tke⁰ > 0 ? c_d / (2 * max(mixing_length, 1) * sqrt(tke⁰)) :
-                typeof(tke⁰)(0)
+        #     @inline dissipation_rate(tke⁰, mixing_length) =
+        #         tke⁰ >= 0 ? c_d * sqrt(tke⁰) / max(mixing_length, 1) :
+        #         1 / float(dt)
+        #     @inline ∂dissipation_rate_∂tke⁰(tke⁰, mixing_length) =
+        #         tke⁰ > 0 ? c_d / (2 * max(mixing_length, 1) * sqrt(tke⁰)) :
+        #         typeof(tke⁰)(0)
 
-            ᶜdissipation_matrix_diagonal = p.ᶜtemp_scalar
-            @. ᶜdissipation_matrix_diagonal =
-                ᶜρatke⁰ * ∂dissipation_rate_∂tke⁰(ᶜtke⁰, ᶜmixing_length)
+        #     ᶜdissipation_matrix_diagonal = p.ᶜtemp_scalar
+        #     @. ᶜdissipation_matrix_diagonal =
+        #         ᶜρatke⁰ * ∂dissipation_rate_∂tke⁰(ᶜtke⁰, ᶜmixing_length)
 
-            ∂ᶜρatke⁰_err_∂ᶜρ = matrix[@name(c.sgs⁰.ρatke), @name(c.ρ)]
-            ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
-                matrix[@name(c.sgs⁰.ρatke), @name(c.sgs⁰.ρatke)]
-            @. ∂ᶜρatke⁰_err_∂ᶜρ =
-                dtγ * (
-                    ᶜdiffusion_u_matrix -
-                    DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
-                ) ⋅ DiagonalMatrixRow(-(ᶜtke⁰) / ᶜρa⁰)
-            @. ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
-                dtγ * (
-                    (
-                        ᶜdiffusion_u_matrix -
-                        DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
-                    ) ⋅ DiagonalMatrixRow(1 / ᶜρa⁰) -
-                    DiagonalMatrixRow(dissipation_rate(ᶜtke⁰, ᶜmixing_length))
-                ) - (I,)
-        end
+        #     ∂ᶜρatke⁰_err_∂ᶜρ = matrix[@name(c.sgs⁰.ρatke), @name(c.ρ)]
+            # ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
+            #     matrix[@name(c.sgs⁰.ρatke), @name(c.sgs⁰.ρatke)]
+        #     @. ∂ᶜρatke⁰_err_∂ᶜρ =
+        #         dtγ * (
+        #             ᶜdiffusion_u_matrix -
+        #             DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
+        #         ) ⋅ DiagonalMatrixRow(-(ᶜtke⁰) / ᶜρa⁰)
+            # @. ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
+        #         dtγ * (
+        #             (
+        #                 ᶜdiffusion_u_matrix -
+        #                 DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
+        #             ) ⋅ DiagonalMatrixRow(1 / ᶜρa⁰) -
+        #             DiagonalMatrixRow(dissipation_rate(ᶜtke⁰, ᶜmixing_length))
+        #         ) - (I,)
+        # end
 
         if (
             !isnothing(p.atmos.turbconv_model) ||

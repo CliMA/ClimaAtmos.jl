@@ -24,13 +24,19 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
     (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
         p.precomputed
+    (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.precip_model isa Microphysics1Moment
         (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
     end
+    FT = Spaces.undertype(axes(Y.c))
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
 
     @. ᶜρa⁰ = ρa⁰(Y.c)
-    @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
+    # @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
+    # (ustar^2)
+    @. ᶜtke⁰ = FT(0.001) + FT(1.0) * exp(-((ᶜz - z_sfc)^2) / (2 * (750^2)))
     @. ᶜmse⁰ = divide_by_ρa(
         Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
         ᶜρa⁰,
