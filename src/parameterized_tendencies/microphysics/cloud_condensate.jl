@@ -108,7 +108,7 @@ function cloud_condensate_tendency!(
         column_iterator(ᶜts),
         column_iterator(ᶜspecific),
    )
-       if minimum(TD.air_temperature.(thp, ts_col)) =< FT(170)
+       if minimum(TD.air_temperature.(thp, ts_col)) < FT(170)
           @show(Fields.coordinate_field(Y_col.c.ρ))
           @show(TD.air_temperature.(thp, ts_col))
           @show(TD.air_density.(thp, ts_col))
