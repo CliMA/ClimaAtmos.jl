@@ -51,6 +51,7 @@ function cloud_condensate_tendency!(
         @info(" ", TD.air_density(thp, ᶜts), extrema(T))
         @info(" ", extrema(TD.PhasePartition(thp, ᶜts).tot), extrema(TD.PhasePartition(thp, ᶜts).liq), extrema(TD.PhasePartition(thp, ᶜts).ice))
         @info(" ", extrema(q_rai), extrema(q_sno))
+    end
     @assert minimum(T) > FT(0)
 
     @. pᵥ_sat_liq = TD.saturation_vapor_pressure(thp, T, TD.Liquid())
