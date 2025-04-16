@@ -324,32 +324,39 @@ function compute_precipitation_sinks!(
     sps = (mp.ps, mp.tv.snow, mp.aps, thp)
     rps = (mp.pr, mp.tv.rain, mp.aps, thp)
 
-    #! format: off
-    # evaporation: q_rai -> q_vap
-    @. Sᵖ = -min(
-        limit(qₚ(qᵣ), dt, 5),
-        -CM1.evaporation_sublimation(rps..., PP(thp, ts), qₚ(qᵣ), ρ, Tₐ(thp, ts)),
-    )
-    @. Sqᵣᵖ += Sᵖ
-    @. tmp_evap = Sᵖ
-
-    # melting: q_sno -> q_rai
-    @. Sᵖ = min(
-        limit(qₚ(qₛ), dt, 5),
-        CM1.snow_melt(sps..., qₚ(qₛ), ρ, Tₐ(thp, ts)),
-    )
+    @. Sᵖ = FT(0)
     @. Sqᵣᵖ += Sᵖ
     @. Sqₛᵖ -= Sᵖ
+    @. tmp_evap = Sᵖ
     @. tmp_melt = Sᵖ
-
-    # deposition/sublimation: q_vap <-> q_sno
-    @. Sᵖ = CM1.evaporation_sublimation(sps..., PP(thp, ts), qₚ(qₛ), ρ, Tₐ(thp, ts))
-    @. Sᵖ = ifelse(
-        Sᵖ > FT(0),
-        min(limit(qᵥ(thp, ts), dt, 5), Sᵖ),
-        -min(limit(qₚ(qₛ), dt, 5), FT(-1) * Sᵖ),
-    )
-    @. Sqₛᵖ += Sᵖ
     @. tmp_dep_sub = Sᵖ
+
+    #! format: off
+    # evaporation: q_rai -> q_vap
+    #@. Sᵖ = -min(
+    #    limit(qₚ(qᵣ), dt, 5),
+    #    -CM1.evaporation_sublimation(rps..., PP(thp, ts), qₚ(qᵣ), ρ, Tₐ(thp, ts)),
+    #)
+    #@. Sqᵣᵖ += Sᵖ
+    #@. tmp_evap = Sᵖ
+
+    ## melting: q_sno -> q_rai
+    #@. Sᵖ = min(
+    #    limit(qₚ(qₛ), dt, 5),
+    #    CM1.snow_melt(sps..., qₚ(qₛ), ρ, Tₐ(thp, ts)),
+    #)
+    #@. Sqᵣᵖ += Sᵖ
+    #@. Sqₛᵖ -= Sᵖ
+    #@. tmp_melt = Sᵖ
+
+    ## deposition/sublimation: q_vap <-> q_sno
+    #@. Sᵖ = CM1.evaporation_sublimation(sps..., PP(thp, ts), qₚ(qₛ), ρ, Tₐ(thp, ts))
+    #@. Sᵖ = ifelse(
+    #    Sᵖ > FT(0),
+    #    min(limit(qᵥ(thp, ts), dt, 5), Sᵖ),
+    #    -min(limit(qₚ(qₛ), dt, 5), FT(-1) * Sᵖ),
+    #)
+    #@. Sqₛᵖ += Sᵖ
+    #@. tmp_dep_sub = Sᵖ
     #! format: on
 end
