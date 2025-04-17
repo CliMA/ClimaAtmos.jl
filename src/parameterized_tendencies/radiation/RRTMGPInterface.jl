@@ -274,7 +274,6 @@ struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V, M}
     sw_solver::SWS
     as::AS  # Atmospheric state
     views::V  # user-friendly views into the solver
-    metric_scaling::M # metric scaling factor
 end
 
 # Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
@@ -906,8 +905,10 @@ function _RRTMGPModel(
         set_and_save!(z_lay, "center_z", t..., dict)
         z_lev = DA{FT}(undef, nlay + 1, ncol)
         set_and_save!(z_lev, "face_z", t..., dict)
-        planet_radius = pop!(dict, :planet_radius)
-        metric_scaling .= ((z_lev .+ planet_radius) ./ planet_radius) .^ 2
+        if deep_atmosphere
+            planet_radius = pop!(dict, :planet_radius)
+            metric_scaling .= ((z_lev .+ planet_radius) ./ planet_radius) .^ 2
+        end
     end
 
     if length(dict) > 0
