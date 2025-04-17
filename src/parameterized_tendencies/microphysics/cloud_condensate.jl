@@ -121,7 +121,7 @@ function cloud_condensate_tendency!(
           @show(TD.air_temperature.(thp, ts_col))
           @info(" ")
           @show(Yt_col.c.ρe_tot)
-          @show(Yt_col.c.ρ_tot)
+          @show(Yt_col.c.ρ)
           @show(Yt_col.c.ρq_tot)
           @show(Yt_col.c.sgs⁰.ρatke)
           @info(" ")
