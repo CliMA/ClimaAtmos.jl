@@ -302,6 +302,14 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 end
             end
 
+            lwp_col = p.scratch.temp_field_level
+            ᶜliquid_water_mass_concentration =
+                @. lazy(cloud_liquid_water_content * Y.c.ρ)
+            Operators.column_integral_definite!(
+                lwp_col,
+                ᶜliquid_water_mass_concentration,
+            )
+
             @. ᶜreliq = ifelse(
                 cloud_liquid_water_content > FT(0),
                 CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
@@ -313,8 +321,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                         dust_aero_conc,
                         seasalt_aero_conc,
                         SO4_aero_conc,
-                        cloud_liquid_water_content /
-                        max(eps(FT), cloud_fraction),
+                        lwp_col,
                     ),
                     FT(0),
                     FT(0),
