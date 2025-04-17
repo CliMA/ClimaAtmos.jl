@@ -93,20 +93,22 @@ function set_precipitation_velocities!(
     )
 
     # compute their contributions to energy and total water advection
-    @. ᶜwₜqₜ =
-        Geometry.WVector(
-                         ᶜwₗ * max(zero(Y.c.ρ), Y.c.ρq_liq) +
-                         ᶜwᵢ * max(zero(Y.c.ρ), Y.c.ρq_ice) +
-                         ᶜwᵣ * max(zero(Y.c.ρ), Y.c.ρq_rai) +
-                         ᶜwₛ * max(zero(Y.c.ρ), Y.c.ρq_sno),
-        ) / Y.c.ρ
-    @. ᶜwₕhₜ =
-        Geometry.WVector(
-                         ᶜwₗ * max(zero(Y.c.ρ), Y.c.ρq_liq) * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
-                         ᶜwᵢ * max(zero(Y.c.ρ), Y.c.ρq_ice) * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
-                         ᶜwᵣ * max(zero(Y.c.ρ), Y.c.ρq_rai) * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))) +
-                         ᶜwₛ * max(zero(Y.c.ρ), Y.c.ρq_sno) * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu))),
-        ) / Y.c.ρ
+    @. ᶜwₜqₜ = Geometry.WVector(FT(0))
+    @. ᶜwₕhₜ = Geometry.WVector(FT(0))
+    #@. ᶜwₜqₜ =
+    #    Geometry.WVector(
+    #                     ᶜwₗ * max(zero(Y.c.ρ), Y.c.ρq_liq) +
+    #                     ᶜwᵢ * max(zero(Y.c.ρ), Y.c.ρq_ice) +
+    #                     ᶜwᵣ * max(zero(Y.c.ρ), Y.c.ρq_rai) +
+    #                     ᶜwₛ * max(zero(Y.c.ρ), Y.c.ρq_sno),
+    #    ) / Y.c.ρ
+    #@. ᶜwₕhₜ =
+    #    Geometry.WVector(
+    #                     ᶜwₗ * max(zero(Y.c.ρ), Y.c.ρq_liq) * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
+    #                     ᶜwᵢ * max(zero(Y.c.ρ), Y.c.ρq_ice) * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
+    #                     ᶜwᵣ * max(zero(Y.c.ρ), Y.c.ρq_rai) * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))) +
+    #                     ᶜwₛ * max(zero(Y.c.ρ), Y.c.ρq_sno) * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu))),
+    #    ) / Y.c.ρ
     return nothing
 end
 
