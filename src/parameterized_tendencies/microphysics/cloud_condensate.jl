@@ -128,7 +128,7 @@ function cloud_condensate_tendency!(
           @show(Yt_col.c.ρ)
           @show(Yt_col.c.ρq_tot)
           @show(Yt_col.c.sgs⁰.ρatke)
-          @show(ᶜdivᵥ.(rad_flux_col)
+          @show(ᶜdivᵥ.(rad_flux_col))
           @info(" ")
           @show(Y_col.c.ρq_tot ./ Y_col.c.ρ)
           @show(Y_col.c.ρq_liq ./ Y_col.c.ρ)
