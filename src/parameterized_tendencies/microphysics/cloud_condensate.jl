@@ -100,12 +100,18 @@ function cloud_condensate_tendency!(
     @. p.scratch.tmp_cloud_liquid_src = Y.c.ρ * cloud_sources(cmc.liquid, thp, ᶜts, q_rai, dt)
     @. p.scratch.tmp_cloud_ice_src = Y.c.ρ * cloud_sources(cmc.ice, thp, ᶜts, q_sno, dt)
 
-    for (Y_col, ql_src_col, qi_src_col ,ts_col, c_spec_col) in zip(
+    for (Y_col, ql_src_col, qi_src_col ,ts_col, c_spec_col, cwl_col, cwi_col, cwr_col, cws_col, cwtqt_col, cwhht_col) in zip(
         column_iterator(Y),
         column_iterator(p.scratch.tmp_cloud_liquid_src),
         column_iterator(p.scratch.tmp_cloud_ice_src),
         column_iterator(ᶜts),
         column_iterator(p.precomputed.ᶜspecific),
+        column_iterator(p.precomputed.ᶜwₗ),
+        column_iterator(p.precomputed.ᶜwᵢ),
+        column_iterator(p.precomputed.ᶜwᵣ),
+        column_iterator(p.precomputed.ᶜwₛ),
+        column_iterator(p.precomputed.ᶜwₜqₜ),
+        column_iterator(p.precomputed.ᶜwₕhₜ),
    )
        if minimum(TD.air_temperature.(thp, ts_col)) < FT(100)
           @info(" ")
@@ -127,6 +133,13 @@ function cloud_condensate_tendency!(
           @info(" ")
           @show(ql_src_col)
           @show(qi_src_col)
+          @info(" ")
+          @show(cwl_col)
+          @show(cwi_col)
+          @show(cwr_col)
+          @show(cws_col)
+          @show(cwtqt_col)
+          @show(cwhht_col)
           @info(" ")
       end
     end
