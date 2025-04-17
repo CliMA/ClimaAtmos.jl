@@ -5,6 +5,7 @@ import Dates
 using Random
 Random.seed!(1234)
 import ClimaAtmos as CA
+using NCDatasets
 
 include("test_helpers.jl")
 
@@ -269,4 +270,198 @@ end
     @test CA.promote_period(Dates.Millisecond(1)) == Dates.Millisecond(1)
     @test CA.promote_period(Dates.Minute(120)) == Dates.Hour(2)
     @test CA.promote_period(Dates.Second(3600)) == Dates.Hour(1)
+end
+
+@testset "ERA5 Observations to forcing file" begin
+    FT = Float64
+    parsed_args = Dict(
+        "start_date" => "20000506",
+        "site_latitude" => 0.0,
+        "site_longitude" => 0.0,
+        "t_end" => "5hours",
+    )
+    # generate 3 datasets that contain mock forcing data
+    temporary_dir = mktempdir()
+    sim_forcing =
+        CA.get_external_forcing_file_path(parsed_args, data_dir = temporary_dir)
+
+    @test basename(sim_forcing) ==
+          "tv_forcing_0.0_0.0_$(parsed_args["start_date"]).nc"
+
+    # create fake data
+    column_data_path = joinpath(
+        temporary_dir,
+        "forcing_and_cloud_hourly_profiles_$(parsed_args["start_date"]).nc",
+    )
+    accum_data_path =
+        joinpath(temporary_dir, "hourly_accum_$(parsed_args["start_date"]).nc")
+    inst_data_path =
+        joinpath(temporary_dir, "hourly_inst_$(parsed_args["start_date"]).nc")
+
+    tvforcing = NCDataset(column_data_path, "c")
+    # define dimensions
+    defDim(tvforcing, "valid_time", 6)
+    defDim(tvforcing, "pressure_level", 37) # same dims as ERA5
+    defDim(tvforcing, "latitude", 9)
+    defDim(tvforcing, "longitude", 9)
+
+    # define variables
+    defVar(tvforcing, "latitude", FT, ("latitude",))
+    defVar(tvforcing, "longitude", FT, ("longitude",))
+    defVar(tvforcing, "pressure_level", FT, ("pressure_level",))
+    defVar(tvforcing, "valid_time", FT, ("valid_time",))
+    tvforcing["valid_time"].attrib["units"] = "hours since 2000-05-06 00:00:00"
+    tvforcing["valid_time"].attrib["calendar"] = "standard"
+
+    # fill the variables with sequential data
+    tvforcing["latitude"][:] = collect(-1.0:0.25:1.0)
+    tvforcing["longitude"][:] = collect(-1.0:0.25:1.0)
+    tvforcing["pressure_level"][:] = 10 .^ (range(1, stop = 4, length = 37))
+    tvforcing["valid_time"][:] = collect(0.0:5.0)
+
+    # define the forcing variables
+    full_dims = ("longitude", "latitude", "pressure_level", "valid_time")
+    defVar(tvforcing, "u", FT, full_dims)
+    defVar(tvforcing, "v", FT, full_dims)
+    defVar(tvforcing, "w", FT, full_dims)
+    defVar(tvforcing, "t", FT, full_dims)
+    defVar(tvforcing, "q", FT, full_dims)
+    defVar(tvforcing, "z", FT, full_dims)
+    defVar(tvforcing, "clwc", FT, full_dims)
+    defVar(tvforcing, "ciwc", FT, full_dims)
+
+    # fill the variables with uniform ones
+    tvforcing["u"][:, :, :, :] .= ones(FT, size(tvforcing["u"]))
+    tvforcing["v"][:, :, :, :] .= ones(FT, size(tvforcing["v"]))
+    tvforcing["w"][:, :, :, :] .= ones(FT, size(tvforcing["w"]))
+    tvforcing["t"][:, :, :, :] .= ones(FT, size(tvforcing["t"]))
+    tvforcing["q"][:, :, :, :] .= ones(FT, size(tvforcing["q"]))
+    tvforcing["z"][:, :, :, :] .= ones(FT, size(tvforcing["z"]))
+    tvforcing["clwc"][:, :, :, :] .= ones(FT, size(tvforcing["clwc"]))
+    tvforcing["ciwc"][:, :, :, :] .= ones(FT, size(tvforcing["ciwc"]))
+
+    # write the accumulated dataset
+    tv_accum = NCDataset(accum_data_path, "c")
+    defDim(tv_accum, "valid_time", 6)
+    defDim(tv_accum, "latitude", 9)
+    defDim(tv_accum, "longitude", 9)
+    defVar(tv_accum, "latitude", FT, ("latitude",))
+    defVar(tv_accum, "longitude", FT, ("longitude",))
+    defVar(tv_accum, "valid_time", FT, ("valid_time",))
+    tv_accum["valid_time"].attrib["units"] = "hours since 2000-05-06 00:00:00"
+    tv_accum["valid_time"].attrib["calendar"] = "standard"
+
+    tv_accum["latitude"][:] = collect(-1.0:0.25:1.0)
+    tv_accum["longitude"][:] = collect(-1.0:0.25:1.0)
+    tv_accum["valid_time"][:] = collect(0.0:5.0)
+
+    # add slhf and sshf variables with ones
+    defVar(tv_accum, "slhf", FT, ("longitude", "latitude", "valid_time"))
+    defVar(tv_accum, "sshf", FT, ("longitude", "latitude", "valid_time"))
+    tv_accum["slhf"][:, :, :] .= ones(FT, size(tv_accum["slhf"]))
+    tv_accum["sshf"][:, :, :] .= ones(FT, size(tv_accum["sshf"]))
+
+    # write the inst dataset
+    tv_inst = NCDataset(inst_data_path, "c")
+    defDim(tv_inst, "valid_time", 6)
+    defDim(tv_inst, "latitude", 9)
+    defDim(tv_inst, "longitude", 9)
+    defVar(tv_inst, "latitude", FT, ("latitude",))
+    defVar(tv_inst, "longitude", FT, ("longitude",))
+    defVar(tv_inst, "valid_time", FT, ("valid_time",))
+    tv_inst["valid_time"].attrib["units"] = "hours since 2000-05-06 00:00:00"
+    tv_inst["valid_time"].attrib["calendar"] = "standard"
+
+    tv_inst["latitude"][:] = collect(-1.0:0.25:1.0)
+    tv_inst["longitude"][:] = collect(-1.0:0.25:1.0)
+    tv_inst["valid_time"][:] = collect(0.0:5.0)
+
+    # define skt
+    defVar(tv_inst, "skt", FT, ("longitude", "latitude", "valid_time"))
+    tv_inst["skt"][:, :, :] .= ones(FT, size(tv_inst["skt"]))
+
+    # assert that the forcing file is generated correctly
+    time_resolution = FT(3600)
+    CA.generate_external_era5_forcing_file(
+        parsed_args["site_latitude"],
+        parsed_args["site_longitude"],
+        parsed_args["start_date"],
+        sim_forcing,
+        Float64,
+        time_resolution = time_resolution,
+        data_dir = temporary_dir,
+    )
+
+    # test that the fixed variables have been copied exactly
+    # name mapping between ERA5 and ClimaAtmos variable convections
+    fixed_vars = Dict(
+        "q" => "hus",
+        "t" => "ta",
+        "u" => "ua",
+        "v" => "va",
+        "w" => "wap",
+        "z" => "zg",
+        "clwc" => "clw",
+        "ciwc" => "cli",
+        "skt" => "ts",
+    )
+
+    # accum variables
+    surface_accum_vars = Dict("slhf" => "hfls", "sshf" => "hfss")
+    # check that the variables are copied correctly
+    # open the dataset
+    processed_data = NCDataset(sim_forcing, "r")
+    for (era5_var, clima_var) in fixed_vars
+        @test all(
+            x -> all(isapprox.(x, 1, atol = 1e-10)),
+            processed_data[clima_var][:],
+        )
+    end
+
+    for (era5_var, clima_var) in surface_accum_vars
+        @test all(
+            x -> all(isapprox.(x, -1 / time_resolution, atol = 1e-10)),
+            processed_data[clima_var][:],
+        )
+    end
+
+    # assert that the gradients are all zero since the entries are constant; not in era5 dataset
+    gradient_vars = ["tnhusha", "tntha"]
+    for var in gradient_vars
+        @test all(
+            x -> all(isapprox.(x, 0, atol = 1e-10)),
+            processed_data[var][:],
+        )
+    end
+
+    # check that the coszen variable is between 0 and 1
+    @test all(x -> x >= 0 && x <= 1, processed_data["coszen"][:])
+
+    # check the vertical tendency function - useful if we implement steady ERA5 forcing
+    vert_partial_ds = Dict(
+        "ta" => processed_data["ta"][1, 1, :, :],
+        "wa" => processed_data["wa"][1, 1, :, :],
+        "hus" => processed_data["hus"][1, 1, :, :],
+        # need to set z to not be all zeros
+        "z" =>
+            collect(1:length(processed_data["z"][:])) .* processed_data["z"][:],
+    )
+    # compute the vertical temperature gradient
+    vertical_temperature_gradient =
+        CA.get_vertical_tendencies(vert_partial_ds, "ta")
+
+    # test the vertical temperature gradient is all zeros
+    @test all(
+        x -> all(isapprox.(x, 0, atol = 1e-10)),
+        vertical_temperature_gradient,
+    )
+
+    # check the forcing file time check passes if the start time and end time from config is valid
+    @test CA.check_external_forcing_file_times(sim_forcing, parsed_args)
+
+    # close files
+    close(tvforcing)
+    close(tv_inst)
+    close(tv_accum)
+    close(processed_data)
 end

@@ -110,7 +110,7 @@ so the initial callback initialization doesn't lead to NaNs in the radiation mod
 Subsequently, the surface albedo will be updated by the coupler.
 """
 function set_surface_albedo!(Y, p, t, ::CouplerAlbedo)
-    if t == 0
+    if float(t) == 0
         FT = eltype(Y)
         # set initial insolation initial conditions
         !(p.atmos.insolation isa IdealizedInsolation) &&

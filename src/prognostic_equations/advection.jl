@@ -201,6 +201,8 @@ function edmfx_sgs_vertical_advection_tendency!(
     (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
 
+    turbconv_params = CAP.turbconv_params(params)
+    α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     ᶠz = Fields.coordinate_field(Y.f).z
     ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜu₃ʲ = p.scratch.ᶜtemp_C3
@@ -215,9 +217,10 @@ function edmfx_sgs_vertical_advection_tendency!(
         )
         # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
         # and calcuate the buoyancy term relative to the grid-mean density.
+        # We also include the buoyancy term in the nonhydrostatic pressure closure here.
         @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-            (ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρʲs.:($$j)) +
-            ᶠgradᵥ(ᶜKᵥʲ)
+            (1 - α_b) * (ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) * ᶠgradᵥ_ᶜΦ) /
+            ᶠinterp(ᶜρʲs.:($$j)) + ᶠgradᵥ(ᶜKᵥʲ)
 
         # buoyancy term in mse equation
         @. Yₜ.c.sgsʲs.:($$j).mse +=

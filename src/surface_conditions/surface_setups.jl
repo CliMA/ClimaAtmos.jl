@@ -276,6 +276,17 @@ function gcm_surface_conditions(external_forcing_file, cfsite_number)
     end
 end
 
+struct ReanalysisTimeVarying end
+
+
+function (surface_setup::ReanalysisTimeVarying)(params)
+    FT = eltype(params)
+    z0 = FT(1e-4)  # zrough
+    parameterization = MoninObukhov(; z0)
+    return SurfaceState(; parameterization)
+end
+
+
 struct ISDAC end
 function (::ISDAC)(params)
     FT = eltype(params)

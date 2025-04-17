@@ -88,21 +88,6 @@ function ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰, scale_hei
            max(scale_height, H_up_min)
 end
 
-edmfx_nh_pressure_buoyancy_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
-function edmfx_nh_pressure_buoyancy_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    turbconv_model::PrognosticEDMFX,
-)
-    (; ᶠnh_pressure₃_buoyʲs) = p.precomputed
-    n = n_mass_flux_subdomains(turbconv_model)
-    for j in 1:n
-        @. Yₜ.f.sgsʲs.:($$j).u₃ -= ᶠnh_pressure₃_buoyʲs.:($$j)
-    end
-end
-
 edmfx_nh_pressure_drag_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 function edmfx_nh_pressure_drag_tendency!(
     Yₜ,

@@ -140,7 +140,7 @@ function build_cache(
             unit_basis_vector_data.(CT3, sfc_local_geometry)
         ),
     )
-
+    external_forcing = external_forcing_cache(Y, atmos, params, start_date)
     sfc_setup = surface_setup(params)
     scratch = temporary_quantities(Y, atmos)
 
@@ -154,6 +154,7 @@ function build_cache(
         scratch,
         dt,
         conservation_check,
+        external_forcing,
     )
 
     # Coupler compatibility
@@ -174,7 +175,6 @@ function build_cache(
         ) : ()
 
     hyperdiff = hyperdiffusion_cache(Y, atmos)
-    external_forcing = external_forcing_cache(Y, atmos, params)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
