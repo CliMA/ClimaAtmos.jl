@@ -8,7 +8,7 @@ This describes the diagnostic EDMF scheme equations and its discretizations. Whe
 * ``\rho``: _density_ in kg/m³, discretized at cell centers.
 * ``u^3``: the contravariant 3 component of velocity, discretized at cell faces.
 * ``h_{\mathrm{s}}``: moist static energy in J/kg, discretized at cell centers.
-* ``q_t``: total specific humidity in kg/kg, discretized at cell centers.
+* ``q_t``: total water specific content in kg/kg, discretized at cell centers.
 * ``\Phi = g z``: geopotential in m²/s², where ``g`` is the gravitational acceleration rate and ``z`` is altitude above the mean sea level, discretized at cell centers.
 * ``(\nabla \Phi)^3``: the contravariant 3 component of the gradient of geopotential, reconstructed at cell centers.
 * ``p``: air pressure, reconstructed at cell centers.
@@ -22,7 +22,7 @@ This describes the diagnostic EDMF scheme equations and its discretizations. Whe
   ```
 * ``u^{j,3}``: the contravariant 3 component of velocity, discretized at cell faces.
 * ``h_{\mathrm{s}}^j``: moist static energy, discretized at cell centers.
-* ``q_t^j``: total specific humidity of the sub-domain j, discretized at cell centers.
+* ``q_t^j``: total water specific content of the sub-domain j, discretized at cell centers.
 * ``u^{0,3}``: the contravariant 3 component of the environmental velocity, obtained as the residual:
   ```math
   \rho u^{0, 3} = \rho u^3 -  \sum_{j\ne 0} \hat\rho^j u^{j, 3}.
