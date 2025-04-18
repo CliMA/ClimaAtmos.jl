@@ -6,7 +6,6 @@ deep_atmosphere: false
 rayleigh_sponge: true
 viscous_sponge: true
 dt_save_state_to_disk: "30days"
-output_dir: "/scratch/olivia/amip_nonequil_implicit_atmosonly"
 cloud_model: "grid_scale"
 moist: "nonequil"
 precip_model: "1M"

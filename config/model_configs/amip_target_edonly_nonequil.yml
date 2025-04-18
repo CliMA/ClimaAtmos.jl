@@ -6,7 +6,7 @@ deep_atmosphere: false
 rayleigh_sponge: true
 viscous_sponge: true
 dt_save_state_to_disk: "30days"
-restart_file: restart/day30.0.hdf5
+restart_file: config/model_configs/restart/day30.0.hdf5
 cloud_model: "grid_scale"
 moist: "nonequil"
 precip_model: "1M"
