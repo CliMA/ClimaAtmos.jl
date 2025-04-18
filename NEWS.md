@@ -4,6 +4,9 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+v0.30.0
+-------
+
 ### Add support for reanalysis-driven single column model with time-varying forcing
 PR [#3758](https://github.com/CliMA/ClimaAtmos.jl/pull/3758) adds support for driving single-column model (SCM) simulations with time-varying ERA5 reanalysis data. This extends the existing GCM-driven SCM interface to allow site-specific simulations that resolve the diurnal cycle and are suited for calibration against observations. Users can now run reanalysis-driven cases globally using only a date and lat/lon, thanks to integrated data handling via ClimaArtifacts.jl. See the updated “Single Column Model” docs page for details on setup, variable requirements, and how to prepare ERA5 input files.
 
@@ -21,7 +24,7 @@ v0.29.1
 
 ### Remove contribution from condensate, precip diffusion in mass tendency
 PR[#3721](https://github.com/CliMA/ClimaAtmos.jl/pull/3721)
-Diffusion of condensate (liq, ice) and precip (rai, sno) vars no longer 
+Diffusion of condensate (liq, ice) and precip (rai, sno) vars no longer
 contributes to the mass tendency terms (updates in vert diffusion boundary layer,
 smag-lilly, implicit solver terms)
 
