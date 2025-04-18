@@ -307,7 +307,7 @@ function quad_loop(
         FT = eltype(x1_hat)
         @assert(x1_hat >= FT(0))
         @assert(x2_hat >= FT(0))
-        _ts = thermo_state(thermo_params; p = p_c, θ = x1_hat, q_tot = x2_hat)
+        _ts = thermo_state(thermo_params, nothing; p = p_c, θ = x1_hat, q_tot = x2_hat)
         hc = TD.has_condensate(thermo_params, _ts)
 
         cf = hc ? FT(1) : FT(0) # cloud fraction

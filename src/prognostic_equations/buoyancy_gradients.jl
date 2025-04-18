@@ -46,6 +46,7 @@ function buoyancy_gradients(
     ∂qt∂z_sat,
     ∂θl∂z_sat,
     ᶜlg,
+    z,
 ) where {C3}
     return buoyancy_gradients(
         ebgc,
@@ -60,6 +61,7 @@ function buoyancy_gradients(
                 ∂θl∂z_sat,
                 ᶜlg,
             ),
+            z,
         ),
     )
 end
@@ -89,7 +91,13 @@ function buoyancy_gradients(
         ts_sat = if moisture_model isa DryModel
             TD.PhaseDry_pθ(thermo_params, p, θ_liq_ice_sat)
         elseif moisture_model isa EquilMoistModel
-            TD.PhaseEquil_pθq(thermo_params, p, θ_liq_ice_sat, qt_sat)
+            TD.PhaseEquil_pθq(
+                thermo_params,
+                p,
+                θ_liq_ice_sat,
+                qt_sat;
+                z = bg_model.z,
+            )
         elseif moisture_model isa NonEquilMoistModel
             TD.PhaseNonEquil_pθq(
                 thermo_params,
@@ -99,7 +107,7 @@ function buoyancy_gradients(
                     qt_sat,
                     get_ql_sat(thermo_params, bg_model),
                     get_qi_sat(thermo_params, bg_model),
-                ),
+                );
             )
         else
             error("Unsupported moisture model")
