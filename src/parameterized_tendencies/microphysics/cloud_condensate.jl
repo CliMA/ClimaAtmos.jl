@@ -101,22 +101,22 @@ function cloud_condensate_tendency!(
     @. p.scratch.tmp_cloud_ice_src = Y.c.ρ * cloud_sources(cmc.ice, thp, ᶜts, q_sno, dt)
 
     # Downwelling shortwave
-    @. p.scratch.ᶠtemp_scalar = Fields.array2field(
+    p.scratch.ᶠtemp_scalar .= Fields.array2field(
         p.radiation.rrtmgp_model.face_sw_flux_dn,
         axes(Y.f),
     )
     # Upwelling shortwave
-    @. p.scratch.ᶠtemp_scalar_2 = Fields.array2field(
+    p.scratch.ᶠtemp_scalar_2 .= Fields.array2field(
         p.radiation.rrtmgp_model.face_sw_flux_up,
         axes(Y.f),
     )
     # Downwelling longwave
-    @. p.scratch.ᶠtemp_scalar_3 = Fields.array2field(
+    p.scratch.ᶠtemp_scalar_3 .= Fields.array2field(
         p.radiation.rrtmgp_model.face_lw_flux_dn,
         axes(Y.f),
     )
     # Upwelling longwave
-    @. p.scratch.ᶠtemp_scalar_4 = Fields.array2field(
+    p.scratch.ᶠtemp_scalar_4 .= Fields.array2field(
         p.radiation.rrtmgp_model.face_lw_flux_up,
         axes(Y.f),
     )
