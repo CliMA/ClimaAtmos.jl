@@ -1,14 +1,6 @@
-function get_diagnostics(
-    parsed_args,
-    atmos_model,
-    Y,
-    p,
-    sim_info,
-    t_start,
-    output_dir,
-)
+function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
 
-    (; dt, start_date) = sim_info
+    (; dt, t_start, start_date) = sim_info
 
     FT = Spaces.undertype(axes(Y.c))
     context = ClimaComms.context(axes(Y.c))
@@ -249,16 +241,16 @@ function checkpoint_frequency_from_parsed_args(dt_save_state_to_disk::String)
 end
 
 
-function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
+function get_callbacks(config, sim_info, atmos, params, Y, p)
     (; parsed_args, comms_ctx) = config
     FT = eltype(params)
-    (; dt, output_dir, start_date) = sim_info
+    (; dt, output_dir, start_date, t_start, t_end) = sim_info
 
     callbacks = ()
     if parsed_args["log_progress"]
         @info "Progress logging enabled"
         walltime_info = WallTimeInfo()
-        tot_steps = ceil(Int, (sim_info.t_end - t_start) / dt)
+        tot_steps = ceil(Int, (t_end - t_start) / dt)
         five_percent_steps = ceil(Int, 0.05 * tot_steps)
         cond = let schedule = CappedGeometricSeriesSchedule(five_percent_steps)
             (u, t, integrator) -> schedule(integrator)
@@ -335,12 +327,23 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         )
     end
 
+    if parsed_args["external_forcing"] == "ReanalysisTimeVarying" &&
+       parsed_args["config"] == "column"
+        callbacks = (
+            callbacks...,
+            call_every_n_steps(
+                external_driven_single_column!;
+                call_at_end = true,
+            ),
+        )
+    end
+
     if !parsed_args["call_cloud_diagnostics_per_stage"]
         dt_cf =
             dt isa ITime ?
             ITime(time_to_seconds(parsed_args["dt_cloud_fraction"])) :
             FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
-        dt_cf, _, _, _ = promote(dt_cf, t_start, dt, sim_info.t_end)
+        dt_cf, _, _, _ = promote(dt_cf, t_start, dt, t_end)
         callbacks =
             (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
     end
@@ -349,7 +352,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         dt_rad =
             dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_rad"])) :
             FT(time_to_seconds(parsed_args["dt_rad"]))
-        dt_rad, _, _, _ = promote(dt_rad, t_start, dt, sim_info.t_end)
+        dt_rad, _, _, _ = promote(dt_rad, t_start, dt, t_end)
         # We use Millisecond to support fractional seconds, eg. 0.1
         dt_rad_ms = Dates.Millisecond(1_000 * float(dt_rad))
         if parsed_args["dt_save_state_to_disk"] != "Inf" &&
@@ -360,6 +363,22 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
 
         callbacks =
             (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
+    end
+
+    if atmos.non_orographic_gravity_wave isa NonOrographicGravityWave
+        dt_nogw =
+            dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_nogw"])) :
+            FT(time_to_seconds(parsed_args["dt_nogw"]))
+        dt_nogw, _, _, _ = promote(dt_nogw, t_start, dt, sim_info.t_end)
+        # We use Millisecond to support fractional seconds, eg. 0.1
+        dt_nogw_ms = Dates.Millisecond(1_000 * float(dt_nogw))
+        if parsed_args["dt_save_state_to_disk"] != "Inf" &&
+           !CA.isdivisible(dt_save_state_to_disk_dates, dt_nogw_ms)
+            @warn "Non-orographic gravity wave period ($(dt_nogw_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"
+            @warn "This simulation will not be reproducible when restarted"
+        end
+
+        callbacks = (callbacks..., call_every_dt(nogw_model_callback!, dt_nogw))
     end
 
     return callbacks

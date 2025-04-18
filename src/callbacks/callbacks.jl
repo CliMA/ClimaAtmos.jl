@@ -39,6 +39,75 @@ function flux_accumulation!(integrator)
     return nothing
 end
 
+"""
+    external_driven_single_column!(integrator)
+
+Evaluate external time-varying forcing inputs for a single-column atmospheric model onto
+objects in the cache.
+
+This callback function evaluates external forcing variables at the current simulation time and
+updates the corresponding fields in the model state. It handles various forcing components:
+
+- Temperature and specific humidity tendencies (vertical eddy terms, horizontal advection)
+- Nudging fields for temperature, humidity, and horizontal wind components
+- Large-scale subsidence computed from vertical velocity
+
+# Arguments
+- `integrator`: The ODE integrator containing the current model state (`u`),
+  cache (`p`), and time (`t`)
+
+# Notes
+The function extracts time-varying inputs from the `column_timevaryinginputs` structure
+and evaluates them at the current time using the `evaluate!` function, which updates
+the corresponding model fields in place.
+"""
+function external_driven_single_column!(integrator)
+    Y = integrator.u
+    p = integrator.p
+    t = integrator.t
+
+    @assert p.atmos.sfc_temperature isa ExternalTVColumnSST (
+        "SCM reanalysis timevarying setup requires `initial_condition`, " *
+        "`external_forcing`, `surface_setup`, and `surface_temperature` " *
+        "to be set to `ReanalysisTimeVarying`"
+    )
+
+    FT = Spaces.undertype(axes(Y.c))
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    # unpack external forcing objects that we can directly set.
+    (;
+        ᶜdTdt_fluc,
+        ᶜdqtdt_fluc,
+        ᶜdTdt_hadv,
+        ᶜdqtdt_hadv,
+        ᶜdTdt_rad, # we skip radiation because we're using RRTMGP, but this can be changed for simpler setups
+        ᶜT_nudge,
+        ᶜqt_nudge,
+        ᶜu_nudge,
+        ᶜv_nudge,
+        ᶜls_subsidence,
+    ) = p.external_forcing
+    # unpack tv inputs
+    (; hus, rho, ta, tnhusha, tnhusva, tntha, tntva, ua, va, wa, wap) =
+        p.external_forcing.column_timevaryinginputs
+
+    # set the external forcing variables; external tendency is updated in a remaining_tendency! call
+    evaluate!(ᶜdTdt_fluc, tntva, t)
+    evaluate!(ᶜdqtdt_fluc, tnhusva, t)
+    evaluate!(ᶜdTdt_hadv, tntha, t)
+    evaluate!(ᶜdqtdt_hadv, tnhusha, t)
+    evaluate!(ᶜT_nudge, ta, t)
+    evaluate!(ᶜqt_nudge, hus, t)
+    evaluate!(ᶜu_nudge, ua, t)
+    evaluate!(ᶜv_nudge, va, t)
+
+    # subsidence
+    evaluate!(ᶜls_subsidence, wa, t)
+end
+
+
+
 NVTX.@annotate function cloud_fraction_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -206,18 +275,53 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 max(cloud_fraction, eps(FT))
             @. ᶜfrac = cloud_fraction
             # RRTMGP needs effective radius in microns
+
+            seasalt_aero_conc = p.scratch.ᶜtemp_scalar
+            dust_aero_conc = p.scratch.ᶜtemp_scalar_2
+            SO4_aero_conc = p.scratch.ᶜtemp_scalar_3
+            @. seasalt_aero_conc = 0
+            @. dust_aero_conc = 0
+            @. SO4_aero_conc = 0
+            # Get aerosol mass concentrations if available
+            seasalt_names = [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+            dust_names = [:DST01, :DST02, :DST03, :DST04, :DST05]
+            SO4_names = [:SO4]
+            if :prescribed_aerosols_field in propertynames(p.tracers)
+                aerosol_field = p.tracers.prescribed_aerosols_field
+                for aerosol_name in propertynames(aerosol_field)
+                    if aerosol_name in seasalt_names
+                        data = getproperty(aerosol_field, aerosol_name)
+                        @. seasalt_aero_conc += data
+                    elseif aerosol_name in dust_names
+                        data = getproperty(aerosol_field, aerosol_name)
+                        @. dust_aero_conc += data
+                    elseif aerosol_name in SO4_names
+                        data = getproperty(aerosol_field, aerosol_name)
+                        @. SO4_aero_conc += data
+                    end
+                end
+            end
+
             @. ᶜreliq = ifelse(
                 cloud_liquid_water_content > FT(0),
                 CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
                     cmc.liquid,
                     Y.c.ρ,
                     cloud_liquid_water_content / max(eps(FT), cloud_fraction),
-                    cmc.N_cloud_liquid_droplets,
+                    ml_N_cloud_liquid_droplets(
+                        (cmc,),
+                        dust_aero_conc,
+                        seasalt_aero_conc,
+                        SO4_aero_conc,
+                        cloud_liquid_water_content /
+                        max(eps(FT), cloud_fraction),
+                    ),
                     FT(0),
                     FT(0),
                 ) * m_to_um_factor,
                 FT(0),
             )
+
             @. ᶜreice = ifelse(
                 cloud_ice_water_content > FT(0),
                 CM.CloudDiagnostics.effective_radius_const(cmc.ice) *
@@ -229,25 +333,20 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         if radiation_mode.aerosol_radiation
-            _update_some_aerosol_conc(Y, p)
             ᶜΔz = Fields.Δz_field(Y.c)
 
-            if pkgversion(RRTMGP) <= v"0.19.2"
-                more_aerosols = ()
-            else
-                more_aerosols = (
-                    (:center_dust1_column_mass_density, :DST01),
-                    (:center_dust2_column_mass_density, :DST02),
-                    (:center_dust3_column_mass_density, :DST03),
-                    (:center_dust4_column_mass_density, :DST04),
-                    (:center_dust5_column_mass_density, :DST05),
-                    (:center_ss1_column_mass_density, :SSLT01),
-                    (:center_ss2_column_mass_density, :SSLT02),
-                    (:center_ss3_column_mass_density, :SSLT03),
-                    (:center_ss4_column_mass_density, :SSLT04),
-                    (:center_ss5_column_mass_density, :SSLT05),
-                )
-            end
+            more_aerosols = (
+                (:center_dust1_column_mass_density, :DST01),
+                (:center_dust2_column_mass_density, :DST02),
+                (:center_dust3_column_mass_density, :DST03),
+                (:center_dust4_column_mass_density, :DST04),
+                (:center_dust5_column_mass_density, :DST05),
+                (:center_ss1_column_mass_density, :SSLT01),
+                (:center_ss2_column_mass_density, :SSLT02),
+                (:center_ss3_column_mass_density, :SSLT03),
+                (:center_ss4_column_mass_density, :SSLT04),
+                (:center_ss5_column_mass_density, :SSLT05),
+            )
 
             aerosol_names_pair = [
                 more_aerosols...,
@@ -295,8 +394,16 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
-    RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(t / integrator.p.dt))
+    RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(floor(t / integrator.p.dt)))
     Fields.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
+    return nothing
+end
+
+NVTX.@annotate function nogw_model_callback!(integrator)
+    Y = integrator.u
+    p = integrator.p
+
+    non_orographic_gravity_wave_compute_tendency!(Y, p)
     return nothing
 end
 
@@ -314,6 +421,21 @@ function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
     rrtmgp_model.cos_zenith .= Fields.field2array(p.external_forcing.cos_zenith)
     rrtmgp_model.weighted_irradiance .=
         Fields.field2array(p.external_forcing.insolation)
+end
+
+function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
+    # unpack objects with time varying data
+    (; rrtmgp_model) = p.radiation
+    (; coszen, rsdt) = p.external_forcing.surface_inputs
+    coszen_tv = p.external_forcing.surface_timevaryinginputs.coszen
+    rsdt_tv = p.external_forcing.surface_timevaryinginputs.rsdt
+    # evaluate time varying data onto temporary fields
+    evaluate!(coszen, coszen_tv, t)
+    evaluate!(rsdt, rsdt_tv, t)
+
+    # set insolation variables from the values within the fields
+    rrtmgp_model.cos_zenith .= Fields.field2array(coszen)
+    rrtmgp_model.weighted_irradiance .= Fields.field2array(rsdt)
 end
 
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)

@@ -44,6 +44,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2} <: ATCP
     detr_vertdiv_coeff::FT
     entr_param_vec::VFT1
     turb_entr_param_vec::VFT2
+    entr_mult_limiter_coeff::FT
     detr_massflux_vertdiv_coeff::FT
     min_area_limiter_scale::FT
     min_area_limiter_power::FT
@@ -70,6 +71,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     TCP,
     STP,
     VDP,
+    EFP,
 } <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
@@ -81,6 +83,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     turbconv_params::TCP
     surface_temp_params::STP
     vert_diff_params::VDP
+    external_forcing_params::EFP
     Omega::FT
     f_plane_coriolis_frequency::FT
     planet_radius::FT
@@ -106,6 +109,10 @@ Base.@kwdef struct ClimaAtmosParameters{
     water_refractive_index::FT
     optics_lookup_temperature_min::FT
     optics_lookup_temperature_max::FT
+    # Hyperdiffusion
+    α_hyperdiff_tracer::FT
+    # Vertical diffusion
+    α_vert_diff_tracer::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
@@ -135,6 +142,18 @@ von_karman_const(ps::ACAP) =
 # Insolation parameters
 day(ps::ACAP) = IP.day(insolation_params(ps))
 tot_solar_irrad(ps::ACAP) = IP.tot_solar_irrad(insolation_params(ps))
+
+# Forward External Forcing parameters
+efp_fields = [
+    :gcmdriven_momentum_relaxation_timescale,
+    :gcmdriven_scalar_relaxation_timescale,
+    :gcmdriven_relaxation_minimum_height,
+    :gcmdriven_relaxation_maximum_height,
+]
+
+for fn_efp in efp_fields
+    @eval $(fn_efp)(ps::ACAP) = external_forcing_params(ps).$(fn_efp)
+end
 
 # Define parameters as functions
 for var in fieldnames(ClimaAtmosParameters)

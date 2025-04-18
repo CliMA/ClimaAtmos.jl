@@ -75,7 +75,6 @@ const T2 = 290
         p.precomputed,
         p.scratch,
         p.hyperdiff,
-        p.precipitation,
         p.external_forcing,
         p.non_orographic_gravity_wave,
         p.orographic_gravity_wave,
@@ -214,6 +213,8 @@ end
     # Verify that using PrescribedSurface does not break the initialization of
     # RRTMGP or diagnostic EDMF. We currently need a moisture model in order to
     # use diagnostic EDMF.
+    #
+    # Also verify we can start with a different t_start than 0
     config = CA.AtmosConfig(
         Dict(
             "surface_setup" => "PrescribedSurface",
@@ -226,6 +227,7 @@ end
             # remove the following line and check that the test runs in less than a few
             # minutes on GitHub
             "output_default_diagnostics" => false,
+            "t_start" => "1secs",
         );
         job_id = "coupler_compatibility3",
     )

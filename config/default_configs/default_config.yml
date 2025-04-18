@@ -123,6 +123,9 @@ FLOAT_TYPE:
 dt:
   help: "Simulation time step. Examples: [`10secs`, `1hours`]"
   value: "600secs"
+t_start:
+  help: "Simulation start time. This is typically useful in the context of manually restarting a simulation (e.g., but reinitializing the initial state). It is overwritten when the simulation is restarted with the checkpointing system. Examples: [`0secs`, `40secs`]"
+  value: "0secs"
 t_end:
   help: "Simulation end time. Examples: [`1200days`, `40secs`]"
   value: "10days"
@@ -163,9 +166,6 @@ test_dycore_consistency:
 dt_save_state_to_disk:
   help: "Time between saving the state to disk. Examples: [`10secs`, `1hours`, `1months`, `Inf` (do not save)]"
   value: "Inf"
-dt_save_to_sol:
-  help: "Time between saving solution. Examples: [`10days`, `1hours`, `Inf` (do not save)]"
-  value: "1days"
 moist:
   help: "Moisture model [`dry` (default), `equil`, `nonequil`]"
   value: "dry"
@@ -179,13 +179,13 @@ disable_surface_flux_tendency:
   help: "(Bool) Whether to disable surface flux tendencies of momentum, energy, and tracers [`true`, `false` (default)]. When this flag is true, the surface flux tendency is not applied, no matter how surface conditions are computed."
   value: false
 surface_setup:
-  help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
+  help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`]"
   value: "DefaultExchangeCoefficients"
 surface_temperature:
-  help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric', 'RCEMIPII']"
+  help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric', 'RCEMIPII', `Reanalysis`, `ReanalysisTimeVarying`]"
   value: "ZonallySymmetric"
 initial_condition:
-  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`], or a file path for a NetCDF file (read documentation about requirements)."
+  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
   value: "DecayingProfile"
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
@@ -220,6 +220,9 @@ orographic_gravity_wave:
 non_orographic_gravity_wave:
   help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
   value: false
+dt_nogw:
+  help: "Time between calling non-orographic gravity wave update"
+  value: "1800secs"
 nh_poly:
   help: "Horizontal polynomial degree. Note: The number of quadrature points in 1D within each horizontal element is then Nq = <--nh_poly> + 1"
   value: 3
@@ -236,14 +239,20 @@ ls_adv:
   help: "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"
   value: ~
 external_forcing:
-  help: "External forcing for single column experiments [`nothing` (default), `GCM`]"
+  help: "External forcing for single column experiments [`nothing` (default), `GCM`, `Reanalysis`, `ReanalysisTimeVarying`]"
   value: ~
 external_forcing_file:
-  help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions [`nothing` (default), `path/to/file`]"
+  help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions. Used for GCM-driven SCM and ISDAC setup [`nothing` (default), `path/to/file`]"
   value: ~
 cfsite_number:
   help: "cfsite identifier for single column forcing from  `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
   value: "site23"
+site_latitude:
+  help: "Site latitude for single column model. Used for externally driven time varying forcing model to generate the forcing file. Artifact support is currently for eastern Pacific region in July 2007 only. [`17.0` (default)]"
+  value: 17.0
+site_longitude:
+  help: "Site longitude for single column model. Used for externally driven time varying forcing model to generate the forcing file. Artifact support is currently for eastern Pacific region in July 2007 only. [`-149.0` (default)]"
+  value: -149.0
 subsidence:
   help: "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`, `ISDAC`]"
   value: ~
@@ -312,14 +321,19 @@ turbconv:
 advection_test:
   help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"
   value: false
-zero_tendency:
-  help: "Turns off tendencies [`nothing` (default), `grid_scale`, `subgrid_scale`]"
-  value: ~
 implicit_sgs_advection:
   help: "Whether to treat the subgrid-scale vertical advection tendency implicitly [`false` (default), `true`]"
   value: false
+implicit_sgs_entr_detr:
+  help: "Whether to treat the subgrid-scale entrainment and detrainment tendency implicitly [`false` (default), `true`]. Setting it to true only works if implicit_sgs_advection is set to true."
+  value: false
+implicit_sgs_nh_pressure:
+  help: "Whether to treat the subgrid-scale nonhydrostatic pressure closure implicitly. Setting it to true only works if 
+  `implicit_sgs_advection` is set to true. This flag only controls whether the drag term in the pressure closure is treated implicitly. 
+  The buoyancy term is always treated implicitly. [`false` (default), `true`]"
+  value: false
 implicit_sgs_mass_flux:
-  help: "Whether to treat the subgrid-scale mass flux tendency implicitly or explicitly in grid-mean equations. Currently updraft only with Jacobian terms 0. [`false` (default), `true`]"
+  help: "Whether to treat the subgrid-scale mass flux tendency implicitly or explicitly in grid-mean equations. Currently updraft only with Jacobian terms 0. [`false` (default), `true`]. Setting it to true only works if both implicit_sgs_advection and implicit_diffusion are set to true."
   value: false
 edmf_coriolis:
   help: "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
@@ -328,7 +342,8 @@ edmfx_filter:
   help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
   value: false
 edmfx_nh_pressure:
-  help: "If set to true, it switches on EDMFX pressure drag closure.  [`true`, `false` (default)]"
+  help: "If set to true, it switches on EDMFX pressure drag closure.  For prognostic EDMF, this only controls the drag term 
+  in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
   value: false
 edmfx_entr_model:
   help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`, `GeneralizedHarmonics`]"

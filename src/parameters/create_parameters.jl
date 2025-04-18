@@ -53,6 +53,9 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
     vert_diff_params = vert_diff_parameters(toml_dict)
     VDP = typeof(vert_diff_params)
 
+    external_forcing_params = external_forcing_parameters(toml_dict)
+    EFP = typeof(external_forcing_params)
+
     parameters =
         CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
     return CAP.ClimaAtmosParameters{
@@ -67,6 +70,7 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
         TCP,
         STP,
         VDP,
+        EFP,
     }(;
         parameters...,
         thermodynamics_params,
@@ -79,6 +83,7 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
         turbconv_params,
         surface_temp_params,
         vert_diff_params,
+        external_forcing_params,
     )
 end
 
@@ -105,6 +110,8 @@ atmos_name_map = (;
     :water_refractive_index => :water_refractive_index,
     :optics_lookup_temperature_min => :optics_lookup_temperature_min,
     :optics_lookup_temperature_max => :optics_lookup_temperature_max,
+    :tracer_hyperdiffusion_factor => :α_hyperdiff_tracer,
+    :tracer_vertical_diffusion_factor => :α_vert_diff_tracer,
 )
 
 cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
@@ -119,6 +126,7 @@ cloud_parameters(toml_dict::CP.AbstractTOMLDict) = (;
         "prescribed_cloud_droplet_number_concentration",
         "ClimaAtmos",
     ).prescribed_cloud_droplet_number_concentration,
+    aml = aerosol_ml_parameters(toml_dict),
 )
 
 microphys_1m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
@@ -145,6 +153,30 @@ function vert_diff_parameters(toml_dict)
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
 end
 
+function external_forcing_parameters(toml_dict)
+    efp_fields = [
+        "gcmdriven_momentum_relaxation_timescale",
+        "gcmdriven_scalar_relaxation_timescale",
+        "gcmdriven_relaxation_minimum_height",
+        "gcmdriven_relaxation_maximum_height",
+    ]
+    return CP.get_parameter_values(toml_dict, efp_fields, "ClimaAtmos")
+end
+
+function aerosol_ml_parameters(toml_dict)
+    name_map = (;
+        :prescribed_cloud_droplet_number_concentration => :N₀,
+        :dust_calibration_coefficient => :α_dust,
+        :seasalt_calibration_coefficient => :α_seasalt,
+        :ammonium_sulfate_calibration_coefficient => :α_SO4,
+        :liquid_water_specific_humidity_calibration_coefficent => :α_q_liq,
+        :reference_dust_aerosol_mass_concentration => :c₀_dust,
+        :reference_seasalt_aerosol_mass_concentration => :c₀_seasalt,
+        :reference_ammonium_sulfate_mass_concentration => :c₀_SO4,
+        :reference_liquid_water_specific_humidity => :q₀_liq,
+    )
+    return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+end
 
 to_svec(x::AbstractArray) = SA.SVector{length(x)}(x)
 to_svec(x) = x
@@ -175,6 +207,7 @@ function TurbulenceConvectionParameters(
         :EDMF_surface_area => :surface_area,
         :entr_param_vec => :entr_param_vec,
         :turb_entr_param_vec => :turb_entr_param_vec,
+        :entr_mult_limiter_coeff => :entr_mult_limiter_coeff,
         :minimum_updraft_top => :min_updraft_top,
         :mixing_length_eddy_viscosity_coefficient => :tke_ed_coeff,
         :mixing_length_smin_ub => :smin_ub,

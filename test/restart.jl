@@ -276,7 +276,6 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :ghost_buffer,
             # Computed in tendencies (which are not computed in this case)
             :hyperdiff,
-            :precipitation,
             # rc is some CUDA/CuArray internal object that we don't care about
             :rc,
             # DataHandlers contains caches, so they are stateful
@@ -412,12 +411,10 @@ if MANYTESTS
                             "enable_diagnostics" => false,
                             "output_dir" => joinpath(output_loc, job_id),
                         )
-                        more_ignore = Symbol[]
-
-                        if turbconv_mode == "prognostic_edmf"
-                            more_ignore = [:ᶠnh_pressure₃ʲs]
-                        end
-                        push!(TESTING, (; test_dict, job_id, more_ignore))
+                        push!(
+                            TESTING,
+                            (; test_dict, job_id, more_ignore = Symbol[]),
+                        )
                     end
                 end
             end

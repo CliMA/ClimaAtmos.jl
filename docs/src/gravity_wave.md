@@ -165,8 +165,9 @@ Similar to the base flux calculation but for the 3D fields, we computed ``N`` an
 ^f N[k]^2 = \frac{g}{^f T[k]} * ( ^f \overline{\frac{dT}{dz}}[k] + \frac{g}{cp}),
 ```
 ```math
-^f V_{\tau}[k] = \max(\epsilon_0, - V[k] \cdot \frac{\tau}{|\tau|}).
+^f V_{\tau}[k] = \max(\epsilon_0, - V[k] \cdot \frac{\tau}{|\tau|}),
 ```
+where ``\epsilon_0`` denotes a measure of floating-point precision.
 
 Let ``L_1 = L_0 * \max(0.5, \min(2.0, 1.0-samp*V_\tau*d^2V_{\tau}/N^2))`` where ``samp=1.0`` is the correction for coarse sampling of ``d^2V/dz^2``, and
 ```math

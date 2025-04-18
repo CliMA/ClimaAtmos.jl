@@ -1133,10 +1133,12 @@ AquaplanetPlots = Union{
     Val{:rcemipii_sphere_diagnostic_edmfx},
     Val{:longrun_aquaplanet_allsky_0M},
     Val{:longrun_aquaplanet_allsky_diagedmf_0M},
-    Val{:longrun_aquaplanet_allsky_progedmf_diffonly_0M},
+    Val{:longrun_aquaplanet_allsky_progedmf_0M},
     Val{:longrun_aquaplanet_allsky_0M_earth},
     Val{:longrun_aquaplanet_dyamond},
+    Val{:longrun_aquaplanet_allsky_tvinsol_0M_slabocean},
     Val{:amip_target_diagedmf},
+    Val{:amip_target_edonly},
 }
 
 function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
@@ -1365,6 +1367,7 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_trmm_column_0M},
     Val{:prognostic_edmfx_simpleplume_column},
     Val{:prognostic_edmfx_gcmdriven_column},
+    Val{:prognostic_edmfx_tv_era5driven_column},
     Val{:prognostic_edmfx_bomex_box},
     Val{:rcemipii_box_diagnostic_edmfx},
     Val{:prognostic_edmfx_soares_column},
@@ -1458,7 +1461,9 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
 
-    precip_names = sim_type isa EDMFBoxPlotsWithPrecip ? ("husra", "hussn") : ()
+    precip_names =
+        sim_type isa EDMFBoxPlotsWithPrecip ?
+        ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen") : ()
 
     short_names = [
         "wa",

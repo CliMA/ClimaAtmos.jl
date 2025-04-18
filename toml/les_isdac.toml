@@ -4,3 +4,6 @@ value = 2000.0
 [mixing_length_Prandtl_number_0]
 value = 0.33333
 type = "float"
+
+[tracer_vertical_diffusion_factor]
+value = 0
