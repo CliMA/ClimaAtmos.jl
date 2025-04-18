@@ -274,6 +274,7 @@ struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V, M}
     sw_solver::SWS
     as::AS  # Atmospheric state
     views::V  # user-friendly views into the solver
+    metric_scaling::M
 end
 
 # Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
@@ -905,7 +906,7 @@ function _RRTMGPModel(
         set_and_save!(z_lay, "center_z", t..., dict)
         z_lev = DA{FT}(undef, nlay + 1, ncol)
         set_and_save!(z_lev, "face_z", t..., dict)
-        if deep_atmosphere
+        if radiation_mode.deep_atmosphere
             planet_radius = pop!(dict, :planet_radius)
             metric_scaling .= ((z_lev .+ planet_radius) ./ planet_radius) .^ 2
         end
@@ -1169,7 +1170,7 @@ NVTX.@annotate update_lw_fluxes!(::AllSkyRadiation, model, metric_scaling) =
         model.lookups.lookup_lw,
         model.lookups.lookup_lw_cld,
         model.lookups.lookup_lw_aero,
-        metric_scaling
+        metric_scaling,
     )
 NVTX.@annotate function update_lw_fluxes!(
     ::AllSkyRadiationWithClearSkyDiagnostics,
@@ -1206,7 +1207,7 @@ NVTX.@annotate update_sw_fluxes!(::ClearSkyRadiation, model, metric_scaling) =
         model.lookups.lookup_sw,
         nothing,
         model.lookups.lookup_sw_aero,
-        metric_scaling
+        metric_scaling, 
     )
 NVTX.@annotate update_sw_fluxes!(::AllSkyRadiation, model, metric_scaling) =
     RRTMGP.RTESolver.solve_sw!(
@@ -1215,7 +1216,7 @@ NVTX.@annotate update_sw_fluxes!(::AllSkyRadiation, model, metric_scaling) =
         model.lookups.lookup_sw,
         model.lookups.lookup_sw_cld,
         model.lookups.lookup_sw_aero,
-        metric_scaling
+        metric_scaling,
     )
 NVTX.@annotate function update_sw_fluxes!(
     ::AllSkyRadiationWithClearSkyDiagnostics,
@@ -1228,7 +1229,7 @@ NVTX.@annotate function update_sw_fluxes!(
         model.lookups.lookup_sw,
         nothing,
         model.lookups.lookup_sw_aero,
-        metric_scaling
+        metric_scaling,
     )
     parent(model.face_clear_sw_flux_up) .= parent(model.face_sw_flux_up)
     parent(model.face_clear_sw_flux_dn) .= parent(model.face_sw_flux_dn)
