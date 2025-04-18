@@ -13,6 +13,9 @@ function temporary_quantities(Y, atmos)
     uvw_vec = UVW(FT(0), FT(0), FT(0))
     return (;
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
+        ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
+        ᶠtemp_scalar_3 = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
+        ᶠtemp_scalar_4 = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜtke_exch
         ᶜtemp_scalar_3 = Fields.Field(FT, center_space),
