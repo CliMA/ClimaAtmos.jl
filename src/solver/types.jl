@@ -325,14 +325,16 @@ Base.@kwdef struct EnvBuoyGradVars{FT, TS}
     ∂θv∂z_unsat::FT
     ∂qt∂z_sat::FT
     ∂θl∂z_sat::FT
+    z::FT
 end
 
 function EnvBuoyGradVars(
     ts::TD.ThermodynamicState,
     ∂θv∂z_unsat_∂qt∂z_sat_∂θl∂z_sat,
+    z,
 )
     (; ∂θv∂z_unsat, ∂qt∂z_sat, ∂θl∂z_sat) = ∂θv∂z_unsat_∂qt∂z_sat_∂θl∂z_sat
-    return EnvBuoyGradVars(ts, ∂θv∂z_unsat, ∂qt∂z_sat, ∂θl∂z_sat)
+    return EnvBuoyGradVars(ts, ∂θv∂z_unsat, ∂qt∂z_sat, ∂θl∂z_sat, z)
 end
 
 Base.eltype(::EnvBuoyGradVars{FT}) where {FT} = FT

@@ -116,6 +116,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
+    
+    FT = Spaces.undertype(axes(Y.c))
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
 
     (; ᶜΦ,) = p.core
     (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
@@ -497,6 +501,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜgradᵥ_q_tot⁰,
         ᶜgradᵥ_θ_liq_ice⁰,
         ᶜlg,
+        ᶜz,
     )
 
     # TODO: Currently the shear production only includes vertical gradients

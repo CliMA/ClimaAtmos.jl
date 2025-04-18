@@ -973,6 +973,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
         p.precomputed.ᶜgradᵥ_q_tot,     # ∂qt∂z_sat
         p.precomputed.ᶜgradᵥ_θ_liq_ice, # ∂θl∂z_sat
         ᶜlg,
+        ᶜz,
     )
 
     # TODO: Currently the shear production only includes vertical gradients

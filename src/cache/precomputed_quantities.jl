@@ -345,7 +345,8 @@ function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
 end
 
 function thermo_state(
-    thermo_params;
+    thermo_params,
+    z;
     ρ = nothing,
     p = nothing,
     θ = nothing,
@@ -355,8 +356,8 @@ function thermo_state(
 )
     get_ts(ρ::Real, ::Nothing, θ::Real, ::Nothing, ::Nothing, ::Nothing) =
         TD.PhaseDry_ρθ(thermo_params, ρ, θ)
-    get_ts(ρ::Real, ::Nothing, θ::Real, ::Nothing, q_tot::Real, ::Nothing) =
-        TD.PhaseEquil_ρθq(thermo_params, ρ, θ, q_tot)
+    get_ts(ρ::Real, ::Nothing, θ::Real, ::Nothing, q_tot::Real, ::Nothing, z::Real) =
+        TD.PhaseEquil_ρθq(thermo_params, ρ, θ, q_tot, z=z)
     get_ts(ρ::Real, ::Nothing, θ::Real, ::Nothing, ::Nothing, q_pt) =
         TD.PhaseNonEquil_ρθq(thermo_params, ρ, θ, q_pt)
     get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, ::Nothing, ::Nothing) =
@@ -369,13 +370,14 @@ function thermo_state(
             q_tot,
             3,
             eltype(thermo_params)(0.003),
+            z = z,
         )
     get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, ::Nothing, q_pt) =
         TD.PhaseNonEquil(thermo_params, e_int, ρ, q_pt)
     get_ts(::Nothing, p::Real, θ::Real, ::Nothing, ::Nothing, ::Nothing) =
         TD.PhaseDry_pθ(thermo_params, p, θ)
-    get_ts(::Nothing, p::Real, θ::Real, ::Nothing, q_tot::Real, ::Nothing) =
-        TD.PhaseEquil_pθq(thermo_params, p, θ, q_tot)
+    get_ts(::Nothing, p::Real, θ::Real, ::Nothing, q_tot::Real, z::Real) =
+        TD.PhaseEquil_pθq(thermo_params, p, θ, q_tot, z = z)
     get_ts(::Nothing, p::Real, θ::Real, ::Nothing, ::Nothing, q_pt) =
         TD.PhaseNonEquil_pθq(thermo_params, p, θ, q_pt)
     get_ts(::Nothing, p::Real, ::Nothing, e_int::Real, ::Nothing, ::Nothing) =
@@ -404,19 +406,20 @@ function thermo_vars(moisture_model, precip_model, specific, K, Φ)
     return (; energy_var..., moisture_var...)
 end
 
-ts_gs(thermo_params, moisture_model, precip_model, specific, K, Φ, ρ) =
+ts_gs(thermo_params, moisture_model, precip_model, specific, K, Φ, ρ, z) =
     thermo_state(
-        thermo_params;
+        thermo_params,
+        z;
         thermo_vars(moisture_model, precip_model, specific, K, Φ)...,
         ρ,
     )
 
-ts_sgs(thermo_params, moisture_model, precip_model, specific, K, Φ, p) =
-    thermo_state(
-        thermo_params;
-        thermo_vars(moisture_model, precip_model, specific, K, Φ)...,
-        p,
-    )
+# ts_sgs(thermo_params, moisture_model, precip_model, specific, K, Φ, p) =
+#     thermo_state(
+#         thermo_params;
+#         thermo_vars(moisture_model, precip_model, specific, K, Φ)...,
+#         p,
+#     )
 
 function eddy_diffusivity_coefficient_H(D₀, H, z_sfc, z)
     return D₀ * exp(-(z - z_sfc) / H)
@@ -478,7 +481,15 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
+    z = Fields.coordinate_field(Y.c).z
+    @. ᶜts = ts_gs(
+        thermo_args...,
+        ᶜspecific,
+        ᶜK,
+        ᶜΦ,
+        Y.c.ρ,
+        z,
+    )
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
 
