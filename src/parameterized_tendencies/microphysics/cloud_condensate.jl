@@ -100,7 +100,28 @@ function cloud_condensate_tendency!(
     @. p.scratch.tmp_cloud_liquid_src = Y.c.ρ * cloud_sources(cmc.liquid, thp, ᶜts, q_rai, dt)
     @. p.scratch.tmp_cloud_ice_src = Y.c.ρ * cloud_sources(cmc.ice, thp, ᶜts, q_sno, dt)
 
-    for (Y_col, Yt_col, ql_src_col, qi_src_col ,ts_col, c_spec_col, cwl_col, cwi_col, cwr_col, cws_col, cwtqt_col, cwhht_col, rad_flux_col) in zip(
+    # Downwelling shortwave
+    @. p.scratch.ᶠtemp_scalar = Fields.array2field(
+        p.radiation.rrtmgp_model.face_sw_flux_dn,
+        axes(Y.f),
+    )
+    # Upwelling shortwave
+    @. p.scratch.ᶠtemp_scalar_2 = Fields.array2field(
+        p.radiation.rrtmgp_model.face_sw_flux_up,
+        axes(Y.f),
+    )
+    # Downwelling longwave
+    @. p.scratch.ᶠtemp_scalar_3 = Fields.array2field(
+        p.radiation.rrtmgp_model.face_lw_flux_dn,
+        axes(Y.f),
+    )
+    # Upwelling longwave
+    @. p.scratch.ᶠtemp_scalar_4 = Fields.array2field(
+        p.radiation.rrtmgp_model.face_lw_flux_up,
+        axes(Y.f),
+    )
+
+    for (Y_col, Yt_col, ql_src_col, qi_src_col ,ts_col, c_spec_col, cwl_col, cwi_col, cwr_col, cws_col, cwtqt_col, cwhht_col, dnsw, upsw, dnlw, uplw) in zip(
         column_iterator(Y),
         column_iterator(Yₜ),
         column_iterator(p.scratch.tmp_cloud_liquid_src),
@@ -113,7 +134,10 @@ function cloud_condensate_tendency!(
         column_iterator(p.precomputed.ᶜwₛ),
         column_iterator(p.precomputed.ᶜwₜqₜ),
         column_iterator(p.precomputed.ᶜwₕhₜ),
-        column_iterator(p.radiation.ᶠradiation_flux)
+        column_iterator(p.scratch.ᶠtemp_scalar),
+        column_iterator(p.scratch.ᶠtemp_scalar_2),
+        column_iterator(p.scratch.ᶠtemp_scalar_3),
+        column_iterator(p.scratch.ᶠtemp_scalar_4),
    )
        if minimum(TD.air_temperature.(thp, ts_col)) < FT(100)
           @info(" ")
@@ -128,7 +152,6 @@ function cloud_condensate_tendency!(
           @show(Yt_col.c.ρ)
           @show(Yt_col.c.ρq_tot)
           @show(Yt_col.c.sgs⁰.ρatke)
-          @show(rad_flux_col)
           @info(" ")
           @show(Y_col.c.ρq_tot ./ Y_col.c.ρ)
           @show(Y_col.c.ρq_liq ./ Y_col.c.ρ)
@@ -151,6 +174,11 @@ function cloud_condensate_tendency!(
           @show(cws_col)
           @show(cwtqt_col)
           @show(cwhht_col)
+          @info(" ")
+          @show(dnsw)
+          @show(upsw)
+          @show(dnlw)
+          @show(uplw)
           @info(" ")
       end
     end
