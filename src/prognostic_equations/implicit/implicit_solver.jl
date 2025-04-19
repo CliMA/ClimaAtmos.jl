@@ -775,7 +775,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         #        ),
         #    ) - (I,)
 
-        MatrixFields.unrolled_foreach(tracer_info) do (ρqₚ_name, _, wₚ_name)
+        MatrixFields.unrolled_foreach(
+            tracer_info,
+        ) do (ρqₚ_name, qₚ_name, wₚ_name)
             MatrixFields.has_field(Y, ρqₚ_name) || return
             ∂ᶜρqₚ_err_∂ᶜρqₚ = matrix[ρqₚ_name, ρqₚ_name]
             ᶜwₚ = MatrixFields.get_field(p, wₚ_name)
@@ -784,8 +786,58 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅
                 ᶠright_bias_matrix() ⋅
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwₚ) / ᶜρ) - (I,)
+            #if ρqₚ_name in (@name(c.ρq_liq), @name(c.ρq_ice))
+
+            #end
         end
 
+    end
+
+    if p.atmos.moisture_model isa NonEquilMoistModel
+
+        ᶜqₗ = ᶜspecific.q_liq
+        ᶜqᵢ = ᶜspecific.q_ice
+
+        cmc = CAP.microphysics_cloud_params(params)
+
+        τₗ = cmc.liquid.τ_relax
+        τᵢ = cmc.ice.τ_relax
+
+        # TO DO: MAKE A GAMMA FUNCTION IN THERMO
+        function Γₗ(tps, ts)
+
+            T = TD.air_temperature(tps, ts)
+            #q = TD.
+            Rᵥ = TD.Parameters.R_v(tps)
+            cₚ_air = TD.cp_m(tps, ts)
+            Lᵥ = TD.latent_heat_vapor(tps, ts)
+            qᵥ_sat_liq = TD.q_vap_saturation_liquid(tps, ts) #_from_density(tps, T, ρ, pᵥ_sat_liq)
+
+            dqsldT = qᵥ_sat_liq * (Lᵥ / (Rᵥ * T^2) - 1 / T)
+
+            return 1 + (Lᵥ / cₚ_air) * dqsldT
+        end
+
+        function Γᵢ(tps, ts)
+
+            T = TD.air_temperature(tps, ts)
+            Rᵥ = TD.Parameters.R_v(tps)
+            cₚ_air = TD.cp_m(tps, ts)
+            Lₛ = TD.latent_heat_sublim(tps, ts)
+            qᵥ_sat_ice = TD.q_vap_saturation_ice(tps, ts) #_from_density(tps, T, ρ, pᵥ_sat_liq)
+
+            dqsidT = qᵥ_sat_ice * (Lₛ / (Rᵥ * T^2) - 1 / T)
+
+            return 1 + (Lₛ / cₚ_air) * dqsidT
+        end
+
+        ∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
+        ∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
+
+        @. ∂ᶜρqₗ_err_∂ᶜρqₗ -=
+            DiagonalMatrixRow(ᶜqₗ / (τₗ * Γₗ(thermo_params, ᶜts)))
+        @. ∂ᶜρqᵢ_err_∂ᶜρqᵢ -=
+            DiagonalMatrixRow(ᶜqᵢ / (τᵢ * Γᵢ(thermo_params, ᶜts)))
     end
 
     if use_derivative(diffusion_flag)
