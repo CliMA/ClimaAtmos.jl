@@ -1,7 +1,7 @@
 #####
 ##### DryModel, EquilMoistModel
 #####
-import ClimaCore: Spaces, Quadratures, Fields
+import ClimaCore: Spaces, Quadratures, Fields, Geometry
 
 cloud_condensate_tendency!(Yₜ, Y, p, _, _) = nothing
 
@@ -145,8 +145,8 @@ function cloud_condensate_tendency!(
           @show(TD.air_density.(thp, ts_col))
           @show(TD.air_temperature.(thp, ts_col))
           @show(Y_col.c.ρe_tot)
-          @show(UVWVector.(Y_col.c.uₕ))
-          @show(UVWVector.(Y_col.f.u₃))
+          @show(Geometry.UVWVector.(Y_col.c.uₕ))
+          @show(Geometry.UVWVector.(Y_col.f.u₃))
           @info(" ")
           @show(Yt_col.c.ρe_tot)
           @show(Yt_col.c.ρ)
