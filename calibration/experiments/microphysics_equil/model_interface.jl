@@ -8,20 +8,17 @@ import ClimaCalibrate:
 
 import ClimaComms
 
-# to do -- change this to the equil baroclinic wave config
 const config_dict =
     YAML.load_file(joinpath(@__DIR__, "baroclinic_wave_equil.yml"))
 
 const output_dir = config_dict["output_dir"]
-#const model_config = experiment_config_dict["model_config"]
 
 function CAL.forward_model(iteration, member)
 
-    # VERSION COPIED FROM TUTORIAL
     member_path = CAL.path_to_ensemble_member(output_dir, iteration, member)
     config_dict["output_dir"] = member_path
 
-    #md # Set the parameters for the current member
+    # Set the parameters for the current member
     parameter_path = CAL.parameter_path(output_dir, iteration, member)
     if haskey(config_dict, "toml")
         push!(config_dict["toml"], parameter_path)
@@ -29,7 +26,7 @@ function CAL.forward_model(iteration, member)
         config_dict["toml"] = [parameter_path]
     end
 
-    #md # Turn off default diagnostics
+    # Turn off default diagnostics
     config_dict["output_default_diagnostics"] = false
 
     comms_ctx = ClimaComms.SingletonCommsContext()
