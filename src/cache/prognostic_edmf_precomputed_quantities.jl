@@ -36,7 +36,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     @. ᶜρa⁰ = ρa⁰(Y.c)
     # @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
     # (ustar^2)
-    @. ᶜtke⁰ = FT(0.001) + FT(1.0) * exp(-((ᶜz - z_sfc)^2) / (2 * (750^2)))
+    @. ᶜtke⁰ = FT(0.01) + FT(5.0) * exp(-((ᶜz - z_sfc)^2) / (2 * (750^2)))
+    # @. ᶜtke⁰ = FT(0.001) + FT(1.0) * exp(-((ᶜz - z_sfc)^2) / (2 * (750^2)))
     @. ᶜmse⁰ = divide_by_ρa(
         Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
         ᶜρa⁰,
