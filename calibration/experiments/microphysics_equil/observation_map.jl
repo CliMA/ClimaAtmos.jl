@@ -1,10 +1,7 @@
 ### to go in here:
 # - observation_map function
-using Distributed
-import ClimaCalibrate as CAL
-import ClimaAnalysis: SimDir, get, slice, average_xy
-using ClimaUtilities.ClimaArtifacts
-import EnsembleKalmanProcesses: I, ParameterDistributions.constrained_gaussian
+
+
 
 """
 version from the TUTORIAL
@@ -27,9 +24,15 @@ function CAL.observation_map(iteration)
     return G_ensemble
 end
 
+# make the loss function daily averaged liquid fraction
 function process_member_data(simdir::SimDir)
     isempty(simdir.vars) && return NaN
-    rsut =
-        get(simdir; short_name = "rsut", reduction = "average", period = "30d")
-    return slice(average_xy(rsut); time = 30days).data
+    cli =
+        get(simdir; short_name = "cli", reduction = "average", period = "1days")
+    clw = 
+        get(simdir; short_name = "clw", reduction = "average", period = "1days")
+
+    liquid_fraction = clw / (cli + clw)
+
+    return slice(average_xy(liquid_fraction); time = 1days).data
 end
