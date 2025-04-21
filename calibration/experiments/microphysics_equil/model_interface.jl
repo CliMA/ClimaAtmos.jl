@@ -6,15 +6,16 @@ import YAML
 import ClimaCalibrate:
     set_up_forward_model, run_forward_model, path_to_ensemble_member
 
+import ClimaComms
+
 # to do -- change this to the equil baroclinic wave config
-const experiment_config_dict =
+const config_dict =
     YAML.load_file(joinpath(@__DIR__, "baroclinic_wave_equil.yml"))
 
-const output_dir = experiment_config_dict["output_dir"]
-const model_config = experiment_config_dict["model_config"]
+const output_dir = config_dict["output_dir"]
+#const model_config = experiment_config_dict["model_config"]
 
 function CAL.forward_model(iteration, member)
-    base_config_dict = YAML.load_file(joinpath(@__DIR__, model_config))
 
     # VERSION COPIED FROM TUTORIAL
     member_path = CAL.path_to_ensemble_member(output_dir, iteration, member)

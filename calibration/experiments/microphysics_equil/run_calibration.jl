@@ -7,7 +7,6 @@ import TOML
 using Distributions
 using Distributed
 using Random
-using Flux
 using Logging
 
 import JLD2
@@ -27,7 +26,7 @@ n_iterations = 3
 noise = 0.1 * I
 
 # change this
-prior = constrained_gaussian("pow_ice", 0.5, 4, 0.01, 10)
+prior = constrained_gaussian("pow_ice", 5, 4, 0.01, 10)
 
 @info "Generating observations"
 parameter_file = CAL.parameter_path(output_dir, 0, 0)
