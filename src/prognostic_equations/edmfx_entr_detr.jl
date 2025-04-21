@@ -428,7 +428,8 @@ limit_detrainment(detr::FT, a, dt) where {FT} =
 
 function limit_turb_entrainment(dyn_entr::FT, turb_entr, dt) where {FT}
     # return max(min((FT(0.9) * 1 / float(dt)) - dyn_entr, turb_entr), 0)
-    return max(min(FT(0.01), turb_entr), 0)
+    return max(min(FT(0.02), turb_entr), 0)
+    # return max(min(turb_entr, FT(0.9) * 1 / float(dt)),0)
 end
 
 # limit entrainment and detrainment rates for diagnostic EDMF
