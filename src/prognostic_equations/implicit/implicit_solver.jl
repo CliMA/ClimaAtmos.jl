@@ -501,7 +501,7 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         (
             use_derivative(A.diffusion_flag) &&
             p.atmos.turbconv_model isa AbstractEDMF ?
-            (; p.precomputed.ᶜtke⁰, p.precomputed.ᶜmixing_length) : (;)
+            (; p.precomputed.ᶜtke⁰, p.precomputed.ᶜmixing_length, p.precomputed.ᶜentrʲs) : (;)
         )...,
         (
             use_derivative(A.diffusion_flag) &&
@@ -857,7 +857,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
             turbconv_params = CAP.turbconv_params(params)
             c_d = CAP.tke_diss_coeff(turbconv_params)
-            (; ᶜtke⁰, ᶜmixing_length, dt) = p
+            (; ᶜtke⁰, ᶜmixing_length, ᶜentrʲs, dt) = p
             ᶜρa⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? p.ᶜρa⁰ : ᶜρ
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
@@ -886,8 +886,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                         ᶜdiffusion_u_matrix -
                         DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
                     ) ⋅ DiagonalMatrixRow(1 / ᶜρa⁰) -
-                    DiagonalMatrixRow(dissipation_rate(ᶜtke⁰, ᶜmixing_length))
-                ) - (I,)
+                    DiagonalMatrixRow(dissipation_rate(ᶜtke⁰, ᶜmixing_length)) #) - (I,)
+                 - DiagonalMatrixRow(ᶜρa⁰ * ᶜentrʲs.:(1))) - (I,)
         end
 
         if (
