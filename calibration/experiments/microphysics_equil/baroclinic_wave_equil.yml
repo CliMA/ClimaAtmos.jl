@@ -13,6 +13,6 @@ moist: "equil"
 disable_surface_flux_tendency: true
 toml: [baroclinic_wave_equil.toml]
 diagnostics:
-  - short_name: [hus, ta, cl, clw, cli]
-    reduction: average
+  - short_name: [clw, cli]
+    reduction_time: average
     period: 1days
