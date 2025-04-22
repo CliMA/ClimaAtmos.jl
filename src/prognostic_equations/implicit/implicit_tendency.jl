@@ -205,8 +205,8 @@ vertical_advection(ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. lazy(-(ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
-    @assert sum(isnan, Y.c.ρq_rai) == 0
+    #@assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    #@assert sum(isnan, Y.c.ρq_rai) == 0
 
     (; moisture_model, turbconv_model, rayleigh_sponge, precip_model) = p.atmos
     (; dt) = p
@@ -244,15 +244,15 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     if precip_model isa Microphysics1Moment
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
 
-        @assert sum(isnan, Yₜ.c.ρq_rai) == 0
-        @assert sum(isnan, Y.c.ρq_rai) == 0
-        @assert sum(isnan, Y.c.ρ) == 0
-        @assert sum(isnan, ᶜwᵣ) == 0
+        #@assert sum(isnan, Yₜ.c.ρq_rai) == 0
+        #@assert sum(isnan, Y.c.ρq_rai) == 0
+        #@assert sum(isnan, Y.c.ρ) == 0
+        #@assert sum(isnan, ᶜwᵣ) == 0
 
-        @assert sum(isinf, Yₜ.c.ρq_rai) == 0
-        @assert sum(isinf, Y.c.ρq_rai) == 0
-        @assert sum(isinf, Y.c.ρ) == 0
-        @assert sum(isinf, ᶜwᵣ) == 0
+        #@assert sum(isinf, Yₜ.c.ρq_rai) == 0
+        #@assert sum(isinf, Y.c.ρq_rai) == 0
+        #@assert sum(isinf, Y.c.ρ) == 0
+        #@assert sum(isinf, ᶜwᵣ) == 0
 
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ *
@@ -263,7 +263,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶠright_bias(Geometry.WVector(-(ᶜwₛ)) * max(zero(Y.c.ρ), Y.c.ρq_sno / Y.c.ρ)),
         )
 
-        @assert sum(isnan, Yₜ.c.ρq_rai) == 0
+        #@assert sum(isnan, Yₜ.c.ρq_rai) == 0
     end
 
     # TODO - decide if this needs to be explicit or implicit

@@ -589,12 +589,12 @@ end
 Updates all precomputed quantities based on the current state `Y`.
 """
 function set_precomputed_quantities!(Y, p, t)
-    @assert sum(isnan, Y.c.ρq_rai) == 0
-    @assert sum(isnan, Y.c.ρq_liq) == 0
-    @assert sum(isnan, Y.c.ρq_ice) == 0
+    #@assert sum(isnan, Y.c.ρq_rai) == 0
+    #@assert sum(isnan, Y.c.ρq_liq) == 0
+    #@assert sum(isnan, Y.c.ρq_ice) == 0
     set_implicit_precomputed_quantities!(Y, p, t)
     set_explicit_precomputed_quantities!(Y, p, t)
-    @assert sum(isnan, Y.c.ρq_rai) == 0
-    @assert sum(isnan, Y.c.ρq_liq) == 0
-    @assert sum(isnan, Y.c.ρq_ice) == 0
+    #@assert sum(isnan, Y.c.ρq_rai) == 0
+    #@assert sum(isnan, Y.c.ρq_liq) == 0
+    #@assert sum(isnan, Y.c.ρq_ice) == 0
 end

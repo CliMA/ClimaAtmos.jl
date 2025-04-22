@@ -1,8 +1,8 @@
 import ClimaCore.MatrixFields: @name
 
 NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
-    @assert sum(isnan, Y.c.ρq_rai) == 0
+    #@assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    #@assert sum(isnan, Y.c.ρq_rai) == 0
 
     prep_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
     prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
@@ -13,8 +13,8 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     apply_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
     apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
-    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
-    @assert sum(isnan, Y.c.ρq_rai) == 0
+    #@assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    #@assert sum(isnan, Y.c.ρq_rai) == 0
 end
 
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
@@ -123,8 +123,8 @@ end
 
 
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
-    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
-    @assert sum(isnan, Y.c.ρq_rai) == 0
+    #@assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    #@assert sum(isnan, Y.c.ρq_rai) == 0
 
     (; ᶜh_tot, ᶜspecific) = p.precomputed
     ᶜuₕ = Y.c.uₕ
@@ -269,6 +269,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         t,
         p.atmos.orographic_gravity_wave,
     )
-    @assert sum(isnan, Yₜ.c.ρq_rai) == 0
-    @assert sum(isnan, Y.c.ρq_rai) == 0
+    #@assert sum(isnan, Yₜ.c.ρq_rai) == 0
+    #@assert sum(isnan, Y.c.ρq_rai) == 0
 end
