@@ -2,7 +2,7 @@
 #PBS -N equil_cal
 #PBS -A UCIT0011
 #PBS -q main
-#PBS -l select:1:ncpus=100:mem=8GB
+#PBS -l select=1:ngpus=1:mem=8GB
 #PBS -l walltime=12:00:00
 #PBS -l job_priority=regular
 #PBS -m abe
