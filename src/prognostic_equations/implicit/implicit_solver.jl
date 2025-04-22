@@ -455,11 +455,11 @@ NVTX.@annotate function ldiv!(
         @. x *= -A.dtγ_ref[]
     end
 
-    for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
-        if sum(isnan, parent(MatrixFields.get_field(x, name))) != 0
-            @info("ldiv: ", name)
-        end
-    end
+    #for name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρ), @name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_tot), @name(c.uₕ), @name(f.u₃))
+    #    if sum(isnan, parent(MatrixFields.get_field(x, name))) != 0
+    #        @info("ldiv: ", name)
+    #    end
+    #end
 end
 
 # This method for ldiv! is called by Krylov.jl from inside ClimaTimeSteppers.jl.
