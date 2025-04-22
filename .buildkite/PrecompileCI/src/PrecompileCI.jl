@@ -40,6 +40,9 @@ import ClimaParams
     # plane
     horizontal_mesh = CA.periodic_line_mesh(; x_max, x_elem)
     h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
+    config = CA.AtmosConfig()
+    config.parsed_args["t_end"] = config.parsed_args["dt"]
+    simulation = CA.get_simulation(config)
 end
 
 
