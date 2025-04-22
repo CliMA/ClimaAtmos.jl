@@ -1,0 +1,28 @@
+#!/bin/bash
+#PBS -N equil_cal
+#PBS -A UCIT0011
+#PBS -q main
+#PBS -l select:1:ncpus=100:mem=8GB
+#PBS -l walltime=12:00:00
+#PBS -l job_priority=regular
+#PBS -m abe
+#PBS -M oalcabes@caltech.edu
+#PBS -o cal.out
+#PBS -e cal.err
+
+# Use scratch for temporary files to avoid space limits in /tmp
+export TMPDIR=${SCRATCH}/temp
+mkdir -p ${TMPDIR}
+
+export CLIMACOMMS_DEVICE=CUDA
+export CLIMACOMMS_CONTEXT=SINGLETON
+export JULIA_CUDA_MEMORY_POOL=none
+#source /glade/u/apps/derecho/23.09/spack/opt/spack/lmod/8.7.24/gcc/7.5.0/c645/lmod/lmod/init/zsh
+
+export MODULEPATH="/glade/campaign/univ/ucit0011/ClimaModules-Derecho:$MODULEPATH"
+
+mv julia*.out juliaout/
+module purge
+module load climacommon/2025_02_25
+
+julia --project=. run_calibration.jl 2>&1 | tee -a workers.txt
