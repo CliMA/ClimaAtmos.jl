@@ -32,7 +32,7 @@ function process_member_data(simdir::SimDir)
     clw = 
         get(simdir; short_name = "clw", reduction = "average", period = "1days")
 
-    liquid_fraction = clw / (cli + clw)
+    liquid_fraction = clw / (cli + clw + eps(Float64))
 
     return slice(average_xy(liquid_fraction); time = 1days).data
 end
