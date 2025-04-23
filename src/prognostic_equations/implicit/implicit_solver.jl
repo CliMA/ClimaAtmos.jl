@@ -184,14 +184,14 @@ function ImplicitEquationJacobian(
         is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
-    tracer_names = (
-        @name(c.ρq_tot),
+    condensate_tracer_names = (
         @name(c.ρq_liq),
         @name(c.ρq_ice),
         @name(c.ρq_rai),
         @name(c.ρq_sno),
     )
-    available_tracer_names = MatrixFields.unrolled_filter(is_in_Y, tracer_names)
+    available_condensate_tracer_names = MatrixFields.unrolled_filter(is_in_Y, condensate_tracer_names)
+    available_tracer_names = (ρq_tot_if_available..., available_condensate_tracer_names...)
 
     # Note: We have to use FT(-1) * I instead of -I because inv(-1) == -1.0,
     # which means that multiplying inv(-1) by a Float32 will yield a Float64.
@@ -222,6 +222,15 @@ function ImplicitEquationJacobian(
         (@name(f.u₃), @name(c.uₕ)) => similar(Y.f, BidiagonalRow_C3xACTh),
         (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
     )
+
+    cloud_condensate_blocks = if atmos.moisture_model isa NonEquilMoistModel
+        (
+            (@name(c.ρq_liq), @name(c.ρq_tot)) => similar(Y.c, DiagonalRow),
+            (@name(c.ρq_ice), @name(c.ρq_tot)) => similar(Y.c, DiagonalRow),
+        )
+    else
+        ()
+    end
 
     diffused_scalar_names = (@name(c.ρe_tot), available_tracer_names...)
     diffusion_blocks = if use_derivative(diffusion_flag)
@@ -349,6 +358,7 @@ function ImplicitEquationJacobian(
         identity_blocks...,
         sgs_advection_blocks...,
         advection_blocks...,
+        cloud_condensate_blocks...,
         diffusion_blocks...,
         sgs_massflux_blocks...,
     )
@@ -360,13 +370,15 @@ function ImplicitEquationJacobian(
     end
 
     names₁_group₁ = (@name(c.ρ), sfc_if_available...)
-    names₁_group₂ = (available_tracer_names..., ρatke_if_available...)
-    names₁_group₃ = (@name(c.ρe_tot),)
+    names₁_group₂ = ρq_tot_if_available
+    names₁_group₃ = (available_condensate_tracer_names..., ρatke_if_available...)
+    names₁_group₄ = (@name(c.ρe_tot),)
     names₁ = (
         names₁_group₁...,
         available_sgs_scalar_names...,
         names₁_group₂...,
         names₁_group₃...,
+        names₁_group₄...,
     )
 
     alg₂ = MatrixFields.BlockLowerTriangularSolve(
@@ -384,7 +396,10 @@ function ImplicitEquationJacobian(
                         use_derivative(diffusion_flag) ?
                         (;
                             alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                                names₁_group₂...,
+                                @name(c.ρq_tot);
+                                alg₂ = MatrixFields.BlockLowerTriangularSolve(
+                                    names₁_group₃...,
+                                ),
                             )
                         ) : (;)
                     (;
@@ -404,7 +419,10 @@ function ImplicitEquationJacobian(
                     is_in_Y(@name(c.ρq_tot)) ?
                     (;
                         alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                            names₁_group₂...,
+                            @name(c.ρq_tot);
+                            alg₂ = MatrixFields.BlockLowerTriangularSolve(
+                                names₁_group₃...,
+                            ),
                         )
                     ) : (;)
                 end
@@ -786,6 +804,48 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwₚ) / ᶜρ) - (I,)
         end
 
+    end
+
+    if p.atmos.moisture_model isa NonEquilMoistModel
+        # TODO: Move this to Thermodynamics.jl
+        function Γₗ(tps, ts)
+            T = TD.air_temperature(tps, ts)
+            Rᵥ = TD.Parameters.R_v(tps)
+            cₚ_air = TD.cp_m(tps, ts)
+            Lᵥ = TD.latent_heat_vapor(tps, ts)
+            qᵥ_sat_liq = TD.q_vap_saturation_liquid(tps, ts)
+            dqsldT = qᵥ_sat_liq * (Lᵥ / (Rᵥ * T^2) - 1 / T)
+            return 1 + (Lᵥ / cₚ_air) * dqsldT
+        end
+        function Γᵢ(tps, ts)
+            T = TD.air_temperature(tps, ts)
+            Rᵥ = TD.Parameters.R_v(tps)
+            cₚ_air = TD.cp_m(tps, ts)
+            Lₛ = TD.latent_heat_sublim(tps, ts)
+            qᵥ_sat_ice = TD.q_vap_saturation_ice(tps, ts)
+            dqsidT = qᵥ_sat_ice * (Lₛ / (Rᵥ * T^2) - 1 / T)
+            return 1 + (Lₛ / cₚ_air) * dqsidT
+        end
+
+        cmc = CAP.microphysics_cloud_params(params)
+        τₗ = cmc.liquid.τ_relax
+        τᵢ = cmc.ice.τ_relax
+
+        #∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
+        #∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
+
+        ∂ᶜρqₗ_err_∂ᶜρqₜ = matrix[@name(c.ρq_liq), @name(c.ρq_tot)]
+        ∂ᶜρqᵢ_err_∂ᶜρqₜ = matrix[@name(c.ρq_ice), @name(c.ρq_tot)]
+
+        #@. ∂ᶜρqₗ_err_∂ᶜρqₗ -=
+        #    DiagonalMatrixRow(1 / (τₗ * Γₗ(thermo_params, ᶜts)))
+        #@. ∂ᶜρqᵢ_err_∂ᶜρqᵢ -=
+        #    DiagonalMatrixRow(1 / (τᵢ * Γᵢ(thermo_params, ᶜts)))
+
+        @. ∂ᶜρqₗ_err_∂ᶜρqₜ =
+            DiagonalMatrixRow(1 / (τₗ * Γₗ(thermo_params, ᶜts)))
+        @. ∂ᶜρqᵢ_err_∂ᶜρqₜ =
+            DiagonalMatrixRow(1 / (τᵢ * Γᵢ(thermo_params, ᶜts)))
     end
 
     if use_derivative(diffusion_flag)
