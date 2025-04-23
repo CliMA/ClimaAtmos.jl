@@ -831,16 +831,16 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         τₗ = cmc.liquid.τ_relax
         τᵢ = cmc.ice.τ_relax
 
-        #∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
-        #∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
+        ∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
+        ∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
 
         ∂ᶜρqₗ_err_∂ᶜρqₜ = matrix[@name(c.ρq_liq), @name(c.ρq_tot)]
         ∂ᶜρqᵢ_err_∂ᶜρqₜ = matrix[@name(c.ρq_ice), @name(c.ρq_tot)]
 
-        #@. ∂ᶜρqₗ_err_∂ᶜρqₗ -=
-        #    DiagonalMatrixRow(1 / (τₗ * Γₗ(thermo_params, ᶜts)))
-        #@. ∂ᶜρqᵢ_err_∂ᶜρqᵢ -=
-        #    DiagonalMatrixRow(1 / (τᵢ * Γᵢ(thermo_params, ᶜts)))
+        @. ∂ᶜρqₗ_err_∂ᶜρqₗ -=
+            DiagonalMatrixRow(1 / (τₗ * Γₗ(thermo_params, ᶜts)))
+        @. ∂ᶜρqᵢ_err_∂ᶜρqᵢ -=
+            DiagonalMatrixRow(1 / (τᵢ * Γᵢ(thermo_params, ᶜts)))
 
         @. ∂ᶜρqₗ_err_∂ᶜρqₜ =
             DiagonalMatrixRow(1 / (τₗ * Γₗ(thermo_params, ᶜts)))
