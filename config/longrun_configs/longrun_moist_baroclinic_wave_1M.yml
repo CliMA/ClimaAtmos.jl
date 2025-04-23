@@ -1,7 +1,7 @@
-h_elem: 30
+h_elem: 120
 z_elem: 43
 dz_bottom: 30.0
-dt: "60secs"
+dt: "40secs"
 approximate_linear_solve_iters: 3
 max_newton_iters_ode: 1
 rayleigh_sponge: true
