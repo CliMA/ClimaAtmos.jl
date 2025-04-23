@@ -349,12 +349,19 @@ function detrainment(
     max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
     max_area_limiter = FT(max_area_limiter_scale)*exp(-FT(max_area_limiter_power) * (FT(1.0) - ᶜaʲ))
     
+    # Define the sigmoid function
+    z_start = FT(20e3)  # 20 km
+    z_end = FT(63e3)    # Domain top, adjust as needed
+    steepness = FT(10) / (z_end - z_start)
+    max_value = FT(0.01) # Adjust this to your desired max value at the domain top
+    detr_top_lim = max_value / (1 + exp(-steepness * (ᶜz - (z_start + z_end) / 2)))
+
     if ᶜρaʲ <= 0
         detr = 0
     elseif ᶜw_vert_div >= 0
-        detr = max_area_limiter
+        detr = max_area_limiter + detr_top_lim
     else
-        detr = ᶜentr - ᶜw_vert_div + max_area_limiter
+        detr = ᶜentr - ᶜw_vert_div + max_area_limiter + detr_top_lim
     end
     return max(detr, 0)
 end
@@ -428,8 +435,8 @@ limit_detrainment(detr::FT, a, dt) where {FT} =
 
 function limit_turb_entrainment(dyn_entr::FT, turb_entr, dt) where {FT}
     # return max(min((FT(0.9) * 1 / float(dt)) - dyn_entr, turb_entr), 0)
-    return max(min(FT(0.02), turb_entr), 0)
-    # return max(min(turb_entr, FT(0.9) * 1 / float(dt)),0)
+    # return max(min(FT(0.02), turb_entr), 0)
+    return max(min(turb_entr, FT(0.9) * 1 / float(dt)),0)
 end
 
 # limit entrainment and detrainment rates for diagnostic EDMF
