@@ -46,3 +46,24 @@ function viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, s)
     zmax = z_max(axes(ᶠz))
     return @. lazy(β_viscous(s, ᶜz, zmax) * wdivₕ(ᶜρ * gradₕ(ᶜχ)))
 end
+
+function viscous_sponge_tendency_ρa(ᶜρa, s)
+    s isa Nothing && return NullBroadcasted()
+    (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜρa))
+    zmax = z_max(axes(ᶠz))
+    return @. lazy(β_viscous(s, ᶜz, zmax) * wdivₕ(gradₕ(ᶜρa)))
+end
+
+function viscous_sponge_tendency_mse(ᶜmse, s)
+    s isa Nothing && return NullBroadcasted()
+    (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜmse))
+    zmax = z_max(axes(ᶠz))
+    return @. lazy(β_viscous(s, ᶜz, zmax) * wdivₕ(gradₕ(ᶜmse)))
+end
+
+function viscous_sponge_tendency_q_tot(ᶜq_tot, s)
+    s isa Nothing && return NullBroadcasted()
+    (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜq_tot))
+    zmax = z_max(axes(ᶠz))
+    return @. lazy(β_viscous(s, ᶜz, zmax) * wdivₕ(gradₕ(ᶜq_tot)))
+end

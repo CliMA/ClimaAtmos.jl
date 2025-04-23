@@ -40,7 +40,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Yₜ.f.u₃
     ᶜρ = Y.c.ρ
-    (; forcing_type, moisture_model, rayleigh_sponge, viscous_sponge) = p.atmos
+    (; forcing_type, moisture_model, rayleigh_sponge, viscous_sponge, turbconv_model) = p.atmos
     (; ls_adv, edmf_coriolis) = p.atmos
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
@@ -63,6 +63,30 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ += rst_uₕ
     @. Yₜ.f.u₃.components.data.:1 += vst_u₃
     @. Yₜ.c.ρe_tot += vst_ρe_tot
+
+    # n = n_mass_flux_subdomains(turbconv_model)
+    # # Apply viscous sponge tendencies for updraft variables
+    # # if turbconv_model isa PrognosticEDMFX
+    # @show n
+    # for j in 1:n
+
+    #     # 
+    #     # vst_ρa = viscous_sponge_tendency_ρa(Y.c.sgsʲs.:($j).ρa, viscous_sponge)
+    #     vst_mse = viscous_sponge_tendency_mse(ᶜmseʲs.:(1), viscous_sponge)
+    #     # vst_q_tot = viscous_sponge_tendency_q_tot(Y.c.sgsʲs.:($j).q_tot, viscous_sponge)
+    #     # @. Yₜ.c.sgsʲs.:($j).ρa += vst_ρa
+    #     @. Yₜ.c.sgsʲs.:($$j).mse += vst_mse
+    #     # @. Yₜ.c.sgsʲs.:($j).q_tot += vst_q_tot
+    # end
+
+    # 
+    # vst_ρa = viscous_sponge_tendency_ρa(Y.c.sgsʲs.:(1).ρa, viscous_sponge)
+    vst_mse = viscous_sponge_tendency_mse(Y.c.sgsʲs.:(1).mse, viscous_sponge)
+    vst_q_tot = viscous_sponge_tendency_q_tot(Y.c.sgsʲs.:(1).q_tot, viscous_sponge)
+    # @. Yₜ.c.sgsʲs.:(1).ρa += vst_ρa
+    @. Yₜ.c.sgsʲs.:(1).mse += vst_mse
+    @. Yₜ.c.sgsʲs.:(1).q_tot += vst_q_tot
+
 
     # TODO: can we write this out explicitly?
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
