@@ -72,8 +72,8 @@ function _error(
     # There are some parameters, e.g. Obukhov length, for which Inf
     # is a reasonable value (implying a stability parameter in the neutral boundary layer
     # regime, for instance). We account for such instances with the `isfinite` function.
-    arr1 = isfinite.(Array(arr1))
-    arr2 = isfinite.(Array(arr2))
+    arr1 = Array(arr1) .* isfinite.(Array(arr1))
+    arr2 = Array(arr2) .* isfinite.(Array(arr2))
     diff = abs.(arr1 .- arr2)
     denominator = abs.(arr1)
     error = ifelse.(denominator .> ABS_TOL, diff ./ denominator, diff)
@@ -225,9 +225,7 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
 
     local_success = true
 
-    config = CA.AtmosConfig(test_dict; job_id, comms_ctx)
-
-    simulation = CA.get_simulation(config)
+    simulation = CA.AtmosSimulation(test_dict; job_id, comms_ctx)
     CA.solve_atmos!(simulation)
 
     # Check re-importing the same state
@@ -244,7 +242,7 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
         comms_ctx,
     )
 
-    simulation_restarted = CA.get_simulation(config_should_be_same)
+    simulation_restarted = CA.AtmosSimulation(config_should_be_same)
 
     if pkgversion(CA.RRTMGP) < v"0.22"
         # Versions of RRTMGP older than 0.22 have a bug and do not set the
@@ -278,7 +276,6 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :ghost_buffer,
             # Computed in tendencies (which are not computed in this case)
             :hyperdiff,
-            :precipitation,
             # rc is some CUDA/CuArray internal object that we don't care about
             :rc,
             # DataHandlers contains caches, so they are stateful
@@ -303,7 +300,7 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
         comms_ctx,
     )
 
-    simulation_restarted2 = CA.get_simulation(config2)
+    simulation_restarted2 = CA.AtmosSimulation(config2)
     CA.fill_with_nans!(simulation_restarted2.integrator.p)
 
     CA.solve_atmos!(simulation_restarted2)
@@ -414,12 +411,10 @@ if MANYTESTS
                             "enable_diagnostics" => false,
                             "output_dir" => joinpath(output_loc, job_id),
                         )
-                        more_ignore = Symbol[]
-
-                        if turbconv_mode == "prognostic_edmf"
-                            more_ignore = [:ᶠnh_pressure₃ʲs]
-                        end
-                        push!(TESTING, (; test_dict, job_id, more_ignore))
+                        push!(
+                            TESTING,
+                            (; test_dict, job_id, more_ignore = Symbol[]),
+                        )
                     end
                 end
             end

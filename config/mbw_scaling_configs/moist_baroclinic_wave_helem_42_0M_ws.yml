@@ -8,5 +8,5 @@ initial_condition: "MoistBaroclinicWave"
 moist: "equil"
 precip_model: "0M"
 dt_save_state_to_disk: "Inf"
-dt_save_to_sol: "Inf"
+disable_surface_flux_tendency: true
 output_default_diagnostics: false

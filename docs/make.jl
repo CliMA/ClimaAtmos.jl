@@ -36,6 +36,7 @@ makedocs(;
         "Topography Representation" => "topography.md",
         "Tracers" => "tracers.md",
         "Radiative Equilibrium" => "radiative_equilibrium.md",
+        "Single Column Model" => "single_column_prospect.md",
         "Restarts and checkpoints" => "restarts.md",
         "REPL scripts" => "repl_scripts.md",
         "Configuration" => "config.md",

@@ -1,4 +1,4 @@
-import FastGaussQuadrature
+import ClimaCore.Quadratures.GaussQuadrature as GQ
 import StaticArrays as SA
 import Thermodynamics as TD
 import Dates
@@ -44,7 +44,7 @@ struct SGSQuadrature{N, A, W} <: AbstractSGSamplingType
         N = quadrature_order
         # TODO: double check this python-> julia translation
         # a, w = np.polynomial.hermite.hermgauss(N)
-        a, w = FastGaussQuadrature.gausshermite(N)
+        a, w = GQ.hermite(FT, N)
         a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
         return new{N, typeof(a), typeof(w)}(a, w)
     end
@@ -90,6 +90,7 @@ abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct ZonallyAsymmetricSST <: AbstractSST end
 struct RCEMIPIISST <: AbstractSST end
+struct ExternalTVColumnSST <: AbstractSST end
 
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
@@ -99,6 +100,7 @@ struct TimeVaryingInsolation <: AbstractInsolation
 end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
+struct ExternalTVInsolation <: AbstractInsolation end
 
 """
     AbstractOzone
@@ -211,13 +213,16 @@ abstract type AbstractVerticalDiffusion end
 Base.@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
     C_E::FT
 end
-diffuse_momentum(::VerticalDiffusion{DM}) where {DM} = DM
+disable_momentum_vertical_diffusion(::VerticalDiffusion{DM}) where {DM} = DM
 Base.@kwdef struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
     H::FT
     D₀::FT
 end
-diffuse_momentum(::DecayWithHeightDiffusion{DM}) where {DM} = DM
-diffuse_momentum(::Nothing) = false
+disable_momentum_vertical_diffusion(::DecayWithHeightDiffusion{DM}) where {DM} =
+    DM
+disable_momentum_vertical_diffusion(::Nothing) = false
+
+struct SurfaceFlux end
 
 abstract type AbstractSponge end
 Base.Broadcast.broadcastable(x::AbstractSponge) = tuple(x)
@@ -236,7 +241,7 @@ Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
 end
 
 abstract type AbstractGravityWave end
-Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
+Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
     source_pressure::FT = 31500
     damp_pressure::FT = 85
     source_height::FT = 15000
@@ -286,6 +291,15 @@ end
 struct GCMForcing{FT}
     external_forcing_file::String
     cfsite_number::String
+end
+
+"""
+    ExternalDrivenTVForcing
+    
+Forcing specified by external forcing file and a start date.
+"""
+struct ExternalDrivenTVForcing{FT}
+    external_forcing_file::String
 end
 
 struct ISDACForcing end
@@ -507,7 +521,6 @@ Base.@kwdef struct AtmosModel{
     EXTFORCING,
     EC,
     AT,
-    TM,
     EDMFX,
     TCM,
     NOGW,
@@ -516,6 +529,8 @@ Base.@kwdef struct AtmosModel{
     VD,
     DM,
     SAM,
+    SEDM,
+    SNPM,
     SMM,
     VS,
     SL,
@@ -545,7 +560,6 @@ Base.@kwdef struct AtmosModel{
     external_forcing::EXTFORCING = nothing
     edmf_coriolis::EC = nothing
     advection_test::AT = nothing
-    tendency_model::TM = nothing
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     non_orographic_gravity_wave::NOGW = nothing
@@ -554,12 +568,19 @@ Base.@kwdef struct AtmosModel{
     vert_diff::VD = nothing
     diff_mode::DM = nothing
     sgs_adv_mode::SAM = nothing
+    """sgs_entr_detr_mode == Implicit() only works if sgs_adv_mode == Implicit()"""
+    sgs_entr_detr_mode::SEDM = nothing
+    """sgs_nh_pressure_mode == Implicit() only works if sgs_adv_mode == Implicit()"""
+    sgs_nh_pressure_mode::SNPM = nothing
+    """sgs_mf_mode == Implicit() only works if sgs_adv_mode == Implicit() and diff_mode == Implicit()"""
     sgs_mf_mode::SMM = nothing
     viscous_sponge::VS = nothing
     smagorinsky_lilly::SL = nothing
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
     insolation::IN = nothing
+    """Whether to apply surface flux tendency (independent of surface conditions)"""
+    disable_surface_flux_tendency::Bool = false
     surface_model::SM = nothing
     surface_albedo::SA = nothing
     numerics::NUM = nothing

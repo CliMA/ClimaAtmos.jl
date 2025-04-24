@@ -9,7 +9,7 @@ dt_rad: "3hours"
 t_end: "654days"
 dz_bottom: 30.0
 config: "column"
-dt_save_to_sol: "30hours"
+disable_surface_flux_tendency: true
 rad: "gray"
 # [2, 2, 80] instead of [1, 1, 80] because Julia ranges are inclusive of the
 # extrema. Given that our columns are 3D, we cannot map the horizontal dimension

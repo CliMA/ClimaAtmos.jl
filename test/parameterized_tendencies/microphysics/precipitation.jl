@@ -10,6 +10,8 @@ import CloudMicrophysics as CM
 include("../../test_helpers.jl")
 
 import Test
+import Test: @testset
+import Test: @test
 
 @testset "Equilibrium Moisture + 0-moment precipitation RHS terms" begin
 
@@ -33,22 +35,23 @@ import Test
     (; turbconv_model, moisture_model, precip_model) = p.atmos
 
     # Test cache to verify expected variables exist in tendency function
-    precip_cache = CA.precipitation_cache(Y, precip_model)
+    CA.set_precipitation_velocities!(Y, p, moisture_model, precip_model)
+    CA.set_precipitation_cache!(Y, p, precip_model, turbconv_model)
+    CA.set_precipitation_surface_fluxes!(Y, p, precip_model)
     test_varnames = (
         :ᶜS_ρq_tot,
         :ᶜS_ρe_tot,
-        :ᶜ3d_rain,
-        :ᶜ3d_snow,
         :surface_rain_flux,
         :surface_snow_flux,
+        :ᶜwₜqₜ,
+        :ᶜwₕhₜ,
     )
     for var_name in test_varnames
-        @test var_name ∈ propertynames(precip_cache)
+        @test var_name ∈ propertynames(p.precomputed)
     end
 
     # No NaNs in cache
-    CA.compute_precipitation_cache!(Y, p, precip_model, turbconv_model)
-    @test maximum(abs.(p.precipitation.ᶜS_ρq_tot)) <= sqrt(eps(FT))
+    @test maximum(abs.(p.precomputed.ᶜS_ρq_tot)) <= sqrt(eps(FT))
 
     # Test that tendencies result in correct water-mass budget,
     # and that the tendency modification corresponds exactly to the
@@ -63,11 +66,12 @@ import Test
         turbconv_model,
     )
     @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
-    @test ᶜYₜ.c.ρ == p.precipitation.ᶜS_ρq_tot
+    @test ᶜYₜ.c.ρ == p.precomputed.ᶜS_ρq_tot
 
     # No cloud condensation tendency for the equilibrium model
     @test CA.cloud_condensate_tendency!(
         ᶜYₜ,
+        Y,
         p,
         moisture_model,
         precip_model,
@@ -96,11 +100,25 @@ end
     (; turbconv_model, moisture_model, precip_model) = p.atmos
 
     # Test cache to verify expected variables exist in tendency function
-    precip_cache = CA.precipitation_cache(Y, precip_model)
-    test_varnames =
-        (:ᶜSqₗᵖ, :ᶜSqᵢᵖ, :ᶜSqᵣᵖ, :ᶜSqₛᵖ, :surface_rain_flux, :surface_snow_flux)
+    CA.set_precipitation_velocities!(Y, p, moisture_model, precip_model)
+    CA.set_precipitation_cache!(Y, p, precip_model, turbconv_model)
+    CA.set_precipitation_surface_fluxes!(Y, p, precip_model)
+    test_varnames = (
+        :ᶜSqₗᵖ,
+        :ᶜSqᵢᵖ,
+        :ᶜSqᵣᵖ,
+        :ᶜSqₛᵖ,
+        :surface_rain_flux,
+        :surface_snow_flux,
+        :ᶜwₗ,
+        :ᶜwᵢ,
+        :ᶜwᵣ,
+        :ᶜwₛ,
+        :ᶜwₜqₜ,
+        :ᶜwₕhₜ,
+    )
     for var_name in test_varnames
-        @test var_name ∈ propertynames(precip_cache)
+        @test var_name ∈ propertynames(p.precomputed)
     end
 
     # test helper functions
@@ -135,7 +153,7 @@ end
     @assert iszero(ᶜYₜ.c.ρ)
 
     # test nonequilibrium cloud condensate
-    CA.cloud_condensate_tendency!(ᶜYₜ, p, moisture_model, precip_model)
+    CA.cloud_condensate_tendency!(ᶜYₜ, Y, p, moisture_model, precip_model)
     @assert !any(isnan, ᶜYₜ.c.ρq_liq)
     @assert !any(isnan, ᶜYₜ.c.ρq_ice)
 

@@ -9,6 +9,7 @@ z_stretch: false
 x_elem: 80
 config: "plane"
 z_max: 6400.0
+disable_surface_flux_tendency: true
 output_default_diagnostics: false
 diagnostics:
   - short_name: thetaa

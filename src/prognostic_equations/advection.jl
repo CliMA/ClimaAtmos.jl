@@ -65,6 +65,21 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
                 wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
                 Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
+            if p.atmos.moisture_model isa NonEquilMoistModel &&
+               p.atmos.precip_model isa Microphysics1Moment
+                @. Yₜ.c.sgsʲs.:($$j).q_liq -=
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_liq * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).q_liq * wdivₕ(ᶜuʲs.:($$j))
+                @. Yₜ.c.sgsʲs.:($$j).q_ice -=
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_ice * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).q_ice * wdivₕ(ᶜuʲs.:($$j))
+                @. Yₜ.c.sgsʲs.:($$j).q_rai -=
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_rai * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).q_rai * wdivₕ(ᶜuʲs.:($$j))
+                @. Yₜ.c.sgsʲs.:($$j).q_sno -=
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_sno * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).q_sno * wdivₕ(ᶜuʲs.:($$j))
+            end
         end
     end
     return nothing
@@ -115,21 +130,27 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
     ᶜρ = Y.c.ρ
-    if :ρe_tot in propertynames(Yₜ.c)
-        (; ᶜh_tot) = p.precomputed
-        for (coeff, upwinding) in ((1, energy_upwinding), (-1, Val(:none)))
-            energy_upwinding isa Val{:none} && continue
-            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), upwinding)
-            @. Yₜ.c.ρe_tot += coeff * vtt
-        end
-    end
+
+    # Full vertical advection of passive tracers (like liq, rai, etc) ...
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
-        for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
-            tracer_upwinding isa Val{:none} && continue
-            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), upwinding)
-            @. ᶜρχₜ += coeff * vtt
-        end
+        χ_name in (:e_tot, :q_tot) && continue
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), tracer_upwinding)
+        @. ᶜρχₜ += vtt
+    end
+    # ... and upwinding correction of energy and total water.
+    # (The central advection of energy and total water is done implicitly.)
+    if energy_upwinding != Val(:none)
+        (; ᶜh_tot) = p.precomputed
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
+        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
+        @. Yₜ.c.ρe_tot += vtt - vtt_central
+    end
+
+    if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
+        ᶜq_tot = ᶜspecific.q_tot
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
+        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
+        @. Yₜ.c.ρq_tot += vtt - vtt_central
     end
 
     if isnothing(ᶠf¹²)
@@ -180,6 +201,8 @@ function edmfx_sgs_vertical_advection_tendency!(
     (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
 
+    turbconv_params = CAP.turbconv_params(params)
+    α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     ᶠz = Fields.coordinate_field(Y.f).z
     ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜu₃ʲ = p.scratch.ᶜtemp_C3
@@ -194,9 +217,10 @@ function edmfx_sgs_vertical_advection_tendency!(
         )
         # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
         # and calcuate the buoyancy term relative to the grid-mean density.
+        # We also include the buoyancy term in the nonhydrostatic pressure closure here.
         @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-            (ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρʲs.:($$j)) +
-            ᶠgradᵥ(ᶜKᵥʲ)
+            (1 - α_b) * (ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) * ᶠgradᵥ_ᶜΦ) /
+            ᶠinterp(ᶜρʲs.:($$j)) + ᶠgradᵥ(ᶜKᵥʲ)
 
         # buoyancy term in mse equation
         @. Yₜ.c.sgsʲs.:($$j).mse +=
@@ -229,5 +253,35 @@ function edmfx_sgs_vertical_advection_tendency!(
             edmfx_upwinding,
         )
         @. Yₜ.c.sgsʲs.:($$j).q_tot += va
+        if p.atmos.moisture_model isa NonEquilMoistModel &&
+           p.atmos.precip_model isa Microphysics1Moment
+            # TODO - add precipitation terminal velocity
+            # TODO - add cloud sedimentation velocity
+            # TODO - add their contributions to mean energy and mass
+            va = vertical_advection(
+                ᶠu³ʲs.:($j),
+                Y.c.sgsʲs.:($j).q_liq,
+                edmfx_upwinding,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_liq += va
+            va = vertical_advection(
+                ᶠu³ʲs.:($j),
+                Y.c.sgsʲs.:($j).q_ice,
+                edmfx_upwinding,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_ice += va
+            va = vertical_advection(
+                ᶠu³ʲs.:($j),
+                Y.c.sgsʲs.:($j).q_rai,
+                edmfx_upwinding,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_rai += va
+            va = vertical_advection(
+                ᶠu³ʲs.:($j),
+                Y.c.sgsʲs.:($j).q_sno,
+                edmfx_upwinding,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_sno += va
+        end
     end
 end

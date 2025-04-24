@@ -30,20 +30,26 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 
+
+    if p.atmos.sgs_entr_detr_mode == Implicit()
+        edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    end
+
     if p.atmos.sgs_mf_mode == Implicit()
         edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    end
+
+    if p.atmos.sgs_nh_pressure_mode == Implicit()
+        edmfx_nh_pressure_drag_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
-    # NOTE: This will zero out all monmentum tendencies in the edmfx advection test
+    # NOTE: This will zero out all momentum tendencies in the edmfx advection test
     # please DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)
 
-    # NOTE: This will zero out all tendencies
-    # please DO NOT add additional tendencies after this function
-    zero_tendency!(Yₜ, Y, p, t, p.atmos.tendency_model, p.atmos.turbconv_model)
     return nothing
 end
 
@@ -126,17 +132,18 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
-    # Central advection of active tracers (e_tot and q_tot)
+    # Central vertical advection of active tracers (e_tot and q_tot)
     vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     @. Yₜ.c.ρe_tot += vtt
-
     if !(moisture_model isa DryModel)
         vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜspecific.q_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot += vtt
     end
 
-    #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
-
+    # Vertical advection of passive tracers with the mean flow
+    # is done in the explicit tendency.
+    # Here we add the vertical advection with precipitation terminal velocity
+    # using downward biasing and free outflow bottom boundary condition
     if moisture_model isa NonEquilMoistModel
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed
         @. Yₜ.c.ρq_liq -= ᶜprecipdivᵥ(
@@ -148,12 +155,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶠright_bias(Geometry.WVector(-(ᶜwᵢ)) * ᶜspecific.q_ice),
         )
     end
-
     if precip_model isa Microphysics1Moment
-        # Advection of precipitation with the mean flow
-        # is done with other passive tracers in the explicit tendency.
-        # Here we add the advection with precipitation terminal velocity
-        # using downward biasing and free outflow bottom boundary condition
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ *
@@ -164,6 +166,9 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶠright_bias(Geometry.WVector(-(ᶜwₛ)) * ᶜspecific.q_sno),
         )
     end
+
+    # TODO - decide if this needs to be explicit or implicit
+    #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
     @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜp) / ᶠinterp(Y.c.ρ) + ᶠgradᵥ_ᶜΦ
 

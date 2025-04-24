@@ -12,20 +12,32 @@ end
 
 function get_sfc_temperature_form(parsed_args)
     surface_temperature = parsed_args["surface_temperature"]
-    @assert surface_temperature in
-            ("ZonallyAsymmetric", "ZonallySymmetric", "RCEMIPII")
+    @assert surface_temperature in (
+        "ZonallyAsymmetric",
+        "ZonallySymmetric",
+        "RCEMIPII",
+        "ReanalysisTimeVarying",
+    )
     return if surface_temperature == "ZonallyAsymmetric"
         ZonallyAsymmetricSST()
     elseif surface_temperature == "ZonallySymmetric"
         ZonallySymmetricSST()
     elseif surface_temperature == "RCEMIPII"
         RCEMIPIISST()
+    elseif surface_temperature == "ReanalysisTimeVarying"
+        ExternalTVColumnSST()
     end
 end
 
 function get_insolation_form(parsed_args)
     insolation = parsed_args["insolation"]
-    @assert insolation in ("idealized", "timevarying", "rcemipii", "gcmdriven")
+    @assert insolation in (
+        "idealized",
+        "timevarying",
+        "rcemipii",
+        "gcmdriven",
+        "externaldriventv",
+    )
     return if insolation == "idealized"
         IdealizedInsolation()
     elseif insolation == "timevarying"
@@ -37,6 +49,8 @@ function get_insolation_form(parsed_args)
         RCEMIPIIInsolation()
     elseif insolation == "gcmdriven"
         GCMDrivenInsolation()
+    elseif insolation == "externaldriventv"
+        ExternalTVInsolation()
     end
 end
 
@@ -76,7 +90,7 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
 end
 
 function get_vertical_diffusion_model(
-    diffuse_momentum,
+    disable_momentum_vertical_diffusion,
     parsed_args,
     params,
     ::Type{FT},
@@ -86,9 +100,14 @@ function get_vertical_diffusion_model(
     return if vert_diff_name in ("false", false, "none")
         nothing
     elseif vert_diff_name in ("true", true, "VerticalDiffusion")
-        VerticalDiffusion{diffuse_momentum, FT}(; C_E = vdp.C_E)
+        VerticalDiffusion{disable_momentum_vertical_diffusion, FT}(;
+            C_E = vdp.C_E,
+        )
     elseif vert_diff_name in ("DecayWithHeightDiffusion",)
-        DecayWithHeightDiffusion{diffuse_momentum, FT}(; H = vdp.H, D₀ = vdp.D₀)
+        DecayWithHeightDiffusion{disable_momentum_vertical_diffusion, FT}(;
+            H = vdp.H,
+            D₀ = vdp.D₀,
+        )
     else
         error("Uncaught diffusion model `$vert_diff_name`.")
     end
@@ -164,9 +183,9 @@ function get_non_orographic_gravity_wave_model(
     @assert nogw_name in (true, false)
     return if nogw_name == true
         if parsed_args["config"] == "column"
-            NonOrographyGravityWave{FT}(; Bw = 1.2, Bn = 0.0, Bt_0 = 4e-3)
+            NonOrographicGravityWave{FT}(; Bw = 1.2, Bn = 0.0, Bt_0 = 4e-3)
         elseif parsed_args["config"] == "sphere"
-            NonOrographyGravityWave{FT}(;
+            NonOrographicGravityWave{FT}(;
                 Bw = 0.4,
                 Bn = 0.0,
                 cw = 35.0,
@@ -403,17 +422,49 @@ function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
 
-function get_external_forcing_model(parsed_args)
+function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
     external_forcing = parsed_args["external_forcing"]
-    @assert external_forcing in (nothing, "GCM", "ISDAC")
+    @assert external_forcing in
+            (nothing, "GCM", "ReanalysisTimeVarying", "ISDAC")
+    reanalysis_required_fields = map(
+        x -> parsed_args[x],
+        [
+            "external_forcing",
+            "surface_setup",
+            "surface_temperature",
+            "initial_condition",
+        ],
+    )
+    if any(reanalysis_required_fields .== "ReanalysisTimeVarying")
+        @assert all(reanalysis_required_fields .== "ReanalysisTimeVarying") "All of external_forcing, surface_setup, surface_temperature and initial_condition must be set to ReanalysisTimeVarying."
+        @assert parsed_args["config"] == "column" "ReanalysisTimeVarying is only supported in column mode."
+    end
     return if isnothing(external_forcing)
         nothing
     elseif external_forcing == "GCM"
-        DType = Float64  # TODO: Read from `parsed_args`
-        GCMForcing{DType}(
-            parsed_args["external_forcing_file"],
-            parsed_args["cfsite_number"],
+        cfsite_number_str = parsed_args["cfsite_number"]
+
+        GCMForcing{FT}(parsed_args["external_forcing_file"], cfsite_number_str)
+
+    elseif external_forcing == "ReanalysisTimeVarying"
+        external_forcing_file = get_external_forcing_file_path(parsed_args)
+        if !isfile(external_forcing_file) ||
+           !check_external_forcing_file_times(
+            external_forcing_file,
+            parsed_args,
         )
+            @info "External forcing file $(external_forcing_file) does not exist or does not cover the expected time range. Generating it now."
+            # generate forcing from provided era5 data paths
+            generate_external_era5_forcing_file(
+                parsed_args["site_latitude"],
+                parsed_args["site_longitude"],
+                parsed_args["start_date"],
+                external_forcing_file,
+                FT,
+            )
+        end
+
+        ExternalDrivenTVForcing{FT}(external_forcing_file)
     elseif external_forcing == "ISDAC"
         ISDACForcing()
     end
@@ -518,18 +569,6 @@ end
 function get_tracers(parsed_args)
     aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
     return (; aerosol_names)
-end
-
-function get_tendency_model(parsed_args)
-    zero_tendency_name = parsed_args["zero_tendency"]
-    @assert zero_tendency_name in (nothing, "grid_scale", "subgrid_scale")
-    return if zero_tendency_name == "grid_scale"
-        NoGridScaleTendency()
-    elseif zero_tendency_name == "subgrid_scale"
-        NoSubgridScaleTendency()
-    elseif isnothing(zero_tendency_name)
-        UseAllTendency()
-    end
 end
 
 function check_case_consistency(parsed_args)

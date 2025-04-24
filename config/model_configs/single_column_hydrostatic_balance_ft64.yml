@@ -5,7 +5,7 @@ dt_save_state_to_disk: "5days"
 initial_condition: "IsothermalProfile"
 config: "column"
 hyperdiff: false
+disable_surface_flux_tendency: true
 dt: "3hours"
 FLOAT_TYPE: "Float64"
 reproducibility_test: true
-dt_save_to_sol: "3hours"

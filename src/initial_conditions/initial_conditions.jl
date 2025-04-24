@@ -1140,7 +1140,7 @@ function (initial_condition::TRMM_LBA)(params)
 
     # Set q_tot to the value implied by the measured pressure and relative
     # humidity profiles (see the definition of relative humidity and equation 37
-    # in Pressel et al.). Note that the measured profiles are different from the
+    # in Pressel et al., 2015). Note that the measured profiles are different from the
     # ones required for hydrostatic balance.
     # TODO: Move this to APL.
     molmass_ratio = TD.Parameters.molmass_ratio(thermo_params)
@@ -1284,6 +1284,81 @@ function gcm_initial_conditions(external_forcing_file, cfsite_number)
             vec(mean(1 ./ ds.group[cfsite_number]["alpha"][:, :], dims = 2)), # convert alpha to rho using rho=1/alpha, take average profile
         )
     end
+end
+
+"""
+    InterpolatedColumnProfile <: InitialCondition
+
+Initial data condition for a column model. Stored as a tuple of Interpolation
+objects. Temperature, zonal wind velocity, meridional wind velocity,
+total specific humidity, and density are all needed to construct the initial
+condition. Type `F` must be callable, i.e., F(z) where z is a number. This
+could be an Interpolations.Extrapolation object or a function.
+"""
+struct InterpolatedColumnProfile{F} <: InitialCondition
+    "temperature"
+    T::F
+    "zonal wind velocity"
+    u::F
+    "meridional wind velocity"
+    v::F
+    "total specific humidity"
+    q_tot::F
+    "air density"
+    ρ₀::F
+end
+
+function (initial_condition::InterpolatedColumnProfile)(params)
+    (; T, u, v, q_tot, ρ₀) = initial_condition
+    thermo_params = CAP.thermodynamics_params(params)
+    function local_state(local_geometry)
+        (; z) = local_geometry.coordinates
+        FT = typeof(z)
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = ts = TD.PhaseEquil_ρTq(
+                thermo_params,
+                FT(ρ₀(z)),
+                FT(T(z)),
+                FT(q_tot(z)),
+            ),
+            velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
+            turbconv_state = EDMFState(; tke = FT(0)),
+        )
+    end
+    return local_state
+end
+
+"""
+    external_tv_initial_condition(external_forcing_file, start_date)
+
+Returns an `InterpolatedColumnProfile` object with the initial conditions
+from the external forcing file for time varying data. The
+`external_forcing_file` is a NetCDF file containing the external forcing
+data, and `start_date` is a string in the format "yyyymmdd" that specifies
+the date to use for the initial conditions.
+"""
+function external_tv_initial_condition(external_forcing_file, start_date)
+    start_date = Dates.DateTime(start_date, "yyyymmdd")
+    z, T, u, v, q_tot, ρ₀ = NC.NCDataset(external_forcing_file) do ds
+        time_index = argmin(abs.(ds["time"][:] .- start_date))
+        (
+            z = ds["z"][:],
+            T = ds["ta"][1, 1, :, time_index],
+            u = ds["ua"][1, 1, :, time_index],
+            v = ds["va"][1, 1, :, time_index],
+            q_tot = ds["hus"][1, 1, :, time_index],
+            ρ₀ = ds["rho"][1, 1, :, time_index],
+        )
+    end
+    T, u, v, q_tot, ρ₀ = map((T, u, v, q_tot, ρ₀)) do value
+        Intp.extrapolate(
+            Intp.interpolate((z,), value, Intp.Gridded(Intp.Linear())),
+            Intp.Flat(),
+        )
+    end
+    return InterpolatedColumnProfile(T, u, v, q_tot, ρ₀)
 end
 
 Base.@kwdef struct ISDAC <: InitialCondition

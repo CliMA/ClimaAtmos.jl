@@ -5,4 +5,5 @@ reproducibility_test_job_ids() = [
     "aquaplanet_equil_allsky_gw_raw_zonalasym",
     "diagnostic_edmfx_aquaplanet",
     "single_column_hydrostatic_balance_ft64",
+    "prognostic_edmfx_aquaplanet",
 ]

@@ -1,10 +1,55 @@
 ClimaAtmos.jl Release Notes
 ============================
 
+main
+-------
+
+v0.30.0
+-------
+
+### Add support for reanalysis-driven single column model with time-varying forcing
+PR [#3758](https://github.com/CliMA/ClimaAtmos.jl/pull/3758) adds support for driving single-column model (SCM) simulations with time-varying ERA5 reanalysis data. This extends the existing GCM-driven SCM interface to allow site-specific simulations that resolve the diurnal cycle and are suited for calibration against observations. Users can now run reanalysis-driven cases globally using only a date and lat/lon, thanks to integrated data handling via ClimaArtifacts.jl. See the updated “Single Column Model” docs page for details on setup, variable requirements, and how to prepare ERA5 input files.
+
+### Non-orographic gravity wave tendency as a callback
+
+PR[#3761](https://github.com/CliMA/ClimaAtmos.jl/pull/3761) introduces support for intermittent calls to update the computation of non-orographic gravity wave tendencies. This PR closes issue[#3434](https://github.com/CliMA/ClimaAtmos.jl/issues/3434).
+
+### Remove `dt_save_to_sol`
+
+The option to save the solution to the integrator object (`dt_save_to_sol`) was
+removed from the configurable options.
+
+v0.29.1
+-------
+
+### Remove contribution from condensate, precip diffusion in mass tendency
+PR[#3721](https://github.com/CliMA/ClimaAtmos.jl/pull/3721)
+Diffusion of condensate (liq, ice) and precip (rai, sno) vars no longer
+contributes to the mass tendency terms (updates in vert diffusion boundary layer,
+smag-lilly, implicit solver terms)
+
+### Add support for non-zero `t_start`
+
+Passing a non zero `t_start` is useful in conditions where one wants to have a
+specific `start_date`, but start the simulation from a different point. This is
+used by `ClimaCoupler` to restart simulations.
+
+v0.29.0
+-------
+
+### Remove precipitation from cache
+And move all the fields into precomputed
+
 v0.28.6
 -------
 
 ### Features
+
+### Add a flag for disabling surface flux tendency
+Surface flux tendency is not controlled by `vert_diff` or `edmfx_sgs_diffusive_flux` anymore.
+Instead, it is controlled by the new flag `disable_surface_flux_tendency`. When it is set to
+true, no surface flux tendency is applied, no matter what `surface_setup` is.
+This flag is set to false by default. PR [3670](https://github.com/CliMA/ClimaAtmos.jl/pull/3670).
 
 ### Automatically determine diagnostic resolution based on model resolution
 
@@ -33,7 +78,7 @@ scheme (not the Mass-Flux).
 
 ### Update default configuration to use deep-atmosphere eqns, fix diagnostic bug
 PR [3422](https://github.com/CliMA/ClimaAtmos.jl/pull/3422)
-Updates the `default_config` to set `deep_atmosphere=true`, and updates the 
+Updates the `default_config` to set `deep_atmosphere=true`, and updates the
 `rv` relative vorticity diagnostic to store the curl of horizontal velocity.
 
 ### Allow different sizes of dust and sea salt for radiation
@@ -59,14 +104,14 @@ more established and better developed tools:
 - instead of `up_deps`, use `PkgDevTools`.
 See the [documentation](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/#Formatting) for more information.
 
-`ClimaAtmos` now only support equilibrium moisture + 0-moment microphysics and 
+`ClimaAtmos` now only support equilibrium moisture + 0-moment microphysics and
 nonequilibrium + 1-moment microphysics (No precipitation is still supported too).
 PR [3557](https://github.com/CliMA/ClimaAtmos.jl/pull/3557)
 
 ### File Logging
 
 `ClimaAtmos` now supports logging to stdout and file simultaneously using
-`ClimaComms.FileLogger`. To enable, set the configuration with `log_to_file = false`. 
+`ClimaComms.FileLogger`. To enable, set the configuration with `log_to_file = false`.
 See [ClimaComms documentation](https://clima.github.io/ClimaComms.jl/dev/logging/)
  for more background on logging.
 

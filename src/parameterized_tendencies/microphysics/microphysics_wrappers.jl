@@ -35,6 +35,33 @@ function limit(q, dt, n::Int)
 end
 
 """
+    ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
+
+ - cmc - a struct with cloud and aerosol parameters
+ - c_dust, c_seasalt, c_SO4 - dust, seasalt and ammonium sulfate mass concentrations [kg/kg]
+ - q_liq - liquid water specific humidity
+
+Returns the liquid cloud droplet number concentration diagnosed based on the
+aerosol loading and cloud liquid water.
+"""
+function ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
+    # We can also add w, T, RH, w' ...
+    # Also consider lookind only at around cloud base height
+    (; α_dust, α_seasalt, α_SO4, α_q_liq) = cmc.aml
+    (; c₀_dust, c₀_seasalt, c₀_SO4, q₀_liq) = cmc.aml
+    N₀ = cmc.N_cloud_liquid_droplets
+
+    FT = eltype(N₀)
+    return N₀ * (
+        FT(1) +
+        α_dust * (log(max(c_dust, eps(FT))) - log(c₀_dust)) +
+        α_seasalt * (log(max(c_seasalt, eps(FT))) - log(c₀_seasalt)) +
+        α_SO4 * (log(max(c_SO4, eps(FT))) - log(c₀_SO4)) +
+        α_q_liq * (log(max(q_liq, eps(FT))) - log(q₀_liq))
+    )
+end
+
+"""
     cloud_sources(cm_params, thp, ts, dt)
 
  - cm_params - CloudMicrophysics parameters struct for cloud water or ice condensate

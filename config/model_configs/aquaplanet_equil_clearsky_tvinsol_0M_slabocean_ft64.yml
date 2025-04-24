@@ -11,4 +11,4 @@ rad: "clearsky"
 insolation: "timevarying"
 dt_rad: "1hours"
 prognostic_surface: "PrognosticSurfaceTemperature"
-#check_conservation: true
+check_conservation: true

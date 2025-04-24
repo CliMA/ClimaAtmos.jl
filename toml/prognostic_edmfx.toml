@@ -44,4 +44,4 @@ value = 0
 value = 40.0
 
 [precipitation_timescale]
-value = 10
+value = 100

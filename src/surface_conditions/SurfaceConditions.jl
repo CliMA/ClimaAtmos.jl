@@ -6,6 +6,7 @@ import ..DryModel
 import ..ZonallyAsymmetricSST
 import ..ZonallySymmetricSST
 import ..RCEMIPIISST
+import ..ExternalTVColumnSST
 import ..PrognosticSurfaceTemperature
 import ..PrescribedSurfaceTemperature
 import ..gcm_driven_timeseries
@@ -16,8 +17,10 @@ import ..get_wstar
 
 import ClimaCore: DataLayouts, Geometry, Fields
 import ClimaCore.Geometry: ⊗
+import ClimaCore.Utilities: half
 import SurfaceFluxes as SF
 import Thermodynamics as TD
+import ClimaUtilities.TimeVaryingInputs: evaluate!
 
 import Interpolations
 import StaticArrays as SA

@@ -1,6 +1,7 @@
 module ClimaAtmos
 
 using NVTX
+import Adapt
 import NullBroadcasts: NullBroadcasted
 import LazyBroadcast
 import LazyBroadcast: lazy
@@ -20,6 +21,7 @@ include(joinpath("utils", "utilities.jl"))
 include(joinpath("utils", "debug_utils.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
 include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
+include(joinpath("utils", "era5_observations_to_forcing_file.jl"))
 
 include(joinpath("utils", "AtmosArtifacts.jl"))
 import .AtmosArtifacts as AA
@@ -27,9 +29,6 @@ import .AtmosArtifacts as AA
 include(joinpath("topography", "topography.jl"))
 include(joinpath("topography", "steady_state_solutions.jl"))
 
-include(
-    joinpath("parameterized_tendencies", "radiation", "radiation_utilities.jl"),
-)
 include(joinpath("parameterized_tendencies", "radiation", "RRTMGPInterface.jl"))
 import .RRTMGPInterface as RRTMGPI
 include(joinpath("parameterized_tendencies", "radiation", "radiation.jl"))
@@ -54,7 +53,6 @@ include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
 
 include(joinpath("prognostic_equations", "pressure_work.jl"))
 include(joinpath("prognostic_equations", "zero_velocity.jl"))
-include(joinpath("prognostic_equations", "zero_tendency.jl"))
 
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))
@@ -116,6 +114,7 @@ include(
 include(
     joinpath("prognostic_equations", "vertical_diffusion_boundary_layer.jl"),
 )
+include(joinpath("prognostic_equations", "surface_flux.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "rayleigh_sponge.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
 include(

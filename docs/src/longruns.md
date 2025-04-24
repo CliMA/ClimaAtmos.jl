@@ -50,10 +50,9 @@ Aquaplanet with idealized insolation, all-sky radiation, diagnostic edmf
 and 0-moment microphysics.
 ```
 ```
-longrun_aquaplanet_allsky_progedmf_diffonly_0M
+longrun_aquaplanet_allsky_progedmf_0M
 
-Aquaplanet with idealized insolation, all-sky radiation, prognostic edmf with diffusion only
-and 0-moment microphysics.
+Aquaplanet with idealized insolation, all-sky radiation, prognostic edmf with 0-moment microphysics.
 ```
 ```
 longrun_aquaplanet_allsky_tvinsol_0M_slabocean
@@ -86,4 +85,10 @@ amip_target_diagedmf
 
 Aquaplanet setup for AMIP (atmosphere-land simulation). This job includes all the
 working atmosphere components required for AMIP. It will be updated whenever new components are ready.
+```
+```
+amip_target_edonly
+
+Aquaplanet setup for AMIP (atmosphere-land simulation) without convection. This job includes all the
+working atmosphere components required for AMIP without convection. It will be updated whenever new components are ready.
 ```
