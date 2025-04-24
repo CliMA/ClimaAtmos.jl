@@ -85,14 +85,12 @@ function jacobian_cache(alg::ApproxJacobian, Y, atmos)
         is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
-    tracer_names = (
-        @name(c.ρq_tot),
-        @name(c.ρq_liq),
-        @name(c.ρq_ice),
-        @name(c.ρq_rai),
-        @name(c.ρq_sno),
-    )
-    available_tracer_names = MatrixFields.unrolled_filter(is_in_Y, tracer_names)
+    condensate_names =
+        (@name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_rai), @name(c.ρq_sno))
+    available_condensate_names =
+        MatrixFields.unrolled_filter(is_in_Y, condensate_names)
+    available_tracer_names =
+        (ρq_tot_if_available..., available_condensate_names...)
 
     sgs_tracer_names = (
         @name(c.sgsʲs.:(1).q_tot),
@@ -141,6 +139,15 @@ function jacobian_cache(alg::ApproxJacobian, Y, atmos)
         (@name(f.u₃), @name(c.uₕ)) => similar(Y.f, BidiagonalRow_C3xACTh),
         (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
     )
+
+    condensate_blocks = if atmos.moisture_model isa NonEquilMoistModel
+        (
+            (@name(c.ρq_liq), @name(c.ρq_tot)) => similar(Y.c, DiagonalRow),
+            (@name(c.ρq_ice), @name(c.ρq_tot)) => similar(Y.c, DiagonalRow),
+        )
+    else
+        ()
+    end
 
     diffused_scalar_names = (@name(c.ρe_tot), available_tracer_names...)
     diffusion_blocks = if use_derivative(diffusion_flag)
@@ -256,78 +263,73 @@ function jacobian_cache(alg::ApproxJacobian, Y, atmos)
         identity_blocks...,
         sgs_advection_blocks...,
         advection_blocks...,
+        condensate_blocks...,
         diffusion_blocks...,
         sgs_massflux_blocks...,
     )
 
-    names₁_group₁ = (@name(c.ρ), sfc_if_available...)
-    names₁_group₂ = (available_tracer_names..., ρatke_if_available...)
-    names₁_group₃ = (@name(c.ρe_tot),)
-    names₁ = (
-        names₁_group₁...,
-        names₁_group₂...,
-        names₁_group₃...,
+    mass_and_surface_names = (@name(c.ρ), sfc_if_available...)
+    available_scalar_names = (
+        mass_and_surface_names...,
+        ρq_tot_if_available...,
+        @name(c.ρe_tot),
+        available_condensate_names...,
+        ρatke_if_available...,
         available_sgs_scalar_names...,
     )
 
-    alg₂ = MatrixFields.BlockLowerTriangularSolve(
+    velocity_alg = MatrixFields.BlockLowerTriangularSolve(
         @name(c.uₕ),
         sgs_u³_if_available...,
     )
-    solver_alg =
+    full_alg =
         if use_derivative(diffusion_flag) ||
            use_derivative(sgs_advection_flag) ||
            !(atmos.moisture_model isa DryModel)
-            alg₁_subalg₂ =
+            gs_scalar_subalg = if !(atmos.moisture_model isa DryModel)
+                MatrixFields.BlockLowerTriangularSolve(@name(c.ρq_tot))
+            else
+                MatrixFields.BlockDiagonalSolve()
+            end
+            scalar_subalg =
                 if atmos.turbconv_model isa PrognosticEDMFX &&
                    use_derivative(sgs_advection_flag)
-                    diff_subalg =
-                        use_derivative(diffusion_flag) ?
-                        (;
-                            alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                                names₁_group₂...,
-                            )
-                        ) : (;)
-                    (;
+                    MatrixFields.BlockLowerTriangularSolve(
+                        available_sgs_tracer_names...;
                         alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                            available_sgs_tracer_names...;
+                            @name(c.sgsʲs.:(1).mse);
                             alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                                @name(c.sgsʲs.:(1).mse);
-                                alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                                    @name(c.sgsʲs.:(1).ρa);
-                                    diff_subalg...,
-                                ),
+                                @name(c.sgsʲs.:(1).ρa);
+                                alg₂ = gs_scalar_subalg,
                             ),
-                        )
+                        ),
                     )
                 else
-                    is_in_Y(@name(c.ρq_tot)) ?
-                    (;
-                        alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                            names₁_group₂...,
-                        )
-                    ) : (;)
+                    gs_scalar_subalg
                 end
-            alg₁ = MatrixFields.BlockLowerTriangularSolve(
-                names₁_group₁...;
-                alg₁_subalg₂...,
+            scalar_alg = MatrixFields.BlockLowerTriangularSolve(
+                mass_and_surface_names...;
+                alg₂ = scalar_subalg,
             )
             MatrixFields.ApproximateBlockArrowheadIterativeSolve(
-                names₁...;
-                alg₁,
-                alg₂,
+                available_scalar_names...;
+                alg₁ = scalar_alg,
+                alg₂ = velocity_alg,
                 P_alg₁ = MatrixFields.MainDiagonalPreconditioner(),
                 n_iters = alg.approximate_solve_iters,
             )
         else
-            MatrixFields.BlockArrowheadSolve(names₁...; alg₂)
+            MatrixFields.BlockArrowheadSolve(
+                available_scalar_names...;
+                alg₂ = velocity_alg,
+            )
         end
 
     temp_matrix = (matrix .+ identity_matrix(matrix, Y)) ./ FT(1)
     temp_matrix_column = similar(first_column(temp_matrix))
 
     return (;
-        matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, solver_alg),
+        matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, full_alg),
         temp_matrix,
         temp_matrix_column,
     )
@@ -561,7 +563,95 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
                 ᶠright_bias_matrix() ⋅
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwₚ) / ᶜρ) - (I,)
         end
+    end
 
+    if p.atmos.moisture_model isa NonEquilMoistModel
+        p_vapₛₗ(tps, ts) = TD.saturation_vapor_pressure(tps, ts, TD.Liquid())
+        p_vapₛᵢ(tps, ts) = TD.saturation_vapor_pressure(tps, ts, TD.Ice())
+
+        function ∂p_vapₛₗ_∂T(tps, ts)
+            T = TD.air_temperature(tps, ts)
+            Rᵥ = TD.Parameters.R_v(tps)
+            Lᵥ = TD.latent_heat_vapor(tps, ts)
+            return p_vapₛₗ(tps, ts) * Lᵥ / (Rᵥ * T^2)
+        end
+        function ∂p_vapₛᵢ_∂T(tps, ts)
+            T = TD.air_temperature(tps, ts)
+            Rᵥ = TD.Parameters.R_v(tps)
+            Lₛ = TD.latent_heat_sublim(tps, ts)
+            return p_vapₛᵢ(tps, ts) * Lₛ / (Rᵥ * T^2)
+        end
+
+        function ∂qₛₗ_∂T(tps, ts)
+            T = TD.air_temperature(tps, ts)
+            Rᵥ = TD.Parameters.R_v(tps)
+            Lᵥ = TD.latent_heat_vapor(tps, ts)
+            qᵥ_sat_liq = TD.q_vap_saturation_liquid(tps, ts)
+            return qᵥ_sat_liq * (Lᵥ / (Rᵥ * T^2) - 1 / T)
+        end
+        function ∂qₛᵢ_∂T(tps, ts)
+            T = TD.air_temperature(tps, ts)
+            Rᵥ = TD.Parameters.R_v(tps)
+            Lₛ = TD.latent_heat_sublim(tps, ts)
+            qᵥ_sat_ice = TD.q_vap_saturation_ice(tps, ts)
+            return qᵥ_sat_ice * (Lₛ / (Rᵥ * T^2) - 1 / T)
+        end
+
+        function Γₗ(tps, ts)
+            cₚ_air = TD.cp_m(tps, ts)
+            Lᵥ = TD.latent_heat_vapor(tps, ts)
+            return 1 + (Lᵥ / cₚ_air) * ∂qₛₗ_∂T(tps, ts)
+        end
+        function Γᵢ(tps, ts)
+            cₚ_air = TD.cp_m(tps, ts)
+            Lₛ = TD.latent_heat_sublim(tps, ts)
+            return 1 + (Lₛ / cₚ_air) * ∂qₛᵢ_∂T(tps, ts)
+        end
+
+        cmc = CAP.microphysics_cloud_params(params)
+        τₗ = cmc.liquid.τ_relax
+        τᵢ = cmc.ice.τ_relax
+
+        ∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
+        ∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
+
+        ∂ᶜρqₗ_err_∂ᶜρqₜ = matrix[@name(c.ρq_liq), @name(c.ρq_tot)]
+        ∂ᶜρqᵢ_err_∂ᶜρqₜ = matrix[@name(c.ρq_ice), @name(c.ρq_tot)]
+
+        @. ∂ᶜρqₗ_err_∂ᶜρqₗ -=
+            DiagonalMatrixRow(1 / (τₗ * Γₗ(thermo_params, ᶜts)))
+        @. ∂ᶜρqᵢ_err_∂ᶜρqᵢ -=
+            DiagonalMatrixRow(1 / (τᵢ * Γᵢ(thermo_params, ᶜts)))
+
+        ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
+        ᶜ∂T_∂p = @. lazy(1 / (ᶜρ * TD.gas_constant_air(thermo_params, ᶜts)))
+
+        # qₛₗ = p_vapₛₗ / p, qₛᵢ = p_vapₛᵢ / p
+        ᶜ∂qₛₗ_∂p = @. lazy(
+            -p_vapₛₗ(thermo_params, ᶜts) / ᶜp^2 +
+            ∂p_vapₛₗ_∂T(thermo_params, ᶜts) * ᶜ∂T_∂p / ᶜp
+        )
+        ᶜ∂qₛᵢ_∂p = @. lazy(
+            -p_vapₛᵢ(thermo_params, ᶜts) / ᶜp^2 +
+            ∂p_vapₛᵢ_∂T(thermo_params, ᶜts) * ᶜ∂T_∂p / ᶜp
+        )
+
+        ᶜ∂p_∂ρqₜ = @. lazy(
+            ᶜkappa_m * ∂e_int_∂q_tot +
+            ᶜ∂kappa_m∂q_tot * (
+                cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
+                ∂e_int_∂q_tot * ᶜspecific.q_tot
+            )
+        )
+
+        @. ∂ᶜρqₗ_err_∂ᶜρqₜ =
+            DiagonalMatrixRow(
+                (1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))
+            )
+        @. ∂ᶜρqᵢ_err_∂ᶜρqₜ =
+            DiagonalMatrixRow(
+                (1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))
+            )
     end
 
     if use_derivative(diffusion_flag)
@@ -600,12 +690,12 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
             ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
             @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((
-                    ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ +
+                    ᶜkappa_m * ∂e_int_∂q_tot +
                     ᶜ∂kappa_m∂q_tot * (
                         cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
                         ∂e_int_∂q_tot * ᶜspecific.q_tot
                     )
-                ))
+                ) / ᶜρ) # TODO: Open PR with bugfix.
             @. ∂ᶜρq_tot_err_∂ᶜρ =
                 dtγ * ᶜdiffusion_h_matrix ⋅
                 DiagonalMatrixRow(-(ᶜspecific.q_tot) / ᶜρ)

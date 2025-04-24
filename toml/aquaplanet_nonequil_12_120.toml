@@ -1,8 +1,8 @@
 [condensation_evaporation_timescale]
-value = 600
+value = 12
 
 [sublimation_deposition_timescale]
-value = 600
+value = 120
 
 [tracer_vertical_diffusion_factor]
 value = 0
