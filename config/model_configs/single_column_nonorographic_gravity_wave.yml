@@ -6,5 +6,5 @@ hyperdiff: false
 dt: "400secs"
 disable_surface_flux_tendency: true
 non_orographic_gravity_wave: true
-dt_nogw: "400secs"
+dt_gw: "400secs"
 

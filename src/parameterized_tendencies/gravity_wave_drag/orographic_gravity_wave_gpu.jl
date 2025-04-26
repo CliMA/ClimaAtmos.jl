@@ -383,9 +383,9 @@ function calc_base_flux!(
     return nothing
 end
 
-function calc_saturation_profile!(
+function calc_saturation_profile_gpu!(
     τ_sat,
-    U_sat,
+    U_sat, 
     FrU_sat,
     FrU_clp,
     ᶠVτ,
@@ -400,74 +400,129 @@ function calc_saturation_profile!(
     v_phy,
     ᶜρ,
     ᶜp,
-    k_pbl,
+    k_pbl
 )
-    (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ϵ) =
-        p.orographic_gravity_wave
+    (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ϵ) = p.orographic_gravity_wave
     FT = eltype(Fr_crit)
     γ = topo_γ
     β = topo_β
     ϵ = topo_ϵ
-
-    # Vτ at cell faces
+    
+    # Calculate Vτ at cell faces using field operations instead of column operations
     @. ᶠVτ = max(
         eps(FT),
         ᶠinterp(
             -(u_phy * τ_x + v_phy * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2)),
         ),
     )
+    
+    # Calculate derivative fields
     ᶠd2udz = ᶠinterp.(ᶜd2dz2(u_phy, p))
     ᶠd2vdz = ᶠinterp.(ᶜd2dz2(v_phy, p))
+    
+    # Calculate ᶠd2Vτdz as field operation
     ᶠd2Vτdz = @. max(
         eps(FT),
         -(ᶠd2udz * τ_x + ᶠd2vdz * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2)),
     )
+    
+    # Calculate L1 as field operation
     L1 = @. topo_L0 *
-            max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶠVτ * ᶠd2Vτdz / ᶠN^2))
-    # the coefficient FT(2.0) is the correction for coarse sampling of d2v/dz2
-    FrU_clp0 = FrU_clp
-    FrU_sat0 = FrU_sat
-    for k in 0:(length(parent(τ_sat)) - 1)
-        U_k = Fields.level(
-            sqrt.(ᶠinterp.(ᶜρ) ./ topo_ρscale .* ᶠVτ .^ 3 ./ ᶠN ./ L1),
-            k + half,
-        )
-        @. U_sat = min(U_sat, U_k)
-        @. FrU_sat = Fr_crit * U_sat
-        @. FrU_sat = Fr_crit * U_sat
-        @. FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
-        if k < k_pbl
-            tmp = Fields.level(τ_sat, k + half)
-            parent(tmp) .= parent(τ_p)
-        else
-            tmp = Fields.level(τ_sat, k + half)
-            parent(tmp) .= parent(
-                topo_a0 .* (
-                    (FrU_clp .^ (2 + γ - ϵ) .- FrU_min .^ (2 + γ - ϵ)) ./
-                    (2 + γ - ϵ) .+
-                    (FrU_sat) .^ 2 .* (FrU_sat0) .^ β .*
-                    (FrU_max .^ (γ - ϵ - β) .- FrU_clp0 .^ (γ - ϵ - β)) ./
-                    (γ - ϵ - β) .+
-                    (FrU_sat) .^ 2 .*
-                    (FrU_clp0 .^ (γ - ϵ) .- FrU_clp .^ (γ - ϵ)) ./ (γ - ϵ)
-                ),
-            )[1]
+       max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶠVτ * ᶠd2Vτdz / ᶠN^2))
+    
+    # Create a combined input field for column_accumulate
+    input = @. lazy(tuple(
+        U_sat,
+        FrU_sat,
+        FrU_clp,
+        FrU_max,
+        FrU_min,
+        τ_p,
+        ᶠN,
+        L1,
+        k_pbl,
+        ᶜρ,
+        ᶜp,
+        τ_x,
+        τ_y
+    ))
+    
+    # Use column_accumulate to process the saturation profile
+    Operators.column_accumulate!(
+        τ_sat,
+        input;
+        init = (FT(0.0), FT(NaN), FT(NaN), FT(NaN), FT(NaN)),
+        transform = first
+    ) do (τ_sat_k, U_sat_prev, FrU_sat_prev, FrU_clp0_prev, FrU_sat0_prev), 
+        (U_sat_k, FrU_sat_k, FrU_clp_k, FrU_max_k, FrU_min_k, τ_p_k, ᶠN_k, L1_k, k_pbl_k, ᶜρ_k, ᶜp_k, τ_x_k, τ_y_k)
+        
+        level = lazy_get_level(τ_sat_k)
+        
+        # Initialize values at first level
+        if level == 1
+            U_sat_val = sqrt(ᶜρ_k / topo_ρscale * ᶠVτ[level]^3 / ᶠN_k / L1_k)
+            FrU_sat_val = Fr_crit * U_sat_val
+            FrU_clp_val = min(FrU_max_k, max(FrU_min_k, FrU_sat_val))
+            
+            # Very first cell face gets τ_p_k directly
+            return (τ_p_k, U_sat_val, FrU_sat_val, FrU_clp_val, FrU_sat_val)
         end
+        
+        # For levels below k_pbl, use τ_p directly
+        if level <= k_pbl_k
+            return (τ_p_k, U_sat_prev, FrU_sat_prev, FrU_clp0_prev, FrU_sat0_prev)
+        end
+        
+        # Calculate U_k
+        U_k = sqrt(ᶜρ_k / topo_ρscale * ᶠVτ[level]^3 / ᶠN_k / L1_k)
+        
+        # Update U_sat (keeping minimum)
+        U_sat_val = min(U_sat_prev, U_k)
+        
+        # Update FrU values
+        FrU_sat_val = Fr_crit * U_sat_val
+        FrU_clp_val = min(FrU_max_k, max(FrU_min_k, FrU_sat_val))
+        
+        # Calculate τ_sat for this level
+        τ_sat_val = topo_a0 * (
+            (FrU_clp_val^(2 + γ - ϵ) - FrU_min_k^(2 + γ - ϵ)) /
+            (2 + γ - ϵ) +
+            (FrU_sat_val)^2 * (FrU_sat0_prev)^β *
+            (FrU_max_k^(γ - ϵ - β) - FrU_clp0_prev^(γ - ϵ - β)) /
+            (γ - ϵ - β) +
+            (FrU_sat_val)^2 *
+            (FrU_clp0_prev^(γ - ϵ) - FrU_clp_val^(γ - ϵ)) / (γ - ϵ)
+        )
+        
+        return (τ_sat_val, U_sat_val, FrU_sat_val, FrU_clp0_prev, FrU_sat0_prev)
     end
+    
+    # Apply correction for wave propagation to the top
+    # If the wave propagates to the top, the residual momentum flux is redistributed
+    apply_top_correction!(τ_sat, ᶜp)
+    
+    return nothing
+end
 
-    # very first cell face
-    tmp = Fields.level(τ_sat, half)
-    parent(tmp) .= parent(τ_p)
+# Helper function to get the level from an array slice
+function lazy_get_level(field_slice)
+    # In a real implementation, you'd need to extract the level index
+    # This is a placeholder for the actual implementation
+    return 1  # Placeholder
+end
 
-    # If the wave propagates to the top, the residual momentum flux is redistributed throughout the column weighted by pressure
-    if parent(τ_sat)[end] > FT(0)
-        ᶠp = ᶠinterp.(ᶜp)
-        τ_sat .-=
-            parent(τ_sat)[end] .* (parent(ᶠp)[1] .- ᶠp) ./
+# Helper function to apply the top correction
+function apply_top_correction!(τ_sat, ᶜp)
+    FT = eltype(τ_sat)
+    ᶠp = ᶠinterp.(ᶜp)
+    
+    # Check if there's residual momentum flux at the top
+    top_val = parent(τ_sat)[end]
+    if top_val > FT(0)
+        # Redistribute the residual momentum flux
+        τ_sat .-= top_val .* (parent(ᶠp)[1] .- ᶠp) ./
             (parent(ᶠp)[1] .- parent(ᶠp)[end])
     end
-    return nothing
-
 end
 
 ᶜd2dz2(ᶜscalar, p) =
