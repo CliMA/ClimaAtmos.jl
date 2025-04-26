@@ -2,7 +2,7 @@ t_end: "48hours"
 dt: "450secs"
 disable_surface_flux_tendency: true
 non_orographic_gravity_wave: true
-dt_nogw: "450secs"
+dt_gw: "450secs"
 diagnostics:
   - short_name: [ta, thetaa, ua, va, wa, zg, utendnogw, vtendnogw]
     period: 1hours
