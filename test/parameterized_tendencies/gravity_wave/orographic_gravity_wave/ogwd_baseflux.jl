@@ -56,7 +56,7 @@ end
 Y = Fields.FieldVector(c = Yc, f = Yf)
 
 # Initialize cache vars for orographic gravity wave
-ogw = CA.OrographicGravityWave{FT, String}()
+ogw = CA.FullOrographicGravityWave{FT, String}()
 p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
 
 # Unpack cache vars
@@ -108,7 +108,7 @@ nc = NCDataset(datafile_cg, "c")
 def_space_coord(nc, center_space, type = "cgll")
 nc_time = def_time_coord(nc)
 nc_tau_x = defVar(nc, "tau_x", FT, h_space, ("time",))
-nc_tau_y = defVar(nc, "tau_y", FT, h_space, ("time",))
+nc_tau_y = defVar(npipc, "tau_y", FT, h_space, ("time",))
 nc_time[1] = 1
 nc_tau_x[:, 1] = topo_τ_x
 nc_tau_y[:, 1] = topo_τ_y
