@@ -46,7 +46,8 @@ setting their `DerivativeFlag`s to either `UseDerivative` or `IgnoreDerivative`.
 - `approximate_solve_iters::Int`: number of iterations to take for the
   approximate linear solve required when the `diffusion_flag` is `UseDerivative`
 """
-struct ApproxJacobian{F1, F2, F3, F4, F5, F6} <: JacobianAlgorithm
+struct ApproxJacobian{F0, F1, F2, F3, F4, F5, F6} <: JacobianAlgorithm
+    noneq_flag::F0
     topography_flag::F1
     diffusion_flag::F2
     sgs_advection_flag::F3
@@ -58,6 +59,7 @@ end
 
 function jacobian_cache(alg::ApproxJacobian, Y, atmos)
     (;
+        noneq_flag,
         topography_flag,
         diffusion_flag,
         sgs_advection_flag,
@@ -140,14 +142,16 @@ function jacobian_cache(alg::ApproxJacobian, Y, atmos)
         (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
     )
 
-    condensate_blocks = if atmos.moisture_model isa NonEquilMoistModel
-        (
-            (@name(c.ρq_liq), @name(c.ρq_tot)) => similar(Y.c, DiagonalRow),
-            (@name(c.ρq_ice), @name(c.ρq_tot)) => similar(Y.c, DiagonalRow),
-        )
-    else
-        ()
-    end
+    condensate_blocks =
+        if atmos.moisture_model isa NonEquilMoistModel &&
+           use_derivative(noneq_flag)
+            (
+                (@name(c.ρq_liq), @name(c.ρq_tot)) => similar(Y.c, DiagonalRow),
+                (@name(c.ρq_ice), @name(c.ρq_tot)) => similar(Y.c, DiagonalRow),
+            )
+        else
+            ()
+        end
 
     diffused_scalar_names = (@name(c.ρe_tot), available_tracer_names...)
     diffusion_blocks = if use_derivative(diffusion_flag)
@@ -355,6 +359,7 @@ end
 
 function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
     (;
+        noneq_flag,
         topography_flag,
         diffusion_flag,
         sgs_advection_flag,
@@ -565,7 +570,8 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
         end
     end
 
-    if p.atmos.moisture_model isa NonEquilMoistModel
+    if p.atmos.moisture_model isa NonEquilMoistModel &&
+       use_derivative(noneq_flag)
         p_vapₛₗ(tps, ts) = TD.saturation_vapor_pressure(tps, ts, TD.Liquid())
         p_vapₛᵢ(tps, ts) = TD.saturation_vapor_pressure(tps, ts, TD.Ice())
 
@@ -629,11 +635,11 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
         # qₛₗ = p_vapₛₗ / p, qₛᵢ = p_vapₛᵢ / p
         ᶜ∂qₛₗ_∂p = @. lazy(
             -p_vapₛₗ(thermo_params, ᶜts) / ᶜp^2 +
-            ∂p_vapₛₗ_∂T(thermo_params, ᶜts) * ᶜ∂T_∂p / ᶜp
+            ∂p_vapₛₗ_∂T(thermo_params, ᶜts) * ᶜ∂T_∂p / ᶜp,
         )
         ᶜ∂qₛᵢ_∂p = @. lazy(
             -p_vapₛᵢ(thermo_params, ᶜts) / ᶜp^2 +
-            ∂p_vapₛᵢ_∂T(thermo_params, ᶜts) * ᶜ∂T_∂p / ᶜp
+            ∂p_vapₛᵢ_∂T(thermo_params, ᶜts) * ᶜ∂T_∂p / ᶜp,
         )
 
         ᶜ∂p_∂ρqₜ = @. lazy(
@@ -641,17 +647,15 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
             ᶜ∂kappa_m∂q_tot * (
                 cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
                 ∂e_int_∂q_tot * ᶜspecific.q_tot
-            )
+            ),
         )
 
-        @. ∂ᶜρqₗ_err_∂ᶜρqₜ =
-            DiagonalMatrixRow(
-                (1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))
-            )
-        @. ∂ᶜρqᵢ_err_∂ᶜρqₜ =
-            DiagonalMatrixRow(
-                (1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))
-            )
+        @. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
+            (1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts)),
+        )
+        @. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
+            (1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts)),
+        )
     end
 
     if use_derivative(diffusion_flag)
@@ -689,13 +693,15 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
             ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
             ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
             @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
-                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((
-                    ᶜkappa_m * ∂e_int_∂q_tot +
-                    ᶜ∂kappa_m∂q_tot * (
-                        cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
-                        ∂e_int_∂q_tot * ᶜspecific.q_tot
-                    )
-                ) / ᶜρ) # TODO: Open PR with bugfix.
+                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(
+                    (
+                        ᶜkappa_m * ∂e_int_∂q_tot +
+                        ᶜ∂kappa_m∂q_tot * (
+                            cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
+                            ∂e_int_∂q_tot * ᶜspecific.q_tot
+                        )
+                    ) / ᶜρ,
+                ) # TODO: Open PR with bugfix.
             @. ∂ᶜρq_tot_err_∂ᶜρ =
                 dtγ * ᶜdiffusion_h_matrix ⋅
                 DiagonalMatrixRow(-(ᶜspecific.q_tot) / ᶜρ)
