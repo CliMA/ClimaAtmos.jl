@@ -393,9 +393,18 @@ function surface_temperature(
     coordinates::Geometry.LatLongZPoint,
     surface_temp_params,
 )
+    # Implements the SST control experiment as described in Neal, R. and Hoskins, B. (2001).
+    # https://rmets.onlinelibrary.wiley.com/doi/epdf/10.1006/asle.2000.0022
     (; lat, z) = coordinates
     FT = eltype(lat)
-    T = FT(271) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2)) - FT(6.5e-3) * z
+
+    T = if FT(-60) < lat < FT(60)
+        FT(27) * (FT(1) - sind((FT(3) * lat) / FT(2))^2) + FT(273.16)
+        # FT(40) * (FT(1) - sind((FT(3) * lat) / FT(2))^2) + FT(273.16)
+    else
+        FT(273.16)
+    end
+    T -= FT(6.5e-3) * z
     return T
 end
 
@@ -407,6 +416,7 @@ function surface_temperature(
     (; lat, long, z) = coordinates
     FT = eltype(lat)
     #Assume a surface temperature that varies with both longitude and latitude, Neale and Hoskins, 2021
+    # https://rmets.onlinelibrary.wiley.com/doi/epdf/10.1006/asle.2000.0022
     T =
         (
             (-60 < lat < 60) ?
