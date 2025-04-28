@@ -22,6 +22,10 @@ function get_atmos(config::AtmosConfig, params)
     moisture_model = get_moisture_model(parsed_args)
     precip_model = get_precipitation_model(parsed_args)
     cloud_model = get_cloud_model(parsed_args)
+
+    implicit_noneq_moist = parsed_args["implicit_noneq_moist"]
+    @assert implicit_noneq_moist in (true, false)
+
     ozone = get_ozone(parsed_args)
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
@@ -92,6 +96,7 @@ function get_atmos(config::AtmosConfig, params)
         edmfx_model,
         precip_model,
         cloud_model,
+        noneq_mode = implicit_noneq_moist ? Implicit() : Explicit(),
         forcing_type,
         call_cloud_diagnostics_per_stage,
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
@@ -410,6 +415,7 @@ end
 get_jacobian(ode_algo, Y, atmos, parsed_args, output_dir) =
     if ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm}
         approx_jacobian_algorithm = ApproxJacobian(
+            DerivativeFlag(atmos.noneq_mode),
             DerivativeFlag(has_topography(axes(Y.c))),
             DerivativeFlag(atmos.diff_mode),
             DerivativeFlag(atmos.sgs_adv_mode),

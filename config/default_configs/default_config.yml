@@ -217,6 +217,9 @@ precip_model:
 cloud_model:
   help: "Cloud model [`grid_scale`, `quadrature` (default), `quadrature_sgs`]"
   value: "quadrature"
+implicit_noneq_moist:
+  help: "Whether to treat the nonequilibrium cloud condensate tendency implicitly [`true`, `false`]"
+  value: false
 perf_summary:
   help: "Flag for collecting performance summary information"
   value: false

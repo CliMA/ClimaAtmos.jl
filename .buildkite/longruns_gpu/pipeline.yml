@@ -227,39 +227,6 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "amip_target_edonly"
 
-      - label: ":computer: amip target edonly edmf nonequil (dt = 240, medium relaxation)"
-        command:
-          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "amip_target_edonly_nonequil_240_medium"
-
-      - label: ":computer: amip target edonly edmf nonequil (dt = 30, slow relaxation)"
-        command:
-          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "amip_target_edonly_nonequil_30_slow"
-
-      - label: ":computer: amip target edonly edmf nonequil (dt = 40, slow relaxation)"
-        command:
-          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "amip_target_edonly_nonequil_40_slow"
-
       - label: ":computer: amip target edonly edmf nonequil (dt = 50, slow relaxation)"
         command:
           - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
@@ -270,17 +237,6 @@ steps:
         env:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "amip_target_edonly_nonequil_50_slow"
-
-      - label: ":computer: amip target edonly edmf nonequil (dt = 30, fast relaxation)"
-        command:
-          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "amip_target_edonly_nonequil_30_fast"
 
       - label: ":computer: amip target edonly edmf nonequil (dt = 50, fast relaxation)"
         command:
@@ -293,24 +249,46 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "amip_target_edonly_nonequil_50_fast"
 
-      - label: ":computer: amip target edonly edmf nonequil (dt = 100, fast relaxation)"
-        command:
-          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "amip_target_edonly_nonequil_100_fast"
+      # - label: ":computer: amip target edonly edmf nonequil (dt = 200, slow relaxation)"
+      #   command:
+      #     - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+      #   artifact_paths: "$$JOB_NAME/output_active/*"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_time: 24:00:00
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #     JOB_NAME: "amip_target_edonly_nonequil_200_slow"
 
-      - label: ":computer: amip target edonly edmf nonequil (dt = 200, fast relaxation)"
-        command:
-          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 24:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "amip_target_edonly_nonequil_200_fast"
+      # - label: ":computer: amip target edonly edmf nonequil (dt = 200, fast relaxation)"
+      #   command:
+      #     - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+      #   artifact_paths: "$$JOB_NAME/output_active/*"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_time: 24:00:00
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #     JOB_NAME: "amip_target_edonly_nonequil_200_fast"
+
+      # - label: ":computer: amip target edonly edmf nonequil (dt = 600, slow relaxation)"
+      #   command:
+      #     - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+      #   artifact_paths: "$$JOB_NAME/output_active/*"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_time: 24:00:00
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #     JOB_NAME: "amip_target_edonly_nonequil_600_slow"
+
+      # - label: ":computer: amip target edonly edmf nonequil (dt = 600, fast relaxation)"
+      #   command:
+      #     - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+      #   artifact_paths: "$$JOB_NAME/output_active/*"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_time: 24:00:00
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #     JOB_NAME: "amip_target_edonly_nonequil_600_fast"
