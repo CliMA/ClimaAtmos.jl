@@ -579,7 +579,15 @@ function _RRTMGPModel(
     FT = typeof(params.grav)
     # turn kwargs into a Dict, so that values can be dynamically popped from it
     dict = Dict(kwargs)
-
+    nlay = domain_nlay + Int(radiation_mode.add_isothermal_boundary_layer)
+    grid_params = RRTMGP.RRTMGPGridParams(
+        FT;
+        context,
+        nlay,
+        ncol,
+        isothermal_boundary_layer = radiation_mode.add_isothermal_boundary_layer,
+    )
+    op = RRTMGP.Optics.TwoStream(grid_params)
     if use_global_means_for_well_mixed_gases && radiation_mode isa GrayRadiation
         @warn "use_global_means_for_well_mixed_gases is ignored when using \
                GrayRadiation"
@@ -593,26 +601,22 @@ function _RRTMGPModel(
     (; lookups, lu_kwargs) = lookup_tables(radiation_mode, device, FT)
     views = []
 
-    nlay = domain_nlay + Int(radiation_mode.add_isothermal_boundary_layer)
     t = (views, domain_nlay)
 
-    src_lw = RRTMGP.Sources.source_func_longwave(
-        params,
-        FT,
-        ncol,
-        nlay,
-        :TwoStream,
-        DA,
-    )
-    flux_lw = RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
+    src_lw = if op isa RRTMGP.Optics.OneScalar
+        RRTMGP.SourceLWNoScat(grid_params; params)
+    else
+        RRTMGP.SourceLW2Str(grid_params; params)
+    end
+    flux_lw = RRTMGP.Fluxes.FluxLW(grid_params)
     fluxb_lw =
         radiation_mode isa GrayRadiation ? nothing :
-        RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
+        RRTMGP.Fluxes.FluxLW(grid_params)
     set_and_save!(flux_lw.flux_up, "face_lw_flux_up", t...)
     set_and_save!(flux_lw.flux_dn, "face_lw_flux_dn", t...)
     set_and_save!(flux_lw.flux_net, "face_lw_flux", t...)
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-        flux_lw2 = RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
+        flux_lw2 = RRTMGP.Fluxes.FluxLW(grid_params)
         set_and_save!(flux_lw2.flux_up, "face_clear_lw_flux_up", t...)
         set_and_save!(flux_lw2.flux_dn, "face_clear_lw_flux_dn", t...)
         set_and_save!(flux_lw2.flux_net, "face_clear_lw_flux", t...)
@@ -629,17 +633,18 @@ function _RRTMGPModel(
     end
     bcs_lw = RRTMGP.BCs.LwBCs(sfc_emis, inc_flux)
     src_sw =
-        RRTMGP.Sources.source_func_shortwave(FT, ncol, nlay, :TwoStream, DA)
-    flux_sw = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
+        op isa RRTMGP.Optics.OneScalar ? nothing :
+        RRTMGP.SourceSW2Str(grid_params)
+    flux_sw = RRTMGP.Fluxes.FluxSW(grid_params)
     fluxb_sw =
         radiation_mode isa GrayRadiation ? nothing :
-        RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
+        RRTMGP.Fluxes.FluxSW(grid_params)
     set_and_save!(flux_sw.flux_up, "face_sw_flux_up", t...)
     set_and_save!(flux_sw.flux_dn, "face_sw_flux_dn", t...)
     set_and_save!(flux_sw.flux_net, "face_sw_flux", t...)
     set_and_save!(flux_sw.flux_dn_dir, "face_sw_direct_flux_dn", t...)
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-        flux_sw2 = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
+        flux_sw2 = RRTMGP.Fluxes.FluxSW(grid_params)
         set_and_save!(flux_sw2.flux_up, "face_clear_sw_flux_up", t...)
         set_and_save!(flux_sw2.flux_dn, "face_clear_sw_flux_dn", t...)
         set_and_save!(
@@ -731,7 +736,7 @@ function _RRTMGPModel(
         gas_names = filter(
             gas_name ->
                 !(gas_name in ("h2o", "h2o_frgn", "h2o_self", "o3")),
-            keys(lookups.idx_gases_sw),
+            RRTMGP.gas_names_sw(),
         )
         # TODO: This gives the wrong types for CUDA 3.4 and above.
         # gm = use_global_means_for_well_mixed_gases
@@ -874,7 +879,6 @@ function _RRTMGPModel(
 
     end
 
-    op = RRTMGP.Optics.TwoStream(FT, ncol, nlay, DA)
     sw_solver = RRTMGP.RTE.TwoStreamSWRTE(
         context,
         op,
