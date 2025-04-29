@@ -622,7 +622,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
             return q / float(dt) / n
         end
     
-        function ∂ρqₗ_err_∂ρqᵪ(tps, ts, cmc, deriv, limit_deriv)
+        function ∂ρqₗ_err_∂ρqᵪ(tps, ts, cmc, dt, deriv, limit_deriv)
             FT_inner = eltype(tps)
             q = TD.PhasePartition(tps, ts)
             ρ = TD.air_density(tps, ts)
@@ -652,7 +652,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
             end
         end
 
-        function ∂ρqᵢ_err_∂ρqᵪ(tps, ts, cmc, deriv, limit_deriv)
+        function ∂ρqᵢ_err_∂ρqᵪ(tps, ts, cmc, dt, deriv, limit_deriv)
             FT_inner = eltype(tps)
             q = TD.PhasePartition(tps, ts)
             ρ = TD.air_density(tps, ts)
@@ -694,7 +694,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
         @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
             DiagonalMatrixRow(
                 ∂ρqₗ_err_∂ρqᵪ(
-                    thermo_params, ᶜts, cmc, (-1 / (τₗ * Γₗ(thermo_params, ᶜts))), (1/(2*dt)),
+                    thermo_params, ᶜts, cmc, dt, (-1 / (τₗ * Γₗ(thermo_params, ᶜts))), (1/(2*float(dt))),
                 )
             )
         
@@ -704,7 +704,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
         @. ∂ᶜρqᵢ_err_∂ᶜρqᵢ +=
             DiagonalMatrixRow(
                 ∂ρqᵢ_err_∂ρqᵪ(
-                    thermo_params, ᶜts, cmc, (-1 / (τᵢ * Γᵢ(thermo_params, ᶜts))), (1/(2*dt)),
+                    thermo_params, ᶜts, cmc, dt, (-1 / (τᵢ * Γᵢ(thermo_params, ᶜts))), (1/(2*float(dt))),
                     )
                 )
 
@@ -734,7 +734,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
         #)
         @. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
             ∂ρqₗ_err_∂ρqᵪ(
-                thermo_params, ts, cmc, ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))), FT(0)
+                thermo_params, ts, cmc, dt, ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))), FT(0)
             )
         )
 
@@ -743,7 +743,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
         #)
         @. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
             ∂ρqᵢ_err_∂ρqᵪ(
-                thermo_params, ts, cmc, ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))), FT(0)
+                thermo_params, ts, cmc, dt, ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))), FT(0)
             )
         )
     end

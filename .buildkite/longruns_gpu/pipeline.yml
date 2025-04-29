@@ -258,7 +258,7 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "amip_target_edonly_nonequil_50_slow_explicit"
+          JOB_NAME: "amip_target_edonly_nonequil_50_explicit_slow"
 
       - label: ":computer: amip target edonly edmf nonequil explicit (dt = 50, fast relaxation)"
         command:
@@ -269,7 +269,7 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "amip_target_edonly_nonequil_50_fast_explicit"
+          JOB_NAME: "amip_target_edonly_nonequil_50_explicit_fast"
 
       - label: ":computer: amip target edonly edmf nonequil explicit (dt = 200, slow relaxation)"
         command:
@@ -280,7 +280,7 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "amip_target_edonly_nonequil_200_slow_explicit"
+          JOB_NAME: "amip_target_edonly_nonequil_200_explicit_slow"
 
       - label: ":computer: amip target edonly edmf nonequil explicit (dt = 200, fast relaxation)"
         command:
@@ -291,7 +291,7 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "amip_target_edonly_nonequil_200_fast_explicit"
+          JOB_NAME: "amip_target_edonly_nonequil_200_explicit_fast"
 
       - label: ":computer: amip target edonly edmf nonequil explicit (dt = 600, slow relaxation)"
         command:
@@ -302,7 +302,7 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "amip_target_edonly_nonequil_600_slow_explicit"
+          JOB_NAME: "amip_target_edonly_nonequil_600_explicit_slow"
 
       - label: ":computer: amip target edonly edmf nonequil explicit (dt = 600, fast relaxation)"
         command:
@@ -313,4 +313,4 @@ steps:
           slurm_time: 24:00:00
         env:
           CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "amip_target_edonly_nonequil_600_fast_explicit"
+          JOB_NAME: "amip_target_edonly_nonequil_600_explicit_fast"
