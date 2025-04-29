@@ -43,7 +43,7 @@ function topography_hughes2023(coord)
     d₂ = (λ - λ_min) - λ₂
     l₁ = λ - λ₁
     l₂ = λ - λ₂
-    zₛ =  FT(
+    zₛ = FT(
         h₀ * (
             exp(-(((ϕ - ϕ₁) / d)^6 + (l₁ / c)^2)) +
             exp(-(((ϕ - ϕ₂) / d)^6 + (l₂ / c)^2))
