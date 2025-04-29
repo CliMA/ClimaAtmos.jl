@@ -512,6 +512,7 @@ Base.@kwdef struct AtmosModel{
     MM,
     PM,
     CM,
+    NM,
     CCDPS,
     F,
     S,
