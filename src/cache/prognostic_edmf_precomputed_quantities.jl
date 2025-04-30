@@ -549,7 +549,20 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
     turbconv_params = CAP.turbconv_params(params)
     c_m = CAP.tke_ed_coeff(turbconv_params)
-    @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
+    # @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
+
+    # Prescribe K_u with a Gaussian profile
+    # Peak value (A), peak height (μ), width (σ)
+    K_peak_value = FT(500.0)
+    K_peak_height = FT(1000.0)
+    K_width = FT(600.0)
+    K_base_value = FT(1.0)
+    @. ᶜK_u =
+        K_base_value +
+        K_peak_value * exp(
+            -((ᶜz - z_sfc - K_peak_height)^2) / (2 * K_width^2),
+        )
+
     @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
