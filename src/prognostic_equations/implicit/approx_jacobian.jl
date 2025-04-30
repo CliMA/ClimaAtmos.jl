@@ -368,7 +368,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
         sgs_mass_flux_flag,
     ) = alg
     (; matrix) = cache
-    (; params) = p
+    (; params, dt) = p
     (; ᶜΦ, ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜspecific, ᶠu³, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
     (;
@@ -817,7 +817,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
         if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
             turbconv_params = CAP.turbconv_params(params)
             c_d = CAP.tke_diss_coeff(turbconv_params)
-            (; dt) = p
+            #(; dt) = p
             (; ᶜtke⁰, ᶜmixing_length) = p.precomputed
             ᶜρa⁰ =
                 p.atmos.turbconv_model isa PrognosticEDMFX ?
