@@ -415,8 +415,8 @@ end
 get_jacobian(ode_algo, Y, atmos, parsed_args, output_dir) =
     if ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm}
         approx_jacobian_algorithm = ApproxJacobian(
-            DerivativeFlag(has_topography(axes(Y.c))),
             DerivativeFlag(atmos.noneq_mode),
+            DerivativeFlag(has_topography(axes(Y.c))),
             DerivativeFlag(atmos.diff_mode),
             DerivativeFlag(atmos.sgs_adv_mode),
             DerivativeFlag(atmos.sgs_entr_detr_mode),
