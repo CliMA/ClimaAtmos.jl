@@ -1327,6 +1327,35 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         end
     end
 
+    # #---------------------------------------------------------------
+    # # Jacobian‐side of the area/u₃ relaxation
+    # # Define relaxation rates for negative area and velocity
+    # @inline area_relaxation_rate(ρa, dt) =
+    #     ρa < zero(eltype(ρa)) ? one(eltype(ρa)) / dt : zero(eltype(ρa))
+    # @inline velocity_relaxation_rate(u₃, dt) =
+    #     u₃.components.data.:1 < zero(eltype(u₃.components.data.:1)) ? one(eltype(u₃)) / dt : zero(eltype(u₃))
+
+    # if p.atmos.turbconv_model isa PrognosticEDMFX &&
+    #    use_derivative(sgs_mass_flux_flag)
+
+    #     dt  = p.dt
+
+    #     # -- only apply to the first updraft (j = 1) --
+    #     # ∂F_{ρa}/∂ρa  -= dtγ * relaxation_rate(ρa)
+    #     nameρa = @name(c.sgsʲs.:(1).ρa)
+    #     ∂ρa_err_∂ρa = matrix[nameρa, nameρa]
+    #     @. ∂ρa_err_∂ρa -= dtγ * DiagonalMatrixRow(
+    #         area_relaxation_rate(Y.c.sgsʲs.:(1).ρa, dt)
+    #     )
+
+    #     # ∂F_{u₃}/∂u₃  -= dtγ * relaxation_rate(u₃) * I₃
+    #     nameu₃ = @name(f.sgsʲs.:(1).u₃)
+    #     ∂u₃_err_∂u₃ = matrix[nameu₃, nameu₃]
+    #     @. ∂u₃_err_∂u₃ -= dtγ * DiagonalMatrixRow(
+    #         velocity_relaxation_rate(Y.f.sgsʲs.:(1).u₃, dt)
+    #     ) ⋅ one_C3xACT3
+    # end
+
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
     zero_velocity_jacobian!(matrix, Y, p, t)
 end

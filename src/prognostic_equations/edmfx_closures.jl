@@ -224,6 +224,29 @@ function mixing_length(
     # get soft minimum
     l_smin = lamb_smooth_minimum(l, smin_ub, smin_rm)
     l_limited = max(l_smag, min(l_smin, l_z))
+    # if l_z > FT(20000.0)
+    #     l_limited = FT(1.0)
+    # end
+
+    # Prescribe mixing length with a Gaussian profile
+    # Peak value (A), peak height (μ), width (σ)
+    l_peak_value = FT(200.0)  # Adjust as needed
+    l_peak_height = FT(1000.0) # Adjust as needed
+    l_width = FT(600.0)    # Adjust as needed
+    # l_base_value = FT(1.5)   # Adjust as needed
+    # l_base_value = FT(0.1) * ᶜdz  # Adjust as needed
+    # Overwrite l_limited with the prescribed profile
+    l_limited =
+        min(
+            # FT(0.1) * ᶜdz,
+            FT(1.1),
+            l_peak_value * exp(
+                -((ᶜz - z_sfc - l_peak_height)^2) / (2 * l_width^2),
+            ),
+        )
+
+    # Apply linear profile near the surface
+    # l_limited = ifelse(l_z < FT(100.0), vkc * l_z, l_limited)
 
     return MixingLength{FT}(l_limited, l_W, l_TKE, l_N)
 end
