@@ -14,4 +14,4 @@ disable_surface_flux_tendency: true
 toml: [toml/longrun_baroclinic_wave_1M.toml]
 diagnostics:
   - short_name: [pfull, wa, va, ua, ta, rhoa, rv, hus, ke, clw, cli, husra, hussn]
-    period: 5days
+    period: 2days
