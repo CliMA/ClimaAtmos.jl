@@ -230,16 +230,27 @@ function mixing_length(
 
     # Prescribe mixing length with a Gaussian profile
     # Peak value (A), peak height (μ), width (σ)
-    l_peak_value = FT(200.0)  # Adjust as needed
-    l_peak_height = FT(1000.0) # Adjust as needed
-    l_width = FT(600.0)    # Adjust as needed
+
+
+    # l_peak_value = FT(250.0)  # Adjust as needed
+    # l_peak_height = FT(1000.0) # Adjust as needed
+    # l_width = FT(600.0)    # Adjust as needed
+
+    l_peak_value = FT(300.0)  # Adjust as needed
+    l_peak_height = FT(400.0) # Adjust as needed
+    l_width = FT(300.0)    # Adjust as needed
+
+
+
     # l_base_value = FT(1.5)   # Adjust as needed
     # l_base_value = FT(0.1) * ᶜdz  # Adjust as needed
     # Overwrite l_limited with the prescribed profile
+
+    # FT(1.1),
+    # FT(0.7),
     l_limited =
-        min(
-            # FT(0.1) * ᶜdz,
-            FT(1.1),
+        max(
+            FT(0.1) * ᶜdz,
             l_peak_value * exp(
                 -((ᶜz - z_sfc - l_peak_height)^2) / (2 * l_width^2),
             ),
