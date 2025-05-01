@@ -23,6 +23,11 @@ function get_atmos(config::AtmosConfig, params)
     moisture_model = get_moisture_model(parsed_args)
     precip_model = get_precipitation_model(parsed_args)
     cloud_model = get_cloud_model(parsed_args)
+
+    implicit_noneq_cloud_formation =
+        parsed_args["implicit_noneq_cloud_formation"]
+    @assert implicit_noneq_cloud_formation in (true, false)
+
     ozone = get_ozone(parsed_args)
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
@@ -93,6 +98,8 @@ function get_atmos(config::AtmosConfig, params)
         edmfx_model,
         precip_model,
         cloud_model,
+        noneq_cloud_formation_mode = implicit_noneq_cloud_formation ?
+                                     Implicit() : Explicit(),
         forcing_type,
         call_cloud_diagnostics_per_stage,
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
