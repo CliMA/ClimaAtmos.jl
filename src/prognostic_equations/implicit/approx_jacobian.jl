@@ -630,6 +630,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
             if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
                 return deriv
             else
+                return FT_inner(0)
             end
          end
  
