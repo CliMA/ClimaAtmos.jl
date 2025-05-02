@@ -622,64 +622,27 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
              return q / float(dt) / n
          end
      
-         function ∂ρqₗ_err_∂ρqᵪ(tps, ts, cmc, dt, deriv, limit_deriv)
+         function ∂ρqₗ_err_∂ρqᵪ(tps, ts, cmc, dt, deriv)
              FT_inner = eltype(tps)
              q = TD.PhasePartition(tps, ts)
              ρ = TD.air_density(tps, ts)
  
-             S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, thp, q, ρ, Tₐ(tps, ts))
- 
-             if S > FT_inner(0)
-                 if S <= limit(qᵥ(tps, ts), dt, 2)
-                     if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
-                         return deriv
-                     else
-                         return FT_inner(0)
-                     end
-                 else
-                     return limit_deriv
-                 end
-             else
-                 if abs(S) <= limit(qₗ(tps, ts, qₚ(qᵣ)), dt, 2)
-                     if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
-                         return -deriv
-                     else
-                         return FT_inner(0)
-                     end
-                 else
-                     return -limit_deriv
-                 end
-             end
+            if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
+                return deriv
+            else
+            end
          end
  
-         function ∂ρqᵢ_err_∂ρqᵪ(tps, ts, cmc, dt, deriv, limit_deriv)
+         function ∂ρqᵢ_err_∂ρqᵪ(tps, ts, cmc, dt, deriv)
              FT_inner = eltype(tps)
              q = TD.PhasePartition(tps, ts)
              ρ = TD.air_density(tps, ts)
  
-             S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.ice, thp, q, ρ, Tₐ(tps, ts))
- 
-             if S > FT_inner(0)
-                 if S <= limit(qᵥ(tps, ts), dt, 2)
-                     if TD.vapor_specific_humidity(q) + TD.ice_specific_humidity(q) > FT_inner(0)
-                         return deriv
-                     else
-                         return FT_inner(0)
-                     end
-                 else
-                     return limit_deriv
-                 end
-             else
-                 if abs(S) <= limit(qᵢ(thp, ts, qₚ(qₛ)), dt, 2)
-                     if TD.vapor_specific_humidity(q) + TD.ice_specific_humidity(q) > FT_inner(0)
-                         return -deriv
-                     else
-                         return FT_inner(0)
-                     end
-                 else
-                     return -limit_deriv
-                 end
-             end
+            if TD.vapor_specific_humidity(q) + TD.ice_specific_humidity(q) > FT_inner(0)
+                return deriv
+            else
+                return FT_inner(0)
+            end
          end
  
  
