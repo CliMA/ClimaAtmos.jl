@@ -572,7 +572,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
     end
 
     if p.atmos.moisture_model isa NonEquilMoistModel &&
-        use_derivative(noneq_flag)
+        use_derivative(noneq_cloud_formation_flag)
          p_vapₛₗ(tps, ts) = TD.saturation_vapor_pressure(tps, ts, TD.Liquid())
          p_vapₛᵢ(tps, ts) = TD.saturation_vapor_pressure(tps, ts, TD.Ice())
  
