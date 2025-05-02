@@ -35,9 +35,6 @@ steps:
 
   - wait
 
-  - group: "helem 30 dycore"
-    steps:
-
   - group: "helem 16 aquaplanet"
     steps:
 
