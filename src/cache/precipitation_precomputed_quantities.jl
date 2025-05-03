@@ -70,7 +70,7 @@ function set_precipitation_velocities!(
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_rai / Y.c.ρ),
     )
-    @assert minimum(ᶜwᵣ) >= FT(0)
+    #@assert minimum(ᶜwᵣ) >= FT(0)
 
     @. ᶜwₛ = CM1.terminal_velocity(
         cmp.ps,

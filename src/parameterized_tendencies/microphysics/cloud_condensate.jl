@@ -139,7 +139,8 @@ function cloud_condensate_tendency!(
         column_iterator(p.scratch.ᶠtemp_scalar_3),
         column_iterator(p.scratch.ᶠtemp_scalar_4),
    )
-       if minimum(TD.air_temperature.(thp, ts_col)) < FT(100)
+       #if minimum(TD.air_temperature.(thp, ts_col)) < FT(100)
+       if minimum(cwr_col) < FT(0)
           @info(" ")
           @show(parent(Fields.coordinate_field(Y_col.c.ρ)))
           @show(parent(TD.air_density.(thp, ts_col)))
@@ -180,7 +181,8 @@ function cloud_condensate_tendency!(
                 @show(parent(dnlw))
                 @show(parent(uplw))
           @info(" ")
-      end
+          error()
+       end
     end
 
     @. Yₜ.c.ρq_liq += Y.c.ρ * cloud_sources(cmc.liquid, thp, ᶜts, q_rai, dt)
