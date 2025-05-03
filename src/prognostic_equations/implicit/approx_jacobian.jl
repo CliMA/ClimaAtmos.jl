@@ -627,7 +627,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
             q = TD.PhasePartition(tps, ts)
             ρ = TD.air_density(tps, ts)
 
-            S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, thp, q, ρ, Tₐ(tps, ts))
+            S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, tps, q, ρ, Tₐ(tps, ts))
 
             if S > FT_inner(0)
                 if S <= limit(qᵥ(tps, ts), dt, 2)
@@ -657,7 +657,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
             q = TD.PhasePartition(tps, ts)
             ρ = TD.air_density(tps, ts)
 
-            S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.ice, thp, q, ρ, Tₐ(tps, ts))
+            S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.ice, tps, q, ρ, Tₐ(tps, ts))
 
             if S > FT_inner(0)
                 if S <= limit(qᵥ(tps, ts), dt, 2)
