@@ -9,6 +9,17 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+
+    if p.atmos.noneq_cloud_formation_mode == Implicit()
+        cloud_condensate_tendency!(
+            Yₜ,
+            Y,
+            p,
+            p.atmos.moisture_model,
+            p.atmos.precip_model,
+        )
+    end
+
     if p.atmos.sgs_adv_mode == Implicit()
         edmfx_sgs_vertical_advection_tendency!(
             Yₜ,

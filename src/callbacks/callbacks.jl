@@ -223,10 +223,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         end
     end
 
-    if p.atmos.insolation isa IdealizedInsolation ||
-       !(p.atmos.surface_albedo isa CouplerAlbedo)
-        set_insolation_variables!(Y, p, t, p.atmos.insolation)
-    end
+    set_insolation_variables!(Y, p, t, p.atmos.insolation)
 
     if radiation_mode isa RRTMGPI.AllSkyRadiation ||
        radiation_mode isa RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics

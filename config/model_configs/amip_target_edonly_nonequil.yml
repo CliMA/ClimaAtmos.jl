@@ -8,6 +8,7 @@ viscous_sponge: true
 dt_save_state_to_disk: "30days"
 cloud_model: "grid_scale"
 moist: "nonequil"
+implicit_noneq_cloud_formation: true
 precip_model: "1M"
 rad: "allskywithclear"
 dt_rad: "1hours"
