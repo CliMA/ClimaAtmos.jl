@@ -131,7 +131,13 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
     end
 end
 
-function non_orographic_gravity_wave_compute_tendency!(Y, p)
+non_orographic_gravity_wave_compute_tendency!(Y, p, ::Nothing) = nothing
+
+function non_orographic_gravity_wave_compute_tendency!(
+    Y,
+    p,
+    ::NonOrographicGravityWave,
+)
     #unpack
     ᶜT = p.scratch.ᶜtemp_scalar
     (; ᶜts) = p.precomputed

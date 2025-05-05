@@ -407,7 +407,11 @@ NVTX.@annotate function nogw_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
 
-    non_orographic_gravity_wave_compute_tendency!(Y, p)
+    non_orographic_gravity_wave_compute_tendency!(
+        Y,
+        p,
+        p.atmos.non_orographic_gravity_wave,
+    )
     return nothing
 end
 
