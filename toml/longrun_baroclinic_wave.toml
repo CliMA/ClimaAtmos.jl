@@ -12,3 +12,6 @@ value = 50
 
 [sublimation_deposition_timescale]
 value = 50
+
+[zd_rayleigh]
+value = 25000.0

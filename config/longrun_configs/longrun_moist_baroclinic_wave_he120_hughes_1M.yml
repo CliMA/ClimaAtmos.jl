@@ -14,7 +14,7 @@ precip_model: "1M"
 dt_save_state_to_disk: "10days"
 output_dir: "/glade/derecho/scratch/asridhar/moist_bw_hughes_he120_1M/"
 netcdf_interpolation_num_points: [1440, 720, 43]
-toml: [toml/longrun_bw.toml]
+toml: [toml/longrun_baroclinic_wave.toml]
 diagnostics:
   - short_name: [pfull, ua, va, ta, ts, wa, va, ke, hus, clw, cli, pr, hussn, husra]
     reduction: inst
