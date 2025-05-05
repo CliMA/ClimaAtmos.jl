@@ -637,7 +637,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
                         return FT_inner(0)
                     end
                 else
-                    return limit_deriv
+                    return -limit_deriv
                 end
             else
                 if abs(S) <= limit(TD.liquid_specific_humidity(q), dt, 2)
@@ -667,7 +667,7 @@ function update_jacobian!(alg::ApproxJacobian, cache, Y, p, dtγ, t)
                         return FT_inner(0)
                     end
                 else
-                    return limit_deriv
+                    return -limit_deriv
                 end
             else
                 if abs(S) <= limit(TD.ice_specific_humidity(q), dt, 2)
