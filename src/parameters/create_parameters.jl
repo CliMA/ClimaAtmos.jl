@@ -202,7 +202,7 @@ function TurbulenceConvectionParameters(
         :EDMF_max_area => :max_area,
         :mixing_length_smin_rm => :smin_rm,
         :entr_coeff => :entr_coeff,
-        :mixing_length_Ri_crit => :Ri_crit,
+        :mixing_length_Ri_crit => :Ri_max,
         :detr_coeff => :detr_coeff,
         :EDMF_surface_area => :surface_area,
         :entr_param_vec => :entr_param_vec,

@@ -466,7 +466,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         )
 
         # The buoyancy term in the nonhydrostatic pressure closure is always applied
-        # for prognostic edmf. The tendency is combined with the buoyancy term in the 
+        # for prognostic edmf. The tendency is combined with the buoyancy term in the
         # updraft momentum equation in `edmfx_sgs_vertical_advection_tendency!`. This
         # term is still calculated here as it is used explicitly in the TKE equation.
         @. ᶠnh_pressure₃_buoyʲs.:($$j) = ᶠupdraft_nh_pressure_buoyancy(
@@ -502,12 +502,15 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
-    @. ᶜprandtl_nvec = turbulent_prandtl_number(
-        params,
-        obukhov_length,
-        ᶜlinear_buoygrad,
-        ᶜstrain_rate_norm,
-    )
+    @. ᶜprandtl_nvec =
+        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+
+    @. p.scratch.old_Ri = old_richardson_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+    @. p.scratch.new_Ri = new_richardson_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+    @. p.scratch.old_Pr = old_turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm, obukhov_length)
+    @. p.scratch.new_Pr = ᶜprandtl_nvec
+
+
     ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
     for j in 1:n

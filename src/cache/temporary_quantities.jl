@@ -12,6 +12,10 @@ function temporary_quantities(Y, atmos)
     CTh = CTh_vector_type(Y.c)
     uvw_vec = UVW(FT(0), FT(0), FT(0))
     return (;
+        old_Ri = Fields.Field(FT, center_space),
+        new_Ri = Fields.Field(FT, center_space),
+        old_Pr = Fields.Field(FT, center_space),
+        new_Pr = Fields.Field(FT, center_space),
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜtke_exch

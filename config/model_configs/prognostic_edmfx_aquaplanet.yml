@@ -38,4 +38,7 @@ diagnostics:
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
     reduction_time: average
     period: 1hours
+  - short_name: [old_Ri, old_Pr, new_Ri, new_Pr]
+    reduction_time: average
+    period: 1hours
 use_itime: true
