@@ -25,7 +25,7 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 10
 dt: "50secs"
-t_end: "20days"
+t_end: "5hours"
 toml: [toml/aquaplanet_nonequil_120_1200.toml]
 diagnostics:
   - short_name: [ta, ua, wa, va, rhoa, hur, hus, hussn, husra, clw, cli]
