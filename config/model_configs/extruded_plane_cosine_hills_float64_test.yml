@@ -2,6 +2,7 @@ config: "box"
 FLOAT_TYPE: "Float64"
 initial_condition: "ConstantBuoyancyFrequencyProfile"
 topography: "Cosine2D"
+mesh_warp_type: "Linear"
 x_max: 100e3
 y_max: 1e3
 z_max: 21e3

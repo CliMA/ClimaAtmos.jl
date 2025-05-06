@@ -2,6 +2,7 @@ config: "plane"
 FLOAT_TYPE: "Float64"
 initial_condition: "ConstantBuoyancyFrequencyProfile"
 topography: "Schar"
+mesh_warp_type: "Linear"
 x_max: 100e3
 z_max: 21e3
 x_elem: 100
