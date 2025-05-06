@@ -30,7 +30,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2} <: ATCP
     static_stab_coeff::FT
     Prandtl_number_scale::FT
     Prandtl_number_0::FT
-    Ri_crit::FT
+    Pr_max::FT
     smin_ub::FT
     smin_rm::FT
     min_updraft_top::FT

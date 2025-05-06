@@ -202,7 +202,6 @@ function TurbulenceConvectionParameters(
         :EDMF_max_area => :max_area,
         :mixing_length_smin_rm => :smin_rm,
         :entr_coeff => :entr_coeff,
-        :mixing_length_Ri_crit => :Ri_crit,
         :detr_coeff => :detr_coeff,
         :EDMF_surface_area => :surface_area,
         :entr_param_vec => :entr_param_vec,
@@ -219,6 +218,7 @@ function TurbulenceConvectionParameters(
         :pressure_normalmode_drag_coeff => :pressure_normalmode_drag_coeff,
         :mixing_length_Prandtl_number_scale => :Prandtl_number_scale,
         :mixing_length_Prandtl_number_0 => :Prandtl_number_0,
+        :mixing_length_Prandtl_maximum => :Pr_max,
         :mixing_length_static_stab_coeff => :static_stab_coeff,
         :pressure_normalmode_buoy_coeff1 =>
             :pressure_normalmode_buoy_coeff1,
