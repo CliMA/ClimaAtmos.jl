@@ -3,10 +3,10 @@ ensemble_size: 100
 n_iterations: 10
 batch_size: 10 # number of cases per iteration
 model_config : prognostic_edmfx_tv_era5driven_column.yml
-output_dir : /central/groups/esm/jschmitt/calibrations/tv_profiles_8 # output dir
+output_dir : /central/groups/esm/jschmitt/calibrations/tv_profiles_37 # output dir
 
 # Slurm resource configuration
-slurm_time: "02:00:00"
+slurm_time: "11:00:00"
 slurm_mem_per_cpu: "25G"
 slurm_cpus_per_task: 1
 
@@ -39,10 +39,12 @@ norm_factors_by_var:
   clw: [0.000004257, 0.00002] # for physical space
   #clw: [-9.32234, 3.10897] # for log space
 
+# change how we weight the different variables in the loss function. 
+covariance_structure: "full_cov"
 const_noise_by_var:
-  thetaa: 0.00005
-  hus: 0.00005
-  clw: 0.00005
+  ta: 0.0025 # 5% noise
+  hus: 0.0025
+  clw: 0.01 # 10% noise 
 
 forcing_toml_files:
   shallow: "scm_tomls/era5driven_relaxation_shallow_forcing.toml"

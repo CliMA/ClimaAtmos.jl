@@ -36,13 +36,32 @@ atmos_config = CA.AtmosConfig(model_config_dict)
 # obs_start, obs_end = start_datetime + Dates.Second(g_t_start_sec), start_datetime + Dates.Second(g_t_end_sec)
 
 # add workers
-# @info "Starting $ensemble_size workers."
-# addprocs(
-#     CAL.SlurmManager(Int(ensemble_size)),
-#     t = experiment_config["slurm_time"],
-#     mem_per_cpu = experiment_config["slurm_mem_per_cpu"],
-#     cpus_per_task = experiment_config["slurm_cpus_per_task"],
-# )
+@info "Starting $ensemble_size workers."
+addprocs(
+    CAL.SlurmManager(Int(ensemble_size)),
+    t = experiment_config["slurm_time"],
+    mem_per_cpu = experiment_config["slurm_mem_per_cpu"],
+    cpus_per_task = experiment_config["slurm_cpus_per_task"],
+)
+
+@everywhere begin
+    using ClimaCalibrate
+    import ClimaCalibrate as CAL
+    import ClimaAtmos as CA
+    import JLD2
+    import YAML
+
+    include("observation_map.jl")
+
+    experiment_dir = dirname(Base.active_project())
+    const model_interface = joinpath(experiment_dir, "model_interface.jl")
+    const experiment_config =
+        YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
+
+    include(model_interface)
+
+end
+
 
 if get(model_config_dict, "mixing_length_model", "") == "nn"
     prior = create_prior_with_nn(
@@ -137,6 +156,7 @@ for i in 1:num_sites
         Dates.Second(g_t_start_sec)
     obs_end = Dates.DateTime(start_dates[i], "yyyymmdd") +
         Dates.Second(g_t_end_sec)
+
     y_obs = get_obs(
         forcing_file_path,
         experiment_config["y_var_names"],
@@ -147,7 +167,18 @@ for i in 1:num_sites
         z_scm = zc_model,
         log_vars = log_vars,
     )
-    Σ_obs = I(length(y_obs))
+    # build noise covariance matrix - diagonal with rescaled noise
+    Σ_obs = get_Σ_obs(
+        forcing_file_path,
+        experiment_config["y_var_names"],
+        obs_start,
+        obs_end;
+        covariance_structure = covariance_structure,
+        normalize = true,
+        norm_factors_dict = norm_factors_by_var,
+        z_scm = zc_model,
+        log_vars = log_vars,
+    )
 
     push!(
         obs_vec,
@@ -164,27 +195,54 @@ end
 series_names = [ref_paths[i] for i in 1:length(ref_paths)]
 
 ### define minibatcher
-rfs_minibatcher =
-    EKP.RandomFixedSizeMinibatcher(experiment_config["batch_size"])
-observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
+rfs_minibatcher = EKP.RandomFixedSizeMinibatcher(experiment_config["batch_size"], "trim")
+observation_series = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
 @info "Obtained Observations..."
 
 ###  EKI hyperparameters/settings
 @info "Initializing calibration" n_iterations ensemble_size output_dir
 
-eki = CAL.calibrate(
-    CAL.WorkerBackend,
-    ensemble_size,
-    n_iterations,
-    observations,
-    nothing, # noise alread specified in observations
-    prior,
-    output_dir;
-    scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+# create the EKI object
+
+ekp_obj = EKP.EnsembleKalmanProcess(
+    EKP.construct_initial_ensemble(prior, ensemble_size),
+    observation_series,
+    EKP.Inversion();
     localization_method = EKP.Localizers.NoLocalization(),
-    ## localization_method = EKP.Localizers.SECNice(nice_loc_ug, nice_loc_gg),
     failure_handler_method = EKP.SampleSuccGauss(),
     accelerator = EKP.DefaultAccelerator(),
-    #     # accelerator = EKP.NesterovAccelerator(),
+    scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+    verbose= true,
 )
+
+eki = CAL.calibrate(CAL.WorkerBackend, ekp_obj, n_iterations, prior, output_dir; failure_rate = 0.9)
+
+
+# eki = CAL.calibrate(
+#     CAL.WorkerBackend,
+#     ensemble_size,
+#     n_iterations,
+#     observations,
+#     nothing, # noise alread specified in observations
+#     prior,
+#     output_dir;
+#     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+#     localization_method = EKP.Localizers.NoLocalization(),
+#     ## localization_method = EKP.Localizers.SECNice(nice_loc_ug, nice_loc_gg),
+#     failure_handler_method = EKP.SampleSuccGauss(),
+#     accelerator = EKP.DefaultAccelerator(),
+#     failure_rate = 0.9,
+#     #     # accelerator = EKP.NesterovAccelerator(),
+# )
+
+# make ekp struct first and then pass 
+
+
+
+
+# eki_obj = JLD2.load_object(experiment_config["output_dir"] * "/iteration_000/" * "eki_file.jld2")
+# G_ensemble = JLD2.load_object(experiment_config["output_dir"] * "/iteration_000/" * "G_ensemble.jld2")
+# G_ensemble = CAL.observation_map(0)
+# prior = CAL.get_prior(joinpath(dirname(Base.active_project()), prior_path))
+# CAL.update_ensemble!(eki_obj, G_ensemble, experiment_config["output_dir"], 0, prior)
