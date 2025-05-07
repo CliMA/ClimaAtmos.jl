@@ -33,7 +33,7 @@ dz_bottom: 30
 perturb_initstate: false
 dt: "10secs"
 dt_rad: "10mins"
-t_end: "8hours"
+t_end: "31hours"
 cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage: true
 toml: [scm_tomls/prognostic_prospct.toml]

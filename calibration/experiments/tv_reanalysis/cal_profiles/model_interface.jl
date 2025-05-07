@@ -11,12 +11,12 @@ using JLD2
 
 include("helper_funcs.jl")
 
-# using Distributed
+using Distributed
 const experiment_config_dict =
     YAML.load_file(joinpath(@__DIR__, "experiment_config.yml"))
-# const output_dir = experiment_config_dict["output_dir"]
-# const model_config = experiment_config_dict["model_config"]
-# const batch_size = experiment_config_dict["batch_size"]
+const output_dir = experiment_config_dict["output_dir"]
+const model_config = experiment_config_dict["model_config"]
+const batch_size = experiment_config_dict["batch_size"]
 
 @everywhere function run_atmos_simulation(atmos_config)
     simulation = CA.get_simulation(atmos_config)

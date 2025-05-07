@@ -216,7 +216,7 @@ function external_forcing_tendency!(
 
     ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_sum = p.scratch.ᶜtemp_scalar_2
-    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_nudging + ᶜdTdt_fluc
+    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_nudging + ᶜdTdt_fluc 
     @. ᶜdqtdt_sum = ᶜdqtdt_hadv + ᶜdqtdt_nudging + ᶜdqtdt_fluc
 
     T_0 = TD.Parameters.T_0(thermo_params)
@@ -296,7 +296,7 @@ function external_forcing_cache(
     column_target_space = axes(Y.c)
     surface_target_space = axes(Fields.level(Y.f.u₃, ClimaCore.Utilities.half))
 
-    extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Linear())
+    extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Flat())
 
     column_timevaryinginputs = [
         TimeVaryingInput(

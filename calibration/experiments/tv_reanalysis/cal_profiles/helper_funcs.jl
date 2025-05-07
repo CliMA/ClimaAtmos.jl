@@ -11,15 +11,24 @@ FT = Float64
 # batch over locations
 lats = [
     -20.0, -20.0, -20.0, -20.0, -20.0, -20.0, -18.5, -17.0,
-    -15.5, -14.0, -12.5, -11.0, -9.5, -8.0, 38.09999847, 35.0, 32.0,
-    29.0, 26.0, 23.0, 20.0, 17.0
+    -15.5, -14.0, -12.5, -11.0, -9.5, -8.0, 35.0, 32.0,
+    29.0, 23.0, 20.0, 17.0
 ]
 
 lons = [
     -72.5, -75.0, -77.5, -80.0, -82.5, -85.0, -90.0, -95.0,
-    -100.0, -105.0, -110.0, -115.0, -120.0, -125.1000061, -123.0,
-    -125.0, -129.0, -133.0, -137.0, -141.0, -145.0, -149.0
+    -100.0, -105.0, -110.0, -115.0, -120.0, -125.1000061,
+    -125.0, -129.0, -133.0, -141.0, -145.0, -149.0
 ]
+
+# Extend calibration sites beyond the cfsites
+append!(lats, vcat([30.0 for _ in 1:10],[-10.0 for _ in 1:10]))
+#append!(lats, [20. for _ in 1:10])
+append!(lons, vcat(range(-120, -160, length=10), range(-80, -160, length=10)))
+
+# Round the latitude and longitude values to the nearest 0.25
+lats = [round(lat * 4) / 4 for lat in lats]
+lons = [round(lon * 4) / 4 for lon in lons]
 
 start_dates = fill("20070701", length(lats))
 convection_type = fill("shallow", length(lats))
@@ -98,6 +107,67 @@ function get_obs(
     end
     obs_data = vcat(y...)
     return obs_data
+end
+
+function get_Σ_obs(
+    filename::String,
+    y_names::Vector{String},
+    obs_start::DateTime,
+    obs_end::DateTime;
+    covariance_structure::String = "full_cov", # options are "full_cov", "diagonal", or "flat"
+    normalize::Bool = true,
+    norm_factors_dict = norm_factors_dict,
+    z_scm::Vector{FT} = zc_model,
+    log_vars::Vector{String} = [""],
+) where {FT <: AbstractFloat}
+    # get a range of the times available in the file
+    data_start, data_end = nothing, nothing
+    NCDataset(filename, "r") do ds
+        time = ds["time"][:]
+        data_start = minimum(time)
+        data_end = maximum(time)
+    end
+    # create list of times spaced by the starttime and endtime window length 
+    time_delta = obs_end - obs_start
+    time_vec = data_start:time_delta:data_end
+    # use nc_fetch to get the observations for each time and variable
+    y_list = []
+    for var in y_names
+        obs = []
+        for i in 1:(length(time_vec) - 1)
+            y_ = vertical_interpolation(time_vec[i], time_vec[i+1], var, filename, z_scm)
+            if normalize
+                # normalize
+                y_ = (y_ .- norm_factors_dict[var][1]) ./ norm_factors_dict[var][2]
+            end
+            push!(obs, y_)
+        end
+        push!(y_list, hcat(obs...))
+    end
+    Y = vcat(y_list...) # samples
+
+    # diagonal inflation / observational noise
+    diag_cov_vec = []
+    for (ind, name) in enumerate(experiment_config["y_var_names"])
+        scale_noise_amount = experiment_config["const_noise_by_var"][name]
+        if isnothing(scale_noise_amount)
+            scale_noise_amount = 1.0
+        end
+        push!(diag_cov_vec, repeat([scale_noise_amount], experiment_config["dims_per_var"]))
+    end
+    measurement_error = vcat(diag_cov_vec...)
+
+    if lowercase(covariance_structure) == "full_cov"
+        Σ_obs = EKP.SVDplusD(EKP.tsvd_cov_from_samples(Y), Diagonal(measurement_error))
+    elseif lowercase(covariance_structure) == "diagonal"
+        observational_uncertainty = std(Y, dims = 2)[:]
+        Σ_obs = diagm(measurement_error .+ observational_uncertainty)
+    elseif lowercase(covariance_structure) == "flat"
+        Σ_obs = diagm(measurement_error)
+    else
+        error("Covariance structure not recognized.")
+    end
+    return Σ_obs
 end
 
 
@@ -315,8 +385,7 @@ function ensemble_data(
                 TOMLInterface.path_to_ensemble_member(output_dir, iteration, m)
             simdir =
                 SimDir(joinpath(member_path, "config_$config_i", "output_0000"))
-
-            G_ensemble[:, m] .= process_profile_func(
+                G_ensemble[:, m] .= process_profile_func(
                 simdir,
                 var_name;
                 reduction = reduction,
