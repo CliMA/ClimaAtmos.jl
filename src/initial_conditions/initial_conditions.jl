@@ -586,7 +586,8 @@ end
 
 function moist_baroclinic_wave_values(z, ϕ, λ, params, perturb, deep_atmosphere)
     FT = eltype(params)
-    MSLP = CAP.MSLP(params)
+    #MSLP = CAP.MSLP(params)
+    MSLP = FT(1e5)
 
     # Constants from paper
     p_w = FT(3.4e4)
