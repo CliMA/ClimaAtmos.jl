@@ -124,20 +124,6 @@ NVTX.@annotate function cloud_fraction_model_callback!(integrator)
     set_cloud_fraction!(Y, p, p.atmos.moisture_model, p.atmos.cloud_model)
 end
 
-# TODO: Move this somewhere else
-update_o3!(_, _, _) = nothing
-function update_o3!(p, t, ::PrescribedOzone)
-    evaluate!(p.tracers.o3, p.tracers.prescribed_o3_timevaryinginput, t)
-    return nothing
-end
-
-update_co2!(_, _, _) = nothing
-function update_co2!(p, t, ::MaunaLoaCO2)
-    evaluate!(p.tracers.co2, p.tracers.prescribed_co2_timevaryinginput, t)
-    return nothing
-end
-
-
 NVTX.@annotate function rrtmgp_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -148,9 +134,6 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     (; ᶠradiation_flux, rrtmgp_model) = p.radiation
     (; radiation_mode) = p.atmos
 
-    # If we have prescribed ozone or aerosols, we need to update them
-    update_o3!(p, t, p.atmos.ozone)
-    update_co2!(p, t, p.atmos.co2)
     if :prescribed_aerosols_field in propertynames(p.tracers)
         for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
             field = getproperty(p.tracers.prescribed_aerosols_field, key)
@@ -165,63 +148,9 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     end
 
     FT = Spaces.undertype(axes(Y.c))
-    thermo_params = CAP.thermodynamics_params(params)
     cmc = CAP.microphysics_cloud_params(params)
-    T_min = CAP.optics_lookup_temperature_min(params)
-    T_max = CAP.optics_lookup_temperature_max(params)
 
-    sfc_ts = sfc_conditions.ts
-    sfc_T = Fields.array2field(rrtmgp_model.surface_temperature, axes(sfc_ts))
-    @. sfc_T = TD.air_temperature(thermo_params, sfc_ts)
-
-    rrtmgp_model.center_pressure .= Fields.field2array(ᶜp)
-    ᶜT = Fields.array2field(rrtmgp_model.center_temperature, axes(Y.c))
-    # TODO: move this to RRTMGP
-    @. ᶜT =
-        min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
-
-    if !(radiation_mode isa RRTMGPI.GrayRadiation)
-        ᶜrh =
-            Fields.array2field(rrtmgp_model.center_relative_humidity, axes(Y.c))
-        ᶜvmr_h2o = Fields.array2field(
-            rrtmgp_model.center_volume_mixing_ratio_h2o,
-            axes(Y.c),
-        )
-        if radiation_mode.idealized_h2o
-            # slowly increase the relative humidity from 0 to 0.6 to account for
-            # the fact that we have a very unrealistic initial condition
-            max_relative_humidity = FT(0.6)
-            t_increasing_humidity = FT(60 * 60 * 24 * 30)
-            if float(t) < t_increasing_humidity
-                max_relative_humidity *= float(t) / t_increasing_humidity
-            end
-            @. ᶜrh = max_relative_humidity
-
-            # temporarily store ᶜq_tot in ᶜvmr_h2o
-            ᶜq_tot = ᶜvmr_h2o
-            @. ᶜq_tot =
-                max_relative_humidity * TD.q_vap_saturation(thermo_params, ᶜts)
-
-            # filter ᶜq_tot so that it is monotonically decreasing with z
-            for i in 2:Spaces.nlevels(axes(ᶜq_tot))
-                level = Fields.field_values(Spaces.level(ᶜq_tot, i))
-                prev_level = Fields.field_values(Spaces.level(ᶜq_tot, i - 1))
-                @. level = min(level, prev_level)
-            end
-
-            # assume that ᶜq_vap = ᶜq_tot when computing ᶜvmr_h2o
-            @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
-                thermo_params,
-                TD.PhasePartition(ᶜq_tot),
-            )
-        else
-            @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
-                thermo_params,
-                TD.PhasePartition(thermo_params, ᶜts),
-            )
-            @. ᶜrh = min(max(TD.relative_humidity(thermo_params, ᶜts), 0), 1)
-        end
-    end
+    RRTMGPI.update_atmospheric_state!(integrator)
 
     set_insolation_variables!(Y, p, t, p.atmos.insolation)
 
@@ -363,6 +292,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
             for (rrtmgp_aerosol_name, prescribed_aerosol_name) in
                 aerosol_names_pair
+
                 ᶜaero_conc = Fields.array2field(
                     getproperty(rrtmgp_model, rrtmgp_aerosol_name),
                     axes(Y.c),
@@ -477,14 +407,13 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     au = FT(CAP.astro_unit(params))
     # TODO: Where does this date0 come from?
     date0 = DateTime("2000-01-01T11:58:56.816")
-    d, δ, η_UTC =
-        FT.(
-            Insolation.helper_instantaneous_zenith_angle(
-                current_datetime,
-                date0,
-                insolation_params,
-            )
-        )
+    d, δ, η_UTC = FT.(
+        Insolation.helper_instantaneous_zenith_angle(
+            current_datetime,
+            date0,
+            insolation_params,
+        ),
+    )
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     cos_zenith =
         Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
