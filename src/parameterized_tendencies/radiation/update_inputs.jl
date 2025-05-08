@@ -21,7 +21,6 @@ function update_atmospheric_state!(radiation_mode::R, integrator) where {R}
     update_concentrations!(radiation_mode, integrator.p.radiation.rrtmgp_model)
     # update gas concentrations (volume mixing ratios)
     update_volume_mixing_ratios!(integrator)
-    @show "after update_atmospheric_state!"
     return nothing
 end
 
@@ -66,6 +65,7 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
     (; radiation_mode) = p.atmos
     (; rrtmgp_model) = p.radiation
     thermo_params = CAP.thermodynamics_params(p.params)
+    FT = eltype(thermo_params)
     (; ᶜts) = p.precomputed
     ᶜrh = Fields.array2field(rrtmgp_model.center_relative_humidity, axes(u.c))
     ᶜvmr_h2o = Fields.array2field(
