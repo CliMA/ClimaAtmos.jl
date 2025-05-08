@@ -162,7 +162,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_aquaplanet_allsky_0M_earth"
 
-      - label: ":umbrella: aquaplanet equilmoist allsky radiation + 1M microphysics"
+      - label: ":umbrella: aquaplanet non-equil moisture allsky radiation + 1M microphysics"
         command:
           - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
         artifact_paths: "$$JOB_NAME/output_active/*"
