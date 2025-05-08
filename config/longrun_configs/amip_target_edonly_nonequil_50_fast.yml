@@ -23,6 +23,7 @@ surface_setup: "DefaultMoninObukhov"
 turbconv: "edonly_edmfx"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
+ode_algo: "ARS111"
 max_newton_iters_ode: 10
 dt: "50secs"
 t_end: "5hours"

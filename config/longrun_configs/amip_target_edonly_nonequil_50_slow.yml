@@ -22,6 +22,7 @@ prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05",
 surface_setup: "DefaultMoninObukhov"
 turbconv: "edonly_edmfx"
 implicit_diffusion: true
+ode_algo: "ARS111"
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 10
 dt: "50secs"
