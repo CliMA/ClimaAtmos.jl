@@ -4,6 +4,10 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+v0.30.1
+-------
+
+
 v0.30.0
 -------
 
