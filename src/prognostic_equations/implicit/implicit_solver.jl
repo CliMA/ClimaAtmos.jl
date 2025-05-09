@@ -1,4 +1,5 @@
 import ForwardDiff
+import ClimaComms: @threaded
 import LinearAlgebra: I, Adjoint, diagind
 import ClimaCore.InputOutput: HDF5, HDF5Writer
 
@@ -112,6 +113,8 @@ function ImplicitEquationJacobian(alg, Y, atmos, output_dir)
     return ImplicitEquationJacobian(alg, cache)
 end
 
+safe_float(dtγ, Y) = eltype(Y)(float(dtγ))
+
 # ClimaTimeSteppers.jl calls zero(jac_prototype) to initialize the Jacobian, but
 # we don't need to allocate a second Jacobian for this (in particular, the exact
 # Jacobian can be very expensive to allocate).
@@ -120,14 +123,14 @@ Base.zero(jacobian::ImplicitEquationJacobian) = jacobian
 # These are either called by ClimaTimeSteppers.jl before each linear solve, or
 # by a callback once every dt_update_exact_jacobian.
 NVTX.@annotate update_jacobian!(jacobian, Y, p, dtγ, t) =
-    update_jacobian!(jacobian.alg, jacobian.cache, Y, p, eltype(Y)(dtγ), t)
+    update_jacobian!(jacobian.alg, jacobian.cache, Y, p, safe_float(dtγ, Y), t)
 NVTX.@annotate update_and_check_jacobian!(jacobian, Y, p, dtγ, t) =
     update_and_check_jacobian!(
         jacobian.alg,
         jacobian.cache,
         Y,
         p,
-        eltype(Y)(dtγ),
+        safe_float(dtγ, Y),
         t,
     )
 
@@ -164,7 +167,7 @@ NVTX.@annotate function save_jacobian!(jacobian, Y, p, dtγ, t)
     sum!(abs, reshape(column_vector, 1, :), column_vectors)
     column_vector ./= Fields.ncolumns(Y.c)
 
-    save_jacobian!(jacobian.alg, jacobian.cache, Y, eltype(Y)(dtγ), t)
+    save_jacobian!(jacobian.alg, jacobian.cache, Y, safe_float(dtγ, Y), t)
 end
 
 contains_any_fields(::Union{Fields.Field, Fields.FieldVector}) = true
