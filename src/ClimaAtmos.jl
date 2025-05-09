@@ -59,6 +59,7 @@ include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))
 include(joinpath("prognostic_equations", "implicit", "approx_jacobian.jl"))
 include(joinpath("prognostic_equations", "implicit", "exact_jacobian.jl"))
+include(joinpath("prognostic_equations", "implicit", "sparse_exact_jacobian.jl"))
 include(joinpath("prognostic_equations", "implicit", "debug_jacobian.jl"))
 include(joinpath("prognostic_equations", "implicit", "dual_fixes.jl"))
 

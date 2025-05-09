@@ -88,7 +88,7 @@ use_exact_jacobian:
   value: false
 debug_approximate_jacobian:
   help: "Whether to compare the approximate Jacobian against the exact Jacobian once per `dt_update_exact_jacobian` (default is `false`)"
-  value: true # TODO: Change this to false
+  value: false
 only_debug_first_column_jacobian:
   help: "Whether to debug only the Jacobian in the first column when `debug_approximate_jacobian` is `true` and `use_exact_jacobian` is `false` (default is equal to `n_cols > 10000`)"
   value: ~

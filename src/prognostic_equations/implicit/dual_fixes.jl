@@ -163,3 +163,20 @@ function scalar_field_index_ranges(field_vector)
     first_level_indices = (1, (last_level_indices[1:(end - 1)] .+ 1)...)
     return map(UnitRange, first_level_indices, last_level_indices)
 end
+
+function column_iterator_indices(field)
+    axes(field) isa Union{Spaces.PointSpace, Spaces.FiniteDifferenceSpace} &&
+        return ((1, 1, 1),)
+    horz_space = Spaces.horizontal_space(axes(field))
+    qs = 1:Quadratures.degrees_of_freedom(Spaces.quadrature_style(horz_space))
+    hs = Spaces.eachslabindex(horz_space)
+    return horz_space isa Spaces.SpectralElementSpace1D ?
+           Iterators.product(qs, hs) : Iterators.product(qs, qs, hs)
+end
+column_iterator_indices(field_vector::Fields.FieldVector) =
+    column_iterator_indices(first(Fields._values(field_vector)))
+
+column_iterator(iterable) =
+    Iterators.map(column_iterator_indices(iterable)) do (indices...,)
+        Fields.column(iterable, indices...)
+    end

@@ -425,24 +425,25 @@ get_jacobian(ode_algo, Y, atmos, parsed_args, output_dir) =
             DerivativeFlag(atmos.sgs_nh_pressure_mode),
             parsed_args["approximate_linear_solve_iters"],
         )
-        use_exact_jacobian = parsed_args["use_exact_jacobian"]
-        debug_approximate_jacobian = parsed_args["debug_approximate_jacobian"]
-        jacobian_algorithm = if debug_approximate_jacobian
-            # Debug one column when there are many columns.
-            only_debug_first_column_jacobian =
-                isnothing(parsed_args["only_debug_first_column_jacobian"]) ?
-                Fields.ncolumns(axes(Y.c)) > 10000 :
-                parsed_args["only_debug_first_column_jacobian"]
-            DebugJacobian(
-                approx_jacobian_algorithm,
-                use_exact_jacobian,
-                only_debug_first_column_jacobian,
-            )
-        elseif use_exact_jacobian
-            ExactJacobian()
-        else
-            approx_jacobian_algorithm
-        end
+        # use_exact_jacobian = parsed_args["use_exact_jacobian"]
+        # debug_approximate_jacobian = parsed_args["debug_approximate_jacobian"]
+        # jacobian_algorithm = if debug_approximate_jacobian
+        #     # Debug one column when there are many columns.
+        #     only_debug_first_column_jacobian =
+        #         isnothing(parsed_args["only_debug_first_column_jacobian"]) ?
+        #         Fields.ncolumns(axes(Y.c)) > 10000 :
+        #         parsed_args["only_debug_first_column_jacobian"]
+        #     DebugJacobian(
+        #         approx_jacobian_algorithm,
+        #         use_exact_jacobian,
+        #         only_debug_first_column_jacobian,
+        #     )
+        # elseif use_exact_jacobian
+        #     ExactJacobian()
+        # else
+        #     approx_jacobian_algorithm
+        # end
+        jacobian_algorithm = SparseExactJacobian(approx_jacobian_algorithm)
         @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
         ImplicitEquationJacobian(jacobian_algorithm, Y, atmos, output_dir)
     else
@@ -460,6 +461,7 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
     else
         @assert ode_algo_name <: CTS.IMEXARKAlgorithmName
         newtons_method = CTS.NewtonsMethod(;
+            update_j = CTS.UpdateEvery(CTS.NewTimeStep),
             max_iters = parsed_args["max_newton_iters_ode"],
             krylov_method = if parsed_args["use_krylov_method"]
                 CTS.KrylovMethod(;
