@@ -10,7 +10,6 @@ import Adapt
 import ClimaComms
 using NVTX
 using Random
-
 # TODO: Move this file to RRTMGP.jl, once the interface has been settled.
 # It will be faster to do interface development in the same repo as experiment
 # development, but, since this is just a user-friendly wrapper for RRTMGP.jl, we
@@ -737,9 +736,9 @@ function _RRTMGPModel(
         )
     else
         layerdata = DA{FT}(undef, 4, nlay, ncol)
-        p_lay = view(layerdata, 2, :, :)
-        t_lay = view(layerdata, 3, :, :)
-        rh_lay = view(layerdata, 4, :, :)
+        p_lay = view(layerdata,2,:,:)
+        t_lay = view(layerdata,3,:,:)
+        rh_lay = view(layerdata,4,:,:)
         set_and_save!(p_lay, "center_pressure", t..., dict)
         set_and_save!(t_lay, "center_temperature", t..., dict)
         set_and_save!(rh_lay, "center_relative_humidity", t..., dict)
@@ -768,7 +767,7 @@ function _RRTMGPModel(
         else
             vmr = RRTMGP.Vmrs.Vmr(DA{FT}(undef, lu_kwargs.ngas_sw, nlay, ncol))
             for gas_name in ["h2o", "o3", gas_names...]
-                gas_view = view(vmr.vmr, lookups.idx_gases_sw[gas_name], :, :)
+                gas_view = view(vmr.vmr,lookups.idx_gases_sw[gas_name],:,:)
                 set_and_save!(gas_view, "center_$vmr_str$gas_name", t..., dict)
             end
         end
@@ -849,7 +848,7 @@ function _RRTMGPModel(
             for (i, name) in enumerate(aerosol_names)
                 if occursin("dust", name) || occursin("ss", name)
                     set_and_save!(
-                        view(aero_size, i, :, :),
+                        view(aero_size,i,:,:),
                         "center_$(name)_radius",
                         t...,
                         dict,
@@ -858,7 +857,7 @@ function _RRTMGPModel(
             end
             for (i, name) in enumerate(aerosol_names)
                 set_and_save!(
-                    view(aero_mass, i, :, :),
+                    view(aero_mass,i,:,:),
                     "center_$(name)_column_mass_density",
                     t...,
                     dict,
@@ -1025,7 +1024,7 @@ NVTX.@annotate function update_fluxes!(model, seedval)
     model.radiation_mode.add_isothermal_boundary_layer &&
         update_boundary_layer!(model)
     clip_values!(model)
-    update_concentrations!(model.radiation_mode, model)
+    #update_concentrations!(model.radiation_mode, model)
     update_lw_fluxes!(model.radiation_mode, model)
     update_sw_fluxes!(model.radiation_mode, model)
     update_net_fluxes!(model.radiation_mode, model)
@@ -1158,7 +1157,7 @@ update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_gas!(
 )
 get_vmr_h2o(vmr::RRTMGP.Vmrs.VmrGM, idx_gases_sw) = vmr.vmr_h2o
 get_vmr_h2o(vmr::RRTMGP.Vmrs.Vmr, idx_gases_sw) =
-    view(vmr.vmr, idx_gases_sw["h2o"], :, :)
+    view(vmr.vmr,idx_gases_sw["h2o"],:,:)
 
 NVTX.@annotate update_lw_fluxes!(::GrayRadiation, model) =
     RRTMGP.RTESolver.solve_lw!(model.lw_solver, model.as, model.metric_scaling)
@@ -1262,4 +1261,5 @@ function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
     model.face_flux .= model.face_lw_flux .+ model.face_sw_flux
 end
 
+include("update_inputs.jl")
 end # end module
