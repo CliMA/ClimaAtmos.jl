@@ -281,43 +281,126 @@ function mixing_length(
 end
 
 """
-    turbulent_prandtl_number(params, obukhov_length, ᶜRi_grad)
+    turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
 
 where:
-- `params`: set with model parameters
-- `obukhov_length`: surface Monin Obukhov length
-- `ᶜRi_grad`: gradient Richardson number
+- `params`: Parameters set
+- `ᶜlinear_buoygrad`: N^2, Brunt-Väisälä frequency squared [1/s^2].
+- `ᶜstrain_rate_norm`: Frobenius norm of strain rate tensor, |S| [1/s].
 
-Returns the turbulent Prandtl number give the obukhov length sign and
-the gradient Richardson number, which is calculated from the linearized
-buoyancy gradient and shear production.
+Returns the turbulent Prandtl number based on the gradient Richardson number.
+
+The formula implemented is from Li et al. (JAS 2015, DOI: 10.1175/JAS-D-14-0335.1, their Eq. 39),
+with a reformulation and correction of an algebraic error in their expression:
+
+    Pr_t(Ri) = (X + sqrt(max(X^2 - 4*Pr_n*Ri, 0))) / 2
+
+where X = Pr_n + ω_pr * Ri and Ri = min( N^2 / max(2*|S|, eps), Ri_max )
+using parameters Pr_n = Prandtl_number_0, ω_pr = Prandtl_number_scale, and Ri_max.
+This formula applies in both stable (Ri > 0) and unstable (Ri < 0) conditions.
 """
-function turbulent_prandtl_number(
-    params,
-    obukhov_length,
-    ᶜlinear_buoygrad,
-    ᶜstrain_rate_norm,
-)
+function turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
     FT = eltype(params)
     turbconv_params = CAP.turbconv_params(params)
-    Ri_c = CAP.Ri_crit(turbconv_params)
-    ω_pr = CAP.Prandtl_number_scale(turbconv_params)
-    Pr_n = CAP.Prandtl_number_0(turbconv_params)
-    ᶜRi_grad = min(ᶜlinear_buoygrad / max(2 * ᶜstrain_rate_norm, eps(FT)), Ri_c)
-    if obukhov_length > 0 && ᶜRi_grad > 0 #stable
+    eps_FT = eps(FT)
+
+    # Parameters from CliMAParams
+    Pr_n = CAP.Prandtl_number_0(turbconv_params) # Neutral Prandtl number
+    ω_pr = CAP.Prandtl_number_scale(turbconv_params) # Prandtl number scale coefficient
+    # TODO The default value for this is 0.25. Testing if 100 works, so I can update ClimaParams
+    #Ri_max = CAP.Ri_max(turbconv_params) # Max Richardson number limit
+    Ri_max = FT(0.25)
+
+    # Calculate the raw gradient Richardson number
+    # Using the definition Ri = N^2 / (2*|S|)
+    shear_term_safe = max(2 * ᶜstrain_rate_norm, eps_FT)
+    ᶜRi_raw = ᶜlinear_buoygrad / shear_term_safe
+
+    # Cap the Richardson number at Ri_max before using it in the formula
+    # This allows negative Ri (unstable) and positive Ri up to Ri_max
+    ᶜRi_grad = min(ᶜRi_raw, Ri_max)
+
+    # --- Apply the Pr_t(Ri) formula valid for stable and unstable conditions ---
+
+    # Calculate the intermediate term X = Pr_n + ω_pr * Ri
+    X = Pr_n + ω_pr * ᶜRi_grad
+
+    # Calculate the discriminant term: (Pr_n + ω_pr*Ri)^2 - 4*Pr_n*Ri = X^2 - 4*Pr_n*Ri
+    discriminant = X * X - 4 * Pr_n * ᶜRi_grad
+    # Ensure the discriminant is non-negative before taking the square root
+    discriminant_safe = max(discriminant, FT(0))
+
+    # Calculate the Prandtl number using the positive root solution of the quadratic eq.
+    # Pr_t = ( X + sqrt(discriminant_safe) ) / 2
+    prandtl_nvec = (X + sqrt(discriminant_safe)) / 2
+
+    # Optional safety: ensure Pr_t is not excessively small or negative,
+    # though the formula should typically yield positive values if Pr_n > 0.
+    return max(prandtl_nvec, eps_FT)
+end
+function new_richardson_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+    FT = eltype(params)
+    turbconv_params = CAP.turbconv_params(params)
+    eps_FT = eps(FT)
+
+    # Parameters from CliMAParams
+    Pr_n = CAP.Prandtl_number_0(turbconv_params) # Neutral Prandtl number
+    ω_pr = CAP.Prandtl_number_scale(turbconv_params) # Prandtl number scale coefficient
+    # TODO The default value for this is 0.25. Testing if 100 works, so I can update ClimaParams
+    #Ri_max = CAP.Ri_max(turbconv_params) # Max Richardson number limit
+    Ri_max = FT(0.25)
+
+    # Calculate the raw gradient Richardson number
+    # Using the definition Ri = N^2 / (2*|S|)
+    shear_term_safe = max(2 * ᶜstrain_rate_norm, eps_FT)
+    ᶜRi_raw = ᶜlinear_buoygrad / shear_term_safe
+
+    # Cap the Richardson number at Ri_max before using it in the formula
+    # This allows negative Ri (unstable) and positive Ri up to Ri_max
+    Ri_grad = min(ᶜRi_raw, Ri_max)
+
+    return Ri_grad
+end
+function old_turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm, obukhov_length)
+    FT = eltype(params)
+    turbconv_params = CAP.turbconv_params(params)
+    eps_FT = eps(FT)
+
+    # Parameters from CliMAParams
+    Pr_n = CAP.Prandtl_number_0(turbconv_params) # Neutral Prandtl number
+    ω_pr = CAP.Prandtl_number_scale(turbconv_params) # Prandtl number scale coefficient
+    Ri_max = FT(0.25)
+
+    # Old computation
+    ᶜRi_grad_old = min(ᶜlinear_buoygrad / max(2 * ᶜstrain_rate_norm, eps(FT)), FT(0.25))
+    prandtl_nvec_old = Pr_n
+    if obukhov_length > 0 && ᶜRi_grad_old > 0 #stable
         # CSB (Dan Li, 2019, eq. 75), where ω_pr = ω_1 + 1 = 53.0 / 13.0
-        prandtl_nvec =
+        prandtl_nvec_old =
             Pr_n * (
-                2 * ᶜRi_grad / (
-                    1 + ω_pr * ᶜRi_grad -
-                    sqrt((1 + ω_pr * ᶜRi_grad)^2 - 4 * ᶜRi_grad)
+                2 * ᶜRi_grad_old / (
+                    1 + ω_pr * ᶜRi_grad_old -
+                    sqrt((1 + ω_pr * ᶜRi_grad_old)^2 - 4 * ᶜRi_grad_old)
                 )
             )
-    else
-        prandtl_nvec = Pr_n
     end
-    return prandtl_nvec
+    return prandtl_nvec_old
 end
+function old_richardson_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+    FT = eltype(params)
+    turbconv_params = CAP.turbconv_params(params)
+    eps_FT = eps(FT)
+
+    # Parameters from CliMAParams
+    Pr_n = CAP.Prandtl_number_0(turbconv_params) # Neutral Prandtl number
+    ω_pr = CAP.Prandtl_number_scale(turbconv_params) # Prandtl number scale coefficient
+    Ri_max = FT(0.25)
+
+    Ri_grad_old = min(ᶜlinear_buoygrad / max(2 * ᶜstrain_rate_norm, eps(FT)), FT(0.25))
+    return Ri_grad_old
+end
+
+
 
 edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 

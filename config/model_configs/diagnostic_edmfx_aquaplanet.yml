@@ -22,3 +22,10 @@ dt: 120secs
 t_end: 3hours
 reproducibility_test: true
 toml: [toml/diagnostic_edmfx_0M.toml]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfes, hur, hus, cl, clw, cli]
+    reduction_time: average
+    period: 1hours
+  - short_name: [old_Ri, old_Pr, new_Ri, new_Pr]
+    reduction_time: average
+    period: 1hours

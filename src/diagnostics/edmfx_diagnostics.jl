@@ -1357,3 +1357,58 @@ add_diagnostic_variable!(
     comments = "Vertical diffusion coefficient for momentum due to parameterized eddies",
     compute! = compute_evu!,
 )
+
+
+
+add_diagnostic_variable!(
+    short_name = "old_Ri",
+    long_name = "old_Ri",
+    standard_name = "old_Ri",
+    units = "-",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.scratch.old_Ri)
+        else
+            out .= cache.scratch.old_Ri
+        end
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "new_Ri",
+    long_name = "mew_Ri",
+    standard_name = "new_Ri",
+    units = "-",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.scratch.new_Ri)
+        else
+            out .= cache.scratch.new_Ri
+        end
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "old_Pr",
+    long_name = "old_Pr",
+    standard_name = "old_Pr",
+    units = "-",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.scratch.old_Pr)
+        else
+            out .= cache.scratch.old_Pr
+        end
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "new_Pr",
+    long_name = "new_Pr",
+    standard_name = "new_Pr",
+    units = "-",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.scratch.new_Pr)
+        else
+            out .= cache.scratch.new_Pr
+        end
+    end,
+)
