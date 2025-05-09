@@ -16,8 +16,8 @@ simulated_years_per_day(es::EfficiencyStats) =
     simulated_years(es) / walltime_in_days(es)
 
 simulated_years(es::EfficiencyStats) =
-    float(es.tspan[2] - es.tspan[1]) * (1 / (365 * 24 * 3600)) #=seconds * years per second=#
-walltime_in_days(es::EfficiencyStats) = es.walltime * (1 / (24 * 3600)) #=seconds * days per second=#
+    float(es.tspan[2] - es.tspan[1]) * (1 / (365 * 24 * 3600))#=seconds * years per second=#
+walltime_in_days(es::EfficiencyStats) = es.walltime * (1 / (24 * 3600))#=seconds * days per second=#
 
 function timed_solve!(integrator)
     device = ClimaComms.device(integrator.u.c)
