@@ -31,6 +31,9 @@ function get_external_forcing_file_path(
                @clima_artifact("era5_hourly_atmos_processed"),
 )
     start_date = parsed_args["start_date"]
+    t_end = parsed_args["t_end"]
+    end_time = DateTime(start_date, "yyyymmdd") + Dates.Second(time_to_seconds(t_end))
+    end_date = Dates.format(end_time, "yyyymmdd")
     # round to era5 quarter degree resolution for site selection
     site_latitude = round(parsed_args["site_latitude"] * 4) / 4
     site_longitude = round(parsed_args["site_longitude"] * 4) / 4
@@ -42,7 +45,7 @@ function get_external_forcing_file_path(
 
     return joinpath(
         data_dir,
-        "tv_forcing_$(site_latitude)_$(site_longitude)_$(start_date).nc",
+        "tv_forcing_$(site_latitude)_$(site_longitude)_$(start_date)_$(end_date).nc",
     )
 end
 
@@ -415,4 +418,76 @@ function generate_external_era5_forcing_file(
     close(tvforcing)
     close(tv_inst)
     close(tv_accum)
+end
+
+
+function generate_multiday_external_forcing_file(
+    parsed_args,
+    forcing_file_path,
+    FT;
+    time_resolution = FT(3600), # size of accumulated variable period in seconds (3600 for hourly, 86400 for daily and monthly)
+    data_dir = @clima_artifact("era5_hourly_atmos_raw"),
+)
+    # run generate_external_era5_forcing_file for each day 
+    # get range of starttimes and endtimes
+    start_date = DateTime(parsed_args["start_date"], "yyyymmdd")
+    end_time = start_date + Dates.Second(time_to_seconds(parsed_args["t_end"]))
+    end_date = Dates.format(end_time, "yyyymmdd")
+
+    start_dates = start_date:Day(1):end_time
+    println(collect(start_dates))
+    
+    file_list = []
+    for (i, dd) in enumerate(start_dates)
+        # get forcing file path
+        single_parsed_args = Dict(
+            "start_date" => Dates.format(dd, "yyyymmdd"),
+            "t_end" => "23hours", # some value between 0 and 24 hours to generate the single file
+            "site_latitude" => parsed_args["site_latitude"],
+            "site_longitude" => parsed_args["site_longitude"],
+        )
+        single_file_path = get_external_forcing_file_path(single_parsed_args)
+        push!(file_list, single_file_path)
+        println(single_file_path)
+        # generate the external forcing file for this day
+        generate_external_era5_forcing_file(
+            parsed_args["site_latitude"],
+            parsed_args["site_longitude"],
+            Dates.format(dd, "yyyymmdd"),
+            single_file_path,
+            FT;
+            time_resolution = time_resolution,
+            data_dir = data_dir,
+        )
+
+        # concatenate NCDatasets together and save as new file
+        if i == length(start_dates)
+
+            # Create a new file for the concatenated dataset
+            # concatenated_file_path = get_external_forcing_file_path(
+            # Dict(
+            #     "start_date" => Dates.format(start_date, "yyyymmdd"),
+            #     "t_end" => Dates.format(end_date - start_date, "HHhours"),
+            #     "site_latitude" => lat,
+            #     "site_longitude" => lon,
+            # )
+            # )
+            concatenated_ds = NCDataset(forcing_file_path, "c")
+
+            # Open all files and concatenate their variables
+            for (j, file) in enumerate(file_list)
+            current_ds = NCDataset(file, "r")
+            # Iterate over variables and concatenate them
+            for var_name in keys(current_ds)
+                if j == 1
+                # Define the variable in the concatenated dataset
+                defVar(concatenated_ds, var_name, current_ds[var_name].eltype, current_ds[var_name].dims)
+                end
+                concatenated_ds[var_name] = vcat(concatenated_ds[var_name], current_ds[var_name])
+            end
+            close(current_ds)
+            end
+            close(concatenated_ds)
+        end
+    end
 end
