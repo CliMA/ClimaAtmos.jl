@@ -8,58 +8,34 @@ import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
 
 #####
-##### No subsidence
-#####
-
-subsidence_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-
-#####
 ##### Subsidence
 #####
 
-subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:none}) =
-    @. ᶜρχₜ -= ᶜρ * (ᶜsubdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³))
-subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:first_order}) =
-    @. ᶜρχₜ -= ᶜρ * (ᶜsubdivᵥ(ᶠupwind1(ᶠu³, ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³))
-subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:third_order}) =
-    @. ᶜρχₜ -= ᶜρ * (ᶜsubdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³))
+subsidence_tracer(::Val{:h_tot}, thermo_params, ts, ρ, ρe_tot) =
+    TD.total_specific_enthalpy(thermo_params, ts, ρe_tot / ρ)
+subsidence_tracer(::Val{:q_tot}, thermo_params, ts, ρ, ρe_tot) =
+    TD.total_specific_humidity(thermo_params, ts)
+subsidence_tracer(::Val{:q_liq}, thermo_params, ts, ρ, ρe_tot) =
+    TD.liquid_specific_humidity(thermo_params, ts)
+subsidence_tracer(::Val{:q_ice}, thermo_params, ts, ρ, ρe_tot) =
+    TD.ice_specific_humidity(thermo_params, ts)
 
-function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
-    (; moisture_model) = p.atmos
-    subsidence_profile = p.atmos.subsidence.prof
-    (; ᶜh_tot, ᶜspecific) = p.precomputed
-
-    ᶠz = Fields.coordinate_field(axes(Y.f)).z
-    ᶠlg = Fields.local_geometry_field(Y.f)
-    ᶠsubsidence³ = p.scratch.ᶠtemp_CT3
-    @. ᶠsubsidence³ =
-        subsidence_profile(ᶠz) * CT3(unit_basis_vector_data(CT3, ᶠlg))
-
-    # LS Subsidence
-    subsidence!(Yₜ.c.ρe_tot, Y.c.ρ, ᶠsubsidence³, ᶜh_tot, Val{:first_order}())
-    subsidence!(
-        Yₜ.c.ρq_tot,
-        Y.c.ρ,
-        ᶠsubsidence³,
-        ᶜspecific.q_tot,
-        Val{:first_order}(),
-    )
-    if moisture_model isa NonEquilMoistModel
-        subsidence!(
-            Yₜ.c.ρq_liq,
-            Y.c.ρ,
-            ᶠsubsidence³,
-            ᶜspecific.q_liq,
-            Val{:first_order}(),
-        )
-        subsidence!(
-            Yₜ.c.ρq_ice,
-            Y.c.ρ,
-            ᶠsubsidence³,
-            ᶜspecific.q_ice,
-            Val{:first_order}(),
-        )
-    end
-
-    return nothing
+function subsidence_tendency(χname, subsidence, thermo_params, ᶜts, ᶜρ, ᶜρe_tot)
+    subsidence isa Nothing && return NullBroadcasted()
+    ᶠu³ = ᶠsubsidence³(axes(ᶜρ), subsidence)
+    ᶜχ = @. lazy(subsidence_tracer(χname, thermo_params, ᶜts, ᶜρ, ᶜρe_tot))
+    return subsidence_tendency(ᶜρ, ᶜχ, ᶠu³, Val{:first_order}())
 end
+
+function ᶠsubsidence³(ᶠspace, subsidence::Subsidence)
+    ᶠz = Fields.coordinate_field(ᶠspace).z
+    ᶠlg = Fields.local_geometry_field(ᶠspace)
+    (; prof) = subsidence
+    return @. lazy(prof(ᶠz) * CT3(unit_basis_vector_data(CT3, ᶠlg)))
+end
+subsidence_tendency(ᶜρ, ᶜχ, ᶠu³, ::Val{:none}) =
+    @. lazy(- ᶜρ * (ᶜsubdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³)))
+subsidence_tendency(ᶜρ, ᶜχ, ᶠu³, ::Val{:first_order}) =
+    @. lazy(- ᶜρ * (ᶜsubdivᵥ(ᶠupwind1(ᶠu³, ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³)))
+subsidence_tendency(ᶜρ, ᶜχ, ᶠu³, ::Val{:third_order}) =
+    @. lazy(- ᶜρ * (ᶜsubdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³)))
