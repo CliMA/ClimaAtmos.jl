@@ -297,7 +297,7 @@ end
 """
     ExternalDrivenTVForcing
     
-Forcing specified by external forcing file and a start date.
+Forcing specified by external forcing file.
 """
 struct ExternalDrivenTVForcing{FT}
     external_forcing_file::String
