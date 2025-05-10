@@ -248,7 +248,7 @@ ls_adv:
   help: "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"
   value: ~
 external_forcing:
-  help: "External forcing for single column experiments [`nothing` (default), `GCM`, `Reanalysis`, `ReanalysisTimeVarying`]"
+  help: "External forcing for single column experiments [`nothing` (default), `GCM`, `Reanalysis`, `ReanalysisTimeVarying`, `ReanalysisMonthlyAveragedDiurnal`]"
   value: ~
 external_forcing_file:
   help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions. Used for GCM-driven SCM and ISDAC setup [`nothing` (default), `path/to/file`]"

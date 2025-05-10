@@ -509,8 +509,11 @@ function clima_to_era5_name_dict()
         "wap" => "w", # era5 w is in Pa/s, this is confusing notation
         "hus" => "q",
         "ta" => "t",
-        "zg" => "z",
+        "zg" => "z", # era5 z is geopotential in m^2/s^2, this is confusing notation
         "clw" => "clwc",
         "cli" => "ciwc",
+        "ts" => "skt",
+        "hfls" => "slhf",
+        "hfss" => "sshf",
     )
 end
