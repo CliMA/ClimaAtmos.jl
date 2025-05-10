@@ -31,6 +31,10 @@ function get_external_forcing_file_path(
                @clima_artifact("era5_hourly_atmos_processed"),
 )
     start_date = parsed_args["start_date"]
+    t_end = get(parsed_args, "t_end", "23hours") # generate a single day file if t_end is not specified
+    end_time =
+        DateTime(start_date, "yyyymmdd") + Dates.Second(time_to_seconds(t_end))
+    end_date = Dates.format(end_time, "yyyymmdd")
     # round to era5 quarter degree resolution for site selection
     site_latitude = round(parsed_args["site_latitude"] * 4) / 4
     site_longitude = round(parsed_args["site_longitude"] * 4) / 4
@@ -42,7 +46,7 @@ function get_external_forcing_file_path(
 
     return joinpath(
         data_dir,
-        "tv_forcing_$(site_latitude)_$(site_longitude)_$(start_date).nc",
+        "tv_forcing_$(site_latitude)_$(site_longitude)_$(start_date)_$(end_date).nc",
     )
 end
 
@@ -99,20 +103,20 @@ function get_horizontal_tendencies(
     dy = 2 * π * rearth / 360 * latitudinal_resolution
 
     # get velocities at site location
-    ᶜu = column_ds["u"][lon_index, lat_index, :, :]
-    ᶜv = column_ds["v"][lon_index, lat_index, :, :]
+    ᶜu = smooth_4D_era5(column_ds, "u", lon_index, lat_index)
+    ᶜv = smooth_4D_era5(column_ds, "v", lon_index, lat_index)
 
     # get temperature at N S E W of center for gradient calculation
-    ʷT = column_ds["t"][lon_index - 1, lat_index, :, :]
-    ⁿT = column_ds["t"][lon_index, lat_index + 1, :, :]
-    ˢT = column_ds["t"][lon_index, lat_index - 1, :, :]
-    ᵉT = column_ds["t"][lon_index + 1, lat_index, :, :]
+    ʷT = smooth_4D_era5(column_ds, "t", lon_index - 1, lat_index)
+    ⁿT = smooth_4D_era5(column_ds, "t", lon_index, lat_index + 1)
+    ˢT = smooth_4D_era5(column_ds, "t", lon_index, lat_index - 1)
+    ᵉT = smooth_4D_era5(column_ds, "t", lon_index + 1, lat_index)
 
     # get specific humidity at N S E W of center for gradient calculation
-    ʷq = column_ds["q"][lon_index - 1, lat_index, :, :]
-    ⁿq = column_ds["q"][lon_index, lat_index + 1, :, :]
-    ˢq = column_ds["q"][lon_index, lat_index - 1, :, :]
-    ᵉq = column_ds["q"][lon_index + 1, lat_index, :, :]
+    ʷq = smooth_4D_era5(column_ds, "q", lon_index - 1, lat_index)
+    ⁿq = smooth_4D_era5(column_ds, "q", lon_index, lat_index + 1)
+    ˢq = smooth_4D_era5(column_ds, "q", lon_index, lat_index - 1)
+    ᵉq = smooth_4D_era5(column_ds, "q", lon_index + 1, lat_index)
 
     # temperature and specific humidity advective tendency at center
     tntha = -(ᶜu .* (ᵉT .- ʷT) ./ (2 * dx) .+ ᶜv .* (ⁿT .- ˢT) ./ (2 * dy))
@@ -182,7 +186,7 @@ function get_coszen_inst(
 end
 
 """
-    generate_external_era5_forcing_file(lat, lon, start_date, forcing_file_path, FT; time_resolution = 3600, data_dir = @clima_artifact("era5_hourly_atmos_raw"))
+    generate_external_era5_forcing_file(lat, lon, start_date, forcing_file_path, FT; time_resolution = 3600, data_dir = @clima_artifact("era5_hourly_atmos_raw"), smooth_amount = 4)
 
 Generate an external forcing file for the ClimaAtmos single column model.
 
@@ -205,6 +209,7 @@ Note:
     `2x2x(pressure levels)x(time)`.
 - This expansion is necessary for interpolation to the model grid and applies even to surface variables
     in the current implementation.
+- The end time of the simulation is inferred from the start date and the simulation time, `t_end`.
 """
 function generate_external_era5_forcing_file(
     lat,
@@ -212,6 +217,7 @@ function generate_external_era5_forcing_file(
     start_date,
     forcing_file_path,
     FT;
+    smooth_amount = 4,
     time_resolution = FT(3600), # size of accumulated variable period in seconds (3600 for hourly, 86400 for daily and monthly)
     data_dir = @clima_artifact("era5_hourly_atmos_raw"),
 )
@@ -243,25 +249,31 @@ function generate_external_era5_forcing_file(
     lat_index = findfirst(tvforcing["latitude"][:] .== lat)
     @assert lon_index != nothing "Longitude $lon not found in forcing_and_cloud_hourly_profiles_$(start_date).nc"
     @assert lat_index != nothing "Latitude $lat not found in forcing_and_cloud_hourly_profiles_$(start_date).nc"
-    @assert 1 < lon_index < length(tvforcing["longitude"][:]) "Longitude index $lon is not covered by forcing_and_cloud_hourly_profiles_$(start_date).nc"
-    @assert 1 < lat_index < length(tvforcing["latitude"][:]) "Latitude index $lat is not covered by forcing_and_cloud_hourly_profiles_$(start_date).nc"
+    @assert smooth_amount + 1 <
+            lon_index <
+            length(tvforcing["longitude"][:]) - smooth_amount "Longitude $lon is not covered by profile forcing file with smoothing amount $smooth_amount"
+    @assert smooth_amount + 1 <
+            lat_index <
+            length(tvforcing["latitude"][:]) - smooth_amount "Latitude $lat is not covered by profile forcing file with smoothing amount $smooth_amount"
 
     sim_forcing = Dict()
     sim_forcing["time"] = tvforcing["valid_time"][:]
     sim_forcing["pressure_level"] = tvforcing["pressure_level"][:]
-    sim_forcing["ua"] = tvforcing["u"][lon_index, lat_index, :, :]
-    sim_forcing["va"] = tvforcing["v"][lon_index, lat_index, :, :]
-    sim_forcing["wap"] = tvforcing["w"][lon_index, lat_index, :, :] # era5 w is in Pa/s, this is confusing notation
-    sim_forcing["hus"] = tvforcing["q"][lon_index, lat_index, :, :]
-    sim_forcing["ta"] = tvforcing["t"][lon_index, lat_index, :, :]
-    sim_forcing["zg"] = tvforcing["z"][lon_index, lat_index, :, :]
-    sim_forcing["z"] =
-        tvforcing["z"][lon_index, lat_index, :, :] /
-        external_tv_params.gravitational_acceleration # height in meters
 
-    # add cloud information - this is used for profile calibration and not for the forcing but saves multiple files for profile calibration
-    sim_forcing["clw"] = tvforcing["clwc"][lon_index, lat_index, :, :]
-    sim_forcing["cli"] = tvforcing["ciwc"][lon_index, lat_index, :, :]
+    name_map = clima_to_era5_name_dict()
+    for clima_name in ["ua", "va", "wap", "hus", "ta", "zg", "clw", "cli"]
+        era5_name = name_map[clima_name]
+        sim_forcing[clima_name] = smooth_4D_era5(
+            tvforcing,
+            era5_name,
+            lon_index,
+            lat_index;
+            smooth_amount = smooth_amount,
+        )
+    end
+
+    sim_forcing["z"] =
+        sim_forcing["zg"] / external_tv_params.gravitational_acceleration # height in meters
 
     # compute subsidence
     pressure = tvforcing["pressure_level"] .* 100 # convert hPa to Pa
@@ -372,36 +384,55 @@ function generate_external_era5_forcing_file(
     lat_index_surf = findfirst(tv_accum["latitude"][:] .== lat)
     @assert lon_index_surf != nothing "Longitude $lon not found in hourly_accum_$(start_date).nc"
     @assert lat_index_surf != nothing "Latitude $lat not found in hourly_accum_$(start_date).nc"
-    matching_time_indices =
-        findall(in(tvforcing["valid_time"][:]), tv_accum["valid_time"][:])
+    @assert smooth_amount + 1 <
+            lon_index_surf <
+            length(tv_accum["longitude"][:]) - smooth_amount "Longitude $lon is not covered by accumulated forcing file with smoothing amount $smooth_amount"
+    @assert smooth_amount + 1 <
+            lat_index_surf <
+            length(tv_accum["latitude"][:]) - smooth_amount "Latitude $lat is not covered by accumulated forcing file with smoothing amount $smooth_amount"
 
     defVar(ds, "hfls", FT, ("x", "y", "z", "time"))
     defVar(ds, "hfss", FT, ("x", "y", "z", "time"))
-    # sensible and latent heat fluxes are opposite
+    # sensible and latent heat fluxes are defined upwards in CliMA, also need to divide by the aggregation
     slhf =
-        -tv_accum["slhf"][
+        -smooth_3D_era5(
+            tv_accum,
+            "slhf",
             lon_index_surf,
-            lat_index_surf,
-            matching_time_indices,
-        ] / time_resolution
+            lat_index_surf;
+            smooth_amount = smooth_amount,
+        ) / time_resolution
+
     sshf =
-        -tv_accum["sshf"][
+        -smooth_3D_era5(
+            tv_accum,
+            "sshf",
             lon_index_surf,
-            lat_index_surf,
-            matching_time_indices,
-        ] / time_resolution
+            lat_index_surf;
+            smooth_amount = smooth_amount,
+        ) / time_resolution
 
     # surface temperature
     lon_index_surf2 = findfirst(tv_inst["longitude"][:] .== lon)
     lat_index_surf2 = findfirst(tv_inst["latitude"][:] .== lat)
     @assert lon_index_surf2 != nothing "Longitude $lon not found in hourly_inst_$(start_date).nc"
     @assert lat_index_surf2 != nothing "Latitude $lat not found in hourly_inst_$(start_date).nc"
-    matching_time_indices =
-        findall(in(tvforcing["valid_time"][:]), tv_inst["valid_time"][:])
+    @assert smooth_amount + 1 <
+            lon_index_surf2 <
+            length(tv_inst["longitude"][:]) - smooth_amount "Longitude $lon is not covered by accumulated forcing file with smoothing amount $smooth_amount"
+    @assert smooth_amount + 1 <
+            lat_index_surf2 <
+            length(tv_inst["latitude"][:]) - smooth_amount "Latitude $lat is not covered by accumulated forcing file with smoothing amount $smooth_amount"
 
     defVar(ds, "ts", FT, ("x", "y", "z", "time"))
-    skt =
-        tv_inst["skt"][lon_index_surf2, lat_index_surf2, matching_time_indices]
+    skt = smooth_3D_era5(
+        tv_inst,
+        "skt",
+        lon_index_surf2,
+        lat_index_surf2;
+        smooth_amount = smooth_amount,
+    )
+
     for time_ind in 1:ds.dim["time"]
         ds["coszen"][:, :, :, time_ind] .= coszen_list[time_ind][1]
         ds["rsdt"][:, :, :, time_ind] .= coszen_list[time_ind][2]
@@ -415,4 +446,109 @@ function generate_external_era5_forcing_file(
     close(tvforcing)
     close(tv_inst)
     close(tv_accum)
+end
+
+"""
+    generate_multiday_era5_external_forcing_file(parsed_args, forcing_file_path, FT; smooth_amount = 4, time_resolution = FT(3600), input_data_dir = @clima_artifact("era5_hourly_atmos_raw"), output_data_dir = @clima_artifact("era5_hourly_atmos_processed"))
+
+Generate an external forcing file for multi-day single column model runs, reusing daily forcing files if they already exist.
+
+# Arguments
+- `parsed_args`: Dictionary containing simulation parameters including start_date, t_end, site_latitude, and site_longitude
+- `forcing_file_path`: Path where the concatenated forcing file will be saved
+- `FT`: Floating point type for the simulation
+
+# Keyword Arguments
+- `smooth_amount`: Amount of temporal smoothing to apply (default: 4 - 1° on each side)
+- `time_resolution`: Time resolution in seconds for accumulated variables (defined in ERA5 docs; 3600 for hourly data; 86400 for daily and monthly data)
+- `input_data_dir`: Directory containing raw ERA5 data files, artifact directory by default
+- `output_data_dir`: Directory where individual daily forcing files are stored
+"""
+function generate_multiday_era5_external_forcing_file(
+    parsed_args,
+    forcing_file_path,
+    FT;
+    smooth_amount = 4,
+    time_resolution = FT(3600), # size of accumulated variable period in seconds (3600 for hourly, 86400 for daily and monthly)
+    input_data_dir = @clima_artifact("era5_hourly_atmos_raw"),
+    output_data_dir = get(ENV, "BUILDKITE", "") == "true" ? mktempdir() :
+                      @clima_artifact("era5_hourly_atmos_processed"),
+)
+    # run generate_external_era5_forcing_file for each day if its processed data file not found 
+    # get range of starttimes and endtimes
+    start_date = DateTime(parsed_args["start_date"], "yyyymmdd")
+    end_time = start_date + Dates.Second(time_to_seconds(parsed_args["t_end"]))
+    end_date = Dates.format(end_time, "yyyymmdd")
+
+    start_dates = start_date:Day(1):end_time
+
+    file_list = String[]
+    for dd in start_dates
+        # get forcing file path
+        single_parsed_args = Dict(
+            "start_date" => Dates.format(dd, "yyyymmdd"),
+            "site_latitude" => parsed_args["site_latitude"],
+            "site_longitude" => parsed_args["site_longitude"],
+        )
+        single_file_path = get_external_forcing_file_path(
+            single_parsed_args;
+            data_dir = output_data_dir,
+        )
+        push!(file_list, single_file_path)
+        # generate the external forcing file for this day
+        if !isfile(single_file_path)
+            generate_external_era5_forcing_file(
+                parsed_args["site_latitude"],
+                parsed_args["site_longitude"],
+                Dates.format(dd, "yyyymmdd"),
+                single_file_path,
+                FT;
+                time_resolution = time_resolution,
+                data_dir = input_data_dir,
+                smooth_amount = smooth_amount,
+            )
+        end
+    end
+    # concatenate data and save 
+    concat_ds = Dataset(file_list; aggdim = "time")
+    NCDatasets.write(forcing_file_path, concat_ds)
+end
+
+"""
+    smooth_4D_era5(data, variable, lon_index, lat_index; smooth_amount = 4)
+
+data is an array from ERA5 data, which has dimension order longitude, latitude,
+pressure_level, and time. We want to return smoothed data by a certain amount. 
+Here we choose 4 points on either side which corresponds to a 2° box total. we
+just average the points here, but something more creative could be done.
+"""
+function smooth_4D_era5(data, variable, lon_index, lat_index; smooth_amount = 4)
+    # extract data in box around the center point
+    data_slice = data[variable][
+        (lon_index - smooth_amount):(lon_index + smooth_amount),
+        (lat_index - smooth_amount):(lat_index + smooth_amount),
+        :,
+        :,
+    ]
+    # compute mean over lat/lon dimensions and return slice
+    return mean(data_slice, dims = (1, 2))[1, 1, :, :]
+end
+
+"""
+    smooth_3D_era5(data, variable, lon_index, lat_index; smooth_amount = 4)
+
+data is an array from ERA5, which has dimension order longitude, latitude, and time. 
+This function returns data smoothed by a certain amount. Here, we choose 4 points on 
+either side which corresponds to a 2° box total. wejust average the points here, but 
+something more creative could be done.
+"""
+function smooth_3D_era5(data, variable, lon_index, lat_index; smooth_amount = 4)
+    # extract data in box around the center point
+    data_slice = data[variable][
+        (lon_index - smooth_amount):(lon_index + smooth_amount),
+        (lat_index - smooth_amount):(lat_index + smooth_amount),
+        :,
+    ]
+    # compute mean over lat/lon dimensions and return slice
+    return mean(data_slice, dims = (1, 2))[1, 1, :]
 end
