@@ -224,9 +224,14 @@ function mixing_length(
     # get soft minimum
     l_smin = lamb_smooth_minimum(l, smin_ub, smin_rm)
     l_limited = max(l_smag, min(l_smin, l_z))
-    # if l_z > FT(20000.0)
-    #     l_limited = FT(1.0)
-    # end
+
+    l_limited = min(max(l_limited, FT(0.1) * ᶜdz, FT(0.0)), FT(500.0))
+
+    if l_z > FT(20000.0)
+        l_limited = FT(1.0)
+    end
+
+   
 
     # Prescribe mixing length with a Gaussian profile
     # Peak value (A), peak height (μ), width (σ)
@@ -236,9 +241,9 @@ function mixing_length(
     # l_peak_height = FT(1000.0) # Adjust as needed
     # l_width = FT(600.0)    # Adjust as needed
 
-    l_peak_value = FT(300.0)  # Adjust as needed
-    l_peak_height = FT(400.0) # Adjust as needed
-    l_width = FT(300.0)    # Adjust as needed
+    # l_peak_value = FT(300.0)  # Adjust as needed
+    # l_peak_height = FT(400.0) # Adjust as needed
+    # l_width = FT(300.0)    # Adjust as needed
 
 
 
@@ -248,13 +253,13 @@ function mixing_length(
 
     # FT(1.1),
     # FT(0.7),
-    l_limited =
-        max(
-            FT(0.1) * ᶜdz,
-            l_peak_value * exp(
-                -((ᶜz - z_sfc - l_peak_height)^2) / (2 * l_width^2),
-            ),
-        )
+    # l_limited =
+    #     max(
+    #         FT(0.1) * ᶜdz,
+    #         l_peak_value * exp(
+    #             -((ᶜz - z_sfc - l_peak_height)^2) / (2 * l_width^2),
+    #         ),
+    #     )
 
     # Apply linear profile near the surface
     # l_limited = ifelse(l_z < FT(100.0), vkc * l_z, l_limited)
