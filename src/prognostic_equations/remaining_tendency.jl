@@ -83,9 +83,13 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     # vst_ρa = viscous_sponge_tendency_ρa(Y.c.sgsʲs.:(1).ρa, viscous_sponge)
     vst_mse = viscous_sponge_tendency_mse(Y.c.sgsʲs.:(1).mse, viscous_sponge)
     vst_q_tot = viscous_sponge_tendency_q_tot(Y.c.sgsʲs.:(1).q_tot, viscous_sponge)
+    # Add the TKE sponge calculation assuming TKE is stored similarly to mse/q_tot
+    vst_tke = viscous_sponge_tendency_tke(Y.c.sgs⁰.ρatke, viscous_sponge)
     # @. Yₜ.c.sgsʲs.:(1).ρa += vst_ρa
     @. Yₜ.c.sgsʲs.:(1).mse += vst_mse
     @. Yₜ.c.sgsʲs.:(1).q_tot += vst_q_tot
+    # Apply the TKE sponge tendency
+    @. Yₜ.c.sgs⁰.ρatke += vst_tke
 
 
     # TODO: can we write this out explicitly?

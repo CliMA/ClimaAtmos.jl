@@ -67,3 +67,10 @@ function viscous_sponge_tendency_q_tot(ᶜq_tot, s)
     zmax = z_max(axes(ᶠz))
     return @. lazy(β_viscous(s, ᶜz, zmax) * wdivₕ(gradₕ(ᶜq_tot)))
 end
+
+function viscous_sponge_tendency_tke(ᶜtke, s)
+    s isa Nothing && return NullBroadcasted()
+    (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜtke))
+    zmax = z_max(axes(ᶠz))
+    return @. lazy(β_viscous(s, ᶜz, zmax) * wdivₕ(gradₕ(ᶜtke)))
+end
