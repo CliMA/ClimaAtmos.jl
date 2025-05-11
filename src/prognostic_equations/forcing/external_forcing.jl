@@ -201,6 +201,8 @@ function external_forcing_tendency!(
         ᶜinv_τ_wind,
         ᶜinv_τ_scalar,
     ) = p.external_forcing
+    ᶜρ = Y.c.ρ
+    ᶜρe_tot = Y.c.ρe_tot
 
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜuₕ_nudge = p.scratch.ᶜtemp_C12
@@ -239,19 +241,21 @@ function external_forcing_tendency!(
     ᶠls_subsidence³ = p.scratch.ᶠtemp_CT3
     @. ᶠls_subsidence³ =
         ᶠinterp(ᶜls_subsidence * CT3(unit_basis_vector_data(CT3, ᶜlg)))
-    subsidence!(
-        Yₜ.c.ρe_tot,
-        Y.c.ρ,
+    Yₜ.c.ρe_tot .+= subsidence_tendency(
+        Val(:h_tot),
         ᶠls_subsidence³,
-        ᶜh_tot,
-        Val{:first_order}(),
+        thermo_params,
+        ᶜts,
+        ᶜρ,
+        ᶜρe_tot,
     )
-    subsidence!(
-        Yₜ.c.ρq_tot,
-        Y.c.ρ,
+    Yₜ.c.ρq_tot .+= subsidence_tendency(
+        Val(:q_tot),
         ᶠls_subsidence³,
-        ᶜspecific.q_tot,
-        Val{:first_order}(),
+        thermo_params,
+        ᶜts,
+        ᶜρ,
+        ᶜρe_tot,
     )
 
     # needed to address top boundary condition for forcings. Otherwise upper portion of domain is anomalously cold
