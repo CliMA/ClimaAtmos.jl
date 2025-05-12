@@ -9,17 +9,20 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 # To load in the precompiled methods, run `using PrecompileCI` before loading ClimaAtmos. 
 # To see what methods are precompiled, open julia: `julia --project=.buildkite/PrecompileCI`
 # and run `using PrecompileTools; PrecompileTools.verbose[] = true; include(".buildkite/PrecompileCI/src/PrecompileCI.jl")`
-using PrecompileCI
+# using PrecompileCI
 import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
 
-if !(@isdefined config)
-    (; config_file, job_id) = CA.commandline_kwargs()
-    config = CA.AtmosConfig(config_file; job_id)
-end
+# if !(@isdefined config)
+#     (; config_file, job_id) = CA.commandline_kwargs()
+#     config = CA.AtmosConfig(config_file; job_id)
+# end
+config = CA.AtmosConfig(
+    "/home/kphan/Desktop/work/ClimaAtmos.jl/lwp/config/perf_configs/bm_aquaplanet_diagedmf.yml",
+)
 simulation = CA.get_simulation(config)
 (; integrator) = simulation
 sol_res = CA.solve_atmos!(simulation)
