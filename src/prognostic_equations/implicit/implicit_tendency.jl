@@ -6,6 +6,7 @@ import ClimaCore
 import ClimaCore: Fields, Geometry
 
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
+    set_implicit_precomputed_quantities!(Y, p, t)
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)

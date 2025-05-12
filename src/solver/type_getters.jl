@@ -673,8 +673,10 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
                     # Can we just pass implicit_tendency! and jac_prototype etc.?
                     lim! = limiters_func!,
                     dss!,
-                    cache! = set_precomputed_quantities!,
-                    cache_imp! = set_implicit_precomputed_quantities!,
+                    # cache! = set_precomputed_quantities!,
+                    cache! = (_Y, _p, _t) -> nothing,
+                    # cache_imp! = set_implicit_precomputed_quantities!,
+                    cache_imp! = (_Y, _p, _t) -> nothing,
                 )
             else
                 SciMLBase.SplitFunction(implicit_func, remaining_tendency!)

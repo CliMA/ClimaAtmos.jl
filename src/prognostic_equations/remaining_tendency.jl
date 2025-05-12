@@ -11,6 +11,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 end
 
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    set_precomputed_quantities!(Y, p, t)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     Yₜ .= zero(eltype(Yₜ))
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)

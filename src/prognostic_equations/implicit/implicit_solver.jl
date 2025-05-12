@@ -103,6 +103,7 @@ struct ImplicitEquationJacobian{
     F6 <: DerivativeFlag,
     T <: Fields.FieldVector,
     R <: Base.RefValue,
+    TCM,
 }
     # stores the matrix E'(Y) = Δt * T_imp'(Y) - I
     matrix::M
@@ -125,6 +126,7 @@ struct ImplicitEquationJacobian{
     # required by OrdinaryDiffEq.jl to run non-Rosenbrock timestepping schemes
     transform_flag::Bool
     dtγ_ref::R
+    turbconv_model::TCM
 end
 
 function Base.zero(jac::ImplicitEquationJacobian)
@@ -141,6 +143,7 @@ function Base.zero(jac::ImplicitEquationJacobian)
         jac.temp_x,
         jac.transform_flag,
         jac.dtγ_ref,
+        jac.turbconv_model,
     )
 end
 
@@ -436,6 +439,7 @@ function ImplicitEquationJacobian(
         similar(Y),
         transform_flag,
         Ref{FT}(),
+        atmos.turbconv_model,
     )
 end
 
@@ -450,6 +454,10 @@ NVTX.@annotate function ldiv!(
     A::ImplicitEquationJacobian,
     b::Fields.FieldVector,
 )
+    (; turbconv_model) = A.atmos
+    ᶠuₕ³ = @. lazy(compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ))
+    set_velocity_at_surface!(x, ᶠuₕ³, turbconv_model)
+    set_velocity_at_top!(x, turbconv_model)
     MatrixFields.field_matrix_solve!(A.solver, x, A.matrix, b)
     if A.transform_flag
         @. x *= -A.dtγ_ref[]
@@ -476,6 +484,7 @@ _linsolve!(x, A, b, update_matrix = false; kwargs...) = ldiv!(x, A, b)
 # This method specifies how to compute E'(Y), which is referred to as "Wfact" in
 # DiffEqBase.jl.
 NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
+    set_implicit_precomputed_quantities!(Y, p, t)
     # Remove unnecessary values from p to avoid allocations in bycolumn.
     p′ = (;
         p.precomputed.ᶜspecific,
