@@ -437,57 +437,63 @@ function generate_multiday_external_forcing_file(
     start_dates = start_date:Day(1):end_time
     println(collect(start_dates))
     
-    file_list = []
+    file_list = String[]
     for (i, dd) in enumerate(start_dates)
         # get forcing file path
         single_parsed_args = Dict(
             "start_date" => Dates.format(dd, "yyyymmdd"),
-            "t_end" => "23hours", # some value between 0 and 24 hours to generate the single file
+            "t_end" => "23hours", # some value between 0 and 24 hours to generate the single day file
             "site_latitude" => parsed_args["site_latitude"],
             "site_longitude" => parsed_args["site_longitude"],
         )
         single_file_path = get_external_forcing_file_path(single_parsed_args)
         push!(file_list, single_file_path)
-        println(single_file_path)
+        @info single_file_path
         # generate the external forcing file for this day
-        generate_external_era5_forcing_file(
-            parsed_args["site_latitude"],
-            parsed_args["site_longitude"],
-            Dates.format(dd, "yyyymmdd"),
-            single_file_path,
-            FT;
-            time_resolution = time_resolution,
-            data_dir = data_dir,
-        )
-
-        # concatenate NCDatasets together and save as new file
-        if i == length(start_dates)
-
-            # Create a new file for the concatenated dataset
-            # concatenated_file_path = get_external_forcing_file_path(
-            # Dict(
-            #     "start_date" => Dates.format(start_date, "yyyymmdd"),
-            #     "t_end" => Dates.format(end_date - start_date, "HHhours"),
-            #     "site_latitude" => lat,
-            #     "site_longitude" => lon,
-            # )
-            # )
-            concatenated_ds = NCDataset(forcing_file_path, "c")
-
-            # Open all files and concatenate their variables
-            for (j, file) in enumerate(file_list)
-            current_ds = NCDataset(file, "r")
-            # Iterate over variables and concatenate them
-            for var_name in keys(current_ds)
-                if j == 1
-                # Define the variable in the concatenated dataset
-                defVar(concatenated_ds, var_name, current_ds[var_name].eltype, current_ds[var_name].dims)
-                end
-                concatenated_ds[var_name] = vcat(concatenated_ds[var_name], current_ds[var_name])
-            end
-            close(current_ds)
-            end
-            close(concatenated_ds)
+        if !isfile(single_file_path)
+            generate_external_era5_forcing_file(
+                parsed_args["site_latitude"],
+                parsed_args["site_longitude"],
+                Dates.format(dd, "yyyymmdd"),
+                single_file_path,
+                FT;
+                time_resolution = time_resolution,
+                data_dir = data_dir,
+            )
         end
     end
+    # concatenate data and save 
+    concat_ds = Dataset(file_list; aggdim="time")
+    NCDatasets.write(forcing_file_path, concat_ds)
+end
+
+"""
+    smooth_4D_era5(data, variable, lon_index, lat_index, smooth_amount = 4)
+
+data is an array from ERA5 data, which has dimension order longitude, latitude,
+pressure_level, and time. We want to return smoothed data by a certain amount. 
+Here we choose 4 points on either side which corresponds to a 2° box total. we
+just average the points here, but something more creative could be done.
+"""
+function smooth_4D_era5(data, variable, lon_index, lat_index, smooth_amount = 4)
+    # extract data
+    data_slice = data[variable][(lon_index - smooth_amount):(lon_index + smooth_amount), (lat_index - smooth_amount):(lat_index + smooth_amount), :, :]
+    @info size(data_slice)
+
+    # compute mean over lat/lon dimensions and return slice
+    return mean(data_slice, dims = (1,2))[1, 1, :, :]
+end
+
+"""
+    smooth_3D_era5(data, variable, lon_index, lat_index, smooth_amount = 4)
+
+data is an array from ERA5, which has dimension order longitude, latitude, and time. 
+This function returns data smoothed by a certain amount. Here, we choose 4 points on 
+either side which corresponds to a 2° box total. wejust average the points here, but 
+something more creative could be done.
+"""
+function smooth_3D_era5(data, variable, lon_index, lat_index, smooth_amount = 4)
+    data_slice = data[variable][(lon_index - smooth_amount):(lon_index + smooth_amount), (lat_index - smooth_amount):(lat_index + smooth_amount), :]
+    @info size(data_slice)
+    return mean(data_slice, dims = (1,2))[1, 1, :]
 end
