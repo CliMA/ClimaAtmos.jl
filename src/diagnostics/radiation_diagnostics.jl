@@ -1027,3 +1027,128 @@ add_diagnostic_variable!(
     comments = "Aerosol scattering optical depth from the ambient aerosols at wavelength 550 nm",
     compute! = compute_odsc550aer!,
 )
+
+###
+# Liquid water path
+###
+compute_lwp_num!(out, state, cache, time) =
+    compute_lwp_num!(out, state, cache, time, cache.atmos.radiation_mode)
+compute_lwp_num!(_, _, _, _, radiation_mode::T) where {T} =
+    error_diagnostic_variable("lwp_num", radiation_mode)
+
+function compute_lwp_num!(
+    out,
+    state,
+    cache,
+    time,
+    radiation_mode::Union{
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
+        RRTMGPI.AllSkyRadiation,
+    },
+)
+    FT = eltype(state)
+    nlevels = Spaces.nlevels(axes(state.c))
+    if isnothing(out)
+        return copy(
+            Fields.array2field(
+                cache.radiation.rrtmgp_model.center_cloud_liquid_water_path,
+                axes(state.c),
+            ) .*
+            ifelse.(
+                Fields.level(
+                    Fields.array2field(
+                        cache.radiation.rrtmgp_model.face_sw_flux_dn,
+                        axes(state.f),
+                    ),
+                    nlevels + half,
+                ) .> FT(0),
+                FT(1),
+                FT(0),
+            ),
+        )
+    else
+        out .=
+            Fields.array2field(
+                cache.radiation.rrtmgp_model.center_cloud_liquid_water_path,
+                axes(state.c),
+            ) .*
+            ifelse.(
+                Fields.level(
+                    Fields.array2field(
+                        cache.radiation.rrtmgp_model.face_sw_flux_dn,
+                        axes(state.f),
+                    ),
+                    nlevels + half,
+                ) .> FT(0),
+                FT(1),
+                FT(0),
+            )
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "lwp_num",
+    long_name = "Liquid water path (numerator)",
+    units = "kg m^-2",
+    comments = "The total mass of liquid water in cloud per unit area.",
+    compute! = compute_lwp_num!,
+)
+
+
+
+
+
+compute_lwp_den!(out, state, cache, time) =
+    compute_lwp_den!(out, state, cache, time, cache.atmos.radiation_mode)
+compute_lwp_den!(_, _, _, _, radiation_mode::T) where {T} =
+    error_diagnostic_variable("lwp_den", radiation_mode)
+
+function compute_lwp_den!(
+    out,
+    state,
+    cache,
+    time,
+    radiation_mode::Union{
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
+        RRTMGPI.AllSkyRadiation,
+    },
+) where {T <: RRTMGPI.AbstractRRTMGPMode}
+    FT = eltype(state)
+    nlevels = Spaces.nlevels(axes(state.c))
+    if isnothing(out)
+        return copy(
+            ifelse.(
+                Fields.level(
+                    Fields.array2field(
+                        cache.radiation.rrtmgp_model.face_sw_flux_dn,
+                        axes(state.f),
+                    ),
+                    nlevels + half,
+                ) .> FT(0),
+                FT(1),
+                FT(0),
+            ),
+        )
+    else
+        out .=
+            ifelse.(
+                Fields.level(
+                    Fields.array2field(
+                        cache.radiation.rrtmgp_model.face_sw_flux_dn,
+                        axes(state.f),
+                    ),
+                    nlevels + half,
+                ) .> FT(0),
+                FT(1),
+                FT(0),
+            )
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "lwp_den",
+    long_name = "Liquid water path (denominator)",
+    units = "kg m^-2",
+    comments = "The total mass of liquid water in cloud per unit area.",
+    compute! = compute_lwp_den!,
+)

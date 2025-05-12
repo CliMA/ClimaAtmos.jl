@@ -277,6 +277,8 @@ function default_diagnostics(
         "rlu",
         "rlut",
         "rlus",
+        "lwp_num",
+        "lwp_den",
     ]
     rad_clearsky_diagnostics = [
         "rsdcs",
