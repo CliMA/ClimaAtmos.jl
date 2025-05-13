@@ -77,7 +77,7 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
 
 end
 
-function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWave)
+function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::FullOrographicGravityWave)
     ᶜT = p.scratch.ᶜtemp_scalar
     (; params) = p
     (; ᶜts, ᶜp) = p.precomputed
@@ -106,12 +106,46 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
 
-    # get PBL info
-    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
-    Fields.bycolumn(axes(Y.c.ρ)) do colidx
-        parent(topo_k_pbl[colidx]) .=
-            get_pbl(ᶜp[colidx], ᶜT[colidx], ᶜz[colidx], grav, cp_d)
+    # can lazy the ᶜp, ᶜT, ᶜz themselves
+    # use lazy whenever possible
+
+    #Prepare PBL fields
+    flags = fill(false, size(ᶜp))
+    flags[1] = fill(true)
+    @. PBL_field = lazy(tuple(ᶜp, TD.air_temperature(thermo_params, ᶜts), ᶜz, grav, cp_d, flags))
+
+    function retrieve(tuple)
+        return (tuple[0], tuple[1], tuple[2])    
     end
+
+    Fields.column_reduce!(
+        topo_k_pbl, 
+        PBL_field, 
+        transform = retrieve
+        )do (tuple_base), (tuple)
+            ᶜp, ᶜT, ᶜz, grav, cp_d, flag = tuple
+            ᶜpb, ᶜTb, ᶜzb, _, _, _ = tuple
+
+            if flag
+                # ᶜp .>= FT(0.5) * ᶜpb follows the criterion in GFDL codes
+                # that the lowest layer that is geq to half of pressure at first face level; while
+                # in our code, when interpolate from center to face, the first face level inherits
+                # values at the first center level
+                if ᶜp .>= FT(0.5) * ᶜpb .& ((ᶜTb + FT(1.5) .- ᶜT) .>
+                                            (grav / cp_d * (ᶜz .- ᶜzb)))
+                    
+                    return tuple
+                end
+            end
+            
+            flag = true
+            return tuple_base
+        end
+    
+    # Threads.@threads for colidx in axes(Y.c.ρ)
+    #     parent(topo_k_pbl[colidx]) .=
+    #         get_pbl(ᶜp[colidx], ᶜT[colidx], ᶜz[colidx], grav, cp_d)
+    # end
 
     # buoyancy frequency at cell centers
     parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
@@ -123,7 +157,7 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
     # compute base flux at k_pbl
-    Fields.bycolumn(axes(Y.c.ρ)) do colidx
+    Threads.@threads for colidx in axes(Y.c.ρ)
         calc_base_flux!(
             topo_τ_x[colidx],
             topo_τ_y[colidx],
@@ -154,7 +188,7 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     ᶠN = ᶠinterp.(ᶜN) # alternatively, can be computed from ᶠT and ᶠdTdz
 
     # compute saturation profile
-    Fields.bycolumn(axes(Y.c.ρ)) do colidx
+    Threads.@threads for colidx in axes(Y.c.ρ)
         calc_saturation_profile!(
             topo_ᶠτ_sat[colidx],
             topo_U_sat[colidx],
@@ -181,7 +215,7 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     vforcing = zeros(axes(v_phy))
 
     # compute drag tendencies due to propagating part
-    Fields.bycolumn(axes(Y.c.ρ)) do colidx
+    Threads.@threads for colidx in axes(Y.c.ρ)
         calc_propagate_forcing!(
             uforcing[colidx],
             vforcing[colidx],
@@ -194,7 +228,171 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     end
 
     # compute drag tendencies due to non-propagating part
-    Fields.bycolumn(axes(Y.c.ρ)) do colidx
+    Threads.@threads for colidx in  axes(Y.c.ρ)
+        calc_nonpropagating_forcing!(
+            uforcing[colidx],
+            vforcing[colidx],
+            ᶠN[colidx],
+            topo_ᶠVτ[colidx],
+            ᶜp[colidx],
+            topo_τ_x[colidx],
+            topo_τ_y[colidx],
+            topo_τ_l[colidx],
+            topo_τ_np[colidx],
+            ᶠz[colidx],
+            ᶜz[colidx],
+            Int(parent(topo_k_pbl[colidx])[1]),
+            grav,
+        )
+    end
+
+    # constrain forcing
+    @. uforcing = max(FT(-3e-3), min(FT(3e-3), uforcing))
+    @. vforcing = max(FT(-3e-3), min(FT(3e-3), vforcing))
+
+    # convert to covariant vector and add to tendency
+    @. Yₜ.c.uₕ +=
+        Geometry.Covariant12Vector.(Geometry.UVVector.(uforcing, vforcing))
+end
+
+function orographic_gravity_wave_tendency_linear!(Yₜ, Y, p, t, ::LinearOrographicGravityWave)
+    ᶜT = p.scratch.ᶜtemp_scalar
+    (; params) = p
+    (; ᶜts, ᶜp) = p.precomputed
+    (; ᶜdTdz) = p.orographic_gravity_wave
+    (;
+        topo_k_pbl,
+        topo_τ_x,
+        topo_τ_y,
+        topo_τ_l,
+        topo_τ_p,
+        topo_τ_np,
+        topo_ᶠτ_sat,
+        topo_ᶠVτ,
+    ) = p.orographic_gravity_wave
+    (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
+        p.orographic_gravity_wave
+    (; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
+    FT = Spaces.undertype(axes(Y.c))
+
+    # parameters
+    thermo_params = CAP.thermodynamics_params(params)
+    grav = FT(CAP.grav(params))
+    cp_d = FT(CAP.cp_d(params))
+
+    # z
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶠz = Fields.coordinate_field(Y.f).z
+
+    # can lazy the ᶜp, ᶜT, ᶜz themselves
+    # use lazy whenever possible
+
+    #Prepare PBL fields
+    flags = fill(false, size(ᶜp))
+    flags[1] = fill(true)
+    @. PBL_field = lazy(tuple(ᶜp, TD.air_temperature(thermo_params, ᶜts), ᶜz, grav, cp_d, flags))
+
+    function retrieve(tuple)
+        return (tuple[0], tuple[1], tuple[2])    
+    end
+
+    Fields.column_reduce!(
+        topo_k_pbl, 
+        PBL_field, 
+        transform = retrieve
+        )do (tuple_base), (tuple)
+            ᶜp, ᶜT, ᶜz, grav, cp_d, flag = tuple
+            ᶜpb, ᶜTb, ᶜzb, _, _, _ = tuple
+
+            if flag
+                # ᶜp .>= FT(0.5) * ᶜpb follows the criterion in GFDL codes
+                # that the lowest layer that is geq to half of pressure at first face level; while
+                # in our code, when interpolate from center to face, the first face level inherits
+                # values at the first center level
+                if ᶜp .>= FT(0.5) * ᶜpb .& ((ᶜTb + FT(1.5) .- ᶜT) .>
+                                            (grav / cp_d * (ᶜz .- ᶜzb)))
+                    
+                    return tuple
+                end
+            end
+            
+            flag = true
+            return tuple_base
+        end
+    
+    # Threads.@threads for colidx in axes(Y.c.ρ)
+    #     parent(topo_k_pbl[colidx]) .=
+    #         get_pbl(ᶜp[colidx], ᶜT[colidx], ᶜz[colidx], grav, cp_d)
+    # end
+
+    # buoyancy frequency at cell centers
+    parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
+    ᶜN = @. (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts)) # this is actually ᶜN^2
+    @. ᶜN = ifelse(ᶜN < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜN))) # to avoid small numbers
+
+    # prepare physical uv input variables for gravity_wave_forcing()
+    u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
+    v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+
+    # compute base flux at k_pbl
+    Threads.@threads for colidx in axes(Y.c.ρ)
+        calc_base_flux!(
+            topo_τ_x[colidx],
+            topo_τ_y[colidx],
+            topo_τ_l[colidx],
+            topo_τ_p[colidx],
+            p,
+            max(0, parent(hmax[colidx])[1]),
+            parent(t11[colidx])[1],
+            parent(t21[colidx])[1],
+            parent(Y.c.ρ[colidx]),
+            parent(u_phy[colidx]),
+            parent(v_phy[colidx]),
+            parent(ᶜN[colidx]),
+            Int(parent(topo_k_pbl[colidx])[1]),
+        )
+    end
+
+    # buoyancy frequency at cell faces
+    ᶠN = ᶠinterp.(ᶜN) # alternatively, can be computed from ᶠT and ᶠdTdz
+
+    # compute saturation profile
+    Threads.@threads for colidx in axes(Y.c.ρ)
+        calc_saturation_profile!(
+            topo_ᶠτ_sat[colidx],
+            topo_U_sat[colidx],
+            topo_FrU_sat[colidx],
+            topo_FrU_clp[colidx],
+            p,
+            topo_FrU_max[colidx],
+            topo_FrU_min[colidx],
+            ᶠN[colidx],
+            topo_τ_x[colidx],
+            u_phy[colidx],
+            Y.c.ρ[colidx],
+            Int(parent(topo_k_pbl[colidx])[1]),
+        )
+    end
+
+    # a place holder to store physical forcing on uv
+    uforcing = zeros(axes(u_phy))
+    vforcing = zeros(axes(v_phy))
+
+    # compute drag tendencies due to propagating part
+    Threads.@threads for colidx in axes(Y.c.ρ)
+        calc_propagate_forcing!(
+            uforcing[colidx],
+            vforcing[colidx],
+            topo_τ_x[colidx],
+            topo_τ_y[colidx],
+            topo_τ_l[colidx],
+            topo_ᶠτ_sat[colidx],
+            Y.c.ρ[colidx],
+        )
+    end
+
+    # compute drag tendencies due to non-propagating part
+    Threads.@threads for colidx in  axes(Y.c.ρ)
         calc_nonpropagating_forcing!(
             uforcing[colidx],
             vforcing[colidx],
@@ -275,6 +473,7 @@ function calc_propagate_forcing!(ᶜuforcing, ᶜvforcing, τ_x, τ_y, τ_l, τ_
     return nothing
 end
 
+#Could Column.reduce! this
 function get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
     FT = eltype(cp_d)
     idx =
@@ -290,6 +489,54 @@ function get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
     return 1 + ci[1]
 end
 
+#Linear base flux
+function calc_base_flux!(
+    τ_x,
+    τ_y,
+    τ_l,
+    p,
+    hmax,
+    t11,
+    t21,
+    c_ρ,
+    u_phy,
+    c_N,
+    k_pbl,
+)
+    (;
+        _,
+        _,
+        topo_L0,
+        _,
+        _,
+        _,
+        _,
+        _,
+    ) = p.orographic_gravity_wave
+    Vτ = p.orographic_gravity_wave.topo_base_Vτ
+
+    ∂h∂x = t11  # terrain slope
+    χ = t21  # lightly smoothed transformation of the terrain height, spatially
+             # transformed (eq 6)
+
+    # Linear drag (scalar, x-direction only) (Why is this different from t_x?)
+    τ_linear = -c_ρ[k_pbl] * c_N[k_pbl]^2 * u_phy[k_pbl] * (χ * ∂h∂x)
+
+    # τ
+    parent(τ_x) .= τ_linear
+    parent(τ_y) .= 0.0
+
+    # Wind speed in x-direction
+    Vτ = abs(u_phy[k_pbl])
+
+    # total linear drag (k = 1/topo_L0)
+    @. τ_l = (c_ρ[k_pbl] * Vτ * c_N[k_pbl] * hmax^2) / (2*topo_L0)
+
+    # propogating
+    return nothing
+end
+
+#Full
 function calc_base_flux!(
     τ_x,
     τ_y,
@@ -354,7 +601,7 @@ function calc_base_flux!(
     @. FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
     # total linear drag
     @. τ_l = ((FrU_max)^(2 + γ - ϵ) - (FrU_min)^(2 + γ - ϵ)) / (2 + γ - ϵ)
-    # propagating
+    # propagating (eq. 21 Garner)
     @. τ_p =
         topo_a0 * (
             (FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ) +
@@ -373,6 +620,102 @@ function calc_base_flux!(
     return nothing
 end
 
+#Linear adapted
+function calc_saturation_profile!(
+    τ_sat,
+    p,
+    ᶠN,
+    τ_x,
+    u_phy,
+    ᶜρ,
+    ᶜp,
+)
+    (; Fr_crit, _ , topo_L0, _) = p.orographic_gravity_wave
+    FT = eltype(Fr_crit)
+
+    # Vertical wavenumber (m = N/U)
+    @. ᶠm = ᶠN / max(eps(FT), ᶠinterp(u_phy))
+
+    # Saturation amplitude (from linear theory)
+    @. τ_sat_base = 0.5 * ᶠinterp(ᶜρ) * ᶠN * ᶠinterp(u_phy) * (p.topo_info.hmax[])^2 * (2π/topo_L0)
+
+    # Critical height for saturation (z_c = 1/(2m))
+    @. z_c = 1/(2 * max(eps(FT), ᶠm))
+
+    # Vertical levels
+    ᶠz = Fields.coordinate_field(axes(τ_sat)).z
+
+    # Apply saturation
+    for k in 1:length(τ_sat)
+        z = parent(ᶠz)[k]
+        τ_linear = parent(τ_x)[1]  # Base flux from calc_base_flux_1D!
+        
+        if z > z_c[k]
+            # Exponential attenuation above critical height
+            parent(τ_sat)[k] = τ_linear * exp(-(z - z_c[k])/z_c[k])
+        else
+            # No attenuation below critical height
+            parent(τ_sat)[k] = τ_linear
+        end
+        
+        # Hard limit based on saturation amplitude
+        parent(τ_sat)[k] = min(parent(τ_sat)[k], parent(τ_sat_base)[k])
+    end
+
+    # Handle surface layer
+    parent(τ_sat)[1] = parent(τ_x)[1]  # Keep full surface flux
+
+    # Redistribute residual flux if needed
+    if parent(τ_sat)[end] > FT(0)
+        ᶠp = ᶠinterp.(ᶜp)
+        τ_sat .-= parent(τ_sat)[end] .* (parent(ᶠp)[1] .- ᶠp) ./
+                 (parent(ᶠp)[1] .- parent(ᶠp)[end])
+    end
+end
+
+#Linear derived
+function calc_saturation_profile!(
+    τ_sat,       # Output: Saturated momentum flux profile
+    U_sat,       # Saturation velocity scale (output)
+    FrU_sat,     # Saturation Froude number (output)
+    FrU_clp,     # Clipped Froude number (output)
+    p,           # Parameters
+    FrU_max,     # Max Froude number (input)
+    FrU_min,     # Min Froude number (input)
+    ᶠN,          # Brunt-Väisälä frequency at faces (input)
+    τ_x,         # Surface momentum flux (input)
+    u_phy,       # Horizontal wind profile (input)
+    ᶜρ,          # Density profile (input)
+)
+    (; Fr_crit, topo_ρscale, topo_L0, _) = p.orographic_gravity_wave
+    k = 2π / topo_L0  # Wavenumber for cosine hill
+
+    # Vertical levels and integration
+    ᶠz = Fields.coordinate_field(axes(τ_sat)).z
+    τ_sat .= τ_x  # Initialize with surface flux
+
+    # Attenuate flux with height (optional)
+    for k in axes(τ_sat)[2:end]
+        z = parent(ᶠz)[k]
+        U = parent(u_phy)[k]
+        N = parent(ᶠN)[k]
+        H = U / N
+        
+        # Exponential attenuation
+        τ_sat[k] = τ_sat[k-1] * exp(-(z - parent(ᶠz)[k-1])/H)
+        
+        # Saturation limit
+        τ_sat_max = parent(ᶜρ)[k] * U^2 / k
+        τ_sat[k] = min(τ_sat[k], τ_sat_max)
+    end
+
+    # Compute auxiliary fields
+    @. U_sat = sqrt(ᶜρ / topo_ρscale * (τ_sat * k) / ᶠN)
+    @. FrU_sat = Fr_crit * U_sat
+    @. FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
+end
+
+#Full
 function calc_saturation_profile!(
     τ_sat,
     U_sat,
@@ -427,9 +770,11 @@ function calc_saturation_profile!(
         @. FrU_sat = Fr_crit * U_sat
         @. FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
         if k < k_pbl
+            # Using Garner eq. 20, 21 (Dp<0>)
             tmp = Fields.level(τ_sat, k + half)
             parent(tmp) .= parent(τ_p)
         else
+            # Using Garner eq. 20, 22
             tmp = Fields.level(τ_sat, k + half)
             parent(tmp) .= parent(
                 topo_a0 .* (

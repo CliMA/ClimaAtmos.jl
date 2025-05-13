@@ -264,7 +264,22 @@ Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
     dϕ_s::FT = -5
 end
 
-Base.@kwdef struct OrographicGravityWave{FT, S} <: AbstractGravityWave
+abstract type OrographicGravityWave <: AbstractGravityWave end
+
+Base.@kwdef struct LinearOrographicGravityWave{FT, S} <: OrographicGravityWave
+    γ::FT = 0.0
+    ϵ::FT = 0.0
+    β::FT = 0.0
+    h_frac::FT = 0.1
+    ρscale::FT = 1.2
+    L0::FT = 80e3
+    a0::FT = 0.0
+    a1::FT = 0.0
+    Fr_crit::FT = 0.7
+    topo_info::S = "linear"
+end
+
+Base.@kwdef struct FullOrographicGravityWave{FT, S} <: OrographicGravityWave
     γ::FT = 0.4
     ϵ::FT = 0.0
     β::FT = 0.5

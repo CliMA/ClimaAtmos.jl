@@ -1,8 +1,7 @@
 config: "plane"
 FLOAT_TYPE: "Float64"
 initial_condition: "ConstantBuoyancyFrequencyProfile"
-topography: "Cosine2D"
-mesh_warp_type: "Linear"
+topography: "Cosine1D"
 x_max: 100e3
 z_max: 21e3
 x_elem: 10
@@ -11,10 +10,10 @@ dz_bottom: 10
 dt: "0.7secs"
 t_end: "2days"
 rayleigh_sponge: true
-disable_surface_flux_tendency: true
 toml: [toml/steady_state_test.toml]
-check_steady_state: false
+check_steady_state: true
 output_default_diagnostics: false
 diagnostics:
   - short_name: [orog, ua, wa, uapredicted, wapredicted, uaerror, waerror]
     period: 1hours
+dataset: 
