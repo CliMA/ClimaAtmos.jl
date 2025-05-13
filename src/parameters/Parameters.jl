@@ -5,6 +5,7 @@ import Insolation.Parameters as IP
 import Thermodynamics as TD
 import CloudMicrophysics as CM
 import SurfaceFluxes as SF
+using SurfaceFluxes.UniversalFunctions: BusingerParams, GryanikParams
 
 abstract type AbstractClimaAtmosParameters end
 const ACAP = AbstractClimaAtmosParameters
@@ -138,6 +139,17 @@ end
 # Forwarding SurfaceFluxes parameters
 von_karman_const(ps::ACAP) =
     SF.Parameters.von_karman_const(surface_fluxes_params(ps))
+
+# ------ MOST (Monin–Obukhov) stability-function coefficients ------
+
+# Businger (a_m, b_m)
+coefficient_a_m_businger(ps::ACAP) =
+    BusingerParams(eltype(ps)).a_m
+coefficient_b_m_businger(ps::ACAP) =
+    BusingerParams(eltype(ps)).b_m
+# Gryanik
+coefficient_b_m_gryanik(ps::ACAP)  =
+    GryanikParams(eltype(ps)).b_m
 
 # Insolation parameters
 day(ps::ACAP) = IP.day(insolation_params(ps))

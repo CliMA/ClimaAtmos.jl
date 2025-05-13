@@ -173,25 +173,25 @@ function lamb_smooth_minimum(l, smoothness_param, λ_floor)
 end
 
 """
-    mixing_length(params, ustar, ᶜz, sfc_tke, ᶜlinear_buoygrad, ᶜtke, obukhov_length, ᶜstrain_rate_norm, ᶜPr, ᶜtke_exch)
+    mixing_length(params, ustar, ᶜz, z_sfc, ᶜdz, 
+                   sfc_tke, ᶜlinear_buoygrad, ᶜtke, obukhov_length, 
+                   ᶜstrain_rate_norm, ᶜPr, ᶜtke_exch)
 
 where:
-- `params`: set with model parameters
-- `ustar`: friction velocity
-- `ᶜz`: height
-- `tke_sfc`: env kinetic energy at first cell center
-- `ᶜlinear_buoygrad`: buoyancy gradient
-- `ᶜtke`: env turbulent kinetic energy
-- `obukhov_length`: surface Monin Obukhov length
-- `ᶜstrain_rate_norm`: Frobenius norm of strain rate tensor
-- `ᶜPr`: Prandtl number
-- `ᶜtke_exch`: subdomain exchange term
+- `params`: Parameter set (e.g., CLIMAParameters.AbstractParameterSet).
+- `ustar`: Friction velocity [m/s].
+- `ᶜz`: Cell center height [m].
+- `z_sfc`: Surface elevation [m].
+- `ᶜdz`: Cell vertical thickness [m].
+- `sfc_tke`: TKE near the surface (e.g., first cell center) [m^2/s^2].
+- `ᶜlinear_buoygrad`: N^2, Brunt-Väisälä frequency squared [1/s^2].
+- `ᶜtke`: Turbulent kinetic energy at cell center [m^2/s^2].
+- `obukhov_length`: Surface Monin-Obukhov length [m].
+- `ᶜstrain_rate_norm`: Frobenius norm of strain rate tensor [1/s].
+- `ᶜPr`: Turbulent Prandtl number [-].
+- `ᶜtke_exch`: TKE exchange term [m^2/s^3].
 
-Returns mixing length as a smooth minimum between
-wall-constrained length scale,
-production-dissipation balanced length scale,
-effective static stability length scale, and
-Smagorinsky length scale.
+Calculates the turbulent mixing length, limited by physical constraints and grid resolution.
 """
 function mixing_length(
     params,
@@ -209,75 +209,201 @@ function mixing_length(
 )
 
     FT = eltype(params)
+    eps_FT = eps(FT)
+
+
     turbconv_params = CAP.turbconv_params(params)
+
     c_m = CAP.tke_ed_coeff(turbconv_params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
     smin_ub = CAP.smin_ub(turbconv_params)
     smin_rm = CAP.smin_rm(turbconv_params)
     c_b = CAP.static_stab_coeff(turbconv_params)
+    # TODO: Parameter forwarding is increasing allocations
     vkc = CAP.von_karman_const(params)
 
-    # compute the maximum mixing length at height z
+    # MOST stability function coefficients (temporarily hard-coded)
+    most_a_m = FT(4.7)   # a_m  – Businger momentum
+    most_b_m = FT(15.0)  # b_m  – Businger momentum
+    most_g_m = FT(0.3)   # g_m≡b_m – Gryanik momentum
+
+    # CAP.coefficient_a_m_businger(params)
+    # CAP.coefficient_b_m_businger(params)
+    # CAP.coefficient_b_m_gryanik(params)
+
+    # --- Physical and Geometric Scales ---
+
+    # l_z: Geometric distance from the surface
     l_z = ᶜz - z_sfc
+    # Ensure l_z is non-negative when ᶜz is numerically smaller than z_sfc.
+    l_z = max(l_z, FT(0))
 
-    # compute the l_W - the wall constraint mixing length
-    # which imposes an upper limit on the size of eddies near the surface
-    # kz scale (surface layer)
-    if obukhov_length < 0.0 #unstable
-        l_W =
-            vkc * (ᶜz - z_sfc) /
-            max(sqrt(sfc_tke / ustar / ustar) * c_m, eps(FT)) *
-            min((1 - 100 * (ᶜz - z_sfc) / obukhov_length)^FT(0.2), 1 / vkc)
-    else # neutral or stable
-        l_W =
-            vkc * (ᶜz - z_sfc) /
-            max(sqrt(sfc_tke / ustar / ustar) * c_m, eps(FT))
+    # l_W: Wall-constrained length scale (near-surface limit, to match 
+    # Monin-Obukhov Similarity Theory in the surface layer, with Businger-Dyer 
+    # type stability functions)
+    tke_sfc_safe = max(sfc_tke, eps_FT)
+    ustar_sq_safe = max(ustar * ustar, eps_FT) # u_*^2 may vanish in certain LES setups
+
+    # Denominator of the base length scale (always positive):
+    #     c_m * √(tke_sfc / u_*²) = c_m * √(e_sfc) / u_*
+    # The value increases when u_* is small and decreases when e_sfc is small.
+    l_W_denom_factor = sqrt(tke_sfc_safe / ustar_sq_safe)
+    l_W_denom = max(c_m * l_W_denom_factor, eps_FT)
+
+    l_W = FT(0) # Initialise
+    # Base length scale (neutral, but adjusted for TKE level)
+    # l_W_base = κ * z / (c_m * sqrt(e_sfc) / u_star)
+    # This can be Inf if l_W_denom is eps_FT and l_z is large.
+    # This can be 0 if l_z is 0.
+    # The expression approaches ∞ when l_W_denom ≈ eps_FT and l_z is large,
+    # and approaches 0 when l_z → 0.
+    l_W_base = vkc * l_z / l_W_denom
+
+    if obukhov_length < FT(0) # Unstable case
+        obukhov_len_safe = min(obukhov_length, -eps_FT) # Ensure L < 0
+        zeta = l_z / obukhov_len_safe # Stability parameter zeta = z/L (<0)
+
+        # Calculate MOST term (1 - b_m * zeta)
+        # Since zeta is negative, this term is > 1
+        inner_term = FT(1) - most_b_m * zeta
+
+        # Numerical safety check – by theory the value is ≥ 1.
+        inner_term_safe = max(inner_term, eps_FT)
+
+        # Unstable-regime correction factor:
+        #     (1 − b_m ζ)^(1/4) = φ_m⁻¹,
+        # where φ_m is the Businger stability function φ_m = (1 − b_m ζ)^(-1/4).
+        stability_correction = sqrt(sqrt(inner_term_safe))
+
+        # Apply the correction factor
+        l_W = l_W_base * stability_correction
+
+    else # Neutral or stable case
+        obukhov_len_safe_stable = max(obukhov_length, eps_FT) # Ensure L > 0 for Monin-Obukhov length
+        zeta = l_z / obukhov_len_safe_stable # zeta >= 0
+
+        # Stable/neutral-regime correction after Gryanik (2020):
+        #     φ_m = 1 + a_m ζ / (1 + g_m ζ)^(2/3),
+        # a nonlinear refinement to the Businger formulation.
+        phi_m_denom_term = (FT(1) + most_g_m * zeta)
+        # Guard against a negative base in the fractional power
+        # (theoretically impossible for ζ ≥ 0 and g_m > 0, retained for robustness).
+        phi_m_denom_cubed_sqrt = cbrt(phi_m_denom_term)
+        phi_m_denom =
+            max(phi_m_denom_cubed_sqrt * phi_m_denom_cubed_sqrt, eps_FT) # (val)^(2/3)
+
+        phi_m = FT(1) + (most_a_m * zeta) / phi_m_denom
+        phi_m_safe = max(phi_m, eps_FT) # phi_m should be >= 1 for stable/neutral
+
+        # Stable-regime correction factor: 1 / φ_m.
+        stability_correction = FT(1) / phi_m_safe
+
+        # Apply the correction factor
+        l_W = l_W_base * stability_correction
     end
+    l_W = max(l_W, FT(0)) # Ensure non-negative
 
-    # compute l_TKE - the production-dissipation balanced length scale
-    a_pd = c_m * (2 * ᶜstrain_rate_norm - ᶜlinear_buoygrad / ᶜPr) * sqrt(ᶜtke)
-    # Dissipation term
-    c_neg = c_d * ᶜtke * sqrt(ᶜtke)
-    if abs(a_pd) > eps(FT) && 4 * a_pd * c_neg > -(ᶜtke_exch * ᶜtke_exch)
-        l_TKE = max(
-            -(ᶜtke_exch / 2 / a_pd) +
-            sqrt(ᶜtke_exch * ᶜtke_exch + 4 * a_pd * c_neg) / 2 / a_pd,
-            0,
-        )
-    elseif abs(a_pd) < eps(FT) && abs(ᶜtke_exch) > eps(FT)
-        l_TKE = c_neg / ᶜtke_exch
-    else
-        l_TKE = FT(0)
+    # --- l_TKE: TKE production-dissipation balance scale ---
+    tke_safe = max(ᶜtke, FT(0)) # Ensure TKE is not negative
+    sqrt_tke_safe = sqrt(tke_safe)
+
+    # Net production of TKE from shear and buoyancy is approximated by
+    #     (S² − N²/Pr_t) · √TKE · l,
+    # where S² denotes shear production and N² denotes buoyancy production.
+    # The factor below corresponds to that production term normalised by l.
+    # Ensure ᶜPr is strictly positive.
+    pr_safe = max(ᶜPr, eps_FT)
+    a_pd =
+        c_m *
+        (2 * ᶜstrain_rate_norm - ᶜlinear_buoygrad / pr_safe) *
+        sqrt_tke_safe
+
+    # Dissipation is modelled as c_d · k^{3/2} / l.
+    # For the quadratic expression below, c_neg ≡ c_d · k^{3/2}.
+    c_neg = c_d * tke_safe * sqrt_tke_safe
+
+    l_TKE = FT(0)
+    # Solve for l_TKE in
+    #     a_pd · l_TKE − c_neg / l_TKE + ᶜtke_exch = 0
+    #  ⇒  a_pd · l_TKE² + ᶜtke_exch · l_TKE − c_neg = 0
+    # yielding
+    #     l_TKE = (−ᶜtke_exch ± √(ᶜtke_exch² + 4 a_pd c_neg)) / (2 a_pd).
+    if abs(a_pd) > eps_FT # If net of shear and buoyancy production (a_pd) is non-zero
+        discriminant = ᶜtke_exch * ᶜtke_exch + 4 * a_pd * c_neg
+        if discriminant >= FT(0) # Ensure real solution exists
+            # Select the physically admissible (positive) root for l_TKE.
+            # When a_pd > 0 (production exceeds dissipation) the root
+            #     (−ᶜtke_exch + √D) / (2 a_pd)
+            # is positive.  For a_pd < 0 the opposite root is required.
+            l_TKE_sol1 = (-(ᶜtke_exch) + sqrt(discriminant)) / (2 * a_pd)
+            # For a_pd < 0 (local destruction exceeds production) use
+            #     (−ᶜtke_exch − √D) / (2 a_pd).
+            if a_pd > FT(0)
+                l_TKE = l_TKE_sol1
+            else # a_pd < FT(0)
+                l_TKE = (-(ᶜtke_exch) - sqrt(discriminant)) / (2 * a_pd)
+            end
+            l_TKE = max(l_TKE, FT(0)) # Ensure it's non-negative
+        end
+    elseif abs(ᶜtke_exch) > eps_FT # If a_pd is zero, balance is between exchange and dissipation
+        # ᶜtke_exch = c_neg / l_TKE  => l_TKE = c_neg / ᶜtke_exch
+        # Ensure division is safe and result is positive
+        if ᶜtke_exch > eps_FT # Assuming positive exchange means TKE sink from env perspective
+            l_TKE = c_neg / ᶜtke_exch # if c_neg is positive, l_TKE is positive
+        elseif ᶜtke_exch < -eps_FT # Negative exchange means TKE source for env
+            # -|ᶜtke_exch| = c_neg / l_TKE. If c_neg > 0, this implies l_TKE < 0, which is unphysical.
+            # This case (a_pd=0, tke_exch < 0, c_neg > 0) implies TKE source and dissipation, no production.
+            # Dissipation = Source. So, c_d * k_sqrt_k / l = -tke_exch. l = c_d * k_sqrt_k / (-tke_exch)
+            l_TKE = c_neg / (-(ᶜtke_exch))
+        end
+        l_TKE = max(l_TKE, FT(0))
     end
+    # If a_pd = 0 and ᶜtke_exch = 0 (or c_neg = 0), l_TKE remains zero.
 
-    # compute l_N - the effective static stability length scale.
-    N_eff = sqrt(max(ᶜlinear_buoygrad, 0))
-    if N_eff > 0.0
-        l_N = min(sqrt(max(c_b * ᶜtke, 0)) / N_eff, l_z)
-    else
-        l_N = l_z
+    # --- l_N: Static-stability length scale (buoyancy limit), constrained by l_z ---
+    N_eff_sq = max(ᶜlinear_buoygrad, FT(0)) # Use N^2 only if stable (N^2 > 0)
+    l_N = l_z # Default to wall distance if not stably stratified or TKE is zero
+    if N_eff_sq > eps_FT && tke_safe > eps_FT
+        N_eff = sqrt(N_eff_sq)
+        # Ensure sqrt(tke) is safe and denominator is non-zero
+        # l_N ~ sqrt(c_b * TKE) / N_eff
+        l_N_physical = sqrt(c_b * tke_safe) / N_eff # c_b is positive
+        # Limit by distance from wall
+        l_N = min(l_N_physical, l_z)
     end
+    l_N = max(l_N, FT(0)) # Ensure non-negative
 
-    # compute l_smag - smagorinsky length scale
-    l_smag = smagorinsky_lilly_length(
-        CAP.c_smag(params),
-        N_eff,
-        ᶜdz,
-        ᶜPr,
-        ᶜstrain_rate_norm,
-    )
+    # --- Grid-scale limit ---
+    # TODO: Replace with a volumetric scale at kilometre-scale resolutions.
+    grid_scale_delta = ᶜdz # Vertical grid scale
+    l_grid = max(grid_scale_delta, eps_FT) # Assign delta to l_grid and ensure positive 
 
-    # add limiters
-    l = SA.SVector(
-        l_N > l_z ? l_z : l_N,
-        l_TKE > l_z ? l_z : l_TKE,
-        l_W > l_z ? l_z : l_W,
-    )
-    # get soft minimum
-    l_smin = lamb_smooth_minimum(l, smin_ub, smin_rm)
-    l_limited = max(l_smag, min(l_smin, l_z))
+    # --- Combine Scales ---
 
-    return MixingLength{FT}(l_limited, l_W, l_TKE, l_N)
+    # Vector of *physical* scales (wall, TKE, stability)
+    # These scales (l_W, l_TKE, l_N) are already ensured to be non-negative.
+    # l_N is already limited by l_z. l_W and l_TKE are not necessarily.
+    l_physical_scales = SA.SVector(l_W, l_TKE, l_N)
+
+    # TODO: Replace lamb_smooth_minimum with TC.blend_scales, supporting hard/soft minimum and ML options
+    l_smin = lamb_smooth_minimum(l_physical_scales, smin_ub, smin_rm)
+    l_smin = max(l_smin, FT(0)) # Ensure non-negative (lamb_smooth_minimum should preserve this if inputs are non-negative)
+
+    # 1. Limit the combined physical scale by the distance from the wall.
+    #    This step mitigates excessive values of l_W or l_TKE.
+    l_limited_phys_wall = min(l_smin, l_z)
+
+    # 2. Impose the grid-scale limit (l_grid).
+    l_final = min(l_limited_phys_wall, l_grid)
+
+    # Final check: guarantee that the mixing length is at least a small positive
+    # value.  This prevents division-by-zero in
+    #     ε_d = C_d · TKE^{3/2} / l_mix
+    # when TKE > 0.  When TKE = 0, l_mix is inconsequential, but eps_FT
+    # provides a conservative lower bound.
+    l_final = max(l_final, eps_FT)
+
+    return MixingLength{FT}(l_final, l_W, l_TKE, l_N)
 end
 
 """
