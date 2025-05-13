@@ -983,12 +983,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
-    @. ᶜprandtl_nvec = turbulent_prandtl_number(
-        params,
-        obukhov_length,
-        ᶜlinear_buoygrad,
-        ᶜstrain_rate_norm,
-    )
+    @. ᶜprandtl_nvec =
+        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+
     ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
     # using ᶜu⁰ would be more correct, but this is more consistent with the
