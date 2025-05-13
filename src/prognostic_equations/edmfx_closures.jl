@@ -103,21 +103,73 @@ function edmfx_nh_pressure_drag_tendency!(
     end
 end
 
-# lambert_2_over_e(::Type{FT}) where {FT} = FT(LambertW.lambertw(FT(2) / FT(MathConstants.e)))
-lambert_2_over_e(::Type{FT}) where {FT} = FT(0.46305551336554884) # since we can evaluate
+"""
+    lamb_smooth_minimum(l::SA.SVector{N, FT}, smoothness_param::FT, λ_floor::FT) where {N, FT}
 
-function lamb_smooth_minimum(
-    l::SA.SVector,
-    lower_bound::FT,
-    upper_bound,
-) where {FT}
+Calculates a smooth minimum of the elements in the StaticVector `l`.
+
+This function provides a differentiable approximation to the `minimum` function,
+yielding a value slightly larger than the true minimum, weighted towards the
+smallest elements. The degree of smoothness is controlled by an internally
+calculated parameter `λ₀`, which depends on the input parameters
+`smoothness_param` and `λ_floor`. A larger `λ₀` results in a smoother
+(less sharp) minimum approximation.
+
+This implementation is based on an exponentially weighted average, with `λ₀`
+determined involving the minimum element `x_min` and a factor related to the
+Lambert W function evaluated at 2/e.
+
+Arguments:
+ - `l`: An `SVector{N, FT}` of N numbers for which to find the smooth minimum.
+ - `smoothness_param`: A parameter (`FT`) influencing the scaling of the smoothness
+                      parameter `λ₀`. A larger value generally leads to a larger `λ₀`
+                      and a smoother minimum.
+ - `λ_floor`: The minimum value (`FT`) allowed for the smoothness parameter `λ₀`.
+                  Ensures a minimum level of smoothing and prevents `λ₀` from
+                  becoming zero or negative. Must be positive.
+Returns:
+ - The smooth minimum value (`FT`).
+
+Algorithm:
+ 1. Find the hard minimum `x_min = minimum(l)`.
+ 2. Calculate the smoothness scale:
+    `λ₀ = max(x_min * smoothness_param / W(2/e), λ_floor)`,
+    where `W(2/e)` is the Lambert W function evaluated at 2/e.
+ 3. Ensure `λ₀` is positive (`>= eps(FT)`).
+ 4. Compute the exponentially weighted average:
+    `smin = Σᵢ(lᵢ * exp(-(lᵢ - x_min) / λ₀)) / Σᵢ(exp(-(lᵢ - x_min) / λ₀))`
+"""
+function lamb_smooth_minimum(l, smoothness_param, λ_floor)
+    FT = typeof(smoothness_param)
+
+    # Precomputed constant value of LambertW(2/e) for efficiency.
+    # LambertW.lambertw(FT(2) / FT(MathConstants.e)) ≈ 0.46305551336554884
+    lambert_2_over_e = FT(0.46305551336554884)
+
+    # Ensure the floor for the smoothness parameter is positive
+    @assert λ_floor > 0 "λ_floor must be positive"
+
+    # 1. Find the minimum value in the vector
     x_min = minimum(l)
-    λ_0 = max(x_min * lower_bound / lambert_2_over_e(FT), upper_bound)
 
-    num = sum(l_i -> l_i * exp(-(l_i - x_min) / λ_0), l)
-    den = sum(l_i -> exp(-(l_i - x_min) / λ_0), l)
-    smin = num / den
-    return smin
+    # 2. Calculate the smoothing parameter λ_0.
+    # It scales with the minimum value and smoothness_param, bounded below by λ_floor.
+    # Using a precomputed value for lambertw(2/e) for type stability and efficiency.
+    lambda_scaling_term = x_min * smoothness_param / lambert_2_over_e
+    λ_0 = max(lambda_scaling_term, λ_floor)
+
+    # 3. Ensure λ_0 is numerically positive (should be guaranteed by λ_floor > 0)
+    λ_0_safe = max(λ_0, eps(FT))
+
+    # Calculate the numerator and denominator for the weighted average.
+    # The exponent is -(l_i - x_min)/λ_0_safe, which is <= 0.
+    numerator = sum(l_i -> l_i * exp(-(l_i - x_min) / λ_0_safe), l)
+    denominator = sum(l_i -> exp(-(l_i - x_min) / λ_0_safe), l)
+
+    # 4. Calculate the smooth minimum.
+    # The denominator is guaranteed to be >= 1 because the term with l_i = x_min
+    # contributes exp(0) = 1. Add a safeguard for (unlikely) underflow issues.
+    return numerator / max(eps(FT), denominator)
 end
 
 """

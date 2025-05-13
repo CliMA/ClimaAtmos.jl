@@ -1,4 +1,4 @@
-235
+236
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+236
+- Radiation fluxes in runs with the `deep_atmosphere` configuration now take into account the 
+  column expansion with height. Affects only cases with `DeepSphericalGlobalGeometry`.
+
 235
 - Related to #3775, the computation and update of non-orographic gravity wave (NOGW) 
   are now separated into callback and tendencies update, affecting the NOGW-related

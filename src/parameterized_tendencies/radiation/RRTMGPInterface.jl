@@ -19,11 +19,13 @@ using Random
 abstract type AbstractRRTMGPMode end
 struct GrayRadiation <: AbstractRRTMGPMode
     add_isothermal_boundary_layer::Bool
+    deep_atmosphere::Bool
 end
 struct ClearSkyRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
     add_isothermal_boundary_layer::Bool
     aerosol_radiation::Bool
+    deep_atmosphere::Bool
 end
 struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
     idealized_h2o::Bool
@@ -39,6 +41,7 @@ struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
     Disable this option when running production runs.
     """
     reset_rng_seed::Bool
+    deep_atmosphere::Bool
 end
 struct AllSkyRadiationWithClearSkyDiagnostics{
     ACR <: AbstractCloudInRadiation,
@@ -56,6 +59,7 @@ struct AllSkyRadiationWithClearSkyDiagnostics{
     Disable this option when running production runs.
     """
     reset_rng_seed::Bool
+    deep_atmosphere::Bool
 end
 
 """
@@ -260,7 +264,7 @@ function extrap!(
     @. p = p⁺ * (T / T⁺)^(cₚ / R)
 end
 
-struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V}
+struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V, M}
     radiation_mode::R
     interpolation::I
     bottom_extrapolation::B
@@ -270,6 +274,7 @@ struct RRTMGPModel{R, I, B, L, P, LWS, SWS, AS, V}
     sw_solver::SWS
     as::AS  # Atmospheric state
     views::V  # user-friendly views into the solver
+    metric_scaling::M
 end
 
 # Allow cache to be moved on the CPU. Used by ClimaCoupler to save checkpoints
@@ -539,6 +544,7 @@ array.
   `requires_z(interpolation) || requires_z(bottom_extrapolation)`:
     - `center_z`: z-coordinate in m at cell centers
     - `face_z`: z-coordinate in m at cell faces
+    - `planet_radius`: planet radius (used to compute metric scaling factor)
 """
 RRTMGPModel(
     params::RRTMGP.Parameters.ARP,
@@ -579,7 +585,15 @@ function _RRTMGPModel(
     FT = typeof(params.grav)
     # turn kwargs into a Dict, so that values can be dynamically popped from it
     dict = Dict(kwargs)
-
+    nlay = domain_nlay + Int(radiation_mode.add_isothermal_boundary_layer)
+    grid_params = RRTMGP.RRTMGPGridParams(
+        FT;
+        context,
+        nlay,
+        ncol,
+        isothermal_boundary_layer = radiation_mode.add_isothermal_boundary_layer,
+    )
+    op = RRTMGP.Optics.TwoStream(grid_params)
     if use_global_means_for_well_mixed_gases && radiation_mode isa GrayRadiation
         @warn "use_global_means_for_well_mixed_gases is ignored when using \
                GrayRadiation"
@@ -593,26 +607,22 @@ function _RRTMGPModel(
     (; lookups, lu_kwargs) = lookup_tables(radiation_mode, device, FT)
     views = []
 
-    nlay = domain_nlay + Int(radiation_mode.add_isothermal_boundary_layer)
     t = (views, domain_nlay)
 
-    src_lw = RRTMGP.Sources.source_func_longwave(
-        params,
-        FT,
-        ncol,
-        nlay,
-        :TwoStream,
-        DA,
-    )
-    flux_lw = RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
+    src_lw = if op isa RRTMGP.Optics.OneScalar
+        RRTMGP.SourceLWNoScat(grid_params; params)
+    else
+        RRTMGP.SourceLW2Str(grid_params; params)
+    end
+    flux_lw = RRTMGP.Fluxes.FluxLW(grid_params)
     fluxb_lw =
         radiation_mode isa GrayRadiation ? nothing :
-        RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
+        RRTMGP.Fluxes.FluxLW(grid_params)
     set_and_save!(flux_lw.flux_up, "face_lw_flux_up", t...)
     set_and_save!(flux_lw.flux_dn, "face_lw_flux_dn", t...)
     set_and_save!(flux_lw.flux_net, "face_lw_flux", t...)
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-        flux_lw2 = RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
+        flux_lw2 = RRTMGP.Fluxes.FluxLW(grid_params)
         set_and_save!(flux_lw2.flux_up, "face_clear_lw_flux_up", t...)
         set_and_save!(flux_lw2.flux_dn, "face_clear_lw_flux_dn", t...)
         set_and_save!(flux_lw2.flux_net, "face_clear_lw_flux", t...)
@@ -629,17 +639,18 @@ function _RRTMGPModel(
     end
     bcs_lw = RRTMGP.BCs.LwBCs(sfc_emis, inc_flux)
     src_sw =
-        RRTMGP.Sources.source_func_shortwave(FT, ncol, nlay, :TwoStream, DA)
-    flux_sw = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
+        op isa RRTMGP.Optics.OneScalar ? nothing :
+        RRTMGP.SourceSW2Str(grid_params)
+    flux_sw = RRTMGP.Fluxes.FluxSW(grid_params)
     fluxb_sw =
         radiation_mode isa GrayRadiation ? nothing :
-        RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
+        RRTMGP.Fluxes.FluxSW(grid_params)
     set_and_save!(flux_sw.flux_up, "face_sw_flux_up", t...)
     set_and_save!(flux_sw.flux_dn, "face_sw_flux_dn", t...)
     set_and_save!(flux_sw.flux_net, "face_sw_flux", t...)
     set_and_save!(flux_sw.flux_dn_dir, "face_sw_direct_flux_dn", t...)
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-        flux_sw2 = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
+        flux_sw2 = RRTMGP.Fluxes.FluxSW(grid_params)
         set_and_save!(flux_sw2.flux_up, "face_clear_sw_flux_up", t...)
         set_and_save!(flux_sw2.flux_dn, "face_clear_sw_flux_dn", t...)
         set_and_save!(
@@ -689,6 +700,11 @@ function _RRTMGPModel(
     end
 
     p_lev = DA{FT}(undef, nlay + 1, ncol)
+    if radiation_mode.deep_atmosphere && :planet_radius in keys(dict)
+        metric_scaling = DA{FT}(undef, nlay + 1, ncol)
+    else
+        metric_scaling = nothing
+    end
     t_lev = DA{FT}(undef, nlay + 1, ncol)
     t_sfc = DA{FT}(undef, ncol)
     set_and_save!(t_sfc, "surface_temperature", t..., dict)
@@ -731,7 +747,7 @@ function _RRTMGPModel(
         gas_names = filter(
             gas_name ->
                 !(gas_name in ("h2o", "h2o_frgn", "h2o_self", "o3")),
-            keys(lookups.idx_gases_sw),
+            RRTMGP.gas_names_sw(),
         )
         # TODO: This gives the wrong types for CUDA 3.4 and above.
         # gm = use_global_means_for_well_mixed_gases
@@ -858,7 +874,6 @@ function _RRTMGPModel(
         else
             aerosol_state = nothing
         end
-
         as = RRTMGP.AtmosphericStates.AtmosphericState(
             lon,
             lat,
@@ -871,10 +886,8 @@ function _RRTMGPModel(
             cloud_state,
             aerosol_state,
         )
-
     end
 
-    op = RRTMGP.Optics.TwoStream(FT, ncol, nlay, DA)
     sw_solver = RRTMGP.RTE.TwoStreamSWRTE(
         context,
         op,
@@ -897,6 +910,14 @@ function _RRTMGPModel(
         set_and_save!(z_lay, "center_z", t..., dict)
         z_lev = DA{FT}(undef, nlay + 1, ncol)
         set_and_save!(z_lev, "face_z", t..., dict)
+        if radiation_mode.deep_atmosphere && :planet_radius in keys(dict)
+            planet_radius = pop!(dict, :planet_radius)
+            # Area ratio appears in denominator of RRTMGP scaling functions, 
+            # we therefore pass the multiplicative inverse from ClimaAtmos to 
+            # use mult ops instead of div in RRTMGP GPU kernels.
+            metric_scaling .=
+                inv.(((z_lev .+ planet_radius) ./ planet_radius) .^ (FT(2)))
+        end
     end
 
     if length(dict) > 0
@@ -917,6 +938,7 @@ function _RRTMGPModel(
         sw_solver,
         as,
         NamedTuple(views),
+        metric_scaling,
     )
 end
 
@@ -1139,7 +1161,7 @@ get_vmr_h2o(vmr::RRTMGP.Vmrs.Vmr, idx_gases_sw) =
     view(vmr.vmr, idx_gases_sw["h2o"], :, :)
 
 NVTX.@annotate update_lw_fluxes!(::GrayRadiation, model) =
-    RRTMGP.RTESolver.solve_lw!(model.lw_solver, model.as)
+    RRTMGP.RTESolver.solve_lw!(model.lw_solver, model.as, model.metric_scaling)
 NVTX.@annotate update_lw_fluxes!(::ClearSkyRadiation, model) =
     RRTMGP.RTESolver.solve_lw!(
         model.lw_solver,
@@ -1147,6 +1169,7 @@ NVTX.@annotate update_lw_fluxes!(::ClearSkyRadiation, model) =
         model.lookups.lookup_lw,
         nothing,
         model.lookups.lookup_lw_aero,
+        model.metric_scaling,
     )
 NVTX.@annotate update_lw_fluxes!(::AllSkyRadiation, model) =
     RRTMGP.RTESolver.solve_lw!(
@@ -1155,6 +1178,7 @@ NVTX.@annotate update_lw_fluxes!(::AllSkyRadiation, model) =
         model.lookups.lookup_lw,
         model.lookups.lookup_lw_cld,
         model.lookups.lookup_lw_aero,
+        model.metric_scaling,
     )
 NVTX.@annotate function update_lw_fluxes!(
     ::AllSkyRadiationWithClearSkyDiagnostics,
@@ -1166,6 +1190,7 @@ NVTX.@annotate function update_lw_fluxes!(
         model.lookups.lookup_lw,
         nothing,
         model.lookups.lookup_lw_aero,
+        model.metric_scaling,
     )
     parent(model.face_clear_lw_flux_up) .= parent(model.face_lw_flux_up)
     parent(model.face_clear_lw_flux_dn) .= parent(model.face_lw_flux_dn)
@@ -1176,11 +1201,12 @@ NVTX.@annotate function update_lw_fluxes!(
         model.lookups.lookup_lw,
         model.lookups.lookup_lw_cld,
         model.lookups.lookup_lw_aero,
+        model.metric_scaling,
     )
 end
 
 NVTX.@annotate update_sw_fluxes!(::GrayRadiation, model) =
-    RRTMGP.RTESolver.solve_sw!(model.sw_solver, model.as)
+    RRTMGP.RTESolver.solve_sw!(model.sw_solver, model.as, model.metric_scaling)
 NVTX.@annotate update_sw_fluxes!(::ClearSkyRadiation, model) =
     RRTMGP.RTESolver.solve_sw!(
         model.sw_solver,
@@ -1188,6 +1214,7 @@ NVTX.@annotate update_sw_fluxes!(::ClearSkyRadiation, model) =
         model.lookups.lookup_sw,
         nothing,
         model.lookups.lookup_sw_aero,
+        model.metric_scaling,
     )
 NVTX.@annotate update_sw_fluxes!(::AllSkyRadiation, model) =
     RRTMGP.RTESolver.solve_sw!(
@@ -1196,6 +1223,7 @@ NVTX.@annotate update_sw_fluxes!(::AllSkyRadiation, model) =
         model.lookups.lookup_sw,
         model.lookups.lookup_sw_cld,
         model.lookups.lookup_sw_aero,
+        model.metric_scaling,
     )
 NVTX.@annotate function update_sw_fluxes!(
     ::AllSkyRadiationWithClearSkyDiagnostics,
@@ -1207,6 +1235,7 @@ NVTX.@annotate function update_sw_fluxes!(
         model.lookups.lookup_sw,
         nothing,
         model.lookups.lookup_sw_aero,
+        model.metric_scaling,
     )
     parent(model.face_clear_sw_flux_up) .= parent(model.face_sw_flux_up)
     parent(model.face_clear_sw_flux_dn) .= parent(model.face_sw_flux_dn)
@@ -1219,6 +1248,7 @@ NVTX.@annotate function update_sw_fluxes!(
         model.lookups.lookup_sw,
         model.lookups.lookup_sw_cld,
         model.lookups.lookup_sw_aero,
+        model.metric_scaling,
     )
 end
 

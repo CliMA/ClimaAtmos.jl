@@ -270,8 +270,7 @@ the `turbconv_model` is EDMFX, the `Y.f.sgsʲs` are also modified so that each
 """
 function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
-    bc_sfc_u₃ = surface_velocity(Y.f.u₃, ᶠuₕ³)
-    @. sfc_u₃ = bc_sfc_u₃
+    sfc_u₃ .= surface_velocity(Y.f.u₃, ᶠuₕ³)
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n_mass_flux_subdomains(turbconv_model)
             sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
@@ -316,8 +315,7 @@ end
 function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
     @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
     @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
-    bc_kinetic = compute_kinetic(ᶜuₕ, ᶠu₃)
-    @. ᶜK = bc_kinetic
+    ᶜK .= compute_kinetic(ᶜuₕ, ᶠu₃)
     return nothing
 end
 

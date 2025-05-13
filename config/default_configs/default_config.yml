@@ -39,7 +39,7 @@ topography:
   value: "NoWarp"
 mesh_warp_type:
   help: "Sets the interior mesh warp method [`Linear`, `SLEVE`]"
-  value: "Linear"
+  value: "SLEVE"
 sleve_eta:
   help: "If SLEVE coordinates are chosen, sets the `ηₕ` parameter (if z/z_top > ηₕ, no warping is applied)"
   value: 0.7
@@ -146,7 +146,7 @@ vert_diff:
   help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `DecayWithHeightDiffusion`]"
   value: false
 hyperdiff:
-  help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
+  help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`), `CAM_SE` (default), `none` (or `false`)]"
   value: "CAM_SE"
 smagorinsky_lilly:
   help: "Smagorinsky-Lilly diffusive closure [`false` (default), `true`]"
@@ -164,7 +164,7 @@ test_dycore_consistency:
   help: "Test dycore consistency [`false` (default), `true`]"
   value: false
 dt_save_state_to_disk:
-  help: "Time between saving the state to disk. Examples: [`10secs`, `1hours`, `1months`, `Inf` (do not save)]"
+  help: "Time between saving the state to disk. Examples: [`10secs`, `1hours`, `1months`, `Inf` (do not save, default)]"
   value: "Inf"
 moist:
   help: "Moisture model [`dry` (default), `equil`, `nonequil`]"
@@ -185,7 +185,7 @@ surface_temperature:
   help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric', 'RCEMIPII', `Reanalysis`, `ReanalysisTimeVarying`]"
   value: "ZonallySymmetric"
 initial_condition:
-  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
+  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
   value: "DecayingProfile"
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
@@ -202,6 +202,9 @@ precip_model:
 cloud_model:
   help: "Cloud model [`grid_scale`, `quadrature` (default), `quadrature_sgs`]"
   value: "quadrature"
+implicit_noneq_cloud_formation:
+  help: "Whether to treat the nonequilibrium cloud condensate tendency implicitly [`true`, `false` (default)]"
+  value: false
 perf_summary:
   help: "Flag for collecting performance summary information"
   value: false
@@ -209,10 +212,10 @@ viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false
 tracer_upwinding:
-  help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`, `vanleer_limiter`]"
+  help: "Tracer upwinding mode [`none`, `first_order` , `third_order`, `boris_book`, `zalesak`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
 energy_upwinding:
-  help: "Energy upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`, `vanleer_limiter`]"
+  help: "Energy upwinding mode [`none`, `first_order` , `third_order`, `boris_book`, `zalesak`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
 orographic_gravity_wave:
   help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`]"

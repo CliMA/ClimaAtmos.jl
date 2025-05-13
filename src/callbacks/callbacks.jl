@@ -223,10 +223,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         end
     end
 
-    if p.atmos.insolation isa IdealizedInsolation ||
-       !(p.atmos.surface_albedo isa CouplerAlbedo)
-        set_insolation_variables!(Y, p, t, p.atmos.insolation)
-    end
+    set_insolation_variables!(Y, p, t, p.atmos.insolation)
 
     if radiation_mode isa RRTMGPI.AllSkyRadiation ||
        radiation_mode isa RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
@@ -410,7 +407,11 @@ NVTX.@annotate function nogw_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
 
-    non_orographic_gravity_wave_compute_tendency!(Y, p)
+    non_orographic_gravity_wave_compute_tendency!(
+        Y,
+        p,
+        p.atmos.non_orographic_gravity_wave,
+    )
     return nothing
 end
 

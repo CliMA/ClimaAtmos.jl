@@ -55,3 +55,4 @@ Artifacts.toml
 
 # misc
 .DS_Store
+.qodo
