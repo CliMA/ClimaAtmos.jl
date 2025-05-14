@@ -1,4 +1,4 @@
-237
+238
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+238
+- Limit by Pr_max = 10 (new default in ClimaParams v0.10.30)
+
 237
 - Changed the formulation of the Richardson and Prandtl numbers. We are now limiting by
   Pr_max = 100 instead of Ri_max = 0.25. Different behavior for stable and neutral conditions.
