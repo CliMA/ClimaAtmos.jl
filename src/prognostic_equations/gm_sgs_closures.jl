@@ -47,23 +47,18 @@ NVTX.@annotate function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     ᶠu = p.scratch.ᶠtemp_C123
     @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
-    bc_strain_rate = compute_strain_rate_center(ᶠu)
-    @. ᶜstrain_rate = bc_strain_rate
+    ᶜstrain_rate .= compute_strain_rate_center(ᶠu)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_2
-    @. ᶜprandtl_nvec = turbulent_prandtl_number(
-        params,
-        obukhov_length,
-        ᶜlinear_buoygrad,
-        ᶜstrain_rate_norm,
-    )
+    @. ᶜprandtl_nvec =
+        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
 
     @. ᶜmixing_length = smagorinsky_lilly_length(
         CAP.c_smag(params),
         sqrt(max(ᶜlinear_buoygrad, 0)),   #N_eff
         ᶜdz,
         ᶜprandtl_nvec,
-        norm_sqr(ᶜstrain_rate),
+        ᶜstrain_rate_norm,
     )
 end

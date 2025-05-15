@@ -1,4 +1,4 @@
-236
+238
 
 # **README**
 #
@@ -20,12 +20,19 @@
 
 
 #=
+238
+- Limit by Pr_max = 10 (new default in ClimaParams v0.10.30)
+
+237
+- Changed the formulation of the Richardson and Prandtl numbers. We are now limiting by
+  Pr_max = 100 instead of Ri_max = 0.25. Different behavior for stable and neutral conditions.
+
 236
-- Radiation fluxes in runs with the `deep_atmosphere` configuration now take into account the 
+- Radiation fluxes in runs with the `deep_atmosphere` configuration now take into account the
   column expansion with height. Affects only cases with `DeepSphericalGlobalGeometry`.
 
 235
-- Related to #3775, the computation and update of non-orographic gravity wave (NOGW) 
+- Related to #3775, the computation and update of non-orographic gravity wave (NOGW)
   are now separated into callback and tendencies update, affecting the NOGW-related
   tests.
 
@@ -66,7 +73,7 @@
   (This only affects prognostic edmf)
 
 225
-- Move nonhydrostatic pressure drag calculation to precomputed quantities and 
+- Move nonhydrostatic pressure drag calculation to precomputed quantities and
   remove one reproducibility job
   (This only affects prognostic edmf)
 
