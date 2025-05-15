@@ -113,6 +113,8 @@ Base.@kwdef struct ClimaAtmosParameters{
     α_hyperdiff_tracer::FT
     # Vertical diffusion
     α_vert_diff_tracer::FT
+    # Gryanik b_m coefficient
+    coeff_b_m_gryanik::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
@@ -138,6 +140,12 @@ end
 # Forwarding SurfaceFluxes parameters
 von_karman_const(ps::ACAP) =
     SF.Parameters.von_karman_const(surface_fluxes_params(ps))
+
+# ------ MOST (Monin–Obukhov) stability-function coefficients ------
+
+# Gryanik b_m
+# needed because surface_fluxes_params defaults to BusingerParams
+coefficient_b_m_gryanik(ps::ACAP) = ps.coeff_b_m_gryanik
 
 # Insolation parameters
 day(ps::ACAP) = IP.day(insolation_params(ps))

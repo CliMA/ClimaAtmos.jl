@@ -76,6 +76,7 @@ function get_atmos(config::AtmosConfig, params)
         sgs_diffusive_flux = Val(parsed_args["edmfx_sgs_diffusive_flux"]),
         nh_pressure = Val(parsed_args["edmfx_nh_pressure"]),
         filter = Val(parsed_args["edmfx_filter"]),
+        scale_blending_method = get_scale_blending_method(parsed_args),
     )
 
     vert_diff = get_vertical_diffusion_model(
@@ -133,6 +134,17 @@ function get_atmos(config::AtmosConfig, params)
 
     @info "AtmosModel: \n$(summary(atmos))"
     return atmos
+end
+
+function get_scale_blending_method(parsed_args)
+    method_name = parsed_args["edmfx_scale_blending"]
+    if method_name == "SmoothMinimum"
+        return SmoothMinimumBlending()
+    elseif method_name == "HardMinimum"
+        return HardMinimumBlending()
+    else
+        error("Unknown edmfx_scale_blending method: $method_name")
+    end
 end
 
 function get_numerics(parsed_args)
