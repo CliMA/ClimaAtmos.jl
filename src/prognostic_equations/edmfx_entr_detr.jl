@@ -344,10 +344,19 @@ function detrainment(
     ᶜtke⁰,
     ::SmoothAreaDetrainment,
 )
-    if (ᶜρaʲ <= 0) || (ᶜw_vert_div >= 0)
+    FT = eltype(thermo_params)
+    max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
+    max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
+    max_area_limiter = FT(max_area_limiter_scale)*exp(-FT(max_area_limiter_power) * (FT(1.0) - ᶜaʲ))
+
+    entr_param_vec = CAP.entr_param_vec(turbconv_params)
+
+    if ᶜρaʲ <= 0
         detr = 0
+    elseif ᶜw_vert_div >= 0
+        detr = max_area_limiter + FT(entr_param_vec[7])
     else
-        detr = ᶜentr - ᶜw_vert_div
+        detr = ᶜentr - ᶜw_vert_div + max_area_limiter + FT(entr_param_vec[7])
     end
     return max(detr, 0)
 end
