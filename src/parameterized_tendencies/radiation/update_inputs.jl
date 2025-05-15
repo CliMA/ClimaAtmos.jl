@@ -23,7 +23,7 @@ function update_atmospheric_state!(radiation_mode::R, integrator) where {R}
     # update relative humidity 
     update_relative_humidity!(integrator)
     # update column amounts of dry/moist air
-    update_concentrations!(radiation_mode, integrator.p.radiation.rrtmgp_model)
+    #update_concentrations!(radiation_mode, integrator.p.radiation.rrtmgp_model)
     # update gas concentrations (volume mixing ratios)
     update_volume_mixing_ratios!(integrator)
     # update aerosol concentrations
@@ -226,7 +226,6 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
     (; cloud_diagnostics_tuple) = p.precomputed
     FT = Spaces.undertype(axes(u.c))
     cmc = CAP.microphysics_cloud_params(p.params)
-
 
         if :prescribed_clouds_field in propertynames(p.radiation)
             for (key, tv) in pairs(p.radiation.prescribed_cloud_timevaryinginputs)

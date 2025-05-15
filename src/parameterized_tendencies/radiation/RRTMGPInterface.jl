@@ -1024,7 +1024,9 @@ NVTX.@annotate function update_fluxes!(model, seedval)
     model.radiation_mode.add_isothermal_boundary_layer &&
         update_boundary_layer!(model)
     clip_values!(model)
-    #update_concentrations!(model.radiation_mode, model)
+    # TODO : update_concentrations as part of update_atmospheric_state! 
+    # clip values has an effect here
+    update_concentrations!(model.radiation_mode, model)
     update_lw_fluxes!(model.radiation_mode, model)
     update_sw_fluxes!(model.radiation_mode, model)
     update_net_fluxes!(model.radiation_mode, model)
