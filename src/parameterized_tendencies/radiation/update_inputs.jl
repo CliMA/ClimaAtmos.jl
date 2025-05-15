@@ -29,7 +29,10 @@ function update_atmospheric_state!(radiation_mode::R, integrator) where {R}
     # update aerosol concentrations
     update_aerosol_concentrations!(integrator)
     # update cloud properties
-    update_cloud_properties!(integrator)
+    if radiation_mode isa AllSkyRadiation ||
+       radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
+        update_cloud_properties!(integrator)
+    end
     return nothing
 end
 
@@ -61,7 +64,7 @@ function update_temperature_pressure!((; u, p, t)::I) where {I}
     @. ᶜT =
         min(max(TD.air_temperature(thermo_params, ᶜts), FT(T_min)), FT(T_max))
     # compute level temperatures and pressures using interpolation/extrapolation
-    update_implied_values!(model)
+    #update_implied_values!(model)
     return nothing
 end
 
@@ -223,15 +226,15 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
     (; cloud_diagnostics_tuple) = p.precomputed
     FT = Spaces.undertype(axes(u.c))
     cmc = CAP.microphysics_cloud_params(p.params)
-    if :prescribed_clouds_field in propertynames(p.radiation)
-        for (key, tv) in pairs(p.radiation.prescribed_cloud_timevaryinginputs)
-            field = getproperty(p.radiation.prescribed_clouds_field, key)
-            evaluate!(field, tv, t)
-        end
-    end
 
-    if radiation_mode isa AllSkyRadiation ||
-       radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
+
+        if :prescribed_clouds_field in propertynames(p.radiation)
+            for (key, tv) in pairs(p.radiation.prescribed_cloud_timevaryinginputs)
+                field = getproperty(p.radiation.prescribed_clouds_field, key)
+                evaluate!(field, tv, t)
+            end
+        end
+
         if !radiation_mode.idealized_clouds
             ᶜΔz = Fields.Δz_field(u.c)
             ᶜlwp = Fields.array2field(
@@ -336,7 +339,6 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
                 FT(0),
             )
         end
-    end
 
     return nothing
 end
