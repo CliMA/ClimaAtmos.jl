@@ -217,13 +217,14 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     au = FT(CAP.astro_unit(params))
     # TODO: Where does this date0 come from?
     date0 = DateTime("2000-01-01T11:58:56.816")
-    d, δ, η_UTC = FT.(
-        Insolation.helper_instantaneous_zenith_angle(
-            current_datetime,
-            date0,
-            insolation_params,
-        ),
-    )
+    d, δ, η_UTC =
+        FT.(
+            Insolation.helper_instantaneous_zenith_angle(
+                current_datetime,
+                date0,
+                insolation_params,
+            ),
+        )
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     cos_zenith =
         Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
