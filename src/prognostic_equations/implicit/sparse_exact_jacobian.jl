@@ -50,7 +50,7 @@ function dense_matrix_to_field_matrix!(field_matrix, dense_matrix, Y)
             end
 
         itr = zip(sparse_column_blocks, dense_column_blocks)
-        @threaded device for (sparse_column_block, dense_column_block) in itr
+        for (sparse_column_block, dense_column_block) in itr
             banded_matrix_transpose =
                 MatrixFields.column_field2array_view(sparse_column_block)'
             band_indices =
@@ -63,7 +63,7 @@ function dense_matrix_to_field_matrix!(field_matrix, dense_matrix, Y)
                     diagind(dense_column_block, band_index)
                 dense_column_block_view =
                     view(dense_column_block, dense_column_block_indices)
-                for level_index in axes(sparse_column_block_view, 1)
+                    @threaded device for level_index in axes(sparse_column_block_view, 1)
                     sparse_column_block_view[level_index] =
                         dense_column_block_view[level_index]
                 end
