@@ -155,14 +155,12 @@ function precomputed_quantities(Y, atmos)
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₛʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜwₜʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜwₕʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqₗᵖ⁰ = similar(Y.c, FT),
             ᶜSqᵢᵖ⁰ = similar(Y.c, FT),
             ᶜSqᵣᵖ⁰ = similar(Y.c, FT),
             ᶜSqₛᵖ⁰ = similar(Y.c, FT),
-            ᶜwₗ⁰ = similar(Y.c, FT),
-            ᶜwᵢ⁰ = similar(Y.c, FT),
-            ᶜwᵣ⁰ = similar(Y.c, FT),
-            ᶜwₛ⁰ = similar(Y.c, FT),
         ) : (;)
     advective_sgs_quantities =
         atmos.turbconv_model isa PrognosticEDMFX ?

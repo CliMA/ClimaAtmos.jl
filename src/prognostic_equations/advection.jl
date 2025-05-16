@@ -259,33 +259,94 @@ function edmfx_sgs_vertical_advection_tendency!(
            # TODO - add cloud sedimentation velocity in implicit solver/tendency with if/else
            # TODO - add their contributions to mean energy and mass
 
-            #(; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs) = p.precomputed
+            (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₜʲs, ᶜwₕʲs) = p.precomputed
+
             #@. lazy(ᶠu³ʲs.:($$j) + CT3(WVector(ᶠinterp(ᶜwₗʲs.:($$j)))),
 
             va = vertical_advection(
-                ᶠu³ʲs.:($j),
+                ᶠinterp(Geometry.WVector(ᶜwₕʲs.:($j))),
+                Y.c.sgsʲs.:($j).mse,
+                edmfx_upwinding,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).mse -= va
+
+            va = vertical_advection(
+                ᶠinterp(Geometry.WVector(ᶜwₜʲs.:($j))),
+                Y.c.sgsʲs.:($j).q_tot,
+                edmfx_upwinding,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -= va
+
+            va = vertical_advection(
+                ᶠu³ʲs.:($j) - ᶠinterp(Geometry.WVector(ᶜwₗʲs.:($j))),
                 Y.c.sgsʲs.:($j).q_liq,
                 edmfx_upwinding,
             )
             @. Yₜ.c.sgsʲs.:($$j).q_liq += va
+
             va = vertical_advection(
-                ᶠu³ʲs.:($j),
+                ᶠu³ʲs.:($j) - ᶠinterp(Geometry.WVector(ᶜwᵢʲs.:($j))),
                 Y.c.sgsʲs.:($j).q_ice,
                 edmfx_upwinding,
             )
             @. Yₜ.c.sgsʲs.:($$j).q_ice += va
+
             va = vertical_advection(
-                ᶠu³ʲs.:($j),
+                ᶠu³ʲs.:($j) - ᶠinterp(Geometry.WVector(ᶜwᵣʲs.:($j))),
                 Y.c.sgsʲs.:($j).q_rai,
                 edmfx_upwinding,
             )
             @. Yₜ.c.sgsʲs.:($$j).q_rai += va
+
             va = vertical_advection(
-                ᶠu³ʲs.:($j),
+                ᶠu³ʲs.:($j) - ᶠinterp(Geometry.WVector(ᶜwₛʲs.:($j))),
                 Y.c.sgsʲs.:($j).q_sno,
                 edmfx_upwinding,
             )
             @. Yₜ.c.sgsʲs.:($$j).q_sno += va
+
+            # TODO - check sign of vertical velocity everywhere
+
+            @. Yₜ.c.sgsʲs.:($$j).mse += Y.c.sgsʲs.:($j).mse / Y.c.sgsʲs.:($$j).ρa *
+                ᶜgradᵥ(ᶠinterp(
+                    Y.c.sgsʲs.:($$j).ρa * (
+                        Geometry.WVector(ᶜwₜʲs.:($j)) * Y.c.sgsʲs.:($j).q_tot - Geometry.WVector(ᶜwₕʲs.:($j))
+                    )
+                ))
+            @. Yₜ.c.sgsʲs.:($$j).q_tot += Y.c.sgsʲs.:($j).q_tot / Y.c.sgsʲs.:($$j).ρa *
+                ᶜgradᵥ(ᶠinterp(
+                    Y.c.sgsʲs.:($$j).ρa * Geometry.WVector(ᶜwₜʲs.:($j)) * (
+                        Y.c.sgsʲs.:($j).q_tot - 1
+                    )
+                ))
+            @. Yₜ.c.sgsʲs.:($$j).q_liq += Y.c.sgsʲs.:($j).q_liq / Y.c.sgsʲs.:($$j).ρa *
+                ᶜgradᵥ(ᶠinterp(
+                    Y.c.sgsʲs.:($$j).ρa * (
+                        Geometry.WVector(ᶜwₜʲs.:($j)) * Y.c.sgsʲs.:($j).q_tot - Geometry.WVector(ᶜwₗʲs.:($j))
+                    )
+                ))
+            @. Yₜ.c.sgsʲs.:($$j).q_ice += Y.c.sgsʲs.:($j).q_ice / Y.c.sgsʲs.:($$j).ρa *
+                ᶜgradᵥ(ᶠinterp(
+                    Y.c.sgsʲs.:($$j).ρa * (
+                        Geometry.WVector(ᶜwₜʲs.:($j)) * Y.c.sgsʲs.:($j).q_tot - Geometry.WVector(ᶜwᵢʲs.:($j))
+                    )
+                ))
+            @. Yₜ.c.sgsʲs.:($$j).q_rai += Y.c.sgsʲs.:($j).q_rai / Y.c.sgsʲs.:($$j).ρa *
+                ᶜgradᵥ(ᶠinterp(
+                    Y.c.sgsʲs.:($$j).ρa * (
+                        Geometry.WVector(ᶜwₜʲs.:($j)) * Y.c.sgsʲs.:($j).q_tot - Geometry.WVector(ᶜwᵣʲs.:($j))
+                    )
+                ))
+            @. Yₜ.c.sgsʲs.:($$j).q_sno += Y.c.sgsʲs.:($j).q_sno / Y.c.sgsʲs.:($$j).ρa *
+                ᶜgradᵥ(ᶠinterp(
+                    Y.c.sgsʲs.:($$j).ρa * (
+                        Geometry.WVector(ᶜwₜʲs.:($j)) * Y.c.sgsʲs.:($j).q_tot - Geometry.WVector(ᶜwₛʲs.:($j))
+                    )
+                ))
         end
     end
 end
+
+
+
+
