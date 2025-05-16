@@ -357,3 +357,13 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
+  
+  - group: "Job analysis and reporting"
+    steps:
+
+      # Build history
+      - label: ":chart_with_downwards_trend: build history"
+        command:
+          - build_history main # Compare branch against main
+        artifact_paths:
+          - "build_history.html"
