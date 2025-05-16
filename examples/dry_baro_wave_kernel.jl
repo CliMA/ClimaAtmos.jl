@@ -16,12 +16,15 @@ ENV["CLIMACOMMS_DEVICE"] = "CUDA";
 ENV["CLIMACOMMS_DEVICE"] = "CPU";
 using Revise; include("examples/dry_baro_wave_kernel.jl")
 =#
+# ENV["CLIMACOMMS_DEVICE"] = "CPU";
 ENV["CLIMACOMMS_DEVICE"] = "CUDA";
+high_res = true;
 using CUDA
 import ClimaComms
 ClimaComms.@import_required_backends
 using ClimaCore.CommonSpaces
 import ClimaAtmos as CA
+import ClimaCore.Fields.StaticArrays: MArray
 using LazyBroadcast: lazy
 using LinearAlgebra: ×, dot, norm
 import ClimaAtmos.Parameters as CAP
@@ -65,128 +68,6 @@ if get(ENV, "CLIMACOMMS_DEVICE", "CPU") == "CUDA"
 else
 end
 
-import ClimaAtmos: C1, C2, C12, C3, C123, CT1, CT2, CT12, CT3, CT123, UVW
-import ClimaAtmos:
-    divₕ, wdivₕ, gradₕ, wgradₕ, curlₕ, wcurlₕ, ᶜinterp, ᶜdivᵥ, ᶜgradᵥ
-import ClimaAtmos: ᶠinterp, ᶠgradᵥ, ᶠcurlᵥ, ᶜinterp_matrix, ᶠgradᵥ_matrix
-import ClimaAtmos: ᶜadvdivᵥ, ᶜadvdivᵥ_matrix, ᶠwinterp, ᶠinterp_matrix
-
-Fields.local_geometry_field(bc::Base.Broadcast.Broadcasted) =
-    Fields.local_geometry_field(axes(bc))
-
-ᶜtendencies(ρ, uₕ, ρe_tot) = (; ρ, uₕ, ρe_tot)
-ᶠtendencies(u₃) = (; u₃)
-
-@inline is_valid_index(us, I) = 1 ≤ I ≤ DataLayouts.get_N(us)
-@inline function is_valid_index_md(us, Nv, I)
-    v = vindex()
-    return 1 ≤ v ≤ Nv && is_valid_index(us, I)
-end
-
-function implicit_tendency_bc!(Yₜ, Y, p, t)
-    Yₜ .= zero(eltype(Yₜ))
-    set_precomputed_quantities!(Y, p, t)
-    (; rayleigh_sponge, params, dt) = p
-    (; ᶜh_tot, ᶠu³, ᶜp) = p.precomputed
-    ᶜz = Fields.coordinate_field(Y.c).z
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶠz = Fields.coordinate_field(Y.f).z
-    grav = FT(CAP.grav(params))
-    zmax = CA.z_max(axes(Y.f))
-
-    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠu³)
-    # Central advection of active tracers (e_tot and q_tot)
-    Yₜ.c.ρe_tot .+= CA.vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
-    @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜp) / ᶠinterp(Y.c.ρ) + ᶠgradᵥ(Φ(grav, ᶜz))
-
-    @. Yₜ.f.u₃ -= CA.β_rayleigh_w(rayleigh_sponge, ᶠz, zmax) * Y.f.u₃
-    return nothing
-end
-
-# Define tendency functions
-# implicit_tendency!(Yₜ, Y, p, t) = implicit_tendency_cuda!(Yₜ, Y, p, t)
-# implicit_tendency!(Yₜ, Y, p, t) = implicit_tendency_KA!(Yₜ, Y, p, t)
-implicit_tendency!(Yₜ, Y, p, t) = implicit_tendency_cuda_md_launch!(Yₜ, Y, p, t)
-function implicit_tendency_cuda_linear_launch!(Yₜ, Y, p, t)
-    ᶜspace = axes(Y.c)
-    ᶠspace = Spaces.face_space(ᶜspace)
-    ᶠNv = Spaces.nlevels(ᶠspace)
-    ᶜcf = Fields.coordinate_field(ᶜspace)
-    us = DataLayouts.UniversalSize(Fields.field_values(ᶜcf))
-    (Ni, Nj, _, _, Nh) = DataLayouts.universal_size(us)
-    nitems = Ni * Nj * 1 * ᶠNv * Nh
-    ᶜYₜ = Yₜ.c
-    ᶠYₜ = Yₜ.f
-    ᶜY = Y.c
-    ᶠY = Y.f
-    (; rayleigh_sponge, params, dt) = p
-    p_kernel = (; rayleigh_sponge, params, dt)
-    zmax = Spaces.z_max(axes(ᶠY)) # DeviceIntervalTopology does not have mesh, and therefore cannot compute zmax
-    
-    kernel = CUDA.@cuda(
-        always_inline = true,
-        launch = false,
-        implicit_tendency_kernel_cuda!(ᶜYₜ, ᶠYₜ, ᶜY, ᶠY, p_kernel, t, us, zmax)
-    )
-    (;threads, blocks) = CUDA.launch_configuration(kernel.fun)
-    @show ᶠNv, nitems, blocks, threads, blocks * threads
-    threads = min(nitems, threads)
-    blocks = cld(nitems, threads)
-    @show ᶠNv, nitems, blocks, threads, blocks * threads
-    kernel(ᶜYₜ, ᶠYₜ, ᶜY, ᶠY, p_kernel, t, us, zmax; threads, blocks)
-end
-
-function implicit_tendency_cuda_md_launch!(Yₜ, Y, p, t)
-    ᶜspace = axes(Y.c)
-    ᶠspace = Spaces.face_space(ᶜspace)
-    ᶠNv = Spaces.nlevels(ᶠspace)
-    ᶜcf = Fields.coordinate_field(ᶜspace)
-    us = DataLayouts.UniversalSize(Fields.field_values(ᶜcf))
-    (Ni, Nj, _, _, Nh) = DataLayouts.universal_size(us)
-    nitems = Ni * Nj * 1 * ᶠNv * Nh
-    ᶜYₜ = Yₜ.c
-    ᶠYₜ = Yₜ.f
-    ᶜY = Y.c
-    ᶠY = Y.f
-    (; rayleigh_sponge, params, dt) = p
-    p_kernel = (; rayleigh_sponge, params, dt)
-    zmax = Spaces.z_max(axes(ᶠY)) # DeviceIntervalTopology does not have mesh, and therefore cannot compute zmax
-    
-    kernel = CUDA.@cuda(
-        always_inline = true,
-        launch = false,
-        implicit_tendency_kernel_cuda_md_launch!(ᶜYₜ, ᶠYₜ, ᶜY, ᶠY, p_kernel, t, us, zmax)
-    )
-    threads = (ᶠNv, )
-    blocks = (Nh, 1, Ni * Nj)
-    kernel(ᶜYₜ, ᶠYₜ, ᶜY, ᶠY, p_kernel, t, us, zmax; threads, blocks)
-end
-
-function implicit_tendency_KA!(Yₜ, Y, p, t)
-    ᶜspace = axes(Y.c)
-    ᶠspace = Spaces.face_space(ᶜspace)
-    ᶠNv = Spaces.nlevels(ᶠspace)
-    ᶜcf = Fields.coordinate_field(ᶜspace)
-    us = DataLayouts.UniversalSize(Fields.field_values(ᶜcf))
-    (Ni, Nj, _, _, Nh) = DataLayouts.universal_size(us)
-    nitems = Ni * Nj * 1 * ᶠNv * Nh
-    ᶜYₜ = Yₜ.c
-    ᶠYₜ = Yₜ.f
-    ᶜY = Y.c
-    ᶠY = Y.f
-    (; rayleigh_sponge, params, dt) = p
-    p_kernel = (; rayleigh_sponge, params, dt)
-    zmax = Spaces.z_max(axes(ᶠY)) # DeviceIntervalTopology does not have mesh, and therefore cannot compute zmax
-
-    backend = if ClimaComms.device(ᶜspace) isa ClimaComms.CUDADevice
-        CUDABackend()
-    else
-        KA.CPU()
-    end
-    kernel = implicit_tendency_kernel_KA!(backend)
-    kernel(ᶜYₜ, ᶠYₜ, ᶜY, ᶠY, p_kernel, t, us, zmax, ndrange = nitems)
-end
-
 # allow on-device use of lazy broadcast objects
 DataLayouts.parent_array_type(::Type{<:CUDA.CuDeviceArray{T, N, A} where {N}}) where {T, A} =
     CUDA.CuDeviceArray{T, N, A} where {N}
@@ -196,6 +77,20 @@ DataLayouts.promote_parent_array_type(
     ::Type{CUDA.CuDeviceArray{T1, N, B} where {N}},
     ::Type{CUDA.CuDeviceArray{T2, N, B} where {N}},
 ) where {T1, T2, B} = CUDA.CuDeviceArray{promote_type(T1, T2), N, B} where {N}
+
+# Ditch sizes (they're never actually used!)
+DataLayouts.promote_parent_array_type(
+    ::Type{MArray{S1, T1}},
+    ::Type{MArray{S2, T2}},
+) where {S1, T1, S2, T2} = MArray{S, promote_type(T1, T2)} where {S}
+DataLayouts.promote_parent_array_type(
+    ::Type{MArray{S1, T1} where {S1}},
+    ::Type{MArray{S2, T2}},
+) where {T1, S2, T2} = MArray{S, promote_type(T1, T2)} where {S}
+DataLayouts.promote_parent_array_type(
+    ::Type{MArray{S1, T1}},
+    ::Type{MArray{S2, T2} where {S2}},
+) where {S1, T1, T2} = MArray{S, promote_type(T1, T2)} where {S}
 
 # allow on-device use of lazy broadcast objects with different type params
 DataLayouts.promote_parent_array_type(
@@ -222,6 +117,290 @@ ClimaComms.device(grid::Grids.DeviceExtrudedFiniteDifferenceGrid) =
 ClimaComms.device(topology::Topologies.DeviceIntervalTopology) = ClimaComms.CUDADevice()
 
 Fields.error_mismatched_spaces(::Type, ::Type) = nothing # causes unsupported dynamic function invocation
+
+import ClimaAtmos: C1, C2, C12, C3, C123, CT1, CT2, CT12, CT3, CT123, UVW
+import ClimaAtmos:
+    divₕ, wdivₕ, gradₕ, wgradₕ, curlₕ, wcurlₕ, ᶜinterp, ᶜdivᵥ, ᶜgradᵥ
+import ClimaAtmos: ᶠinterp, ᶠgradᵥ, ᶠcurlᵥ, ᶜinterp_matrix, ᶠgradᵥ_matrix
+import ClimaAtmos: ᶜadvdivᵥ, ᶜadvdivᵥ_matrix, ᶠwinterp, ᶠinterp_matrix
+
+Fields.local_geometry_field(bc::Base.Broadcast.Broadcasted) =
+    Fields.local_geometry_field(axes(bc))
+
+ᶜtendencies(ρ, uₕ, ρe_tot) = (; ρ, uₕ, ρe_tot)
+ᶠtendencies(u₃) = (; u₃)
+
+@inline is_valid_index(us, I) = 1 ≤ I ≤ DataLayouts.get_N(us)
+@inline is_valid_index_KA(us, ui) = 1 ≤ ui[4] ≤ DataLayouts.get_Nv(us)
+@inline function is_valid_index_md(us, Nv, I)
+    v = vindex()
+    return 1 ≤ v ≤ Nv && is_valid_index(us, I)
+end
+
+function implicit_tendency_bc!(Yₜ, Y, p, t)
+    Yₜ .= zero(eltype(Yₜ))
+    set_precomputed_quantities!(Y, p, t)
+    (; rayleigh_sponge, params, dt) = p
+    (; ᶜh_tot, ᶠu³, ᶜp) = p.precomputed
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶠz = Fields.coordinate_field(Y.f).z
+    grav = FT(CAP.grav(params))
+    zmax = CA.z_max(axes(Y.f))
+
+    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠwinterp(ᶜJ, Y.c.ρ) * ᶠu³)
+    # Central advection of active tracers (e_tot and q_tot)
+    Yₜ.c.ρe_tot .+= CA.vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
+    @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜp) / ᶠinterp(Y.c.ρ) + ᶠgradᵥ(Φ(grav, ᶜz))
+
+    @. Yₜ.f.u₃ -= CA.β_rayleigh_w(rayleigh_sponge, ᶠz, zmax) * Y.f.u₃
+    return nothing
+end
+
+# Define tendency functions
+# implicit_tendency!(@nospecialize(Yₜ), @nospecialize(Y), @nospecialize(p), @nospecialize(t)) =
+#     implicit_tendency_KA!(Yₜ, Y, p, t)
+implicit_tendency!(Yₜ, Y, p, t) = implicit_tendency_cuda_md_launch!(Yₜ, Y, p, t)
+
+function implicit_tendency_cuda_md_launch!(Yₜ, Y, p, t)
+    ᶜspace = axes(Y.c)
+    ᶠspace = Spaces.face_space(ᶜspace)
+    ᶠNv = Spaces.nlevels(ᶠspace)
+    ᶜcf = Fields.coordinate_field(ᶜspace)
+    us = DataLayouts.UniversalSize(Fields.field_values(ᶜcf))
+    (Ni, Nj, _, _, Nh) = DataLayouts.universal_size(us)
+    nitems = Ni * Nj * 1 * ᶠNv * Nh
+    ᶜYₜ = Yₜ.c
+    ᶠYₜ = Yₜ.f
+    ᶜY = Y.c
+    ᶠY = Y.f
+    (; rayleigh_sponge, params, dt) = p
+    p_kernel = (; rayleigh_sponge, params, dt)
+    zmax = Spaces.z_max(axes(ᶠY)) # DeviceIntervalTopology does not have mesh, and therefore cannot compute zmax
+    
+    kernel = CUDA.@cuda(
+        always_inline = true,
+        launch = false,
+        implicit_tendency_kernel_cuda_md_launch!(ᶜYₜ, ᶠYₜ, ᶜY, ᶠY, p_kernel, t, zmax)
+    )
+    threads = (ᶠNv, )
+    blocks = (Nh, 1, Ni * Nj)
+    kernel(ᶜYₜ, ᶠYₜ, ᶜY, ᶠY, p_kernel, t, zmax; threads, blocks)
+end
+
+function implicit_tendency_kernel_cuda_md_launch!(ᶜYₜ, ᶠYₜ, _ᶜY, _ᶠY, p, t, zmax)
+    ᶜY_fv = Fields.field_values(_ᶜY)
+    ᶠY_fv = Fields.field_values(_ᶠY)
+    FT = Spaces.undertype(axes(_ᶜY))
+    ᶜNv = Spaces.nlevels(axes(_ᶜY))
+    ᶠNv = Spaces.nlevels(axes(_ᶠY))
+    ᶜus = DataLayouts.UniversalSize(ᶜY_fv)
+    ᶠus = DataLayouts.UniversalSize(ᶠY_fv)
+    (Ni, Nj, _, _, Nh) = DataLayouts.universal_size(ᶠus)
+    ᶜTS = DataLayouts.typesize(FT, eltype(ᶜY_fv))
+    ᶠTS = DataLayouts.typesize(FT, eltype(ᶠY_fv))
+    ᶜlg = Spaces.local_geometry_data(axes(_ᶜY))
+    ᶠlg = Spaces.local_geometry_data(axes(_ᶠY))
+    ᶜTS_lg = DataLayouts.typesize(FT, eltype(ᶜlg))
+
+    ᶜui = universal_index_cuda(ᶜus)
+    ᶠui = universal_index_cuda(ᶠus)
+    # ilc = @index(Local, Cartesian)
+    # igc = @index(Group, Cartesian)
+    # gs = @groupsize()
+    # ᶜui = universal_index_KA(ᶠus, ilc, igc, gs)
+    # ᶠui = universal_index_KA(ᶠus, ilc, igc, gs)
+
+    ᶜY_arr = CUDA.CuStaticSharedArray(FT, (ᶜNv, ᶜTS)) # ᶜY_arr = @localmem FT (ᶜNv, ᶜTS)
+    ᶠY_arr = CUDA.CuStaticSharedArray(FT, (ᶠNv, ᶠTS)) # ᶠY_arr = @localmem FT (ᶠNv, ᶠTS)
+    ᶜdata_col = rebuild_column(ᶜY_fv, ᶜY_arr)
+    ᶠdata_col = rebuild_column(ᶠY_fv, ᶠY_arr)
+    
+    ᶜlg_arr = CUDA.CuStaticSharedArray(FT, (ᶜNv, ᶜTS_lg)) # ᶜlg_arr = @localmem FT (ᶜNv, ᶜTS_lg)
+    ᶠlg_arr = CUDA.CuStaticSharedArray(FT, (ᶠNv, ᶜTS_lg)) # ᶠlg_arr = @localmem FT (ᶠNv, ᶜTS_lg)
+
+    (ᶜspace_col, ᶠspace_col) = column_spaces_KA(_ᶜY, _ᶠY, ᶠui, ᶜlg_arr, ᶠlg_arr)
+
+    is_valid_index_KA(ᶜus, ᶜui) && (ᶜdata_col[ᶜui] = ᶜY_fv[ᶜui])
+    is_valid_index_KA(ᶠus, ᶠui) && (ᶠdata_col[ᶠui] = ᶠY_fv[ᶠui])
+
+    ᶜlg_col = Spaces.local_geometry_data(ᶜspace_col)
+    ᶠlg_col = Spaces.local_geometry_data(ᶠspace_col)
+    # is_valid_index_KA(ᶜus, ᶜui) && (ᶜlg_col[ᶜui] = ᶜlg[ᶜui])
+    # is_valid_index_KA(ᶠus, ᶠui) && (ᶠlg_col[ᶠui] = ᶠlg[ᶠui])
+
+    is_valid_index_KA(ᶜus, ᶜui) && (ᶜlg_col.coordinates.z[ᶜui] = ᶜlg.coordinates.z[ᶜui]) # needed
+    is_valid_index_KA(ᶠus, ᶠui) && (ᶠlg_col.coordinates.z[ᶠui] = ᶠlg.coordinates.z[ᶠui]) # needed
+    is_valid_index_KA(ᶜus, ᶜui) && (ᶜlg_col.J[ᶜui] = ᶜlg.J[ᶜui]) # needed
+    is_valid_index_KA(ᶠus, ᶠui) && (ᶠlg_col.J[ᶠui] = ᶠlg.J[ᶠui]) # needed
+    is_valid_index_KA(ᶜus, ᶜui) && (ᶜlg_col.invJ[ᶜui] = ᶜlg.invJ[ᶜui]) # needed
+    is_valid_index_KA(ᶜus, ᶜui) && (ᶜlg_col.gⁱʲ.components.data.:1[ᶜui] = ᶜlg.gⁱʲ.components.data.:1[ᶜui]) # needed
+    is_valid_index_KA(ᶜus, ᶜui) && (ᶜlg_col.gⁱʲ.components.data.:2[ᶜui] = ᶜlg.gⁱʲ.components.data.:2[ᶜui]) # needed
+    is_valid_index_KA(ᶜus, ᶜui) && (ᶜlg_col.gⁱʲ.components.data.:3[ᶜui] = ᶜlg.gⁱʲ.components.data.:3[ᶜui]) # needed
+    is_valid_index_KA(ᶜus, ᶜui) && (ᶜlg_col.gⁱʲ.components.data.:4[ᶜui] = ᶜlg.gⁱʲ.components.data.:4[ᶜui]) # needed
+    is_valid_index_KA(ᶜus, ᶜui) && (ᶜlg_col.gⁱʲ.components.data.:5[ᶜui] = ᶜlg.gⁱʲ.components.data.:5[ᶜui]) # needed
+    is_valid_index_KA(ᶜus, ᶜui) && (ᶜlg_col.gⁱʲ.components.data.:6[ᶜui] = ᶜlg.gⁱʲ.components.data.:6[ᶜui]) # needed
+    is_valid_index_KA(ᶠus, ᶠui) && (ᶠlg_col.gⁱʲ.components.data.:9[ᶠui] = ᶠlg.gⁱʲ.components.data.:9[ᶠui]) # needed
+
+    CUDA.sync_threads()
+
+    # ilc = @index(Local, Cartesian)
+    # igc = @index(Group, Cartesian)
+    # gs = @groupsize()
+    # ᶜui = universal_index_KA(ᶠus, ilc, igc, gs)
+    # ᶠui = universal_index_KA(ᶠus, ilc, igc, gs)
+
+    ᶜdata_col = rebuild_column(ᶜY_fv, ᶜY_arr)
+    ᶠdata_col = rebuild_column(ᶠY_fv, ᶠY_arr)
+
+    # (ᶜspace_col, ᶠspace_col) = column_spaces_KA(_ᶜY, _ᶠY, ᶠui, ᶜlg_arr, ᶠlg_arr)
+
+    if is_valid_index_KA(ᶜus, ᶜui)
+        (ᶜY, ᶠY) = column_states(_ᶜY, _ᶠY, ᶜdata_col, ᶠdata_col, ᶠui, ᶜspace_col, ᶠspace_col)
+        ᶜbc = ᶜimplicit_tendency_bc(ᶜY, ᶠY, p, t, zmax)
+        (ᶜidx, ᶜhidx) = operator_inds(axes(ᶜY), ᶜui)
+        Fields.field_values(ᶜYₜ)[ᶜui] = Operators.getidx(axes(ᶜY), ᶜbc, ᶜidx, ᶜhidx)
+        # ᶜYₜ[ᶜui] = ᶜimplicit_tendency_bc(ᶜY, ᶠY, p, t)[ᶜui] # might be possible?
+    end
+    if is_valid_index_KA(ᶠus, ᶠui)
+        (ᶜY, ᶠY) = column_states(_ᶜY, _ᶠY, ᶜdata_col, ᶠdata_col, ᶠui, ᶜspace_col, ᶠspace_col)
+        ᶠbc = ᶠimplicit_tendency_bc(ᶜY, ᶠY, p, t, zmax)
+        (ᶠidx, ᶠhidx) = operator_inds(axes(ᶠY), ᶠui)
+        Fields.field_values(ᶠYₜ)[ᶠui] = Operators.getidx(axes(ᶠY), ᶠbc, ᶠidx, ᶠhidx)
+        # ᶠYₜ[ᶠui] = ᶠimplicit_tendency_bc(ᶜY, ᶠY, p, t)[ᶠui] # might be possible?
+    end
+    return nothing
+end
+
+@inline function universal_index_cuda(us)
+    (tv,) = CUDA.threadIdx()
+    (h, bv, ij) = CUDA.blockIdx()
+    v = tv + (bv - 1) * CUDA.blockDim().x
+    (Ni, Nj, _, _, _) = DataLayouts.universal_size(us)
+    if Ni * Nj < ij
+        return CartesianIndex((-1, -1, 1, -1, -1))
+    end
+    @inbounds (i, j) = CartesianIndices((Ni, Nj))[ij].I
+    return CartesianIndex((i, j, 1, v, h))
+end
+
+@inline function universal_index_KA(
+        us,
+        ilc, # @index(Local, Cartesian)
+        igc, # @index(Group, Cartesian)
+        gs, # @groupsize()
+    )
+    @inbounds begin
+        tv = ilc[1]
+        (h, bv, ij) = igc.I
+        v = tv + (bv - 1) * gs[1]
+        (Ni, Nj, _, _, _) = DataLayouts.universal_size(us)
+        if Ni * Nj < ij
+            ui = CartesianIndex((-1, -1, 1, -1, -1))
+        else
+            @inbounds (i, j) = CartesianIndices((Ni, Nj))[ij].I
+            ui = CartesianIndex((i, j, 1, v, h))
+        end
+        return ui
+    end
+end
+
+function implicit_tendency_KA!(@nospecialize(Yₜ), @nospecialize(Y), @nospecialize(p), @nospecialize(t))
+    ᶜspace = axes(Y.c)
+    ᶠspace = Spaces.face_space(ᶜspace)
+    ᶠNv = Spaces.nlevels(ᶠspace)
+    ᶜcf = Fields.coordinate_field(ᶜspace)
+    us = DataLayouts.UniversalSize(Fields.field_values(ᶜcf))
+    (Ni, Nj, _, _, Nh) = DataLayouts.universal_size(us)
+    nitems = Ni * Nj * 1 * ᶠNv * Nh
+    ᶜYₜ = Yₜ.c
+    ᶠYₜ = Yₜ.f
+    ᶜY = Y.c
+    ᶠY = Y.f
+    (; rayleigh_sponge, params, dt) = p
+    p_kernel = (; rayleigh_sponge, params, dt)
+    zmax = Spaces.z_max(axes(ᶠY)) # DeviceIntervalTopology does not have mesh, and therefore cannot compute zmax
+
+    backend = if ClimaComms.device(ᶜspace) isa ClimaComms.CUDADevice
+        CUDABackend()
+    else
+        KA.CPU()
+    end
+    threads = (ᶠNv, )
+    blocks = (ᶠNv * Nh, 1, Ni * Nj)
+    kernel = implicit_tendency_kernel_KA!(backend, threads, blocks)
+    # ndrange = (ᶠNv, Ni * Nj * Nh)
+    # @show ᶠNv, Ni, Nj, Nh, prod(blocks)
+    kernel(ᶜYₜ, ᶠYₜ, ᶜY, ᶠY, p_kernel, t, zmax, ndrange = blocks)
+end
+@kernel function implicit_tendency_kernel_KA!(ᶜYₜ, ᶠYₜ, _ᶜY, _ᶠY, @Const(p), @Const(t), @Const(zmax))
+    ᶜY_fv = @uniform Fields.field_values(_ᶜY)
+    ᶠY_fv = @uniform Fields.field_values(_ᶠY)
+    FT = @uniform Spaces.undertype(axes(_ᶜY))
+    ᶜNv = @uniform Spaces.nlevels(axes(_ᶜY))
+    ᶠNv = @uniform Spaces.nlevels(axes(_ᶠY))
+    ᶜus = @uniform DataLayouts.UniversalSize(ᶜY_fv)
+    ᶠus = @uniform DataLayouts.UniversalSize(ᶠY_fv)
+    (Ni, Nj, _, _, Nh) = @uniform DataLayouts.universal_size(ᶠus)
+    ᶜTS = @uniform DataLayouts.typesize(FT, eltype(ᶜY_fv))
+    ᶠTS = @uniform DataLayouts.typesize(FT, eltype(ᶠY_fv))
+    ᶜlg = @uniform Spaces.local_geometry_data(axes(_ᶜY))
+    ᶠlg = @uniform Spaces.local_geometry_data(axes(_ᶠY))
+    ᶜTS_lg = @uniform DataLayouts.typesize(FT, eltype(ᶜlg))
+
+    ilc = @index(Local, Cartesian)
+    igc = @index(Group, Cartesian)
+    gs = @groupsize()
+    ᶜui = universal_index_KA(ᶠus, ilc, igc, gs)
+    ᶠui = universal_index_KA(ᶠus, ilc, igc, gs)
+
+    # @print("ᶜui = $(ᶜui.I)\n")
+    ᶜY_arr = @localmem FT (ᶜNv, ᶜTS)
+    ᶠY_arr = @localmem FT (ᶠNv, ᶠTS)
+    ᶜdata_col = rebuild_column(ᶜY_fv, ᶜY_arr)
+    ᶠdata_col = rebuild_column(ᶠY_fv, ᶠY_arr)
+    
+    ᶜlg_arr = @localmem FT (ᶜNv, ᶜTS_lg)
+    ᶠlg_arr = @localmem FT (ᶠNv, ᶜTS_lg)
+
+    (ᶜspace_col, ᶠspace_col) = column_spaces_KA(_ᶜY, _ᶠY, ᶠui, ᶜlg_arr, ᶠlg_arr)
+
+    is_valid_index_KA(ᶜus, ᶜui) && (ᶜdata_col[ᶜui] = ᶜY_fv[ᶜui])
+    is_valid_index_KA(ᶠus, ᶠui) && (ᶠdata_col[ᶠui] = ᶠY_fv[ᶠui])
+
+    ᶜlg_col = Spaces.local_geometry_data(ᶜspace_col)
+    ᶠlg_col = Spaces.local_geometry_data(ᶠspace_col)
+    is_valid_index_KA(ᶜus, ᶜui) && (ᶜlg_col[ᶜui] = ᶜlg[ᶜui])
+    is_valid_index_KA(ᶠus, ᶠui) && (ᶠlg_col[ᶠui] = ᶠlg[ᶠui])
+
+    @synchronize
+
+    ilc = @index(Local, Cartesian)
+    igc = @index(Group, Cartesian)
+    gs = @groupsize()
+    ᶜui = universal_index_KA(ᶠus, ilc, igc, gs)
+    ᶠui = universal_index_KA(ᶠus, ilc, igc, gs)
+
+    ᶜdata_col = rebuild_column(ᶜY_fv, ᶜY_arr)
+    ᶠdata_col = rebuild_column(ᶠY_fv, ᶠY_arr)
+
+    (ᶜspace_col, ᶠspace_col) = column_spaces_KA(_ᶜY, _ᶠY, ᶠui, ᶜlg_arr, ᶠlg_arr)
+
+    if is_valid_index_KA(ᶜus, ᶜui)
+        (ᶜY, ᶠY) = column_states(_ᶜY, _ᶠY, ᶜdata_col, ᶠdata_col, ᶠui, ᶜspace_col, ᶠspace_col)
+        ᶜbc = ᶜimplicit_tendency_bc(ᶜY, ᶠY, p, t, zmax)
+        (ᶜidx, ᶜhidx) = operator_inds(axes(ᶜY), ᶜui)
+        Fields.field_values(ᶜYₜ)[ᶜui] = Operators.getidx(axes(ᶜY), ᶜbc, ᶜidx, ᶜhidx)
+        # ᶜYₜ[ᶜui] = ᶜimplicit_tendency_bc(ᶜY, ᶠY, p, t)[ᶜui] # might be possible?
+    end
+    if is_valid_index_KA(ᶠus, ᶠui)
+        (ᶜY, ᶠY) = column_states(_ᶜY, _ᶠY, ᶜdata_col, ᶠdata_col, ᶠui, ᶜspace_col, ᶠspace_col)
+        ᶠbc = ᶠimplicit_tendency_bc(ᶜY, ᶠY, p, t, zmax)
+        (ᶠidx, ᶠhidx) = operator_inds(axes(ᶠY), ᶠui)
+        Fields.field_values(ᶠYₜ)[ᶠui] = Operators.getidx(axes(ᶠY), ᶠbc, ᶠidx, ᶠhidx)
+        # ᶠYₜ[ᶠui] = ᶠimplicit_tendency_bc(ᶜY, ᶠY, p, t)[ᶠui] # might be possible?
+    end
+end
 
 @inline function operator_inds(space, I)
     li = Operators.left_idx(space)
@@ -294,6 +473,14 @@ function column_lg_shmem(f, ui)
     return rebuild_column(lg_col, lg_arr)
 end
 
+function column_lg_shmem_KA(f, ui, lg_arr)
+    (i, j, _, _, h) = ui.I
+    colidx = Grids.ColumnIndex((i, j), h)
+    lg = Spaces.local_geometry_data(axes(f))
+    lg_col = Spaces.column(lg, colidx)
+    return rebuild_column(lg_col, lg_arr)
+end
+
 function column_spaces(ᶜY, ᶠY, ui)
     (i, j, _, _, h) = ui.I
     colidx = Grids.ColumnIndex((i, j), h)
@@ -314,55 +501,35 @@ function column_spaces(ᶜY, ᶠY, ui)
     return (ᶜspace_col, ᶠspace_col)
 end
 
+function column_spaces_KA(ᶜY, ᶠY, ui, ᶜlg_arr, ᶠlg_arr)
+    (i, j, _, _, h) = ui.I
+    colidx = Grids.ColumnIndex((i, j), h)
+    ᶜlg_col = column_lg_shmem_KA(ᶜY, ui, ᶜlg_arr)
+    ᶠlg_col = column_lg_shmem_KA(ᶠY, ui, ᶠlg_arr)
+    col_space = Spaces.column(axes(ᶜY), colidx)
+    col_grid = Spaces.grid(col_space)
+    if col_grid isa Grids.ColumnGrid && col_grid.full_grid isa Grids.DeviceExtrudedFiniteDifferenceGrid
+        (; full_grid) = col_grid
+        (; vertical_topology, global_geometry) = full_grid
+        col_grid_shmem = Grids.DeviceFiniteDifferenceGrid(vertical_topology, global_geometry, ᶜlg_col, ᶠlg_col)
+        ᶜspace_col = Spaces.space(col_grid_shmem, Grids.CellCenter())
+        ᶠspace_col = Spaces.space(col_grid_shmem, Grids.CellFace())
+    elseif col_grid isa Grids.ColumnGrid && col_grid.full_grid isa Grids.ExtrudedFiniteDifferenceGrid
+        (; full_grid) = col_grid
+        (; vertical_grid, global_geometry) = full_grid
+        col_grid_shmem = Grids.FiniteDifferenceGrid(vertical_grid.topology, global_geometry, ᶜlg_col, ᶠlg_col)
+        ᶜspace_col = Spaces.space(col_grid_shmem, Grids.CellCenter())
+        ᶠspace_col = Spaces.space(col_grid_shmem, Grids.CellFace())
+    else
+        error("Uncaught case")
+    end
+    return (ᶜspace_col, ᶠspace_col)
+end
+
 function column_states(ᶜY, ᶠY, ᶜdata_col, ᶠdata_col, ui, ᶜspace_col, ᶠspace_col)
     ᶜY_col = Fields.Field(ᶜdata_col, ᶜspace_col)
     ᶠY_col = Fields.Field(ᶠdata_col, ᶠspace_col)
     return (ᶜY_col, ᶠY_col)
-end
-
-@kernel function implicit_tendency_kernel_KA!(ᶜYₜ, ᶠYₜ, _ᶜY, _ᶠY, p, t, us, zmax)
-    # gid = (CUDA.blockIdx().x - Int32(1)) * CUDA.blockDim().x + CUDA.threadIdx().x
-    gid = @index(Global)
-    ᶜY_fv = @uniform Fields.field_values(_ᶜY)
-    ᶠY_fv = @uniform Fields.field_values(_ᶠY)
-    ᶜus = @uniform DataLayouts.UniversalSize(ᶜY_fv)
-    ᶠus = @uniform DataLayouts.UniversalSize(ᶠY_fv)
-    FT = @uniform Spaces.undertype(axes(_ᶜY))
-    ᶜNv = @uniform Spaces.nlevels(axes(_ᶜY))
-    ᶠNv = @uniform Spaces.nlevels(axes(_ᶠY))
-    ᶜui = is_valid_index(ᶜus, gid) ? universal_index(ᶜus)[gid] : CartesianIndex((-1, -1, -1, -1, -1))
-    ᶠui = is_valid_index(ᶠus, gid) ? universal_index(ᶠus)[gid] : CartesianIndex((-1, -1, -1, -1, -1))
-
-    ᶜTS = @uniform DataLayouts.typesize(FT, eltype(ᶜY_fv))
-    ᶠTS = @uniform DataLayouts.typesize(FT, eltype(ᶠY_fv))
-    ᶜY_arr = @localmem FT (ᶜNv, ᶜTS)
-    ᶠY_arr = @localmem FT (ᶠNv, ᶠTS)
-    ᶜdata_col = @uniform rebuild_column(ᶜY_fv, ᶜY_arr)
-    ᶠdata_col = @uniform rebuild_column(ᶠY_fv, ᶠY_arr)
-    is_valid_index(ᶜus, gid) && (ᶜdata_col[ᶜui] = ᶜY_fv[ᶜui])
-    is_valid_index(ᶠus, gid) && (ᶠdata_col[ᶠui] = ᶠY_fv[ᶠui])
-
-    @synchronize
-
-    ᶜui = is_valid_index(ᶜus, gid) ? universal_index(ᶜus)[gid] : CartesianIndex((-1, -1, -1, -1, -1))
-    ᶠui = is_valid_index(ᶠus, gid) ? universal_index(ᶠus)[gid] : CartesianIndex((-1, -1, -1, -1, -1))
-    # ᶜY = _ᶜY
-    # ᶠY = _ᶠY
-
-    if is_valid_index(ᶜus, gid)
-        (ᶜY, ᶠY) = column_states(_ᶜY, _ᶠY, ᶜdata_col, ᶠdata_col, ᶠui)
-        ᶜbc = ᶜimplicit_tendency_bc(ᶜY, ᶠY, p, t, zmax)
-        (ᶜidx, ᶜhidx) = operator_inds(axes(ᶜY), ᶜui)
-        Fields.field_values(ᶜYₜ)[ᶜui] = Operators.getidx(axes(ᶜY), ᶜbc, ᶜidx, ᶜhidx)
-        # ᶜYₜ[ᶜui] = ᶜimplicit_tendency_bc(ᶜY, ᶠY, p, t)[ᶜui] # might be possible?
-    end
-    if is_valid_index(ᶠus, gid)
-        (ᶜY, ᶠY) = column_states(_ᶜY, _ᶠY, ᶜdata_col, ᶠdata_col, ᶠui)
-        ᶠbc = ᶠimplicit_tendency_bc(ᶜY, ᶠY, p, t, zmax)
-        (ᶠidx, ᶠhidx) = operator_inds(axes(ᶠY), ᶠui)
-        Fields.field_values(ᶠYₜ)[ᶠui] = Operators.getidx(axes(ᶠY), ᶠbc, ᶠidx, ᶠhidx)
-        # ᶠYₜ[ᶠui] = ᶠimplicit_tendency_bc(ᶜY, ᶠY, p, t)[ᶠui] # might be possible?
-    end
 end
 
 function vindex()
@@ -370,130 +537,6 @@ function vindex()
     (h, bv, ij) = CUDA.blockIdx()
     v = tv + (bv - 1) * CUDA.blockDim().x
     return v
-end
-
-function implicit_tendency_kernel_cuda_md_launch!(ᶜYₜ, ᶠYₜ, _ᶜY, _ᶠY, p, t, us, zmax)
-    gid = (CUDA.blockIdx().x - Int32(1)) * CUDA.blockDim().x + CUDA.threadIdx().x
-    ᶜY_fv = Fields.field_values(_ᶜY)
-    ᶠY_fv = Fields.field_values(_ᶠY)
-    ᶜus = DataLayouts.UniversalSize(ᶜY_fv)
-    ᶠus = DataLayouts.UniversalSize(ᶠY_fv)
-    FT = Spaces.undertype(axes(_ᶜY))
-    ᶜNv = Spaces.nlevels(axes(_ᶜY))
-    ᶠNv = Spaces.nlevels(axes(_ᶠY))
-    ᶜui = cccuda_ext.fd_shmem_stencil_universal_index(axes(_ᶜY), ᶜus)
-    ᶠui = cccuda_ext.fd_shmem_stencil_universal_index(axes(_ᶠY), ᶠus)
-
-    (i, j, _, _, h) = ᶜui.I
-    colidx = Grids.ColumnIndex((i, j), h)
-    (ᶜspace_col, ᶠspace_col) = column_spaces(_ᶜY, _ᶠY, ᶠui)
-
-    ᶜTS = DataLayouts.typesize(FT, eltype(DataLayouts.column(ᶜY_fv, colidx)))
-    ᶠTS = DataLayouts.typesize(FT, eltype(DataLayouts.column(ᶠY_fv, colidx)))
-    ᶜY_arr = CUDA.CuStaticSharedArray(FT, (ᶜNv, ᶜTS))
-    ᶠY_arr = CUDA.CuStaticSharedArray(FT, (ᶠNv, ᶠTS))
-    ᶜdata_col = rebuild_column(ᶜY_fv, ᶜY_arr)
-    ᶠdata_col = rebuild_column(ᶠY_fv, ᶠY_arr)
-    is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜdata_col[ᶜui] = ᶜY_fv[ᶜui])
-    is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠdata_col[ᶠui] = ᶠY_fv[ᶠui])
-
-    ᶜlg = Spaces.local_geometry_data(axes(_ᶜY))
-    ᶠlg = Spaces.local_geometry_data(axes(_ᶠY))
-    ᶜlg_col = Spaces.local_geometry_data(ᶜspace_col)
-    ᶠlg_col = Spaces.local_geometry_data(ᶠspace_col)
-    is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.coordinates.z[ᶜui] = ᶜlg.coordinates.z[ᶜui]) # needed
-    is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.coordinates.z[ᶠui] = ᶠlg.coordinates.z[ᶠui]) # needed
-    is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.J[ᶜui] = ᶜlg.J[ᶜui]) # needed
-    is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.J[ᶠui] = ᶠlg.J[ᶠui]) # needed
-    # is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.WJ[ᶜui] = ᶜlg.WJ[ᶜui]) # not needed
-    # is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.WJ[ᶠui] = ᶠlg.WJ[ᶠui]) # not needed
-    is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.invJ[ᶜui] = ᶜlg.invJ[ᶜui]) # needed
-    # is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.invJ[ᶠui] = ᶠlg.invJ[ᶠui]) # not needed
-    # is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.∂x∂ξ[ᶜui] = ᶜlg.∂x∂ξ[ᶜui]) # not needed
-    # is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.∂x∂ξ[ᶠui] = ᶠlg.∂x∂ξ[ᶠui]) # not needed
-    # is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.∂ξ∂x[ᶜui] = ᶜlg.∂ξ∂x[ᶜui]) # not needed
-    # is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.∂ξ∂x[ᶠui] = ᶠlg.∂ξ∂x[ᶠui]) # not needed
-    # is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.gᵢⱼ[ᶜui] = ᶜlg.gᵢⱼ[ᶜui]) # not needed
-    # is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.gᵢⱼ[ᶠui] = ᶠlg.gᵢⱼ[ᶠui]) # not needed
-
-    is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.gⁱʲ.components.data.:1[ᶜui] = ᶜlg.gⁱʲ.components.data.:1[ᶜui]) # needed
-    is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.gⁱʲ.components.data.:2[ᶜui] = ᶜlg.gⁱʲ.components.data.:2[ᶜui]) # needed
-    is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.gⁱʲ.components.data.:3[ᶜui] = ᶜlg.gⁱʲ.components.data.:3[ᶜui]) # needed
-    is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.gⁱʲ.components.data.:4[ᶜui] = ᶜlg.gⁱʲ.components.data.:4[ᶜui]) # needed
-    is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.gⁱʲ.components.data.:5[ᶜui] = ᶜlg.gⁱʲ.components.data.:5[ᶜui]) # needed
-    is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.gⁱʲ.components.data.:6[ᶜui] = ᶜlg.gⁱʲ.components.data.:6[ᶜui]) # needed
-    # is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.gⁱʲ.components.data.:7[ᶜui] = ᶜlg.gⁱʲ.components.data.:7[ᶜui]) # not needed
-    # is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.gⁱʲ.components.data.:8[ᶜui] = ᶜlg.gⁱʲ.components.data.:8[ᶜui]) # not needed
-    # is_valid_index_md(ᶜus, ᶜNv, gid) && (ᶜlg_col.gⁱʲ.components.data.:9[ᶜui] = ᶜlg.gⁱʲ.components.data.:9[ᶜui]) # not needed
-    
-    # is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.gⁱʲ.components.data.:1[ᶠui] = ᶠlg.gⁱʲ.components.data.:1[ᶠui]) # not needed
-    # is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.gⁱʲ.components.data.:2[ᶠui] = ᶠlg.gⁱʲ.components.data.:2[ᶠui]) # not needed
-    # is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.gⁱʲ.components.data.:3[ᶠui] = ᶠlg.gⁱʲ.components.data.:3[ᶠui]) # not needed
-    # is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.gⁱʲ.components.data.:4[ᶠui] = ᶠlg.gⁱʲ.components.data.:4[ᶠui]) # not needed
-    # is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.gⁱʲ.components.data.:5[ᶠui] = ᶠlg.gⁱʲ.components.data.:5[ᶠui]) # not needed
-    # is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.gⁱʲ.components.data.:6[ᶠui] = ᶠlg.gⁱʲ.components.data.:6[ᶠui]) # not needed
-    # is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.gⁱʲ.components.data.:7[ᶠui] = ᶠlg.gⁱʲ.components.data.:7[ᶠui]) # not needed
-    # is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.gⁱʲ.components.data.:8[ᶠui] = ᶠlg.gⁱʲ.components.data.:8[ᶠui]) # not needed
-    is_valid_index_md(ᶠus, ᶠNv, gid) && (ᶠlg_col.gⁱʲ.components.data.:9[ᶠui] = ᶠlg.gⁱʲ.components.data.:9[ᶠui]) # needed
-
-    CUDA.sync_threads()
-
-    if is_valid_index_md(ᶜus, ᶜNv, gid)
-        (ᶜY, ᶠY) = column_states(_ᶜY, _ᶠY, ᶜdata_col, ᶠdata_col, ᶠui, ᶜspace_col, ᶠspace_col)
-        ᶜbc = ᶜimplicit_tendency_bc(ᶜY, ᶠY, p, t, zmax)
-        (ᶜidx, ᶜhidx) = operator_inds(axes(ᶜY), ᶜui)
-        # Fields.field_values(ᶜYₜ)[ᶜui] = Operators.getidx(axes(ᶜY), ᶜbc, ᶜidx, ᶜhidx)
-        Fields.field_values(ᶜYₜ)[ᶜui] = Operators.getidx(ᶜspace_col, ᶜbc, ᶜidx, ᶜhidx)
-    #     # ᶜYₜ[ᶜui] = ᶜimplicit_tendency_bc(ᶜY, ᶠY, p, t)[ᶜui] # might be possible?
-    end
-    if is_valid_index_md(ᶠus, ᶠNv, gid)
-        (ᶜY, ᶠY) = column_states(_ᶜY, _ᶠY, ᶜdata_col, ᶠdata_col, ᶠui, ᶜspace_col, ᶠspace_col)
-        ᶠbc = ᶠimplicit_tendency_bc(ᶜY, ᶠY, p, t, zmax)
-        (ᶠidx, ᶠhidx) = operator_inds(axes(ᶠY), ᶠui)
-        # Fields.field_values(ᶠYₜ)[ᶠui] = Operators.getidx(axes(ᶠY), ᶠbc, ᶠidx, ᶠhidx)
-        Fields.field_values(ᶠYₜ)[ᶠui] = Operators.getidx(ᶠspace_col, ᶠbc, ᶠidx, ᶠhidx)
-    #     # ᶠYₜ[ᶠui] = ᶠimplicit_tendency_bc(ᶜY, ᶠY, p, t)[ᶠui] # might be possible?
-    end
-    return nothing
-end
-
-function implicit_tendency_kernel_cuda_linear_launch!(ᶜYₜ, ᶠYₜ, _ᶜY, _ᶠY, p, t, us, zmax)
-    gid = (CUDA.blockIdx().x - Int32(1)) * CUDA.blockDim().x + CUDA.threadIdx().x
-    ᶜY_fv = Fields.field_values(_ᶜY)
-    ᶠY_fv = Fields.field_values(_ᶠY)
-    ᶜus = DataLayouts.UniversalSize(ᶜY_fv)
-    ᶠus = DataLayouts.UniversalSize(ᶠY_fv)
-    FT = Spaces.undertype(axes(_ᶜY))
-    ᶜNv = Spaces.nlevels(axes(_ᶜY))
-    ᶠNv = Spaces.nlevels(axes(_ᶠY))
-    ᶜui = is_valid_index(ᶜus, gid) ? universal_index(ᶜus)[gid] : CartesianIndex((-1, -1, -1, -1, -1))
-    ᶠui = is_valid_index(ᶠus, gid) ? universal_index(ᶠus)[gid] : CartesianIndex((-1, -1, -1, -1, -1))
-
-    ᶜTS = DataLayouts.typesize(FT, eltype(ᶜY_fv))
-    ᶠTS = DataLayouts.typesize(FT, eltype(ᶠY_fv))
-    ᶜY_arr = CUDA.CuStaticSharedArray(FT, (ᶜNv, ᶜTS))
-    ᶠY_arr = CUDA.CuStaticSharedArray(FT, (ᶠNv, ᶠTS))
-    ᶜdata_col = rebuild_column(ᶜY_fv, ᶜY_arr)
-    ᶠdata_col = rebuild_column(ᶠY_fv, ᶠY_arr)
-    is_valid_index(ᶜus, gid) && (ᶜdata_col[ᶜui] = ᶜY_fv[ᶜui])
-    is_valid_index(ᶠus, gid) && (ᶠdata_col[ᶠui] = ᶠY_fv[ᶠui])
-    CUDA.sync_threads()
-
-    if is_valid_index(ᶜus, gid)
-        (ᶜY, ᶠY) = column_states(_ᶜY, _ᶠY, ᶜdata_col, ᶠdata_col, ᶠui)
-        ᶜbc = ᶜimplicit_tendency_bc(ᶜY, ᶠY, p, t, zmax)
-        (ᶜidx, ᶜhidx) = operator_inds(axes(ᶜY), ᶜui)
-        Fields.field_values(ᶜYₜ)[ᶜui] = Operators.getidx(axes(ᶜY), ᶜbc, ᶜidx, ᶜhidx)
-        # ᶜYₜ[ᶜui] = ᶜimplicit_tendency_bc(ᶜY, ᶠY, p, t)[ᶜui] # might be possible?
-    end
-    if is_valid_index(ᶠus, gid)
-        (ᶜY, ᶠY) = column_states(_ᶜY, _ᶠY, ᶜdata_col, ᶠdata_col, ᶠui)
-        ᶠbc = ᶠimplicit_tendency_bc(ᶜY, ᶠY, p, t, zmax)
-        (ᶠidx, ᶠhidx) = operator_inds(axes(ᶠY), ᶠui)
-        Fields.field_values(ᶠYₜ)[ᶠui] = Operators.getidx(axes(ᶠY), ᶠbc, ᶠidx, ᶠhidx)
-        # ᶠYₜ[ᶠui] = ᶠimplicit_tendency_bc(ᶜY, ᶠY, p, t)[ᶠui] # might be possible?
-    end
-    return nothing
 end
 
 function ᶜimplicit_tendency_bc(ᶜY, ᶠY, p, t, zmax)
@@ -516,16 +559,12 @@ function ᶜimplicit_tendency_bc(ᶜY, ᶠY, p, t, zmax)
     # Central advection of active tracers (e_tot and q_tot)
     ᶠuₕ³ = @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
     ᶠu³ = @. lazy(ᶠuₕ³ + CT3(ᶠu₃))
-    tend_ρ_1 = @. lazy(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠuₕ³))
-    # tend_ᶠu₃_1 = @. lazy(ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) + ᶠgradᵥ(Φ(grav, ᶜz)))
-    tend_ᶠu₃_2 = @. lazy(CA.β_rayleigh_w(rayleigh_sponge, ᶠz, zmax) * ᶠu₃)
+    tend_ρ_1 = @. lazy( - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠuₕ³))
     tend_ρe_tot_1 = CA.vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, Val(:none))
-
     ᶜuₕ₀ = (zero(eltype(ᶜuₕ)),)
 
     return @. lazy(ᶜtendencies(
-        - tend_ρ_1,
-        # - tend_ᶠu₃_2,
+        tend_ρ_1,
         - ᶜuₕ₀,
         tend_ρe_tot_1,
     ))
@@ -793,16 +832,29 @@ end
 # This block:
 # @time if !@isdefined(integrator)
     FT = Float64;
-    ᶜspace = ExtrudedCubedSphereSpace(
-        FT;
-        z_elem = 63,
-        z_min = 0,
-        z_max = 30000.0,
-        radius = 6.371e6,
-        h_elem = 30,
-        n_quad_points = 4,
-        staggering = CellCenter(),
-    );
+    if high_res
+        ᶜspace = ExtrudedCubedSphereSpace(
+            FT;
+            z_elem = 63,
+            z_min = 0,
+            z_max = 30000.0,
+            radius = 6.371e6,
+            h_elem = 30,
+            n_quad_points = 4,
+            staggering = CellCenter(),
+        );
+    else
+        ᶜspace = ExtrudedCubedSphereSpace(
+            FT;
+            z_elem = 8,
+            z_min = 0,
+            z_max = 30000.0,
+            radius = 6.371e6,
+            h_elem = 2,
+            n_quad_points = 2,
+            staggering = CellCenter(),
+        );
+    end
     ᶠspace = Spaces.face_space(ᶜspace);
     cnt = (; ρ = zero(FT), uₕ = zero(CA.C12{FT}), ρe_tot = zero(FT));
     Yc = Fields.fill(cnt, ᶜspace);
@@ -922,7 +974,7 @@ if ClimaComms.device() isa ClimaComms.CUDADevice
         @show abs_err_f
     end
     @test results_match
-    println(CUDA.@profile begin
+    println(CUDA.@profile trace=true begin
         # SciMLBase.step!(integrator)
         implicit_tendency!(Yₜ, integrator.u, integrator.p, integrator.t)
         implicit_tendency!(Yₜ, integrator.u, integrator.p, integrator.t)
