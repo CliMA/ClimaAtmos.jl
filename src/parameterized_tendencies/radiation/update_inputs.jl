@@ -23,7 +23,17 @@ function update_atmospheric_state!(radiation_mode::R, integrator) where {R}
     # update relative humidity 
     update_relative_humidity!(integrator)
     # update column amounts of dry/moist air
-    #update_concentrations!(radiation_mode, integrator.p.radiation.rrtmgp_model)
+    if (
+        radiation_mode isa AllSkyRadiation ||
+        radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
+    )
+        radiation_mode.reset_rng_seed && Random.seed!(seedval)
+    end
+    update_implied_values!(integrator.p.radiation.rrtmgp_model)
+    integrator.p.radiation.rrtmgp_model.radiation_mode.add_isothermal_boundary_layer &&
+        update_boundary_layer!(integrator.p.radiation.rrtmgp_model)
+    clip_values!(integrator.p.radiation.rrtmgp_model)
+    update_concentrations!(radiation_mode, integrator.p.radiation.rrtmgp_model)
     # update gas concentrations (volume mixing ratios)
     update_volume_mixing_ratios!(integrator)
     # update aerosol concentrations

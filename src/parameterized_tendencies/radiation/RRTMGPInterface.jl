@@ -1013,19 +1013,6 @@ available fluxes also includes
   `face_clear_sw_direct_flux_dn`
 """
 NVTX.@annotate function update_fluxes!(model, seedval)
-    (; radiation_mode) = model
-    if (
-        radiation_mode isa AllSkyRadiation ||
-        radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
-    )
-        radiation_mode.reset_rng_seed && Random.seed!(seedval)
-    end
-    update_implied_values!(model)
-    model.radiation_mode.add_isothermal_boundary_layer &&
-        update_boundary_layer!(model)
-    clip_values!(model)
-    # TODO : update_concentrations as part of update_atmospheric_state! 
-    update_concentrations!(model.radiation_mode, model)
     update_lw_fluxes!(model.radiation_mode, model)
     update_sw_fluxes!(model.radiation_mode, model)
     update_net_fluxes!(model.radiation_mode, model)
