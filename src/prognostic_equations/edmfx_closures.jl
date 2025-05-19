@@ -380,7 +380,8 @@ function mixing_length(
     l_physical_scales = SA.SVector(l_W, l_TKE, l_N)
 
     # TODO: Replace lamb_smooth_minimum with TC.blend_scales, supporting hard/soft minimum and ML options
-    l_smin = lamb_smooth_minimum(l_physical_scales, smin_ub, smin_rm)
+    # l_smin = lamb_smooth_minimum(l_physical_scales, smin_ub, smin_rm)
+    l_smin = minimum(l_physical_scales)
     l_smin = max(l_smin, FT(0)) # Ensure non-negative (lamb_smooth_minimum should preserve this if inputs are non-negative)
 
     # 1. Limit the combined physical scale by the distance from the wall.
@@ -388,7 +389,7 @@ function mixing_length(
     l_limited_phys_wall = min(l_smin, l_z)
 
     # 2. Impose the grid-scale limit (l_grid).
-    l_final = min(l_limited_phys_wall, l_grid)
+    l_final = min(l_limited_phys_wall, FT(0.5) * l_grid)
 
     # Final check: guarantee that the mixing length is at least a small positive
     # value.  This prevents division-by-zero in
