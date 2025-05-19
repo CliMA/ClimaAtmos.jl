@@ -15,24 +15,24 @@ edmfx_filter: true
 #prognostic_tke: true
 moist: "equil"
 config: "column"
-z_max: 10000
+z_max: 3000
 x_elem: 2
 y_elem: 2
-z_elem: 200
+z_elem: 30
 z_stretch: false
 #perturb_initstate: false
-dt: 30secs
-dt_rad: 10mins
-t_end: 12days #"6hours"
+dt: 5secs
+dt_rad: 1mins
+t_end: 30mins #"6hours"
 dt_save_state_to_disk: "6days"
 cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage : true
 #toml: [toml/prognostic_edmfx_gcmdriven.toml]
 netcdf_output_at_levels: true
-netcdf_interpolation_num_points: [2, 2, 200]
+#netcdf_interpolation_num_points: [2, 2, 200]
 output_default_diagnostics: true
 rad: allskywithclear
-# insolation: "larcform1"         # TODO
+insolation: "larcform1"
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
     period: 30mins

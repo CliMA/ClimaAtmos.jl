@@ -113,6 +113,7 @@ end
 struct RCEMIPIIInsolation <: AbstractInsolation end
 struct GCMDrivenInsolation <: AbstractInsolation end
 struct ExternalTVInsolation <: AbstractInsolation end
+struct Larcform1Insolation <: AbstractInsolation end
 
 """
     AbstractCloudInRadiation
