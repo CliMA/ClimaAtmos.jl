@@ -14,26 +14,31 @@ if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()
     config = CA.AtmosConfig(config_file; job_id)
 end
+#config.parsed_args["insolation"] = larcform1
+
 simulation = CA.get_simulation(config)
-
 #---------- my code -------------------
-Y = simulation.integrator.u
-p = simulation.integrator.p
-t = simulation.integrator.t
+Y = simulation.integrator.u;
+p = simulation.integrator.p;
+t = simulation.integrator.t;
 
-include(joinpath(pkgdir(CA), "src", "solver", "types.jl"))
+# Does not converge. Trying to implement in src
+#include(joinpath(pkgdir(CA), "src", "solver", "types.jl"))
+#=
 struct Larcform1Insolation <: AbstractInsolation end
 #Uniform insolation, magnitudes from Wing et al. (2018)
 #Note that the TOA downward shortwave fluxes won't be the same as the values in the paper if add_isothermal_boundary_layer is true
 function set_insolation_variables!(Y, p, t, ::Larcform1Insolation)
     FT = Spaces.undertype(axes(Y.c))
     (; rrtmgp_model) = p.radiation
-    rrtmgp_model.cos_zenith .= cosd(FT(42.05))
+    rrtmgp_model.cos_zenith .= cosd(FT(π)./3)
     rrtmgp_model.weighted_irradiance .= FT(0)
 end
-ins = Larcform1Insolation()
-set_insolation_variables!(Y, p, t, ins)
+ins = Larcform1Insolation() # ins is insolation instantiated as type ::Larcform1Insolation
+set_insolation_variables!(Y, p, t, ins)  # mutates p, maybe also Y?
 #--------------------------------------------
+=#
+
 
 sol_res = CA.solve_atmos!(simulation)
 
