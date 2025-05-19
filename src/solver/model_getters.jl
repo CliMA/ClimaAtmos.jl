@@ -37,6 +37,7 @@ function get_insolation_form(parsed_args)
         "rcemipii",
         "gcmdriven",
         "externaldriventv",
+        "larcform1"
     )
     return if insolation == "idealized"
         IdealizedInsolation()
@@ -51,6 +52,8 @@ function get_insolation_form(parsed_args)
         GCMDrivenInsolation()
     elseif insolation == "externaldriventv"
         ExternalTVInsolation()
+    elseif insolation =="larcform1"
+        Larcform1Insolation()
     end
 end
 
