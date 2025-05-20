@@ -351,11 +351,10 @@ function calc_base_flux!(
         init = (1, nothing, nothing, nothing, nothing),  # Start with level index 1
         transform = x -> (x[2], x[3], x[4], x[5])        # Extract just the values of interest
     ) do (level_idx, ρ_acc, u_acc, v_acc, N_acc), (ρ, u, v, N, k_level)
-        k_idx = Int(k_level)
-        
+               
         # If we're at the target level, extract values
-        if level_idx == k_idx
-            return (level_idx + 1, ρ[level_idx], u[level_idx], v[level_idx], N[level_idx])
+        if level_idx == k_level
+            return (level_idx + 1, ρ, u, v, N)
         # Otherwise, just increment the level counter
         else
             return (level_idx + 1, ρ_acc, u_acc, v_acc, N_acc)
@@ -413,7 +412,7 @@ function calc_base_flux!(
     return nothing
 end
 
-function calc_saturation_profile_gpu!(
+function calc_saturation_profile!(
     τ_sat,
     U_sat, 
     FrU_sat,
@@ -429,130 +428,151 @@ function calc_saturation_profile_gpu!(
     u_phy,
     v_phy,
     ᶜρ,
-    ᶜp,
     k_pbl
 )
+    # Extract parameters
     (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ϵ) = p.orographic_gravity_wave
     FT = eltype(Fr_crit)
     γ = topo_γ
     β = topo_β
     ϵ = topo_ϵ
     
-    # Calculate Vτ at cell faces using field operations instead of column operations
+    # Calculate Vτ at cell faces using field operations
     @. ᶠVτ = max(
         eps(FT),
         ᶠinterp(
-            -(u_phy * τ_x + v_phy * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2)),
-        ),
+            -(u_phy * τ_x + v_phy * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2))
+        )
     )
     
-    # Calculate derivative fields
+    # Calculate derivatives for ᶠd2Vτdz
     ᶠd2udz = ᶠinterp.(ᶜd2dz2(u_phy, p))
     ᶠd2vdz = ᶠinterp.(ᶜd2dz2(v_phy, p))
     
-    # Calculate ᶠd2Vτdz as field operation
+    # Calculate derivative for L1
     ᶠd2Vτdz = @. max(
         eps(FT),
-        -(ᶠd2udz * τ_x + ᶠd2vdz * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2)),
+        -(ᶠd2udz * τ_x + ᶠd2vdz * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2))
     )
     
-    # Calculate L1 as field operation
-    L1 = @. topo_L0 *
-       max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶠVτ * ᶠd2Vτdz / ᶠN^2))
+    # Calculate L1
+    L1 = @. topo_L0 * max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶠVτ * ᶠd2Vτdz / ᶠN^2))
     
-    # Create a combined input field for column_accumulate
+    # Store original values for later use
+    FrU_clp0 = copy(FrU_clp)
+    FrU_sat0 = copy(FrU_sat)
+    
+    # Create field at face levels for U_k calculation
+    ᶠρ = ᶠinterp.(ᶜρ)
+    U_k_field = @. sqrt(ᶠρ / topo_ρscale * ᶠVτ^3 / ᶠN / L1)
+    
+    # Prepare a level index field to help with operations at specific levels
+    ᶠlevel_idx = similar(ᶠVτ)
+    for i in 1:Spaces.nlevels(axes(ᶠVτ))
+        fill!(Fields.level(ᶠlevel_idx, i), i)
+    end
+    
+    # Create combined input for column_accumulate
     input = @. lazy(tuple(
-        U_sat,
-        FrU_sat,
-        FrU_clp,
+        FrU_clp0,
+        FrU_sat0,
+        U_k_field,
         FrU_max,
         FrU_min,
         τ_p,
-        ᶠN,
-        L1,
-        k_pbl,
-        ᶜρ,
-        ᶜp,
-        τ_x,
-        τ_y
+        ᶠlevel_idx,
+        k_pbl
     ))
     
-    # Use column_accumulate to process the saturation profile
+    # Initialize the result field with τ_p at the lowest face
+    τ_sat_initial .= τ_p
+    fill!(τ_sat, 0.0)
+    fill!(Fields.level(τ_sat, 1), Fields.field_values(τ_sat_initial))
+    
+    # Use column_accumulate to build the saturation profile
     Operators.column_accumulate!(
         τ_sat,
         input;
-        init = (FT(0.0), FT(NaN), FT(NaN), FT(NaN), FT(NaN)),
-        transform = first
-    ) do (τ_sat_k, U_sat_prev, FrU_sat_prev, FrU_clp0_prev, FrU_sat0_prev), 
-        (U_sat_k, FrU_sat_k, FrU_clp_k, FrU_max_k, FrU_min_k, τ_p_k, ᶠN_k, L1_k, k_pbl_k, ᶜρ_k, ᶜp_k, τ_x_k, τ_y_k)
+        init = (copy(U_sat), copy(FrU_sat), copy(FrU_clp), false),
+        transform = (U_sat_k, FrU_sat_k, FrU_clp_k, τ_sat_k) -> τ_sat_k
+    ) do (U_sat_prev, FrU_sat_prev, FrU_clp_prev, τ_sat_prev), 
+        (FrU_clp0_k, FrU_sat0_k, U_k, FrU_max_k, FrU_min_k, τ_p_k, level_idx, k_pbl_k)
         
-        level = lazy_get_level(τ_sat_k)
-        
-        # Initialize values at first level
-        if level == 1
-            U_sat_val = sqrt(ᶜρ_k / topo_ρscale * ᶠVτ[level]^3 / ᶠN_k / L1_k)
-            FrU_sat_val = Fr_crit * U_sat_val
-            FrU_clp_val = min(FrU_max_k, max(FrU_min_k, FrU_sat_val))
-            
-            # Very first cell face gets τ_p_k directly
-            return (τ_p_k, U_sat_val, FrU_sat_val, FrU_clp_val, FrU_sat_val)
+        # Skip the first level (already initialized)
+        if level_idx == 1
+            return (U_sat_prev, FrU_sat_prev, FrU_clp_prev, true, τ_p_k)
         end
         
-        # For levels below k_pbl, use τ_p directly
-        if level <= k_pbl_k
-            return (τ_p_k, U_sat_prev, FrU_sat_prev, FrU_clp0_prev, FrU_sat0_prev)
+        # Calculate current level saturation value
+        U_sat_k = min(U_sat_prev, U_k)
+        FrU_sat_k = Fr_crit * U_sat_k
+        FrU_clp_k = min(FrU_max_k, max(FrU_min_k, FrU_sat_k))
+        
+        # Determine saturation value based on level
+        τ_sat_k = if level_idx <= k_pbl_k
+            τ_p_k
+        else
+            topo_a0 * (
+                (FrU_clp_k^(2 + γ - ϵ) - FrU_min_k^(2 + γ - ϵ)) / (2 + γ - ϵ) +
+                (FrU_sat_k)^2 * (FrU_sat0_k)^β *
+                (FrU_max_k^(γ - ϵ - β) - FrU_clp0_k^(γ - ϵ - β)) / (γ - ϵ - β) +
+                (FrU_sat_k)^2 *
+                (FrU_clp0_k^(γ - ϵ) - FrU_clp_k^(γ - ϵ)) / (γ - ϵ)
+            )
         end
         
-        # Calculate U_k
-        U_k = sqrt(ᶜρ_k / topo_ρscale * ᶠVτ[level]^3 / ᶠN_k / L1_k)
-        
-        # Update U_sat (keeping minimum)
-        U_sat_val = min(U_sat_prev, U_k)
-        
-        # Update FrU values
-        FrU_sat_val = Fr_crit * U_sat_val
-        FrU_clp_val = min(FrU_max_k, max(FrU_min_k, FrU_sat_val))
-        
-        # Calculate τ_sat for this level
-        τ_sat_val = topo_a0 * (
-            (FrU_clp_val^(2 + γ - ϵ) - FrU_min_k^(2 + γ - ϵ)) /
-            (2 + γ - ϵ) +
-            (FrU_sat_val)^2 * (FrU_sat0_prev)^β *
-            (FrU_max_k^(γ - ϵ - β) - FrU_clp0_prev^(γ - ϵ - β)) /
-            (γ - ϵ - β) +
-            (FrU_sat_val)^2 *
-            (FrU_clp0_prev^(γ - ϵ) - FrU_clp_val^(γ - ϵ)) / (γ - ϵ)
-        )
-        
-        return (τ_sat_val, U_sat_val, FrU_sat_val, FrU_clp0_prev, FrU_sat0_prev)
+        return (U_sat_k, FrU_sat_k, FrU_clp_k, τ_sat_k)
     end
     
-    # Apply correction for wave propagation to the top
-    # If the wave propagates to the top, the residual momentum flux is redistributed
+    # Apply top correction using field operations
     apply_top_correction!(τ_sat, ᶜp)
+    
+    # Update U_sat and FrU values for subsequent calculations
+    # We need to run another column_accumulate just to update these fields
+    # Operators.column_accumulate!(
+    #     U_k_field,  # Use as scratch field
+    #     input;
+    #     init = (copy(U_sat), copy(FrU_sat), copy(FrU_clp)),
+    #     transform = (U_sat_k, FrU_sat_k, FrU_clp_k) -> (U_sat_k, FrU_sat_k, FrU_clp_k)
+    # ) do (U_sat_prev, FrU_sat_prev, FrU_clp_prev), 
+    #      (_, _, U_k, FrU_max_k, FrU_min_k, _, _, _)
+        
+    #     U_sat_k = min(U_sat_prev, U_k)
+    #     FrU_sat_k = Fr_crit * U_sat_k
+    #     FrU_clp_k = min(FrU_max_k, max(FrU_min_k, FrU_sat_k))
+        
+    #     return (U_sat_k, FrU_sat_k, FrU_clp_k)
+    # end
+    
+    # Copy the final values back to the output fields
+    # @. U_sat = U_sat_final
+    # @. FrU_sat = FrU_sat_final
+    # @. FrU_clp = FrU_clp_final
     
     return nothing
 end
 
-# Helper function to get the level from an array slice
-function lazy_get_level(field_slice)
-    # In a real implementation, you'd need to extract the level index
-    # This is a placeholder for the actual implementation
-    return 1  # Placeholder
-end
-
-# Helper function to apply the top correction
+# Helper function to apply top correction
 function apply_top_correction!(τ_sat, ᶜp)
     FT = eltype(τ_sat)
-    ᶠp = ᶠinterp.(ᶜp)
     
-    # Check if there's residual momentum flux at the top
-    top_val = parent(τ_sat)[end]
-    if top_val > FT(0)
-        # Redistribute the residual momentum flux
-        τ_sat .-= top_val .* (parent(ᶠp)[1] .- ᶠp) ./
-            (parent(ᶠp)[1] .- parent(ᶠp)[end])
+    # Get top value
+    τ_top = Fields.level(τ_sat, Spaces.nlevels(axes(τ_sat)))
+    top_val = Fields.field_values(τ_top)
+    
+    # Check if correction is needed
+    need_correction = any(top_val .> FT(0))
+    
+    if need_correction
+        # Apply correction with field operations
+        ᶠp = ᶠinterp.(ᶜp)
+        p_surf = Fields.field_values(Fields.level(ᶠp, 1))
+        p_top = Fields.field_values(Fields.level(ᶠp, Spaces.nlevels(axes(ᶠp))))
+        
+        @. τ_sat -= τ_top * (p_surf - ᶠp) / (p_surf - p_top)
     end
+    
+    return nothing
 end
 
 ᶜd2dz2(ᶜscalar, p) =
