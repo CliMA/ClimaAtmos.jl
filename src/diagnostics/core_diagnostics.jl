@@ -346,7 +346,7 @@ add_diagnostic_variable!(
 )
 
 ###
-# Total specific humidity (3d)
+# Total water specific content (3d)
 ###
 compute_hus!(out, state, cache, time) =
     compute_hus!(out, state, cache, time, cache.atmos.moisture_model)
@@ -369,15 +369,15 @@ end
 
 add_diagnostic_variable!(
     short_name = "hus",
-    long_name = "Specific Humidity",
-    standard_name = "specific_humidity",
+    long_name = "Specific Humidity",  # TODO: rename to "Total Water Specific Content"
+    standard_name = "specific_humidity",  # TODO: rename to total_water_specific_content
     units = "kg kg^-1",
     comments = "Mass of all water phases per mass of air",
     compute! = compute_hus!,
 )
 
 ###
-# Liquid water specific humidity (3d)
+# Liquid water specific content (3d)
 ###
 compute_clw!(out, state, cache, time) =
     compute_clw!(out, state, cache, time, cache.atmos.moisture_model)
@@ -413,7 +413,7 @@ add_diagnostic_variable!(
 )
 
 ###
-# Ice water specific humidity (3d)
+# Ice water specific content (3d)
 ###
 compute_cli!(out, state, cache, time) =
     compute_cli!(out, state, cache, time, cache.atmos.moisture_model)
@@ -449,7 +449,7 @@ add_diagnostic_variable!(
 )
 
 ###
-# Surface specific humidity (2d)
+# Surface total water specific content (2d)
 ###
 compute_hussfc!(out, state, cache, time) =
     compute_hussfc!(out, state, cache, time, cache.atmos.moisture_model)
@@ -465,13 +465,13 @@ function compute_hussfc!(
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.total_specific_humidity.(
+        return TD.total_specific_humidity.(  # TODO: rename to "total_water_specific_content"
             thermo_params,
             cache.precomputed.sfc_conditions.ts,
         )
     else
         out .=
-            TD.total_specific_humidity.(
+            TD.total_specific_humidity.(  # TODO: rename to total_water_specific_content
                 thermo_params,
                 cache.precomputed.sfc_conditions.ts,
             )
@@ -480,8 +480,8 @@ end
 
 add_diagnostic_variable!(
     short_name = "hussfc",
-    long_name = "Surface Specific Humidity",
-    standard_name = "specific_humidity",
+    long_name = "Surface Specific Humidity",  # TODO: rename to "Surface Total Water Spefici Content"
+    standard_name = "specific_humidity",  # TODO: rename to "total_water_specific_content"
     units = "kg kg^-1",
     comments = "Mass of all water phases per mass of air in the layer infinitely close to the surface",
     compute! = compute_hussfc!,
@@ -1239,7 +1239,7 @@ end
 
 add_diagnostic_variable!(
     short_name = "husv",
-    long_name = "Vapor Specific Humidity",
+    long_name = "Vapor Specific Humidity",  # TODO: rename to "Specific Humidity"?
     units = "kg kg^-1",
     comments = "Mass of water vapor per mass of air",
     compute! = compute_husv!,

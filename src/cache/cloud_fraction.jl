@@ -49,7 +49,7 @@ NVTX.@annotate function set_cloud_fraction!(
             @. ᶜgradᵥ_θ_virt =
                 ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))
             @. ᶜgradᵥ_q_tot =
-                ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
+                ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))  # TODO: rename to "total_water_specific_content"
             @. ᶜgradᵥ_θ_liq_ice =
                 ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
         end
@@ -95,7 +95,7 @@ NVTX.@annotate function set_cloud_fraction!(
             @. ᶜgradᵥ_θ_virt =
                 ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))
             @. ᶜgradᵥ_q_tot =
-                ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
+                ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))  # TODO: rename to "total_water_specific_content"
             @. ᶜgradᵥ_θ_liq_ice =
                 ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
         end
@@ -265,7 +265,7 @@ function quad_loop(
     thermo_params,
 )
     p_c = TD.air_pressure(thermo_params, ts)
-    q_mean = TD.total_specific_humidity(thermo_params, ts)
+    q_mean = TD.total_specific_humidity(thermo_params, ts)  # TODO: rename to "total_water_specific_content"
     θ_mean = TD.liquid_ice_pottemp(thermo_params, ts)
     # Returns the physical values based on quadrature sampling points
     # and limited covarainces
@@ -325,7 +325,7 @@ end
    that approximate the sub-grid scale variability of θ and q.
 
    θ - liquid ice potential temperature
-   q - total water specific humidity
+   q - total water specific content
 """
 function quad(f::F, get_x_hat::F1, quad) where {F <: Function, F1 <: Function}
     χ = quad.a
