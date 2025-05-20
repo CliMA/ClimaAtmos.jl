@@ -1,4 +1,4 @@
-238
+239
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+239
+- Update mixing length formulation
+
 238
 - Limit by Pr_max = 10 (new default in ClimaParams v0.10.30)
 

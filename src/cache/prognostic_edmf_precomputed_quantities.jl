@@ -527,6 +527,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜstrain_rate_norm,
         ᶜprandtl_nvec,
         ᶜtke_exch,
+        p.atmos.edmfx_model.scale_blending_method,
     )
 
     @. ᶜmixing_length = ᶜmixing_length_tuple.master

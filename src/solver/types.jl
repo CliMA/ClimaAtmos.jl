@@ -449,6 +449,11 @@ struct Implicit <: AbstractTimesteppingMode end
 
 struct QuasiMonotoneLimiter end # For dispatching to use the ClimaCore QuasiMonotoneLimiter.
 
+abstract type AbstractScaleBlendingMethod end
+struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
+struct HardMinimumBlending <: AbstractScaleBlendingMethod end
+Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
+
 Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM}
 
     """Enable specific upwinding schemes for specific equations"""
@@ -498,6 +503,7 @@ Base.@kwdef struct EDMFXModel{
     ESDF <: ValTF,
     ENP <: ValTF,
     EVR <: ValTF,
+    SBM <: AbstractScaleBlendingMethod,
 }
     entr_model::EEM = nothing
     detr_model::EDM = nothing
@@ -505,6 +511,7 @@ Base.@kwdef struct EDMFXModel{
     sgs_diffusive_flux::ESDF = Val(false)
     nh_pressure::ENP = Val(false)
     filter::EVR = Val(false)
+    scale_blending_method::SBM
 end
 
 Base.@kwdef struct AtmosModel{

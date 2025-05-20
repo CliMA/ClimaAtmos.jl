@@ -324,6 +324,9 @@ turbconv:
 advection_test:
   help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"
   value: false
+edmfx_scale_blending:
+  help: "Method for blending physical scales in EDMFX mixing length calculation. [`SmoothMinimum` (default), `HardMinimum`]"
+  value: "SmoothMinimum"
 implicit_sgs_advection:
   help: "Whether to treat the subgrid-scale vertical advection tendency implicitly [`false` (default), `true`]"
   value: false
