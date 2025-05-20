@@ -12,7 +12,10 @@ include(
     joinpath(pkgdir(ClimaAtmos), "post_processing/remap", "remap_helpers.jl"),
 )
 
-context = ClimaComms.SingletonCommsContext()
+comms_ctx = ClimaComms.SingletonCommsContext()
+(; config_file, job_id) = CA.commandline_kwargs()
+config = CA.AtmosConfig(config_file; job_id, comms_ctx)
+config.parsed_args["topography"] = "NoWarp"
 
 # Create meshes and spaces
 h_elem = 6
@@ -21,20 +24,18 @@ z_max = 30e3
 z_elem = 1
 radius = 6.371229e6
 
-grid = CA.SphereGrid(
-    FT;
-    context,
-    z_elem,
+quad = Quadratures.GLL{nh_poly + 1}()
+horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
+h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
+z_stretch = Meshes.Uniform()
+center_space, face_space = CA.make_hybrid_spaces(
+    h_space,
     z_max,
-    z_stretch = false,
-    radius,
-    h_elem,
-    nh_poly,
-    bubble = false,
-    topography = CA.NoTopography(),
+    z_elem,
+    z_stretch;
+    parsed_args = config.parsed_args,
 )
-(; center_space, face_space) = CA.get_spaces(grid)
-h_space = Spaces.horizontal_space(center_space)
+
 ᶜlocal_geometry = Fields.local_geometry_field(center_space)
 ᶠlocal_geometry = Fields.local_geometry_field(face_space)
 
@@ -69,32 +70,30 @@ u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
 v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
 # Compute base flux
-Fields.bycolumn(axes(Y.c.ρ)) do colidx
-    CA.calc_base_flux!(
-        topo_τ_x[colidx],
-        topo_τ_y[colidx],
-        topo_τ_l[colidx],
-        topo_τ_p[colidx],
-        topo_τ_np[colidx],
-        topo_U_sat[colidx],
-        topo_FrU_sat[colidx],
-        topo_FrU_max[colidx],
-        topo_FrU_min[colidx],
-        topo_FrU_clp[colidx],
-        p,
-        max(FT(0), parent(hmax[colidx])[1]),
-        max(FT(0), parent(hmin[colidx])[1]),
-        parent(t11[colidx])[1],
-        parent(t12[colidx])[1],
-        parent(t21[colidx])[1],
-        parent(t22[colidx])[1],
-        parent(Y.c.ρ[colidx]),
-        parent(u_phy[colidx]),
-        parent(v_phy[colidx]),
-        parent(Y.c.N[colidx]),
-        1,
-    )
-end
+CA.calc_base_flux!(
+    topo_τ_x,
+    topo_τ_y,
+    topo_τ_l,
+    topo_τ_p,
+    topo_τ_np,
+    topo_U_sat,
+    topo_FrU_sat,
+    topo_FrU_max,
+    topo_FrU_min,
+    topo_FrU_clp,
+    p,
+    hmax,
+    hmin,
+    t11,
+    t12,
+    t21,
+    t22,
+    Y.c.ρ,
+    u_phy,
+    v_phy,
+    Y.c.N,
+    1,
+)
 
 # Remap base flux to regular lat/lon grid for visualization
 TOPO_DIR = joinpath(@__DIR__, "remap_data/")
