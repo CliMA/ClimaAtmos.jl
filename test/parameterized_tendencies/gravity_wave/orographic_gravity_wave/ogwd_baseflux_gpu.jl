@@ -70,32 +70,30 @@ u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
 v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
 # Compute base flux
-Fields.bycolumn(axes(Y.c.ρ)) do colidx
-    CA.calc_base_flux!(
-        topo_τ_x[colidx],
-        topo_τ_y[colidx],
-        topo_τ_l[colidx],
-        topo_τ_p[colidx],
-        topo_τ_np[colidx],
-        topo_U_sat[colidx],
-        topo_FrU_sat[colidx],
-        topo_FrU_max[colidx],
-        topo_FrU_min[colidx],
-        topo_FrU_clp[colidx],
-        p,
-        max(FT(0), parent(hmax[colidx])[1]),
-        max(FT(0), parent(hmin[colidx])[1]),
-        parent(t11[colidx])[1],
-        parent(t12[colidx])[1],
-        parent(t21[colidx])[1],
-        parent(t22[colidx])[1],
-        parent(Y.c.ρ[colidx]),
-        parent(u_phy[colidx]),
-        parent(v_phy[colidx]),
-        parent(Y.c.N[colidx]),
-        1,
-    )
-end
+CA.calc_base_flux!(
+    topo_τ_x,
+    topo_τ_y,
+    topo_τ_l,
+    topo_τ_p,
+    topo_τ_np,
+    topo_U_sat,
+    topo_FrU_sat,
+    topo_FrU_max,
+    topo_FrU_min,
+    topo_FrU_clp,
+    p,
+    hmax,
+    hmin,
+    t11,
+    t12,
+    t21,
+    t22,
+    Y.c.ρ,
+    u_phy,
+    v_phy,
+    Y.c.N,
+    1,
+)
 
 # Remap base flux to regular lat/lon grid for visualization
 TOPO_DIR = joinpath(@__DIR__, "remap_data/")
