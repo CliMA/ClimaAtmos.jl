@@ -434,7 +434,6 @@ function calc_saturation_profile!(
         )
         @. U_sat = min(U_sat, U_k)
         @. FrU_sat = Fr_crit * U_sat
-        @. FrU_sat = Fr_crit * U_sat
         @. FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
         if k < k_pbl
             tmp = Fields.level(τ_sat, k + half)
