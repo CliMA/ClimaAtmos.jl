@@ -32,23 +32,11 @@ end
 """
     Return surface flux of TKE, a C3 vector used by ClimaAtmos operator boundary conditions
 """
-function surface_flux_tke(
-    turbconv_params,
-    ρ_int,
-    u_int,
-    ustar,
-    interior_local_geometry,
-    surface_local_geometry,
-)
-    c_d = CAP.tke_diss_coeff(turbconv_params)
-    c_m = CAP.tke_ed_coeff(turbconv_params)
-    k_star² = CAP.tke_surf_scale(turbconv_params)
-    speed = Geometry._norm(
-        CA.CT12(u_int, interior_local_geometry),
-        interior_local_geometry,
-    )
+function surface_flux_tke(turbconv_params, ρ_int, ustar, surface_local_geometry)
+
+    c_k = CAP.tke_surf_flux_coeff(turbconv_params)
     c3_unit = C3(unit_basis_vector_data(C3, surface_local_geometry))
-    return ρ_int * (1 - c_d * c_m * k_star²^2) * ustar^2 * speed * c3_unit
+    return c_k * ρ_int * ustar^3 * c3_unit
 end
 
 """

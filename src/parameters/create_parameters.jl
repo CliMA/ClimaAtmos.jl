@@ -200,6 +200,7 @@ function TurbulenceConvectionParameters(
         :min_area_limiter_scale => :min_area_limiter_scale,
         :max_area_limiter_scale => :max_area_limiter_scale,
         :mixing_length_tke_surf_scale => :tke_surf_scale,
+        :mixing_length_tke_surf_flux_coeff => :tke_surf_flux_coeff,
         :mixing_length_diss_coeff => :tke_diss_coeff,
         :diagnostic_covariance_coeff => :diagnostic_covariance_coeff,
         :detr_buoy_coeff => :detr_buoy_coeff,
