@@ -333,6 +333,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         identity_blocks...,
         sgs_advection_blocks...,
         advection_blocks...,
+        condensate_blocks...,
         diffusion_blocks...,
         sgs_massflux_blocks...,
     )
@@ -342,6 +343,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         mass_and_surface_names...,
         available_tracer_names...,
         @name(c.ρe_tot),
+        available_condensate_names...,
         ρatke_if_available...,
         available_sgs_scalar_names...,
     )
