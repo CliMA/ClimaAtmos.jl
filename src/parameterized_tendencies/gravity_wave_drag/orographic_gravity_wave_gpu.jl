@@ -317,12 +317,13 @@ function calc_base_flux!(
     t12,
     t21,
     t22,
-    c_ρ,
+    ᶜρ,
     u_phy,
     v_phy,
-    c_N,
-    k_pbl,
+    ᶜN,
+    k_pbl
 )
+    # Extract parameters
     (;
         Fr_crit,
         topo_ρscale,
@@ -333,53 +334,82 @@ function calc_base_flux!(
         topo_β,
         topo_ϵ,
     ) = p.orographic_gravity_wave
-    Vτ = p.orographic_gravity_wave.topo_base_Vτ
-
+    
     FT = eltype(Fr_crit)
     γ = topo_γ
     β = topo_β
     ϵ = topo_ϵ
-
-    # τ
-    parent(τ_x) .=
-        c_ρ[k_pbl] * c_N[k_pbl] * (t11 * u_phy[k_pbl] + t21 * v_phy[k_pbl])
-    parent(τ_y) .=
-        c_ρ[k_pbl] * c_N[k_pbl] * (t12 * u_phy[k_pbl] + t22 * v_phy[k_pbl])
-    Vτ = max(
+    
+    # Create an input tuple for column_reduce to extract k_pbl level data
+    input = @. lazy(tuple(ᶜρ, u_phy, v_phy, ᶜN, k_pbl))
+    
+    # Use column_reduce to extract values at k_pbl level
+    k_pbl_values = similar(hmax, Tuple{FT, FT, FT, FT})
+    Operators.column_reduce!(
+        k_pbl_values,
+        input;
+        init = (1, nothing, nothing, nothing, nothing),  # Start with level index 1
+        transform = x -> (x[2], x[3], x[4], x[5])        # Extract just the values of interest
+    ) do (level_idx, ρ_acc, u_acc, v_acc, N_acc), (ρ, u, v, N, k_level)
+        k_idx = Int(k_level)
+        
+        # If we're at the target level, extract values
+        if level_idx == k_idx
+            return (level_idx + 1, ρ[level_idx], u[level_idx], v[level_idx], N[level_idx])
+        # Otherwise, just increment the level counter
+        else
+            return (level_idx + 1, ρ_acc, u_acc, v_acc, N_acc)
+        end
+    end
+    
+    # Extract values from the tuple
+    ρ_pbl = @. k_pbl_values.:1
+    u_pbl = @. k_pbl_values.:2
+    v_pbl = @. k_pbl_values.:3
+    N_pbl = @. k_pbl_values.:4
+    
+    # Calculate τ components
+    @. τ_x = ρ_pbl * N_pbl * (t11 * u_pbl + t21 * v_pbl)
+    @. τ_y = ρ_pbl * N_pbl * (t12 * u_pbl + t22 * v_pbl)
+    
+    # Calculate Vτ using field operations
+    τ_magnitude = @. sqrt(τ_x^2 + τ_y^2)
+    Vτ = @. max(
         eps(FT),
-        -(u_phy[k_pbl] * parent(τ_x)[1] + v_phy[k_pbl] * parent(τ_y)[1]) /
-        max(eps(FT), parent(sqrt.(τ_x .^ 2 .+ τ_y .^ 2))[1]),
+        -(u_pbl * τ_x + v_pbl * τ_y) / max(eps(FT), τ_magnitude)
     )
-    # Froude number
-    Fr_max = @. hmax * c_N[k_pbl] / Vτ
-    Fr_min = @. hmin * c_N[k_pbl] / Vτ
-    # U_sat
-    parent(U_sat) .=
-        sqrt(c_ρ[k_pbl] / topo_ρscale * Vτ^3 / c_N[k_pbl] / topo_L0)
-    # FrU's
+    
+    # Calculate Froude numbers
+    Fr_max = @. max(FT(0), hmax) * N_pbl / Vτ
+    Fr_min = @. max(FT(0), hmin) * N_pbl / Vτ
+    
+    # Calculate U_sat
+    @. U_sat = @. sqrt(ρ_pbl / topo_ρscale * @. Vτ^3 / N_pbl / topo_L0)
+    
+    # Calculate FrU values
     @. FrU_sat = Fr_crit * U_sat
     @. FrU_min = Fr_min * U_sat
     @. FrU_max = max(Fr_max * U_sat, FrU_min + eps(FT))
-    ## [U_c] in Garner 2005
     @. FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
-    # total linear drag
+    
+    # Calculate drag components
     @. τ_l = ((FrU_max)^(2 + γ - ϵ) - (FrU_min)^(2 + γ - ϵ)) / (2 + γ - ϵ)
-    # propagating
-    @. τ_p =
-        topo_a0 * (
-            (FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ) +
-            FrU_sat^(β + 2) * (FrU_max^(γ - ϵ - β) - FrU_clp^(γ - ϵ - β)) /
-            (γ - ϵ - β)
-        )
-    # nonpropagating
-    @. τ_np =
-        topo_a1 * U_sat / (1 + β) * (
-            (FrU_max^(1 + γ - ϵ) - FrU_clp^(1 + γ - ϵ)) / (1 + γ - ϵ) -
-            FrU_sat^(β + 1) * (FrU_max^(γ - ϵ - β) - FrU_clp^(γ - ϵ - β)) /
-            (γ - ϵ - β)
-        )
-
-    @. τ_np = τ_np / max(Fr_crit, Fr_max) # use_mg_scaling = .true. in GFDL code
+    
+    # Calculate propagating drag
+    @. τ_p = topo_a0 * (
+        (FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ) +
+        FrU_sat^(β + 2) * (FrU_max^(γ - ϵ - β) - FrU_clp^(γ - ϵ - β)) / (γ - ϵ - β)
+    )
+    
+    # Calculate non-propagating drag
+    @. τ_np = topo_a1 * U_sat / (1 + β) * (
+        (FrU_max^(1 + γ - ϵ) - FrU_clp^(1 + γ - ϵ)) / (1 + γ - ϵ) -
+        FrU_sat^(β + 1) * (FrU_max^(γ - ϵ - β) - FrU_clp^(γ - ϵ - β)) / (γ - ϵ - β)
+    )
+    
+    # Apply scaling
+    @. τ_np = τ_np / max(Fr_crit, Fr_max)
+    
     return nothing
 end
 
