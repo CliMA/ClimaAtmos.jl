@@ -40,8 +40,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Yₜ.f.u₃
     ᶜρ = Y.c.ρ
+    ᶜρe_tot = Y.c.ρe_tot
     (; forcing_type, moisture_model, rayleigh_sponge, viscous_sponge) = p.atmos
-    (; ls_adv, edmf_coriolis) = p.atmos
+    (; ls_adv, subsidence, edmf_coriolis) = p.atmos
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜp, sfc_conditions, ᶜts) = p.precomputed
@@ -53,6 +54,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     hs_args = (ᶜuₕ, ᶜp, params, sfc_conditions.ts, moisture_model, forcing_type)
     hs_tendency_uₕ = held_suarez_forcing_tendency_uₕ(hs_args...)
     hs_tendency_ρe_tot = held_suarez_forcing_tendency_ρe_tot(ᶜρ, hs_args...)
+    subs_args = (subsidence, thermo_params, ᶜts, ᶜρ, ᶜρe_tot)
     edmf_cor_tend_uₕ = edmf_coriolis_tendency_uₕ(ᶜuₕ, edmf_coriolis)
     lsa_args = (ᶜρ, thermo_params, ᶜts, t, ls_adv)
     bc_lsa_tend_ρe_tot = large_scale_advection_tendency_ρe_tot(lsa_args...)
@@ -76,12 +78,17 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ += hs_tendency_uₕ
     @. Yₜ.c.ρe_tot += hs_tendency_ρe_tot
 
-    subsidence_tendency!(Yₜ, Y, p, t, p.atmos.subsidence)
+    if moisture_model isa AbstractMoistModel
+        Yₜ.c.ρq_tot .+= subsidence_tendency(Val(:q_tot), subs_args...)
+    end
+    if moisture_model isa NonEquilMoistModel
+        Yₜ.c.ρq_liq .+= subsidence_tendency(Val(:q_liq), subs_args...)
+        Yₜ.c.ρq_ice .+= subsidence_tendency(Val(:q_ice), subs_args...)
+    end
 
     @. Yₜ.c.ρe_tot += bc_lsa_tend_ρe_tot
     if moisture_model isa AbstractMoistModel
-        bc_lsa_tend_ρq_tot = large_scale_advection_tendency_ρq_tot(lsa_args...)
-        @. Yₜ.c.ρq_tot += bc_lsa_tend_ρq_tot
+        Yₜ.c.ρq_tot .+= large_scale_advection_tendency_ρq_tot(lsa_args...)
     end
 
     @. Yₜ.c.uₕ += edmf_cor_tend_uₕ
