@@ -1,5 +1,5 @@
 using ClimaCore:
-    Fields, Geometry, Domains, Meshes, Topologies, Spaces, Operators
+    Fields, Geometry, Domains, Meshes, Topologies, Spaces, Operators, DataLayouts
 using NCDatasets
 import ClimaAtmos
 import ClimaAtmos as CA
@@ -16,7 +16,14 @@ include(
 )
 include("../gw_plotutils.jl")
 
-context = ClimaComms.SingletonCommsContext()
+comms_ctx = ClimaComms.SingletonCommsContext()
+(; config_file, job_id) = CA.commandline_kwargs()
+config = CA.AtmosConfig(config_file; job_id, comms_ctx)
+
+config.parsed_args["topography"] = "Earth";
+config.parsed_args["topo_smoothing"] = false;
+config.parsed_args["mesh_warp_type"] = "Linear";
+(; parsed_args) = config
 
 # load gfdl data
 include(joinpath(@__DIR__, "../../../artifact_funcs.jl"))
@@ -79,23 +86,12 @@ z_elem = 33
 dz_bottom = 300.0
 radius = 6.371229e6
 
-grid = CA.SphereGrid(
-    FT;
-    context,
-    z_elem,
-    z_max,
-    z_stretch = true,
-    dz_bottom,
-    radius,
-    h_elem,
-    nh_poly,
-    bubble = false,
-    topography = CA.EarthTopography(),
-    topography_damping_factor = 5,
-    mesh_warp_type = CA.LinearWarp(),
-    topo_smoothing = false,
-)
-(; center_space, face_space) = CA.get_spaces(grid)
+quad = Quadratures.GLL{nh_poly + 1}()
+horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
+h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
+z_stretch = Meshes.HyperbolicTangentStretching(dz_bottom)
+center_space, face_space =
+    CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
 
 ᶜlocal_geometry = Fields.local_geometry_field(center_space)
 ᶠlocal_geometry = Fields.local_geometry_field(face_space)
@@ -232,59 +228,56 @@ parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
 u_phy = Y.c.u_phy
 v_phy = Y.c.v_phy
 
+# 
+k_pbl_int = trunc.(topo_k_pbl)
+
 # compute base flux at k_pbl
-Fields.bycolumn(axes(Y.c.ρ)) do colidx
-    CA.calc_base_flux!(
-        topo_τ_x[colidx],
-        topo_τ_y[colidx],
-        topo_τ_l[colidx],
-        topo_τ_p[colidx],
-        topo_τ_np[colidx],
-        topo_U_sat[colidx],
-        topo_FrU_sat[colidx],
-        topo_FrU_max[colidx],
-        topo_FrU_min[colidx],
-        topo_FrU_clp[colidx],
-        p,
-        max(FT(0), parent(hmax[colidx])[1]),
-        max(FT(0), parent(hmin[colidx])[1]),
-        parent(t11[colidx])[1],
-        parent(t12[colidx])[1],
-        parent(t21[colidx])[1],
-        parent(t22[colidx])[1],
-        parent(Y.c.ρ[colidx]),
-        parent(u_phy[colidx]),
-        parent(v_phy[colidx]),
-        parent(ᶜN[colidx]),
-        Int(parent(topo_k_pbl[colidx])[1]),
-    )
-end
+CA.calc_base_flux!(
+    topo_τ_x,
+    topo_τ_y,
+    topo_τ_l,
+    topo_τ_p,
+    topo_τ_np,
+    topo_U_sat,
+    topo_FrU_sat,
+    topo_FrU_max,
+    topo_FrU_min,
+    topo_FrU_clp,
+    p,
+    hmax,
+    hmin,
+    t11,
+    t12,
+    t21,
+    t22,
+    Y.c.ρ,
+    u_phy,
+    v_phy,
+    ᶜN,
+    k_pbl_int,
+)
 
 # buoyancy frequency at cell faces
 ᶠN = ᶠinterp.(ᶜN) # alternatively, can be computed from ᶠT and ᶠdTdz
 
-# compute saturation profile
-Fields.bycolumn(axes(Y.c.ρ)) do colidx
-    CA.calc_saturation_profile!(
-        topo_ᶠτ_sat[colidx],
-        topo_U_sat[colidx],
-        topo_FrU_sat[colidx],
-        topo_FrU_clp[colidx],
-        topo_ᶠVτ[colidx],
-        p,
-        topo_FrU_max[colidx],
-        topo_FrU_min[colidx],
-        ᶠN[colidx],
-        topo_τ_x[colidx],
-        topo_τ_y[colidx],
-        topo_τ_p[colidx],
-        u_phy[colidx],
-        v_phy[colidx],
-        Y.c.ρ[colidx],
-        ᶜp[colidx],
-        Int(parent(topo_k_pbl[colidx])[1]),
-    )
-end
+CA.calc_saturation_profile!(
+    topo_ᶠτ_sat,
+    topo_U_sat, 
+    topo_FrU_sat,
+    topo_FrU_clp,
+    topo_ᶠVτ,
+    p,
+    topo_FrU_max,
+    topo_FrU_min,
+    ᶠN,
+    topo_τ_x,
+    topo_τ_y,
+    topo_τ_p,
+    u_phy,
+    v_phy,
+    ᶜp,
+    k_pbl_int
+)
 
 # a place holder to store physical forcing on uv
 uforcing = zeros(axes(u_phy))
@@ -448,4 +441,3 @@ for k in [21, 31]
     )
     CairoMakie.save(joinpath(output_dir, "vforcing_$k.png"), fig)
 end
-
