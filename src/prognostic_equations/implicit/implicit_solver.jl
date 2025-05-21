@@ -588,6 +588,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         sgs_nh_pressure_flag,
         topography_flag,
         sgs_mass_flux_flag,
+        noneq_cloud_formation_flag,
     ) = A
     (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜh_tot) = p
     (;
@@ -605,6 +606,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         ᶜdiffusion_h_matrix_scaled,
         ᶜdiffusion_u_matrix,
         params,
+        dt,
     ) = p
     (; edmfx_upwinding) = p.atmos.numerics
 
