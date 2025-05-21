@@ -343,7 +343,6 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         mass_and_surface_names...,
         available_tracer_names...,
         @name(c.ρe_tot),
-        available_condensate_names...,
         ρatke_if_available...,
         available_sgs_scalar_names...,
     )
