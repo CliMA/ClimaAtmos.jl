@@ -1349,3 +1349,143 @@ add_diagnostic_variable!(
         end
     end,
 )
+
+###
+# Convective Available Potential Energy (2d)
+###
+function compute_cape!(out, state, cache, time)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    g = TD.Parameters.grav(thermo_params)
+
+    # Get surface parcel properties
+    surface_thermal_state = Fields.level(cache.precomputed.ᶜts, 1)
+    surface_q = TD.total_specific_humidity.(thermo_params, surface_thermal_state)
+    surface_θ_liq_ice = TD.liquid_ice_pottemp.(thermo_params, surface_thermal_state)
+
+    # Create parcel thermodynamic states at each level based on energy & moisture at surface
+    parcel_ts_moist = TD.PhaseEquil_pθq.(thermo_params, 
+                                        cache.precomputed.ᶜts.p, 
+                                        surface_θ_liq_ice, 
+                                        surface_q)
+    
+    # Calculate virtual temperatures for parcel & environment
+    parcel_Tv = TD.virtual_temperature.(thermo_params, parcel_ts_moist)
+    env_Tv = TD.virtual_temperature.(thermo_params, cache.precomputed.ᶜts)
+
+    # Calculate buoyancy from the difference in virtual temperatures
+    ᶜbuoyancy = cache.scratch.ᶜtemp_scalar
+    ᶜbuoyancy .= g .* (parcel_Tv .- env_Tv) ./ env_Tv
+
+    # Integrate positive buoyancy to get CAPE
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        Operators.column_integral_definite!(out, max.(ᶜbuoyancy, 0))
+        return out
+    else
+        Operators.column_integral_definite!(out, max.(ᶜbuoyancy, 0))
+        return out
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "cape",
+    long_name = "Convective Available Potential Energy",
+    standard_name = "convective_available_potential_energy",
+    units = "J kg^-1",
+    comments = "Energy available to a parcel lifted moist adiabatically from the surface. We assume fully reversible phase changes and no precipitation.",
+    compute! = compute_cape!,
+)
+
+###
+# Convective Inhibition (2d)
+###
+function compute_cin!(out, state, cache, time)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    g = TD.Parameters.grav(thermo_params)
+
+    # Get surface parcel properties
+    surface_thermal_state = Fields.level(cache.precomputed.ᶜts, 1)
+    surface_q = TD.total_specific_humidity.(thermo_params, surface_thermal_state)
+    surface_θ_liq_ice = TD.liquid_ice_pottemp.(thermo_params, surface_thermal_state)
+
+    # Create parcel thermodynamic states at each level
+    parcel_ts_moist = TD.PhaseEquil_pθq.(thermo_params, 
+                                        cache.precomputed.ᶜts.p, 
+                                        surface_θ_liq_ice, 
+                                        surface_q)
+    
+    # Calculate virtual temperature
+    parcel_Tv = TD.virtual_temperature.(thermo_params, parcel_ts_moist)
+    env_Tv = TD.virtual_temperature.(thermo_params, cache.precomputed.ᶜts)
+
+    # Calculate buoyancy
+    ᶜbuoyancy = cache.scratch.ᶜtemp_scalar
+    ᶜbuoyancy .= g .* (parcel_Tv .- env_Tv) ./ env_Tv
+
+    # Integrate negative buoyancy to get CIN
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        Operators.column_integral_definite!(out, max.(.- ᶜbuoyancy, 0))
+        return out
+    else
+        Operators.column_integral_definite!(out, .-max.(.- ᶜbuoyancy, 0))
+        return out 
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "cin",
+    long_name = "Convective Inhibition",
+    standard_name = "convective_inhibition",
+    units = "J kg^-1",
+    comments = "Energy required to lift a parcel from the surface to its level of free convection. Negative values indicate more energy is required, 0 indicates the parcel is unstable.",
+    compute! = compute_cin!,
+)
+
+###
+# Lifted Condensation Level (2d)
+###
+function compute_lcl!(out, state, cache, time)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+
+    # Get surface parcel properties
+    surface_thermal_state = Fields.level(cache.precomputed.ᶜts, 1)
+    surface_q = TD.total_specific_humidity.(thermo_params, surface_thermal_state)
+    surface_θ_liq_ice = TD.liquid_ice_pottemp.(thermo_params, surface_thermal_state)
+
+    # Create parcel thermodynamic states at each level
+    parcel_ts = TD.PhaseEquil_pθq.(thermo_params, 
+                                  cache.precomputed.ᶜts.p, 
+                                  surface_θ_liq_ice, 
+                                  surface_q)
+    
+    # Get condensate amount and heights
+    q_condensed = TD.condensate.(thermo_params, parcel_ts)
+    z = Fields.coordinate_field(q_condensed).z
+
+    # just basic LCL at grid levels for now 
+    q_condensed_array = Fields.field2array(q_condensed)
+    z_array = Fields.field2array(z)
+
+    # Find first level with condensation
+    ind = findfirst(q_condensed_array .> 0)
+    basic_lcl = isnothing(ind) ? Inf : z_array[ind]
+    # Initialize output field
+    if isnothing(out)
+        out = Fields.zeros(Spaces.horizontal_space(axes(state.c.ρ)))
+        out .= basic_lcl
+        return out
+    else
+        out .= basic_lcl
+        return out
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "lcl",
+    long_name = "Lifted Condensation Level",
+    standard_name = "lifted_condensation_level",
+    units = "m",
+    comments = "Height at which a surface parcel becomes saturated when lifted adiabatically. Calculated using linear interpolation between model levels.",
+    compute! = compute_lcl!,
+)

@@ -209,6 +209,8 @@ function default_diagnostics(
         "lwp",
         "clwvi",
         "clivi",
+        "cape",
+        "cin",
     ]
     average_func = frequency_averages(duration)
     return [average_func(moist_diagnostics...; output_writer, start_date)...]
