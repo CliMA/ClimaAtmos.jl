@@ -4,6 +4,12 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+v0.30.2
+-------
+
+### Add limiting by max Prandtl number
+This is part of a larger refactoring of the Eddy Diffusivity code for EDMF
+
 v0.30.1
 -------
 
