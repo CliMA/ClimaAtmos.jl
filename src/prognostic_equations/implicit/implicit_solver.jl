@@ -1048,7 +1048,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
             turbconv_params = CAP.turbconv_params(params)
             c_d = CAP.tke_diss_coeff(turbconv_params)
-            (; ᶜtke⁰, ᶜmixing_length, dt) = p
+            (; ᶜtke⁰, ᶜmixing_length) = p
             ᶜρa⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? p.ᶜρa⁰ : ᶜρ
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
