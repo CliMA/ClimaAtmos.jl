@@ -1349,3 +1349,62 @@ add_diagnostic_variable!(
         end
     end,
 )
+
+###
+# Convective Available Potential Energy (2d)
+###
+function compute_cape!(out, state, cache, time)
+    thermo_params = lazy.(CAP.thermodynamics_params(cache.params))
+    g = lazy.(TD.Parameters.grav(thermo_params))
+
+    # Get surface parcel properties
+    surface_thermal_state = lazy.(cache.precomputed.sfc_conditions.ts)
+    surface_q =
+        lazy.(TD.total_specific_humidity.(thermo_params, surface_thermal_state))
+    surface_θ_liq_ice =
+        lazy.(TD.liquid_ice_pottemp.(thermo_params, surface_thermal_state))
+
+    # Create parcel thermodynamic states at each level based on energy & moisture at surface
+    parcel_ts_moist =
+        lazy.(
+            TD.PhaseEquil_pθq.(
+                thermo_params,
+                cache.precomputed.ᶜp,
+                surface_θ_liq_ice,
+                surface_q,
+            )
+        )
+
+    # Calculate virtual temperatures for parcel & environment
+    parcel_Tv = lazy.(TD.virtual_temperature.(thermo_params, parcel_ts_moist))
+    env_Tv =
+        lazy.(TD.virtual_temperature.(thermo_params, cache.precomputed.ᶜts))
+
+    # Calculate buoyancy from the difference in virtual temperatures
+    ᶜbuoyancy = cache.scratch.ᶜtemp_scalar
+    ᶜbuoyancy .= g .* (parcel_Tv .- env_Tv) ./ env_Tv
+
+    # restrict to tropospheric buoyancy (generously below 20km) TODO: integrate from LFC to LNB 
+    FT = Spaces.undertype(axes(ᶜbuoyancy))
+    ᶜbuoyancy .=
+        ᶜbuoyancy .*
+        ifelse.(
+            Fields.coordinate_field(state.c.ρ).z .< FT(20000.0),
+            FT(1.0),
+            FT(0.0),
+        )
+
+    # Integrate positive buoyancy to get CAPE
+    out′ = isnothing(out) ? zeros(axes(Fields.level(state.f, half))) : out
+    Operators.column_integral_definite!(out′, lazy.(max.(ᶜbuoyancy, 0)))
+    return out′
+end
+
+add_diagnostic_variable!(
+    short_name = "cape",
+    long_name = "Convective Available Potential Energy",
+    standard_name = "convective_available_potential_energy",
+    units = "J kg^-1",
+    comments = "Energy available to a parcel lifted moist adiabatically from the surface. We assume fully reversible phase changes and no precipitation.",
+    compute! = compute_cape!,
+)
