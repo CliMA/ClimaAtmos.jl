@@ -1,167 +1,133 @@
-import LinearAlgebra: I, Adjoint, ldiv!
-import ClimaCore.MatrixFields: @name
+import LinearAlgebra: I, Adjoint, diagind
+
 using ClimaCore.MatrixFields
+import ClimaCore.MatrixFields: @name
+
+"""
+    JacobianAlgorithm
+
+A description of how to compute the matrix ``∂R/∂Y``, where ``R(Y)`` denotes the
+residual of an implicit step with the state ``Y``. Concrete implementations of
+this abstract type should define 3 methods:
+ - `jacobian_cache(alg::JacobianAlgorithm, Y, atmos)`
+ - `update_jacobian!(alg::JacobianAlgorithm, cache, Y, p, dtγ, t)`
+ - `invert_jacobian!(alg::JacobianAlgorithm, cache, ΔY, R)`
+
+See [Implicit Solver](@ref) for additional background information.
+"""
+abstract type JacobianAlgorithm end
+
+"""
+    Jacobian(alg, Y, atmos)
+
+Wrapper for a `JacobianAlgorithm` and its cache, which it uses to update and
+invert the Jacobian.
+"""
+struct Jacobian{A <: JacobianAlgorithm, C}
+    alg::A
+    cache::C
+end
+function Jacobian(alg, Y, atmos)
+    krylov_cache = (; ΔY_krylov = similar(Y), R_krylov = similar(Y))
+    cache = (; jacobian_cache(alg, Y, atmos)..., krylov_cache...)
+    return Jacobian(alg, cache)
+end
+
+# ClimaTimeSteppers.jl calls zero(jac_prototype) to initialize the Jacobian, but
+# we don't need to allocate a second Jacobian for this (in particular, the exact
+# Jacobian can be very expensive to allocate).
+Base.zero(jacobian::Jacobian) = jacobian
+
+safe_float(dtγ, Y) = eltype(Y)(float(dtγ)) # Convert dtγ to the eltype of Y.
+
+# ClimaTimeSteppers.jl calls this to set the Jacobian before each linear solve.
+NVTX.@annotate update_jacobian!(jacobian, Y, p, dtγ, t) =
+    update_jacobian!(jacobian.alg, jacobian.cache, Y, p, safe_float(dtγ, Y), t)
+
+# ClimaTimeSteppers.jl calls this to perform each linear solve.
+NVTX.@annotate LinearAlgebra.ldiv!(
+    ΔY::Fields.FieldVector,
+    jacobian::Jacobian,
+    R::Fields.FieldVector,
+) = invert_jacobian!(jacobian.alg, jacobian.cache, ΔY, R)
+
+# This is called by Krylov.jl from inside ClimaTimeSteppers.jl. See
+# https://github.com/JuliaSmoothOptimizers/Krylov.jl/issues/605 for a related
+# issue that requires the same workaround.
+function LinearAlgebra.ldiv!(
+    ΔY::AbstractVector,
+    jacobian::Jacobian,
+    R::AbstractVector,
+)
+    (; ΔY_krylov, R_krylov) = jacobian.cache
+    R_krylov .= R
+    LinearAlgebra.ldiv!(ΔY_krylov, jacobian, R_krylov)
+    ΔY .= ΔY_krylov
+end
 
 abstract type DerivativeFlag end
 struct UseDerivative <: DerivativeFlag end
 struct IgnoreDerivative <: DerivativeFlag end
+
+DerivativeFlag(value) = value ? UseDerivative() : IgnoreDerivative()
+DerivativeFlag(mode::AbstractTimesteppingMode) =
+    DerivativeFlag(mode == Implicit())
+
 use_derivative(::UseDerivative) = true
 use_derivative(::IgnoreDerivative) = false
 
 """
-    ImplicitEquationJacobian(
-        Y, atmos;
-        approximate_solve_iters, diffusion_flag, topography_flag, sgs_advection_flag, transform_flag
+    ManualSparseJacobian(
+        topography_flag,
+        diffusion_flag,
+        sgs_advection_flag,
+        sgs_entr_detr_flag,
+        sgs_mass_flux_flag,
+        sgs_nh_pressure_flag,
+        approximate_solve_iters,
     )
 
-A wrapper for the matrix ``∂E/∂Y``, where ``E(Y)`` is the "error" of the
-implicit step with the state ``Y``.
-
-# Background
-
-When we use an implicit or split implicit-explicit (IMEX) timestepping scheme,
-we end up with a nonlinear equation of the form ``E(Y) = 0``, where
-```math
-    E(Y) = Y_{imp}(Y) - Y = \\hat{Y} + Δt * T_{imp}(Y) - Y.
-```
-In this expression, ``Y_{imp}(Y)`` denotes the state at some time ``t + Δt``.
-This can be expressed as the sum of ``\\hat{Y}``, the contribution from the
-state at time ``t`` (and possibly also at earlier times, depending on the order
-of the timestepping scheme), and ``Δt * T_{imp}(Y)``, the contribution from the
-implicit tendency ``T_{imp}`` between times ``t`` and ``t + Δt``. The new state
-at the end of each implicit step in the timestepping scheme is the value of
-``Y`` that solves this equation, i.e., the value of ``Y`` that is consistent
-with the state ``Y_{imp}(Y)`` predicted by the implicit step.
-
-Note: When we use a higher-order timestepping scheme, the full step ``Δt`` is
-divided into several sub-steps or "stages", where the duration of stage ``i`` is
-``Δt * γ_i`` for some constant ``γ_i`` between 0 and 1.
-
-In order to solve this equation using Newton's method, we must specify the
-derivative ``∂E/∂Y``. Since ``\\hat{Y}`` does not depend on ``Y`` (it is only a
-function of the state at or before time ``t``), this derivative is
-```math
-    E'(Y) = Δt * T_{imp}'(Y) - I.
-```
-In addition, we must specify how to divide ``E(Y)`` by this derivative, i.e.,
-how to solve the linear equation
-```math
-    E'(Y) * ΔY = E(Y).
-```
-
-Note: This equation comes from assuming that there is some ``ΔY`` such that
-``E(Y - ΔY) = 0`` and making the first-order approximation
-```math
-    E(Y - ΔY) \\approx E(Y) - E'(Y) * ΔY.
-```
-
-After initializing ``Y`` to ``Y[0] = \\hat{Y}``, Newton's method executes the
-following steps:
-- Compute the derivative ``E'(Y[0])``.
-- Compute the implicit tendency ``T_{imp}(Y[0])`` and use it to get ``E(Y[0])``.
-- Solve the linear equation ``E'(Y[0]) * ΔY[0] = E(Y[0])`` for ``ΔY[0]``.
-- Update ``Y`` to ``Y[1] = Y[0] - ΔY[0]``.
-If the number of Newton iterations is limited to 1, this new value of ``Y`` is
-taken to be the solution of the implicit equation. Otherwise, this sequence of
-steps is repeated, i.e., ``ΔY[1]`` is computed and used to update ``Y`` to
-``Y[2] = Y[1] - ΔY[1]``, then ``ΔY[2]`` is computed and used to update ``Y`` to
-``Y[3] = Y[2] - ΔY[2]``, and so on. The iterative process is terminated either
-when the error ``E(Y)`` is sufficiently close to 0 (according to the convergence
-condition passed to Newton's method), or when the maximum number of iterations
-is reached.
+A `JacobianAlgorithm` that approximates the `Jacobian` using analytically
+derived tendency derivatives and inverts it using a specialized nested linear
+solver. Certain groups of derivatives can be toggled on or off by setting their
+`DerivativeFlag`s to either `UseDerivative` or `IgnoreDerivative`.
 
 # Arguments
 
-- `Y::FieldVector`: the state of the simulation
-- `atmos::AtmosModel`: the model configuration
-- `approximate_solve_iters::Int`: number of iterations to take for the
-  approximate linear solve required when `diffusion_flag = UseDerivative()`
-- `diffusion_flag::DerivativeFlag`: whether the derivative of the
-  diffusion tendency with respect to the quantities being diffused should be
-  computed or approximated as 0; must be either `UseDerivative()` or
-  `IgnoreDerivative()` instead of a `Bool` to ensure type-stability
 - `topography_flag::DerivativeFlag`: whether the derivative of vertical
   contravariant velocity with respect to horizontal covariant velocity should be
-  computed or approximated as 0; must be either `UseDerivative()` or
-  `IgnoreDerivative()` instead of a `Bool` to ensure type-stability
-- `sgs_advection_flag::DerivativeFlag`: whether the derivative of the
-  subgrid-scale advection tendency with respect to the updraft quantities should be
-  computed or approximated as 0; must be either `UseDerivative()` or
-  `IgnoreDerivative()` instead of a `Bool` to ensure type-stability
-- `transform_flag::Bool`: whether the error should be transformed from ``E(Y)``
-  to ``E(Y)/Δt``, which is required for non-Rosenbrock timestepping schemes from
-  OrdinaryDiffEq.jl
+  computed
+- `diffusion_flag::DerivativeFlag`: whether the derivatives of the grid-scale
+  diffusion tendency should be computed
+- `sgs_advection_flag::DerivativeFlag`: whether the derivatives of the
+  subgrid-scale advection tendency should be computed
+- `sgs_entr_detr_flag::DerivativeFlag`: whether the derivatives of the
+  subgrid-scale entrainment and detrainment tendencies should be computed
+- `sgs_mass_flux_flag::DerivativeFlag`: whether the derivatives of the
+  subgrid-scale mass flux tendency should be computed
+- `sgs_nh_pressure_flag::DerivativeFlag`: whether the derivatives of the
+  subgrid-scale non-hydrostatic pressure drag tendency should be computed
+- `approximate_solve_iters::Int`: number of iterations to take for the
+  approximate linear solve required when the `diffusion_flag` is `UseDerivative`
 """
-struct ImplicitEquationJacobian{
-    M <: MatrixFields.FieldMatrix,
-    S <: MatrixFields.FieldMatrixSolver,
-    F1 <: DerivativeFlag,
-    F2 <: DerivativeFlag,
-    F3 <: DerivativeFlag,
-    F4 <: DerivativeFlag,
-    F5 <: DerivativeFlag,
-    F6 <: DerivativeFlag,
-    T <: Fields.FieldVector,
-    R <: Base.RefValue,
-}
-    # stores the matrix E'(Y) = Δt * T_imp'(Y) - I
-    matrix::M
-
-    # solves the linear equation E'(Y) * ΔY = E(Y) for ΔY
-    solver::S
-
-    # flags that determine how E'(Y) is approximated
-    diffusion_flag::F1
-    topography_flag::F2
+struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6} <: JacobianAlgorithm
+    topography_flag::F1
+    diffusion_flag::F2
     sgs_advection_flag::F3
     sgs_entr_detr_flag::F4
-    sgs_nh_pressure_flag::F5
-    sgs_mass_flux_flag::F6
-
-    # required by Krylov.jl to evaluate ldiv! with AbstractVector inputs
-    temp_b::T
-    temp_x::T
-
-    # required by OrdinaryDiffEq.jl to run non-Rosenbrock timestepping schemes
-    transform_flag::Bool
-    dtγ_ref::R
+    sgs_mass_flux_flag::F5
+    sgs_nh_pressure_flag::F6
+    approximate_solve_iters::Int
 end
 
-function Base.zero(jac::ImplicitEquationJacobian)
-    return ImplicitEquationJacobian(
-        Base.zero(jac.matrix),
-        jac.solver,
-        jac.diffusion_flag,
-        jac.topography_flag,
-        jac.sgs_advection_flag,
-        jac.sgs_entr_detr_flag,
-        jac.sgs_nh_pressure_flag,
-        jac.sgs_mass_flux_flag,
-        jac.temp_b,
-        jac.temp_x,
-        jac.transform_flag,
-        jac.dtγ_ref,
-    )
-end
-
-function ImplicitEquationJacobian(
-    Y,
-    atmos;
-    approximate_solve_iters = 1,
-    diffusion_flag = atmos.diff_mode == Implicit() ? UseDerivative() :
-                     IgnoreDerivative(),
-    topography_flag = has_topography(axes(Y.c)) ? UseDerivative() :
-                      IgnoreDerivative(),
-    sgs_advection_flag = atmos.sgs_adv_mode == Implicit() ? UseDerivative() :
-                         IgnoreDerivative(),
-    sgs_entr_detr_flag = atmos.sgs_entr_detr_mode == Implicit() ?
-                         UseDerivative() : IgnoreDerivative(),
-    sgs_nh_pressure_flag = atmos.sgs_nh_pressure_mode == Implicit() ?
-                           UseDerivative() : IgnoreDerivative(),
-    sgs_mass_flux_flag = atmos.sgs_mf_mode == Implicit() ? UseDerivative() :
-                         IgnoreDerivative(),
-    transform_flag = false,
-)
+function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
+    (;
+        topography_flag,
+        diffusion_flag,
+        sgs_advection_flag,
+        sgs_mass_flux_flag,
+        approximate_solve_iters,
+    ) = alg
     FT = Spaces.undertype(axes(Y.c))
     CTh = CTh_vector_type(axes(Y.c))
 
@@ -412,181 +378,35 @@ function ImplicitEquationJacobian(
             )
         end
 
-    return ImplicitEquationJacobian(
-        matrix,
-        MatrixFields.FieldMatrixSolver(full_alg, matrix, Y),
-        diffusion_flag,
-        topography_flag,
-        sgs_advection_flag,
-        sgs_entr_detr_flag,
-        sgs_nh_pressure_flag,
-        sgs_mass_flux_flag,
-        similar(Y),
-        similar(Y),
-        transform_flag,
-        Ref{FT}(),
-    )
+    return (; matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, full_alg))
 end
 
-# We only use A, but ClimaTimeSteppers.jl require us to
-# pass jac_prototype and then call similar(jac_prototype) to
-# obtain A. This is a workaround to avoid unnecessary allocations.
-Base.similar(A::ImplicitEquationJacobian) = A
-
-# This method specifies how to solve the equation E'(Y) * ΔY = E(Y) for ΔY.
-NVTX.@annotate function ldiv!(
-    x::Fields.FieldVector,
-    A::ImplicitEquationJacobian,
-    b::Fields.FieldVector,
-)
-    MatrixFields.field_matrix_solve!(A.solver, x, A.matrix, b)
-    if A.transform_flag
-        @. x *= -A.dtγ_ref[]
-    end
-end
-
-# This method for ldiv! is called by Krylov.jl from inside ClimaTimeSteppers.jl.
-# See https://github.com/JuliaSmoothOptimizers/Krylov.jl/issues/605 for a
-# related issue that requires the same workaround.
-NVTX.@annotate function ldiv!(
-    x::AbstractVector,
-    A::ImplicitEquationJacobian,
-    b::AbstractVector,
-)
-    A.temp_b .= b
-    ldiv!(A.temp_x, A, A.temp_b)
-    x .= A.temp_x
-end
-
-# This function is used by DiffEqBase.jl instead of ldiv!.
-linsolve!(::Type{Val{:init}}, f, u0; kwargs...) = _linsolve!
-_linsolve!(x, A, b, update_matrix = false; kwargs...) = ldiv!(x, A, b)
-
-# This method specifies how to compute E'(Y), which is referred to as "Wfact" in
-# DiffEqBase.jl.
-NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
-    # Remove unnecessary values from p to avoid allocations in bycolumn.
-    p′ = (;
-        p.precomputed.ᶜspecific,
-        p.precomputed.ᶜK,
-        p.precomputed.ᶠu³,
-        p.precomputed.ᶜts,
-        p.precomputed.ᶜp,
-        p.precomputed.ᶜwₜqₜ,
-        p.precomputed.ᶜwₕhₜ,
-        (
-            p.atmos.moisture_model isa NonEquilMoistModel ?
-            (; p.precomputed.ᶜwₗ, p.precomputed.ᶜwᵢ) : (;)
-        )...,
-        (
-            p.atmos.precip_model isa Microphysics1Moment ?
-            (; p.precomputed.ᶜwᵣ, p.precomputed.ᶜwₛ) : (;)
-        )...,
-        p.precomputed.ᶜh_tot,
-        (
-            use_derivative(A.diffusion_flag) ?
-            (; p.precomputed.ᶜK_u, p.precomputed.ᶜK_h) : (;)
-        )...,
-        (
-            use_derivative(A.diffusion_flag) &&
-            p.atmos.turbconv_model isa AbstractEDMF ?
-            (; p.precomputed.ᶜtke⁰, p.precomputed.ᶜmixing_length) : (;)
-        )...,
-        (
-            use_derivative(A.diffusion_flag) &&
-            p.atmos.turbconv_model isa PrognosticEDMFX ?
-            (; p.precomputed.ᶜρa⁰) : (;)
-        )...,
-        (
-            use_derivative(A.sgs_advection_flag) &&
-            p.atmos.turbconv_model isa PrognosticEDMFX ?
-            (;
-                p.core.ᶜgradᵥ_ᶠΦ,
-                p.precomputed.ᶜρʲs,
-                p.precomputed.ᶠu³ʲs,
-                p.precomputed.ᶜtsʲs,
-                p.precomputed.bdmr_l,
-                p.precomputed.bdmr_r,
-                p.precomputed.bdmr,
-            ) : (;)
-        )...,
-        (
-            use_derivative(A.sgs_entr_detr_flag) &&
-            p.atmos.turbconv_model isa PrognosticEDMFX ?
-            (;
-                p.precomputed.ᶜentrʲs,
-                p.precomputed.ᶜdetrʲs,
-                p.precomputed.ᶜturb_entrʲs,
-            ) : (;)
-        )...,
-        (
-            use_derivative(A.sgs_nh_pressure_flag) &&
-            p.atmos.turbconv_model isa PrognosticEDMFX ?
-            (; p.precomputed.ᶠu₃⁰,) : (;)
-        )...,
-        (
-            use_derivative(A.sgs_mass_flux_flag) &&
-            p.atmos.turbconv_model isa PrognosticEDMFX ?
-            (; p.precomputed.ᶜKʲs) : (;)
-        )...,
-        p.core.ᶜΦ,
-        p.core.ᶠgradᵥ_ᶜΦ,
-        p.scratch.ᶜtemp_scalar,
-        p.scratch.ᶜtemp_scalar_2,
-        p.scratch.ᶜtemp_C3,
-        p.scratch.ᶠtemp_CT3,
-        p.scratch.∂ᶜK_∂ᶜuₕ,
-        p.scratch.∂ᶜK_∂ᶠu₃,
-        p.scratch.ᶠp_grad_matrix,
-        p.scratch.ᶜadvection_matrix,
-        p.scratch.ᶜdiffusion_h_matrix,
-        p.scratch.ᶜdiffusion_h_matrix_scaled,
-        p.scratch.ᶜdiffusion_u_matrix,
-        p.scratch.ᶠbidiagonal_matrix_ct3,
-        p.scratch.ᶠbidiagonal_matrix_ct3_2,
-        p.scratch.ᶠtridiagonal_matrix_c3,
-        p.dt,
-        p.params,
-        p.atmos,
-    )
-
-    # Convert dtγ from a Float64 to an FT.
-    FT = Spaces.undertype(axes(Y.c))
-    dtγ′ = FT(float(dtγ))
-
-    A.dtγ_ref[] = dtγ′
-    update_implicit_equation_jacobian!(A, Y, p′, dtγ′, t)
-end
-
-function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
-    dtγ = float(dtγ)
+function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     (;
-        matrix,
+        topography_flag,
         diffusion_flag,
         sgs_advection_flag,
         sgs_entr_detr_flag,
         sgs_nh_pressure_flag,
-        topography_flag,
         sgs_mass_flux_flag,
-    ) = A
-    (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜh_tot) = p
+    ) = alg
+    (; matrix) = cache
+    (; params) = p
+    (; ᶜΦ, ᶠgradᵥ_ᶜΦ) = p.core
+    (; ᶜspecific, ᶠu³, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
     (;
-        ᶜtemp_C3,
         ∂ᶜK_∂ᶜuₕ,
         ∂ᶜK_∂ᶠu₃,
         ᶠp_grad_matrix,
         ᶜadvection_matrix,
-        ᶠbidiagonal_matrix_ct3,
-        ᶠbidiagonal_matrix_ct3_2,
-        ᶠtridiagonal_matrix_c3,
-    ) = p
-    (;
         ᶜdiffusion_h_matrix,
         ᶜdiffusion_h_matrix_scaled,
         ᶜdiffusion_u_matrix,
-        params,
-    ) = p
-    (; edmfx_upwinding) = p.atmos.numerics
+        ᶠbidiagonal_matrix_ct3,
+        ᶠbidiagonal_matrix_ct3_2,
+        ᶠtridiagonal_matrix_c3,
+    ) = p.scratch
+    rs = p.atmos.rayleigh_sponge
 
     FT = Spaces.undertype(axes(Y.c))
     CTh = CTh_vector_type(axes(Y.c))
@@ -611,13 +431,14 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
-    ᶠlg = Fields.local_geometry_field(Y.f)
+    ᶠz = Fields.coordinate_field(Y.f).z
+    zmax = z_max(axes(Y.f))
 
-    ᶜkappa_m = p.ᶜtemp_scalar
+    ᶜkappa_m = p.scratch.ᶜtemp_scalar
     @. ᶜkappa_m =
         TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts)
 
-    ᶜ∂kappa_m∂q_tot = p.ᶜtemp_scalar_2
+    ᶜ∂kappa_m∂q_tot = p.scratch.ᶜtemp_scalar_2
     # Using abs2 because ^2 results in allocation
     @. ᶜ∂kappa_m∂q_tot =
         (
@@ -656,7 +477,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     )
     MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, χ_name)
         MatrixFields.has_field(Y, ρχ_name) || return
-        ᶜχ = MatrixFields.get_field(p, χ_name)
+        ᶜχ = MatrixFields.get_field(p.precomputed, χ_name)
         if use_derivative(topography_flag)
             ∂ᶜρχ_err_∂ᶜuₕ = matrix[ρχ_name, @name(c.uₕ)]
         end
@@ -695,9 +516,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     I_u₃ = DiagonalMatrixRow(one_C3xACT3)
     @. ∂ᶠu₃_err_∂ᶜuₕ =
         dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅ ∂ᶜK_∂ᶜuₕ
-    rs = p.atmos.rayleigh_sponge
-    ᶠz = Fields.coordinate_field(Y.f).z
-    zmax = z_max(axes(Y.f))
     if rs isa RayleighSponge
         @. ∂ᶠu₃_err_∂ᶠu₃ =
             dtγ * (
@@ -710,7 +528,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
             dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅
             ∂ᶜK_∂ᶠu₃ - (I_u₃,)
     end
-
 
     tracer_info = (
         (@name(c.ρq_liq), @name(q_liq), @name(ᶜwₗ)),
@@ -732,7 +549,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         #        -(1 + ᶜkappa_m) / ᶜρ * ifelse(
         #            ᶜh_tot == 0,
         #            (Geometry.WVector(FT(0)),),
-        #            p.ᶜwₕhₜ / ᶜh_tot,
+        #            p.precomputed.ᶜwₕhₜ / ᶜh_tot,
         #        ),
         #    )
 
@@ -746,7 +563,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         #        -(ᶜkappa_m) * ∂e_int_∂q_tot / ᶜρ * ifelse(
         #            ᶜh_tot == 0,
         #            (Geometry.WVector(FT(0)),),
-        #            p.ᶜwₕhₜ / ᶜh_tot,
+        #            p.precomputed.ᶜwₕhₜ / ᶜh_tot,
         #        ),
         #    )
 
@@ -760,14 +577,14 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         #        -1 / ᶜρ * ifelse(
         #            ᶜspecific.q_tot == 0,
         #            (Geometry.WVector(FT(0)),),
-        #            p.ᶜwₜqₜ / ᶜspecific.q_tot,
+        #            p.precomputed.ᶜwₜqₜ / ᶜspecific.q_tot,
         #        ),
         #    ) - (I,)
 
         MatrixFields.unrolled_foreach(tracer_info) do (ρqₚ_name, _, wₚ_name)
             MatrixFields.has_field(Y, ρqₚ_name) || return
             ∂ᶜρqₚ_err_∂ᶜρqₚ = matrix[ρqₚ_name, ρqₚ_name]
-            ᶜwₚ = MatrixFields.get_field(p, wₚ_name)
+            ᶜwₚ = MatrixFields.get_field(p.precomputed, wₚ_name)
             @. ∂ᶜρqₚ_err_∂ᶜρqₚ =
                 dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
                 DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅
@@ -779,7 +596,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
 
     if use_derivative(diffusion_flag)
         α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
-        (; ᶜK_h, ᶜK_u) = p
+        (; ᶜK_h, ᶜK_u) = p.precomputed
         @. ᶜdiffusion_h_matrix =
             ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅
             ᶠgradᵥ_matrix()
@@ -826,7 +643,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
 
-
         MatrixFields.unrolled_foreach(tracer_info) do (ρq_name, q_name, _)
             MatrixFields.has_field(Y, ρq_name) || return
             ᶜq = MatrixFields.get_field(ᶜspecific, q_name)
@@ -846,8 +662,11 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
             turbconv_params = CAP.turbconv_params(params)
             c_d = CAP.tke_diss_coeff(turbconv_params)
-            (; ᶜtke⁰, ᶜmixing_length, dt) = p
-            ᶜρa⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? p.ᶜρa⁰ : ᶜρ
+            (; dt) = p
+            (; ᶜtke⁰, ᶜmixing_length) = p.precomputed
+            ᶜρa⁰ =
+                p.atmos.turbconv_model isa PrognosticEDMFX ?
+                p.precomputed.ᶜρa⁰ : ᶜρ
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
             @inline dissipation_rate(tke⁰, mixing_length) =
@@ -857,7 +676,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 tke⁰ > 0 ? c_d / (2 * max(mixing_length, 1) * sqrt(tke⁰)) :
                 typeof(tke⁰)(0)
 
-            ᶜdissipation_matrix_diagonal = p.ᶜtemp_scalar
+            ᶜdissipation_matrix_diagonal = p.scratch.ᶜtemp_scalar
             @. ᶜdissipation_matrix_diagonal =
                 ᶜρatke⁰ * ∂dissipation_rate_∂tke⁰(ᶜtke⁰, ᶜmixing_length)
 
@@ -891,11 +710,11 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
-
         if use_derivative(sgs_advection_flag)
-            (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs) = p
-            (; bdmr_l, bdmr_r, bdmr) = p
-            is_third_order = edmfx_upwinding == Val(:third_order)
+            (; ᶜgradᵥ_ᶠΦ) = p.core
+            (; ᶜρʲs, ᶠu³ʲs, ᶜtsʲs, ᶜKʲs, bdmr_l, bdmr_r, bdmr) = p.precomputed
+            is_third_order =
+                p.atmos.numerics.edmfx_upwinding == Val(:third_order)
             ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
             ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
                 top = Operators.SetValue(zero(CT3{FT})),
@@ -910,22 +729,20 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
             ) # Need to wrap ᶠupwind_matrix in this for well-defined boundaries.
 
             ᶠu³ʲ_data = ᶠu³ʲs.:(1).components.data.:1
-            ᶜkappa_mʲ = p.ᶜtemp_scalar
+
+            ᶜkappa_mʲ = p.scratch.ᶜtemp_scalar
             @. ᶜkappa_mʲ =
                 TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)) /
                 TD.cv_m(thermo_params, ᶜtsʲs.:(1))
 
             # Note this is the derivative of R_m / cp_m with respect to q_tot
             # but we call it ∂kappa_m∂q_totʲ
-            ᶜ∂kappa_m∂q_totʲ = p.ᶜtemp_scalar_2
+            ᶜ∂kappa_m∂q_totʲ = p.scratch.ᶜtemp_scalar_2
             @. ᶜ∂kappa_m∂q_totʲ =
                 (
                     ΔR_v * TD.cp_m(thermo_params, ᶜtsʲs.:(1)) -
                     Δcp_v * TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1))
                 ) / abs2(TD.cp_m(thermo_params, ᶜtsʲs.:(1)))
-
-            turbconv_params = CAP.turbconv_params(params)
-            α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
 
             ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
@@ -935,10 +752,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                     ᶜadvdivᵥ_matrix() ⋅
                     ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)))
                 ) - (I,)
-
             ∂ᶜq_totʲ_err_∂ᶠu₃ʲ =
                 matrix[@name(c.sgsʲs.:(1).q_tot), @name(f.sgsʲs.:(1).u₃)]
-
             @. ∂ᶜq_totʲ_err_∂ᶠu₃ʲ =
                 dtγ * (
                     -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
@@ -948,7 +763,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                     ) +
                     DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot) ⋅ ᶜadvdivᵥ_matrix()
                 ) ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
-
 
             ∂ᶜmseʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot)]
@@ -966,19 +780,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                         ),
                     )
                 )
-
-            ∂ᶜmseʲ_err_∂ᶠu₃ʲ =
-                matrix[@name(c.sgsʲs.:(1).mse), @name(f.sgsʲs.:(1).u₃)]
-            @. ∂ᶜmseʲ_err_∂ᶠu₃ʲ =
-                dtγ * (
-                    -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
-                        ᶠset_upwind_bcs(
-                            ᶠupwind(CT3(sign(ᶠu³ʲ_data)), Y.c.sgsʲs.:(1).mse),
-                        ) * adjoint(C3(sign(ᶠu³ʲ_data))),
-                    ) +
-                    DiagonalMatrixRow(Y.c.sgsʲs.:(1).mse) ⋅ ᶜadvdivᵥ_matrix()
-                ) ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
-
             ∂ᶜmseʲ_err_∂ᶜmseʲ =
                 matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
             @. ∂ᶜmseʲ_err_∂ᶜmseʲ =
@@ -993,6 +794,17 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                         ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp),
                     )
                 ) - (I,)
+            ∂ᶜmseʲ_err_∂ᶠu₃ʲ =
+                matrix[@name(c.sgsʲs.:(1).mse), @name(f.sgsʲs.:(1).u₃)]
+            @. ∂ᶜmseʲ_err_∂ᶠu₃ʲ =
+                dtγ * (
+                    -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                        ᶠset_upwind_bcs(
+                            ᶠupwind(CT3(sign(ᶠu³ʲ_data)), Y.c.sgsʲs.:(1).mse),
+                        ) * adjoint(C3(sign(ᶠu³ʲ_data))),
+                    ) +
+                    DiagonalMatrixRow(Y.c.sgsʲs.:(1).mse) ⋅ ᶜadvdivᵥ_matrix()
+                ) ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
 
             ∂ᶜρaʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).q_tot)]
@@ -1021,10 +833,10 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                     Y.c.sgsʲs.:(1).ρa * ᶜkappa_mʲ / ((ᶜkappa_mʲ + 1) * ᶜp) *
                     ∂e_int_∂q_tot,
                 )
-
             @. ∂ᶜρaʲ_err_∂ᶜq_totʲ =
                 dtγ * ᶜadvdivᵥ_matrix() ⋅
                 (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
+
             ∂ᶜρaʲ_err_∂ᶜmseʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).mse)]
             @. ᶠbidiagonal_matrix_ct3 =
@@ -1047,6 +859,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
             @. ∂ᶜρaʲ_err_∂ᶜmseʲ =
                 dtγ * ᶜadvdivᵥ_matrix() ⋅
                 (ᶠbidiagonal_matrix_ct3 - ᶠbidiagonal_matrix_ct3_2)
+
             ∂ᶜρaʲ_err_∂ᶜρaʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).ρa)]
             @. ᶜadvection_matrix =
@@ -1056,7 +869,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 dtγ * ᶜadvection_matrix ⋅
                 ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1))) ⋅
                 DiagonalMatrixRow(1 / ᶜρʲs.:(1)) - (I,)
-
 
             ∂ᶜρaʲ_err_∂ᶠu₃ʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(f.sgsʲs.:(1).u₃)]
@@ -1073,6 +885,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                     g³³(ᶠgⁱʲ),
                 )
 
+            turbconv_params = CAP.turbconv_params(params)
+            α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
             ∂ᶠu₃ʲ_err_∂ᶜq_totʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).q_tot)]
             @. ∂ᶠu₃ʲ_err_∂ᶜq_totʲ =
@@ -1098,15 +912,14 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                 ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
                     ᶜkappa_mʲ * (ᶜρʲs.:(1))^2 / ((ᶜkappa_mʲ + 1) * ᶜp),
                 )
+
             ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
-            ᶜu₃ʲ = ᶜtemp_C3
+            ᶜu₃ʲ = p.scratch.ᶜtemp_C3
             @. ᶜu₃ʲ = ᶜinterp(Y.f.sgsʲs.:(1).u₃)
-
             @. bdmr_l = convert(BidiagonalMatrixRow{FT}, ᶜleft_bias_matrix())
             @. bdmr_r = convert(BidiagonalMatrixRow{FT}, ᶜright_bias_matrix())
             @. bdmr = ifelse(ᶜu₃ʲ.components.data.:1 > 0, bdmr_l, bdmr_r)
-
             @. ᶠtridiagonal_matrix_c3 = -(ᶠgradᵥ_matrix()) ⋅ bdmr
             if rs isa RayleighSponge
                 @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
@@ -1123,10 +936,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                     DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) - (I_u₃,)
             end
 
-            # entrainment and detrainment
+            # entrainment and detrainment (rates are treated explicitly)
             if use_derivative(sgs_entr_detr_flag)
-                (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p
-                # This assumes entrainment and detrainment rates are constant in the Jacobian
+                (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p.precomputed
                 @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -=
                     dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
                 @. ∂ᶜmseʲ_err_∂ᶜmseʲ -=
@@ -1141,41 +953,23 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
             end
 
             # non-hydrostatic pressure drag
-            # Only the quadratic drag term is considered in the Jacobian, the buoyancy term is ignored
+            # (quadratic drag term treated implicitly, buoyancy term explicitly)
             if use_derivative(sgs_nh_pressure_flag)
-                (; ᶠu₃⁰) = p
-                turbconv_params = CAP.turbconv_params(params)
+                (; ᶠu₃⁰) = p.precomputed
                 α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
                 scale_height =
                     CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
                 H_up_min = CAP.min_updraft_top(turbconv_params)
                 @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ -=
                     dtγ * (DiagonalMatrixRow(
-                        2 *
-                        α_d *
-                        Geometry._norm((Y.f.sgsʲs.:(1).u₃ - ᶠu₃⁰), ᶠlg) /
+                        2 * α_d * norm(Y.f.sgsʲs.:(1).u₃ - ᶠu₃⁰) /
                         max(scale_height, H_up_min) * (one_C3xACT3,),
                     ))
             end
 
             # add updraft mass flux contributions to grid-mean
             if use_derivative(sgs_mass_flux_flag)
-
-                (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs, ᶠu³, ᶜKʲs) = p
-                (; bdmr_l, bdmr_r, bdmr) = p
-                is_third_order = edmfx_upwinding == Val(:third_order)
-                ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
-                ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
-                    top = Operators.SetValue(zero(CT3{FT})),
-                    bottom = Operators.SetValue(zero(CT3{FT})),
-                ) # Need to wrap ᶠupwind in this for well-defined boundaries.
-                UpwindMatrixRowType =
-                    is_third_order ? QuaddiagonalMatrixRow : BidiagonalMatrixRow
-                ᶠupwind_matrix =
-                    is_third_order ? ᶠupwind3_matrix : ᶠupwind1_matrix
-
                 # Jacobian contributions of updraft massflux to grid-mean
-
                 ∂ᶜupdraft_mass_flux_∂ᶜscalar = ᶠbidiagonal_matrix_ct3
                 @. ∂ᶜupdraft_mass_flux_∂ᶜscalar =
                     DiagonalMatrixRow(
@@ -1185,12 +979,12 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
 
                 # Derivative of total energy tendency with respect to updraft MSE
                 ## grid-mean ρe_tot
-                ᶜkappa_m = p.ᶜtemp_scalar
+                ᶜkappa_m = p.scratch.ᶜtemp_scalar
                 @. ᶜkappa_m =
                     TD.gas_constant_air(thermo_params, ᶜts) /
                     TD.cv_m(thermo_params, ᶜts)
 
-                ᶜ∂kappa_m∂q_tot = p.ᶜtemp_scalar_2
+                ᶜ∂kappa_m∂q_tot = p.scratch.ᶜtemp_scalar_2
                 @. ᶜ∂kappa_m∂q_tot =
                     (
                         ΔR_v * TD.cv_m(thermo_params, ᶜts) -
@@ -1302,9 +1096,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                         (ᶠu³ʲs.:(1) - ᶠu³) *
                         ᶠinterp((Y.c.sgsʲs.:(1).q_tot - ᶜspecific.q_tot)) / ᶠJ,
                     ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(ᶜJ)
-
             end
-
         elseif rs isa RayleighSponge
             ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                 matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
@@ -1319,3 +1111,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
     zero_velocity_jacobian!(matrix, Y, p, t)
 end
+
+invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R) =
+    LinearAlgebra.ldiv!(ΔY, cache.matrix, R)

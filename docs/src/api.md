@@ -43,10 +43,12 @@ ClimaAtmos.InitialConditions.Bomex
 ClimaAtmos.InitialConditions.Soares
 ```
 
-### Implicit Solver
+### Jacobian
 
 ```@docs
-ClimaAtmos.ImplicitEquationJacobian
+ClimaAtmos.Jacobian
+ClimaAtmos.JacobianAlgorithm
+ClimaAtmos.ManualSparseJacobian
 ```
 
 ### Helper

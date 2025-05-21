@@ -272,6 +272,24 @@ using ClimaComms
 is_distributed(::ClimaComms.SingletonCommsContext) = false
 is_distributed(::ClimaComms.MPICommsContext) = true
 
+"""
+    summary_string(x)
+
+Returns a string that is similar to the output of `dump(x)`, but without any
+type parameters.
+"""
+summary_string(x) = summary_string(x, 0)
+summary_string(x, depth) =
+    fieldcount(typeof(x)) == 0 ? repr(x) :
+    (string(nameof(typeof(x))) * '(') *
+    mapreduce(*, 1:fieldcount(typeof(x))) do i
+        field =
+            x isa Tuple ? ':' * string(i) : string(fieldname(typeof(x), i))
+        ('\n' * "  "^(depth + 1) * field * " = ") *
+        (summary_string(getfield(x, i), depth + 1) * ',')
+    end *
+    ('\n' * "  "^depth * ')')
+
 # From BenchmarkTools
 function prettytime(t)
     if t < 1e3
