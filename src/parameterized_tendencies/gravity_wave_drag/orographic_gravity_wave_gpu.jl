@@ -83,8 +83,11 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
         topo_FrU_max = similar(Fields.level(Y.c.ρ, 1)),
         topo_FrU_min = similar(Fields.level(Y.c.ρ, 1)),
         topo_FrU_clp = similar(Fields.level(Y.c.ρ, 1)),
+        topo_tmp_1 = similar(Fields.level(Y.c.ρ, 1)),
+        topo_tmp_2 = similar(Fields.level(Y.c.ρ, 1)),
         topo_base_Vτ = similar(Fields.level(Y.c.ρ, 1)),
         topo_k_pbl = similar(Fields.level(Y.c.ρ, 1)),
+        topo_k_pbl_values = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT}),
         topo_info = topo_info,
         ᶜN = similar(Fields.level(Y.c.ρ, 1)),
         ᶜdTdz = similar(Y.c.ρ),
@@ -317,6 +320,9 @@ function calc_base_flux!(
     FrU_max,
     FrU_min,
     FrU_clp,
+    Vτ,
+    Fr_max,
+    Fr_min,
     p,
     hmax,
     hmin,
@@ -328,7 +334,8 @@ function calc_base_flux!(
     u_phy,
     v_phy,
     ᶜN,
-    k_pbl
+    k_pbl,
+    k_pbl_values
 )
     # Extract parameters
     (;
@@ -351,7 +358,7 @@ function calc_base_flux!(
     input = @. lazy(tuple(ᶜρ, u_phy, v_phy, ᶜN, k_pbl))
     
     # Use column_reduce to extract values at k_pbl level
-    k_pbl_values = similar(hmax, Tuple{FT, FT, FT, FT})
+    # k_pbl_values = similar(hmax, Tuple{FT, FT, FT, FT})
     Operators.column_reduce!(
         k_pbl_values,
         input;
@@ -369,6 +376,7 @@ function calc_base_flux!(
     end
     
     # Extract values from the tuple
+    # Is this a view or a copy?
     ρ_pbl = @. k_pbl_values.:1
     u_pbl = @. k_pbl_values.:2
     v_pbl = @. k_pbl_values.:3
@@ -379,18 +387,17 @@ function calc_base_flux!(
     @. τ_y = ρ_pbl * N_pbl * (t12 * u_pbl + t22 * v_pbl)
     
     # Calculate Vτ using field operations
-    τ_magnitude = @. sqrt(τ_x^2 + τ_y^2)
-    Vτ = @. max(
+    @. Vτ = max(
         eps(FT),
-        -(u_pbl * τ_x + v_pbl * τ_y) / max(eps(FT), τ_magnitude)
+        -(u_pbl * τ_x + v_pbl * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2))
     )
     
     # Calculate Froude numbers
-    Fr_max = @. max(FT(0), hmax) * N_pbl / Vτ
-    Fr_min = @. max(FT(0), hmin) * N_pbl / Vτ
+    @. Fr_max = max(FT(0), hmax) * N_pbl / Vτ
+    @. Fr_min = max(FT(0), hmin) * N_pbl / Vτ
     
     # Calculate U_sat
-    @. U_sat = @. sqrt(ρ_pbl / topo_ρscale * @. Vτ^3 / N_pbl / topo_L0)
+    @. U_sat = sqrt.(ρ_pbl / topo_ρscale * @. Vτ^3 / N_pbl / topo_L0)
     
     # Calculate FrU values
     @. FrU_sat = Fr_crit * U_sat
@@ -446,6 +453,7 @@ function calc_saturation_profile!(
     
     # Calculate Vτ at cell faces using field operations
     # @Main.infiltrate
+    # To be removed
     @. ᶠVτ = max(
         eps(FT),
         (
@@ -530,44 +538,8 @@ function calc_saturation_profile!(
         return (τ_sat, U_sat)
     end
     
-    # Use column_accumulate to build the saturation profile
-    # Operators.column_accumulate!(
-    #     τ_sat,
-    #     input;
-    #     # init = (copy(U_sat), copy(FrU_sat), copy(FrU_clp), false),
-    #     init = (copy(U_sat), copy(FrU_sat), copy(FrU_clp), copy(τ_sat)),
-    #     transform = x -> x[4]
-    # ) do (U_sat_prev, FrU_sat_prev, FrU_clp_prev, τ_sat_prev), 
-    #     (FrU_clp0_k, FrU_sat0_k, U_k, FrU_max_k, FrU_min_k, τ_p_k, level_idx, k_pbl_k)
-        
-    #     # Skip the first level (already initialized)
-    #     # @Main.infiltrate
-    #     if level_idx == 1
-    #         return (U_sat_prev, FrU_sat_prev, FrU_clp_prev, τ_p_k)
-    #     end
-        
-    #     # Calculate current level saturation value
-    #     U_sat_k = min.(U_sat_prev, U_k)
-    #     FrU_sat_k = Fr_crit .* U_sat_k
-    #     FrU_clp_k = min.(FrU_max_k, max.(FrU_min_k, FrU_sat_k))
-        
-    #     # Determine saturation value based on level
-    #     if level_idx <= k_pbl_k
-    #         τ_sat_k = τ_p_k
-    #     else
-    #         τ_sat_k = topo_a0 .* (
-    #             (FrU_clp_k.^(2 + γ - ϵ) .- FrU_min_k.^(2 + γ - ϵ)) ./ (2 + γ - ϵ) .+
-    #             (FrU_sat_k).^2 .* (FrU_sat0_k).^β .*
-    #             (FrU_max_k.^(γ - ϵ - β) .- FrU_clp0_k.^(γ - ϵ - β)) ./ (γ - ϵ - β) .+
-    #             (FrU_sat_k).^2 .*
-    #             (FrU_clp0_k.^(γ - ϵ) .- FrU_clp_k.^(γ - ϵ)) ./ (γ - ϵ)
-    #         )
-    #     end
-        
-    #     return (U_sat_k, FrU_sat_k, FrU_clp_k, τ_sat_k)
-    # end
-    
     # Apply top correction using field operations
+    # TBC
     ᶠτ_sat = ᶠinterp.(τ_sat)
     
     if parent(τ_sat)[end] > FT(0)
