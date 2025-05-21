@@ -64,13 +64,20 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
         topo_L0 = L0,
         topo_a0 = a0,
         topo_a1 = a1,
-        topo_ᶠτ_sat = Fields.Field(FT, axes(Y.f.u₃)),
-        topo_ᶠVτ = Fields.Field(FT, axes(Y.f.u₃)),
+        # topo_ᶠτ_sat = Fields.Field(FT, axes(Y.f.u₃)),
+        # topo_ᶠVτ = Fields.Field(FT, axes(Y.f.u₃)),
+        topo_ᶠτ_sat = Fields.Field(FT, axes(Y.c)),
+        topo_ᶠVτ = Fields.Field(FT, axes(Y.c)),
         topo_τ_x = similar(Fields.level(Y.c.ρ, 1)),
         topo_τ_y = similar(Fields.level(Y.c.ρ, 1)),
         topo_τ_l = similar(Fields.level(Y.c.ρ, 1)),
         topo_τ_p = similar(Fields.level(Y.c.ρ, 1)),
         topo_τ_np = similar(Fields.level(Y.c.ρ, 1)),
+        # topo_τ_x = Fields.Field(FT, axes(Y.f.u₃)),
+        # topo_τ_y = Fields.Field(FT, axes(Y.f.u₃)),
+        # topo_τ_l = Fields.Field(FT, axes(Y.f.u₃)),
+        # topo_τ_p = Fields.Field(FT, axes(Y.f.u₃)),
+        # topo_τ_np = Fields.Field(FT, axes(Y.f.u₃)),
         topo_U_sat = similar(Fields.level(Y.c.ρ, 1)),
         topo_FrU_sat = similar(Fields.level(Y.c.ρ, 1)),
         topo_FrU_max = similar(Fields.level(Y.c.ρ, 1)),
@@ -427,7 +434,7 @@ function calc_saturation_profile!(
     τ_p,
     u_phy,
     v_phy,
-    ᶜρ,
+    ᶜp,
     k_pbl
 )
     # Extract parameters
@@ -438,16 +445,17 @@ function calc_saturation_profile!(
     ϵ = topo_ϵ
     
     # Calculate Vτ at cell faces using field operations
+    # @Main.infiltrate
     @. ᶠVτ = max(
         eps(FT),
-        ᶠinterp(
+        (
             -(u_phy * τ_x + v_phy * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2))
         )
     )
     
     # Calculate derivatives for ᶠd2Vτdz
-    ᶠd2udz = ᶠinterp.(ᶜd2dz2(u_phy, p))
-    ᶠd2vdz = ᶠinterp.(ᶜd2dz2(v_phy, p))
+    ᶠd2udz = (ᶜd2dz2(u_phy, p))
+    ᶠd2vdz = (ᶜd2dz2(v_phy, p))
     
     # Calculate derivative for L1
     ᶠd2Vτdz = @. max(
@@ -463,11 +471,11 @@ function calc_saturation_profile!(
     FrU_sat0 = copy(FrU_sat)
     
     # Create field at face levels for U_k calculation
-    ᶠρ = ᶠinterp.(ᶜρ)
-    U_k_field = @. sqrt(ᶠρ / topo_ρscale * ᶠVτ^3 / ᶠN / L1)
+    ᶠp = (ᶜp)
+    U_k_field = @. sqrt(ᶠp / topo_ρscale * ᶠVτ^3 / ᶠN / L1)
     
     # Prepare a level index field to help with operations at specific levels
-    ᶠlevel_idx = similar(ᶠVτ)
+    ᶠlevel_idx = similar(ᶠVτ, FT)
     for i in 1:Spaces.nlevels(axes(ᶠVτ))
         fill!(Fields.level(ᶠlevel_idx, i), i)
     end
@@ -481,99 +489,98 @@ function calc_saturation_profile!(
         FrU_min,
         τ_p,
         ᶠlevel_idx,
-        k_pbl
+        k_pbl,
+        topo_a0
     ))
     
     # Initialize the result field with τ_p at the lowest face
-    τ_sat_initial .= τ_p
     fill!(τ_sat, 0.0)
-    fill!(Fields.level(τ_sat, 1), Fields.field_values(τ_sat_initial))
-    
-    # Use column_accumulate to build the saturation profile
+    # @Main.infiltrate
+    # Fields.level(τ_sat, half) .= parent(τ_p )
+    # L2 = Operators.LeftBiasedF2C(;)
+
+    Fields.level(τ_sat, 1) .= τ_p
+
     Operators.column_accumulate!(
         τ_sat,
         input;
-        init = (copy(U_sat), copy(FrU_sat), copy(FrU_clp), false),
-        transform = (U_sat_k, FrU_sat_k, FrU_clp_k, τ_sat_k) -> τ_sat_k
-    ) do (U_sat_prev, FrU_sat_prev, FrU_clp_prev, τ_sat_prev), 
-        (FrU_clp0_k, FrU_sat0_k, U_k, FrU_max_k, FrU_min_k, τ_p_k, level_idx, k_pbl_k)
-        
-        # Skip the first level (already initialized)
+        init = (FT(0.0), U_sat),
+        transform = first,
+    ) do (τ_sat, U_sat),
+        (FrU_clp0, FrU_sat0, U, FrU_max, FrU_min, τ_p, level_idx, k_pbl, topo_a0)
+
         if level_idx == 1
-            return (U_sat_prev, FrU_sat_prev, FrU_clp_prev, true, τ_p_k)
+            return (U, Fr_crit * U, FrU_sat0, τ_p)
         end
-        
-        # Calculate current level saturation value
-        U_sat_k = min(U_sat_prev, U_k)
-        FrU_sat_k = Fr_crit * U_sat_k
-        FrU_clp_k = min(FrU_max_k, max(FrU_min_k, FrU_sat_k))
-        
-        # Determine saturation value based on level
-        τ_sat_k = if level_idx <= k_pbl_k
-            τ_p_k
+
+        U_sat = min(U_sat, U)
+        FrU_sat = Fr_crit * U_sat
+        FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
+
+        if level_idx <= k_pbl
+            τ_sat = τ_p
         else
-            topo_a0 * (
-                (FrU_clp_k^(2 + γ - ϵ) - FrU_min_k^(2 + γ - ϵ)) / (2 + γ - ϵ) +
-                (FrU_sat_k)^2 * (FrU_sat0_k)^β *
-                (FrU_max_k^(γ - ϵ - β) - FrU_clp0_k^(γ - ϵ - β)) / (γ - ϵ - β) +
-                (FrU_sat_k)^2 *
-                (FrU_clp0_k^(γ - ϵ) - FrU_clp_k^(γ - ϵ)) / (γ - ϵ)
-            )
+            term1 = (FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ)
+            term2 = FrU_sat^2 * FrU_sat0^β *
+                (FrU_max^(γ - ϵ - β) - FrU_clp0^(γ - ϵ - β)) / (γ - ϵ - β)
+            term3 = FrU_sat^2 * (FrU_clp0^(γ - ϵ) - FrU_clp^(γ - ϵ)) / (γ - ϵ)
+            τ_sat = topo_a0 * (term1 + term2 + term3)
         end
-        
-        return (U_sat_k, FrU_sat_k, FrU_clp_k, τ_sat_k)
+
+        return (τ_sat, U_sat)
     end
     
-    # Apply top correction using field operations
-    apply_top_correction!(τ_sat, ᶜp)
-    
-    # Update U_sat and FrU values for subsequent calculations
-    # We need to run another column_accumulate just to update these fields
+    # Use column_accumulate to build the saturation profile
     # Operators.column_accumulate!(
-    #     U_k_field,  # Use as scratch field
+    #     τ_sat,
     #     input;
-    #     init = (copy(U_sat), copy(FrU_sat), copy(FrU_clp)),
-    #     transform = (U_sat_k, FrU_sat_k, FrU_clp_k) -> (U_sat_k, FrU_sat_k, FrU_clp_k)
-    # ) do (U_sat_prev, FrU_sat_prev, FrU_clp_prev), 
-    #      (_, _, U_k, FrU_max_k, FrU_min_k, _, _, _)
+    #     # init = (copy(U_sat), copy(FrU_sat), copy(FrU_clp), false),
+    #     init = (copy(U_sat), copy(FrU_sat), copy(FrU_clp), copy(τ_sat)),
+    #     transform = x -> x[4]
+    # ) do (U_sat_prev, FrU_sat_prev, FrU_clp_prev, τ_sat_prev), 
+    #     (FrU_clp0_k, FrU_sat0_k, U_k, FrU_max_k, FrU_min_k, τ_p_k, level_idx, k_pbl_k)
         
-    #     U_sat_k = min(U_sat_prev, U_k)
-    #     FrU_sat_k = Fr_crit * U_sat_k
-    #     FrU_clp_k = min(FrU_max_k, max(FrU_min_k, FrU_sat_k))
+    #     # Skip the first level (already initialized)
+    #     # @Main.infiltrate
+    #     if level_idx == 1
+    #         return (U_sat_prev, FrU_sat_prev, FrU_clp_prev, τ_p_k)
+    #     end
         
-    #     return (U_sat_k, FrU_sat_k, FrU_clp_k)
+    #     # Calculate current level saturation value
+    #     U_sat_k = min.(U_sat_prev, U_k)
+    #     FrU_sat_k = Fr_crit .* U_sat_k
+    #     FrU_clp_k = min.(FrU_max_k, max.(FrU_min_k, FrU_sat_k))
+        
+    #     # Determine saturation value based on level
+    #     if level_idx <= k_pbl_k
+    #         τ_sat_k = τ_p_k
+    #     else
+    #         τ_sat_k = topo_a0 .* (
+    #             (FrU_clp_k.^(2 + γ - ϵ) .- FrU_min_k.^(2 + γ - ϵ)) ./ (2 + γ - ϵ) .+
+    #             (FrU_sat_k).^2 .* (FrU_sat0_k).^β .*
+    #             (FrU_max_k.^(γ - ϵ - β) .- FrU_clp0_k.^(γ - ϵ - β)) ./ (γ - ϵ - β) .+
+    #             (FrU_sat_k).^2 .*
+    #             (FrU_clp0_k.^(γ - ϵ) .- FrU_clp_k.^(γ - ϵ)) ./ (γ - ϵ)
+    #         )
+    #     end
+        
+    #     return (U_sat_k, FrU_sat_k, FrU_clp_k, τ_sat_k)
     # end
     
-    # Copy the final values back to the output fields
-    # @. U_sat = U_sat_final
-    # @. FrU_sat = FrU_sat_final
-    # @. FrU_clp = FrU_clp_final
+    # Apply top correction using field operations
+    ᶠτ_sat = ᶠinterp.(τ_sat)
     
+    if parent(τ_sat)[end] > FT(0)
+        ᶠp = ᶠinterp.(ᶜp)
+        ᶠτ_sat .-=
+            parent(ᶠτ_sat)[end] .* (parent(ᶠp)[1] .- ᶠp) ./
+            (parent(ᶠp)[1] .- parent(ᶠp)[end])
+    end
+
     return nothing
 end
 
-# Helper function to apply top correction
-function apply_top_correction!(τ_sat, ᶜp)
-    FT = eltype(τ_sat)
-    
-    # Get top value
-    τ_top = Fields.level(τ_sat, Spaces.nlevels(axes(τ_sat)))
-    top_val = Fields.field_values(τ_top)
-    
-    # Check if correction is needed
-    need_correction = any(top_val .> FT(0))
-    
-    if need_correction
-        # Apply correction with field operations
-        ᶠp = ᶠinterp.(ᶜp)
-        p_surf = Fields.field_values(Fields.level(ᶠp, 1))
-        p_top = Fields.field_values(Fields.level(ᶠp, Spaces.nlevels(axes(ᶠp))))
-        
-        @. τ_sat -= τ_top * (p_surf - ᶠp) / (p_surf - p_top)
-    end
-    
-    return nothing
-end
+
 
 ᶜd2dz2(ᶜscalar, p) =
     Geometry.WVector.(ᶜgradᵥ.(ᶠddz(ᶜscalar, p))).components.data.:1
