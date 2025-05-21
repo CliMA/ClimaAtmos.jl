@@ -103,6 +103,7 @@ struct ImplicitEquationJacobian{
     F4 <: DerivativeFlag,
     F5 <: DerivativeFlag,
     F6 <: DerivativeFlag,
+    F7 <: DerivativeFlag,
     T <: Fields.FieldVector,
     R <: Base.RefValue,
 }
@@ -140,6 +141,7 @@ function Base.zero(jac::ImplicitEquationJacobian)
         jac.sgs_entr_detr_flag,
         jac.sgs_nh_pressure_flag,
         jac.sgs_mass_flux_flag,
+        jac.noneq_cloud_formation_flag,
         jac.temp_b,
         jac.temp_x,
         jac.transform_flag,
@@ -439,6 +441,7 @@ function ImplicitEquationJacobian(
         sgs_entr_detr_flag,
         sgs_nh_pressure_flag,
         sgs_mass_flux_flag,
+        noneq_cloud_formation_flag,
         similar(Y),
         similar(Y),
         transform_flag,
