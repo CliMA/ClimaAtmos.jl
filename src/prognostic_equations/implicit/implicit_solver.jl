@@ -877,6 +877,11 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
                     ) ⋅ DiagonalMatrixRow(1 / ᶜρa⁰) -
                     DiagonalMatrixRow(dissipation_rate(ᶜtke⁰, ᶜmixing_length))
                 ) - (I,)
+
+            if p.atmos.rayleigh_sponge isa RayleighSponge
+                ᶜz = Fields.coordinate_field(Y.c).z 
+                @. ∂ᶜρatke⁰_err_∂ᶜρatke⁰ -= dtγ * DiagonalMatrixRow(β_rayleigh_tke(p.atmos.rayleigh_sponge, ᶜz, zmax))
+            end
         end
 
         if (

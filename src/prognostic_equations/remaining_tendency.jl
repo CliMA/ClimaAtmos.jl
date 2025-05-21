@@ -64,6 +64,13 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     @. Yₜ.f.u₃.components.data.:1 += vst_u₃
     @. Yₜ.c.ρe_tot += vst_ρe_tot
 
+    # viscous sponge tendencies for subdomain variables in sgs parameterization
+    vst_mse = viscous_sponge_subdomain_var(Y.c.sgsʲs.:(1).mse, viscous_sponge)
+    vst_q_tot = viscous_sponge_subdomain_var(Y.c.sgsʲs.:(1).q_tot, viscous_sponge)
+
+    @. Yₜ.c.sgsʲs.:(1).mse += vst_mse
+    @. Yₜ.c.sgsʲs.:(1).q_tot += vst_q_tot
+
     # TODO: can we write this out explicitly?
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
