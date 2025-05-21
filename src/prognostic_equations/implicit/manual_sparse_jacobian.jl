@@ -549,6 +549,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         sgs_entr_detr_flag,
         sgs_nh_pressure_flag,
         sgs_mass_flux_flag,
+        noneq_cloud_formation_flag,
     ) = alg
     (; matrix) = cache
     (; params) = p
@@ -565,6 +566,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         ᶠbidiagonal_matrix_ct3,
         ᶠbidiagonal_matrix_ct3_2,
         ᶠtridiagonal_matrix_c3,
+        dt,
     ) = p.scratch
     rs = p.atmos.rayleigh_sponge
 
@@ -1002,11 +1004,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
             turbconv_params = CAP.turbconv_params(params)
             c_d = CAP.tke_diss_coeff(turbconv_params)
-            (; dt) = p
-            (; ᶜtke⁰, ᶜmixing_length) = p.precomputed
-            ᶜρa⁰ =
-                p.atmos.turbconv_model isa PrognosticEDMFX ?
-                p.precomputed.ᶜρa⁰ : ᶜρ
+            (; ᶜtke⁰, ᶜmixing_length) = p
+            ᶜρa⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? p.ᶜρa⁰ : ᶜρ
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
             @inline dissipation_rate(tke⁰, mixing_length) =
