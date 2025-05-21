@@ -182,6 +182,20 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         end
     end
 
+    if p.atmos.turbconv_model isa PrognosticEDMFX
+        n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+        for j in 1:n
+            vst_mse =
+                viscous_sponge_tendency_sgs(Y.c.sgsʲs.:($j).mse, viscous_sponge)
+            vst_q_tot = viscous_sponge_tendency_sgs(
+                Y.c.sgsʲs.:($j).q_tot,
+                viscous_sponge,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).mse += vst_mse
+            @. Yₜ.c.sgsʲs.:($$j).q_tot += vst_q_tot
+        end
+    end
+
     # Held Suarez tendencies
     @. Yₜ.c.uₕ += hs_tendency_uₕ
     @. Yₜ.c.ρe_tot += hs_tendency_ρe_tot
