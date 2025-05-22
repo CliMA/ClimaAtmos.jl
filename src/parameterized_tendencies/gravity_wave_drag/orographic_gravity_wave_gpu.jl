@@ -485,8 +485,8 @@ function calc_saturation_profile!(
     # @Main.infiltrate
     
     # Calculate tmp_field_1 == L1
-    # Here on the RHS, tmp_field_1 == Vτ, tmp_field_2 == d2Vτdz
-    @. tmp_field_1 = topo_L0 * max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * tmp_field_1 * tmp_field_2 / ᶜN^2))
+    # Here on the RHS, tmp_field_2 == d2Vτdz
+    @. tmp_field_1 = topo_L0 * max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶜVτ * tmp_field_2 / ᶜN^2))
     
     # Store original values for later use
     # To remove
@@ -495,24 +495,24 @@ function calc_saturation_profile!(
     
     # Create field for U_k calculation
     # Here, U_k == tmp_field_1
-    @. tmp_field_1 = sqrt(ᶜp / topo_ρscale * ᶜVτ^3 / ᶜN / tmp_field_1)
+    @. tmp_field_2 = sqrt(ᶜp / topo_ρscale * ᶜVτ^3 / ᶜN / tmp_field_1)
     
     # Prepare a level index field to help with operations at specific levels
     # level_idx = similar(Vτ, FT)
     # Here, tmp_field_2 == level_idx
     for i in 1:Spaces.nlevels(axes(ᶜVτ))
-        fill!(Fields.level(tmp_field_2, i), i)
+        fill!(Fields.level(tmp_field_1, i), i)
     end
     
     # Create combined input for column_accumulate
     input = @. lazy(tuple(
         FrU_clp0,
         FrU_sat0,
-        tmp_field_1,
+        tmp_field_2,
         FrU_max,
         FrU_min,
         τ_p,
-        tmp_field_2,
+        tmp_field_1,
         k_pbl,
         topo_a0
     ))
