@@ -169,7 +169,8 @@ function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
         zd = params.zd_rayleigh
         α_uₕ = params.alpha_rayleigh_uh
         α_w = params.alpha_rayleigh_w
-        RayleighSponge{FT}(; zd, α_uₕ, α_w)
+        α_tke = params.alpha_rayleigh_tke
+        RayleighSponge{FT}(; zd, α_uₕ, α_w, α_tke)
     else
         error("Uncaught rayleigh sponge model `$rs_name`.")
     end

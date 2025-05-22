@@ -11,10 +11,19 @@ import ClimaCore.Fields as Fields
     αₘ(s, z, s.α_uₕ) * ζ_rayleigh(s, z, zmax)
 β_rayleigh_w(s::RayleighSponge{FT}, z, zmax) where {FT} =
     αₘ(s, z, s.α_w) * ζ_rayleigh(s, z, zmax)
+β_rayleigh_tke(s::RayleighSponge{FT}, z, zmax) where {FT} =
+    αₘ(s, z, s.α_tke) * ζ_rayleigh(s, z, zmax)
 
 function rayleigh_sponge_tendency_uₕ(ᶜuₕ, s)
     s isa Nothing && return NullBroadcasted()
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜuₕ))
     zmax = z_max(axes(ᶠz))
     return @. lazy(-β_rayleigh_uₕ(s, ᶜz, zmax) * ᶜuₕ)
+end
+
+function rayleigh_sponge_tendency_tke(ᶜtke, s)
+    s isa Nothing && return NullBroadcasted()
+    (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜtke))
+    zmax = z_max(axes(ᶠz))
+    return @. lazy(-β_rayleigh_tke(s, ᶜz, zmax) * ᶜtke)
 end
