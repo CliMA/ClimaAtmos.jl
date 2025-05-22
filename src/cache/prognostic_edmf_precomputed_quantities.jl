@@ -371,7 +371,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     (;
         ᶜmixing_length_tuple,
         ᶜmixing_length,
-        ᶜlinear_buoygrad,
+        ᶜbuoygrad,
         ᶜstrain_rate_norm,
         ᶜK_u,
         ᶜK_h,
@@ -410,7 +410,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
-            ᶜphysical_buoyancy(thermo_params, Y.c.ρ, ᶜρʲs.:($$j)),
+            buoyancy(thermo_params, Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ),  # TODO need to make sure ᶜgradᵥ_ᶠΦ is available
             get_physical_w(ᶜu, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
             FT(0),
@@ -447,7 +447,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
-            ᶜphysical_buoyancy(thermo_params, Y.c.ρ, ᶜρʲs.:($$j)),
+            buoyancy(thermo_params, Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ),  # TODO: make sure ᶜgradᵥ_ᶠΦ is available
             get_physical_w(ᶜu, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
             FT(0),
@@ -471,7 +471,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         # term is still calculated here as it is used explicitly in the TKE equation.
         @. ᶠnh_pressure₃_buoyʲs.:($$j) = ᶠupdraft_nh_pressure_buoyancy(
             params,
-            ᶠbuoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
+            buoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
         )
     end
 
@@ -481,7 +481,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     @. ᶜgradᵥ_q_tot⁰ = ᶜgradᵥ(ᶠinterp(ᶜq_tot⁰))                                        # ∂qt∂z_sat
     @. ᶜgradᵥ_θ_liq_ice⁰ =
         ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰)))                    # ∂θl∂z_sat
-    @. ᶜlinear_buoygrad = buoyancy_gradients( # TODO - do we need to modify buoyancy gradients based on NonEq + 1M tracers?
+    @. ᶜbuoygrad = buoyancy_gradients( # TODO - do we need to modify buoyancy gradients based on NonEq + 1M tracers?
         BuoyGradMean(),
         thermo_params,
         moisture_model,
@@ -493,6 +493,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜlg,
     )
 
+    # TODO: Make strain_rate_norm calculation a function in eddy_diffusion_closures
     # TODO: Currently the shear production only includes vertical gradients
     ᶠu⁰ = p.scratch.ᶠtemp_C123
     @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
@@ -502,7 +503,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
     @. ᶜprandtl_nvec =
-        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+        turbulent_prandtl_number(params, ᶜbuoygrad, ᶜstrain_rate_norm)
 
     ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
@@ -521,7 +522,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         z_sfc,
         ᶜdz,
         max(sfc_tke, eps(FT)),
-        ᶜlinear_buoygrad,
+        ᶜbuoygrad,
         max(ᶜtke⁰, 0),
         obukhov_length,
         ᶜstrain_rate_norm,
@@ -533,27 +534,25 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     @. ᶜmixing_length = ᶜmixing_length_tuple.master
 
     turbconv_params = CAP.turbconv_params(params)
-    c_m = CAP.tke_ed_coeff(turbconv_params)
-    @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
-    @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
+    @. (ᶜK_u, ᶜK_h) =
+        eddy_viscosity_diffusivity(turbconv_params, ᶜtke⁰, ᶜmixing_length, ᶜprandtl_nvec)
 
-    ρatke_flux_values = Fields.field_values(ρatke_flux)
-    ρ_int_values = Fields.field_values(Fields.level(ᶜρa⁰, 1))
-    u_int_values = Fields.field_values(Fields.level(ᶜu, 1))
-    ustar_values = Fields.field_values(ustar)
-    int_local_geometry_values =
-        Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
-    sfc_local_geometry_values = Fields.field_values(
-        Fields.level(Fields.local_geometry_field(Y.f), half),
-    )
-    @. ρatke_flux_values = surface_flux_tke(
-        turbconv_params,
-        ρ_int_values,
-        u_int_values,
-        ustar_values,
-        int_local_geometry_values,
-        sfc_local_geometry_values,
-    )
+    if p.atmos.edmfx_model.tke_flux_bc isa Val{:ustar}
+        ρatke_flux_values = Fields.field_values(ρatke_flux)
+        ρa_sfc_values = Fields.field_values(Fields.level(ᶜρa⁰, 1)) # TODO: replace by surface value
+        ustar_values = Fields.field_values(ustar)
+        sfc_local_geometry_values = Fields.field_values(
+            Fields.level(Fields.local_geometry_field(Y.f), half),
+        )
+        @. ρatke_flux_values = surface_flux_tke(
+            turbconv_params,
+            ρa_sfc_values,   
+            ustar_values,
+            sfc_local_geometry_values,
+        )
+    else
+        @. ρatke_flux = Geometry.WVector.(FT(0))
+    end
 
     return nothing
 end
