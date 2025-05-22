@@ -188,8 +188,10 @@ p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
 
 (; topo_k_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
     p.orographic_gravity_wave
-(; topo_ᶠτ_sat, topo_ᶠVτ) = p.orographic_gravity_wave
+(; topo_ᶜτ_sat, topo_ᶠτ_sat) = p.orographic_gravity_wave
 (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
+    p.orographic_gravity_wave
+(; topo_ᶜVτ, topo_ᶠVτ, topo_base_Vτ, topo_tmp_1, topo_tmp_2, topo_tmp_field_1, topo_tmp_field_2, topo_tmp_f, topo_k_pbl_values) =
     p.orographic_gravity_wave
 (; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
 (; ᶜdTdz) = p.orographic_gravity_wave
@@ -243,6 +245,9 @@ CA.calc_base_flux!(
     topo_FrU_max,
     topo_FrU_min,
     topo_FrU_clp,
+    topo_base_Vτ,
+    topo_tmp_1,
+    topo_tmp_2,
     p,
     hmax,
     hmin,
@@ -255,16 +260,21 @@ CA.calc_base_flux!(
     v_phy,
     ᶜN,
     k_pbl_int,
+    topo_k_pbl_values
 )
 
 # buoyancy frequency at cell faces
 ᶠN = ᶠinterp.(ᶜN) # alternatively, can be computed from ᶠT and ᶠdTdz
 
 CA.calc_saturation_profile!(
+    topo_ᶜτ_sat,
     topo_ᶠτ_sat,
     topo_U_sat, 
     topo_FrU_sat,
     topo_FrU_clp,
+    topo_tmp_field_1,
+    topo_tmp_field_2,
+    topo_ᶜVτ,
     topo_ᶠVτ,
     p,
     topo_FrU_max,
@@ -276,6 +286,7 @@ CA.calc_saturation_profile!(
     u_phy,
     v_phy,
     ᶜp,
+    topo_tmp_f,
     k_pbl_int
 )
 

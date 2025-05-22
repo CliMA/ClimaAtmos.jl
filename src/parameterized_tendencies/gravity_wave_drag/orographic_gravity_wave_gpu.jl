@@ -55,6 +55,7 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
     end
 
     # Prepare cache
+    # QN: Is there a limit to how big the cache can be?
     return (;
         Fr_crit = Fr_crit,
         topo_γ = γ,
@@ -64,10 +65,10 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
         topo_L0 = L0,
         topo_a0 = a0,
         topo_a1 = a1,
-        # topo_ᶠτ_sat = Fields.Field(FT, axes(Y.f.u₃)),
-        # topo_ᶠVτ = Fields.Field(FT, axes(Y.f.u₃)),
-        topo_ᶠτ_sat = Fields.Field(FT, axes(Y.c)),
-        topo_ᶠVτ = Fields.Field(FT, axes(Y.c)),
+        topo_ᶜτ_sat = Fields.Field(FT, axes(Y.c)),
+        topo_ᶠτ_sat = Fields.Field(FT, axes(Y.f.u₃)),
+        topo_ᶜVτ = Fields.Field(FT, axes(Y.c)),
+        topo_ᶠVτ = Fields.Field(FT, axes(Y.f.u₃)),
         topo_τ_x = similar(Fields.level(Y.c.ρ, 1)),
         topo_τ_y = similar(Fields.level(Y.c.ρ, 1)),
         topo_τ_l = similar(Fields.level(Y.c.ρ, 1)),
@@ -85,6 +86,12 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
         topo_FrU_clp = similar(Fields.level(Y.c.ρ, 1)),
         topo_tmp_1 = similar(Fields.level(Y.c.ρ, 1)),
         topo_tmp_2 = similar(Fields.level(Y.c.ρ, 1)),
+        topo_tmp_field_1 = Fields.Field(FT, axes(Y.c)),
+        topo_tmp_field_2 = Fields.Field(FT, axes(Y.c)),
+        # QN: What is the difference between:
+        # topo_tmp_f = similar(Fields.level(Y.f, half)),
+        # and the line below?
+        topo_tmp_f = similar(Fields.level(Y.f, half)),
         topo_base_Vτ = similar(Fields.level(Y.c.ρ, 1)),
         topo_k_pbl = similar(Fields.level(Y.c.ρ, 1)),
         topo_k_pbl_values = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT}),
@@ -338,6 +345,7 @@ function calc_base_flux!(
     k_pbl_values
 )
     # Extract parameters
+    # QN: When should I pass an array as argument, and when should I extract them from cache?
     (;
         Fr_crit,
         topo_ρscale,
@@ -376,7 +384,7 @@ function calc_base_flux!(
     end
     
     # Extract values from the tuple
-    # Is this a view or a copy?
+    # QN: Is this a view or a copy?
     ρ_pbl = @. k_pbl_values.:1
     u_pbl = @. k_pbl_values.:2
     v_pbl = @. k_pbl_values.:3
@@ -427,21 +435,26 @@ function calc_base_flux!(
 end
 
 function calc_saturation_profile!(
-    τ_sat,
+    ᶜτ_sat,
+    ᶠτ_sat,
     U_sat, 
     FrU_sat,
     FrU_clp,
+    tmp_field_1,
+    tmp_field_2,
+    ᶜVτ,
     ᶠVτ,
     p,
     FrU_max,
     FrU_min,
-    ᶠN,
+    ᶜN,
     τ_x,
     τ_y,
     τ_p,
     u_phy,
     v_phy,
     ᶜp,
+    ᶠp,
     k_pbl
 )
     # Extract parameters
@@ -452,9 +465,7 @@ function calc_saturation_profile!(
     ϵ = topo_ϵ
     
     # Calculate Vτ at cell faces using field operations
-    # @Main.infiltrate
-    # To be removed
-    @. ᶠVτ = max(
+    @. ᶜVτ = max(
         eps(FT),
         (
             -(u_phy * τ_x + v_phy * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2))
@@ -462,59 +473,64 @@ function calc_saturation_profile!(
     )
     
     # Calculate derivatives for ᶠd2Vτdz
-    ᶠd2udz = (ᶜd2dz2(u_phy, p))
-    ᶠd2vdz = (ᶜd2dz2(v_phy, p))
+    # QN: Is the Julia compiler smart enough to inline these?
+    d2udz = (ᶜd2dz2(u_phy, p))
+    d2vdz = (ᶜd2dz2(v_phy, p))
     
-    # Calculate derivative for L1
-    ᶠd2Vτdz = @. max(
+    # Calculate derivative for L1; tmp_field_2 == d2Vτdz
+    @. tmp_field_2 = max(
         eps(FT),
-        -(ᶠd2udz * τ_x + ᶠd2vdz * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2))
+        -(d2udz * τ_x + d2vdz * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2))
     )
+    # @Main.infiltrate
     
-    # Calculate L1
-    L1 = @. topo_L0 * max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶠVτ * ᶠd2Vτdz / ᶠN^2))
+    # Calculate tmp_field_1 == L1
+    # Here on the RHS, tmp_field_1 == Vτ, tmp_field_2 == d2Vτdz
+    @. tmp_field_1 = topo_L0 * max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * tmp_field_1 * tmp_field_2 / ᶜN^2))
     
     # Store original values for later use
+    # To remove
     FrU_clp0 = copy(FrU_clp)
     FrU_sat0 = copy(FrU_sat)
     
-    # Create field at face levels for U_k calculation
-    ᶠp = (ᶜp)
-    U_k_field = @. sqrt(ᶠp / topo_ρscale * ᶠVτ^3 / ᶠN / L1)
+    # Create field for U_k calculation
+    # Here, U_k == tmp_field_1
+    @. tmp_field_1 = sqrt(ᶜp / topo_ρscale * ᶜVτ^3 / ᶜN / tmp_field_1)
     
     # Prepare a level index field to help with operations at specific levels
-    ᶠlevel_idx = similar(ᶠVτ, FT)
-    for i in 1:Spaces.nlevels(axes(ᶠVτ))
-        fill!(Fields.level(ᶠlevel_idx, i), i)
+    # level_idx = similar(Vτ, FT)
+    # Here, tmp_field_2 == level_idx
+    for i in 1:Spaces.nlevels(axes(ᶜVτ))
+        fill!(Fields.level(tmp_field_2, i), i)
     end
     
     # Create combined input for column_accumulate
     input = @. lazy(tuple(
         FrU_clp0,
         FrU_sat0,
-        U_k_field,
+        tmp_field_1,
         FrU_max,
         FrU_min,
         τ_p,
-        ᶠlevel_idx,
+        tmp_field_2,
         k_pbl,
         topo_a0
     ))
     
     # Initialize the result field with τ_p at the lowest face
-    fill!(τ_sat, 0.0)
+    fill!(ᶜτ_sat, 0.0)
     # @Main.infiltrate
     # Fields.level(τ_sat, half) .= parent(τ_p )
     # L2 = Operators.LeftBiasedF2C(;)
 
-    Fields.level(τ_sat, 1) .= τ_p
+    Fields.level(ᶜτ_sat, 1) .= τ_p
 
     Operators.column_accumulate!(
-        τ_sat,
+        ᶜτ_sat,
         input;
         init = (FT(0.0), U_sat),
         transform = first,
-    ) do (τ_sat, U_sat),
+    ) do (ᶜτ_sat, U_sat),
         (FrU_clp0, FrU_sat0, U, FrU_max, FrU_min, τ_p, level_idx, k_pbl, topo_a0)
 
         if level_idx == 1
@@ -526,23 +542,26 @@ function calc_saturation_profile!(
         FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
 
         if level_idx <= k_pbl
-            τ_sat = τ_p
+            ᶜτ_sat = τ_p
         else
             term1 = (FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ)
             term2 = FrU_sat^2 * FrU_sat0^β *
                 (FrU_max^(γ - ϵ - β) - FrU_clp0^(γ - ϵ - β)) / (γ - ϵ - β)
             term3 = FrU_sat^2 * (FrU_clp0^(γ - ϵ) - FrU_clp^(γ - ϵ)) / (γ - ϵ)
-            τ_sat = topo_a0 * (term1 + term2 + term3)
+            ᶜτ_sat = topo_a0 * (term1 + term2 + term3)
         end
 
-        return (τ_sat, U_sat)
+        return (ᶜτ_sat, U_sat)
     end
     
     # Apply top correction using field operations
-    # TBC
-    ᶠτ_sat = ᶠinterp.(τ_sat)
+    # QN: How can I GPUify this? Tried for hours!
+    ᶠτ_sat .= ᶠinterp.(ᶜτ_sat)
+    ᶠVτ .= ᶠinterp.(ᶜVτ)
     
-    if parent(τ_sat)[end] > FT(0)
+    if parent(ᶠτ_sat)[end] > FT(0)
+        # QN: Why can't I use ᶠp .= ᶠinterp.(ᶜp) here?
+        # QN: Is this a copy operation then?
         ᶠp = ᶠinterp.(ᶜp)
         ᶠτ_sat .-=
             parent(ᶠτ_sat)[end] .* (parent(ᶠp)[1] .- ᶠp) ./
