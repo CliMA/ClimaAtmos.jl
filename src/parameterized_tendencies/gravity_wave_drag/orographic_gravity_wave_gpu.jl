@@ -54,6 +54,7 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
         error("topo_info must be one of gfdl_restart, raw_topo, or linear")
     end
 
+    topo_level_idx = similar(Y.c.ρ, FT)
     # Prepare cache
     # QN: Is there a limit to how big the cache can be?
     return (;
@@ -86,10 +87,12 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
         topo_FrU_clp = similar(Fields.level(Y.c.ρ, 1)),
         topo_tmp_1 = similar(Fields.level(Y.c.ρ, 1)),
         topo_tmp_2 = similar(Fields.level(Y.c.ρ, 1)),
-        # topo_d2Vτdz = Fields.Field(FT, axes(Y.c)),
-        # topo_L1 = Fields.Field(FT, axes(Y.c)),
-        # topo_U_k_field = Fields.Field(FT, axes(Y.c)),
-        # topo_level_idx = Fields.Field(FT, axes(Y.c)),
+
+        topo_d2Vτdz = Fields.Field(FT, axes(Y.c)),
+        topo_L1 = Fields.Field(FT, axes(Y.c)),
+        topo_U_k_field = Fields.Field(FT, axes(Y.c)),
+        topo_level_idx = topo_level_idx,
+
         topo_base_Vτ = similar(Fields.level(Y.c.ρ, 1)),
         topo_k_pbl = similar(Fields.level(Y.c.ρ, 1)),
         topo_k_pbl_values = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT}),
@@ -451,7 +454,11 @@ function calc_saturation_profile!(
     v_phy,
     ᶜρ,
     ᶜp,
-    k_pbl
+    k_pbl,
+    d2Vτdz,
+    L1,
+    U_k_field,
+    level_idx,
 )
     # Extract parameters
     (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ϵ) = p.orographic_gravity_wave
@@ -474,7 +481,7 @@ function calc_saturation_profile!(
     d2vdz = (ᶜd2dz2(v_phy, p))
     
     # Calculate derivative for L1; tmp_field_2 == d2Vτdz
-    d2Vτdz = @. max(
+    @. d2Vτdz = max(
         eps(FT),
         -(d2udz * τ_x + d2vdz * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2))
     )
@@ -482,7 +489,7 @@ function calc_saturation_profile!(
     
     # Calculate tmp_field_1 == L1
     # Here on the RHS, tmp_field_2 == d2Vτdz
-    L1 = @. topo_L0 * max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶜVτ * d2Vτdz / ᶜN^2))
+    @. L1 = topo_L0 * max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶜVτ * d2Vτdz / ᶜN^2))
     
     # Store original values for later use
     # To remove
@@ -491,11 +498,10 @@ function calc_saturation_profile!(
     
     # Create field for U_k calculation
     # Here, U_k == tmp_field_1
-    U_k_field = @. sqrt(ᶜρ / topo_ρscale * ᶜVτ^3 / ᶜN / L1)
+    @. U_k_field = sqrt(ᶜρ / topo_ρscale * ᶜVτ^3 / ᶜN / L1)
     
     # Prepare a level index field to help with operations at specific levels
 
-    level_idx = similar(ᶜρ, FT)
     for i in 1:Spaces.nlevels(axes(ᶜρ))
         fill!(Fields.level(level_idx, i), i)
     end
@@ -541,11 +547,13 @@ function calc_saturation_profile!(
         if level_idx <= k_pbl
             tau_sat_val = τ_p
         else
-            term1 = (FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ)
-            term2 = FrU_sat^2 * FrU_sat0^β *
-                (FrU_max^(γ - ϵ - β) - FrU_clp0^(γ - ϵ - β)) / (γ - ϵ - β)
-            term3 = FrU_sat^2 * (FrU_clp0^(γ - ϵ) - FrU_clp^(γ - ϵ)) / (γ - ϵ)
-            tau_sat_val = topo_a0 * (term1 + term2 + term3)
+            tau_sat_val = topo_a0 * (
+            (FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ) +
+            FrU_sat^2 * FrU_sat0^β *
+                (FrU_max^(γ - ϵ - β) - FrU_clp0^(γ - ϵ - β)) / (γ - ϵ - β) +
+            FrU_sat^2 *
+                (FrU_clp0^(γ - ϵ) - FrU_clp^(γ - ϵ)) / (γ - ϵ)
+            )
         end
 
         return (tau_sat_val, U_sat_val)
