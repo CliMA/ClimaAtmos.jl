@@ -64,6 +64,8 @@ p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
     p.orographic_gravity_wave
 (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
     p.orographic_gravity_wave
+(; topo_base_Vτ, topo_tmp_1, topo_tmp_2, topo_k_pbl_values) =
+    p.orographic_gravity_wave
 (; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
 
 u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
@@ -81,6 +83,9 @@ CA.calc_base_flux!(
     topo_FrU_max,
     topo_FrU_min,
     topo_FrU_clp,
+    topo_base_Vτ,
+    topo_tmp_1,
+    topo_tmp_2,
     p,
     hmax,
     hmin,
@@ -93,6 +98,7 @@ CA.calc_base_flux!(
     v_phy,
     Y.c.N,
     1,
+    topo_k_pbl_values
 )
 
 # Remap base flux to regular lat/lon grid for visualization
