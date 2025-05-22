@@ -307,13 +307,13 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 bottom = Operators.SetValue(ρatke_flux),
             )
             @. Yₜ.c.sgs⁰.ρatke -=
-                ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) + tke_dissipation(
+                ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) 
+                + limit(tke_dissipation(
+                    turbconv_params,
                     Y.c.sgs⁰.ρatke,
                     ᶜtke⁰,
-                    ᶜmixing_length,
-                    c_d,
-                    float(dt),
-                )
+                    ᶜmixing_length),
+                    float(dt), 1)  # TODO Use Limit function from microphysics; Anna is moving it to a more central place
         end
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
@@ -426,7 +426,3 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     return nothing
 end
-
-tke_dissipation(ρatke⁰, tke⁰, mixing_length, c_d, dt) =
-    tke⁰ >= 0 ? c_d * ρatke⁰ * sqrt(tke⁰) / max(mixing_length, 1) :
-    ρatke⁰ / float(dt)
