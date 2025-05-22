@@ -189,6 +189,7 @@ p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
 (; topo_k_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
     p.orographic_gravity_wave
 (; topo_ᶠτ_sat, topo_ᶠVτ) = p.orographic_gravity_wave
+(; topo_ᶜτ_sat, topo_ᶜVτ) = p.orographic_gravity_wave
 (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
     p.orographic_gravity_wave
 (; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
@@ -262,15 +263,17 @@ end
 # compute saturation profile
 Fields.bycolumn(axes(Y.c.ρ)) do colidx
     CA.calc_saturation_profile!(
+        topo_ᶜτ_sat[colidx],
         topo_ᶠτ_sat[colidx],
         topo_U_sat[colidx],
         topo_FrU_sat[colidx],
         topo_FrU_clp[colidx],
+        topo_ᶜVτ[colidx],
         topo_ᶠVτ[colidx],
         p,
         topo_FrU_max[colidx],
         topo_FrU_min[colidx],
-        ᶠN[colidx],
+        ᶜN[colidx],
         topo_τ_x[colidx],
         topo_τ_y[colidx],
         topo_τ_p[colidx],
