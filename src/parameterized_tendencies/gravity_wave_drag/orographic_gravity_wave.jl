@@ -64,7 +64,9 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
         topo_L0 = L0,
         topo_a0 = a0,
         topo_a1 = a1,
+        topo_ᶜτ_sat = Fields.Field(FT, axes(Y.c)),
         topo_ᶠτ_sat = Fields.Field(FT, axes(Y.f.u₃)),
+        topo_ᶜVτ = Fields.Field(FT, axes(Y.c)),
         topo_ᶠVτ = Fields.Field(FT, axes(Y.f.u₃)),
         topo_τ_x = similar(Fields.level(Y.c.ρ, 1)),
         topo_τ_y = similar(Fields.level(Y.c.ρ, 1)),
@@ -385,14 +387,16 @@ end
 
 function calc_saturation_profile!(
     τ_sat,
+    ᶠτ_sat,
     U_sat,
     FrU_sat,
     FrU_clp,
+    Vτ,
     ᶠVτ,
     p,
     FrU_max,
     FrU_min,
-    ᶠN,
+    ᶜN,
     τ_x,
     τ_y,
     τ_p,
@@ -410,17 +414,17 @@ function calc_saturation_profile!(
     ϵ = topo_ϵ
 
     # Vτ at cell faces
-    @. ᶠVτ = max(
+    @. Vτ = max(
         eps(FT),
-        ᶠinterp(
-            -(u_phy * τ_x + v_phy * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2)),
-        ),
+        (
+            -(u_phy * τ_x + v_phy * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2))
+        )
     )
-    ᶠd2udz = ᶠinterp.(ᶜd2dz2(u_phy, p))
-    ᶠd2vdz = ᶠinterp.(ᶜd2dz2(v_phy, p))
-    ᶠd2Vτdz = @. max(
+    d2udz = (ᶜd2dz2(u_phy, p))
+    d2vdz = (ᶜd2dz2(v_phy, p))
+    d2Vτdz = @. max(
         eps(FT),
-        -(ᶠd2udz * τ_x + ᶠd2vdz * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2)),
+        -(d2udz * τ_x + d2vdz * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2)),
     )
     L1 = @. topo_L0 *
             max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶠVτ * ᶠd2Vτdz / ᶠN^2))
@@ -429,17 +433,17 @@ function calc_saturation_profile!(
     FrU_sat0 = FrU_sat
     for k in 0:(length(parent(τ_sat)) - 1)
         U_k = Fields.level(
-            sqrt.(ᶠinterp.(ᶜρ) ./ topo_ρscale .* ᶠVτ .^ 3 ./ ᶠN ./ L1),
-            k + half,
+            sqrt.((ᶜρ) ./ topo_ρscale .* Vτ .^ 3 ./ ᶜN ./ L1),
+            k + 1,
         )
         @. U_sat = min(U_sat, U_k)
         @. FrU_sat = Fr_crit * U_sat
         @. FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
         if k < k_pbl
-            tmp = Fields.level(τ_sat, k + half)
+            tmp = Fields.level(τ_sat, k + 1)
             parent(tmp) .= parent(τ_p)
         else
-            tmp = Fields.level(τ_sat, k + half)
+            tmp = Fields.level(τ_sat, k + 1)
             parent(tmp) .= parent(
                 topo_a0 .* (
                     (FrU_clp .^ (2 + γ - ϵ) .- FrU_min .^ (2 + γ - ϵ)) ./
@@ -455,16 +459,19 @@ function calc_saturation_profile!(
     end
 
     # very first cell face
-    tmp = Fields.level(τ_sat, half)
+    tmp = Fields.level(τ_sat, 1)
     parent(tmp) .= parent(τ_p)
 
     # If the wave propagates to the top, the residual momentum flux is redistributed throughout the column weighted by pressure
     if parent(τ_sat)[end] > FT(0)
-        ᶠp = ᶠinterp.(ᶜp)
+        ᶠp = (ᶜp)
         τ_sat .-=
             parent(τ_sat)[end] .* (parent(ᶠp)[1] .- ᶠp) ./
             (parent(ᶠp)[1] .- parent(ᶠp)[end])
     end
+
+    ᶠτ_sat .= ᶠinterp.(τ_sat)
+    ᶠVτ .= ᶠinterp.(Vτ)
     return nothing
 
 end
