@@ -553,20 +553,48 @@ function calc_saturation_profile!(
     
     # Apply top correction using field operations
     # QN: How can I GPUify this? Tried for hours!
-    if parent(ᶜτ_sat)[end] > FT(0)
-    #     # QN: Why can't I use ᶠp .= ᶠinterp.(ᶜp)?
-    #     # QN: Is this a copy operation then?
-        ᶜτ_sat .-=
-            parent(ᶜτ_sat)[end] .* (parent(ᶜp)[1] .- ᶜp) ./
-            (parent(ᶜp)[1] .- parent(ᶜp)[end])
-    end
+    # if parent(ᶜτ_sat)[end] > FT(0)
+    # #     # QN: Why can't I use ᶠp .= ᶠinterp.(ᶜp)?
+    # #     # QN: Is this a copy operation then?
+    #     ᶜτ_sat .-=
+    #         parent(ᶜτ_sat)[end] .* (parent(ᶜp)[1] .- ᶜp) ./
+    #         (parent(ᶜp)[1] .- parent(ᶜp)[end])
+    # end
 
     # QN: ATTEMPT 
-    # top_values = Fields.level(ᶜτ_sat, Spaces.nlevels(axes(ᶜτ_sat)))
+    top_values = Fields.level(ᶜτ_sat, Spaces.nlevels(axes(ᶜτ_sat)))
+    p_surf = Fields.level(ᶜp, 1)
+    p_top = Fields.level(ᶜp, Spaces.nlevels(axes(ᶜp)))
 
-    # p_surf = Fields.level(ᶜp, 1)
-    # p_top = Fields.level(ᶜp, Spaces.nlevels(axes(ᶜp)))
+    input = @. lazy(tuple(
+        top_values,
+        ᶜτ_sat,
+        p_surf,
+        p_top,
+        ᶜp,
+    ))
 
+    Operators.column_accumulate!(
+        ᶜτ_sat,
+        input;
+        init = (FT(0.0)),
+        transform = first,
+    ) do (τ_sat_val),
+        (top_values, ᶜτ_sat, p_surf, p_top, ᶜp)
+
+        τ_sat_val = ᶜτ_sat
+        
+        if top_values > FT(0)
+            τ_sat_val -= (top_values * (p_surf - ᶜp) / (p_surf - p_top))
+
+        return(τ_sat_val)
+        end
+    end
+
+    # QN: What is the canonical way of defining
+    # operations between a 3D slab and 2D slice?
+    # is there a broadcast function? 
+    # @Main.infiltrate
     # @. ᶜτ_sat -= ifelse(
     #     top_values > FT(0),
     #     top_values * (p_surf - ᶜp) / (p_surf - p_top),
