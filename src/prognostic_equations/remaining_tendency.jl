@@ -10,9 +10,71 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 end
 
+function ᶜremaining_tendency(ᶜY, ᶠY, p, t)
+    nt = (;
+            ᶜremaining_tendency_ρ(ᶜY, ᶠY, p, t)...,
+            ᶜremaining_tendency_uₕ(ᶜY, ᶠY, p, t)...,
+            ᶜremaining_tendency_ρe_tot(ᶜY, ᶠY, p, t)...,
+            ᶜremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)...,
+    )
+    return nt
+end
+function ᶠremaining_tendency(ᶜY, ᶠY, p, t)
+    nt = (;
+            ᶠremaining_tendency_u₃(ᶜY, ᶠY, p, t)...,
+            ᶠremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)...,
+    )
+    return nt
+end
+
+function ᶜremaining_tendency_ρ(ᶜY, ᶠY, p, t)
+    :ρ in propertynames(ᶜY) || return ()
+    ∑tendencies = zero(eltype(ᶜY.ρ))
+    return (;ρ=∑tendencies)
+end
+function ᶜremaining_tendency_uₕ(ᶜY, ᶠY, p, t)
+    :uₕ in propertynames(ᶜY) || return ()
+    ∑tendencies = zero(eltype(ᶜY.uₕ))
+    return (;uₕ=∑tendencies)
+end
+function ᶜremaining_tendency_ρe_tot(ᶜY, ᶠY, p, t)
+    :ρe_tot in propertynames(ᶜY) || return ()
+    ∑tendencies = zero(eltype(ᶜY.ρe_tot))
+    return (;ρe_tot=∑tendencies)
+end
+function ᶜremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)
+    :sgsʲs in propertynames(ᶜY) || return ()
+    ∑tendencies = zero(eltype(ᶜY.sgsʲs))
+    return (;sgsʲs=∑tendencies)
+end
+function ᶠremaining_tendency_u₃(ᶜY, ᶠY, p, t)
+    :u₃ in propertynames(ᶠY) || return ()
+    ∑tendencies = zero(eltype(ᶠY.u₃))
+    return (;u₃=∑tendencies)
+end
+function ᶠremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)
+    :sgsʲs in propertynames(ᶠY) || return ()
+    ∑tendencies = zero(eltype(ᶠY.sgsʲs))
+    return (;sgsʲs=∑tendencies)
+end
+
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    device = ClimaComms.device(axes(Y.c))
+    p_rt = (;)
+    Operators.columnwise!(
+        device,
+        ᶜremaining_tendency,
+        ᶠremaining_tendency,
+        Yₜ.c,
+        Yₜ.f,
+        Y.c,
+        Y.f,
+        p_rt,
+        t,
+        Val(false),
+        Val(false),
+    )
     Yₜ_lim .= zero(eltype(Yₜ_lim))
-    Yₜ .= zero(eltype(Yₜ))
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
     fill_with_nans!(p)
     horizontal_advection_tendency!(Yₜ, Y, p, t)
