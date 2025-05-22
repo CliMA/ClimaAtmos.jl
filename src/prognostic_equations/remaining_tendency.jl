@@ -38,7 +38,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     (; ᶜh_tot, ᶜspecific) = p.precomputed
     ᶜuₕ = Y.c.uₕ
-    ᶠu₃ = Yₜ.f.u₃
+    ᶠu₃ = Y.f.u₃
     ᶜρ = Y.c.ρ
     (; forcing_type, moisture_model, rayleigh_sponge, viscous_sponge) = p.atmos
     (; ls_adv, edmf_coriolis) = p.atmos
