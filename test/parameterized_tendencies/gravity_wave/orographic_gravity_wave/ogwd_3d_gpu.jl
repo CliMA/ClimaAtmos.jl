@@ -193,6 +193,7 @@ p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
     p.orographic_gravity_wave
 (; topo_ᶜVτ, topo_ᶠVτ, topo_base_Vτ, topo_tmp_1, topo_tmp_2, topo_k_pbl_values) =
     p.orographic_gravity_wave
+(; topo_d2Vτdz, topo_L1, topo_U_k_field, topo_level_idx) = p.orographic_gravity_wave
 (; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
 (; ᶜdTdz) = p.orographic_gravity_wave
 
@@ -285,7 +286,11 @@ CA.calc_saturation_profile!(
     v_phy,
     Y.c.ρ,
     ᶜp,
-    k_pbl_int
+    k_pbl_int,
+    topo_d2Vτdz,
+    topo_L1,
+    topo_U_k_field,
+    topo_level_idx,
 )
 
 # a place holder to store physical forcing on uv
