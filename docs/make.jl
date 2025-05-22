@@ -35,6 +35,7 @@ makedocs(;
         "Ocean Surface Albedo Parameterization" => "surface_albedo.md",
         "Topography Representation" => "topography.md",
         "Tracers" => "tracers.md",
+        "Implicit Solver" => "implicit_solver.md",
         "Radiative Equilibrium" => "radiative_equilibrium.md",
         "Single Column Model" => "single_column_prospect.md",
         "Restarts and checkpoints" => "restarts.md",

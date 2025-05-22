@@ -31,6 +31,10 @@ steps:
 
       - echo "--- Instantiate .buildkite"
       - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.precompile(;strict=true); using CUDA; CUDA.precompile_runtime(); Pkg.status()'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name=\"ClimaCore\", rev=\"tr/fieldmatrix-functions-for-jacobian\"))'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name=\"ClimaComms\", rev=\"main\"))'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name=\"Thermodynamics\", rev=\"main\"))'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name=\"CloudMicrophysics\", rev=\"main\"))'"
 
     agents:
       slurm_cpus_per_task: 8
@@ -119,7 +123,7 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
           --job_id single_column_nonorographic_gravity_wave
-        artifact_paths: "single_column_nonorographic_gravity_wave/*"
+        artifact_paths: "single_column_nonorographic_gravity_wave/output_active/*"
 
   - group: "Column Examples"
     steps:
@@ -153,6 +157,8 @@ steps:
           --config_file $CONFIG_PATH/box_density_current_test.yml
           --job_id box_density_current_test
         artifact_paths: "box_density_current_test/output_active/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":computer: Box rcemipii with diagnostic edmf"
         command: >
@@ -168,7 +174,7 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/les_isdac_box.yml
           --job_id les_isdac_box
-        artifact_paths: "les_isdac_box/*"
+        artifact_paths: "les_isdac_box/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
@@ -595,7 +601,7 @@ steps:
           --job_id amip_target_edonly_nonequil
         artifact_paths: "amip_target_edonly_nonequil/output_active/*"
         agents:
-          slurm_mem: 20GB
+          slurm_mem: 200GB
 
   - group: "Diagnostic EDMFX"
     steps:
@@ -860,7 +866,7 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
           --job_id prognostic_edmfx_bomex_box
-        artifact_paths: "prognostic_edmfx_bomex_box/*"
+        artifact_paths: "prognostic_edmfx_bomex_box/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -886,7 +892,7 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/sphere_nonorographic_gravity_wave.yml
           --job_id sphere_nonorographic_gravity_wave
-        artifact_paths: "sphere_nonorographic_gravity_wave/*"
+        artifact_paths: "sphere_nonorographic_gravity_wave/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
