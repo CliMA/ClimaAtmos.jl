@@ -359,7 +359,6 @@ function mixing_length(
     FT = eltype(params)
     eps_FT = eps(FT)
 
-
     turbconv_params = CAP.turbconv_params(params)
     sf_params = CAP.surface_fluxes_params(params) # Businger params
 
@@ -523,8 +522,9 @@ function mixing_length(
     #    This step mitigates excessive values of l_W or l_TKE.
     l_limited_phys_wall = min(l_smin, l_z)
 
-    # 2. Impose the grid-scale limit
-    l_final = min(l_limited_phys_wall, ᶜdz)
+    # 2. Impose the grid-scale limit (TODO: replace by volumetric grid scale)
+    l_grid = ᶜdz   # TODO include costant rescaling factor
+    l_final = min(l_limited_phys_wall, l_grid)
 
     # Final check: guarantee that the mixing length is at least a small positive
     # value.  This prevents division-by-zero in
@@ -533,7 +533,7 @@ function mixing_length(
     # provides a conservative lower bound.
     l_final = max(l_final, eps_FT)
 
-    return MixingLength{FT}(l_final, l_W, l_TKE, l_N)
+    return MixingLength{FT}(l_final, l_W, l_TKE, l_N, l_grid) # Added l_grid to output struct; TODO: update struct definition
 end
 
 """
@@ -551,10 +551,10 @@ with a reformulation and correction of an algebraic error in their expression:
 
     Pr_t(Ri) = (X + sqrt(max(X^2 - 4*Pr_n*Ri, 0))) / 2
 
-where X = Pr_n + ω_pr * Ri and Ri = N^2 / max(2*|S|, eps)
-using parameters Pr_n = Prandtl_number_0, ω_pr = Prandtl_number_scale.
+where X = Pr_n + ω_pr * Ri and Ri = N^2 / max(2*|S|, eps).
+Parameters used are Pr_n = Prandtl_number_0 and ω_pr = Prandtl_number_scale.
 This formula applies in both stable (Ri > 0) and unstable (Ri < 0) conditions.
-The returned turbulent Prandtl number is limited by Pr_max parameter.
+The returned turbulent Prandtl number is limited to be between eps(FT) and Pr_max.
 """
 function turbulent_prandtl_number(params, ᶜN2_eff, ᶜstrain_rate_norm)
     FT = eltype(params)
@@ -712,19 +712,26 @@ turbulent Prandtl number.
 Returns a tuple (K_u, K_h) in units of [m^2/s].
 """
 function eddy_viscosity_diffusivity(turbconv_params, tke, mixing_length, prandtl_nvec)
+    FT = typeof(tke) 
     c_m = CAP.tke_ed_coeff(turbconv_params)
-    K_u = c_m * mixing_length * sqrt(max(tke, 0))
-    K_h = K_u / prandtl_nvec
+    K_u = c_m * mixing_length * sqrt(max(tke, FT(0)))
+    K_h = K_u / prandtl_nvec # prandtl_nvec is already bounded by eps_FT and Pr_max
     return (K_u, K_h)
 end
+
 
 """
     tke_dissipation(turbconv_params, ρatke, tke, mixing_length)
 
 Returns a scalar value representing the TKE dissipation rate 
 per unit volume [kg m^-1 s^-3].
+
+Dissipation ε_d = c_d * TKE^(3/2) / l_mix.
+
+This function returns ρ * ε_d.
 """
 function tke_dissipation(turbconv_params, ρatke, tke, mixing_length)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    return c_d * ρatke * sqrt(abs(tke)) / mixing_length
+    dissipation_rate_vol = c_d * ρatke * sqrt(abs(tke)) / mixing_length
+    return dissipation_rate_vol
 end
