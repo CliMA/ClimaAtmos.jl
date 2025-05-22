@@ -86,12 +86,10 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
         topo_FrU_clp = similar(Fields.level(Y.c.ρ, 1)),
         topo_tmp_1 = similar(Fields.level(Y.c.ρ, 1)),
         topo_tmp_2 = similar(Fields.level(Y.c.ρ, 1)),
-        topo_tmp_field_1 = Fields.Field(FT, axes(Y.c)),
-        topo_tmp_field_2 = Fields.Field(FT, axes(Y.c)),
-        # QN: What is the difference between:
-        # topo_tmp_f = similar(Fields.level(Y.f, half)),
-        # and the line below?
-        topo_tmp_f = similar(Fields.level(Y.f, half)),
+        # topo_d2Vτdz = Fields.Field(FT, axes(Y.c)),
+        # topo_L1 = Fields.Field(FT, axes(Y.c)),
+        # topo_U_k_field = Fields.Field(FT, axes(Y.c)),
+        # topo_level_idx = Fields.Field(FT, axes(Y.c)),
         topo_base_Vτ = similar(Fields.level(Y.c.ρ, 1)),
         topo_k_pbl = similar(Fields.level(Y.c.ρ, 1)),
         topo_k_pbl_values = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT}),
@@ -440,8 +438,6 @@ function calc_saturation_profile!(
     U_sat, 
     FrU_sat,
     FrU_clp,
-    tmp_field_1,
-    tmp_field_2,
     ᶜVτ,
     ᶠVτ,
     p,
@@ -453,8 +449,8 @@ function calc_saturation_profile!(
     τ_p,
     u_phy,
     v_phy,
+    ᶜρ,
     ᶜp,
-    ᶠp,
     k_pbl
 )
     # Extract parameters
@@ -478,7 +474,7 @@ function calc_saturation_profile!(
     d2vdz = (ᶜd2dz2(v_phy, p))
     
     # Calculate derivative for L1; tmp_field_2 == d2Vτdz
-    @. tmp_field_2 = max(
+    d2Vτdz = @. max(
         eps(FT),
         -(d2udz * τ_x + d2vdz * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2))
     )
@@ -486,7 +482,7 @@ function calc_saturation_profile!(
     
     # Calculate tmp_field_1 == L1
     # Here on the RHS, tmp_field_2 == d2Vτdz
-    @. tmp_field_1 = topo_L0 * max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶜVτ * tmp_field_2 / ᶜN^2))
+    L1 = @. topo_L0 * max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶜVτ * d2Vτdz / ᶜN^2))
     
     # Store original values for later use
     # To remove
@@ -495,26 +491,27 @@ function calc_saturation_profile!(
     
     # Create field for U_k calculation
     # Here, U_k == tmp_field_1
-    @. tmp_field_2 = sqrt(ᶜp / topo_ρscale * ᶜVτ^3 / ᶜN / tmp_field_1)
+    U_k_field = @. sqrt(ᶜρ / topo_ρscale * ᶜVτ^3 / ᶜN / L1)
     
     # Prepare a level index field to help with operations at specific levels
-    # level_idx = similar(Vτ, FT)
-    # Here, tmp_field_2 == level_idx
-    for i in 1:Spaces.nlevels(axes(ᶜVτ))
-        fill!(Fields.level(tmp_field_1, i), i)
+
+    level_idx = similar(ᶜρ, FT)
+    for i in 1:Spaces.nlevels(axes(ᶜρ))
+        fill!(Fields.level(level_idx, i), i)
     end
     
     # Create combined input for column_accumulate
     input = @. lazy(tuple(
         FrU_clp0,
         FrU_sat0,
-        tmp_field_2,
+        U_k_field,
         FrU_max,
         FrU_min,
-        τ_p,
-        tmp_field_1,
+        level_idx,
         k_pbl,
-        topo_a0
+        topo_a0,
+        τ_p, 
+        U_sat
     ))
     
     # Initialize the result field with τ_p at the lowest face
@@ -523,50 +520,61 @@ function calc_saturation_profile!(
     # Fields.level(τ_sat, half) .= parent(τ_p )
     # L2 = Operators.LeftBiasedF2C(;)
 
-    Fields.level(ᶜτ_sat, 1) .= τ_p
+    # Fields.level(ᶜτ_sat, 1) .= τ_p
 
     Operators.column_accumulate!(
         ᶜτ_sat,
         input;
-        init = (FT(0.0), U_sat),
+        init = (FT(0.0), FT(0.0)),
         transform = first,
-    ) do (ᶜτ_sat, U_sat),
-        (FrU_clp0, FrU_sat0, U, FrU_max, FrU_min, τ_p, level_idx, k_pbl, topo_a0)
+    ) do (tau_sat_val, U_sat_val),
+        (FrU_clp0, FrU_sat0, U, FrU_max, FrU_min, level_idx, k_pbl, topo_a0, τ_p, U_sat)
 
         if level_idx == 1
-            return (U, Fr_crit * U, FrU_sat0, τ_p)
+            U_sat_val = U_sat
         end
 
-        U_sat = min(U_sat, U)
-        FrU_sat = Fr_crit * U_sat
+        U_sat_val = min(U_sat_val, U)
+        FrU_sat = Fr_crit * U_sat_val
         FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
 
         if level_idx <= k_pbl
-            ᶜτ_sat = τ_p
+            tau_sat_val = τ_p
         else
             term1 = (FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ)
             term2 = FrU_sat^2 * FrU_sat0^β *
                 (FrU_max^(γ - ϵ - β) - FrU_clp0^(γ - ϵ - β)) / (γ - ϵ - β)
             term3 = FrU_sat^2 * (FrU_clp0^(γ - ϵ) - FrU_clp^(γ - ϵ)) / (γ - ϵ)
-            ᶜτ_sat = topo_a0 * (term1 + term2 + term3)
+            tau_sat_val = topo_a0 * (term1 + term2 + term3)
         end
 
-        return (ᶜτ_sat, U_sat)
+        return (tau_sat_val, U_sat_val)
     end
     
     # Apply top correction using field operations
     # QN: How can I GPUify this? Tried for hours!
+    if parent(ᶜτ_sat)[end] > FT(0)
+    #     # QN: Why can't I use ᶠp .= ᶠinterp.(ᶜp)?
+    #     # QN: Is this a copy operation then?
+        ᶜτ_sat .-=
+            parent(ᶜτ_sat)[end] .* (parent(ᶜp)[1] .- ᶜp) ./
+            (parent(ᶜp)[1] .- parent(ᶜp)[end])
+    end
+
+    # QN: ATTEMPT 
+    # top_values = Fields.level(ᶜτ_sat, Spaces.nlevels(axes(ᶜτ_sat)))
+
+    # p_surf = Fields.level(ᶜp, 1)
+    # p_top = Fields.level(ᶜp, Spaces.nlevels(axes(ᶜp)))
+
+    # @. ᶜτ_sat -= ifelse(
+    #     top_values > FT(0),
+    #     top_values * (p_surf - ᶜp) / (p_surf - p_top),
+    #     FT(0)
+    # )
+
     ᶠτ_sat .= ᶠinterp.(ᶜτ_sat)
     ᶠVτ .= ᶠinterp.(ᶜVτ)
-    
-    if parent(ᶠτ_sat)[end] > FT(0)
-        # QN: Why can't I use ᶠp .= ᶠinterp.(ᶜp) here?
-        # QN: Is this a copy operation then?
-        ᶠp = ᶠinterp.(ᶜp)
-        ᶠτ_sat .-=
-            parent(ᶠτ_sat)[end] .* (parent(ᶠp)[1] .- ᶠp) ./
-            (parent(ᶠp)[1] .- parent(ᶠp)[end])
-    end
 
     return nothing
 end
