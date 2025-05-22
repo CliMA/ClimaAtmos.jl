@@ -35,6 +35,18 @@ end
 function ᶜremaining_tendency_uₕ(ᶜY, ᶠY, p, t)
     :uₕ in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.uₕ))
+
+    ᶜuₕ = ᶜY.c.uₕ
+    ᶠu₃ = Yₜ.f.u₃
+    ᶜρ = Y.c.ρ
+    (; forcing_type, moisture_model, rayleigh_sponge, viscous_sponge) = p.atmos
+    (; ls_adv, edmf_coriolis) = p.atmos
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜp, sfc_conditions, ᶜts) = p.precomputed
+
+    ∑tendencies += viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge)
+
     return (;uₕ=∑tendencies)
 end
 function ᶜremaining_tendency_ρe_tot(ᶜY, ᶠY, p, t)
