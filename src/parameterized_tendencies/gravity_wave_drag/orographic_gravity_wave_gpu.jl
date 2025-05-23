@@ -57,6 +57,7 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
     topo_level_idx = similar(Y.c.ρ, FT)
     # Prepare cache
     # QN: Is there a limit to how big the cache can be?
+    # Limit is the GPU memory -- since the cache is stored anywhere on the device.
     return (;
         Fr_crit = Fr_crit,
         topo_γ = γ,
@@ -265,10 +266,69 @@ function calc_nonpropagating_forcing!(
 )
     FT = eltype(grav)
     ᶠp = ᶠinterp.(ᶜp)
+
     # compute k_ref: the upper bound for nonpropagating drag to function
     phase = FT(0)
     zlast = parent(Fields.level(ᶠz, k_pbl + half))[1]
     k_ref = k_pbl
+
+    # @Main.infiltrate
+    # ᶠk_surf = Fields.field_values(k_pbl) .+ 0.5
+
+    
+    # zlast = Fields.level(ᶠz, ᶠk_surf)
+
+    # zlast = similar(Fields.level(ᶠz, half), FT)
+    # input = @. lazy(tuple(ᶠz, k_pbl))
+
+    # Operators.column_reduce!(
+    #     zlast,
+    #     input;
+    # ) do (z_val), (z_field, k_surf)
+    #     k_surf = k_surf + half
+    #     return z_field[k_surf]
+    # end
+    # prep_z = Fields.field_values(ᶜz) .- Fields.field_values(zlast)
+
+    
+
+
+    # @Main.infiltrate
+    # input = @. lazy(tuple(
+    #     prep_z,
+    #     ᶠz,
+    #     ᶠN,
+    #     ᶠVτ,
+    #     k_pbl,
+    # ))
+
+    # Operators.column_reduce!(
+    #     phase,
+    #     input;
+    #     init = (FT(0), FT(0), 1),
+    #     transform = first,
+    # ) do (phase, k_ref, level_idx), (prep_z, ᶠz, ᶠN, ᶠVτ, k_pbl)
+
+    #     # FU: move k-indexing to z-indexing
+    #     if level_idx == 1
+    #         k_ref = k_pbl
+    #     end
+
+    #     if level_idx > k_pbl + 1
+    #         # QN: Is this indexing of ᶜz bad?
+    #         # Yes, use the RightBiasedF2C operator
+    #         phase += prep_z[level_idx+1] *
+    #             max(FT(0.7e-2), min(FT(1.7e-2), ᶠN)) /
+    #             max(FT(1.0), ᶠVτ)
+    #     end
+    #     if phase > π
+    #         k_ref = level_idx
+    #         return (phase, k_ref, level_idx + 1)
+    #     end
+
+    #     return (phase, k_ref, level_idx + 1)
+    # end
+
     for k in (k_pbl + 1):length(parent(ᶜz))
         phase +=
             (parent(ᶜz)[k + 1] - zlast) *
@@ -296,25 +356,51 @@ function calc_nonpropagating_forcing!(
 end
 
 function calc_propagate_forcing!(ᶜuforcing, ᶜvforcing, τ_x, τ_y, τ_l, τ_sat, ᶜρ)
-    dτdz = ᶜddz(τ_sat)
-    @. ᶜuforcing -= τ_x / τ_l / ᶜρ * dτdz
-    @. ᶜvforcing -= τ_y / τ_l / ᶜρ * dτdz
+    # QN: Again, I can't inline this, right?
+    # Adding the dollar sign tells @. to stop before ᶜddz(...)
+    # This is necessary as we are lazily evaluating the expression
+    @. ᶜuforcing -= τ_x / τ_l / ᶜρ * $ᶜddz(τ_sat)
+    @. ᶜvforcing -= τ_y / τ_l / ᶜρ * $ᶜddz(τ_sat)
     return nothing
 end
 
 function get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
     FT = eltype(cp_d)
-    idx =
-        (parent(ᶜp) .>= (FT(0.5) * parent(ᶜp)[1])) .& (
-            (parent(ᶜT)[1] + FT(1.5) .- parent(ᶜT)) .>
-            (grav / cp_d * (parent(ᶜz) .- parent(ᶜz)[1]))
-        )
-    # parent(ᶜp) .>= (FT(0.5) * parent(ᶜp)[1]) follows the criterion in GFDL codes
-    # that the lowest layer that is geq to half of pressure at first face level; while
-    # in our code, when interpolate from center to face, the first face level inherits
-    # values at the first center level
-    ci = findlast(idx)::CartesianIndex
-    return 1 + ci[1]
+    
+    # Initialize result field to hold k_pbl values
+    result = similar(Fields.level(ᶜp, 1), FT)
+    
+    # Get surface values (first level values)
+    p_sfc = Fields.level(ᶜp, 1)
+    T_sfc = Fields.level(ᶜT, 1)
+    z_sfc = Fields.level(ᶜz, 1)
+
+    # Create a lazy tuple of inputs for column_reduce
+    input = @. lazy(tuple(ᶜp, ᶜT, ᶜz, p_sfc, T_sfc, z_sfc))
+    # @Main.infiltrate
+
+    # Perform the column reduction
+    Operators.column_reduce!(
+        result,
+        input;
+        init = (1, 2),  # (k_pbl, current_level)
+        transform = first # Extract just the k_pbl value
+    ) do (k_pbl, level_idx), (p_col, T_col, z_col, p_sfc, T_sfc, z_sfc)
+        
+        # Check conditions
+        p_threshold = p_col >= (FT(0.5) * p_sfc)
+        T_threshold = (T_sfc + FT(1.5) - T_col) > (grav / cp_d * (z_col - z_sfc))
+        
+        # If both conditions are met, update k_pbl
+        if p_threshold && T_threshold
+            k_pbl = level_idx
+        end
+        
+        # Move to next level
+        return (k_pbl, level_idx + 1)
+    end
+
+    return result
 end
 
 function calc_base_flux!(
@@ -386,10 +472,11 @@ function calc_base_flux!(
     
     # Extract values from the tuple
     # QN: Is this a view or a copy?
-    ρ_pbl = @. k_pbl_values.:1
-    u_pbl = @. k_pbl_values.:2
-    v_pbl = @. k_pbl_values.:3
-    N_pbl = @. k_pbl_values.:4
+    # These are views
+    ρ_pbl = k_pbl_values.:1
+    u_pbl = k_pbl_values.:2
+    v_pbl = k_pbl_values.:3
+    N_pbl = k_pbl_values.:4
     
     # Calculate τ components
     @. τ_x = ρ_pbl * N_pbl * (t11 * u_pbl + t21 * v_pbl)
@@ -477,8 +564,9 @@ function calc_saturation_profile!(
     
     # Calculate derivatives for ᶠd2Vτdz
     # QN: Is the Julia compiler smart enough to inline these?
-    d2udz = (ᶜd2dz2(u_phy, p))
-    d2vdz = (ᶜd2dz2(v_phy, p))
+    # FU: Lazy this
+    d2udz = (ᶜd2dz2(u_phy))
+    d2vdz = (ᶜd2dz2(v_phy))
     
     # Calculate derivative for L1; tmp_field_2 == d2Vτdz
     @. d2Vτdz = max(
@@ -602,6 +690,7 @@ function calc_saturation_profile!(
     # QN: What is the canonical way of defining
     # operations between a 3D slab and 2D slice?
     # is there a broadcast function? 
+    # FU: Try .- ; ./ ; .-
     # @Main.infiltrate
     # @. ᶜτ_sat -= ifelse(
     #     top_values > FT(0),
@@ -617,9 +706,9 @@ end
 
 
 
-ᶜd2dz2(ᶜscalar, p) =
-    Geometry.WVector.(ᶜgradᵥ.(ᶠddz(ᶜscalar, p))).components.data.:1
+ᶜd2dz2(ᶜscalar) =
+    lazy.(Geometry.WVector.(ᶜgradᵥ.(ᶠddz(ᶜscalar))).components.data.:1)
 
-ᶜddz(ᶠscalar) = Geometry.WVector.(ᶜgradᵥ.(ᶠscalar)).components.data.:1
+ᶜddz(ᶠscalar) = lazy.(Geometry.WVector.(ᶜgradᵥ.(ᶠscalar)).components.data.:1)
 
-ᶠddz(ᶜscalar, p) = Geometry.WVector.(ᶠgradᵥ.(ᶜscalar)).components.data.:1
+ᶠddz(ᶜscalar) = lazy.(Geometry.WVector.(ᶠgradᵥ.(ᶜscalar)).components.data.:1)
