@@ -284,15 +284,11 @@ end
 function surface_velocity(ᶠu₃, ᶠuₕ³)
     assert_eltype(ᶠu₃, Geometry.Covariant3Vector)
     assert_eltype(ᶠuₕ³, Geometry.Contravariant3Vector)
+    ᶠlg = Fields.local_geometry_field(axes(ᶠu₃))
     sfc_u₃ = Fields.level(ᶠu₃.components.data.:1, half)
     sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
     sfc_g³³ = g³³_field(sfc_u₃)
-    w₃ = @. lazy(-sfc_uₕ³ / sfc_g³³) # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
-
-    # sfc_u₃ = Fields.level(ᶠu₃, half)
-    # sfc_uₕ³ = Fields.level(ᶠuₕ³, half)
-    # w₃ = @. lazy(-sfc_uₕ³ / sfc_u₃) # are metric terms automatically applied here?
-
+    w₃ = @. lazy(-C3(sfc_uₕ³ / sfc_g³³, ᶠlg)) # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
     assert_eltype(w₃, Geometry.Covariant3Vector)
     return w₃
 end
