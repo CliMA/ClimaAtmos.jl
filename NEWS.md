@@ -4,6 +4,9 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+### Add diagnostic for CAPE
+PR [#3820](https://github.com/CliMA/ClimaAtmos.jl/pull/3820) adds support for computing convective available potential energy (CAPE), or the vertical integral of the buoyancy differential between a parcel lifted from the surface and the environment. Exemplified in the TRMM deep convection case.
+
 v0.30.2
 -------
 
