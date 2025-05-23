@@ -96,6 +96,7 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
 
         topo_base_Vτ = similar(Fields.level(Y.c.ρ, 1)),
         topo_k_pbl = similar(Fields.level(Y.c.ρ, 1)),
+        topo_z_pbl = similar(Fields.level(Y.c.ρ, 1)),
         topo_k_pbl_values = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT}),
         topo_info = topo_info,
         ᶜN = similar(Fields.level(Y.c.ρ, 1)),
@@ -403,6 +404,44 @@ function get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
     return result
 end
 
+function get_pbl_z(ᶜp, ᶜT, ᶜz, grav, cp_d)
+    FT = eltype(cp_d)
+    
+    # Initialize result field to hold z_pbl values
+    result = similar(Fields.level(ᶜp, 1), FT)
+    
+    # Get surface values (first level values)
+    p_sfc = Fields.level(ᶜp, 1)
+    T_sfc = Fields.level(ᶜT, 1)
+    z_sfc = Fields.level(ᶜz, 1)
+
+    # Create a lazy tuple of inputs for column_reduce
+    input = @. lazy(tuple(ᶜp, ᶜT, ᶜz, p_sfc, T_sfc, z_sfc))
+
+    # Perform the column reduction
+    Operators.column_reduce!(
+        result,
+        input;
+        init = (z_sfc, 2),  # (z_pbl, current_level) - start with surface height
+        transform = first # Extract just the z_pbl value
+    ) do (z_pbl, level_idx), (p_col, T_col, z_col, p_sfc, T_sfc, z_sfc)
+        
+        # Check conditions
+        p_threshold = p_col >= (FT(0.5) * p_sfc)
+        T_threshold = (T_sfc + FT(1.5) - T_col) > (grav / cp_d * (z_col - z_sfc))
+        
+        # If both conditions are met, update z_pbl to current height
+        if p_threshold && T_threshold
+            z_pbl = z_col
+        end
+        
+        # Move to next level
+        return (z_pbl, level_idx + 1)
+    end
+
+    return result
+end
+
 function calc_base_flux!(
     τ_x,
     τ_y,
@@ -428,7 +467,7 @@ function calc_base_flux!(
     u_phy,
     v_phy,
     ᶜN,
-    k_pbl,
+    z_pbl,
     k_pbl_values
 )
     # Extract parameters
@@ -450,23 +489,40 @@ function calc_base_flux!(
     ϵ = topo_ϵ
     
     # Create an input tuple for column_reduce to extract k_pbl level data
-    input = @. lazy(tuple(ᶜρ, u_phy, v_phy, ᶜN, k_pbl))
+    # input = @. lazy(tuple(ᶜρ, u_phy, v_phy, ᶜN, k_pbl))
     
     # Use column_reduce to extract values at k_pbl level
     # k_pbl_values = similar(hmax, Tuple{FT, FT, FT, FT})
+    # Operators.column_reduce!(
+    #     k_pbl_values,
+    #     input;
+    #     init = (1, nothing, nothing, nothing, nothing),  # Start with level index 1
+    #     transform = x -> (x[2], x[3], x[4], x[5])        # Extract just the values of interest
+    # ) do (level_idx, ρ_acc, u_acc, v_acc, N_acc), (ρ, u, v, N, k_level)
+               
+    #     # If we're at the target level, extract values
+    #     if level_idx == k_level
+    #         return (level_idx + 1, ρ, u, v, N)
+    #     # Otherwise, just increment the level counter
+    #     else
+    #         return (level_idx + 1, ρ_acc, u_acc, v_acc, N_acc)
+    #     end
+    # end
+    ᶜz = Fields.coordinate_field(ᶜρ).z
+    input = @. lazy(tuple(ᶜρ, u_phy, v_phy, ᶜN, ᶜz, z_pbl))
+
     Operators.column_reduce!(
         k_pbl_values,
         input;
-        init = (1, nothing, nothing, nothing, nothing),  # Start with level index 1
-        transform = x -> (x[2], x[3], x[4], x[5])        # Extract just the values of interest
-    ) do (level_idx, ρ_acc, u_acc, v_acc, N_acc), (ρ, u, v, N, k_level)
-               
-        # If we're at the target level, extract values
-        if level_idx == k_level
-            return (level_idx + 1, ρ, u, v, N)
-        # Otherwise, just increment the level counter
+        init = (nothing, nothing, nothing, nothing),
+    ) do (ρ_acc, u_acc, v_acc, N_acc), (ρ, u, v, N, z_col, z_target)
+        
+        # Check if current level height is at or above z_pbl
+        # Use the last valid level that satisfies z_col <= z_target
+        if z_col <= z_target
+            return (ρ, u, v, N)
         else
-            return (level_idx + 1, ρ_acc, u_acc, v_acc, N_acc)
+            return (ρ_acc, u_acc, v_acc, N_acc)
         end
     end
     
@@ -541,7 +597,7 @@ function calc_saturation_profile!(
     v_phy,
     ᶜρ,
     ᶜp,
-    k_pbl,
+    z_pbl,
     d2Vτdz,
     L1,
     U_k_field,
@@ -593,7 +649,11 @@ function calc_saturation_profile!(
     for i in 1:Spaces.nlevels(axes(ᶜρ))
         fill!(Fields.level(level_idx, i), i)
     end
+
+    # Get height coordinate for comparison
+    ᶜz = Fields.coordinate_field(ᶜρ).z
     
+    z_surf = Fields.level(ᶜz, 1)
     # Create combined input for column_accumulate
     input = @. lazy(tuple(
         FrU_clp0,
@@ -601,8 +661,9 @@ function calc_saturation_profile!(
         U_k_field,
         FrU_max,
         FrU_min,
-        level_idx,
-        k_pbl,
+        z_surf,
+        ᶜz, 
+        z_pbl,
         topo_a0,
         τ_p, 
         U_sat
@@ -615,16 +676,15 @@ function calc_saturation_profile!(
     # L2 = Operators.LeftBiasedF2C(;)
 
     # Fields.level(ᶜτ_sat, 1) .= τ_p
-
     Operators.column_accumulate!(
         ᶜτ_sat,
         input;
         init = (FT(0.0), FT(0.0)),
         transform = first,
     ) do (tau_sat_val, U_sat_val),
-        (FrU_clp0, FrU_sat0, U, FrU_max, FrU_min, level_idx, k_pbl, topo_a0, τ_p, U_sat)
+        (FrU_clp0, FrU_sat0, U, FrU_max, FrU_min, z_surf, z_col, z_target, topo_a0, τ_p, U_sat)
 
-        if level_idx == 1
+        if z_col == z_surf
             U_sat_val = U_sat
         end
 
@@ -632,7 +692,7 @@ function calc_saturation_profile!(
         FrU_sat = Fr_crit * U_sat_val
         FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
 
-        if level_idx <= k_pbl
+        if z_col <= z_target
             tau_sat_val = τ_p
         else
             tau_sat_val = topo_a0 * (
@@ -673,9 +733,9 @@ function calc_saturation_profile!(
     Operators.column_accumulate!(
         ᶜτ_sat,
         input;
-        init = (FT(0.0)),
-        transform = first,
-    ) do (τ_sat_val),
+        init = FT(0.0),
+        transform = identity,
+    ) do τ_sat_val,
         (top_values, ᶜτ_sat, p_surf, p_top, ᶜp)
 
         τ_sat_val = ᶜτ_sat
@@ -683,7 +743,7 @@ function calc_saturation_profile!(
         if top_values > FT(0)
             τ_sat_val -= (top_values * (p_surf - ᶜp) / (p_surf - p_top))
 
-        return(τ_sat_val)
+        return τ_sat_val
         end
     end
 
