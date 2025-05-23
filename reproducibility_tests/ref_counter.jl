@@ -1,4 +1,4 @@
-241
+242
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+242
+- Use ustar^3 surface tke boundary condition
+
 241
 - Add triangle inequality limiter from Horn (2012) and apply it in microphysics
 

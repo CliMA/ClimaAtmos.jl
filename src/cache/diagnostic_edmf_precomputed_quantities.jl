@@ -1032,9 +1032,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     @. ρatke_flux_values = surface_flux_tke(
         turbconv_params,
         ρ_int_values,
-        u_int_values,
         ustar_values,
-        int_local_geometry_values,
         sfc_local_geometry_values,
     )
     return nothing
