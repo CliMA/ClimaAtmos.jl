@@ -7,10 +7,8 @@ Apply spherical shell geometric correction to radiative fluxes at radial height 
 
 Helper function for scaling radiation diagnostics.
 """
-function apply_geometric_scaling!(out, z, planet_radius, FT)
+apply_geometric_scaling!(out, z, planet_radius, FT) =
     @. out *= ((z + planet_radius) / planet_radius)^(FT(2))
-    return out
-end
 
 # Radiative fluxes
 
@@ -78,20 +76,25 @@ function compute_rsdt!(
     z_max = Spaces.z_max(axes(state.f))
     planet_radius = CAP.planet_radius(cache.params)
     FT = eltype(cache.params)
-
     if isnothing(out)
         out = copy(
-            Fields.array2field(
-                cache.radiation.rrtmgp_model.face_sw_flux_dn,
-                axes(state.f),
+            Fields.level(
+                Fields.array2field(
+                    cache.radiation.rrtmgp_model.face_sw_flux_dn,
+                    axes(state.f),
+                ),
+                nlevels + half,
             ),
         ),
         apply_geometric_scaling!(out, z_max, planet_radius, FT)
         return out
     else
-        out .= Fields.array2field(
-            cache.radiation.rrtmgp_model.face_sw_flux_dn,
-            axes(state.f),
+        out .= Fields.level(
+            Fields.array2field(
+                cache.radiation.rrtmgp_model.face_sw_flux_dn,
+                axes(state.f),
+            ),
+            nlevels + half,
         ),
         apply_geometric_scaling!(out, z_max, planet_radius, FT)
     end
@@ -217,17 +220,23 @@ function compute_rsut!(
     FT = eltype(cache.params)
     if isnothing(out)
         out = copy(
-            Fields.array2field(
-                cache.radiation.rrtmgp_model.face_sw_flux_up,
-                axes(state.f),
+            Fields.level(
+                Fields.array2field(
+                    cache.radiation.rrtmgp_model.face_sw_flux_up,
+                    axes(state.f),
+                ),
+                nlevels + half,
             ),
         ),
         apply_geometric_scaling!(out, z_max, planet_radius, FT)
         return out
     else
-        out .= Fields.array2field(
-            cache.radiation.rrtmgp_model.face_sw_flux_up,
-            axes(state.f),
+        out .= Fields.level(
+            Fields.array2field(
+                cache.radiation.rrtmgp_model.face_sw_flux_up,
+                axes(state.f),
+            ),
+            nlevels + half,
         ),
         apply_geometric_scaling!(out, z_max, planet_radius, FT)
     end
@@ -443,17 +452,23 @@ function compute_rlut!(
     FT = eltype(cache.params)
     if isnothing(out)
         out = copy(
-            Fields.array2field(
-                cache.radiation.rrtmgp_model.face_lw_flux_up,
-                axes(state.f),
+            Fields.level(
+                Fields.array2field(
+                    cache.radiation.rrtmgp_model.face_lw_flux_up,
+                    axes(state.f),
+                ),
+                nlevels + half,
             ),
         ),
         apply_geometric_scaling!(out, z_max, planet_radius, FT)
         return out
     else
-        out .= Fields.array2field(
-            cache.radiation.rrtmgp_model.face_lw_flux_up,
-            axes(state.f),
+        out .= Fields.level(
+            Fields.array2field(
+                cache.radiation.rrtmgp_model.face_lw_flux_up,
+                axes(state.f),
+            ),
+            nlevels + half,
         ),
         apply_geometric_scaling!(out, z_max, planet_radius, FT)
     end
@@ -669,17 +684,23 @@ function compute_rsutcs!(
     FT = eltype(cache.params)
     if isnothing(out)
         out = copy(
-            Fields.array2field(
-                cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
-                axes(state.f),
+            Fields.level(
+                Fields.array2field(
+                    cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
+                    axes(state.f),
+                ),
+                nlevels + half,
             ),
         ),
         apply_geometric_scaling!(out, z_max, planet_radius, FT)
         return out
     else
-        out .= Fields.array2field(
-            cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
-            axes(state.f),
+        out .= Fields.level(
+            Fields.array2field(
+                cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
+                axes(state.f),
+            ),
+            nlevels + half,
         ),
         apply_geometric_scaling!(out, z_max, planet_radius, FT)
     end
@@ -896,18 +917,24 @@ function compute_rlutcs!(
     FT = eltype(cache.params)
     if isnothing(out)
         out = copy(
+            Fields.level(
+                Fields.array2field(
+                    cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
+                    axes(state.f),
+                ),
+                nlevels + half,
+            ),
+        )
+        apply_geometric_scaling!(out, z_max, planet_radius, FT)
+        return out
+    else
+        out .= Fields.level(
             Fields.array2field(
                 cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
                 axes(state.f),
             ),
-        ),
-        apply_geometric_scaling!(out, z_max, planet_radius, FT)
-        return out
-    else
-        out .= Fields.array2field(
-            cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
-            axes(state.f),
-        ),
+            nlevels + half,
+        )
         apply_geometric_scaling!(out, z_max, planet_radius, FT)
     end
 end
