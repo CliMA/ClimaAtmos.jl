@@ -186,7 +186,7 @@ epsilon = 0.622
 ogw = CA.FullOrographicGravityWave{FT, String}()
 p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
 
-(; topo_k_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
+(; topo_k_pbl, topo_z_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
     p.orographic_gravity_wave
 (; topo_ᶜτ_sat, topo_ᶠτ_sat) = p.orographic_gravity_wave
 (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
@@ -218,6 +218,7 @@ thermo_params = CA.TD.Parameters.ThermodynamicsParameters(FT)
 
 # get PBL info
 topo_k_pbl .= CA.get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
+topo_z_pbl .= CA.get_pbl_z(ᶜp, ᶜT, ᶜz, grav, cp_d)
 
 # buoyancy frequency at cell centers
 parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
@@ -257,7 +258,7 @@ CA.calc_base_flux!(
     u_phy,
     v_phy,
     ᶜN,
-    k_pbl_int,
+    topo_z_pbl,
     topo_k_pbl_values
 )
 
@@ -278,12 +279,12 @@ CA.calc_saturation_profile!(
     ᶜN,
     topo_τ_x,
     topo_τ_y,
-    topo_τ_p,                                                                                                                                                                                                                                                                      
+    topo_τ_p,                   
     u_phy,
     v_phy,
     Y.c.ρ,
     ᶜp,
-    k_pbl_int,
+    topo_z_pbl,
     topo_d2Vτdz,
     topo_L1,
     topo_U_k_field,
