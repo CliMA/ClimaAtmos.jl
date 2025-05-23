@@ -493,3 +493,26 @@ function issphere(space)
     return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
            Domains.SphereDomain
 end
+
+import ClimaCore.DataLayouts
+
+"""
+    assert_eltype(x, ::Type{T}) where {T}
+
+Assert that the eltype of `x` is of type `T`
+"""
+function assert_eltype end
+
+assert_eltype(bc::Base.AbstractBroadcasted, ::Type{T}) where {T} =
+    assert_eltype(eltype(bc), T)
+assert_eltype(f::Fields.Field, ::Type{T}) where {T} =
+    assert_eltype(Fields.field_values(f), T)
+assert_eltype(data::DataLayouts.AbstractData, ::Type{T}) where {T} =
+    assert_eltype(eltype(data), T)
+
+function assert_eltype(::Type{S}, ::Type{T}) where {S, T}
+    if !(S <: T)
+        error("Type $S should be a subtype of $T")
+    end
+    return nothing
+end
