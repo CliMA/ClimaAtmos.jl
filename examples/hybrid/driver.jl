@@ -10,6 +10,15 @@ import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
 
+# Todo: move this to NullBroadcasts, or is there a better way?
+import NullBroadcasts
+# This makes the following pattern easier:
+# ∑tendencies = lazy.(∑tendencies .+ viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge))
+Base.broadcasted(::typeof(+), ::NullBroadcasts.NullBroadcasted, x) = x
+Base.broadcasted(::typeof(+), x, ::NullBroadcasts.NullBroadcasted) = x
+# Base.broadcasted(::typeof(-), ::NullBroadcasts.NullBroadcasted, x) = x
+Base.broadcasted(::typeof(-), x, ::NullBroadcasts.NullBroadcasted) = x
+
 if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()
     config = CA.AtmosConfig(config_file; job_id)

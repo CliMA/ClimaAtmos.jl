@@ -9,6 +9,16 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 # To load in the precompiled methods, run `using PrecompileCI` before loading ClimaAtmos. 
 # To see what methods are precompiled, open julia: `julia --project=.buildkite/PrecompileCI`
 # and run `using PrecompileTools; PrecompileTools.verbose[] = true; include(".buildkite/PrecompileCI/src/PrecompileCI.jl")`
+
+# Todo: move this to NullBroadcasts, or is there a better way?
+import NullBroadcasts
+# This makes the following pattern easier:
+# ∑tendencies = lazy.(∑tendencies .+ viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge))
+Base.broadcasted(::typeof(+), ::NullBroadcasts.NullBroadcasted, x) = x
+Base.broadcasted(::typeof(+), x, ::NullBroadcasts.NullBroadcasted) = x
+# Base.broadcasted(::typeof(-), ::NullBroadcasts.NullBroadcasted, x) = x
+Base.broadcasted(::typeof(-), x, ::NullBroadcasts.NullBroadcasted) = x
+
 using PrecompileCI
 import ClimaComms
 ClimaComms.@import_required_backends
