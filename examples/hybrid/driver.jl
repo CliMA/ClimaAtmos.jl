@@ -10,6 +10,9 @@ import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
 
+import ClimaCore
+ClimaCore.Fields.local_geometry_field(bc::Base.AbstractBroadcasted) =
+    ClimaCore.Fields.local_geometry_field(axes(bc))
 # Todo: move this to NullBroadcasts, or is there a better way?
 import NullBroadcasts
 # This makes the following pattern easier:
