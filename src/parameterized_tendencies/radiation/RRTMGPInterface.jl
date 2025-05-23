@@ -10,7 +10,6 @@ import Adapt
 import ClimaComms
 using NVTX
 using Random
-
 # TODO: Move this file to RRTMGP.jl, once the interface has been settled.
 # It will be faster to do interface development in the same repo as experiment
 # development, but, since this is just a user-friendly wrapper for RRTMGP.jl, we
@@ -1025,6 +1024,7 @@ NVTX.@annotate function update_fluxes!(model, seedval)
     model.radiation_mode.add_isothermal_boundary_layer &&
         update_boundary_layer!(model)
     clip_values!(model)
+    # TODO : update_concentrations as part of update_atmospheric_state! 
     update_concentrations!(model.radiation_mode, model)
     update_lw_fluxes!(model.radiation_mode, model)
     update_sw_fluxes!(model.radiation_mode, model)
@@ -1262,4 +1262,5 @@ function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
     model.face_flux .= model.face_lw_flux .+ model.face_sw_flux
 end
 
+include("update_inputs.jl")
 end # end module
