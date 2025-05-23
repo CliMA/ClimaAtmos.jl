@@ -217,10 +217,7 @@ thermo_params = CA.TD.Parameters.ThermodynamicsParameters(FT)
 ᶠz = Fields.coordinate_field(Y.f).z
 
 # get PBL info
-Fields.bycolumn(axes(Y.c.ρ)) do colidx
-    parent(topo_k_pbl[colidx]) .=
-        CA.get_pbl(ᶜp[colidx], ᶜT[colidx], ᶜz[colidx], grav, cp_d)
-end
+topo_k_pbl .= CA.get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
 
 # buoyancy frequency at cell centers
 parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
@@ -298,17 +295,15 @@ uforcing = zeros(axes(u_phy))
 vforcing = zeros(axes(v_phy))
 
 # compute drag tendencies due to propagating part
-Fields.bycolumn(axes(Y.c.ρ)) do colidx
-    CA.calc_propagate_forcing!(
-        uforcing[colidx],
-        vforcing[colidx],
-        topo_τ_x[colidx],
-        topo_τ_y[colidx],
-        topo_τ_l[colidx],
-        topo_ᶠτ_sat[colidx],
-        Y.c.ρ[colidx],
-    )
-end
+CA.calc_propagate_forcing!(
+    uforcing,
+    vforcing,
+    topo_τ_x,
+    topo_τ_y,
+    topo_τ_l,
+    topo_ᶠτ_sat,
+    Y.c.ρ,
+)
 
 # compute drag tendencies due to non-propagating part
 Fields.bycolumn(axes(Y.c.ρ)) do colidx
@@ -328,6 +323,23 @@ Fields.bycolumn(axes(Y.c.ρ)) do colidx
         grav,
     )
 end
+
+# CA.calc_nonpropagating_forcing!(
+#     uforcing,
+#     vforcing,
+#     ᶠN,
+#     topo_ᶠVτ,
+#     ᶜp,
+#     topo_τ_x,
+#     topo_τ_y,
+#     topo_τ_l,
+#     topo_τ_np,
+#     ᶠz,
+#     ᶜz,
+#     topo_k_pbl,
+#     grav,
+#     topo_tmp_1
+# )
 
 # constrain forcing
 @. uforcing = max(FT(-3e-3), min(FT(3e-3), uforcing))
