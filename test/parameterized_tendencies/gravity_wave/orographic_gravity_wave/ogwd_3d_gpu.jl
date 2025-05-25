@@ -361,6 +361,7 @@ CA.calc_nonpropagating_forcing!(
     ᶠN,
     topo_ᶠVτ,
     ᶠp,
+    ᶜp,
     ᶠp_m1,
     topo_τ_x,
     topo_τ_y,
