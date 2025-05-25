@@ -256,6 +256,7 @@ function calc_nonpropagating_forcing!(
     ᶠN,
     ᶠVτ,
     ᶠp,
+    ᶜp,
     ᶠp_m1,
     τ_x,
     τ_y,
@@ -280,7 +281,7 @@ function calc_nonpropagating_forcing!(
     Operators.column_reduce!(
         z_ref_field,
         input;
-        init = (FT(0), FT(0), FT(0), true),  # (phase, z_ref)
+        init = (FT(0), FT(0), FT(0), false),  # (phase, z_ref)
         transform = x -> (x[1], x[2])
     ) do (z_ref_acc, ᶠz_pbl_acc, phase_acc, done), (z_face, N_face, Vτ_face, z_pbl)
         # if done && z_face == FT(0)
@@ -293,7 +294,7 @@ function calc_nonpropagating_forcing!(
             return (z_ref_acc, ᶠz_pbl_acc, phase_acc, true)
         end
         # Only accumulate phase above z_pbl
-        if z_face > z_pbl         
+        if z_face > z_pbl
             phase_acc += (z_face - z_pbl) * 
                 max(FT(0.7e-2), min(FT(1.7e-2), N_face)) / 
                 max(FT(1.0), Vτ_face)
@@ -307,44 +308,65 @@ function calc_nonpropagating_forcing!(
         return (z_ref_acc, ᶠz_pbl_acc, phase_acc, false)
     end
 
-    # @Main.infiltrate
     z_ref = z_ref_field.:1
     ᶠz_pbl = z_ref_field.:2
 
-    input = @. lazy(tuple(ᶠz, ᶠp, ᶠp_m1, z_ref, dz, ᶠz_pbl))
-    weights_and_sum = similar(ᶜuforcing, Tuple{FT, FT})
-    
-    Operators.column_accumulate!(
-        weights_and_sum,
-        input;
-        init = (FT(0), FT(0), FT(NaN)),
-        transform = x -> (x[1], x[2])
-    ) do (wtsum_acc, weights_acc, ᶠp_ref), (ᶠz, ᶠp, ᶠp_m1, z_ref, z_pbl, dz)
+    ᶠp_ref = similar(Fields.level(ᶠN, half), FT)
+    input = @. lazy(tuple(z_ref, ᶠz, ᶠp, dz))
 
+    Operators.column_reduce!(
+        ᶠp_ref,
+        input;
+        init = FT(NaN)
+    ) do ᶠp_ref, (z_ref, ᶠz, ᶠp, dz)
         if abs(ᶠz - z_ref) < (0.5 * dz + eps(FT))
-        # if ᶠz >= z_ref
             if isnan(ᶠp_ref)
                 ᶠp_ref = ᶠp
             end
         end
-        if !isnan(ᶠp_ref)
-            if (ᶠz > z_pbl) && (ᶠz <= z_ref)
-                weights_acc = ᶠp - ᶠp_ref
-                if abs(weights_acc) > 0
-                    wtsum_acc = (ᶠp_m1 - ᶠp) / weights_acc
-                end
-            end
-            if (ᶠz > z_ref)
-                return(0.0, 0.0, ᶠp_ref)
-            end
-        end
-        return (wtsum_acc, weights_acc, ᶠp_ref)
+        return ᶠp_ref
     end
 
-    wtsum_field = weights_and_sum.:1
-    weights = weights_and_sum.:2
-
     # @Main.infiltrate
+
+    # input = @. lazy(tuple(ᶠz, ᶠp, ᶠp_m1, z_ref, ᶠp_ref, ᶠz_pbl, ᶜp))
+    # weights_and_sum = similar(ᶜuforcing, Tuple{FT, FT})
+    
+    # Operators.column_accumulate!(
+    #     weights_and_sum,
+    #     input;
+    #     init = (FT(0), FT(0)),
+    #     transform = x -> (x[1], x[2])
+    # ) do (wtsum_acc, weights_acc), (ᶠz, ᶠp, ᶠp_m1, z_ref, ᶠp_ref, z_pbl, ᶜp)
+    #     if (ᶠz > z_pbl) && (ᶠz <= z_ref)
+    #         weights_acc = ᶜp - ᶠp_ref
+    #         if abs(weights_acc) > 0
+    #             wtsum_acc = (ᶠp_m1 - ᶠp) / weights_acc
+    #         end
+    #     end
+    #     if (ᶠz > z_ref)
+    #         return(0.0, 0.0, ᶠp_ref)
+    #     end
+    #     return (wtsum_acc, weights_acc)
+    # end
+
+    # wtsum_field = weights_and_sum.:1
+    # weights = weights_and_sum.:2
+    
+    mask = Fields.Field(Bool, axes(ᶠz))
+    @. mask = (ᶠz .> z_pbl) .&& (ᶠz .<= z_ref)
+    L2 = Operators.LeftBiasedF2C(;)
+    mask = L2.(mask)
+
+    weights = ᶜp .- ᶠp_ref
+    f_diff = ᶠp_m1 .- ᶠp
+    f_diff = ᶜinterp.(f_diff)
+
+    wtsum_field = @. ifelse(mask != 0, f_diff / weights, 0.0)
+
+    weights = weights .* mask
+
+    @Main.infiltrate
 
     # i_top = Spaces.nlevels(axes(ᶠz))
     # wtsum = Fields.level(wtsum_field, i_top - 1)
