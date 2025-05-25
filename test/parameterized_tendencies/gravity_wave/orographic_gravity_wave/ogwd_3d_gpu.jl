@@ -232,6 +232,36 @@ v_phy = Y.c.v_phy
 # 
 k_pbl_int = trunc.(topo_k_pbl)
 
+
+ᶠp = ᶠinterp.(ᶜp)
+ᶠp_m1 = similar(ᶠp)
+
+# More explicit scale height approach for pressure extrapolation
+z_bottom = Fields.level(ᶠz, half)
+z_second = Fields.level(ᶠz, 1 + half)
+p_bottom = Fields.level(ᶠp, half)
+p_second = Fields.level(ᶠp, 1 + half)
+
+# Calculate scale height from the two levels
+scale_height_values = (Fields.field_values(z_second) .- Fields.field_values(z_bottom)) ./ 
+log.(Fields.field_values(p_bottom) ./ Fields.field_values(p_second))
+scale_height = Fields.Field(scale_height_values, axes(z_bottom))
+
+# Calculate the extrapolated height (one level below bottom)
+dz_values = Fields.field_values(z_second) .- Fields.field_values(z_bottom)
+dz = Fields.Field(dz_values, axes(z_bottom))
+z_extrapolated_values = Fields.field_values(z_bottom) .- dz_values
+z_extrapolated = Fields.Field(z_extrapolated_values, axes(z_bottom))
+
+# Extrapolate pressure using barometric formula: p = p₀ * exp(-z/H)
+Boundary_value = Fields.Field(
+    Fields.field_values(p_bottom) .* 
+    exp.((z_extrapolated_values .- Fields.field_values(z_bottom)) ./ scale_height_values),
+    axes(p_bottom)
+)
+
+CA.field_shiftface_down!(ᶠp, ᶠp_m1, Boundary_value)
+
 # compute base flux at k_pbl
 CA.calc_base_flux!(
     topo_τ_x,
@@ -307,40 +337,41 @@ CA.calc_propagate_forcing!(
 )
 
 # compute drag tendencies due to non-propagating part
-Fields.bycolumn(axes(Y.c.ρ)) do colidx
-    CA.calc_nonpropagating_forcing!(
-        uforcing[colidx],
-        vforcing[colidx],
-        ᶠN[colidx],
-        topo_ᶠVτ[colidx],
-        ᶜp[colidx],
-        topo_τ_x[colidx],
-        topo_τ_y[colidx],
-        topo_τ_l[colidx],
-        topo_τ_np[colidx],
-        ᶠz[colidx],
-        ᶜz[colidx],
-        Int(parent(topo_k_pbl[colidx])[1]),
-        grav,
-    )
-end
+# Fields.bycolumn(axes(Y.c.ρ)) do colidx
+#     CA.calc_nonpropagating_forcing!(
+#         uforcing[colidx],
+#         vforcing[colidx],
+#         ᶠN[colidx],
+#         topo_ᶠVτ[colidx],
+#         ᶜp[colidx],
+#         topo_τ_x[colidx],
+#         topo_τ_y[colidx],
+#         topo_τ_l[colidx],
+#         topo_τ_np[colidx],
+#         ᶠz[colidx],
+#         ᶜz[colidx],
+#         Int(parent(topo_k_pbl[colidx])[1]),
+#         grav,
+#     )
+# end
 
-# CA.calc_nonpropagating_forcing!(
-#     uforcing,
-#     vforcing,
-#     ᶠN,
-#     topo_ᶠVτ,
-#     ᶜp,
-#     topo_τ_x,
-#     topo_τ_y,
-#     topo_τ_l,
-#     topo_τ_np,
-#     ᶠz,
-#     ᶜz,
-#     topo_k_pbl,
-#     grav,
-#     topo_tmp_1
-# )
+CA.calc_nonpropagating_forcing!(
+    uforcing,
+    vforcing,
+    ᶠN,
+    topo_ᶠVτ,
+    ᶠp,
+    ᶠp_m1,
+    topo_τ_x,
+    topo_τ_y,
+    topo_τ_l,
+    topo_τ_np,
+    ᶠz,
+    ᶜz,
+    topo_z_pbl,
+    dz,
+    grav,
+)
 
 # constrain forcing
 @. uforcing = max(FT(-3e-3), min(FT(3e-3), uforcing))
