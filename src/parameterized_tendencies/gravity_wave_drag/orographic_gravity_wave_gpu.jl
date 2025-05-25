@@ -255,99 +255,111 @@ function calc_nonpropagating_forcing!(
     ᶜvforcing,
     ᶠN,
     ᶠVτ,
-    ᶜp,
+    ᶠp,
+    ᶠp_m1,
     τ_x,
     τ_y,
     τ_l,
     τ_np,
     ᶠz,
     ᶜz,
-    k_pbl,
+    z_pbl,
+    dz,
     grav,
 )
     FT = eltype(grav)
-    ᶠp = ᶠinterp.(ᶜp)
 
-    # compute k_ref: the upper bound for nonpropagating drag to function
-    phase = FT(0)
-    zlast = parent(Fields.level(ᶠz, k_pbl + half))[1]
-    k_ref = k_pbl
+    # Initialize fields for z_ref and phase computation
+    z_ref_field = similar(Fields.level(ᶠz, half), Tuple{FT, FT})
 
-    # @Main.infiltrate
-    # ᶠk_surf = Fields.field_values(k_pbl) .+ 0.5
-
-    
-    # zlast = Fields.level(ᶠz, ᶠk_surf)
-
-    # zlast = similar(Fields.level(ᶠz, half), FT)
-    # input = @. lazy(tuple(ᶠz, k_pbl))
-
-    # Operators.column_reduce!(
-    #     zlast,
-    #     input;
-    # ) do (z_val), (z_field, k_surf)
-    #     k_surf = k_surf + half
-    #     return z_field[k_surf]
-    # end
-    # prep_z = Fields.field_values(ᶜz) .- Fields.field_values(zlast)
-
-    
-
+    # Compute z_ref using column_reduce
+    input = @. lazy(tuple(ᶠz, ᶠN, ᶠVτ, z_pbl))
 
     # @Main.infiltrate
-    # input = @. lazy(tuple(
-    #     prep_z,
-    #     ᶠz,
-    #     ᶠN,
-    #     ᶠVτ,
-    #     k_pbl,
-    # ))
 
-    # Operators.column_reduce!(
-    #     phase,
-    #     input;
-    #     init = (FT(0), FT(0), 1),
-    #     transform = first,
-    # ) do (phase, k_ref, level_idx), (prep_z, ᶠz, ᶠN, ᶠVτ, k_pbl)
+    Operators.column_reduce!(
+        z_ref_field,
+        input;
+        init = (FT(0), FT(0), FT(0), true),  # (phase, z_ref)
+        transform = x -> (x[1], x[2])
+    ) do (z_ref_acc, ᶠz_pbl_acc, phase_acc, done), (z_face, N_face, Vτ_face, z_pbl)
+        # if done && z_face == FT(0)
+        #     z_ref_acc = z_pbl
+        #     done = false
+        # end
 
-    #     # FU: move k-indexing to z-indexing
-    #     if level_idx == 1
-    #         k_ref = k_pbl
-    #     end
-
-    #     if level_idx > k_pbl + 1
-    #         # QN: Is this indexing of ᶜz bad?
-    #         # Yes, use the RightBiasedF2C operator
-    #         phase += prep_z[level_idx+1] *
-    #             max(FT(0.7e-2), min(FT(1.7e-2), ᶠN)) /
-    #             max(FT(1.0), ᶠVτ)
-    #     end
-    #     if phase > π
-    #         k_ref = level_idx
-    #         return (phase, k_ref, level_idx + 1)
-    #     end
-
-    #     return (phase, k_ref, level_idx + 1)
-    # end
-
-    for k in (k_pbl + 1):length(parent(ᶜz))
-        phase +=
-            (parent(ᶜz)[k + 1] - zlast) *
-            max(FT(0.7e-2), min(FT(1.7e-2), parent(ᶠN)[k])) /
-            max(FT(1.0), parent(ᶠVτ)[k])
-        if phase > π
-            k_ref = k
-            break
+        if done
+            # If already done, return the accumulated values
+            return (z_ref_acc, ᶠz_pbl_acc, phase_acc, true)
         end
+        # Only accumulate phase above z_pbl
+        if z_face > z_pbl         
+            phase_acc += (z_face - z_pbl) * 
+                max(FT(0.7e-2), min(FT(1.7e-2), N_face)) / 
+                max(FT(1.0), Vτ_face)
+            
+            # If phase exceeds π, stop and return current z_col as z_ref
+            if phase_acc > π
+                return (z_face, z_pbl, phase_acc, true)
+            end
+        end
+        # Always return the accumulator tuple
+        return (z_ref_acc, ᶠz_pbl_acc, phase_acc, false)
     end
 
-    # compute weights
-    weights = FT(0) .* ᶜz
-    wtsum = FT(0)
-    for k in k_pbl:k_ref
-        tmp = Fields.level(weights, k)
-        parent(tmp) .= parent(ᶜp)[k] - parent(ᶠp)[k_ref]
-        wtsum += (parent(ᶠp)[k - 1] - parent(ᶠp)[k]) / parent(weights)[k]
+    # @Main.infiltrate
+    z_ref = z_ref_field.:1
+    ᶠz_pbl = z_ref_field.:2
+
+    input = @. lazy(tuple(ᶠz, ᶠp, ᶠp_m1, z_ref, dz, ᶠz_pbl))
+    weights_and_sum = similar(ᶜuforcing, Tuple{FT, FT})
+    
+    Operators.column_accumulate!(
+        weights_and_sum,
+        input;
+        init = (FT(0), FT(0), FT(NaN)),
+        transform = x -> (x[1], x[2])
+    ) do (wtsum_acc, weights_acc, ᶠp_ref), (ᶠz, ᶠp, ᶠp_m1, z_ref, z_pbl, dz)
+
+        if abs(ᶠz - z_ref) < (0.5 * dz + eps(FT))
+        # if ᶠz >= z_ref
+            if isnan(ᶠp_ref)
+                ᶠp_ref = ᶠp
+            end
+        end
+        if !isnan(ᶠp_ref)
+            if (ᶠz > z_pbl) && (ᶠz <= z_ref)
+                weights_acc = ᶠp - ᶠp_ref
+                if abs(weights_acc) > 0
+                    wtsum_acc = (ᶠp_m1 - ᶠp) / weights_acc
+                end
+            end
+            if (ᶠz > z_ref)
+                return(0.0, 0.0, ᶠp_ref)
+            end
+        end
+        return (wtsum_acc, weights_acc, ᶠp_ref)
+    end
+
+    wtsum_field = weights_and_sum.:1
+    weights = weights_and_sum.:2
+
+    # @Main.infiltrate
+
+    # i_top = Spaces.nlevels(axes(ᶠz))
+    # wtsum = Fields.level(wtsum_field, i_top - 1)
+    wtsum = similar(Fields.level(ᶜuforcing, 1), FT)
+
+    Operators.column_reduce!(
+        wtsum, 
+        wtsum_field;
+        init = FT(0)
+    ) do acc, wtsum_field
+        return acc + wtsum_field
+    end
+
+    if any(isnan, parent(wtsum)) || any(x -> x == 0, parent(wtsum))
+    @warn "wtsum contains invalid values!"
     end
 
     # compute drag
@@ -378,7 +390,6 @@ function get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
 
     # Create a lazy tuple of inputs for column_reduce
     input = @. lazy(tuple(ᶜp, ᶜT, ᶜz, p_sfc, T_sfc, z_sfc))
-    # @Main.infiltrate
 
     # Perform the column reduction
     Operators.column_reduce!(
@@ -424,7 +435,7 @@ function get_pbl_z(ᶜp, ᶜT, ᶜz, grav, cp_d)
         input;
         init = (z_sfc, 2),  # (z_pbl, current_level) - start with surface height
         transform = first # Extract just the z_pbl value
-    ) do (z_pbl, level_idx), (p_col, T_col, z_col, p_sfc, T_sfc, z_sfc)
+    ) do z_pbl, (p_col, T_col, z_col, p_sfc, T_sfc, z_sfc)
         
         # Check conditions
         p_threshold = p_col >= (FT(0.5) * p_sfc)
@@ -436,10 +447,16 @@ function get_pbl_z(ᶜp, ᶜT, ᶜz, grav, cp_d)
         end
         
         # Move to next level
-        return (z_pbl, level_idx + 1)
+        return z_pbl
     end
 
     return result
+end
+
+function field_shiftface_down!(ᶠexample_field, ᶠshifted_field, Boundary_value)
+    L1 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(Boundary_value))
+    L2 = Operators.LeftBiasedF2C(;)
+    ᶠshifted_field .= L1.(L2.(ᶠexample_field))
 end
 
 function calc_base_flux!(
@@ -629,7 +646,6 @@ function calc_saturation_profile!(
         eps(FT),
         -(d2udz * τ_x + d2vdz * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2))
     )
-    # @Main.infiltrate
     
     # Calculate tmp_field_1 == L1
     # Here on the RHS, tmp_field_2 == d2Vτdz
@@ -671,7 +687,6 @@ function calc_saturation_profile!(
     
     # Initialize the result field with τ_p at the lowest face
     fill!(ᶜτ_sat, 0.0)
-    # @Main.infiltrate
     # Fields.level(τ_sat, half) .= parent(τ_p )
     # L2 = Operators.LeftBiasedF2C(;)
 
@@ -751,7 +766,6 @@ function calc_saturation_profile!(
     # operations between a 3D slab and 2D slice?
     # is there a broadcast function? 
     # FU: Try .- ; ./ ; .-
-    # @Main.infiltrate
     # @. ᶜτ_sat -= ifelse(
     #     top_values > FT(0),
     #     top_values * (p_surf - ᶜp) / (p_surf - p_top),
