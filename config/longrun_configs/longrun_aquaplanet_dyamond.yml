@@ -22,7 +22,7 @@ precip_model: "0M"
 turbconv: "edonly_edmfx"
 edmfx_sgs_diffusive_flux: true
 toml: [toml/longrun_aquaplanet.toml]
-netcdf_interpolation_num_points:  [720, 360, 63]
+netcdf_interpolation_num_points:  [360, 180, 63]
 diagnostics:
  - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
    reduction: inst
