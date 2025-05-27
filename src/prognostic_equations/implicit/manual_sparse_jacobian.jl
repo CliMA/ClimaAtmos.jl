@@ -806,8 +806,18 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         function limit(q, dt, n::Int)
             return q / float(dt) / n
         end
+
+        function ∂ρq_err_∂ρqᵪ(tps, force, force_deriv, pos_lim, pos_lim_deriv, neg_lim, neg_lim_deriv)
+            FT_inner = eltype(tps)
+
+            if force > FT_inner(0)
+                return force_deriv + pos_limit_deriv - (force * force_deriv + pos_lim * pos_lim_deriv)/(sqrt((force)^2 + (pos_lim)^2))
+            else
+                return - force_deriv - neg_limit_deriv + (force * force_deriv + neg_lim * neg_lim_deriv)/(sqrt((force)^2 + (neg_lim)^2))
+            end
+        end
     
-        function ∂ρqₗ_err_∂ρqᵪ(tps, ts, cmc, dt, deriv, limit_deriv)
+        function ∂ρqₗ_err_∂ρqᵪ(tps, ts, cmc, force, force_deriv, pos_lim, pos_lim_deriv, neg_lim, neg_lim_deriv)
             FT_inner = eltype(tps)
             q = TD.PhasePartition(tps, ts)
             ρ = TD.air_density(tps, ts)
@@ -815,25 +825,31 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
             S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, tps, q, ρ, Tₐ(tps, ts))
 
             if S > FT_inner(0)
-                if S <= limit(TD.vapor_specific_humidity(q), dt, 2)
-                    if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
-                        return deriv
-                    else
-                        return FT_inner(0)
-                    end
-                else
-                    return -limit_deriv
-                end
+                # lim = limit(TD.vapor_specific_humidity(q), dt, 2)
+                # lim_deriv = (1/(2*float(dt)))
+                return force_deriv + pos_limit_deriv - (force * force_deriv + pos_lim * pos_lim_deriv)/(sqrt((force)^2 + (pos_lim)^2))
+                # if S <= limit(TD.vapor_specific_humidity(q), dt, 2)
+                #     if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
+                #         return deriv
+                #     else
+                #         return FT_inner(0)
+                #     end
+                # else
+                #     return -limit_deriv
+                # end
             else
-                if abs(S) <= limit(TD.liquid_specific_humidity(q), dt, 2)
-                    if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
-                        return -deriv
-                    else
-                        return FT_inner(0)
-                    end
-                else
-                    return -limit_deriv
-                end
+                # lim = limit(TD.liquid_specific_humidity(q), dt, 2)
+                # lim_deriv = (1/(2*float(dt)))
+                return - force_deriv - neg_limit_deriv + (force * force_deriv + neg_lim * neg_lim_deriv)/(sqrt((force)^2 + (neg_lim)^2))
+                # if abs(S) <= limit(TD.liquid_specific_humidity(q), dt, 2)
+                #     if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
+                #         return -deriv
+                #     else
+                #         return FT_inner(0)
+                #     end
+                # else
+                #     return -limit_deriv
+                # end
             end
         end
 
@@ -879,22 +895,45 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         
         #@. ∂ᶜρqₗ_err_∂ᶜρqₗ -=
         #    DiagonalMatrixRow(1 / (τₗ * Γₗ(thermo_params, ᶜts)))
+        # @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
+        #     DiagonalMatrixRow(
+        #         ∂ρqₗ_err_∂ρqᵪ(
+        #             thermo_params, ᶜts, (cmc,), dt, (-1 / (τₗ * Γₗ(thermo_params, ᶜts))), (1/(2*float(dt))),
+        #         )
+        #     )
+        q = TD.PhasePartition(tps, ᶜts)
+        ρ = TD.air_density(tps, ᶜts)
+
+        force_liq = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, tps, q, ρ, Tₐ(tps, ts))
+        force_ice = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.ice, tps, q, ρ, Tₐ(tps, ts))
+
         @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
             DiagonalMatrixRow(
-                ∂ρqₗ_err_∂ρqᵪ(
-                    thermo_params, ᶜts, (cmc,), dt, (-1 / (τₗ * Γₗ(thermo_params, ᶜts))), (1/(2*float(dt))),
+                ∂ρq_err_∂ρqᵪ(
+                    thermo_params, force_liq, (-1 / (τₗ * Γₗ(thermo_params, ᶜts))),
+                    limit(TD.vapor_specific_humidity(q), dt, 2), (-1/(2*float(dt))),
+                    limit(TD.liquid_specific_humidity(q), dt, 2), (1/(2*float(dt))),
                 )
             )
         
         #@. ∂ᶜρqᵢ_err_∂ᶜρqᵢ -=
         #    DiagonalMatrixRow(1 / (τᵢ * Γᵢ(thermo_params, ᶜts)))
 
+        # @. ∂ᶜρqᵢ_err_∂ᶜρqᵢ +=
+        #     DiagonalMatrixRow(
+        #         ∂ρqᵢ_err_∂ρqᵪ(
+        #             thermo_params, ᶜts, (cmc,), dt, (-1 / (τᵢ * Γᵢ(thermo_params, ᶜts))), (1/(2*float(dt))),
+        #             )
+        #         )
+
         @. ∂ᶜρqᵢ_err_∂ᶜρqᵢ +=
             DiagonalMatrixRow(
-                ∂ρqᵢ_err_∂ρqᵪ(
-                    thermo_params, ᶜts, (cmc,), dt, (-1 / (τᵢ * Γᵢ(thermo_params, ᶜts))), (1/(2*float(dt))),
-                    )
+                ∂ρq_err_∂ρqᵪ(
+                    thermo_params, force_ice, (-1 / (τᵢ * Γᵢ(thermo_params, ᶜts))),
+                    limit(TD.vapor_specific_humidity(q), dt, 2), (-1/(2*float(dt))),
+                    limit(TD.ice_specific_humidity(q), dt, 2), (1/(2*float(dt))),
                 )
+            )
 
         ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
         ᶜ∂T_∂p = @. lazy(1 / (ᶜρ * TD.gas_constant_air(thermo_params, ᶜts)))
@@ -920,18 +959,32 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, t)
         #@. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
         #    (1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts)),
         #)
+        # @. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
+        #     ∂ρqₗ_err_∂ρqᵪ(
+        #         thermo_params, ᶜts, (cmc,), dt, ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))), FT(0)
+        #     )
+        # )
         @. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
-            ∂ρqₗ_err_∂ρqᵪ(
-                thermo_params, ᶜts, (cmc,), dt, ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))), FT(0)
+            ∂ρq_err_∂ρqᵪ(
+                thermo_params, force_liq, ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))),
+                limit(TD.vapor_specific_humidity(q), dt, 2), (1/(2*float(dt))),
+                limit(TD.liquid_specific_humidity(q), dt, 2), FT(0),
             )
         )
 
         #@. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
         #    (1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts)),
         #)
+        # @. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
+        #     ∂ρqᵢ_err_∂ρqᵪ(
+        #         thermo_params, ᶜts, (cmc,), dt, ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))), FT(0)
+        #     )
+        # )
         @. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
-            ∂ρqᵢ_err_∂ρqᵪ(
-                thermo_params, ᶜts, (cmc,), dt, ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))), FT(0)
+            ∂ρq_err_∂ρqᵪ(
+                thermo_params, force_ice, ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))),
+                limit(TD.vapor_specific_humidity(q), dt, 2), (1/(2*float(dt))),
+                limit(TD.ice_specific_humidity(q), dt, 2), FT(0),
             )
         )
     end
