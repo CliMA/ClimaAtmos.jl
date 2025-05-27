@@ -2,6 +2,31 @@
 ##### EDMF SGS flux
 #####
 
+"""
+    tke_dissipation(turbconv_params, ρatke, tke, mixing_length)
+
+Returns a scalar value representing the TKE dissipation rate
+per unit volume, ρ * ε_d [kg m^-1 s^-3].
+
+The physical dissipation is calculated as:
+  ρ * ε_d = c_d * ρatke * sqrt(abs(tke)) / mixing_length
+where `c_d` is a parameter.
+
+Arguments:
+- `turbconv_params`: Turbulence and convection model parameters.
+- `ρatke`: ρ_area_weighted * tke [kg m^-2 s^-2].
+- `tke`: Turbulent kinetic energy [m^2 s^-2].
+- `mixing_length`: Turbulent mixing length [m].
+"""
+function tke_dissipation(turbconv_params, ρatke, tke, mixing_length)
+    FT = typeof(tke)
+    c_d = CAP.tke_diss_coeff(turbconv_params)
+    dissipation_rate_vol = c_d * ρatke * sqrt(abs(tke)) / mixing_length
+    return dissipation_rate_vol
+end
+
+
+
 edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model::EDOnlyEDMFX)

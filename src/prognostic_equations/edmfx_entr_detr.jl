@@ -150,6 +150,7 @@ function detrainment_from_thermo_state(
     ᶜmassflux_vert_div, # mass flux divergence is not implemented for diagnostic edmf
     w_vert_div_level,
     tke_prev_level,
+    ᶜgradᵥ_ᶠΦ,
     edmfx_detr_model,
 )
     FT = eltype(thermo_params)
@@ -164,7 +165,12 @@ function detrainment_from_thermo_state(
         draft_area(ρaʲ_prev_level, ρʲ_prev_level),
         get_physical_w(u³ʲ_prev_halflevel, local_geometry_prev_halflevel),
         TD.relative_humidity(thermo_params, tsʲ_prev_level),
-        ᶜphysical_buoyancy(thermo_params, ρ_prev_level, ρʲ_prev_level),
+        vertical_buoyancy_acceleration(
+            ρ_prev_level,
+            ρʲ_prev_level,
+            ᶜgradᵥ_ᶠΦ,
+            local_geometry_prev_halflevel,
+        ),
         get_physical_w(u³_prev_halflevel, local_geometry_prev_halflevel),
         TD.relative_humidity(thermo_params, ts_prev_level),
         FT(0),

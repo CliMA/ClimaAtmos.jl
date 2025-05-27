@@ -304,7 +304,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; params) = p
     (; dt) = p
     dt = float(dt)
-    (; ᶜΦ) = p.core
+    (; ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
     (; ᶜp, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
     (;
@@ -482,7 +482,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     local_geometry_prev_halflevel,
                 ),
                 TD.relative_humidity(thermo_params, tsʲ_prev_level),
-                ᶜphysical_buoyancy(thermo_params, ρ_prev_level, ρʲ_prev_level),
+                vertical_buoyancy_acceleration(
+                    ρ_prev_level,
+                    ρʲ_prev_level,
+                    ᶜgradᵥ_ᶠΦ,
+                    local_geometry_prev_halflevel,
+                ),
                 get_physical_w(
                     u³_prev_halflevel,
                     local_geometry_prev_halflevel,
@@ -644,6 +649,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 FT(0), # mass flux divergence is not implemented for diagnostic edmf
                 w_vert_div_level,
                 tke_prev_level,
+                ᶜgradᵥ_ᶠΦ,
                 p.atmos.edmfx_model.detr_model,
             )
 
