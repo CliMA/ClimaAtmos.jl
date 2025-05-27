@@ -54,7 +54,7 @@ function jacobian_cache(::AutoDenseJacobian, Y, atmos)
     )
 end
 
-function update_jacobian_skip_factorizing!(
+NVTX.@annotate function update_jacobian_skip_factorizing!(
     ::AutoDenseJacobian,
     cache,
     Y,
@@ -99,21 +99,21 @@ function update_jacobian_skip_factorizing!(
     end
 end
 
-function update_jacobian!(::AutoDenseJacobian, cache, Y, p, dtγ, t)
+NVTX.@annotate function update_jacobian!(::AutoDenseJacobian, cache, Y, p, dtγ, t)
     (; column_matrices, column_lu_factors, lu_cache, I_matrix) = cache
     update_jacobian_skip_factorizing!(AutoDenseJacobian(), cache, Y, p, dtγ, t)
     column_lu_factors .= dtγ .* column_matrices .- I_matrix
     parallel_lu_factorize!(column_lu_factors, lu_cache)
 end
 
-function invert_jacobian!(::AutoDenseJacobian, cache, ΔY, R)
+NVTX.@annotate function invert_jacobian!(::AutoDenseJacobian, cache, ΔY, R)
     (; column_lu_solve_vectors, column_lu_factors, lu_cache) = cache
     column_vectors_to_field_vector(column_lu_solve_vectors, R) .= R
     parallel_lu_solve!(column_lu_solve_vectors, column_lu_factors, lu_cache)
     ΔY .= column_vectors_to_field_vector(column_lu_solve_vectors, ΔY)
 end
 
-function save_jacobian!(::AutoDenseJacobian, cache, Y, dtγ, t)
+NVTX.@annotate function save_jacobian!(::AutoDenseJacobian, cache, Y, dtγ, t)
     (; column_matrices, column_matrix) = cache
     (n_columns, n_εs, _) = size(column_matrices)
 
@@ -153,7 +153,7 @@ end
 end
 
 # TODO: Reshape column_matrices and turn this into a single kernel launch.
-function parallel_lu_factorize!(column_matrices, temporary_vector)
+NVTX.@annotate function parallel_lu_factorize!(column_matrices, temporary_vector)
     @assert ndims(column_matrices) == 3
     n = size(column_matrices, 2)
     @assert size(column_matrices, 3) == n
@@ -177,7 +177,7 @@ function parallel_lu_factorize!(column_matrices, temporary_vector)
 end
 
 # TODO: Reshape column_matrices and turn this into a single kernel launch.
-function parallel_lu_solve!(column_vectors, column_matrices, temporary_vector)
+NVTX.@annotate function parallel_lu_solve!(column_vectors, column_matrices, temporary_vector)
     @assert ndims(column_vectors) == 2 && ndims(column_matrices) == 3
     n = size(column_matrices, 2)
     @assert size(column_vectors, 2) == n && size(column_matrices, 3) == n

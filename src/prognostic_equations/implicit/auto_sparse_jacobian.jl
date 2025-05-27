@@ -15,7 +15,7 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos)
     return (; dense_cache..., sparse_cache...)
 end
 
-function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
+NVTX.@annotate function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
     (; column_matrices, I_matrix, matrix) = cache
     rescaled_column_matrices = cache.column_lu_factors
     update_jacobian_skip_factorizing!(AutoDenseJacobian(), cache, Y, p, dtγ, t)
@@ -23,13 +23,13 @@ function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
     dense_matrix_to_field_matrix!(matrix, rescaled_column_matrices, Y)
 end
 
-invert_jacobian!(::AutoSparseJacobian, cache, ΔY, R) =
+NVTX.@annotate invert_jacobian!(::AutoSparseJacobian, cache, ΔY, R) =
     LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
 
-save_jacobian!(::AutoSparseJacobian, cache, Y, dtγ, t) =
+NVTX.@annotate save_jacobian!(::AutoSparseJacobian, cache, Y, dtγ, t) =
     save_jacobian!(alg.sparse_jacobian_algorithm, cache, Y, dtγ, t)
 
-function dense_matrix_to_field_matrix!(field_matrix, dense_matrix, Y)
+NVTX.@annotate function dense_matrix_to_field_matrix!(field_matrix, dense_matrix, Y)
     device = ClimaComms.device(Y.c)
     field_names = scalar_field_names(Y)
     index_ranges = scalar_field_index_ranges(Y)
