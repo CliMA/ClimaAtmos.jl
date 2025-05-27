@@ -11,6 +11,9 @@ import ClimaCore:
 import ClimaCore.Utilities: half
 import Thermodynamics as TD
 
+# compute lazily to reduce allocations
+import ..lazy
+
 import ..AtmosModel
 import ..AtmosCallback
 import ..EveryNSteps
