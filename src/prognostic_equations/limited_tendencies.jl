@@ -1,5 +1,13 @@
+"""
+    limiters_func!(Y, p, t, ref_Y)
 
 # Interacting with ClimaCore quasimonotone limiter for advection
+Apply tracer limiters to the prognostic state `Y` in place, using parameters `p`,
+time `t`, and a reference state `ref_Y` for bounds.
+
+This function iterates over tracer variables in `Y.c` and applies the limiter
+if one is specified in `p.numerics`.
+"""
 NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
     (; limiter) = p.numerics
     if !isnothing(limiter)

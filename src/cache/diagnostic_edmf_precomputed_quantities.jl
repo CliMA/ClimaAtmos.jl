@@ -304,7 +304,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; params) = p
     (; dt) = p
     dt = float(dt)
-    (; ᶜΦ) = p.core
+    (; ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
     (; ᶜp, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
     (;
@@ -434,6 +434,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             q_totʲ_prev_level =
                 Fields.field_values(Fields.level(ᶜq_totʲ, i - 1))
             ρʲ_prev_level = Fields.field_values(Fields.level(ᶜρʲ, i - 1))
+            ᶜgradᵥ_ᶠΦ_prev_level =
+                Fields.field_values(Fields.level(ᶜgradᵥ_ᶠΦ, i - 1))
             tsʲ_prev_level = Fields.field_values(Fields.level(ᶜtsʲ, i - 1))
             entrʲ_prev_level = Fields.field_values(Fields.level(ᶜentrʲ, i - 1))
             detrʲ_prev_level = Fields.field_values(Fields.level(ᶜdetrʲ, i - 1))
@@ -482,7 +484,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     local_geometry_prev_halflevel,
                 ),
                 TD.relative_humidity(thermo_params, tsʲ_prev_level),
-                ᶜphysical_buoyancy(thermo_params, ρ_prev_level, ρʲ_prev_level),
+                vertical_buoyancy_acceleration(
+                    ρ_prev_level,
+                    ρʲ_prev_level,
+                    ᶜgradᵥ_ᶠΦ_prev_level,
+                    local_geometry_prev_halflevel,
+                ),
                 get_physical_w(
                     u³_prev_halflevel,
                     local_geometry_prev_halflevel,
@@ -644,6 +651,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 FT(0), # mass flux divergence is not implemented for diagnostic edmf
                 w_vert_div_level,
                 tke_prev_level,
+                ᶜgradᵥ_ᶠΦ_prev_level,
                 p.atmos.edmfx_model.detr_model,
             )
 
@@ -952,6 +960,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
         ᶜmixing_length,
     ) = p.precomputed
     (; ᶜK_h, ᶜK_u, ρatke_flux) = p.precomputed
+    turbconv_params = CAP.turbconv_params(params)
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
@@ -1015,10 +1024,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     )
     @. ᶜmixing_length = ᶜmixing_length_tuple.master
 
-    turbconv_params = CAP.turbconv_params(params)
-    c_m = CAP.tke_ed_coeff(turbconv_params)
-    @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
-    @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
+    @. ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
+    @. ᶜK_h = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
     ρ_int_values = Fields.field_values(Fields.level(Y.c.ρ, 1))

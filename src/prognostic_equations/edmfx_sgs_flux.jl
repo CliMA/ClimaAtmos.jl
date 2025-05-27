@@ -306,13 +306,17 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(ρatke_flux),
             )
+            # relax tke to zero in one time step if tke < 0
             @. Yₜ.c.sgs⁰.ρatke -=
-                ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) + tke_dissipation(
-                    Y.c.sgs⁰.ρatke,
-                    ᶜtke⁰,
-                    ᶜmixing_length,
-                    c_d,
-                    float(dt),
+                ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) + ifelse(
+                    ᶜtke⁰ >= FT(0),
+                    tke_dissipation(
+                        turbconv_params,
+                        Y.c.sgs⁰.ρatke,
+                        ᶜtke⁰,
+                        ᶜmixing_length,
+                    ),
+                    Y.c.sgs⁰.ρatke / float(dt),
                 )
         end
         if !(p.atmos.moisture_model isa DryModel)
@@ -398,9 +402,18 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(ρatke_flux),
             )
+            # relax tke to zero in one time step if tke < 0
             @. Yₜ.c.sgs⁰.ρatke -=
-                ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) +
-                tke_dissipation(Y.c.sgs⁰.ρatke, ᶜtke⁰, ᶜmixing_length, c_d, dt)
+                ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) + ifelse(
+                    ᶜtke⁰ >= FT(0),
+                    tke_dissipation(
+                        turbconv_params,
+                        Y.c.sgs⁰.ρatke,
+                        ᶜtke⁰,
+                        ᶜmixing_length,
+                    ),
+                    Y.c.sgs⁰.ρatke / float(dt),
+                )
         end
 
         if !(p.atmos.moisture_model isa DryModel)
@@ -426,7 +439,3 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     return nothing
 end
-
-tke_dissipation(ρatke⁰, tke⁰, mixing_length, c_d, dt) =
-    tke⁰ >= 0 ? c_d * ρatke⁰ * sqrt(tke⁰) / max(mixing_length, 1) :
-    ρatke⁰ / float(dt)
