@@ -669,16 +669,17 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 p.precomputed.ᶜρa⁰ : ᶜρ
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
-            @inline dissipation_rate(tke⁰, mixing_length) =
-                tke⁰ >= 0 ? c_d * sqrt(tke⁰) / max(mixing_length, 1) :
+            @inline tke_dissipation_rate_tendency(tke⁰, mixing_length) =
+                tke⁰ >= 0 ? c_d * sqrt(tke⁰) / mixing_length :
                 1 / float(dt)
-            @inline ∂dissipation_rate_∂tke⁰(tke⁰, mixing_length) =
-                tke⁰ > 0 ? c_d / (2 * max(mixing_length, 1) * sqrt(tke⁰)) :
+            @inline ∂tke_dissipation_rate_tendency_∂tke⁰(tke⁰, mixing_length) =
+                tke⁰ > 0 ? c_d / (2 * mixing_length * sqrt(tke⁰)) :
                 typeof(tke⁰)(0)
 
             ᶜdissipation_matrix_diagonal = p.scratch.ᶜtemp_scalar
             @. ᶜdissipation_matrix_diagonal =
-                ᶜρatke⁰ * ∂dissipation_rate_∂tke⁰(ᶜtke⁰, ᶜmixing_length)
+                ᶜρatke⁰ *
+                ∂tke_dissipation_rate_tendency_∂tke⁰(ᶜtke⁰, ᶜmixing_length)
 
             ∂ᶜρatke⁰_err_∂ᶜρ = matrix[@name(c.sgs⁰.ρatke), @name(c.ρ)]
             ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
@@ -693,8 +694,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     (
                         ᶜdiffusion_u_matrix -
                         DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
-                    ) ⋅ DiagonalMatrixRow(1 / ᶜρa⁰) -
-                    DiagonalMatrixRow(dissipation_rate(ᶜtke⁰, ᶜmixing_length))
+                    ) ⋅ DiagonalMatrixRow(1 / ᶜρa⁰) - DiagonalMatrixRow(
+                        tke_dissipation_rate_tendency(ᶜtke⁰, ᶜmixing_length),
+                    )
                 ) - (I,)
         end
 

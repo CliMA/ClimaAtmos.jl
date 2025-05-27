@@ -343,6 +343,7 @@ struct MixingLength{FT}
     wall::FT
     tke::FT
     buoy::FT
+    l_grid::FT
 end
 
 abstract type AbstractEDMF end
