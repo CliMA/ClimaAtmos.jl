@@ -22,14 +22,23 @@ Base.broadcasted(::typeof(+), x, ::NullBroadcasts.NullBroadcasted) = x
 # Base.broadcasted(::typeof(-), ::NullBroadcasts.NullBroadcasted, x) = x
 Base.broadcasted(::typeof(-), x, ::NullBroadcasts.NullBroadcasted) = x
 
-if !(@isdefined config)
+ClimaCore.Operators.fd_shmem_is_supported(bc::Base.Broadcast.Broadcasted) = false
+ClimaCore.Operators.use_fd_shmem() = false
+# The existing implementation limits our ability to apply
+# the same expressions from within kernels
+ClimaComms.device(topology::ClimaCore.Topologies.DeviceIntervalTopology) =
+    ClimaComms.CUDADevice()
+ClimaCore.Fields.error_mismatched_spaces(::Type, ::Type) = nothing # causes unsupported dynamic function invocation
+
+
+# if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()
     config = CA.AtmosConfig(config_file; job_id)
-end
+# end
 simulation = CA.AtmosSimulation(config)
 sol_res = CA.solve_atmos!(simulation)
 
-include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
-if ClimaComms.iamroot(config.comms_ctx)
-    make_plots(Val(Symbol(simulation.job_id)), simulation.output_dir)
-end
+# include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
+# if ClimaComms.iamroot(config.comms_ctx)
+#     make_plots(Val(Symbol(simulation.job_id)), simulation.output_dir)
+# end

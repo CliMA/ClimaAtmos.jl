@@ -10,51 +10,27 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 end
 
-print_dlt(x) = type_depth_limit(stdout, string(typeof(x)); maxtypedepth=3)
-print_dlt(::Type{T}) where {T} = type_depth_limit(stdout, string(T); maxtypedepth=3)
-function type_depth_limit(io::IO, s::String; maxtypedepth::Union{Nothing, Int})
-    sz = get(io, :displaysize, displaysize(io))::Tuple{Int, Int}
-    return Base.type_depth_limit(s, max(sz[2], 120); maxdepth = maxtypedepth)
-end
-
-function assert_concretized(var)
-    val = Operators.getidx(axes(var), var, 1, (1,1,1))
-    if val isa Base.AbstractBroadcasted
-        T_lim = type_depth_limit(stdout, string(typeof(val)); maxtypedepth = 3)
-        error("This should be concretized:\n\n\t$T_lim\n\n")
-    end
-    return nothing
-end
+prognostic_nt(::Val{names}, tends...) where {names} =
+    NamedTuple{names}(tends)
 
 function ᶜremaining_tendency(ᶜY, ᶠY, p, t)
-    nt = (;
+    names = propertynames(ᶜY)
+    tends = (
             ᶜremaining_tendency_ρ(ᶜY, ᶠY, p, t)...,
             ᶜremaining_tendency_uₕ(ᶜY, ᶠY, p, t)...,
             ᶜremaining_tendency_ρe_tot(ᶜY, ᶠY, p, t)...,
             ᶜremaining_tendency_ρq_tot(ᶜY, ᶠY, p, t)...,
             ᶜremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)...,
     )
-    debug_tendencies = true
-    if debug_tendencies
-        :ρ in propertynames(ᶜY) &&      assert_concretized(nt.ρ)
-        :uₕ in propertynames(ᶜY) &&     assert_concretized(nt.uₕ)
-        :ρe_tot in propertynames(ᶜY) && assert_concretized(nt.ρe_tot)
-        :ρq_tot in propertynames(ᶜY) && assert_concretized(nt.ρq_tot)
-        :sgsʲs in propertynames(ᶜY) &&  assert_concretized(nt.sgsʲs)
-    end
-    return nt
+    return lazy.(prognostic_nt.(Val(names), tends...))
 end
 function ᶠremaining_tendency(ᶜY, ᶠY, p, t)
-    nt = (;
+    names = propertynames(ᶠY)
+    tends = (
             ᶠremaining_tendency_u₃(ᶜY, ᶠY, p, t)...,
             ᶠremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)...,
     )
-    debug_tendencies = true
-    if debug_tendencies
-        :u₃ in propertynames(ᶠY) && assert_concretized(nt.u₃)
-        :sgsʲs in propertynames(ᶠY) && assert_concretized(nt.sgsʲs)
-    end
-    return nt
+    return lazy.(prognostic_nt.(Val(names), tends...))
 end
 
 water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜχ) =
@@ -152,54 +128,15 @@ function ᶜremaining_tendency_ρe_tot(ᶜY, ᶠY, p, t)
     if !(p.atmos.moisture_model isa DryModel)
         ᶜwₕhₜ = compute_ᶜwₕhₜ(ᶜY, ᶠY, p, t)
         ∑tendencies = lazy.(∑tendencies .- water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜwₕhₜ))
-        # @show "test 1"
     end
     if energy_upwinding != Val(:none)
-        # @show energy_upwinding
-        # error("Done")
-        # @show "test 2"
         (; dt) = p
         ᶠu³ = compute_ᶠu³(ᶜY, ᶠY)
-        # ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
-        # ᶠz = Fields.coordinate_field(axes(ᶠY.u₃)).z
-        # sfc_u₃ = surface_velocity_full(ᶠY.u₃, ᶠuₕ³)
-        # todo: generalize this with z_min
-        # ᶠu₃_with_bcs = @. lazy(ifelse(iszero(ᶠz), sfc_u₃, ᶠY.u₃))
-        # _ᶠu₃_with_bcs = similar(Base.materialize(sfc_u₃))
-        # @. _ᶠu₃_with_bcs = ifelse(iszero(ᶠz), sfc_u₃, ᶠY.u₃)
-        # ᶠu₃_with_bcs = @. lazy(ifelse(ᶠz==0, sfc_u₃, ᶠY.u₃))
-        # @show Base.materialize(ᶠu₃_with_bcs)
-        # _ᶠu³ = Base.materialize(ᶠu³)
-        _ᶠu³ = ᶠu³ # works!
-        # _ᶜh_tot = Base.materialize(ᶜh_tot)
-        _ᶜh_tot = ᶜh_tot # results in `Killed: 9` (seg fault?)
-
-        # return @. lazy(ᶠuₕ³ + CT3(ᶠu₃))
-        vtt = vertical_transport(ᶜρ, _ᶠu³, _ᶜh_tot, float(dt), energy_upwinding)
-        # # @show vtt
-        # ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
-        # ᶠu₃_with_bcs = compute_ᶠu₃_with_bcs(ᶠY.u₃, ᶠuₕ³)
-        # # @show print_dlt(Base.materialize(ᶠuₕ³))
-        # # @show print_dlt(Base.materialize(ᶠu₃_with_bcs))
-        # # @show print_dlt(Base.materialize(ᶠu³))
-        # @show print_dlt(eltype(_ᶠu³))
-        # @show print_dlt(eltype(ᶜh_tot))
-        # @show print_dlt(eltype(_ᶜh_tot))
-        # @show print_dlt(eltype(vtt))
-        # val = Operators.getidx(axes(ᶜY), vtt, 1, (1,1,1))
-        # if val isa Base.AbstractBroadcasted
-        #     error("getidx of the input is a broadcasted.")
-        # else
-        #     @show print_dlt(val)
-        # end
-        # error("Done")
-
-        ∑tendencies = lazy.(∑tendencies .+ vtt) # problematic
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
+        ∑tendencies = lazy.(∑tendencies .+ vtt)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
         # need to improve NullBroadcast support for this.
-        # neg_vtt_central = @. lazy(vtt_central * (-1))
-        neg_vtt_central = vtt_central # TODO: this is a -1 factor bug!
-        # ∑tendencies = lazy.(∑tendencies .+ neg_vtt_central)
+        ∑tendencies = lazy.(∑tendencies .+ (-1) .* vtt_central)
     end
 
     ∑tendencies = lazy.(∑tendencies .+ viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge))
@@ -263,11 +200,16 @@ end
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     device = ClimaComms.device(axes(Y.c))
     (; moisture_model, viscous_sponge, precip_model) = p.atmos
-    p_rt = (;
+    p_kernel = (;
         atmos = p.atmos,
         params = p.params,
         dt = p.dt,
     )
+    (localmem_lg, localmem_state) = if device isa ClimaComms.CUDADevice
+        Val(false), Val(true)
+    else
+        Val(false), Val(false)
+    end
     Operators.columnwise!(
         device,
         ᶜremaining_tendency,
@@ -276,10 +218,10 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
         Yₜ.f,
         Y.c,
         Y.f,
-        p_rt,
+        p_kernel,
         t,
-        Val(false),
-        Val(false),
+        localmem_lg,
+        localmem_state
     )
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
