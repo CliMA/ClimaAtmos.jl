@@ -408,7 +408,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         noneq_cloud_formation_flag,
     ) = alg
     (; matrix) = cache
-    (; params) = p
+    (; params, dt) = p
     (; ᶜΦ, ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜspecific, ᶠu³, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
     (;
@@ -422,7 +422,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         ᶠbidiagonal_matrix_ct3,
         ᶠbidiagonal_matrix_ct3_2,
         ᶠtridiagonal_matrix_c3,
-        dt,
     ) = p.scratch
     rs = p.atmos.rayleigh_sponge
 
