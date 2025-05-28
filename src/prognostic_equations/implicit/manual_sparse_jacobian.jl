@@ -666,9 +666,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             FT_inner = eltype(tps)
 
             if force > FT_inner(0)
-                return force_deriv + pos_limit_deriv - (force * force_deriv + pos_lim * pos_lim_deriv)/(sqrt((force)^2 + (pos_lim)^2))
+                return force_deriv + pos_lim_deriv - (force * force_deriv + pos_lim * pos_lim_deriv)/(sqrt((force)^2 + (pos_lim)^2))
             else
-                return - force_deriv - neg_limit_deriv + (force * force_deriv + neg_lim * neg_lim_deriv)/(sqrt((force)^2 + (neg_lim)^2))
+                return - force_deriv - neg_lim_deriv + (force * force_deriv + neg_lim * neg_lim_deriv)/(sqrt((force)^2 + (neg_lim)^2))
             end
         end
     
@@ -760,7 +760,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         #ρ = TD.air_density(thermo_params, ᶜts)
 
         # allocate using scratch temporary quantities
-        ᶜforce_liq =  @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, thermo_params,  TD.PhasePartition(thermo_params, ᶜts), TD.air_density(thermo_params, ᶜts), Tₐ(thermo_params, ᶜts)))
+        ᶜforce_liq =  @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, thermo_params, TD.PhasePartition(thermo_params, ᶜts), TD.air_density(thermo_params, ᶜts), Tₐ(thermo_params, ᶜts)))
         ᶜforce_ice = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.ice, thermo_params,  TD.PhasePartition(thermo_params, ᶜts), TD.air_density(thermo_params, ᶜts), Tₐ(thermo_params, ᶜts)))
 
         @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
