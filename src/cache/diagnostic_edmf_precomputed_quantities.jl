@@ -482,7 +482,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     local_geometry_prev_halflevel,
                 ),
                 TD.relative_humidity(thermo_params, tsʲ_prev_level),
-                ᶜphysical_buoyancy(thermo_params, ρ_prev_level, ρʲ_prev_level),
+                buoyancy(thermo_params, ρ_prev_level, ρʲ_prev_level),
                 get_physical_w(
                     u³_prev_halflevel,
                     local_geometry_prev_halflevel,
