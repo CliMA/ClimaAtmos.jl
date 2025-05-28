@@ -37,7 +37,8 @@ function compute_rsd!(
                 axes(state.f),
             ),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
         return out
     else
         out .= Fields.array2field(
@@ -45,7 +46,8 @@ function compute_rsd!(
             axes(state.f),
         )
         @assert out !== nothing "Output field 'out' must not be `nothing` in this branch"
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
     end
 end
 
@@ -87,7 +89,8 @@ function compute_rsdt!(
                 nlevels + half,
             ),
         )
-        apply_geometric_scaling!(out, z_max, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_max, planet_radius, FT)
         return out
     else
         out .= Fields.level(
@@ -97,7 +100,8 @@ function compute_rsdt!(
             ),
             nlevels + half,
         )
-        apply_geometric_scaling!(out, z_max, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_max, planet_radius, FT)
     end
 end
 
@@ -180,14 +184,16 @@ function compute_rsu!(
                 axes(state.f),
             ),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
         return out
     else
         out .= Fields.array2field(
             cache.radiation.rrtmgp_model.face_sw_flux_up,
             axes(state.f),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
     end
 end
 
@@ -229,7 +235,8 @@ function compute_rsut!(
                 nlevels + half,
             ),
         )
-        apply_geometric_scaling!(out, z_max, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_max, planet_radius, FT)
         return out
     else
         out .= Fields.level(
@@ -239,7 +246,8 @@ function compute_rsut!(
             ),
             nlevels + half,
         )
-        apply_geometric_scaling!(out, z_max, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_max, planet_radius, FT)
     end
 end
 
@@ -322,14 +330,16 @@ function compute_rld!(
                 axes(state.f),
             ),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
         return out
     else
         out .= Fields.array2field(
             cache.radiation.rrtmgp_model.face_lw_flux_dn,
             axes(state.f),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
     end
 end
 
@@ -412,14 +422,16 @@ function compute_rlu!(
                 axes(state.f),
             ),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
         return out
     else
         out .= Fields.array2field(
             cache.radiation.rrtmgp_model.face_lw_flux_up,
             axes(state.f),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
     end
 end
 
@@ -461,7 +473,8 @@ function compute_rlut!(
                 nlevels + half,
             ),
         )
-        apply_geometric_scaling!(out, z_max, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_max, planet_radius, FT)
         return out
     else
         out .= Fields.level(
@@ -471,7 +484,8 @@ function compute_rlut!(
             ),
             nlevels + half,
         )
-        apply_geometric_scaling!(out, z_max, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_max, planet_radius, FT)
     end
 end
 
@@ -554,14 +568,16 @@ function compute_rsdcs!(
                 axes(state.f),
             ),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
         return out
     else
         out .= Fields.array2field(
             cache.radiation.rrtmgp_model.face_clear_sw_flux_dn,
             axes(state.f),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
     end
 end
 
@@ -644,14 +660,16 @@ function compute_rsucs!(
                 axes(state.f),
             ),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
         return out
     else
         out .= Fields.array2field(
             cache.radiation.rrtmgp_model.face_clear_sw_flux_up,
             axes(state.f),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
     end
 end
 
@@ -693,7 +711,8 @@ function compute_rsutcs!(
                 nlevels + half,
             ),
         )
-        apply_geometric_scaling!(out, z_max, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_max, planet_radius, FT)
         return out
     else
         out .= Fields.level(
@@ -703,7 +722,8 @@ function compute_rsutcs!(
             ),
             nlevels + half,
         )
-        apply_geometric_scaling!(out, z_max, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_max, planet_radius, FT)
     end
 end
 
@@ -787,14 +807,16 @@ function compute_rldcs!(
                 axes(state.f),
             ),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
         return out
     else
         out .= Fields.array2field(
             cache.radiation.rrtmgp_model.face_clear_lw_flux_dn,
             axes(state.f),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
     end
 end
 
@@ -877,14 +899,16 @@ function compute_rlucs!(
                 axes(state.f),
             ),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
         return out
     else
         out .= Fields.array2field(
             cache.radiation.rrtmgp_model.face_clear_lw_flux_up,
             axes(state.f),
         )
-        apply_geometric_scaling!(out, z_lev, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_lev, planet_radius, FT)
     end
 end
 
@@ -926,7 +950,8 @@ function compute_rlutcs!(
                 nlevels + half,
             ),
         )
-        apply_geometric_scaling!(out, z_max, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_max, planet_radius, FT)
         return out
     else
         out .= Fields.level(
@@ -936,7 +961,8 @@ function compute_rlutcs!(
             ),
             nlevels + half,
         )
-        apply_geometric_scaling!(out, z_max, planet_radius, FT)
+        radiation_mode.deep_atmosphere &&
+            apply_geometric_scaling!(out, z_max, planet_radius, FT)
     end
 end
 
