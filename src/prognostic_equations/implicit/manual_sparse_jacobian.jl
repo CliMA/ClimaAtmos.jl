@@ -756,16 +756,17 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         #             thermo_params, ᶜts, (cmc,), dt, (-1 / (τₗ * Γₗ(thermo_params, ᶜts))), (1/(2*float(dt))),
         #         )
         #     )
-        q = TD.PhasePartition(thermo_params, ᶜts)
-        ρ = TD.air_density(thermo_params, ᶜts)
+        #q = TD.PhasePartition(thermo_params, ᶜts)
+        #ρ = TD.air_density(thermo_params, ᶜts)
 
-        force_liq = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, thermo_params, q, ρ, Tₐ(thermo_params, ᶜts))
-        force_ice = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.ice, thermo_params, q, ρ, Tₐ(thermo_params, ᶜts))
+        # allocate using scratch temporary quantities
+        ᶜforce_liq =  @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, thermo_params,  TD.PhasePartition(thermo_params, ᶜts), TD.air_density(thermo_params, ᶜts), Tₐ(thermo_params, ᶜts)))
+        ᶜforce_ice = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.ice, thermo_params,  TD.PhasePartition(thermo_params, ᶜts), TD.air_density(thermo_params, ᶜts), Tₐ(thermo_params, ᶜts)))
 
         @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
             DiagonalMatrixRow(
                 ∂ρq_err_∂ρqᵪ(
-                    thermo_params, force_liq, (-1 / (τₗ * Γₗ(thermo_params, ᶜts))),
+                    thermo_params, ᶜforce_liq, (-1 / (τₗ * Γₗ(thermo_params, ᶜts))),
                     limit(TD.vapor_specific_humidity(q), dt, 2), (-1/(2*float(dt))),
                     limit(TD.liquid_specific_humidity(q), dt, 2), (1/(2*float(dt))),
                 )
@@ -784,7 +785,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         @. ∂ᶜρqᵢ_err_∂ᶜρqᵢ +=
             DiagonalMatrixRow(
                 ∂ρq_err_∂ρqᵪ(
-                    thermo_params, force_ice, (-1 / (τᵢ * Γᵢ(thermo_params, ᶜts))),
+                    thermo_params, ᶜforce_ice, (-1 / (τᵢ * Γᵢ(thermo_params, ᶜts))),
                     limit(TD.vapor_specific_humidity(q), dt, 2), (-1/(2*float(dt))),
                     limit(TD.ice_specific_humidity(q), dt, 2), (1/(2*float(dt))),
                 )
@@ -821,7 +822,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         # )
         @. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
             ∂ρq_err_∂ρqᵪ(
-                thermo_params, force_liq, ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))),
+                thermo_params, ᶜforce_liq, ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))),
                 limit(TD.vapor_specific_humidity(q), dt, 2), (1/(2*float(dt))),
                 limit(TD.liquid_specific_humidity(q), dt, 2), FT(0),
             )
@@ -837,7 +838,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         # )
         @. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
             ∂ρq_err_∂ρqᵪ(
-                thermo_params, force_ice, ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))),
+                thermo_params, ᶜforce_ice, ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))),
                 limit(TD.vapor_specific_humidity(q), dt, 2), (1/(2*float(dt))),
                 limit(TD.ice_specific_humidity(q), dt, 2), FT(0),
             )
