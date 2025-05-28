@@ -756,11 +756,11 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         #             thermo_params, ᶜts, (cmc,), dt, (-1 / (τₗ * Γₗ(thermo_params, ᶜts))), (1/(2*float(dt))),
         #         )
         #     )
-        q = TD.PhasePartition(tps, ᶜts)
-        ρ = TD.air_density(tps, ᶜts)
+        q = TD.PhasePartition(thermo_params, ᶜts)
+        ρ = TD.air_density(thermo_params, ᶜts)
 
-        force_liq = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, tps, q, ρ, Tₐ(tps, ts))
-        force_ice = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.ice, tps, q, ρ, Tₐ(tps, ts))
+        force_liq = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, thermo_params, q, ρ, Tₐ(thermo_params, ᶜts))
+        force_ice = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.ice, thermo_params, q, ρ, Tₐ(thermo_params, ᶜts))
 
         @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
             DiagonalMatrixRow(
