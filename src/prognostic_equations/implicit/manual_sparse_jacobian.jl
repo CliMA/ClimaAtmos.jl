@@ -767,8 +767,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             DiagonalMatrixRow(
                 ∂ρq_err_∂ρqᵪ(
                     thermo_params, ᶜforce_liq, (-1 / (τₗ * Γₗ(thermo_params, ᶜts))),
-                    limit(TD.vapor_specific_humidity(q), dt, 2), (-1/(2*float(dt))),
-                    limit(TD.liquid_specific_humidity(q), dt, 2), (1/(2*float(dt))),
+                    limit(TD.vapor_specific_humidity(thermo_params, ᶜts), dt, 2), (-1/(2*float(dt))),
+                    limit(TD.liquid_specific_humidity(thermo_params, ᶜts), dt, 2), (1/(2*float(dt))),
                 )
             )
         
@@ -786,8 +786,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             DiagonalMatrixRow(
                 ∂ρq_err_∂ρqᵪ(
                     thermo_params, ᶜforce_ice, (-1 / (τᵢ * Γᵢ(thermo_params, ᶜts))),
-                    limit(TD.vapor_specific_humidity(q), dt, 2), (-1/(2*float(dt))),
-                    limit(TD.ice_specific_humidity(q), dt, 2), (1/(2*float(dt))),
+                    limit(TD.vapor_specific_humidity(thermo_params, ᶜts), dt, 2), (-1/(2*float(dt))),
+                    limit(TD.ice_specific_humidity(thermo_params, ᶜts), dt, 2), (1/(2*float(dt))),
                 )
             )
 
@@ -823,8 +823,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         @. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
             ∂ρq_err_∂ρqᵪ(
                 thermo_params, ᶜforce_liq, ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))),
-                limit(TD.vapor_specific_humidity(q), dt, 2), (1/(2*float(dt))),
-                limit(TD.liquid_specific_humidity(q), dt, 2), FT(0),
+                limit(TD.vapor_specific_humidity(thermo_params, ᶜts), dt, 2), (1/(2*float(dt))),
+                limit(TD.liquid_specific_humidity(thermo_params, ᶜts), dt, 2), FT(0),
             )
         )
 
@@ -839,8 +839,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         @. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
             ∂ρq_err_∂ρqᵪ(
                 thermo_params, ᶜforce_ice, ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))),
-                limit(TD.vapor_specific_humidity(q), dt, 2), (1/(2*float(dt))),
-                limit(TD.ice_specific_humidity(q), dt, 2), FT(0),
+                limit(TD.vapor_specific_humidity(thermo_params, ᶜts), dt, 2), (1/(2*float(dt))),
+                limit(TD.ice_specific_humidity(thermo_params, ᶜts), dt, 2), FT(0),
             )
         )
     end
