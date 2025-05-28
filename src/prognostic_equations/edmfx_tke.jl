@@ -1,6 +1,27 @@
 #####
-##### EDMF SGS flux
+##### EDMFX TKE Tendency
 #####
+
+"""
+ edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model)
+
+ Applies the tendency from the EDMFX subgrid scale turbulent kinetic energy (TKE)
+ to the prognostic variables.
+
+ This function calculates and applies the changes in the environment TKE
+ (`Yₜ.c.sgs⁰.ρatke`) due to various processes within the EDMFX framework,
+ including shear production, buoyancy production, entrainment, detrainment,
+ turbulent entrainment, pressure work, and dissipation.
+
+ Arguments:
+ - `Yₜ`: The tendency state vector.
+ - `Y`: The current state vector.
+ - `p`: The cache, containing precomputed quantities and parameters.
+ - `t`: The current simulation time.
+ - `turbconv_model`: The turbulence convection model (e.g., `EDOnlyEDMFX`, `PrognosticEDMFX`, `DiagnosticEDMFX`).
+
+ Returns: `nothing`, modifies `Yₜ` in place.
+"""
 
 edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
@@ -23,7 +44,7 @@ function edmfx_tke_tendency!(
 )
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs, ᶠu³ʲs) = p.precomputed
-    (; ᶠu³⁰, ᶠu³, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰) = p.precomputed
+    (; ᶠu³⁰, ᶠu³, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰, ᶜmixing_length) = p.precomputed
     (; ᶜK_u, ᶜK_h) = p.precomputed
     ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
     nh_pressure3_buoyʲs =

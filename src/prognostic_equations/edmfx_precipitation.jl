@@ -1,6 +1,31 @@
 #####
-##### EDMF precipitation
+##### EDMFX precipitation
 #####
+
+"""
+    edmfx_precipitation_tendency!(Yₜ, Y, p, t, turbconv_model, precip_model)
+
+Applies precipitation tendencies to the EDMFX prognostic variables.
+
+This function calculates and applies the changes in updraft prognostic variables
+(`ρa`, `mse`, `q_tot`, `q_liq`, `q_ice`, `q_rai`, `q_sno`) due to precipitation
+processes within the EDMFX framework. The specific precipitation sources
+(`ᶜSqₜᵖʲs`, `ᶜSqₗᵖʲs`, etc.) are precomputed and stored in `p.precomputed`.
+
+The tendencies are applied to the updraft prognostic variables (`Yₜ.c.sgsʲs.:($$j)`)
+for each mass flux subdomain `j`.
+
+Arguments:
+- `Yₜ`: The tendency state vector.
+- `Y`: The current state vector.
+- `p`: The cache, containing precomputed quantities and parameters.
+- `t`: The current simulation time.
+- `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`).
+- `precip_model`: The precipitation model (e.g., `Microphysics0Moment`,
+                  `Microphysics1Moment`).
+
+Returns: `nothing`, modifies `Yₜ` in place.
+"""
 
 edmfx_precipitation_tendency!(Yₜ, Y, p, t, turbconv_model, precip_model) =
     nothing

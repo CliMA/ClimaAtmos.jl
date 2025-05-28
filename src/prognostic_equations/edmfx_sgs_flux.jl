@@ -308,7 +308,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
             )
             @. Yₜ.c.sgs⁰.ρatke -=
                 ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) 
-                + limit(tke_dissipation(
+                + limit(tke_dissipation(  # TODO why is this not in edmfx_tke_tendency?
                     turbconv_params,
                     Y.c.sgs⁰.ρatke,
                     ᶜtke⁰,
