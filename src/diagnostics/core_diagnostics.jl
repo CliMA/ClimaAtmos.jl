@@ -1,3 +1,7 @@
+import Dates
+import ClimaUtilities
+import Insolation
+import ..insolation_date0
 # This file is included in Diagnostics.jl
 #
 # README: Adding a new core diagnostic:
@@ -942,6 +946,69 @@ add_diagnostic_variable!(
 ###
 # Liquid water path (2d)
 ###
+struct DaytimeSchedule{FT} <: ClimaDiagnostics.Schedules.AbstractSchedule
+    date0::Dates.DateTime
+    insolation_params::Insolation.Parameters.InsolationParameters{FT}
+    schedule::Union{Nothing, ClimaDiagnostics.Schedules.AbstractSchedule}
+end
+
+function DaytimeSchedule(insolation_params, schedule = nothing)
+    DaytimeSchedule(insolation_date0, insolation_params, schedule)
+end
+
+function (s::DaytimeSchedule{FT})(integrator) where {FT}
+    (; t, u) = integrator
+    current_datetime =
+        t isa ClimaUtilities.TimeManager.ITime ?
+        ClimaUtilities.TimeManager.date(t) :
+        s.date0 + Dates.Second(round(Int, t))
+
+    # Get solar parameters (d = day of year, δ = declination, η_UTC = solar time angle)
+    d, δ, η_UTC =
+        FT.(
+            Insolation.helper_instantaneous_zenith_angle(
+                current_datetime,
+                s.date0,
+                s.insolation_params,
+            ),
+        )
+
+    bottom_coords = Fields.coordinate_field(Spaces.level(integrator.u.c, 1))
+    insolation_tuple = similar(bottom_coords, Tuple{FT, FT, FT})
+
+    if eltype(bottom_coords) <: Geometry.LatLongZPoint
+        @. insolation_tuple = Insolation.instantaneous_zenith_angle(
+            d,
+            δ,
+            η_UTC,
+            bottom_coords.long,
+            bottom_coords.lat,
+        )
+    else
+        insolation_tuple .= Ref(
+            Insolation.instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0)),
+        )
+    end
+
+    zenith_angles = getfield.(insolation_tuple, 1)  # get θ from (θ, ϕ, r)
+    threshold = deg2rad(FT(85.0))
+    is_daytime = any(x -> x < threshold, zenith_angles)
+
+    if isnothing(s.schedule)
+        return is_daytime
+    else
+        return is_daytime && s.schedule(integrator)
+    end
+end
+
+function ClimaDiagnostics.Schedules.short_name(::DaytimeSchedule)
+    return "daytime"
+end
+
+function ClimaDiagnostics.Schedules.long_name(::DaytimeSchedule)
+    return "when solar zenith angle < 85° (daylight)"
+end
+
 compute_lwp!(out, state, cache, time) =
     compute_lwp!(out, state, cache, time, cache.atmos.moisture_model)
 compute_lwp!(_, _, _, _, model::T) where {T} =
@@ -1372,7 +1439,7 @@ function compute_cape!(out, state, cache, time)
                 cache.precomputed.ᶜp,
                 surface_θ_liq_ice,
                 surface_q,
-            )
+            ),
         )
 
     # Calculate virtual temperatures for parcel & environment

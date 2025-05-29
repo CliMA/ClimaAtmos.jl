@@ -144,6 +144,13 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
                 period_dates;
                 reference_date = start_date,
             )
+            # Special handling for lwp and clivi to use DaytimeSchedule
+            if short_name in ["lwp", "clivi"]
+                output_schedule = CAD.DaytimeSchedule(
+                    CAP.insolation_params(p.params),
+                    output_schedule,
+                )
+            end
 
             if isnothing(output_name)
                 output_short_name = CAD.descriptive_short_name(
