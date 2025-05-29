@@ -86,6 +86,12 @@ eisenstat_walker_forcing_alpha:
 jvp_step_adjustment:
   help: "Amount by which the step size of the forward difference approximation of the Jacobian-vector product in the Krylov method should be scaled (only used if `use_krylov_method` is `true`)"
   value: 1.0
+use_dense_jacobian:
+  help: "Whether to use a dense Jacobian matrix that is computed using forward-mode automatic differentiation and inverted using LU factorization [`true`, `false` (default)]"
+  value: false
+update_jacobian_every:
+  help: "Frequency at which the Jacobian matrix should be updated (once per timestep, once per timestepper stage, or once per linear solve) [`dt`, `stage`, `solve` (default)]"
+  value: "solve"
 # Radiation
 rad:
   help: "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`]"
