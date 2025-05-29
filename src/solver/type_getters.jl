@@ -428,15 +428,17 @@ end
 
 get_jacobian(ode_algo, Y, atmos, parsed_args) =
     if ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm}
-        jacobian_algorithm = ManualSparseJacobian(
-            DerivativeFlag(has_topography(axes(Y.c))),
-            DerivativeFlag(atmos.diff_mode),
-            DerivativeFlag(atmos.sgs_adv_mode),
-            DerivativeFlag(atmos.sgs_entr_detr_mode),
-            DerivativeFlag(atmos.sgs_mf_mode),
-            DerivativeFlag(atmos.sgs_nh_pressure_mode),
-            parsed_args["approximate_linear_solve_iters"],
-        )
+        jacobian_algorithm =
+            parsed_args["use_dense_jacobian"] ? AutoDenseJacobian() :
+            ManualSparseJacobian(
+                DerivativeFlag(has_topography(axes(Y.c))),
+                DerivativeFlag(atmos.diff_mode),
+                DerivativeFlag(atmos.sgs_adv_mode),
+                DerivativeFlag(atmos.sgs_entr_detr_mode),
+                DerivativeFlag(atmos.sgs_mf_mode),
+                DerivativeFlag(atmos.sgs_nh_pressure_mode),
+                parsed_args["approximate_linear_solve_iters"],
+            )
         @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
         Jacobian(jacobian_algorithm, Y, atmos)
     else
@@ -453,6 +455,10 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
     ode_algo_name = getproperty(CTS, Symbol(ode_name))
     @info "Using ODE config: `$ode_algo_name`"
     return if ode_algo_name <: CTS.RosenbrockAlgorithmName
+        if parsed_args["update_jacobian_every"] != "solve"
+            @warn "Rosenbrock algorithms in ClimaTimeSteppers currently only \
+                   support `update_jacobian_every` = \"solve\""
+        end
         CTS.RosenbrockAlgorithm(CTS.tableau(ode_algo_name()))
     elseif ode_algo_name <: CTS.ERKAlgorithmName
         CTS.ExplicitAlgorithm(ode_algo_name())
@@ -460,6 +466,16 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
         @assert ode_algo_name <: CTS.IMEXARKAlgorithmName
         newtons_method = CTS.NewtonsMethod(;
             max_iters = parsed_args["max_newton_iters_ode"],
+            update_j = if parsed_args["update_jacobian_every"] == "dt"
+                CTS.UpdateEvery(CTS.NewTimeStep)
+            elseif parsed_args["update_jacobian_every"] == "stage"
+                CTS.UpdateEvery(CTS.NewNewtonSolve)
+            elseif parsed_args["update_jacobian_every"] == "solve"
+                CTS.UpdateEvery(CTS.NewNewtonIteration)
+            else
+                error("Unknown value of `update_jacobian_every`: \
+                       $(parsed_args["update_jacobian_every"])")
+            end,
             krylov_method = if parsed_args["use_krylov_method"]
                 CTS.KrylovMethod(;
                     jacobian_free_jvp = CTS.ForwardDiffJVP(;
