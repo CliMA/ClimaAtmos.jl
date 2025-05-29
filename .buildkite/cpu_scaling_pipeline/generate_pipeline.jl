@@ -2,8 +2,16 @@
 # To run: `julia --project=.buildkite .buildkite/cpu_scaling_pipeline/generate_pipeline.jl`
 # nodes = (1, 2, 4, 8, 16, 32)
 # helems = (30, 42, 60, 84, 120, 170)
-nodes = (1, 2, 4)
-helems = (30, 42, 60)
+
+#strong scaling
+ss_nodes = (1, 2, 4) # number of nodes for weak scaling runs
+ss_helems = (30, 60, 120) # helems for weak scaling runs
+ss_procspernode = 16 # number of MPI processes per node
+
+# weak scaling
+ws_nodes = (1, 2, 4) # number of nodes for weak scaling runs
+ws_helems = (30, 42, 60) # helems for weak scaling runs
+ws_procspernode = 16 # number of MPI processes per node
 
 import YAML
 
@@ -36,19 +44,41 @@ init_step = Dict(
     ),
 )
 
-function generate_step(nodes::Int, helems::Int)
+function generate_step_ws(nodes::Int, helems::Int, procspernode::Int)
     return Dict(
-        "label" => ":computer: $nodes node, 16 processes per node, helem = $helems",
+        "label" => ":computer: MBW weak scaling, $nodes nodes, $procspernode processes per node, helem = $helems",
         "command" => "srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $MBW_SCALING_CONFIG_PATH/moist_baroclinic_wave_helem_$(helems)_0M_ws.yml --job_id moist_baroclinic_wave_helem_$(helems)_0M_ws",
         "artifact_paths" => "moist_baroclinic_wave_helem_$(helems)_0M_ws/output_active/*",
+        "key" => "ws_$(nodes)_nodes",
         "agents" => Dict(
             "slurm_constraint" => CPU_TYPE,
             "queue" => "new-central",
             "slurm_nodes" => nodes,
-            "slurm_tasks_per_node" => 16,
+            "slurm_tasks_per_node" => procspernode,
             "slurm_cpus_per_task" => 1,
             "slurm_mem" => 0,
             "slurm_time" => "1:00:00",
+            "slurm_reservation" => "false",
+            "slurm_exclusive" => true,
+        ),
+    )
+end
+
+function generate_step_ss(nodes::Int, helems::Int, procspernode::Int)
+    return Dict(
+        "label" => ":computer: MBW strong scaling, $nodes nodes, $procspernode processes per node, helem = $helems",
+        "command" => "srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $MBW_SCALING_CONFIG_PATH/moist_baroclinic_wave_helem_$(helems)_0M_ss.yml --job_id moist_baroclinic_wave_helem_$(helems)_0M_ss",
+        "artifact_paths" => "moist_baroclinic_wave_helem_$(helems)_0M_ss/output_active/*",
+        "key" => "ss_$(nodes)_nodes",
+        "agents" => Dict(
+            "slurm_constraint" => CPU_TYPE,
+            "queue" => "new-central",
+            "slurm_nodes" => nodes,
+            "slurm_tasks_per_node" => procspernode,
+            "slurm_cpus_per_task" => 1,
+            "slurm_mem" => 0,
+            "slurm_time" => "1:00:00",
+            "slurm_reservation" => "false",
             "slurm_exclusive" => true,
         ),
     )
@@ -62,7 +92,15 @@ pipeline = Dict(
         "wait",
         Dict(
             "group" => "Moist Baroclinic Wave, weak scaling",
-            "steps" => [generate_step.(nodes, helems)...],
+            "steps" => [
+                generate_step_ws.(ws_nodes, ws_helems, ws_procspernode)...,
+            ],
+        ),
+        Dict(
+            "group" => "Moist Baroclinic Wave, strong scaling",
+            "steps" => [
+                generate_step_ss.(ss_nodes, ss_helems, ss_procspernode)...,
+            ],
         ),
     ],
 )
