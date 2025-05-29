@@ -306,6 +306,9 @@ end
 
 import Dates
 
+# TODO: Where does this date0 come from?
+const insolation_date0 = Dates.DateTime("2000-01-01T11:58:56.816")
+
 """
     time_and_units_str(x::Real)
 

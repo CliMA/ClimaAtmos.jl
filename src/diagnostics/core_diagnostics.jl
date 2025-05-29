@@ -1,3 +1,4 @@
+import Dates
 # This file is included in Diagnostics.jl
 #
 # README: Adding a new core diagnostic:
@@ -942,6 +943,54 @@ add_diagnostic_variable!(
 ###
 # Liquid water path (2d)
 ###
+struct DaytimeSchedule{FT} <: ClimaDiagnostics.Schedules.AbstractSchedule
+    date0::Dates.DateTime
+    insolation_params::Insolation.InsolationParams{FT}
+    schedule
+end
+
+function DaytimeSchedule(insolation_params, schedule)
+    DaytimeSchedule(insolation_date0,insolation_params, schedule)
+end
+
+function (s::DaytimeSchedule{FT})(integrator) where {FT}
+    (;t, u) = integrator
+    current_datetime = 
+        t isa ITime ? ClimaUtilities.TimeManager.date(t) :
+        tvi.start_date + Dates.Second(round(Int, t)) # current time
+
+    # Get solar parameters (d = day of year, δ = declination, η_UTC = solar time angle)
+    d, δ, η_UTC = FT.(Insolation.helper_instantaneous_zenith_angle(
+        current_datetime, s.date0, s.insolation_params)
+    )
+
+    bottom_coords = Fields.coordinate_field(Spaces.level(integrator.u.c, 1))
+    insolation_tuple = similar(bottom_coords, Tuple{FT, FT, FT})
+
+    if eltype(bottom_coords) <: Geometry.LatLongZPoint
+        @. insolation_tuple = instantaneous_zenith_angle(
+            d, δ, η_UTC, bottom_coords.long, bottom_coords.lat
+        )
+    else
+        insolation_tuple .= Ref(instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0)))
+    end
+
+    zenith_angles = getfield.(insolation_tuple, 1)  # get θ from (θ, ϕ, r)
+    if isnothing(s.schedule)
+        return any(zenith_angles .< deg2rad(85.0))
+    else
+        any(zenith_angles .< deg2rad(85.0)) && s.schedule(integrator)
+    end
+end
+
+function ClimaDiagnostics.Schedules.short_name(::DaytimeSchedule)
+    return "daytime"
+end
+
+function ClimaDiagnostics.Schedules.long_name(::DaytimeSchedule)
+    return "when solar zenith angle < 85° (daylight)"
+end
+
 compute_lwp!(out, state, cache, time) =
     compute_lwp!(out, state, cache, time, cache.atmos.moisture_model)
 compute_lwp!(_, _, _, _, model::T) where {T} =
