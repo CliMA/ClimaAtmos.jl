@@ -98,6 +98,76 @@ function set_precipitation_velocities!(
     return nothing
 end
 
+function compute_precip_velocities(ᶜY, ᶠY, p, t)
+    cmc = CAP.microphysics_cloud_params(p.params)
+    cmp = CAP.microphysics_1m_params(p.params)
+
+    # compute the precipitation terminal velocity [m/s]
+    ᶜwᵣ = CM1.terminal_velocity(
+        cmp.pr,
+        cmp.tv.rain,
+        ᶜY.ρ,
+        max(zero(ᶜY.ρ), ᶜY.ρq_rai / ᶜY.ρ),
+    )
+    ᶜwₛ = CM1.terminal_velocity(
+        cmp.ps,
+        cmp.tv.snow,
+        ᶜY.ρ,
+        max(zero(ᶜY.ρ), ᶜY.ρq_sno / ᶜY.ρ),
+    )
+    # compute sedimentation velocity for cloud condensate [m/s]
+    ᶜwₗ = CMNe.terminal_velocity(
+        cmc.liquid,
+        cmc.Ch2022.rain,
+        ᶜY.ρ,
+        max(zero(ᶜY.ρ), ᶜY.ρq_liq / ᶜY.ρ),
+    )
+    ᶜwᵢ = CMNe.terminal_velocity(
+        cmc.ice,
+        cmc.Ch2022.small_ice,
+        ᶜY.ρ,
+        max(zero(ᶜY.ρ), ᶜY.ρq_ice / ᶜY.ρ),
+    )
+    return (ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ)
+end
+
+
+compute_ᶜwₜqₜ(ᶜY, ᶠY, p, t) =
+    compute_ᶜwₜqₜ(ᶜY, ᶠY, p, t, p.atmos.moisture_model, p.atmos.precip_model)
+compute_ᶜwₜqₜ(ᶜY, ᶠY, p, t, moisture_model, precip_model) = zero(ᶜY.ρ)
+
+function compute_ᶜwₜqₜ(ᶜY, ᶠY, p, t,
+    ::NonEquilMoistModel,
+    ::Microphysics1Moment,
+)
+    (ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ) = compute_precip_velocities(ᶜY, ᶠY, p, t)
+    # compute their contributions to energy and total water advection
+    return Geometry.WVector(
+            ᶜwₗ * ᶜY.ρq_liq +
+            ᶜwᵢ * ᶜY.ρq_ice +
+            ᶜwᵣ * ᶜY.ρq_rai +
+            ᶜwₛ * ᶜY.ρq_sno,
+        ) / ᶜY.ρ
+end
+
+compute_ᶜwₕhₜ(ᶜY, ᶠY, p, t) =
+    compute_ᶜwₕhₜ(ᶜY, ᶠY, p, t, p.atmos.moisture_model, p.atmos.precip_model)
+
+compute_ᶜwₕhₜ(ᶜY, ᶠY, p, t, moisture_model, precip_model) = zero(ᶜY.ρ)
+
+function compute_ᶜwₕhₜ(ᶜY, ᶠY, p, t, ::NonEquilMoistModel, ::Microphysics1Moment)
+    thp = CAP.thermodynamics_params(p.params)
+    ᶜts = compute_ᶜts(ᶜY, ᶠY, p, t)
+    (ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ) = compute_precip_velocities(ᶜY, ᶠY, p, t)
+    # compute their contributions to energy and total water advection
+    return @. lazy(Geometry.WVector(
+            ᶜwₗ * ᶜY.ρq_liq * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₗ, ᶜY.ᶜu))) +
+            ᶜwᵢ * ᶜY.ρq_ice * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜY.ᶜu))) +
+            ᶜwᵣ * ᶜY.ρq_rai * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜY.ᶜu))) +
+            ᶜwₛ * ᶜY.ρq_sno * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₛ, ᶜY.ᶜu))),
+        ) / ᶜY.ρ)
+end
+
 """
     set_precipitation_cache!(Y, p, precip_model, turbconv_model)
 

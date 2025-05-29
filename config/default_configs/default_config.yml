@@ -128,7 +128,7 @@ t_start:
   value: "0secs"
 t_end:
   help: "Simulation end time. Examples: [`1200days`, `40secs`]"
-  value: "10days"
+  value: "1200secs"
 output_dir:
   help: "Output directory"
   value: ~
