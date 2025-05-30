@@ -428,15 +428,16 @@ end
 
 get_jacobian(ode_algo, Y, atmos, parsed_args) =
     if ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm}
-        jacobian_algorithm = ManualSparseJacobian(
-            DerivativeFlag(has_topography(axes(Y.c))),
-            DerivativeFlag(atmos.diff_mode),
-            DerivativeFlag(atmos.sgs_adv_mode),
-            DerivativeFlag(atmos.sgs_entr_detr_mode),
-            DerivativeFlag(atmos.sgs_mf_mode),
-            DerivativeFlag(atmos.sgs_nh_pressure_mode),
-            parsed_args["approximate_linear_solve_iters"],
-        )
+        # jacobian_algorithm = ManualSparseJacobian(
+        #     DerivativeFlag(has_topography(axes(Y.c))),
+        #     DerivativeFlag(atmos.diff_mode),
+        #     DerivativeFlag(atmos.sgs_adv_mode),
+        #     DerivativeFlag(atmos.sgs_entr_detr_mode),
+        #     DerivativeFlag(atmos.sgs_mf_mode),
+        #     DerivativeFlag(atmos.sgs_nh_pressure_mode),
+        #     parsed_args["approximate_linear_solve_iters"],
+        # )
+        jacobian_algorithm = AutoDenseJacobian() # TODO: Add a flag for this.
         @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
         Jacobian(jacobian_algorithm, Y, atmos)
     else
