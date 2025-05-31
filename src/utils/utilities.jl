@@ -58,11 +58,13 @@ individual velocity components:
     cell centers, and
  - `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
 """
-function compute_kinetic(uₕ::Fields.Field, uᵥ::Fields.Field)
+function compute_kinetic(uₕ, uᵥ)
     @assert eltype(uₕ) <: Union{C1, C2, C12}
     @assert eltype(uᵥ) <: C3
+    FT = Spaces.undertype(axes(uₕ))
+    onehalf = FT(1 / 2)
     return @. lazy(
-        1 / 2 * (
+        onehalf * (
             dot(C123(uₕ), CT123(uₕ)) +
             ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
             2 * dot(CT123(uₕ), ᶜinterp(C123(uᵥ)))
