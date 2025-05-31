@@ -343,6 +343,12 @@ struct MixingLength{FT}
     wall::FT
     tke::FT
     buoy::FT
+    l_grid::FT
+end
+
+struct EddyViscosityDiffusivity{FT}
+    K_u::FT # Eddy viscosity for momentum [m^2/s].
+    K_h::FT # Eddy diffusivity for scalars [m^2/s].
 end
 
 abstract type AbstractEDMF end
