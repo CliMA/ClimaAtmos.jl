@@ -115,13 +115,20 @@ function set_precipitation_velocities!(
 
     # compute the precipitation terminal velocity [m/s]
     # TODO sedimentation of snow is based on the 1M scheme
-    @. (ᶜwNᵣ, ᶜwᵣ) = CM2.rain_terminal_velocity(
+    @. ᶜwNᵣ = getindex(CM2.rain_terminal_velocity(
         cm2p.sb,
         cm2p.tv,
         q_rai,
         Y.c.ρ,
         Y.c.N_rai,
-    )
+    ), 1)
+    @. ᶜwᵣ = getindex(CM2.rain_terminal_velocity(
+        cm2p.sb,
+        cm2p.tv,
+        q_rai,
+        Y.c.ρ,
+        Y.c.N_rai,
+    ), 2)
     @. ᶜwNₛ = CM1.terminal_velocity(
         cm1p.ps,
         cm1p.tv.snow,
