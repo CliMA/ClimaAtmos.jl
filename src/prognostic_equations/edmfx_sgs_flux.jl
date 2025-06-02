@@ -1,7 +1,33 @@
 #####
-##### EDMF SGS flux
+##### Tendencies applied to the grid-mean atmospheric state due to subgrid-scale (SGS) 
+##### fluxes computed by the EDMFX scheme
 #####
 
+"""
+    edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
+
+Computes and applies tendencies to the grid-mean prognostic variables due to the
+divergence of subgrid-scale (SGS) mass fluxes from EDMFX updrafts and the environment.
+
+This involves terms of the form `- ∂(ρₖ aₖ w′ₖ ϕ′ₖ)/∂z`, where `k` denotes
+an SGS component (updraft `j` or environment `0`), `aₖ` is the area fraction,
+`w′ₖ` is the vertical velocity deviation from the grid mean, and `ϕ′ₖ` is the
+deviation of a conserved variable `ϕ` (such as total enthalpy or specific humidity) 
+from its grid-mean value. These terms represent the redistribution of energy and tracers
+by the resolved SGS circulations relative to the grid mean flow.
+
+The specific implementation depends on the `turbconv_model` (e.g., `PrognosticEDMFX`
+or `DiagnosticEDMFX`). A generic fallback doing nothing is also provided.
+The function modifies `Yₜ.c` (grid-mean tendencies) in place.
+
+Arguments:
+- `Yₜ`: The tendency state vector for grid-mean variables.
+- `Y`: The current state vector (used for grid-mean and SGS properties).
+- `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
+       and scratch space.
+- `t`: Current simulation time.
+- `turbconv_model`: The turbulence convection model instance.
+"""
 edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_sgs_mass_flux_tendency!(
@@ -27,7 +53,10 @@ function edmfx_sgs_mass_flux_tendency!(
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
-        # energy
+        # Enthalpy fluxes. First sum up the draft fluxes
+        # TODO: Isolate assembly of flux term pattern to a function and 
+        # reuse (both in prognostic and diagnostic EDMFX)
+        # [best after removal of precomputed quantities]
         ᶠu³_diff = p.scratch.ᶠtemp_CT3
         ᶜa_scalar = p.scratch.ᶜtemp_scalar
         for j in 1:n
@@ -44,6 +73,7 @@ function edmfx_sgs_mass_flux_tendency!(
             )
             @. Yₜ.c.ρe_tot += vtt
         end
+        # Add the environment fluxes
         @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
         @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
         vtt = vertical_transport(
@@ -56,7 +86,7 @@ function edmfx_sgs_mass_flux_tendency!(
         @. Yₜ.c.ρe_tot += vtt
 
         if !(p.atmos.moisture_model isa DryModel)
-            # specific humidity
+            # Specific humidity fluxes: First sum up the draft fluxes
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                 @. ᶜa_scalar =
@@ -71,6 +101,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 )
                 @. Yₜ.c.ρq_tot += vtt
             end
+            # Add the environment fluxes
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar = (ᶜq_tot⁰ - ᶜspecific.q_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
@@ -87,6 +118,7 @@ function edmfx_sgs_mass_flux_tendency!(
             p.atmos.moisture_model isa NonEquilMoistModel &&
             p.atmos.precip_model isa Microphysics1Moment
         )
+            # Liquid, ice, rain and snow specific humidity fluxes
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
 
@@ -181,7 +213,8 @@ function edmfx_sgs_mass_flux_tendency!(
             @. Yₜ.c.ρq_sno += vtt
         end
         # TODO - compute sedimentation and terminal velocities
-        # TODO - add w q_tot, w h_tot terms
+        # TODO - add w q_tot, w h_tot terms associated with sedimentation/falling
+        # TODO - add vertical momentum fluxes
     end
     return nothing
 end
@@ -205,7 +238,7 @@ function edmfx_sgs_mass_flux_tendency!(
     FT = eltype(Y)
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
-        # energy
+        # Enthalpy fluxes
         ᶠu³_diff = p.scratch.ᶠtemp_CT3
         ᶜa_scalar = p.scratch.ᶜtemp_scalar
         for j in 1:n
@@ -231,9 +264,10 @@ function edmfx_sgs_mass_flux_tendency!(
             )
             @. Yₜ.c.ρe_tot += vtt
         end
+        # TODO: add environment flux?
 
         if !(p.atmos.moisture_model isa DryModel)
-            # specific humidity
+            # Specific humidity fluxes
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                 # @. ᶜa_scalar =
@@ -259,11 +293,40 @@ function edmfx_sgs_mass_flux_tendency!(
                 )
                 @. Yₜ.c.ρq_tot += vtt
             end
+            # TODO: add environment flux?
         end
     end
+
+    # TODO: add vertical momentum fluxes
+
     return nothing
 end
 
+"""
+    edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
+
+Computes and applies tendencies to the grid-mean prognostic variables due to the
+divergence of subgrid-scale (SGS) diffusive fluxes, representing turbulent mixing 
+by the EDMFX environment component.
+
+This function parameterizes these fluxes using an eddy-diffusivity/viscosity
+approach (K-theory) for the environment (sgs⁰). Tendencies are calculated for
+total energy, moisture species, momentum, and optionally TKE.
+The form is typically `- ∂/∂z(-D ∂ϕ/∂z)`, where `D` is an effective SGS eddy
+diffusivity for the quantity `ϕ`.
+
+The specific implementation depends on the `turbconv_model`. A generic fallback
+doing nothing is also provided. The function modifies `Yₜ.c` (grid-mean tendencies)
+in place.
+
+Arguments:
+- `Yₜ`: The tendency state vector for grid-mean variables.
+- `Y`: The current state vector.
+- `p`: Cache containing parameters, precomputed fields, atmospheric
+       model settings, and scratch space.
+- `t`: Current simulation time.
+- `turbconv_model`: The turbulence convection model instance.
+"""
 edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_sgs_diffusive_flux_tendency!(
@@ -293,20 +356,20 @@ function edmfx_sgs_diffusive_flux_tendency!(
         ᶠρaK_u = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_u = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_u)
 
-        # energy
+        # Total enthalpy diffusion
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
         @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜmse⁰ + ᶜK⁰)))
         if use_prognostic_tke(turbconv_model)
-            # turbulent transport (diffusive flux)
-            # boundary condition for the diffusive flux
+            # Turbulent TKE transport (diffusion)
             ᶜdivᵥ_ρatke = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(ρatke_flux),
             )
-            # relax tke to zero in one time step if tke < 0
+            # Add flux divergence and dissipation term, relaxing TKE to zero 
+            # in one time step if tke < 0
             @. Yₜ.c.sgs⁰.ρatke -=
                 ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) + ifelse(
                     ᶜtke⁰ >= FT(0),
@@ -320,7 +383,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 )
         end
         if !(p.atmos.moisture_model isa DryModel)
-            # specific humidity
+            # Specific humidity diffusion
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
@@ -328,12 +391,13 @@ function edmfx_sgs_diffusive_flux_tendency!(
             )
             @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_tot⁰)))
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
-            @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
+            @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
         end
         if (
             p.atmos.moisture_model isa NonEquilMoistModel &&
             p.atmos.precip_model isa Microphysics1Moment
         )
+            # Liquid, ice, rain and snow specific humidity diffusion
             α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
 
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
@@ -358,7 +422,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
             @. Yₜ.c.ρq_sno -= ᶜρχₜ_diffusion
         end
 
-        # momentum
+        # Momentum diffusion
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
         ᶠstrain_rate .= compute_strain_rate_face(ᶜu⁰)
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
@@ -374,6 +438,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
     turbconv_model::Union{EDOnlyEDMFX, DiagnosticEDMFX},
 )
 
+    # Assumes envinronmental area fraction is 1 (so draft area fraction is negligible)
+    # TODO: Relax this assumption and construct diagnostic EDMF fluxes in parallel to 
+    # prognostic fluxes
     FT = Spaces.undertype(axes(Y.c))
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
@@ -388,7 +455,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
         ᶠρaK_u = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_u = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_u)
 
-        # energy
+        # Total enthalpy diffusion
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
@@ -396,13 +463,13 @@ function edmfx_sgs_diffusive_flux_tendency!(
         @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜh_tot)))
 
         if use_prognostic_tke(turbconv_model)
-            # turbulent transport (diffusive flux)
-            # boundary condition for the diffusive flux
+            # Turbulent TKE transport (diffusion)
             ᶜdivᵥ_ρatke = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(ρatke_flux),
             )
-            # relax tke to zero in one time step if tke < 0
+            # Add flux divergence and dissipation term, relaxing TKE to zero 
+            # in one time step if tke < 0
             @. Yₜ.c.sgs⁰.ρatke -=
                 ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) + ifelse(
                     ᶜtke⁰ >= FT(0),
@@ -417,7 +484,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
         end
 
         if !(p.atmos.moisture_model isa DryModel)
-            # specific humidity
+            # Specific humidity diffusion
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
@@ -429,13 +496,15 @@ function edmfx_sgs_diffusive_flux_tendency!(
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
         end
 
-        # momentum
+        # TODO: add liquid, ice, rain and snow specific humidity diffusion
+
+        # Momentum diffusion
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
         ᶠstrain_rate .= compute_strain_rate_face(ᶜu)
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
     end
 
-    # TODO: Add tracer flux
+    # TODO: Add tracer fluxes
 
     return nothing
 end

@@ -305,7 +305,7 @@ end
 
 struct ISDACForcing end
 
-struct EDMFCoriolis{U, V, FT}
+struct SCMCoriolis{U, V, FT}
     prof_ug::U
     prof_vg::V
     coriolis_param::FT
@@ -325,15 +325,15 @@ Base.@kwdef struct EnvBuoyGradVars{FT, TS}
     ts::TS
     ∂θv∂z_unsat::FT
     ∂qt∂z_sat::FT
-    ∂θl∂z_sat::FT
+    ∂θli∂z_sat::FT
 end
 
 function EnvBuoyGradVars(
     ts::TD.ThermodynamicState,
-    ∂θv∂z_unsat_∂qt∂z_sat_∂θl∂z_sat,
+    ∂θv∂z_unsat_∂qt∂z_sat_∂θli∂z_sat,
 )
-    (; ∂θv∂z_unsat, ∂qt∂z_sat, ∂θl∂z_sat) = ∂θv∂z_unsat_∂qt∂z_sat_∂θl∂z_sat
-    return EnvBuoyGradVars(ts, ∂θv∂z_unsat, ∂qt∂z_sat, ∂θl∂z_sat)
+    (; ∂θv∂z_unsat, ∂qt∂z_sat, ∂θli∂z_sat) = ∂θv∂z_unsat_∂qt∂z_sat_∂θli∂z_sat
+    return EnvBuoyGradVars(ts, ∂θv∂z_unsat, ∂qt∂z_sat, ∂θli∂z_sat)
 end
 
 Base.eltype(::EnvBuoyGradVars{FT}) where {FT} = FT
@@ -386,15 +386,13 @@ use_prognostic_tke(::Any) = false
 abstract type AbstractEntrainmentModel end
 struct NoEntrainment <: AbstractEntrainmentModel end
 struct PiGroupsEntrainment <: AbstractEntrainmentModel end
-struct GeneralizedEntrainment <: AbstractEntrainmentModel end
-struct GeneralizedHarmonicsEntrainment <: AbstractEntrainmentModel end
+struct InvZEntrainment <: AbstractEntrainmentModel end
 
 abstract type AbstractDetrainmentModel end
 
 struct NoDetrainment <: AbstractDetrainmentModel end
 struct PiGroupsDetrainment <: AbstractDetrainmentModel end
-struct GeneralizedDetrainment <: AbstractDetrainmentModel end
-struct GeneralizedHarmonicsDetrainment <: AbstractDetrainmentModel end
+struct BuoyancyVelocityDetrainment <: AbstractDetrainmentModel end
 struct SmoothAreaDetrainment <: AbstractDetrainmentModel end
 
 abstract type AbstractSurfaceThermoState end
@@ -569,7 +567,7 @@ Base.@kwdef struct AtmosModel{
     radiation_mode::RM = nothing
     ls_adv::LA = nothing
     external_forcing::EXTFORCING = nothing
-    edmf_coriolis::EC = nothing
+    scm_coriolis::EC = nothing
     advection_test::AT = nothing
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
