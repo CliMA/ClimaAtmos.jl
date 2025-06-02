@@ -4,6 +4,7 @@ import Thermodynamics as TD
 import CloudMicrophysics.Microphysics0M as CM0
 import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics.Microphysics2M as CM2
+import CloudMicrophysics.MicrophysicsP3 as P3
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
 import CloudMicrophysics.Parameters as CMP
 
@@ -467,4 +468,59 @@ function compute_warm_precipitation_sources_2M!(
     )
     @. SNᵣᵖ += Sᵖ
 
+end
+
+"""
+    compute_p3_microphysics_sources!(Sᵖ,S₂ᵖ,SNₗᵖ,SNᵣᵖ,Sqₗᵖ,Sqᵣᵖ,Sqᵢᵖ,SL_rimᵖ,SB_rimᵖ,SL_iceᵖ,ρ,Nₗ,Nᵣ,qₗ,qᵣ,qᵢ,L_rim,B_rim,L_ice,ts,dt,mp,thp,)
+
+Compute source terms for P3 microphysics scheme, combining 2M warm rain with P3 ice microphysics.
+
+# Arguments
+- `Sᵖ, S₂ᵖ`: Temporary containers to help compute precipitation source terms
+- `SNᵢᵖ, SNᵣᵖ`: Cached storage for precipitation source terms
+- `ρ`: Air density
+- `Nₗ, Nᵣ`: Cloud liquid and rain number concentration
+- `qₗ, qᵣ`: Cloud liquid and rain specific humidity
+- `L_ice`: Ice mass
+- `N_ice`: Ice number concentration
+- `L_rim`: Rimed mass
+- `B_rim`: Rimed volume
+- `ts`: Thermodynamic state
+- `dt`: Model time step
+- `mp`: Microphysics parameters
+- `thp`: Thermodynamic parameters
+
+Returns the source terms for the P3 microphysics scheme.
+"""
+function compute_p3_microphysics_sources!(
+    Sᵖ, S₂ᵖ,
+    SNᵢᵖ, SNᵣᵖ, SL_rimᵖ, SB_rimᵖ, SL_iceᵖ,
+    ρ, Nₗ, Nᵣ, qₗ, qᵣ,
+    L_ice, N_ice,
+    L_rim, B_rim,
+    ts, dt, mp, thp,
+)
+    FT = eltype(thp)
+
+    # Initialize all tendencies to zero
+    @. SNᵢᵖ = ρ * FT(0)
+    @. SNᵣᵖ = ρ * FT(0)
+    @. SL_rimᵖ = ρ * FT(0)
+    @. SB_rimᵖ = ρ * FT(0)
+    @. SL_iceᵖ = ρ * FT(0)
+
+    # TODO: Add P3 ice microphysics processes:
+    # - Ice nucleation
+    # @. Sᵖ = P3.het_ice_nucleation(...)
+    # - Ice growth/sublimation
+    # - Riming
+    # - Melting
+    # @. Sᵖ = P3.ice_melt(...)
+    # - Ice-ice collection
+    # - Ice-rain collection
+    # @. Sᵖ = P3.bulk_collision_rate_with_liquid(...)
+    # - Ice sedimentation
+    # - Ice breakup
+
+    return nothing
 end

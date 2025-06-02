@@ -241,3 +241,39 @@ function precipitation_tendency!(
 )
     error("Not implemented yet")
 end
+
+"""
+    precipitation_tendency!(Yₜ, Y, p, t, ::NonEquilMoistModel, ::MicrophysicsP3, _)
+
+Compute tendencies for P3 microphysics scheme, combining 2M warm rain with P3 ice microphysics.
+"""
+function precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::NonEquilMoistModel,
+    precip_model::MicrophysicsP3,
+    _,
+)
+    # Warm rain tendencies (from 2M)
+    (; ᶜSqₗᵖ, ᶜSqᵣᵖ) = p.precomputed
+    (; ᶜSNₗᵖ, ᶜSNᵣᵖ) = p.precomputed
+    
+    # P3 ice tendencies
+    (; ᶜSqᵢᵖ, ᶜSL_rimᵖ, ᶜSB_rimᵖ, ᶜSL_iceᵖ) = p.precomputed
+
+    # Update warm rain tendencies
+    @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜSqₗᵖ
+    @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜSqᵣᵖ
+    @. Yₜ.c.N_liq += ᶜSNₗᵖ
+    @. Yₜ.c.N_rai += ᶜSNᵣᵖ
+
+    # Update P3 ice tendencies
+    @. Yₜ.c.ρq_ice += Y.c.ρ * ᶜSqᵢᵖ
+    @. Yₜ.c.L_rim += ᶜSL_rimᵖ
+    @. Yₜ.c.B_rim += ᶜSB_rimᵖ
+    @. Yₜ.c.L_ice += ᶜSL_iceᵖ
+
+    return nothing
+end

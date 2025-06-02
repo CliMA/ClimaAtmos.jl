@@ -136,6 +136,24 @@ precip_variables(ls, ::Microphysics2Moment) = (;
     N_ice = ls.precip_state.N_ice,
 )
 
+"""
+    precip_variables(ls, ::MicrophysicsP3)
+
+Define prognostic variables for P3 microphysics scheme.
+"""
+precip_variables(ls, ::MicrophysicsP3) = (;
+    # Warm rain variables (from 2M)
+    ρq_rai = ls.ρ * ls.precip_state.q_rai,
+    N_rai = ls.precip_state.N_rai,
+    N_liq = ls.precip_state.N_liq,
+    # P3 ice variables
+    ρq_ice = ls.ρ * ls.precip_state.q_ice,
+    N_ice = ls.precip_state.N_ice,  # Rimed mass mixing ratio
+    L_ice = ls.precip_state.L_ice,  # Ice mass mixing ratio
+    B_rim = ls.precip_state.B_rim,  # Rimed volume mixing ratio
+    L_rim = ls.precip_state.L_rim,  # Rimed mass mixing ratio
+)
+
 # We can use paper-based cases for LES type configurations (no TKE)
 # or SGS type configurations (initial TKE needed), so we do not need to assert
 # that there is no TKE when there is no turbconv_model.
