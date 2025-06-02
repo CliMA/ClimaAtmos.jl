@@ -20,7 +20,7 @@ end
 
 @testset "Gauss quantile" begin
     for p in 0.0:0.1:1.0
-        @test ClimaAtmos.guass_quantile(p) ≈
+        @test ClimaAtmos.gauss_quantile(p) ≈
               Distributions.quantile(Distributions.Normal(), p) rtol = 1e-3
     end
 
