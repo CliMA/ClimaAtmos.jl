@@ -1,6 +1,8 @@
 #####
 ##### Apply prescribed large-scale advection tendencies for total 
 ##### specific humidity and total energy
+##### Apply prescribed large-scale advection tendencies for total 
+##### specific humidity and total energy
 #####
 
 import Thermodynamics as TD
@@ -31,7 +33,8 @@ Arguments:
             or another type if large-scale advection is inactive.
 
 Returns:
-- A `ClimaCore.Fields.Field` representing the tendency `∂(ρq_tot)/∂t` due to
+- A `ClimaCore.Fields.Field`, or a lazy broadcast over ClimaCore Fields,
+  representing the tendency `∂(ρq_tot)/∂t` due to
   large-scale advection of `q_tot`, or `NullBroadcasted` if inactive.
 """
 function large_scale_advection_tendency_ρq_tot(
@@ -76,7 +79,8 @@ Arguments:
             or another type if large-scale advection is inactive.
 
 Returns:
-- A `ClimaCore.Fields.Field` representing the tendency `∂(ρe_tot)/∂t` due to
+- A `ClimaCore.Fields.Field`, or a lazy broadcast over ClimaCore Fields,
+  representing the tendency `∂(ρe_tot)/∂t` due to
   large-scale advection of `T` and `q_tot`, or `NullBroadcasted` if inactive.
 """
 function large_scale_advection_tendency_ρe_tot(
@@ -94,9 +98,13 @@ function large_scale_advection_tendency_ρe_tot(
 
     # Moisture advection term does not contain potential energy because 
     # it's just horizontal advection of specific humidity
+
+    # Moisture advection term does not contain potential energy because 
+    # it's just horizontal advection of specific humidity
     return @. lazy(
         ᶜρ * (
             TD.cv_m(thermo_params, ᶜts) * ᶜdTdt_hadv +
+            TD.internal_energy_vapor(thermo_params, ᶜts) * ᶜdqtdt_hadv
             TD.internal_energy_vapor(thermo_params, ᶜts) * ᶜdqtdt_hadv
         ),
     )
