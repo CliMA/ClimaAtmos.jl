@@ -625,6 +625,37 @@ end
 
 
 """
+    gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
+
+Calculates the gradient Richardson number (Ri).
+
+The gradient Richardson number is a dimensionless parameter that represents the ratio
+of buoyancy term to the shear term in the TKE equation. It is calculated as:
+
+    Ri = ᶜN²_eff / max(2 * |S|, ε)
+
+where:
+- `params`: Parameter set (e.g., CLIMAParameters.AbstractParameterSet), used to determine floating point type.
+- `ᶜN²_eff`: Effective squared Brunt-Väisälä frequency [1/s²].
+- `ᶜstrain_rate_norm`: Frobenius norm of the strain rate tensor, |S| [1/s].
+- `ε` is a small machine epsilon value to prevent division by zero.
+
+Returns:
+- The gradient Richardson number (dimensionless scalar).
+"""
+function gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
+    FT = eltype(params)
+
+    # Calculate the denominator term for Ri, ensuring it's not zero
+    # Based on the formulation Ri = N^2 / max(2*|S|, eps)
+    ᶜshear_term_safe = max(2 * ᶜstrain_rate_norm, eps(FT))
+    ᶜRi_grad = ᶜN²_eff / ᶜshear_term_safe
+
+    return ᶜRi_grad
+end
+
+
+"""
     turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
 where:

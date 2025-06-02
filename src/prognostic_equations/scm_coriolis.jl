@@ -24,7 +24,8 @@ Arguments:
                    is returned, indicating no Coriolis forcing.
 
 Returns:
-- A `ClimaCore.Fields.Field` representing the Coriolis tendency for `ᶜuₕ` [m/s²],
+- A `ClimaCore.Fields.Field` (or a lazy broadcast over ClimaCore Fields)
+  representing the Coriolis tendency for `ᶜuₕ` [m/s²],
   or `NullBroadcasted()` if `scm_coriolis` is not an `SCMCoriolis` type.
 """
 function scm_coriolis_tendency_uₕ(ᶜuₕ, scm_coriolis)
