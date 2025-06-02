@@ -476,22 +476,22 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function get_edmf_coriolis(parsed_args, ::Type{FT}) where {FT}
-    edmf_coriolis = parsed_args["edmf_coriolis"]
-    edmf_coriolis == nothing && return nothing
-    (prof_u, prof_v) = if edmf_coriolis == "Bomex"
+function get_scm_coriolis(parsed_args, ::Type{FT}) where {FT}
+    scm_coriolis = parsed_args["scm_coriolis"]
+    scm_coriolis == nothing && return nothing
+    (prof_u, prof_v) = if scm_coriolis == "Bomex"
         (APL.Bomex_geostrophic_u(FT), z -> FT(0))
-    elseif edmf_coriolis == "LifeCycleTan2018"
+    elseif scm_coriolis == "LifeCycleTan2018"
         (APL.LifeCycleTan2018_geostrophic_u(FT), z -> FT(0))
-    elseif edmf_coriolis == "Rico"
+    elseif scm_coriolis == "Rico"
         (APL.Rico_geostrophic_ug(FT), APL.Rico_geostrophic_vg(FT))
-    elseif edmf_coriolis == "ARM_SGP"
+    elseif scm_coriolis == "ARM_SGP"
         (z -> FT(10), z -> FT(0))
-    elseif edmf_coriolis == "DYCOMS_RF01"
+    elseif scm_coriolis == "DYCOMS_RF01"
         (z -> FT(7), z -> FT(-5.5))
-    elseif edmf_coriolis == "DYCOMS_RF02"
+    elseif scm_coriolis == "DYCOMS_RF02"
         (z -> FT(5), z -> FT(-5.5))
-    elseif edmf_coriolis == "GABLS"
+    elseif scm_coriolis == "GABLS"
         (APL.GABLS_geostrophic_ug(FT), APL.GABLS_geostrophic_vg(FT))
     else
         error("Uncaught case")
@@ -505,8 +505,8 @@ function get_edmf_coriolis(parsed_args, ::Type{FT}) where {FT}
     coriolis_params["DYCOMS_RF01"] = FT(0) # TODO: check this
     coriolis_params["DYCOMS_RF02"] = FT(0) # TODO: check this
     coriolis_params["GABLS"] = FT(1.39e-4)
-    coriolis_param = coriolis_params[edmf_coriolis]
-    return EDMFCoriolis(prof_u, prof_v, coriolis_param)
+    coriolis_param = coriolis_params[scm_coriolis]
+    return SCMCoriolis(prof_u, prof_v, coriolis_param)
 end
 
 function get_turbconv_model(FT, parsed_args, turbconv_params)
@@ -541,9 +541,7 @@ function get_entrainment_model(parsed_args)
     elseif entr_model == "PiGroups"
         PiGroupsEntrainment()
     elseif entr_model == "Generalized"
-        GeneralizedEntrainment()
-    elseif entr_model == "GeneralizedHarmonics"
-        GeneralizedHarmonicsEntrainment()
+        InvZEntrainment()
     else
         error("Invalid entr_model $(entr_model)")
     end
@@ -556,9 +554,7 @@ function get_detrainment_model(parsed_args)
     elseif detr_model == "PiGroups"
         PiGroupsDetrainment()
     elseif detr_model == "Generalized"
-        GeneralizedDetrainment()
-    elseif detr_model == "GeneralizedHarmonics"
-        GeneralizedHarmonicsDetrainment()
+        BuoyancyVelocityDetrainment()
     elseif detr_model == "SmoothArea"
         SmoothAreaDetrainment()
     else
@@ -583,7 +579,7 @@ function check_case_consistency(parsed_args)
     subs = parsed_args["subsidence"]
     surf = parsed_args["surface_setup"]
     rad = parsed_args["rad"]
-    cor = parsed_args["edmf_coriolis"]
+    cor = parsed_args["scm_coriolis"]
     forc = parsed_args["forcing"]
     moist = parsed_args["moist"]
     ls_adv = parsed_args["ls_adv"]

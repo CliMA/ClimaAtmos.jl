@@ -1,4 +1,4 @@
-244
+245
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+245
+- Prognostic edmf docstrings + refactor + scm_coriolis change
+
 244
 - Add a new test case: aquaplanet with 2M microphysics
 
