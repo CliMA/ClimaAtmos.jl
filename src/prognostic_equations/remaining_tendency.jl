@@ -10,9 +10,124 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 end
 
+function prognostic_nt(::Val{names}; tends...) where {names}
+    nt_ordered = NamedTuple{names}(rzero(values(tends)))
+    nt_values = NamedTuple{keys(tends)}(values(tends))
+    return merge(nt_ordered, nt_values)
+end
+
+function ᶜremaining_tendency(ᶜY, ᶠY, p, t)
+    names = propertynames(ᶜY)
+    tends = (;
+        ᶜremaining_tendency_ρ(ᶜY, ᶠY, p, t)...,
+        ᶜremaining_tendency_uₕ(ᶜY, ᶠY, p, t)...,
+        ᶜremaining_tendency_ρe_tot(ᶜY, ᶠY, p, t)...,
+        ᶜremaining_tendency_ρq_tot(ᶜY, ᶠY, p, t)...,
+        ᶜremaining_tendency_ρq_liq(ᶜY, ᶠY, p, t)...,
+        ᶜremaining_tendency_ρq_ice(ᶜY, ᶠY, p, t)...,
+        ᶜremaining_tendency_ρq_rai(ᶜY, ᶠY, p, t)...,
+        ᶜremaining_tendency_ρq_sno(ᶜY, ᶠY, p, t)...,
+        ᶜremaining_tendency_sgs⁰(ᶜY, ᶠY, p, t)...,
+        ᶜremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)...,
+    )
+    return lazy.(prognostic_nt.(Val(names); tends...))
+end
+function ᶠremaining_tendency(ᶜY, ᶠY, p, t)
+    names = propertynames(ᶠY)
+    tends = (;
+        ᶠremaining_tendency_u₃(ᶜY, ᶠY, p, t)...,
+        ᶠremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)...,
+    )
+    return lazy.(prognostic_nt.(Val(names); tends...))
+end
+using ClimaCore.RecursiveApply: rzero
+function ᶜremaining_tendency_ρ(ᶜY, ᶠY, p, t)
+    :ρ in propertynames(ᶜY) || return ()
+    ∑tendencies = zero(eltype(ᶜY.ρ))
+    return (; ρ = ∑tendencies)
+end
+function ᶜremaining_tendency_uₕ(ᶜY, ᶠY, p, t)
+    :uₕ in propertynames(ᶜY) || return ()
+    ∑tendencies = zero(eltype(ᶜY.uₕ))
+    return (; uₕ = ∑tendencies)
+end
+function ᶜremaining_tendency_ρe_tot(ᶜY, ᶠY, p, t)
+    :ρe_tot in propertynames(ᶜY) || return ()
+    ∑tendencies = zero(eltype(ᶜY.ρe_tot))
+    return (; ρe_tot = ∑tendencies)
+end
+function ᶜremaining_tendency_ρq_tot(ᶜY, ᶠY, p, t)
+    :ρq_tot in propertynames(ᶜY) || return ()
+    ∑tendencies = zero(eltype(ᶜY.ρq_tot))
+    return (; ρq_tot = ∑tendencies)
+end
+function ᶜremaining_tendency_ρq_liq(ᶜY, ᶠY, p, t)
+    :ρq_liq in propertynames(ᶜY) || return ()
+    ∑tendencies = zero(eltype(ᶜY.ρq_liq))
+    return (; ρq_liq = ∑tendencies)
+end
+function ᶜremaining_tendency_ρq_ice(ᶜY, ᶠY, p, t)
+    :ρq_ice in propertynames(ᶜY) || return ()
+    ∑tendencies = zero(eltype(ᶜY.ρq_ice))
+    return (; ρq_ice = ∑tendencies)
+end
+function ᶜremaining_tendency_ρq_rai(ᶜY, ᶠY, p, t)
+    :ρq_rai in propertynames(ᶜY) || return ()
+    ∑tendencies = zero(eltype(ᶜY.ρq_rai))
+    return (; ρq_rai = ∑tendencies)
+end
+function ᶜremaining_tendency_ρq_sno(ᶜY, ᶠY, p, t)
+    :ρq_sno in propertynames(ᶜY) || return ()
+    ∑tendencies = zero(eltype(ᶜY.ρq_sno))
+    return (; ρq_sno = ∑tendencies)
+end
+function ᶜremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)
+    :sgsʲs in propertynames(ᶜY) || return ()
+    ∑tendencies = rzero(eltype(ᶜY.sgsʲs))
+    return (; sgsʲs = ∑tendencies)
+end
+function ᶜremaining_tendency_sgs⁰(ᶜY, ᶠY, p, t)
+    :sgs⁰ in propertynames(ᶜY) || return ()
+    ∑tendencies = rzero(eltype(ᶜY.sgs⁰))
+    return (; sgs⁰ = ∑tendencies)
+end
+function ᶠremaining_tendency_u₃(ᶜY, ᶠY, p, t)
+    :u₃ in propertynames(ᶠY) || return ()
+    ∑tendencies = zero(eltype(ᶠY.u₃))
+    return (; u₃ = ∑tendencies)
+end
+function ᶠremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)
+    :sgsʲs in propertynames(ᶠY) || return ()
+    ∑tendencies = rzero(eltype(ᶠY.sgsʲs))
+    return (; sgsʲs = ∑tendencies)
+end
+
+
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
-    Yₜ .= zero(eltype(Yₜ))
+    device = ClimaComms.device(axes(Y.c))
+    (localmem_lg, localmem_state) = if device isa ClimaComms.CUDADevice
+        Val(false), Val(true)
+    else
+        Val(false), Val(false)
+    end
+    p_kernel = (;)
+    if :sfc in propertynames(Y) # columnwise! does not yet handle .sfc
+        parent(Yₜ.sfc) .= zero(Spaces.undertype(axes(Y.c)))
+    end
+    Operators.columnwise!(
+        device,
+        ᶜremaining_tendency,
+        ᶠremaining_tendency,
+        Yₜ.c,
+        Yₜ.f,
+        Y.c,
+        Y.f,
+        p_kernel,
+        t,
+        localmem_lg,
+        localmem_state,
+    )
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
     fill_with_nans!(p)
     horizontal_advection_tendency!(Yₜ, Y, p, t)
