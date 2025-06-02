@@ -165,3 +165,77 @@ function precipitation_tendency!(
         @. Yₜ.c.ρq_sno += Y.c.sgsʲs.:($$j).ρa * ᶜSqₛᵖʲs.:($$j)
     end
 end
+
+#####
+##### 2-moment microphysics without sgs scheme
+#####
+
+function precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::DryModel,
+    precip_model::Microphysics2Moment,
+    _,
+)
+    error("Microphysics2Moment precipitation should not be used with DryModel")
+end
+function precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::EquilMoistModel,
+    precip_model::Microphysics2Moment,
+    _,
+)
+    error(
+        "Microphysics2Moment precipitation and EquilMoistModel precipitation_tendency is not implemented",
+    )
+end
+function precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::NonEquilMoistModel,
+    precip_model::Microphysics2Moment,
+    _,
+)
+    (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
+    (; ᶜSnₗᵖ, ᶜSnᵣᵖ) = p.precomputed
+
+    # Update grid mean tendencies
+    @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜSqₗᵖ
+    @. Yₜ.c.ρq_ice += Y.c.ρ * ᶜSqᵢᵖ
+    @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜSqᵣᵖ
+    @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜSqₛᵖ
+
+    @. Yₜ.c.ρn_liq += Y.c.ρ * ᶜSnₗᵖ
+    @. Yₜ.c.ρn_rai += Y.c.ρ * ᶜSnᵣᵖ
+
+    return nothing
+end
+function precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::NonEquilMoistModel,
+    precip_model::Microphysics2Moment,
+    turbconv_model::DiagnosticEDMFX,
+)
+    error("Not implemented yet")
+end
+function precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::NonEquilMoistModel,
+    precip_model::Microphysics2Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    error("Not implemented yet")
+end

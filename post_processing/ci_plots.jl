@@ -621,7 +621,10 @@ function make_plots(
 end
 
 function make_plots(
-    ::Val{:single_column_precipitation_test},
+    sim_type::Union{
+        Val{:single_column_precipitation_test},
+        Val{:single_column_precipitation_2M_test},
+    },
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -629,7 +632,17 @@ function make_plots(
     # TODO: Move this plotting code into the same framework as the other ones
     simdir = simdirs[1]
 
-    short_names = ["hus", "clw", "cli", "husra", "hussn", "ta"]
+    if sim_type isa Val{:single_column_precipitation_test}
+        short_names = ["hus", "clw", "cli", "husra", "hussn", "ta"]
+        figsize = (1200, 600)
+        pr_row = 3
+    else
+        short_names =
+            ["hus", "clw", "cli", "husra", "hussn", "ta", "cdnc", "ncra"]
+        figsize = (1200, 800)
+        pr_row = 4
+    end
+
     vars = [
         slice(get(simdir; short_name), x = 0.0, y = 0.0) for
         short_name in short_names
@@ -637,7 +650,7 @@ function make_plots(
 
     # We first prepare the axes with all the nice labels with ClimaAnalysis, then we use
     # CairoMakie to add the additional lines.
-    fig = CairoMakie.Figure(; size = (1200, 600))
+    fig = CairoMakie.Figure(; size = figsize)
 
     p_loc = [1, 1]
 
@@ -677,7 +690,7 @@ function make_plots(
     viz.line_plot1D!(
         fig,
         slice(surface_precip, x = 0.0, y = 0.0);
-        p_loc = [3, 1:3],
+        p_loc = [pr_row, 1:3],
     )
 
     file_path = joinpath(output_paths[1], "summary.pdf")
@@ -1130,6 +1143,7 @@ AquaplanetPlots = Union{
     Val{:edonly_edmfx_aquaplanet},
     Val{:mpi_sphere_aquaplanet_rhoe_equil_clearsky},
     Val{:aquaplanet_nonequil_allsky_gw_res},
+    Val{:aquaplanet_nonequil_allsky_gw_res_2M},
     Val{:rcemipii_sphere_diagnostic_edmfx},
     Val{:longrun_aquaplanet_allsky_0M},
     Val{:longrun_aquaplanet_allsky_diagedmf_0M},
@@ -1141,11 +1155,17 @@ AquaplanetPlots = Union{
     Val{:amip_target_edonly},
 }
 
-function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
+function make_plots(
+    sim_type::AquaplanetPlots,
+    output_paths::Vector{<:AbstractString},
+)
     simdirs = SimDir.(output_paths)
 
     reduction = "average"
-    short_names_3D = ["ua", "ta", "hus"]
+    short_names_3D =
+        sim_type isa Val{:aquaplanet_nonequil_allsky_gw_res_2M} ?
+        ["ua", "ta", "hus", "clw", "cli", "husra", "hussn", "cdnc", "ncra"] :
+        ["ua", "ta", "hus"]
     short_names_2D = [
         "rsdt",
         "rsds",

@@ -16,7 +16,7 @@ function cloud_condensate_tendency!(
     ::Union{NoPrecipitation, Microphysics0Moment},
 )
     error(
-        "NonEquilMoistModel can only be run with Microphysics1Moment precipitation",
+        "NonEquilMoistModel can only be run with Microphysics1Moment or Microphysics2Moment precipitation",
     )
 end
 
@@ -36,4 +36,33 @@ function cloud_condensate_tendency!(
 
     @. Yₜ.c.ρq_liq += Y.c.ρ * cloud_sources(cmc.liquid, thp, ᶜts, q_rai, dt)
     @. Yₜ.c.ρq_ice += Y.c.ρ * cloud_sources(cmc.ice, thp, ᶜts, q_sno, dt)
+end
+
+function cloud_condensate_tendency!(
+    Yₜ,
+    Y,
+    p,
+    ::NonEquilMoistModel,
+    ::Microphysics2Moment,
+)
+    (; ᶜts) = p.precomputed
+    (; params, dt) = p
+    (; q_rai, q_sno, n_liq) = p.precomputed.ᶜspecific
+    FT = eltype(params)
+    thp = CAP.thermodynamics_params(params)
+    cmc = CAP.microphysics_cloud_params(params)
+
+    @. Yₜ.c.ρq_liq += Y.c.ρ * cloud_sources(cmc.liquid, thp, ᶜts, q_rai, dt)
+    @. Yₜ.c.ρq_ice += Y.c.ρ * cloud_sources(cmc.ice, thp, ᶜts, q_sno, dt)
+
+    @. Yₜ.c.ρn_liq +=
+        Y.c.ρ * aerosol_activation_sources(
+            cmc.liquid,
+            thp,
+            ᶜts,
+            q_rai,
+            n_liq,
+            cmc.N_cloud_liquid_droplets,
+            dt,
+        )
 end

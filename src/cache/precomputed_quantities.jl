@@ -139,6 +139,19 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵣᵖ = similar(Y.c, FT),
             ᶜSqₛᵖ = similar(Y.c, FT),
         )
+    elseif atmos.precip_model isa Microphysics2Moment
+        precipitation_quantities = (;
+            ᶜwᵣ = similar(Y.c, FT),
+            ᶜwₛ = similar(Y.c, FT),
+            ᶜSqₗᵖ = similar(Y.c, FT),
+            ᶜSqᵢᵖ = similar(Y.c, FT),
+            ᶜSqᵣᵖ = similar(Y.c, FT),
+            ᶜSqₛᵖ = similar(Y.c, FT),
+            ᶜwnₗ = similar(Y.c, FT),
+            ᶜwnᵣ = similar(Y.c, FT),
+            ᶜSnₗᵖ = similar(Y.c, FT),
+            ᶜSnᵣᵖ = similar(Y.c, FT),
+        )
     else
         precipitation_quantities = (;)
     end

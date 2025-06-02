@@ -150,8 +150,14 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
-    condensate_names =
-        (@name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_rai), @name(c.ρq_sno))
+    condensate_names = (
+        @name(c.ρq_liq),
+        @name(c.ρq_ice),
+        @name(c.ρq_rai),
+        @name(c.ρq_sno),
+        @name(c.ρn_liq),
+        @name(c.ρn_rai)
+    )
     available_condensate_names =
         MatrixFields.unrolled_filter(is_in_Y, condensate_names)
     available_tracer_names =
@@ -534,6 +540,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         (@name(c.ρq_ice), @name(q_ice), @name(ᶜwᵢ)),
         (@name(c.ρq_rai), @name(q_rai), @name(ᶜwᵣ)),
         (@name(c.ρq_sno), @name(q_sno), @name(ᶜwₛ)),
+        (@name(c.ρn_liq), @name(n_liq), @name(ᶜwnₗ)),
+        (@name(c.ρn_rai), @name(n_rai), @name(ᶜwnᵣ)),
     )
     if !(p.atmos.moisture_model isa DryModel) || use_derivative(diffusion_flag)
         ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
@@ -581,11 +589,11 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         #        ),
         #    ) - (I,)
 
-        MatrixFields.unrolled_foreach(tracer_info) do (ρqₚ_name, _, wₚ_name)
-            MatrixFields.has_field(Y, ρqₚ_name) || return
-            ∂ᶜρqₚ_err_∂ᶜρqₚ = matrix[ρqₚ_name, ρqₚ_name]
+        MatrixFields.unrolled_foreach(tracer_info) do (ρχₚ_name, _, wₚ_name)
+            MatrixFields.has_field(Y, ρχₚ_name) || return
+            ∂ᶜρχₚ_err_∂ᶜρχₚ = matrix[ρχₚ_name, ρχₚ_name]
             ᶜwₚ = MatrixFields.get_field(p.precomputed, wₚ_name)
-            @. ∂ᶜρqₚ_err_∂ᶜρqₚ =
+            @. ∂ᶜρχₚ_err_∂ᶜρχₚ =
                 dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
                 DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅
                 ᶠright_bias_matrix() ⋅
@@ -643,19 +651,19 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
 
-        MatrixFields.unrolled_foreach(tracer_info) do (ρq_name, q_name, _)
-            MatrixFields.has_field(Y, ρq_name) || return
-            ᶜq = MatrixFields.get_field(ᶜspecific, q_name)
-            ∂ᶜρq_err_∂ᶜρ = matrix[ρq_name, @name(c.ρ)]
-            ∂ᶜρq_err_∂ᶜρq = matrix[ρq_name, ρq_name]
+        MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, χ_name, _)
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ᶜχ = MatrixFields.get_field(ᶜspecific, χ_name)
+            ∂ᶜρχ_err_∂ᶜρ = matrix[ρχ_name, @name(c.ρ)]
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
             ᶜtridiagonal_matrix_scalar = ifelse(
-                q_name in (@name(q_rai), @name(q_sno)),
+                χ_name in (@name(q_rai), @name(q_sno), @name(n_rai)),
                 ᶜdiffusion_h_matrix_scaled,
                 ᶜdiffusion_h_matrix,
             )
-            @. ∂ᶜρq_err_∂ᶜρ =
-                dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(-(ᶜq) / ᶜρ)
-            @. ∂ᶜρq_err_∂ᶜρq +=
+            @. ∂ᶜρχ_err_∂ᶜρ =
+                dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(-(ᶜχ) / ᶜρ)
+            @. ∂ᶜρχ_err_∂ᶜρχ +=
                 dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
 
