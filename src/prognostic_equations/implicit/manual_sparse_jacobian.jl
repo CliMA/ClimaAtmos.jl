@@ -151,7 +151,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
     condensate_names =
-        (@name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_rai), @name(c.ρq_sno))
+        (@name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_rai), @name(c.ρq_sno), @name(c.N_liq), @name(c.N_ice), @name(c.N_rai), @name(c.N_sno))
     available_condensate_names =
         MatrixFields.unrolled_filter(is_in_Y, condensate_names)
     available_tracer_names =
@@ -591,6 +591,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ᶠright_bias_matrix() ⋅
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwₚ) / ᶜρ) - (I,)
         end
+
+        # ∂ᶜN_liq_err_∂ᶜN_liq = matrix[@name(c.N_liq), @name(c.N_liq)]
+        # @. ∂ᶜN_liq_err_∂ᶜN_liq = zero(typeof(∂ᶜN_liq_err_∂ᶜN_liq)) - (I,)
+
+        # ∂ᶜN_ice_err_∂ᶜN_ice = matrix[@name(c.N_ice), @name(c.N_ice)]
+        # @. ∂ᶜN_ice_err_∂ᶜN_ice = zero(typeof(∂ᶜN_ice_err_∂ᶜN_ice)) - (I,)
+
+        # ∂ᶜN_rai_err_∂ᶜN_rai = matrix[@name(c.N_rai), @name(c.N_rai)]
+        # @. ∂ᶜN_rai_err_∂ᶜN_rai = zero(typeof(∂ᶜN_rai_err_∂ᶜN_rai)) - (I,)
+
+        # ∂ᶜN_sno_err_∂ᶜN_sno = matrix[@name(c.N_sno), @name(c.N_sno)]
+        # @. ∂ᶜN_sno_err_∂ᶜN_sno = zero(typeof(∂ᶜN_sno_err_∂ᶜN_sno)) - (I,)
 
     end
 

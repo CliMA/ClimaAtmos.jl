@@ -707,6 +707,7 @@ function compute_pr!(
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
+        Microphysics2Moment,
     },
 )
     if isnothing(out)
@@ -742,6 +743,7 @@ function compute_prra!(
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
+        Microphysics2Moment,
     },
 )
     if isnothing(out)
@@ -774,6 +776,7 @@ function compute_prsn!(
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
+        Microphysics2Moment,
     },
 )
     if isnothing(out)
@@ -805,7 +808,10 @@ function compute_husra!(
     state,
     cache,
     time,
-    precip_model::Microphysics1Moment,
+    precip_model::Union{
+        Microphysics1Moment,
+        Microphysics2Moment,
+    },
 )
     if isnothing(out)
         return state.c.ρq_rai ./ state.c.ρ
@@ -836,7 +842,10 @@ function compute_hussn!(
     state,
     cache,
     time,
-    precip_model::Microphysics1Moment,
+    precip_model::Union{
+        Microphysics1Moment,
+        Microphysics2Moment,
+    },
 )
     if isnothing(out)
         return state.c.ρq_sno ./ state.c.ρ

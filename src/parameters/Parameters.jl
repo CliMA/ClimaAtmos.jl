@@ -68,6 +68,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     MPC,
     MP0M,
     MP1M,
+    MP2M,
     SFP,
     TCP,
     STP,
@@ -80,6 +81,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     microphysics_cloud_params::MPC
     microphysics_0m_params::MP0M
     microphysics_1m_params::MP1M
+    microphysics_2m_params::MP2M
     surface_fluxes_params::SFP
     turbconv_params::TCP
     surface_temp_params::STP
