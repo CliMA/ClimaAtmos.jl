@@ -305,6 +305,8 @@ function get_precipitation_model(parsed_args)
         Microphysics0Moment()
     elseif precip_model == "1M"
         Microphysics1Moment()
+    elseif precip_model == "2M"
+        Microphysics2Moment()
     else
         error("Invalid precip_model $(precip_model)")
     end
