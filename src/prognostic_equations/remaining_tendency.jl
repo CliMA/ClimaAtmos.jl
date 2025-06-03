@@ -44,22 +44,84 @@ using ClimaCore.RecursiveApply: rzero
 function ᶜremaining_tendency_ρ(ᶜY, ᶠY, p, t)
     :ρ in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.ρ))
-    return (; ρ = ∑tendencies)
+    ᶜJ = Fields.local_geometry_field(ᶜY).J
+    ᶠJ = Fields.local_geometry_field(ᶠY).J
+
+    if !(p.atmos.moisture_model isa DryModel)
+        ᶜwₜqₜ = compute_ᶜwₜqₜ(ᶜY, ᶠY, p, t)
+        ∑tendencies = lazy.(∑tendencies .- water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜwₜqₜ))
+    end
+    return (;ρ=∑tendencies)
 end
 function ᶜremaining_tendency_uₕ(ᶜY, ᶠY, p, t)
     :uₕ in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.uₕ))
-    return (; uₕ = ∑tendencies)
+    (; viscous_sponge, rayleigh_sponge) = p.atmos
+    ᶜuₕ = ᶜY.uₕ
+    ∑tendencies = lazy.(∑tendencies .+ viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge))
+    ∑tendencies = lazy.(∑tendencies .+ rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge))
+
+    return (;uₕ=∑tendencies)
 end
 function ᶜremaining_tendency_ρe_tot(ᶜY, ᶠY, p, t)
     :ρe_tot in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.ρe_tot))
-    return (; ρe_tot = ∑tendencies)
+
+    (; moisture_model, viscous_sponge, precip_model) = p.atmos
+    (; energy_upwinding) = p.atmos.numerics
+    thermo_params = CAP.thermodynamics_params(p.params)
+    thermo_args = (thermo_params, moisture_model, precip_model)
+    ᶜz = Fields.coordinate_field(ᶜY).z
+    ᶜρ = ᶜY.ρ
+    ᶜuₕ = ᶜY.uₕ
+    ᶜρe_tot = ᶜY.ρe_tot
+    ᶜts = compute_ᶜts(ᶜY, ᶠY, p, t)
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
+    ᶜe_tot = @. lazy(ᶜρe_tot / ᶜρ)
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
+
+    if !(p.atmos.moisture_model isa DryModel)
+        ᶜwₕhₜ = compute_ᶜwₕhₜ(ᶜY, ᶠY, p, t)
+        ∑tendencies = lazy.(∑tendencies .- water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜwₕhₜ))
+    end
+    if energy_upwinding != Val(:none)
+        (; dt) = p
+        ᶠu³ = compute_ᶠu³(ᶜY, ᶠY)
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
+        ∑tendencies = lazy.(∑tendencies .+ vtt)
+        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
+        # need to improve NullBroadcast support for this.
+        ∑tendencies = lazy.(∑tendencies .+ (-1) .* vtt_central)
+    end
+
+    ∑tendencies = lazy.(∑tendencies .+ viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge))
+    return (;ρe_tot=∑tendencies)
 end
 function ᶜremaining_tendency_ρq_tot(ᶜY, ᶠY, p, t)
     :ρq_tot in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.ρq_tot))
-    return (; ρq_tot = ∑tendencies)
+    ᶜJ = Fields.local_geometry_field(ᶜY).J
+    ᶠJ = Fields.local_geometry_field(ᶠY).J
+    ᶜρ = ᶜY.ρ
+    if !(p.atmos.moisture_model isa DryModel)
+        ᶜwₜqₜ = compute_ᶜwₜqₜ(ᶜY, ᶠY, p, t)
+        cmc = CAP.microphysics_cloud_params(p.params)
+        cmp = CAP.microphysics_1m_params(p.params)
+        thp = CAP.thermodynamics_params(p.params)
+        ∑tendencies = lazy.(∑tendencies .- water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜwₜqₜ))
+    end
+    (; tracer_upwinding) = p.atmos.numerics
+    if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
+        (; dt) = p
+        (; ᶜspecific) = p.precomputed
+        ᶜq_tot = @. lazy(ᶜY.ρq_tot / ᶜY.ρ)
+        ᶠu³ = compute_ᶠu³(ᶜY, ᶠY)
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
+        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
+        ∑tendencies = lazy.(∑tendencies .+ vtt .- vtt_central)
+    end
+
+    return (;ρq_tot=∑tendencies)
 end
 function ᶜremaining_tendency_ρq_liq(ᶜY, ᶠY, p, t)
     :ρq_liq in propertynames(ᶜY) || return ()
@@ -94,7 +156,13 @@ end
 function ᶠremaining_tendency_u₃(ᶜY, ᶠY, p, t)
     :u₃ in propertynames(ᶠY) || return ()
     ∑tendencies = zero(eltype(ᶠY.u₃))
-    return (; u₃ = ∑tendencies)
+    (; viscous_sponge) = p.atmos
+    ᶜρ = ᶜY.ρ
+    ᶜuₕ = ᶜY.uₕ
+    ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
+    ᶠu₃ = compute_ᶠu₃_with_bcs(ᶠY.u₃, ᶠuₕ³)
+    ∑tendencies = lazy.(∑tendencies .+ viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge))
+    return (;u₃=∑tendencies)
 end
 function ᶠremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)
     :sgsʲs in propertynames(ᶠY) || return ()
@@ -102,6 +170,64 @@ function ᶠremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)
     return (; sgsʲs = ∑tendencies)
 end
 
+
+water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜχ) =
+    @. lazy(ᶜprecipdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠright_bias(-(ᶜχ))))
+
+function surface_velocity_full(ᶠu₃, ᶠuₕ³)
+    assert_eltype(ᶠuₕ³, Geometry.Contravariant3Vector)
+    assert_eltype(ᶠu₃, Geometry.Covariant3Vector)
+    ᶠlg = Fields.local_geometry_field(axes(ᶠu₃))
+    sfc_u₃ = ᶠu₃ # Fields.level(ᶠu₃.components.data.:1, half)
+    sfc_uₕ³ = ᶠuₕ³ # Fields.level(ᶠuₕ³.components.data.:1, half)
+    sfc_g³³ = g³³_field(axes(sfc_u₃))
+    w₃ = @. lazy(- C3(sfc_uₕ³ / sfc_g³³, ᶠlg)) # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
+    assert_eltype(w₃, Geometry.Covariant3Vector)
+    return w₃
+end
+
+function compute_ᶜts(ᶜY, ᶠY, p, t)
+    (; moisture_model, precip_model) = p.atmos
+    thermo_params = CAP.thermodynamics_params(p.params)
+    thermo_args = (thermo_params, moisture_model, precip_model)
+    ᶜz = Fields.coordinate_field(ᶜY).z
+    FT = Spaces.undertype(axes(ᶜY))
+    grav = FT(CAP.grav(p.params))
+    ᶜΦ = @. lazy(grav * ᶜz)
+
+    ᶜρ = ᶜY.ρ
+    ᶜuₕ = ᶜY.uₕ
+    ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
+    ᶠu₃ = compute_ᶠu₃_with_bcs(ᶠY.u₃, ᶠuₕ³)
+    ᶜK = compute_kinetic(ᶜuₕ, ᶠu₃)
+    ᶜspecific = @. lazy(specific_gs(ᶜY))
+    return @. lazy(ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, ᶜρ))
+end
+
+assert_eltype(bc::Base.AbstractBroadcasted, ::Type{T}) where {T} =
+    assert_eltype(eltype(bc), T)
+assert_eltype(f::Fields.Field, ::Type{T}) where {T} =
+    assert_eltype(Fields.field_values(f), T)
+assert_eltype(data::DataLayouts.AbstractData, ::Type{T}) where {T} =
+    assert_eltype(eltype(data), T)
+assert_eltype(::Type{S}, ::Type{T}) where {S, T} =
+    @assert S <: T "Type $S should be a subtype of $T"
+
+function compute_ᶠu₃_with_bcs(ᶠu₃, ᶠuₕ³)
+    assert_eltype(ᶠu₃, Geometry.Covariant3Vector)
+    assert_eltype(ᶠuₕ³, Geometry.Contravariant3Vector)
+    ᶠz = Fields.coordinate_field(axes(ᶠu₃)).z
+    sfc_u₃ = surface_velocity_full(ᶠu₃, ᶠuₕ³)
+    # todo: generalize this with z_min
+    return @. lazy(ifelse(iszero(ᶠz), sfc_u₃, ᶠu₃))
+end
+function compute_ᶠu³(ᶜY, ᶠY)
+    ᶜρ = ᶜY.ρ
+    ᶜuₕ = ᶜY.uₕ
+    ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
+    ᶠu₃ = compute_ᶠu₃_with_bcs(ᶠY.u₃, ᶠuₕ³)
+    return @. lazy(ᶠuₕ³ + CT3(ᶠu₃))
+end
 
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
@@ -111,7 +237,12 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     else
         Val(false), Val(false)
     end
-    p_kernel = (;)
+    (; moisture_model, viscous_sponge, precip_model) = p.atmos
+    p_kernel = (;
+        atmos = p.atmos,
+        params = p.params,
+        dt = p.dt,
+    )
     if :sfc in propertynames(Y) # columnwise! does not yet handle .sfc
         parent(Yₜ.sfc) .= zero(Spaces.undertype(axes(Y.c)))
     end
@@ -133,7 +264,6 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     horizontal_advection_tendency!(Yₜ, Y, p, t)
     hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)
     return Yₜ
 end
@@ -161,23 +291,12 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜp, sfc_conditions, ᶜts) = p.precomputed
 
-    vst_uₕ = viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge)
-    vst_u₃ = viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge)
-    vst_ρe_tot = viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge)
-    rst_uₕ = rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge)
     hs_args = (ᶜuₕ, ᶜp, params, sfc_conditions.ts, moisture_model, forcing_type)
     hs_tendency_uₕ = held_suarez_forcing_tendency_uₕ(hs_args...)
     hs_tendency_ρe_tot = held_suarez_forcing_tendency_ρe_tot(ᶜρ, hs_args...)
     edmf_cor_tend_uₕ = edmf_coriolis_tendency_uₕ(ᶜuₕ, edmf_coriolis)
     lsa_args = (ᶜρ, thermo_params, ᶜts, t, ls_adv)
     bc_lsa_tend_ρe_tot = large_scale_advection_tendency_ρe_tot(lsa_args...)
-
-    # TODO: fuse, once we fix
-    #       https://github.com/CliMA/ClimaCore.jl/issues/2165
-    @. Yₜ.c.uₕ += vst_uₕ
-    @. Yₜ.c.uₕ += rst_uₕ
-    @. Yₜ.f.u₃.components.data.:1 += vst_u₃
-    @. Yₜ.c.ρe_tot += vst_ρe_tot
 
     # TODO: can we write this out explicitly?
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)

@@ -139,19 +139,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
     # ... and upwinding correction of energy and total water.
     # (The central advection of energy and total water is done implicitly.)
-    if energy_upwinding != Val(:none)
-        (; ᶜh_tot) = p.precomputed
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
-        @. Yₜ.c.ρe_tot += vtt - vtt_central
-    end
-
-    if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
-        ᶜq_tot = ᶜspecific.q_tot
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
-        @. Yₜ.c.ρq_tot += vtt - vtt_central
-    end
 
     if isnothing(ᶠf¹²)
         # shallow atmosphere
