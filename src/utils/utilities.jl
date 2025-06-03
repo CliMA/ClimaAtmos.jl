@@ -309,7 +309,7 @@ end
 
 import Dates
 
-# TODO: Where does this date0 come from?
+# Reference date corresponding for the J2000 epoch (2000-01-01T12:00:00 TT ≈ 2000-01-01T11:58:56.816 UTC)
 const insolation_date0 = Dates.DateTime("2000-01-01T11:58:56.816")
 
 """

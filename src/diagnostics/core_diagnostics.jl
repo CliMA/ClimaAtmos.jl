@@ -910,25 +910,41 @@ function compute_clwvi!(
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    FT = eltype(state.c.ρ)
     if isnothing(out)
-        out = zeros(axes(Fields.level(state.f, half)))
-        clw = cache.scratch.ᶜtemp_scalar
-        @. clw =
-            state.c.ρ * (
-                cache.precomputed.cloud_diagnostics_tuple.q_liq +
-                cache.precomputed.cloud_diagnostics_tuple.q_ice
-            )
-        Operators.column_integral_definite!(out, clw)
-        return out
-    else
-        clw = cache.scratch.ᶜtemp_scalar
-        @. clw =
-            state.c.ρ * (
-                cache.precomputed.cloud_diagnostics_tuple.q_liq +
-                cache.precomputed.cloud_diagnostics_tuple.q_ice
-            )
-        Operators.column_integral_definite!(out, clw)
+        out = fill(FT(NaN), axes(Fields.level(state.f, half)))
     end
+
+    # Get current datetime
+    current_datetime =
+        time isa ClimaUtilities.TimeManager.ITime ?
+        ClimaUtilities.TimeManager.date(time) :
+        insolation_date0 + Dates.Second(round(Int, time))
+
+    # Compute daytime mask
+    bottom_coords = Fields.coordinate_field(Spaces.level(state.c.ρ, 1))
+    daytime_mask = compute_daytime_mask(
+        current_datetime,
+        insolation_date0,
+        CAP.insolation_params(cache.params),
+        bottom_coords,
+    )
+
+    # If it's nighttime everywhere, return array of NaNs
+    if !any(daytime_mask)
+        return isnothing(out) ? out : nothing
+    end
+
+    # Compute ice water path
+    cli = cache.scratch.ᶜtemp_scalar
+    @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+
+    Operators.column_integral_definite!(out, cli)
+
+    # Mark nighttime points as NaN in final output
+    @. out = ifelse(daytime_mask, out, FT(NaN))
+
+    return isnothing(out) ? out : nothing
 end
 
 add_diagnostic_variable!(
@@ -946,69 +962,6 @@ add_diagnostic_variable!(
 ###
 # Liquid water path (2d)
 ###
-struct DaytimeSchedule{FT} <: ClimaDiagnostics.Schedules.AbstractSchedule
-    date0::Dates.DateTime
-    insolation_params::Insolation.Parameters.InsolationParameters{FT}
-    schedule::Union{Nothing, ClimaDiagnostics.Schedules.AbstractSchedule}
-end
-
-function DaytimeSchedule(insolation_params, schedule = nothing)
-    DaytimeSchedule(insolation_date0, insolation_params, schedule)
-end
-
-function (s::DaytimeSchedule{FT})(integrator) where {FT}
-    (; t, u) = integrator
-    current_datetime =
-        t isa ClimaUtilities.TimeManager.ITime ?
-        ClimaUtilities.TimeManager.date(t) :
-        s.date0 + Dates.Second(round(Int, t))
-
-    # Get solar parameters (d = day of year, δ = declination, η_UTC = solar time angle)
-    d, δ, η_UTC =
-        FT.(
-            Insolation.helper_instantaneous_zenith_angle(
-                current_datetime,
-                s.date0,
-                s.insolation_params,
-            ),
-        )
-
-    bottom_coords = Fields.coordinate_field(Spaces.level(integrator.u.c, 1))
-    insolation_tuple = similar(bottom_coords, Tuple{FT, FT, FT})
-
-    if eltype(bottom_coords) <: Geometry.LatLongZPoint
-        @. insolation_tuple = Insolation.instantaneous_zenith_angle(
-            d,
-            δ,
-            η_UTC,
-            bottom_coords.long,
-            bottom_coords.lat,
-        )
-    else
-        insolation_tuple .= Ref(
-            Insolation.instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0)),
-        )
-    end
-
-    zenith_angles = getfield.(insolation_tuple, 1)  # get θ from (θ, ϕ, r)
-    threshold = deg2rad(FT(85.0))
-    is_daytime = any(x -> x < threshold, zenith_angles)
-
-    if isnothing(s.schedule)
-        return is_daytime
-    else
-        return is_daytime && s.schedule(integrator)
-    end
-end
-
-function ClimaDiagnostics.Schedules.short_name(::DaytimeSchedule)
-    return "daytime"
-end
-
-function ClimaDiagnostics.Schedules.long_name(::DaytimeSchedule)
-    return "when solar zenith angle < 85° (daylight)"
-end
-
 compute_lwp!(out, state, cache, time) =
     compute_lwp!(out, state, cache, time, cache.atmos.moisture_model)
 compute_lwp!(_, _, _, _, model::T) where {T} =
@@ -1021,17 +974,41 @@ function compute_lwp!(
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    FT = eltype(state.c.ρ)
     if isnothing(out)
-        out = zeros(axes(Fields.level(state.f, half)))
-        lw = cache.scratch.ᶜtemp_scalar
-        @. lw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
-        Operators.column_integral_definite!(out, lw)
-        return out
-    else
-        lw = cache.scratch.ᶜtemp_scalar
-        @. lw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
-        Operators.column_integral_definite!(out, lw)
+        out = fill(FT(NaN), axes(Fields.level(state.f, half)))
     end
+
+    # Get current datetime
+    current_datetime =
+        time isa ClimaUtilities.TimeManager.ITime ?
+        ClimaUtilities.TimeManager.date(time) :
+        insolation_date0 + Dates.Second(round(Int, time))
+
+    # Compute daytime mask
+    bottom_coords = Fields.coordinate_field(Spaces.level(state.c.ρ, 1))
+    daytime_mask = compute_daytime_mask(
+        current_datetime,
+        insolation_date0,
+        CAP.insolation_params(cache.params),
+        bottom_coords,
+    )
+
+    # If it's nighttime everywhere, return array of NaNs
+    if !any(daytime_mask)
+        return isnothing(out) ? out : nothing
+    end
+
+    # Compute liquid water path
+    lw = cache.scratch.ᶜtemp_scalar
+    @. lw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+
+    Operators.column_integral_definite!(out, lw)
+
+    # Mark nighttime points as NaN in final output
+    @. out = ifelse(daytime_mask, out, FT(NaN))
+
+    return isnothing(out) ? out : nothing
 end
 
 add_diagnostic_variable!(
@@ -1061,17 +1038,41 @@ function compute_clivi!(
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    FT = eltype(state.c.ρ)
     if isnothing(out)
-        out = zeros(axes(Fields.level(state.f, half)))
-        cli = cache.scratch.ᶜtemp_scalar
-        @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
-        Operators.column_integral_definite!(out, cli)
-        return out
-    else
-        cli = cache.scratch.ᶜtemp_scalar
-        @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
-        Operators.column_integral_definite!(out, cli)
+        out = fill(FT(NaN), axes(Fields.level(state.f, half)))
     end
+
+    # Get current datetime
+    current_datetime =
+        time isa ClimaUtilities.TimeManager.ITime ?
+        ClimaUtilities.TimeManager.date(time) :
+        insolation_date0 + Dates.Second(round(Int, time))
+
+    # Compute daytime mask
+    bottom_coords = Fields.coordinate_field(Spaces.level(state.c.ρ, 1))
+    daytime_mask = compute_daytime_mask(
+        current_datetime,
+        insolation_date0,
+        CAP.insolation_params(cache.params),
+        bottom_coords,
+    )
+
+    # If it's nighttime everywhere, return array of NaNs
+    if !any(daytime_mask)
+        return isnothing(out) ? out : nothing
+    end
+
+    # Compute ice water path
+    cli = cache.scratch.ᶜtemp_scalar
+    @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+
+    Operators.column_integral_definite!(out, cli)
+
+    # Mark nighttime points as NaN in final output
+    @. out = ifelse(daytime_mask, out, FT(NaN))
+
+    return isnothing(out) ? out : nothing
 end
 
 add_diagnostic_variable!(
@@ -1082,6 +1083,7 @@ add_diagnostic_variable!(
     comments = """
     The total mass of ice in cloud per unit area.
     (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
+    NaN values indicate nighttime points where measurements are not valid (solar zenith angle >= 85°).
     """,
     compute! = compute_clivi!,
 )
@@ -1475,3 +1477,46 @@ add_diagnostic_variable!(
     comments = "Energy available to a parcel lifted moist adiabatically from the surface. We assume fully reversible phase changes and no precipitation.",
     compute! = compute_cape!,
 )
+
+"""
+    compute_daytime_mask(current_datetime, date0, insolation_params, bottom_coords)
+
+Returns a boolean mask indicating which points are in daylight (solar zenith angle < 85°).
+"""
+function compute_daytime_mask(
+    current_datetime,
+    date0,
+    insolation_params,
+    bottom_coords,
+)
+    FT = eltype(insolation_params)
+    # Get solar parameters
+    d, δ, η_UTC =
+        FT.(
+            Insolation.helper_instantaneous_zenith_angle(
+                current_datetime,
+                date0,
+                insolation_params,
+            ),
+        )
+
+    insolation_tuple = similar(bottom_coords, Tuple{FT, FT, FT})
+
+    if eltype(bottom_coords) <: Geometry.LatLongZPoint
+        @. insolation_tuple = Insolation.instantaneous_zenith_angle(
+            d,
+            δ,
+            η_UTC,
+            bottom_coords.long,
+            bottom_coords.lat,
+        )
+    else
+        insolation_tuple .= Ref(
+            Insolation.instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0)),
+        )
+    end
+
+    zenith_angles = getfield.(insolation_tuple, 1)  # get θ from (θ, ϕ, r)
+    threshold = deg2rad(FT(85.0))
+    return zenith_angles .< threshold
+end
