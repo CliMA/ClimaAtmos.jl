@@ -49,17 +49,23 @@ function ᶜremaining_tendency_ρ(ᶜY, ᶠY, p, t)
 
     if !(p.atmos.moisture_model isa DryModel)
         ᶜwₜqₜ = compute_ᶜwₜqₜ(ᶜY, ᶠY, p, t)
-        ∑tendencies = lazy.(∑tendencies .- water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜwₜqₜ))
+        ∑tendencies = sub_tend(∑tendencies, water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜwₜqₜ))
     end
     return (;ρ=∑tendencies)
 end
+
+add_tend(∑tends, t) = lazy.(∑tends .+ t)
+add_tend(∑tends, ::NullBroadcasted) = ∑tends
+sub_tend(∑tends, ::NullBroadcasted) = ∑tends
+sub_tend(∑tends, t) = lazy.(∑tends .- t)
+
 function ᶜremaining_tendency_uₕ(ᶜY, ᶠY, p, t)
     :uₕ in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.uₕ))
     (; viscous_sponge, rayleigh_sponge) = p.atmos
     ᶜuₕ = ᶜY.uₕ
-    ∑tendencies = lazy.(∑tendencies .+ viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge))
-    ∑tendencies = lazy.(∑tendencies .+ rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge))
+    ∑tendencies = add_tend(∑tendencies, viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge))
+    ∑tendencies = add_tend(∑tendencies, rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge))
 
     return (;uₕ=∑tendencies)
 end
@@ -82,19 +88,19 @@ function ᶜremaining_tendency_ρe_tot(ᶜY, ᶠY, p, t)
 
     if !(p.atmos.moisture_model isa DryModel)
         ᶜwₕhₜ = compute_ᶜwₕhₜ(ᶜY, ᶠY, p, t)
-        ∑tendencies = lazy.(∑tendencies .- water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜwₕhₜ))
+        ∑tendencies = sub_tend(∑tendencies, water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜwₕhₜ))
     end
     if energy_upwinding != Val(:none)
         (; dt) = p
         ᶠu³ = compute_ᶠu³(ᶜY, ᶠY)
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
-        ∑tendencies = lazy.(∑tendencies .+ vtt)
+        ∑tendencies = add_tend(∑tendencies, vtt)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
         # need to improve NullBroadcast support for this.
-        ∑tendencies = lazy.(∑tendencies .+ (-1) .* vtt_central)
+        ∑tendencies = sub_tend(∑tendencies, vtt_central)
     end
 
-    ∑tendencies = lazy.(∑tendencies .+ viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge))
+    ∑tendencies = add_tend(∑tendencies, viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge))
     return (;ρe_tot=∑tendencies)
 end
 function ᶜremaining_tendency_ρq_tot(ᶜY, ᶠY, p, t)
@@ -108,7 +114,7 @@ function ᶜremaining_tendency_ρq_tot(ᶜY, ᶠY, p, t)
         cmc = CAP.microphysics_cloud_params(p.params)
         cmp = CAP.microphysics_1m_params(p.params)
         thp = CAP.thermodynamics_params(p.params)
-        ∑tendencies = lazy.(∑tendencies .- water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜwₜqₜ))
+        ∑tendencies = sub_tend(∑tendencies, water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜwₜqₜ))
     end
     (; tracer_upwinding) = p.atmos.numerics
     if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
@@ -118,7 +124,8 @@ function ᶜremaining_tendency_ρq_tot(ᶜY, ᶠY, p, t)
         ᶠu³ = compute_ᶠu³(ᶜY, ᶠY)
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
-        ∑tendencies = lazy.(∑tendencies .+ vtt .- vtt_central)
+        ∑tendencies = add_tend(∑tendencies, vtt)
+        ∑tendencies = sub_tend(∑tendencies, vtt_central)
     end
 
     return (;ρq_tot=∑tendencies)
@@ -161,7 +168,7 @@ function ᶠremaining_tendency_u₃(ᶜY, ᶠY, p, t)
     ᶜuₕ = ᶜY.uₕ
     ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
     ᶠu₃ = compute_ᶠu₃_with_bcs(ᶠY.u₃, ᶠuₕ³)
-    ∑tendencies = lazy.(∑tendencies .+ viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge))
+    ∑tendencies = add_tend(∑tendencies, viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge))
     return (;u₃=∑tendencies)
 end
 function ᶠremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)
