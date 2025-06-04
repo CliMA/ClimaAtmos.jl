@@ -21,16 +21,18 @@ lons = [
     -125.0, -129.0, -133.0, -141.0, -145.0, -149.0
 ]
 
-# Extend calibration sites beyond the cfsites
-append!(lats, vcat([30.0 for _ in 1:10],[-10.0 for _ in 1:10]))
-#append!(lats, [20. for _ in 1:10])
-append!(lons, vcat(range(-120, -160, length=10), range(-80, -160, length=10)))
-
 # Round the latitude and longitude values to the nearest 0.25
 lats = [round(lat * 4) / 4 for lat in lats]
 lons = [round(lon * 4) / 4 for lon in lons]
 
-start_dates = fill("20070701", length(lats))
+start_date_stubs = ["20070101", "20070401", "20070701", "20071001"]
+#start_date_stubs = ["20070701"]
+start_dates = hcat([fill(start_date, length(lats)) for start_date in start_date_stubs]...)[:]
+
+# repeat lats /lons for 4 seasons of startdates
+lats = hcat(repeat(lats, length(start_date_stubs))...)[:]
+lons = hcat(repeat(lons, length(start_date_stubs))...)[:]
+# make sure convection type is set to shallow as all these cases are Sc and Cu cases
 convection_type = fill("shallow", length(lats))
 
 function get_era5_calibration_library(lats = lats, lons = lons, convection_type = convection_type, start_dates=start_dates)
@@ -40,14 +42,14 @@ function get_era5_calibration_library(lats = lats, lons = lons, convection_type 
             "start_date" => get_startdate(i, start_dates),
             "site_latitude" => get_latitude(i, lats),
             "site_longitude" => get_longitude(i, lons),
+            "t_end" => "95hours", # TODO Fix hardcoding
         )
+        @info site_info
         fpath = CA.get_external_forcing_file_path(site_info)
 
         if !isfile(fpath)
             @info "Creating forcing file at $fpath ..."
-            CA.generate_external_era5_forcing_file(site_info["site_latitude"], 
-                                                site_info["site_longitude"], 
-                                                site_info["start_date"], 
+            CA.generate_multiday_external_forcing_file(site_info, 
                                                 fpath,
                                                 FT,
             )
@@ -65,8 +67,8 @@ function get_longitude(i, lons)
     return lons[i]
 end
 
-function get_startdate(i, dates)
-    return "20070701"
+function get_startdate(i, start_dates)
+    return start_dates[i]
 end
 
 function get_forcing_type(i, convection_types)

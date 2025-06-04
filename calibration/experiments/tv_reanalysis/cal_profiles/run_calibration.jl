@@ -148,8 +148,10 @@ for i in 1:num_sites
             "start_date" => start_dates[i],
             "site_latitude" => lats[i],
             "site_longitude" => lons[i],
+            "t_end" => "31hours",
         ),
     )
+    @info forcing_file_path
     push!(ref_paths, forcing_file_path)
     # get obs_start, obs_end from start_date, more flexible for when we batch over months
     obs_start = Dates.DateTime(start_dates[i], "yyyymmdd") +
