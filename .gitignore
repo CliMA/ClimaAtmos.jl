@@ -52,6 +52,7 @@ Artifacts.toml
 *.lock
 *.loc
 *.out
+*.log
 
 # misc
 .DS_Store
