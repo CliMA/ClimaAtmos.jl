@@ -130,7 +130,6 @@ function ᶜremaining_tendency_ρq_tot(ᶜY, ᶠY, p, t)
     (; tracer_upwinding) = p.atmos.numerics
     if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
         (; dt) = p
-        (; ᶜspecific) = p.precomputed
         ᶜq_tot = @. lazy(ᶜY.ρq_tot / ᶜY.ρ)
         ᶠu³ = compute_ᶠu³(ᶜY, ᶠY)
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
