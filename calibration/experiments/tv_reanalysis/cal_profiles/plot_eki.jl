@@ -9,8 +9,8 @@ using Plots
 using LinearAlgebra
 using DataFrames
 
-output_dir = "/central/groups/esm/jschmitt/calibrations/tv_profiles_36"
-iterations = 0:7
+output_dir = "/central/groups/esm/jschmitt/calibrations/tv_profiles_40"
+iterations = 0:9
 # iterations = nothing
 
 include("helper_funcs.jl")

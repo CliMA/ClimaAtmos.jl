@@ -3,7 +3,7 @@ ensemble_size: 100
 n_iterations: 10
 batch_size: 10 # number of cases per iteration
 model_config : prognostic_edmfx_tv_era5driven_column.yml
-output_dir : /central/groups/esm/jschmitt/calibrations/tv_profiles_37 # output dir
+output_dir : /central/groups/esm/jschmitt/calibrations/tv_profiles_40 # output dir
 
 # Slurm resource configuration
 slurm_time: "11:00:00"
@@ -27,11 +27,11 @@ z_cal_grid: # calibration grid (stretch-grid parameters). In general, `z_elem` s
 
 
 # eki_timestep: 0.1 # timestep of eki, if using default
-start_time : "20070701"
+# start_time : "20070701"
 
 g_t_start_sec : 64800.0 # start time of averaging window [s] : .75
+# TODO if you change this remember to change the get calibration number or fix the hardcoding 
 g_t_end_sec : 86400.0 # end time of averaging window [s] : 1
-
 # mean value and standard deviation of profile data
 norm_factors_by_var:
   ta: [252.8, 31.1699]
