@@ -10,11 +10,19 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 end
 
-function prognostic_nt(::Val{names}; tends...) where {names}
-    nt_ordered = NamedTuple{names}(rzero(values(tends)))
-    nt_values = NamedTuple{keys(tends)}(values(tends))
-    return merge(nt_ordered, nt_values)
+@generated function sorted_nt(::Val{snames}, ::Val{unames}, vals...) where {snames,unames}
+    svals_exprs = []
+    for sn in snames
+        i = findfirst(un -> un == sn, unames)::Int
+        push!(svals_exprs, :(getfield(vals, $i)))
+    end
+    return quote
+        NamedTuple{snames}(($(svals_exprs...),))
+    end
 end
+
+prognostic_nt(::Val{names}, ::Val{K}, vals...) where {names, K} =
+    sorted_nt(Val(names), Val(K), vals...)
 
 function ᶜremaining_tendency(ᶜY, ᶠY, p, t)
     names = propertynames(ᶜY)
@@ -30,7 +38,7 @@ function ᶜremaining_tendency(ᶜY, ᶠY, p, t)
         ᶜremaining_tendency_sgs⁰(ᶜY, ᶠY, p, t)...,
         ᶜremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)...,
     )
-    return lazy.(prognostic_nt.(Val(names); tends...))
+    return lazy.(prognostic_nt.(Val(names), Val(keys(tends)), values(tends)...))
 end
 function ᶠremaining_tendency(ᶜY, ᶠY, p, t)
     names = propertynames(ᶠY)
@@ -38,7 +46,7 @@ function ᶠremaining_tendency(ᶜY, ᶠY, p, t)
         ᶠremaining_tendency_u₃(ᶜY, ᶠY, p, t)...,
         ᶠremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)...,
     )
-    return lazy.(prognostic_nt.(Val(names); tends...))
+    return lazy.(prognostic_nt.(Val(names), Val(keys(tends)), values(tends)...))
 end
 using ClimaCore.RecursiveApply: rzero
 function ᶜremaining_tendency_ρ(ᶜY, ᶠY, p, t)
@@ -46,6 +54,7 @@ function ᶜremaining_tendency_ρ(ᶜY, ᶠY, p, t)
     ∑tendencies = zero(eltype(ᶜY.ρ))
     ᶜJ = Fields.local_geometry_field(ᶜY).J
     ᶠJ = Fields.local_geometry_field(ᶠY).J
+    ᶜρ = ᶜY.ρ
 
     if !(p.atmos.moisture_model isa DryModel)
         ᶜwₜqₜ = compute_ᶜwₜqₜ(ᶜY, ᶠY, p, t)
@@ -178,7 +187,8 @@ function ᶠremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)
 end
 
 
-water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜχ) =
+water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜχ::Real) = zero(eltype(ᶜρ))
+water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜχ) = # only valid when ᶜχ is a field
     @. lazy(ᶜprecipdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠright_bias(-(ᶜχ))))
 
 function surface_velocity_full(ᶠu₃, ᶠuₕ³)

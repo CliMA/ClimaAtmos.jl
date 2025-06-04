@@ -34,31 +34,31 @@ function compute_precip_velocities(ᶜY, ᶠY, p, t)
     cmp = CAP.microphysics_1m_params(p.params)
 
     # compute the precipitation terminal velocity [m/s]
-    ᶜwᵣ = CM1.terminal_velocity(
-        cmp.pr,
-        cmp.tv.rain,
-        ᶜY.ρ,
-        max(zero(ᶜY.ρ), ᶜY.ρq_rai / ᶜY.ρ),
-    )
-    ᶜwₛ = CM1.terminal_velocity(
+    ᶜwᵣ = @. lazy(CM1.terminal_velocity(
+            cmp.pr,
+            cmp.tv.rain,
+            ᶜY.ρ,
+            max(zero(ᶜY.ρ), ᶜY.ρq_rai / ᶜY.ρ),
+        ))
+    ᶜwₛ = @. lazy(CM1.terminal_velocity(
         cmp.ps,
         cmp.tv.snow,
         ᶜY.ρ,
         max(zero(ᶜY.ρ), ᶜY.ρq_sno / ᶜY.ρ),
-    )
+    ))
     # compute sedimentation velocity for cloud condensate [m/s]
-    ᶜwₗ = CMNe.terminal_velocity(
+    ᶜwₗ = @. lazy(CMNe.terminal_velocity(
         cmc.liquid,
         cmc.Ch2022.rain,
         ᶜY.ρ,
         max(zero(ᶜY.ρ), ᶜY.ρq_liq / ᶜY.ρ),
-    )
-    ᶜwᵢ = CMNe.terminal_velocity(
+    ))
+    ᶜwᵢ = @. lazy(CMNe.terminal_velocity(
         cmc.ice,
         cmc.Ch2022.small_ice,
         ᶜY.ρ,
         max(zero(ᶜY.ρ), ᶜY.ρq_ice / ᶜY.ρ),
-    )
+    ))
     return (ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ)
 end
 
@@ -73,12 +73,12 @@ function compute_ᶜwₜqₜ(ᶜY, ᶠY, p, t,
 )
     (ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ) = compute_precip_velocities(ᶜY, ᶠY, p, t)
     # compute their contributions to energy and total water advection
-    return Geometry.WVector(
+    return @. lazy(Geometry.WVector(
             ᶜwₗ * ᶜY.ρq_liq +
             ᶜwᵢ * ᶜY.ρq_ice +
             ᶜwᵣ * ᶜY.ρq_rai +
             ᶜwₛ * ᶜY.ρq_sno,
-        ) / ᶜY.ρ
+        ) / ᶜY.ρ)
 end
 
 compute_ᶜwₕhₜ(ᶜY, ᶠY, p, t) =
