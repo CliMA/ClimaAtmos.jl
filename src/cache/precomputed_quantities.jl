@@ -126,35 +126,35 @@ function precomputed_quantities(Y, atmos)
     )
     sedimentation_quantities =
         atmos.moisture_model isa NonEquilMoistModel ?
-        (; ᶜwₗ = similar(Y.c, FT), ᶜwᵢ = similar(Y.c, FT), ᶜwNₗ = similar(Y.c, FT), ᶜwNᵢ = similar(Y.c, FT)) : (;)
+        (; ᶜwₗ = similar(Y.c, FT), ᶜwᵢ = similar(Y.c, FT), ᶜwnₗ = similar(Y.c, FT), ᶜwnᵢ = similar(Y.c, FT)) : (;)
     if atmos.precip_model isa Microphysics0Moment
         precipitation_quantities =
             (; ᶜS_ρq_tot = similar(Y.c, FT), ᶜS_ρe_tot = similar(Y.c, FT))
-        elseif atmos.precip_model isa Microphysics1Moment
-            precipitation_quantities = (;
-                ᶜwᵣ = similar(Y.c, FT),
-                ᶜwₛ = similar(Y.c, FT),
-                ᶜSqₗᵖ = similar(Y.c, FT),
-                ᶜSqᵢᵖ = similar(Y.c, FT),
-                ᶜSqᵣᵖ = similar(Y.c, FT),
-                ᶜSqₛᵖ = similar(Y.c, FT),
-            )
-        elseif atmos.precip_model isa Microphysics2Moment
-            precipitation_quantities = (;
-                ᶜwᵣ = similar(Y.c, FT),
-                ᶜwₛ = similar(Y.c, FT),
-                ᶜSqₗᵖ = similar(Y.c, FT),
-                ᶜSqᵢᵖ = similar(Y.c, FT),
-                ᶜSqᵣᵖ = similar(Y.c, FT),
-                ᶜSqₛᵖ = similar(Y.c, FT),
-                ᶜwNᵣ = similar(Y.c, FT),
-                ᶜwNₛ = similar(Y.c, FT),
-                ᶜSNₗᵖ = similar(Y.c, FT),
-                ᶜSNᵢᵖ = similar(Y.c, FT),
-                ᶜSNᵣᵖ = similar(Y.c, FT),
-                ᶜSNₛᵖ = similar(Y.c, FT),
-            )
-        else
+    elseif atmos.precip_model isa Microphysics1Moment
+        precipitation_quantities = (;
+            ᶜwᵣ = similar(Y.c, FT),
+            ᶜwₛ = similar(Y.c, FT),
+            ᶜSqₗᵖ = similar(Y.c, FT),
+            ᶜSqᵢᵖ = similar(Y.c, FT),
+            ᶜSqᵣᵖ = similar(Y.c, FT),
+            ᶜSqₛᵖ = similar(Y.c, FT),
+        )
+    elseif atmos.precip_model isa Microphysics2Moment
+        precipitation_quantities = (;
+            ᶜwᵣ = similar(Y.c, FT),
+            ᶜwₛ = similar(Y.c, FT),
+            ᶜSqₗᵖ = similar(Y.c, FT),
+            ᶜSqᵢᵖ = similar(Y.c, FT),
+            ᶜSqᵣᵖ = similar(Y.c, FT),
+            ᶜSqₛᵖ = similar(Y.c, FT),
+            ᶜwnᵣ = similar(Y.c, FT),
+            ᶜwnₛ = similar(Y.c, FT),
+            ᶜSnₗᵖ = similar(Y.c, FT),
+            ᶜSnᵢᵖ = similar(Y.c, FT),
+            ᶜSnᵣᵖ = similar(Y.c, FT),
+            ᶜSnₛᵖ = similar(Y.c, FT),
+        )
+    else
         precipitation_quantities = (;)
     end
     precipitation_sgs_quantities =

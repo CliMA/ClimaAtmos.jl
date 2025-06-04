@@ -204,7 +204,7 @@ function precipitation_tendency!(
     _,
 )
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
-    (; ᶜSNₗᵖ, ᶜSNᵢᵖ, ᶜSNᵣᵖ, ᶜSNₛᵖ) = p.precomputed
+    (; ᶜSnₗᵖ, ᶜSnᵢᵖ, ᶜSnᵣᵖ, ᶜSnₛᵖ) = p.precomputed
 
     # Update grid mean tendencies
     @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜSqₗᵖ
@@ -212,10 +212,10 @@ function precipitation_tendency!(
     @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜSqᵣᵖ
     @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜSqₛᵖ
 
-    @. Yₜ.c.N_liq += ᶜSNₗᵖ
-    @. Yₜ.c.N_ice += ᶜSNᵢᵖ
-    @. Yₜ.c.N_rai += ᶜSNᵣᵖ
-    @. Yₜ.c.N_sno += ᶜSNₛᵖ
+    @. Yₜ.c.ρn_liq += Y.c.ρ * ᶜSnₗᵖ
+    @. Yₜ.c.ρn_ice += Y.c.ρ * ᶜSnᵢᵖ
+    @. Yₜ.c.ρn_rai += Y.c.ρ * ᶜSnᵣᵖ
+    @. Yₜ.c.ρn_sno += Y.c.ρ * ᶜSnₛᵖ
 
     return nothing
 end
@@ -236,7 +236,7 @@ function precipitation_tendency!(
     p,
     t,
     ::NonEquilMoistModel,
-    precip_model::Microphysics1Moment,
+    precip_model::Microphysics2Moment,
     turbconv_model::PrognosticEDMFX,
 )
     error("Not implemented yet")

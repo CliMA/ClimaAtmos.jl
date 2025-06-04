@@ -62,7 +62,7 @@ function ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
 end
 
 """
-    cloud_mass_sources(cm_params, thp, ts, dt)
+    cloud_sources(cm_params, thp, ts, dt)
 
  - cm_params - CloudMicrophysics parameters struct for cloud water or ice condensate
  - thp - Thermodynamics parameters struct
@@ -336,10 +336,9 @@ end
  - cm_params - CloudMicrophysics parameters struct for cloud water or ice condensate
  - thp - Thermodynamics parameters struct
  - ts - thermodynamics state
- - ρ - air density
  - qₚ - precipitation (rain or snow) specific humidity
- - N_dp - droplets (liquid or ice) number concentration
- _ N_dp_prescribed - droplets (liquid or ice) prescribed number concentration
+ - n_dp - number concentration droplets (liquid or ice) per mass
+ _ n_dp_prescribed - prescribed number concentration of droplets (liquid or ice) per mass
  - dt - model time step
 
 Returns the activation rate. #TODO This function temporarily computes activation rate 
@@ -349,30 +348,29 @@ function aerosol_activation_sources(
     cm_params::Union{CMP.CloudLiquid{FT}, CMP.CloudIce{FT}},
     thp,
     ts,
-    ρ,
     qₚ,
-    N_dp,
-    N_dp_prescribed,
+    n_dp,
+    n_dp_prescribed,
     dt,
 ) where {FT}
     r_dp = FT(2e-6) # 2 μm
-    m_dp = 4 / 3 * π * r_dp^3
-    S = ρ * cloud_sources(cm_params, thp, ts, qₚ, dt) / m_dp
+    m_dp = 4 / 3 * π * r_dp^3 * 1000 # ρ_water = 1000 kg/m^3
+    Sn = cloud_sources(cm_params, thp, ts, qₚ, dt) / m_dp
 
     return ifelse(
-        S > FT(0),
-        triangle_inequality_limiter(S, limit((N_dp_prescribed - N_dp), dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(N_dp, dt, 2)),
+        Sn > FT(0),
+        triangle_inequality_limiter(Sn, limit((n_dp_prescribed - n_dp), dt, 2)),
+        -triangle_inequality_limiter(abs(Sn), limit(n_dp, dt, 2)),
         )
 end
 
 """
-    compute_warm_precipitation_sources_2M!(Sᵖ, S₂ᵖ, SNₗᵖ, SNᵣᵖ, Sqₗᵖ, Sqᵣᵖ, ρ, Nₗ, Nᵣ, qₗ, qᵣ, dt, sb, thp)
+    compute_warm_precipitation_sources_2M!(Sᵖ, S₂ᵖ, Snₗᵖ, Snᵣᵖ, Sqₗᵖ, Sqᵣᵖ, ρ, nₗ, nᵣ, qₗ, qᵣ, dt, sb, thp)
 
  - Sᵖ, S₂ᵖ - temporary containters to help compute precipitation source terms
- - SNₗᵖ, SNᵣᵖ, Sqₗᵖ, Sqᵣᵖ - cached storage for precipitation source terms
+ - Snₗᵖ, Snᵣᵖ, Sqₗᵖ, Sqᵣᵖ - cached storage for precipitation source terms
  - ρ - air density
- - Nₗ, Nᵣ - cloud liquid and rain number concentration
+ - nₗ, nᵣ - cloud liquid and rain number concentration per mass
  - qₗ, qᵣ - cloud liquid and rain specific humidity
  - ts - thermodynamic state (see td package for details)
  - dt - model time step
@@ -384,13 +382,13 @@ Seifert and Beheng (2006) scheme.
 function compute_warm_precipitation_sources_2M!(
     Sᵖ,
     S₂ᵖ,
-    SNₗᵖ,
-    SNᵣᵖ,
+    Snₗᵖ,
+    Snᵣᵖ,
     Sqₗᵖ,
     Sqᵣᵖ,
     ρ,
-    Nₗ,
-    Nᵣ,
+    nₗ,
+    nᵣ,
     qₗ,
     qᵣ,
     ts,
@@ -400,14 +398,14 @@ function compute_warm_precipitation_sources_2M!(
 )
 
     FT = eltype(thp)
-    @. SNₗᵖ = ρ * FT(0)
-    @. SNᵣᵖ = ρ * FT(0)
+    @. Snₗᵖ = ρ * FT(0)
+    @. Snᵣᵖ = ρ * FT(0)
     @. Sqₗᵖ = ρ * FT(0)
     @. Sqᵣᵖ = ρ * FT(0)
 
     # auto-conversion (mass)
     @. Sᵖ = triangle_inequality_limiter(
-        CM2.autoconversion(mp.sb.acnv, mp.sb.pdf_c, qₗ, qᵣ, ρ, Nₗ).dq_rai_dt,
+        CM2.autoconversion(mp.sb.acnv, mp.sb.pdf_c, qₗ, qᵣ, ρ, ρ * nₗ).dq_rai_dt,
         limit(qₗ, dt, 5),
     )
     @. Sqₗᵖ -= Sᵖ
@@ -415,32 +413,32 @@ function compute_warm_precipitation_sources_2M!(
 
     # auto-conversion (number) and liquid self-collection
     @. Sᵖ = triangle_inequality_limiter(
-        CM2.autoconversion(mp.sb.acnv, mp.sb.pdf_c, qₗ, qᵣ, ρ, Nₗ).dN_liq_dt,
-        limit(Nₗ, dt, 10),
+        CM2.autoconversion(mp.sb.acnv, mp.sb.pdf_c, qₗ, qᵣ, ρ, ρ * nₗ).dN_liq_dt / ρ,
+        limit(nₗ, dt, 10),
     )
     @. S₂ᵖ = -triangle_inequality_limiter(
-        -CM2.liquid_self_collection(mp.sb.acnv, mp.sb.pdf_c, qₗ, ρ, Sᵖ),
-        limit(Nₗ, dt, 5)
+        -CM2.liquid_self_collection(mp.sb.acnv, mp.sb.pdf_c, qₗ, ρ, Sᵖ) / ρ,
+        limit(nₗ / ρ, dt, 5)
     )
-    @. SNₗᵖ += Sᵖ
-    @. SNₗᵖ += S₂ᵖ
-    @. SNᵣᵖ -= 0.5*Sᵖ
+    @. Snₗᵖ += Sᵖ
+    @. Snₗᵖ += S₂ᵖ
+    @. Snᵣᵖ -= 0.5*Sᵖ
 
     # rain self-collection and breakup
     @. Sᵖ = -triangle_inequality_limiter(
-        -CM2.rain_self_collection(mp.sb.pdf_r, mp.sb.self, qᵣ, ρ, Nᵣ),
-        limit(Nᵣ, dt, 5),
+        -CM2.rain_self_collection(mp.sb.pdf_r, mp.sb.self, qᵣ, ρ, ρ * nᵣ) / ρ,
+        limit(nᵣ, dt, 5),
     )
     @. S₂ᵖ = triangle_inequality_limiter(
-        CM2.rain_breakup(mp.sb.pdf_r, mp.sb.brek, qᵣ, ρ, Nᵣ, Sᵖ),
-        limit(Nᵣ, dt, 5),
+        CM2.rain_breakup(mp.sb.pdf_r, mp.sb.brek, qᵣ, ρ, ρ * nᵣ, Sᵖ) / ρ,
+        limit(nᵣ, dt, 5),
     )
-    @. SNᵣᵖ += Sᵖ
-    @. SNᵣᵖ += S₂ᵖ
+    @. Snᵣᵖ += Sᵖ
+    @. Snᵣᵖ += S₂ᵖ
 
     # accretion (mass)
     @. Sᵖ = triangle_inequality_limiter(
-        CM2.accretion(mp.sb, qₗ, qᵣ, ρ, Nₗ).dq_rai_dt,
+        CM2.accretion(mp.sb, qₗ, qᵣ, ρ, ρ * nₗ).dq_rai_dt,
         limit(qₗ, dt, 5),
     )
     @. Sqₗᵖ -= Sᵖ
@@ -448,23 +446,23 @@ function compute_warm_precipitation_sources_2M!(
 
     # accretion (number)
     @. Sᵖ = -triangle_inequality_limiter(
-        -CM2.accretion(mp.sb, qₗ, qᵣ, ρ, Nₗ).dN_liq_dt,
-        limit(Nₗ, dt, 5),
+        -CM2.accretion(mp.sb, qₗ, qᵣ, ρ, ρ * nₗ).dN_liq_dt / ρ,
+        limit(nₗ, dt, 5),
     )
-    @. SNₗᵖ += Sᵖ
+    @. Snₗᵖ += Sᵖ
 
     # evaporation (mass)
     @. Sᵖ = -triangle_inequality_limiter(
-        -CM2.rain_evaporation(mp.sb, mp.aps, thp, PP(thp, ts), qᵣ, ρ, Nᵣ, Tₐ(thp, ts)).evap_rate_1,
+        -CM2.rain_evaporation(mp.sb, mp.aps, thp, PP(thp, ts), qᵣ, ρ, ρ * nᵣ, Tₐ(thp, ts)).evap_rate_1,
         limit(qᵣ, dt, 5),
     )
     @. Sqᵣᵖ += Sᵖ
 
     # evaporation (number)
     @. Sᵖ = -triangle_inequality_limiter(
-        -CM2.rain_evaporation(mp.sb, mp.aps, thp, PP(thp, ts), qᵣ, ρ, Nᵣ, Tₐ(thp, ts)).evap_rate_0,
-        limit(Nᵣ, dt, 5),
+        -CM2.rain_evaporation(mp.sb, mp.aps, thp, PP(thp, ts), qᵣ, ρ, ρ * nᵣ, Tₐ(thp, ts)).evap_rate_0 / ρ,
+        limit(nᵣ, dt, 5),
     )
-    @. SNᵣᵖ += Sᵖ
+    @. Snᵣᵖ += Sᵖ
 
 end
