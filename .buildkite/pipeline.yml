@@ -328,7 +328,8 @@ steps:
         artifact_paths: "baroclinic_wave_equil/output_active/*"
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
-          slurm_mem: 20GB # columnwise!
+          # slurm_mem: 20GB # columnwise! insufficient mem
+          slurm_mem: 60GB # columnwise!
 
       - label: ":computer: held suarez"
         key: held_suarez
