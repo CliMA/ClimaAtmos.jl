@@ -1,4 +1,4 @@
-242
+243
 
 # **README**
 #
@@ -20,6 +20,13 @@
 
 
 #=
+243
+- Consolidate eddy diffusivity logic in eddy_diffusion_closures.jl and mass flux
+  logic in mass_flux_closures.jl, update buoyancy calculations to be consistent throughout
+  (use geopotential gradient instead of g parameter), add helper functions for computing
+  diffusivity/viscosity, adds l_grid to MixingLength output struct. Includes more docstrings
+  and comments.
+
 242
 - Use ustar^3 surface tke boundary condition
 

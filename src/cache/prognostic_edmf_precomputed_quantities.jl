@@ -360,7 +360,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
     (; params) = p
     (; dt) = p
-    (; ᶠgradᵥ_ᶜΦ) = p.core
+    (; ᶠgradᵥ_ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
     thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
 
@@ -410,7 +410,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
-            ᶜphysical_buoyancy(thermo_params, Y.c.ρ, ᶜρʲs.:($$j)),
+            vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
             get_physical_w(ᶜu, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
             FT(0),
@@ -447,7 +447,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
-            ᶜphysical_buoyancy(thermo_params, Y.c.ρ, ᶜρʲs.:($$j)),
+            vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
             get_physical_w(ᶜu, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
             FT(0),
@@ -471,7 +471,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         # term is still calculated here as it is used explicitly in the TKE equation.
         @. ᶠnh_pressure₃_buoyʲs.:($$j) = ᶠupdraft_nh_pressure_buoyancy(
             params,
-            ᶠbuoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
+            buoyancy(ᶠinterp(Y.c.ρ), ᶠinterp(ᶜρʲs.:($$j)), ᶠgradᵥ_ᶜΦ),
         )
     end
 
@@ -493,6 +493,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜlg,
     )
 
+    # TODO: Make strain_rate_norm calculation a function in eddy_diffusion_closures
     # TODO: Currently the shear production only includes vertical gradients
     ᶠu⁰ = p.scratch.ᶠtemp_C123
     @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
@@ -532,23 +533,18 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
     @. ᶜmixing_length = ᶜmixing_length_tuple.master
 
-    turbconv_params = CAP.turbconv_params(params)
-    c_m = CAP.tke_ed_coeff(turbconv_params)
-    @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
-    @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
+    @. ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
+    @. ᶜK_h = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
-    ρ_int_values = Fields.field_values(Fields.level(ᶜρa⁰, 1))
-    u_int_values = Fields.field_values(Fields.level(ᶜu, 1))
+    ρa_sfc_values = Fields.field_values(Fields.level(ᶜρa⁰, 1)) # TODO: replace by surface value
     ustar_values = Fields.field_values(ustar)
-    int_local_geometry_values =
-        Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
     sfc_local_geometry_values = Fields.field_values(
         Fields.level(Fields.local_geometry_field(Y.f), half),
     )
     @. ρatke_flux_values = surface_flux_tke(
         turbconv_params,
-        ρ_int_values,
+        ρa_sfc_values,
         ustar_values,
         sfc_local_geometry_values,
     )
