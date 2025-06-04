@@ -87,6 +87,8 @@ function ᶜremaining_tendency_ρe_tot(ᶜY, ᶠY, p, t)
     thermo_params = CAP.thermodynamics_params(p.params)
     thermo_args = (thermo_params, moisture_model, precip_model)
     ᶜz = Fields.coordinate_field(ᶜY).z
+    ᶜJ = Fields.local_geometry_field(ᶜY).J
+    ᶠJ = Fields.local_geometry_field(ᶠY).J
     ᶜρ = ᶜY.ρ
     ᶜuₕ = ᶜY.uₕ
     ᶜρe_tot = ᶜY.ρe_tot
