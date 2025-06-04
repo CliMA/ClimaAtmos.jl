@@ -3,6 +3,7 @@
 #####
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
+import AtmosphericProfilesLibrary as APL
 
 """
     implicit_precomputed_quantities(Y, atmos)
@@ -427,6 +428,60 @@ function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
 end
 
 """
+    total_specific_humidity_from_RH(thermo_params, T, p, relative_humidity)
+
+Compute total specific humidity from relative humidity, temperature and pressure.
+
+# Theory
+The calculation is based on the following relationships:
+
+1. Relative humidity is defined as the ratio of vapor pressure to saturation vapor pressure:
+   ```
+   RH = e_v/e_sat
+   ```
+   where:
+   - e_v is the actual vapor pressure
+   - e_sat is the saturation vapor pressure at temperature T
+
+2. Specific humidity is defined as:
+   ```
+   q = (ε * e_v) / (p - e_v + ε * e_v)
+   ```
+   where:
+   - ε is the ratio of gas constants (R_d/R_v)
+   - p is total pressure
+   - e_v is vapor pressure
+
+3. For a given relative humidity:
+   ```
+   e_v = e_sat * RH
+   ```
+
+# Arguments
+- `thermo_params`: Thermodynamic parameters
+- `T`: Temperature in K
+- `p`: Pressure in Pa
+- `relative_humidity`: Relative humidity (0-1)
+
+# Returns
+- Total specific humidity in kg/kg
+
+# References
+- Pressel et al. (2015), equation 37
+- Rogers and Yau (1989), Chapter 2
+"""
+function total_specific_humidity_from_RH(thermo_params, T, p, relative_humidity)
+    molmass_ratio = TD.Parameters.molmass_ratio(thermo_params)
+    p_v_sat = TD.saturation_vapor_pressure(thermo_params, T, TD.Liquid())
+    # p - e_v + ε * e_v where e_v = e_sat * RH
+    denominator = p - p_v_sat + (1 / molmass_ratio) * p_v_sat * relative_humidity
+    # Calculate q_v_sat and scale by RH
+    q_v_sat = p_v_sat * (1 / molmass_ratio) / denominator
+    q_tot = q_v_sat * relative_humidity
+    return q_tot
+end 
+
+"""
     set_implicit_precomputed_quantities!(Y, p, t)
 
 Updates the precomputed quantities that are handled implicitly based on the
@@ -476,9 +531,10 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
+    @. ᶜts = ts_gs(thermo_params, moisture_model, precip_model, ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
+    
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)

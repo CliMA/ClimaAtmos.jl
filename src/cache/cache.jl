@@ -128,6 +128,36 @@ function build_cache(
 
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
+    
+    # Reference enthalpy for hyperdiffusion computation
+    ᶜz = Fields.coordinate_field(Y.c).z
+    rel_hum_ref = atmos.moisture_model isa DryModel ? FT(0) : FT(0.3)
+    T_ref = similar(ᶜz)
+    p_ref = similar(ᶜz)
+    q_tot_ref = similar(ᶜz)
+    cv_m = similar(ᶜz)
+    R_m = similar(ᶜz)
+    thermo_params = CAP.thermodynamics_params(params)
+    
+    temp_profile = TD.TemperatureProfiles.DecayingTemperatureProfile{FT}(
+        thermo_params,
+        FT(299),  # surface temperature
+        FT(220),  # top temperature
+        FT(8e3),  # decay height scale
+    )
+
+    T_0 = CAP.T_0(params)
+    grav = CAP.grav(params)
+    @. T_ref = first(temp_profile(thermo_params, ᶜz))  # Get temperature from (T,p) tuple
+    @. p_ref = last(temp_profile(thermo_params, ᶜz))  # Get pressure from (T,p) tuple
+    @. q_tot_ref = total_specific_humidity_from_RH(thermo_params, T_ref, p_ref, rel_hum_ref)
+    @. cv_m = TD.cv_m(thermo_params, TD.PhasePartition(q_tot_ref, FT(0), FT(0)))
+    @. R_m = TD.gas_constant_air(thermo_params, TD.PhasePartition(q_tot_ref, FT(0), FT(0)))
+    ᶜh_ref = @. TD.total_specific_enthalpy(
+        cv_m * (T_ref - T_0) + grav * ᶜz,
+        R_m,
+        T_ref,
+    )
 
     core = (
         ᶜΦ,
@@ -139,6 +169,7 @@ function build_cache(
         surface_ct3_unit = CT3.(
             unit_basis_vector_data.(CT3, sfc_local_geometry)
         ),
+        ᶜh_ref,
     )
     external_forcing = external_forcing_cache(Y, atmos, params, start_date)
     sfc_setup = surface_setup(params)
