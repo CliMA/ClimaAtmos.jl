@@ -290,7 +290,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # triggers allocations.
     for (ᶜρχₜ, ᶜ∇²χ, χ_name) in matching_subfields(Yₜ.c, ᶜ∇²specific_tracers)
         ν₄_scalar = ifelse(
-            χ_name in (:q_rai, :q_sno),
+            χ_name in (:q_rai, :q_sno, :n_rai, :n_sno),
             α_hyperdiff_tracer * ν₄_scalar,
             ν₄_scalar,
         )

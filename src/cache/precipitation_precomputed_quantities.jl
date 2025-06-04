@@ -104,7 +104,7 @@ function set_precipitation_velocities!(
     moisture_model::NonEquilMoistModel,
     precip_model::Microphysics2Moment,
 )
-    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwNₗ, ᶜwNᵢ, ᶜwNᵣ, ᶜwNₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwnₗ, ᶜwnᵢ, ᶜwnᵣ, ᶜwnₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
     (; q_liq, q_ice, q_rai, q_sno) = p.precomputed.ᶜspecific
     (; ᶜΦ) = p.core
 
@@ -115,21 +115,21 @@ function set_precipitation_velocities!(
 
     # compute the precipitation terminal velocity [m/s]
     # TODO sedimentation of snow is based on the 1M scheme
-    @. ᶜwNᵣ = getindex(CM2.rain_terminal_velocity(
+    @. ᶜwnᵣ = getindex(CM2.rain_terminal_velocity(
         cm2p.sb,
         cm2p.tv,
         q_rai,
         Y.c.ρ,
-        Y.c.N_rai,
+        Y.c.ρn_rai,
     ), 1)
     @. ᶜwᵣ = getindex(CM2.rain_terminal_velocity(
         cm2p.sb,
         cm2p.tv,
         q_rai,
         Y.c.ρ,
-        Y.c.N_rai,
+        Y.c.ρn_rai,
     ), 2)
-    @. ᶜwNₛ = CM1.terminal_velocity(
+    @. ᶜwnₛ = CM1.terminal_velocity(
         cm1p.ps,
         cm1p.tv.snow,
         Y.c.ρ,
@@ -144,7 +144,7 @@ function set_precipitation_velocities!(
     # compute sedimentation velocity for cloud condensate [m/s]
     # TODO sedimentation velocities of cloud condensates are based 
     # on the 1M scheme.
-    @. ᶜwNₗ = CMNe.terminal_velocity(
+    @. ᶜwnₗ = CMNe.terminal_velocity(
         cm1c.liquid,
         cm1c.Ch2022.rain,
         Y.c.ρ,
@@ -156,7 +156,7 @@ function set_precipitation_velocities!(
         Y.c.ρ,
         q_liq,
     )
-    @. ᶜwNᵢ = CMNe.terminal_velocity(
+    @. ᶜwnᵢ = CMNe.terminal_velocity(
         cm1c.ice,
         cm1c.Ch2022.small_ice,
         Y.c.ρ,
@@ -355,35 +355,34 @@ function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
     (; dt) = p
     (; ᶜts) = p.precomputed
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
-    (; ᶜSNₗᵖ, ᶜSNᵢᵖ, ᶜSNᵣᵖ, ᶜSNₛᵖ) = p.precomputed
+    (; ᶜSnₗᵖ, ᶜSnᵢᵖ, ᶜSnᵣᵖ, ᶜSnₛᵖ) = p.precomputed
 
-    (; q_liq, q_rai, q_sno) = p.precomputed.ᶜspecific
+    (; q_liq, q_rai, n_liq, n_rai) = p.precomputed.ᶜspecific
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜS₂ᵖ = p.scratch.ᶜtemp_scalar_2
 
     # get thermodynamics and microphysics params
     (; params) = p
-    cm1p = CAP.microphysics_1m_params(params)
-    cm2p = CAP.microphysics_2m_params(params)
+    cmp = CAP.microphysics_2m_params(params)
     thp = CAP.thermodynamics_params(params)
 
     # compute warm precipitation sources on the grid mean (based on SB2006 2M scheme)
     compute_warm_precipitation_sources_2M!(
         ᶜSᵖ,
         ᶜS₂ᵖ,
-        ᶜSNₗᵖ,
-        ᶜSNᵣᵖ,
+        ᶜSnₗᵖ,
+        ᶜSnᵣᵖ,
         ᶜSqₗᵖ,
         ᶜSqᵣᵖ,
         Y.c.ρ,
-        Y.c.N_liq,
-        Y.c.N_rai,
+        n_liq,
+        n_rai,
         q_liq,
         q_rai,
         ᶜts,
         dt,
-        cm2p,
+        cmp,
         thp,
     )
 
