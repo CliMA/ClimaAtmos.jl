@@ -84,7 +84,7 @@ end
 compute_ᶜwₕhₜ(ᶜY, ᶠY, p, t) =
     compute_ᶜwₕhₜ(ᶜY, ᶠY, p, t, p.atmos.moisture_model, p.atmos.precip_model)
 
-compute_ᶜwₕhₜ(ᶜY, ᶠY, p, t, moisture_model, precip_model) = zero(ᶜY.ρ)
+compute_ᶜwₕhₜ(ᶜY, ᶠY, p, t, moisture_model, precip_model) = zero(eltype(ᶜY.ρ))
 
 function compute_ᶜwₕhₜ(ᶜY, ᶠY, p, t, ::NonEquilMoistModel, ::Microphysics1Moment)
     thp = CAP.thermodynamics_params(p.params)
