@@ -405,7 +405,14 @@ function compute_warm_precipitation_sources_2M!(
 
     # auto-conversion (mass)
     @. Sᵖ = triangle_inequality_limiter(
-        CM2.autoconversion(mp.sb.acnv, mp.sb.pdf_c, qₗ, qᵣ, ρ, ρ * nₗ).dq_rai_dt,
+        CM2.autoconversion(
+            mp.sb.acnv,
+            mp.sb.pdf_c,
+            qₗ,
+            qᵣ,
+            ρ,
+            ρ * nₗ,
+        ).dq_rai_dt,
         limit(qₗ, dt, 5),
     )
     @. Sqₗᵖ -= Sᵖ
@@ -413,8 +420,14 @@ function compute_warm_precipitation_sources_2M!(
 
     # auto-conversion (number) and liquid self-collection
     @. Sᵖ = triangle_inequality_limiter(
-        CM2.autoconversion(mp.sb.acnv, mp.sb.pdf_c, qₗ, qᵣ, ρ, ρ * nₗ).dN_liq_dt /
-        ρ,
+        CM2.autoconversion(
+            mp.sb.acnv,
+            mp.sb.pdf_c,
+            qₗ,
+            qᵣ,
+            ρ,
+            ρ * nₗ,
+        ).dN_liq_dt / ρ,
         limit(nₗ, dt, 10),
     )
     @. S₂ᵖ =
@@ -424,7 +437,7 @@ function compute_warm_precipitation_sources_2M!(
         )
     @. Snₗᵖ += Sᵖ
     @. Snₗᵖ += S₂ᵖ
-    @. Snᵣᵖ -= 0.5*Sᵖ
+    @. Snᵣᵖ -= 0.5 * Sᵖ
 
     # rain self-collection and breakup
     @. Sᵖ =

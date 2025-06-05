@@ -398,11 +398,12 @@ function overwrite_initial_conditions!(
     Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
     # Velocity is first assigned on cell-centers and then interpolated onto
     # cell faces.
-    vel = Geometry.UVWVector.(
-        SpaceVaryingInputs.SpaceVaryingInput(file_path, "u", center_space),
-        SpaceVaryingInputs.SpaceVaryingInput(file_path, "v", center_space),
-        SpaceVaryingInputs.SpaceVaryingInput(file_path, "w", center_space),
-    )
+    vel =
+        Geometry.UVWVector.(
+            SpaceVaryingInputs.SpaceVaryingInput(file_path, "u", center_space),
+            SpaceVaryingInputs.SpaceVaryingInput(file_path, "v", center_space),
+            SpaceVaryingInputs.SpaceVaryingInput(file_path, "w", center_space),
+        )
     Y.c.uₕ .= C12.(Geometry.UVVector.(vel))
     Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
     e_kin = similar(ᶜT)
@@ -1270,12 +1271,12 @@ function (initial_condition::GCMDriven)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state =  ts = TD.PhaseEquil_ρTq(
+            thermo_state = ts = TD.PhaseEquil_ρTq(
                 thermo_params,
                 FT(ρ₀(z)),
                 FT(T(z)),
                 FT(q_tot(z)),
-            ) ,
+            ),
             velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
             turbconv_state = EDMFState(; tke = FT(0)),
         )
@@ -1326,12 +1327,12 @@ function (initial_condition::InterpolatedColumnProfile)(params)
         return LocalState(;
             params,
             geometry = local_geometry,
-            thermo_state =  ts = TD.PhaseEquil_ρTq(
+            thermo_state = ts = TD.PhaseEquil_ρTq(
                 thermo_params,
                 FT(ρ₀(z)),
                 FT(T(z)),
                 FT(q_tot(z)),
-            ) ,
+            ),
             velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
             turbconv_state = EDMFState(; tke = FT(0)),
         )

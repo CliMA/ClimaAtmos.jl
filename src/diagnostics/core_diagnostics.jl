@@ -470,10 +470,11 @@ function compute_hussfc!(
             cache.precomputed.sfc_conditions.ts,
         )
     else
-        out .= TD.total_specific_humidity.(
-            thermo_params,
-            cache.precomputed.sfc_conditions.ts,
-        )
+        out .=
+            TD.total_specific_humidity.(
+                thermo_params,
+                cache.precomputed.sfc_conditions.ts,
+            )
     end
 end
 
@@ -503,10 +504,11 @@ add_diagnostic_variable!(
                 cache.precomputed.sfc_conditions.ts,
             )
         else
-            out .= TD.air_temperature.(
-                thermo_params,
-                cache.precomputed.sfc_conditions.ts,
-            )
+            out .=
+                TD.air_temperature.(
+                    thermo_params,
+                    cache.precomputed.sfc_conditions.ts,
+                )
         end
     end,
 )
@@ -528,10 +530,11 @@ add_diagnostic_variable!(
                 Fields.level(cache.precomputed.ᶜts, 1),
             )
         else
-            out .= TD.air_temperature.(
-                thermo_params,
-                Fields.level(cache.precomputed.ᶜts, 1),
-            )
+            out .=
+                TD.air_temperature.(
+                    thermo_params,
+                    Fields.level(cache.precomputed.ᶜts, 1),
+                )
         end
     end,
 )
@@ -553,9 +556,10 @@ add_diagnostic_variable!(
                 ),
             )
         else
-            out .= u_component.(
-                Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1)),
-            )
+            out .=
+                u_component.(
+                    Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1)),
+                )
         end
     end,
 )
@@ -577,9 +581,10 @@ add_diagnostic_variable!(
                 ),
             )
         else
-            out .= v_component.(
-                Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1)),
-            )
+            out .=
+                v_component.(
+                    Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1)),
+                )
         end
     end,
 )
@@ -593,12 +598,16 @@ function compute_tau!(out, state, cache, component)
 
     if isnothing(out)
         return getproperty(
-            Geometry.UVVector.(adjoint.(ρ_flux_uₕ) .* surface_ct3_unit).components.data,
+            Geometry.UVVector.(
+                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit
+            ).components.data,
             component,
         )
     else
         out .= getproperty(
-            Geometry.UVVector.(adjoint.(ρ_flux_uₕ) .* surface_ct3_unit).components.data,
+            Geometry.UVVector.(
+                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit
+            ).components.data,
             component,
         )
     end
@@ -1347,10 +1356,11 @@ function compute_husv!(
             cache.precomputed.ᶜts,
         )
     else
-        out .= TD.vapor_specific_humidity.(
-            CAP.thermodynamics_params(cache.params),
-            cache.precomputed.ᶜts,
-        )
+        out .=
+            TD.vapor_specific_humidity.(
+                CAP.thermodynamics_params(cache.params),
+                cache.precomputed.ᶜts,
+            )
     end
 end
 
@@ -1482,14 +1492,15 @@ function compute_cape!(out, state, cache, time)
         lazy.(TD.liquid_ice_pottemp.(thermo_params, surface_thermal_state))
 
     # Create parcel thermodynamic states at each level based on energy & moisture at surface
-    parcel_ts_moist = lazy.(
-        TD.PhaseEquil_pθq.(
-            thermo_params,
-            cache.precomputed.ᶜp,
-            surface_θ_liq_ice,
-            surface_q,
-        ),
-    )
+    parcel_ts_moist =
+        lazy.(
+            TD.PhaseEquil_pθq.(
+                thermo_params,
+                cache.precomputed.ᶜp,
+                surface_θ_liq_ice,
+                surface_q,
+            ),
+        )
 
     # Calculate virtual temperatures for parcel & environment
     parcel_Tv = lazy.(TD.virtual_temperature.(thermo_params, parcel_ts_moist))
@@ -1503,7 +1514,8 @@ function compute_cape!(out, state, cache, time)
     # restrict to tropospheric buoyancy (generously below 20km) TODO: integrate from LFC to LNB 
     FT = Spaces.undertype(axes(ᶜbuoyancy))
     ᶜbuoyancy .=
-        ᶜbuoyancy .* ifelse.(
+        ᶜbuoyancy .*
+        ifelse.(
             Fields.coordinate_field(state.c.ρ).z .< FT(20000.0),
             FT(1.0),
             FT(0.0),
