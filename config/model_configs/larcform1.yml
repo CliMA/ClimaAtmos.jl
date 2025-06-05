@@ -15,16 +15,18 @@ edmfx_filter: true
 #prognostic_tke: true
 moist: "equil"
 config: "column"
-z_max: 3000
+z_max: 9000.0
+dz_bottom: 20.0
+z_elem: 100
+z_stretch: true
 x_elem: 2
 y_elem: 2
-z_elem: 30
-z_stretch: false
+
 #perturb_initstate: false
-dt: 5secs
-dt_rad: 1mins
-t_end: 30mins #"6hours"
-dt_save_state_to_disk: "6days"
+dt: 10secs
+dt_rad: 10mins
+t_end: 2days #"6hours"
+dt_save_state_to_disk: 6days"
 cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage : true
 #toml: [toml/prognostic_edmfx_gcmdriven.toml]
@@ -49,7 +51,7 @@ ode_algo: ARS343
 
 # TODO:
 # ensure advective tendencies are set to zero
-# Set surface temperature to 250 K
+# Set surface temperature to 250 K (diagnostic: ts)
 # - surface_temperature 
 # Consider surface-atmosphere interactions [Persson et al., 1999]
 # set run length to 20 days (analysis on first 10 days)
