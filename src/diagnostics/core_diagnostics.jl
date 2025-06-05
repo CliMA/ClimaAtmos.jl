@@ -889,7 +889,7 @@ add_diagnostic_variable!(
     short_name = "clwnm",
     long_name = "Number Concentration of Cloud Liquid Water",
     standard_name = "number_concentration_of_cloud_liquid_water",
-    units = "1 m^3",
+    units = "1 m^-3",
     comments = """
     This is calculated as the number of cloud liquid water droplets in the grid 
     cell divided by the cell volume.
@@ -920,7 +920,7 @@ add_diagnostic_variable!(
     short_name = "clinm",
     long_name = "Number Concentration of Cloud Ice",
     standard_name = "number_concentration_of_cloud_ice",
-    units = "1 m^3",
+    units = "1 m^-3",
     comments = """
     This is calculated as the number of cloud ice chrystals in the grid 
     cell divided by the cell volume.
@@ -951,7 +951,7 @@ add_diagnostic_variable!(
     short_name = "nmra",
     long_name = "Number Concentration of Rain",
     standard_name = "number_concentration_of_rain",
-    units = "1 m^3",
+    units = "1 m^-3",
     comments = """
     This is calculated as the number of raindrops in the grid cell divided
     by the cell volume.
@@ -982,7 +982,7 @@ add_diagnostic_variable!(
     short_name = "nmsn",
     long_name = "Number Concentration of Snow",
     standard_name = "number_concentration_of_snow",
-    units = "1 m^3",
+    units = "1 m^-3",
     comments = """
     This is calculated as the number of snow flakes in the grid cell divided
     by the cell volume.

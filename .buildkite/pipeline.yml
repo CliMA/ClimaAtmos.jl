@@ -86,6 +86,13 @@ steps:
           --config_file $CONFIG_PATH/single_column_precipitation_test.yml
           --job_id single_column_precipitation_test
         artifact_paths: "single_column_precipitation_test/output_active/*"
+      
+      - label: ":umbrella: 2-moment precipitation sanity test single column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/single_column_precipitation_2M_test.yml
+          --job_id single_column_precipitation_2M_test
+        artifact_paths: "single_column_precipitation_2M_test/output_active/*"
 
   - group: "Gravity wave"
     steps:
