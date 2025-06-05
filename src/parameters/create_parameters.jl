@@ -51,6 +51,7 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
     microphysics_0m_params = CM.Parameters.Parameters0M(toml_dict)
     microphysics_1m_params = microphys_1m_parameters(toml_dict)
     microphysics_2m_params = microphys_2m_parameters(toml_dict)
+    microphysics_p3_params = microphys_p3_parameters(toml_dict)
     MP0M = typeof(microphysics_0m_params)
     MP1M = typeof(microphysics_1m_params)
     MP2M = typeof(microphysics_2m_params)
@@ -72,6 +73,7 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
         MP0M,
         MP1M,
         MP2M,
+        MPP3,
         SFP,
         TCP,
         STP,
@@ -86,6 +88,7 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
         microphysics_0m_params,
         microphysics_1m_params,
         microphysics_2m_params,
+        microphysics_p3_params,
         surface_fluxes_params,
         turbconv_params,
         surface_temp_params,
@@ -162,7 +165,16 @@ microphys_2m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
 microphys_2m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
     sb = CM.Parameters.SB2006(toml_dict),
     aps = CM.Parameters.AirProperties(toml_dict),
-    tv = CM.Parameters.SB2006VelType(toml_dict),
+    tv = CM.Parameters.Chen2022VelType(toml_dict),
+)
+
+"""
+    microphys_p3_parameters(toml_dict)
+
+Create parameters for P3 microphysics scheme. This combines 2M warm rain with P3 ice microphysics.
+"""
+microphys_p3_parameters(toml_dict::CP.AbstractTOMLDict) = (;
+    p3 = CM.Parameters.ParametersP3(toml_dict),
 )
 
 function vert_diff_parameters(toml_dict)

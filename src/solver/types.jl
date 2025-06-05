@@ -17,6 +17,7 @@ struct NoPrecipitation <: AbstractPrecipitationModel end
 struct Microphysics0Moment <: AbstractPrecipitationModel end
 struct Microphysics1Moment <: AbstractPrecipitationModel end
 struct Microphysics2Moment <: AbstractPrecipitationModel end
+struct MicrophysicsP3 <: AbstractPrecipitationModel end
 
 """
 
