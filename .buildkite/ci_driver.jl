@@ -11,6 +11,8 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 # and run `using PrecompileTools; PrecompileTools.verbose[] = true; include(".buildkite/PrecompileCI/src/PrecompileCI.jl")`
 using PrecompileCI
 import ClimaComms
+import ClimaCore
+ClimaCore.Fields.error_mismatched_spaces(::Type, ::Type) = nothing # causes unsupported dynamic function invocation
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import Random
