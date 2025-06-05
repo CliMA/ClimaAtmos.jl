@@ -361,7 +361,7 @@ function aerosol_activation_sources(
         Sn > FT(0),
         triangle_inequality_limiter(Sn, limit((n_dp_prescribed - n_dp), dt, 2)),
         -triangle_inequality_limiter(abs(Sn), limit(n_dp, dt, 2)),
-        )
+    )
 end
 
 """
@@ -413,22 +413,26 @@ function compute_warm_precipitation_sources_2M!(
 
     # auto-conversion (number) and liquid self-collection
     @. Sᵖ = triangle_inequality_limiter(
-        CM2.autoconversion(mp.sb.acnv, mp.sb.pdf_c, qₗ, qᵣ, ρ, ρ * nₗ).dN_liq_dt / ρ,
+        CM2.autoconversion(mp.sb.acnv, mp.sb.pdf_c, qₗ, qᵣ, ρ, ρ * nₗ).dN_liq_dt /
+        ρ,
         limit(nₗ, dt, 10),
     )
-    @. S₂ᵖ = -triangle_inequality_limiter(
-        -CM2.liquid_self_collection(mp.sb.acnv, mp.sb.pdf_c, qₗ, ρ, Sᵖ) / ρ,
-        limit(nₗ / ρ, dt, 5)
-    )
+    @. S₂ᵖ =
+        -triangle_inequality_limiter(
+            -CM2.liquid_self_collection(mp.sb.acnv, mp.sb.pdf_c, qₗ, ρ, Sᵖ) / ρ,
+            limit(nₗ / ρ, dt, 5),
+        )
     @. Snₗᵖ += Sᵖ
     @. Snₗᵖ += S₂ᵖ
     @. Snᵣᵖ -= 0.5*Sᵖ
 
     # rain self-collection and breakup
-    @. Sᵖ = -triangle_inequality_limiter(
-        -CM2.rain_self_collection(mp.sb.pdf_r, mp.sb.self, qᵣ, ρ, ρ * nᵣ) / ρ,
-        limit(nᵣ, dt, 5),
-    )
+    @. Sᵖ =
+        -triangle_inequality_limiter(
+            -CM2.rain_self_collection(mp.sb.pdf_r, mp.sb.self, qᵣ, ρ, ρ * nᵣ) /
+            ρ,
+            limit(nᵣ, dt, 5),
+        )
     @. S₂ᵖ = triangle_inequality_limiter(
         CM2.rain_breakup(mp.sb.pdf_r, mp.sb.brek, qᵣ, ρ, ρ * nᵣ, Sᵖ) / ρ,
         limit(nᵣ, dt, 5),
@@ -445,24 +449,45 @@ function compute_warm_precipitation_sources_2M!(
     @. Sqᵣᵖ += Sᵖ
 
     # accretion (number)
-    @. Sᵖ = -triangle_inequality_limiter(
-        -CM2.accretion(mp.sb, qₗ, qᵣ, ρ, ρ * nₗ).dN_liq_dt / ρ,
-        limit(nₗ, dt, 5),
-    )
+    @. Sᵖ =
+        -triangle_inequality_limiter(
+            -CM2.accretion(mp.sb, qₗ, qᵣ, ρ, ρ * nₗ).dN_liq_dt / ρ,
+            limit(nₗ, dt, 5),
+        )
     @. Snₗᵖ += Sᵖ
 
     # evaporation (mass)
-    @. Sᵖ = -triangle_inequality_limiter(
-        -CM2.rain_evaporation(mp.sb, mp.aps, thp, PP(thp, ts), qᵣ, ρ, ρ * nᵣ, Tₐ(thp, ts)).evap_rate_1,
-        limit(qᵣ, dt, 5),
-    )
+    @. Sᵖ =
+        -triangle_inequality_limiter(
+            -CM2.rain_evaporation(
+                mp.sb,
+                mp.aps,
+                thp,
+                PP(thp, ts),
+                qᵣ,
+                ρ,
+                ρ * nᵣ,
+                Tₐ(thp, ts),
+            ).evap_rate_1,
+            limit(qᵣ, dt, 5),
+        )
     @. Sqᵣᵖ += Sᵖ
 
     # evaporation (number)
-    @. Sᵖ = -triangle_inequality_limiter(
-        -CM2.rain_evaporation(mp.sb, mp.aps, thp, PP(thp, ts), qᵣ, ρ, ρ * nᵣ, Tₐ(thp, ts)).evap_rate_0 / ρ,
-        limit(nᵣ, dt, 5),
-    )
+    @. Sᵖ =
+        -triangle_inequality_limiter(
+            -CM2.rain_evaporation(
+                mp.sb,
+                mp.aps,
+                thp,
+                PP(thp, ts),
+                qᵣ,
+                ρ,
+                ρ * nᵣ,
+                Tₐ(thp, ts),
+            ).evap_rate_0 / ρ,
+            limit(nᵣ, dt, 5),
+        )
     @. Snᵣᵖ += Sᵖ
 
 end

@@ -150,8 +150,16 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
     sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
-    condensate_names =
-        (@name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρn_liq), @name(c.ρn_ice), @name(c.ρn_rai), @name(c.ρn_sno))
+    condensate_names = (
+        @name(c.ρq_liq),
+        @name(c.ρq_ice),
+        @name(c.ρq_rai),
+        @name(c.ρq_sno),
+        @name(c.ρn_liq),
+        @name(c.ρn_ice),
+        @name(c.ρn_rai),
+        @name(c.ρn_sno)
+    )
     available_condensate_names =
         MatrixFields.unrolled_filter(is_in_Y, condensate_names)
     available_tracer_names =
@@ -653,7 +661,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ∂ᶜρχ_err_∂ᶜρ = matrix[ρχ_name, @name(c.ρ)]
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
             ᶜtridiagonal_matrix_scalar = ifelse(
-                χ_name in (@name(q_rai), @name(q_sno), @name(n_rai), @name(n_sno)),
+                χ_name in
+                (@name(q_rai), @name(q_sno), @name(n_rai), @name(n_sno)),
                 ᶜdiffusion_h_matrix_scaled,
                 ᶜdiffusion_h_matrix,
             )

@@ -55,6 +55,24 @@ function cloud_condensate_tendency!(
     @. Yₜ.c.ρq_liq += Y.c.ρ * cloud_sources(cmc.liquid, thp, ᶜts, q_rai, dt)
     @. Yₜ.c.ρq_ice += Y.c.ρ * cloud_sources(cmc.ice, thp, ᶜts, q_sno, dt)
 
-    @. Yₜ.c.ρn_liq += Y.c.ρ * aerosol_activation_sources(cmc.liquid, thp, ᶜts, q_rai, n_liq, cmc.N_cloud_liquid_droplets, dt)
-    @. Yₜ.c.ρn_ice += Y.c.ρ * aerosol_activation_sources(cmc.ice, thp, ᶜts, q_sno, n_ice, cmc.N_cloud_liquid_droplets, dt)
+    @. Yₜ.c.ρn_liq +=
+        Y.c.ρ * aerosol_activation_sources(
+            cmc.liquid,
+            thp,
+            ᶜts,
+            q_rai,
+            n_liq,
+            cmc.N_cloud_liquid_droplets,
+            dt,
+        )
+    @. Yₜ.c.ρn_ice +=
+        Y.c.ρ * aerosol_activation_sources(
+            cmc.ice,
+            thp,
+            ᶜts,
+            q_sno,
+            n_ice,
+            cmc.N_cloud_liquid_droplets,
+            dt,
+        )
 end

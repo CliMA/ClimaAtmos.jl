@@ -637,7 +637,18 @@ function make_plots(
         figsize = (1200, 600)
         pr_row = 3
     else
-        short_names = ["hus", "clw", "cli", "husra", "hussn", "ta", "clwnm", "clinm", "nmra", "nmsn"]
+        short_names = [
+            "hus",
+            "clw",
+            "cli",
+            "husra",
+            "hussn",
+            "ta",
+            "clwnm",
+            "clinm",
+            "nmra",
+            "nmsn",
+        ]
         figsize = (1200, 1000)
         pr_row = 5
     end

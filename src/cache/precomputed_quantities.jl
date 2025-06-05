@@ -126,7 +126,12 @@ function precomputed_quantities(Y, atmos)
     )
     sedimentation_quantities =
         atmos.moisture_model isa NonEquilMoistModel ?
-        (; ᶜwₗ = similar(Y.c, FT), ᶜwᵢ = similar(Y.c, FT), ᶜwnₗ = similar(Y.c, FT), ᶜwnᵢ = similar(Y.c, FT)) : (;)
+        (;
+            ᶜwₗ = similar(Y.c, FT),
+            ᶜwᵢ = similar(Y.c, FT),
+            ᶜwnₗ = similar(Y.c, FT),
+            ᶜwnᵢ = similar(Y.c, FT),
+        ) : (;)
     if atmos.precip_model isa Microphysics0Moment
         precipitation_quantities =
             (; ᶜS_ρq_tot = similar(Y.c, FT), ᶜS_ρe_tot = similar(Y.c, FT))

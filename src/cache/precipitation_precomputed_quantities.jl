@@ -104,7 +104,8 @@ function set_precipitation_velocities!(
     moisture_model::NonEquilMoistModel,
     precip_model::Microphysics2Moment,
 )
-    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwnₗ, ᶜwnᵢ, ᶜwnᵣ, ᶜwnₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwnₗ, ᶜwnᵢ, ᶜwnᵣ, ᶜwnₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) =
+        p.precomputed
     (; q_liq, q_ice, q_rai, q_sno) = p.precomputed.ᶜspecific
     (; ᶜΦ) = p.core
 
@@ -115,59 +116,26 @@ function set_precipitation_velocities!(
 
     # compute the precipitation terminal velocity [m/s]
     # TODO sedimentation of snow is based on the 1M scheme
-    @. ᶜwnᵣ = getindex(CM2.rain_terminal_velocity(
-        cm2p.sb,
-        cm2p.tv,
-        q_rai,
-        Y.c.ρ,
-        Y.c.ρn_rai,
-    ), 1)
-    @. ᶜwᵣ = getindex(CM2.rain_terminal_velocity(
-        cm2p.sb,
-        cm2p.tv,
-        q_rai,
-        Y.c.ρ,
-        Y.c.ρn_rai,
-    ), 2)
-    @. ᶜwnₛ = CM1.terminal_velocity(
-        cm1p.ps,
-        cm1p.tv.snow,
-        Y.c.ρ,
-        q_sno,
+    @. ᶜwnᵣ = getindex(
+        CM2.rain_terminal_velocity(cm2p.sb, cm2p.tv, q_rai, Y.c.ρ, Y.c.ρn_rai),
+        1,
     )
-    @. ᶜwₛ = CM1.terminal_velocity(
-        cm1p.ps,
-        cm1p.tv.snow,
-        Y.c.ρ,
-        q_sno,
+    @. ᶜwᵣ = getindex(
+        CM2.rain_terminal_velocity(cm2p.sb, cm2p.tv, q_rai, Y.c.ρ, Y.c.ρn_rai),
+        2,
     )
+    @. ᶜwnₛ = CM1.terminal_velocity(cm1p.ps, cm1p.tv.snow, Y.c.ρ, q_sno)
+    @. ᶜwₛ = CM1.terminal_velocity(cm1p.ps, cm1p.tv.snow, Y.c.ρ, q_sno)
     # compute sedimentation velocity for cloud condensate [m/s]
     # TODO sedimentation velocities of cloud condensates are based 
     # on the 1M scheme.
-    @. ᶜwnₗ = CMNe.terminal_velocity(
-        cm1c.liquid,
-        cm1c.Ch2022.rain,
-        Y.c.ρ,
-        q_liq,
-    )
-    @. ᶜwₗ = CMNe.terminal_velocity(
-        cm1c.liquid,
-        cm1c.Ch2022.rain,
-        Y.c.ρ,
-        q_liq,
-    )
-    @. ᶜwnᵢ = CMNe.terminal_velocity(
-        cm1c.ice,
-        cm1c.Ch2022.small_ice,
-        Y.c.ρ,
-        q_ice,
-    )
-    @. ᶜwᵢ = CMNe.terminal_velocity(
-        cm1c.ice,
-        cm1c.Ch2022.small_ice,
-        Y.c.ρ,
-        q_ice,
-    )
+    @. ᶜwnₗ =
+        CMNe.terminal_velocity(cm1c.liquid, cm1c.Ch2022.rain, Y.c.ρ, q_liq)
+    @. ᶜwₗ = CMNe.terminal_velocity(cm1c.liquid, cm1c.Ch2022.rain, Y.c.ρ, q_liq)
+    @. ᶜwnᵢ =
+        CMNe.terminal_velocity(cm1c.ice, cm1c.Ch2022.small_ice, Y.c.ρ, q_ice)
+    @. ᶜwᵢ =
+        CMNe.terminal_velocity(cm1c.ice, cm1c.Ch2022.small_ice, Y.c.ρ, q_ice)
 
     # compute their contributions to energy and total water advection
     @. ᶜwₜqₜ =
@@ -391,7 +359,7 @@ function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
     @. ᶜSqₛᵖ = 0
     @. ᶜSnᵢᵖ = 0
     @. ᶜSnₛᵖ = 0
-    
+
     return nothing
 end
 function set_precipitation_cache!(

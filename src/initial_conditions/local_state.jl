@@ -115,5 +115,11 @@ struct PrecipState2M{FT} <: PrecipState{FT}
     n_rai::FT
     n_sno::FT
 end
-PrecipState2M(; q_rai = 0, q_sno = 0, n_liq = 0, n_ice = 0, n_rai = 0, n_sno = 0) =
-    PrecipState2M{typeof(q_rai)}(q_rai, q_sno, n_liq, n_ice, n_rai, n_sno)
+PrecipState2M(;
+    q_rai = 0,
+    q_sno = 0,
+    n_liq = 0,
+    n_ice = 0,
+    n_rai = 0,
+    n_sno = 0,
+) = PrecipState2M{typeof(q_rai)}(q_rai, q_sno, n_liq, n_ice, n_rai, n_sno)
