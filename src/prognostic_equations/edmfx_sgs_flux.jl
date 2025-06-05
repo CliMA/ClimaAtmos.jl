@@ -56,7 +56,7 @@ function edmfx_sgs_mass_flux_tendency!(
         @. Yₜ.c.ρe_tot += vtt
 
         if !(p.atmos.moisture_model isa DryModel)
-            # specific humidity
+            # total water specific content
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                 @. ᶜa_scalar =
@@ -233,7 +233,7 @@ function edmfx_sgs_mass_flux_tendency!(
         end
 
         if !(p.atmos.moisture_model isa DryModel)
-            # specific humidity
+            # total water specific content
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                 # @. ᶜa_scalar =
@@ -320,7 +320,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 )
         end
         if !(p.atmos.moisture_model isa DryModel)
-            # specific humidity
+            # total water specific content
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
@@ -417,7 +417,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
         end
 
         if !(p.atmos.moisture_model isa DryModel)
-            # specific humidity
+            # total water specific content
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
