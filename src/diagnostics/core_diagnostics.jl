@@ -866,6 +866,130 @@ add_diagnostic_variable!(
     compute! = compute_hussn!,
 )
 
+compute_clwnm!(out, state, cache, time) =
+    compute_clwnm!(out, state, cache, time, cache.atmos.precip_model)
+compute_clwnm!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("clwnm", model)
+
+function compute_clwnm!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Microphysics2Moment,
+)
+    if isnothing(out)
+        return state.c.ρn_liq
+    else
+        out .= state.c.ρn_liq
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "clwnm",
+    long_name = "Number Concentration of Cloud Liquid Water",
+    standard_name = "number_concentration_of_cloud_liquid_water",
+    units = "1 m^3",
+    comments = """
+    This is calculated as the number of cloud liquid water droplets in the grid 
+    cell divided by the cell volume.
+    """,
+    compute! = compute_clwnm!,
+)
+
+compute_clinm!(out, state, cache, time) =
+    compute_clinm!(out, state, cache, time, cache.atmos.precip_model)
+compute_clinm!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("clinm", model)
+
+function compute_clwnm!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Microphysics2Moment,
+)
+    if isnothing(out)
+        return state.c.ρn_ice
+    else
+        out .= state.c.ρn_ice
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "clinm",
+    long_name = "Number Concentration of Cloud Ice",
+    standard_name = "number_concentration_of_cloud_ice",
+    units = "1 m^3",
+    comments = """
+    This is calculated as the number of cloud ice chrystals in the grid 
+    cell divided by the cell volume.
+    """,
+    compute! = compute_clinm!,
+)
+
+compute_nmra!(out, state, cache, time) =
+    compute_nmra!(out, state, cache, time, cache.atmos.precip_model)
+compute_nmra!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("nmra", model)
+
+function compute_nmra!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Microphysics2Moment,
+)
+    if isnothing(out)
+        return state.c.ρn_rai
+    else
+        out .= state.c.ρn_rai
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "nmra",
+    long_name = "Number Concentration of Rain",
+    standard_name = "number_concentration_of_rain",
+    units = "1 m^3",
+    comments = """
+    This is calculated as the number of raindrops in the grid cell divided
+    by the cell volume.
+    """,
+    compute! = compute_nmra!,
+)
+
+compute_nmsn!(out, state, cache, time) =
+    compute_nmsn!(out, state, cache, time, cache.atmos.precip_model)
+compute_nmsn!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("nmsn", model)
+
+function compute_nmsn!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Microphysics2Moment,
+)
+    if isnothing(out)
+        return state.c.ρn_sno
+    else
+        out .= state.c.ρn_sno
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "nmsn",
+    long_name = "Number Concentration of Snow",
+    standard_name = "number_concentration_of_snow",
+    units = "1 m^3",
+    comments = """
+    This is calculated as the number of snow flakes in the grid cell divided
+    by the cell volume.
+    """,
+    compute! = compute_nmsn!,
+)
+
 ###
 # Topography
 ###
