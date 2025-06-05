@@ -860,12 +860,12 @@ add_diagnostic_variable!(
     compute! = compute_hussn!,
 )
 
-compute_clwnm!(out, state, cache, time) =
-    compute_clwnm!(out, state, cache, time, cache.atmos.precip_model)
-compute_clwnm!(_, _, _, _, model::T) where {T} =
-    error_diagnostic_variable("clwnm", model)
+compute_cdnc!(out, state, cache, time) =
+    compute_cdnc!(out, state, cache, time, cache.atmos.precip_model)
+compute_cdnc!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("cdnc", model)
 
-function compute_clwnm!(
+function compute_cdnc!(
     out,
     state,
     cache,
@@ -880,23 +880,23 @@ function compute_clwnm!(
 end
 
 add_diagnostic_variable!(
-    short_name = "clwnm",
-    long_name = "Number Concentration of Cloud Liquid Water",
-    standard_name = "number_concentration_of_cloud_liquid_water",
-    units = "1 m^-3",
+    short_name = "cdnc",
+    long_name = "Cloud Liquid Droplet Number Concentration",
+    standard_name = "number_concentration_of_cloud_liquid_water_particles_in_air",
+    units = "m^-3",
     comments = """
     This is calculated as the number of cloud liquid water droplets in the grid 
     cell divided by the cell volume.
     """,
-    compute! = compute_clwnm!,
+    compute! = compute_cdnc!,
 )
 
-compute_clinm!(out, state, cache, time) =
-    compute_clinm!(out, state, cache, time, cache.atmos.precip_model)
-compute_clinm!(_, _, _, _, model::T) where {T} =
-    error_diagnostic_variable("clinm", model)
+compute_cdinc!(out, state, cache, time) =
+    compute_cdinc!(out, state, cache, time, cache.atmos.precip_model)
+compute_cdinc!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("cdinc", model)
 
-function compute_clinm!(
+function compute_cdinc!(
     out,
     state,
     cache,
@@ -911,23 +911,23 @@ function compute_clinm!(
 end
 
 add_diagnostic_variable!(
-    short_name = "clinm",
-    long_name = "Number Concentration of Cloud Ice",
-    standard_name = "number_concentration_of_cloud_ice",
-    units = "1 m^-3",
+    short_name = "cdinc",
+    long_name = "Cloud Ice Chrystal Number Concentration",
+    standard_name = "number_concentration_of_cloud_ice_chrystals_in_air",
+    units = "m^-3",
     comments = """
     This is calculated as the number of cloud ice chrystals in the grid 
     cell divided by the cell volume.
     """,
-    compute! = compute_clinm!,
+    compute! = compute_cdinc!,
 )
 
-compute_nmra!(out, state, cache, time) =
-    compute_nmra!(out, state, cache, time, cache.atmos.precip_model)
-compute_nmra!(_, _, _, _, model::T) where {T} =
-    error_diagnostic_variable("nmra", model)
+compute_ncra!(out, state, cache, time) =
+    compute_ncra!(out, state, cache, time, cache.atmos.precip_model)
+compute_ncra!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("ncra", model)
 
-function compute_nmra!(
+function compute_ncra!(
     out,
     state,
     cache,
@@ -942,23 +942,23 @@ function compute_nmra!(
 end
 
 add_diagnostic_variable!(
-    short_name = "nmra",
-    long_name = "Number Concentration of Rain",
-    standard_name = "number_concentration_of_rain",
-    units = "1 m^-3",
+    short_name = "ncra",
+    long_name = "Raindrop Number Concentration",
+    standard_name = "number_concentration_of_raindrops_in_air",
+    units = "m^-3",
     comments = """
     This is calculated as the number of raindrops in the grid cell divided
     by the cell volume.
     """,
-    compute! = compute_nmra!,
+    compute! = compute_ncra!,
 )
 
-compute_nmsn!(out, state, cache, time) =
-    compute_nmsn!(out, state, cache, time, cache.atmos.precip_model)
-compute_nmsn!(_, _, _, _, model::T) where {T} =
-    error_diagnostic_variable("nmsn", model)
+compute_ncsn!(out, state, cache, time) =
+    compute_ncsn!(out, state, cache, time, cache.atmos.precip_model)
+compute_ncsn!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("ncsn", model)
 
-function compute_nmsn!(
+function compute_ncsn!(
     out,
     state,
     cache,
@@ -973,15 +973,15 @@ function compute_nmsn!(
 end
 
 add_diagnostic_variable!(
-    short_name = "nmsn",
-    long_name = "Number Concentration of Snow",
-    standard_name = "number_concentration_of_snow",
-    units = "1 m^-3",
+    short_name = "ncsn",
+    long_name = "Snowflake Number Concentration",
+    standard_name = "number_concentration_of_snowflakes_in_air",
+    units = "m^-3",
     comments = """
     This is calculated as the number of snow flakes in the grid cell divided
     by the cell volume.
     """,
-    compute! = compute_nmsn!,
+    compute! = compute_ncsn!,
 )
 
 ###

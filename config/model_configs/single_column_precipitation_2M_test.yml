@@ -16,7 +16,7 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 reproducibility_test: false
 diagnostics:
-  - short_name: [hus, clw, cli, husra, hussn, clwnm, clinm, nmra, nmsn, ta, wa]
+  - short_name: [hus, clw, cli, husra, hussn, cdnc, cdinc, ncra, ncsn, ta, wa]
     period: 500secs
   - short_name: [pr]
     period: 10secs

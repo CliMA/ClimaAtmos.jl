@@ -644,10 +644,10 @@ function make_plots(
             "husra",
             "hussn",
             "ta",
-            "clwnm",
-            "clinm",
-            "nmra",
-            "nmsn",
+            "cdnc",
+            "cdinc",
+            "ncra",
+            "ncsn",
         ]
         figsize = (1200, 1000)
         pr_row = 5
@@ -1153,6 +1153,7 @@ AquaplanetPlots = Union{
     Val{:edonly_edmfx_aquaplanet},
     Val{:mpi_sphere_aquaplanet_rhoe_equil_clearsky},
     Val{:aquaplanet_nonequil_allsky_gw_res},
+    Val{:aquaplanet_nonequil_allsky_2M},
     Val{:rcemipii_sphere_diagnostic_edmfx},
     Val{:longrun_aquaplanet_allsky_0M},
     Val{:longrun_aquaplanet_allsky_diagedmf_0M},

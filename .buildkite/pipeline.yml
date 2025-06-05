@@ -94,6 +94,17 @@ steps:
           --job_id single_column_precipitation_2M_test
         artifact_paths: "single_column_precipitation_2M_test/output_active/*"
 
+      - label: ":umbrella: 2-moment precipitation aquaplanet nonequil allsky"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/aquaplanet_nonequil_allsky_2M.yml
+          --job_id aquaplanet_nonequil_allsky_2M
+
+        artifact_paths: "aquaplanet_nonequil_allsky_2M/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
   - group: "Gravity wave"
     steps:
 
