@@ -387,6 +387,10 @@ function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
     )
 
     #TODO - implement 2M cold processes!
+    @. ᶜSqᵢᵖ = 0
+    @. ᶜSqₛᵖ = 0
+    @. ᶜSnᵢᵖ = 0
+    @. ᶜSnₛᵖ = 0
     
     return nothing
 end
