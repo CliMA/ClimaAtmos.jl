@@ -902,7 +902,7 @@ compute_clinm!(out, state, cache, time) =
 compute_clinm!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("clinm", model)
 
-function compute_clwnm!(
+function compute_clinm!(
     out,
     state,
     cache,
