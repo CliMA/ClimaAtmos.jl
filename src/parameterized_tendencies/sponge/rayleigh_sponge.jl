@@ -14,7 +14,13 @@ import ClimaCore.Fields as Fields
 
 function rayleigh_sponge_tendency_uₕ(ᶜuₕ, s)
     s isa Nothing && return NullBroadcasted()
-    (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜuₕ))
+    ᶜz = Fields.coordinate_field(Spaces.center_space(axes(ᶜuₕ))).z
+    ᶠz = Fields.coordinate_field(Spaces.face_space(axes(ᶜuₕ))).z
     zmax = z_max(axes(ᶠz))
+    return rayleigh_sponge_tendency_uₕ(ᶜuₕ, s, ᶜz, ᶠz, zmax)
+end
+
+function rayleigh_sponge_tendency_uₕ(ᶜuₕ, s, ᶜz, ᶠz, zmax)
+    s isa Nothing && return NullBroadcasted()
     return @. lazy(-β_rayleigh_uₕ(s, ᶜz, zmax) * ᶜuₕ)
 end

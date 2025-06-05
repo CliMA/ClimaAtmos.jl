@@ -69,10 +69,13 @@ sub_tend(∑tends, t) = lazy.(∑tends .- t)
 function ᶜremaining_tendency(::Val{:uₕ}, ᶜY, ᶠY, p, t)
     :uₕ in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.uₕ))
+    (; zmax) = p
     (; viscous_sponge, rayleigh_sponge) = p.atmos
+    ᶜz = Fields.coordinate_field(ᶜY).z
+    ᶠz = Fields.coordinate_field(ᶠY).z
     ᶜuₕ = ᶜY.uₕ
     ∑tendencies = add_tend(∑tendencies, viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge))
-    ∑tendencies = add_tend(∑tendencies, rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge))
+    ∑tendencies = add_tend(∑tendencies, rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge, ᶜz, ᶠz, zmax))
 
     return ∑tendencies
 end
@@ -255,6 +258,7 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     end
     (; moisture_model, viscous_sponge, precip_model) = p.atmos
     p_kernel = (;
+        zmax = Spaces.z_max(axes(Y.f)),
         atmos = p.atmos,
         params = p.params,
         dt = p.dt,
