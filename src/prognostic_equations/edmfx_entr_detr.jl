@@ -66,6 +66,7 @@ function entrainment(
         ref_H = ᶜp / (ᶜρ * g)
 
         entr_param_vec = CAP.entr_param_vec(turbconv_params)
+        entr_inv_tau = CAP.entr_tau(turbconv_params)
 
         # non-dimensional pi-groups
         Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
@@ -78,15 +79,16 @@ function entrainment(
         Π₂ = min(max(Π₂, -1), 1)
 
         entr =
-            ((FT(1) - min(ᶜaʲ, FT(1)))^entr_mult_limiter_coeff) *
-            abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) * (
-                entr_param_vec[1] * abs(Π₁) +
-                entr_param_vec[2] * abs(Π₂) +
-                entr_param_vec[3] * abs(Π₃) +
-                entr_param_vec[4] * abs(Π₄) +
-                entr_param_vec[5] * abs(Π₅) +
-                entr_param_vec[6]
-            )
+            ((FT(1) - min(ᶜaʲ, FT(1)))^entr_mult_limiter_coeff) * (
+                abs(ᶜwʲ - ᶜw⁰) / (ᶜz - z_sfc) * (
+                    entr_param_vec[1] * abs(Π₁) +
+                    entr_param_vec[2] * abs(Π₂) +
+                    entr_param_vec[3] * abs(Π₃) +
+                    entr_param_vec[4] * abs(Π₄) +
+                    entr_param_vec[5] * abs(Π₅) +
+                    entr_param_vec[6]
+                )
+            ) + entr_inv_tau
 
         return max(entr, 0)
     end
