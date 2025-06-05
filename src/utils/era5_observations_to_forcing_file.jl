@@ -102,20 +102,20 @@ function get_horizontal_tendencies(
     dy = 2 * π * rearth / 360 * latitudinal_resolution
 
     # get velocities at site location
-    ᶜu = column_ds["u"][lon_index, lat_index, :, :]
-    ᶜv = column_ds["v"][lon_index, lat_index, :, :]
+    ᶜu = smooth_4D_era5(column_ds, "u", lon_index, lat_index)
+    ᶜv = smooth_4D_era5(column_ds, "v", lon_index, lat_index)
 
     # get temperature at N S E W of center for gradient calculation
-    ʷT = column_ds["t"][lon_index - 1, lat_index, :, :]
-    ⁿT = column_ds["t"][lon_index, lat_index + 1, :, :]
-    ˢT = column_ds["t"][lon_index, lat_index - 1, :, :]
-    ᵉT = column_ds["t"][lon_index + 1, lat_index, :, :]
+    ʷT = smooth_4D_era5(column_ds, "t", lon_index - 1, lat_index)
+    ⁿT = smooth_4D_era5(column_ds, "t", lon_index, lat_index + 1)
+    ˢT = smooth_4D_era5(column_ds, "t", lon_index, lat_index - 1)
+    ᵉT = smooth_4D_era5(column_ds, "t", lon_index + 1, lat_index)
 
     # get specific humidity at N S E W of center for gradient calculation
-    ʷq = column_ds["q"][lon_index - 1, lat_index, :, :]
-    ⁿq = column_ds["q"][lon_index, lat_index + 1, :, :]
-    ˢq = column_ds["q"][lon_index, lat_index - 1, :, :]
-    ᵉq = column_ds["q"][lon_index + 1, lat_index, :, :]
+    ʷq = smooth_4D_era5(column_ds, "q", lon_index - 1, lat_index)
+    ⁿq = smooth_4D_era5(column_ds, "q", lon_index, lat_index + 1)
+    ˢq = smooth_4D_era5(column_ds, "q", lon_index, lat_index - 1)
+    ᵉq = smooth_4D_era5(column_ds, "q", lon_index + 1, lat_index)
 
     # temperature and specific humidity advective tendency at center
     tntha = -(ᶜu .* (ᵉT .- ʷT) ./ (2 * dx) .+ ᶜv .* (ⁿT .- ˢT) ./ (2 * dy))
@@ -252,19 +252,17 @@ function generate_external_era5_forcing_file(
     sim_forcing = Dict()
     sim_forcing["time"] = tvforcing["valid_time"][:]
     sim_forcing["pressure_level"] = tvforcing["pressure_level"][:]
-    sim_forcing["ua"] = tvforcing["u"][lon_index, lat_index, :, :]
-    sim_forcing["va"] = tvforcing["v"][lon_index, lat_index, :, :]
-    sim_forcing["wap"] = tvforcing["w"][lon_index, lat_index, :, :] # era5 w is in Pa/s, this is confusing notation
-    sim_forcing["hus"] = tvforcing["q"][lon_index, lat_index, :, :]
-    sim_forcing["ta"] = tvforcing["t"][lon_index, lat_index, :, :]
-    sim_forcing["zg"] = tvforcing["z"][lon_index, lat_index, :, :]
-    sim_forcing["z"] =
-        tvforcing["z"][lon_index, lat_index, :, :] /
-        external_tv_params.gravitational_acceleration # height in meters
+    sim_forcing["ua"] = smooth_4D_era5(tvforcing, "u", lon_index, lat_index)
+    sim_forcing["va"] = smooth_4D_era5(tvforcing, "v", lon_index, lat_index)
+    sim_forcing["wap"] = smooth_4D_era5(tvforcing, "w", lon_index, lat_index) # era5 w is in Pa/s, this is confusing notation
+    sim_forcing["hus"] = smooth_4D_era5(tvforcing, "q", lon_index, lat_index)
+    sim_forcing["ta"] = smooth_4D_era5(tvforcing, "t", lon_index, lat_index)
+    sim_forcing["zg"] = smooth_4D_era5(tvforcing, "z", lon_index, lat_index)
+    sim_forcing["z"] = sim_forcing["zg"] / external_tv_params.gravitational_acceleration # height in meters
 
     # add cloud information - this is used for profile calibration and not for the forcing but saves multiple files for profile calibration
-    sim_forcing["clw"] = tvforcing["clwc"][lon_index, lat_index, :, :]
-    sim_forcing["cli"] = tvforcing["ciwc"][lon_index, lat_index, :, :]
+    sim_forcing["clw"] = smooth_4D_era5(tvforcing, "clwc", lon_index, lat_index)
+    sim_forcing["cli"] = smooth_4D_era5(tvforcing, "ciwc", lon_index, lat_index)
 
     # compute subsidence
     pressure = tvforcing["pressure_level"] .* 100 # convert hPa to Pa
@@ -375,36 +373,23 @@ function generate_external_era5_forcing_file(
     lat_index_surf = findfirst(tv_accum["latitude"][:] .== lat)
     @assert lon_index_surf != nothing "Longitude $lon not found in hourly_accum_$(start_date).nc"
     @assert lat_index_surf != nothing "Latitude $lat not found in hourly_accum_$(start_date).nc"
-    matching_time_indices =
-        findall(in(tvforcing["valid_time"][:]), tv_accum["valid_time"][:])
 
     defVar(ds, "hfls", FT, ("x", "y", "z", "time"))
     defVar(ds, "hfss", FT, ("x", "y", "z", "time"))
-    # sensible and latent heat fluxes are opposite
-    slhf =
-        -tv_accum["slhf"][
-            lon_index_surf,
-            lat_index_surf,
-            matching_time_indices,
-        ] / time_resolution
-    sshf =
-        -tv_accum["sshf"][
-            lon_index_surf,
-            lat_index_surf,
-            matching_time_indices,
-        ] / time_resolution
+    # sensible and latent heat fluxes are defined upwards in CliMA, also need to divide by the aggregation
+    slhf = - smooth_3D_era5(tv_accum, "slhf", lon_index_surf, lat_index_surf) / time_resolution
+
+    sshf = - smooth_3D_era5(tv_accum, "sshf", lon_index_surf, lat_index_surf) / time_resolution
 
     # surface temperature
     lon_index_surf2 = findfirst(tv_inst["longitude"][:] .== lon)
     lat_index_surf2 = findfirst(tv_inst["latitude"][:] .== lat)
     @assert lon_index_surf2 != nothing "Longitude $lon not found in hourly_inst_$(start_date).nc"
     @assert lat_index_surf2 != nothing "Latitude $lat not found in hourly_inst_$(start_date).nc"
-    matching_time_indices =
-        findall(in(tvforcing["valid_time"][:]), tv_inst["valid_time"][:])
 
     defVar(ds, "ts", FT, ("x", "y", "z", "time"))
-    skt =
-        tv_inst["skt"][lon_index_surf2, lat_index_surf2, matching_time_indices]
+    skt = smooth_3D_era5(tv_inst, "skt", lon_index_surf2, lat_index_surf2)
+
     for time_ind in 1:ds.dim["time"]
         ds["coszen"][:, :, :, time_ind] .= coszen_list[time_ind][1]
         ds["rsdt"][:, :, :, time_ind] .= coszen_list[time_ind][2]
@@ -476,10 +461,8 @@ Here we choose 4 points on either side which corresponds to a 2° box total. we
 just average the points here, but something more creative could be done.
 """
 function smooth_4D_era5(data, variable, lon_index, lat_index, smooth_amount = 4)
-    # extract data
+    # extract data in box around the center point
     data_slice = data[variable][(lon_index - smooth_amount):(lon_index + smooth_amount), (lat_index - smooth_amount):(lat_index + smooth_amount), :, :]
-    @info size(data_slice)
-
     # compute mean over lat/lon dimensions and return slice
     return mean(data_slice, dims = (1,2))[1, 1, :, :]
 end
@@ -493,7 +476,8 @@ either side which corresponds to a 2° box total. wejust average the points here
 something more creative could be done.
 """
 function smooth_3D_era5(data, variable, lon_index, lat_index, smooth_amount = 4)
+    # extract data in box around the center point
     data_slice = data[variable][(lon_index - smooth_amount):(lon_index + smooth_amount), (lat_index - smooth_amount):(lat_index + smooth_amount), :]
-    @info size(data_slice)
+    # compute mean over lat/lon dimensions and return slice
     return mean(data_slice, dims = (1,2))[1, 1, :]
 end
