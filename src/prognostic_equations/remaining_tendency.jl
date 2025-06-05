@@ -37,24 +37,6 @@ end
 function ᶜremaining_tendency(ᶜY, ᶠY, p, t)
     names = propertynames(ᶜY)
     tends = construct_tends(Val(names), ᶜremaining_tendency, ᶜY, ᶠY, p, t)
-    @show length(tends)
-    @show length(names)
-    # tends = (
-    #     ᶜremaining_tendency(Val(:ρ), ᶜY, ᶠY, p, t),
-    #     ᶜremaining_tendency(Val(:uₕ), ᶜY, ᶠY, p, t),
-    #     ᶜremaining_tendency(Val(:ρe_tot), ᶜY, ᶠY, p, t),
-    #     ᶜremaining_tendency(Val(:ρq_tot), ᶜY, ᶠY, p, t),
-    #     ᶜremaining_tendency(Val(:ρq_liq), ᶜY, ᶠY, p, t),
-    #     ᶜremaining_tendency(Val(:ρq_ice), ᶜY, ᶠY, p, t),
-    #     ᶜremaining_tendency(Val(:ρq_rai), ᶜY, ᶠY, p, t),
-    #     ᶜremaining_tendency(Val(:ρq_sno), ᶜY, ᶠY, p, t),
-    #     ᶜremaining_tendency(Val(:sgs⁰), ᶜY, ᶠY, p, t),
-    #     ᶜremaining_tendency(Val(:sgsʲs), ᶜY, ᶠY, p, t),
-    # )
-
-    # return lazy.(prognostic_nt.(Val(names), Val(keys(tends)), values(tends)...))
-    # prog_nt = (NamedTuple{names} ∘ tuple)
-    # return lazy.(prog_nt.(tends))
     return lazy.(foo.(Val(names), tends...))
 end
 foo(::Val{names}, tends...) where {names} = NamedTuple{names}(tends)
@@ -62,13 +44,6 @@ foo(::Val{names}, tends...) where {names} = NamedTuple{names}(tends)
 function ᶠremaining_tendency(ᶜY, ᶠY, p, t)
     names = propertynames(ᶠY)
     tends = construct_tends(Val(names), ᶠremaining_tendency, ᶜY, ᶠY, p, t)
-    # tends = (;
-    #     ᶠremaining_tendency(Val(:u₃), ᶜY, ᶠY, p, t)...,
-    #     ᶠremaining_tendency(Val(:sgsʲs), ᶜY, ᶠY, p, t)...,
-    # )
-    # return lazy.(prognostic_nt.(Val(names), Val(keys(tends)), values(tends)...))
-    # prog_nt = (NamedTuple{names} ∘ tuple)
-    # return lazy.(prog_nt.(tends))
     return lazy.(foo.(Val(names), tends...))
 end
 using ClimaCore.RecursiveApply: rzero
