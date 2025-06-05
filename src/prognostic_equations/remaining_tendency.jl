@@ -24,32 +24,49 @@ end
 prognostic_nt(::Val{names}, ::Val{K}, vals...) where {names, K} =
     sorted_nt(Val(names), Val(K), vals...)
 
+@generated function construct_tends(::Val{names}, f, ᶜY, ᶠY, p, t) where {names}
+    calls = []
+    for name in names
+        push!(calls, :(f(Val($name), ᶜY, ᶠY, p, t)))
+    end
+    return quote
+        $(calls...)
+    end
+end
+
 function ᶜremaining_tendency(ᶜY, ᶠY, p, t)
     names = propertynames(ᶜY)
-    tends = (;
-        ᶜremaining_tendency_ρ(ᶜY, ᶠY, p, t)...,
-        ᶜremaining_tendency_uₕ(ᶜY, ᶠY, p, t)...,
-        ᶜremaining_tendency_ρe_tot(ᶜY, ᶠY, p, t)...,
-        ᶜremaining_tendency_ρq_tot(ᶜY, ᶠY, p, t)...,
-        ᶜremaining_tendency_ρq_liq(ᶜY, ᶠY, p, t)...,
-        ᶜremaining_tendency_ρq_ice(ᶜY, ᶠY, p, t)...,
-        ᶜremaining_tendency_ρq_rai(ᶜY, ᶠY, p, t)...,
-        ᶜremaining_tendency_ρq_sno(ᶜY, ᶠY, p, t)...,
-        ᶜremaining_tendency_sgs⁰(ᶜY, ᶠY, p, t)...,
-        ᶜremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)...,
-    )
-    return lazy.(prognostic_nt.(Val(names), Val(keys(tends)), values(tends)...))
+    tends = construct_tends(Val(names), ᶜremaining_tendency, ᶜY, ᶠY, p, t)
+    # tends = (;
+    #     ᶜremaining_tendency(Val(:ρ), ᶜY, ᶠY, p, t)...,
+    #     ᶜremaining_tendency(Val(:uₕ), ᶜY, ᶠY, p, t)...,
+    #     ᶜremaining_tendency(Val(:ρe_tot), ᶜY, ᶠY, p, t)...,
+    #     ᶜremaining_tendency(Val(:ρq_tot), ᶜY, ᶠY, p, t)...,
+    #     ᶜremaining_tendency(Val(:ρq_liq), ᶜY, ᶠY, p, t)...,
+    #     ᶜremaining_tendency(Val(:ρq_ice), ᶜY, ᶠY, p, t)...,
+    #     ᶜremaining_tendency(Val(:ρq_rai), ᶜY, ᶠY, p, t)...,
+    #     ᶜremaining_tendency(Val(:ρq_sno), ᶜY, ᶠY, p, t)...,
+    #     ᶜremaining_tendency(Val(:sgs⁰), ᶜY, ᶠY, p, t)...,
+    #     ᶜremaining_tendency(Val(:sgsʲs), ᶜY, ᶠY, p, t)...,
+    # )
+
+    # return lazy.(prognostic_nt.(Val(names), Val(keys(tends)), values(tends)...))
+    prog_nt = (NamedTuple{names} ∘ tuple)
+    return lazy.(prog_nt.(tends))
 end
 function ᶠremaining_tendency(ᶜY, ᶠY, p, t)
     names = propertynames(ᶠY)
-    tends = (;
-        ᶠremaining_tendency_u₃(ᶜY, ᶠY, p, t)...,
-        ᶠremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)...,
-    )
-    return lazy.(prognostic_nt.(Val(names), Val(keys(tends)), values(tends)...))
+    tends = construct_tends(Val(names), ᶠremaining_tendency, ᶜY, ᶠY, p, t)
+    # tends = (;
+    #     ᶠremaining_tendency(Val(:u₃), ᶜY, ᶠY, p, t)...,
+    #     ᶠremaining_tendency(Val(:sgsʲs), ᶜY, ᶠY, p, t)...,
+    # )
+    # return lazy.(prognostic_nt.(Val(names), Val(keys(tends)), values(tends)...))
+    prog_nt = (NamedTuple{names} ∘ tuple)
+    return lazy.(prog_nt.(tends))
 end
 using ClimaCore.RecursiveApply: rzero
-function ᶜremaining_tendency_ρ(ᶜY, ᶠY, p, t)
+function ᶜremaining_tendency(::Val{:ρ}, ᶜY, ᶠY, p, t)
     :ρ in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.ρ))
     ᶜJ = Fields.local_geometry_field(ᶜY).J
@@ -60,7 +77,7 @@ function ᶜremaining_tendency_ρ(ᶜY, ᶠY, p, t)
         ᶜwₜqₜ = compute_ᶜwₜqₜ(ᶜY, ᶠY, p, t)
         ∑tendencies = sub_tend(∑tendencies, water_adv(ᶜρ, ᶜJ, ᶠJ, ᶜwₜqₜ))
     end
-    return (;ρ=∑tendencies)
+    return ∑tendencies
 end
 
 add_tend(∑tends, t) = lazy.(∑tends .+ t)
@@ -68,7 +85,7 @@ add_tend(∑tends, ::NullBroadcasted) = ∑tends
 sub_tend(∑tends, ::NullBroadcasted) = ∑tends
 sub_tend(∑tends, t) = lazy.(∑tends .- t)
 
-function ᶜremaining_tendency_uₕ(ᶜY, ᶠY, p, t)
+function ᶜremaining_tendency(::Val{:uₕ}, ᶜY, ᶠY, p, t)
     :uₕ in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.uₕ))
     (; viscous_sponge, rayleigh_sponge) = p.atmos
@@ -76,9 +93,9 @@ function ᶜremaining_tendency_uₕ(ᶜY, ᶠY, p, t)
     ∑tendencies = add_tend(∑tendencies, viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge))
     ∑tendencies = add_tend(∑tendencies, rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge))
 
-    return (;uₕ=∑tendencies)
+    return ∑tendencies
 end
-function ᶜremaining_tendency_ρe_tot(ᶜY, ᶠY, p, t)
+function ᶜremaining_tendency(::Val{:ρe_tot}, ᶜY, ᶠY, p, t)
     :ρe_tot in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.ρe_tot))
 
@@ -112,9 +129,9 @@ function ᶜremaining_tendency_ρe_tot(ᶜY, ᶠY, p, t)
     end
 
     ∑tendencies = add_tend(∑tendencies, viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge))
-    return (;ρe_tot=∑tendencies)
+    return ∑tendencies
 end
-function ᶜremaining_tendency_ρq_tot(ᶜY, ᶠY, p, t)
+function ᶜremaining_tendency(::Val{:ρq_tot}, ᶜY, ᶠY, p, t)
     :ρq_tot in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.ρq_tot))
     ᶜJ = Fields.local_geometry_field(ᶜY).J
@@ -138,39 +155,39 @@ function ᶜremaining_tendency_ρq_tot(ᶜY, ᶠY, p, t)
         ∑tendencies = sub_tend(∑tendencies, vtt_central)
     end
 
-    return (;ρq_tot=∑tendencies)
+    return ∑tendencies
 end
-function ᶜremaining_tendency_ρq_liq(ᶜY, ᶠY, p, t)
+function ᶜremaining_tendency(::Val{:ρq_liq}, ᶜY, ᶠY, p, t)
     :ρq_liq in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.ρq_liq))
-    return (; ρq_liq = ∑tendencies)
+    return ∑tendencies
 end
-function ᶜremaining_tendency_ρq_ice(ᶜY, ᶠY, p, t)
+function ᶜremaining_tendency(::Val{:ρq_ice}, ᶜY, ᶠY, p, t)
     :ρq_ice in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.ρq_ice))
-    return (; ρq_ice = ∑tendencies)
+    return ∑tendencies
 end
-function ᶜremaining_tendency_ρq_rai(ᶜY, ᶠY, p, t)
+function ᶜremaining_tendency(::Val{:ρq_rai}, ᶜY, ᶠY, p, t)
     :ρq_rai in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.ρq_rai))
-    return (; ρq_rai = ∑tendencies)
+    return ∑tendencies
 end
-function ᶜremaining_tendency_ρq_sno(ᶜY, ᶠY, p, t)
+function ᶜremaining_tendency(::Val{:ρq_sno}, ᶜY, ᶠY, p, t)
     :ρq_sno in propertynames(ᶜY) || return ()
     ∑tendencies = zero(eltype(ᶜY.ρq_sno))
-    return (; ρq_sno = ∑tendencies)
+    return ∑tendencies
 end
-function ᶜremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)
+function ᶜremaining_tendency(::Val{:sgsʲs}, ᶜY, ᶠY, p, t)
     :sgsʲs in propertynames(ᶜY) || return ()
     ∑tendencies = rzero(eltype(ᶜY.sgsʲs))
-    return (; sgsʲs = ∑tendencies)
+    return ∑tendencies
 end
-function ᶜremaining_tendency_sgs⁰(ᶜY, ᶠY, p, t)
+function ᶜremaining_tendency(::Val{:sgs⁰}, ᶜY, ᶠY, p, t)
     :sgs⁰ in propertynames(ᶜY) || return ()
     ∑tendencies = rzero(eltype(ᶜY.sgs⁰))
-    return (; sgs⁰ = ∑tendencies)
+    return ∑tendencies
 end
-function ᶠremaining_tendency_u₃(ᶜY, ᶠY, p, t)
+function ᶠremaining_tendency(::Val{:u₃}, ᶜY, ᶠY, p, t)
     :u₃ in propertynames(ᶠY) || return ()
     ∑tendencies = zero(eltype(ᶠY.u₃))
     (; viscous_sponge) = p.atmos
@@ -179,12 +196,12 @@ function ᶠremaining_tendency_u₃(ᶜY, ᶠY, p, t)
     ᶠuₕ³ = compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
     ᶠu₃ = compute_ᶠu₃_with_bcs(ᶠY.u₃, ᶠuₕ³)
     ∑tendencies = add_tend(∑tendencies, viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge))
-    return (;u₃=∑tendencies)
+    return ∑tendencies
 end
-function ᶠremaining_tendency_sgsʲs(ᶜY, ᶠY, p, t)
+function ᶠremaining_tendency(::Val{:sgsʲs}, ᶜY, ᶠY, p, t)
     :sgsʲs in propertynames(ᶠY) || return ()
     ∑tendencies = rzero(eltype(ᶠY.sgsʲs))
-    return (; sgsʲs = ∑tendencies)
+    return ∑tendencies
 end
 
 
