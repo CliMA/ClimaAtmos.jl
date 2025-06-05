@@ -25,6 +25,9 @@ value = 0.7
 [precipitation_timescale]
 value = 1919.9324772692971
 
+[entr_inv_tau]
+value = 0
+
 [entr_mult_limiter_coeff]
 value = 1.092018003548091
 
