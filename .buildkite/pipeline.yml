@@ -902,8 +902,8 @@ steps:
           --config_file $CONFIG_PATH/baroclinic_wave.yml
           --job_id baroclinic_wave_gpu
         artifact_paths: "baroclinic_wave_gpu/output_active/*"
-        # env:
-        #   CLIMACOMMS_DEVICE: "CUDA"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
           slurm_mem: 60GB
