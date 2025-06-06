@@ -152,6 +152,7 @@ function entrainment(
     end
 
     g = TDP.grav(thermo_params)
+    entr_pi_const = CAP.entr_pi_const(turbconv_params)
     ref_H = ᶜp / (ᶜρ * g) # Pressure scale height
 
     Π₁, Π₂, Π₃, Π₄, Π₅ = calculate_pi_groups(
@@ -170,12 +171,12 @@ function entrainment(
     entr_param_vec = CAP.entr_param_vec(turbconv_params)
     entr_inv_tau = CAP.entr_tau(turbconv_params)
     pi_sum =
-        entr_param_vec[1] * abs(Π₁) +
+        (entr_param_vec[1] * abs(Π₁) +
         entr_param_vec[2] * abs(Π₂) +
         entr_param_vec[3] * abs(Π₃) +
         entr_param_vec[4] * abs(Π₄) +
         entr_param_vec[5] * abs(Π₅) +
-        entr_param_vec[6]
+        entr_pi_const)
 
     inv_timescale_factor = abs(ᶜwʲ - ᶜw⁰) / elev_above_sfc
 
