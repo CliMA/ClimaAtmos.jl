@@ -50,8 +50,10 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
 
     microphysics_0m_params = CM.Parameters.Parameters0M(toml_dict)
     microphysics_1m_params = microphys_1m_parameters(toml_dict)
+    microphysics_2m_params = microphys_2m_parameters(toml_dict)
     MP0M = typeof(microphysics_0m_params)
     MP1M = typeof(microphysics_1m_params)
+    MP2M = typeof(microphysics_2m_params)
 
     vert_diff_params = vert_diff_parameters(toml_dict)
     VDP = typeof(vert_diff_params)
@@ -69,6 +71,7 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
         MPC,
         MP0M,
         MP1M,
+        MP2M,
         SFP,
         TCP,
         STP,
@@ -82,6 +85,7 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
         microphysics_cloud_params,
         microphysics_0m_params,
         microphysics_1m_params,
+        microphysics_2m_params,
         surface_fluxes_params,
         turbconv_params,
         surface_temp_params,
@@ -150,6 +154,15 @@ microphys_1m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
         "prescribed_cloud_droplet_number_concentration",
         "ClimaAtmos",
     ).prescribed_cloud_droplet_number_concentration,
+)
+
+microphys_2m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
+    microphys_2m_parameters(CP.create_toml_dict(FT))
+
+microphys_2m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
+    sb = CM.Parameters.SB2006(toml_dict),
+    aps = CM.Parameters.AirProperties(toml_dict),
+    tv = CM.Parameters.SB2006VelType(toml_dict),
 )
 
 function vert_diff_parameters(toml_dict)

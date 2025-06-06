@@ -4,6 +4,7 @@
 
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
 import CloudMicrophysics.Microphysics1M as CM1
+import CloudMicrophysics.Microphysics2M as CM2
 
 import Thermodynamics as TD
 import ClimaCore.Operators as Operators
@@ -79,6 +80,62 @@ function set_precipitation_velocities!(
         Y.c.ρ,
         max(zero(Y.c.ρ), Y.c.ρq_ice / Y.c.ρ),
     )
+
+    # compute their contributions to energy and total water advection
+    @. ᶜwₜqₜ =
+        Geometry.WVector(
+            ᶜwₗ * Y.c.ρq_liq +
+            ᶜwᵢ * Y.c.ρq_ice +
+            ᶜwᵣ * Y.c.ρq_rai +
+            ᶜwₛ * Y.c.ρq_sno,
+        ) / Y.c.ρ
+    @. ᶜwₕhₜ =
+        Geometry.WVector(
+            ᶜwₗ * Y.c.ρq_liq * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
+            ᶜwᵢ * Y.c.ρq_ice * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
+            ᶜwᵣ * Y.c.ρq_rai * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))) +
+            ᶜwₛ * Y.c.ρq_sno * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu))),
+        ) / Y.c.ρ
+    return nothing
+end
+function set_precipitation_velocities!(
+    Y,
+    p,
+    moisture_model::NonEquilMoistModel,
+    precip_model::Microphysics2Moment,
+)
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwnₗ, ᶜwnᵢ, ᶜwnᵣ, ᶜwnₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) =
+        p.precomputed
+    (; q_liq, q_ice, q_rai, q_sno) = p.precomputed.ᶜspecific
+    (; ᶜΦ) = p.core
+
+    cm1c = CAP.microphysics_cloud_params(p.params)
+    cm1p = CAP.microphysics_1m_params(p.params)
+    cm2p = CAP.microphysics_2m_params(p.params)
+    thp = CAP.thermodynamics_params(p.params)
+
+    # compute the precipitation terminal velocity [m/s]
+    # TODO sedimentation of snow is based on the 1M scheme
+    @. ᶜwnᵣ = getindex(
+        CM2.rain_terminal_velocity(cm2p.sb, cm2p.tv, q_rai, Y.c.ρ, Y.c.ρn_rai),
+        1,
+    )
+    @. ᶜwᵣ = getindex(
+        CM2.rain_terminal_velocity(cm2p.sb, cm2p.tv, q_rai, Y.c.ρ, Y.c.ρn_rai),
+        2,
+    )
+    @. ᶜwnₛ = CM1.terminal_velocity(cm1p.ps, cm1p.tv.snow, Y.c.ρ, q_sno)
+    @. ᶜwₛ = CM1.terminal_velocity(cm1p.ps, cm1p.tv.snow, Y.c.ρ, q_sno)
+    # compute sedimentation velocity for cloud condensate [m/s]
+    # TODO sedimentation velocities of cloud condensates are based 
+    # on the 1M scheme.
+    @. ᶜwnₗ =
+        CMNe.terminal_velocity(cm1c.liquid, cm1c.Ch2022.rain, Y.c.ρ, q_liq)
+    @. ᶜwₗ = CMNe.terminal_velocity(cm1c.liquid, cm1c.Ch2022.rain, Y.c.ρ, q_liq)
+    @. ᶜwnᵢ =
+        CMNe.terminal_velocity(cm1c.ice, cm1c.Ch2022.small_ice, Y.c.ρ, q_ice)
+    @. ᶜwᵢ =
+        CMNe.terminal_velocity(cm1c.ice, cm1c.Ch2022.small_ice, Y.c.ρ, q_ice)
 
     # compute their contributions to energy and total water advection
     @. ᶜwₜqₜ =
@@ -262,6 +319,67 @@ function set_precipitation_cache!(
     # in edmf sub-domains.
     return nothing
 end
+function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
+    (; dt) = p
+    (; ᶜts) = p.precomputed
+    (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
+    (; ᶜSnₗᵖ, ᶜSnᵢᵖ, ᶜSnᵣᵖ, ᶜSnₛᵖ) = p.precomputed
+
+    (; q_liq, q_rai, n_liq, n_rai) = p.precomputed.ᶜspecific
+
+    ᶜSᵖ = p.scratch.ᶜtemp_scalar
+    ᶜS₂ᵖ = p.scratch.ᶜtemp_scalar_2
+
+    # get thermodynamics and microphysics params
+    (; params) = p
+    cmp = CAP.microphysics_2m_params(params)
+    thp = CAP.thermodynamics_params(params)
+
+    # compute warm precipitation sources on the grid mean (based on SB2006 2M scheme)
+    compute_warm_precipitation_sources_2M!(
+        ᶜSᵖ,
+        ᶜS₂ᵖ,
+        ᶜSnₗᵖ,
+        ᶜSnᵣᵖ,
+        ᶜSqₗᵖ,
+        ᶜSqᵣᵖ,
+        Y.c.ρ,
+        n_liq,
+        n_rai,
+        q_liq,
+        q_rai,
+        ᶜts,
+        dt,
+        cmp,
+        thp,
+    )
+
+    #TODO - implement 2M cold processes!
+    @. ᶜSqᵢᵖ = 0
+    @. ᶜSqₛᵖ = 0
+    @. ᶜSnᵢᵖ = 0
+    @. ᶜSnₛᵖ = 0
+
+    return nothing
+end
+function set_precipitation_cache!(
+    Y,
+    p,
+    ::Microphysics2Moment,
+    ::DiagnosticEDMFX,
+)
+    error("Not implemented yet")
+    return nothing
+end
+function set_precipitation_cache!(
+    Y,
+    p,
+    ::Microphysics2Moment,
+    ::PrognosticEDMFX,
+)
+    error("Not implemented yet")
+    return nothing
+end
 
 """
     set_precipitation_surface_fluxes!(Y, p, precipitation model)
@@ -301,7 +419,7 @@ end
 function set_precipitation_surface_fluxes!(
     Y,
     p,
-    precip_model::Microphysics1Moment,
+    precip_model::Union{Microphysics1Moment, Microphysics2Moment},
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency,) = p.conservation_check

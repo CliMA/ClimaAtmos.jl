@@ -127,6 +127,14 @@ precip_variables(ls, ::Microphysics1Moment) = (;
     ρq_rai = ls.ρ * ls.precip_state.q_rai,
     ρq_sno = ls.ρ * ls.precip_state.q_sno,
 )
+precip_variables(ls, ::Microphysics2Moment) = (;
+    ρq_rai = ls.ρ * ls.precip_state.q_rai,
+    ρq_sno = ls.ρ * ls.precip_state.q_sno,
+    ρn_rai = ls.ρ * ls.precip_state.n_rai,
+    ρn_sno = ls.ρ * ls.precip_state.n_sno,
+    ρn_liq = ls.ρ * ls.precip_state.n_liq,
+    ρn_ice = ls.ρ * ls.precip_state.n_ice,
+)
 
 # We can use paper-based cases for LES type configurations (no TKE)
 # or SGS type configurations (initial TKE needed), so we do not need to assert
