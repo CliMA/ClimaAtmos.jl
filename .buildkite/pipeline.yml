@@ -328,6 +328,8 @@ steps:
         artifact_paths: "baroclinic_wave_equil/output_active/*"
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
+          # slurm_mem: 20GB # columnwise! insufficient mem
+          slurm_mem: 60GB # columnwise!
 
       - label: ":computer: held suarez"
         key: held_suarez
@@ -904,7 +906,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
-          slurm_mem: 16GB
+          slurm_mem: 60GB
 
       - label: "GPU: compare BW with CPU"
         command: >
