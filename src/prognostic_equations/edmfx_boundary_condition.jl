@@ -100,7 +100,7 @@ surface layer using Monin-Obukhov Similarity Theory (MOST).
 The calculation depends on stability:
 - For unstable conditions (Obukhov length `L < 0`):
   σ² = C₁ * c²∗ * (1 - C₂ * z / L)^(-2/3)
-- For stable/neutral conditions (Obukhov length `L > 0`):
+- For stable/neutral conditions (Obukhov length `L >= 0`):
   σ² = C₁ * c²∗
 where `c∗ = -kinematic_scalar_flux / ustar` is the scalar flux scale.
 The constants C₁ and C₂ are empirical (here, C₁=4, C₂=8.3).
