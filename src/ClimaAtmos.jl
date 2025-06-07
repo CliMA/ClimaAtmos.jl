@@ -93,7 +93,7 @@ include(
 )
 include(joinpath("prognostic_equations", "hyperdiffusion.jl"))
 include(joinpath("prognostic_equations", "gm_sgs_closures.jl"))
-include(joinpath("prognostic_equations", "edmf_coriolis.jl"))
+include(joinpath("prognostic_equations", "scm_coriolis.jl"))
 include(joinpath("prognostic_equations", "eddy_diffusion_closures.jl"))
 include(joinpath("prognostic_equations", "mass_flux_closures.jl"))
 include(joinpath("prognostic_equations", "edmfx_entr_detr.jl"))

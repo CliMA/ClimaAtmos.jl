@@ -210,7 +210,7 @@ function projected_vector_buoy_grad_vars(::Type{V}, v1, v2, v3, lg) where {V}
     return (;
         ∂θv∂z_unsat = V(v1, lg)[1] / ubvd,
         ∂qt∂z_sat = V(v2, lg)[1] / ubvd,
-        ∂θl∂z_sat = V(v3, lg)[1] / ubvd,
+        ∂θli∂z_sat = V(v3, lg)[1] / ubvd,
     )
 end
 

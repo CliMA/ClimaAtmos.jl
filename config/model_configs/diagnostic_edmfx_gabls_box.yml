@@ -1,5 +1,5 @@
 initial_condition: GABLS
-edmf_coriolis: GABLS
+scm_coriolis: GABLS
 surface_setup: GABLS
 turbconv: diagnostic_edmfx
 implicit_diffusion: true
