@@ -30,7 +30,7 @@ from the upper tail (from percentile `1 - ᶜaʲ_int` to 1) of a Gaussian distri
 of SGS fluctuations.
 
 This boundary condition is applied only when the surface buoyancy flux
-is positive (unstable conditions), indicating surface-driven updrafts.
+is positive (unstable conditions), indicating surface-driven updrafts. When the surface buoyancy flux is non-positive, the updraft scalar value is set to the grid-mean scalar.
 
 Arguments:
 - `ᶜz_int`: Height of the first interior cell center [m].
