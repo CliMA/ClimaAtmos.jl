@@ -44,6 +44,7 @@ allocs_limit["flame_default_1m"] = 441_904
 allocs_limit["flame_diagnostics"] = 10_677_144
 allocs_limit["flame_aquaplanet_diagedmf"] = 11_644_128
 allocs_limit["flame_aquaplanet_progedmf"] = 697_520
+allocs_limit["flame_aquaplanet_progedmf_dense_autodiff"] = 727_512
 allocs_limit["flame_diffusion"] = 100_360
 allocs_limit["flame_threaded"] = 2047_736
 allocs_limit["flame_callbacks"] = 391_864
