@@ -548,7 +548,6 @@ Returns:
 """
 function gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
     FT = eltype(params)
-    eps_FT = eps(FT)
 
     # Calculate the denominator term for Ri, ensuring it's not zero
     # Based on the formulation Ri = N^2 / max(2*|S|, eps)
