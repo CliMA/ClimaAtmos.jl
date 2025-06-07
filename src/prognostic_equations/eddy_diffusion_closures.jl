@@ -551,7 +551,7 @@ function gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
     # Calculate the denominator term for Ri, ensuring it's not zero
     # Based on the formulation Ri = N^2 / max(2*|S|, eps)
-    ᶜshear_term_safe = max(2 * ᶜstrain_rate_norm, eps_FT)
+    ᶜshear_term_safe = max(2 * ᶜstrain_rate_norm, eps(FT))
     ᶜRi_grad = ᶜN²_eff / ᶜshear_term_safe
 
     return ᶜRi_grad
