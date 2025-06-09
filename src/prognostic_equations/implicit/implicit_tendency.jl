@@ -4,6 +4,7 @@
 
 import ClimaCore
 import ClimaCore: Fields, Geometry
+import Thermodynamics as TD
 
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
@@ -139,7 +140,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜh_tot, ᶜspecific, ᶠu³, ᶜp) = p.precomputed
+    (; ᶜh_tot, ᶜspecific, ᶠu³, ᶜp, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
@@ -181,7 +183,9 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # TODO - decide if this needs to be explicit or implicit
     #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
-    @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜp) / ᶠinterp(Y.c.ρ) + ᶠgradᵥ_ᶜΦ
+    # Vertical pressure gradient term using Exner pressure formulation
+    @. Yₜ.f.u₃ -= ᶠinterp(TD.cp_m(thermo_params, ᶜts) * TD.virtual_pottemp(thermo_params, ᶜts)) * 
+                   ᶠgradᵥ(TD.exner(thermo_params, ᶜts)) + ᶠgradᵥ_ᶜΦ
 
     if rayleigh_sponge isa RayleighSponge
         ᶠz = Fields.coordinate_field(Y.f).z

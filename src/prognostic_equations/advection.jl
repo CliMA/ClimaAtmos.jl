@@ -5,11 +5,14 @@
 using LinearAlgebra: ×, dot
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
+import Thermodynamics as TD
 
 NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜK, ᶜp) = p.precomputed
+    (; ᶜu, ᶜK, ᶜp, ᶜts) = p.precomputed  # Get thermodynamic state from precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)  # Get thermo params from params
+
     if p.atmos.turbconv_model isa AbstractEDMF
         if p.atmos.turbconv_model isa EDOnlyEDMFX
             ᶜu⁰ = ᶜu
@@ -43,7 +46,10 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
     end
 
-    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
+    # Inlined pressure gradient term using Exner pressure formulation
+    @. Yₜ.c.uₕ -= C12(TD.cp_m(thermo_params, ᶜts) * 
+                     TD.virtual_pottemp(thermo_params, ᶜts) * 
+                     gradₕ(TD.exner(thermo_params, ᶜts)) + gradₕ(ᶜK + ᶜΦ))
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end
