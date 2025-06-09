@@ -46,10 +46,10 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
     end
 
-    # Inlined pressure gradient term using Exner pressure formulation
+        # Inlined pressure gradient term using Exner pressure formulation (assuming ∇cp_m ≈ 0)
     @. Yₜ.c.uₕ -= C12(TD.cp_m(thermo_params, ᶜts) * 
-                     TD.virtual_pottemp(thermo_params, ᶜts) * 
-                     gradₕ(TD.exner(thermo_params, ᶜts)) + gradₕ(ᶜK + ᶜΦ))
+                      TD.virtual_pottemp(thermo_params, ᶜts) * 
+                      gradₕ(TD.exner(thermo_params, ᶜts)) + gradₕ(ᶜK + ᶜΦ))
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end
