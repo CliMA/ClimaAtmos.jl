@@ -182,8 +182,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     # TODO - decide if this needs to be explicit or implicit
     #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
-
-    # Vertical pressure gradient term using Exner pressure formulation (assuming ∇cp_m ≈ 0)
+    
     @. Yₜ.f.u₃ -= ᶠinterp(TD.cp_m(thermo_params, ᶜts) * TD.virtual_pottemp(thermo_params, ᶜts)) * 
                    ᶠgradᵥ(TD.exner(thermo_params, ᶜts)) + ᶠgradᵥ_ᶜΦ
 
