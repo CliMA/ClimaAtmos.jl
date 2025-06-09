@@ -41,7 +41,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_2
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
-        if χ_name in (:q_rai, :q_sno)
+        if χ_name in (:q_rai, :q_sno, :n_rai)
             @. ᶜK_h_scaled = α_vert_diff_tracer * ᶜK_h
         else
             @. ᶜK_h_scaled = ᶜK_h

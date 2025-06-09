@@ -552,13 +552,13 @@ add_diagnostic_variable!(
         if isnothing(out)
             return copy(
                 u_component.(
-                    Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1))
+                    Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1)),
                 ),
             )
         else
             out .=
                 u_component.(
-                    Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1))
+                    Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1)),
                 )
         end
     end,
@@ -577,13 +577,13 @@ add_diagnostic_variable!(
         if isnothing(out)
             return copy(
                 v_component.(
-                    Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1))
+                    Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1)),
                 ),
             )
         else
             out .=
                 v_component.(
-                    Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1))
+                    Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1)),
                 )
         end
     end,
@@ -707,6 +707,7 @@ function compute_pr!(
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
+        Microphysics2Moment,
     },
 )
     if isnothing(out)
@@ -742,6 +743,7 @@ function compute_prra!(
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
+        Microphysics2Moment,
     },
 )
     if isnothing(out)
@@ -774,6 +776,7 @@ function compute_prsn!(
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
+        Microphysics2Moment,
     },
 )
     if isnothing(out)
@@ -805,7 +808,7 @@ function compute_husra!(
     state,
     cache,
     time,
-    precip_model::Microphysics1Moment,
+    precip_model::Union{Microphysics1Moment, Microphysics2Moment},
 )
     if isnothing(out)
         return state.c.ρq_rai ./ state.c.ρ
@@ -836,7 +839,7 @@ function compute_hussn!(
     state,
     cache,
     time,
-    precip_model::Microphysics1Moment,
+    precip_model::Union{Microphysics1Moment, Microphysics2Moment},
 )
     if isnothing(out)
         return state.c.ρq_sno ./ state.c.ρ
@@ -855,6 +858,68 @@ add_diagnostic_variable!(
     the mass of air (dry air + water vapor + cloud condensate) in the grid cells.
     """,
     compute! = compute_hussn!,
+)
+
+compute_cdnc!(out, state, cache, time) =
+    compute_cdnc!(out, state, cache, time, cache.atmos.precip_model)
+compute_cdnc!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("cdnc", model)
+
+function compute_cdnc!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Microphysics2Moment,
+)
+    if isnothing(out)
+        return state.c.ρn_liq
+    else
+        out .= state.c.ρn_liq
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "cdnc",
+    long_name = "Cloud Liquid Droplet Number Concentration",
+    standard_name = "number_concentration_of_cloud_liquid_water_particles_in_air",
+    units = "m^-3",
+    comments = """
+    This is calculated as the number of cloud liquid water droplets in the grid 
+    cell divided by the cell volume.
+    """,
+    compute! = compute_cdnc!,
+)
+
+compute_ncra!(out, state, cache, time) =
+    compute_ncra!(out, state, cache, time, cache.atmos.precip_model)
+compute_ncra!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("ncra", model)
+
+function compute_ncra!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Microphysics2Moment,
+)
+    if isnothing(out)
+        return state.c.ρn_rai
+    else
+        out .= state.c.ρn_rai
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "ncra",
+    long_name = "Raindrop Number Concentration",
+    standard_name = "number_concentration_of_raindrops_in_air",
+    units = "m^-3",
+    comments = """
+    This is calculated as the number of raindrops in the grid cell divided
+    by the cell volume.
+    """,
+    compute! = compute_ncra!,
 )
 
 ###
@@ -1372,7 +1437,7 @@ function compute_cape!(out, state, cache, time)
                 cache.precomputed.ᶜp,
                 surface_θ_liq_ice,
                 surface_q,
-            )
+            ),
         )
 
     # Calculate virtual temperatures for parcel & environment

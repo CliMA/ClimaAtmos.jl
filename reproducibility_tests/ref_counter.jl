@@ -1,4 +1,4 @@
-243
+244
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+244
+- Add a new test case: aquaplanet with 2M microphysics
+
 243
 - Consolidate eddy diffusivity logic in eddy_diffusion_closures.jl and mass flux
   logic in mass_flux_closures.jl, update buoyancy calculations to be consistent throughout

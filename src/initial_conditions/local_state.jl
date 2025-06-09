@@ -102,14 +102,20 @@ struct NoPrecipState{FT} <: PrecipState{FT} end
 @inline Base.getproperty(::NoPrecipState{FT}, ::Symbol) where {FT} = FT(0)
 
 """
-    PrecipState1M(; q_rai, q_sno)
+    PrecipState2M(; q_rai, q_sno)
 
-Stores the values of `ρq_rai` and `ρq_sno` for the `precip_model`.
-If no values are provided, they are set to zero.
+
+Stores the values of `n_liq`, `n_rai`, `q_rai`, and `q_sno` for the `precip_model`.
+This struct includes both mass and number densities and can be used for initializing 
+precipitation states in both one-moment and two-moment microphysics schemes. 
+In one-moment schemes, the number densities (`n_liq`, `n_rai`) are ignored.
+If no values are provided, all fields are initialized to zero.
 """
-struct PrecipState1M{FT} <: PrecipState{FT}
+struct PrecipStateMassNum{FT} <: PrecipState{FT}
+    n_liq::FT
+    n_rai::FT
     q_rai::FT
     q_sno::FT
 end
-PrecipState1M(; q_rai = 0, q_sno = 0) =
-    PrecipState1M{typeof(q_rai)}(q_rai, q_sno)
+PrecipStateMassNum(; n_liq = 0, n_rai = 0, q_rai = 0, q_sno = 0) =
+    PrecipStateMassNum{typeof(q_rai)}(n_liq, n_rai, q_rai, q_sno)

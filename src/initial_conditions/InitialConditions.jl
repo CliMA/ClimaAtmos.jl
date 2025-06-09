@@ -7,6 +7,7 @@ import ..NonEquilMoistModel
 import ..NoPrecipitation
 import ..Microphysics0Moment
 import ..Microphysics1Moment
+import ..Microphysics2Moment
 import ..PrescribedSurfaceTemperature
 import ..PrognosticSurfaceTemperature
 import ..ᶜinterp

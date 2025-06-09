@@ -230,6 +230,19 @@ function default_diagnostics(
     return [average_func(precip_diagnostics...; output_writer, start_date)...]
 end
 
+function default_diagnostics(
+    ::Microphysics2Moment,
+    duration,
+    start_date;
+    output_writer,
+)
+    precip_diagnostics = ["husra", "hussn", "cdnc", "ncra"]
+
+    average_func = frequency_averages(duration)
+
+    return [average_func(precip_diagnostics...; output_writer, start_date)...]
+end
+
 ##################
 # Radiation mode #
 ##################

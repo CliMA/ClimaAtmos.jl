@@ -1203,6 +1203,8 @@ function (initial_condition::PrecipitatingColumn)(params)
     qₛ = prescribed_prof(FT, 5000, 8000, 2e-6)
     qₗ = prescribed_prof(FT, 4000, 5500, 2e-5)
     qᵢ = prescribed_prof(FT, 6000, 9000, 1e-5)
+    nₗ = prescribed_prof(FT, 4000, 5500, 1e7)
+    nᵣ = prescribed_prof(FT, 2000, 5000, 1e3)
     θ = APL.Rico_θ_liq_ice(FT)
     q_tot = APL.Rico_q_tot(FT)
     u = prescribed_prof(FT, 0, Inf, 0)
@@ -1222,7 +1224,12 @@ function (initial_condition::PrecipitatingColumn)(params)
             thermo_state = ts,
             velocity = Geometry.UVVector(u(z), v(z)),
             turbconv_state = nothing,
-            precip_state = PrecipState1M(; q_rai = qᵣ(z), q_sno = qₛ(z)),
+            precip_state = PrecipStateMassNum(;
+                n_liq = nₗ(z),
+                n_rai = nᵣ(z),
+                q_rai = qᵣ(z),
+                q_sno = qₛ(z),
+            ),
         )
     end
     return local_state

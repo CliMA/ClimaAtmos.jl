@@ -86,6 +86,13 @@ steps:
           --config_file $CONFIG_PATH/single_column_precipitation_test.yml
           --job_id single_column_precipitation_test
         artifact_paths: "single_column_precipitation_test/output_active/*"
+      
+      - label: ":umbrella: 2-moment precipitation sanity test single column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/single_column_precipitation_2M_test.yml
+          --job_id single_column_precipitation_2M_test
+        artifact_paths: "single_column_precipitation_2M_test/output_active/*"
 
   - group: "Gravity wave"
     steps:
@@ -363,6 +370,20 @@ steps:
           --job_id aquaplanet_nonequil_allsky_gw_res
           --out_dir aquaplanet_nonequil_allsky_gw_res/output_active
         artifact_paths: "aquaplanet_nonequil_allsky_gw_res/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
+      - label: ":umbrella: aquaplanet nonequil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 2-moment"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/aquaplanet_nonequil_allsky_gw_res_2M.yml
+          --job_id aquaplanet_nonequil_allsky_gw_res_2M
+
+          julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl
+          --job_id aquaplanet_nonequil_allsky_gw_res_2M
+          --out_dir aquaplanet_nonequil_allsky_gw_res_2M/output_active
+        artifact_paths: "aquaplanet_nonequil_allsky_gw_res_2M/output_active/*"
         agents:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
