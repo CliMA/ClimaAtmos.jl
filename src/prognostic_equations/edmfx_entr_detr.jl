@@ -528,11 +528,15 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
-    (; ᶜq_tot⁰, ᶜmse⁰, ᶠu₃⁰) = p.precomputed
+    (; ᶠu₃⁰) = p.precomputed
 
+    ᶜmse⁰ = @.lazy(specific_env_mse(Y.c, p))
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.microphysics_model isa Microphysics1Moment
-        (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
+        ᶜq_liq⁰ = @.lazy(specific_env_value(:q_liq, Y.c, turbconv_model))
+        ᶜq_ice⁰ = @.lazy(specific_env_value(:q_ice, Y.c, turbconv_model))
+        ᶜq_rai⁰ = @.lazy(specific_env_value(:q_rai, Y.c, turbconv_model))
+        ᶜq_sno⁰ = @.lazy(specific_env_value(:q_sno, Y.c, turbconv_model))
     end
 
     for j in 1:n
@@ -544,6 +548,7 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
             (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
             (ᶜmse⁰ - Y.c.sgsʲs.:($$j).mse)
 
+        ᶜq_tot⁰ = @.lazy(specific_env_value(:q_tot, Y.c, turbconv_model))
         @. Yₜ.c.sgsʲs.:($$j).q_tot +=
             (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
             (ᶜq_tot⁰ - Y.c.sgsʲs.:($$j).q_tot)
