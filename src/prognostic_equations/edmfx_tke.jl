@@ -44,8 +44,16 @@ function edmfx_tke_tendency!(
 )
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs, ᶠu³ʲs) = p.precomputed
-    (; ᶠu³⁰, ᶠu³, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰) = p.precomputed
-    (; ᶜK_u, ᶜK_h) = p.precomputed
+    (;
+        ᶠu³⁰,
+        ᶠu³,
+        ᶜstrain_rate_norm,
+        ᶜlinear_buoygrad,
+        ᶜtke⁰,
+        ᶜmixing_length,
+    ) = p.precomputed
+    turbconv_params = CAP.turbconv_params(p.params)
+
     ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
     nh_pressure3_buoyʲs =
         turbconv_model isa PrognosticEDMFX ?
@@ -68,6 +76,8 @@ function edmfx_tke_tendency!(
     end
 
     if use_prognostic_tke(turbconv_model)
+        ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
+        ᶜK_h = eddy_diffusivity(ᶜK_u, p.precomputed.ᶜPr)
         # shear production
         @. Yₜ.c.sgs⁰.ρatke += 2 * ᶜρa⁰ * ᶜK_u * ᶜstrain_rate_norm
         # buoyancy production

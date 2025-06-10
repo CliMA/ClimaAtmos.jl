@@ -729,8 +729,7 @@ Returns K_u in units of [m^2/s].
 function eddy_viscosity(turbconv_params, tke, mixing_length)
     FT = typeof(tke)
     c_m = CAP.tke_ed_coeff(turbconv_params)
-    K_u = c_m * mixing_length * sqrt(max(tke, FT(0)))
-    return K_u
+    return @. lazy(c_m * mixing_length * sqrt(max(tke, FT(0))))
 end
 
 """
@@ -743,7 +742,7 @@ Returns K_h in units of [m^2/s].
 """
 
 function eddy_diffusivity(K_u, prandtl_nvec)
-    return K_u / prandtl_nvec # prandtl_nvec is already bounded by eps_FT and Pr_max
+    return @. lazy(K_u / prandtl_nvec) # prandtl_nvec is already bounded by eps_FT and Pr_max
 end
 
 
@@ -757,6 +756,5 @@ Returns K_h in units of [m^2/s].
 """
 function eddy_diffusivity(turbconv_params, tke, mixing_length, prandtl_nvec)
     K_u = eddy_viscosity(turbconv_params, tke, mixing_length)
-    K_h = K_u / prandtl_nvec # prandtl_nvec is already bounded by eps_FT and Pr_max
-    return K_h
+    return @. lazy(K_u / prandtl_nvec)
 end

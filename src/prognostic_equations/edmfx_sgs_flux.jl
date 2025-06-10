@@ -347,10 +347,13 @@ function edmfx_sgs_diffusive_flux_tendency!(
     )
         (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
     end
-    (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
+    (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
+
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
+        ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
+        ᶜK_h = eddy_diffusivity(ᶜK_u, p.precomputed.ᶜPr)
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar

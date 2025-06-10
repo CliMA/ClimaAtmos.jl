@@ -173,8 +173,6 @@ function precomputed_quantities(Y, atmos)
         atmos.turbconv_model isa PrognosticEDMFX ?
         (;
             ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
-            ᶜK_u = similar(Y.c, FT),
-            ᶜK_h = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             bdmr_l = similar(Y.c, BidiagonalMatrixRow{FT}),
             bdmr_r = similar(Y.c, BidiagonalMatrixRow{FT}),

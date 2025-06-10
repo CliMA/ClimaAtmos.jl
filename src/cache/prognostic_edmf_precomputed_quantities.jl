@@ -373,8 +373,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜmixing_length,
         ᶜlinear_buoygrad,
         ᶜstrain_rate_norm,
-        ᶜK_u,
-        ᶜK_h,
         ρatke_flux,
     ) = p.precomputed
     (;
@@ -532,9 +530,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     )
 
     @. ᶜmixing_length = ᶜmixing_length_tuple.master
-
-    @. ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
-    @. ᶜK_h = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
     ρa_sfc_values = Fields.field_values(Fields.level(ᶜρa⁰, 1)) # TODO: replace by surface value
