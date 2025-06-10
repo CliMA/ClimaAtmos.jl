@@ -1,4 +1,30 @@
+"""
+    hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 
+Orchestrates the calculation and application of hyperdiffusion tendencies to the
+state vector `Y`.
+
+This function follows a sequence:
+1. Prepares hyperdiffusion tendencies for tracers (stored in `Yₜ_lim`).
+2. Prepares hyperdiffusion tendencies for other state variables (e.g., momentum, energy, stored in `Yₜ`).
+3. If Direct Stiffness Summation (DSS) is required and hyperdiffusion is active, performs DSS on the 
+   prepared hyperdiffusion tendencies.
+4. Applies the (potentially DSSed) hyperdiffusion tendencies to `Yₜ_lim` and `Yₜ`.
+
+The distinction between `Yₜ` and `Yₜ_lim` allows for separate handling, often
+because tracers might be subject to limiters applied via `Yₜ_lim`.
+
+Arguments:
+- `Yₜ`: The main tendency state vector, modified in place.
+- `Yₜ_lim`: The tendency state vector for tracers (often subject to limiters), modified in place.
+- `Y`: The current state vector.
+- `p`: Cache containing parameters, atmospheric model configuration (e.g., `p.atmos.hyperdiff`),
+       and data for DSS.
+- `t`: Current simulation time.
+
+Helper functions `prep_..._tendency!`, `dss_hyperdiffusion_tendency_pairs`,
+and `apply_..._tendency!` implement the specific details of hyperdiffusion.
+"""
 NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     prep_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
     prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
@@ -36,7 +62,8 @@ end
 
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
-    (; ᶜh_tot, ᶜspecific) = p.precomputed
+    (; ᶜh_tot) = p.precomputed
+    ᶜspecific = all_specific_gs(Y.c)
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
     ᶜρ = Y.c.ρ

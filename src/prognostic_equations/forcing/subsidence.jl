@@ -22,12 +22,38 @@ subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:none}) =
 subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:first_order}) =
     @. ᶜρχₜ -= ᶜρ * (ᶜsubdivᵥ(ᶠupwind1(ᶠu³, ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³))
 subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:third_order}) =
-    @. ᶜρχₜ -= ᶜρ * (ᶜsubdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³))
+    @. ᶜρχₜ -= ᶜρ * (ᶜsubdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³)) # 3rd-order upwind ρ * (-w * ∂χ/∂z)
 
-function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
+
+"""
+    subsidence_tendency!(Yₜ, Y, p, t, subsidence_model::Subsidence)
+
+Applies subsidence tendencies to total energy (`ρe_tot`), total specific humidity
+(`ρq_tot`), and other moisture species (`ρq_liq`, `ρq_ice`) if a `NonEquilMoistModel`
+is used.
+
+The subsidence velocity profile `w_sub(z)` is obtained from `subsidence_model.prof`.
+This profile is used to construct a face-valued vertical velocity field `ᶠsubsidence³`.
+The `subsidence!` helper function is then called (currently with a first-order
+upwind scheme) to compute and apply the vertical advective tendency for each relevant 
+scalar quantity `χ`.
+
+Arguments:
+- `Yₜ`: The tendency state vector, modified in place.
+- `Y`: The current state vector, used for density (`ρ`).
+- `p`: Cache containing parameters, precomputed fields (`ᶜh_tot`),
+       and the subsidence model object.
+- `t`: Current simulation time.
+- `subsidence`: The subsidence model object, containing the prescribed vertical
+              velocity profile `Dᵥ`.
+"""
+function subsidence_tendency!(Yₜ, Y, p, t, subsidence::Subsidence)
+    (; Dᵥ) = subsidence
+    (; ᶜh_tot) = p.precomputed
+    ᶜρ = Y.c.ρ
     (; moisture_model) = p.atmos
     subsidence_profile = p.atmos.subsidence.prof
-    (; ᶜh_tot, ᶜspecific) = p.precomputed
+    (; ᶜh_tot) = p.precomputed
 
     ᶠz = Fields.coordinate_field(axes(Y.f)).z
     ᶠlg = Fields.local_geometry_field(Y.f)
@@ -41,7 +67,7 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
         Yₜ.c.ρq_tot,
         Y.c.ρ,
         ᶠsubsidence³,
-        ᶜspecific.q_tot,
+        specific(Y.c.ρq_tot, Y.c.ρ),
         Val{:first_order}(),
     )
     if moisture_model isa NonEquilMoistModel
@@ -49,14 +75,14 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
             Yₜ.c.ρq_liq,
             Y.c.ρ,
             ᶠsubsidence³,
-            ᶜspecific.q_liq,
+            specific(Y.c.ρq_liq, Y.c.ρ),
             Val{:first_order}(),
         )
         subsidence!(
             Yₜ.c.ρq_ice,
             Y.c.ρ,
             ᶠsubsidence³,
-            ᶜspecific.q_ice,
+            specific(Y.c.ρq_ice, Y.c.ρ),
             Val{:first_order}(),
         )
     end

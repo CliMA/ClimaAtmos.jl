@@ -224,10 +224,11 @@ function set_precipitation_cache!(
     ::PrognosticEDMFX,
 )
     (; ᶜΦ) = p.core
-    (; ᶜSqₜᵖ⁰, ᶜSqₜᵖʲs, ᶜρa⁰) = p.precomputed
+    (; ᶜSqₜᵖ⁰, ᶜSqₜᵖʲs) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
     (; ᶜts⁰, ᶜtsʲs) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
@@ -254,7 +255,8 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     (; ᶜts, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
 
-    (; q_rai, q_sno) = p.precomputed.ᶜspecific
+    q_rai = specific(Y.c.ρq_rai, Y.c.ρ)
+    q_sno = specific(Y.c.ρq_sno, Y.c.ρ)
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
@@ -322,7 +324,10 @@ function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
     (; ᶜSnₗᵖ, ᶜSnᵣᵖ) = p.precomputed
 
-    (; q_liq, q_rai, n_liq, n_rai) = p.precomputed.ᶜspecific
+    q_liq = specific(Y.c.ρq_liq, Y.c.ρ)
+    q_rai = specific(Y.c.ρq_rai, Y.c.ρ)
+    n_liq = specific(Y.c.ρn_liq, Y.c.ρ)
+    n_rai = specific(Y.c.ρn_rai, Y.c.ρ)
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜS₂ᵖ = p.scratch.ᶜtemp_scalar_2
@@ -418,7 +423,7 @@ function set_precipitation_surface_fluxes!(
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency,) = p.conservation_check
-    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜspecific) = p.precomputed
+    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ) = p.precomputed
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     sfc_J = Fields.level(ᶠJ, Fields.half)
@@ -432,19 +437,19 @@ function set_precipitation_surface_fluxes!(
 
     # Constant extrapolation to surface, consistent with simple downwinding
     sfc_qᵣ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_rai, 1)),
+        Fields.field_values(Fields.level(specific(Y.c.ρq_rai, Y.c.ρ), 1)),
         sfc_space,
     )
     sfc_qₛ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_sno, 1)),
+        Fields.field_values(Fields.level(specific(Y.c.ρq_sno, Y.c.ρ), 1)),
         sfc_space,
     )
     sfc_qₗ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_liq, 1)),
+        Fields.field_values(Fields.level(specific(Y.c.ρq_liq, Y.c.ρ), 1)),
         sfc_space,
     )
     sfc_qᵢ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_ice, 1)),
+        Fields.field_values(Fields.level(specific(Y.c.ρq_ice, Y.c.ρ), 1)),
         sfc_space,
     )
     sfc_wᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), sfc_space)
