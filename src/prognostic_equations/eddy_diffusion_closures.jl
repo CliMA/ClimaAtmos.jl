@@ -527,6 +527,41 @@ function mixing_length(
     return MixingLength{FT}(l_final, l_W, l_TKE, l_N, l_grid)
 end
 
+function master_mixing_length(    
+    params,
+    ustar,
+    ᶜz,
+    z_sfc,
+    ᶜdz,
+    sfc_tke,
+    ᶜN²_eff,
+    ᶜtke,
+    obukhov_length,
+    ᶜstrain_rate_norm,
+    ᶜPr,
+    ᶜtke_exch,
+    scale_blending_method,
+)
+
+    ᶜmixing_length_tuple = @. lazy(mixing_length(
+        params,
+        ustar,
+        ᶜz,
+        z_sfc,
+        ᶜdz,
+        max(sfc_tke, eps(FT)),
+        ᶜlinear_buoygrad,
+        max(ᶜtke⁰, 0),
+        obukhov_length,
+        ᶜstrain_rate_norm,
+        ᶜprandtl_nvec,
+        ᶜtke_exch,
+        scale_blending_method,
+    ))
+
+    return getproperty(ᶜmixing_length_tuple, :master)
+end
+
 """
     gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
@@ -729,7 +764,7 @@ Returns K_u in units of [m^2/s].
 function eddy_viscosity(turbconv_params, tke, mixing_length)
     FT = typeof(tke)
     c_m = CAP.tke_ed_coeff(turbconv_params)
-    return @. lazy(c_m * mixing_length * sqrt(max(tke, FT(0))))
+    return c_m * mixing_length * sqrt(max(tke, FT(0)))
 end
 
 """
@@ -742,7 +777,7 @@ Returns K_h in units of [m^2/s].
 """
 
 function eddy_diffusivity(K_u, prandtl_nvec)
-    return @. lazy(K_u / prandtl_nvec) # prandtl_nvec is already bounded by eps_FT and Pr_max
+    return K_u / prandtl_nvec # prandtl_nvec is already bounded by eps_FT and Pr_max
 end
 
 
@@ -756,5 +791,5 @@ Returns K_h in units of [m^2/s].
 """
 function eddy_diffusivity(turbconv_params, tke, mixing_length, prandtl_nvec)
     K_u = eddy_viscosity(turbconv_params, tke, mixing_length)
-    return @. lazy(K_u / prandtl_nvec)
+    return K_u / prandtl_nvec
 end

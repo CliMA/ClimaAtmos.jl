@@ -1287,10 +1287,20 @@ function compute_edt!(
     vert_diff::Nothing,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+
+    turbconv_params = CAP.turbconv_params(cache.params)   
+    (; ᶜmixing_length_tuple, ᶜtke⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed  
+
+    ᶜprandtl_nvec = @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
+
+    ᶜmixing_length = ᶜmixing_length_tuple.master
+
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length))
+    ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_h)
+        return copy(ᶜK_h)
     else
-        out .= cache.precomputed.ᶜK_h
+        out .= ᶜK_h
     end
 end
 
@@ -1342,10 +1352,15 @@ function compute_evu!(
     vert_diff::Nothing,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    turbconv_params = CAP.turbconv_params(cache.params)   
+    (; ᶜmixing_length_tuple, ᶜtke⁰) = cache.precomputed  
+    ᶜmixing_length = ᶜmixing_length_tuple.master
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length))
+
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_u)
+        return copy(ᶜK_u)
     else
-        out .= cache.precomputed.ᶜK_u
+        out .= ᶜK_u
     end
 end
 

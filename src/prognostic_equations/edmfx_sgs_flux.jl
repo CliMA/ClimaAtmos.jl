@@ -340,7 +340,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length) = p.precomputed
+    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm,) = p.precomputed
     if (
         p.atmos.moisture_model isa NonEquilMoistModel &&
         p.atmos.precip_model isa Microphysics1Moment
@@ -350,10 +350,13 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
-
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
-        ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
-        ᶜK_h = eddy_diffusivity(ᶜK_u, p.precomputed.ᶜPr)
+        ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
+        @. ᶜprandtl_nvec =
+            turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+
+        ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length))
+        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar

@@ -30,15 +30,15 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     end
 
     @. ᶜρa⁰ = ρa⁰(Y.c)
-    @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
-    @. ᶜmse⁰ = divide_by_ρa(
+    @. ᶜtke⁰ = specific(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
+    @. ᶜmse⁰ = specific(
         Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
         ᶜρa⁰,
         Y.c.ρ * (ᶜh_tot - ᶜK),
         Y.c.ρ,
         turbconv_model,
     )
-    @. ᶜq_tot⁰ = divide_by_ρa(
+    @. ᶜq_tot⁰ = specific(
         Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
         ᶜρa⁰,
         Y.c.ρq_tot,
@@ -47,28 +47,28 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     )
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.precip_model isa Microphysics1Moment
-        @. ᶜq_liq⁰ = divide_by_ρa(
+        @. ᶜq_liq⁰ = specific(
             Y.c.ρq_liq - ρaq_liq⁺(Y.c.sgsʲs),
             ᶜρa⁰,
             Y.c.ρq_liq,
             Y.c.ρ,
             turbconv_model,
         )
-        @. ᶜq_ice⁰ = divide_by_ρa(
+        @. ᶜq_ice⁰ = specific(
             Y.c.ρq_ice - ρaq_ice⁺(Y.c.sgsʲs),
             ᶜρa⁰,
             Y.c.ρq_ice,
             Y.c.ρ,
             turbconv_model,
         )
-        @. ᶜq_rai⁰ = divide_by_ρa(
+        @. ᶜq_rai⁰ = specific(
             Y.c.ρq_rai - ρaq_rai⁺(Y.c.sgsʲs),
             ᶜρa⁰,
             Y.c.ρq_rai,
             Y.c.ρ,
             turbconv_model,
         )
-        @. ᶜq_sno⁰ = divide_by_ρa(
+        @. ᶜq_sno⁰ = specific(
             Y.c.ρq_sno - ρaq_sno⁺(Y.c.sgsʲs),
             ᶜρa⁰,
             Y.c.ρq_sno,
@@ -369,8 +369,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
     (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
     (;
-        ᶜmixing_length_tuple,
-        ᶜmixing_length,
+        # ᶜmixing_length_tuple,
+        # ᶜmixing_length,
         ᶜlinear_buoygrad,
         ᶜstrain_rate_norm,
         ρatke_flux,
@@ -513,23 +513,22 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     end
 
     sfc_tke = Fields.level(ᶜtke⁰, 1)
-    @. ᶜmixing_length_tuple = mixing_length(
-        p.params,
-        ustar,
-        ᶜz,
-        z_sfc,
-        ᶜdz,
-        max(sfc_tke, eps(FT)),
-        ᶜlinear_buoygrad,
-        max(ᶜtke⁰, 0),
-        obukhov_length,
-        ᶜstrain_rate_norm,
-        ᶜprandtl_nvec,
-        ᶜtke_exch,
-        p.atmos.edmfx_model.scale_blending_method,
-    )
-
-    @. ᶜmixing_length = ᶜmixing_length_tuple.master
+ 
+    # ᶜmixing_length = @. lazy(master_mixing_length(
+    #         p.params,
+    #         ustar,
+    #         ᶜz,
+    #         z_sfc,
+    #         ᶜdz,
+    #         max(sfc_tke, eps(FT)),
+    #         ᶜlinear_buoygrad,
+    #         max(ᶜtke⁰, 0),
+    #         obukhov_length,
+    #         ᶜstrain_rate_norm,
+    #         ᶜprandtl_nvec,
+    #         ᶜtke_exch,
+    #         p.atmos.edmfx_model.scale_blending_method,
+    #     ))
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
     ρa_sfc_values = Fields.field_values(Fields.level(ᶜρa⁰, 1)) # TODO: replace by surface value

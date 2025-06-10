@@ -172,7 +172,7 @@ function precomputed_quantities(Y, atmos)
     advective_sgs_quantities =
         atmos.turbconv_model isa PrognosticEDMFX ?
         (;
-            ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
+            # ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             bdmr_l = similar(Y.c, BidiagonalMatrixRow{FT}),
             bdmr_r = similar(Y.c, BidiagonalMatrixRow{FT}),
@@ -192,7 +192,6 @@ function precomputed_quantities(Y, atmos)
         (;
             ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
             ᶜtke⁰ = similar(Y.c, FT),
-            ᶜK_u = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             ᶜK_h = similar(Y.c, FT),
         ) : (;)
@@ -396,34 +395,34 @@ function thermo_state(
     return get_ts(ρ, p, θ, e_int, q_tot, q_pt)
 end
 
-function thermo_vars(moisture_model, precip_model, specific, K, Φ)
-    energy_var = (; e_int = specific.e_tot - K - Φ)
+function thermo_vars(moisture_model, precip_model, ᶜY, K, Φ)
+    energy_var = (; e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ)
     moisture_var = if moisture_model isa DryModel
         (;)
     elseif moisture_model isa EquilMoistModel
-        (; specific.q_tot)
+        (; q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ))
     elseif moisture_model isa NonEquilMoistModel
         q_pt_args = (
-            specific.q_tot,
-            specific.q_liq + specific.q_rai,
-            specific.q_ice + specific.q_sno,
+            q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ),
+            q_liq = specific(ᶜY.ρq_liq, ᶜY.ρ),
+            q_ice = specific(ᶜY.ρq_ice, ᶜY.ρ),
         )
         (; q_pt = TD.PhasePartition(q_pt_args...))
     end
     return (; energy_var..., moisture_var...)
 end
 
-ts_gs(thermo_params, moisture_model, precip_model, specific, K, Φ, ρ) =
+ts_gs(thermo_params, moisture_model, precip_model, ᶜY, K, Φ, ρ) =
     thermo_state(
         thermo_params;
-        thermo_vars(moisture_model, precip_model, specific, K, Φ)...,
+        thermo_vars(moisture_model, precip_model, ᶜY, K, Φ)...,
         ρ,
     )
 
-ts_sgs(thermo_params, moisture_model, precip_model, specific, K, Φ, p) =
+ts_sgs(thermo_params, moisture_model, precip_model, ᶜY, K, Φ, p) =
     thermo_state(
         thermo_params;
-        thermo_vars(moisture_model, precip_model, specific, K, Φ)...,
+        thermo_vars(moisture_model, precip_model, ᶜY, K, Φ)...,
         p,
     )
 
@@ -487,7 +486,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
+    @. ᶜts = ts_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
 
