@@ -50,8 +50,16 @@ function edmfx_tke_tendency!(
 )
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs, ᶠu³ʲs) = p.precomputed
-    (; ᶠu³⁰, ᶠu³, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰) = p.precomputed
-    (; ᶜK_u, ᶜK_h) = p.precomputed
+    (;
+        ᶠu³⁰,
+        ᶠu³,
+        ᶜstrain_rate_norm,
+        ᶜlinear_buoygrad,
+        ᶜtke⁰,
+    ) = p.precomputed
+    turbconv_params = CAP.turbconv_params(p.params)
+    FT = eltype(p.params)
+
     ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
     nh_pressure3_buoyʲs =
         turbconv_model isa PrognosticEDMFX ?
@@ -74,6 +82,46 @@ function edmfx_tke_tendency!(
     end
 
     if use_prognostic_tke(turbconv_model)
+        (; ustar, obukhov_length) = p.precomputed.sfc_conditions
+        (; params) = p
+
+        ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
+        @. ᶜprandtl_nvec =
+            turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+
+        sfc_tke = Fields.level(ᶜtke⁰, 1)
+        z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+        ᶜz = Fields.coordinate_field(Y.c).z
+        ᶜdz = Fields.Δz_field(axes(Y.c))
+
+        ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
+        @. ᶜtke_exch = 0
+        for j in 1:n
+            ᶠu³ʲ = ᶠu³ʲs.:($j)
+            @. ᶜtke_exch +=
+                Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / max(ᶜρa⁰, eps(FT)) *
+                (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
+        end
+        
+        ᶜmixing_length = @. lazy(master_mixing_length(
+            p.params,
+            ustar,
+            ᶜz,
+            z_sfc,
+            ᶜdz,
+            max(sfc_tke, eps(FT)),
+            ᶜlinear_buoygrad,
+            max(ᶜtke⁰, 0),
+            obukhov_length,
+            ᶜstrain_rate_norm,
+            ᶜprandtl_nvec,
+            ᶜtke_exch,
+            p.atmos.edmfx_model.scale_blending_method,
+        ))
+
+        ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length))
+        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+
         # shear production
         @. Yₜ.c.sgs⁰.ρatke += 2 * ᶜρa⁰ * ᶜK_u * ᶜstrain_rate_norm
         # buoyancy production

@@ -1,67 +1,101 @@
 """
+    specific(ρχ, ρ)
+    specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
+
+Calculates the specific quantity `χ` (per unit mass) from a density-weighted
+quantity. This function uses multiple dispatch to select the appropriate
+calculation method based on the number of arguments.
+
+**Grid-Scale Method (2 arguments)**
+
+    specific(ρχ, ρ)
+
+Performs a direct division of the density-weighted quantity `ρχ` by the density `ρ`.
+This method is used for grid-mean quantities where the density `ρ` is well-defined
+and non-zero.
+
+**SGS Regularized Method (5 arguments)**
+
+    specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
+
+Calculates the specific quantity `χ` for a subgrid-scale (SGS) component by
+dividing the density-area-weighted quantity `ρaχ` by the density-area
+product `ρa`.
+
+This method includes regularization to handle cases where the SGS area fraction
+(and thus `ρa`) is zero or vanishingly small. It performs a linear interpolation
+between the SGS specific quantity (`ρaχ / ρa`) and the grid-mean specific
+quantity (`ρχ / ρ`). The interpolation weight is computed by `sgs_weight_function`
+to ensure a smooth and numerically stable transition, preventing division by zero.
+Using this regularized version instead of directly computing `ρaχ / ρa` breaks the
+assumption of domain decomposition (sum of SGS domains equals GS) when the approximated 
+area fraction `a` is small.
+
+Arguments:
+- `ρχ`: The grid-mean density-weighted quantity (e.g., `ρe_tot`, `ρq_tot`).
+- `ρ`: The grid-mean density.
+- `ρaχ`: The density-area-weighted SGS quantity (e.g., `sgs.ρa * sgs.h_tot`).
+- `ρa`: The density-area product of the SGS component.
+- `ρχ_fallback`: The grid-mean density-weighted quantity used for the fallback value.
+- `ρ_fallback`: The grid-mean density used for the fallback value.
+- `turbconv_model`: The turbulence convection model, containing parameters for regularization (e.g., `a_half`).
+"""
+function specific(ρχ, ρ)
+    return ρχ / ρ 
+end
+
+function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
+    # TODO: Replace turbconv_model struct by parameters, and include a_half in 
+    # parameters, not in config
+    weight = sgs_weight_function(ρa / ρ, turbconv_model.a_half)
+    # If ρa is exactly zero, the weight function will be zero, causing the first
+    # term to be NaN (0 * ... / 0). The ifelse handles this case explicitly.
+    return ρa == 0 ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
+end
+
+"""
     sgs_weight_function(a, a_half)
 
-Computes the weight of the SGS variables in the linear interpolation used in
-`divide_by_ρa`. This is a continuously differentiable and monotonically
-increasing function of `a` that is equal to 0 when `a ≤ 0`, is equal to 1 when
-`a ≥ 1`, is equal to `1 / 2` when `a = a_half`, grows very rapidly near
-`a = a_half`, and grows very slowly at all other values of `a`.  If `a_half` is
-sufficiently small, this function is essentially equal to 1 for all `a` more
-than a few times larger than `a_half` (up to floating-point precision).
+Computes a smooth, monotonic weight function `w(a)` that ranges from 0 to 1.
 
-We will now provide a description of how this function was constructed. We need
-the function to be equal to 0 when `a ≤ 0` and equal to 1 when `a ≥ 1`. Since
-the function must also be continuously differentiable, its derivative at these
-values of `a` has to be 0. To obtain a function with these properties, we use a
-piecewise definition:
-    - For all `a < 0`, the function is equal to 0.
-    - For all `a > 1`, the function is equal to 1.
-    - For all `0 ≤ a ≤ 1`, the function is a sigmoid that connects the point
-      `(0, 0)` to the point `(1, 1)`, with a derivative of 0 at these points.
-Most well-known sigmoid functions connect the "points" `(-Inf, 0)` and
-`(Inf, 1)`, not `(0, 0)` and `(1, 1)`. To obtain the desired sigmoid curve, we
-begin with two simple sigmoid functions that go from `(-Inf, 0)` to `(Inf, 1)`
-at different rates. In this case, we use two `tanh` functions, scaled and
-translated so that they lie between 0 and 1:
-    - `fast_sigmoid(a) = (1 + tanh(a)) / 2` and
-    - `slow_sigmoid(a) = (1 + tanh(a / 2)) / 2`.
-Note that the second sigmoid is commonly called the "logistic" function. We then
-take the inverse of the sigmoid that grows more slowly, and we make that the
-input of the sigmoid that grows more quickly:
-    - `sigmoid(a) = fast_sigmoid(slow_sigmoid⁻¹(a)) =
-       (1 + tanh(2 * atanh(2 * a - 1))) / 2`.
-The resulting function goes from `(0, 0)` to `(1, 1)`, and, since the outer
-sigmoid grows more quickly, it has the same asymptotic behavior as the outer
-sigmoid, which means that its derivative at the boundary points is 0. If we had
-instead put the sigmoid that grows more slowly on the outside, the asymptotic
-behavior would come from the inverted inner sigmoid, which means that the
-derivative at the boundary points would be `Inf`.
+This function is used as the interpolation weight in the regularized `specific`
+function. It ensures a numerically stable and smooth transition between a subgrid-scale 
+(SGS) quantity and its grid-mean counterpart, especially when the SGS area fraction `a` 
+is small.
 
-The sigmoid function we have constructed reaches `1 / 2` when `a = 1 / 2`. More
-generally, we need the weight function to reach `1 / 2` when `a` is some small
-value `a_half`. To achieve this, we replace the input to the sigmoid function
-with a smooth, monotonically increasing function that goes through `(0, 0)`,
-`(a_half, 1 / 2)`, and `(1, 1)`. The simplest option is the power function
-    - `power(a) = a^(-1 / log2(a_half))`.
-However, this function does not work well because, when `a_half < 1 / 2`, its
-derivative at `a = 0` is `Inf`, and its derivative at `a = 1` is some positive
-number. Making this power function the input to the sigmoid function causes the
-derivative of the sigmoid to become `Inf` at `a = 0` when `a_half < 1 / 4`, and
-it causes the sigmoid to grow too slowly from `1 / 2` to 1, only reaching 1 when
-`a` is significantly larger than `a_half`. In order to fix this, we transform
-the power function by replacing `a` with `1 - a`, `a_half` with `1 - a_half`,
-and `power(a)` with `1 - power(a)`, which gives us
-    - `power(a) = 1 - (1 - a)^(-1 / log2(1 - a_half))`.
-This transformed function works better because, when `a_half < 1 / 2`, its
-derivative at `a = 0` is some positive number, and its derivative at `a = 1` is
-0. When we make this the input to the sigmoid function, the result has a
-continuous derivative and is essentially equal to 1 for all `a` more than a few
-times larger than `a_half`. So, for all `0 ≤ a ≤ 1`, we define the weight
-function as
-    - `weight(a) = sigmoid(power(a)) =
-       (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2`.
+**Key Properties:**
+- `w(a) = 0` for `a ≤ 0`.
+- `w(a) = 1` for `a ≥ 1`.
+- `w(a_half) = 0.5`.
+- The function is continuously differentiable, with derivatives equal to zero at
+  `a = 0` and `a = 1`, which ensures smooth blending.
+- The functions grows very rapidly near `a = a_half`, and grows very slowly at all other 
+  values of `a`.
+- For small `a_half`, the weight rapidly approaches 1 for values of `a` that are
+  a few times larger than `a_half`.
+
+**Construction Method:**
+The function is piecewise. For `a` between 0 and 1, it is a custom sigmoid curve
+constructed in two main steps to satisfy the key properties:
+1.  **Bounded Sigmoid Creation**: A base sigmoid is created that maps the interval
+    `(0, 1)` to `(0, 1)` with zero derivatives at the endpoints. This is achieved
+    by composing a standard `tanh` function with the inverse of a slower-growing
+    `tanh` function.
+2.  **Midpoint Control**: To ensure the function passes through the control point
+    `(a_half, 0.5)`, the input `a` is first transformed by a specially designed
+    power function (`1 - (1 - a)^k`) before being passed to the bounded sigmoid.
+    This transformation maps `a_half` to `0.5` while preserving differentiability 
+    at the boundaries.
+
+Arguments:
+- `a`: The input SGS area fraction (often approximated as `ρa / ρ`).
+- `a_half`: The value of `a` at which the weight function should be 0.5, controlling
+          the transition point of the sigmoid curve.
+
+Returns:
+- The computed weight, a value between 0 and 1.
 """
-sgs_weight_function(a, a_half) =
+function sgs_weight_function(a, a_half)
     if a < 0
         zero(a)
     elseif a > 1
@@ -69,26 +103,6 @@ sgs_weight_function(a, a_half) =
     else
         (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2
     end
-
-"""
-    divide_by_ρa(ρaχ, ρa, ρχ, ρ, turbconv_model)
-
-Computes `ρaχ / ρa`, regularizing the result to avoid issues when `a` is small.
-This is done by performing a linear interpolation from `ρaχ / ρa` to `ρχ / ρ`,
-using `sgs_weight_function(ρa / ρ, turbconv_model.a_half)` as the weight of
-`ρaχ / ρa` in the interpolation. Note that `ρa / ρ` is the "anelastic
-approximation" of `a`; we cannot directly use `a` to compute the weight because
-this function needs to be called before `a` has been computed. Also, note that
-using this function instead of directly computing `ρaχ / ρa` breaks the
-assumption of domain decomposition when the approximated `a` is small.
-"""
-function divide_by_ρa(ρaχ, ρa, ρχ, ρ, turbconv_model)
-    weight = sgs_weight_function(ρa / ρ, turbconv_model.a_half)
-    # If ρa = 0, we know that ρa / ρ = 0, which means that weight = 0. However,
-    # 0 * ρaχ / 0 = NaN, regardless of what ρaχ is, so the linear interpolation
-    # will always return NaN when ρa = 0. To avoid this problem, we need to add
-    # a special case for ρa = 0.
-    return ρa == 0 ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
 end
 
 # Helper functions for manipulating symbols in the generated functions:
@@ -121,7 +135,7 @@ end
 Converts every variable of the form `ρaχ` in the sub-grid-scale state `sgs` into
 the specific variable `χ` by dividing it by `ρa`. All other variables in `sgs`
 are omitted from the result. The division is computed as
-`divide_by_ρa(ρaχ, ρa, ρχ, ρ, turbconv_model)`, which is preferable to simply
+`specific(ρaχ, ρa, ρχ, ρ, turbconv_model)`, which is preferable to simply
 calling `ρaχ / ρa` because it avoids numerical issues that arise when `a` is
 small. The values of `ρ` and `ρχ` are taken from `gs`, but, when `ρχ` is not
 available in `gs` (e.g., when `χ` is a second moment variable like `tke`), its
@@ -136,7 +150,7 @@ value is assumed to be equal to the value of `ρaχ` in `sgs`.
         map(name -> remove_prefix(name, :ρa), relevant_sgs_names)
     relevant_gs_names = map(name -> Symbol(:ρ, name), specific_sgs_names)
     specific_sgs_values = map(
-        (sgs_name, gs_name) -> :(divide_by_ρa(
+        (sgs_name, gs_name) -> :(specific(
             sgs.$sgs_name,
             sgs.ρa,
             $(gs_name in gs_names ? :(gs.$gs_name) : :(sgs.$sgs_name)),
@@ -260,7 +274,7 @@ are computed from the tuples of subdomain densities and velocities `ρaʲs` and
 `u₃ʲs`. The division is computed using `divide_by_ρa` to avoid issues when `a⁺`
 is small.
 """
-u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = divide_by_ρa(
+u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
     unrolled_dotproduct(ρaʲs, u₃ʲs),
     reduce(+, ρaʲs),
     ρ * u₃,
@@ -278,7 +292,7 @@ are computed from the domain decomposition of the grid-scale quantities `ρw` an
 environment quantities. The division is computed using `divide_by_ρa` to avoid
 issues when `a⁰` is small.
 """
-u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = divide_by_ρa(
+u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
     ρ * u₃ - unrolled_dotproduct(ρaʲs, u₃ʲs),
     ρ - reduce(+, ρaʲs),
     ρ * u₃,
