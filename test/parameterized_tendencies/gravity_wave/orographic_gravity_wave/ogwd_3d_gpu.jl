@@ -1,5 +1,7 @@
 using ClimaCore:
-    Fields, Geometry, Domains, Meshes, Topologies, Spaces, Operators, DataLayouts
+    Fields, Geometry, Domains, Meshes, Topologies, Spaces, Operators, DataLayouts, Utilities
+using ClimaCore
+using ClimaCore.CommonSpaces
 using NCDatasets
 import ClimaAtmos
 import ClimaAtmos as CA
@@ -10,6 +12,8 @@ using ClimaCoreTempestRemap
 
 import Interpolations
 
+using CUDA
+
 const FT = Float64
 include(
     joinpath(pkgdir(ClimaAtmos), "post_processing/remap", "remap_helpers.jl"),
@@ -17,6 +21,10 @@ include(
 include("../gw_plotutils.jl")
 
 comms_ctx = ClimaComms.SingletonCommsContext()
+# comms_ctx = ClimaComms.SingletonCommsContext(ClimaComms.CUDADevice())
+@show CUDA.functional()
+@show ClimaComms.device(comms_ctx)
+
 (; config_file, job_id) = CA.commandline_kwargs()
 config = CA.AtmosConfig(config_file; job_id, comms_ctx)
 
@@ -90,11 +98,11 @@ quad = Quadratures.GLL{nh_poly + 1}()
 horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
 h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
 z_stretch = Meshes.HyperbolicTangentStretching(dz_bottom)
-center_space, face_space =
+ᶜspace, ᶠspace =
     CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
 
-ᶜlocal_geometry = Fields.local_geometry_field(center_space)
-ᶠlocal_geometry = Fields.local_geometry_field(face_space)
+ᶜlocal_geometry = Fields.local_geometry_field(ᶜspace)
+ᶠlocal_geometry = Fields.local_geometry_field(ᶠspace)
 
 # interpolation functions
 function ᶜinterp_latlon2cg(lon, lat, datain, ᶜlocal_geometry)
@@ -184,7 +192,72 @@ epsilon = 0.622
 
 # Initialize cache vars for orographic gravity wave
 ogw = CA.FullOrographicGravityWave{FT, String}()
-p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
+
+topo_info = CA.get_topo_info(Y, ogw)
+
+Y = ClimaCore.to_device(ClimaComms.CUDADevice(), copy(Y))
+
+# pre-compute thermal vars
+thermo_params = CA.TD.Parameters.ThermodynamicsParameters(FT)
+
+thermo_params = ClimaCore.to_device(ClimaComms.CUDADevice(), thermo_params)
+
+ᶜT_cpu = gfdl_ca_temp
+ᶜp_cpu = gfdl_ca_p
+
+ᶜp = similar(Y.c.T)
+ᶜT = similar(Y.c.T)
+
+parent(ᶜp) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(ᶜp_cpu)))
+parent(ᶜT) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(ᶜT_cpu)))
+
+# ᶜts_cpu = similar(Y.c, CA.TD.PhaseEquil{FT})
+# @. ᶜts_cpu = CA.TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, ᶜp_cpu, Y.c.qt)
+# cp_m_out_cpu = @. CA.TD.cp_m(thermo_params, ᶜts_cpu)
+
+t11 = similar(Fields.level(Y.c.ρ, 1))
+t12 = similar(Fields.level(Y.c.ρ, 1))
+t21 = similar(Fields.level(Y.c.ρ, 1))
+t22 = similar(Fields.level(Y.c.ρ, 1))
+hmin = similar(Fields.level(Y.c.ρ, 1))
+hmax = similar(Fields.level(Y.c.ρ, 1))
+
+parent(t11) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.t11)))
+parent(t12) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.t12)))
+parent(t21) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.t21)))
+parent(t22) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.t22)))
+parent(hmin) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.hmin)))
+parent(hmax) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.hmax)))
+# )
+
+topo_info = (; 
+    t11 = t11,
+    t12 = t12,
+    t21 = t21,
+    t22 = t22,
+    hmin = hmin,
+    hmax = hmax,
+)
+
+
+# move cache to the GPU
+# topo_info = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info)
+# ogw = ClimaCore.to_device(ClimaComms.CUDADevice(), ogw)
+# Y = ClimaCore.to_device(ClimaComms.CUDADevice(), copy(Y))
+# topo_info = Fields.Field(ClimaCore.to_device(ClimaComms.CUDADevice(), Fields.field_values(topo_info)), axes(Y.c))
+
+# initialize GPU thermodynamics vars
+# ᶜts = similar(Y.c)
+cp_m_out = similar(Y.c)
+ᶜts = similar(Y.c, CA.TD.PhaseEquil{FT})
+@. ᶜts = CA.TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, ᶜp, Y.c.qt)
+# @. cp_m_out = CA.TD.cp_m(thermo_params, ᶜts)
+
+# Moving the thermodynamics parameters to the GPU
+# parent(ᶜts) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(ᶜts_cpu)))
+# parent(cp_m_out) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(cp_m_out_cpu)))
+
+p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info))
 
 (; topo_k_pbl, topo_z_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
     p.orographic_gravity_wave
@@ -197,13 +270,17 @@ p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
 (; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
 (; ᶜdTdz) = p.orographic_gravity_wave
 
-# pre-compute thermal vars
-thermo_params = CA.TD.Parameters.ThermodynamicsParameters(FT)
-
-ᶜT = gfdl_ca_temp
-ᶜp = gfdl_ca_p
-ᶜts = similar(Y.c, CA.TD.PhaseEquil{FT})
-@. ᶜts = CA.TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, ᶜp, Y.c.qt)
+# Extract parameters once and pack into tuple
+ogw_params = (;
+    Fr_crit = p.orographic_gravity_wave.Fr_crit,
+    topo_ρscale = p.orographic_gravity_wave.topo_ρscale,
+    topo_L0 = p.orographic_gravity_wave.topo_L0,
+    topo_a0 = p.orographic_gravity_wave.topo_a0,
+    topo_a1 = p.orographic_gravity_wave.topo_a1,
+    topo_γ = p.orographic_gravity_wave.topo_γ,
+    topo_β = p.orographic_gravity_wave.topo_β,
+    topo_ϵ = p.orographic_gravity_wave.topo_ϵ,
+)
 
 # operators
 ᶜgradᵥ = Operators.GradientF2C()
@@ -217,8 +294,8 @@ thermo_params = CA.TD.Parameters.ThermodynamicsParameters(FT)
 ᶠz = Fields.coordinate_field(Y.f).z
 
 # get PBL info
-topo_k_pbl .= CA.get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
-topo_z_pbl .= CA.get_pbl_z(ᶜp, ᶜT, ᶜz, grav, cp_d)
+topo_k_pbl .= CA.get_pbl(ᶜp, ᶜT, copy(ᶜz), grav, cp_d)
+topo_z_pbl .= CA.get_pbl_z(ᶜp, ᶜT, copy(ᶜz), grav, cp_d)
 
 # buoyancy frequency at cell centers
 parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
@@ -228,10 +305,6 @@ parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
 # prepare physical uv input variables for gravity_wave_forcing()
 u_phy = Y.c.u_phy
 v_phy = Y.c.v_phy
-
-# 
-k_pbl_int = trunc.(topo_k_pbl)
-
 
 ᶠp = ᶠinterp.(ᶜp)
 ᶠp_m1 = similar(ᶠp)
@@ -262,6 +335,9 @@ Boundary_value = Fields.Field(
 
 CA.field_shiftface_down!(ᶠp, ᶠp_m1, Boundary_value)
 
+# buoyancy frequency at cell faces
+ᶠN = ᶠinterp.(ᶜN) # alternatively, can be computed from ᶠT and ᶠdTdz
+
 # compute base flux at k_pbl
 CA.calc_base_flux!(
     topo_τ_x,
@@ -277,23 +353,20 @@ CA.calc_base_flux!(
     topo_base_Vτ,
     topo_tmp_1,
     topo_tmp_2,
-    p,
+    ogw_params,
     hmax,
     hmin,
     t11,
     t12,
     t21,
     t22,
-    Y.c.ρ,
+    copy(Y.c.ρ),
     u_phy,
     v_phy,
     ᶜN,
     topo_z_pbl,
     topo_k_pbl_values
 )
-
-# buoyancy frequency at cell faces
-ᶠN = ᶠinterp.(ᶜN) # alternatively, can be computed from ᶠT and ᶠdTdz
 
 CA.calc_saturation_profile!(
     topo_ᶜτ_sat,
@@ -303,7 +376,7 @@ CA.calc_saturation_profile!(
     topo_FrU_clp,
     topo_ᶜVτ,
     topo_ᶠVτ,
-    p,
+    ogw_params,
     topo_FrU_max,
     topo_FrU_min,
     ᶜN,
@@ -312,7 +385,7 @@ CA.calc_saturation_profile!(
     topo_τ_p,                   
     u_phy,
     v_phy,
-    Y.c.ρ,
+    copy(Y.c.ρ),
     ᶜp,
     topo_z_pbl,
     topo_d2Vτdz,
@@ -333,27 +406,8 @@ CA.calc_propagate_forcing!(
     topo_τ_y,
     topo_τ_l,
     topo_ᶠτ_sat,
-    Y.c.ρ,
+    copy(Y.c.ρ),
 )
-
-# compute drag tendencies due to non-propagating part
-# Fields.bycolumn(axes(Y.c.ρ)) do colidx
-#     CA.calc_nonpropagating_forcing!(
-#         uforcing[colidx],
-#         vforcing[colidx],
-#         ᶠN[colidx],
-#         topo_ᶠVτ[colidx],
-#         ᶜp[colidx],
-#         topo_τ_x[colidx],
-#         topo_τ_y[colidx],
-#         topo_τ_l[colidx],
-#         topo_τ_np[colidx],
-#         ᶠz[colidx],
-#         ᶜz[colidx],
-#         Int(parent(topo_k_pbl[colidx])[1]),
-#         grav,
-#     )
-# end
 
 CA.calc_nonpropagating_forcing!(
     uforcing,
