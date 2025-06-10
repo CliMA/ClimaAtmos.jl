@@ -56,8 +56,15 @@ import ..SlabOceanSST
 
 # functions used to calculate diagnostics
 import ..draft_area
-import ..compute_gm_mixing_length!
+import ..compute_gm_mixing_length
 import ..horizontal_integral_at_boundary
+import ..ᶜmixing_length
+import ..eddy_diffusivity
+import ..eddy_viscosity
+import ..turbulent_prandtl_number
+import ..smagorinsky_lilly_length
+import ..ᶜcompute_eddy_diffusivity_coefficient
+
 
 # We need the abbreviations for symbols like curl, grad, and so on
 include(joinpath("..", "utils", "abbreviations.jl"))

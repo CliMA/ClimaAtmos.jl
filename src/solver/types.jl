@@ -346,6 +346,11 @@ struct MixingLength{FT}
     l_grid::FT
 end
 
+function MixingLength(master, wall, tke, buoy, l_grid)
+    return MixingLength(promote(master, wall, tke, buoy, l_grid)...)
+end
+
+
 abstract type AbstractEDMF end
 
 """

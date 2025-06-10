@@ -1,4 +1,4 @@
-248
+249
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+249
+- Remove viscosity, diffusivity, and mixing length from precomputed quantities
+
 248
 - update deps: climacore 0.14.35
 
