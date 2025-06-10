@@ -109,8 +109,13 @@ end
 function moisture_variables(ls, ::EquilMoistModel)
     @assert !(ls.thermo_state isa TD.AbstractPhaseNonEquil)
     return (;
-        ρq_tot = ls.ρ *
-                 TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
+        #ρq_tot = ls.ρ *
+        #         TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
+        ρq_tot = ls.ρ * 
+                 TD.q_vap_from_RH_liquid(ls.thermo_params, 
+                                         TD.air_pressure(ls.thermo_params, ls.thermo_state), 
+                                         TD.air_temperature(ls.thermo_params, ls.thermo_state), 
+                                         FT(0.3))
     )
 end
 moisture_variables(ls, ::NonEquilMoistModel) = (;
