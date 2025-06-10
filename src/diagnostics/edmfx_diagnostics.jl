@@ -1176,10 +1176,12 @@ function compute_lmixw!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    ᶜwall_mixing_length = ᶜmixing_length(state, cache, Val(:wall))
+
     if isnothing(out)
-        return copy(cache.precomputed.ᶜmixing_length_tuple.wall)
+        return Base.materialize(ᶜwall_mixing_length)
     else
-        out .= cache.precomputed.ᶜmixing_length_tuple.wall
+        out .= ᶜwall_mixing_length
     end
 end
 
@@ -1205,10 +1207,13 @@ function compute_lmixtke!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+
+    ᶜtke_mixing_length = ᶜmixing_length(state, cache, Val(:tke))
+
     if isnothing(out)
-        return copy(cache.precomputed.ᶜmixing_length_tuple.tke)
+        return Base.materialize(ᶜtke_mixing_length)
     else
-        out .= cache.precomputed.ᶜmixing_length_tuple.tke
+        out .= ᶜtke_mixing_length
     end
 end
 
@@ -1234,10 +1239,12 @@ function compute_lmixb!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    ᶜbuoy_mixing_length = ᶜmixing_length(state, cache, Val(:buoy))
+
     if isnothing(out)
-        return copy(cache.precomputed.ᶜmixing_length_tuple.buoy)
+        return Base.materialize(ᶜbuoy_mixing_length)
     else
-        out .= cache.precomputed.ᶜmixing_length_tuple.buoy
+        out .= ᶜbuoy_mixing_length
     end
 end
 
@@ -1272,10 +1279,18 @@ function compute_edt!(
     vert_diff::Union{VerticalDiffusion, DecayWithHeightDiffusion},
     turbconv_model::Nothing,
 )
+    (; vert_diff) = cache.atmos
+    (; ᶜp) = cache.precomputed
+
+    if vert_diff isa DecayWithHeightDiffusion
+        ᶜK_h = compute_eddy_diffusivity_coefficient(state.c.ρ, vert_diff)
+    elseif vert_diff isa VerticalDiffusion
+        ᶜK_h = compute_eddy_diffusivity_coefficient(state.c.uₕ, ᶜp, vert_diff)
+    end
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_h)
+        return copy(ᶜK_h)
     else
-        out .= cache.precomputed.ᶜK_h
+        out .= ᶜK_h
     end
 end
 
@@ -1287,10 +1302,16 @@ function compute_edt!(
     vert_diff::Nothing,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    turbconv_params = CAP.turbconv_params(cache.params)
+    (; ᶜtke⁰) = cache.precomputed
+
+    ᶜmixing_length_field = ᶜmixing_length(state, cache)
+    ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+    ᶜK_h = ᶜeddy_diffusivity(cache, ᶜK_u)
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_h)
+        return Base.materialize(ᶜK_h)
     else
-        out .= cache.precomputed.ᶜK_h
+        out .= ᶜK_h
     end
 end
 
@@ -1327,10 +1348,19 @@ function compute_evu!(
     vert_diff::Union{VerticalDiffusion, DecayWithHeightDiffusion},
     turbconv_model::Nothing,
 )
+    (; vert_diff) = cache.atmos
+    (; ᶜp) = cache.precomputed
+
+    # this setup assumes ᶜK_u = ᶜK_h
+    if vert_diff isa DecayWithHeightDiffusion
+        ᶜK_u = compute_eddy_diffusivity_coefficient(state.c.ρ, vert_diff)
+    elseif vert_diff isa VerticalDiffusion
+        ᶜK_u = compute_eddy_diffusivity_coefficient(state.c.uₕ, ᶜp, vert_diff)
+    end
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_u)
+        return copy(ᶜK_u)
     else
-        out .= cache.precomputed.ᶜK_u
+        out .= ᶜK_u
     end
 end
 
@@ -1342,10 +1372,15 @@ function compute_evu!(
     vert_diff::Nothing,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    turbconv_params = CAP.turbconv_params(cache.params)
+    (; ᶜtke⁰) = cache.precomputed
+    ᶜmixing_length_field = ᶜmixing_length(state, cache)
+    ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_u)
+        return Base.materialize(ᶜK_u)
     else
-        out .= cache.precomputed.ᶜK_u
+        out .= ᶜK_u
     end
 end
 
