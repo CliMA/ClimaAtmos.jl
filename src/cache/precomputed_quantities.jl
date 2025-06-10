@@ -113,7 +113,6 @@ function precomputed_quantities(Y, atmos)
     gs_quantities = (;
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
-        ᶜmixing_length = similar(Y.c, FT),
         ᶜlinear_buoygrad = similar(Y.c, FT),
         ᶜstrain_rate_norm = similar(Y.c, FT),
         sfc_conditions = similar(Spaces.level(Y.f, half), SCT),
@@ -172,9 +171,6 @@ function precomputed_quantities(Y, atmos)
     advective_sgs_quantities =
         atmos.turbconv_model isa PrognosticEDMFX ?
         (;
-            ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
-            ᶜK_u = similar(Y.c, FT),
-            ᶜK_h = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             bdmr_l = similar(Y.c, BidiagonalMatrixRow{FT}),
             bdmr_r = similar(Y.c, BidiagonalMatrixRow{FT}),
@@ -192,11 +188,8 @@ function precomputed_quantities(Y, atmos)
     edonly_quantities =
         atmos.turbconv_model isa EDOnlyEDMFX ?
         (;
-            ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
             ᶜtke⁰ = similar(Y.c, FT),
-            ᶜK_u = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
-            ᶜK_h = similar(Y.c, FT),
         ) : (;)
 
     sgs_quantities = (;
@@ -224,20 +217,10 @@ function precomputed_quantities(Y, atmos)
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶜK⁰ = similar(Y.c, FT),
-            ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
-            ᶜK_u = similar(Y.c, FT),
-            ᶜK_h = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             precipitation_sgs_quantities...,
         ) : (;)
-    vert_diff_quantities =
-        if atmos.vert_diff isa
-           Union{VerticalDiffusion, DecayWithHeightDiffusion}
-            ᶜK_h = similar(Y.c, FT)
-            (; ᶜK_u = ᶜK_h, ᶜK_h) # ᶜK_u aliases ᶜK_h because they are always equal.
-        else
-            (;)
-        end
+
     smagorinsky_lilly_quantities =
         if atmos.smagorinsky_lilly isa SmagorinskyLilly
             uvw_vec = UVW(FT(0), FT(0), FT(0))
@@ -258,7 +241,6 @@ function precomputed_quantities(Y, atmos)
         advective_sgs_quantities...,
         edonly_quantities...,
         diagnostic_sgs_quantities...,
-        vert_diff_quantities...,
         sedimentation_quantities...,
         precipitation_quantities...,
         surface_precip_fluxes...,
@@ -534,12 +516,6 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
             ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
     end
 
-    # TODO: It is too slow to calculate mixing length at every timestep
-    # if isnothing(turbconv_model)
-    #     (; ᶜmixing_length) = p.precomputed
-    #     compute_gm_mixing_length!(ᶜmixing_length, Y, p)
-    # end
-
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
@@ -575,14 +551,6 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # Needs to be done after edmf precipitation is computed in sub-domains
     set_precipitation_cache!(Y, p, p.atmos.precip_model, p.atmos.turbconv_model)
     set_precipitation_surface_fluxes!(Y, p, p.atmos.precip_model)
-
-    if vert_diff isa DecayWithHeightDiffusion
-        (; ᶜK_h) = p.precomputed
-        @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.ρ, vert_diff)
-    elseif vert_diff isa VerticalDiffusion
-        (; ᶜK_h) = p.precomputed
-        @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vert_diff)
-    end
 
     # TODO
     if call_cloud_diagnostics_per_stage isa CallCloudDiagnosticsPerStage

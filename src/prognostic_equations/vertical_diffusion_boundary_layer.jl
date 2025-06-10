@@ -75,16 +75,23 @@ function vertical_diffusion_boundary_layer_tendency!(
     ::Union{VerticalDiffusion, DecayWithHeightDiffusion},
 )
     FT = eltype(Y)
+    (; vert_diff) = p.atmos
     α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
-    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h) = p.precomputed
+    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜp) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
+
+    if vert_diff isa DecayWithHeightDiffusion
+        ᶜK_h = compute_eddy_diffusivity_coefficient(Y.c.ρ, vert_diff)
+    elseif vert_diff isa VerticalDiffusion
+        ᶜK_h = compute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vert_diff)
+    end
 
     if !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
         ᶠstrain_rate .= compute_strain_rate_face(ᶜu)
         @. Yₜ.c.uₕ -= C12(
-            ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_u) * ᶠstrain_rate) / Y.c.ρ,
-        )
+            ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠstrain_rate) / Y.c.ρ,
+        ) # assumes ᶜK_u = ᶜK_h
     end
 
     ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
