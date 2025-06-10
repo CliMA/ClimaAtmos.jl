@@ -259,7 +259,7 @@ cp_m_out = similar(Y.c)
 
 p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info))
 
-(; topo_k_pbl, topo_z_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
+(; topo_k_pbl, topo_ᶜz_pbl, topo_ᶠz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
     p.orographic_gravity_wave
 (; topo_ᶜτ_sat, topo_ᶠτ_sat) = p.orographic_gravity_wave
 (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
@@ -268,7 +268,7 @@ p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_i
     p.orographic_gravity_wave
 (; topo_d2Vτdz, topo_L1, topo_U_k_field, topo_level_idx) = p.orographic_gravity_wave
 (; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
-(; ᶜdTdz) = p.orographic_gravity_wave
+(; ᶜdTdz, ᶜdτ_sat_dz) = p.orographic_gravity_wave
 
 # Extract parameters once and pack into tuple
 ogw_params = (;
@@ -295,7 +295,11 @@ ogw_params = (;
 
 # get PBL info
 topo_k_pbl .= CA.get_pbl(ᶜp, ᶜT, copy(ᶜz), grav, cp_d)
-topo_z_pbl .= CA.get_pbl_z(ᶜp, ᶜT, copy(ᶜz), grav, cp_d)
+topo_ᶜz_pbl .= CA.get_pbl_z(ᶜp, ᶜT, copy(ᶜz), grav, cp_d)
+# we copy the z_pbl from a cell-centered to face array.
+# the z-values don't change, but this is necessary for
+# calc_nonpropagating_forcing! to work on the GPU
+parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl)
 
 # buoyancy frequency at cell centers
 parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
@@ -336,7 +340,8 @@ Boundary_value = Fields.Field(
 CA.field_shiftface_down!(ᶠp, ᶠp_m1, Boundary_value)
 
 # buoyancy frequency at cell faces
-ᶠN = ᶠinterp.(ᶜN) # alternatively, can be computed from ᶠT and ᶠdTdz
+ᶠN = similar(ᶠz)
+ᶠN .= ᶠinterp.(ᶜN) # alternatively, can be computed from ᶠT and ᶠdTdz
 
 # compute base flux at k_pbl
 CA.calc_base_flux!(
@@ -364,7 +369,7 @@ CA.calc_base_flux!(
     u_phy,
     v_phy,
     ᶜN,
-    topo_z_pbl,
+    topo_ᶜz_pbl,
     topo_k_pbl_values
 )
 
@@ -387,7 +392,7 @@ CA.calc_saturation_profile!(
     v_phy,
     copy(Y.c.ρ),
     ᶜp,
-    topo_z_pbl,
+    topo_ᶜz_pbl,
     topo_d2Vτdz,
     topo_L1,
     topo_U_k_field,
@@ -407,6 +412,7 @@ CA.calc_propagate_forcing!(
     topo_τ_l,
     topo_ᶠτ_sat,
     copy(Y.c.ρ),
+    ᶜdτ_sat_dz
 )
 
 CA.calc_nonpropagating_forcing!(
@@ -423,7 +429,7 @@ CA.calc_nonpropagating_forcing!(
     topo_τ_np,
     ᶠz,
     ᶜz,
-    topo_z_pbl,
+    topo_ᶠz_pbl,
     dz,
     grav,
 )
