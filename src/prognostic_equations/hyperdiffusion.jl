@@ -34,7 +34,7 @@ function hyperdiffusion_cache(
     gs_quantities = (;
         ᶜ∇²u = similar(Y.c, C123{FT}),
         ᶜ∇²specific_energy = similar(Y.c, FT),
-        ᶜ∇²specific_tracers = remove_energy_var.(specific_gs.(Y.c)),
+        ᶜ∇²specific_tracers = remove_energy_var.(all_specific_gs.(Y.c)),
     )
 
     # Sub-grid scale quantities
@@ -85,7 +85,8 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
-    (; ᶜp, ᶜspecific) = p.precomputed
+    (; ᶜp) = p.precomputed
+
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
@@ -100,7 +101,8 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         wdivₕ(gradₕ(specific(Y.c.ρe_tot, Y.c.ρ) + ᶜp / Y.c.ρ))
 
     if diffuse_tke
-        (; ᶜtke⁰) = p.precomputed
+        ᶜtke⁰ =
+            @.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
         (; ᶜ∇²tke⁰) = p.hyperdiff
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜtke⁰))
     end
@@ -137,14 +139,14 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     diffuse_tke = use_prognostic_tke(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; ᶜp, ᶜspecific) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜρa⁰) = p.precomputed
+        ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
     if use_prognostic_tke(turbconv_model)
-        (; ᶜtke⁰) = p.precomputed
+        ᶜtke⁰ =
+            @.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
         (; ᶜ∇²tke⁰) = p.hyperdiff
     end
 
@@ -240,7 +242,7 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
 
-    (; ᶜspecific) = p.precomputed
+    ᶜspecific = all_specific_gs(Y.c)
     (; ᶜ∇²specific_tracers) = p.hyperdiff
 
     for χ_name in propertynames(ᶜ∇²specific_tracers)
@@ -282,6 +284,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     ν₄_scalar = ν₄_scalar_coeff * h_length_scale^3
     n = n_mass_flux_subdomains(turbconv_model)
 
+    ᶜspecific = all_specific_gs(Y.c)
     (; ᶜ∇²specific_tracers) = p.hyperdiff
 
     # TODO: Since we are not applying the limiter to density (or area-weighted
@@ -334,3 +337,4 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
     return nothing
 end
+

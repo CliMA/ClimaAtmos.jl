@@ -8,6 +8,8 @@ import LazyBroadcast
 import LazyBroadcast: lazy
 import Thermodynamics as TD
 import Thermodynamics
+import ClimaCore.MatrixFields: @name
+
 
 include("compat.jl")
 include(joinpath("parameters", "Parameters.jl"))
