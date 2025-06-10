@@ -1,4 +1,4 @@
-250
+251
 
 # **README**
 #
@@ -20,6 +20,11 @@
 
 
 #=
+251
+- Remove ᶜtke⁰, ᶜh_tot, ᶜmse⁰, ᶜρ⁰, and specific quantities from precomputed quantities cache.
+  Introduce helper functions to compute sums over draft, environmental volumetric variables,
+  and specific env variables.
+
 250
 - Add ARG aerosol activation for 2M microphysics; increase the allocation limit for `flame_callbacks`
   from 391864 to 391942 to account for additional allocations when constructing `ClimaAtmosParameters` 

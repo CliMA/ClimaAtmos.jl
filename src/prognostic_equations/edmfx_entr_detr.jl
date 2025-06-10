@@ -528,44 +528,47 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
-    (; ᶜq_tot⁰, ᶜmse⁰, ᶠu₃⁰) = p.precomputed
+    (; ᶠu₃⁰) = p.precomputed
 
+    ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.microphysics_model isa Microphysics1Moment
-        (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
+        ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y, p)
+        ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
+        ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
+        ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
     end
 
     for j in 1:n
+        ᶜentrʲ = ᶜentrʲs.:($j)
+        ᶜdetrʲ = ᶜdetrʲs.:($j)
+        ᶜturb_entrʲ = ᶜturb_entrʲs.:($j)
+        ᶜmseʲ = Y.c.sgsʲs.:($j).mse
+        ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
 
-        @. Yₜ.c.sgsʲs.:($$j).ρa +=
-            Y.c.sgsʲs.:($$j).ρa * (ᶜentrʲs.:($$j) - ᶜdetrʲs.:($$j))
+        ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
 
-        @. Yₜ.c.sgsʲs.:($$j).mse +=
-            (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
-            (ᶜmse⁰ - Y.c.sgsʲs.:($$j).mse)
+        @. Yₜ.c.sgsʲs.:($$j).ρa += Y.c.sgsʲs.:($$j).ρa * (ᶜentrʲ - ᶜdetrʲ)
+
+        @. Yₜ.c.sgsʲs.:($$j).mse += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜmse⁰ - ᶜmseʲ)
 
         @. Yₜ.c.sgsʲs.:($$j).q_tot +=
-            (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
-            (ᶜq_tot⁰ - Y.c.sgsʲs.:($$j).q_tot)
+            (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_tot⁰ - ᶜq_totʲ)
 
         if p.atmos.moisture_model isa NonEquilMoistModel &&
            p.atmos.microphysics_model isa Microphysics1Moment
             @. Yₜ.c.sgsʲs.:($$j).q_liq +=
-                (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
-                (ᶜq_liq⁰ - Y.c.sgsʲs.:($$j).q_liq)
+                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_liq⁰ - Y.c.sgsʲs.:($$j).q_liq)
             @. Yₜ.c.sgsʲs.:($$j).q_ice +=
-                (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
-                (ᶜq_ice⁰ - Y.c.sgsʲs.:($$j).q_ice)
+                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_ice⁰ - Y.c.sgsʲs.:($$j).q_ice)
             @. Yₜ.c.sgsʲs.:($$j).q_rai +=
-                (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
-                (ᶜq_rai⁰ - Y.c.sgsʲs.:($$j).q_rai)
+                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_rai⁰ - Y.c.sgsʲs.:($$j).q_rai)
             @. Yₜ.c.sgsʲs.:($$j).q_sno +=
-                (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
-                (ᶜq_sno⁰ - Y.c.sgsʲs.:($$j).q_sno)
+                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_sno⁰ - Y.c.sgsʲs.:($$j).q_sno)
         end
 
         @. Yₜ.f.sgsʲs.:($$j).u₃ +=
-            (ᶠinterp(ᶜentrʲs.:($$j)) .+ ᶠinterp(ᶜturb_entrʲs.:($$j))) *
+            (ᶠinterp(ᶜentrʲ) .+ ᶠinterp(ᶜturb_entrʲ)) *
             (ᶠu₃⁰ - Y.f.sgsʲs.:($$j).u₃)
     end
     return nothing

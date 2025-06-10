@@ -65,10 +65,32 @@ If `subsidence_model` is `Nothing`, no subsidence tendency is applied.
 """
 subsidence_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing    # No subsidence
 
+
+"""
+    subsidence_tendency!(Yₜ, Y, p, t, subsidence_model::Subsidence)
+
+Applies subsidence tendencies to total energy (`ρe_tot`), total specific humidity
+(`ρq_tot`), and other moisture species (`ρq_liq`, `ρq_ice`) if a `NonEquilMoistModel`
+is used.
+
+The subsidence velocity profile `w_sub(z)` is obtained from `subsidence_model.prof`.
+This profile is used to construct a face-valued vertical velocity field `ᶠsubsidence³`.
+The `subsidence!` helper function is then called (currently with a first-order
+upwind scheme) to compute and apply the vertical advective tendency for each relevant 
+scalar quantity `χ`.
+
+Arguments:
+- `Yₜ`: The tendency state vector, modified in place.
+- `Y`: The current state vector, used for density (`ρ`).
+- `p`: Cache containing parameters, and the subsidence model object.
+- `t`: Current simulation time.
+- `subsidence`: The subsidence model object.
+"""
 function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
     (; moisture_model) = p.atmos
     subsidence_profile = p.atmos.subsidence.prof
-    (; ᶜh_tot) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜts) = p.precomputed
 
     ᶠz = Fields.coordinate_field(axes(Y.f)).z
     ᶠlg = Fields.local_geometry_field(Y.f)
@@ -76,9 +98,16 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
     @. ᶠsubsidence³ =
         subsidence_profile(ᶠz) * CT3(unit_basis_vector_data(CT3, ᶠlg))
 
-    # Large-scale subsidence
-    subsidence!(Yₜ.c.ρe_tot, Y.c.ρ, ᶠsubsidence³, ᶜh_tot, Val{:first_order}())
+    # LS Subsidence
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    subsidence!(Yₜ.c.ρe_tot, Y.c.ρ, ᶠsubsidence³, ᶜh_tot, Val{:first_order}())
     subsidence!(Yₜ.c.ρq_tot, Y.c.ρ, ᶠsubsidence³, ᶜq_tot, Val{:first_order}())
     if moisture_model isa NonEquilMoistModel
         ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))

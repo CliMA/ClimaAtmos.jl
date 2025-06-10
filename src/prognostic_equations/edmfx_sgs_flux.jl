@@ -40,15 +40,12 @@ function edmfx_sgs_mass_flux_tendency!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
-    (; ᶠu³, ᶜh_tot) = p.precomputed
+    (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
-    if (
-        p.atmos.moisture_model isa NonEquilMoistModel &&
-        p.atmos.microphysics_model isa Microphysics1Moment
-    )
-        (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
-    end
+    (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
@@ -59,6 +56,13 @@ function edmfx_sgs_mass_flux_tendency!(
         # [best after removal of precomputed quantities]
         ᶠu³_diff = p.scratch.ᶠtemp_CT3
         ᶜa_scalar = p.scratch.ᶜtemp_scalar
+        ᶜh_tot = @. lazy(
+            TD.total_specific_enthalpy(
+                thermo_params,
+                ᶜts,
+                specific(Y.c.ρe_tot, Y.c.ρ),
+            ),
+        )
         for j in 1:n
             @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
             @. ᶜa_scalar =
@@ -75,6 +79,8 @@ function edmfx_sgs_mass_flux_tendency!(
         end
         # Add the environment fluxes
         @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
+
+        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
         @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
         vtt = vertical_transport(
             ᶜρ⁰,
@@ -102,6 +108,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 @. Yₜ.c.ρq_tot += vtt
             end
             # Add the environment fluxes
+            ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar =
                 (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
@@ -119,6 +126,10 @@ function edmfx_sgs_mass_flux_tendency!(
             p.atmos.moisture_model isa NonEquilMoistModel &&
             p.atmos.microphysics_model isa Microphysics1Moment
         )
+            ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y, p)
+            ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
+            ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
+            ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
             # Liquid, ice, rain and snow specific humidity fluxes
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
@@ -236,14 +247,22 @@ function edmfx_sgs_mass_flux_tendency!(
     a_max = CAP.max_area(turbconv_params)
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
-    (; ᶠu³, ᶜh_tot) = p.precomputed
-    (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs) = p.precomputed
+    (; ᶠu³) = p.precomputed
+    (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶜts) = p.precomputed
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     FT = eltype(Y)
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
-        # Enthalpy fluxes
+        thermo_params = CAP.thermodynamics_params(p.params)
+        # energy
+        ᶜh_tot = @. lazy(
+            TD.total_specific_enthalpy(
+                thermo_params,
+                ᶜts,
+                specific(Y.c.ρe_tot, Y.c.ρ),
+            ),
+        )
         ᶠu³_diff = p.scratch.ᶠtemp_CT3
         ᶜa_scalar = p.scratch.ᶜtemp_scalar
         for j in 1:n
@@ -272,7 +291,7 @@ function edmfx_sgs_mass_flux_tendency!(
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                 # @. ᶜa_scalar =
-                #     (ᶜq_totʲs.:($$j) - specific(Y.c.ρq_tot, Y.c.ρ)) *
+                #     (ᶜq_totʲs.:($$j) - specific(Y.c.ρq_tot, Y.c.ρ) *
                 #     draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j))
                 # TODO: remove this filter when mass flux is treated implicitly
                 @. ᶜa_scalar =
@@ -296,19 +315,51 @@ function edmfx_sgs_mass_flux_tendency!(
             end
             # TODO: add environment flux?
         end
+        # TODO: the following adds the environment flux to the tendency
+        # Make active and test later
+        # @. ᶠu³_diff = p.precomputed.ᶠu³⁰ - ᶠu³
+        # ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)
+        # ᶜρ⁰ = p.scratch.ᶜtemp_scalar_2
+        # @. ᶜρ⁰ = TD.air_density(
+        #     CAP.thermodynamics_params(p.params),
+        #     p.precomputed.ᶜts⁰,
+        # )
+        # ᶜmse⁰ = @.lazy(ᶜspecific_env_mse(Y, p))
+        # @. ᶜa_scalar =
+        #     (ᶜmse⁰ + p.precomputed.ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
+        # vtt = vertical_transport(
+        #     ᶜρ⁰,
+        #     ᶠu³_diff,
+        #     ᶜa_scalar,
+        #     dt,
+        #     edmfx_sgsflux_upwinding,
+        # )
+        # @. Yₜ.c.ρe_tot += vtt
+        # if !(p.atmos.moisture_model isa DryModel)
+        #     ᶜq_tot⁰ = @specific_env_value(:q_tot, Y.c, turbconv_model))
+        #     @. ᶜa_scalar =
+        #         (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) *
+        #         draft_area(ᶜρa⁰, ᶜρ⁰)
+        #     vtt = vertical_transport(
+        #         ᶜρ⁰,
+        #         ᶠu³_diff,
+        #         ᶜa_scalar,
+        #         dt,
+        #         edmfx_sgsflux_upwinding,
+        #     )
+        #     @. Yₜ.c.ρq_tot += vtt
+        # end
     end
 
-    # TODO: add vertical momentum fluxes
-
-    return nothing
 end
 
 """
     edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Computes and applies tendencies to the grid-mean prognostic variables due to the
-divergence of subgrid-scale (SGS) diffusive fluxes, representing turbulent mixing 
-by the EDMFX environment component.
+Computes and applies the tendency to the grid-mean state `Y` due to SGS
+diffusive fluxes from the EDMFX environment. This involves calculating the
+divergence of turbulent fluxes, which are parameterized using eddy diffusivity
+and viscosity closures.
 
 This function parameterizes these fluxes using an eddy-diffusivity/viscosity
 approach (K-theory) for the environment (sgs⁰). Tendencies are calculated for
@@ -322,9 +373,9 @@ in place.
 
 Arguments:
 - `Yₜ`: The tendency state vector for grid-mean variables.
-- `Y`: The current state vector.
-- `p`: Cache containing parameters, precomputed fields, atmospheric
-       model settings, and scratch space.
+- `Y`: The current state vector (used for grid-mean and SGS properties).
+- `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
+       and scratch space.
 - `t`: Current simulation time.
 - `turbconv_model`: The turbulence convection model instance.
 """
@@ -341,20 +392,16 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰) = p.precomputed
-    if (
-        p.atmos.moisture_model isa NonEquilMoistModel &&
-        p.atmos.microphysics_model isa Microphysics1Moment
-    )
-        (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
-    end
+    (; ᶜu⁰, ᶜK⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
         (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-
+        # scratch to prevent GPU Kernel parameter memory error
         ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
         ᶜmixing_length_field .= ᶜmixing_length(Y, p)
         ᶜK_u = @. lazy(
@@ -378,6 +425,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
+
+        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
         @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜmse⁰ + ᶜK⁰)))
         if use_prognostic_tke(turbconv_model)
             # Turbulent TKE transport (diffusion)
@@ -406,6 +455,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(C3(FT(0))),
             )
+            ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
             @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_tot⁰)))
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
@@ -414,6 +464,10 @@ function edmfx_sgs_diffusive_flux_tendency!(
             p.atmos.moisture_model isa NonEquilMoistModel &&
             p.atmos.microphysics_model isa Microphysics1Moment
         )
+            ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y, p)
+            ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
+            ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
+            ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
             # Liquid, ice, rain and snow specific humidity diffusion
             α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
 
@@ -461,15 +515,17 @@ function edmfx_sgs_diffusive_flux_tendency!(
     FT = Spaces.undertype(axes(Y.c))
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
+    thermo_params = CAP.thermodynamics_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜu, ᶜh_tot, ᶜtke⁰) = p.precomputed
+    (; ᶜu, ᶜts) = p.precomputed
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, Y.c.ρ, turbconv_model))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
         (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-
+        # scratch to prevent GPU Kernel parameter memory error
         ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
         ᶜmixing_length_field .= ᶜmixing_length(Y, p)
         ᶜK_u = @. lazy(
@@ -493,6 +549,13 @@ function edmfx_sgs_diffusive_flux_tendency!(
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
+        )
+        ᶜh_tot = @. lazy(
+            TD.total_specific_enthalpy(
+                thermo_params,
+                ᶜts,
+                specific(Y.c.ρe_tot, Y.c.ρ),
+            ),
         )
         @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜh_tot)))
 
