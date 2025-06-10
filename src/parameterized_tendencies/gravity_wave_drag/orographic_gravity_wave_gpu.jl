@@ -740,18 +740,18 @@ function calc_saturation_profile!(
         end
 
         U_sat_val = min(U_sat_val, U)
-        FrU_sat = Fr_crit * U_sat_val
-        FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
+        local_FrU_sat = Fr_crit * U_sat_val  # Use local variable instead
+        local_FrU_clp = min(FrU_max, max(FrU_min, local_FrU_sat))  # Use local variable instead
 
         if z_col <= z_target
             tau_sat_val = τ_p
         else
             tau_sat_val = topo_a0 * (
-            (FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ) +
-            FrU_sat^2 * FrU_sat0^β *
+            (local_FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ) +
+            local_FrU_sat^2 * FrU_sat0^β *
                 (FrU_max^(γ - ϵ - β) - FrU_clp0^(γ - ϵ - β)) / (γ - ϵ - β) +
-            FrU_sat^2 *
-                (FrU_clp0^(γ - ϵ) - FrU_clp^(γ - ϵ)) / (γ - ϵ)
+            local_FrU_sat^2 *
+                (FrU_clp0^(γ - ϵ) - local_FrU_clp^(γ - ϵ)) / (γ - ϵ)
             )
         end
 
@@ -762,12 +762,15 @@ function calc_saturation_profile!(
     p_surf = Fields.level(ᶜp, 1)
     p_top = Fields.level(ᶜp, Spaces.nlevels(axes(ᶜp)))
 
+    zero_val = FT(0.0)
+
     input = @. lazy(tuple(
         top_values,
         ᶜτ_sat,
         p_surf,
         p_top,
         ᶜp,
+        zero_val,
     ))
 
     Operators.column_accumulate!(
@@ -776,15 +779,15 @@ function calc_saturation_profile!(
         init = FT(0.0),
         transform = identity,
     ) do τ_sat_val,
-        (top_values, ᶜτ_sat, p_surf, p_top, ᶜp)
+        (top_values, ᶜτ_sat, p_surf, p_top, ᶜp, zero_val)
 
         τ_sat_val = ᶜτ_sat
         
-        if top_values > FT(0)
+        if top_values > zero_val
             τ_sat_val -= (top_values * (p_surf - ᶜp) / (p_surf - p_top))
+        end
 
         return τ_sat_val
-        end
     end
 
     @. ᶠτ_sat = ᶠinterp(ᶜτ_sat)
