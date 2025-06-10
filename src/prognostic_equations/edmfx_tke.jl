@@ -55,7 +55,7 @@ function edmfx_tke_tendency!(
     FT = eltype(p.params)
 
     
-    ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? @.lazy(ρa⁰(Y.c)) : Y.c.ρ
+    ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? (@.lazy(ρa⁰(Y.c))) : Y.c.ρ
     nh_pressure3_buoyʲs =
         turbconv_model isa PrognosticEDMFX ?
         p.precomputed.ᶠnh_pressure₃_buoyʲs : p.precomputed.ᶠnh_pressure³_buoyʲs
