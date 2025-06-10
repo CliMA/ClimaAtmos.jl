@@ -268,7 +268,8 @@ p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_i
     p.orographic_gravity_wave
 (; topo_d2Vτdz, topo_L1, topo_U_k_field, topo_level_idx) = p.orographic_gravity_wave
 (; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
-(; ᶜdTdz, ᶜdτ_sat_dz) = p.orographic_gravity_wave
+(; ᶜweights, ᶜdTdz, ᶜdτ_sat_dz) = p.orographic_gravity_wave
+(; uforcing, vforcing) = p.orographic_gravity_wave
 
 # Extract parameters once and pack into tuple
 ogw_params = (;
@@ -404,8 +405,8 @@ CA.calc_saturation_profile!(
 )
 
 # a place holder to store physical forcing on uv
-uforcing = zeros(axes(u_phy))
-vforcing = zeros(axes(v_phy))
+# uforcing = zeros(axes(u_phy))
+# vforcing = zeros(axes(v_phy))
 
 # compute drag tendencies due to propagating part
 CA.calc_propagate_forcing!(
@@ -436,6 +437,7 @@ CA.calc_nonpropagating_forcing!(
     topo_ᶠz_pbl,
     ᶠdz,
     grav,
+    ᶜweights
 )
 
 # constrain forcing

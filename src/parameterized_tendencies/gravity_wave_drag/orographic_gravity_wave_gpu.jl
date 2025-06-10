@@ -123,6 +123,9 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info)
         topo_k_pbl_values = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT}),
         topo_info = topo_info,
         ᶜN = similar(Fields.level(Y.c.ρ, 1)),
+        uforcing = similar(Y.c.u_phy),
+        vforcing = similar(Y.c.v_phy),
+        ᶜweights = similar(Y.c.ρ),
         ᶜdTdz = similar(Y.c.ρ),
         ᶜdτ_sat_dz = similar(Y.c.ρ)
     )
@@ -291,6 +294,7 @@ function calc_nonpropagating_forcing!(
     z_pbl,
     ᶠdz,
     grav,
+    ᶜweights
 )
     FT = eltype(grav)
 
@@ -358,13 +362,15 @@ function calc_nonpropagating_forcing!(
     L2 = Operators.LeftBiasedF2C(;)
     mask = L2.(mask)
 
-    weights = ᶜp .- ᶠp_ref
+
+    ᶠweights = ᶠp .- ᶠp_ref
+    weights = ᶜinterp.(ᶠweights)
     f_diff = ᶠp_m1 .- ᶠp
     f_diff = ᶜinterp.(f_diff)
 
     wtsum_field = @. ifelse(mask != 0, f_diff / weights, 0.0)
 
-    weights = weights .* mask
+    parent(ᶜweights) .= parent(weights .* mask)
 
     wtsum = similar(Fields.level(ᶜuforcing, 1), FT)
 
@@ -381,8 +387,8 @@ function calc_nonpropagating_forcing!(
     end
 
     # compute drag
-    @. ᶜuforcing += grav * τ_x * τ_np / τ_l / wtsum * weights
-    @. ᶜvforcing += grav * τ_y * τ_np / τ_l / wtsum * weights
+    @. ᶜuforcing += grav * τ_x * τ_np / τ_l / wtsum * ᶜweights
+    @. ᶜvforcing += grav * τ_y * τ_np / τ_l / wtsum * ᶜweights
 
 end
 
