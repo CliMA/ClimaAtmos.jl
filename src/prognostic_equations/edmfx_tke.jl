@@ -93,10 +93,10 @@ function edmfx_tke_tendency!(
         for j in 1:n
             ᶠu³ʲ = ᶠu³ʲs.:($j)
             @. ᶜtke_exch +=
-                Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / ᶜρa⁰ *
+                Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / max(ᶜρa⁰, eps(FT)) *
                 (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
         end
-
+        
         ᶜmixing_length = @. lazy(master_mixing_length(
             p.params,
             ustar,
@@ -115,6 +115,7 @@ function edmfx_tke_tendency!(
 
         ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length))
         ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+
         # shear production
         @. Yₜ.c.sgs⁰.ρatke += 2 * ᶜρa⁰ * ᶜK_u * ᶜstrain_rate_norm
         # buoyancy production

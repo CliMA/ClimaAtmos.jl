@@ -542,22 +542,22 @@ function master_mixing_length(
     ᶜtke_exch,
     scale_blending_method,
 )
-
-    ᶜmixing_length_tuple = @. lazy(mixing_length(
+    FT = eltype(params)
+    ᶜmixing_length_tuple = mixing_length(
         params,
         ustar,
         ᶜz,
         z_sfc,
         ᶜdz,
         max(sfc_tke, eps(FT)),
-        ᶜlinear_buoygrad,
-        max(ᶜtke⁰, 0),
+        ᶜN²_eff,
+        max(ᶜtke, 0),
         obukhov_length,
         ᶜstrain_rate_norm,
-        ᶜprandtl_nvec,
+        ᶜPr,
         ᶜtke_exch,
         scale_blending_method,
-    ))
+    )
 
     return getproperty(ᶜmixing_length_tuple, :master)
 end

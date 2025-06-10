@@ -39,9 +39,23 @@ NVTX.@annotate function set_cloud_fraction!(
 )
     (; params) = p
     (; turbconv_model) = p.atmos
-    (; ᶜts, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
+    (; ᶜts, cloud_diagnostics_tuple) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
+    FT = eltype(p.params)
+    n = n_mass_flux_subdomains(turbconv_model)
     if isnothing(turbconv_model)
+        (; ustar, obukhov_length) = p.precomputed.sfc_conditions
+        (;
+            ᶜlinear_buoygrad,
+            ᶜstrain_rate_norm,
+            ᶠu³⁰,
+            ᶠu³,
+            ᶜtke⁰,
+            ᶜentrʲs,
+            ᶜdetrʲs,
+            ᶠu³ʲs,
+            ᶜρa⁰,
+        ) = p.precomputed
         if p.atmos.call_cloud_diagnostics_per_stage isa
            CallCloudDiagnosticsPerStage
             (; ᶜgradᵥ_θ_virt, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
@@ -53,6 +67,39 @@ NVTX.@annotate function set_cloud_fraction!(
             @. ᶜgradᵥ_θ_liq_ice =
                 ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
         end
+        ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
+        @. ᶜprandtl_nvec =
+            turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+
+        sfc_tke = Fields.level(ᶜtke⁰, 1)
+        z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+        ᶜz = Fields.coordinate_field(Y.c).z
+        ᶜdz = Fields.Δz_field(axes(Y.c))
+
+        ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
+        @. ᶜtke_exch = 0
+        for j in 1:n
+            ᶠu³ʲ = ᶠu³ʲs.:($j)
+            @. ᶜtke_exch +=
+                Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / ᶜρa⁰ *
+                (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
+        end
+
+        ᶜmixing_length = @. lazy(master_mixing_length(
+            params,
+            ustar,
+            ᶜz,
+            z_sfc,
+            ᶜdz,
+            max(sfc_tke, eps(FT)),
+            ᶜlinear_buoygrad,
+            max(ᶜtke⁰, 0),
+            obukhov_length,
+            ᶜstrain_rate_norm,
+            ᶜprandtl_nvec,
+            ᶜtke_exch,
+            p.atmos.edmfx_model.scale_blending_method,
+        ))
         compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     end
     if moist_model isa EquilMoistModel

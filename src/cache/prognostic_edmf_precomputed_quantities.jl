@@ -506,7 +506,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
     for j in 1:n
-        ᶠu³ʲ = ᶠu³ʲs.:($j)
         @. ᶜtke_exch +=
             Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / ᶜρa⁰ *
             (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
