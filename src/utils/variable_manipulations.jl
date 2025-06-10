@@ -193,6 +193,9 @@ out the matching subfields (as of Julia 1.8).
     return :(($(subfield_tuples...),))
 end
 
+# draft_sum(sgsʲs, ρχ_name) = mapreduce_with_init(sgsʲ -> getproperty(sgsʲ, ρχ_name), +, sgsʲs)
+
+
 """
     ρa⁺(gs)
 
