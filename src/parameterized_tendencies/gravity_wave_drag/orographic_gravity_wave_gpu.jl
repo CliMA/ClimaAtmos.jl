@@ -118,11 +118,13 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info)
 
         topo_base_Vτ = similar(Fields.level(Y.c.ρ, 1)),
         topo_k_pbl = similar(Fields.level(Y.c.ρ, 1)),
-        topo_z_pbl = similar(Fields.level(Y.c.ρ, 1)),
+        topo_ᶜz_pbl = similar(Fields.level(Y.c.ρ, 1)),
+        topo_ᶠz_pbl = similar(Fields.level(Y.f.u₃, half)),
         topo_k_pbl_values = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT}),
         topo_info = topo_info,
         ᶜN = similar(Fields.level(Y.c.ρ, 1)),
         ᶜdTdz = similar(Y.c.ρ),
+        ᶜdτ_sat_dz = similar(Y.c.ρ)
     )
 
 end
@@ -165,7 +167,7 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::FullOrographicGravit
     end
 
     # buoyancy frequency at cell centers
-    parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
+    ᶜdTdz .= Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
     ᶜN = @. (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts)) # this is actually ᶜN^2
     @. ᶜN = ifelse(ᶜN < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜN))) # to avoid small numbers
 
@@ -296,6 +298,7 @@ function calc_nonpropagating_forcing!(
     z_ref_field = similar(Fields.level(ᶠz, half), Tuple{FT, FT})
 
     # Compute z_ref using column_reduce
+    @Main.infiltrate
     input = @. lazy(tuple(ᶠz, ᶠN, ᶠVτ, z_pbl))
 
     # @Main.infiltrate
@@ -386,12 +389,17 @@ function calc_nonpropagating_forcing!(
 
 end
 
-function calc_propagate_forcing!(ᶜuforcing, ᶜvforcing, τ_x, τ_y, τ_l, τ_sat, ᶜρ)
+function calc_propagate_forcing!(ᶜuforcing, ᶜvforcing, τ_x, τ_y, τ_l, τ_sat, ᶜρ, dτ_sat_dz)
     # QN: Again, I can't inline this, right?
     # Adding the dollar sign tells @. to stop before ᶜddz(...)
     # This is necessary as we are lazily evaluating the expression
-    @. ᶜuforcing -= τ_x / τ_l / ᶜρ * $ᶜddz(τ_sat)
-    @. ᶜvforcing -= τ_y / τ_l / ᶜρ * $ᶜddz(τ_sat)
+    # dτ_sat_dz_lazy = lazy.(ᶜddz(τ_sat))
+    # @. dτ_sat_dz = dτ_sat_dz_lazy
+
+    parent(dτ_sat_dz) .= parent(Geometry.WVector.(ᶜgradᵥ.(τ_sat)).components.data.:1)
+
+    @. ᶜuforcing -= τ_x / τ_l / ᶜρ * dτ_sat_dz
+    @. ᶜvforcing -= τ_y / τ_l / ᶜρ * dτ_sat_dz
     return nothing
 end
 
@@ -561,7 +569,6 @@ function calc_base_flux!(
     #     end
     # end
     ᶜz = Fields.coordinate_field(ᶜρ).z
-    # @Main.infiltrate
     input = @. lazy(tuple(ᶜρ, u_phy, v_phy, ᶜN, ᶜz, z_pbl))
 
     Operators.column_reduce!(
@@ -677,7 +684,6 @@ function calc_saturation_profile!(
     # Lazy this (done)
     d2udz = lazy.(ᶜd2dz2(u_phy))
     d2vdz = lazy.(ᶜd2dz2(v_phy))
-    
     # Calculate derivative for L1; tmp_field_2 == d2Vτdz
     @. d2Vτdz = max(
         eps(FT),
