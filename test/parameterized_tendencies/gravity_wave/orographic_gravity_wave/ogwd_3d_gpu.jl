@@ -300,6 +300,7 @@ topo_ᶜz_pbl .= CA.get_pbl_z(ᶜp, ᶜT, copy(ᶜz), grav, cp_d)
 # the z-values don't change, but this is necessary for
 # calc_nonpropagating_forcing! to work on the GPU
 parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl)
+topo_ᶠz_pbl = topo_ᶠz_pbl.components.data.:1
 
 # buoyancy frequency at cell centers
 parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
@@ -310,7 +311,8 @@ parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
 u_phy = Y.c.u_phy
 v_phy = Y.c.v_phy
 
-ᶠp = ᶠinterp.(ᶜp)
+ᶠp = similar(Y.f.u₃).components.data.:1
+ᶠp .= ᶠinterp.(ᶜp)
 ᶠp_m1 = similar(ᶠp)
 
 # More explicit scale height approach for pressure extrapolation
@@ -329,6 +331,8 @@ dz_values = Fields.field_values(z_second) .- Fields.field_values(z_bottom)
 dz = Fields.Field(dz_values, axes(z_bottom))
 z_extrapolated_values = Fields.field_values(z_bottom) .- dz_values
 z_extrapolated = Fields.Field(z_extrapolated_values, axes(z_bottom))
+
+ᶠdz = Fields.Δz_field(axes(Y.f))
 
 # Extrapolate pressure using barometric formula: p = p₀ * exp(-z/H)
 Boundary_value = Fields.Field(
@@ -430,7 +434,7 @@ CA.calc_nonpropagating_forcing!(
     ᶠz,
     ᶜz,
     topo_ᶠz_pbl,
-    dz,
+    ᶠdz,
     grav,
 )
 
