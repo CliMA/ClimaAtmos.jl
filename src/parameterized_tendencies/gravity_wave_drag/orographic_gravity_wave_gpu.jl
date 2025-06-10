@@ -23,15 +23,9 @@ orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 
 orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
-function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
+function get_topo_info(Y, ogw::OrographicGravityWave)
     # For now, the initialisation of the cache is the same for all types of
     # orographic gravity wave drag parameterizations
-
-    @assert Spaces.topology(Spaces.horizontal_space(axes(Y.c))).mesh.domain isa
-            Domains.SphereDomain
-
-    FT = Spaces.undertype(axes(Y.c))
-    (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) = ogw
 
     if ogw.topo_info == "gfdl_restart"
         topo_path = @clima_artifact("topo_drag", ClimaComms.context(Y.c))
@@ -54,7 +48,35 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
         error("topo_info must be one of gfdl_restart, raw_topo, or linear")
     end
 
+    return topo_info
+
+end
+
+function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info)
+    # For now, the initialisation of the cache is the same for all types of
+    # orographic gravity wave drag parameterizations
+    @assert Spaces.topology(Spaces.horizontal_space(axes(Y.c))).mesh.domain isa
+            Domains.SphereDomain
+
+    FT = Spaces.undertype(axes(Y.c))
+    (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) = ogw
+
     topo_level_idx = similar(Y.c.ρ, FT)
+
+    # topo_info = fill(
+    #     (;
+    #         t11 = FT(Fields.field_values(loaded_topo_info.t11)),
+    #         t12 = FT(Fields.field_values(loaded_topo_info.t12)),
+    #         t21 = FT(Fields.field_values(loaded_topo_info.t21)),
+    #         t22 = FT(Fields.field_values(loaded_topo_info.t22)),
+    #         hmin = FT(Fields.field_values(loaded_topo_info.hmin)),
+    #         hmax = FT(Fields.field_values(loaded_topo_info.hmax)),
+    #     ),
+    #     axes(Fields.level(Y.c.ρ, 1)),
+    # )
+
+    # topo_info = (; 
+
     # Prepare cache
     # QN: Is there a limit to how big the cache can be?
     # Limit is the GPU memory -- since the cache is stored anywhere on the device.
@@ -326,32 +348,6 @@ function calc_nonpropagating_forcing!(
         end
         return ᶠp_ref
     end
-
-    # @Main.infiltrate
-
-    # input = @. lazy(tuple(ᶠz, ᶠp, ᶠp_m1, z_ref, ᶠp_ref, ᶠz_pbl, ᶜp))
-    # weights_and_sum = similar(ᶜuforcing, Tuple{FT, FT})
-    
-    # Operators.column_accumulate!(
-    #     weights_and_sum,
-    #     input;
-    #     init = (FT(0), FT(0)),
-    #     transform = x -> (x[1], x[2])
-    # ) do (wtsum_acc, weights_acc), (ᶠz, ᶠp, ᶠp_m1, z_ref, ᶠp_ref, z_pbl, ᶜp)
-    #     if (ᶠz > z_pbl) && (ᶠz <= z_ref)
-    #         weights_acc = ᶜp - ᶠp_ref
-    #         if abs(weights_acc) > 0
-    #             wtsum_acc = (ᶠp_m1 - ᶠp) / weights_acc
-    #         end
-    #     end
-    #     if (ᶠz > z_ref)
-    #         return(0.0, 0.0, ᶠp_ref)
-    #     end
-    #     return (wtsum_acc, weights_acc)
-    # end
-
-    # wtsum_field = weights_and_sum.:1
-    # weights = weights_and_sum.:2
     
     mask = Fields.Field(Bool, axes(ᶠz))
     @. mask = (ᶠz .> z_pbl) .&& (ᶠz .<= z_ref)
@@ -366,7 +362,7 @@ function calc_nonpropagating_forcing!(
 
     weights = weights .* mask
 
-    @Main.infiltrate
+    # @Main.infiltrate
 
     # i_top = Spaces.nlevels(axes(ᶠz))
     # wtsum = Fields.level(wtsum_field, i_top - 1)
@@ -410,8 +406,14 @@ function get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
     T_sfc = Fields.level(ᶜT, 1)
     z_sfc = Fields.level(ᶜz, 1)
 
+    # Convert constants to the appropriate type beforehand
+    half_val = FT(0.5)
+    temp_offset = FT(1.5)
+    grav_val = FT(grav)
+    cp_d_val = FT(cp_d)
+
     # Create a lazy tuple of inputs for column_reduce
-    input = @. lazy(tuple(ᶜp, ᶜT, ᶜz, p_sfc, T_sfc, z_sfc))
+    input = @. lazy(tuple(ᶜp, ᶜT, ᶜz, p_sfc, T_sfc, z_sfc, half_val, temp_offset, grav_val, cp_d_val))
 
     # Perform the column reduction
     Operators.column_reduce!(
@@ -419,11 +421,11 @@ function get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
         input;
         init = (1, 2),  # (k_pbl, current_level)
         transform = first # Extract just the k_pbl value
-    ) do (k_pbl, level_idx), (p_col, T_col, z_col, p_sfc, T_sfc, z_sfc)
+    ) do (k_pbl, level_idx), (p_col, T_col, z_col, p_sfc, T_sfc, z_sfc, half_val, temp_offset, grav_val, cp_d_val)
         
         # Check conditions
-        p_threshold = p_col >= (FT(0.5) * p_sfc)
-        T_threshold = (T_sfc + FT(1.5) - T_col) > (grav / cp_d * (z_col - z_sfc))
+        p_threshold = p_col >= (half_val * p_sfc)
+        T_threshold = (T_sfc + temp_offset - T_col) > (grav_val / cp_d_val * (z_col - z_sfc))
         
         # If both conditions are met, update k_pbl
         if p_threshold && T_threshold
@@ -448,20 +450,30 @@ function get_pbl_z(ᶜp, ᶜT, ᶜz, grav, cp_d)
     T_sfc = Fields.level(ᶜT, 1)
     z_sfc = Fields.level(ᶜz, 1)
 
+
+    half_val = FT(0.5)
+    temp_offset = FT(1.5)
+    grav_val = FT(grav)
+    cp_d_val = FT(cp_d)
+    zero_val = FT(0)
+
     # Create a lazy tuple of inputs for column_reduce
-    input = @. lazy(tuple(ᶜp, ᶜT, ᶜz, p_sfc, T_sfc, z_sfc))
+    input = @. lazy(tuple(ᶜp, ᶜT, ᶜz, p_sfc, T_sfc, z_sfc, grav_val, cp_d_val, half_val, temp_offset, zero_val))
 
     # Perform the column reduction
     Operators.column_reduce!(
         result,
         input;
-        init = (z_sfc, 2),  # (z_pbl, current_level) - start with surface height
+        init = FT(0),
         transform = first # Extract just the z_pbl value
-    ) do z_pbl, (p_col, T_col, z_col, p_sfc, T_sfc, z_sfc)
+    ) do z_pbl, (p_col, T_col, z_col, p_sfc, T_sfc, z_sfc, grav_val, cp_d_val, half_val, temp_offset, zero_val)
         
+        if z_pbl == zero_val
+            z_pbl = z_sfc
+        end
         # Check conditions
-        p_threshold = p_col >= (FT(0.5) * p_sfc)
-        T_threshold = (T_sfc + FT(1.5) - T_col) > (grav / cp_d * (z_col - z_sfc))
+        p_threshold = p_col >= (half_val * p_sfc)
+        T_threshold = (T_sfc + temp_offset - T_col) > (grav_val / cp_d_val * (z_col - z_sfc))
         
         # If both conditions are met, update z_pbl to current height
         if p_threshold && T_threshold
@@ -495,7 +507,7 @@ function calc_base_flux!(
     Vτ,
     Fr_max,
     Fr_min,
-    p,
+    ogw_params,
     hmax,
     hmin,
     t11,
@@ -511,6 +523,7 @@ function calc_base_flux!(
 )
     # Extract parameters
     # QN: When should I pass an array as argument, and when should I extract them from cache?
+    # Extract parameters from tuple
     (;
         Fr_crit,
         topo_ρscale,
@@ -520,7 +533,7 @@ function calc_base_flux!(
         topo_γ,
         topo_β,
         topo_ϵ,
-    ) = p.orographic_gravity_wave
+    ) = ogw_params
     
     FT = eltype(Fr_crit)
     γ = topo_γ
@@ -548,12 +561,13 @@ function calc_base_flux!(
     #     end
     # end
     ᶜz = Fields.coordinate_field(ᶜρ).z
+    # @Main.infiltrate
     input = @. lazy(tuple(ᶜρ, u_phy, v_phy, ᶜN, ᶜz, z_pbl))
 
     Operators.column_reduce!(
         k_pbl_values,
         input;
-        init = (nothing, nothing, nothing, nothing),
+        init = (FT(0.0), FT(0.0), FT(0.0), FT(0.0)),
     ) do (ρ_acc, u_acc, v_acc, N_acc), (ρ, u, v, N, z_col, z_target)
         
         # Check if current level height is at or above z_pbl
@@ -625,7 +639,7 @@ function calc_saturation_profile!(
     FrU_clp,
     ᶜVτ,
     ᶠVτ,
-    p,
+    ogw_params,
     FrU_max,
     FrU_min,
     ᶜN,
@@ -642,8 +656,9 @@ function calc_saturation_profile!(
     U_k_field,
     level_idx,
 )
-    # Extract parameters
-    (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ϵ) = p.orographic_gravity_wave
+    # Extract parameters from tuple
+    (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ϵ) = ogw_params
+
     FT = eltype(Fr_crit)
     γ = topo_γ
     β = topo_β
@@ -659,9 +674,9 @@ function calc_saturation_profile!(
     
     # Calculate derivatives for ᶠd2Vτdz
     # QN: Is the Julia compiler smart enough to inline these?
-    # FU: Lazy this
-    d2udz = (ᶜd2dz2(u_phy))
-    d2vdz = (ᶜd2dz2(v_phy))
+    # Lazy this (done)
+    d2udz = lazy.(ᶜd2dz2(u_phy))
+    d2vdz = lazy.(ᶜd2dz2(v_phy))
     
     # Calculate derivative for L1; tmp_field_2 == d2Vτdz
     @. d2Vτdz = max(
@@ -683,7 +698,6 @@ function calc_saturation_profile!(
     @. U_k_field = sqrt(ᶜρ / topo_ρscale * ᶜVτ^3 / ᶜN / L1)
     
     # Prepare a level index field to help with operations at specific levels
-
     for i in 1:Spaces.nlevels(axes(ᶜρ))
         fill!(Fields.level(level_idx, i), i)
     end
@@ -744,17 +758,6 @@ function calc_saturation_profile!(
         return (tau_sat_val, U_sat_val)
     end
     
-    # Apply top correction using field operations
-    # QN: How can I GPUify this? Tried for hours!
-    # if parent(ᶜτ_sat)[end] > FT(0)
-    # #     # QN: Why can't I use ᶠp .= ᶠinterp.(ᶜp)?
-    # #     # QN: Is this a copy operation then?
-    #     ᶜτ_sat .-=
-    #         parent(ᶜτ_sat)[end] .* (parent(ᶜp)[1] .- ᶜp) ./
-    #         (parent(ᶜp)[1] .- parent(ᶜp)[end])
-    # end
-
-    # QN: ATTEMPT 
     top_values = Fields.level(ᶜτ_sat, Spaces.nlevels(axes(ᶜτ_sat)))
     p_surf = Fields.level(ᶜp, 1)
     p_top = Fields.level(ᶜp, Spaces.nlevels(axes(ᶜp)))
@@ -784,18 +787,8 @@ function calc_saturation_profile!(
         end
     end
 
-    # QN: What is the canonical way of defining
-    # operations between a 3D slab and 2D slice?
-    # is there a broadcast function? 
-    # FU: Try .- ; ./ ; .-
-    # @. ᶜτ_sat -= ifelse(
-    #     top_values > FT(0),
-    #     top_values * (p_surf - ᶜp) / (p_surf - p_top),
-    #     FT(0)
-    # )
-
-    ᶠτ_sat .= ᶠinterp.(ᶜτ_sat)
-    ᶠVτ .= ᶠinterp.(ᶜVτ)
+    @. ᶠτ_sat = ᶠinterp(ᶜτ_sat)
+    @. ᶠVτ = ᶠinterp(ᶜVτ)
 
     return nothing
 end
