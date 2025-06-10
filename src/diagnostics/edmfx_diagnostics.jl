@@ -633,15 +633,16 @@ compute_aren!(_, _, _, _, turbconv_model::T) where {T} =
 
 function compute_aren!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜρa⁰ = @.lazy(ρa⁰(state.c))
     if isnothing(out)
         return draft_area.(
-            cache.precomputed.ᶜρa⁰,
+            ᶜρa⁰,
             TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰),
         )
     else
         out .=
             draft_area.(
-                cache.precomputed.ᶜρa⁰,
+                ᶜρa⁰,
                 TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰),
             )
     end

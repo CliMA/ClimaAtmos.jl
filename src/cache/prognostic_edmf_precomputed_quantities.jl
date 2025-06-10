@@ -22,14 +22,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
     (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
-    (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
+    (; ᶜtke⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
         p.precomputed
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.precip_model isa Microphysics1Moment
         (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
     end
 
-    @. ᶜρa⁰ = ρa⁰(Y.c)
+    ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
     @. ᶜtke⁰ = specific(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
     @. ᶜmse⁰ = specific(
         Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
@@ -367,7 +367,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜtke⁰, ᶜu, ᶜp, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
     (;
         # ᶜmixing_length_tuple,
         # ᶜmixing_length,

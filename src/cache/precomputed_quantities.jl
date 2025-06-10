@@ -68,7 +68,6 @@ function implicit_precomputed_quantities(Y, atmos)
     prognostic_sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
-            ᶜρa⁰ = similar(Y.c, FT),
             ᶜmse⁰ = similar(Y.c, FT),
             ᶜq_tot⁰ = similar(Y.c, FT),
             ᶠu₃⁰ = similar(Y.f, C3{FT}),

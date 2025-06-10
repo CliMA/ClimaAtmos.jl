@@ -148,7 +148,9 @@ function precipitation_tendency!(
     # Source terms from EDMFX updrafts
     (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs) = p.precomputed
     # Source terms from EDMFX environment
-    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρa⁰) = p.precomputed
+    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+
+    ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
 
     # Update from environment precipitation and cloud formation sources/sinks
     @. Yₜ.c.ρq_liq += ᶜρa⁰ * ᶜSqₗᵖ⁰

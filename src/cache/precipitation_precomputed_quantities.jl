@@ -223,10 +223,11 @@ function set_precipitation_cache!(
     ::PrognosticEDMFX,
 )
     (; ᶜΦ) = p.core
-    (; ᶜSqₜᵖ⁰, ᶜSqₜᵖʲs, ᶜρa⁰) = p.precomputed
+    (; ᶜSqₜᵖ⁰, ᶜSqₜᵖʲs) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
     (; ᶜts⁰, ᶜtsʲs) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
