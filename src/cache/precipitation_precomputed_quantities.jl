@@ -124,7 +124,7 @@ function set_precipitation_velocities!(
     )
     @. ᶜwₛ = CM1.terminal_velocity(cm1p.ps, cm1p.tv.snow, Y.c.ρ, specific(Y.c.ρq_sno, Y.c.ρ))
     # compute sedimentation velocity for cloud condensate [m/s]
-    # TODO sedimentation velocities of cloud condensates are based 
+    # TODO sedimentation velocities of cloud condensates are based
     # on the 1M scheme. Sedimentation velocity of cloud number concentration
     # is equal to that of the mass.
     @. ᶜwnₗ =
@@ -275,6 +275,9 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         ᶜSqᵣᵖ,
         ᶜSqₛᵖ,
         Y.c.ρ,
+        q_tot,
+        q_liq,
+        q_ice,
         q_rai,
         q_sno,
         ᶜts,
@@ -289,6 +292,9 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         ᶜSqᵣᵖ,
         ᶜSqₛᵖ,
         Y.c.ρ,
+        q_tot,
+        q_liq,
+        q_ice,
         q_rai,
         q_sno,
         ᶜts,
