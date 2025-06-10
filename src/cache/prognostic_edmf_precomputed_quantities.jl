@@ -606,7 +606,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
 
     (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
     (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρ⁰, ᶜts⁰) = p.precomputed
-    (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
+    (; ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
 
     # TODO - can I re-use them between js and env?
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
@@ -624,6 +624,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             ᶜSqᵣᵖʲs.:($j),
             ᶜSqₛᵖʲs.:($j),
             ᶜρʲs.:($j),
+            Y.c.sgsʲs.:($j).q_tot,
+            Y.c.sgsʲs.:($j).q_liq,
+            Y.c.sgsʲs.:($j).q_ice,
             Y.c.sgsʲs.:($j).q_rai,
             Y.c.sgsʲs.:($j).q_sno,
             ᶜtsʲs.:($j),
@@ -636,6 +639,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             ᶜSqᵣᵖʲs.:($j),
             ᶜSqₛᵖʲs.:($j),
             ᶜρʲs.:($j),
+            Y.c.sgsʲs.:($j).q_tot,
+            Y.c.sgsʲs.:($j).q_liq,
+            Y.c.sgsʲs.:($j).q_ice,
             Y.c.sgsʲs.:($j).q_rai,
             Y.c.sgsʲs.:($j).q_sno,
             ᶜtsʲs.:($j),
@@ -669,6 +675,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜSqᵣᵖ⁰,
         ᶜSqₛᵖ⁰,
         ᶜρ⁰,
+        ᶜq_tot⁰,
+        ᶜq_liq⁰,
+        ᶜq_ice⁰,
         ᶜq_rai⁰,
         ᶜq_sno⁰,
         ᶜts⁰,
@@ -681,6 +690,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜSqᵣᵖ⁰,
         ᶜSqₛᵖ⁰,
         ᶜρ⁰,
+        ᶜq_tot⁰,
+        ᶜq_liq⁰,
+        ᶜq_ice⁰,
         ᶜq_rai⁰,
         ᶜq_sno⁰,
         ᶜts⁰,

@@ -324,6 +324,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; ᶠu³⁰, ᶜK⁰, ᶜtke⁰) = p.precomputed
 
     if precip_model isa Microphysics1Moment
+        ᶜq_liqʲs = p.precomputed.ᶜq_liqʲs
+        ᶜq_iceʲs = p.precomputed.ᶜq_iceʲs
         q_rai = p.precomputed.ᶜqᵣ
         q_sno = p.precomputed.ᶜqₛ
     end
@@ -416,6 +418,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 ᶜS_e_totʲ = p.precomputed.ᶜSeₜᵖʲs.:($j)
                 ᶜSᵖ = p.scratch.ᶜtemp_scalar
                 ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+                ᶜq_liqʲ = ᶜq_liqʲs.:($j)
+                ᶜq_iceʲ = ᶜq_iceʲs.:($j)
             end
 
             ρaʲ_level = Fields.field_values(Fields.level(ᶜρaʲ, i))
@@ -467,6 +471,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 Sᵖ_prev_level = Fields.field_values(Fields.level(ᶜSᵖ, i - 1))
                 Sᵖ_snow_prev_level =
                     Fields.field_values(Fields.level(ᶜSᵖ_snow, i - 1))
+                q_liqʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜq_liqʲ, i - 1))
+                q_iceʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜq_iceʲ, i - 1))
             end
 
             tke_prev_level = Fields.field_values(Fields.level(ᶜtke⁰, i - 1))
@@ -580,6 +588,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     S_q_snoʲ_prev_level,
                     S_e_totʲ_prev_level,
                     ρʲ_prev_level,
+                    q_totʲ_prev_level,
+                    q_liqʲ_prev_level,
+                    q_iceʲ_prev_level,
                     q_rai_prev_level,
                     q_sno_prev_level,
                     tsʲ_prev_level,
