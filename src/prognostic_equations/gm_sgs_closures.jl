@@ -36,7 +36,7 @@ function smagorinsky_lilly_length(c_smag, N_eff, dz, Pr, ϵ_st)
 end
 
 """
-    compute_gm_mixing_length!(ᶜmixing_length, Y, p)
+    compute_gm_mixing_length(Y, p)
 
 Computes the grid-mean subgrid-scale (SGS) mixing length using the
 Smagorinsky-Lilly formulation and stores it in `ᶜmixing_length`.
@@ -61,7 +61,7 @@ Modifies `ᶜmixing_length` in place. Also modifies fields in `p.precomputed`
 (like `ᶜlinear_buoygrad`, `ᶜstrain_rate_norm`) and uses `p.scratch` for
 intermediate calculations.
 """
-NVTX.@annotate function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
+NVTX.@annotate function compute_gm_mixing_length(Y, p)
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
 
@@ -92,11 +92,13 @@ NVTX.@annotate function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     @. ᶜprandtl_nvec =
         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
 
-    @. ᶜmixing_length = smagorinsky_lilly_length(
-        CAP.c_smag(params),
-        sqrt(max(ᶜlinear_buoygrad, 0)),   # N_eff
-        ᶜdz,
-        ᶜprandtl_nvec,
-        ᶜstrain_rate_norm,
+    return @. lazy(
+        smagorinsky_lilly_length(
+            CAP.c_smag(params),
+            sqrt(max(ᶜlinear_buoygrad, 0)),   # N_eff
+            ᶜdz,
+            ᶜprandtl_nvec,
+            ᶜstrain_rate_norm,
+        ),
     )
 end

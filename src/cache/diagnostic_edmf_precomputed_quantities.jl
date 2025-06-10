@@ -966,13 +966,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     (; ᶜp, ᶜu, ᶜts) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜtke⁰) = p.precomputed
-    (;
-        ᶜlinear_buoygrad,
-        ᶜstrain_rate_norm,
-        ᶜmixing_length_tuple,
-        ᶜmixing_length,
-    ) = p.precomputed
-    (; ᶜK_h, ᶜK_u, ρatke_flux) = p.precomputed
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ρatke_flux) = p.precomputed
     turbconv_params = CAP.turbconv_params(params)
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
@@ -1003,42 +998,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
     ᶜstrain_rate .= compute_strain_rate_center(ᶠu⁰)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
-
-    ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
-    @. ᶜprandtl_nvec =
-        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
-
-    ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
-    @. ᶜtke_exch = 0
-    # using ᶜu⁰ would be more correct, but this is more consistent with the
-    # TKE equation, where using ᶜu⁰ results in allocation
-    for j in 1:n
-        @. ᶜtke_exch +=
-            ᶜρaʲs.:($$j) * ᶜdetrʲs.:($$j) / Y.c.ρ *
-            (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
-    end
-
-    sfc_tke = Fields.level(ᶜtke⁰, 1)
-    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, half)
-    @. ᶜmixing_length_tuple = mixing_length(
-        params,
-        ustar,
-        ᶜz,
-        z_sfc,
-        ᶜdz,
-        max(sfc_tke, 0),
-        ᶜlinear_buoygrad,
-        max(ᶜtke⁰, 0),
-        obukhov_length,
-        ᶜstrain_rate_norm,
-        ᶜprandtl_nvec,
-        ᶜtke_exch,
-        p.atmos.edmfx_model.scale_blending_method,
-    )
-    @. ᶜmixing_length = ᶜmixing_length_tuple.master
-
-    @. ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
-    @. ᶜK_h = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
     ρ_int_values = Fields.field_values(Fields.level(Y.c.ρ, 1))

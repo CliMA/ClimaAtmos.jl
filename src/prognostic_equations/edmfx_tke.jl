@@ -26,8 +26,13 @@
 edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model::EDOnlyEDMFX)
-    (; ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed
-    (; ᶜK_u, ᶜK_h) = p.precomputed
+    (; ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰) = p.precomputed
+    turbconv_params = CAP.turbconv_params(p.params)
+
+    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+    ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+    ᶜK_h = ᶜeddy_diffusivity(p, ᶜK_u)
 
     # shear production
     @. Yₜ.c.sgs⁰.ρatke += 2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate_norm
@@ -45,7 +50,9 @@ function edmfx_tke_tendency!(
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs, ᶠu³ʲs) = p.precomputed
     (; ᶠu³⁰, ᶠu³, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰) = p.precomputed
-    (; ᶜK_u, ᶜK_h) = p.precomputed
+    turbconv_params = CAP.turbconv_params(p.params)
+    FT = eltype(p.params)
+
     ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
     nh_pressure3_buoyʲs =
         turbconv_model isa PrognosticEDMFX ?
@@ -68,6 +75,12 @@ function edmfx_tke_tendency!(
     end
 
     if use_prognostic_tke(turbconv_model)
+
+        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
+        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+        ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+        ᶜK_h = ᶜeddy_diffusivity(p, ᶜK_u)
+
         # shear production
         @. Yₜ.c.sgs⁰.ρatke += 2 * ᶜρa⁰ * ᶜK_u * ᶜstrain_rate_norm
         # buoyancy production

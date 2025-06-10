@@ -248,10 +248,6 @@ function edmfx_sgs_mass_flux_tendency!(
         ᶜa_scalar = p.scratch.ᶜtemp_scalar
         for j in 1:n
             @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
-            # @. ᶜa_scalar =
-            #     (ᶜmseʲs.:($$j) + ᶜKʲs.:($$j) - ᶜh_tot) *
-            #     draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j))
-            # TODO: remove this filter when mass flux is treated implicitly
             @. ᶜa_scalar =
                 (ᶜmseʲs.:($$j) + ᶜKʲs.:($$j) - ᶜh_tot) * min(
                     min(draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)), a_max),
@@ -345,17 +341,22 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length) = p.precomputed
+    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰) = p.precomputed
     if (
         p.atmos.moisture_model isa NonEquilMoistModel &&
         p.atmos.microphysics_model isa Microphysics1Moment
     )
         (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
     end
-    (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
+    (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
+
+        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
+        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+        ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+        ᶜK_h = ᶜeddy_diffusivity(p, ᶜK_u)
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar
@@ -382,7 +383,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                         turbconv_params,
                         Y.c.sgs⁰.ρatke,
                         ᶜtke⁰,
-                        ᶜmixing_length,
+                        ᶜmixing_length_field,
                     ),
                     Y.c.sgs⁰.ρatke / float(dt),
                 )
@@ -450,11 +451,17 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜu, ᶜh_tot, ᶜtke⁰, ᶜmixing_length) = p.precomputed
-    (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
+    (; ᶜu, ᶜh_tot, ᶜtke⁰) = p.precomputed
+    (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
+
+        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
+        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+        ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+        ᶜK_h = ᶜeddy_diffusivity(p, ᶜK_u)
+
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar
@@ -482,7 +489,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                         turbconv_params,
                         Y.c.sgs⁰.ρatke,
                         ᶜtke⁰,
-                        ᶜmixing_length,
+                        ᶜmixing_length_field,
                     ),
                     Y.c.sgs⁰.ρatke / float(dt),
                 )

@@ -273,10 +273,40 @@ add_diagnostic_variable!(
     or from mixing length closure with EDMF SGS model.
     """,
     compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.ᶜmixing_length)
+        turbconv_model = cache.atmos.turbconv_model
+        # TODO: consolidate remaining mixing length types
+        # (smagorinsky_lilly, dz) into a single mixing length function
+        if isa(turbconv_model, PrognosticEDMFX) ||
+           isa(turbconv_model, DiagnosticEDMFX) ||
+           isa(turbconv_model, EDOnlyEDMFX)
+            ᶜmixing_length_field = ᶜmixing_length(state, cache)
         else
-            out .= cache.precomputed.ᶜmixing_length
+            (; params) = cache
+            (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+            ᶜdz = Fields.Δz_field(axes(state.c))
+            ᶜprandtl_nvec = @. lazy(
+                turbulent_prandtl_number(
+                    params,
+                    ᶜlinear_buoygrad,
+                    ᶜstrain_rate_norm,
+                ),
+            )
+            ᶜmixing_length_field = @. lazy(
+                smagorinsky_lilly_length(
+                    CAP.c_smag(params),
+                    sqrt(max(ᶜlinear_buoygrad, 0)),   # N_eff
+                    ᶜdz,
+                    ᶜprandtl_nvec,
+                    ᶜstrain_rate_norm,
+                ),
+            )
+        end
+
+
+        if isnothing(out)
+            return Base.materialize(ᶜmixing_length_field)
+        else
+            out .= ᶜmixing_length_field
         end
     end,
 )
