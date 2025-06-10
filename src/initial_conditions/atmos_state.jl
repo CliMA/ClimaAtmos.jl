@@ -115,7 +115,7 @@ function moisture_variables(ls, ::EquilMoistModel)
                  TD.q_vap_from_RH_liquid(ls.thermo_params, 
                                          TD.air_pressure(ls.thermo_params, ls.thermo_state), 
                                          TD.air_temperature(ls.thermo_params, ls.thermo_state), 
-                                         eltype(ls.params)(0.3))
+                                         eltype(ls.params)(0.3) * exp(-ls.geometry.coordinates.z))
     )
 end
 moisture_variables(ls, ::NonEquilMoistModel) = (;
