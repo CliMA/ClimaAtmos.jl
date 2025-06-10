@@ -289,62 +289,63 @@ function calc_nonpropagating_forcing!(
     ᶠz,
     ᶜz,
     z_pbl,
-    dz,
+    ᶠdz,
     grav,
 )
     FT = eltype(grav)
 
     # Initialize fields for z_ref and phase computation
-    z_ref_field = similar(Fields.level(ᶠz, half), Tuple{FT, FT})
+    z_ref = similar(Fields.level(ᶠz, half), FT)
+
+    # Convert type parameters to values before using in closure
+    zero_val = FT(0)
+    pi_val = FT(π)
+    min_n_val = FT(0.7e-2)
+    max_n_val = FT(1.7e-2)
+    min_Vτ_val = FT(1.0)
 
     # Compute z_ref using column_reduce
-    @Main.infiltrate
-    input = @. lazy(tuple(ᶠz, ᶠN, ᶠVτ, z_pbl))
-
-    # @Main.infiltrate
+    input = @. lazy(tuple(z_pbl, ᶠz, ᶠN, ᶠVτ, zero_val, pi_val, min_n_val, max_n_val, min_Vτ_val))
 
     Operators.column_reduce!(
-        z_ref_field,
+        z_ref,
         input;
-        init = (FT(0), FT(0), FT(0), false),  # (phase, z_ref)
-        transform = x -> (x[1], x[2])
-    ) do (z_ref_acc, ᶠz_pbl_acc, phase_acc, done), (z_face, N_face, Vτ_face, z_pbl)
-        # if done && z_face == FT(0)
-        #     z_ref_acc = z_pbl
-        #     done = false
-        # end
-
+        init = (FT(0.0), FT(0.0), FT(0.0), false),
+        transform = first
+    ) do (z_ref_acc, ᶠz_pbl_acc, phase_acc, done), (z_pbl_itr, z_face, N_face, Vτ_face, zero_val, pi_val, min_n_val, max_n_val, min_Vτ_val)
         if done
             # If already done, return the accumulated values
             return (z_ref_acc, ᶠz_pbl_acc, phase_acc, true)
         end
+        if (z_face > z_pbl_itr)
         # Only accumulate phase above z_pbl
-        if z_face > z_pbl
-            phase_acc += (z_face - z_pbl) * 
-                max(FT(0.7e-2), min(FT(1.7e-2), N_face)) / 
-                max(FT(1.0), Vτ_face)
+            phase_acc += (z_face - z_pbl_itr) * 
+                max(min_n_val, min(max_n_val, N_face)) / 
+                max(min_Vτ_val, Vτ_face)
             
             # If phase exceeds π, stop and return current z_col as z_ref
-            if phase_acc > π
-                return (z_face, z_pbl, phase_acc, true)
+            if phase_acc > pi_val
+                return (z_face, z_pbl_itr, phase_acc, true)
             end
         end
         # Always return the accumulator tuple
         return (z_ref_acc, ᶠz_pbl_acc, phase_acc, false)
     end
 
-    z_ref = z_ref_field.:1
-    ᶠz_pbl = z_ref_field.:2
+    ᶠp_ref = similar(Fields.level(ᶠz, half), FT)
 
-    ᶠp_ref = similar(Fields.level(ᶠN, half), FT)
-    input = @. lazy(tuple(z_ref, ᶠz, ᶠp, dz))
+    eps_val = eps(FT)
+    half_val = FT(0.5)
+    nan_val = FT(NaN)
+    
+    input = @. lazy(tuple(z_ref, ᶠp, ᶠz, ᶠdz, eps_val, half_val))
 
     Operators.column_reduce!(
         ᶠp_ref,
         input;
-        init = FT(NaN)
-    ) do ᶠp_ref, (z_ref, ᶠz, ᶠp, dz)
-        if abs(ᶠz - z_ref) < (0.5 * dz + eps(FT))
+        init = nan_val
+    ) do ᶠp_ref, (z_ref, ᶠp, ᶠz, ᶠdz, eps_val, half_val)
+        if abs(ᶠz - z_ref) < (half_val * ᶠdz + eps_val)
             if isnan(ᶠp_ref)
                 ᶠp_ref = ᶠp
             end
@@ -365,10 +366,6 @@ function calc_nonpropagating_forcing!(
 
     weights = weights .* mask
 
-    # @Main.infiltrate
-
-    # i_top = Spaces.nlevels(axes(ᶠz))
-    # wtsum = Fields.level(wtsum_field, i_top - 1)
     wtsum = similar(Fields.level(ᶜuforcing, 1), FT)
 
     Operators.column_reduce!(
