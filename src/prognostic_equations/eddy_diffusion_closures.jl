@@ -293,7 +293,7 @@ function surface_flux_tke(
 end
 
 """
-    mixing_length(
+    mixing_length_lopez_gomez_2020(
     params,
     ustar,
     ᶜz,
@@ -325,12 +325,15 @@ where:
 - `scale_blending_method`: The method to use for blending physical scales.
 
 Calculates the turbulent mixing length, limited by physical constraints (wall distance,
-TKE balance, stability) and grid resolution. 
+TKE balance, stability) and grid resolution. Based on 
+Lopez‐Gomez, I., Cohen, Y., He, J., Jaruga, A., & Schneider, T. (2020). 
+A generalized mixing length closure for eddy‐diffusivity mass‐flux schemes of turbulence and convection. 
+Journal of Advances in Modeling Earth Systems, 12, e2020MS002161. https://doi.org/ 10.1029/2020MS002161
 
 Returns a `MixingLength{FT}` struct containing the final blended mixing length (`master`) 
 and its constituent physical scales.
 """
-function mixing_length(
+function mixing_length_lopez_gomez_2020(
     params,
     ustar,
     ᶜz,
@@ -527,6 +530,82 @@ function mixing_length(
     return MixingLength{FT}(l_final, l_W, l_TKE, l_N, l_grid)
 end
 
+function mixing_length(
+    params,
+    ustar,
+    ᶜz,
+    z_sfc,
+    ᶜdz,
+    sfc_tke,
+    ᶜN²_eff,
+    ᶜtke,
+    obukhov_length,
+    ᶜstrain_rate_norm,
+    ᶜPr,
+    ᶜtke_exch,
+    scale_blending_method,
+    ::Val{P},
+) where {P<:Symbol}
+    FT = eltype(params)
+    ᶜmixing_length_tuple = mixing_length_lopez_gomez_2020(
+        params,
+        ustar,
+        ᶜz,
+        z_sfc,
+        ᶜdz,
+        max(sfc_tke, eps(FT)),
+        ᶜN²_eff,
+        max(ᶜtke, 0),
+        obukhov_length,
+        ᶜstrain_rate_norm,
+        ᶜPr,
+        ᶜtke_exch,
+        scale_blending_method,
+    )
+
+    return @inbounds getproperty(ᶜmixing_length_tuple, P)
+end
+
+function mixing_length(Y, p, property::Symbol = :master)
+    (; params) = p
+    (; ustar, obukhov_length) = p.precomputed.sfc_conditions
+    (; ᶜtke⁰) = p.precomputed
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+    sfc_tke = Fields.level(ᶜtke⁰, 1)
+
+    ᶜprandtl_nvec = turbulent_prandtl_number(p)
+    ᶜtke_exch = tke_exchange(Y, p)
+
+    propVal = if      property === :master   Val{:master}()
+    elseif property === :wall  Val{:wall}()
+    elseif property === :tke      Val{:tke}()
+    elseif property === :buoy      Val{:buoy}()
+    else  error("unknown property $property")
+    end
+
+    return @. lazy(
+        mixing_length(
+            params,
+            ustar,
+            ᶜz,
+            z_sfc,
+            ᶜdz,
+            max(sfc_tke, 0),
+            ᶜlinear_buoygrad,
+            max(ᶜtke⁰, 0),
+            obukhov_length,
+            ᶜstrain_rate_norm,
+            ᶜprandtl_nvec,
+            ᶜtke_exch,
+            p.atmos.edmfx_model.scale_blending_method,
+            propVal,
+        ),
+    )
+end
+
 """
     gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
@@ -610,6 +689,60 @@ function turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
     # though the formula should typically yield positive values if Pr_n > 0.
     # Also ensure that it's not larger than the Pr_max parameter.
     return min(max(prandtl_nvec, eps_FT), Pr_max)
+end
+
+
+function turbulent_prandtl_number(p)
+    (; params) = p
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    return @. lazy(
+        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+    )
+end
+
+
+"""
+    tke_exchange(Y, p)
+
+Calculates the turbulent kinetic energy (TKE) exchange tendency between the
+environment and updrafts due to detrainment.
+
+Arguments:
+- `Y`: The prognostic state vector.
+- `p`: Cache
+
+Returns:
+- The TKE exchange tendency term [m²/s³].
+"""
+function tke_exchange(Y, p)
+    (; turbconv_model) = p.atmos
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; ᶜdetrʲs, ᶜtke⁰, ᶠu³⁰, ᶠu³ʲs) = p.precomputed
+    ᶜρa⁰ =
+        p.atmos.turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
+
+    ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
+    @. ᶜtke_exch = 0
+    if p.atmos.turbconv_model isa PrognosticEDMFX
+        for j in 1:n
+            @. ᶜtke_exch +=
+                Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / ᶜρa⁰ * (
+                    1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) -
+                    ᶜtke⁰
+                )
+        end
+    elseif p.atmos.turbconv_model isa DiagnosticEDMFX
+        (; ᶜρaʲs) = p.precomputed
+        for j in 1:n
+            @. ᶜtke_exch +=
+                ᶜρaʲs.:($$j) * ᶜdetrʲs.:($$j) / ᶜρa⁰ * (
+                    1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) -
+                    ᶜtke⁰
+                )
+        end
+    end
+
+    return ᶜtke_exch
 end
 
 """
@@ -727,25 +860,9 @@ kinetic energy (TKE) and the mixing length.
 Returns K_u in units of [m^2/s].
 """
 function eddy_viscosity(turbconv_params, tke, mixing_length)
-    FT = typeof(tke)
     c_m = CAP.tke_ed_coeff(turbconv_params)
-    K_u = c_m * mixing_length * sqrt(max(tke, FT(0)))
-    return K_u
+    return @. lazy(c_m * mixing_length * sqrt(max(tke, 0)))
 end
-
-"""
-    eddy_diffusivity(K_u, prandtl_nvec)
-
-Calculates the eddy diffusivity (K_h) for scalars given the
-eddy viscosity (K_u) and the turbulent Prandtl number.
-
-Returns K_h in units of [m^2/s].
-"""
-
-function eddy_diffusivity(K_u, prandtl_nvec)
-    return K_u / prandtl_nvec # prandtl_nvec is already bounded by eps_FT and Pr_max
-end
-
 
 """
     eddy_diffusivity(turbconv_params, tke, mixing_length, prandtl_nvec)
@@ -757,6 +874,11 @@ Returns K_h in units of [m^2/s].
 """
 function eddy_diffusivity(turbconv_params, tke, mixing_length, prandtl_nvec)
     K_u = eddy_viscosity(turbconv_params, tke, mixing_length)
-    K_h = K_u / prandtl_nvec # prandtl_nvec is already bounded by eps_FT and Pr_max
-    return K_h
+    return K_u / prandtl_nvec
+end
+
+
+function eddy_diffusivity(p, K_u)
+    ᶜprandtl_nvec = turbulent_prandtl_number(p)
+    return @. lazy(K_u / ᶜprandtl_nvec) # prandtl_nvec is already bounded by eps_FT and Pr_max
 end

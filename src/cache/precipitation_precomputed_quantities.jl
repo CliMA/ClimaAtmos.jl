@@ -112,6 +112,7 @@ function set_precipitation_velocities!(
     cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
 
+
     # compute the precipitation terminal velocity [m/s]
     # TODO sedimentation of snow is based on the 1M scheme
     @. ᶜwnᵣ = getindex(
