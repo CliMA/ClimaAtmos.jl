@@ -363,13 +363,13 @@ This allows running simulations with TKE-based vertical diffusion.
 struct EDOnlyEDMFX <: AbstractEDMF end
 
 struct PrognosticEDMFX{N, TKE, FT} <: AbstractEDMF
-    a_half::FT # WARNING: this should never be used outside of divide_by_ρa
+    a_half::FT # WARNING: this should never be used outside of `specific`
 end
 PrognosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
     PrognosticEDMFX{N, TKE, FT}(a_half)
 
 struct DiagnosticEDMFX{N, TKE, FT} <: AbstractEDMF
-    a_half::FT # WARNING: this should never be used outside of divide_by_ρa
+    a_half::FT # WARNING: this should never be used outside of d`specific`
 end
 DiagnosticEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
     DiagnosticEDMFX{N, TKE, FT}(a_half)

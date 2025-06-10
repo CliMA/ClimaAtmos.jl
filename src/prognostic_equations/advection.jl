@@ -49,7 +49,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    (; ᶜh_tot) = p.precomputed
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
     @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
@@ -178,7 +178,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
-    (; ᶜspecific) = p.precomputed
 
     ᶠu³⁰ =
         advect_tke ?
@@ -186,9 +185,20 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             turbconv_model isa EDOnlyEDMFX ? p.precomputed.ᶠu³ :
             p.precomputed.ᶠu³⁰
         ) : nothing
-    ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
-    ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
-    ᶜtke⁰ = advect_tke ? p.precomputed.ᶜtke⁰ : nothing
+    ᶜρa⁰ = advect_tke ? (n > 0 ? (@.lazy(ρa⁰(Y.c))) : Y.c.ρ) : nothing
+    ᶜρ⁰ = if advect_tke
+        if n > 0
+            thermo_params = CAP.thermodynamics_params(p.params)
+            @. TD.air_density(thermo_params, p.precomputed.ᶜts⁰)
+        else
+            Y.c.ρ
+        end
+    else
+        nothing
+    end
+    ᶜtke⁰ = advect_tke ?
+        (@.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))) :
+        nothing
     ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜω³ = p.scratch.ᶜtemp_CT3
     ᶠω¹² = p.scratch.ᶠtemp_CT12
@@ -223,7 +233,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # ... and upwinding correction of energy and total water.
     # (The central advection of energy and total water is done implicitly.)
     if energy_upwinding != Val(:none)
-        (; ᶜh_tot) = p.precomputed
+        ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
         @. Yₜ.c.ρe_tot += vtt - vtt_central

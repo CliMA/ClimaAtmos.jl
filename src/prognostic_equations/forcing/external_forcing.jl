@@ -403,7 +403,8 @@ function external_forcing_tendency!(
         Yₜ.c.ρq_tot,
         Y.c.ρ,
         ᶠls_subsidence³,
-        ᶜq_tot,
+        specific(Y.c.ρq_tot, Y.c.ρ),
+        specific(Y.c.ρq_tot, Y.c.ρ),
         Val{:first_order}(),
     )
 

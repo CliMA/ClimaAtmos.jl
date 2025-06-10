@@ -448,7 +448,8 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     @assert !(p.atmos.moisture_model isa DryModel)
 
     (; params) = p
-    (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_ρq, ᶠradiation_flux) =
+    (; ᶜts) = p.precomputed
+    (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_q, ᶠradiation_flux) =
         p.radiation
     (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
@@ -475,10 +476,10 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     q_tot_isoline = FT(0.008)
     Operators.column_reduce!(
         (nt1, nt2) ->
-            abs(specific(nt1.ρq_tot, nt1.ρ) - q_tot_isoline) <
-            abs(specific(nt2.ρq_tot, nt2.ρ) - q_tot_isoline) ? nt1 : nt2,
-        isoline_z_ρ_ρq,
-        Base.broadcasted(NT ∘ tuple, ᶜz, Y.c.ρ, Y.c.ρq_tot),
+            abs(nt1.q_tot - q_tot_isoline) < abs(nt2.q_tot - q_tot_isoline) ?
+            nt1 : nt2,
+        isoline_z_ρ_q,
+        Base.broadcasted(NT ∘ tuple, ᶜz, Y.c.ρ, specific(Y.c.ρq_tot, Y.c.ρ)),
     )
 
     zi = isoline_z_ρ_ρq.z
