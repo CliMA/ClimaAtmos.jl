@@ -18,7 +18,7 @@ import Test
 # DO NOT ADD new dependencies if:
 
 # - the feature you need can be easily implemented (e.g., do you need the might
-#   of Distributions.jl to compute a guassian function?)
+#   of Distributions.jl to compute a gaussian function?)
 # - your dependency is heavy/has lots of dependencies (e.g., DataFrames, CUDA).
 #   Instead, ask around, someone will help you accomplish what you need
 # - your dependency implements code that logically should be implemented elsewhere

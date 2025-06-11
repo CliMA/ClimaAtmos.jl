@@ -93,7 +93,7 @@ function get_atmos(config::AtmosConfig, params)
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
         external_forcing = get_external_forcing_model(parsed_args, FT),
-        edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
+        scm_coriolis = get_scm_coriolis(parsed_args, FT),
         advection_test,
         edmfx_model,
         precip_model,

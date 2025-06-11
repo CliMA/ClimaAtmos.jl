@@ -25,7 +25,7 @@ get_qv_sat(thermo_params, x::EnvBuoyGradVars) =
     TD.vapor_specific_humidity(thermo_params, x.ts)
 get_θ_sat(thermo_params, x::EnvBuoyGradVars) =
     TD.dry_pottemp(thermo_params, x.ts)
-get_∂θl∂z_sat(_, x::EnvBuoyGradVars) = x.∂θl∂z_sat
+get_∂θli∂z_sat(_, x::EnvBuoyGradVars) = x.∂θli∂z_sat
 get_∂qt∂z_sat(_, x::EnvBuoyGradVars) = x.∂qt∂z_sat
 get_∂θv∂z_unsat(_, x::EnvBuoyGradVars) = x.∂θv∂z_unsat
 
@@ -39,7 +39,7 @@ get_∂θv∂z_unsat(_, x::EnvBuoyGradVars) = x.∂θv∂z_unsat
         ::Type{C3}, # Covariant3 vector type, for projecting gradients
         ∂θv∂z_unsat::AbstractField, # Vertical gradient of virtual potential temperature in unsaturated part
         ∂qt∂z_sat::AbstractField,   # Vertical gradient of total specific humidity in saturated part
-        ∂θl∂z_sat::AbstractField,   # Vertical gradient of liquid-ice potential temperature in saturated part
+        ∂θli∂z_sat::AbstractField,   # Vertical gradient of liquid-ice potential temperature in saturated part
         local_geometry::Fields.LocalGeometry,
         # Argument for the second method (internal use with precomputed EnvBuoyGradVars):
         # bg_model::EnvBuoyGradVars
@@ -74,7 +74,7 @@ Arguments:
 - `C3`: The `ClimaCore.Geometry.Covariant3Vector` type, used for projecting input vertical gradients.
 - `∂θv∂z_unsat`: Field of vertical gradients of virtual potential temperature in the unsaturated part.
 - `∂qt∂z_sat`: Field of vertical gradients of total specific humidity in the saturated part.
-- `∂θl∂z_sat`: Field of vertical gradients of liquid-ice potential temperature in the saturated part.
+- `∂θli∂z_sat`: Field of vertical gradients of liquid-ice potential temperature in the saturated part.
 - `local_geometry`: Field of local geometry at cell centers, used for gradient projection.
 The second method takes a precomputed `EnvBuoyGradVars` object instead of `ts` and gradient fields.
 
@@ -91,7 +91,7 @@ function buoyancy_gradients(
     ::Type{C3},
     ∂θv∂z_unsat,
     ∂qt∂z_sat,
-    ∂θl∂z_sat,
+    ∂θli∂z_sat,
     ᶜlg,
 ) where {C3}
     return buoyancy_gradients(
@@ -104,7 +104,7 @@ function buoyancy_gradients(
                 C3,
                 ∂θv∂z_unsat,
                 ∂qt∂z_sat,
-                ∂θl∂z_sat,
+                ∂θli∂z_sat,
                 ᶜlg,
             ),
         ),
@@ -124,7 +124,7 @@ function buoyancy_gradients(
     R_d = TDP.R_d(thermo_params)
     R_v = TDP.R_v(thermo_params)
 
-    phase_part = TD.PhasePartition(FT(0), FT(0), FT(0)) # assuming R_d = R_m
+    phase_part = TD.PhasePartition(FT(0), FT(0), FT(0)) # assuming R_m = R_d
     p = get_p(thermo_params, bg_model)
     Π = TD.exner_given_pressure(thermo_params, p, phase_part)
 
@@ -157,17 +157,16 @@ function buoyancy_gradients(
         cp_m = TD.cp_m(thermo_params, ts_sat)
         t_sat = get_t_sat(thermo_params, bg_model)
         qv_sat = get_qv_sat(thermo_params, bg_model)
-        # TODO - double check if this is assuming liquid only?
-        ∂b∂θl_sat = (
+        ∂b∂θli_sat = (
             ∂b∂θv *
             (1 + molmass_ratio * (1 + lh / R_v / t_sat) * qv_sat - qt_sat) /
             (1 + lh * lh / cp_m / R_v / t_sat / t_sat * qv_sat)
         )
         ∂b∂qt_sat =
-            (lh / cp_m / t_sat * ∂b∂θl_sat - ∂b∂θv) *
+            (lh / cp_m / t_sat * ∂b∂θli_sat - ∂b∂θv) *
             get_θ_sat(thermo_params, bg_model)
     else
-        ∂b∂θl_sat = FT(0)
+        ∂b∂θli_sat = FT(0)
         ∂b∂qt_sat = FT(0)
     end
 
@@ -176,7 +175,7 @@ function buoyancy_gradients(
         bg_model,
         thermo_params,
         ∂b∂θv,
-        ∂b∂θl_sat,
+        ∂b∂θli_sat,
         ∂b∂qt_sat,
     )
     return ∂b∂z
@@ -188,7 +187,7 @@ end
         bg_model::EnvBuoyGradVars,
         thermo_params,
         ∂b∂θv::FT,
-        ∂b∂θl_sat::FT,
+        ∂b∂θli_sat::FT,
         ∂b∂qt_sat::FT,
     ) where {FT}
 
@@ -201,7 +200,7 @@ This function takes the partial derivatives of buoyancy with respect to:
 - total specific humidity (`∂b/∂qₜ,sat`) for the saturated part.
 
 It then multiplies these by the respective vertical gradients of `θᵥ`, `θₗᵢ`, and `qₜ`
-(obtained from `bg_model` via `get_∂θv∂z_unsat`, `get_∂θl∂z_sat`, `get_∂qt∂z_sat`)
+(obtained from `bg_model` via `get_∂θv∂z_unsat`, `get_∂θli∂z_sat`, `get_∂qt∂z_sat`)
 to get the buoyancy gradients for the unsaturated (`∂b∂z_unsat`) and saturated
 (`∂b∂z_sat`) parts of the environment.
 Finally, it returns a single mean buoyancy gradient by linearly combining
@@ -213,7 +212,7 @@ Arguments:
 - `bg_model`: Precomputed environmental buoyancy gradient variables (`EnvBuoyGradVars`).
 - `thermo_params`: Thermodynamic parameters from `CLIMAParameters`.
 - `∂b∂θv`: Partial derivative of buoyancy w.r.t. virtual potential temperature (unsaturated part).
-- `∂b∂θl_sat`: Partial derivative of buoyancy w.r.t. liquid-ice potential temperature (saturated part).
+- `∂b∂θli_sat`: Partial derivative of buoyancy w.r.t. liquid-ice potential temperature (saturated part).
 - `∂b∂qt_sat`: Partial derivative of buoyancy w.r.t. total specific humidity (saturated part).
 
 Returns:
@@ -224,13 +223,13 @@ function buoyancy_gradient_chain_rule(
     bg_model::EnvBuoyGradVars,
     thermo_params,
     ∂b∂θv,
-    ∂b∂θl_sat,
+    ∂b∂θli_sat,
     ∂b∂qt_sat,
 )
     FT = eltype(thermo_params)
     en_cld_frac = get_en_cld_frac(thermo_params, bg_model)
     if en_cld_frac > FT(0)
-        ∂b∂z_θl_sat = ∂b∂θl_sat * get_∂θl∂z_sat(thermo_params, bg_model)
+        ∂b∂z_θl_sat = ∂b∂θli_sat * get_∂θli∂z_sat(thermo_params, bg_model)
         ∂b∂z_qt_sat = ∂b∂qt_sat * get_∂qt∂z_sat(thermo_params, bg_model)
     else
         ∂b∂z_θl_sat = FT(0)
@@ -529,6 +528,37 @@ function mixing_length(
 end
 
 """
+    gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
+
+Calculates the gradient Richardson number (Ri).
+
+The gradient Richardson number is a dimensionless parameter that represents the ratio
+of buoyancy term to the shear term in the TKE equation. It is calculated as:
+
+    Ri = ᶜN²_eff / max(2 * |S|, ε)
+
+where:
+- `params`: Parameter set (e.g., CLIMAParameters.AbstractParameterSet), used to determine floating point type.
+- `ᶜN²_eff`: Effective squared Brunt-Väisälä frequency [1/s²].
+- `ᶜstrain_rate_norm`: Frobenius norm of the strain rate tensor, |S| [1/s].
+- `ε` is a small machine epsilon value to prevent division by zero.
+
+Returns:
+- The gradient Richardson number (dimensionless scalar).
+"""
+function gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
+    FT = eltype(params)
+
+    # Calculate the denominator term for Ri, ensuring it's not zero
+    # Based on the formulation Ri = N^2 / max(2*|S|, eps)
+    ᶜshear_term_safe = max(2 * ᶜstrain_rate_norm, eps(FT))
+    ᶜRi_grad = ᶜN²_eff / ᶜshear_term_safe
+
+    return ᶜRi_grad
+end
+
+
+"""
     turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
 where:
@@ -559,10 +589,8 @@ function turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
     ω_pr = CAP.Prandtl_number_scale(turbconv_params) # Prandtl number scale coefficient
     Pr_max = CAP.Pr_max(turbconv_params) # Maximum Prandtl number limit
 
-    # Calculate the raw gradient Richardson number
-    # Using the definition Ri = N^2 / (2*|S|)
-    ᶜshear_term_safe = max(2 * ᶜstrain_rate_norm, eps_FT)
-    ᶜRi_grad = ᶜN²_eff / ᶜshear_term_safe
+    # Calculate the raw gradient Richardson number using the new helper function
+    ᶜRi_grad = gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
     # --- Apply the Pr_t(Ri) formula valid for stable and unstable conditions ---
 
