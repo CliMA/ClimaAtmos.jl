@@ -81,18 +81,17 @@ scalar quantity `χ`.
 
 Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
-- `Y`: The current state vector (used for `Y.c.ρ`).
-- `p`: Cache containing parameters, precomputed fields (`ᶜh_tot`, `ᶜspecific`),
-       atmospheric model configurations (`p.atmos.moisture_model`, `p.atmos.subsidence`),
-       and scratch space.
-- `t`: Current simulation time (unused by this specific tendency calculation).
-- `subsidence_model`: A `Subsidence` object containing the subsidence profile function.
-
-If `subsidence_model` is `Nothing`, no subsidence tendency is applied.
+- `Y`: The current state vector, used for density (`ρ`).
+- `p`: Cache containing parameters, precomputed fields (`ᶜh_tot`),
+       and the subsidence model object.
+- `t`: Current simulation time.
+- `subsidence`: The subsidence model object, containing the prescribed vertical
+              velocity profile `Dᵥ`.
 """
-subsidence_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing    # No subsidence
-
-function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
+function subsidence_tendency!(Yₜ, Y, p, t, subsidence::Subsidence)
+    (; Dᵥ) = subsidence
+    (; ᶜh_tot) = p.precomputed
+    ᶜρ = Y.c.ρ
     (; moisture_model) = p.atmos
     subsidence_profile = p.atmos.subsidence.prof
     (; ᶜh_tot) = p.precomputed

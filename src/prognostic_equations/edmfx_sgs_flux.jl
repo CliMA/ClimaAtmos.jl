@@ -316,7 +316,40 @@ function edmfx_sgs_mass_flux_tendency!(
                 )
                 @. Yₜ.c.ρq_tot += vtt
             end
-            # TODO: add environment flux?
+        end
+        # TODO: the following adds the environment flux to the tendency
+        # Make active and test later
+        # @. ᶠu³_diff = p.precomputed.ᶠu³⁰ - ᶠu³
+        # ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
+        # ᶜρ⁰ = p.scratch.ᶜtemp_scalar_2
+        # @. ᶜρ⁰ = TD.air_density(
+        #     CAP.thermodynamics_params(p.params),
+        #     p.precomputed.ᶜts⁰,
+        # )
+        # ᶜmse⁰ = @.lazy(specific_env_mse(Y.c, p))
+        # @. ᶜa_scalar =
+        #     (ᶜmse⁰ + p.precomputed.ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
+        # vtt = vertical_transport(
+        #     ᶜρ⁰,
+        #     ᶠu³_diff,
+        #     ᶜa_scalar,
+        #     dt,
+        #     edmfx_sgsflux_upwinding,
+        # )
+        # @. Yₜ.c.ρe_tot += vtt
+        # if !(p.atmos.moisture_model isa DryModel)
+        #     ᶜq_tot⁰ = @.lazy(specific_env_value(:q_tot, Y.c, turbconv_model))
+        #     @. ᶜa_scalar =
+        #         (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) *
+        #         draft_area(ᶜρa⁰, ᶜρ⁰)
+        #     vtt = vertical_transport(
+        #         ᶜρ⁰,
+        #         ᶠu³_diff,
+        #         ᶜa_scalar,
+        #         dt,
+        #         edmfx_sgsflux_upwinding,
+        #     )
+        #     @. Yₜ.c.ρq_tot += vtt
         end
         # TODO: the following adds the environment flux to the tendency
         # Make active and test later
