@@ -105,13 +105,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 @. Yₜ.c.ρq_tot += vtt
             end
             # Add the environment fluxes
-            ᶜq_tot⁰ = @.lazy( specific(
-                    Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
-                    ᶜρa⁰,
-                    Y.c.ρq_tot,
-                    Y.c.ρ,
-                    turbconv_model,
-            ))
+            ᶜq_tot⁰ = @.lazy( specific_env_value(:q_tot, Y.c, turbconv_model))
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar = (ᶜq_tot⁰ - ᶜspecific.q_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
@@ -406,13 +400,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(C3(FT(0))),
             )
-            ᶜq_tot⁰ = @.lazy( specific(
-                    Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
-                    ᶜρa⁰,
-                    Y.c.ρq_tot,
-                    Y.c.ρ,
-                    turbconv_model,
-            ))
+            ᶜq_tot⁰ = @.lazy( specific_env_value(:q_tot, Y.c, turbconv_model))
             @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_tot⁰)))
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
