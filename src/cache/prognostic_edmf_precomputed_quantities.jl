@@ -22,7 +22,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
     (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
-    (; ᶜtke⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
+    (; ᶜtke⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜmse⁰, ᶜq_tot⁰) =
         p.precomputed
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.precip_model isa Microphysics1Moment
@@ -90,7 +90,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     else
         @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
     end
-    @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
     return nothing
 end
 
@@ -599,7 +598,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     cmc = CAP.microphysics_cloud_params(params)
 
     (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
-    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρ⁰, ᶜts⁰) = p.precomputed
+    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜts⁰) = p.precomputed
     (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
 
     # TODO - can I re-use them between js and env?
@@ -662,7 +661,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜSqᵢᵖ⁰,
         ᶜSqᵣᵖ⁰,
         ᶜSqₛᵖ⁰,
-        ᶜρ⁰,
+        TD.air_density.(thp, ᶜts⁰),
         ᶜq_rai⁰,
         ᶜq_sno⁰,
         ᶜts⁰,
@@ -674,7 +673,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜSᵖ,
         ᶜSqᵣᵖ⁰,
         ᶜSqₛᵖ⁰,
-        ᶜρ⁰,
+        TD.air_density.(thp, ᶜts⁰),
         ᶜq_rai⁰,
         ᶜq_sno⁰,
         ᶜts⁰,

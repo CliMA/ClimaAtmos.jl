@@ -42,7 +42,9 @@ function edmfx_sgs_mass_flux_tendency!(
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜts⁰) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜρ⁰ = @. TD.air_density(thermo_params, ᶜts⁰)
     ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
     if (
         p.atmos.moisture_model isa NonEquilMoistModel &&

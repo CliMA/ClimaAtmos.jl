@@ -187,7 +187,16 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             p.precomputed.ᶠu³⁰
         ) : nothing
     ᶜρa⁰ = advect_tke ? (n > 0 ? (@.lazy(ρa⁰(Y.c))) : Y.c.ρ) : nothing
-    ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
+    ᶜρ⁰ = if advect_tke
+        if n > 0
+            thermo_params = CAP.thermodynamics_params(p.params)
+            @. TD.air_density(thermo_params, p.precomputed.ᶜts⁰)
+        else
+            Y.c.ρ
+        end
+    else
+        nothing
+    end
     ᶜtke⁰ = advect_tke ? p.precomputed.ᶜtke⁰ : nothing
     ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜω³ = p.scratch.ᶜtemp_CT3

@@ -245,7 +245,7 @@ NVTX.@annotate function set_cloud_fraction!(
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜts⁰, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
-    (; ᶜρʲs, ᶜtsʲs, ᶜρ⁰) = p.precomputed
+    (; ᶜρʲs, ᶜtsʲs) = p.precomputed
     (; turbconv_model) = p.atmos
     ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
 
@@ -266,9 +266,9 @@ NVTX.@annotate function set_cloud_fraction!(
     # weight cloud diagnostics by environmental area
     @. cloud_diagnostics_tuple *= NamedTuple{(:cf, :q_liq, :q_ice)}(
         tuple(
-            draft_area(ᶜρa⁰, ᶜρ⁰),
-            draft_area(ᶜρa⁰, ᶜρ⁰),
-            draft_area(ᶜρa⁰, ᶜρ⁰),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
         ),
     )
     # updrafts

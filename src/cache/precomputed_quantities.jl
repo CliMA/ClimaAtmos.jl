@@ -26,10 +26,8 @@ every quantity except for `ᶜp` (which is shared across all subdomains):
     - `_ʲs`: a tuple of values for the mass-flux subdomains
 In addition, there are several other SGS quantities for `PrognosticEDMFX`:
     - `ᶜtke⁰`: turbulent kinetic energy of the environment on cell centers
-    - `ᶜρa⁰`: area-weighted air density of the environment on cell centers
     - `ᶜmse⁰`: moist static energy of the environment on cell centers
     - `ᶜq_tot⁰`: total specific humidity of the environment on cell centers
-    - `ᶜρ⁰`: air density of the environment on cell centers
     - `ᶜρʲs`: a tuple of the air densities of the mass-flux subdomains on cell
         centers
 For every other `AbstractEDMF`, only `ᶜtke⁰` is added as a precomputed quantity.
@@ -75,7 +73,6 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜK⁰ = similar(Y.c, FT),
             ᶜts⁰ = similar(Y.c, TST),
-            ᶜρ⁰ = similar(Y.c, FT),
             ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
             ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
