@@ -265,6 +265,50 @@ function specific_env_value(χ_name::Symbol, gs, turbconv_model)
     )
 end
 
+"""
+    specific_env_mse(gs, p)
+
+Computes the specific moist static energy (`mse`) in the environment (`mse⁰`).
+
+This is a specialized helper function because `mse` is not a grid-scale prognostic
+variable. It first computes the grid-scale moist static energy density (`ρmse`)
+from other grid-scale quantities (`ρ`, total specific enthalpy `h_tot`, specific 
+kinetic energy`K`). It then uses the `env_value` helper to compute the environment's 
+portion of `ρmse` and `ρa` via domain decomposition, and finally calculates the specific 
+value using the regularized `specific` function.
+
+Arguments:
+- `gs`: The grid-scale state (`Y.c`), containing `ρ` and `sgsʲs`.
+- `p`: The cache, containing the `turbconv_model` and precomputed grid-scale
+       fields `ᶜh_tot` and `ᶜK`.
+
+Returns:
+- A `ClimaCore.Fields.Field` containing the specific moist static energy of the
+  environment (`mse⁰`).
+"""
+function specific_env_mse(gs, p)
+    # Get necessary precomputed values from the cache `p`
+    (; ᶜh_tot, ᶜK) = p.precomputed  # TODO: replace by on-the-fly computation
+    (; turbconv_model) = p.atmos
+
+    # 1. Define the grid-scale moist static energy density `ρ * mse`.
+    grid_scale_ρmse = gs.ρ .* (ᶜh_tot .- ᶜK)
+
+    # 2. Compute the environment's density-area-weighted mse (`ρa⁰mse⁰`).
+    ρa⁰mse⁰ = env_value(grid_scale_ρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, gs)
+
+    # 3. Compute the environment's density-area product (`ρa⁰`).
+    ρa⁰_val = ρa⁰(gs)
+
+    # 4. Compute and return the final specific environment mse (`mse⁰`).
+    return specific(
+        ρa⁰mse⁰,
+        ρa⁰_val,
+        grid_scale_ρmse,
+        gs.ρ,
+        turbconv_model,
+    )
+end
 
 """
     ρah_tot⁺(sgsʲs)
