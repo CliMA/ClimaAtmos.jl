@@ -54,56 +54,43 @@ function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
 end
 
 """
-    sgs_weight_function(a, a_half)
+    specific_sgs(χ_name::Symbol, sgs, gs, turbconv_model)
 
-Computes a smooth, monotonic weight function `w(a)` that ranges from 0 to 1.
+Computes the specific quantity `χ` from a subgrid-scale (SGS) state `sgs`,
+identified by the symbol `χ_name`.
 
-This function is used as the interpolation weight in the regularized `specific`
-function. It ensures a numerically stable and smooth transition between a subgrid-scale 
-(SGS) quantity and its grid-mean counterpart, especially when the SGS area fraction `a` 
-is small.
-
-**Key Properties:**
-- `w(a) = 0` for `a ≤ 0`.
-- `w(a) = 1` for `a ≥ 1`.
-- `w(a_half) = 0.5`.
-- The function is continuously differentiable, with derivatives equal to zero at
-  `a = 0` and `a = 1`, which ensures smooth blending.
-- The functions grows very rapidly near `a = a_half`, and grows very slowly at all other 
-  values of `a`.
-- For small `a_half`, the weight rapidly approaches 1 for values of `a` that are
-  a few times larger than `a_half`.
-
-**Construction Method:**
-The function is piecewise. For `a` between 0 and 1, it is a custom sigmoid curve
-constructed in two main steps to satisfy the key properties:
-1.  **Bounded Sigmoid Creation**: A base sigmoid is created that maps the interval
-    `(0, 1)` to `(0, 1)` with zero derivatives at the endpoints. This is achieved
-    by composing a standard `tanh` function with the inverse of a slower-growing
-    `tanh` function.
-2.  **Midpoint Control**: To ensure the function passes through the control point
-    `(a_half, 0.5)`, the input `a` is first transformed by a specially designed
-    power function (`1 - (1 - a)^k`) before being passed to the bounded sigmoid.
-    This transformation maps `a_half` to `0.5` while preserving differentiability 
-    at the boundaries.
+This function constructs the required variable names (e.g.,
+`:ρaq_tot` from `:q_tot`) and computes the specific value using the regularized
+`specific` function. When area fraction becomes small, to avoid division by zero, 
+this includes a smooth fallback to grid-mean values when they are available, and to 
+0 when they are not.
 
 Arguments:
-- `a`: The input SGS area fraction (often approximated as `ρa / ρ`).
-- `a_half`: The value of `a` at which the weight function should be 0.5, controlling
-          the transition point of the sigmoid curve.
+- `χ_name`: A `Symbol` representing the specific quantity to be calculated (e.g., `:q_tot`).
+- `sgs`: The SGS state (e.g., draft).
+- `gs`: The grid-scale state, used to provide fallback values.
+- `turbconv_model`: The turbulence convection model, for regularization parameters.
 
 Returns:
-- The computed weight, a value between 0 and 1.
+- The specific value of the requested SGS quantity `χ`.
 """
-function sgs_weight_function(a, a_half)
-    if a < 0
-        zero(a)
-    elseif a > 1
-        one(a)
+# TODO: Replace turbconv_model by passing parameters needed for sgs_weight_function
+function specific_sgs(χ_name::Symbol, sgs, gs, turbconv_model)
+    sgs_name = Symbol(:ρa, χ_name)
+    gs_name = Symbol(:ρ, χ_name)
+
+    ρaχ = getproperty(sgs, sgs_name)
+    ρχ_fallback = if hasproperty(gs, gs_name)
+        getproperty(gs, gs_name)
     else
-        (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2
+        # Fallback for variables that do not exist at grid scale (e.g., TKE)
+        zero(ρaχ)
     end
+
+    return specific(ρaχ, sgs.ρa, ρχ_fallback, gs.ρ, turbconv_model)
 end
+
+
 
 # Helper functions for manipulating symbols in the generated functions:
 has_prefix(symbol, prefix_symbol) =
@@ -146,14 +133,9 @@ end
 Computes all specific quantities (`χ`) from a subgrid-scale (SGS) state `sgs`.
 
 This `@generated` function identifies all density-area-weighted fields in the SGS
-state (e.g., `:ρaq_tot`) and computes their specific values using the
-regularized `specific` function. This avoids numerical issues when the SGS area
-fraction is small by blending with the grid-mean value.
-
-For the fallback term in the regularized division, it uses the corresponding grid-mean 
-quantity from `gs` if it exists, otherwise it uses the SGS value itself as a proxy. 
-This is a performant, type-stable method for converting all relevant SGS variables to 
-specific quantities.
+state (e.g., `:ρaq_tot`) and generates code to compute their specific values by
+calling the `specific_sgs` helper for each variable. This provides a performant,
+type-stable method for converting all relevant SGS variables to specific quantities.
 
 Arguments:
 - `sgs`: A `NamedTuple`-like object for the SGS state (e.g., an updraft or environment).
@@ -165,24 +147,15 @@ Returns:
 """
 @generated function all_specific_sgs(sgs, gs, turbconv_model)
     sgs_names = Base._nt_names(sgs)
-    gs_names = Base._nt_names(gs)
     relevant_sgs_names =
         filter(name -> has_prefix(name, :ρa) && name != :ρa, sgs_names)
-    all_specific_sgs_names =
+    specific_sgs_names =
         map(name -> remove_prefix(name, :ρa), relevant_sgs_names)
-    relevant_gs_names = map(name -> Symbol(:ρ, name), all_specific_sgs_names)
-    all_specific_sgs_values = map(
-        (sgs_name, gs_name) -> :(specific(
-            sgs.$sgs_name,
-            sgs.ρa,
-            $(gs_name in gs_names ? :(gs.$gs_name) : :(sgs.$sgs_name)),
-            gs.ρ,
-            turbconv_model,
-        )),
-        relevant_sgs_names,
-        relevant_gs_names,
+    specific_sgs_values = map(
+        name -> :(specific_sgs($(QuoteNode(name)), sgs, gs, turbconv_model)),
+        specific_sgs_names,
     )
-    return :(NamedTuple{$all_specific_sgs_names}(($(all_specific_sgs_values...),)))
+    return :(NamedTuple{$specific_sgs_names}(($(specific_sgs_values...),)))
 end
 
 """
@@ -239,6 +212,57 @@ remove_energy_var(specific_state::NamedTuple) =
 remove_energy_var(specific_state::Tuple) =
     map(remove_energy_var, specific_state)
 
+    """
+    sgs_weight_function(a, a_half)
+
+Computes a smooth, monotonic weight function `w(a)` that ranges from 0 to 1.
+
+This function is used as the interpolation weight in the regularized `specific`
+function. It ensures a numerically stable and smooth transition between a subgrid-scale 
+(SGS) quantity and its grid-mean counterpart, especially when the SGS area fraction `a` 
+is small.
+
+**Key Properties:**
+- `w(a) = 0` for `a ≤ 0`.
+- `w(a) = 1` for `a ≥ 1`.
+- `w(a_half) = 0.5`.
+- The function is continuously differentiable, with derivatives equal to zero at
+  `a = 0` and `a = 1`, which ensures smooth blending.
+- The functions grows very rapidly near `a = a_half`, and grows very slowly at all other 
+  values of `a`.
+- For small `a_half`, the weight rapidly approaches 1 for values of `a` that are
+  a few times larger than `a_half`.
+
+**Construction Method:**
+The function is piecewise. For `a` between 0 and 1, it is a custom sigmoid curve
+constructed in two main steps to satisfy the key properties:
+1.  **Bounded Sigmoid Creation**: A base sigmoid is created that maps the interval
+    `(0, 1)` to `(0, 1)` with zero derivatives at the endpoints. This is achieved
+    by composing a standard `tanh` function with the inverse of a slower-growing
+    `tanh` function.
+2.  **Midpoint Control**: To ensure the function passes through the control point
+    `(a_half, 0.5)`, the input `a` is first transformed by a specially designed
+    power function (`1 - (1 - a)^k`) before being passed to the bounded sigmoid.
+    This transformation maps `a_half` to `0.5` while preserving differentiability 
+    at the boundaries.
+
+Arguments:
+- `a`: The input SGS area fraction (often approximated as `ρa / ρ`).
+- `a_half`: The value of `a` at which the weight function should be 0.5, controlling
+          the transition point of the sigmoid curve.
+
+Returns:
+- The computed weight, a value between 0 and 1.
+"""
+function sgs_weight_function(a, a_half)
+    if a < 0
+        zero(a)
+    elseif a > 1
+        one(a)
+    else
+        (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2
+    end
+end
 
 """
     draft_sum(f, sgsʲs)
@@ -311,14 +335,6 @@ function specific_env_value(χ_name::Symbol, gs, turbconv_model)
         turbconv_model,
     )
 end
-
-"""
-    ρa⁰(gs)
-
-Computes the environment area-weighted density, assuming that the
-draft subdomain states are stored in `gs.sgsʲs`.
-"""
-ρa⁰(gs) = env_value(gs.ρ, sgsʲ -> sgsʲ.ρa, gs)
 
 """
     specific_env_mse(gs, p)
