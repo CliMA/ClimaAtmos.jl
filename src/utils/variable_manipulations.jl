@@ -265,13 +265,6 @@ function specific_env_value(χ_name::Symbol, gs, turbconv_model)
     )
 end
 
-"""
-    ρa⁺(gs)
-
-Computes the total area-weighted density of all draft subdomains, assuming that the
-draft subdomain states are stored in `gs.sgsʲs`.
-"""
-ρa⁺(gs) = draft_sum(sgsʲ -> sgsʲ.ρa, gs.sgsʲs)
 
 """
     ρah_tot⁺(sgsʲs)
@@ -288,14 +281,6 @@ Computes the total area-weighted `ρmse` across all draft subdomains, assuming t
 draft subdomain states are stored in `sgsʲs`.
 """
 ρamse⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, sgsʲs)
-
-"""
-    ρaq_tot⁺(sgsʲs)
-
-Computes the total area-weighted `ρq_tot` across all draft subdomains, assuming that the
-draft subdomain states are stored in `sgsʲs`.
-"""
-ρaq_tot⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.q_tot, sgsʲs)
 
 """
     ρaq_liq⁺(sgsʲs)
