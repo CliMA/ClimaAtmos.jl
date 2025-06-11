@@ -38,7 +38,7 @@ function implicit_precomputed_quantities(Y, atmos)
     TST = thermo_state_type(moisture_model, FT)
     n = n_mass_flux_subdomains(turbconv_model)
     gs_quantities = (;
-        ᶜspecific = specific_gs.(Y.c),
+        ᶜspecific = specific_gs.(Y.c),  #TODO Remove this
         ᶜu = similar(Y.c, C123{FT}),
         ᶠu³ = similar(Y.f, CT3{FT}),
         ᶠu = similar(Y.f, CT123{FT}),
