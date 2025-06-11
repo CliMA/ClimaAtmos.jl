@@ -11,9 +11,7 @@ Allocates precomputed quantities that are treated implicitly (i.e., updated
 on each iteration of the implicit solver). This includes all quantities related
 to velocity and thermodynamics that are used in the implicit tendency.
 
-The following grid-scale quantities are treated implicitly:
-    - `ᶜspecific`: specific quantities on cell centers (for every prognostic
-        quantity `ρχ`, there is a corresponding specific quantity `χ`)
+The following grid-scale quantities are treated implicitly and are precomputed:
     - `ᶜu`: covariant velocity on cell centers
     - `ᶠu`: contravariant velocity on cell faces
     - `ᶜK`: kinetic energy on cell centers
@@ -37,8 +35,7 @@ function implicit_precomputed_quantities(Y, atmos)
     FT = eltype(Y)
     TST = thermo_state_type(moisture_model, FT)
     n = n_mass_flux_subdomains(turbconv_model)
-    gs_quantities = (;
-        ᶜspecific = all_specific_gs.(Y.c),  #TODO Remove this
+    gs_quantities = (;   
         ᶜu = similar(Y.c, C123{FT}),
         ᶠu³ = similar(Y.f, CT3{FT}),
         ᶠu = similar(Y.f, CT123{FT}),
@@ -433,13 +430,12 @@ quantities are updated.
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, moisture_model, precip_model) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜspecific, ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
     thermo_args = (thermo_params, moisture_model, precip_model)
 
-    @. ᶜspecific = all_specific_gs(Y.c)
     @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
 
     # TODO: We might want to move this to dss! (and rename dss! to something
@@ -467,7 +463,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     end
     @. ᶜts = ts_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
-    @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
+    @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ))
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)

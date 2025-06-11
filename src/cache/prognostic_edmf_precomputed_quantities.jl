@@ -22,8 +22,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
     (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
-    (; ᶜtke⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰) =
-        p.precomputed
+    (; ᶜtke⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰) = p.precomputed
 
     ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
     @. ᶜtke⁰ = specific_sgs(@name(tke), Y.c.sgs⁰, Y.c, turbconv_model)
@@ -133,7 +132,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
     turbconv_params = CAP.turbconv_params(p.params)
 
     (; ᶜΦ,) = p.core
-    (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ᶜp, ᶜh_tot, ᶜK, ᶜtsʲs, ᶜρʲs) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
     for j in 1:n
@@ -193,7 +192,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
         )
 
         # ... and the first interior point for EDMFX ᶜq_totʲ.
-        ᶜq_tot_int_val = Fields.field_values(Fields.level(ᶜspecific.q_tot, 1))
+        ᶜq_tot_int_val =
+            Fields.field_values(Fields.level(specific(Y.c.ρq_tot, Y.c.ρ), 1))
         ᶜq_totʲ_int_val = Fields.field_values(Fields.level(ᶜq_totʲ, 1))
         @. ᶜq_totʲ_int_val = sgs_scalar_first_interior_bc(
             ᶜz_int_val - z_sfc_val,
@@ -209,23 +209,27 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
         if p.atmos.moisture_model isa NonEquilMoistModel &&
            p.atmos.precip_model isa Microphysics1Moment
             # TODO - any better way to define the cloud and precip tracer flux?
-            ᶜq_liq_int_val =
-                Fields.field_values(Fields.level(ᶜspecific.q_liq, 1))
+            ᶜq_liq_int_val = Fields.field_values(
+                Fields.level(specific(Y.c.ρq_liq, Y.c.ρ), 1),
+            )
             ᶜq_liqʲ_int_val = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
             @. ᶜq_liqʲ_int_val = ᶜq_liq_int_val
 
-            ᶜq_ice_int_val =
-                Fields.field_values(Fields.level(ᶜspecific.q_ice, 1))
+            ᶜq_ice_int_val = Fields.field_values(
+                Fields.level(specific(Y.c.ρq_ice, Y.c.ρ), 1),
+            )
             ᶜq_iceʲ_int_val = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
             @. ᶜq_iceʲ_int_val = ᶜq_ice_int_val
 
-            ᶜq_rai_int_val =
-                Fields.field_values(Fields.level(ᶜspecific.q_rai, 1))
+            ᶜq_rai_int_val = Fields.field_values(
+                Fields.level(specific(Y.c.ρq_rai, Y.c.ρ), 1),
+            )
             ᶜq_raiʲ_int_val = Fields.field_values(Fields.level(ᶜq_raiʲ, 1))
             @. ᶜq_raiʲ_int_val = ᶜq_rai_int_val
 
-            ᶜq_sno_int_val =
-                Fields.field_values(Fields.level(ᶜspecific.q_sno, 1))
+            ᶜq_sno_int_val = Fields.field_values(
+                Fields.level(specific(Y.c.ρq_sno, Y.c.ρ), 1),
+            )
             ᶜq_snoʲ_int_val = Fields.field_values(Fields.level(ᶜq_snoʲ, 1))
             @. ᶜq_snoʲ_int_val = ᶜq_sno_int_val
         end

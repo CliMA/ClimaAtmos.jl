@@ -54,21 +54,20 @@ scalar quantity `χ`.
 
 Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
-- `Y`: The current state vector (used for `Y.c.ρ`).
-- `p`: Cache containing parameters, precomputed fields (`ᶜh_tot`, `ᶜspecific`),
-       atmospheric model configurations (`p.atmos.moisture_model`, `p.atmos.subsidence`),
-       and scratch space.
-- `t`: Current simulation time (unused by this specific tendency calculation).
-- `subsidence_model`: A `Subsidence` object containing the subsidence profile function.
-
-If `subsidence_model` is `Nothing`, no subsidence tendency is applied.
+- `Y`: The current state vector, used for density (`ρ`).
+- `p`: Cache containing parameters, precomputed fields (`ᶜh_tot`),
+       and the subsidence model object.
+- `t`: Current simulation time.
+- `subsidence`: The subsidence model object, containing the prescribed vertical
+              velocity profile `Dᵥ`.
 """
-subsidence_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing    # No subsidence
-
-function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
+function subsidence_tendency!(Yₜ, Y, p, t, subsidence::Subsidence)
+    (; Dᵥ) = subsidence
+    (; ᶜh_tot) = p.precomputed
+    ᶜρ = Y.c.ρ
     (; moisture_model) = p.atmos
     subsidence_profile = p.atmos.subsidence.prof
-    (; ᶜh_tot, ᶜspecific) = p.precomputed
+    (; ᶜh_tot) = p.precomputed
 
     ᶠz = Fields.coordinate_field(axes(Y.f)).z
     ᶠlg = Fields.local_geometry_field(Y.f)
@@ -82,7 +81,7 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
         Yₜ.c.ρq_tot,
         Y.c.ρ,
         ᶠsubsidence³,
-        ᶜspecific.q_tot,
+        specific(Y.c.ρq_tot, Y.c.ρ),
         Val{:first_order}(),
     )
     if moisture_model isa NonEquilMoistModel
@@ -90,14 +89,14 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
             Yₜ.c.ρq_liq,
             Y.c.ρ,
             ᶠsubsidence³,
-            ᶜspecific.q_liq,
+            specific(Y.c.ρq_liq, Y.c.ρ),
             Val{:first_order}(),
         )
         subsidence!(
             Yₜ.c.ρq_ice,
             Y.c.ρ,
             ᶠsubsidence³,
-            ᶜspecific.q_ice,
+            specific(Y.c.ρq_ice, Y.c.ρ),
             Val{:first_order}(),
         )
     end

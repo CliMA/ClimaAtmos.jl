@@ -96,7 +96,8 @@ horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
-    (; ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶜspecific, ᶜh_tot) = p.precomputed
+    (; ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶜh_tot) = p.precomputed
+    ᶜspecific = all_specific_gs(Y.c)
 
     ## Momentum tendencies
     ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(Y.c.ρ)
@@ -123,8 +124,9 @@ end
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     FT = eltype(Y)
     (; sfc_temp_C3, ᶠtemp_scalar, ᶜtemp_scalar) = p.scratch
-    (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, ᶜspecific, ᶜh_tot, sfc_conditions) =
+    (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, ᶜh_tot, sfc_conditions) =
         p.precomputed
+    ᶜspecific = all_specific_gs(Y.c)
     (; ρ_flux_uₕ, ρ_flux_h_tot) = sfc_conditions
 
     # Define operators

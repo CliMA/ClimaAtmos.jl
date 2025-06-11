@@ -104,7 +104,7 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
     p.atmos.disable_surface_flux_tendency && return
 
     FT = eltype(Y)
-    (; ᶜh_tot, ᶜspecific, sfc_conditions) = p.precomputed
+    (; ᶜh_tot, sfc_conditions) = p.precomputed
 
     if !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
         btt =
@@ -115,8 +115,7 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
     btt = boundary_tendency_scalar(ᶜh_tot, sfc_conditions.ρ_flux_h_tot)
     @. Yₜ.c.ρe_tot -= btt
     ρ_flux_χ = p.scratch.sfc_temp_C3
-    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
+    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, remove_energy_var(all_specific_gs(Y.c)))
         if χ_name == :q_tot
             @. ρ_flux_χ = sfc_conditions.ρ_flux_q_tot
         else

@@ -49,11 +49,19 @@ This function is dispatched based on the type of the vertical diffusion model
       diffusion tendency of total specific humidity `ρq_tot`: 
       `Yₜ.c.ρ -= ᶜρχₜ_diffusion_for_q_tot`.
 
-Arguments for all methods:
-- `Yₜ`: The tendency state vector, modified in place.
+This function is acting as a wrapper around the specific implementations
+for different turbulence and convection models.
+
+The primary role of this function is to dispatch to the correct turbulence model's
+tendency function. It operates on the state `Y` and its tendency `Yₜ`, using
+precomputed fields (e.g., `ᶜK_u`, `ᶜK_h`, `ᶜh_tot`),
+and the model-specific cache `p`.
+
+Arguments:
+- `Yₜ`: The tendency state vector.
 - `Y`: The current state vector.
 - `p`: Cache containing parameters (e.g., `p.params` for `CAP.α_vert_diff_tracer`),
-       precomputed fields (e.g., `ᶜK_u`, `ᶜK_h`, `ᶜh_tot`, `ᶜspecific` tracer values),
+       precomputed fields (e.g., `ᶜK_u`, `ᶜK_h`, `ᶜh_tot`),
        atmospheric model configurations (like `p.atmos.vert_diff`), and scratch space.
 - `t`: Current simulation time (not directly used in diffusion calculations).
 - `vert_diff_model` (for dispatched methods): The specific vertical diffusion model instance.
@@ -76,7 +84,7 @@ function vertical_diffusion_boundary_layer_tendency!(
 )
     FT = eltype(Y)
     α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
-    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h) = p.precomputed
+    (; ᶜu, ᶜh_tot, ᶜK_u, ᶜK_h) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
     if !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
@@ -96,8 +104,7 @@ function vertical_diffusion_boundary_layer_tendency!(
 
     ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
     ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_2
-    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
+    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, remove_energy_var(all_specific_gs(Y.c)))
         if χ_name in (:q_rai, :q_sno, :n_rai)
             @. ᶜK_h_scaled = α_vert_diff_tracer * ᶜK_h
         else

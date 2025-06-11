@@ -178,7 +178,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
-    (; ᶜspecific) = p.precomputed
 
     ᶠu³⁰ =
         advect_tke ?
@@ -222,8 +221,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
 
     # Full vertical advection of passive tracers (like liq, rai, etc) ...
-    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name in (:e_tot, :q_tot) && continue
+    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, remove_energy_var(all_specific_gs(Y.c)))
+        χ_name in (:q_tot,) && continue
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), tracer_upwinding)
         @. ᶜρχₜ += vtt
     end
@@ -237,7 +236,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
 
     if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
-        ᶜq_tot = ᶜspecific.q_tot
+        ᶜq_tot = specific(Y.c.ρq_tot, Y.c.ρ)
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
         @. Yₜ.c.ρq_tot += vtt - vtt_central

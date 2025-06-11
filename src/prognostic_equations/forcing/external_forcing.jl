@@ -337,7 +337,8 @@ function external_forcing_tendency!(
     # horizontal advection, vertical fluctuation, nudging, subsidence (need to add),
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜspecific, ᶜts, ᶜh_tot) = p.precomputed
+    (; ᶜts, ᶜh_tot) = p.precomputed
+    (; ᶜts, ᶜh_tot) = p.precomputed
     (;
         ᶜdTdt_fluc,
         ᶜdqtdt_fluc,
@@ -363,7 +364,8 @@ function external_forcing_tendency!(
     ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
     @. ᶜdTdt_nudging =
         -(TD.air_temperature(thermo_params, ᶜts) - ᶜT_nudge) * ᶜinv_τ_scalar
-    @. ᶜdqtdt_nudging = -(ᶜspecific.q_tot - ᶜqt_nudge) * ᶜinv_τ_scalar
+    @. ᶜdqtdt_nudging = -(specific(Y.c.ρq_tot, Y.c.ρ) - ᶜqt_nudge) * ᶜinv_τ_scalar
+    @. ᶜdqtdt_nudging = -(specific(Y.c.ρq_tot, Y.c.ρ) - ᶜqt_nudge) * ᶜinv_τ_scalar
 
     ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_sum = p.scratch.ᶜtemp_scalar_2
@@ -401,7 +403,8 @@ function external_forcing_tendency!(
         Yₜ.c.ρq_tot,
         Y.c.ρ,
         ᶠls_subsidence³,
-        ᶜspecific.q_tot,
+        specific(Y.c.ρq_tot, Y.c.ρ),
+        specific(Y.c.ρq_tot, Y.c.ρ),
         Val{:first_order}(),
     )
 
@@ -572,7 +575,8 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜspecific, ᶜts, ᶜh_tot, ᶜp) = p.precomputed
+    (; ᶜts, ᶜh_tot, ᶜp) = p.precomputed
+    (; ᶜts, ᶜh_tot, ᶜp) = p.precomputed
 
     ᶜinv_τ_scalar = APL.ISDAC_inv_τ_scalar(FT)  # s⁻¹
     ᶜinv_τ_wind = APL.ISDAC_inv_τ_wind(FT)  # s⁻¹
@@ -601,7 +605,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     @. ᶜdTdt_nudging =
         -(TD.air_temperature(thermo_params, ᶜts) - ta_ISDAC(ᶜp, ᶜz)) *
         ᶜinv_τ_scalar(ᶜz)
-    @. ᶜdqtdt_nudging = -(ᶜspecific.q_tot - q_tot(ᶜz)) * ᶜinv_τ_scalar(ᶜz)
+    @. ᶜdqtdt_nudging = -(specific(Y.c.ρq_tot, Y.c.ρ) - q_tot(ᶜz)) * ᶜinv_τ_scalar(ᶜz)
 
     T_0 = TD.Parameters.T_0(thermo_params)
     Lv_0 = TD.Parameters.LH_v0(thermo_params)
