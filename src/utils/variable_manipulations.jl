@@ -114,42 +114,64 @@ remove_prefix(symbol, prefix_symbol) =
 # can contain non-ASCII characters like 'ρ'.
 
 """
-    specific_gs(gs)
+    all_specific_gs(gs)
 
-Converts every variable of the form `ρχ` in the grid-scale state `gs` into the
-specific variable `χ` by dividing it by `ρ`. All other variables in `gs` are
-omitted from the result.
+Computes all specific quantities (`χ`) from a grid-scale state `gs`.
+
+This `@generated` function introspects the field names of `gs` at compile time.
+It identifies all density-weighted fields (e.g., `:ρq_tot`, `:ρe_tot`), divides
+them by the grid-scale density `gs.ρ`, and returns them in a new `NamedTuple`.
+This provides a type-stable and performant way to convert all relevant state
+variables to their specific counterparts at once.
+
+Arguments:
+- `gs`: A `NamedTuple`-like object representing the grid-scale state, which must
+        contain a `:ρ` field and other fields with a `:ρ` prefix.
+
+Returns:
+- A new `NamedTuple` containing only the specific quantities (e.g., `:q_tot`, `:e_tot`).
 """
-@generated function specific_gs(gs)
+@generated function all_specific_gs(gs)
     gs_names = Base._nt_names(gs)
     relevant_gs_names =
         filter(name -> has_prefix(name, :ρ) && name != :ρ, gs_names)
-    specific_gs_names = map(name -> remove_prefix(name, :ρ), relevant_gs_names)
-    specific_gs_values = map(name -> :(gs.$name / gs.ρ), relevant_gs_names)
-    return :(NamedTuple{$specific_gs_names}(($(specific_gs_values...),)))
+    all_specific_gs_names = map(name -> remove_prefix(name, :ρ), relevant_gs_names)
+    all_specific_gs_values = map(name -> :(gs.$name / gs.ρ), relevant_gs_names)
+    return :(NamedTuple{$all_specific_gs_names}(($(all_specific_gs_values...),)))
 end
 
 """
-    specific_sgs(sgs, gs, turbconv_model)
+    all_specific_sgs(sgs, gs, turbconv_model)
 
-Converts every variable of the form `ρaχ` in the sub-grid-scale state `sgs` into
-the specific variable `χ` by dividing it by `ρa`. All other variables in `sgs`
-are omitted from the result. The division is computed as
-`specific(ρaχ, ρa, ρχ, ρ, turbconv_model)`, which is preferable to simply
-calling `ρaχ / ρa` because it avoids numerical issues that arise when `a` is
-small. The values of `ρ` and `ρχ` are taken from `gs`, but, when `ρχ` is not
-available in `gs` (e.g., when `χ` is a second moment variable like `tke`), its
-value is assumed to be equal to the value of `ρaχ` in `sgs`.
+Computes all specific quantities (`χ`) from a subgrid-scale (SGS) state `sgs`.
+
+This `@generated` function identifies all density-area-weighted fields in the SGS
+state (e.g., `:ρaq_tot`) and computes their specific values using the
+regularized `specific` function. This avoids numerical issues when the SGS area
+fraction is small by blending with the grid-mean value.
+
+For the fallback term in the regularized division, it uses the corresponding grid-mean 
+quantity from `gs` if it exists, otherwise it uses the SGS value itself as a proxy. 
+This is a performant, type-stable method for converting all relevant SGS variables to 
+specific quantities.
+
+Arguments:
+- `sgs`: A `NamedTuple`-like object for the SGS state (e.g., an updraft or environment).
+- `gs`: The corresponding grid-scale state, used to provide fallback values.
+- `turbconv_model`: The turbulence convection model, for regularization parameters.
+
+Returns:
+- A new `NamedTuple` containing only the specific SGS quantities (e.g., `:q_tot`).
 """
-@generated function specific_sgs(sgs, gs, turbconv_model)
+@generated function all_specific_sgs(sgs, gs, turbconv_model)
     sgs_names = Base._nt_names(sgs)
     gs_names = Base._nt_names(gs)
     relevant_sgs_names =
         filter(name -> has_prefix(name, :ρa) && name != :ρa, sgs_names)
-    specific_sgs_names =
+    all_specific_sgs_names =
         map(name -> remove_prefix(name, :ρa), relevant_sgs_names)
-    relevant_gs_names = map(name -> Symbol(:ρ, name), specific_sgs_names)
-    specific_sgs_values = map(
+    relevant_gs_names = map(name -> Symbol(:ρ, name), all_specific_sgs_names)
+    all_specific_sgs_values = map(
         (sgs_name, gs_name) -> :(specific(
             sgs.$sgs_name,
             sgs.ρa,
@@ -160,7 +182,7 @@ value is assumed to be equal to the value of `ρaχ` in `sgs`.
         relevant_sgs_names,
         relevant_gs_names,
     )
-    return :(NamedTuple{$specific_sgs_names}(($(specific_sgs_values...),)))
+    return :(NamedTuple{$all_specific_sgs_names}(($(all_specific_sgs_values...),)))
 end
 
 """
@@ -192,6 +214,31 @@ out the matching subfields (as of Julia 1.8).
     )
     return :(($(subfield_tuples...),))
 end
+
+"""
+    remove_energy_var(specific_state)
+
+Creates a copy of `specific_state` with the energy variable (`:e_tot`) removed, 
+where `specific_state` is the result of calling, e.g., `all_specific_gs`, `all_specific_sgsʲs`, 
+or `all_specific_sgs⁰`. This is a utility function used to isolate non-energy tracer variables, 
+for example, to calculate diffusive fluxes (which, for energy, involve gradients of enthalpy, 
+not energy, and hence are handled separateyly). 
+
+It dispatches on the input type to handle either a single `NamedTuple` or a `Tuple` of them 
+(such as a collection of draft states). 
+
+Arguments:
+- `specific_state`: A `NamedTuple` or a `Tuple` of `NamedTuple`s from which to
+                    remove the `:e_tot` field.
+
+Returns:
+- A new `NamedTuple` or `Tuple` without the `:e_tot` field(s).
+"""
+remove_energy_var(specific_state::NamedTuple) =
+    Base.structdiff(specific_state, NamedTuple{(:e_tot,)})
+remove_energy_var(specific_state::Tuple) =
+    map(remove_energy_var, specific_state)
+
 
 """
     draft_sum(f, sgsʲs)
@@ -362,30 +409,6 @@ u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
     ρ,
     turbconv_model,
 )
-
-"""
-    remove_energy_var(specific_state)
-
-Creates a copy of `specific_state` with the energy variable (`:e_tot`) removed, 
-where `specific_state` is the result of calling, e.g., `specific_gs`, `specific_sgsʲs`, 
-or `specific_sgs⁰`. This is a utility function used to isolate non-energy tracer variables, 
-for example, to calculate diffusive fluxes (which, for energy, involve gradients of enthalpy, 
-not energy, and hence are handled separateyly). 
-
-It dispatches on the input type to handle either a single `NamedTuple` or a `Tuple` of them 
-(such as a collection of draft states). 
-
-Arguments:
-- `specific_state`: A `NamedTuple` or a `Tuple` of `NamedTuple`s from which to
-                    remove the `:e_tot` field.
-
-Returns:
-- A new `NamedTuple` or `Tuple` without the `:e_tot` field(s).
-"""
-remove_energy_var(specific_state::NamedTuple) =
-    Base.structdiff(specific_state, NamedTuple{(:e_tot,)})
-remove_energy_var(specific_state::Tuple) =
-    map(remove_energy_var, specific_state)
 
 """
     mapreduce_with_init(f, op, iter...)

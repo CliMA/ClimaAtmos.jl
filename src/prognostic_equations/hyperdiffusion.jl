@@ -34,7 +34,7 @@ function hyperdiffusion_cache(
     gs_quantities = (;
         ᶜ∇²u = similar(Y.c, C123{FT}),
         ᶜ∇²specific_energy = similar(Y.c, FT),
-        ᶜ∇²specific_tracers = remove_energy_var.(specific_gs.(Y.c)),
+        ᶜ∇²specific_tracers = remove_energy_var.(all_specific_gs.(Y.c)),
     )
 
     # Sub-grid scale quantities

@@ -38,7 +38,7 @@ function implicit_precomputed_quantities(Y, atmos)
     TST = thermo_state_type(moisture_model, FT)
     n = n_mass_flux_subdomains(turbconv_model)
     gs_quantities = (;
-        ᶜspecific = specific_gs.(Y.c),  #TODO Remove this
+        ᶜspecific = all_specific_gs.(Y.c),  #TODO Remove this
         ᶜu = similar(Y.c, C123{FT}),
         ᶠu³ = similar(Y.f, CT3{FT}),
         ᶠu = similar(Y.f, CT123{FT}),
@@ -439,7 +439,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     thermo_params = CAP.thermodynamics_params(p.params)
     thermo_args = (thermo_params, moisture_model, precip_model)
 
-    @. ᶜspecific = specific_gs(Y.c)
+    @. ᶜspecific = all_specific_gs(Y.c)
     @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
 
     # TODO: We might want to move this to dss! (and rename dss! to something
