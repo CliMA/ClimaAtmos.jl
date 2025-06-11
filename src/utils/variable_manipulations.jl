@@ -193,88 +193,158 @@ out the matching subfields (as of Julia 1.8).
     return :(($(subfield_tuples...),))
 end
 
-# draft_sum(sgsʲs, ρχ_name) = mapreduce_with_init(sgsʲ -> getproperty(sgsʲ, ρχ_name), +, sgsʲs)
+"""
+    draft_sum(f, sgsʲs)
 
+Computes the sum of a function `f` applied to each draft subdomain
+state `sgsʲ` in the iterator `sgsʲs`.
+
+Arguments:
+- `f`: A function to apply to each element of `sgsʲs`.
+- `sgsʲs`: An iterator over the draft subdomain states.
+"""
+draft_sum(f, sgsʲs) = mapreduce_with_init(f, +, sgsʲs)
+
+"""
+    env_value(grid_scale_value, f_draft, gs)
+
+Computes the value of a quantity in the environment domain by subtracting the
+sum of its values in all draft subdomains from the grid-scale value.
+
+This is based on the domain decomposition principle: `GridMean = Env + Sum(Drafts)`.
+
+Arguments:
+- `grid_scale_value`: The grid-scale value of the quantity.
+- `f_draft`: A function that extracts the corresponding value from a draft subdomain state.
+- `gs`: The grid-scale state, which contains the draft subdomain states `gs.sgsʲs`.
+"""
+function env_value(grid_scale_value, f_draft, gs)
+    return grid_scale_value - draft_sum(f_draft, gs.sgsʲs)
+end
+
+"""
+    specific_env_value(χ_name::Symbol, gs, turbconv_model)
+
+Calculates the specific value of a quantity `χ` in the environment (`χ⁰`).
+
+This function uses the domain decomposition principle to first find the
+density-area-weighted environment value (`ρa⁰χ⁰`) and the environment
+density-area (`ρa⁰`). It then computes the specific value using the
+regularized `specific` function, which provides a stable result even when the
+environment area fraction is very small.
+
+Arguments:
+- `χ_name`: The `Symbol` for the specific quantity `χ` (e.g., `:h_tot`, `:q_tot`).
+- `gs`: The grid-scale state, containing grid-mean and draft subdomain states.
+- `turbconv_model`: The turbulence convection model, containing parameters for regularization.
+
+Returns:
+- The specific value of the quantity `χ` in the environment.
+"""
+function specific_env_value(χ_name::Symbol, gs, turbconv_model)
+    # Grid-scale density-weighted variable name, e.g., :ρq_tot
+    ρχ_name = Symbol(:ρ, χ_name)
+
+    # Numerator: ρa⁰χ⁰ = (gs.ρχ) - (Σ sgsʲ.ρa * sgsʲ.χ)
+    ρaχ⁰ = env_value(
+        getproperty(gs, ρχ_name),
+        sgsʲ -> getproperty(sgsʲ, :ρa) * getproperty(sgsʲ, χ_name),
+        gs,
+    )
+
+    # Denominator: ρa⁰ = gs.ρ - Σ sgsʲ.ρa
+    ρa⁰_val = env_value(gs.ρ, sgsʲ -> sgsʲ.ρa, gs)
+
+    # Call the 5-argument specific function for regularized division
+    return specific(
+        ρaχ⁰,                      # ρaχ for environment
+        ρa⁰_val,                   # ρa for environment
+        getproperty(gs, ρχ_name),  # Fallback ρχ is the grid-mean value
+        gs.ρ,                      # Fallback ρ is the grid-mean value
+        turbconv_model,
+    )
+end
 
 """
     ρa⁺(gs)
 
-Computes the total mass-flux subdomain area-weighted density, assuming that the
-mass-flux subdomain states are stored in `gs.sgsʲs`.
+Computes the total area-weighted density of all draft subdomains, assuming that the
+draft subdomain states are stored in `gs.sgsʲs`.
 """
-ρa⁺(gs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa, +, gs.sgsʲs)
+ρa⁺(gs) = draft_sum(sgsʲ -> sgsʲ.ρa, gs.sgsʲs)
 
 """
     ρah_tot⁺(sgsʲs)
 
-Computes the total mass-flux subdomain area-weighted ρh_tot, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
+Computes the total area-weighted `ρh_tot` across all draft subdomains, assuming that the
+draft subdomain states are stored in `sgsʲs`.
 """
-ρah_tot⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.h_tot, +, sgsʲs)
+ρah_tot⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.h_tot, sgsʲs)
 
 """
     ρamse⁺(sgsʲs)
 
-Computes the total mass-flux subdomain area-weighted ρmse, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
+Computes the total area-weighted `ρmse` across all draft subdomains, assuming that the
+draft subdomain states are stored in `sgsʲs`.
 """
-ρamse⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, +, sgsʲs)
+ρamse⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, sgsʲs)
 
 """
     ρaq_tot⁺(sgsʲs)
 
-Computes the total mass-flux subdomain area-weighted ρq_tot, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
+Computes the total area-weighted `ρq_tot` across all draft subdomains, assuming that the
+draft subdomain states are stored in `sgsʲs`.
 """
-ρaq_tot⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_tot, +, sgsʲs)
+ρaq_tot⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.q_tot, sgsʲs)
 
 """
     ρaq_liq⁺(sgsʲs)
 
-Computes the liquid water mass-flux subdomain area-weighted ρq_liq, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
+Computes the liquid water area-weighted `ρq_liq` across all draft subdomains, assuming that the
+draft subdomain states are stored in `sgsʲs`.
 """
-ρaq_liq⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_liq, +, sgsʲs)
+ρaq_liq⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.q_liq, sgsʲs)
 
 """
     ρaq_ice⁺(sgsʲs)
 
-Computes the ice water  mass-flux subdomain area-weighted ρq_ice, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
+Computes the ice water area-weighted `ρq_ice` across all draft subdomains, assuming that the
+draft subdomain states are stored in `sgsʲs`.
 """
-ρaq_ice⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_ice, +, sgsʲs)
+ρaq_ice⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.q_ice, sgsʲs)
 
 """
     ρaq_rai⁺(sgsʲs)
 
-Computes the rain mass-flux subdomain area-weighted ρq_rai, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
+Computes the rain area-weighted `ρq_rai` across all draft subdomains, assuming that the
+draft subdomain states are stored in `sgsʲs`.
 """
-ρaq_rai⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_rai, +, sgsʲs)
+ρaq_rai⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.q_rai, sgsʲs)
 
 """
     ρaq_sno⁺(sgsʲs)
 
-Computes the snow mass-flux subdomain area-weighted ρq_sno, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
+Computes the snow area-weighted `ρq_sno` across all draft subdomains, assuming that the
+draft subdomain states are stored in `sgsʲs`.
 """
-ρaq_sno⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_sno, +, sgsʲs)
+ρaq_sno⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.q_sno, sgsʲs)
 
 """
     ρa⁰(gs)
 
-Computes the environment area-weighted density, assuming that the mass-flux
-subdomain states are stored in `gs.sgsʲs`.
+Computes the environment area-weighted density, assuming that the
+draft subdomain states are stored in `gs.sgsʲs`.
 """
-ρa⁰(gs) = gs.ρ - mapreduce_with_init(sgsʲ -> sgsʲ.ρa, +, gs.sgsʲs)
+ρa⁰(gs) = env_value(gs.ρ, sgsʲ -> sgsʲ.ρa, gs)
+
 
 """
     u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model)
 
-Computes the average mass-flux subdomain vertical velocity `u₃⁺` by dividing the
+Computes the average draft subdomain vertical velocity `u₃⁺` by dividing the
 total momentum `ρaw⁺` by the total area-weighted density `ρa⁺`, both of which
 are computed from the tuples of subdomain densities and velocities `ρaʲs` and
-`u₃ʲs`. The division is computed using `divide_by_ρa` to avoid issues when `a⁺`
+`u₃ʲs`. The division is computed using `specific` to avoid issues when `a⁺`
 is small.
 """
 u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
@@ -291,8 +361,8 @@ u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
 Computes the environment vertical velocity `u₃⁰` by dividing the environment
 momentum `ρaw⁰` by the environment area-weighted density `ρa⁰`, both of which
 are computed from the domain decomposition of the grid-scale quantities `ρw` and
-`ρ` into the mass-flux subdomain quantities `ρawʲs` and `ρaʲs` and the
-environment quantities. The division is computed using `divide_by_ρa` to avoid
+`ρ` into the draft subdomain quantities `ρawʲs` and `ρaʲs` and the
+environment quantities. The division is computed using `specific` to avoid
 issues when `a⁰` is small.
 """
 u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
