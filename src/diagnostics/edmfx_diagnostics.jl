@@ -944,6 +944,7 @@ function compute_clwen!(
             TD.liquid_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
+
 function compute_clwen!(
     out,
     state,
@@ -952,11 +953,10 @@ function compute_clwen!(
     moisture_model::NonEquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return cache.precomputed.ᶜq_liq⁰
+        return specific_env_value(:q_liq, state.c, turbconv_model)
     else
-        out .= cache.precomputed.ᶜq_liq⁰
+        out .= specific_env_value(:q_liq, state.c, turbconv_model)
     end
 end
 
@@ -1008,6 +1008,7 @@ function compute_clien!(
         out .= TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
+
 function compute_clien!(
     out,
     state,
@@ -1016,11 +1017,10 @@ function compute_clien!(
     moisture_model::NonEquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return cache.precomputed.ᶜq_ice⁰
+        return specific_env_value(:q_ice, state.c, turbconv_model)
     else
-        out .= cache.precomputed.ᶜq_ice⁰
+        out .= specific_env_value(:q_ice, state.c, turbconv_model)
     end
 end
 
@@ -1065,11 +1065,10 @@ function compute_husraen!(
     precip_model_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return cache.precomputed.ᶜq_rai⁰
+        return specific_env_value(:q_rai, state.c, turbconv_model)
     else
-        out .= cache.precomputed.ᶜq_rai⁰
+        out .= specific_env_value(:q_rai, state.c, turbconv_model)
     end
 end
 
@@ -1114,11 +1113,10 @@ function compute_hussnen!(
     precip_model_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return cache.precomputed.ᶜq_sno⁰
+        return specific_env_value(:q_sno, state.c, turbconv_model)
     else
-        out .= cache.precomputed.ᶜq_sno⁰
+        out .= specific_env_value(:q_sno, state.c, turbconv_model)
     end
 end
 

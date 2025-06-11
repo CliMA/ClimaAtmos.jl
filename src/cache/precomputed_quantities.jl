@@ -49,18 +49,6 @@ function implicit_precomputed_quantities(Y, atmos)
     )
     sgs_quantities =
         turbconv_model isa AbstractEDMF ? (; ᶜtke⁰ = similar(Y.c, FT)) : (;)
-    moisture_sgs_quantities =
-        (
-            turbconv_model isa PrognosticEDMFX &&
-            moisture_model isa NonEquilMoistModel &&
-            precip_model isa Microphysics1Moment
-        ) ?
-        (;
-            ᶜq_liq⁰ = similar(Y.c, FT),
-            ᶜq_ice⁰ = similar(Y.c, FT),
-            ᶜq_rai⁰ = similar(Y.c, FT),
-            ᶜq_sno⁰ = similar(Y.c, FT),
-        ) : (;)
     prognostic_sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
@@ -76,7 +64,6 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
             ᶠnh_pressure₃_dragʲs = similar(Y.f, NTuple{n, C3{FT}}),
-            moisture_sgs_quantities...,
         ) : (;)
     return (; gs_quantities..., sgs_quantities..., prognostic_sgs_quantities...)
 end

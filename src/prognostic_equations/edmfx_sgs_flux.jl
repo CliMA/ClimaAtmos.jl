@@ -46,12 +46,6 @@ function edmfx_sgs_mass_flux_tendency!(
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜρ⁰ = @. TD.air_density(thermo_params, ᶜts⁰)
     ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
-    if (
-        p.atmos.moisture_model isa NonEquilMoistModel &&
-        p.atmos.precip_model isa Microphysics1Moment
-    )
-        (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
-    end
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
@@ -106,7 +100,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 @. Yₜ.c.ρq_tot += vtt
             end
             # Add the environment fluxes
-            ᶜq_tot⁰ = @.lazy( specific_env_value(:q_tot, Y.c, turbconv_model))
+            ᶜq_tot⁰ = @.lazy(specific_env_value(:q_tot, Y.c, turbconv_model))
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar = (ᶜq_tot⁰ - ᶜspecific.q_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
@@ -123,6 +117,10 @@ function edmfx_sgs_mass_flux_tendency!(
             p.atmos.moisture_model isa NonEquilMoistModel &&
             p.atmos.precip_model isa Microphysics1Moment
         )
+            ᶜq_liq⁰ = @.lazy(specific_env_value(:q_liq, Y.c, turbconv_model))
+            ᶜq_ice⁰ = @.lazy(specific_env_value(:q_ice, Y.c, turbconv_model))
+            ᶜq_rai⁰ = @.lazy(specific_env_value(:q_rai, Y.c, turbconv_model))
+            ᶜq_sno⁰ = @.lazy(specific_env_value(:q_sno, Y.c, turbconv_model))
             # Liquid, ice, rain and snow specific humidity fluxes
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
@@ -346,12 +344,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
     (; ᶜu⁰, ᶜK⁰, ᶜtke⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm,) = p.precomputed
-    if (
-        p.atmos.moisture_model isa NonEquilMoistModel &&
-        p.atmos.precip_model isa Microphysics1Moment
-    )
-        (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
-    end
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
     ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
@@ -411,6 +403,10 @@ function edmfx_sgs_diffusive_flux_tendency!(
             p.atmos.moisture_model isa NonEquilMoistModel &&
             p.atmos.precip_model isa Microphysics1Moment
         )
+            ᶜq_liq⁰ = @.lazy(specific_env_value(:q_liq, Y.c, turbconv_model))
+            ᶜq_ice⁰ = @.lazy(specific_env_value(:q_ice, Y.c, turbconv_model))
+            ᶜq_rai⁰ = @.lazy(specific_env_value(:q_rai, Y.c, turbconv_model))
+            ᶜq_sno⁰ = @.lazy(specific_env_value(:q_sno, Y.c, turbconv_model))
             # Liquid, ice, rain and snow specific humidity diffusion
             α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
 

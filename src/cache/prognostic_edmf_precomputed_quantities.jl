@@ -24,50 +24,19 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
     (; ᶜtke⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰) =
         p.precomputed
-    if p.atmos.moisture_model isa NonEquilMoistModel &&
-       p.atmos.precip_model isa Microphysics1Moment
-        (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
-    end
 
     ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
     @. ᶜtke⁰ = specific(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
-    if p.atmos.moisture_model isa NonEquilMoistModel &&
-       p.atmos.precip_model isa Microphysics1Moment
-        @. ᶜq_liq⁰ = specific(
-            Y.c.ρq_liq - ρaq_liq⁺(Y.c.sgsʲs),
-            ᶜρa⁰,
-            Y.c.ρq_liq,
-            Y.c.ρ,
-            turbconv_model,
-        )
-        @. ᶜq_ice⁰ = specific(
-            Y.c.ρq_ice - ρaq_ice⁺(Y.c.sgsʲs),
-            ᶜρa⁰,
-            Y.c.ρq_ice,
-            Y.c.ρ,
-            turbconv_model,
-        )
-        @. ᶜq_rai⁰ = specific(
-            Y.c.ρq_rai - ρaq_rai⁺(Y.c.sgsʲs),
-            ᶜρa⁰,
-            Y.c.ρq_rai,
-            Y.c.ρ,
-            turbconv_model,
-        )
-        @. ᶜq_sno⁰ = specific(
-            Y.c.ρq_sno - ρaq_sno⁺(Y.c.sgsʲs),
-            ᶜρa⁰,
-            Y.c.ρq_sno,
-            Y.c.ρ,
-            turbconv_model,
-        )
-    end
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke⁰
-    ᶜq_tot⁰ = @.lazy( specific_env_value(:q_tot, Y.c, turbconv_model))
+    ᶜq_tot⁰ = @.lazy(specific_env_value(:q_tot, Y.c, turbconv_model))
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.precip_model isa Microphysics1Moment
+        ᶜq_liq⁰ = @.lazy(specific_env_value(:q_liq, Y.c, turbconv_model))
+        ᶜq_ice⁰ = @.lazy(specific_env_value(:q_ice, Y.c, turbconv_model))
+        ᶜq_rai⁰ = @.lazy(specific_env_value(:q_rai, Y.c, turbconv_model))
+        ᶜq_sno⁰ = @.lazy(specific_env_value(:q_sno, Y.c, turbconv_model))
         @. ᶜts⁰ = TD.PhaseNonEquil_phq(
             thermo_params,
             ᶜp,
@@ -590,10 +559,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     thp = CAP.thermodynamics_params(params)
     cmp = CAP.microphysics_1m_params(params)
     cmc = CAP.microphysics_cloud_params(params)
+    (; turbconv_model) = p.atmos
 
     (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
     (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜts⁰) = p.precomputed
-    (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
 
     # TODO - can I re-use them between js and env?
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
@@ -648,6 +617,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     end
 
     # Precipitation sources and sinks from the environment
+    ᶜq_liq⁰ = @.lazy(specific_env_value(:q_liq, Y.c, turbconv_model))
+    ᶜq_ice⁰ = @.lazy(specific_env_value(:q_ice, Y.c, turbconv_model))
+    ᶜq_rai⁰ = @.lazy(specific_env_value(:q_rai, Y.c, turbconv_model))
+    ᶜq_sno⁰ = @.lazy(specific_env_value(:q_sno, Y.c, turbconv_model))
     compute_precipitation_sources!(
         ᶜSᵖ,
         ᶜSᵖ_snow,
