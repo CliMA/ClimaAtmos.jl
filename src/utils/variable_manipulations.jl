@@ -54,20 +54,21 @@ function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
 end
 
 """
-    specific_sgs(χ_name::Symbol, sgs, gs, turbconv_model)
+    specific_sgs(χ_name, sgs, gs, turbconv_model)
 
-Computes the specific quantity `χ` from a subgrid-scale (SGS) state `sgs`,
-identified by the symbol `χ_name`.
+Computes a single specific quantity `χ` from a subgrid-scale (SGS) state `sgs`,
+identified by `χ_name`.
 
-This function constructs the required variable names (e.g.,
-`:ρaq_tot` from `:q_tot`) and computes the specific value using the regularized
-`specific` function. When area fraction becomes small, to avoid division by zero, 
-this includes a smooth fallback to grid-mean values when they are available, and to 
-0 when they are not.
+This function uses `ClimaCore.MatrixFields` utilities to robustly handle field names. 
+It constructs the required variable names (e.g., `@name(q_tot)`) and computes the specific 
+value using the regularized `specific` function. When the SGS area fraction 
+becomes small, to avoid division by zero, this includes a smooth fallback to grid-mean 
+values when they are available, and to zero when they are not.
 
 Arguments:
-- `χ_name`: A `Symbol` representing the specific quantity to be calculated (e.g., `:q_tot`).
-- `sgs`: The SGS state (e.g., draft).
+- `χ_name`: A `ClimaCore.MatrixFields.FieldName` representing the
+          specific quantity to be calculated (e.g., `@name(q_tot)`).
+- `sgs`: The SGS state (e.g., a draft subdomain or the environment).
 - `gs`: The grid-scale state, used to provide fallback values.
 - `turbconv_model`: The turbulence convection model, for regularization parameters.
 
@@ -75,13 +76,18 @@ Returns:
 - The specific value of the requested SGS quantity `χ`.
 """
 # TODO: Replace turbconv_model by passing parameters needed for sgs_weight_function
-function specific_sgs(χ_name::Symbol, sgs, gs, turbconv_model)
-    sgs_name = Symbol(:ρa, χ_name)
-    gs_name = Symbol(:ρ, χ_name)
+function specific_sgs(χ_name, sgs, gs, turbconv_model)
+    # Deconstruct the name to prepend ρa or ρ to the top-level variable name
+    first_name = ClimaCore.MatrixFields.extract_first(χ_name)
+    last_name = ClimaCore.MatrixFields.drop_first(χ_name)
+    sgs_first_name = Symbol(:ρa, first_name)
+    gs_first_name = Symbol(:ρ, first_name)
+    sgs_name = ClimaCore.MatrixFields.append_internal_name(sgs_first_name, last_name)
+    gs_name = ClimaCore.MatrixFields.append_internal_name(gs_first_name, last_name)
 
-    ρaχ = getproperty(sgs, sgs_name)
-    ρχ_fallback = if hasproperty(gs, gs_name)
-        getproperty(gs, gs_name)
+    ρaχ = ClimaCore.MatrixFields.get_field(sgs, sgs_name)
+    ρχ_fallback = if ClimaCore.MatrixFields.has_field(gs, gs_name)
+        ClimaCore.MatrixFields.get_field(gs, gs_name)
     else
         # Fallback for variables that do not exist at grid scale (e.g., TKE)
         zero(ρaχ)
