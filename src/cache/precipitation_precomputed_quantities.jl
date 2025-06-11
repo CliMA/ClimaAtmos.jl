@@ -105,6 +105,7 @@ function set_precipitation_velocities!(
     precip_model::Microphysics2Moment,
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwnₗ, ᶜwnᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
+    (; q_liq, q_ice, q_rai, q_sno) = p.precomputed.ᶜspecific
     (; ᶜΦ) = p.core
 
     cm1c = CAP.microphysics_cloud_params(p.params)
@@ -112,26 +113,27 @@ function set_precipitation_velocities!(
     cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
 
+
     # compute the precipitation terminal velocity [m/s]
     # TODO sedimentation of snow is based on the 1M scheme
     @. ᶜwnᵣ = getindex(
-        CM2.rain_terminal_velocity(cm2p.sb, cm2p.tv, specific(Y.c.ρq_rai, Y.c.ρ), Y.c.ρ, Y.c.ρn_rai),
+        CM2.rain_terminal_velocity(cm2p.sb, cm2p.tv, q_rai, Y.c.ρ, Y.c.ρn_rai),
         1,
     )
     @. ᶜwᵣ = getindex(
-        CM2.rain_terminal_velocity(cm2p.sb, cm2p.tv, specific(Y.c.ρq_rai, Y.c.ρ), Y.c.ρ, Y.c.ρn_rai),
+        CM2.rain_terminal_velocity(cm2p.sb, cm2p.tv, q_rai, Y.c.ρ, Y.c.ρn_rai),
         2,
     )
-    @. ᶜwₛ = CM1.terminal_velocity(cm1p.ps, cm1p.tv.snow, Y.c.ρ, specific(Y.c.ρq_sno, Y.c.ρ))
+    @. ᶜwₛ = CM1.terminal_velocity(cm1p.ps, cm1p.tv.snow, Y.c.ρ, q_sno)
     # compute sedimentation velocity for cloud condensate [m/s]
     # TODO sedimentation velocities of cloud condensates are based
     # on the 1M scheme. Sedimentation velocity of cloud number concentration
     # is equal to that of the mass.
     @. ᶜwnₗ =
-        CMNe.terminal_velocity(cm1c.liquid, cm1c.Ch2022.rain, Y.c.ρ, specific(Y.c.ρq_liq, Y.c.ρ))
-    @. ᶜwₗ = CMNe.terminal_velocity(cm1c.liquid, cm1c.Ch2022.rain, Y.c.ρ, specific(Y.c.ρq_liq, Y.c.ρ))
+        CMNe.terminal_velocity(cm1c.liquid, cm1c.Ch2022.rain, Y.c.ρ, q_liq)
+    @. ᶜwₗ = CMNe.terminal_velocity(cm1c.liquid, cm1c.Ch2022.rain, Y.c.ρ, q_liq)
     @. ᶜwᵢ =
-        CMNe.terminal_velocity(cm1c.ice, cm1c.Ch2022.small_ice, Y.c.ρ, specific(Y.c.ρq_ice, Y.c.ρ))
+        CMNe.terminal_velocity(cm1c.ice, cm1c.Ch2022.small_ice, Y.c.ρ, q_ice)
 
     # compute their contributions to energy and total water advection
     @. ᶜwₜqₜ =

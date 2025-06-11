@@ -61,7 +61,7 @@ NVTX.@annotate function set_diagnostic_edmfx_env_quantities_level!(
     local_geometry_halflevel,
     turbconv_model,
 )
-    @. u³⁰_halflevel = specific(
+    @. u³⁰_halflevel = divide_by_ρa(
         ρ_level * u³_halflevel -
         unrolled_dotproduct(ρaʲs_level, u³ʲs_halflevel),
         ρ_level,
@@ -961,6 +961,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     (; params) = p
     (; dt) = p
     (; ᶜp, ᶜu, ᶜts) = p.precomputed
+    (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜtke⁰) = p.precomputed
     (;
@@ -1070,13 +1071,14 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     microphys_0m_params = CAP.microphysics_0m_params(p.params)
     (; dt) = p
     (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
+    (; q_tot) = p.precomputed.ᶜspecific
 
     # Environment precipitation sources (to be applied to grid mean)
     @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
         thermo_params,
         microphys_0m_params,
         dt,
-        specific(Y.c.ρq_tot, Y.c.ρ),
+        q_tot,
         ᶜts,
     )
     return nothing

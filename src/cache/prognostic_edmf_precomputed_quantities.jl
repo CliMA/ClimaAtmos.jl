@@ -30,15 +30,15 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     end
 
     @. ᶜρa⁰ = ρa⁰(Y.c)
-    @. ᶜtke⁰ = specific(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
-    @. ᶜmse⁰ = specific(
+    @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
+    @. ᶜmse⁰ = divide_by_ρa(
         Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
         ᶜρa⁰,
         Y.c.ρ * (ᶜh_tot - ᶜK),
         Y.c.ρ,
         turbconv_model,
     )
-    @. ᶜq_tot⁰ = specific(
+    @. ᶜq_tot⁰ = divide_by_ρa(
         Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
         ᶜρa⁰,
         Y.c.ρq_tot,
@@ -47,28 +47,28 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     )
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.precip_model isa Microphysics1Moment
-        @. ᶜq_liq⁰ = specific(
+        @. ᶜq_liq⁰ = divide_by_ρa(
             Y.c.ρq_liq - ρaq_liq⁺(Y.c.sgsʲs),
             ᶜρa⁰,
             Y.c.ρq_liq,
             Y.c.ρ,
             turbconv_model,
         )
-        @. ᶜq_ice⁰ = specific(
+        @. ᶜq_ice⁰ = divide_by_ρa(
             Y.c.ρq_ice - ρaq_ice⁺(Y.c.sgsʲs),
             ᶜρa⁰,
             Y.c.ρq_ice,
             Y.c.ρ,
             turbconv_model,
         )
-        @. ᶜq_rai⁰ = specific(
+        @. ᶜq_rai⁰ = divide_by_ρa(
             Y.c.ρq_rai - ρaq_rai⁺(Y.c.sgsʲs),
             ᶜρa⁰,
             Y.c.ρq_rai,
             Y.c.ρ,
             turbconv_model,
         )
-        @. ᶜq_sno⁰ = specific(
+        @. ᶜq_sno⁰ = divide_by_ρa(
             Y.c.ρq_sno - ρaq_sno⁺(Y.c.sgsʲs),
             ᶜρa⁰,
             Y.c.ρq_sno,

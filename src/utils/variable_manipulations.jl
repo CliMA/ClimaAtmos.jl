@@ -1,59 +1,4 @@
 """
-    specific(ρχ, ρ)
-    specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
-
-Calculates the specific quantity `χ` (per unit mass) from a density-weighted
-quantity. This function uses multiple dispatch to select the appropriate
-calculation method based on the number of arguments.
-
-**Grid-Scale Method (2 arguments)**
-
-    specific(ρχ, ρ)
-
-Performs a direct division of the density-weighted quantity `ρχ` by the density `ρ`.
-This method is used for grid-mean quantities where the density `ρ` is well-defined
-and non-zero.
-
-**SGS Regularized Method (5 arguments)**
-
-    specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
-
-Calculates the specific quantity `χ` for a subgrid-scale (SGS) component by
-dividing the density-area-weighted quantity `ρaχ` by the density-area
-product `ρa`.
-
-This method includes regularization to handle cases where the SGS area fraction
-(and thus `ρa`) is zero or vanishingly small. It performs a linear interpolation
-between the SGS specific quantity (`ρaχ / ρa`) and the grid-mean specific
-quantity (`ρχ / ρ`). The interpolation weight is computed by `sgs_weight_function`
-to ensure a smooth and numerically stable transition, preventing division by zero.
-Using this regularized version instead of directly computing `ρaχ / ρa` breaks the
-assumption of domain decomposition (sum of SGS domains equals GS) when the approximated 
-area fraction `a` is small.
-
-Arguments:
-- `ρχ`: The grid-mean density-weighted quantity (e.g., `ρe_tot`, `ρq_tot`).
-- `ρ`: The grid-mean density.
-- `ρaχ`: The density-area-weighted SGS quantity (e.g., `sgs.ρa * sgs.h_tot`).
-- `ρa`: The density-area product of the SGS component.
-- `ρχ_fallback`: The grid-mean density-weighted quantity used for the fallback value.
-- `ρ_fallback`: The grid-mean density used for the fallback value.
-- `turbconv_model`: The turbulence convection model, containing parameters for regularization (e.g., `a_half`).
-"""
-function specific(ρχ, ρ)
-    return ρχ / ρ 
-end
-
-function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
-    # TODO: Replace turbconv_model struct by parameters, and include a_half in 
-    # parameters, not in config
-    weight = sgs_weight_function(ρa / ρ, turbconv_model.a_half)
-    # If ρa is exactly zero, the weight function will be zero, causing the first
-    # term to be NaN (0 * ... / 0). The ifelse handles this case explicitly.
-    return ρa == 0 ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
-end
-
-"""
     sgs_weight_function(a, a_half)
 
 Computes a smooth, monotonic weight function `w(a)` that ranges from 0 to 1.
@@ -69,7 +14,7 @@ is small.
 - `w(a_half) = 0.5`.
 - The function is continuously differentiable, with derivatives equal to zero at
   `a = 0` and `a = 1`, which ensures smooth blending.
-- The functions grows very rapidly near `a = a_half`, and grows very slowly at all other 
+- The functions grows very rapidly near `a = a_half`, and grows very slowly at all other
   values of `a`.
 - For small `a_half`, the weight rapidly approaches 1 for values of `a` that are
   a few times larger than `a_half`.
@@ -84,7 +29,7 @@ constructed in two main steps to satisfy the key properties:
 2.  **Midpoint Control**: To ensure the function passes through the control point
     `(a_half, 0.5)`, the input `a` is first transformed by a specially designed
     power function (`1 - (1 - a)^k`) before being passed to the bounded sigmoid.
-    This transformation maps `a_half` to `0.5` while preserving differentiability 
+    This transformation maps `a_half` to `0.5` while preserving differentiability
     at the boundaries.
 
 Arguments:
@@ -103,6 +48,27 @@ function sgs_weight_function(a, a_half)
     else
         (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2
     end
+end
+
+"""
+    divide_by_ρa(ρaχ, ρa, ρχ, ρ, turbconv_model)
+
+Computes `ρaχ / ρa`, regularizing the result to avoid issues when `a` is small.
+This is done by performing a linear interpolation from `ρaχ / ρa` to `ρχ / ρ`,
+using `sgs_weight_function(ρa / ρ, turbconv_model.a_half)` as the weight of
+`ρaχ / ρa` in the interpolation. Note that `ρa / ρ` is the "anelastic
+approximation" of `a`; we cannot directly use `a` to compute the weight because
+this function needs to be called before `a` has been computed. Also, note that
+using this function instead of directly computing `ρaχ / ρa` breaks the
+assumption of domain decomposition when the approximated `a` is small.
+"""
+function divide_by_ρa(ρaχ, ρa, ρχ, ρ, turbconv_model)
+    weight = sgs_weight_function(ρa / ρ, turbconv_model.a_half)
+    # If ρa = 0, we know that ρa / ρ = 0, which means that weight = 0. However,
+    # 0 * ρaχ / 0 = NaN, regardless of what ρaχ is, so the linear interpolation
+    # will always return NaN when ρa = 0. To avoid this problem, we need to add
+    # a special case for ρa = 0.
+    return ρa == 0 ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
 end
 
 # Helper functions for manipulating symbols in the generated functions:
@@ -135,7 +101,7 @@ end
 Converts every variable of the form `ρaχ` in the sub-grid-scale state `sgs` into
 the specific variable `χ` by dividing it by `ρa`. All other variables in `sgs`
 are omitted from the result. The division is computed as
-`specific(ρaχ, ρa, ρχ, ρ, turbconv_model)`, which is preferable to simply
+`divide_by_ρa(ρaχ, ρa, ρχ, ρ, turbconv_model)`, which is preferable to simply
 calling `ρaχ / ρa` because it avoids numerical issues that arise when `a` is
 small. The values of `ρ` and `ρχ` are taken from `gs`, but, when `ρχ` is not
 available in `gs` (e.g., when `χ` is a second moment variable like `tke`), its
@@ -150,7 +116,7 @@ value is assumed to be equal to the value of `ρaχ` in `sgs`.
         map(name -> remove_prefix(name, :ρa), relevant_sgs_names)
     relevant_gs_names = map(name -> Symbol(:ρ, name), specific_sgs_names)
     specific_sgs_values = map(
-        (sgs_name, gs_name) -> :(specific(
+        (sgs_name, gs_name) -> :(divide_by_ρa(
             sgs.$sgs_name,
             sgs.ρa,
             $(gs_name in gs_names ? :(gs.$gs_name) : :(sgs.$sgs_name)),
@@ -274,7 +240,7 @@ are computed from the tuples of subdomain densities and velocities `ρaʲs` and
 `u₃ʲs`. The division is computed using `divide_by_ρa` to avoid issues when `a⁺`
 is small.
 """
-u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
+u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = divide_by_ρa(
     unrolled_dotproduct(ρaʲs, u₃ʲs),
     reduce(+, ρaʲs),
     ρ * u₃,
@@ -292,7 +258,7 @@ are computed from the domain decomposition of the grid-scale quantities `ρw` an
 environment quantities. The division is computed using `divide_by_ρa` to avoid
 issues when `a⁰` is small.
 """
-u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
+u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = divide_by_ρa(
     ρ * u₃ - unrolled_dotproduct(ρaʲs, u₃ʲs),
     ρ - reduce(+, ρaʲs),
     ρ * u₃,
