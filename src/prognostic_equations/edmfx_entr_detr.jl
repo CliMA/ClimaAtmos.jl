@@ -528,7 +528,7 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
-    (; ᶜq_tot⁰, ᶜmse⁰, ᶠu₃⁰) = p.precomputed
+    (; ᶜmse⁰, ᶠu₃⁰) = p.precomputed
 
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.precip_model isa Microphysics1Moment
@@ -544,6 +544,13 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
             (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
             (ᶜmse⁰ - Y.c.sgsʲs.:($$j).mse)
 
+        ᶜq_tot⁰ = @.lazy( specific(
+                Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+                ρa⁰(Y.c),
+                Y.c.ρq_tot,
+                Y.c.ρ,
+                turbconv_model,
+        ))
         @. Yₜ.c.sgsʲs.:($$j).q_tot +=
             (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
             (ᶜq_tot⁰ - Y.c.sgsʲs.:($$j).q_tot)

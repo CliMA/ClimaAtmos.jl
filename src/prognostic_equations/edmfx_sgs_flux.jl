@@ -42,7 +42,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜts⁰) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜts⁰) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜρ⁰ = @. TD.air_density(thermo_params, ᶜts⁰)
     ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
@@ -105,6 +105,13 @@ function edmfx_sgs_mass_flux_tendency!(
                 @. Yₜ.c.ρq_tot += vtt
             end
             # Add the environment fluxes
+            ᶜq_tot⁰ = @.lazy( specific(
+                    Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+                    ᶜρa⁰,
+                    Y.c.ρq_tot,
+                    Y.c.ρ,
+                    turbconv_model,
+            ))
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar = (ᶜq_tot⁰ - ᶜspecific.q_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
@@ -343,7 +350,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm,) = p.precomputed
+    (; ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜtke⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm,) = p.precomputed
     if (
         p.atmos.moisture_model isa NonEquilMoistModel &&
         p.atmos.precip_model isa Microphysics1Moment
@@ -352,6 +359,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     end
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
+    ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
         ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
@@ -398,6 +406,13 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(C3(FT(0))),
             )
+            ᶜq_tot⁰ = @.lazy( specific(
+                    Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+                    ᶜρa⁰,
+                    Y.c.ρq_tot,
+                    Y.c.ρ,
+                    turbconv_model,
+            ))
             @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_tot⁰)))
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass

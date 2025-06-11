@@ -22,7 +22,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
     (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
-    (; ᶜtke⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜmse⁰, ᶜq_tot⁰) =
+    (; ᶜtke⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜmse⁰) =
         p.precomputed
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.precip_model isa Microphysics1Moment
@@ -35,13 +35,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
         ᶜρa⁰,
         Y.c.ρ * (ᶜh_tot - ᶜK),
-        Y.c.ρ,
-        turbconv_model,
-    )
-    @. ᶜq_tot⁰ = specific(
-        Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
-        ᶜρa⁰,
-        Y.c.ρq_tot,
         Y.c.ρ,
         turbconv_model,
     )
@@ -79,6 +72,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke⁰
+    ᶜq_tot⁰ = @.lazy( specific(
+            Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρq_tot,
+            Y.c.ρ,
+            turbconv_model,
+    ))
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.precip_model isa Microphysics1Moment
         @. ᶜts⁰ = TD.PhaseNonEquil_phq(
@@ -366,7 +366,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜtke⁰, ᶜu, ᶜp, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜtke⁰, ᶜu, ᶜp, ᶠu³⁰, ᶜts⁰) = p.precomputed
     (;
         # ᶜmixing_length_tuple,
         # ᶜmixing_length,
@@ -475,6 +475,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     (; ᶜgradᵥ_θ_virt⁰, ᶜgradᵥ_q_tot⁰, ᶜgradᵥ_θ_liq_ice⁰) = p.precomputed
     # First order approximation: Use environmental mean fields.
     @. ᶜgradᵥ_θ_virt⁰ = ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts⁰)))       # ∂θv∂z_unsat
+    ᶜq_tot⁰ = @.lazy( specific(
+            Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+            ᶜρa⁰,
+            Y.c.ρq_tot,
+            Y.c.ρ,
+            turbconv_model,
+    ))
     @. ᶜgradᵥ_q_tot⁰ = ᶜgradᵥ(ᶠinterp(ᶜq_tot⁰))                                        # ∂qt∂z_sat
     @. ᶜgradᵥ_θ_liq_ice⁰ =
         ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰)))                    # ∂θl∂z_sat
@@ -567,7 +574,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     (; params, dt) = p
     thp = CAP.thermodynamics_params(params)
     cmp = CAP.microphysics_0m_params(params)
-    (; ᶜts⁰, ᶜq_tot⁰, ᶜtsʲs, ᶜSqₜᵖʲs, ᶜSqₜᵖ⁰) = p.precomputed
+    (; ᶜts⁰, ᶜtsʲs, ᶜSqₜᵖʲs, ᶜSqₜᵖ⁰) = p.precomputed
 
     # Sources from the updrafts
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -581,6 +588,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         )
     end
     # sources from the environment
+    ᶜq_tot⁰ = @.lazy( specific(
+            Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+            ρa⁰(Y.c),
+            Y.c.ρq_tot,
+            Y.c.ρ,
+            p.atmos.turbconv_model,
+    ))
     @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(thp, cmp, dt, ᶜq_tot⁰, ᶜts⁰)
     return nothing
 end
