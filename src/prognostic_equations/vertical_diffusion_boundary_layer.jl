@@ -49,11 +49,19 @@ This function is dispatched based on the type of the vertical diffusion model
       diffusion tendency of total specific humidity `ρq_tot`: 
       `Yₜ.c.ρ -= ᶜρχₜ_diffusion_for_q_tot`.
 
-Arguments for all methods:
-- `Yₜ`: The tendency state vector, modified in place.
+This function is acting as a wrapper around the specific implementations
+for different turbulence and convection models.
+
+The primary role of this function is to dispatch to the correct turbulence model's
+tendency function. It operates on the state `Y` and its tendency `Yₜ`, using
+precomputed fields (e.g., `ᶜK_u`, `ᶜK_h`, `ᶜh_tot`),
+and the model-specific cache `p`.
+
+Arguments:
+- `Yₜ`: The tendency state vector.
 - `Y`: The current state vector.
 - `p`: Cache containing parameters (e.g., `p.params` for `CAP.α_vert_diff_tracer`),
-       precomputed fields (e.g., `ᶜK_u`, `ᶜK_h`, `ᶜh_tot`, `ᶜspecific` tracer values),
+       precomputed fields (e.g., `ᶜK_u`, `ᶜK_h`, `ᶜh_tot`),
        atmospheric model configurations (like `p.atmos.vert_diff`), and scratch space.
 - `t`: Current simulation time (not directly used in diffusion calculations).
 - `vert_diff_model` (for dispatched methods): The specific vertical diffusion model instance.
