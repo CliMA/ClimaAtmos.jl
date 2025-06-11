@@ -266,6 +266,14 @@ function specific_env_value(χ_name::Symbol, gs, turbconv_model)
 end
 
 """
+    ρa⁰(gs)
+
+Computes the environment area-weighted density, assuming that the
+draft subdomain states are stored in `gs.sgsʲs`.
+"""
+ρa⁰(gs) = env_value(gs.ρ, sgsʲ -> sgsʲ.ρa, gs)
+
+"""
     specific_env_mse(gs, p)
 
 Computes the specific moist static energy (`mse`) in the environment (`mse⁰`).
@@ -311,88 +319,41 @@ function specific_env_mse(gs, p)
 end
 
 """
-    ρah_tot⁺(sgsʲs)
-
-Computes the total area-weighted `ρh_tot` across all draft subdomains, assuming that the
-draft subdomain states are stored in `sgsʲs`.
-"""
-ρah_tot⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.h_tot, sgsʲs)
-
-"""
-    ρamse⁺(sgsʲs)
-
-Computes the total area-weighted `ρmse` across all draft subdomains, assuming that the
-draft subdomain states are stored in `sgsʲs`.
-"""
-ρamse⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, sgsʲs)
-
-"""
-    ρaq_liq⁺(sgsʲs)
-
-Computes the liquid water area-weighted `ρq_liq` across all draft subdomains, assuming that the
-draft subdomain states are stored in `sgsʲs`.
-"""
-ρaq_liq⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.q_liq, sgsʲs)
-
-"""
-    ρaq_ice⁺(sgsʲs)
-
-Computes the ice water area-weighted `ρq_ice` across all draft subdomains, assuming that the
-draft subdomain states are stored in `sgsʲs`.
-"""
-ρaq_ice⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.q_ice, sgsʲs)
-
-"""
-    ρaq_rai⁺(sgsʲs)
-
-Computes the rain area-weighted `ρq_rai` across all draft subdomains, assuming that the
-draft subdomain states are stored in `sgsʲs`.
-"""
-ρaq_rai⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.q_rai, sgsʲs)
-
-"""
-    ρaq_sno⁺(sgsʲs)
-
-Computes the snow area-weighted `ρq_sno` across all draft subdomains, assuming that the
-draft subdomain states are stored in `sgsʲs`.
-"""
-ρaq_sno⁺(sgsʲs) = draft_sum(sgsʲ -> sgsʲ.ρa * sgsʲ.q_sno, sgsʲs)
-
-"""
     ρa⁰(gs)
 
-Computes the environment area-weighted density, assuming that the
-draft subdomain states are stored in `gs.sgsʲs`.
+Computes the environment area-weighted density (`ρa⁰`).
+
+This function uses the `env_value` helper, which applies the domain
+decomposition principle (`GridMean = Environment + Sum(Drafts)`) to calculate
+the environment area-weighted density by subtracting the sum of all draft
+subdomain area-weighted densities (`ρaʲ`) from the grid-mean density (`ρ`).
+
+Arguments:
+- `gs`: The grid-scale state, which contains the grid-mean density `gs.ρ` and
+        the draft subdomain states `gs.sgsʲs`.
+
+Returns:
+- The area-weighted density (`ρa⁰`).
 """
 ρa⁰(gs) = env_value(gs.ρ, sgsʲ -> sgsʲ.ρa, gs)
-
-
-"""
-    u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model)
-
-Computes the average draft subdomain vertical velocity `u₃⁺` by dividing the
-total momentum `ρaw⁺` by the total area-weighted density `ρa⁺`, both of which
-are computed from the tuples of subdomain densities and velocities `ρaʲs` and
-`u₃ʲs`. The division is computed using `specific` to avoid issues when `a⁺`
-is small.
-"""
-u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
-    unrolled_dotproduct(ρaʲs, u₃ʲs),
-    reduce(+, ρaʲs),
-    ρ * u₃,
-    ρ,
-    turbconv_model,
-)
 
 """
     u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model)
 
-Computes the environment vertical velocity `u₃⁰` by dividing the environment
-momentum `ρaw⁰` by the environment area-weighted density `ρa⁰`, both of which
-are computed from the domain decomposition of the grid-scale quantities `ρw` and
-`ρ` into the draft subdomain quantities `ρawʲs` and `ρaʲs` and the
-environment quantities. The division is computed using `specific` to avoid
-issues when `a⁰` is small.
+Computes the environment vertical velocity `u₃⁰`.
+
+This function calculates the environment's total vertical momentum (`ρa⁰u₃⁰`) and
+its total area-weighted density (`ρa⁰`) using the domain decomposition principle 
+(GridMean = Env + Sum(Drafts)). It then computes the final specific velocity `u₃⁰` 
+using the regularized `specific` function to ensure numerical stability when the 
+environment area fraction `a⁰` is small.
+
+Arguments:
+- `ρaʲs`: A tuple of area-weighted densities for each draft subdomain.
+- `u₃ʲs`: A tuple of vertical velocities for each draft subdomain.
+- `ρ`: The grid-mean air density.
+- `u₃`: The grid-mean vertical velocity.
+- `turbconv_model`: The turbulence convection model, containing regularization parameters.
 """
 u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
     ρ * u₃ - unrolled_dotproduct(ρaʲs, u₃ʲs),
@@ -405,24 +366,72 @@ u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
 """
     remove_energy_var(specific_state)
 
-Creates a copy of `specific_state` with the energy variable
-removed, where `specific_state` is the result of calling, e.g., `specific_gs`,
-`specific_sgsʲs`, or `specific_sgs⁰`.
+Creates a copy of `specific_state` with the energy variable (`:e_tot`) removed, 
+where `specific_state` is the result of calling, e.g., `specific_gs`, `specific_sgsʲs`, 
+or `specific_sgs⁰`. This is a utility function used to isolate non-energy tracer variables, 
+for example, to calculate diffusive fluxes (which, for energy, involve gradients of enthalpy, 
+not energy, and hence are handled separateyly). 
+
+It dispatches on the input type to handle either a single `NamedTuple` or a `Tuple` of them 
+(such as a collection of draft states). 
+
+Arguments:
+- `specific_state`: A `NamedTuple` or a `Tuple` of `NamedTuple`s from which to
+                    remove the `:e_tot` field.
+
+Returns:
+- A new `NamedTuple` or `Tuple` without the `:e_tot` field(s).
 """
 remove_energy_var(specific_state::NamedTuple) =
     Base.structdiff(specific_state, NamedTuple{(:e_tot,)})
 remove_energy_var(specific_state::Tuple) =
     map(remove_energy_var, specific_state)
 
+"""
+    mapreduce_with_init(f, op, iter...)
 
+A wrapper for Julia's `mapreduce` function that automatically determines
+the initial value (`init`) for the reduction.
+
+This is useful for iterators whose elements are custom structs or 
+`ClimaCore.Geometry.AxisTensor`s, where the zero element cannot be inferred
+as a simple scalar. It uses `ClimaCore.RecursiveApply` tools (`rzero`,
+`rpromote_type`) to create a type-stable, correctly-structured zero element
+based on the output of the function `f` applied to the first elements of the
+iterators.
+
+Arguments:
+- `f`: The function to apply to each element.
+- `op`: The reduction operator (e.g., `+`, `*`).
+- `iter...`: One or more iterators.
+"""
 import ClimaCore.RecursiveApply: ⊞, ⊠, rzero, rpromote_type
 function mapreduce_with_init(f, op, iter...)
     r₀ = rzero(rpromote_type(typeof(f(map(first, iter)...))))
     mapreduce(f, op, iter...; init = r₀)
 end
 
-# Inference fails for certain mapreduce calls inside cuda
-# kernels, so let's define a recursive unrolled dot product:
+"""
+    unrolled_dotproduct(a::Tuple, b::Tuple)
+
+Computes the dot product of two `Tuple`s (`a` and `b`) using a recursive,
+manually unrolled implementation.
+
+This function is designed to be type-stable and efficient for CUDA kernels,
+where standard `mapreduce` implementations can otherwise suffer from type-inference 
+failures.
+
+It uses `ClimaCore.RecursiveApply` operators (`⊞` for addition, `⊠` for
+multiplication), which allows it to handle dot products of tuples containing
+complex, nested types such as `ClimaCore.Geometry.AxisTensor`s.
+
+Arguments:
+- `a`: The first `Tuple`.
+- `b`: The second `Tuple`, which must have the same length as `a`.
+
+Returns:
+- The result of the dot product, `Σᵢ a[i] * b[i]`.
+"""
 promote_type_mul(n::Number, x::Geometry.AxisTensor) = typeof(x)
 promote_type_mul(x::Geometry.AxisTensor, n::Number) = typeof(x)
 @inline function unrolled_dotproduct(a::Tuple, b::Tuple)
