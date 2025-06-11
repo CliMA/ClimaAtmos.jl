@@ -242,8 +242,10 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; ᶜspecific) = p.precomputed
     (; ᶜ∇²specific_tracers) = p.hyperdiff
 
-    for χ_name in propertynames(ᶜ∇²specific_tracers)
-        @. ᶜ∇²specific_tracers.:($$χ_name) = wdivₕ(gradₕ(ᶜspecific.:($$χ_name)))
+    # TODO: double check this change
+    for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
+        is_energy_var(ρχ_name) || continue
+        @. ᶜ∇²specific_tracers.:($$χ_name) = wdivₕ(gradₕ(specific(Y.c.:$$χ_name, Y.c.ρ)))
     end
 
     if turbconv_model isa PrognosticEDMFX
