@@ -369,8 +369,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
     (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
     (;
-        # ᶜmixing_length_tuple,
-        # ᶜmixing_length,
         ᶜlinear_buoygrad,
         ᶜstrain_rate_norm,
         ρatke_flux,
@@ -499,36 +497,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜstrain_rate .= compute_strain_rate_center(ᶠu⁰)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
-    ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
-    @. ᶜprandtl_nvec =
-        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
-
-    ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
-    @. ᶜtke_exch = 0
-    for j in 1:n
-        @. ᶜtke_exch +=
-            Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / ᶜρa⁰ *
-            (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
-    end
-
-    sfc_tke = Fields.level(ᶜtke⁰, 1)
- 
-    # ᶜmixing_length = @. lazy(master_mixing_length(
-    #         p.params,
-    #         ustar,
-    #         ᶜz,
-    #         z_sfc,
-    #         ᶜdz,
-    #         max(sfc_tke, eps(FT)),
-    #         ᶜlinear_buoygrad,
-    #         max(ᶜtke⁰, 0),
-    #         obukhov_length,
-    #         ᶜstrain_rate_norm,
-    #         ᶜprandtl_nvec,
-    #         ᶜtke_exch,
-    #         p.atmos.edmfx_model.scale_blending_method,
-    #     ))
-
     ρatke_flux_values = Fields.field_values(ρatke_flux)
     ρa_sfc_values = Fields.field_values(Fields.level(ᶜρa⁰, 1)) # TODO: replace by surface value
     ustar_values = Fields.field_values(ustar)
@@ -543,6 +511,24 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     )
 
     return nothing
+end
+
+function compute_tke_exch(ᶜdetrʲs, ᶜρa⁰,  ᶜtke⁰, ᶠu³⁰, ᶠu³ʲs, sgsʲs, n)
+    ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
+    @. ᶜtke_exch = 0
+    for j in 1:n
+        @. ᶜtke_exch += sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / ᶜρa⁰ *
+            (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
+    end
+    return ᶜtke_exch
+end
+
+function compute_tke_exch(Y, p)
+    (; turbconv_model) = p.atmos
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; ᶜdetrʲs, ᶜρa⁰, ᶜtke⁰, ᶠu³⁰, ᶠu³ʲs) = p.precomputed
+    sgsʲs = Y.c.sgsʲs
+    return compute_tke_exch(ᶜdetrʲs, ᶜρa⁰, ᶜtke⁰, ᶠu³⁰, ᶠu³ʲs, sgsʲs, n)
 end
 
 """

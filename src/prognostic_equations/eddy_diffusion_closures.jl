@@ -562,6 +562,40 @@ function master_mixing_length(
     return getproperty(ᶜmixing_length_tuple, :master)
 end
 
+function master_mixing_length(Y, p)
+    (; params) = p
+    (; ustar, obukhov_length) = p.precomputed.sfc_conditions
+    (; ᶜtke⁰, ᶜρa⁰, ᶠu³⁰, ᶜts⁰) = p.precomputed
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+    sfc_tke = Fields.level(ᶜtke⁰, 1)
+    # ᶜPr = turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+    ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
+    @. ᶜprandtl_nvec = 0
+    @. ᶜprandtl_nvec =
+        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+    
+    ᶜtke_exch = compute_tke_exch(ᶜdetrʲs, ᶜρa⁰, ᶜtke⁰, ᶠu³⁰, ᶠu³ʲs, Y.c.sgsʲs, n)
+    return master_mixing_length(
+        params,
+        ustar,
+        ᶜz,
+        z_sfc,
+        ᶜdz,
+        max(sfc_tke, eps(eltype(params))),
+        ᶜlinear_buoygrad,
+        max(ᶜtke⁰, 0),
+        obukhov_length,
+        ᶜstrain_rate_norm,
+        ᶜprandtl_nvec,
+        ᶜtke_exch,
+        p.atmos.edmfx_model.scale_blending_method,
+    )
+end
+
 """
     gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 

@@ -1005,15 +1005,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     @. ᶜprandtl_nvec =
         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
 
-    ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
-    @. ᶜtke_exch = 0
-    # using ᶜu⁰ would be more correct, but this is more consistent with the
-    # TKE equation, where using ᶜu⁰ results in allocation
-    for j in 1:n
-        @. ᶜtke_exch +=
-            ᶜρaʲs.:($$j) * ᶜdetrʲs.:($$j) / Y.c.ρ *
-            (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
-    end
+    ᶜtke_exch = compute_tke_exch(ᶜdetrʲs, ᶜρa⁰, ᶜtke⁰, ᶠu³⁰, ᶠu³ʲs, Y.c.sgsʲs, n)
 
     sfc_tke = Fields.level(ᶜtke⁰, 1)
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, half)
