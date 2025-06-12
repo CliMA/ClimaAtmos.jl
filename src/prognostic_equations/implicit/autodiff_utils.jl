@@ -166,6 +166,7 @@ for func in (:isequal, :isless, :<, :>, :(==), :!=, :<=, :>=)
 
     # These methods handle combinations of Reals and Duals without ambiguities.
     for R in (ForwardDiff.AMBIGUOUS_TYPES..., AbstractIrrational)
+        R == Real && continue # defining these methods for Real causes ambiguities from StatsBase
         @eval @inline Base.$func(arg1::ForwardDiff.Dual{Jacobian}, arg2::$R) =
             $func(ForwardDiff.value(arg1), arg2)
         @eval @inline Base.$func(arg1::$R, arg2::ForwardDiff.Dual{Jacobian}) =

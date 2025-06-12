@@ -178,6 +178,8 @@ end
    - GridScaleCloud: Cloud fraction is set to 1 if there is non-zero grid-scale condensate, 0 otherwise.
    - QuadratureCloud: Cloud fraction is computed by sampling over the quadrature points.
      Additional contributions from the updrafts are considered when using EDMF.
+   - MLCloud: Cloud fraction is computed using a neural network for the environmental cloud fraction, while 
+     cloud and liquid ice mixing ratios and EMDFX updraft contributions are computed as in `QuadratureCloud`.
 """
 NVTX.@annotate function set_cloud_fraction!(Y, p, ::DryModel, _)
     FT = eltype(p.params)
@@ -216,7 +218,7 @@ NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
     ::Union{EquilMoistModel, NonEquilMoistModel},
-    qc::QuadratureCloud,
+    qc::Union{QuadratureCloud, MLCloud},
 )
     thermo_params = CAP.thermodynamics_params(p.params)
     turbconv_model = p.atmos.turbconv_model
@@ -236,6 +238,19 @@ NVTX.@annotate function set_cloud_fraction!(
             ᶜθ′θ′,
             ᶜθ′q′,
         )
+
+    if qc isa MLCloud
+        # overwrite with the ML computed environmental cloud fraction, leaving q_liq, q_ice computed via quadrature
+        set_ml_cloud_fraction!(
+            Y,
+            p,
+            qc,
+            thermo_params,
+            turbconv_model,
+            ᶜts,
+        )
+    end
+
     # ... weight by environment area fraction if using PrognosticEDMFX (assumed 1 otherwise) ...
     if turbconv_model isa PrognosticEDMFX
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
@@ -271,4 +286,109 @@ NVTX.@annotate function set_cloud_fraction!(
             )
         end
     end
+end
+
+function set_ml_cloud_fraction!(
+    Y,
+    p,
+    ml_cloud::MLCloud,
+    thermo_params,
+    turbconv_model,
+    ᶜts,
+)
+    FT = eltype(p.params)
+    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_field .=
+        turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX ?
+        ᶜmixing_length(Y, p) :
+        compute_gm_mixing_length(Y, p)
+
+    # Vertical gradients of q_tot and θ_liq_ice
+    ᶜ∇q = p.scratch.ᶜtemp_scalar_2
+    ᶜ∇q .=
+        projected_vector_data.(
+            C3,
+            p.precomputed.ᶜgradᵥ_q_tot,
+            Fields.level(Fields.local_geometry_field(Y.c)),
+        )
+    ᶜ∇θ = p.scratch.ᶜtemp_scalar_3
+    ᶜ∇θ .=
+        projected_vector_data.(
+            C3,
+            p.precomputed.ᶜgradᵥ_θ_liq_ice,
+            Fields.level(Fields.local_geometry_field(Y.c)),
+        )
+
+    p.precomputed.cloud_diagnostics_tuple.cf .=
+        compute_ml_cloud_fraction.(
+            Ref(ml_cloud.model),
+            ᶜmixing_length_field,
+            ᶜ∇q,
+            ᶜ∇θ,
+            specific.(Y.c.ρq_tot, Y.c.ρ),
+            ᶜts,
+            thermo_params,
+        )
+end
+
+function compute_ml_cloud_fraction(
+    nn_model,
+    ᶜmixing_length_field,
+    ᶜ∇q,
+    ᶜ∇θ,
+    q_tot,
+    ᶜts,
+    thermo_params,
+)
+    FT = eltype(thermo_params)
+    # Saturation state at current thermodynamic state
+    q_sat = TD.q_vap_saturation(thermo_params, ᶜts)
+
+    # Liquid–ice potential temperature at current thermodynamic state
+    θli = TD.liquid_ice_pottemp(thermo_params, ᶜts)
+
+
+    # distance to saturation in temperature space
+    Δθli, θli_sat, dqsatdθli =
+        saturation_distance(q_tot, q_sat, ᶜts, θli, thermo_params, FT(0.1))
+
+    # form the pi groups 
+    π_1 = (q_sat - q_tot) / q_sat
+    π_2 = Δθli / θli_sat
+    π_3 = (((dqsatdθli * ᶜ∇θ - ᶜ∇q) * ᶜmixing_length_field) / q_sat)
+    π_4 = (ᶜ∇θ * ᶜmixing_length_field) / θli_sat
+
+    return apply_cf_nn(nn_model, π_1, π_2, π_3, π_4)
+
+end
+
+function saturation_distance(q_tot, q_sat, ᶜts, θli, thermo_params, Δθli_fd)
+
+    # Perturbed thermodynamic states for finite-difference
+    ts_perturbed = TD.PhaseEquil_pθq(
+        thermo_params,
+        ᶜts.p,
+        θli .+ Δθli_fd,
+        ᶜts.q_tot,
+    )
+    q_sat_perturbed = TD.q_vap_saturation(thermo_params, ts_perturbed)
+
+    # Finite-difference derivative ∂q_sat / ∂θli
+    dq_sat_dθli = (q_sat_perturbed - q_sat) / Δθli_fd
+
+    # Newton step to saturation distance in θli-space
+    Δθli = (q_sat - q_tot) / dq_sat_dθli
+    θli_sat = θli + Δθli
+
+    return Δθli, θli_sat, dq_sat_dθli
+end
+
+
+"""
+    apply_cf_nn(model, π_1, π_2, π_3, π_4)
+
+Compute the NN-based cloud fraction given non-dimensional groups.
+"""
+function apply_cf_nn(model, π_1::FT, π_2::FT, π_3::FT, π_4::FT) where {FT}
+    return clamp((model(SA.SVector(π_1, π_2, π_3, π_4))[]), FT(0.0), FT(1.0))
 end
