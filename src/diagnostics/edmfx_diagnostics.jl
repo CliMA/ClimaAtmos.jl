@@ -1139,7 +1139,7 @@ compute_tke!(out, state, cache, time) =
 compute_tke!(_, _, _, _, turbconv_model::T) where {T} =
     error_diagnostic_variable("tke", turbconv_model)
 
-function compute_tke!(   # TODO need to fix this to remove ᶜtke⁰ from preconputed
+function compute_tke!(  
     out,
     state,
     cache,
@@ -1147,9 +1147,9 @@ function compute_tke!(   # TODO need to fix this to remove ᶜtke⁰ from precon
     turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
-        return copy(cache.precomputed.ᶜtke⁰)
+        return copy(ᶜtke⁰)
     else
-        out .= cache.precomputed.ᶜtke⁰
+        out .= ᶜtke⁰
     end
 end
 
