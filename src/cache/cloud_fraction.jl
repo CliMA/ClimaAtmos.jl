@@ -146,7 +146,7 @@ NVTX.@annotate function set_cloud_fraction!(
     # environment
     diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
 
-    @. cloud_diagnostics_tuple = quad_loop(
+    foo = @allocated @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,
         ᶜts,
         Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot),
@@ -155,6 +155,7 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜmixing_length,
         thermo_params,
     )
+    @info typeof(foo)
 
     # updrafts
     n = n_mass_flux_subdomains(turbconv_model)
@@ -259,10 +260,10 @@ computed as a sum over quadrature points.
 function quad_loop(
     SG_quad::SGSQuadrature,
     ts,
-    ᶜ∇q,
-    ᶜ∇θ,
+    ∇q,
+    ∇θ,
     coeff,
-    ᶜlength_scale,
+    length_scale,
     thermo_params,
 )
     p_c = TD.air_pressure(thermo_params, ts)
@@ -270,49 +271,47 @@ function quad_loop(
     θ_mean = TD.liquid_ice_pottemp(thermo_params, ts)
     # Returns the physical values based on quadrature sampling points
     # and limited covarainces
-    function get_x_hat(χ1, χ2)
 
-        FT = eltype(χ1)
+    FT = typeof(q_mean)
 
-        q′q′ = covariance_from_grad(coeff, ᶜlength_scale, ᶜ∇q, ᶜ∇q)
-        θ′θ′ = covariance_from_grad(coeff, ᶜlength_scale, ᶜ∇θ, ᶜ∇θ)
-        θ′q′ = covariance_from_grad(coeff, ᶜlength_scale, ᶜ∇θ, ᶜ∇q)
+    q′q′ = covariance_from_grad(coeff, length_scale, ∇q, ∇q)
+    θ′θ′ = covariance_from_grad(coeff, length_scale, ∇θ, ∇θ) 
+    θ′q′ = covariance_from_grad(coeff, length_scale, ∇θ, ∇q)
+    # Epsilon defined per typical variable fluctuation
+    eps_q = eps(FT) * max(eps(FT), q_mean)
+    eps_θ = eps(FT)
 
-        # Epsilon defined per typical variable fluctuation
-        eps_q = eps(FT) * max(eps(FT), q_mean)
-        eps_θ = eps(FT)
+    # limit σ_q to prevent negative q_tot_hat
+    σ_q_lim = -q_mean / (sqrt(FT(2)) * SG_quad.a[1])
+    σ_q = min(sqrt(q′q′), σ_q_lim)
+    # Do we also have to try to limit θ in the same way as q??
+    σ_θ = sqrt(θ′θ′)
 
-        # limit σ_q to prevent negative q_tot_hat
-        σ_q_lim = -q_mean / (sqrt(FT(2)) * SG_quad.a[1])
-        σ_q = min(sqrt(q′q′), σ_q_lim)
-        # Do we also have to try to limit θ in the same way as q??
-        σ_θ = sqrt(θ′θ′)
+    # Enforce Cauchy-Schwarz inequality, numerically stable compute
+    _corr = (θ′q′ / max(σ_q, eps_q))
+    corr = max(min(_corr / max(σ_θ, eps_θ), FT(1)), FT(-1))
 
-        # Enforce Cauchy-Schwarz inequality, numerically stable compute
-        _corr = (θ′q′ / max(σ_q, eps_q))
-        corr = max(min(_corr / max(σ_θ, eps_θ), FT(1)), FT(-1))
+    # Conditionals
+    σ_c = sqrt(max(1 - corr * corr, 0)) * σ_θ
 
-        # Conditionals
-        σ_c = sqrt(max(1 - corr * corr, 0)) * σ_θ
-
+    function get_x_hat(χ1::FT, χ2::FT) where {FT}
         μ_c = θ_mean + sqrt(FT(2)) * corr * σ_θ * χ1
         θ_hat = μ_c + sqrt(FT(2)) * σ_c * χ2
         q_hat = q_mean + sqrt(FT(2)) * σ_q * χ1
         # The σ_q_lim limits q_tot_hat to be close to zero
         # for the negative sampling points. However due to numerical errors
         # we sometimes still get small negative numbers here
-        return (θ_hat, max(FT(0), q_hat))
+        return (θ_hat, max(0, q_hat))
     end
 
     function f(x1_hat, x2_hat)
-        FT = eltype(x1_hat)
-        @assert(x1_hat >= FT(0))
-        @assert(x2_hat >= FT(0))
+        @assert(x1_hat >= 0)
+        @assert(x2_hat >= 0)
         _ts = thermo_state(thermo_params; p = p_c, θ = x1_hat, q_tot = x2_hat)
         hc = TD.has_condensate(thermo_params, _ts)
 
-        cf = hc ? FT(1) : FT(0) # cloud fraction
-        q_tot_sat = hc ? x2_hat : FT(0) # cloudy/dry for buoyancy in TKE
+        cf = hc ? 1 : 0 # cloud fraction
+        q_tot_sat = hc ? x2_hat : 0 # cloudy/dry for buoyancy in TKE
         q_liq = TD.PhasePartition(thermo_params, _ts).liq # cloud liquid for radiation
         q_ice = TD.PhasePartition(thermo_params, _ts).ice # cloud ice for radiation
 
@@ -346,4 +345,50 @@ function quad(f::F, get_x_hat::F1, quad) where {F <: Function, F1 <: Function}
         outer_env = outer_env ⊞ inner_env ⊠ weights[m_q] ⊠ FT(1 / sqrt(π))
     end
     return outer_env
+end
+
+"""
+    Diagnose horizontal covariances based on vertical gradients
+    (i.e. taking turbulence production as the only term)
+    We'll learn the weighting coefficients in the ML closure from data 
+    so no need to add the diagnostic_covariance_coeff here
+"""
+function unweighted_covariance_from_grad(mixing_length, ∇Φ, ∇Ψ)
+    return 2 * mixing_length^2 * dot(∇Φ, ∇Ψ)
+end
+
+"""
+    set_cloud_fraction! for machine learning based cloud fraction closure
+"""
+NVTX.@annotate function set_cloud_fraction!(
+    Y,
+    p,
+    moist_model::Union{EquilMoistModel, NonEquilMoistModel},
+    ::CloudML,
+)
+    (; params) = p
+    (; ᶜts, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(params)
+    FT = eltype(p.params)
+
+    # quantities to be used in the regression 
+    thermo_params = CAP.thermodynamics_params(p.params)
+
+    ᶜ∇q = Geometry.WVector.(p.precomputed.ᶜgradᵥ_q_tot⁰)
+    ᶜ∇θ = Geometry.WVector.(p.precomputed.ᶜgradᵥ_θ_liq_ice⁰)
+
+    q′q′ = unweighted_covariance_from_grad.(ᶜmixing_length, ᶜ∇q, ᶜ∇q)
+    θ′θ′ = unweighted_covariance_from_grad.(ᶜmixing_length, ᶜ∇θ, ᶜ∇θ)
+    θ′q′ = unweighted_covariance_from_grad.(ᶜmixing_length, ᶜ∇θ, ᶜ∇q)
+
+    # get saturation specific humidity, ice and liquid water content
+    q_liq = TD.PhasePartition.(thermo_params, ᶜts).liq
+    q_ice = TD.PhasePartition.(thermo_params, ᶜts).ice
+    q_sat = TD.q_vap_saturation.(thermo_params, ᶜts)
+
+    # TODO: Add ML model parameters to atmos model
+    # TODO: Add ML model inference here
+    # For now, return zeros as placeholder
+    p.precomputed.cloud_diagnostics_tuple .= 
+        ((; cf = FT(0), q_liq = FT(0), q_ice = FT(0)),)
 end
