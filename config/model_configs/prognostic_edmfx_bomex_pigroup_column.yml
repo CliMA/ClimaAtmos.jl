@@ -12,7 +12,7 @@ edmfx_nh_pressure: true
 edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
-cloud_model: "grid_scale"
+cloud_model: "quadrature_sgs"
 moist: "equil"
 call_cloud_diagnostics_per_stage: true
 config: "column"
@@ -22,8 +22,7 @@ z_stretch: false
 perturb_initstate: false
 dt: "5secs"
 t_end: "6hours"
-dt_save_state_to_disk: "10mins"
-toml: [toml/prognostic_edmfx_bomex_pigroup.toml]
+toml: [ClimaAtmos.jl/toml/prognostic_edmfx_bomex_pigroup.toml]
 netcdf_interpolation_num_points: [2, 2, 60]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]

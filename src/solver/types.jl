@@ -94,6 +94,13 @@ struct SGSQuadratureCloud{SGQ <: AbstractSGSamplingType} <: AbstractCloudModel
     SG_quad::SGQ
 end
 
+"""
+    CloudML
+
+Compute the cloud fraction using a machine learning model.
+"""
+struct CloudML <: AbstractCloudModel end
+
 abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct ZonallyAsymmetricSST <: AbstractSST end

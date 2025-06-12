@@ -348,3 +348,97 @@ function quad(f::F, get_x_hat::F1, quad) where {F <: Function, F1 <: Function}
     end
     return outer_env
 end
+
+"""
+    Diagnose horizontal covariances based on vertical gradients
+    (i.e. taking turbulence production as the only term)
+    We'll learn the weighting coefficients in the ML closure from data
+    so no need to add the diagnostic_covariance_coeff here
+"""
+function unweighted_covariance_from_grad(mixing_length, ∇Φ, ∇Ψ)
+    return 2 * mixing_length^2 * dot(∇Φ, ∇Ψ)
+end
+
+"""
+    set_cloud_fraction! for machine learning based cloud fraction closure
+"""
+NVTX.@annotate function set_cloud_fraction!(
+    Y,
+    p,
+    moist_model::Union{EquilMoistModel, NonEquilMoistModel},
+    ::CloudML,
+)
+    (; params) = p
+    (; ᶜts, cloud_diagnostics_tuple) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(params)
+    FT = eltype(p.params)
+
+    # mixing length
+    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+
+    # z
+    z = p.scratch.ᶜtemp_scalar_2
+    z .= Fields.coordinate_field(Y.c.ρ).z
+
+    # t
+    t = p.scratch.ᶜtemp_scalar_3
+    t .= TD.air_temperature.(
+        CAP.thermodynamics_params(p.params),
+        p.precomputed.ᶜts,
+    )
+
+    # specific humidity
+    q = p.scratch.ᶜtemp_scalar_4
+    @. q = Y.c.ρq_tot / Y.c.ρ
+
+    # buoyancy_freq
+    N² = p.scratch.ᶜtemp_scalar_5
+    ᶜθ = TD.dry_pottemp.(CAP.thermodynamics_params(p.params), p.precomputed.ᶜts) # TODO allocation
+    ᶜ∇θ = Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜθ))).components.data.:1 # TODO allocation
+    N² .= CAP.grav(params) ./ ᶜθ .* ᶜ∇θ
+
+    #TODO strain rate
+    # ᶠu = p.scratch.ᶠtemp_C123
+    # @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(p.precomputed.ᶠu³)
+    # ᶜstrain_rate = compute_strain_rate_center_vertical(ᶠu)
+
+
+    # q_lengthscale
+    q_lengthscale = TD.q_vap_saturation.(thermo_params, ᶜts) .- q
+
+    function dqsatdt(thermo_params, ts)
+        ts_hi = deepcopy(ts)
+        ts_lo = deepcopy(ts)
+        ts_hi.T .+= FT(1)
+        ts_lo.T .-= FT(1)
+        return (TD.q_vap_saturation.(thermo_params, ts_hi) .-
+                TD.q_vap_saturation.(thermo_params, ts_lo)) ./ FT(2)
+    end
+
+    # theta lengthscale
+    T_lengthscale = ᶜθ ./ t .*(TD.q_vap_saturation.(thermo_params, ᶜts) .- q) ./
+                    dqsatdt(thermo_params, ᶜts)
+
+
+    ᶜtke = specific.(Y.c.sgs⁰.ρatke, Y.c.ρ)
+
+    # quantities to be used in the regression
+    ᶜ∇q = Geometry.WVector.(p.precomputed.ᶜgradᵥ_q_tot⁰) # TODO computed on the fly now
+    ᶜ∇θ = Geometry.WVector.(p.precomputed.ᶜgradᵥ_θ_liq_ice⁰) # TODO computed on the fly now
+
+    q′q′ = unweighted_covariance_from_grad.(ᶜmixing_length, ᶜ∇q, ᶜ∇q)
+    θ′θ′ = unweighted_covariance_from_grad.(ᶜmixing_length, ᶜ∇θ, ᶜ∇θ)
+    θ′q′ = unweighted_covariance_from_grad.(ᶜmixing_length, ᶜ∇θ, ᶜ∇q)
+
+    # get saturation specific humidity, ice and liquid water content
+    q_liq = TD.PhasePartition.(thermo_params, ᶜts).liq
+    q_ice = TD.PhasePartition.(thermo_params, ᶜts).ice
+    q_sat = TD.q_vap_saturation.(thermo_params, ᶜts)
+
+    # TODO: Add ML model parameters to atmos model
+    # TODO: Add ML model inference here
+    # For now, return zeros as placeholder
+    p.precomputed.cloud_diagnostics_tuple .=
+        ((; cf = FT(0), q_liq = q_liq, q_ice = q_ice),)
+end
