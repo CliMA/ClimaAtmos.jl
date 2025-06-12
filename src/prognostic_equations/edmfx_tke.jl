@@ -48,8 +48,7 @@ function edmfx_tke_tendency!(
         ᶠu³⁰,
         ᶠu³,
         ᶜstrain_rate_norm,
-        ᶜlinear_buoygrad,
-        ᶜtke⁰,
+        ᶜlinear_buoygrad
     ) = p.precomputed
     turbconv_params = CAP.turbconv_params(p.params)
     FT = eltype(p.params)
@@ -84,6 +83,7 @@ function edmfx_tke_tendency!(
         @. ᶜprandtl_nvec =
             turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
 
+        ᶜtke⁰ = @.lazy(specific_sgs(@name(tke), Y.c.sgs⁰, Y.c, turbconv_model))
         sfc_tke = Fields.level(ᶜtke⁰, 1)
         z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
         ᶜz = Fields.coordinate_field(Y.c).z

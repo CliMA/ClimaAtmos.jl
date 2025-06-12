@@ -97,7 +97,6 @@ function specific_sgs(χ_name, sgs, gs, turbconv_model)
 end
 
 
-
 # Helper functions for manipulating symbols in the generated functions:
 has_prefix(symbol, prefix_symbol) =
     startswith(string(symbol), string(prefix_symbol))
@@ -118,8 +117,8 @@ This provides a type-stable and performant way to convert all relevant state
 variables to their specific counterparts at once.
 
 Arguments:
-- `gs`: A `NamedTuple`-like object representing the grid-scale state, which must
-        contain a `:ρ` field and other fields with a `:ρ` prefix.
+- `gs`: The grid-scale state, which must contain a `:ρ` field and other fields 
+    with a `:ρ` prefix.
 
 Returns:
 - A new `NamedTuple` containing only the specific quantities (e.g., `:q_tot`, `:e_tot`).

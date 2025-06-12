@@ -1139,7 +1139,7 @@ compute_tke!(out, state, cache, time) =
 compute_tke!(_, _, _, _, turbconv_model::T) where {T} =
     error_diagnostic_variable("tke", turbconv_model)
 
-function compute_tke!(
+function compute_tke!(   # TODO need to fix this to remove ᶜtke⁰ from preconputed
     out,
     state,
     cache,
@@ -1288,8 +1288,9 @@ function compute_edt!(
 )
 
     turbconv_params = CAP.turbconv_params(cache.params)   
-    (; ᶜmixing_length_tuple, ᶜtke⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed  
+    (; ᶜmixing_length_tuple, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed  
 
+    ᶜtke⁰ = @.lazy(specific_sgs(@name(tke), state.c.sgs⁰, state.c, turbconv_model))
     ᶜprandtl_nvec = @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
 
     ᶜmixing_length = ᶜmixing_length_tuple.master
@@ -1352,7 +1353,7 @@ function compute_evu!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     turbconv_params = CAP.turbconv_params(cache.params)   
-    (; ᶜmixing_length_tuple, ᶜtke⁰) = cache.precomputed  
+    (; ᶜmixing_length_tuple, ᶜtke⁰) = cache.precomputed  # TODO need to remove ᶜtke⁰
     ᶜmixing_length = ᶜmixing_length_tuple.master
     ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length))
 

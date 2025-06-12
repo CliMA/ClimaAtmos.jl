@@ -23,10 +23,9 @@ every quantity except for `ᶜp` (which is shared across all subdomains):
     - `_⁰`: value for the environment
     - `_ʲs`: a tuple of values for the mass-flux subdomains
 In addition, there are several other SGS quantities for `PrognosticEDMFX`:
-    - `ᶜtke⁰`: turbulent kinetic energy of the environment on cell centers
     - `ᶜρʲs`: a tuple of the air densities of the mass-flux subdomains on cell
         centers
-For every other `AbstractEDMF`, only `ᶜtke⁰` is added as a precomputed quantity.
+
 
 TODO: Rename `ᶜK` to `ᶜκ`.
 """
@@ -45,7 +44,7 @@ function implicit_precomputed_quantities(Y, atmos)
         ᶜh_tot = similar(Y.c, FT),
     )
     sgs_quantities =
-        turbconv_model isa AbstractEDMF ? (; ᶜtke⁰ = similar(Y.c, FT)) : (;)
+        turbconv_model isa AbstractEDMF ? (;) : (;)
     prognostic_sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
@@ -167,7 +166,6 @@ function precomputed_quantities(Y, atmos)
         atmos.turbconv_model isa EDOnlyEDMFX ?
         (;
             ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
-            ᶜtke⁰ = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             ᶜK_h = similar(Y.c, FT),
         ) : (;)
@@ -469,9 +467,13 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_implicit_closures!(Y, p, t)
-    elseif turbconv_model isa AbstractEDMF
-        (; ᶜtke⁰) = p.precomputed
-        @. ᶜtke⁰ = Y.c.sgs⁰.ρatke / Y.c.ρ
+    elseif turbconv_model isa DiagnosticEDMFX
+        set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
+    elseif !(isnothing(turbconv_model))
+        # Do nothing for other turbconv models for now
+    end
+    if p.atmos.sgs_adv_model isa AdvectSGS
+        set_sgs_precomputed_quantities!(Y, p, t)
     end
 end
 

@@ -395,10 +395,11 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜu⁰, ᶜK⁰, ᶜtke⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm,) = p.precomputed
+    (; ᶜu⁰, ᶜK⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm,) = p.precomputed
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
     ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
+    ᶜtke⁰ = @.lazy(specific_sgs(@name(tke), Y.c.sgs⁰, Y.c, turbconv_model))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
         ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
@@ -507,9 +508,10 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜu, ᶜh_tot, ᶜtke⁰, ᶜmixing_length) = p.precomputed
+    (; ᶜu, ᶜh_tot, ᶜmixing_length) = p.precomputed
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
+    ᶜtke⁰ = @.lazy(specific_sgs(@name(tke), Y.c.sgs⁰, Y.c, turbconv_model))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
         ᶠρaK_h = p.scratch.ᶠtemp_scalar

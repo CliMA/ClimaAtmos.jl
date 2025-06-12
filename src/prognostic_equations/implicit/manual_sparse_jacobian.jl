@@ -399,7 +399,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     (; matrix) = cache
     (; params) = p
     (; ᶜΦ, ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜspecific, ᶠu³, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶠu³, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
     (;
         ∂ᶜK_∂ᶜuₕ,
         ∂ᶜK_∂ᶠu₃,
@@ -430,6 +430,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ∂e_int_∂q_tot = T_0 * (Δcv_v - R_d) - FT(CAP.e_int_v0(params))
     thermo_params = CAP.thermodynamics_params(params)
 
+    ᶜspecific = all_specific_gs(Y.c)   # TODO: this, here and elsewhere, probably needs @.lazy?
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
@@ -577,7 +578,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
         ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
         @. ∂ᶜρq_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρq_tot_err_∂ᶜρq_tot)) - (I,)
-        #TODO: tetsing explicit vs implicit
+        #TODO: testing explicit vs implicit
         #@. ∂ᶜρq_tot_err_∂ᶜρq_tot =
         #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
         #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
@@ -671,10 +672,11 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             turbconv_params = CAP.turbconv_params(params)
             c_d = CAP.tke_diss_coeff(turbconv_params)
             (; dt) = p
-            (; ᶜtke⁰, ᶜmixing_length) = p.precomputed
-            ᶜρa⁰ =
-                p.atmos.turbconv_model isa PrognosticEDMFX ?
-                @.lazy(ρa⁰(Y.c)) : ᶜρ
+            turbconv_model = p.atmos.turbconv_model
+            ᶜmixing_length = p.precomputed.ᶜmixing_length
+            ᶜtke⁰ =
+                @.lazy(specific_sgs(@name(tke), Y.c.sgs⁰, Y.c, turbconv_model))
+            ᶜρa⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? @.lazy(ρa⁰(Y.c)) : ᶜρ
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
             @inline tke_dissipation_rate_tendency(tke⁰, mixing_length) =
