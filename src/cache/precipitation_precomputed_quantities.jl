@@ -453,7 +453,7 @@ function set_precipitation_surface_fluxes!(
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency,) = p.conservation_check
-    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜspecific) = p.precomputed
+    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ) = p.precomputed
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     sfc_J = Fields.level(ᶠJ, Fields.half)
@@ -461,31 +461,21 @@ function set_precipitation_surface_fluxes!(
 
     # Jacobian-weighted extrapolation from interior to surface, consistent with
     # the reconstruction of density on cell faces, ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
-    int_J = Fields.Field(Fields.field_values(Fields.level(ᶜJ, 1)), sfc_space)
-    int_ρ = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), sfc_space)
+    sfc_lev(x) =
+        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
+    int_J = sfc_lev(ᶜJ)
+    int_ρ = sfc_lev(Y.c.ρ)
     sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
 
     # Constant extrapolation to surface, consistent with simple downwinding
-    sfc_qᵣ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_rai, 1)),
-        sfc_space,
-    )
-    sfc_qₛ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_sno, 1)),
-        sfc_space,
-    )
-    sfc_qₗ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_liq, 1)),
-        sfc_space,
-    )
-    sfc_qᵢ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_ice, 1)),
-        sfc_space,
-    )
-    sfc_wᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), sfc_space)
-    sfc_wₛ = Fields.Field(Fields.field_values(Fields.level(ᶜwₛ, 1)), sfc_space)
-    sfc_wₗ = Fields.Field(Fields.field_values(Fields.level(ᶜwₗ, 1)), sfc_space)
-    sfc_wᵢ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵢ, 1)), sfc_space)
+    sfc_wᵣ = sfc_lev(ᶜwᵣ)
+    sfc_wₛ = sfc_lev(ᶜwₛ)
+    sfc_wₗ = sfc_lev(ᶜwₗ)
+    sfc_wᵢ = sfc_lev(ᶜwᵢ)
+    sfc_qᵣ = lazy.(specific.(sfc_lev(Y.c.ρq_rai), sfc_ρ))
+    sfc_qₛ = lazy.(specific.(sfc_lev(Y.c.ρq_sno), sfc_ρ))
+    sfc_qₗ = lazy.(specific.(sfc_lev(Y.c.ρq_liq), sfc_ρ))
+    sfc_qᵢ = lazy.(specific.(sfc_lev(Y.c.ρq_ice), sfc_ρ))
 
     @. surface_rain_flux = sfc_ρ * (sfc_qᵣ * (-sfc_wᵣ) + sfc_qₗ * (-sfc_wₗ))
     @. surface_snow_flux = sfc_ρ * (sfc_qₛ * (-sfc_wₛ) + sfc_qᵢ * (-sfc_wᵢ))
