@@ -496,3 +496,69 @@ function issphere(space)
     return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
            Domains.SphereDomain
 end
+
+
+"""
+    construct_tendencies(::Val{names}, f, ᶜY, ᶠY, p, t)
+
+Return a tuple of calls to
+
+```
+f(Val(name), ᶜY, ᶠY, p, t)
+```
+for all names in `names`.
+
+For example, `f(Val((:a, :b)), ᶜY, ᶠY, p, t)` will return:
+
+```
+(
+    f(Val(:a), ᶜY, ᶠY, p, t),
+    f(Val(:b), ᶜY, ᶠY, p, t),
+)
+```
+"""
+@generated function construct_tendencies(
+    ::Val{names},
+    f,
+    ᶜY,
+    ᶠY,
+    p,
+    t,
+) where {names}
+    calls = []
+    for name in names
+        push!(calls, :(f(Val($(QuoteNode(name))), ᶜY, ᶠY, p, t)))
+    end
+    return quote
+        ($(calls...),)
+    end
+end
+
+"""
+    make_named_tuple(::Val{names}, vals...) where {names}
+
+Construct a NamedTuple given the names `names` and values `vals`.
+"""
+make_named_tuple(::Val{names}, vals...) where {names} = NamedTuple{names}(vals)
+
+"""
+    add_tend(∑tendencies, tendency)
+
+A helper function which returns `∑tendencies` when `tendency` is a
+`NullBroadcasted` and `lazy.(∑tendencies + tendency)` when `tendency` is not a
+`NullBroadcasted`.
+"""
+function add_tend end
+add_tend(∑tends, t) = lazy.(∑tends .+ t)
+add_tend(∑tends, ::NullBroadcasted) = ∑tends
+
+"""
+    sub_tend(∑tendencies, tendency)
+
+A helper function which returns `∑tendencies` when `tendency` is a
+`NullBroadcasted` and `lazy.(∑tendencies - tendency)` when `tendency` is not a
+`NullBroadcasted`.
+"""
+function sub_tend end
+sub_tend(∑tends, ::NullBroadcasted) = ∑tends
+sub_tend(∑tends, t) = lazy.(∑tends .- t)
