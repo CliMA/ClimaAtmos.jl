@@ -1,4 +1,57 @@
 """
+    specific(ρχ, ρ)
+    specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
+
+Calculates the specific quantity `χ` (per unit mass) from a density-weighted
+quantity. This function uses multiple dispatch to select the appropriate
+calculation method based on the number of arguments.
+
+**Grid-Scale Method (2 arguments)**
+
+    specific(ρχ, ρ)
+
+Performs a direct division of the density-weighted quantity `ρχ` by the density
+`ρ`. This method is used for grid-mean quantities where the density `ρ` is
+well-defined and non-zero.
+
+**SGS Regularized Method (5 arguments)**
+
+    specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
+
+Calculates the specific quantity `χ` for a subgrid-scale (SGS) component by
+dividing the density-area-weighted quantity `ρaχ` by the density-area product
+`ρa`.
+
+This method includes regularization to handle cases where the SGS area fraction
+(and thus `ρa`) is zero or vanishingly small. It performs a linear
+interpolation between the SGS specific quantity (`ρaχ / ρa`) and the grid-mean
+specific quantity (`ρχ / ρ`). The interpolation weight is computed by
+`sgs_weight_function` to ensure a smooth and numerically stable transition,
+preventing division by zero. Using this regularized version instead of directly
+computing `ρaχ / ρa` breaks the assumption of domain decomposition (sum of SGS
+domains equals GS) when the approximated area fraction `a` is small.
+
+Arguments:
+- `ρχ`: The grid-mean density-weighted quantity (e.g., `ρe_tot`, `ρq_tot`).
+- `ρ`: The grid-mean density.
+- `ρaχ`: The density-area-weighted SGS quantity (e.g., `sgs.ρa * sgs.h_tot`).
+- `ρa`: The density-area product of the SGS component.
+- `ρχ_fallback`: The grid-mean density-weighted quantity used for the fallback value.
+- `ρ_fallback`: The grid-mean density used for the fallback value.
+- `turbconv_model`: The turbulence convection model, containing parameters for regularization (e.g., `a_half`).
+"""
+@inline specific(ρχ, ρ) = ρχ / ρ
+
+@inline function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
+    # TODO: Replace turbconv_model struct by parameters, and include a_half in
+    # parameters, not in config
+    weight = sgs_weight_function(ρa / ρ, turbconv_model.a_half)
+    # If ρa is exactly zero, the weight function will be zero, causing the first
+    # term to be NaN (0 * ... / 0). The ifelse handles this case explicitly.
+    return ρa == 0 ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
+end
+
+"""
     sgs_weight_function(a, a_half)
 
 Computes the weight of the SGS variables in the linear interpolation used in

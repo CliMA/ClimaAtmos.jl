@@ -64,15 +64,16 @@ NVTX.@annotate function set_cloud_fraction!(
     else
         @. cloud_diagnostics_tuple = make_named_tuple(
             ifelse(
-                p.precomputed.ᶜspecific.q_liq + p.precomputed.ᶜspecific.q_ice > 0,
+                specific(Y.c.ρq_liq, Y.c.ρ) + specific(Y.c.ρq_ice, Y.c.ρ) > 0,
                 1,
                 0,
             ),
-            p.precomputed.ᶜspecific.q_liq,
-            p.precomputed.ᶜspecific.q_ice,
+            specific(Y.c.ρq_liq, Y.c.ρ),
+            specific(Y.c.ρq_ice, Y.c.ρ),
         )
     end
 end
+
 NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,

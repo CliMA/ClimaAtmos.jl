@@ -511,8 +511,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow((
                 ᶜkappa_m * ∂e_int_∂q_tot +
                 ᶜ∂kappa_m∂q_tot * (
-                    cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
-                    ∂e_int_∂q_tot * ᶜspecific.q_tot
+                    cp_d * T_0 + specific(Y.c.ρe_tot, Y.c.ρ) - ᶜK - ᶜΦ +
+                    ∂e_int_∂q_tot * specific(Y.c.ρq_tot, Y.c.ρ)
                 )
             ))
     end
@@ -626,8 +626,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         @. ∂ᶜρe_tot_err_∂ᶜρ =
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(
                 (
-                    -(1 + ᶜkappa_m) * ᶜspecific.e_tot -
-                    ᶜkappa_m * ∂e_int_∂q_tot * ᶜspecific.q_tot
+                    -(1 + ᶜkappa_m) * specific(Y.c.ρe_tot, Y.c.ρ) -
+                    ᶜkappa_m * ∂e_int_∂q_tot * specific(Y.c.ρq_tot, Y.c.ρ)
                 ) / ᶜρ,
             )
         @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
@@ -640,13 +640,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((
                     ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ +
                     ᶜ∂kappa_m∂q_tot * (
-                        cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
-                        ∂e_int_∂q_tot * ᶜspecific.q_tot
+                        cp_d * T_0 + specific(Y.c.ρe_tot, Y.c.ρ) - ᶜK - ᶜΦ +
+                        ∂e_int_∂q_tot * specific(Y.c.ρq_tot, Y.c.ρ)
                     )
                 ))
             @. ∂ᶜρq_tot_err_∂ᶜρ =
                 dtγ * ᶜdiffusion_h_matrix ⋅
-                DiagonalMatrixRow(-(ᶜspecific.q_tot) / ᶜρ)
+                DiagonalMatrixRow(-(specific(Y.c.ρq_tot, Y.c.ρ)) / ᶜρ)
             @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
@@ -1004,8 +1004,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar ⋅
                     DiagonalMatrixRow(
                         (
-                            -(1 + ᶜkappa_m) * ᶜspecific.e_tot -
-                            ᶜkappa_m * ∂e_int_∂q_tot * ᶜspecific.q_tot
+                            -(1 + ᶜkappa_m) * specific(Y.c.ρe_tot, Y.c.ρ) -
+                            ᶜkappa_m *
+                            ∂e_int_∂q_tot *
+                            specific(Y.c.ρq_tot, Y.c.ρ)
                         ) / ᶜρ,
                     )
 
@@ -1014,8 +1016,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     DiagonalMatrixRow((
                         ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ +
                         ᶜ∂kappa_m∂q_tot * (
-                            cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
-                            ∂e_int_∂q_tot * ᶜspecific.q_tot
+                            cp_d * T_0 + specific(Y.c.ρe_tot, Y.c.ρ) - ᶜK - ᶜΦ +
+                            ∂e_int_∂q_tot * specific(Y.c.ρq_tot, Y.c.ρ)
                         )
                     ))
 
@@ -1031,7 +1033,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ## grid-mean ρq_tot
                 @. ∂ᶜρq_tot_err_∂ᶜρ +=
                     dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar ⋅
-                    DiagonalMatrixRow(-(ᶜspecific.q_tot) / ᶜρ)
+                    DiagonalMatrixRow(-(specific(Y.c.ρq_tot, Y.c.ρ)) / ᶜρ)
 
                 @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                     dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar ⋅
@@ -1070,7 +1072,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 @. ∂ᶜρq_tot_err_∂ᶠu₃ +=
                     dtγ * ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(
                         ᶠinterp(
-                            (Y.c.sgsʲs.:(1).q_tot - ᶜspecific.q_tot) *
+                            (
+                                Y.c.sgsʲs.:(1).q_tot -
+                                specific(Y.c.ρq_tot, Y.c.ρ)
+                            ) *
                             ᶜρʲs.:(1) *
                             ᶜJ *
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
@@ -1082,7 +1087,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 @. ∂ᶜρq_tot_err_∂ᶠu₃ʲ =
                     dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
                         ᶠinterp(
-                            (Y.c.sgsʲs.:(1).q_tot - ᶜspecific.q_tot) *
+                            (
+                                Y.c.sgsʲs.:(1).q_tot -
+                                specific(Y.c.ρq_tot, Y.c.ρ)
+                            ) *
                             ᶜρʲs.:(1) *
                             ᶜJ *
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
@@ -1102,8 +1110,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     matrix[@name(c.ρq_tot), @name(c.sgsʲs.:(1).ρa)]
                 @. ∂ᶜρq_tot_err_∂ᶜρa =
                     dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
-                        (ᶠu³ʲs.:(1) - ᶠu³) *
-                        ᶠinterp((Y.c.sgsʲs.:(1).q_tot - ᶜspecific.q_tot)) / ᶠJ,
+                        (ᶠu³ʲs.:(1) - ᶠu³) * ᶠinterp((
+                            Y.c.sgsʲs.:(1).q_tot - specific(Y.c.ρq_tot, Y.c.ρ)
+                        )) / ᶠJ,
                     ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(ᶜJ)
             end
         elseif rs isa RayleighSponge
