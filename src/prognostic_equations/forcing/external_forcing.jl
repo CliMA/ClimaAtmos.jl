@@ -337,7 +337,7 @@ function external_forcing_tendency!(
     # horizontal advection, vertical fluctuation, nudging, subsidence (need to add),
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜspecific, ᶜts, ᶜh_tot) = p.precomputed
+    (; ᶜts, ᶜh_tot) = p.precomputed
     (;
         ᶜdTdt_fluc,
         ᶜdqtdt_fluc,
@@ -398,11 +398,12 @@ function external_forcing_tendency!(
         ᶜh_tot,
         Val{:first_order}(),
     )
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     subsidence!(
         Yₜ.c.ρq_tot,
         Y.c.ρ,
         ᶠls_subsidence³,
-        ᶜspecific.q_tot,
+        ᶜq_tot,
         Val{:first_order}(),
     )
 

@@ -961,7 +961,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     (; params) = p
     (; dt) = p
     (; ᶜp, ᶜu, ᶜts) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜtke⁰) = p.precomputed
     (;
@@ -1079,14 +1078,13 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     microphys_0m_params = CAP.microphysics_0m_params(p.params)
     (; dt) = p
     (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
 
     # Environment precipitation sources (to be applied to grid mean)
     @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
         thermo_params,
         microphys_0m_params,
         dt,
-        q_tot,
+        specific(Y.c.ρq_tot, Y.c.ρ),
         ᶜts,
     )
     return nothing
@@ -1102,7 +1100,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     #microphys_1m_params = CAP.microphysics_1m_params(p.params)
 
     #(; ᶜts, ᶜSqₜᵖ⁰, ᶜSeₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
-    #(; q_tot) = p.precomputed.ᶜspecific
     #(; ᶜqᵣ, ᶜqₛ) = p.precomputed
 
     #ᶜSᵖ = p.scratch.ᶜtemp_scalar
