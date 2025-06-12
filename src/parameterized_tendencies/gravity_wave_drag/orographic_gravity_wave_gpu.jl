@@ -362,7 +362,6 @@ function calc_nonpropagating_forcing!(
     L2 = Operators.LeftBiasedF2C(;)
     mask = L2.(mask)
 
-
     ᶠweights = ᶠp .- ᶠp_ref
     weights = ᶜinterp.(ᶠweights)
     f_diff = ᶠp_m1 .- ᶠp
