@@ -272,3 +272,131 @@ NVTX.@annotate function set_cloud_fraction!(
         end
     end
 end
+
+"""
+    Diagnose horizontal covariances based on vertical gradients
+    (i.e. taking turbulence production as the only term)
+    We'll learn the weighting coefficients in the ML closure from data
+    so no need to add the diagnostic_covariance_coeff here
+"""
+function unweighted_covariance_from_grad(mixing_length, ∇Φ, ∇Ψ)
+    return 2 * mixing_length^2 * dot(∇Φ, ∇Ψ)
+end
+
+"""
+    set_cloud_fraction! for machine learning based cloud fraction closure
+"""
+NVTX.@annotate function set_cloud_fraction!(
+    Y,
+    p,
+    ::Union{EquilMoistModel, NonEquilMoistModel},
+    cloud_ml::CloudML,
+)
+    SG_quad = cloud_ml.SG_quad
+    (; params) = p
+    (; turbconv_model) = p.atmos
+    (; ᶜρʲs, ᶜtsʲs, ᶜts⁰, ᶜts, cloud_diagnostics_tuple) = p.precomputed
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+    thermo_params = CAP.thermodynamics_params(params)
+    FT = eltype(p.params)
+
+    # quantities needed to form pi groups 
+    #Main.@infiltrate
+
+    # mixing length
+    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+    q_sat = TD.q_vap_saturation.(thermo_params, ᶜts)
+    Δq = @. q_sat - specific(Y.c.ρq_tot, Y.c.ρ)
+    #dqt_dz
+    ᶜ∇q = dot.(Geometry.WVector.(p.precomputed.ᶜgradᵥ_q_tot), Ref(ClimaCore.Geometry.WVector(FT(1.0))))
+    #dθli_dz
+    ᶜ∇θ = dot.(Geometry.WVector.(p.precomputed.ᶜgradᵥ_θ_liq_ice), Ref(ClimaCore.Geometry.WVector(FT(1.0))))
+
+    θli = p.scratch.ᶜtemp_scalar_2
+    θli .= TD.liquid_ice_pottemp.(thermo_params, ᶜts)
+    delta_θli = FT(0.1)
+    #
+    ts_plus = TD.PhaseEquil_pθq.(thermo_params, ᶜts.p, θli .+ delta_θli, ᶜts.q_tot)
+    q_sat_plus = TD.q_vap_saturation.(thermo_params, ts_plus) 
+    dqsatdθli = (q_sat_plus .- q_sat) ./ delta_θli
+    Δθli = @. (q_sat - specific(Y.c.ρq_tot, Y.c.ρ)) / dqsatdθli
+    θli_sat = θli .+ Δθli
+
+    # form the pi groups 
+    π_1 = Δq ./ q_sat
+    π_2 = Δθli ./ θli_sat
+    π_3 = @. (((dqsatdθli * ᶜ∇θ - ᶜ∇q) * ᶜmixing_length_field) / q_sat)
+    # π_3 = LinearAlgebra.dot.(π_3, Ref(ClimaCore.Geometry.WVector(FT(1.0))))
+    π_4 = @. (ᶜ∇θ * ᶜmixing_length_field) / θli_sat
+    # π_4 = LinearAlgebra.dot.(π_4, Ref(ClimaCore.Geometry.WVector(FT(1.0))))
+    # Main.@infiltrate
+    function apply_cf_nn(model, π_1::FT, π_2::FT, π_3::FT, π_4::FT) where FT
+        return clamp((model(SA.SVector(π_1, π_2, π_3, π_4))[]), FT(0.), FT(1.))
+    end
+
+    # Main.@infiltrate
+    cf = p.scratch.ᶜtemp_scalar_3
+    #cf_arr = Fields.field2array(cf) # get view of underlying array so we can overwrite 
+    # cf_arr .= clamp.(reshape(cloud_ml.model(hcat(Fields.field2array(π_1), Fields.field2array(π_2), Fields.field2array(π_3), Fields.field2array(π_4))'), size(cf_arr)), FT(0), FT(1))
+    # @. cf = apply_cf_nn(Ref(cloud_ml.model), π_1, π_2, π_3, π_4)
+    # Main.@infiltrate
+    cf .= apply_cf_nn.(Ref(cloud_ml.model), π_1, π_2, π_3, π_4)
+
+    # @. cf = clamp(cloud_ml.model(SA.SVector(π_1, π_2, π_3, π_4)), Ref(FT(0)), Ref(FT(1)))
+
+    # TODO either need ml model for qliq, qice or default back to quadrature. 
+    q_liq = TD.PhasePartition.(thermo_params, ᶜts).liq
+    q_ice = TD.PhasePartition.(thermo_params, ᶜts).ice
+
+    #@. p.precomputed.cloud_diagnostics_tuple .= NamedTuple{(:cf, :q_liq, :q_ice)}(tuple(cf, q_liq, q_ice))
+
+
+    diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
+
+
+    @. cloud_diagnostics_tuple = quad_loop(
+        SG_quad,
+        ᶜts,
+        Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot),
+        Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice),
+        diagnostic_covariance_coeff,
+        ᶜmixing_length_field,
+        thermo_params,
+    )
+    # overwrite with the ML computed cloud fraction, leaving q_liq, q_ice computed via quadrature
+    cloud_diagnostics_tuple.cf .= cf
+
+    # weight cloud diagnostics by environmental area
+    @. cloud_diagnostics_tuple *= NamedTuple{(:cf, :q_liq, :q_ice)}(
+        tuple(
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+        ),
+    )
+
+    # add contributions from updrafts
+    n = n_mass_flux_subdomains(turbconv_model)
+    if n > 0
+        (; ᶜρʲs, ᶜtsʲs) = p.precomputed
+    end
+
+    for j in 1:n
+        @. cloud_diagnostics_tuple += NamedTuple{(:cf, :q_liq, :q_ice)}(
+            tuple(
+                ifelse(
+                    TD.has_condensate(thermo_params, ᶜtsʲs.:($$j)),
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                    0,
+                ),
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)) *
+                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).liq,
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)) *
+                TD.PhasePartition(thermo_params, ᶜtsʲs.:($$j)).ice,
+            ),
+        )
+    end
+    # p.precomputed.cloud_diagnostics_tuple .=
+    #     ((; cf = cf, q_liq = q_liq, q_ice = q_ice),)
+end

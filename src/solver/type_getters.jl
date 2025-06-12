@@ -21,7 +21,7 @@ function get_atmos(config::AtmosConfig, params)
     check_case_consistency(parsed_args)
     moisture_model = get_moisture_model(parsed_args)
     microphysics_model = get_microphysics_model(parsed_args)
-    cloud_model = get_cloud_model(parsed_args)
+    cloud_model = get_cloud_model(parsed_args, params)
 
     if moisture_model isa DryModel
         @warn "Running simulations without any moisture present."
