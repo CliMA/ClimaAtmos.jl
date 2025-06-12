@@ -197,7 +197,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         nothing
     end
     ᶜtke⁰ = advect_tke ?
-        (@.lazy(specific_sgs(@name(tke), Y.c.sgs⁰, Y.c, turbconv_model))) :
+        (@.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))) :
         nothing
     ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜω³ = p.scratch.ᶜtemp_CT3

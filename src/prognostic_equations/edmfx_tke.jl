@@ -83,7 +83,7 @@ function edmfx_tke_tendency!(
         @. ᶜprandtl_nvec =
             turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
 
-        ᶜtke⁰ = @.lazy(specific_sgs(@name(tke), Y.c.sgs⁰, Y.c, turbconv_model))
+        ᶜtke⁰ = @.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
         sfc_tke = Fields.level(ᶜtke⁰, 1)
         z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
         ᶜz = Fields.coordinate_field(Y.c).z

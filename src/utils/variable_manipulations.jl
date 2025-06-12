@@ -97,6 +97,7 @@ function specific_sgs(χ_name, sgs, gs, turbconv_model)
 end
 
 
+
 # Helper functions for manipulating symbols in the generated functions:
 has_prefix(symbol, prefix_symbol) =
     startswith(string(symbol), string(prefix_symbol))
@@ -404,6 +405,36 @@ Returns:
 - The area-weighted density (`ρa⁰`).
 """
 ρa⁰(gs) = env_value(gs.ρ, sgsʲ -> sgsʲ.ρa, gs)
+
+"""
+    specific_tke(sgs⁰, gs, turbconv_model)
+
+Computes the specific turbulent kinetic energy (`tke`) in the environment (`tke⁰`).
+
+This is a specialized helper that encapsulates the call to the regularized
+`specific` function for the TKE variable. It provides `0` as the grid-scale
+fallback value (`ρχ_fallback`) in the limit of small environmental area
+fraction.
+
+Arguments:
+- `sgs⁰`: The environment SGS state (`Y.c.sgs⁰`), containing `ρatke`.
+- `gs`: The grid-scale state (`Y.c`), containing the grid-mean density `ρ`.
+- `turbconv_model`: The turbulence convection model, for regularization parameters.
+
+Returns:
+- The specific TKE of the environment (`tke⁰`).
+"""
+function specific_tke(sgs⁰, gs, turbconv_model)
+    ρa⁰_val = ρa⁰(gs)
+
+    return specific(
+        sgs⁰.ρatke,     # ρaχ for environment TKE
+        ρa⁰_val,        # ρa for environment, now computed internally
+        0,              # Fallback ρχ is zero for TKE
+        gs.ρ,           # Fallback ρ
+        turbconv_model,
+    )
+end
 
 """
     u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model)

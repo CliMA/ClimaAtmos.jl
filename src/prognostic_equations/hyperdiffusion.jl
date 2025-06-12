@@ -101,7 +101,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     if diffuse_tke
         ᶜtke⁰ =
-            @.lazy(specific_sgs(@name(tke), Y.c.sgs⁰, Y.c, turbconv_model))
+            @.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
         (; ᶜ∇²tke⁰) = p.hyperdiff
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜtke⁰))
     end
@@ -145,7 +145,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
     if use_prognostic_tke(turbconv_model)
         ᶜtke⁰ =
-            @.lazy(specific_sgs(@name(tke), Y.c.sgs⁰, Y.c, turbconv_model))
+            @.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
         (; ᶜ∇²tke⁰) = p.hyperdiff
     end
 
