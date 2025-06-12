@@ -13,6 +13,7 @@ using ClimaCoreTempestRemap
 import Interpolations
 
 using CUDA
+using Dates
 
 const FT = Float64
 include(
@@ -444,6 +445,14 @@ CA.calc_nonpropagating_forcing!(
 @. uforcing = max(FT(-3e-3), min(FT(3e-3), uforcing))
 @. vforcing = max(FT(-3e-3), min(FT(3e-3), vforcing))
 
+# Move GPU arrays back to CPU for plotting
+uforcing_cpu = ClimaCore.to_cpu(uforcing)
+vforcing_cpu = ClimaCore.to_cpu(vforcing)
+gfdl_ca_udt_topo_cpu = ClimaCore.to_cpu(gfdl_ca_udt_topo)
+gfdl_ca_vdt_topo_cpu = ClimaCore.to_cpu(gfdl_ca_vdt_topo)
+ᶜz_cpu = ClimaCore.to_cpu(ᶜz)
+Y_cpu  = ClimaCore.to_cpu(Y)
+
 ##################
 # plotting!!!!
 ##################
@@ -456,27 +465,28 @@ REMAP_DIR = joinpath(@__DIR__, "ogwd_3d", "remap_data/")
 if !isdir(REMAP_DIR)
     mkpath(REMAP_DIR)
 end
-datafile_cg = joinpath(REMAP_DIR, "data_cg.nc")
+timestamp = Dates.format(now(), "yyyymmdd_HHMMSS")
+datafile_cg = joinpath(REMAP_DIR, "data_cg_$(timestamp).nc")
 nc = NCDataset(datafile_cg, "c")
-def_space_coord(nc, center_space, type = "cgll")
+def_space_coord(nc, ᶜspace, type = "cgll")
 nc_time = def_time_coord(nc)
-nc_ogwd_uforcing = defVar(nc, "ogwd_u", FT, center_space, ("time",))
-nc_ogwd_vforcing = defVar(nc, "ogwd_v", FT, center_space, ("time",))
-nc_gfdl_udt_topo = defVar(nc, "gfdl_udt_topo", FT, center_space, ("time",))
-nc_gfdl_vdt_topo = defVar(nc, "gfdl_vdt_topo", FT, center_space, ("time",))
-nc_z_3d = defVar(nc, "z_3d", FT, center_space, ("time",))
+nc_ogwd_uforcing = defVar(nc, "ogwd_u", FT, ᶜspace, ("time",))
+nc_ogwd_vforcing = defVar(nc, "ogwd_v", FT, ᶜspace, ("time",))
+nc_gfdl_udt_topo = defVar(nc, "gfdl_udt_topo", FT, ᶜspace, ("time",))
+nc_gfdl_vdt_topo = defVar(nc, "gfdl_vdt_topo", FT, ᶜspace, ("time",))
+nc_z_3d = defVar(nc, "z_3d", FT, ᶜspace, ("time",))
 nc_time[1] = 1
-nc_ogwd_uforcing[:, 1] = uforcing
-nc_ogwd_vforcing[:, 1] = vforcing
-nc_gfdl_udt_topo[:, 1] = gfdl_ca_udt_topo
-nc_gfdl_vdt_topo[:, 1] = gfdl_ca_vdt_topo
-nc_z_3d[:, 1] = ᶜz
+nc_ogwd_uforcing[:, 1] = uforcing_cpu
+nc_ogwd_vforcing[:, 1] = vforcing_cpu
+nc_gfdl_udt_topo[:, 1] = gfdl_ca_udt_topo_cpu
+nc_gfdl_vdt_topo[:, 1] = gfdl_ca_vdt_topo_cpu
+nc_z_3d[:, 1] = ᶜz_cpu
 close(nc)
 
 nlat = 90
 nlon = 180
 weightfile = joinpath(REMAP_DIR, "remap_weights.nc")
-create_weightfile(weightfile, axes(Y.c), axes(Y.f), nlat, nlon, mono = true)
+create_weightfile(weightfile, axes(Y_cpu.c), axes(Y_cpu.f), nlat, nlon, mono = true)
 
 datafile_rll = joinpath(REMAP_DIR, "data_rll.nc")
 apply_remap(
