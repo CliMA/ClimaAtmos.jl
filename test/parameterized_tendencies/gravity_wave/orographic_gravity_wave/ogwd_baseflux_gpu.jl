@@ -1,4 +1,5 @@
 using NCDatasets
+using ClimaCore
 import ClimaAtmos
 import ClimaAtmos as CA
 using ClimaCore: Fields, Domains, Meshes, Topologies, Spaces, Geometry
@@ -7,12 +8,18 @@ import Interpolations
 using ClimaCoreTempestRemap
 const FT = Float64
 
+using CUDA
+using Dates
+
 include("../gw_plotutils.jl")
 include(
     joinpath(pkgdir(ClimaAtmos), "post_processing/remap", "remap_helpers.jl"),
 )
 
 comms_ctx = ClimaComms.SingletonCommsContext()
+@show CUDA.functional()
+@show ClimaComms.device(comms_ctx)
+
 (; config_file, job_id) = CA.commandline_kwargs()
 config = CA.AtmosConfig(config_file; job_id, comms_ctx)
 config.parsed_args["topography"] = "NoWarp"
@@ -57,7 +64,14 @@ Y = Fields.FieldVector(c = Yc, f = Yf)
 
 # Initialize cache vars for orographic gravity wave
 ogw = CA.FullOrographicGravityWave{FT, String}()
-p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
+topo_info = CA.get_topo_info(Y, ogw)
+
+# Move cache and arrays to the GPU
+Y = ClimaCore.to_device(ClimaComms.CUDADevice(), copy(Y))
+topo_info_gpu = CA.move_topo_info_to_gpu(Y, topo_info)
+
+p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info_gpu))
+
 
 # Unpack cache vars
 (; topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
@@ -66,12 +80,25 @@ p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
     p.orographic_gravity_wave
 (; topo_base_Vτ, topo_tmp_1, topo_tmp_2, topo_k_pbl_values) =
     p.orographic_gravity_wave
-(; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
+(; hmax, hmin, t11, t12, t21, t22) = topo_info_gpu
+
+# Extract parameters once and pack into tuple
+ogw_params = (;
+    Fr_crit = p.orographic_gravity_wave.Fr_crit,
+    topo_ρscale = p.orographic_gravity_wave.topo_ρscale,
+    topo_L0 = p.orographic_gravity_wave.topo_L0,
+    topo_a0 = p.orographic_gravity_wave.topo_a0,
+    topo_a1 = p.orographic_gravity_wave.topo_a1,
+    topo_γ = p.orographic_gravity_wave.topo_γ,
+    topo_β = p.orographic_gravity_wave.topo_β,
+    topo_ϵ = p.orographic_gravity_wave.topo_ϵ,
+)
 
 u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
 v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
 # Compute base flux
+# @Main.infiltrate
 CA.calc_base_flux!(
     topo_τ_x,
     topo_τ_y,
@@ -86,20 +113,29 @@ CA.calc_base_flux!(
     topo_base_Vτ,
     topo_tmp_1,
     topo_tmp_2,
-    p,
+    ogw_params,
     hmax,
     hmin,
     t11,
     t12,
     t21,
     t22,
-    Y.c.ρ,
+    copy(Y.c.ρ),
     u_phy,
     v_phy,
     Y.c.N,
-    1,
+    FT(16000),
     topo_k_pbl_values
 )
+# @Main.infiltrate
+
+# Move GPU arrays back to CPU for plotting
+# uforcing_cpu = ClimaCore.to_cpu(uforcing)
+# vforcing_cpu = ClimaCore.to_cpu(vforcing)
+topo_τ_x = ClimaCore.to_cpu(topo_τ_x)
+topo_τ_y = ClimaCore.to_cpu(topo_τ_y)
+# ᶜz_cpu = ClimaCore.to_cpu(ᶜz)
+Y_cpu  = ClimaCore.to_cpu(Y)
 
 # Remap base flux to regular lat/lon grid for visualization
 TOPO_DIR = joinpath(@__DIR__, "remap_data/")
@@ -107,7 +143,8 @@ REMAP_DIR = joinpath(TOPO_DIR, "ogwd_baseflux")
 if !isdir(REMAP_DIR)
     mkpath(REMAP_DIR)
 end
-datafile_cg = joinpath(REMAP_DIR, "data_cg.nc")
+timestamp = Dates.format(now(), "yyyymmdd_HHMMSS")
+datafile_cg = joinpath(REMAP_DIR, "data_cg_$(timestamp).nc")
 nc = NCDataset(datafile_cg, "c")
 def_space_coord(nc, center_space, type = "cgll")
 nc_time = def_time_coord(nc)
@@ -121,7 +158,7 @@ close(nc)
 nlat = 90
 nlon = 180
 weightfile = joinpath(REMAP_DIR, "remap_weights.nc")
-create_weightfile(weightfile, axes(Y.c), axes(Y.f), nlat, nlon)
+create_weightfile(weightfile, axes(Y_cpu.c), axes(Y_cpu.f), nlat, nlon)
 
 datafile_rll = joinpath(REMAP_DIR, "data_rll.nc")
 apply_remap(datafile_rll, datafile_cg, weightfile, ["tau_x", "tau_y"])
@@ -164,4 +201,3 @@ create_plot!(
     yreversed = false,
 )
 CairoMakie.save(joinpath(output_dir, "baseflux.png"), fig)
-rm(TOPO_DIR; recursive = true)
