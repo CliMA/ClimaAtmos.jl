@@ -399,7 +399,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     (; matrix) = cache
     (; params) = p
     (; ᶜΦ, ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜspecific, ᶠu³, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶠu³, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
     (;
         ∂ᶜK_∂ᶜuₕ,
         ∂ᶜK_∂ᶠu₃,
@@ -477,20 +477,22 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
     @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
 
-    tracer_info = (
-        (@name(c.ρe_tot), @name(ᶜh_tot)),
-        (@name(c.ρq_tot), @name(ᶜspecific.q_tot)),
-    )
-    MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, χ_name)
+    tracer_info = (@name(c.ρe_tot), @name(c.ρq_tot))
+    MatrixFields.unrolled_foreach(tracer_info) do ρχ_name
         MatrixFields.has_field(Y, ρχ_name) || return
-        ᶜχ = MatrixFields.get_field(p.precomputed, χ_name)
+        ᶜχ = if ρχ_name === @name(c.ρe_tot)
+            p.precomputed.ᶜh_tot
+        else
+            @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+        end
         if use_derivative(topography_flag)
             ∂ᶜρχ_err_∂ᶜuₕ = matrix[ρχ_name, @name(c.uₕ)]
+            @. ∂ᶜρχ_err_∂ᶜuₕ =
+                dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ)) ⋅
+                ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅ DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
         end
+
         ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
-        use_derivative(topography_flag) && @. ∂ᶜρχ_err_∂ᶜuₕ =
-            dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ)) ⋅
-            ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅ DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
         @. ∂ᶜρχ_err_∂ᶠu₃ =
             dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
     end
@@ -536,12 +538,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     end
 
     tracer_info = (
-        (@name(c.ρq_liq), @name(q_liq), @name(ᶜwₗ)),
-        (@name(c.ρq_ice), @name(q_ice), @name(ᶜwᵢ)),
-        (@name(c.ρq_rai), @name(q_rai), @name(ᶜwᵣ)),
-        (@name(c.ρq_sno), @name(q_sno), @name(ᶜwₛ)),
-        (@name(c.ρn_liq), @name(n_liq), @name(ᶜwnₗ)),
-        (@name(c.ρn_rai), @name(n_rai), @name(ᶜwnᵣ)),
+        (@name(c.ρq_liq), @name(ᶜwₗ)),
+        (@name(c.ρq_ice), @name(ᶜwᵢ)),
+        (@name(c.ρq_rai), @name(ᶜwᵣ)),
+        (@name(c.ρq_sno), @name(ᶜwₛ)),
+        (@name(c.ρn_liq), @name(ᶜwnₗ)),
+        (@name(c.ρn_rai), @name(ᶜwnᵣ)),
     )
     if !(p.atmos.moisture_model isa DryModel) || use_derivative(diffusion_flag)
         ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
@@ -583,13 +585,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
         #    DiagonalMatrixRow(
         #        -1 / ᶜρ * ifelse(
-        #            ᶜspecific.q_tot == 0,
+        #            specific(Y.c.ρq_tot, Y.c.ρ) == 0,
         #            (Geometry.WVector(FT(0)),),
-        #            p.precomputed.ᶜwₜqₜ / ᶜspecific.q_tot,
+        #            p.precomputed.ᶜwₜqₜ / specific(Y.c.ρq_tot, Y.c.ρ),
         #        ),
         #    ) - (I,)
 
-        MatrixFields.unrolled_foreach(tracer_info) do (ρχₚ_name, _, wₚ_name)
+        MatrixFields.unrolled_foreach(tracer_info) do (ρχₚ_name, wₚ_name)
             MatrixFields.has_field(Y, ρχₚ_name) || return
             ∂ᶜρχₚ_err_∂ᶜρχₚ = matrix[ρχₚ_name, ρχₚ_name]
             ᶜwₚ = MatrixFields.get_field(p.precomputed, wₚ_name)
@@ -651,13 +653,14 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
 
-        MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, χ_name, _)
+        MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, _)
             MatrixFields.has_field(Y, ρχ_name) || return
-            ᶜχ = MatrixFields.get_field(ᶜspecific, χ_name)
+            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+            ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
             ∂ᶜρχ_err_∂ᶜρ = matrix[ρχ_name, @name(c.ρ)]
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
             ᶜtridiagonal_matrix_scalar = ifelse(
-                χ_name in (@name(q_rai), @name(q_sno), @name(n_rai)),
+                ρχ_name in (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρn_rai)),
                 ᶜdiffusion_h_matrix_scaled,
                 ᶜdiffusion_h_matrix,
             )
