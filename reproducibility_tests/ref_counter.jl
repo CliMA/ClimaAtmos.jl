@@ -1,4 +1,4 @@
-246
+247
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+247
+- Hyperdiffusion of enthalpy perturbation
+
 246
 - Prognostic edmf docstrings + refactor + scm_coriolis change
 
