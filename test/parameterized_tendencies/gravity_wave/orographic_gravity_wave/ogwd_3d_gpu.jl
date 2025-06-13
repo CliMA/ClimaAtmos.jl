@@ -22,7 +22,6 @@ include(
 include("../gw_plotutils.jl")
 
 comms_ctx = ClimaComms.SingletonCommsContext()
-# comms_ctx = ClimaComms.SingletonCommsContext(ClimaComms.CUDADevice())
 @show CUDA.functional()
 @show ClimaComms.device(comms_ctx)
 
@@ -212,34 +211,7 @@ thermo_params = ClimaCore.to_device(ClimaComms.CUDADevice(), thermo_params)
 parent(ᶜp) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(ᶜp_cpu)))
 parent(ᶜT) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(ᶜT_cpu)))
 
-# ᶜts_cpu = similar(Y.c, CA.TD.PhaseEquil{FT})
-# @. ᶜts_cpu = CA.TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, ᶜp_cpu, Y.c.qt)
-# cp_m_out_cpu = @. CA.TD.cp_m(thermo_params, ᶜts_cpu)
-
-t11 = similar(Fields.level(Y.c.ρ, 1))
-t12 = similar(Fields.level(Y.c.ρ, 1))
-t21 = similar(Fields.level(Y.c.ρ, 1))
-t22 = similar(Fields.level(Y.c.ρ, 1))
-hmin = similar(Fields.level(Y.c.ρ, 1))
-hmax = similar(Fields.level(Y.c.ρ, 1))
-
-parent(t11) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.t11)))
-parent(t12) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.t12)))
-parent(t21) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.t21)))
-parent(t22) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.t22)))
-parent(hmin) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.hmin)))
-parent(hmax) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.hmax)))
-# )
-
-topo_info = (; 
-    t11 = t11,
-    t12 = t12,
-    t21 = t21,
-    t22 = t22,
-    hmin = hmin,
-    hmax = hmax,
-)
-
+topo_info = CA.move_topo_info_to_gpu(Y, topo_info)
 
 # move cache to the GPU
 # topo_info = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info)
