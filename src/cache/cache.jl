@@ -147,14 +147,14 @@ function build_cache(
         decay_scale_height,  # decay height scale
     )
 
-    rel_hum_ref = atmos.moisture_model isa DryModel ? 
-                    FT(0) : 
-                    @. FT(0.5) * exp( - ᶜz / decay_scale_height)
+    rel_hum_ref =
+        atmos.moisture_model isa DryModel ? FT(0) :
+        @. FT(0.5) * exp(- ᶜz / decay_scale_height)
 
     T_0 = CAP.T_0(params)
     grav = CAP.grav(params)
-    @. T_ref = first(temp_profile(thermo_params, ᶜz)) 
-    @. p_ref = last(temp_profile(thermo_params, ᶜz)) 
+    @. T_ref = first(temp_profile(thermo_params, ᶜz))
+    @. p_ref = last(temp_profile(thermo_params, ᶜz))
     @. q_tot_ref =
         TD.q_vap_from_RH_liquid(thermo_params, p_ref, T_ref, rel_hum_ref)
     @. cv_m = TD.cv_m(thermo_params, TD.PhasePartition(q_tot_ref, FT(0), FT(0)))
