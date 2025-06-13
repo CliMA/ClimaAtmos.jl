@@ -44,6 +44,7 @@ known_dependencies = Set([
     "ClimaUtilities",
     "CloudMicrophysics",
     "Dates",
+    "ForwardDiff", # for automatic differentiation in the implicit solver
     "Insolation",
     "Interpolations",
     "LazyBroadcast", # for https://github.com/CliMA/ClimaAtmos.jl/issues/3594

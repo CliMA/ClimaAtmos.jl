@@ -320,6 +320,14 @@ steps:
           --job_id baroclinic_wave
         artifact_paths: "baroclinic_wave/output_active/*"
 
+      - label: ":computer: baroclinic wave dense autodiff"
+        key: baroclinic_wave_dense_autodiff
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/baroclinic_wave_dense_autodiff.yml
+          --job_id baroclinic_wave_dense_autodiff
+        artifact_paths: "baroclinic_wave_dense_autodiff/output_active/*"
+
       - label: ":computer: no lim baroclinic wave equilmoist"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -381,6 +389,16 @@ steps:
           --job_id aquaplanet_nonequil_allsky_gw_res_2M
           --out_dir aquaplanet_nonequil_allsky_gw_res_2M/output_active
         artifact_paths: "aquaplanet_nonequil_allsky_gw_res_2M/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
+      - label: ":umbrella: aquaplanet nonequil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment dense autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/aquaplanet_nonequil_allsky_gw_res_dense_autodiff.yml
+          --job_id aquaplanet_nonequil_allsky_gw_res_dense_autodiff
+        artifact_paths: "aquaplanet_nonequil_allsky_gw_res_dense_autodiff/output_active/*"
         agents:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
@@ -731,6 +749,16 @@ steps:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
+      - label: ":genie: Diagnostic EDMFX aquaplanet dense autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet_dense_autodiff.yml
+          --job_id diagnostic_edmfx_aquaplanet_dense_autodiff
+        artifact_paths: "diagnostic_edmfx_aquaplanet_dense_autodiff/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
   - group: "Prognostic EDMFX"
     steps:
 
@@ -896,6 +924,16 @@ steps:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
+      - label: ":genie: Prognostic EDMFX aquaplanet dense autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_dense_autodiff.yml
+          --job_id prognostic_edmfx_aquaplanet_dense_autodiff
+        artifact_paths: "prognostic_edmfx_aquaplanet_dense_autodiff/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
   - group: "GPU"
     steps:
 
@@ -918,6 +956,19 @@ steps:
           --config_file $CONFIG_PATH/baroclinic_wave.yml
           --job_id baroclinic_wave_gpu
         artifact_paths: "baroclinic_wave_gpu/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16GB
+
+      - label: "GPU: baroclinic wave dense autodiff"
+        key: "baroclinic_wave_gpu_dense_autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/baroclinic_wave_dense_autodiff.yml
+          --job_id baroclinic_wave_gpu_dense_autodiff
+        artifact_paths: "baroclinic_wave_gpu_dense_autodiff/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
@@ -1134,6 +1185,15 @@ steps:
           --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf.yml
           --job_id flame_aquaplanet_progedmf
         artifact_paths: "flame_aquaplanet_progedmf/*"
+        agents:
+          slurm_mem: 32GB
+
+      - label: ":fire: Flame graph: prognostic edmf dense autodiff"
+        command: >
+          julia --color=yes --project=.buildkite perf/flame.jl
+          --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf_dense_autodiff.yml
+          --job_id flame_aquaplanet_progedmf_dense_autodiff
+        artifact_paths: "flame_aquaplanet_progedmf_dense_autodiff/*"
         agents:
           slurm_mem: 32GB
 

@@ -1,57 +1,155 @@
 # Implicit Solver
 
-When we use an implicit or split implicit-explicit (IMEX) timestepping scheme,
-we end up with a nonlinear equation of the form ``R(Y) = 0``, where
+The state ``Y`` is evolved using a split implicit-explicit (IMEX) timestepping
+scheme, which separates the tendency ``T(Y) = \partial Y/\partial t`` into
+implicit (fast) and explicit (slow) components,
 ```math
-    R(Y) = Y_{imp}(Y) - Y = Y_{prev} + Δt * T_{imp}(Y) - Y.
+T(Y) = T_{imp}(Y) + T_{exp}(Y).
 ```
-In this expression, ``Y_{imp}(Y)`` denotes the state at some time ``t + Δt``.
-This can be expressed as the sum of ``Y_{prev}``, the contribution from the
-state at time ``t`` (and possibly also at earlier times, depending on the order
-of the timestepping scheme), and ``Δt * T_{imp}(Y)``, the contribution from the
-implicit tendency ``T_{imp}`` between times ``t`` and ``t + Δt``. The new state
-at the end of each implicit step in the timestepping scheme is the value of
-``Y`` that solves this equation, i.e., the value of ``Y`` that is consistent
-with the state ``Y_{imp}(Y)`` predicted by the implicit step.
-
-Note: When we use a higher-order timestepping scheme, the full step ``Δt`` is
-divided into several sub-steps or "stages", where the duration of stage ``i`` is
-``Δt * γ_i`` for some constant ``γ_i`` between 0 and 1.
-
-In order to solve this equation using Newton's method, we must specify the
-derivative ``∂R/∂Y``. Since ``Y_{prev}`` does not depend on ``Y`` (it is only a
-function of the state at or before time ``t``), this derivative is
+For an implicit step from time ``t`` to ``t + \Delta t``, we begin with the
+state ``Y_{prev}`` from the explicit step at time ``t`` (which also includes
+information from all previous times before ``t``), and we find a state ``Y``
+that solves the implicit equation
 ```math
-    R'(Y) = Δt * T_{imp}'(Y) - I.
+Y = Y_{prev} + \Delta t * T_{imp}(Y),
 ```
-In addition, we must specify how to divide ``R(Y)`` by this derivative, i.e.,
-how to solve the linear equation
+where ``\Delta t * T_{imp}(Y)`` is a linear approximation of the state change
+due to the implicit tendency between times ``t`` and ``t + \Delta t``. Solving
+this equation amounts to finding a root of the residual function
 ```math
-    R'(Y) * ΔY = R(Y).
+R(Y) = Y_{prev} + \Delta t * T_{imp}(Y) - Y,
+```
+since any state ``Y`` that satisfies ``R(Y) = 0`` is consistent with the linear
+approximation of the implicit state change.
+
+*Note:* When we use a higher-order timestepping scheme, the full step
+``\Delta t`` is divided into several sub-steps or "stages", where the duration
+of stage ``i`` is ``\Delta t * γ_i`` for some constant ``γ_i`` between 0 and 1.
+
+To find the root of ``R(Y)`` using Newton's method, we must specify the
+derivative ``\partial R/\partial Y``. Since ``Y_{prev}`` does not depend on
+``Y`` (it is only a function of the state at or before time ``t``), this
+derivative is given by
+```math
+R'(Y) = \Delta t * \frac{\partial T_{imp}}{\partial Y} - I.
+```
+For each state ``Y``, Newton's method computes an update ``\Delta Y`` that
+brings ``R(Y)`` closer to 0 by solving the linear equation
+```math
+R'(Y) * \Delta Y = R(Y).
 ```
 
-Note: This equation comes from assuming that there is some ``ΔY`` such that
-``R(Y - ΔY) = 0`` and making the first-order approximation
+*Note:* This equation comes from assuming that there is some ``\Delta Y``
+for which ``R(Y - \Delta Y) = 0`` and approximating
 ```math
-    R(Y - ΔY) \approx R(Y) - R'(Y) * ΔY.
+R(Y - \Delta Y) \approx R(Y) - R'(Y) * \Delta Y.
 ```
 
 After initializing ``Y`` to ``Y[0] = Y_{prev}``, Newton's method executes the
 following steps:
-- Compute the derivative ``R'(Y[0])``.
-- Compute the implicit tendency ``T_{imp}(Y[0])`` and use it to get ``R(Y[0])``.
-- Solve the linear equation ``R'(Y[0]) * ΔY[0] = R(Y[0])`` for ``ΔY[0]``.
-- Update ``Y`` to ``Y[1] = Y[0] - ΔY[0]``.
+1. Compute the residual ``R(Y[0])`` and its derivative ``R'(Y[0])``.
+2. Solve ``R'(Y[0]) * \Delta Y[0] = R(Y[0])`` for ``\Delta Y[0]``.
+3. Update ``Y`` to ``Y[1] = Y[0] - \Delta Y[0]``.
 
 If the number of Newton iterations is limited to 1, this new value of ``Y`` is
 taken to be the solution of the implicit equation. Otherwise, this sequence of
-steps is repeated, i.e., ``ΔY[1]`` is computed and used to update ``Y`` to
-``Y[2] = Y[1] - ΔY[1]``, then ``ΔY[2]`` is computed and used to update ``Y`` to
-``Y[3] = Y[2] - ΔY[2]``, and so on. The iterative process is terminated either
-when the residual ``R(Y)`` is sufficiently close to 0 (according to the
-convergence condition passed to Newton's method), or when the maximum number of
+steps is repeated, i.e., ``\Delta Y[1]`` is computed and ``Y`` is updated to
+``Y[2] = Y[1] - \Delta Y[1]``, then ``\Delta Y[2]`` is computed and ``Y`` is
+updated to ``Y[3] = Y[2] - \Delta Y[2]``, and so on until the maximum number of
 iterations is reached.
 
-In ClimaAtmos, the derivative ``∂R/∂Y`` is represented as a
-[`ClimaAtmos.Jacobian`](@ref), and the method for computing it is given by a
-[`ClimaAtmos.JacobianAlgorithm`](@ref).
+## Computing the Jacobian
+
+The derivative ``\partial R/\partial Y`` is represented as a
+[`ClimaAtmos.Jacobian`](@ref), and the method for computing it and solving its
+linear equation is given by a [`ClimaAtmos.JacobianAlgorithm`](@ref).
+
+### Manual Differentiation
+
+By making certain assumptions about the physical significance of each block in
+the Jacobian (see Yatunin et al., Appendix F), we can obtain a sparse matrix
+structure that allows for an efficient linear solver. Specifically, the memory
+required for the sparse matrix and the time required for the linear solver both
+scale linearly with the number of values in each column.
+
+To populate the nonzero entries of this sparse matrix, the
+[`ClimaAtmos.ManualSparseJacobian`](@ref) specifies approximate derivatives for
+all possible configurations of the atmosphere model, which are analytically
+derived from expressions used to compute the implicit tendency. This algorithm
+also provides flags for zeroing out blocks of the sparse matrix, where each flag
+corresponds to the implicit treatment of some particular physical process.
+
+### Dense Automatic Differentiation
+
+Another way to compute the Jacobian is through automatic differentiation. This
+involves replacing all real numbers with dual numbers of the form
+```math
+x^D = x + x'_1 * \varepsilon_1 + x'_2 * \varepsilon_2 + \ldots,
+```
+where 
+- ``x`` and ``x'_i`` are real numbers, and
+- ``\varepsilon_i`` is an infinitesimal number with the property that
+  ``\varepsilon_i * \varepsilon_j = 0``.
+
+The [`ClimaAtmos.AutoDenseJacobian`](@ref) defines the dual counterpart of each
+column's state vector ``Y`` as
+```math
+Y^D = Y + \varepsilon =
+\begin{pmatrix}
+    Y_1 + \varepsilon_1 \\
+    Y_2 + \varepsilon_2 \\
+    \vdots \\
+    Y_N + \varepsilon_N
+\end{pmatrix},
+```
+where ``N`` is the number of values in the column. If ``x`` is a function of
+``Y``, evaluating ``x(Y^D)`` gives us
+```math
+x^D = x + \frac{\partial x}{\partial Y} * \varepsilon =
+x + \frac{\partial x}{\partial Y_1} * \varepsilon_1 +
+    \frac{\partial x}{\partial Y_2} * \varepsilon_2 + \ldots +
+    \frac{\partial x}{\partial Y_N} * \varepsilon_N,
+```
+so that each coefficient ``x'_i`` is a component of ``\partial x/\partial Y``.
+
+*Note:* When there are many values in each column, the dual number components
+``\varepsilon_i`` are split into batches to reduce compilation latency and
+runtime. Each batch requires a separate evaluation of ``x(Y^D)``, but that
+evaluation involves fewer derivative coefficients and less compiled code.
+
+After we initialize ``Y^D`` as shown above, we evaluate ``T_{imp}(Y^D)`` to
+obtain a dense representation of the matrix ``\partial T_{imp}/\partial Y``,
+```math
+T_{imp}^D = T_{imp} + \frac{\partial T_{imp}}{\partial Y} * \varepsilon =
+\begin{pmatrix}
+    T_{imp, 1} + \frac{\partial T_{imp, 1}}{\partial Y_1} * \varepsilon_1 +
+    \frac{\partial T_{imp, 1}}{\partial Y_2} * \varepsilon_2 + \ldots +
+    \frac{\partial T_{imp, 1}}{\partial Y_N} * \varepsilon_N \\
+    T_{imp, 2} + \frac{\partial T_{imp, 2}}{\partial Y_1} * \varepsilon_1 +
+    \frac{\partial T_{imp, 2}}{\partial Y_2} * \varepsilon_2 + \ldots +
+    \frac{\partial T_{imp, 2}}{\partial Y_N} * \varepsilon_N \\
+    \vdots \\
+    T_{imp, N} + \frac{\partial T_{imp, N}}{\partial Y_1} * \varepsilon_1 +
+    \frac{\partial T_{imp, N}}{\partial Y_2} * \varepsilon_2 + \ldots +
+    \frac{\partial T_{imp, N}}{\partial Y_N} * \varepsilon_N
+\end{pmatrix},
+```
+where the entry in the ``i``-th row and ``j``-th column of
+``\partial T_{imp}/\partial Y`` is the coefficient of ``\varepsilon_j`` in
+``T_{imp, i}^D``.
+
+*Note:* The implicit tendency is evaluated in two function calls. The first
+function ``p_{imp}(Y)`` computes cached values that are treated implicitly, and
+the second function ``T_{imp}(Y, p_{imp})`` computes the tendency itself. So, we
+first evaluate ``p_{imp}(Y^D)`` to get ``p_{imp}^D``, and then we evaluate
+``T_{imp}(Y^D, p_{imp}^D)``.
+
+The full dense Jacobian ``\partial R/\partial Y`` is computed as
+``\Delta t * \partial T_{imp}/\partial Y - I``, and its linear equation is
+solved using [LU factorization](https://en.wikipedia.org/wiki/LU_decomposition).
+The memory required for the dense matrix scales in proportion to ``N^2``, and
+the time required for LU factorization scales as ``N^3``.
+
+## See also
+- [Yatunin, D, et al., "The CliMA atmosphere dynamical core: Concepts, numerics, and scaling"](https://doi.org/10.22541/essoar.173940262.23304403/v1), Section 5 and Appendix F
+- [Documentation for ClimaTimeSteppers.jl](https://clima.github.io/ClimaTimeSteppers.jl/dev/algorithm_formulations/ode_solvers/)

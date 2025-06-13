@@ -56,9 +56,12 @@ include(joinpath("prognostic_equations", "pressure_work.jl"))
 include(joinpath("prognostic_equations", "zero_velocity.jl"))
 
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
+include(joinpath("prognostic_equations", "implicit", "jacobian.jl"))
 include(
     joinpath("prognostic_equations", "implicit", "manual_sparse_jacobian.jl"),
 )
+include(joinpath("prognostic_equations", "implicit", "auto_dense_jacobian.jl"))
+include(joinpath("prognostic_equations", "implicit", "autodiff_utils.jl"))
 
 include(joinpath("prognostic_equations", "water_advection.jl"))
 include(joinpath("prognostic_equations", "remaining_tendency.jl"))

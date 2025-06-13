@@ -88,8 +88,8 @@ function vertical_diffusion_boundary_layer_tendency!(
     end
 
     ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
-        top = Operators.SetValue(C3(FT(0))),
-        bottom = Operators.SetValue(C3(FT(0))),
+        top = Operators.SetValue(C3(0)),
+        bottom = Operators.SetValue(C3(0)),
     )
     @. Yₜ.c.ρe_tot -=
         ᶜdivᵥ_ρe_tot(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜh_tot)))
@@ -104,8 +104,8 @@ function vertical_diffusion_boundary_layer_tendency!(
             @. ᶜK_h_scaled = ᶜK_h
         end
         ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
+            top = Operators.SetValue(C3(0)),
+            bottom = Operators.SetValue(C3(0)),
         )
         @. ᶜρχₜ_diffusion =
             ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h_scaled) * ᶠgradᵥ(ᶜχ)))
