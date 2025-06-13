@@ -63,19 +63,6 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info)
 
     topo_level_idx = similar(Y.c.ρ, FT)
 
-    # topo_info = fill(
-    #     (;
-    #         t11 = FT(Fields.field_values(loaded_topo_info.t11)),
-    #         t12 = FT(Fields.field_values(loaded_topo_info.t12)),
-    #         t21 = FT(Fields.field_values(loaded_topo_info.t21)),
-    #         t22 = FT(Fields.field_values(loaded_topo_info.t22)),
-    #         hmin = FT(Fields.field_values(loaded_topo_info.hmin)),
-    #         hmax = FT(Fields.field_values(loaded_topo_info.hmax)),
-    #     ),
-    #     axes(Fields.level(Y.c.ρ, 1)),
-    # )
-
-    # topo_info = (; 
 
     # Prepare cache
     # QN: Is there a limit to how big the cache can be?
@@ -123,8 +110,8 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info)
         topo_k_pbl_values = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT}),
         topo_info = topo_info,
         ᶜN = similar(Fields.level(Y.c.ρ, 1)),
-        uforcing = similar(Y.c.u_phy),
-        vforcing = similar(Y.c.v_phy),
+        uforcing = similar(Y.c.ρ),
+        vforcing = similar(Y.c.ρ),
         ᶜweights = similar(Y.c.ρ),
         ᶜdTdz = similar(Y.c.ρ),
         ᶜdτ_sat_dz = similar(Y.c.ρ)
