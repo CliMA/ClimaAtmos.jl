@@ -89,6 +89,15 @@ jvp_step_adjustment:
 use_dense_jacobian:
   help: "Whether to use a dense Jacobian matrix that is computed using forward-mode automatic differentiation and inverted using LU factorization [`true`, `false` (default)]"
   value: false
+use_auto_jacobian:
+  help: "Whether to populate the entries of the sparse Jacobian matrix using forward-mode automatic differentiation with sparse matrix coloring (only used when `use_dense_jacobian` is `false`) [`true`, `false` (default)]"
+  value: true # TODO: Change this to false
+auto_jacobian_padding_bands:
+  help: "Minimum number of bands to add in every block of the sparse Jacobian matrix, eliminating errors from Jacobian entries that lie outside of the default sparsity pattern (only used when `use_auto_jacobian` is `true`; default is `0`)"
+  value: 2 # TODO: Change this to 0
+debug_approximate_jacobian:
+  help: "Whether to compare approximations of the Jacobian matrix in the first column of the final state against the exact Jacobian [`true`, `false` (default)]"
+  value: true # TODO: Change this to false
 update_jacobian_every:
   help: "Frequency at which the Jacobian matrix should be updated (once per timestep, once per timestepper stage, or once per linear solve) [`dt`, `stage`, `solve` (default)]"
   value: "solve"
