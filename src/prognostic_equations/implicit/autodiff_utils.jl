@@ -1,3 +1,9 @@
+# TODO: Move this bugfix into ClimaCore.
+Spaces.issubspace(
+    column_space::Spaces.FiniteDifferenceSpace{<:Grids.ColumnGrid},
+    extruded_space::Spaces.ExtrudedFiniteDifferenceSpace,
+) = Spaces.grid(column_space).full_grid === Spaces.grid(extruded_space)
+
 # Replaces all numbers in Fields and DataLayouts with values of type T.
 replace_parent_type(x::Fields.FieldVector, ::Type{T}) where {T} = similar(x, T)
 replace_parent_type(x::Fields.Field, ::Type{T}) where {T} =
@@ -7,11 +13,32 @@ replace_parent_type(x::DataLayouts.AbstractData, ::Type{T}) where {T} =
 replace_parent_type(x::Union{Tuple, NamedTuple}, ::Type{T}) where {T} =
     unrolled_map(Base.Fix2(replace_parent_type, T), x)
 
-# An iterator over the column indices of all fields in a FieldVector.
-function column_index_iterator(field_vector)
+# Replaces the given precomputed and scratch fields in an AtmosCache.
+function replace_precomputed_and_scratch(cache, precomputed, scratch)
+    new_cache_fields =
+        ntuple(Val(fieldcount(typeof(cache)))) do cache_field_index
+            cache_field_name = fieldname(typeof(cache), cache_field_index)
+            if cache_field_name == :precomputed
+                (; cache.precomputed..., precomputed...)
+            elseif cache_field_name == :scratch
+                (; cache.scratch..., scratch...)
+            else
+                getfield(cache, cache_field_index)
+            end
+        end
+    return AtmosCache(new_cache_fields...)
+end
+
+# The horizontal SpectralElementSpace of the fields in a FieldVector.
+function horizontal_space(field_vector)
     all_values = Fields._values(field_vector)
     first_field = unrolled_argfirst(value -> value isa Fields.Field, all_values)
-    horz_space = Spaces.horizontal_space(axes(first_field))
+    return Spaces.horizontal_space(axes(first_field))
+end
+
+# An iterator over the column indices of all fields in a FieldVector.
+function column_index_iterator(field_vector)
+    horz_space = horizontal_space(field_vector)
     qs = 1:Quadratures.degrees_of_freedom(Spaces.quadrature_style(horz_space))
     hs = Spaces.eachslabindex(horz_space)
     return horz_space isa Spaces.SpectralElementSpace1D ?
@@ -24,12 +51,10 @@ scalar_field_names(field_vector) =
         x isa Fields.Field && eltype(x) == eltype(field_vector)
     end
 
-# An iterator with pairs of the form
-# (scalar_level_index, (scalar_index, level_index)), where scalar_index is an
-# index into scalar_field_names(field_vector), level_index is a vertical index
-# into the scalar field with this name, and scalar_level_index is a unique
-# linear index for each combination of scalar field name and vertical index.
-function scalar_level_index_pairs(field_vector)
+# An iterator with tuples of the form (scalar_index, level_index)), where
+# scalar_index is an index into scalar_field_names(field_vector) and level_index
+# is a vertical index into the scalar field with this name.
+function field_vector_index_iterator(field_vector)
     scalar_names = scalar_field_names(field_vector)
     scalar_index_and_level_pairs =
         unrolled_map(enumerate(scalar_names)) do (scalar_index, name)
@@ -40,7 +65,7 @@ function scalar_level_index_pairs(field_vector)
                 Base.OneTo(is_one_level ? 1 : Spaces.nlevels(axes(field))),
             )
         end
-    return enumerate(Iterators.flatten(scalar_index_and_level_pairs))
+    return Iterators.flatten(scalar_index_and_level_pairs)
 end
 
 # A view of the data for one point in a field, which can be used like a Ref.

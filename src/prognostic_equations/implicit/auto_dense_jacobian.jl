@@ -89,45 +89,36 @@ function update_column_matrices!(alg::AutoDenseJacobian, cache, Y, p, dtγ, t)
     device = ClimaComms.device(Y.c)
     column_indices = column_index_iterator(Y)
     scalar_names = scalar_field_names(Y)
-    scalar_level_indices = scalar_level_index_pairs(Y)
-    batch_size = max_simultaneous_derivatives(alg)
-    batch_size_val = Val(batch_size)
+    jacobian_axis_index_to_field_vector_index_map =
+        enumerate(field_vector_index_iterator(Y))
+    n_εs = max_simultaneous_derivatives(alg)
+    n_εs_val = Val(n_εs)
+    p_dual = replace_precomputed_and_scratch(p, precomputed_dual, scratch_dual)
 
-    p_dual_args = ntuple(Val(fieldcount(typeof(p)))) do cache_field_index
-        cache_field_name = fieldname(typeof(p), cache_field_index)
-        if cache_field_name == :precomputed
-            (; p.precomputed..., precomputed_dual...)
-        elseif cache_field_name == :scratch
-            scratch_dual
-        else
-            getfield(p, cache_field_index)
-        end
-    end
-    p_dual = AtmosCache(p_dual_args...)
-
-    batches = Iterators.partition(scalar_level_indices, batch_size)
-    for batch_scalar_level_indices in ClimaComms.threadable(device, batches)
+    batches =
+        Iterators.partition(jacobian_axis_index_to_field_vector_index_map, n_εs)
+    for indices_for_Y_axis in ClimaComms.threadable(device, batches)
         Y_dual .= Y
 
         # Add a unique ε to Y for each scalar level index in this batch. With
         # Y_col and Yᴰ_col denoting the columns of Y and Y_dual at column_index,
-        # set Yᴰ_col to Y_col + I[:, batch_scalar_level_indices] * εs, where I
-        # is the identity matrix for Y_col (i.e., the value of ∂Y_col/∂Y_col),
-        # εs is a vector of batch_size dual number components, and
-        # batch_scalar_level_indices are the batch's indices into Y_col.
+        # set Yᴰ_col to Y_col + I[:, indices_for_Y_axis] * εs, where I is the
+        # identity matrix for Y_col (i.e., the value of ∂Y_col/∂Y_col), εs is a
+        # vector of n_εs dual number components, and indices_for_Y_axis are the
+        # batch's indices into Y_col.
         ClimaComms.@threaded device begin
             # On multithreaded devices, assign one thread to each combination of
             # spatial column index and scalar level index in this batch.
             for column_index in column_indices,
                 (ε_index, (_, (scalar_index, level_index))) in
-                enumerate(batch_scalar_level_indices)
+                enumerate(indices_for_Y_axis)
 
-                Y_partials = ntuple(i -> i == ε_index ? 1 : 0, batch_size_val)
-                Y_dual_increment = ForwardDiff.Dual{Jacobian}(0, Y_partials...)
+                Y_partials = ntuple(==(ε_index), n_εs_val)
+                Y_dual_εs_value = ForwardDiff.Dual{Jacobian}(0, Y_partials)
                 unrolled_applyat(scalar_index, scalar_names) do name
                     field = MatrixFields.get_field(Y_dual, name)
                     @inbounds point(field, level_index, column_index...)[] +=
-                        Y_dual_increment
+                        Y_dual_εs_value
                 end
             end
         end
@@ -141,19 +132,19 @@ function update_column_matrices!(alg::AutoDenseJacobian, cache, Y, p, dtγ, t)
         # with col_matrix denoting the matrix at the corresponding matrix_index
         # in column_matrices, copy the coefficients of the εs in Yₜᴰ_col into
         # col_matrix, where the previous steps have set Yₜᴰ_col to
-        # Yₜ_col + (∂Yₜ_col/∂Y_col)[:, batch_scalar_level_indices] * εs.
-        # Specifically, set col_matrix[scalar_level_index1, scalar_level_index2]
-        # to ∂Yₜ_col[scalar_level_index1]/∂Y_col[scalar_level_index2], obtaining
+        # Yₜ_col + (∂Yₜ_col/∂Y_col)[:, indices_for_Y_axis] * εs. Specifically, set
+        # col_matrix[scalar_level_index1, scalar_level_index2] to
+        # ∂Yₜ_col[scalar_level_index1]/∂Y_col[scalar_level_index2], obtaining
         # this derivative from the coefficient of εs[ε_index] in
         # Yₜᴰ_col[scalar_level_index1], where ε_index is the index of
-        # scalar_level_index2 in batch_scalar_level_indices. After all batches
-        # have been processed, col_matrix is the full Jacobian ∂Yₜ_col/∂Y_col.
+        # scalar_level_index2 in indices_for_Y_axis. After all batches have been
+        # processed, col_matrix is the full Jacobian ∂Yₜ_col/∂Y_col.
         ClimaComms.@threaded device begin
             # On multithreaded devices, assign one thread to each combination of
             # spatial column index and scalar level index.
             for (matrix_index, column_index) in enumerate(column_indices),
                 (scalar_level_index1, (scalar_index1, level_index1)) in
-                scalar_level_indices
+                jacobian_axis_index_to_field_vector_index_map
 
                 Yₜ_dual_value =
                     unrolled_applyat(scalar_index1, scalar_names) do name
@@ -162,7 +153,7 @@ function update_column_matrices!(alg::AutoDenseJacobian, cache, Y, p, dtγ, t)
                     end
                 Yₜ_partials = ForwardDiff.partials(Yₜ_dual_value)
                 for (ε_index, (scalar_level_index2, _)) in
-                    enumerate(batch_scalar_level_indices)
+                    enumerate(indices_for_Y_axis)
                     cartesian_index =
                         (scalar_level_index1, scalar_level_index2, matrix_index)
                     @inbounds column_matrices[cartesian_index...] =
@@ -193,14 +184,15 @@ function invert_jacobian!(::AutoDenseJacobian, cache, ΔY, R)
     device = ClimaComms.device(ΔY.c)
     column_indices = column_index_iterator(ΔY)
     scalar_names = scalar_field_names(ΔY)
-    scalar_level_indices = scalar_level_index_pairs(ΔY)
+    vector_index_to_field_vector_index_map =
+        enumerate(field_vector_index_iterator(ΔY))
 
     # Copy all scalar values from R into column_lu_vectors.
     ClimaComms.@threaded device begin
         # On multithreaded devices, assign one thread to each index into R.
         for (vector_index, column_index) in enumerate(column_indices),
             (scalar_level_index, (scalar_index, level_index)) in
-            scalar_level_indices
+            vector_index_to_field_vector_index_map
 
             value = unrolled_applyat(scalar_index, scalar_names) do name
                 field = MatrixFields.get_field(R, name)
@@ -219,7 +211,7 @@ function invert_jacobian!(::AutoDenseJacobian, cache, ΔY, R)
         # On multithreaded devices, assign one thread to each index into ΔY.
         for (vector_index, column_index) in enumerate(column_indices),
             (scalar_level_index, (scalar_index, level_index)) in
-            scalar_level_indices
+            vector_index_to_field_vector_index_map
 
             @inbounds value =
                 column_lu_vectors[scalar_level_index, vector_index]

@@ -102,16 +102,16 @@ function vertical_diffusion_boundary_layer_tendency!(
 
     ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
     ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_2
-    ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
-        top = Operators.SetValue(C3(0)),
-        bottom = Operators.SetValue(C3(0)),
-    )
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         if ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai))
             @. ᶜK_h_scaled = α_vert_diff_tracer * ᶜK_h
         else
             @. ᶜK_h_scaled = ᶜK_h
         end
+        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
+            top = Operators.SetValue(C3(0)),
+            bottom = Operators.SetValue(C3(0)),
+        )
         @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρχ(
             -(
                 ᶠinterp(Y.c.ρ) *
