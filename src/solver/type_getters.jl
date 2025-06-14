@@ -428,17 +428,30 @@ end
 
 get_jacobian(ode_algo, Y, atmos, parsed_args) =
     if ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm}
+        # jacobian_algorithm =
+        #     parsed_args["use_dense_jacobian"] ? AutoDenseJacobian() :
+        #     ManualSparseJacobian(
+        #         DerivativeFlag(has_topography(axes(Y.c))),
+        #         DerivativeFlag(atmos.diff_mode),
+        #         DerivativeFlag(atmos.sgs_adv_mode),
+        #         DerivativeFlag(atmos.sgs_entr_detr_mode),
+        #         DerivativeFlag(atmos.sgs_mf_mode),
+        #         DerivativeFlag(atmos.sgs_nh_pressure_mode),
+        #         parsed_args["approximate_linear_solve_iters"],
+        #     )
         jacobian_algorithm =
             parsed_args["use_dense_jacobian"] ? AutoDenseJacobian() :
-            ManualSparseJacobian(
-                DerivativeFlag(has_topography(axes(Y.c))),
-                DerivativeFlag(atmos.diff_mode),
-                DerivativeFlag(atmos.sgs_adv_mode),
-                DerivativeFlag(atmos.sgs_entr_detr_mode),
-                DerivativeFlag(atmos.sgs_mf_mode),
-                DerivativeFlag(atmos.sgs_nh_pressure_mode),
-                parsed_args["approximate_linear_solve_iters"],
-            )
+            AutoSparseJacobian(
+                ManualSparseJacobian(
+                    DerivativeFlag(has_topography(axes(Y.c))),
+                    DerivativeFlag(atmos.diff_mode),
+                    DerivativeFlag(atmos.sgs_adv_mode),
+                    DerivativeFlag(atmos.sgs_entr_detr_mode),
+                    DerivativeFlag(atmos.sgs_mf_mode),
+                    DerivativeFlag(atmos.sgs_nh_pressure_mode),
+                    parsed_args["approximate_linear_solve_iters"],
+                ),
+            ) # TODO: Add a new "use_auto_jacobian" flag.
         @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
         Jacobian(jacobian_algorithm, Y, atmos)
     else
