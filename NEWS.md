@@ -4,6 +4,8 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+PR [#3856](https://github.com/CliMA/ClimaAtmos.jl/pull/3856) adds number adjustment tendencies to the two-moment microphysics scheme.
+
 v0.30.3
 -------
 
