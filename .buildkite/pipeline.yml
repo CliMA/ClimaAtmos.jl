@@ -28,6 +28,7 @@ steps:
 
       - echo "--- Instantiate .buildkite"
       - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.precompile(;strict=true); using CUDA; CUDA.precompile_runtime(); Pkg.status()'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name=\"ClimaCore\", rev=\"tr/refactor-fm-internal-index\"))'"
 
     agents:
       slurm_cpus_per_task: 8
@@ -631,7 +632,7 @@ steps:
           --job_id amip_target_edonly_nonequil
         artifact_paths: "amip_target_edonly_nonequil/output_active/*"
         agents:
-          slurm_mem: 20GB
+          slurm_mem: 64GB
 
   - group: "Diagnostic EDMFX"
     steps:

@@ -45,6 +45,63 @@ include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
 ref_job_id = config.parsed_args["reference_job_id"]
 reference_job_id = isnothing(ref_job_id) ? simulation.job_id : ref_job_id
 
+if true # TODO: Add a debug_manual_jacobian flag.
+    Y_end = integrator.u
+    t_end = integrator.t
+    dt = integrator.dt
+    timestepper_algorithm = integrator.alg
+    tableau_coefficients =
+        timestepper_algorithm isa CA.CTS.RosenbrockAlgorithm ?
+        timestepper_algorithm.tableau.Γ : timestepper_algorithm.tableau.a_imp
+    γs = unique(filter(!iszero, CA.LinearAlgebra.diag(tableau_coefficients)))
+    dtγ = float(dt) * γs[end]
+
+    auto_jac_alg = integrator.cache.newtons_method_cache.j.alg
+    manual_jac_alg = auto_jac_alg.sparse_alg
+    auto_jac = CA.Jacobian(auto_jac_alg, Y_end, atmos)
+    manual_jac = CA.Jacobian(manual_jac_alg, Y_end, atmos)
+    CA.update_jacobian!(auto_jac, Y_end, p, dtγ, t_end)
+    CA.update_jacobian!(manual_jac, Y_end, p, dtγ, t_end)
+    auto_matrix = auto_jac.cache.matrix.matrix
+    manual_matrix = manual_jac.cache.matrix.matrix
+    auto_scalar_matrix = CA.MatrixFields.scalar_field_matrix(auto_matrix)
+    manual_scalar_matrix = CA.MatrixFields.scalar_field_matrix(manual_matrix)
+    difference_scalar_matrix = auto_scalar_matrix .- manual_scalar_matrix
+
+    @info "Debugging manual Jacobian"
+    for scalar_block_name in keys(auto_scalar_matrix)
+        auto_block = auto_scalar_matrix[scalar_block_name]
+        manual_block = manual_scalar_matrix[scalar_block_name]
+        difference_block = difference_scalar_matrix[scalar_block_name]
+
+        auto_block isa CA.Fields.Field || continue
+
+        println("$scalar_block_name:")
+        println("\t$(eltype(auto_block))")
+
+        (_, _, auto_lower_band, auto_upper_band) =
+            CA.MatrixFields.band_matrix_info(auto_block)
+        (_, _, manual_lower_band, manual_upper_band) =
+            CA.MatrixFields.band_matrix_info(manual_block)
+        for band in auto_lower_band:auto_upper_band
+            auto_band_index = band - auto_lower_band + 1
+            auto_band_average =
+                mean(abs, auto_block.entries.:($auto_band_index))
+            is_manual = band in manual_lower_band:manual_upper_band
+            println("\tAverage of$(is_manual ? "" : " padding") band $band:")
+            println("\t\t$auto_band_average (auto)")
+            is_manual || continue
+            manual_band_index = band - manual_lower_band + 1
+            manual_band_average =
+                mean(abs, manual_block.entries.:($manual_band_index))
+            difference_band_average =
+                mean(abs, difference_block.entries.:($auto_band_index))
+            println("\t\t$manual_band_average (manual)")
+            println("\t\t$difference_band_average (difference)")
+        end
+    end
+end
+
 if sol_res.ret_code == :simulation_crashed
     error(
         "The ClimaAtmos simulation has crashed. See the stack trace for details.",
