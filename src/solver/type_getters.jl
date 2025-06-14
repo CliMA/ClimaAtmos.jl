@@ -451,24 +451,31 @@ function get_surface_setup(parsed_args)
     return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
 end
 
-get_jacobian(ode_algo, Y, atmos, parsed_args) =
-    if ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm}
-        jacobian_algorithm =
-            parsed_args["use_dense_jacobian"] ? AutoDenseJacobian() :
-            ManualSparseJacobian(
-                DerivativeFlag(has_topography(axes(Y.c))),
-                DerivativeFlag(atmos.diff_mode),
-                DerivativeFlag(atmos.sgs_adv_mode),
-                DerivativeFlag(atmos.sgs_entr_detr_mode),
-                DerivativeFlag(atmos.sgs_mf_mode),
-                DerivativeFlag(atmos.sgs_nh_pressure_mode),
-                parsed_args["approximate_linear_solve_iters"],
-            )
-        @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
-        Jacobian(jacobian_algorithm, Y, atmos)
+function get_jacobian(ode_algo, Y, atmos, parsed_args)
+    ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
+        return nothing
+    jacobian_algorithm = if parsed_args["use_dense_jacobian"]
+        AutoDenseJacobian()
     else
-        nothing
+        manual_jacobian_algorithm = ManualSparseJacobian(
+            DerivativeFlag(has_topography(axes(Y.c))),
+            DerivativeFlag(atmos.diff_mode),
+            DerivativeFlag(atmos.sgs_adv_mode),
+            DerivativeFlag(atmos.sgs_entr_detr_mode),
+            DerivativeFlag(atmos.sgs_mf_mode),
+            DerivativeFlag(atmos.sgs_nh_pressure_mode),
+            parsed_args["approximate_linear_solve_iters"],
+        )
+        parsed_args["use_auto_jacobian"] ?
+        AutoSparseJacobian(
+            manual_jacobian_algorithm,
+            parsed_args["auto_jacobian_padding_bands"],
+        ) : manual_jacobian_algorithm
     end
+    @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
+    verbose = parsed_args["debug_jacobian"]
+    return Jacobian(jacobian_algorithm, Y, atmos; verbose)
+end
 
 #=
     ode_configuration(Y, parsed_args)

@@ -292,6 +292,13 @@ steps:
           --job_id baroclinic_wave_equil_conservation_ft64
         artifact_paths: "baroclinic_wave_equil_conservation_ft64/output_active/*"
 
+      - label: ":computer: baroclinic wave moist check conservation float64 sparse autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_ft64_sparse_autodiff.yml
+          --job_id baroclinic_wave_equil_conservation_ft64_sparse_autodiff
+        artifact_paths: "baroclinic_wave_equil_conservation_ft64_sparse_autodiff/output_active/*"
+        soft_fail: true
+
       - label: ":computer: baroclinic wave moist check conservation with sources"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_source.yml
@@ -327,6 +334,14 @@ steps:
           --config_file $CONFIG_PATH/baroclinic_wave_dense_autodiff.yml
           --job_id baroclinic_wave_dense_autodiff
         artifact_paths: "baroclinic_wave_dense_autodiff/output_active/*"
+
+      - label: ":computer: baroclinic wave sparse autodiff"
+        key: baroclinic_wave_sparse_autodiff
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/baroclinic_wave_sparse_autodiff.yml
+          --job_id baroclinic_wave_sparse_autodiff
+        artifact_paths: "baroclinic_wave_sparse_autodiff/output_active/*"
 
       - label: ":computer: no lim baroclinic wave equilmoist"
         command: >
@@ -379,6 +394,26 @@ steps:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
+      - label: ":umbrella: aquaplanet nonequil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment dense autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/aquaplanet_nonequil_allsky_gw_res_dense_autodiff.yml
+          --job_id aquaplanet_nonequil_allsky_gw_res_dense_autodiff
+        artifact_paths: "aquaplanet_nonequil_allsky_gw_res_dense_autodiff/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
+      - label: ":umbrella: aquaplanet nonequil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment sparse autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/aquaplanet_nonequil_allsky_gw_res_sparse_autodiff.yml
+          --job_id aquaplanet_nonequil_allsky_gw_res_sparse_autodiff
+        artifact_paths: "aquaplanet_nonequil_allsky_gw_res_sparse_autodiff/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
       - label: ":umbrella: aquaplanet nonequil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 2-moment"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -389,16 +424,6 @@ steps:
           --job_id aquaplanet_nonequil_allsky_gw_res_2M
           --out_dir aquaplanet_nonequil_allsky_gw_res_2M/output_active
         artifact_paths: "aquaplanet_nonequil_allsky_gw_res_2M/output_active/*"
-        agents:
-          slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-
-      - label: ":umbrella: aquaplanet nonequil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment dense autodiff"
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/aquaplanet_nonequil_allsky_gw_res_dense_autodiff.yml
-          --job_id aquaplanet_nonequil_allsky_gw_res_dense_autodiff
-        artifact_paths: "aquaplanet_nonequil_allsky_gw_res_dense_autodiff/output_active/*"
         agents:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
@@ -633,6 +658,15 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":man_in_business_suit_levitating: AMIP Target EDOnly nonequil sparse autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/amip_target_edonly_nonequil_sparse_autodiff.yml
+          --job_id amip_target_edonly_nonequil_sparse_autodiff
+        artifact_paths: "amip_target_edonly_nonequil_sparse_autodiff/output_active/*"
+        agents:
+          slurm_mem: 40GB
+
   - group: "Diagnostic EDMFX"
     steps:
 
@@ -755,6 +789,16 @@ steps:
           --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet_dense_autodiff.yml
           --job_id diagnostic_edmfx_aquaplanet_dense_autodiff
         artifact_paths: "diagnostic_edmfx_aquaplanet_dense_autodiff/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
+      - label: ":genie: Diagnostic EDMFX aquaplanet sparse autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet_sparse_autodiff.yml
+          --job_id diagnostic_edmfx_aquaplanet_sparse_autodiff
+        artifact_paths: "diagnostic_edmfx_aquaplanet_sparse_autodiff/output_active/*"
         agents:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
@@ -943,6 +987,16 @@ steps:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
+      - label: ":genie: Prognostic EDMFX aquaplanet sparse autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_sparse_autodiff.yml
+          --job_id prognostic_edmfx_aquaplanet_sparse_autodiff
+        artifact_paths: "prognostic_edmfx_aquaplanet_sparse_autodiff/output_active/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
   - group: "GPU"
     steps:
 
@@ -978,6 +1032,19 @@ steps:
           --config_file $CONFIG_PATH/baroclinic_wave_dense_autodiff.yml
           --job_id baroclinic_wave_gpu_dense_autodiff
         artifact_paths: "baroclinic_wave_gpu_dense_autodiff/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16GB
+
+      - label: "GPU: baroclinic wave sparse autodiff"
+        key: "baroclinic_wave_gpu_sparse_autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/baroclinic_wave_sparse_autodiff.yml
+          --job_id baroclinic_wave_gpu_sparse_autodiff
+        artifact_paths: "baroclinic_wave_gpu_sparse_autodiff/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
@@ -1079,6 +1146,30 @@ steps:
           --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu.yml
           --job_id prognostic_edmfx_aquaplanet_gpu
         artifact_paths: "prognostic_edmfx_aquaplanet_gpu/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+
+      - label: "GPU: Prognostic EDMFX aquaplanet dense autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu_dense_autodiff.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu_dense_autodiff
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu_dense_autodiff/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+
+      - label: "GPU: Prognostic EDMFX aquaplanet sparse autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet_gpu_sparse_autodiff.yml
+          --job_id prognostic_edmfx_aquaplanet_gpu_sparse_autodiff
+        artifact_paths: "prognostic_edmfx_aquaplanet_gpu_sparse_autodiff/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
@@ -1215,6 +1306,15 @@ steps:
           --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf_dense_autodiff.yml
           --job_id flame_aquaplanet_progedmf_dense_autodiff
         artifact_paths: "flame_aquaplanet_progedmf_dense_autodiff/*"
+        agents:
+          slurm_mem: 32GB
+
+      - label: ":fire: Flame graph: prognostic edmf sparse autodiff"
+        command: >
+          julia --color=yes --project=.buildkite perf/flame.jl
+          --config_file $PERF_CONFIG_PATH/bm_aquaplanet_progedmf_sparse_autodiff.yml
+          --job_id flame_aquaplanet_progedmf_sparse_autodiff
+        artifact_paths: "flame_aquaplanet_progedmf_sparse_autodiff/*"
         agents:
           slurm_mem: 32GB
 

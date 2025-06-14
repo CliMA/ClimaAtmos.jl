@@ -48,7 +48,7 @@ solver. Certain groups of derivatives can be toggled on or off by setting their
 - `approximate_solve_iters::Int`: number of iterations to take for the
   approximate linear solve required when the `diffusion_flag` is `UseDerivative`
 """
-struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6} <: JacobianAlgorithm
+struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6} <: SparseJacobian
     topography_flag::F1
     diffusion_flag::F2
     sgs_advection_flag::F3

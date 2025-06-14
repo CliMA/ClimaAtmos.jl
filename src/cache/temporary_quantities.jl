@@ -5,6 +5,21 @@ using ClimaCore.Utilities: half
 # but cannot be computed on the fly. Unlike the precomputed quantities, these
 # can be modified at any point, so they should never be assumed to be unchanged
 # between function calls.
+function implicit_temporary_quantities(Y, atmos)
+    center_space, face_space = axes(Y.c), axes(Y.f)
+
+    FT = Spaces.undertype(center_space)
+    uvw_vec = UVW(FT(0), FT(0), FT(0))
+    return (;
+        ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠρaK_h, ᶠρaK_u
+        ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜρχₜ_diffusion, ᶜa_scalar
+        ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜKᵥʲ
+        ᶜtemp_scalar_3 = Fields.Field(FT, center_space), # ᶜK_h_scaled
+        ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜu₃ʲ
+        ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³, ᶠu³_diff
+        ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
+    )
+end
 function temporary_quantities(Y, atmos)
     center_space, face_space = axes(Y.c), axes(Y.f)
 
