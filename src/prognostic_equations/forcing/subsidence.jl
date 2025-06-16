@@ -55,7 +55,7 @@ scalar quantity `χ`.
 Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
 - `Y`: The current state vector (used for `Y.c.ρ`).
-- `p`: Cache containing parameters, precomputed fields (`ᶜh_tot`, `ᶜspecific`),
+- `p`: Cache containing parameters, precomputed fields (`ᶜh_tot`),
        atmospheric model configurations (`p.atmos.moisture_model`, `p.atmos.subsidence`),
        and scratch space.
 - `t`: Current simulation time (unused by this specific tendency calculation).
@@ -68,7 +68,7 @@ subsidence_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing    # No subsidence
 function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
     (; moisture_model) = p.atmos
     subsidence_profile = p.atmos.subsidence.prof
-    (; ᶜh_tot, ᶜspecific) = p.precomputed
+    (; ᶜh_tot) = p.precomputed
 
     ᶠz = Fields.coordinate_field(axes(Y.f)).z
     ᶠlg = Fields.local_geometry_field(Y.f)
@@ -78,26 +78,23 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
 
     # Large-scale subsidence
     subsidence!(Yₜ.c.ρe_tot, Y.c.ρ, ᶠsubsidence³, ᶜh_tot, Val{:first_order}())
-    subsidence!(
-        Yₜ.c.ρq_tot,
-        Y.c.ρ,
-        ᶠsubsidence³,
-        ᶜspecific.q_tot,
-        Val{:first_order}(),
-    )
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    subsidence!(Yₜ.c.ρq_tot, Y.c.ρ, ᶠsubsidence³, ᶜq_tot, Val{:first_order}())
     if moisture_model isa NonEquilMoistModel
+        ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
         subsidence!(
             Yₜ.c.ρq_liq,
             Y.c.ρ,
             ᶠsubsidence³,
-            ᶜspecific.q_liq,
+            ᶜq_liq,
             Val{:first_order}(),
         )
+        ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
         subsidence!(
             Yₜ.c.ρq_ice,
             Y.c.ρ,
             ᶠsubsidence³,
-            ᶜspecific.q_ice,
+            ᶜq_ice,
             Val{:first_order}(),
         )
     end
