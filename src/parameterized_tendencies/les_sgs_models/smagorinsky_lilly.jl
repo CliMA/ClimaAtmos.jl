@@ -108,23 +108,24 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLill
     @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(ᶜh_tot))
 
     ## Tracer diffusion and associated mass changes
-    for (ᶜρχₜ, ᶜχ, χ_name) in CA.matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
-        ᶜρχₜ_diffusion =
-            @. p.scratch.ᶜtemp_scalar = wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(ᶜχ))
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+        ᶜρχₜ_diffusion = @. lazy(wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(ᶜχ)))
         @. ᶜρχₜ += ᶜρχₜ_diffusion
         # Rain and snow does not affect the mass
-        if χ_name ∉ (:q_rai, :q_sno)
+        if ρχ_name == @name(ρq_tot)
             @. Yₜ.c.ρ += ᶜρχₜ_diffusion
         end
     end
 
 end
 
+import UnrolledUtilities as UU
+
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     FT = eltype(Y)
-    (; sfc_temp_C3, ᶠtemp_scalar, ᶜtemp_scalar) = p.scratch
-    (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, ᶜh_tot, sfc_conditions) =
+    (; sfc_temp_C3, ᶠtemp_scalar) = p.scratch
+    (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, ᶜspecific, ᶜh_tot, sfc_conditions) =
         p.precomputed
     ᶜspecific = all_specific_gs(Y.c)
     (; ρ_flux_uₕ, ρ_flux_h_tot) = sfc_conditions
@@ -157,18 +158,17 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜh_tot)))
 
     ## Tracer diffusion and associated mass changes
-    for (ᶜρχₜ, ᶜχ, χ_name) in CA.matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
+    ᶜdivᵥ_ρχ = Operators.DivergenceF2C(;
+        top = Operators.SetValue(C3(FT(0))),
+        bottom = Operators.SetValue(C3(FT(0))),
+    )
 
-        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(;
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
-        )
-
-        ᶜ∇ᵥρD∇χₜ = @. ᶜtemp_scalar = ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜχ)))
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ᶜ∇ᵥρD∇χₜ =
+            @. lazy(ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ)))))
         @. ᶜρχₜ -= ᶜ∇ᵥρD∇χₜ
         # Rain and snow does not affect the mass
-        if χ_name == :q_tot
+        if ρχ_name == @name(ρq_tot)
             @. Yₜ.c.ρ -= ᶜ∇ᵥρD∇χₜ
         end
     end

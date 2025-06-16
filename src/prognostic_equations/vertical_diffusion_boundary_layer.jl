@@ -46,7 +46,7 @@ This function is dispatched based on the type of the vertical diffusion model
       for scalars. Zero-flux boundary conditions are explicitly applied.
     - **Note on mass conservation for `q_tot` diffusion**: The current implementation
       also modifies the tendency of total moist air density `Yₜ.c.ρ` based on the
-      diffusion tendency of total specific humidity `ρq_tot`: 
+      diffusion tendency of total specific humidity `ρq_tot`:
       `Yₜ.c.ρ -= ᶜρχₜ_diffusion_for_q_tot`.
 
 This function is acting as a wrapper around the specific implementations
@@ -66,7 +66,7 @@ Arguments:
 - `t`: Current simulation time (not directly used in diffusion calculations).
 - `vert_diff_model` (for dispatched methods): The specific vertical diffusion model instance.
 
-Modifies components of tendency vector `Yₜ.c` (e.g., `Yₜ.c.uₕ`, `Yₜ.c.ρe_tot`, `Yₜ.c.ρ`, and 
+Modifies components of tendency vector `Yₜ.c` (e.g., `Yₜ.c.uₕ`, `Yₜ.c.ρe_tot`, `Yₜ.c.ρ`, and
 various tracer fields such as `Yₜ.c.ρq_tot`).
 """
 
@@ -104,22 +104,27 @@ function vertical_diffusion_boundary_layer_tendency!(
 
     ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
     ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_2
-    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, remove_energy_var(all_specific_gs(Y.c)))
-        if χ_name in (:q_rai, :q_sno, :n_rai)
+    ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
+        top = Operators.SetValue(C3(0)),
+        bottom = Operators.SetValue(C3(0)),
+    )
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        if ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai))
             @. ᶜK_h_scaled = α_vert_diff_tracer * ᶜK_h
         else
             @. ᶜK_h_scaled = ᶜK_h
         end
-        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
+        @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρχ(
+            -(
+                ᶠinterp(Y.c.ρ) *
+                ᶠinterp(ᶜK_h_scaled) *
+                ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))
+            ),
         )
-        @. ᶜρχₜ_diffusion =
-            ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h_scaled) * ᶠgradᵥ(ᶜχ)))
         @. ᶜρχₜ -= ᶜρχₜ_diffusion
-        # Exclude contributions from diffusion of condensate, precipitation 
-        # in mass tendency
-        if χ_name == :q_tot
+        # Only add contribution from total water diffusion to mass tendency
+        # (exclude contributions from diffusion of condensate, precipitation)
+        if ρχ_name == @name(ρq_tot)
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
         end
     end
