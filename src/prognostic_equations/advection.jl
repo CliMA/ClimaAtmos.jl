@@ -213,10 +213,12 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
 
     # Full vertical advection of passive tracers (like liq, rai, etc) ...
-    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name in (:e_tot, :q_tot) && continue
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), tracer_upwinding)
-        @. ᶜρχₜ += vtt
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
+            ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), tracer_upwinding)
+            @. ᶜρχₜ += vtt
+        end
     end
     # ... and upwinding correction of energy and total water.
     # (The central advection of energy and total water is done implicitly.)
