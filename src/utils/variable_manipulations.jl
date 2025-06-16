@@ -42,6 +42,20 @@ Arguments:
 """
 @inline specific(ρχ, ρ) = ρχ / ρ
 
+#! format: off
+@inline specific_name(ρχ_name::Symbol) =
+        if ρχ_name == :ρe_tot; return :e_tot
+    elseif ρχ_name == :ρq_tot; return :q_tot
+    elseif ρχ_name == :ρq_liq; return :q_liq
+    elseif ρχ_name == :ρq_ice; return :q_ice
+    elseif ρχ_name == :ρq_rai; return :q_rai
+    elseif ρχ_name == :ρn_liq; return :n_liq
+    elseif ρχ_name == :ρn_rai; return :q_rai
+    elseif ρχ_name == :ρq_sno; return :q_sno
+    else; error("Uncaught name: $ρχ_name")
+    end
+#! format: on
+
 @inline function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     # TODO: Replace turbconv_model struct by parameters, and include a_half in
     # parameters, not in config
