@@ -183,6 +183,32 @@ omitted from the result.
 end
 
 """
+    all_specific_gs(gs)
+
+Lazily computes all specific quantities (`χ`) from a grid-scale state `gs`.
+This `@generated` function introspects the field names of `gs` at compile time.
+It identifies all density-weighted fields (e.g., `:ρq_tot`, `:ρe_tot`), divides
+them by the grid-scale density `gs.ρ`, and returns them in a new `NamedTuple`.
+This provides a type-stable and performant way to convert all relevant state
+variables to their specific counterparts at once.
+
+Arguments:
+- `gs`: The grid-scale state, which must contain a `:ρ` field and other fields
+    with a `:ρ` prefix.
+
+Returns:
+- A new `NamedTuple` containing only the specific quantities (e.g., `:q_tot`, `:e_tot`).
+"""
+@generated function all_specific_gs(gs)
+    gs_names = Base._nt_names(gs)
+    relevant_gs_names =
+        filter(name -> has_prefix(name, :ρ) && name != :ρ, gs_names)
+    all_specific_gs_names = map(name -> remove_prefix(name, :ρ), relevant_gs_names)
+    all_specific_gs_values = map(name -> :(lazy.(specific.(gs.$name, gs.ρ))), relevant_gs_names)
+    return :(NamedTuple{$all_specific_gs_names}(($(all_specific_gs_values...),)))
+end
+
+"""
     specific_sgs(sgs, gs, turbconv_model)
 
 Converts every variable of the form `ρaχ` in the sub-grid-scale state `sgs` into
