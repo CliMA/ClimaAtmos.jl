@@ -34,11 +34,23 @@ function cloud_condensate_tendency!(
     cmc = CAP.microphysics_cloud_params(params)
 
     @. Yₜ.c.ρq_liq +=
-        Y.c.ρ *
-        cloud_sources(cmc.liquid, thp, ᶜts, specific(Y.c.ρq_rai, Y.c.ρ), dt)
+        Y.c.ρ * cloud_sources(
+            cmc.liquid,
+            thp,
+            ᶜts,
+            specific(Y.c.ρq_rai, Y.c.ρ),
+            specific(Y.c.ρq_sno, Y.c.ρ),
+            dt,
+        )
     @. Yₜ.c.ρq_ice +=
-        Y.c.ρ *
-        cloud_sources(cmc.ice, thp, ᶜts, specific(Y.c.ρq_sno, Y.c.ρ), dt)
+        Y.c.ρ * cloud_sources(
+            cmc.ice,
+            thp,
+            ᶜts,
+            specific(Y.c.ρq_rai, Y.c.ρ),
+            specific(Y.c.ρq_sno, Y.c.ρ),
+            dt,
+        )
 end
 
 function cloud_condensate_tendency!(
@@ -55,11 +67,23 @@ function cloud_condensate_tendency!(
     cmc = CAP.microphysics_cloud_params(params)
 
     @. Yₜ.c.ρq_liq +=
-        Y.c.ρ *
-        cloud_sources(cmc.liquid, thp, ᶜts, specific(Y.c.ρq_rai, Y.c.ρ), dt)
+        Y.c.ρ * cloud_sources(
+            cmc.liquid,
+            thp,
+            ᶜts,
+            specific(Y.c.ρq_rai, Y.c.ρ),
+            specific(Y.c.ρq_sno, Y.c.ρ),
+            dt,
+        )
     @. Yₜ.c.ρq_ice +=
-        Y.c.ρ *
-        cloud_sources(cmc.ice, thp, ᶜts, specific(Y.c.ρq_sno, Y.c.ρ), dt)
+        Y.c.ρ * cloud_sources(
+            cmc.ice,
+            thp,
+            ᶜts,
+            specific(Y.c.ρq_rai, Y.c.ρ),
+            specific(Y.c.ρq_sno, Y.c.ρ),
+            dt,
+        )
 
     @. Yₜ.c.ρn_liq +=
         Y.c.ρ * aerosol_activation_sources(
@@ -67,6 +91,7 @@ function cloud_condensate_tendency!(
             thp,
             ᶜts,
             specific(Y.c.ρq_rai, Y.c.ρ),
+            specific(Y.c.ρq_sno, Y.c.ρ),
             specific(Y.c.ρn_liq, Y.c.ρ),
             cmc.N_cloud_liquid_droplets,
             dt,
