@@ -42,20 +42,6 @@ Arguments:
 """
 @inline specific(ρχ, ρ) = ρχ / ρ
 
-#! format: off
-@inline specific_name(ρχ_name::Symbol) =
-        if ρχ_name == :ρe_tot; return :e_tot
-    elseif ρχ_name == :ρq_tot; return :q_tot
-    elseif ρχ_name == :ρq_liq; return :q_liq
-    elseif ρχ_name == :ρq_ice; return :q_ice
-    elseif ρχ_name == :ρq_rai; return :q_rai
-    elseif ρχ_name == :ρn_liq; return :n_liq
-    elseif ρχ_name == :ρn_rai; return :q_rai
-    elseif ρχ_name == :ρq_sno; return :q_sno
-    else; error("Uncaught name: $ρχ_name")
-    end
-#! format: on
-
 @inline function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     # TODO: Replace turbconv_model struct by parameters, and include a_half in
     # parameters, not in config
@@ -173,24 +159,28 @@ Converts every variable of the form `ρχ` in the grid-scale state `gs` into the
 specific variable `χ` by dividing it by `ρ`. All other variables in `gs` are
 omitted from the result.
 """
-@generated specific_gs(gs) =
-    :(NamedTuple{$(specific_gs_names(gs))}(($(map(name -> :(gs.$name / gs.ρ), relevant_gs_names(gs))...),)))
+specific_gs(gs) =
+    NamedTuple{specific_gs_names(gs)}(map(name -> gs.:($name) / gs.ρ, relevant_gs_names(gs)))
 
 """
     relevant_gs_names(gs)
 
 Returns relevant grid-scale state `gs` names for determining specific variables.
 """
-@generated relevant_gs_names(gs) =
-    filter(name -> has_prefix(name, :ρ) && name != :ρ, Base._nt_names(gs))
+@generated relevant_gs_names(::Type{GS}) where {GS} =
+    filter(name -> has_prefix(name, :ρ) && name != :ρ, Base._nt_names(GS))
+
+@inline relevant_gs_names(gs) = relevant_gs_names(typeof(gs))
 
 """
     specific_gs_names(gs)
 
 Returns relevant specific grid-scale state `gs` names.
 """
-@generated specific_gs_names(gs) =
-    map(name -> remove_prefix(name, :ρ), relevant_gs_names(gs))
+@generated specific_gs_names(::Type{GS}) where {GS} =
+    map(name -> remove_prefix(name, :ρ), relevant_gs_names(GS))
+
+@inline specific_gs_names(gs) = specific_gs_names(typeof(gs))
 
 """
     all_specific_gs(gs)
@@ -209,9 +199,9 @@ Arguments:
 Returns:
 - A new `NamedTuple` containing only the specific quantities (e.g., `:q_tot`, `:e_tot`).
 """
-all_specific_gs(gs::Fields.Field) =
+all_specific_gs(gs) =
     NamedTuple{specific_gs_names(eltype(gs))}(
-        UU.unrolled_map(relevant_gs_names(gs)) do name
+        UU.unrolled_map(relevant_gs_names(eltype(gs))) do name
             lazy.(specific.(getproperty(gs, name), gs.ρ))
         end
     )
