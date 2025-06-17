@@ -186,12 +186,13 @@ Returns:
 - A new `NamedTuple` containing only the specific quantities (e.g., `:q_tot`, `:e_tot`).
 """
 @generated function all_specific_gs(gs)
-    gs_names = Base._nt_names(gs)
-    relevant_gs_names =
-        filter(name -> has_prefix(name, :ρ) && name != :ρ, gs_names)
-    specific_gs_names = map(name -> remove_prefix(name, :ρ), relevant_gs_names)
-    specific_gs_values = map(name -> :(lazy.(specific.(gs.$name, gs.ρ))), relevant_gs_names)
-    return :(NamedTuple{$specific_gs_names}(($(specific_gs_values...),)))
+    relevant_names = filter(name -> has_prefix(name, :ρ) && name != :ρ, Base._nt_names(eltype(gs)))
+    specific_names = map(name -> remove_prefix(name, :ρ), relevant_names)
+    return :(NamedTuple{$specific_names}(
+        UU.unrolled_map($relevant_names) do name
+            lazy.(specific.(getproperty(gs, name), gs.ρ))
+        end
+    ))
 end
 
 """
