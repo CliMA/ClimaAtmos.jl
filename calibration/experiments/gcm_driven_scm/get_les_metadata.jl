@@ -15,16 +15,22 @@ function get_les_calibration_library()
     # AMIP data: July, NE Pacific
     # cfsite_numbers = (17, 18, 22, 23, 30, 94)
     # cfsite_numbers = (17, 22, 23, 30, 33, 94)
-    cfsite_numbers = (17, 21, 23, 30, 33)# 94)
+    base_cfsite_numbers = [17, 21, 23, 30, 33]  # Changed from tuple to array
     # cfsite_numbers = (30, 33,)# 94)
 
     # cfsite_numbers = (17, 30,)# 94)
-    les_kwargs = (forcing_model = "HadGEM2-A", month = 7, experiment = "amip")
-    ref_paths = [
-        get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...)) for
-        cfsite_number in cfsite_numbers
-    ]
-    return (ref_paths, cfsite_numbers)
+    ref_paths = []
+    cfsite_numbers = []
+    for month in [7, 10]
+        les_kwargs = (forcing_model = "HadGEM2-A", month = month, experiment = "amip")
+        ref_paths_month = [
+            get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...)) for
+            cfsite_number in base_cfsite_numbers
+        ]
+        append!(ref_paths, ref_paths_month)
+        append!(cfsite_numbers, base_cfsite_numbers)  # Add cfsite numbers for each month
+    end
+    return (ref_paths, cfsite_numbers)  # cfsite_numbers is now a Vector
 end
 
 function get_cfsite_type(i, cfsite_numbers)

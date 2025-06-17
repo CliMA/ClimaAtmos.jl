@@ -12,8 +12,8 @@ using DataFrames
 # output_dir = "output/exp_1"
 # output_dir= "/groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix/exp_40"
 # output_dir= "/central/scratch/cchristo/output_ml_mix2/exp_6"
-output_dir = "/central/scratch/cchristo/output_ml_mix2/exp_8"
-iterations = 0:5
+output_dir = "/central/scratch/jschmitt/calibrations/exp2"
+iterations = 0:7
 # iterations = nothing
 
 include("helper_funcs.jl")

@@ -200,18 +200,33 @@ observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 ###  EKI hyperparameters/settings
 @info "Initializing calibration" n_iterations ensemble_size output_dir
 
-eki = CAL.calibrate(
-    CAL.WorkerBackend,
-    ensemble_size,
-    n_iterations,
+
+ekp_obj = EKP.EnsembleKalmanProcess(
+    EKP.construct_initial_ensemble(prior, ensemble_size),
     observations,
-    nothing, # noise alread sprecified in observations
-    prior,
-    output_dir;
-    scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+    EKP.Inversion();
     localization_method = EKP.Localizers.NoLocalization(),
-    ## localization_method = EKP.Localizers.SECNice(nice_loc_ug, nice_loc_gg),
     failure_handler_method = EKP.SampleSuccGauss(),
     accelerator = EKP.DefaultAccelerator(),
-    #     # accelerator = EKP.NesterovAccelerator(),
+    scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+    verbose= true,
 )
+
+eki = CAL.calibrate(CAL.WorkerBackend, ekp_obj, n_iterations, prior, output_dir; failure_rate = 0.9)
+
+
+# eki = CAL.calibrate(
+#     CAL.WorkerBackend,
+#     ensemble_size,
+#     n_iterations,
+#     observations,
+#     nothing, # noise alread sprecified in observations
+#     prior,
+#     output_dir;
+#     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+#     localization_method = EKP.Localizers.NoLocalization(),
+#     ## localization_method = EKP.Localizers.SECNice(nice_loc_ug, nice_loc_gg),
+#     failure_handler_method = EKP.SampleSuccGauss(),
+#     accelerator = EKP.DefaultAccelerator(),
+#     #     # accelerator = EKP.NesterovAccelerator(),
+# )
