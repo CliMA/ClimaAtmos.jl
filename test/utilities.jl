@@ -5,7 +5,6 @@ import Dates
 using Random
 Random.seed!(1234)
 import ClimaAtmos as CA
-import LazyBroadcast: lazy
 using NCDatasets
 
 include("test_helpers.jl")
@@ -32,21 +31,6 @@ end
     @test !CA.isdivisible(Dates.Minute(1), Dates.Second(13))
     @test !CA.isdivisible(Dates.Day(1), Dates.Second(1e6))
     @test CA.isdivisible(Dates.Month(1), Dates.Hour(1))
-end
-
-@testset "Variable manipulations" begin
-    (; helem, cent_space, face_space) = get_cartesian_spaces()
-    ccoords, fcoords = get_coords(cent_space, face_space)
-    FT = eltype(ccoords.x)
-    nt = (;ρ=FT(2),ρa=FT(4), ρe_tot=FT(4))
-    @test CA.relevant_gs_names(typeof(nt)) == (:ρa, :ρe_tot)
-    @test CA.specific_gs_names(nt) == (:a, :e_tot)
-    @test CA.specific_gs(nt) == (a = 2.0, e_tot = 2.0)
-    f = Fields.Field(typeof(nt), cent_space)
-    @test CA.all_specific_gs(f) == (;
-        a = lazy.(CA.specific.(f.ρa, f.ρ)),
-        e_tot = lazy.(CA.specific.(f.ρe_tot, f.ρ)),
-    )
 end
 
 @testset "kinetic_energy (c.f. analytical function)" begin
