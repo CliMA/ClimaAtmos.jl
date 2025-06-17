@@ -655,12 +655,14 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             thp,
             ᶜtsʲs.:($$j),
             Y.c.sgsʲs.:($$j).q_rai,
+            Y.c.sgsʲs.:($$j).q_sno,
             dt,
         )
         @. ᶜSqᵢᵖʲs.:($$j) += cloud_sources(
             cmc.ice,
             thp,
             ᶜtsʲs.:($$j),
+            Y.c.sgsʲs.:($$j).q_rai,
             Y.c.sgsʲs.:($$j).q_sno,
             dt,
         )
@@ -701,7 +703,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         thp,
     )
     # Cloud formation from the environment
-    @. ᶜSqₗᵖ⁰ += cloud_sources(cmc.liquid, thp, ᶜts⁰, ᶜq_rai⁰, dt)
-    @. ᶜSqᵢᵖ⁰ += cloud_sources(cmc.ice, thp, ᶜts⁰, ᶜq_sno⁰, dt)
+    @. ᶜSqₗᵖ⁰ += cloud_sources(cmc.liquid, thp, ᶜts⁰, ᶜq_rai⁰, ᶜq_sno⁰, dt)
+    @. ᶜSqᵢᵖ⁰ += cloud_sources(cmc.ice, thp, ᶜts⁰, ᶜq_rai⁰, ᶜq_sno⁰, dt)
     return nothing
 end
