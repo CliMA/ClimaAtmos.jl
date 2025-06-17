@@ -10,9 +10,15 @@ import CloudMicrophysics.Parameters as CMP
 # Define some aliases and functions to make the code more readable
 const Tₐ = TD.air_temperature
 const PP = TD.PhasePartition
-const qᵥ = TD.vapor_specific_humidity
+#const qᵥ = TD.vapor_specific_humidity
 qₜ(thp, ts) = TD.PhasePartition(thp, ts).tot
 
+# calculate water vapor ALLOWING IT TO BE NEGATIVE
+function qᵥ(thp, ts)
+    FT = eltype(ts)
+    q = TD.PhasePartition(thp, ts)
+    return q.tot - q.liq - q.ice
+end
 # Get q_liq and q_ice out of phase partition
 function qₗ(thp, ts, qᵣ)
     FT = eltype(ts)
@@ -85,10 +91,15 @@ function cloud_sources(
 
     S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cm_params, thp, q, ρ, Tₐ(thp, ts))
 
+    # return ifelse(
+    #     S > FT(0),
+    #     triangle_inequality_limiter(S, limit(qᵥ(thp, ts), dt, 2)),
+    #     -triangle_inequality_limiter(abs(S), limit(qₗ(thp, ts, qₚ(qᵣ)), dt, 2)),
+    # )
     return ifelse(
-        S > FT(0),
-        triangle_inequality_limiter(S, limit(qᵥ(thp, ts), dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(qₗ(thp, ts, qₚ(qᵣ)), dt, 2)),
+    S > FT(0),
+    triangle_inequality_limiter(S, limit(qᵥ(thp, ts), dt, 2)),
+    -triangle_inequality_limiter(abs(S), limit(TD.liquid_specific_humidity(thp, ts), dt, 2)),
     )
 end
 function cloud_sources(cm_params::CMP.CloudIce{FT}, thp, ts, qₛ, dt) where {FT}
@@ -98,10 +109,15 @@ function cloud_sources(cm_params::CMP.CloudIce{FT}, thp, ts, qₛ, dt) where {FT
 
     S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cm_params, thp, q, ρ, Tₐ(thp, ts))
 
+    # return ifelse(
+    #     S > FT(0),
+    #     triangle_inequality_limiter(S, limit(qᵥ(thp, ts), dt, 2)),
+    #     -triangle_inequality_limiter(abs(S), limit(qᵢ(thp, ts, qₚ(qₛ)), dt, 2)),
+    # )
     return ifelse(
         S > FT(0),
         triangle_inequality_limiter(S, limit(qᵥ(thp, ts), dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(qᵢ(thp, ts, qₚ(qₛ)), dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(TD.ice_specific_humidity(thp, ts), dt, 2)),
     )
 end
 
