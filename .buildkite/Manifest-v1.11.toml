@@ -410,9 +410,9 @@ version = "0.2.15"
 
 [[deps.ClimaParams]]
 deps = ["TOML"]
-git-tree-sha1 = "f82183583b42d08bccad3f1f466e014b04189a2d"
+git-tree-sha1 = "46397777b5eb84842e90ece991603d4372eddc53"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "0.10.31"
+version = "0.10.32"
 
 [[deps.ClimaReproducibilityTests]]
 deps = ["OrderedCollections", "PrettyTables"]
@@ -451,10 +451,10 @@ uuid = "fb6a15b2-703c-40df-9091-08a04967cfa9"
 version = "0.1.13"
 
 [[deps.CloudMicrophysics]]
-deps = ["ClimaParams", "DocStringExtensions", "ForwardDiff", "HCubature", "LazyArtifacts", "LogExpFunctions", "QuadGK", "RootSolvers", "SpecialFunctions", "Thermodynamics"]
-git-tree-sha1 = "8f1965abc1a35d3b08f9d95d19c2a59b647fed9b"
+deps = ["ClimaParams", "DocStringExtensions", "ForwardDiff", "LazyArtifacts", "LogExpFunctions", "QuadGK", "RootSolvers", "SpecialFunctions", "Thermodynamics"]
+git-tree-sha1 = "55810bafe2bc9e0fb9e2a5301ad5009939046690"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.22.13"
+version = "0.24.1"
 
     [deps.CloudMicrophysics.extensions]
     EmulatorModelsExt = ["DataFrames", "MLJ"]
@@ -2141,7 +2141,7 @@ version = "0.2.1"
 
 [[deps.RuntimeGeneratedFunctions]]
 deps = ["ExprTools", "SHA", "Serialization"]
-git-tree-sha1 = "86a8a8b783481e1ea6b9c91dd949cb32191f8ab4"
+git-tree-sha1 = "86a8b7833a2f5f814357d238b83e30d8c301e71f"
 uuid = "7e49a35a-f44a-4d26-94aa-eba1b4ca6b47"
 version = "0.5.15"
 
@@ -2707,7 +2707,7 @@ version = "1.2.13+1"
 [[deps.Zstd_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "446b23e73536f84e8037f5dce465e92275f6a308"
-uuid = "3161d3a3-bdf6-5164-811a-617609db77b4"
+uuid = "3b182d85-2403-5c21-9c21-1e1f0cc25472"
 version = "1.5.7+1"
 
 [[deps.demumble_jll]]
