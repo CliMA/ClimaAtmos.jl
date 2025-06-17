@@ -173,14 +173,24 @@ Converts every variable of the form `ρχ` in the grid-scale state `gs` into the
 specific variable `χ` by dividing it by `ρ`. All other variables in `gs` are
 omitted from the result.
 """
-@generated function specific_gs(gs)
-    gs_names = Base._nt_names(gs)
-    relevant_gs_names =
-        filter(name -> has_prefix(name, :ρ) && name != :ρ, gs_names)
-    specific_gs_names = map(name -> remove_prefix(name, :ρ), relevant_gs_names)
-    specific_gs_values = map(name -> :(gs.$name / gs.ρ), relevant_gs_names)
-    return :(NamedTuple{$specific_gs_names}(($(specific_gs_values...),)))
-end
+@generated specific_gs(gs) =
+    :(NamedTuple{$(specific_gs_names(gs))}(($(map(name -> :(gs.$name / gs.ρ), relevant_gs_names(gs))...),)))
+
+"""
+    relevant_gs_names(gs)
+
+Returns relevant grid-scale state `gs` names for determining specific variables.
+"""
+@generated relevant_gs_names(gs) =
+    filter(name -> has_prefix(name, :ρ) && name != :ρ, Base._nt_names(gs))
+
+"""
+    specific_gs_names(gs)
+
+Returns relevant specific grid-scale state `gs` names.
+"""
+@generated specific_gs_names(gs) =
+    map(name -> remove_prefix(name, :ρ), relevant_gs_names(gs))
 
 """
     all_specific_gs(gs)
@@ -199,14 +209,12 @@ Arguments:
 Returns:
 - A new `NamedTuple` containing only the specific quantities (e.g., `:q_tot`, `:e_tot`).
 """
-@generated function all_specific_gs(gs)
-    gs_names = Base._nt_names(gs)
-    relevant_gs_names =
-        filter(name -> has_prefix(name, :ρ) && name != :ρ, gs_names)
-    all_specific_gs_names = map(name -> remove_prefix(name, :ρ), relevant_gs_names)
-    all_specific_gs_values = map(name -> :(lazy.(specific.(gs.$name, gs.ρ))), relevant_gs_names)
-    return :(NamedTuple{$all_specific_gs_names}(($(all_specific_gs_values...),)))
-end
+all_specific_gs(gs::Fields.Field) =
+    NamedTuple{specific_gs_names(eltype(gs))}(
+        UU.unrolled_map(relevant_gs_names(gs)) do name
+            lazy.(specific.(getproperty(gs, name), gs.ρ))
+        end
+    )
 
 """
     specific_sgs(sgs, gs, turbconv_model)
