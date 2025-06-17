@@ -19,6 +19,9 @@ output_dir: "/glade/derecho/scratch/asridhar/moist_bw_hughes_0M_exner_pg/"
 toml: [toml/longrun_bw.toml]
 output_default_diagnostics: false
 diagnostics:
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr, rhoa, rv, ke]
+    period: 1days
   - short_name: [massa, energya, watera, energyo, watero]
     period: 6hours
     writer: dict
