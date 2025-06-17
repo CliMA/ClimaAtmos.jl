@@ -69,7 +69,8 @@ end
  - cm_params - CloudMicrophysics parameters struct for cloud water or ice condensate
  - thp - Thermodynamics parameters struct
  - ts - thermodynamics state
- - qᵣ or qₛ - rain or snow specific humidity
+ - qᵣ - rain specific humidity
+ - qₛ - snow specific humidity
  - dt - model time step
 
 Returns the condensation/evaporation or deposition/sublimation rate for
@@ -80,13 +81,22 @@ function cloud_sources(
     thp,
     ts,
     qᵣ,
+    qₛ,
     dt,
 ) where {FT}
 
     q = TD.PhasePartition(thp, ts)
     ρ = TD.air_density(thp, ts)
 
-    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cm_params, thp, q, ρ, Tₐ(thp, ts))
+    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+        cm_params,
+        thp,
+        q,
+        qᵣ,
+        qₛ,
+        ρ,
+        Tₐ(thp, ts),
+    )
 
     return ifelse(
         S > FT(0),
@@ -94,12 +104,27 @@ function cloud_sources(
         -triangle_inequality_limiter(abs(S), limit(qₗ(thp, ts, qₚ(qᵣ)), dt, 2)),
     )
 end
-function cloud_sources(cm_params::CMP.CloudIce{FT}, thp, ts, qₛ, dt) where {FT}
+function cloud_sources(
+    cm_params::CMP.CloudIce{FT},
+    thp,
+    ts,
+    qᵣ,
+    qₛ,
+    dt,
+) where {FT}
 
     q = TD.PhasePartition(thp, ts)
     ρ = TD.air_density(thp, ts)
 
-    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cm_params, thp, q, ρ, Tₐ(thp, ts))
+    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+        cm_params,
+        thp,
+        q,
+        qᵣ,
+        qₛ,
+        ρ,
+        Tₐ(thp, ts),
+    )
 
     return ifelse(
         S > FT(0),
@@ -342,7 +367,8 @@ end
  - cm_params - CloudMicrophysics parameters struct for cloud water or ice condensate
  - thp - Thermodynamics parameters struct
  - ts - thermodynamics state
- - qₚ - precipitation (rain or snow) specific humidity
+ - qᵣ - rain specific humidity
+ - qₛ - snow specific humidity
  - n_dp - number concentration droplets (liquid or ice) per mass
  _ n_dp_prescribed - prescribed number concentration of droplets (liquid or ice) per mass
  - dt - model time step
@@ -354,14 +380,15 @@ function aerosol_activation_sources(
     cm_params::CMP.CloudLiquid{FT},
     thp,
     ts,
-    qₚ,
+    qᵣ,
+    qₛ,
     n_dp,
     n_dp_prescribed,
     dt,
 ) where {FT}
     r_dp = FT(2e-6) # 2 μm
     m_dp = 4 / 3 * FT(π) * r_dp^3 * cm_params.ρw
-    Sn = cloud_sources(cm_params, thp, ts, qₚ, dt) / m_dp
+    Sn = cloud_sources(cm_params, thp, ts, qᵣ, qₛ, dt) / m_dp
 
     return ifelse(
         Sn > FT(0),
