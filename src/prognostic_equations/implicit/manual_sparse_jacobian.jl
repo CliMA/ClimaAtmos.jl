@@ -555,184 +555,185 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwₚ) / ᶜρ) - (I,)
         end
 
-         if p.atmos.moisture_model isa NonEquilMoistModel &&
-        use_derivative(noneq_cloud_formation_flag)
-        p_vapₛₗ(tps, ts) = TD.saturation_vapor_pressure(tps, ts, TD.Liquid())
-        p_vapₛᵢ(tps, ts) = TD.saturation_vapor_pressure(tps, ts, TD.Ice())
+        if p.atmos.moisture_model isa NonEquilMoistModel &&
+            use_derivative(noneq_cloud_formation_flag)
+            p_vapₛₗ(tps, ts) = TD.saturation_vapor_pressure(tps, ts, TD.Liquid())
+            p_vapₛᵢ(tps, ts) = TD.saturation_vapor_pressure(tps, ts, TD.Ice())
 
-        function ∂p_vapₛₗ_∂T(tps, ts)
-            T = TD.air_temperature(tps, ts)
-            Rᵥ = TD.Parameters.R_v(tps)
-            Lᵥ = TD.latent_heat_vapor(tps, ts)
-            return p_vapₛₗ(tps, ts) * Lᵥ / (Rᵥ * T^2)
-        end
-        function ∂p_vapₛᵢ_∂T(tps, ts)
-            T = TD.air_temperature(tps, ts)
-            Rᵥ = TD.Parameters.R_v(tps)
-            Lₛ = TD.latent_heat_sublim(tps, ts)
-            return p_vapₛᵢ(tps, ts) * Lₛ / (Rᵥ * T^2)
-        end
+            function ∂p_vapₛₗ_∂T(tps, ts)
+                T = TD.air_temperature(tps, ts)
+                Rᵥ = TD.Parameters.R_v(tps)
+                Lᵥ = TD.latent_heat_vapor(tps, ts)
+                return p_vapₛₗ(tps, ts) * Lᵥ / (Rᵥ * T^2)
+            end
+            function ∂p_vapₛᵢ_∂T(tps, ts)
+                T = TD.air_temperature(tps, ts)
+                Rᵥ = TD.Parameters.R_v(tps)
+                Lₛ = TD.latent_heat_sublim(tps, ts)
+                return p_vapₛᵢ(tps, ts) * Lₛ / (Rᵥ * T^2)
+            end
 
-        function ∂qₛₗ_∂T(tps, ts)
-            T = TD.air_temperature(tps, ts)
-            Rᵥ = TD.Parameters.R_v(tps)
-            Lᵥ = TD.latent_heat_vapor(tps, ts)
-            qᵥ_sat_liq = TD.q_vap_saturation_liquid(tps, ts)
-            return qᵥ_sat_liq * (Lᵥ / (Rᵥ * T^2) - 1 / T)
-        end
-        function ∂qₛᵢ_∂T(tps, ts)
-            T = TD.air_temperature(tps, ts)
-            Rᵥ = TD.Parameters.R_v(tps)
-            Lₛ = TD.latent_heat_sublim(tps, ts)
-            qᵥ_sat_ice = TD.q_vap_saturation_ice(tps, ts)
-            return qᵥ_sat_ice * (Lₛ / (Rᵥ * T^2) - 1 / T)
-        end
+            function ∂qₛₗ_∂T(tps, ts)
+                T = TD.air_temperature(tps, ts)
+                Rᵥ = TD.Parameters.R_v(tps)
+                Lᵥ = TD.latent_heat_vapor(tps, ts)
+                qᵥ_sat_liq = TD.q_vap_saturation_liquid(tps, ts)
+                return qᵥ_sat_liq * (Lᵥ / (Rᵥ * T^2) - 1 / T)
+            end
+            function ∂qₛᵢ_∂T(tps, ts)
+                T = TD.air_temperature(tps, ts)
+                Rᵥ = TD.Parameters.R_v(tps)
+                Lₛ = TD.latent_heat_sublim(tps, ts)
+                qᵥ_sat_ice = TD.q_vap_saturation_ice(tps, ts)
+                return qᵥ_sat_ice * (Lₛ / (Rᵥ * T^2) - 1 / T)
+            end
 
-        function Γₗ(tps, ts)
-            cₚ_air = TD.cp_m(tps, ts)
-            Lᵥ = TD.latent_heat_vapor(tps, ts)
-            return 1 + (Lᵥ / cₚ_air) * ∂qₛₗ_∂T(tps, ts)
-        end
-        function Γᵢ(tps, ts)
-            cₚ_air = TD.cp_m(tps, ts)
-            Lₛ = TD.latent_heat_sublim(tps, ts)
-            return 1 + (Lₛ / cₚ_air) * ∂qₛᵢ_∂T(tps, ts)
-        end
+            function Γₗ(tps, ts)
+                cₚ_air = TD.cp_m(tps, ts)
+                Lᵥ = TD.latent_heat_vapor(tps, ts)
+                return 1 + (Lᵥ / cₚ_air) * ∂qₛₗ_∂T(tps, ts)
+            end
+            function Γᵢ(tps, ts)
+                cₚ_air = TD.cp_m(tps, ts)
+                Lₛ = TD.latent_heat_sublim(tps, ts)
+                return 1 + (Lₛ / cₚ_air) * ∂qₛᵢ_∂T(tps, ts)
+            end
 
-        cmc = CAP.microphysics_cloud_params(params)
-        τₗ = cmc.liquid.τ_relax
-        τᵢ = cmc.ice.τ_relax
-        function limit(q, dt, n::Int)
-            return q / float(dt) / n
-        end
-    
-        function ∂ρqₗ_err_∂ρqᵪ(tps, ts, cmc, dt, deriv, limit_deriv)
-            FT_inner = eltype(tps)
-            q = TD.PhasePartition(tps, ts)
-            ρ = TD.air_density(tps, ts)
+            cmc = CAP.microphysics_cloud_params(params)
+            τₗ = cmc.liquid.τ_relax
+            τᵢ = cmc.ice.τ_relax
+            function limit(q, dt, n::Int)
+                return q / float(dt) / n
+            end
+        
+            function ∂ρqₗ_err_∂ρqᵪ(tps, ts, cmc, dt, deriv, limit_deriv)
+                FT_inner = eltype(tps)
+                q = TD.PhasePartition(tps, ts)
+                ρ = TD.air_density(tps, ts)
 
-            S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, tps, q, ρ, Tₐ(tps, ts))
+                S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, tps, q, ρ, Tₐ(tps, ts))
 
-            if S > FT_inner(0)
-                if S <= limit(TD.vapor_specific_humidity(q), dt, 2)
-                    if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
-                        return deriv
+                if S > FT_inner(0)
+                    if S <= limit(TD.vapor_specific_humidity(q), dt, 2)
+                        if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
+                            return deriv
+                        else
+                            return FT_inner(0)
+                        end
                     else
-                        return FT_inner(0)
+                        return -limit_deriv
                     end
                 else
-                    return -limit_deriv
-                end
-            else
-                if abs(S) <= limit(TD.liquid_specific_humidity(q), dt, 2)
-                    if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
-                        return -deriv
+                    if abs(S) <= limit(TD.liquid_specific_humidity(q), dt, 2)
+                        if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
+                            return -deriv
+                        else
+                            return FT_inner(0)
+                        end
                     else
-                        return FT_inner(0)
+                        return -limit_deriv
                     end
-                else
-                    return -limit_deriv
                 end
             end
-        end
 
-        function ∂ρqᵢ_err_∂ρqᵪ(tps, ts, cmc, dt, deriv, limit_deriv)
-            FT_inner = eltype(tps)
-            q = TD.PhasePartition(tps, ts)
-            ρ = TD.air_density(tps, ts)
+            function ∂ρqᵢ_err_∂ρqᵪ(tps, ts, cmc, dt, deriv, limit_deriv)
+                FT_inner = eltype(tps)
+                q = TD.PhasePartition(tps, ts)
+                ρ = TD.air_density(tps, ts)
 
-            S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.ice, tps, q, ρ, Tₐ(tps, ts))
+                S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.ice, tps, q, ρ, Tₐ(tps, ts))
 
-            if S > FT_inner(0)
-                if S <= limit(TD.vapor_specific_humidity(q), dt, 2)
-                    if TD.vapor_specific_humidity(q) + TD.ice_specific_humidity(q) > FT_inner(0)
-                        return deriv
+                if S > FT_inner(0)
+                    if S <= limit(TD.vapor_specific_humidity(q), dt, 2)
+                        if TD.vapor_specific_humidity(q) + TD.ice_specific_humidity(q) > FT_inner(0)
+                            return deriv
+                        else
+                            return FT_inner(0)
+                        end
                     else
-                        return FT_inner(0)
+                        return -limit_deriv
                     end
                 else
-                    return -limit_deriv
-                end
-            else
-                if abs(S) <= limit(TD.ice_specific_humidity(q), dt, 2)
-                    if TD.vapor_specific_humidity(q) + TD.ice_specific_humidity(q) > FT_inner(0)
-                        return -deriv
+                    if abs(S) <= limit(TD.ice_specific_humidity(q), dt, 2)
+                        if TD.vapor_specific_humidity(q) + TD.ice_specific_humidity(q) > FT_inner(0)
+                            return -deriv
+                        else
+                            return FT_inner(0)
+                        end
                     else
-                        return FT_inner(0)
+                        return -limit_deriv
                     end
-                else
-                    return -limit_deriv
                 end
             end
-        end
 
-        ∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
-        ∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
+            ∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
+            ∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
 
-        ∂ᶜρqₗ_err_∂ᶜρqₜ = matrix[@name(c.ρq_liq), @name(c.ρq_tot)]
-        ∂ᶜρqᵢ_err_∂ᶜρqₜ = matrix[@name(c.ρq_ice), @name(c.ρq_tot)]
+            ∂ᶜρqₗ_err_∂ᶜρqₜ = matrix[@name(c.ρq_liq), @name(c.ρq_tot)]
+            ∂ᶜρqᵢ_err_∂ᶜρqₜ = matrix[@name(c.ρq_ice), @name(c.ρq_tot)]
 
-        #if isdefined(Main, :Infiltrator)
-        #    Main.@infiltrate
-        #end
-        
-        #@. ∂ᶜρqₗ_err_∂ᶜρqₗ -=
-        #    DiagonalMatrixRow(1 / (τₗ * Γₗ(thermo_params, ᶜts)))
-        @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
-            DiagonalMatrixRow(
-                ∂ρqₗ_err_∂ρqᵪ(
-                    thermo_params, ᶜts, (cmc,), dt, (-1 / (τₗ * Γₗ(thermo_params, ᶜts))), (1/(2*float(dt))),
-                )
-            )
-        
-        #@. ∂ᶜρqᵢ_err_∂ᶜρqᵢ -=
-        #    DiagonalMatrixRow(1 / (τᵢ * Γᵢ(thermo_params, ᶜts)))
-
-        @. ∂ᶜρqᵢ_err_∂ᶜρqᵢ +=
-            DiagonalMatrixRow(
-                ∂ρqᵢ_err_∂ρqᵪ(
-                    thermo_params, ᶜts, (cmc,), dt, (-1 / (τᵢ * Γᵢ(thermo_params, ᶜts))), (1/(2*float(dt))),
+            #if isdefined(Main, :Infiltrator)
+            #    Main.@infiltrate
+            #end
+            
+            #@. ∂ᶜρqₗ_err_∂ᶜρqₗ -=
+            #    DiagonalMatrixRow(1 / (τₗ * Γₗ(thermo_params, ᶜts)))
+            @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
+                DiagonalMatrixRow(
+                    ∂ρqₗ_err_∂ρqᵪ(
+                        thermo_params, ᶜts, (cmc,), dt, (-1 / (τₗ * Γₗ(thermo_params, ᶜts))), (1/(2*float(dt))),
                     )
                 )
+            
+            #@. ∂ᶜρqᵢ_err_∂ᶜρqᵢ -=
+            #    DiagonalMatrixRow(1 / (τᵢ * Γᵢ(thermo_params, ᶜts)))
 
-        ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
-        ᶜ∂T_∂p = @. lazy(1 / (ᶜρ * TD.gas_constant_air(thermo_params, ᶜts)))
+            @. ∂ᶜρqᵢ_err_∂ᶜρqᵢ +=
+                DiagonalMatrixRow(
+                    ∂ρqᵢ_err_∂ρqᵪ(
+                        thermo_params, ᶜts, (cmc,), dt, (-1 / (τᵢ * Γᵢ(thermo_params, ᶜts))), (1/(2*float(dt))),
+                        )
+                    )
 
-        # qₛₗ = p_vapₛₗ / p, qₛᵢ = p_vapₛᵢ / p
-        ᶜ∂qₛₗ_∂p = @. lazy(
-            -p_vapₛₗ(thermo_params, ᶜts) / ᶜp^2 +
-            ∂p_vapₛₗ_∂T(thermo_params, ᶜts) * ᶜ∂T_∂p / ᶜp,
-        )
-        ᶜ∂qₛᵢ_∂p = @. lazy(
-            -p_vapₛᵢ(thermo_params, ᶜts) / ᶜp^2 +
-            ∂p_vapₛᵢ_∂T(thermo_params, ᶜts) * ᶜ∂T_∂p / ᶜp,
-        )
+            ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
+            ᶜ∂T_∂p = @. lazy(1 / (ᶜρ * TD.gas_constant_air(thermo_params, ᶜts)))
 
-        ᶜ∂p_∂ρqₜ = @. lazy(
-            ᶜkappa_m * ∂e_int_∂q_tot +
-            ᶜ∂kappa_m∂q_tot * (
-                cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
-                ∂e_int_∂q_tot * ᶜspecific.q_tot
-            ),
-        )
-
-        #@. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
-        #    (1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts)),
-        #)
-        @. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
-            ∂ρqₗ_err_∂ρqᵪ(
-                thermo_params, ᶜts, (cmc,), dt, ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))), FT(0)
+            # qₛₗ = p_vapₛₗ / p, qₛᵢ = p_vapₛᵢ / p
+            ᶜ∂qₛₗ_∂p = @. lazy(
+                -p_vapₛₗ(thermo_params, ᶜts) / ᶜp^2 +
+                ∂p_vapₛₗ_∂T(thermo_params, ᶜts) * ᶜ∂T_∂p / ᶜp,
             )
-        )
-
-        #@. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
-        #    (1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts)),
-        #)
-        @. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
-            ∂ρqᵢ_err_∂ρqᵪ(
-                thermo_params, ᶜts, (cmc,), dt, ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))), FT(0)
+            ᶜ∂qₛᵢ_∂p = @. lazy(
+                -p_vapₛᵢ(thermo_params, ᶜts) / ᶜp^2 +
+                ∂p_vapₛᵢ_∂T(thermo_params, ᶜts) * ᶜ∂T_∂p / ᶜp,
             )
-        )
+
+            ᶜ∂p_∂ρqₜ = @. lazy(
+                ᶜkappa_m * ∂e_int_∂q_tot +
+                ᶜ∂kappa_m∂q_tot * (
+                    cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
+                    ∂e_int_∂q_tot * ᶜspecific.q_tot
+                ),
+            )
+
+            #@. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
+            #    (1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts)),
+            #)
+            @. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
+                ∂ρqₗ_err_∂ρqᵪ(
+                    thermo_params, ᶜts, (cmc,), dt, ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))), FT(0)
+                )
+            )
+
+            #@. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
+            #    (1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts)),
+            #)
+            @. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
+                ∂ρqᵢ_err_∂ρqᵪ(
+                    thermo_params, ᶜts, (cmc,), dt, ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))), FT(0)
+                )
+            )
+        end
     end
 
     if use_derivative(diffusion_flag)
@@ -1266,4 +1267,3 @@ end
 
 invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R) =
     LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
-end
