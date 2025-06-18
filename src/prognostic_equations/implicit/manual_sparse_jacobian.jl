@@ -606,12 +606,24 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 return q / float(dt) / n
             end
         
-            function ∂ρqₗ_err_∂ρqᵪ(tps, ts, cmc, dt, deriv, limit_deriv)
+            function ∂ρqₗ_err_∂ρqₗ(tps, ts, cmc, dt, S, pos_lim, neg_lim,
+                                  source_deriv, pos_lim_deriv, neg_lim_deriv)
                 FT_inner = eltype(tps)
                 q = TD.PhasePartition(tps, ts)
                 ρ = TD.air_density(tps, ts)
 
-                S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, tps, q, ρ, Tₐ(tps, ts))
+                # set derivatives to 0 if things are getting clipped
+                if q.vap < FT(0)
+                    pos_lim_deriv = 0
+
+                if q.liq < FT(0)
+                    neg_lim_deriv = 0
+
+                if q.tot + q.liq < FT(0)
+                    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, tps, q, ρ, Tₐ(tps, ts))
+                else
+                    S = 0
+                    source_deriv = 0
 
                 if S > FT_inner(0)
                     if S <= limit(TD.vapor_specific_humidity(q), dt, 2)
@@ -636,7 +648,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 end
             end
 
-            function ∂ρqᵢ_err_∂ρqᵪ(tps, ts, cmc, dt, deriv, limit_deriv)
+            function ∂ρqᵢ_err_∂ρqᵢ(tps, ts, cmc, dt, deriv, limit_deriv)
                 FT_inner = eltype(tps)
                 q = TD.PhasePartition(tps, ts)
                 ρ = TD.air_density(tps, ts)
