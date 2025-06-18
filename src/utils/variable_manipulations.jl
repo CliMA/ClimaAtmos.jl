@@ -96,6 +96,60 @@ function specific_sgs(χ_name, sgs, gs, turbconv_model)
     return specific(ρaχ, sgs.ρa, ρχ_fallback, gs.ρ, turbconv_model)
 end
 
+"""
+    scalar_names(field)
+
+Filters and returns the names of the variables from a given state
+vector component, excluding `ρ`, `ρe_tot`, and `uₕ`
+
+Arguments:
+- `field`: A component of the state vector `Y.c`.
+
+Returns:
+- A `Tuple` of `ClimaCore.MatrixFields.FieldName`s corresponding to the tracers.
+"""
+scalar_names(field) =
+    unrolled_filter(MatrixFields.top_level_names(field)) do name
+        !(name in (@name(ρ), @name(ρe_tot), @name(uₕ)))
+    end
+
+"""
+    foreach_scalar(f::F, Yₜ, Y) where {F}
+
+Applies a given function `f` to each scalar variable (except `ρ` and  `ρe_tot`)
+in the state `Y` and its corresponding tendency `Yₜ`.
+
+This utility abstracts the process of iterating over all scalars. It uses
+`scalar_names` to identify the relevant variables and `unrolled_foreach` to
+ensure a performant loop. For each tracer, it calls the provided function `f` 
+with the tendency field, the state field, and a boolean flag indicating if 
+the current tracer is `ρq_tot` (to allow for special handling).
+
+Arguments:
+- `f`: A function to apply to each scalar. It must have the signature
+     `f(ᶜρχₜ, ᶜρχ, is_ρq_tot)`, where `ᶜρχₜ` is the tendency field, `ᶜρχ` is
+     the state field, and `is_ρq_tot` is a `Bool`.
+- `Yₜ`: The tendency state vector.
+- `Y`: The current state vector.
+
+# Example
+```julia
+foreach_scalar(Yₜ, Y) do ᶜρχₜ, ᶜρχ, is_ρq_tot
+    # Apply some operation, e.g., a sponge layer
+    @. ᶜρχₜ += some_sponge_function(ᶜρχ)
+    if is_ρq_tot
+        # Perform an additional operation only for ρq_tot
+    end
+end
+```
+"""
+foreach_scalar(f::F, Yₜ, Y) where {F} =
+    unrolled_foreach(scalar_names(Y.c)) do scalar_name
+        ᶜρχₜ = MatrixFields.get_field(Yₜ.c, scalar_name)
+        ᶜρχ = MatrixFields.get_field(Y.c, scalar_name)
+        is_ρq_tot = scalar_name == @name(ρq_tot)
+        f(ᶜρχₜ, ᶜρχ, is_ρq_tot)
+    end
 
 
 # Helper functions for manipulating symbols in the generated functions:
