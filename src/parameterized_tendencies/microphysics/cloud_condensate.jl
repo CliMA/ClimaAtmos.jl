@@ -33,22 +33,32 @@ function cloud_condensate_tendency!(
     thp = CAP.thermodynamics_params(params)
     cmc = CAP.microphysics_cloud_params(params)
 
+    Tₐ = @. lazy(TD.air_temperature(thp, ᶜts))
+
     @. Yₜ.c.ρq_liq +=
         Y.c.ρ * cloud_sources(
             cmc.liquid,
             thp,
-            ᶜts,
+            specific(Y.c.ρq_tot, Y.c.ρ),
+            specific(Y.c.ρq_liq, Y.c.ρ),
+            specific(Y.c.ρq_ice, Y.c.ρ),
             specific(Y.c.ρq_rai, Y.c.ρ),
             specific(Y.c.ρq_sno, Y.c.ρ),
+            Y.c.ρ,
+            Tₐ,
             dt,
         )
     @. Yₜ.c.ρq_ice +=
         Y.c.ρ * cloud_sources(
             cmc.ice,
             thp,
-            ᶜts,
+            specific(Y.c.ρq_tot, Y.c.ρ),
+            specific(Y.c.ρq_liq, Y.c.ρ),
+            specific(Y.c.ρq_ice, Y.c.ρ),
             specific(Y.c.ρq_rai, Y.c.ρ),
             specific(Y.c.ρq_sno, Y.c.ρ),
+            Y.c.ρ,
+            Tₐ,
             dt,
         )
 end
@@ -66,22 +76,32 @@ function cloud_condensate_tendency!(
     thp = CAP.thermodynamics_params(params)
     cmc = CAP.microphysics_cloud_params(params)
 
+    Tₐ = @. lazy(TD.air_temperature(thp, ᶜts))
+
     @. Yₜ.c.ρq_liq +=
         Y.c.ρ * cloud_sources(
             cmc.liquid,
             thp,
-            ᶜts,
+            specific(Y.c.ρq_tot, Y.c.ρ),
+            specific(Y.c.ρq_liq, Y.c.ρ),
+            specific(Y.c.ρq_ice, Y.c.ρ),
             specific(Y.c.ρq_rai, Y.c.ρ),
             specific(Y.c.ρq_sno, Y.c.ρ),
+            Y.c.ρ,
+            Tₐ,
             dt,
         )
     @. Yₜ.c.ρq_ice +=
         Y.c.ρ * cloud_sources(
             cmc.ice,
             thp,
-            ᶜts,
+            specific(Y.c.ρq_tot, Y.c.ρ),
+            specific(Y.c.ρq_liq, Y.c.ρ),
+            specific(Y.c.ρq_ice, Y.c.ρ),
             specific(Y.c.ρq_rai, Y.c.ρ),
             specific(Y.c.ρq_sno, Y.c.ρ),
+            Y.c.ρ,
+            Tₐ,
             dt,
         )
 
@@ -89,7 +109,11 @@ function cloud_condensate_tendency!(
         Y.c.ρ * aerosol_activation_sources(
             cmc.liquid,
             thp,
-            ᶜts,
+            Y.c.ρ,
+            Tₐ,
+            specific(Y.c.ρq_tot, Y.c.ρ),
+            specific(Y.c.ρq_liq, Y.c.ρ),
+            specific(Y.c.ρq_ice, Y.c.ρ),
             specific(Y.c.ρq_rai, Y.c.ρ),
             specific(Y.c.ρq_sno, Y.c.ρ),
             specific(Y.c.ρn_liq, Y.c.ρ),
