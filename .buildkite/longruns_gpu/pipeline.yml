@@ -26,7 +26,7 @@ steps:
       - julia --project=.buildkite -e 'using CUDA; CUDA.precompile_runtime()'
       - julia --project=.buildkite -e 'using Pkg; Pkg.status()'
       - "julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name=\"Thermodynamics\", rev=\"main\"))'"
-      - "julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name=\"CloudMicrophysics\", rev=\"oa/noneq_no_phasepartition\"))'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name=\"CloudMicrophysics\", rev=\"main\"))'"
 
     agents:
       slurm_gpus: 1
