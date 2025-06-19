@@ -323,11 +323,27 @@ function set_velocity_at_top!(Y, turbconv_model)
     return nothing
 end
 
+"""
+    compute_ᶜu(ᶜuₕ, ᶠu₃)
+Computes the cell-centered velocity, given
+ - `ᶜuₕ` the cell-centered horizontal velocity
+ - `ᶠu₃` the cell-face `Covariant3` velocity
+"""
+compute_ᶜu(ᶜuₕ, ᶠu₃) = @. lazy(C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃)))
+
+"""
+    compute_ᶠu³(ᶠuₕ³, ᶠu₃)
+Computes the cell-face contravariant velocity, given
+ - `ᶠuₕ³` the cell-face horizontal `Contravariant3` velocity
+ - `ᶠu₃` the cell-face `Covariant3` velocity
+"""
+compute_ᶠu³(ᶠuₕ³, ᶠu₃) = ᶠuₕ³ + CT3(ᶠu₃)
+
 # This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
 # ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
 function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
-    @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
-    @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
+    ᶜu .= compute_ᶜu(ᶜuₕ, ᶠu₃)
+    ᶠu³ .= compute_ᶠu³.(ᶠuₕ³, ᶠu₃)
     ᶜK .= compute_kinetic(ᶜuₕ, ᶠu₃)
     return nothing
 end
@@ -462,7 +478,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     thermo_args = (thermo_params, moisture_model, precip_model)
 
     @. ᶜspecific = specific_gs(Y.c)
-    @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+    ᶠuₕ³ .= compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
 
     # TODO: We might want to move this to dss! (and rename dss! to something
     # like enforce_constraints!).
