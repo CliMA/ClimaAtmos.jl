@@ -468,6 +468,8 @@ function external_forcing_cache(
 
     extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Linear())
 
+    @show "Check EFF:" external_forcing_file
+    @show "Check name:" name
     column_timevaryinginputs = [
         TimeVaryingInput(
             external_forcing_file,
