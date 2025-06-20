@@ -11,22 +11,11 @@ import CloudMicrophysics.Parameters as CMP
 const Tₐ = TD.air_temperature
 const PP = TD.PhasePartition
 const qᵥ = TD.vapor_specific_humidity
-qₜ(thp, ts) = TD.PhasePartition(thp, ts).tot
 
-# Get q_liq and q_ice out of phase partition
-function qₗ(thp, ts, qᵣ)
-    FT = eltype(ts)
-    return max(FT(0), TD.PhasePartition(thp, ts).liq - qᵣ)
-end
-function qᵢ(thp, ts, qₛ)
-    FT = eltype(ts)
-    return max(FT(0), TD.PhasePartition(thp, ts).ice - qₛ)
-end
-
-# Clip precipitation to avoid negative numbers
-function qₚ(q_rain_snow)
-    FT = eltype(q_rain_snow)
-    return max(FT(0), q_rain_snow)
+# Clip any specific humidity
+function clip(q)
+    FT = eltype(q)
+    return max(FT(0), q)
 end
 
 # Helper function to compute the limit of the tendency in the traingle limiter.
@@ -64,13 +53,17 @@ function ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
 end
 
 """
-    cloud_sources(cm_params, thp, ts, dt)
+    cloud_sources(cm_params, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, Tₐ, dt)
 
  - cm_params - CloudMicrophysics parameters struct for cloud water or ice condensate
  - thp - Thermodynamics parameters struct
- - ts - thermodynamics state
+ - qₜ - total specific humidity
+ - qₗ - liquid specific humidity
+ - qᵢ - ice specific humidity
  - qᵣ - rain specific humidity
  - qₛ - snow specific humidity
+ - ρ - air density
+ - Tₐ - air temperature
  - dt - model time step
 
 Returns the condensation/evaporation or deposition/sublimation rate for
@@ -79,57 +72,75 @@ non-equilibrium Morrison and Milbrandt 2015 cloud formation.
 function cloud_sources(
     cm_params::CMP.CloudLiquid{FT},
     thp,
-    ts,
+    qₜ,
+    qₗ,
+    qᵢ,
     qᵣ,
     qₛ,
+    ρ,
+    Tₐ,
     dt,
 ) where {FT}
 
-    q = TD.PhasePartition(thp, ts)
-    ρ = TD.air_density(thp, ts)
+    qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
 
-    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
-        cm_params,
-        thp,
-        q,
-        qᵣ,
-        qₛ,
-        ρ,
-        Tₐ(thp, ts),
-    )
+    if qᵥ + qₗ > FT(0)
+        S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+            cm_params,
+            thp,
+            qₜ,
+            qₗ,
+            qᵢ,
+            qᵣ,
+            qₛ,
+            ρ,
+            Tₐ,
+        )
+    else
+        S = FT(0)
+    end
 
     return ifelse(
         S > FT(0),
-        triangle_inequality_limiter(S, limit(qᵥ(thp, ts), dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(qₗ(thp, ts, qₚ(qᵣ)), dt, 2)),
+        triangle_inequality_limiter(S, limit(clip(qᵥ), dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(clip(qₗ), dt, 2)),
     )
 end
 function cloud_sources(
     cm_params::CMP.CloudIce{FT},
     thp,
-    ts,
+    qₜ,
+    qₗ,
+    qᵢ,
     qᵣ,
     qₛ,
+    ρ,
+    T,
     dt,
 ) where {FT}
 
-    q = TD.PhasePartition(thp, ts)
-    ρ = TD.air_density(thp, ts)
+    qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
 
-    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
-        cm_params,
-        thp,
-        q,
-        qᵣ,
-        qₛ,
-        ρ,
-        Tₐ(thp, ts),
-    )
+    if qᵥ + qᵢ > FT(0)
+        S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+            cm_params,
+            thp,
+            qₜ,
+            qₗ,
+            qᵢ,
+            qᵣ,
+            qₛ,
+            ρ,
+            T,
+        )
+    else
+        S = FT(0)
+    end
 
     return ifelse(
         S > FT(0),
-        triangle_inequality_limiter(S, limit(qᵥ(thp, ts), dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(qᵢ(thp, ts, qₚ(qₛ)), dt, 2)),
+        triangle_inequality_limiter(S, limit(clip(qᵥ), dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(clip(qᵢ), dt, 2)),
     )
 end
 
@@ -362,11 +373,15 @@ end
 #####
 
 """
-    aerosol_activation_sources(cm_params, thp, ts, qₚ, n_dp, n_dp_prescribed, dt)
+    aerosol_activation_sources(cm_params, thp, ρ, Tₐ, qₜ, qₗ, qᵢ, qᵣ, qₛ, n_dp, n_dp_prescribed, dt)
 
  - cm_params - CloudMicrophysics parameters struct for cloud water or ice condensate
  - thp - Thermodynamics parameters struct
- - ts - thermodynamics state
+ - ρ - air density
+ - Tₐ - air temperature
+ - qₜ - total specific humidity
+ - qₗ - liquid specific humidity
+ - qᵢ - ice specific humidity
  - qᵣ - rain specific humidity
  - qₛ - snow specific humidity
  - n_dp - number concentration droplets (liquid or ice) per mass
@@ -379,7 +394,11 @@ based on mass rates and a prescribed droplet mass (no activation parameterizatio
 function aerosol_activation_sources(
     cm_params::CMP.CloudLiquid{FT},
     thp,
-    ts,
+    ρ,
+    Tₐ,
+    qₜ,
+    qₗ,
+    qᵢ,
     qᵣ,
     qₛ,
     n_dp,
@@ -388,7 +407,7 @@ function aerosol_activation_sources(
 ) where {FT}
     r_dp = FT(2e-6) # 2 μm
     m_dp = 4 / 3 * FT(π) * r_dp^3 * cm_params.ρw
-    Sn = cloud_sources(cm_params, thp, ts, qᵣ, qₛ, dt) / m_dp
+    Sn = cloud_sources(cm_params, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, Tₐ, dt) / m_dp
 
     return ifelse(
         Sn > FT(0),
