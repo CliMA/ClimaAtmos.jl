@@ -280,7 +280,7 @@ end
         CA.get_external_forcing_file_path(parsed_args, data_dir = temporary_dir)
 
     @test basename(sim_forcing) ==
-          "tv_forcing_0.0_0.0_$(parsed_args["start_date"]).nc"
+          "tv_forcing_0.0_0.0_$(parsed_args["start_date"])_$(parsed_args["start_date"]).nc"
 
     # create fake data
     column_data_path = joinpath(
@@ -296,8 +296,8 @@ end
     # define dimensions
     defDim(tvforcing, "valid_time", 6)
     defDim(tvforcing, "pressure_level", 37) # same dims as ERA5
-    defDim(tvforcing, "latitude", 9)
-    defDim(tvforcing, "longitude", 9)
+    defDim(tvforcing, "latitude", 17)  # increased from 9 to provide more buffer for smoothing
+    defDim(tvforcing, "longitude", 17)  # increased from 9 to provide more buffer for smoothing
 
     # define variables
     defVar(tvforcing, "latitude", FT, ("latitude",))
@@ -307,9 +307,9 @@ end
     tvforcing["valid_time"].attrib["units"] = "hours since 2000-05-06 00:00:00"
     tvforcing["valid_time"].attrib["calendar"] = "standard"
 
-    # fill the variables with sequential data
-    tvforcing["latitude"][:] = collect(-1.0:0.25:1.0)
-    tvforcing["longitude"][:] = collect(-1.0:0.25:1.0)
+    # fill the variables with sequential data - expanded range for larger grid
+    tvforcing["latitude"][:] = collect(-2.0:0.25:2.0)  # 17 points from -2.0 to 2.0
+    tvforcing["longitude"][:] = collect(-2.0:0.25:2.0)  # 17 points from -2.0 to 2.0
     tvforcing["pressure_level"][:] = 10 .^ (range(1, stop = 4, length = 37))
     tvforcing["valid_time"][:] = collect(0.0:5.0)
 
@@ -337,16 +337,16 @@ end
     # write the accumulated dataset
     tv_accum = NCDataset(accum_data_path, "c")
     defDim(tv_accum, "valid_time", 6)
-    defDim(tv_accum, "latitude", 9)
-    defDim(tv_accum, "longitude", 9)
+    defDim(tv_accum, "latitude", 17)  # increased from 9 to match tvforcing
+    defDim(tv_accum, "longitude", 17)  # increased from 9 to match tvforcing
     defVar(tv_accum, "latitude", FT, ("latitude",))
     defVar(tv_accum, "longitude", FT, ("longitude",))
     defVar(tv_accum, "valid_time", FT, ("valid_time",))
     tv_accum["valid_time"].attrib["units"] = "hours since 2000-05-06 00:00:00"
     tv_accum["valid_time"].attrib["calendar"] = "standard"
 
-    tv_accum["latitude"][:] = collect(-1.0:0.25:1.0)
-    tv_accum["longitude"][:] = collect(-1.0:0.25:1.0)
+    tv_accum["latitude"][:] = collect(-2.0:0.25:2.0)  # 17 points from -2.0 to 2.0
+    tv_accum["longitude"][:] = collect(-2.0:0.25:2.0)  # 17 points from -2.0 to 2.0
     tv_accum["valid_time"][:] = collect(0.0:5.0)
 
     # add slhf and sshf variables with ones
@@ -358,16 +358,16 @@ end
     # write the inst dataset
     tv_inst = NCDataset(inst_data_path, "c")
     defDim(tv_inst, "valid_time", 6)
-    defDim(tv_inst, "latitude", 9)
-    defDim(tv_inst, "longitude", 9)
+    defDim(tv_inst, "latitude", 17)  # increased from 9 to match other datasets
+    defDim(tv_inst, "longitude", 17)  # increased from 9 to match other datasets
     defVar(tv_inst, "latitude", FT, ("latitude",))
     defVar(tv_inst, "longitude", FT, ("longitude",))
     defVar(tv_inst, "valid_time", FT, ("valid_time",))
     tv_inst["valid_time"].attrib["units"] = "hours since 2000-05-06 00:00:00"
     tv_inst["valid_time"].attrib["calendar"] = "standard"
 
-    tv_inst["latitude"][:] = collect(-1.0:0.25:1.0)
-    tv_inst["longitude"][:] = collect(-1.0:0.25:1.0)
+    tv_inst["latitude"][:] = collect(-2.0:0.25:2.0)  # 17 points from -2.0 to 2.0
+    tv_inst["longitude"][:] = collect(-2.0:0.25:2.0)  # 17 points from -2.0 to 2.0
     tv_inst["valid_time"][:] = collect(0.0:5.0)
 
     # define skt
@@ -376,10 +376,8 @@ end
 
     # assert that the forcing file is generated correctly
     time_resolution = FT(3600)
-    CA.generate_external_era5_forcing_file(
-        parsed_args["site_latitude"],
-        parsed_args["site_longitude"],
-        parsed_args["start_date"],
+    CA.generate_multiday_external_forcing_file(
+        parsed_args,
         sim_forcing,
         Float64,
         time_resolution = time_resolution,
