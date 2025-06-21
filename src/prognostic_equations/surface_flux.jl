@@ -115,16 +115,16 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
     btt = boundary_tendency_scalar(ᶜh_tot, sfc_conditions.ρ_flux_h_tot)
     @. Yₜ.c.ρe_tot -= btt
     ρ_flux_χ = p.scratch.sfc_temp_C3
-    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
-        if χ_name == :q_tot
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+        if ρχ_name == @name(ρq_tot)
             @. ρ_flux_χ = sfc_conditions.ρ_flux_q_tot
         else
             @. ρ_flux_χ = C3(FT(0))
         end
         btt = boundary_tendency_scalar(ᶜχ, ρ_flux_χ)
         @. ᶜρχₜ -= btt
-        if χ_name == :q_tot
+        if ρχ_name == @name(ρq_tot)
             @. Yₜ.c.ρ -= btt
         end
     end

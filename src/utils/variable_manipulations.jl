@@ -1,3 +1,5 @@
+import ClimaCore.MatrixFields: @name
+
 """
     specific(ρχ, ρ)
     specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
@@ -50,6 +52,66 @@ Arguments:
     # term to be NaN (0 * ... / 0). The ifelse handles this case explicitly.
     return ρa == 0 ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
 end
+
+"""
+    tracer_names(field)
+
+Filters and returns the names of the variables from a given state
+vector component, excluding `ρ`, `ρe_tot`, and `uₕ` and SGS fields.
+
+Arguments:
+
+- `field`: A component of the state vector `Y.c`.
+
+Returns:
+
+- A `Tuple` of `ClimaCore.MatrixFields.FieldName`s corresponding to the tracers.
+"""
+tracer_names(field) =
+    unrolled_filter(MatrixFields.top_level_names(field)) do name
+        !(
+            name in
+            (@name(ρ), @name(ρe_tot), @name(uₕ), @name(sgs⁰), @name(sgsʲs))
+        )
+    end
+
+"""
+    foreach_gs_tracer(f::F, Yₜ, Y) where {F}
+
+Applies a given function `f` to each grid-scale scalar variable (except `ρ` and  `ρe_tot`)
+in the state `Y` and its corresponding tendency `Yₜ`.
+This utility abstracts the process of iterating over all scalars. It uses
+`tracer_names` to identify the relevant variables and `unrolled_foreach` to
+ensure a performant loop. For each tracer, it calls the provided function `f`
+with the tendency field, the state field, and a boolean flag indicating if
+the current tracer is `ρq_tot` (to allow for special handling).
+
+Arguments:
+
+- `f`: A function to apply to each grid-scale scalar. It must have the signature `f
+  (ᶜρχₜ, ᶜρχ, ρχ_name)`, where `ᶜρχₜ` is the tendency field, `ᶜρχ`
+  is the state field, and `ρχ_name` is a `MatrixFields.@name` object.
+- `Yₜ`: The tendency state vector.
+- `Y`: The current state vector.
+
+# Example
+
+```julia
+foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+    # Apply some operation, e.g., a sponge layer
+    @. ᶜρχₜ += some_sponge_function(ᶜρχ)
+    if ρχ_name == @name(ρq_tot)
+        # Perform an additional operation only for ρq_tot
+    end
+end
+```
+"""
+foreach_gs_tracer(f::F, Yₜ, Y) where {F} =
+    unrolled_foreach(tracer_names(Y.c)) do scalar_name
+        ᶜρχₜ = MatrixFields.get_field(Yₜ.c, scalar_name)
+        ᶜρχ = MatrixFields.get_field(Y.c, scalar_name)
+        f(ᶜρχₜ, ᶜρχ, scalar_name)
+    end
 
 """
     sgs_weight_function(a, a_half)
