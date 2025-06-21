@@ -8,6 +8,7 @@ import LazyBroadcast
 import LazyBroadcast: lazy
 import Thermodynamics as TD
 import Thermodynamics
+import UnrolledUtilities as UU
 
 include("compat.jl")
 include(joinpath("parameters", "Parameters.jl"))
