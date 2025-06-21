@@ -7,6 +7,7 @@ TODO
 """
 struct AutoSparseJacobian{A} <: JacobianAlgorithm
     sparse_alg::A
+    pentadiagonal_padding::Bool
 end
 
 function jacobian_cache(alg::AutoSparseJacobian, Y, atmos)
@@ -26,6 +27,38 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos)
         MatrixFields.replace_name_tree(matrix_without_tree.matrix, tree),
         matrix_without_tree.solver,
     )
+
+    if alg.pentadiagonal_padding
+        # Replace all tridiagonal blocks with pentadiagonal blocks, and replace
+        # bidiagonal pressure gradient blocks with quaddiagonal blocks.
+        padded_matrix_blocks =
+            map(pairs(matrix)) do ((block_row_name, _), matrix_block)
+                if matrix_block isa Fields.Field
+                    row_type = eltype(matrix_block)
+                    T = eltype(row_type)
+                    new_row_type =
+                        if row_type == MatrixFields.TridiagonalMatrixRow{T}
+                            MatrixFields.PentadiagonalMatrixRow{T}
+                        elseif (
+                            row_type == MatrixFields.BidiagonalMatrixRow{T} &&
+                            block_row_name == @name(f.u₃)
+                        )
+                            MatrixFields.QuaddiagonalMatrixRow{T}
+                        else
+                            row_type
+                        end
+                    new_row_type == row_type ? matrix_block :
+                    similar(matrix_block, new_row_type)
+                else
+                    matrix_block
+                end
+            end
+        matrix = MatrixFields.FieldMatrixWithSolver(
+            MatrixFields.FieldNameDict(keys(matrix), padded_matrix_blocks),
+            Y,
+            matrix.solver.alg,
+        )
+    end
 
     tendency_matrix = matrix .+ one(matrix) # sparse matrix ∂Yₜ/∂Y
 
