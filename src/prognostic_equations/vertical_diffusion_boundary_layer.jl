@@ -52,11 +52,6 @@ This function is dispatched based on the type of the vertical diffusion model
 This function is acting as a wrapper around the specific implementations
 for different turbulence and convection models.
 
-The primary role of this function is to dispatch to the correct turbulence model's
-tendency function. It operates on the state `Y` and its tendency `Yₜ`, using
-precomputed fields (e.g., `ᶜK_u`, `ᶜK_h`, `ᶜh_tot`),
-and the model-specific cache `p`.
-
 Arguments:
 - `Yₜ`: The tendency state vector.
 - `Y`: The current state vector.
