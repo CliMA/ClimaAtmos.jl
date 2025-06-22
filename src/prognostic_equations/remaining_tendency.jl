@@ -170,7 +170,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
         vst_tracer = viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, viscous_sponge)
         @. ᶜρχₜ += vst_tracer
-        @. Yₜ.c.ρ += vst_tracer  # TODO: This doesn't look right for all tracers here. Remove?
+        if ρχ_name == @name(ρq_tot)
+            @. Yₜ.c.ρ += vst_tracer
+        end
     end
 
     # Held Suarez tendencies
