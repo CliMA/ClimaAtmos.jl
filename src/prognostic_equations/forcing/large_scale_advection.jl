@@ -105,7 +105,6 @@ function large_scale_advection_tendency_ρe_tot(
         ᶜρ * (
             TD.cv_m(thermo_params, ᶜts) * ᶜdTdt_hadv +
             TD.internal_energy_vapor(thermo_params, ᶜts) * ᶜdqtdt_hadv
-            TD.internal_energy_vapor(thermo_params, ᶜts) * ᶜdqtdt_hadv
         ),
     )
 end

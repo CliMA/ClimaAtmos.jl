@@ -350,7 +350,7 @@ function edmfx_sgs_mass_flux_tendency!(
         #         edmfx_sgsflux_upwinding,
         #     )
         #     @. Yₜ.c.ρq_tot += vtt
-        end
+        # end
         # TODO: the following adds the environment flux to the tendency
         # Make active and test later
         # @. ᶠu³_diff = p.precomputed.ᶠu³⁰ - ᶠu³
@@ -384,7 +384,7 @@ function edmfx_sgs_mass_flux_tendency!(
         #         edmfx_sgsflux_upwinding,
         #     )
         #     @. Yₜ.c.ρq_tot += vtt
-        end
+        # end
     end
 
     return nothing
