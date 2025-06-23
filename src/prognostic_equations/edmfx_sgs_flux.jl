@@ -41,7 +41,6 @@ function edmfx_sgs_mass_flux_tendency!(
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶠu³, ᶜh_tot) = p.precomputed
-    (; ᶠu³, ᶜh_tot) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜts⁰) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -93,12 +92,7 @@ function edmfx_sgs_mass_flux_tendency!(
                         Y.c.sgsʲs.:($$j).q_tot -
                         specific(Y.c.ρq_tot, Y.c.ρ)
                     ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-                    (
-                        Y.c.sgsʲs.:($$j).q_tot -
-                        specific(Y.c.ρq_tot, Y.c.ρ)
-                    ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                 vtt = vertical_transport(
-                    ᶜρʲs.:($$j),
                     ᶜρʲs.:($$j),
                     ᶠu³_diff,
                     ᶜa_scalar,
@@ -110,9 +104,6 @@ function edmfx_sgs_mass_flux_tendency!(
             # Add the environment fluxes
             ᶜq_tot⁰ = @.lazy(specific_env_value(:q_tot, Y.c, turbconv_model))
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
-            @. ᶜa_scalar =
-                (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) *
-                draft_area(ᶜρa⁰, ᶜρ⁰)
             @. ᶜa_scalar =
                 (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) *
                 draft_area(ᶜρa⁰, ᶜρ⁰)
@@ -143,10 +134,6 @@ function edmfx_sgs_mass_flux_tendency!(
                         Y.c.sgsʲs.:($$j).q_liq -
                         specific(Y.c.ρq_liq, Y.c.ρ)
                     ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-                    (
-                        Y.c.sgsʲs.:($$j).q_liq -
-                        specific(Y.c.ρq_liq, Y.c.ρ)
-                    ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                 vtt = vertical_transport(
                     ᶜρʲs.:($j),
                     ᶠu³_diff,
@@ -157,10 +144,6 @@ function edmfx_sgs_mass_flux_tendency!(
                 @. Yₜ.c.ρq_liq += vtt
 
                 @. ᶜa_scalar =
-                    (
-                        Y.c.sgsʲs.:($$j).q_ice -
-                        specific(Y.c.ρq_ice, Y.c.ρ)
-                    ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                     (
                         Y.c.sgsʲs.:($$j).q_ice -
                         specific(Y.c.ρq_ice, Y.c.ρ)
@@ -179,10 +162,6 @@ function edmfx_sgs_mass_flux_tendency!(
                         Y.c.sgsʲs.:($$j).q_rai -
                         specific(Y.c.ρq_rai, Y.c.ρ)
                     ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-                    (
-                        Y.c.sgsʲs.:($$j).q_rai -
-                        specific(Y.c.ρq_rai, Y.c.ρ)
-                    ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                 vtt = vertical_transport(
                     ᶜρʲs.:($j),
                     ᶠu³_diff,
@@ -193,10 +172,6 @@ function edmfx_sgs_mass_flux_tendency!(
                 @. Yₜ.c.ρq_rai += vtt
 
                 @. ᶜa_scalar =
-                    (
-                        Y.c.sgsʲs.:($$j).q_sno -
-                        specific(Y.c.ρq_sno, Y.c.ρ)
-                    ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                     (
                         Y.c.sgsʲs.:($$j).q_sno -
                         specific(Y.c.ρq_sno, Y.c.ρ)
@@ -215,9 +190,6 @@ function edmfx_sgs_mass_flux_tendency!(
             @. ᶜa_scalar =
                 (ᶜq_liq⁰ - specific(Y.c.ρq_liq, Y.c.ρ)) *
                 draft_area(ᶜρa⁰, ᶜρ⁰)
-            @. ᶜa_scalar =
-                (ᶜq_liq⁰ - specific(Y.c.ρq_liq, Y.c.ρ)) *
-                draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
@@ -227,9 +199,6 @@ function edmfx_sgs_mass_flux_tendency!(
             )
             @. Yₜ.c.ρq_liq += vtt
 
-            @. ᶜa_scalar =
-                (ᶜq_ice⁰ - specific(Y.c.ρq_ice, Y.c.ρ)) *
-                draft_area(ᶜρa⁰, ᶜρ⁰)
             @. ᶜa_scalar =
                 (ᶜq_ice⁰ - specific(Y.c.ρq_ice, Y.c.ρ)) *
                 draft_area(ᶜρa⁰, ᶜρ⁰)
@@ -245,9 +214,6 @@ function edmfx_sgs_mass_flux_tendency!(
             @. ᶜa_scalar =
                 (ᶜq_rai⁰ - specific(Y.c.ρq_rai, Y.c.ρ)) *
                 draft_area(ᶜρa⁰, ᶜρ⁰)
-            @. ᶜa_scalar =
-                (ᶜq_rai⁰ - specific(Y.c.ρq_rai, Y.c.ρ)) *
-                draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
@@ -257,9 +223,6 @@ function edmfx_sgs_mass_flux_tendency!(
             )
             @. Yₜ.c.ρq_rai += vtt
 
-            @. ᶜa_scalar =
-                (ᶜq_sno⁰ - specific(Y.c.ρq_sno, Y.c.ρ)) *
-                draft_area(ᶜρa⁰, ᶜρ⁰)
             @. ᶜa_scalar =
                 (ᶜq_sno⁰ - specific(Y.c.ρq_sno, Y.c.ρ)) *
                 draft_area(ᶜρa⁰, ᶜρ⁰)
@@ -291,7 +254,6 @@ function edmfx_sgs_mass_flux_tendency!(
     a_max = CAP.max_area(turbconv_params)
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
-    (; ᶠu³, ᶜh_tot) = p.precomputed
     (; ᶠu³, ᶜh_tot) = p.precomputed
     (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs) = p.precomputed
     (; dt) = p
@@ -333,11 +295,9 @@ function edmfx_sgs_mass_flux_tendency!(
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                 # @. ᶜa_scalar =
                 #     (ᶜq_totʲs.:($$j) - specific(Y.c.ρq_tot, Y.c.ρ) *
-                #     (ᶜq_totʲs.:($$j) - specific(Y.c.ρq_tot, Y.c.ρ) *
                 #     draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j))
                 # TODO: remove this filter when mass flux is treated implicitly
                 @. ᶜa_scalar =
-                    (ᶜq_totʲs.:($$j) - specific(Y.c.ρq_tot, Y.c.ρ)) * min(
                     (ᶜq_totʲs.:($$j) - specific(Y.c.ρq_tot, Y.c.ρ)) * min(
                         min(draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)), a_max),
                         FT(0.02) / max(
@@ -356,6 +316,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 )
                 @. Yₜ.c.ρq_tot += vtt
             end
+            # TODO: add environment flux?
         end
         # TODO: the following adds the environment flux to the tendency
         # Make active and test later
@@ -390,7 +351,7 @@ function edmfx_sgs_mass_flux_tendency!(
         #         edmfx_sgsflux_upwinding,
         #     )
         #     @. Yₜ.c.ρq_tot += vtt
-        end
+        # end
     end
 
     return nothing
@@ -399,10 +360,6 @@ end
 """
     edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Computes and applies the tendency to the grid-mean state `Y` due to SGS
-diffusive fluxes from the EDMFX environment. This involves calculating the
-divergence of turbulent fluxes, which are parameterized using eddy diffusivity
-and viscosity closures.
 Computes and applies the tendency to the grid-mean state `Y` due to SGS
 diffusive fluxes from the EDMFX environment. This involves calculating the
 divergence of turbulent fluxes, which are parameterized using eddy diffusivity
@@ -420,9 +377,6 @@ in place.
 
 Arguments:
 - `Yₜ`: The tendency state vector for grid-mean variables.
-- `Y`: The current state vector (used for grid-mean and SGS properties).
-- `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
-       and scratch space.
 - `Y`: The current state vector (used for grid-mean and SGS properties).
 - `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
        and scratch space.
@@ -555,7 +509,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜu, ᶜh_tot, ᶜtke⁰, ᶜmixing_length) = p.precomputed
+    (; ᶜu, ᶜh_tot, ᶜmixing_length) = p.precomputed
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
     ᶜtke⁰ = @.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
@@ -602,7 +556,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 bottom = Operators.SetValue(C3(FT(0))),
             )
             @. ᶜρχₜ_diffusion =
-                ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(specific(Y.c.ρq_tot, Y.c.ρ))))
                 ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(specific(Y.c.ρq_tot, Y.c.ρ))))
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
