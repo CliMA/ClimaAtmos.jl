@@ -135,6 +135,9 @@ cloud_parameters(toml_dict::CP.AbstractTOMLDict) = (;
         "ClimaAtmos",
     ).prescribed_cloud_droplet_number_concentration,
     aml = aerosol_ml_parameters(toml_dict),
+    aps = CM.Parameters.AirProperties(toml_dict),
+    arg = CM.Parameters.AerosolActivationParameters(toml_dict),
+    aerosol = prescribed_aerosol_parameters(toml_dict),
 )
 
 microphys_1m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
@@ -191,6 +194,24 @@ function aerosol_ml_parameters(toml_dict)
         :reference_seasalt_aerosol_mass_concentration => :c₀_seasalt,
         :reference_ammonium_sulfate_mass_concentration => :c₀_SO4,
         :reference_liquid_water_specific_humidity => :q₀_liq,
+    )
+    return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+end
+
+function prescribed_aerosol_parameters(toml_dict)
+    name_map = (;
+        :MERRA2_seasalt_aerosol_bin01_radius => :SSLT01_radius,
+        :MERRA2_seasalt_aerosol_bin02_radius => :SSLT02_radius,
+        :MERRA2_seasalt_aerosol_bin03_radius => :SSLT03_radius,
+        :MERRA2_seasalt_aerosol_bin04_radius => :SSLT04_radius,
+        :MERRA2_seasalt_aerosol_bin05_radius => :SSLT05_radius,
+        :seasalt_aerosol_kappa => :seasalt_kappa,
+        :seasalt_aerosol_density => :seasalt_density,
+        :mam3_stdev_coarse => :seasalt_std,
+        :MERRA2_sulfate_aerosol_radius => :sulfate_radius,
+        :sulfate_aerosol_kappa => :sulfate_kappa,
+        :sulfate_aerosol_density => :sulfate_density,
+        :mam3_stdev_accum => :sulfate_std,
     )
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
 end

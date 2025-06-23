@@ -105,19 +105,67 @@ function cloud_condensate_tendency!(
             dt,
         )
 
-    @. Yₜ.c.ρn_liq +=
-        Y.c.ρ * aerosol_activation_sources(
-            cmc.liquid,
-            thp,
-            Y.c.ρ,
-            Tₐ,
-            specific(Y.c.ρq_tot, Y.c.ρ),
-            specific(Y.c.ρq_liq, Y.c.ρ),
-            specific(Y.c.ρq_ice, Y.c.ρ),
-            specific(Y.c.ρq_rai, Y.c.ρ),
-            specific(Y.c.ρq_sno, Y.c.ρ),
-            specific(Y.c.ρn_liq, Y.c.ρ),
-            cmc.N_cloud_liquid_droplets,
-            dt,
-        )
+    # Aerosol activation using prescribed aerosol (Sea salt and sulfate)
+    if !(:prescribed_aerosols_field in propertynames(p.tracers))
+        return
+    end
+    seasalt_num = p.scratch.ᶜtemp_scalar
+    seasalt_mean_radius = p.scratch.ᶜtemp_scalar_2
+    sulfate_num = p.scratch.ᶜtemp_scalar_3
+    @. seasalt_num = 0
+    @. seasalt_mean_radius = 0
+    @. sulfate_num = 0
+    # Get aerosol concentrations if available
+    seasalt_names = [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+    sulfate_names = [:SO4]
+    aerosol_field = p.tracers.prescribed_aerosols_field
+    for aerosol_name in propertynames(aerosol_field)
+        if aerosol_name in seasalt_names
+            seasalt_particle_radius = getproperty(
+                cmc.aerosol,
+                Symbol(string(aerosol_name) * "_radius"),
+            )
+            seasalt_particle_mass =
+                4 / 3 *
+                FT(pi) *
+                seasalt_particle_radius^3 *
+                cmc.aerosol.seasalt_density
+            seasalt_mass = getproperty(aerosol_field, aerosol_name)
+            @. seasalt_num += seasalt_mass / seasalt_particle_mass
+            @. seasalt_mean_radius +=
+                seasalt_mass / seasalt_particle_mass *
+                log(seasalt_particle_radius)
+        elseif aerosol_name in sulfate_names
+            sulfate_particle_mass =
+                4 / 3 *
+                FT(pi) *
+                cmc.aerosol.sulfate_radius^3 *
+                cmc.aerosol.sulfate_density
+            sulfate_mass = getproperty(aerosol_field, aerosol_name)
+            @. sulfate_num += sulfate_mass / sulfate_particle_mass
+        end
+    end
+    @. seasalt_mean_radius = exp(seasalt_mean_radius / seasalt_num)
+
+    # Compute aerosol activation (ARG 2000)
+    (; ᶜu) = p.precomputed
+    ᶜw = p.scratch.ᶜtemp_scalar_4
+    Snₗ = p.scratch.ᶜtemp_scalar_5
+    @. ᶜw = max(0, w_component.(Geometry.WVector.(ᶜu)))
+    @. Snₗ = aerosol_activation_sources(
+        seasalt_num,
+        seasalt_mean_radius,
+        sulfate_num,
+        specific(Y.c.ρq_tot, Y.c.ρ),
+        specific(Y.c.ρq_liq, Y.c.ρ),
+        specific(Y.c.ρq_ice, Y.c.ρ),
+        specific(Y.c.ρn_liq, Y.c.ρ),
+        Y.c.ρ,
+        ᶜw,
+        (cmc,),
+        thp,
+        ᶜts,
+        dt,
+    )
+    @. Yₜ.c.ρn_liq += Y.c.ρ * Snₗ
 end
