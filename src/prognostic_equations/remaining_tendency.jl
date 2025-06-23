@@ -166,11 +166,13 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.ρe_tot += vst_ρe_tot
 
     # TODO: can we write this out explicitly?
-    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
         vst_tracer = viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, viscous_sponge)
         @. ᶜρχₜ += vst_tracer
-        @. Yₜ.c.ρ += vst_tracer  # TODO: This doesn't look right for all tracers here. Remove?
+        if ρχ_name == @name(ρq_tot)
+            @. Yₜ.c.ρ += vst_tracer
+        end
     end
 
     # Held Suarez tendencies
