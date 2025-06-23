@@ -173,7 +173,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    #TODO Test lazy computations and remove from precomputed quantities
     (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
     #TODO Test new compute_<> utility functions (set surface boundary condition) and rm from precomputed quantities
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
@@ -193,18 +192,16 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜtke⁰ = advect_tke ? p.precomputed.ᶜtke⁰ : nothing
     ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜω³ = p.scratch.ᶜtemp_CT3
-    ᶠω¹² = p.scratch.ᶠtemp_CT12
-    ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
 
     if point_type <: Geometry.Abstract3DPoint
-        @. ᶜω³ = curlₕ(Y.c.uₕ)
+        ᶜω³ = @. lazy(curlₕ(Y.c.uₕ))
     elseif point_type <: Geometry.Abstract2DPoint
-        @. ᶜω³ = zero(ᶜω³)
+        @. ᶜω³ = @. lazy(zero(ᶜω³))
     end
 
-    @. ᶠω¹² = ᶠcurlᵥ(Y.c.uₕ)
+    ᶠω¹² = @. lazy(ᶠcurlᵥ(Y.c.uₕ))
     for j in 1:n
-        @. ᶠω¹²ʲs.:($$j) = ᶠω¹²
+        ᶠω¹²ʲs.:($$j) = @. lazy(ᶠω¹²)
     end
     @. ᶠω¹² += CT12(curlₕ(Y.f.u₃))
     for j in 1:n
@@ -213,20 +210,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
     ᶜρ = Y.c.ρ
-    if Spaces.global_geometry(axes(Fields.coordinate_field(Y.c))) isa Geometry.DeepSphericalGlobalGeometry
-        coriolis_deep(coord::Geometry.LatLongZPoint) = Geometry.LocalVector(
-            Geometry.Cartesian123Vector(zero(Ω), zero(Ω), 2 * Ω),
-            global_geom,
-            coord,
-        )
-        ᶜf³ = @. lazy(CT3(CT123(coriolis_deep(Fields.coordinate_field(Y.c)))))
-        ᶜf¹² = @. lazy(CT12(CT123(coriolis_deep(Fields.coordinate_field(Y.f)))))
-    else
-        coriolis_shallow(coord::Geometry.LatLongZPoint) =
-            Geometry.WVector(2 * Ω * sind(coord.lat))
-        ᶜf³ = @. lazy(CT3(coriolis_shallow(Fields.coordinate_field(Y.c))))
-        ᶠf¹² = nothing
-    end
 
     # Full vertical advection of passive tracers (like liq, rai, etc) ...
     #TODO reduce dependency on ᶜspecific
