@@ -211,6 +211,20 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
     ᶜρ = Y.c.ρ
+    if Spaces.global_geometry(axes(Fields.coordinate_field(Y.c))) isa Geometry.DeepSphericalGlobalGeometry
+        coriolis_deep(coord::Geometry.LatLongZPoint) = Geometry.LocalVector(
+            Geometry.Cartesian123Vector(zero(Ω), zero(Ω), 2 * Ω),
+            global_geom,
+            coord,
+        )
+        ᶜf³ = @. lazy(CT3(CT123(coriolis_deep(Fields.coordinate_field(Y.c)))))
+        ᶜf¹² = @. lazy(CT12(CT123(coriolis_deep(Fields.coordinate_field(Y.f)))))
+    else
+        coriolis_shallow(coord::Geometry.LatLongZPoint) =
+            Geometry.WVector(2 * Ω * sind(coord.lat))
+        ᶜf³ = @. lazy(CT3(coriolis_shallow(ᶜcoord)))
+        ᶠf¹² = nothing
+    end
 
     # Full vertical advection of passive tracers (like liq, rai, etc) ...
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)

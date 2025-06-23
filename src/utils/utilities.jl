@@ -65,7 +65,7 @@ function compute_ᶠu³(Y)
 end
 
 function compute_ᶜu(Y)
-    return C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
+    return C123(Y.c.uₕ) + ᶜinterp(C123(Y.f.u₃))
 end
 
 """
