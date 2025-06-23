@@ -224,7 +224,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     else
         coriolis_shallow(coord::Geometry.LatLongZPoint) =
             Geometry.WVector(2 * Ω * sind(coord.lat))
-        ᶜf³ = @. lazy(CT3(coriolis_shallow(ᶜcoord)))
+        ᶜf³ = @. lazy(CT3(coriolis_shallow(Fields.coordinate_field(Y.c))))
         ᶠf¹² = nothing
     end
 
