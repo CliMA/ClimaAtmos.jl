@@ -202,7 +202,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     for j in 1:n
         ᶠω¹²ʲs.:($j) = @. lazy(ᶠω¹²)
     end
-    @. ᶠω¹² += CT12(curlₕ(Y.f.u₃))
+    ᶠω¹² += @. lazy(CT12(curlₕ(Y.f.u₃)))
     for j in 1:n
         @. ᶠω¹²ʲs.:($j) += CT12(curlₕ(Y.f.sgsʲs.:($j).u₃))
     end
