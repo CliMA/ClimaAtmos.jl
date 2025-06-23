@@ -356,7 +356,6 @@ function edmfx_sgs_mass_flux_tendency!(
                 )
                 @. Yₜ.c.ρq_tot += vtt
             end
-            # TODO: add environment flux?
         end
         # TODO: the following adds the environment flux to the tendency
         # Make active and test later
