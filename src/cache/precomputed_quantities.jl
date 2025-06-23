@@ -23,9 +23,6 @@ every quantity except for `ᶜp` (which is shared across all subdomains):
     - `_⁰`: value for the environment
     - `_ʲs`: a tuple of values for the mass-flux subdomains
 In addition, there are several other SGS quantities for `PrognosticEDMFX`:
-    - `ᶜtke⁰`: turbulent kinetic energy of the environment on cell centers
-    - `ᶜmse⁰`: moist static energy of the environment on cell centers
-    - `ᶜq_tot⁰`: total specific humidity of the environment on cell centers
     - `ᶜρʲs`: a tuple of the air densities of the mass-flux subdomains on cell
         centers
 
