@@ -173,7 +173,9 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    #TODO Test lazy computations and remove from precomputed quantities
     (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
+    #TODO Test new compute_<> utility functions (set surface boundary condition) and rm from precomputed quantities
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
@@ -227,6 +229,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
 
     # Full vertical advection of passive tracers (like liq, rai, etc) ...
+    #TODO reduce dependency on ᶜspecific
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
         χ_name in (:e_tot, :q_tot) && continue
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), tracer_upwinding)
