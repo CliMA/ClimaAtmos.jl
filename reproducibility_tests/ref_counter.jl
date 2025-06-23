@@ -1,4 +1,4 @@
-248
+249
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+249
+- Add aerosol activation for 2M microphysics
+
 248
 - update deps: climacore 0.14.35
 
