@@ -124,8 +124,8 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
         end
         btt = boundary_tendency_scalar(ᶜχ, ρ_flux_χ)
         @. ᶜρχₜ -= btt
-        if χ_name == :q_tot
-            @. Yₜ.c.ρ -= btt
-        end
+        #if χ_name == :q_tot
+        #    @. Yₜ.c.ρ -= btt
+        #end
     end
 end
