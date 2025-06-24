@@ -462,7 +462,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
+    @. ᶜts = ts_gs(thermo_args..., ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ))
 

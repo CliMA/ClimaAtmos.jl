@@ -90,7 +90,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     @. Yₜ.f.u₃.components.data.:1 += vst_u₃
     @. Yₜ.c.ρe_tot += vst_ρe_tot
 
-    # TODO: can we write this out explicitly?
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
         vst_tracer = viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, viscous_sponge)

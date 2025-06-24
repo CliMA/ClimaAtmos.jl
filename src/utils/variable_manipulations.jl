@@ -376,7 +376,6 @@ Arguments:
 - `op`: The reduction operator (e.g., `+`, `*`).
 - `iter...`: One or more iterators.
 """
-import ClimaCore.RecursiveApply: ⊞, ⊠, rzero, rpromote_type
 function mapreduce_with_init(f, op, iter...)
     r₀ = rzero(rpromote_type(typeof(f(map(first, iter)...))))
     mapreduce(f, op, iter...; init = r₀)

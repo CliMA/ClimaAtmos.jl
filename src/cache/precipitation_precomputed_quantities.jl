@@ -105,13 +105,17 @@ function set_precipitation_velocities!(
     precip_model::Microphysics2Moment,
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwnₗ, ᶜwnᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
-    (; q_liq, q_ice, q_rai, q_sno) = p.precomputed.ᶜspecific
     (; ᶜΦ) = p.core
 
     cm1c = CAP.microphysics_cloud_params(p.params)
     cm1p = CAP.microphysics_1m_params(p.params)
     cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
+
+    q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+    q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+    q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    q_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
 
     # compute the precipitation terminal velocity [m/s]
     # TODO sedimentation of snow is based on the 1M scheme

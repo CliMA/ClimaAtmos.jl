@@ -93,16 +93,20 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜh_tot, ᶜK) = p.precomputed
+    (; ᶜp, ᶠu³, ᶜK) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.precomputed.sfc_conditions
     (; ᶜρaʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰) = p.precomputed
 
     (; params) = p
-    q_tot = specific(Y.c.ρq_tot, Y.c.ρ)
+  
     thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
+    ᶜts = Y.c.ts   #TODO replace
+
+    q_tot = specific(Y.c.ρq_tot, Y.c.ρ)
+    ᶜh_tot = @. lazy(total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
 
     ρ_int_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
     uₕ_int_level = Fields.field_values(Fields.level(Y.c.uₕ, 1))
@@ -950,7 +954,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     (; params) = p
     (; dt) = p
     (; ᶜp, ᶜu, ᶜts) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (;
         ᶜlinear_buoygrad,
@@ -1067,9 +1070,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     microphys_0m_params = CAP.microphysics_0m_params(p.params)
     (; dt) = p
     (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
 
     # Environment precipitation sources (to be applied to grid mean)
+    q_tot = @. lazy(specific(Y.c.q_tot, Y.c.ρ)
     @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
         thermo_params,
         microphys_0m_params,
@@ -1090,7 +1093,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     #microphys_1m_params = CAP.microphysics_1m_params(p.params)
 
     #(; ᶜts, ᶜSqₜᵖ⁰, ᶜSeₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
-    #(; q_tot) = p.precomputed.ᶜspecific
     #(; ᶜqᵣ, ᶜqₛ) = p.precomputed
 
     #ᶜSᵖ = p.scratch.ᶜtemp_scalar
