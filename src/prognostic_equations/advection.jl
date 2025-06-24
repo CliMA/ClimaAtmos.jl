@@ -74,6 +74,24 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     return nothing
 end
 
+"""
+    horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
+Computes tendencies due to horizontal advection for tracers in the grid mean
+and for specific humidity species within EDMFX subdomains.
+Specifically, this function calculates:
+- Horizontal advection for all prognostic tracer variables (`ρχ_name`) in `Y.c`.
+- Horizontal advection for EDMFX updraft total specific humidity (`q_totʲ`).
+- Horizontal advection for other EDMFX updraft moisture species (`q_liqʲ`, `q_iceʲ`,
+  `q_raiʲ`, `q_snoʲ`) if using a `NonEquilMoistModel` and `Microphysics1Moment`
+  precipitation model.
+Arguments:
+- `Yₜ`: The tendency state vector, modified in place.
+- `Y`: The current state vector.
+- `p`: Cache containing parameters and precomputed fields (e.g., velocities `ᶜu`, `ᶜuʲs`).
+- `t`: Current simulation time (not directly used in calculations).
+Modifies tracer fields in `Yₜ.c` (e.g., `Yₜ.c.ρq_tracer`) and EDMFX moisture fields
+in `Yₜ.c.sgsʲs` if applicable.
+"""
 NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜu) = p.precomputed
