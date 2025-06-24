@@ -605,6 +605,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             function limit(q, dt, n::Int)
                 return q / float(dt) / n
             end
+            function clipped(q)
+                if q > 0
+                    return true
+                else
+                    return false
+                end
+            end
         
             function ∂ρqₗ_err_∂ρqₗ(tps, ts, cmc, dt, S, pos_lim, neg_lim,
                                   source_deriv, pos_lim_deriv, neg_lim_deriv)
@@ -620,7 +627,17 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     neg_lim_deriv = 0
 
                 if q.tot + q.liq < FT(0)
-                    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.liquid, tps, q, ρ, Tₐ(tps, ts))
+                    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+                        cm_params,
+                        thp,
+                        qₜ,
+                        qₗ,
+                        qᵢ,
+                        qᵣ,
+                        qₛ,
+                        ρ,
+                        Tₐ,
+                    )
                 else
                     S = 0
                     source_deriv = 0
@@ -653,7 +670,17 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 q = TD.PhasePartition(tps, ts)
                 ρ = TD.air_density(tps, ts)
 
-                S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(cmc.ice, tps, q, ρ, Tₐ(tps, ts))
+                S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+                    cmc,
+                    thp,
+                    qₜ,
+                    qₗ,
+                    qᵢ,
+                    qᵣ,
+                    qₛ,
+                    ρ,
+                    Tₐ,
+                )
 
                 if S > FT_inner(0)
                     if S <= limit(TD.vapor_specific_humidity(q), dt, 2)
@@ -683,6 +710,11 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             ∂ᶜρqₗ_err_∂ᶜρqₜ = matrix[@name(c.ρq_liq), @name(c.ρq_tot)]
             ∂ᶜρqᵢ_err_∂ᶜρqₜ = matrix[@name(c.ρq_ice), @name(c.ρq_tot)]
+
+
+            # plan -- check if things have been clipped or not. if so then don't calc.
+
+            
 
             #if isdefined(Main, :Infiltrator)
             #    Main.@infiltrate
