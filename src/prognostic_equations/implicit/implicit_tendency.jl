@@ -182,6 +182,29 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ),
         )
     end
+    if precip_model isa Microphysics2Moment
+        (; ᶜwnₗ, ᶜwnᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
+        @. Yₜ.c.ρn_liq -= ᶜprecipdivᵥ(
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                Geometry.WVector(-(ᶜwnₗ)) * specific(Y.c.ρn_liq, Y.c.ρ),
+            ),
+        )
+        @. Yₜ.c.ρn_rai -= ᶜprecipdivᵥ(
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                Geometry.WVector(-(ᶜwnᵣ)) * specific(Y.c.ρn_rai, Y.c.ρ),
+            ),
+        )
+        @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                Geometry.WVector(-(ᶜwᵣ)) * specific(Y.c.ρq_rai, Y.c.ρ),
+            ),
+        )
+        @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                Geometry.WVector(-(ᶜwₛ)) * specific(Y.c.ρq_sno, Y.c.ρ),
+            ),
+        )
+    end
 
     # TODO - decide if this needs to be explicit or implicit
     #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)

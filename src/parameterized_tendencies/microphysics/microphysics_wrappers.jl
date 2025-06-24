@@ -558,4 +558,48 @@ function compute_warm_precipitation_sources_2M!(
         )
     @. Snᵣᵖ += Sᵖ
 
+    # cloud liquid number adjustment for mass limits
+    # TODO: Once CCN number becomes a prognostic variable, these number adjustment tendencies
+    #       should be linked to it. Any increase in droplet number (source here) would imply 
+    #       a corresponding sink in CCN, and vice versa.
+    @. Sᵖ = CM2.number_increase_for_mass_limit(
+        mp.sb.numadj,
+        mp.sb.pdf_c.xc_max,
+        qₗ,
+        ρ,
+        ρ * nₗ,
+    )
+    @. S₂ᵖ =
+        -triangle_inequality_limiter(
+            -CM2.number_decrease_for_mass_limit(
+                mp.sb.numadj,
+                mp.sb.pdf_c.xc_min,
+                qₗ,
+                ρ,
+                ρ * nₗ,
+            ),
+            limit(nₗ, dt, 5),
+        )
+    @. Snₗᵖ = Sᵖ + S₂ᵖ
+    # rain number adjustment for mass limits
+    @. Sᵖ = CM2.number_increase_for_mass_limit(
+        mp.sb.numadj,
+        mp.sb.pdf_r.xr_max,
+        qᵣ,
+        ρ,
+        ρ * nᵣ,
+    )
+    @. S₂ᵖ =
+        -triangle_inequality_limiter(
+            -CM2.number_decrease_for_mass_limit(
+                mp.sb.numadj,
+                mp.sb.pdf_r.xr_min,
+                qᵣ,
+                ρ,
+                ρ * nᵣ,
+            ),
+            limit(nᵣ, dt, 5),
+        )
+    @. Snᵣᵖ += Sᵖ + S₂ᵖ
+
 end
