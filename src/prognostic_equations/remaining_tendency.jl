@@ -63,7 +63,6 @@ end
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     (; ᶜh_tot) = p.precomputed
-    ᶜspecific = all_specific_gs(Y.c)
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
     ᶜρ = Y.c.ρ
