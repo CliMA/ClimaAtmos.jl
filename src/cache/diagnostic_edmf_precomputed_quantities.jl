@@ -327,8 +327,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; ᶠu³⁰, ᶜK⁰, ᶜtke⁰) = p.precomputed
 
     if precip_model isa Microphysics1Moment
-        q_rai = p.precomputed.ᶜqᵣ
-        q_sno = p.precomputed.ᶜqₛ
+        q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+        q_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
     end
 
     thermo_params = CAP.thermodynamics_params(params)
