@@ -134,21 +134,17 @@ function cloud_sources(
         TD.saturation_vapor_pressure(thp, T, TD.Ice()),
     )
 
-    if qᵥ + qᵢ > FT(0)
-        S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
-            cm_params,
-            thp,
-            qₜ,
-            qₗ,
-            qᵢ,
-            qᵣ,
-            qₛ,
-            ρ,
-            T,
-        )
-    else
-        S = FT(0)
-    end
+    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+        cm_params,
+        thp,
+        qₜ,
+        qₗ,
+        qᵢ,
+        qᵣ,
+        qₛ,
+        ρ,
+        T,
+    )
 
     return ifelse(
         S > FT(0),

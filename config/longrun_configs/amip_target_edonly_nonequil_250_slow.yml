@@ -1,0 +1,32 @@
+h_elem: 9
+z_elem: 39
+z_max: 60000.0
+dz_bottom: 100.0
+deep_atmosphere: false
+rayleigh_sponge: true
+viscous_sponge: true
+dt_save_state_to_disk: "30days"
+cloud_model: "grid_scale"
+moist: "nonequil"
+implicit_noneq_cloud_formation: true
+precip_model: "1M"
+rad: "allskywithclear"
+dt_rad: "1hours"
+dt_cloud_fraction: "1hours"
+insolation: "timevarying"
+co2_model: maunaloa
+prescribe_ozone: true
+aerosol_radiation: true
+edmfx_sgs_diffusive_flux: true
+prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05", "OC1", "OC2", "SO4", "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
+surface_setup: "DefaultMoninObukhov"
+turbconv: "edonly_edmfx"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+dt: "250secs"
+t_end: "20days"
+toml: [toml/aquaplanet_nonequil_120_1200.toml]
+diagnostics:
+  - short_name: [ta, ua, wa, va, rhoa, hur, hus, hussn, husra, clw, cli]
+    period: 5days
+netcdf_output_at_levels: true

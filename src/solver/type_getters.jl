@@ -462,6 +462,7 @@ get_jacobian(ode_algo, Y, atmos, parsed_args) =
                 DerivativeFlag(atmos.sgs_entr_detr_mode),
                 DerivativeFlag(atmos.sgs_mf_mode),
                 DerivativeFlag(atmos.sgs_nh_pressure_mode),
+                DerivativeFlag(atmos.noneq_cloud_formation_mode),
                 parsed_args["approximate_linear_solve_iters"],
             )
         @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
