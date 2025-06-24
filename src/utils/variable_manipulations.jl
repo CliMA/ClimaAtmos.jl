@@ -252,8 +252,7 @@ value using the regularized `specific` function.
 
 Arguments:
 - `gs`: The grid-scale state (`Y.c`), containing `ρ` and `sgsʲs`.
-- `p`: The cache, containing the `turbconv_model` and precomputed grid-scale
-       fields `ᶜh_tot` and `ᶜK`.
+- `p`: The cache, containing the `turbconv_model` 
 
 Returns:
 - A `ClimaCore.Fields.Field` containing the specific moist static energy of the
@@ -261,8 +260,10 @@ Returns:
 """
 function specific_env_mse(gs, p)
     # Get necessary precomputed values from the cache `p`
-    (; ᶜh_tot, ᶜK) = p.precomputed  # TODO: replace by on-the-fly computation
+    (; ᶜK) = p.precomputed  # TODO: replace by on-the-fly computation
     (; turbconv_model) = p.atmos
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
 
     # 1. Define the grid-scale moist static energy density `ρ * mse`.
     grid_scale_ρmse = gs.ρ .* (ᶜh_tot .- ᶜK)

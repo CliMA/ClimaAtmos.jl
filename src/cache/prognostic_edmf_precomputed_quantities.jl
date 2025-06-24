@@ -21,7 +21,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     thermo_params = CAP.thermodynamics_params(p.params)
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
-    (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
+    (; ᶜp,ᶜK) = p.precomputed
     (; ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰) = p.precomputed
 
     ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
@@ -132,7 +132,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
     turbconv_params = CAP.turbconv_params(p.params)
 
     (; ᶜΦ,) = p.core
-    (; ᶜp, ᶜh_tot, ᶜK, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ᶜp, ᶜK, ᶜtsʲs, ᶜρʲs) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
     for j in 1:n
@@ -176,6 +176,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
         # TODO: replace this with the actual surface area fraction when
         # using prognostic surface area
         @. ᶜaʲ_int_val = FT(turbconv_params.surface_area)
+        ᶜh_tot = @. laxy(TD.total_specific_enthalpy(thermo_params, ᶜtsʲ, specific(Y.c.ρe_tot, Y.c.ρ)))
         ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
         ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
         ᶜmseʲ_int_val = Fields.field_values(Fields.level(ᶜmseʲ, 1))

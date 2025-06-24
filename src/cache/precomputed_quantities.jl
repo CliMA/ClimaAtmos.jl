@@ -17,7 +17,6 @@ The following grid-scale quantities are treated implicitly and are precomputed:
     - `ᶜK`: kinetic energy on cell centers
     - `ᶜts`: thermodynamic state on cell centers
     - `ᶜp`: air pressure on cell centers
-    - `ᶜh_tot`: total enthalpy on cell centers
 If the `turbconv_model` is `PrognosticEDMFX`, there also two SGS versions of
 every quantity except for `ᶜp` (which is shared across all subdomains):
     - `_⁰`: value for the environment
@@ -40,8 +39,7 @@ function implicit_precomputed_quantities(Y, atmos)
         ᶠu = similar(Y.f, CT123{FT}),
         ᶜK = similar(Y.c, FT),
         ᶜts = similar(Y.c, TST),
-        ᶜp = similar(Y.c, FT),
-        ᶜh_tot = similar(Y.c, FT),
+        ᶜp = similar(Y.c, FT)
     )
     sgs_quantities =
         turbconv_model isa AbstractEDMF ? (;) : (;)
@@ -431,7 +429,7 @@ quantities are updated.
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, moisture_model, precip_model) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -464,7 +462,6 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     end
     @. ᶜts = ts_gs(thermo_args..., ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
-    @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ))
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)

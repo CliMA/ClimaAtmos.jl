@@ -14,7 +14,7 @@ function edmfx_sgs_mass_flux_tendency!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
-    (; ᶠu³, ᶜh_tot) = p.precomputed
+    (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜts⁰) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -27,6 +27,7 @@ function edmfx_sgs_mass_flux_tendency!(
         # energy
         ᶠu³_diff = p.scratch.ᶠtemp_CT3
         ᶜa_scalar = p.scratch.ᶜtemp_scalar
+        ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜtsʲ, specific(Y.c.ρe_tot, Y.c.ρ)))
         for j in 1:n
             @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
             @. ᶜa_scalar =
@@ -223,7 +224,7 @@ function edmfx_sgs_mass_flux_tendency!(
     a_max = CAP.max_area(turbconv_params)
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
-    (; ᶠu³, ᶜh_tot) = p.precomputed
+    (; ᶠu³) = p.precomputed
     (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs) = p.precomputed
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -231,6 +232,7 @@ function edmfx_sgs_mass_flux_tendency!(
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
         # energy
+        ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜtsʲ, specific(Y.c.ρe_tot, Y.c.ρ)))
         ᶠu³_diff = p.scratch.ᶠtemp_CT3
         ᶜa_scalar = p.scratch.ᶜtemp_scalar
         for j in 1:n
@@ -466,8 +468,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
     FT = Spaces.undertype(axes(Y.c))
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
+    thermo_params = CAP.thermodynamics_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜu, ᶜh_tot, ᶜmixing_length) = p.precomputed
+    (; ᶜu, ᶜmixing_length) = p.precomputed
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
     ᶜtke⁰ = @.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
@@ -483,6 +486,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
+        ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜtsʲ, specific(Y.c.ρe_tot, Y.c.ρ)))
         @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜh_tot)))
 
         if use_prognostic_tke(turbconv_model)

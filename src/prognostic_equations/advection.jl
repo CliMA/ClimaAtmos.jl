@@ -28,7 +28,7 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    (; ᶜh_tot) = p.precomputed
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
     @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
@@ -152,7 +152,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # ... and upwinding correction of energy and total water.
     # (The central advection of energy and total water is done implicitly.)
     if energy_upwinding != Val(:none)
-        (; ᶜh_tot) = p.precomputed
+        ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
         @. Yₜ.c.ρe_tot += vtt - vtt_central

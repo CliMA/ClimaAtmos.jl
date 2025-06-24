@@ -309,7 +309,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; dt) = p
     dt = float(dt)
     (; ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
+    (; ᶜp, ᶠu³, ᶜts, ᶜK) = p.precomputed
     (;
         ᶜρaʲs,
         ᶠu³ʲs,

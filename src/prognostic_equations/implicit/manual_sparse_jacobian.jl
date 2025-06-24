@@ -399,7 +399,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     (; matrix) = cache
     (; params) = p
     (; ᶜΦ, ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶠu³, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶠu³, ᶜK, ᶜts, ᶜp) = p.precomputed
     (;
         ∂ᶜK_∂ᶜuₕ,
         ∂ᶜK_∂ᶠu₃,
@@ -427,8 +427,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     Δcp_v = FT(CAP.cp_v(params)) - cp_d
     # This term appears a few times in the Jacobian, and is technically
     # minus ∂e_int_∂q_tot
-    ∂e_int_∂q_tot = T_0 * (Δcv_v - R_d) - FT(CAP.e_int_v0(params))
     thermo_params = CAP.thermodynamics_params(params)
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
 
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
