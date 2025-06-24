@@ -129,6 +129,30 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     return nothing
 end
 
+"""
+    explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+Computes tendencies due to explicit vertical advection for various grid-mean
+prognostic variables, including passive tracers, energy, total water, momentum (using
+a vector invariant form), and optionally TKE.
+This function handles:
+- Calculation of vorticity components (`ᶜω³`, `ᶠω¹²`).
+- Vertical advection of passive tracers using `vertical_transport` with specified upwinding.
+- Upwinding corrections for vertical advection of energy and total water, assuming
+  their central advection might be handled elsewhere or implicitly.
+- Vertical advection terms for horizontal and vertical momentum, differing for
+  shallow and deep atmosphere approximations, incorporating Coriolis and vorticity effects.
+- Vertical advection of grid-mean TKE (`ρatke⁰`) if `use_prognostic_tke` is true.
+Arguments:
+- `Yₜ`: The tendency state vector, modified in place.
+- `Y`: The current state vector.
+- `p`: Cache containing parameters, core fields (e.g., `ᶜf³`, `ᶠf¹²`, `ᶜΦ`),
+       precomputed fields (e.g., `ᶜu`, `ᶠu³`, `ᶜK`, EDMF velocities/TKE if applicable),
+       atmospheric model settings (`p.atmos.numerics` for upwinding schemes),
+       and scratch space.
+- `t`: Current simulation time (not directly used in calculations).
+Modifies `Yₜ.c` (various tracers, `ρe_tot`, `ρq_tot`, `uₕ`), `Yₜ.f.u₃`,
+`Yₜ.f.sgsʲs` (updraft `u₃`), and `Yₜ.c.sgs⁰.ρatke` as applicable.
+"""
 NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; turbconv_model) = p.atmos
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
@@ -240,6 +264,28 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
 end
 
+"""
+    edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
+Computes tendencies due to vertical advection and buoyancy for EDMFX subgrid-scale
+(SGS) updraft prognostic variables.
+This function handles:
+- Vertical advection of updraft density-area product (`ρaʲ`).
+- Vertical advection of updraft moist static energy (`mseʲ`) and total specific humidity (`q_totʲ`).
+- Vertical advection of other updraft moisture species (`q_liqʲ`, `q_iceʲ`, `q_raiʲ`, `q_snoʲ`)
+  if using a `NonEquilMoistModel` and `Microphysics1Moment` precipitation model.
+- Buoyancy forcing terms in the updraft vertical momentum (`u₃ʲ`) equation, including
+  adjustments for non-hydrostatic pressure.
+- Buoyancy production/conversion terms in the updraft `mseʲ` equation.
+Arguments:
+- `Yₜ`: The tendency state vector, modified in place.
+- `Y`: The current state vector.
+- `p`: Cache containing parameters (`p.params`), time step `dt`, core fields (`ᶠgradᵥ_ᶜΦ`),
+       precomputed EDMF fields (e.g., `ᶠu³ʲs`, `ᶜρʲs`), atmospheric model settings
+       (`p.atmos.numerics.edmfx_upwinding`), and scratch space.
+- `t`: Current simulation time (not directly used in calculations).
+- `turbconv_model`: The `PrognosticEDMFX` turbulence convection model instance.
+Modifies EDMF updraft fields in `Yₜ.c.sgsʲs` and `Yₜ.f.sgsʲs`.
+"""
 edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_sgs_vertical_advection_tendency!(
