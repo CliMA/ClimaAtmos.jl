@@ -669,9 +669,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             (; dt) = p
             turbconv_model = p.atmos.turbconv_model
             ᶜmixing_length = p.precomputed.ᶜmixing_length
-            ᶜtke⁰ =
-                @.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
-            ᶜρa⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? @.lazy(ρa⁰(Y.c)) : ᶜρ
+            ᶜtke⁰ = @.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
+            ᶜρa⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? (@.lazy(ρa⁰(Y.c))) : Y.c.ρ
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
             @inline tke_dissipation_rate_tendency(tke⁰, mixing_length) =
