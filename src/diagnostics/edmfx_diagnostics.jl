@@ -1146,10 +1146,11 @@ function compute_tke!(
     time,
     turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX, DiagnosticEDMFX},
 )
+
     if isnothing(out)
-        return copy(ᶜtke⁰)
+        return specific_tke(state.c.sgs⁰, state.c, turbconv_model)
     else
-        out .= ᶜtke⁰
+        out .= specific_tke(state.c.sgs⁰, state.c, turbconv_model)
     end
 end
 

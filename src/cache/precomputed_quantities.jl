@@ -168,7 +168,6 @@ function precomputed_quantities(Y, atmos)
         atmos.turbconv_model isa EDOnlyEDMFX ?
         (;
             ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
-            ᶜtke⁰ = similar(Y.c, FT),
             ᶜK_u = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             ᶜK_h = similar(Y.c, FT),

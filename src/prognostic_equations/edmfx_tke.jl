@@ -87,6 +87,8 @@ function edmfx_tke_tendency!(
         # buoyancy production
         @. Yₜ.c.sgs⁰.ρatke -= ᶜρa⁰ * ᶜK_h * ᶜlinear_buoygrad
 
+        ᶜtke⁰ = @. lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
+
         # entrainment and detraiment
         # using ᶜu⁰ and local geometry results in allocation
         for j in 1:n
