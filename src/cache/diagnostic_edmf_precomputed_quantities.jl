@@ -61,7 +61,7 @@ NVTX.@annotate function set_diagnostic_edmfx_env_quantities_level!(
     local_geometry_halflevel,
     turbconv_model,
 )
-    @. u³⁰_halflevel = divide_by_ρa(
+    @. u³⁰_halflevel = specific(
         ρ_level * u³_halflevel -
         unrolled_dotproduct(ρaʲs_level, u³ʲs_halflevel),
         ρ_level,
