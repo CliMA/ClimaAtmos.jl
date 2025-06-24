@@ -37,6 +37,115 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 end
 
+using ClimaCore.RecursiveApply: rzero
+
+#####
+##### Cell center tendencies
+#####
+
+"""
+    ᶜremaining_tendency(ᶜY, ᶠY, p, t)
+
+Returns a Broadcasted object, for evaluating the cell center remaining
+tendency. This method calls `ᶜremaining_tendency(Val(name), ᶜY, ᶠY, p, t)` for
+all `propertynames` of `ᶜY`.
+"""
+function ᶜremaining_tendency(ᶜY, ᶠY, p, t)
+    names = propertynames(ᶜY)
+    tends = construct_tendencies(Val(names), ᶜremaining_tendency, ᶜY, ᶠY, p, t)
+    # We cannot broadcast over a NamedTuple, so we need to check that edge case
+    # first.
+    if all(t -> !(t isa Base.Broadcast.Broadcasted), tends)
+        return make_named_tuple(Val(names), tends...)
+    else
+        return lazy.(make_named_tuple.(Val(names), tends...))
+    end
+end
+
+#####
+##### Cell face tendencies
+#####
+
+"""
+    ᶠremaining_tendency(ᶜY, ᶠY, p, t)
+
+Returns a Broadcasted object, for evaluating the cell center remaining
+tendency. This method calls `ᶠremaining_tendency(Val(name), ᶜY, ᶠY, p, t)` for
+all `propertynames` of `ᶠY`.
+"""
+function ᶠremaining_tendency(ᶜY, ᶠY, p, t)
+    names = propertynames(ᶠY)
+    tends = construct_tendencies(Val(names), ᶠremaining_tendency, ᶜY, ᶠY, p, t)
+    # We cannot broadcast over a NamedTuple, so we need to check that edge case
+    # first.
+    if all(t -> !(t isa Base.Broadcast.Broadcasted), tends)
+        return make_named_tuple(Val(names), tends...)
+    else
+        return lazy.(make_named_tuple.(Val(names), tends...))
+    end
+end
+
+#####
+##### Individual tendencies
+#####
+
+function ᶜremaining_tendency(::Val{:ρ}, ᶜY, ᶠY, p, t)
+    ∑tendencies = zero(eltype(ᶜY.ρ))
+    return ∑tendencies
+end
+function ᶜremaining_tendency(::Val{:uₕ}, ᶜY, ᶠY, p, t)
+    ∑tendencies = zero(eltype(ᶜY.uₕ))
+    return ∑tendencies
+end
+function ᶜremaining_tendency(::Val{:ρe_tot}, ᶜY, ᶠY, p, t)
+    ∑tendencies = zero(eltype(ᶜY.ρe_tot))
+    return ∑tendencies
+end
+function ᶜremaining_tendency(::Val{:ρq_tot}, ᶜY, ᶠY, p, t)
+    ∑tendencies = zero(eltype(ᶜY.ρq_tot))
+    return ∑tendencies
+end
+function ᶜremaining_tendency(::Val{:ρq_liq}, ᶜY, ᶠY, p, t)
+    ∑tendencies = zero(eltype(ᶜY.ρq_liq))
+    return ∑tendencies
+end
+function ᶜremaining_tendency(::Val{:ρq_ice}, ᶜY, ᶠY, p, t)
+    ∑tendencies = zero(eltype(ᶜY.ρq_ice))
+    return ∑tendencies
+end
+function ᶜremaining_tendency(::Val{:ρn_liq}, ᶜY, ᶠY, p, t)
+    ∑tendencies = zero(eltype(ᶜY.ρn_liq))
+    return ∑tendencies
+end
+function ᶜremaining_tendency(::Val{:ρn_rai}, ᶜY, ᶠY, p, t)
+    ∑tendencies = zero(eltype(ᶜY.ρn_rai))
+    return ∑tendencies
+end
+function ᶜremaining_tendency(::Val{:ρq_rai}, ᶜY, ᶠY, p, t)
+    ∑tendencies = zero(eltype(ᶜY.ρq_rai))
+    return ∑tendencies
+end
+function ᶜremaining_tendency(::Val{:ρq_sno}, ᶜY, ᶠY, p, t)
+    ∑tendencies = zero(eltype(ᶜY.ρq_sno))
+    return ∑tendencies
+end
+function ᶜremaining_tendency(::Val{:sgsʲs}, ᶜY, ᶠY, p, t)
+    ∑tendencies = rzero(eltype(ᶜY.sgsʲs))
+    return ∑tendencies
+end
+function ᶜremaining_tendency(::Val{:sgs⁰}, ᶜY, ᶠY, p, t)
+    ∑tendencies = rzero(eltype(ᶜY.sgs⁰))
+    return ∑tendencies
+end
+function ᶠremaining_tendency(::Val{:u₃}, ᶜY, ᶠY, p, t)
+    ∑tendencies = zero(eltype(ᶠY.u₃))
+    return ∑tendencies
+end
+function ᶠremaining_tendency(::Val{:sgsʲs}, ᶜY, ᶠY, p, t)
+    ∑tendencies = rzero(eltype(ᶠY.sgsʲs))
+    return ∑tendencies
+end
+
 """
     remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 
@@ -64,7 +173,27 @@ Returns:
 """
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
-    Yₜ .= zero(eltype(Yₜ))
+    device = ClimaComms.device(axes(Y.c))
+    p_kernel = (;
+        zmax = Spaces.z_max(axes(Y.f)),
+        atmos = p.atmos,
+        params = p.params,
+        dt = p.dt,
+    )
+    if :sfc in propertynames(Y) # columnwise! does not yet handle .sfc
+        parent(Yₜ.sfc) .= zero(Spaces.undertype(axes(Y.c)))
+    end
+    Operators.columnwise!(
+        device,
+        ᶜremaining_tendency,
+        ᶠremaining_tendency,
+        Yₜ.c,
+        Yₜ.f,
+        Y.c,
+        Y.f,
+        p_kernel,
+        t,
+    )
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
     fill_with_nans!(p)  # TODO: would be better to limit this to debug mode (e.g., if p.debug_mode...)
     horizontal_dynamics_tendency!(Yₜ, Y, p, t)
