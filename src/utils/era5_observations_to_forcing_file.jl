@@ -18,14 +18,14 @@ import Insolation.Parameters as IP
 import ClimaParams as CP
 
 """
-    get_external_forcing_file_path(parsed_args; data_dir)
+    get_external_daily_forcing_file_path(parsed_args; data_dir)
 
 Get the path to the external forcing file for a given site and start date.
 When using the BUILDKITE env, a temporary directory is used for the
 external forcing file. Otherwise, the file is expected to stored in the
 era5_hourly_atmos_processed artifact directory.
 """
-function get_external_forcing_file_path(
+function get_external_daily_forcing_file_path(
     parsed_args;
     data_dir = get(ENV, "BUILDKITE", "") == "true" ? mktempdir() :
                @clima_artifact("era5_hourly_atmos_processed"),
@@ -43,10 +43,45 @@ function get_external_forcing_file_path(
        site_longitude != parsed_args["site_longitude"]
         @info "Rounded site latitude/longitude from ($(parsed_args["site_latitude"]), $(parsed_args["site_longitude"])) to ($(site_latitude), $(site_longitude)) for ERA5 quarter-degree resolution."
     end
-
+    if !isdir(joinpath(data_dir, "daily"))
+        mkdir(joinpath(data_dir, "daily"))
+    end
     return joinpath(
         data_dir,
+        "daily",
         "tv_forcing_$(site_latitude)_$(site_longitude)_$(start_date)_$(end_date).nc",
+    )
+end
+
+"""
+    get_external_monthly_forcing_file_path(parsed_args; data_dir)
+
+Get the path to the external forcing file for a given site and start date.
+When using the BUILDKITE env, a temporary directory is used for the
+external forcing file. Otherwise, the file is expected to stored in the
+era5_hourly_atmos_processed artifact directory.
+"""
+function get_external_monthly_forcing_file_path(
+    parsed_args;
+    data_dir = get(ENV, "BUILDKITE", "") == "true" ? mktempdir() :
+               @clima_artifact("era5_hourly_atmos_processed"),
+)
+    start_date = parsed_args["start_date"]
+    # round to era5 quarter degree resolution for site selection
+    site_latitude = round(parsed_args["site_latitude"] * 4) / 4
+    site_longitude = round(parsed_args["site_longitude"] * 4) / 4
+
+    if site_latitude != parsed_args["site_latitude"] ||
+       site_longitude != parsed_args["site_longitude"]
+        @info "Rounded site latitude/longitude from ($(parsed_args["site_latitude"]), $(parsed_args["site_longitude"])) to ($(site_latitude), $(site_longitude)) for ERA5 quarter-degree resolution."
+    end
+    if !isdir(joinpath(data_dir, "monthly"))
+        mkdir(joinpath(data_dir, "monthly"))
+    end
+    return joinpath(
+        data_dir,
+        "monthly",
+        "monthly_diurnal_cycle_forcing_$(site_latitude)_$(site_longitude)_$(start_date).nc",
     )
 end
 
@@ -196,6 +231,7 @@ and should contain 3 files:
     - Column profile dataset, named "forcing_and_cloud_hourly_profiles_"start_date".nc"
     - Surface sensible and latent heat fluxes, named "hourly_accum_"start_date".nc"
     - Surface temperature, named "hourly_inst_"start_date".nc"
+Parsed args should contain the site_latitude, site_longitude, and start_date.
 
 The variables and specific naming convention for these files is better described in the Single Column
 Model section of the documentation.
@@ -211,16 +247,20 @@ Note:
     in the current implementation.
 - The end time of the simulation is inferred from the start date and the simulation time, `t_end`.
 """
-function generate_external_era5_forcing_file(
-    lat,
-    lon,
-    start_date,
+function generate_external_forcing_file(
+    parsed_args,
     forcing_file_path,
     FT;
     smooth_amount = 4,
     time_resolution = FT(3600), # size of accumulated variable period in seconds (3600 for hourly, 86400 for daily and monthly)
     data_dir = @clima_artifact("era5_hourly_atmos_raw"),
+    source_strings = ["forcing_and_cloud_hourly_profiles", "hourly_inst", "hourly_accum"],
 )
+    # unpack parsed args
+    lat = parsed_args["site_latitude"]
+    lon = parsed_args["site_longitude"]
+    start_date = parsed_args["start_date"]
+
     external_tv_params = CP.get_parameter_values(
         CP.create_toml_dict(FT),
         [
@@ -230,15 +270,16 @@ function generate_external_era5_forcing_file(
             "molar_mass_dry_air",
         ],
     )
+    @info source_strings
     # load datasets
     tvforcing = NCDataset(
         joinpath(
             data_dir,
-            "forcing_and_cloud_hourly_profiles_$(start_date).nc",
+            "$(source_strings[1])_$(start_date).nc",
         ),
     )
-    tv_inst = NCDataset(joinpath(data_dir, "hourly_inst_$(start_date).nc"))
-    tv_accum = NCDataset(joinpath(data_dir, "hourly_accum_$(start_date).nc"))
+    tv_inst = NCDataset(joinpath(data_dir, "$(source_strings[2])_$(start_date).nc"))
+    tv_accum = NCDataset(joinpath(data_dir, "$(source_strings[3])_$(start_date).nc"))
 
     # round to era5 quarter degree resolution for site selection
     lat = round(lat * 4) / 4
@@ -490,17 +531,15 @@ function generate_multiday_era5_external_forcing_file(
             "site_latitude" => parsed_args["site_latitude"],
             "site_longitude" => parsed_args["site_longitude"],
         )
-        single_file_path = get_external_forcing_file_path(
+        single_file_path = get_external_daily_forcing_file_path(
             single_parsed_args;
             data_dir = output_data_dir,
         )
         push!(file_list, single_file_path)
         # generate the external forcing file for this day
         if !isfile(single_file_path)
-            generate_external_era5_forcing_file(
-                parsed_args["site_latitude"],
-                parsed_args["site_longitude"],
-                Dates.format(dd, "yyyymmdd"),
+            generate_external_forcing_file(
+                single_parsed_args,
                 single_file_path,
                 FT;
                 time_resolution = time_resolution,
