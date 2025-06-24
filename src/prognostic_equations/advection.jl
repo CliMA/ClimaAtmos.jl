@@ -6,17 +6,34 @@ using LinearAlgebra: ×, dot
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 
+"""
+    horizontal_advection_tendency!(Yₜ, Y, p, t)
+Computes tendencies due to horizontal advection for prognostic variables of the
+grid mean and EDMFX subdomains, and also applies horizontal pressure gradient and 
+gravitational acceleration terms for horizontal momentum.
+Specifically, this function calculates:
+- Horizontal advection of density (`ρ`).
+- Horizontal advection of EDMFX updraft density-area product (`ρaʲ`).
+- Horizontal advection of total energy (`ρe_tot`) using total enthalpy flux.
+- Horizontal advection of EDMFX updraft moist static energy (`mseʲ`).
+- Horizontal advection of turbulent kinetic energy (`ρatke⁰`) if used.
+- Horizontal pressure gradient, kinetic energy gradient, and geopotential gradient
+  forces for horizontal momentum (`uₕ`).
+Arguments:
+- `Yₜ`: The tendency state vector, modified in place.
+- `Y`: The current state vector.
+- `p`: Cache containing parameters, precomputed fields (e.g., velocities `ᶜu`,
+       `ᶜu⁰`, `ᶜuʲs`; pressure `ᶜp`; kinetic energy `ᶜK`; total enthalpy `ᶜh_tot`),
+       and core components (e.g., geopotential `ᶜΦ`).
+- `t`: Current simulation time (not directly used in calculations).
+Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, `Yₜ.c.uₕ`, and EDMFX-related fields in
+`Yₜ.c.sgsʲs` and `Yₜ.c.sgs⁰` if applicable.
+"""
 NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜΦ) = p.core
     (; ᶜu, ᶜK, ᶜp) = p.precomputed
-    if p.atmos.turbconv_model isa AbstractEDMF
-        if p.atmos.turbconv_model isa EDOnlyEDMFX
-            ᶜu⁰ = ᶜu
-        else
-            (; ᶜu⁰) = p.precomputed
-        end
-    end
+    
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
     end
@@ -40,7 +57,16 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     end
 
     if use_prognostic_tke(p.atmos.turbconv_model)
-        @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
+        if p.atmos.turbconv_model isa EDOnlyEDMFX
+            ᶜu_for_tke_advection = ᶜu
+        elseif p.atmos.turbconv_model isa AbstractEDMF
+            ᶜu_for_tke_advection = p.precomputed.ᶜu⁰
+        else
+            error(
+                "Unsupported turbconv_model type for TKE advection: $(typeof(p.atmos.turbconv_model))",
+            )
+        end
+        @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu_for_tke_advection)
     end
 
     @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))

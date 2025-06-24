@@ -29,10 +29,10 @@ function edmfx_sgs_mass_flux_tendency!(
         ᶜa_scalar = p.scratch.ᶜtemp_scalar
         ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜtsʲ, specific(Y.c.ρe_tot, Y.c.ρ)))
         for j in 1:n
-            @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
+            @. ᶠu³_diff = ᶠu³ʲs.:(j) - ᶠu³
             @. ᶜa_scalar =
-                (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j) - ᶜh_tot) *
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                (Y.c.sgsʲs.:(j).mse + ᶜKʲs.:(j) - ᶜh_tot) *
+                draft_area(Y.c.sgsʲs.:(j).ρa, ᶜρʲs.:(j))
             vtt = vertical_transport(
                 ᶜρʲs.:($j),
                 ᶠu³_diff,
@@ -57,14 +57,14 @@ function edmfx_sgs_mass_flux_tendency!(
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
             for j in 1:n
-                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
+                @. ᶠu³_diff = ᶠu³ʲs.:(j) - ᶠu³
                 @. ᶜa_scalar =
                     (
-                        Y.c.sgsʲs.:($$j).q_tot -
+                        Y.c.sgsʲs.:(j).q_tot -
                         specific(Y.c.ρq_tot, Y.c.ρ)
-                    ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                    ) * draft_area(Y.c.sgsʲs.:(j).ρa, ᶜρʲs.:(j))
                 vtt = vertical_transport(
-                    ᶜρʲs.:($$j),
+                    ᶜρʲs.:(j),
                     ᶠu³_diff,
                     ᶜa_scalar,
                     dt,
@@ -98,13 +98,13 @@ function edmfx_sgs_mass_flux_tendency!(
             ᶜq_sno⁰ = @.lazy(specific_env_value(:q_sno, Y.c, turbconv_model))
             # Liquid, ice, rain and snow specific humidity fluxes
             for j in 1:n
-                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
+                @. ᶠu³_diff = ᶠu³ʲs.:(j) - ᶠu³
 
                 @. ᶜa_scalar =
                     (
-                        Y.c.sgsʲs.:($$j).q_liq -
+                        Y.c.sgsʲs.:(j).q_liq -
                         specific(Y.c.ρq_liq, Y.c.ρ)
-                    ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                    ) * draft_area(Y.c.sgsʲs.:(j).ρa, ᶜρʲs.:(j))
                 vtt = vertical_transport(
                     ᶜρʲs.:($j),
                     ᶠu³_diff,
@@ -116,9 +116,9 @@ function edmfx_sgs_mass_flux_tendency!(
 
                 @. ᶜa_scalar =
                     (
-                        Y.c.sgsʲs.:($$j).q_ice -
+                        Y.c.sgsʲs.:(j).q_ice -
                         specific(Y.c.ρq_ice, Y.c.ρ)
-                    ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                    ) * draft_area(Y.c.sgsʲs.:(j).ρa, ᶜρʲs.:(j))
                 vtt = vertical_transport(
                     ᶜρʲs.:($j),
                     ᶠu³_diff,
@@ -130,9 +130,9 @@ function edmfx_sgs_mass_flux_tendency!(
 
                 @. ᶜa_scalar =
                     (
-                        Y.c.sgsʲs.:($$j).q_rai -
+                        Y.c.sgsʲs.:(j).q_rai -
                         specific(Y.c.ρq_rai, Y.c.ρ)
-                    ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                    ) * draft_area(Y.c.sgsʲs.:(j).ρa, ᶜρʲs.:(j))
                 vtt = vertical_transport(
                     ᶜρʲs.:($j),
                     ᶠu³_diff,
@@ -144,9 +144,9 @@ function edmfx_sgs_mass_flux_tendency!(
 
                 @. ᶜa_scalar =
                     (
-                        Y.c.sgsʲs.:($$j).q_sno -
+                        Y.c.sgsʲs.:(j).q_sno -
                         specific(Y.c.ρq_sno, Y.c.ρ)
-                    ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                    ) * draft_area(Y.c.sgsʲs.:(j).ρa, ᶜρʲs.:(j))
                 vtt = vertical_transport(
                     ᶜρʲs.:($j),
                     ᶠu³_diff,
@@ -209,6 +209,7 @@ function edmfx_sgs_mass_flux_tendency!(
         # TODO - compute sedimentation and terminal velocities
         # TODO - add w q_tot, w h_tot terms
     end
+
     return nothing
 end
 
@@ -236,14 +237,14 @@ function edmfx_sgs_mass_flux_tendency!(
         ᶠu³_diff = p.scratch.ᶠtemp_CT3
         ᶜa_scalar = p.scratch.ᶜtemp_scalar
         for j in 1:n
-            @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
+            @. ᶠu³_diff = ᶠu³ʲs.:(j) - ᶠu³
             # @. ᶜa_scalar =
-            #     (ᶜmseʲs.:($$j) + ᶜKʲs.:($$j) - ᶜh_tot) *
-            #     draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j))
+            #     (ᶜmseʲs.:(j) + ᶜKʲs.:(j) - ᶜh_tot) *
+            #     draft_area(ᶜρaʲs.:(j), ᶜρʲs.:(j))
             # TODO: remove this filter when mass flux is treated implicitly
             @. ᶜa_scalar =
-                (ᶜmseʲs.:($$j) + ᶜKʲs.:($$j) - ᶜh_tot) * min(
-                    min(draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)), a_max),
+                (ᶜmseʲs.:(j) + ᶜKʲs.:(j) - ᶜh_tot) * min(
+                    min(draft_area(ᶜρaʲs.:(j), ᶜρʲs.:(j)), a_max),
                     FT(0.02) / max(
                         Geometry.WVector(ᶜinterp(ᶠu³_diff)).components.data.:1,
                         eps(FT),
@@ -262,14 +263,14 @@ function edmfx_sgs_mass_flux_tendency!(
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
             for j in 1:n
-                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
+                @. ᶠu³_diff = ᶠu³ʲs.:(j) - ᶠu³
                 # @. ᶜa_scalar =
-                #     (ᶜq_totʲs.:($$j) - specific(Y.c.ρq_tot, Y.c.ρ) *
-                #     draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j))
+                #     (ᶜq_totʲs.:(j) - specific(Y.c.ρq_tot, Y.c.ρ) *
+                #     draft_area(ᶜρaʲs.:(j), ᶜρʲs.:(j))
                 # TODO: remove this filter when mass flux is treated implicitly
                 @. ᶜa_scalar =
-                    (ᶜq_totʲs.:($$j) - specific(Y.c.ρq_tot, Y.c.ρ)) * min(
-                        min(draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)), a_max),
+                    (ᶜq_totʲs.:(j) - specific(Y.c.ρq_tot, Y.c.ρ)) * min(
+                        min(draft_area(ᶜρaʲs.:(j), ᶜρʲs.:(j)), a_max),
                         FT(0.02) / max(
                             Geometry.WVector(
                                 ᶜinterp(ᶠu³_diff),
@@ -323,6 +324,7 @@ function edmfx_sgs_mass_flux_tendency!(
         # end
     end
 
+    return nothing
 end
 
 """
