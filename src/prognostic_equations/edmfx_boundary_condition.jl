@@ -20,13 +20,17 @@ The method sets the updraft scalar value as the sum of the grid-mean scalar at
 that level (`ᶜscalar_int`) and an SGS fluctuation term. This fluctuation is
 proportional to the square root of the estimated SGS scalar variance (σ), i.e.,
 `SGS_scalar = Mean_scalar + C * σ`.
+
 The SGS variance is computed using Monin-Obukhov Similarity Theory via
 `get_first_interior_variance`. The coefficient `C` (here, `surface_scalar_coeff`)
 is determined by `percentile_bounds_mean_norm`, assuming the updraft samples
 from the upper tail (from percentile `1 - ᶜaʲ_int` to 1) of a Gaussian distribution
 of SGS fluctuations.
+
 This boundary condition is applied only when the surface buoyancy flux
-is positive (unstable conditions), indicating surface-driven updrafts. When the surface buoyancy flux is non-positive, the updraft scalar value is set to the grid-mean scalar.
+is positive (unstable conditions), indicating surface-driven updrafts. When the surface 
+buoyancy flux is non-positive, the updraft scalar value is set to the grid-mean scalar.
+
 Arguments:
 - `ᶜz_int`: Height of the first interior cell center [m].
 - `ᶜρ_int`: Grid-mean air density at `ᶜz_int` [kg/m³].
@@ -40,6 +44,7 @@ Arguments:
 - `obukhov_length`: Obukhov length [m].
 - `sfc_local_geometry`: `ClimaCore.Geometry.LocalGeometry` at the surface, passed to
                         variance calculation.
+
 Returns:
 - The prescribed scalar value for the SGS updraft at the first interior level.
   Returns `ᶜscalar_int` if `sfc_buoyancy_flux <= 0`.
@@ -84,21 +89,26 @@ end
         obukhov_length,
         local_geometry, 
     ) where {FT}
+
 Calculates the variance of a scalar quantity (σ²) at height `z` within the
 surface layer using Monin-Obukhov Similarity Theory (MOST).
 The calculation depends on stability:
+
 - For unstable conditions (Obukhov length `L < 0`):
   σ² = C₁ * c²∗ * (1 - C₂ * z / L)^(-2/3)
 - For stable/neutral conditions (Obukhov length `L >= 0`):
   σ² = C₁ * c²∗
+
 where `c∗ = -kinematic_scalar_flux / ustar` is the scalar flux scale.
 The constants C₁ and C₂ are empirical (here, C₁=4, C₂=8.3).
+
 Arguments:
 - `kinematic_scalar_flux`: Kinematic surface flux of the scalar (e.g., w'c'_sfc) [K⋅m/s or (kg/kg)⋅m/s].
 - `ustar`: Friction velocity [m/s].
 - `z`: Height above the surface [m].
 - `obukhov_length`: Obukhov length [m].
 - `local_geometry`: `ClimaCore.Geometry.LocalGeometry` object, used for `_norm_sqr` 
+
 Returns:
 - The estimated variance of the scalar quantity [K² or (kg/kg)²].
 """
