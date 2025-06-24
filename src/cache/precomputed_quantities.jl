@@ -370,34 +370,39 @@ function thermo_state(
     return get_ts(ρ, p, θ, e_int, q_tot, q_pt)
 end
 
-function thermo_vars(moisture_model, precip_model, specific, K, Φ)
-    energy_var = (; e_int = specific.e_tot - K - Φ)
+function thermo_vars(moisture_model, precip_model, Y_c, K, Φ)
+    # Compute specific quantities on-the-fly
+    e_tot = @. lazy(specific(Y_c.ρe_tot, Y_c.ρ))
+    energy_var = (; e_int = e_tot - K - Φ)
+    
     moisture_var = if moisture_model isa DryModel
         (;)
     elseif moisture_model isa EquilMoistModel
-        (; specific.q_tot)
+        q_tot = @. lazy(specific(Y_c.ρq_tot, Y_c.ρ))
+        (; q_tot)
     elseif moisture_model isa NonEquilMoistModel
-        q_pt_args = (
-            specific.q_tot,
-            specific.q_liq + specific.q_rai,
-            specific.q_ice + specific.q_sno,
-        )
+        q_tot = @. lazy(specific(Y_c.ρq_tot, Y_c.ρ))
+        q_liq = @. lazy(specific(Y_c.ρq_liq, Y_c.ρ))
+        q_ice = @. lazy(specific(Y_c.ρq_ice, Y_c.ρ))
+        q_rai = @. lazy(specific(Y_c.ρq_rai, Y_c.ρ))
+        q_sno = @. lazy(specific(Y_c.ρq_sno, Y_c.ρ))
+        q_pt_args = (q_tot, q_liq + q_rai, q_ice + q_sno)
         (; q_pt = TD.PhasePartition(q_pt_args...))
     end
     return (; energy_var..., moisture_var...)
 end
 
-ts_gs(thermo_params, moisture_model, precip_model, specific, K, Φ, ρ) =
+ts_gs(thermo_params, moisture_model, precip_model, Y_c, K, Φ, ρ) =
     thermo_state(
         thermo_params;
-        thermo_vars(moisture_model, precip_model, specific, K, Φ)...,
+        thermo_vars(moisture_model, precip_model, Y_c, K, Φ)...,
         ρ,
     )
 
-ts_sgs(thermo_params, moisture_model, precip_model, specific, K, Φ, p) =
+ts_sgs(thermo_params, moisture_model, precip_model, Y_c, K, Φ, p) =
     thermo_state(
         thermo_params;
-        thermo_vars(moisture_model, precip_model, specific, K, Φ)...,
+        thermo_vars(moisture_model, precip_model, Y_c, K, Φ)...,
         p,
     )
 
@@ -460,7 +465,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    @. ᶜts = ts_gs(thermo_args..., ᶜK, ᶜΦ, Y.c.ρ)
+    @. ᶜts = ts_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
     if turbconv_model isa PrognosticEDMFX
@@ -471,9 +476,6 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     elseif !(isnothing(turbconv_model))
         # Do nothing for other turbconv models for now
-    end
-    if p.atmos.sgs_adv_model isa AdvectSGS
-        set_sgs_precomputed_quantities!(Y, p, t)
     end
 end
 

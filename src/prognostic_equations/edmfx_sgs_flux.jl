@@ -320,10 +320,9 @@ function edmfx_sgs_mass_flux_tendency!(
         #         edmfx_sgsflux_upwinding,
         #     )
         #     @. Yₜ.c.ρq_tot += vtt
-        end
+        # end
     end
 
-    return nothing
 end
 
 """
