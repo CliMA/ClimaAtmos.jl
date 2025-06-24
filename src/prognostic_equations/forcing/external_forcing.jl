@@ -550,13 +550,13 @@ function external_forcing_cache(
 end
 
 """
-    external_forcing_cache(Y, external_forcing::ISDACForcing, params)
+    external_forcing_cache(Y, external_forcing::ISDACForcing, params, _)
 
 Returns an empty cache for ISDAC (Indirect and Semi-Direct Aerosol Campaign)
 forcing. ISDAC forcing profiles are analytical functions of height, not requiring 
 pre-loading from files into cached fields.
 """
-external_forcing_cache(Y, external_forcing::ISDACForcing, params) = (;)  # Don't need to cache anything
+external_forcing_cache(Y, external_forcing::ISDACForcing, params, _) = (;)  # Don't need to cache anything
 
 """
     external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)

@@ -473,7 +473,6 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
     elseif external_forcing == "ReanalysisMonthlyAveragedDiurnal"
         external_forcing_file = get_external_monthly_forcing_file_path(parsed_args)
         # ExternalDrivenMonthlyAveragedDiurnalForcing{FT}(external_forcing_file)
-        ExternalDrivenTVForcing{FT}(external_forcing_file)
         # generate single file from monthly averaged diurnal data if it doesn't exist
         # we'll use ClimaUtilities.TimeVaryingInputs downstream to repeat the data. 
         if !isfile(external_forcing_file)
@@ -485,6 +484,7 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
                 source_strings = ["monthly_diurnal_profiles", "monthly_diurnal_inst", "monthly_diurnal_accum"]
             )
         end
+        ExternalDrivenTVForcing{FT}(external_forcing_file)
 
     elseif external_forcing == "ISDAC"
         ISDACForcing()
