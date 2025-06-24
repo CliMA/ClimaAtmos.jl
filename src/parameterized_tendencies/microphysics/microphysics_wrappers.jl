@@ -84,26 +84,22 @@ function cloud_sources(
 
     qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
 
-    if qᵥ + qₗ > FT(0)
-        S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
-            cm_params,
-            thp,
-            qₜ,
-            qₗ,
-            qᵢ,
-            qᵣ,
-            qₛ,
-            ρ,
-            Tₐ,
-        )
-    else
-        S = FT(0)
-    end
+    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+        cm_params,
+        thp,
+        qₜ,
+        qₗ,
+        qᵢ,
+        qᵣ,
+        qₛ,
+        ρ,
+        Tₐ,
+    )
 
     return ifelse(
         S > FT(0),
-        triangle_inequality_limiter(S, limit(clip(qᵥ), dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(clip(qₗ), dt, 2)),
+        triangle_inequality_limiter(S, limit(qᵥ, dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(qₗ, dt, 2)),
     )
 end
 function cloud_sources(
@@ -121,26 +117,22 @@ function cloud_sources(
 
     qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
 
-    if qᵥ + qᵢ > FT(0)
-        S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
-            cm_params,
-            thp,
-            qₜ,
-            qₗ,
-            qᵢ,
-            qᵣ,
-            qₛ,
-            ρ,
-            T,
-        )
-    else
-        S = FT(0)
-    end
+    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+        cm_params,
+        thp,
+        qₜ,
+        qₗ,
+        qᵢ,
+        qᵣ,
+        qₛ,
+        ρ,
+        T,
+    )
 
     return ifelse(
         S > FT(0),
-        triangle_inequality_limiter(S, limit(clip(qᵥ), dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(clip(qᵢ), dt, 2)),
+        triangle_inequality_limiter(S, limit(qᵥ, dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(qᵢ, dt, 2)),
     )
 end
 
