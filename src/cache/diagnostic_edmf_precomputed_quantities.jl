@@ -103,10 +103,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
   
     thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
-    ᶜts = Y.c.ts   #TODO replace
+    ᶜts = p.precomputed.ᶜts   #TODO replace
 
     q_tot = specific(Y.c.ρq_tot, Y.c.ρ)
-    ᶜh_tot = @. lazy(total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
 
     ρ_int_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
     uₕ_int_level = Fields.field_values(Fields.level(Y.c.uₕ, 1))
@@ -1072,7 +1072,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
 
     # Environment precipitation sources (to be applied to grid mean)
-    q_tot = @. lazy(specific(Y.c.q_tot, Y.c.ρ)
+    q_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
         thermo_params,
         microphys_0m_params,

@@ -260,10 +260,10 @@ Returns:
 """
 function specific_env_mse(gs, p)
     # Get necessary precomputed values from the cache `p`
-    (; ᶜK) = p.precomputed  # TODO: replace by on-the-fly computation
+    (; ᶜK, ᶜts) = p.precomputed  # TODO: replace by on-the-fly computation
     (; turbconv_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(gs.ρe_tot, gs.ρ)))
 
     # 1. Define the grid-scale moist static energy density `ρ * mse`.
     grid_scale_ρmse = gs.ρ .* (ᶜh_tot .- ᶜK)
