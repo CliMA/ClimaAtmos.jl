@@ -53,6 +53,58 @@ function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     return ρa == 0 ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
 end
 
+ """
+    sgs_weight_function(a, a_half)
+
+Computes a smooth, monotonic weight function `w(a)` that ranges from 0 to 1.
+
+This function is used as the interpolation weight in the regularized `specific`
+function. It ensures a numerically stable and smooth transition between a subgrid-scale 
+(SGS) quantity and its grid-mean counterpart, especially when the SGS area fraction `a` 
+is small.
+
+**Key Properties:**
+- `w(a) = 0` for `a ≤ 0`.
+- `w(a) = 1` for `a ≥ 1`.
+- `w(a_half) = 0.5`.
+- The function is continuously differentiable, with derivatives equal to zero at
+  `a = 0` and `a = 1`, which ensures smooth blending.
+- The functions grows very rapidly near `a = a_half`, and grows very slowly at all other 
+  values of `a`.
+- For small `a_half`, the weight rapidly approaches 1 for values of `a` that are
+  a few times larger than `a_half`.
+
+**Construction Method:**
+The function is piecewise. For `a` between 0 and 1, it is a custom sigmoid curve
+constructed in two main steps to satisfy the key properties:
+1.  **Bounded Sigmoid Creation**: A base sigmoid is created that maps the interval
+    `(0, 1)` to `(0, 1)` with zero derivatives at the endpoints. This is achieved
+    by composing a standard `tanh` function with the inverse of a slower-growing
+    `tanh` function.
+2.  **Midpoint Control**: To ensure the function passes through the control point
+    `(a_half, 0.5)`, the input `a` is first transformed by a specially designed
+    power function (`1 - (1 - a)^k`) before being passed to the bounded sigmoid.
+    This transformation maps `a_half` to `0.5` while preserving differentiability 
+    at the boundaries.
+
+Arguments:
+- `a`: The input SGS area fraction (often approximated as `ρa / ρ`).
+- `a_half`: The value of `a` at which the weight function should be 0.5, controlling
+          the transition point of the sigmoid curve.
+
+Returns:
+- The computed weight, a value between 0 and 1.
+"""
+function sgs_weight_function(a, a_half)
+    if a < 0
+        zero(a)
+    elseif a > 1
+        one(a)
+    else
+        (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2
+    end
+end
+
 """
     tracer_names(field)
 
@@ -112,58 +164,6 @@ foreach_gs_tracer(f::F, Yₜ, Y) where {F} =
         ᶜρχ = MatrixFields.get_field(Y.c, scalar_name)
         f(ᶜρχₜ, ᶜρχ, scalar_name)
     end
-
- """
-    sgs_weight_function(a, a_half)
-
-Computes a smooth, monotonic weight function `w(a)` that ranges from 0 to 1.
-
-This function is used as the interpolation weight in the regularized `specific`
-function. It ensures a numerically stable and smooth transition between a subgrid-scale 
-(SGS) quantity and its grid-mean counterpart, especially when the SGS area fraction `a` 
-is small.
-
-**Key Properties:**
-- `w(a) = 0` for `a ≤ 0`.
-- `w(a) = 1` for `a ≥ 1`.
-- `w(a_half) = 0.5`.
-- The function is continuously differentiable, with derivatives equal to zero at
-  `a = 0` and `a = 1`, which ensures smooth blending.
-- The functions grows very rapidly near `a = a_half`, and grows very slowly at all other 
-  values of `a`.
-- For small `a_half`, the weight rapidly approaches 1 for values of `a` that are
-  a few times larger than `a_half`.
-
-**Construction Method:**
-The function is piecewise. For `a` between 0 and 1, it is a custom sigmoid curve
-constructed in two main steps to satisfy the key properties:
-1.  **Bounded Sigmoid Creation**: A base sigmoid is created that maps the interval
-    `(0, 1)` to `(0, 1)` with zero derivatives at the endpoints. This is achieved
-    by composing a standard `tanh` function with the inverse of a slower-growing
-    `tanh` function.
-2.  **Midpoint Control**: To ensure the function passes through the control point
-    `(a_half, 0.5)`, the input `a` is first transformed by a specially designed
-    power function (`1 - (1 - a)^k`) before being passed to the bounded sigmoid.
-    This transformation maps `a_half` to `0.5` while preserving differentiability 
-    at the boundaries.
-
-Arguments:
-- `a`: The input SGS area fraction (often approximated as `ρa / ρ`).
-- `a_half`: The value of `a` at which the weight function should be 0.5, controlling
-          the transition point of the sigmoid curve.
-
-Returns:
-- The computed weight, a value between 0 and 1.
-"""
-function sgs_weight_function(a, a_half)
-    if a < 0
-        zero(a)
-    elseif a > 1
-        one(a)
-    else
-        (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2
-    end
-end
 
 """
     draft_sum(f, sgsʲs)
