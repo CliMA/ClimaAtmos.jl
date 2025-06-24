@@ -266,6 +266,13 @@ end
     @test CA.promote_period(Dates.Second(3600)) == Dates.Hour(1)
 end
 
+@testset "parse_date" begin
+    @test CA.parse_date("20000506") == Dates.DateTime(2000, 5, 6)
+    @test CA.parse_date("20000506-0000") == Dates.DateTime(2000, 5, 6, 0, 0)
+    @test_throws ErrorException CA.parse_date("20000506-00000")
+    @test_throws ErrorException CA.parse_date("")
+end
+
 @testset "ERA5 single day forcing file generation" begin
     FT = Float64
     parsed_args = Dict(

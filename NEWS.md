@@ -4,6 +4,8 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+PR [#3883](https://github.com/CliMA/ClimaAtmos.jl/pull/3883) adds atmosphere initial condition for WeatherQuest from ERA5
+
 PR [#3870](https://github.com/CliMA/ClimaAtmos.jl/pull/3870) adds externally driven SCM models forced by monthly-averaged ERA5
 reanalysis which are less data intensive and more stable. The simulation also employs the new implicit solver yielding a several 
 factor speedup. The associated documentation section, "Single Column Model", was also improved.
