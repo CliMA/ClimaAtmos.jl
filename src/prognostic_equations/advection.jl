@@ -36,7 +36,9 @@ Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, `Yₜ.c.uₕ`, and EDMFX-related fields 
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜK, ᶜp) = p.precomputed
+    (; ᶜts, ᶜu, ᶜK) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed

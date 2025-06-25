@@ -142,7 +142,6 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; ᶜts) = p.precomputed
-    ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
 
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
