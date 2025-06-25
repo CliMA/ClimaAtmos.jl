@@ -555,9 +555,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ᶜK_u = ᶜK_h
         else
             (; ᶜtke⁰,) = p.precomputed
-            ᶜmixing_length = p.scratch.ᶜtemp_scalar_6
-            ᶜmixing_length_lazy = mixing_length(Y, p)
-            ᶜmixing_length = Base.Broadcast.materialize(ᶜmixing_length_lazy)
+            ᶜmixing_length = p.scratch.ᶜtemp_scalar_3
+            ᶜmixing_length .= mixing_length(Y, p)
             ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
             ᶜK_h = eddy_diffusivity(p, ᶜK_u)
         end

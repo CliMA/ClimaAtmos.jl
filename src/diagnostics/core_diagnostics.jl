@@ -284,11 +284,12 @@ add_diagnostic_variable!(
             (; params) = cache
             (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
             ᶜdz = Fields.Δz_field(axes(state.c))
-            ᶜprandtl_nvec = cache.scratch.ᶜtemp_scalar_2
-            @. ᶜprandtl_nvec = turbulent_prandtl_number(
-                params,
-                ᶜlinear_buoygrad,
-                ᶜstrain_rate_norm,
+            ᶜprandtl_nvec = @. lazy(
+                turbulent_prandtl_number(
+                    params,
+                    ᶜlinear_buoygrad,
+                    ᶜstrain_rate_norm,
+                ),
             )
             ᶜmixing_length = @. lazy(
                 smagorinsky_lilly_length(

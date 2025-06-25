@@ -353,9 +353,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
-        ᶜmixing_length = p.scratch.ᶜtemp_scalar_6
-        ᶜmixing_length_lazy = mixing_length(Y, p)
-        ᶜmixing_length = Base.Broadcast.materialize(ᶜmixing_length_lazy)
+        ᶜmixing_length = p.scratch.ᶜtemp_scalar_2
+        ᶜmixing_length .= mixing_length(Y, p)
         ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
         ᶜK_h = eddy_diffusivity(p, ᶜK_u)
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
@@ -458,9 +457,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
-        ᶜmixing_length = p.scratch.ᶜtemp_scalar_6
-        ᶜmixing_length_lazy = mixing_length(Y, p)
-        ᶜmixing_length = Base.Broadcast.materialize(ᶜmixing_length_lazy)
+        ᶜmixing_length = p.scratch.ᶜtemp_scalar_2
+        ᶜmixing_length .= mixing_length(Y, p)
         ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
         ᶜK_h = eddy_diffusivity(p, ᶜK_u)
 
