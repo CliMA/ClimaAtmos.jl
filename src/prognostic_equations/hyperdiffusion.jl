@@ -124,7 +124,6 @@ end
 # variables in dss_hyperdiffusion_tendency_pairs
 NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
-    thermo_params = CAP.thermodynamics_params(p.params)
 
     isnothing(hyperdiff) && return nothing
 

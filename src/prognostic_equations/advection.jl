@@ -38,7 +38,6 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     (; ᶜΦ) = p.core
     (; ᶜts, ᶜu, ᶜK) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
@@ -76,6 +75,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
 
     end
 
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
     @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
