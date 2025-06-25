@@ -21,15 +21,19 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     thermo_params = CAP.thermodynamics_params(p.params)
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
-    (; ᶜp,ᶜK) = p.precomputed
+    (; ᶜp, ᶜK) = p.precomputed
     (; ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰) = p.precomputed
 
     ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
-    @. ᶜtke⁰ = specific_tke(Y.c.sgs⁰, Y.c, turbconv_model)
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke⁰
     ᶜq_tot⁰ = @.lazy(specific_env_value(:q_tot, Y.c, turbconv_model))
+
+    ᶜmse⁰ = p.scratch.ᶜtemp_scalar_2
+    ᶜmse⁰ .= specific_env_mse(Y.c, p)
+
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.microphysics_model isa Microphysics1Moment
         ᶜq_liq⁰ = @.lazy(specific_env_value(:q_liq, Y.c, turbconv_model))
@@ -39,16 +43,12 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         @. ᶜts⁰ = TD.PhaseNonEquil_phq(
             thermo_params,
             ᶜp,
-            specific_env_mse(Y.c, p) - ᶜΦ,
+            ᶜmse⁰ - ᶜΦ,
             TD.PhasePartition(ᶜq_tot⁰, ᶜq_liq⁰ + ᶜq_rai⁰, ᶜq_ice⁰ + ᶜq_sno⁰),
         )
     else
-        @. ᶜts⁰ = TD.PhaseEquil_phq(
-            thermo_params,
-            ᶜp,
-            specific_env_mse(Y.c, p) - ᶜΦ,
-            ᶜq_tot⁰,
-        )
+
+        @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
     end
     return nothing
 end
@@ -132,7 +132,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
     turbconv_params = CAP.turbconv_params(p.params)
 
     (; ᶜΦ,) = p.core
-    (; ᶜp, ᶜK, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ᶜp, ᶜK, ᶜtsʲs, ᶜρʲs, ᶜts) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
     for j in 1:n
@@ -176,8 +176,15 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
         # TODO: replace this with the actual surface area fraction when
         # using prognostic surface area
         @. ᶜaʲ_int_val = FT(turbconv_params.surface_area)
-        ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜtsʲ, specific(Y.c.ρe_tot, Y.c.ρ)))
-        ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
+        ᶜh_tot = @. lazy(
+            TD.total_specific_enthalpy(
+                thermo_params,
+                ᶜts,
+                specific(Y.c.ρe_tot, Y.c.ρ),
+            ),
+        )
+        ᶜh_tot_int_val =
+            Fields.field_values(Fields.level(Base.materialize(ᶜh_tot), 1))
         ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
         ᶜmseʲ_int_val = Fields.field_values(Fields.level(ᶜmseʲ, 1))
         @. ᶜmseʲ_int_val = sgs_scalar_first_interior_bc(
@@ -193,8 +200,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
         )
 
         # ... and the first interior point for EDMFX ᶜq_totʲ.
+
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         ᶜq_tot_int_val =
-            Fields.field_values(Fields.level(specific(Y.c.ρq_tot, Y.c.ρ), 1))
+            Fields.field_values(Fields.level(Base.materialize(ᶜq_tot), 1))
         ᶜq_totʲ_int_val = Fields.field_values(Fields.level(ᶜq_totʲ, 1))
         @. ᶜq_totʲ_int_val = sgs_scalar_first_interior_bc(
             ᶜz_int_val - z_sfc_val,
@@ -359,6 +368,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶠlg = Fields.local_geometry_field(Y.f)
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c))
 
     ᶜvert_div = p.scratch.ᶜtemp_scalar
     ᶜmassflux_vert_div = p.scratch.ᶜtemp_scalar_2
@@ -480,7 +491,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
     end
 
-    sfc_tke = Fields.level(ᶜtke⁰, 1)
+    sfc_tke = Fields.level(Base.materialize(ᶜtke⁰), 1)
     @. ᶜmixing_length_tuple = mixing_length(
         p.params,
         ustar,
@@ -503,7 +514,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     @. ᶜK_h = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
-    ρa_sfc_values = Fields.field_values(Fields.level(ᶜρa⁰, 1)) # TODO: replace by surface value
+    ρa_sfc_values = Fields.field_values(Fields.level(Base.materialize(ᶜρa⁰), 1)) # TODO: replace by surface value
     ustar_values = Fields.field_values(ustar)
     sfc_local_geometry_values = Fields.field_values(
         Fields.level(Fields.local_geometry_field(Y.f), half),
