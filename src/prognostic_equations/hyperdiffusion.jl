@@ -81,16 +81,18 @@ end
 # dss_hyperdiffusion_tendency_pairs
 NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
+    thermo_params = CAP.thermodynamics_params(p.params)
     isnothing(hyperdiff) && return nothing
 
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
-    (; ᶜp, ᶜspecific) = p.precomputed
+    (; ᶜts) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
-
+    
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
     # Grid scale hyperdiffusion
     @. ᶜ∇²u =
         C123(wgradₕ(divₕ(p.precomputed.ᶜu))) -
@@ -122,6 +124,8 @@ end
 # variables in dss_hyperdiffusion_tendency_pairs
 NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
+    thermo_params = CAP.thermodynamics_params(p.params)
+
     isnothing(hyperdiff) && return nothing
 
     (; ν₄_vorticity_coeff, ν₄_scalar_coeff, divergence_damping_factor) =
@@ -137,7 +141,9 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     diffuse_tke = use_prognostic_tke(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; ᶜp, ᶜspecific) = p.precomputed
+    (; ᶜts) = p.precomputed
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
+
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜρa⁰) = p.precomputed
