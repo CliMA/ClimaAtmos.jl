@@ -461,10 +461,8 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
         )
             @info "External forcing file $(external_forcing_file) does not exist or does not cover the expected time range. Generating it now."
             # generate forcing from provided era5 data paths
-            generate_external_era5_forcing_file(
-                parsed_args["site_latitude"],
-                parsed_args["site_longitude"],
-                parsed_args["start_date"],
+            generate_multiday_era5_external_forcing_file(
+                parsed_args,
                 external_forcing_file,
                 FT,
             )

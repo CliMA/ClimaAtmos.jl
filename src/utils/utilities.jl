@@ -496,3 +496,21 @@ function issphere(space)
     return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
            Domains.SphereDomain
 end
+
+"""
+    clima_to_era5_name_dict()
+
+Returns a dictionary mapping ClimaAtmos variable names to ERA5 variable names.
+"""
+function clima_to_era5_name_dict()
+    Dict(
+        "ua" => "u",
+        "va" => "v",
+        "wap" => "w", # era5 w is in Pa/s, this is confusing notation
+        "hus" => "q",
+        "ta" => "t",
+        "zg" => "z",
+        "clw" => "clwc",
+        "cli" => "ciwc",
+    )
+end

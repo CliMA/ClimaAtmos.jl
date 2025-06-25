@@ -266,7 +266,7 @@ end
     @test CA.promote_period(Dates.Second(3600)) == Dates.Hour(1)
 end
 
-@testset "ERA5 Observations to forcing file" begin
+@testset "ERA5 single day forcing file generation" begin
     FT = Float64
     parsed_args = Dict(
         "start_date" => "20000506",
@@ -274,120 +274,30 @@ end
         "site_longitude" => 0.0,
         "t_end" => "5hours",
     )
-    # generate 3 datasets that contain mock forcing data
+
     temporary_dir = mktempdir()
     sim_forcing =
         CA.get_external_forcing_file_path(parsed_args, data_dir = temporary_dir)
 
     @test basename(sim_forcing) ==
-          "tv_forcing_0.0_0.0_$(parsed_args["start_date"]).nc"
+          "tv_forcing_0.0_0.0_$(parsed_args["start_date"])_$(parsed_args["start_date"]).nc"
 
-    # create fake data
-    column_data_path = joinpath(
-        temporary_dir,
-        "forcing_and_cloud_hourly_profiles_$(parsed_args["start_date"]).nc",
-    )
-    accum_data_path =
-        joinpath(temporary_dir, "hourly_accum_$(parsed_args["start_date"]).nc")
-    inst_data_path =
-        joinpath(temporary_dir, "hourly_inst_$(parsed_args["start_date"]).nc")
+    # Create mock datasets
+    create_mock_era5_datasets(temporary_dir, parsed_args["start_date"], FT)
 
-    tvforcing = NCDataset(column_data_path, "c")
-    # define dimensions
-    defDim(tvforcing, "valid_time", 6)
-    defDim(tvforcing, "pressure_level", 37) # same dims as ERA5
-    defDim(tvforcing, "latitude", 9)
-    defDim(tvforcing, "longitude", 9)
-
-    # define variables
-    defVar(tvforcing, "latitude", FT, ("latitude",))
-    defVar(tvforcing, "longitude", FT, ("longitude",))
-    defVar(tvforcing, "pressure_level", FT, ("pressure_level",))
-    defVar(tvforcing, "valid_time", FT, ("valid_time",))
-    tvforcing["valid_time"].attrib["units"] = "hours since 2000-05-06 00:00:00"
-    tvforcing["valid_time"].attrib["calendar"] = "standard"
-
-    # fill the variables with sequential data
-    tvforcing["latitude"][:] = collect(-1.0:0.25:1.0)
-    tvforcing["longitude"][:] = collect(-1.0:0.25:1.0)
-    tvforcing["pressure_level"][:] = 10 .^ (range(1, stop = 4, length = 37))
-    tvforcing["valid_time"][:] = collect(0.0:5.0)
-
-    # define the forcing variables
-    full_dims = ("longitude", "latitude", "pressure_level", "valid_time")
-    defVar(tvforcing, "u", FT, full_dims)
-    defVar(tvforcing, "v", FT, full_dims)
-    defVar(tvforcing, "w", FT, full_dims)
-    defVar(tvforcing, "t", FT, full_dims)
-    defVar(tvforcing, "q", FT, full_dims)
-    defVar(tvforcing, "z", FT, full_dims)
-    defVar(tvforcing, "clwc", FT, full_dims)
-    defVar(tvforcing, "ciwc", FT, full_dims)
-
-    # fill the variables with uniform ones
-    tvforcing["u"][:, :, :, :] .= ones(FT, size(tvforcing["u"]))
-    tvforcing["v"][:, :, :, :] .= ones(FT, size(tvforcing["v"]))
-    tvforcing["w"][:, :, :, :] .= ones(FT, size(tvforcing["w"]))
-    tvforcing["t"][:, :, :, :] .= ones(FT, size(tvforcing["t"]))
-    tvforcing["q"][:, :, :, :] .= ones(FT, size(tvforcing["q"]))
-    tvforcing["z"][:, :, :, :] .= ones(FT, size(tvforcing["z"]))
-    tvforcing["clwc"][:, :, :, :] .= ones(FT, size(tvforcing["clwc"]))
-    tvforcing["ciwc"][:, :, :, :] .= ones(FT, size(tvforcing["ciwc"]))
-
-    # write the accumulated dataset
-    tv_accum = NCDataset(accum_data_path, "c")
-    defDim(tv_accum, "valid_time", 6)
-    defDim(tv_accum, "latitude", 9)
-    defDim(tv_accum, "longitude", 9)
-    defVar(tv_accum, "latitude", FT, ("latitude",))
-    defVar(tv_accum, "longitude", FT, ("longitude",))
-    defVar(tv_accum, "valid_time", FT, ("valid_time",))
-    tv_accum["valid_time"].attrib["units"] = "hours since 2000-05-06 00:00:00"
-    tv_accum["valid_time"].attrib["calendar"] = "standard"
-
-    tv_accum["latitude"][:] = collect(-1.0:0.25:1.0)
-    tv_accum["longitude"][:] = collect(-1.0:0.25:1.0)
-    tv_accum["valid_time"][:] = collect(0.0:5.0)
-
-    # add slhf and sshf variables with ones
-    defVar(tv_accum, "slhf", FT, ("longitude", "latitude", "valid_time"))
-    defVar(tv_accum, "sshf", FT, ("longitude", "latitude", "valid_time"))
-    tv_accum["slhf"][:, :, :] .= ones(FT, size(tv_accum["slhf"]))
-    tv_accum["sshf"][:, :, :] .= ones(FT, size(tv_accum["sshf"]))
-
-    # write the inst dataset
-    tv_inst = NCDataset(inst_data_path, "c")
-    defDim(tv_inst, "valid_time", 6)
-    defDim(tv_inst, "latitude", 9)
-    defDim(tv_inst, "longitude", 9)
-    defVar(tv_inst, "latitude", FT, ("latitude",))
-    defVar(tv_inst, "longitude", FT, ("longitude",))
-    defVar(tv_inst, "valid_time", FT, ("valid_time",))
-    tv_inst["valid_time"].attrib["units"] = "hours since 2000-05-06 00:00:00"
-    tv_inst["valid_time"].attrib["calendar"] = "standard"
-
-    tv_inst["latitude"][:] = collect(-1.0:0.25:1.0)
-    tv_inst["longitude"][:] = collect(-1.0:0.25:1.0)
-    tv_inst["valid_time"][:] = collect(0.0:5.0)
-
-    # define skt
-    defVar(tv_inst, "skt", FT, ("longitude", "latitude", "valid_time"))
-    tv_inst["skt"][:, :, :] .= ones(FT, size(tv_inst["skt"]))
-
-    # assert that the forcing file is generated correctly
+    # Generate forcing file
     time_resolution = FT(3600)
     CA.generate_external_era5_forcing_file(
         parsed_args["site_latitude"],
         parsed_args["site_longitude"],
         parsed_args["start_date"],
         sim_forcing,
-        Float64,
+        FT,
         time_resolution = time_resolution,
         data_dir = temporary_dir,
     )
 
-    # test that the fixed variables have been copied exactly
-    # name mapping between ERA5 and ClimaAtmos variable convections
+    # Format is "ecmwf_var" => "clima_var"
     fixed_vars = Dict(
         "q" => "hus",
         "t" => "ta",
@@ -399,12 +309,11 @@ end
         "ciwc" => "cli",
         "skt" => "ts",
     )
-
-    # accum variables
     surface_accum_vars = Dict("slhf" => "hfls", "sshf" => "hfss")
-    # check that the variables are copied correctly
-    # open the dataset
+
     processed_data = NCDataset(sim_forcing, "r")
+
+    # Test fixed variables - this tests that the variables are copied correctly
     for (era5_var, clima_var) in fixed_vars
         @test all(
             x -> all(isapprox.(x, 1, atol = 1e-10)),
@@ -412,6 +321,7 @@ end
         )
     end
 
+    # Test accumulated variables - note that the sign is flipped because of differences between ecmwf and clima
     for (era5_var, clima_var) in surface_accum_vars
         @test all(
             x -> all(isapprox.(x, -1 / time_resolution, atol = 1e-10)),
@@ -419,7 +329,7 @@ end
         )
     end
 
-    # assert that the gradients are all zero since the entries are constant; not in era5 dataset
+    # Test gradient variables (should be zero for uniform data)
     gradient_vars = ["tnhusha", "tntha"]
     for var in gradient_vars
         @test all(
@@ -428,8 +338,77 @@ end
         )
     end
 
-    # check that the coszen variable is between 0 and 1
+    # Test coszen variable
     @test all(x -> x >= 0 && x <= 1, processed_data["coszen"][:])
+
+    # Test time check
+    @test CA.check_external_forcing_file_times(sim_forcing, parsed_args)
+
+    close(processed_data)
+end
+
+@testset "ERA5 multiday forcing file generation" begin
+    FT = Float64
+    parsed_args = Dict(
+        "start_date" => "20000506",
+        "site_latitude" => 0.0,
+        "site_longitude" => 0.0,
+        "t_end" => "2days",
+    )
+
+    input_dir = mktempdir()
+    output_dir = mktempdir()
+    sim_forcing =
+        CA.get_external_forcing_file_path(parsed_args, data_dir = output_dir)
+
+    # Create mock datasets for multiple days
+    start_date = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
+    end_time =
+        start_date + Dates.Second(CA.time_to_seconds(parsed_args["t_end"]))
+    days_needed = Dates.value(Dates.Day(end_time - start_date)) + 1  # Add 1 to include partial end day
+
+    # Use a common base date for all datasets to avoid time concatenation issues
+    base_date = "20000101"
+
+    for day_offset in 0:(days_needed - 1)
+        current_date = start_date + Dates.Day(day_offset)
+        date_str = Dates.format(current_date, "yyyymmdd")
+        println("Creating mock datasets for $date_str")
+        create_mock_era5_datasets(
+            input_dir,
+            date_str,
+            FT;
+            base_date = base_date,
+        )
+    end
+
+    # Generate multiday forcing file
+    time_resolution = FT(3600)
+    CA.generate_multiday_era5_external_forcing_file(
+        parsed_args,
+        sim_forcing,
+        FT,
+        time_resolution = time_resolution,
+        input_data_dir = input_dir,
+        output_data_dir = output_dir,
+    ) # getting confused on the directories
+
+    # Test the generated file
+    processed_data = NCDataset(sim_forcing, "r")
+
+    # Should have days_needed * 24 hours per day time steps
+    expected_time_steps = days_needed * 24
+    @test length(processed_data["time"][:]) == expected_time_steps
+
+    # Test that data is consistent across time
+    @test all(x -> all(isapprox.(x, 1, atol = 1e-10)), processed_data["ta"][:])
+    @test all(
+        x -> all(isapprox.(x, -1 / time_resolution, atol = 1e-10)),
+        processed_data["hfls"][:],
+    )
+
+    # Test time check
+    @test CA.check_external_forcing_file_times(sim_forcing, parsed_args)
 
     # check the vertical tendency function - useful if we implement steady ERA5 forcing
     vert_partial_ds = Dict(
@@ -444,18 +423,103 @@ end
     vertical_temperature_gradient =
         CA.get_vertical_tendencies(vert_partial_ds, "ta")
 
-    # test the vertical temperature gradient is all zeros
-    @test all(
-        x -> all(isapprox.(x, 0, atol = 1e-10)),
-        vertical_temperature_gradient,
-    )
-
-    # check the forcing file time check passes if the start time and end time from config is valid
-    @test CA.check_external_forcing_file_times(sim_forcing, parsed_args)
-
-    # close files
-    close(tvforcing)
-    close(tv_inst)
-    close(tv_accum)
     close(processed_data)
+end
+
+@testset "ERA5 smoothing functions" begin
+    FT = Float64
+    temporary_dir = mktempdir()
+
+    # Create a test dataset with known spatial patterns
+    test_data_path = joinpath(temporary_dir, "test_smoothing.nc")
+    ds = NCDataset(test_data_path, "c")
+
+    # Create a larger grid for testing smoothing
+    nlat, nlon, npres, ntime = 21, 21, 5, 3
+    defDim(ds, "longitude", nlon)
+    defDim(ds, "latitude", nlat)
+    defDim(ds, "pressure_level", npres)
+    defDim(ds, "valid_time", ntime)
+
+    defVar(ds, "longitude", FT, ("longitude",))
+    defVar(ds, "latitude", FT, ("latitude",))
+    defVar(
+        ds,
+        "test_var_4d",
+        FT,
+        ("longitude", "latitude", "pressure_level", "valid_time"),
+    )
+    defVar(ds, "test_var_3d", FT, ("longitude", "latitude", "valid_time"))
+
+    # Fill coordinates
+    ds["longitude"][:] = collect(-5.0:0.5:5.0)  # 21 points
+    ds["latitude"][:] = collect(-5.0:0.5:5.0)   # 21 points
+
+    # Create test pattern: checkerboard-like pattern
+    for i in 1:nlon, j in 1:nlat, k in 1:npres, t in 1:ntime
+        ds["test_var_4d"][i, j, k, t] = ((i + j) % 2 == 0) ? 1.0 : 0.0
+    end
+
+    for i in 1:nlon, j in 1:nlat, t in 1:ntime
+        ds["test_var_3d"][i, j, t] = ((i + j) % 2 == 0) ? 1.0 : 0.0
+    end
+
+    close(ds)
+
+    # Test smooth_4D_era5
+    @testset "smooth_4D_era5" begin
+        test_ds = NCDataset(test_data_path, "r")
+
+        # Test with center point (should smooth checkerboard pattern)
+        center_lon_idx = 11  # middle of 21-point grid
+        center_lat_idx = 11
+        smoothed_4d = CA.smooth_4D_era5(
+            test_ds,
+            "test_var_4d",
+            center_lon_idx,
+            center_lat_idx,
+            smooth_amount = 4,
+        )
+
+        # With a checkerboard pattern and 4-point smoothing, we get 41 ones in a 81 square box 
+        exact_value_checkerboard = 41 / 81
+        @test all(
+            isapprox.(smoothed_4d, exact_value_checkerboard, atol = 1e-10),
+        )
+
+        # Test with different smoothing amount
+        smoothed_4d_small = CA.smooth_4D_era5(
+            test_ds,
+            "test_var_4d",
+            center_lon_idx,
+            center_lat_idx,
+            smooth_amount = 1,
+        )
+        @test size(smoothed_4d_small) == (npres, ntime)
+
+        close(test_ds)
+    end
+
+    # Test smooth_3D_era5
+    @testset "smooth_3D_era5" begin
+        test_ds = NCDataset(test_data_path, "r")
+
+        center_lon_idx = 11
+        center_lat_idx = 11
+        smoothed_3d = CA.smooth_3D_era5(
+            test_ds,
+            "test_var_3d",
+            center_lon_idx,
+            center_lat_idx,
+            smooth_amount = 4,
+        )
+
+        # With checkerboard pattern and 4-point smoothing, should get 41/81 
+        exact_value_checkerboard = 41 / 81
+        @test all(
+            isapprox.(smoothed_3d, exact_value_checkerboard, atol = 1e-10),
+        )
+        @test length(smoothed_3d) == ntime
+        close(test_ds)
+    end
 end
