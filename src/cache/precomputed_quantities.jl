@@ -337,13 +337,13 @@ Computes the cell-face contravariant velocity, given
  - `ᶠuₕ³` the cell-face horizontal `Contravariant3` velocity
  - `ᶠu₃` the cell-face `Covariant3` velocity
 """
-compute_ᶠu³(ᶠuₕ³, ᶠu₃) = ᶠuₕ³ + CT3(ᶠu₃)
+compute_ᶠu³(ᶠuₕ³, ᶠu₃) = @. lazy(ᶠuₕ³ + CT3(ᶠu₃))
 
 # This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
 # ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
 function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
     ᶜu .= compute_ᶜu(ᶜuₕ, ᶠu₃)
-    ᶠu³ .= compute_ᶠu³.(ᶠuₕ³, ᶠu₃)
+    ᶠu³ .= compute_ᶠu³(ᶠuₕ³, ᶠu₃)
     ᶜK .= compute_kinetic(ᶜuₕ, ᶠu₃)
     return nothing
 end
