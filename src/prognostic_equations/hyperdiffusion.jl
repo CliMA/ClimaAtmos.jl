@@ -117,8 +117,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         wdivₕ(gradₕ(specific(Y.c.ρe_tot, Y.c.ρ) + ᶜp / Y.c.ρ - ᶜh_ref))
 
     if diffuse_tke
-        ᶜtke⁰ =
-            @.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
+        ᶜtke⁰ = @.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
         (; ᶜ∇²tke⁰) = p.hyperdiff
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜtke⁰))
     end
@@ -155,8 +154,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
     if use_prognostic_tke(turbconv_model)
-        ᶜtke⁰ =
-            @.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
+        ᶜtke⁰ = @.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
         (; ᶜ∇²tke⁰) = p.hyperdiff
     end
 
@@ -252,7 +250,6 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
 
-    ᶜspecific = all_specific_gs(Y.c)
     (; ᶜ∇²specific_tracers) = p.hyperdiff
 
     # TODO: Fix RecursiveApply bug in gradₕ to fuse this operation.
@@ -294,7 +291,6 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     ν₄_scalar_for_precip = CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar
 
     n = n_mass_flux_subdomains(turbconv_model)
-    ᶜspecific = all_specific_gs(Y.c)
     (; ᶜ∇²specific_tracers) = p.hyperdiff
 
     # TODO: Since we are not applying the limiter to density (or area-weighted
@@ -338,4 +334,3 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
     return nothing
 end
-
