@@ -146,7 +146,13 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜp, sfc_conditions, ᶜts) = p.precomputed
 
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
     vst_uₕ = viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge)
     vst_u₃ = viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge)
     vst_ρe_tot = viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge)

@@ -140,9 +140,15 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶠu³, ᶜp) = p.precomputed
+    (; ᶠu³, ᶜp, ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
@@ -150,10 +156,11 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     @. Yₜ.c.ρe_tot += vtt
     if !(moisture_model isa DryModel)
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         vtt = vertical_transport(
             Y.c.ρ,
             ᶠu³,
-            specific(Y.c.ρq_tot, Y.c.ρ),
+            ᶜq_tot,
             dt,
             Val(:none),
         )
@@ -167,14 +174,12 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     if moisture_model isa NonEquilMoistModel
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed
         @. Yₜ.c.ρq_liq -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ *
-            ᶠright_bias(
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
                 Geometry.WVector(-(ᶜwₗ)) * specific(Y.c.ρq_liq, Y.c.ρ),
             ),
         )
         @. Yₜ.c.ρq_ice -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ *
-            ᶠright_bias(
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
                 Geometry.WVector(-(ᶜwᵢ)) * specific(Y.c.ρq_ice, Y.c.ρ),
             ),
         )
@@ -182,8 +187,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     if microphysics_model isa Microphysics1Moment
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ *
-            ᶠright_bias(
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
                 Geometry.WVector(-(ᶜwᵣ)) * specific(Y.c.ρq_rai, Y.c.ρ),
             ),
         )
@@ -212,8 +216,6 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         )
         @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ *
-            ᶠright_bias(
                 Geometry.WVector(-(ᶜwₛ)) * specific(Y.c.ρq_sno, Y.c.ρ),
             ),
         )
