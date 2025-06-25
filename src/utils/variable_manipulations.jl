@@ -1,4 +1,5 @@
 import ClimaCore.MatrixFields: @name
+import ClimaCore.RecursiveApply: ⊞, ⊠, rzero, rpromote_type
 
 """
     specific(ρχ, ρ)
@@ -386,19 +387,20 @@ function specific_env_mse(gs, p)
     grid_scale_ρmse = gs.ρ .* (ᶜh_tot .- ᶜK)
 
     # 2. Compute the environment's density-area-weighted mse (`ρa⁰mse⁰`).
-    ρa⁰mse⁰ = env_value(grid_scale_ρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, gs)
+    ρa⁰mse⁰ = p.scratch.ᶜtemp_scalar
+    @. ρa⁰mse⁰ = env_value(grid_scale_ρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, gs)
 
     # 3. Compute the environment's density-area product (`ρa⁰`).
-    ρa⁰_val = ρa⁰(gs)
+    ρa⁰_val = @. lazy(ρa⁰(gs))
 
     # 4. Compute and return the final specific environment mse (`mse⁰`).
-    return specific(
+    return @. lazy(specific(
         ρa⁰mse⁰,
         ρa⁰_val,
         grid_scale_ρmse,
         gs.ρ,
         turbconv_model,
-    )
+    ))
 end
 
 """

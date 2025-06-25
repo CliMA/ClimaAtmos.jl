@@ -36,7 +36,9 @@ Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, `Yₜ.c.uₕ`, and EDMFX-related fields 
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜK, ᶜp) = p.precomputed
+    (; ᶜu, ᶜK, ᶜp, ᶜts) = p.precomputed
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
@@ -174,7 +176,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
-    (; ᶜu, ᶠu³, ᶜK) = p.precomputed
+    (; ᶜu, ᶠu³, ᶜK, ᶜts) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics

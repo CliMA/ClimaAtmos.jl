@@ -3,6 +3,7 @@
 #####
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
+using Base.Broadcast: materialize
 
 """
     implicit_precomputed_quantities(Y, atmos)
@@ -372,21 +373,20 @@ function thermo_state(
 end
 
 function thermo_vars(moisture_model, precip_model, Y_c, K, Φ)
-    # Compute specific quantities on-the-fly
-    e_tot = @. lazy(specific(Y_c.ρe_tot, Y_c.ρ))
+    e_tot = materialize(@. lazy(specific(Y_c.ρe_tot, Y_c.ρ)))
     energy_var = (; e_int = e_tot - K - Φ)
-    
+
     moisture_var = if moisture_model isa DryModel
         (;)
     elseif moisture_model isa EquilMoistModel
-        q_tot = @. lazy(specific(Y_c.ρq_tot, Y_c.ρ))
+        q_tot = materialize(@. lazy(specific(Y_c.ρq_tot, Y_c.ρ)))
         (; q_tot)
     elseif moisture_model isa NonEquilMoistModel
-        q_tot = @. lazy(specific(Y_c.ρq_tot, Y_c.ρ))
-        q_liq = @. lazy(specific(Y_c.ρq_liq, Y_c.ρ))
-        q_ice = @. lazy(specific(Y_c.ρq_ice, Y_c.ρ))
-        q_rai = @. lazy(specific(Y_c.ρq_rai, Y_c.ρ))
-        q_sno = @. lazy(specific(Y_c.ρq_sno, Y_c.ρ))
+        q_tot = materialize(@. lazy(specific(Y_c.ρq_tot, Y_c.ρ)))
+        q_liq = materialize(@. lazy(specific(Y_c.ρq_liq, Y_c.ρ)))
+        q_ice = materialize(@. lazy(specific(Y_c.ρq_ice, Y_c.ρ)))
+        q_rai = materialize(@. lazy(specific(Y_c.ρq_rai, Y_c.ρ)))
+        q_sno = materialize(@. lazy(specific(Y_c.ρq_sno, Y_c.ρ)))
         q_pt_args = (q_tot, q_liq + q_rai, q_ice + q_sno)
         (; q_pt = TD.PhasePartition(q_pt_args...))
     end
@@ -439,7 +439,6 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     thermo_params = CAP.thermodynamics_params(p.params)
     thermo_args = (thermo_params, moisture_model, precip_model)
 
-    ᶜspecific .= ᶜspecific_gs_tracers(Y)
     @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
 
     # TODO: We might want to move this to dss! (and rename dss! to something

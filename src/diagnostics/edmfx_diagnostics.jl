@@ -633,7 +633,7 @@ compute_aren!(_, _, _, _, turbconv_model::T) where {T} =
 
 function compute_aren!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
-    ᶜρa⁰ = @.lazy(ρa⁰(state.c))
+    ᶜρa⁰ = @. lazy(ρa⁰(state.c))
     if isnothing(out)
         return draft_area.(
             ᶜρa⁰,
@@ -1146,11 +1146,11 @@ function compute_tke!(
     time,
     turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX, DiagnosticEDMFX},
 )
-
+    ᶜtke = @. lazy(specific_tke(state.c.sgs⁰, state.c, turbconv_model))
     if isnothing(out)
-        return specific_tke(state.c.sgs⁰, state.c, turbconv_model)
+        return Base.materialize(ᶜtke)
     else
-        out .= specific_tke(state.c.sgs⁰, state.c, turbconv_model)
+        out .= ᶜtke
     end
 end
 

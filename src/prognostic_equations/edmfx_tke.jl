@@ -48,7 +48,9 @@ function edmfx_tke_tendency!(
         ᶠu³⁰,
         ᶠu³,
         ᶜstrain_rate_norm,
-        ᶜlinear_buoygrad
+        ᶜlinear_buoygrad,
+        ᶜK_u,
+        ᶜK_h,
     ) = p.precomputed
     turbconv_params = CAP.turbconv_params(p.params)
     FT = eltype(p.params)
