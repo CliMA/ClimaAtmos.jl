@@ -471,7 +471,7 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
                 parsed_args,
                 external_forcing_file,
                 FT,
-                data_dir = joinpath(
+                input_data_dir = joinpath(
                     @clima_artifact("era5_hourly_atmos_raw"),
                     "daily",
                 ),
