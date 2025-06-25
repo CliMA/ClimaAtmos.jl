@@ -64,15 +64,8 @@ NVTX.@annotate function set_cloud_fraction!(
     else
         q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
         q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-        @. cloud_diagnostics_tuple = make_named_tuple(
-            ifelse(
-                q_liq + q_ice > 0,
-                1,
-                0,
-            ),
-            q_liq,
-            q_ice,
-        )
+        @. cloud_diagnostics_tuple =
+            make_named_tuple(ifelse(q_liq + q_ice > 0, 1, 0), q_liq, q_ice)
     end
 end
 
@@ -91,15 +84,6 @@ NVTX.@annotate function set_cloud_fraction!(
     (; turbconv_model) = p.atmos
 
     if isnothing(turbconv_model)
-        (;
-            ᶜlinear_buoygrad,
-            ᶜstrain_rate_norm,
-            ᶠu³⁰,
-            ᶠu³,
-            ᶜentrʲs, 
-            ᶜdetrʲs, 
-            ᶠu³ʲs,
-        ) = p.precomputed
         ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
         if p.atmos.call_cloud_diagnostics_per_stage isa
            CallCloudDiagnosticsPerStage

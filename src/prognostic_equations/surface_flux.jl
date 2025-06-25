@@ -104,7 +104,9 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
     p.atmos.disable_surface_flux_tendency && return
 
     FT = eltype(Y)
-    (; sfc_conditions) = p.precomputed
+    (; params) = p
+    (; sfc_conditions, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(params)
 
     if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         btt =
@@ -112,7 +114,13 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.uₕ -= btt
     end
 
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
     btt = boundary_tendency_scalar(ᶜh_tot, sfc_conditions.ρ_flux_h_tot)
     @. Yₜ.c.ρe_tot -= btt
     ρ_flux_χ = p.scratch.sfc_temp_C3

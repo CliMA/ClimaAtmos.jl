@@ -1,4 +1,5 @@
 import ClimaCore.MatrixFields: @name
+import ClimaCore.RecursiveApply: ⊞, ⊠, rzero, rpromote_type
 
 """
     specific(ρχ, ρ)
@@ -218,7 +219,7 @@ Arguments:
 - `turbconv_model`: The turbulence convection model, containing parameters for regularization (e.g., `a_half`).
 """
 function specific(ρχ, ρ)
-    return ρχ / ρ 
+    return ρχ / ρ
 end
 
 function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
@@ -230,7 +231,7 @@ function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     return ρa == 0 ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
 end
 
- """
+"""
     sgs_weight_function(a, a_half)
 
 Computes a smooth, monotonic weight function `w(a)` that ranges from 0 to 1.
@@ -380,24 +381,27 @@ function specific_env_mse(gs, p)
     (; ᶜK, ᶜts) = p.precomputed  # TODO: replace by on-the-fly computation
     (; turbconv_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(gs.ρe_tot, gs.ρ)))
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(gs.ρe_tot, gs.ρ),
+        ),
+    )
 
     # 1. Define the grid-scale moist static energy density `ρ * mse`.
     grid_scale_ρmse = gs.ρ .* (ᶜh_tot .- ᶜK)
 
     # 2. Compute the environment's density-area-weighted mse (`ρa⁰mse⁰`).
-    ρa⁰mse⁰ = env_value(grid_scale_ρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, gs)
+    ρa⁰mse⁰ = p.scratch.ᶜtemp_scalar
+    @. ρa⁰mse⁰ = env_value(grid_scale_ρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, gs)
 
     # 3. Compute the environment's density-area product (`ρa⁰`).
-    ρa⁰_val = ρa⁰(gs)
+    ρa⁰_val = @. lazy(ρa⁰(gs))
 
     # 4. Compute and return the final specific environment mse (`mse⁰`).
-    return specific(
-        ρa⁰mse⁰,
-        ρa⁰_val,
-        grid_scale_ρmse,
-        gs.ρ,
-        turbconv_model,
+    return @. lazy(
+        specific(ρa⁰mse⁰, ρa⁰_val, grid_scale_ρmse, gs.ρ, turbconv_model),
     )
 end
 
