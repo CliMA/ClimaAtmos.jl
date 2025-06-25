@@ -254,7 +254,7 @@ function generate_external_forcing_file(
     smooth_amount = 4,
     time_resolution = FT(3600), # size of accumulated variable period in seconds (3600 for hourly, 86400 for daily and monthly)
     data_dir = @clima_artifact("era5_hourly_atmos_raw"),
-    source_strings = [
+    data_strs = [
         "forcing_and_cloud_hourly_profiles",
         "hourly_inst",
         "hourly_accum",
@@ -274,14 +274,11 @@ function generate_external_forcing_file(
             "molar_mass_dry_air",
         ],
     )
-    @info source_strings
     # load datasets
     tvforcing =
-        NCDataset(joinpath(data_dir, "$(source_strings[1])_$(start_date).nc"))
-    tv_inst =
-        NCDataset(joinpath(data_dir, "$(source_strings[2])_$(start_date).nc"))
-    tv_accum =
-        NCDataset(joinpath(data_dir, "$(source_strings[3])_$(start_date).nc"))
+        NCDataset(joinpath(data_dir, "$(data_strs[1])_$(start_date).nc"))
+    tv_inst = NCDataset(joinpath(data_dir, "$(data_strs[2])_$(start_date).nc"))
+    tv_accum = NCDataset(joinpath(data_dir, "$(data_strs[3])_$(start_date).nc"))
 
     # round to era5 quarter degree resolution for site selection
     lat = round(lat * 4) / 4

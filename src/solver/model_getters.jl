@@ -494,7 +494,7 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
                     @clima_artifact("era5_hourly_atmos_raw"),
                     "monthly",
                 ),
-                source_strings = [
+                data_strs = [
                     "monthly_diurnal_profiles",
                     "monthly_diurnal_inst",
                     "monthly_diurnal_accum",

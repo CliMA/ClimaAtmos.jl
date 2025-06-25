@@ -290,11 +290,10 @@ end
     # Generate forcing file
     time_resolution = FT(3600)
     CA.generate_external_forcing_file(
-        parsed_args["site_latitude"],
-        parsed_args["site_longitude"],
-        parsed_args["start_date"],
+        parsed_args,
         sim_forcing,
         FT,
+        smooth_amount = 4,
         time_resolution = time_resolution,
         data_dir = temporary_dir,
     )
@@ -395,7 +394,7 @@ end
         time_resolution = time_resolution,
         input_data_dir = input_dir,
         output_data_dir = output_dir,
-    ) # getting confused on the directories
+    )
 
     # Test the generated file
     processed_data = NCDataset(sim_forcing, "r")
