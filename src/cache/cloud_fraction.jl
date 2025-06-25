@@ -144,9 +144,8 @@ NVTX.@annotate function set_cloud_fraction!(
     # environment
     diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
 
-    ᶜmixing_length = p.scratch.ᶜtemp_scalar_6
-    ᶜmixing_length_lazy = mixing_length(Y, p)
-    ᶜmixing_length = Base.Broadcast.materialize(ᶜmixing_length_lazy)
+    ᶜmixing_length = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length .= mixing_length(Y, p)
 
     @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,
@@ -202,9 +201,8 @@ NVTX.@annotate function set_cloud_fraction!(
     # environment
     diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
 
-    ᶜmixing_length = p.scratch.ᶜtemp_scalar_6
-    ᶜmixing_length_lazy = mixing_length(Y, p)
-    ᶜmixing_length = Base.Broadcast.materialize(ᶜmixing_length_lazy)
+    ᶜmixing_length = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length .= mixing_length(Y, p)
 
     @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,

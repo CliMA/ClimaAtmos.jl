@@ -576,9 +576,8 @@ function mixing_length(Y, p, mixing_length_property = :master)
     ᶜdz = Fields.Δz_field(axes(Y.c))
     sfc_tke = Fields.level(ᶜtke⁰, 1)
 
-    ᶜprandtl_nvec_lazy = turbulent_prandtl_number(p)
-    ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_7
-    ᶜprandtl_nvec = Base.Broadcast.materialize(ᶜprandtl_nvec_lazy)
+    ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
+    ᶜprandtl_nvec .= ᶜturbulent_prandtl_number(p)
 
     ᶜtke_exch = tke_exchange(Y, p)
 
@@ -700,7 +699,7 @@ function turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 end
 
 
-function turbulent_prandtl_number(p)
+function ᶜturbulent_prandtl_number(p)
     (; params) = p
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
     return @. lazy(
@@ -890,6 +889,6 @@ end
 
 
 function eddy_diffusivity(p, K_u)
-    ᶜprandtl_nvec = turbulent_prandtl_number(p)
+    ᶜprandtl_nvec = ᶜturbulent_prandtl_number(p)
     return @. lazy(K_u / ᶜprandtl_nvec) # prandtl_nvec is already bounded by eps_FT and Pr_max
 end
