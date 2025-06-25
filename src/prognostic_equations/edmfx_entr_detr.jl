@@ -530,7 +530,8 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
     (; ᶠu₃⁰) = p.precomputed
 
-    ᶜmse⁰ = @.lazy(specific_env_mse(Y.c, p))
+    ᶜmse⁰ = p.scratch.ᶜtemp_scalar
+    ᶜmse⁰ .= specific_env_mse(Y.c, p)
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.microphysics_model isa Microphysics1Moment
         ᶜq_liq⁰ = @.lazy(specific_env_value(:q_liq, Y.c, turbconv_model))

@@ -115,7 +115,13 @@ function vertical_diffusion_boundary_layer_tendency!(
         top = Operators.SetValue(C3(0)),
         bottom = Operators.SetValue(C3(0)),
     )
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
     @. Yₜ.c.ρe_tot -=
         ᶜdivᵥ_ρe_tot(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜh_tot)))
 

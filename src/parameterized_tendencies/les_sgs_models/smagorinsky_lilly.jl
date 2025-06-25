@@ -96,7 +96,7 @@ horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
-    (; ᶜτ_smag, ᶠτ_smag, ᶜD_smag) = p.precomputed
+    (; ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶜts) = p.precomputed
 
     ## Momentum tendencies
     ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(Y.c.ρ)
@@ -104,7 +104,13 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLill
     @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_smag) / ᶠρ)
 
     ## Total energy tendency
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
     @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(ᶜh_tot))
 
     ## Tracer diffusion and associated mass changes
@@ -125,9 +131,9 @@ import UnrolledUtilities as UU
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     FT = eltype(Y)
     (; sfc_temp_C3, ᶠtemp_scalar) = p.scratch
-    (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, sfc_conditions) =
-        p.precomputed
+    (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, sfc_conditions) = p.precomputed
     (; ρ_flux_uₕ, ρ_flux_h_tot) = sfc_conditions
+    (; ᶜts) = p.precomputed
 
     # Define operators
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
@@ -154,7 +160,13 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     @. Yₜ.f.u₃ -= C3(ᶠdivᵥ(Y.c.ρ * ᶜτ_smag) / ᶠρ)
 
     ## Total energy tendency
-    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)))
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜh_tot)))
 
     ## Tracer diffusion and associated mass changes
