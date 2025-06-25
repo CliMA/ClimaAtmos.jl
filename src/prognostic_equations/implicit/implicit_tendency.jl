@@ -211,8 +211,6 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         )
         @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ *
-            ᶠright_bias(
                 Geometry.WVector(-(ᶜwₛ)) * specific(Y.c.ρq_sno, Y.c.ρ),
             ),
         )

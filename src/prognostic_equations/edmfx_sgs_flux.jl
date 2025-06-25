@@ -92,7 +92,7 @@ function edmfx_sgs_mass_flux_tendency!(
                     (Y.c.sgsʲs.:($$j).q_tot - specific(Y.c.ρq_tot, Y.c.ρ)) *
                     draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                 vtt = vertical_transport(
-                    ᶜρʲs.:($$j),
+                    ᶜρʲs.:($j),
                     ᶠu³_diff,
                     ᶜa_scalar,
                     dt,
