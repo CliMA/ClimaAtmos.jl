@@ -476,7 +476,9 @@ function external_forcing_cache(
             reference_date = start_date,
             regridder_kwargs = (; extrapolation_bc),
             # useful for monthly averaged diurnal data - does not affect hourly era5 case because of time bounds flag
-            method = TimeVaryingInputs.LinearInterpolation(TimeVaryingInputs.PeriodicCalendar())
+            method = TimeVaryingInputs.LinearInterpolation(
+                TimeVaryingInputs.PeriodicCalendar(),
+            ),
         ) for name in column_tendencies
     ]
 
@@ -487,7 +489,9 @@ function external_forcing_cache(
             surface_target_space;
             reference_date = start_date,
             regridder_kwargs = (; extrapolation_bc),
-            method = TimeVaryingInputs.LinearInterpolation(TimeVaryingInputs.PeriodicCalendar())
+            method = TimeVaryingInputs.LinearInterpolation(
+                TimeVaryingInputs.PeriodicCalendar(),
+            ),
         ) for name in surface_tendencies
     ]
 

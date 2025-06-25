@@ -276,8 +276,10 @@ end
     )
 
     temporary_dir = mktempdir()
-    sim_forcing =
-        CA.get_external_daily_forcing_file_path(parsed_args, data_dir = temporary_dir)
+    sim_forcing = CA.get_external_daily_forcing_file_path(
+        parsed_args,
+        data_dir = temporary_dir,
+    )
 
     @test basename(sim_forcing) ==
           "tv_forcing_0.0_0.0_$(parsed_args["start_date"])_$(parsed_args["start_date"]).nc"
@@ -358,8 +360,10 @@ end
 
     input_dir = mktempdir()
     output_dir = mktempdir()
-    sim_forcing =
-        CA.get_external_daily_forcing_file_path(parsed_args, data_dir = output_dir)
+    sim_forcing = CA.get_external_daily_forcing_file_path(
+        parsed_args,
+        data_dir = output_dir,
+    )
 
     # Create mock datasets for multiple days
     start_date = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
