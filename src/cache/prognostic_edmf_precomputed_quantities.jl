@@ -21,7 +21,12 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     thermo_params = CAP.thermodynamics_params(p.params)
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
-    (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
+    (; ᶜK) = p.precomputed
+
+    # TODO lazy broadcast with levels
+    ᶜh_tot = @. TD.total_specific_enthalpy(thermo_params, 
+                                                p.precomputed.ᶜts, 
+                                                specific(Y.c.ρe_tot, Y.c.ρ))
     (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
         p.precomputed
     if p.atmos.moisture_model isa NonEquilMoistModel &&
@@ -45,6 +50,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         Y.c.ρ,
         turbconv_model,
     )
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, p.precomputed.ᶜts))
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.precip_model isa Microphysics1Moment
         @. ᶜq_liq⁰ = divide_by_ρa(
@@ -111,9 +117,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    (; ᶜΦ,) = p.core
-    (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ᶜΦ) = p.core
+    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶜtsʲs, ᶜρʲs, ᶜts) = p.precomputed
 
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, p.precomputed.ᶜts))
     for j in 1:n
         ᶜuʲ = ᶜuʲs.:($j)
         ᶠu³ʲ = ᶠu³ʲs.:($j)
@@ -173,7 +180,15 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
     turbconv_params = CAP.turbconv_params(p.params)
 
     (; ᶜΦ,) = p.core
-    (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ᶜspecific, ᶜK, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    
+    # TODO: lazy broadcast with levels
+    ᶜp = @. TD.air_pressure(thermo_params, p.precomputed.ᶜts)
+    ᶜh_tot = @. TD.total_specific_enthalpy(thermo_params, 
+                                                p.precomputed.ᶜts, 
+                                                specific(Y.c.ρe_tot, Y.c.ρ))
+
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
     for j in 1:n
@@ -367,7 +382,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜtke⁰, ᶜu, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
     (;
         ᶜmixing_length_tuple,
         ᶜmixing_length,
@@ -376,6 +391,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜK_u,
         ᶜK_h,
         ρatke_flux,
+        ᶜts,
     ) = p.precomputed
     (;
         ᶜuʲs,
@@ -398,6 +414,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜvert_div = p.scratch.ᶜtemp_scalar
     ᶜmassflux_vert_div = p.scratch.ᶜtemp_scalar_2
     ᶜw_vert_div = p.scratch.ᶜtemp_scalar_3
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, p.precomputed.ᶜts))
     for j in 1:n
         # entrainment/detrainment
         @. ᶜentrʲs.:($$j) = entrainment(

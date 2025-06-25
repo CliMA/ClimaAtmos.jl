@@ -80,7 +80,7 @@ end
 function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWave)
     ᶜT = p.scratch.ᶜtemp_scalar
     (; params) = p
-    (; ᶜts, ᶜp) = p.precomputed
+    (; ᶜts) = p.precomputed
     (; ᶜdTdz) = p.orographic_gravity_wave
     (;
         topo_k_pbl,
@@ -98,9 +98,10 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     FT = Spaces.undertype(axes(Y.c))
 
     # parameters
-    thermo_params = CAP.thermodynamics_params(params)
+    thermo_params = CAP.thermodynamics_params(p.params)
     grav = FT(CAP.grav(params))
     cp_d = FT(CAP.cp_d(params))
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
 
     # z
     ᶜz = Fields.coordinate_field(Y.c).z

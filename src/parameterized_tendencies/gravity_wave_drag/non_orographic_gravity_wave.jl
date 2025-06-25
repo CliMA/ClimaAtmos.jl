@@ -141,6 +141,8 @@ function non_orographic_gravity_wave_compute_tendency!(
     #unpack
     ᶜT = p.scratch.ᶜtemp_scalar
     (; ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
     (; params) = p
     (;
         ᶜdTdz,
@@ -159,7 +161,6 @@ function non_orographic_gravity_wave_compute_tendency!(
     ᶜz = Fields.coordinate_field(Y.c).z
     FT = Spaces.undertype(axes(Y.c))
     # parameters
-    thermo_params = CAP.thermodynamics_params(params)
     grav = CAP.grav(params)
 
     # compute buoyancy frequency

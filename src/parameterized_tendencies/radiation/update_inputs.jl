@@ -48,8 +48,9 @@ function update_temperature_pressure!((; u, p, t)::I) where {I}
     T_min = CAP.optics_lookup_temperature_min(params)
     T_max = CAP.optics_lookup_temperature_max(params)
 
-    (; ᶜts, ᶜp, sfc_conditions) = p.precomputed
+    (; ᶜts, sfc_conditions) = p.precomputed
     model = p.radiation.rrtmgp_model
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
 
     # update surface temperature
     sfc_ts = sfc_conditions.ts

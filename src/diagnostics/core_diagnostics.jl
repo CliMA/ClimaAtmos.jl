@@ -181,10 +181,11 @@ add_diagnostic_variable!(
     long_name = "Pressure at Model Full-Levels",
     units = "Pa",
     compute! = (out, state, cache, time) -> begin
+    thermo_params = CAP.thermodynamics_params(cache.params)
         if isnothing(out)
-            return copy(cache.precomputed.ᶜp)
+            return copy(TD.air_pressure.(thermo_params, cache.precomputed.ᶜts))
         else
-            out .= cache.precomputed.ᶜp
+            out .= TD.air_pressure.(thermo_params, cache.precomputed.ᶜts)
         end
     end,
 )

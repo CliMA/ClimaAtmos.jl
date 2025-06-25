@@ -93,7 +93,14 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜh_tot, ᶜK) = p.precomputed
+    (; ᶠu³, ᶜK, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, p.precomputed.ᶜts))
+
+    # TODO lazy broadcast pattern with levels ?  
+    ᶜh_tot = @. TD.total_specific_enthalpy(thermo_params, 
+                                                p.precomputed.ᶜts, 
+                                                specific(Y.c.ρe_tot, Y.c.ρ))
     (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.precomputed.sfc_conditions
@@ -101,7 +108,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     (; ᶠu³⁰, ᶜK⁰) = p.precomputed
 
     (; params) = p
-    thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
 
     ρ_int_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
@@ -305,7 +311,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; dt) = p
     dt = float(dt)
     (; ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
+    (; ᶠu³, ᶜts, ᶜK) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, p.precomputed.ᶜts))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, 
+                                                p.precomputed.ᶜts, 
+                                                specific(Y.c.ρe_tot, Y.c.ρ)))
     (; q_tot) = p.precomputed.ᶜspecific
     (;
         ᶜρaʲs,
@@ -330,7 +341,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         q_sno = p.precomputed.ᶜqₛ
     end
 
-    thermo_params = CAP.thermodynamics_params(params)
     microphys_0m_params = CAP.microphysics_0m_params(params)
     microphys_1m_params = CAP.microphysics_1m_params(params)
     turbconv_params = CAP.turbconv_params(params)
@@ -960,19 +970,29 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
-    (; ᶜp, ᶜu, ᶜts) = p.precomputed
-    (; ustar, obukhov_length) = p.precomputed.sfc_conditions
-    (; ᶜtke⁰) = p.precomputed
+    (; ᶠu³, ᶜK) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, p.precomputed.ᶜts))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, 
+                                                p.precomputed.ᶜts, 
+                                                specific(Y.c.ρe_tot, Y.c.ρ)))
+    (; q_tot) = p.precomputed.ᶜspecific
     (;
-        ᶜlinear_buoygrad,
-        ᶜstrain_rate_norm,
-        ᶜmixing_length_tuple,
-        ᶜmixing_length,
+        ᶜρaʲs,
+        ᶠu³ʲs,
+        ᶜKʲs,
+        ᶜmseʲs,
+        ᶜq_totʲs,
+        ᶜtsʲs,
+        ᶜρʲs,
+        ᶜentrʲs,
+        ᶜdetrʲs,
+        ᶜturb_entrʲs,
+        ᶠnh_pressure³_buoyʲs,
+        ᶠnh_pressure³_dragʲs,
     ) = p.precomputed
-    (; ᶜK_h, ᶜK_u, ρatke_flux) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜtke⁰) = p.precomputed
     turbconv_params = CAP.turbconv_params(params)
-    thermo_params = CAP.thermodynamics_params(params)
-    ᶜlg = Fields.local_geometry_field(Y.c)
 
     if p.atmos.turbconv_model isa DiagnosticEDMFX
         (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs, ᶠu³⁰, ᶜu⁰) = p.precomputed

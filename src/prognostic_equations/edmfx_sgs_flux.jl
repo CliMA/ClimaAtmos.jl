@@ -40,9 +40,10 @@ function edmfx_sgs_mass_flux_tendency!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
-    (; ᶠu³, ᶜh_tot) = p.precomputed
+    (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
     if (
         p.atmos.moisture_model isa NonEquilMoistModel &&
         p.atmos.precip_model isa Microphysics1Moment
@@ -52,6 +53,9 @@ function edmfx_sgs_mass_flux_tendency!(
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, 
+                                                ᶜts, 
+                                                specific(Y.c.ρe_tot, Y.c.ρ)))
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
         # Enthalpy fluxes. First sum up the draft fluxes
         # TODO: Isolate assembly of flux term pattern to a function and 
