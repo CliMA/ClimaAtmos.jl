@@ -47,6 +47,27 @@ determined by the filename.
 sort_files_by_time(files) =
     permute!(files, sortperm(time_from_filename.(files)))
 
+
+"""
+    Velocity manipulations
+"""
+function compute_ᶠuₕ³(Y)
+    return compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+end
+
+function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
+end
+
+function compute_ᶠu³(Y)
+    return compute_ᶠuₕ³(Y) + CT3(Y.f.u₃)
+end
+
+function compute_ᶜu(Y)
+    return C123(Y.c.uₕ) + ᶜinterp(C123(Y.f.u₃))
+end
+
 """
     κ .= compute_kinetic(uₕ::Field, uᵥ::Field)
 

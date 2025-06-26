@@ -267,12 +267,6 @@ function precomputed_quantities(Y, atmos)
     )
 end
 
-# Interpolates the third contravariant component of Y.c.uₕ to cell faces.
-function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
-    ᶜJ = Fields.local_geometry_field(ᶜρ).J
-    return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
-end
-
 """
     set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
 
