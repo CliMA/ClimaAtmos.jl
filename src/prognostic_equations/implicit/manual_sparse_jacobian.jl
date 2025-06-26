@@ -557,20 +557,20 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
         if p.atmos.moisture_model isa NonEquilMoistModel &&
             use_derivative(noneq_cloud_formation_flag)
-            p_vapₛₗ(tps, ts) = TD.saturation_vapor_pressure(tps, ts, TD.Liquid())
-            p_vapₛᵢ(tps, ts) = TD.saturation_vapor_pressure(tps, ts, TD.Ice())
+            p_vapₛₗ(tps, T) = TD.saturation_vapor_pressure(tps, T, TD.Liquid())
+            p_vapₛᵢ(tps, T) = TD.saturation_vapor_pressure(tps, T, TD.Ice())
 
             ᶜT = @. lazy(TD.air_temperature(tps,ts))
 
-            function ∂p_vapₛₗ_∂T(tps, ts, T)
+            function ∂p_vapₛₗ_∂T(tps, T)
                 Rᵥ = TD.Parameters.R_v(tps)
                 Lᵥ = TD.latent_heat_vapor(tps, T)
-                return p_vapₛₗ(tps, ts) * Lᵥ / (Rᵥ * T^2)
+                return p_vapₛₗ(tps, T) * Lᵥ / (Rᵥ * T^2)
             end
-            function ∂p_vapₛᵢ_∂T(tps, ts, T)
+            function ∂p_vapₛᵢ_∂T(tps, T)
                 Rᵥ = TD.Parameters.R_v(tps)
                 Lₛ = TD.latent_heat_sublim(tps, T)
-                return p_vapₛᵢ(tps, ts) * Lₛ / (Rᵥ * T^2)
+                return p_vapₛᵢ(tps, T) * Lₛ / (Rᵥ * T^2)
             end
 
             function ∂qₛₗ_∂T(tps, ts, T)
@@ -677,12 +677,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             # qₛₗ = p_vapₛₗ / p, qₛᵢ = p_vapₛᵢ / p
             ᶜ∂qₛₗ_∂p = @. lazy(
-                -p_vapₛₗ(thermo_params, ᶜts) / ᶜp^2 +
-                ∂p_vapₛₗ_∂T(thermo_params, ᶜts, ᶜT) * ᶜ∂T_∂p / ᶜp,
+                -p_vapₛₗ(thermo_params, ᶜT) / ᶜp^2 +
+                ∂p_vapₛₗ_∂T(thermo_params, ᶜT) * ᶜ∂T_∂p / ᶜp,
             )
             ᶜ∂qₛᵢ_∂p = @. lazy(
-                -p_vapₛᵢ(thermo_params, ᶜts) / ᶜp^2 +
-                ∂p_vapₛᵢ_∂T(thermo_params, ᶜts, ᶜT) * ᶜ∂T_∂p / ᶜp,
+                -p_vapₛᵢ(thermo_params, ᶜT) / ᶜp^2 +
+                ∂p_vapₛᵢ_∂T(thermo_params, ᶜT) * ᶜ∂T_∂p / ᶜp,
             )
 
             ᶜ∂p_∂ρqₜ = @. lazy(
