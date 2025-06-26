@@ -29,6 +29,8 @@ steps:
       - echo "--- Instantiate .buildkite"
       - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.precompile(;strict=true); using CUDA; CUDA.precompile_runtime(); Pkg.status()'"
 
+      
+
     agents:
       slurm_cpus_per_task: 8
       slurm_gpus: 1

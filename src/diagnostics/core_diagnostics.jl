@@ -279,7 +279,7 @@ add_diagnostic_variable!(
         if isa(turbconv_model, PrognosticEDMFX) ||
            isa(turbconv_model, DiagnosticEDMFX) ||
            isa(turbconv_model, EDOnlyEDMFX)
-            ᶜmixing_length = mixing_length(state, cache)
+            ᶜmixing_length_field = ᶜmixing_length(state, cache)
         else
             (; params) = cache
             (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
@@ -291,7 +291,7 @@ add_diagnostic_variable!(
                     ᶜstrain_rate_norm,
                 ),
             )
-            ᶜmixing_length = @. lazy(
+            ᶜmixing_length_field = @. lazy(
                 smagorinsky_lilly_length(
                     CAP.c_smag(params),
                     sqrt(max(ᶜlinear_buoygrad, 0)),   # N_eff
@@ -304,9 +304,9 @@ add_diagnostic_variable!(
 
 
         if isnothing(out)
-            return copy(ᶜmixing_length)
+            return Base.materialize(ᶜmixing_length_field)
         else
-            out .= ᶜmixing_length
+            out .= ᶜmixing_length_field
         end
     end,
 )
