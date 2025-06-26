@@ -560,8 +560,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             p_vapₛₗ(tps, T) = TD.saturation_vapor_pressure(tps, T, TD.Liquid())
             p_vapₛᵢ(tps, T) = TD.saturation_vapor_pressure(tps, T, TD.Ice())
 
-            ᶜT = @. lazy(TD.air_temperature(tps,ts))
-
             function ∂p_vapₛₗ_∂T(tps, T)
                 Rᵥ = TD.Parameters.R_v(tps)
                 Lᵥ = TD.latent_heat_vapor(tps, T)
@@ -572,34 +570,28 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 Lₛ = TD.latent_heat_sublim(tps, T)
                 return p_vapₛᵢ(tps, T) * Lₛ / (Rᵥ * T^2)
             end
-
-            function ∂qₛₗ_∂T(tps, ts, T)
+            
+            function ∂qₛₗ_∂T(tps, ρ, T)
                 Rᵥ = TD.Parameters.R_v(tps)
                 Lᵥ = TD.latent_heat_vapor(tps, T)
-                qᵥ_sat_liq = TD.q_vap_saturation_liquid(tps, ts)
+                qᵥ_sat_liq = TD.q_vap_saturation_from_density(tps, T, ρ, p_vapₛₗ(tps, T))
                 return qᵥ_sat_liq * (Lᵥ / (Rᵥ * T^2) - 1 / T)
             end
-            function ∂qₛᵢ_∂T(tps, ts, T)
+            function ∂qₛᵢ_∂T(tps, ρ, T)
                 Rᵥ = TD.Parameters.R_v(tps)
                 Lₛ = TD.latent_heat_sublim(tps, T)
-                qᵥ_sat_ice = TD.q_vap_saturation_ice(tps, ts)
+                qᵥ_sat_ice = TD.q_vap_saturation_from_density(tps, T, ρ, p_vapₛᵢ(tps, T))
                 return qᵥ_sat_ice * (Lₛ / (Rᵥ * T^2) - 1 / T)
             end
 
-            function Γₗ(tps, ts, T)
-                cₚ_air = TD.cp_m(tps, ts)
+            function Γₗ(tps, cₚ_air, ρ, T)
                 Lᵥ = TD.latent_heat_vapor(tps, T)
-                return 1 + (Lᵥ / cₚ_air) * ∂qₛₗ_∂T(tps, ts, T)
+                return 1 + (Lᵥ / cₚ_air) * ∂qₛₗ_∂T(tps, ρ, T)
             end
-            function Γᵢ(tps, ts, T)
-                cₚ_air = TD.cp_m(tps, ts)
+            function Γᵢ(tps, cₚ_air, ρ, T)
                 Lₛ = TD.latent_heat_sublim(tps, T)
-                return 1 + (Lₛ / cₚ_air) * ∂qₛᵢ_∂T(tps, ts, T)
+                return 1 + (Lₛ / cₚ_air) * ∂qₛᵢ_∂T(tps, ρ, T)
             end
-
-            cmc = CAP.microphysics_cloud_params(params)
-            τₗ = cmc.liquid.τ_relax
-            τᵢ = cmc.ice.τ_relax
 
             function ∂ρqₓ_err_∂ρqᵪ(tps, force, force_deriv, pos_lim, pos_lim_deriv, neg_lim, neg_lim_deriv)
 
@@ -611,7 +603,22 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     return - force_deriv - neg_lim_deriv + (force * force_deriv + neg_lim * neg_lim_deriv)/(sqrt((force)^2 + (neg_lim)^2))
                 end
             end
-            
+
+            cmc = CAP.microphysics_cloud_params(params)
+            τₗ = cmc.liquid.τ_relax
+            τᵢ = cmc.ice.τ_relax
+
+            ᶜT = @. lazy(TD.air_temperature(tps,ts))
+            ᶜcₚ_air = @. lazy(TD.cp_m(
+                    tps,
+                    specific(Y.c.ρq_tot, Y.c.ρ),
+                    specific(Y.c.ρq_liq, Y.c.ρ),
+                    specific(Y.c.ρq_ice, Y.c.ρ),
+                    specific(Y.c.ρq_rai, Y.c.ρ),
+                    specific(Y.c.ρq_sno, Y.c.ρ),
+                    )
+                )
+
             ᶜforce_liq = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(
                     cmc.liquid,
                     thermo_params,
@@ -651,7 +658,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ∂ρqₓ_err_∂ρqᵪ(
                         thermo_params,
                         ᶜforce_liq,
-                        (-1 / (τₗ * Γₗ(thermo_params, ᶜts, ᶜT))),
+                        (-1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
                         pos_lim,
                         (-1/(2*float(dt))),
                         (qₗ/(2*float(dt))),
@@ -664,7 +671,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ∂ρqₓ_err_∂ρqᵪ(
                         thermo_params,
                         ᶜforce_ice,
-                        (-1 / (τᵢ * Γᵢ(thermo_params, ᶜts, ᶜT))),
+                        (-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
                         pos_lim,
                         (-1/(2*float(dt))),
                         (qᵢ/(2*float(dt))),
@@ -698,7 +705,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ∂ρqₓ_err_∂ρqᵪ(
                         thermo_params,
                         ᶜforce_liq,
-                        ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts, ᶜT))),
+                        ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
                         pos_lim,
                         (1/(2*float(dt))),
                         (qₗ/(2*float(dt))),
@@ -711,7 +718,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ∂ρqₓ_err_∂ρqᵪ(
                         thermo_params,
                         ᶜforce_ice,
-                        ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts, ᶜT))),
+                        ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
                         pos_lim,
                         (1/(2*float(dt))),
                         (qᵢ/(2*float(dt))),
