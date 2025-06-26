@@ -602,76 +602,43 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             cmc = CAP.microphysics_cloud_params(params)
             τₗ = cmc.liquid.τ_relax
             τᵢ = cmc.ice.τ_relax
-            function limit(q, dt, n::Int)
-                return q / float(dt) / n
-            end
-            function clipped(q)
-                if q > 0
-                    return true
+            # function limit(q, dt, n::Int)
+            #     return q / float(dt) / n
+            # end
+            # function clipped(q)
+            #     if q > 0
+            #         return true
+            #     else
+            #         return false
+            #     end
+            # end
+
+            function ∂ρqₓ_err_∂ρqᵪ(tps, force, force_deriv, pos_lim, pos_lim_deriv, neg_lim, neg_lim_deriv)
+
+                FT_inner = eltype(tps)
+
+                if force > FT_inner(0)
+                    return force_deriv + pos_lim_deriv - (force * force_deriv + pos_lim * pos_lim_deriv)/(sqrt((force)^2 + (pos_lim)^2))
                 else
-                    return false
+                    return - force_deriv - neg_lim_deriv + (force * force_deriv + neg_lim * neg_lim_deriv)/(sqrt((force)^2 + (neg_lim)^2))
                 end
             end
-        
-            function ∂ρqₗ_err_∂ρqₗ(tps, ts, cmc, dt, S, pos_lim, neg_lim,
-                                  source_deriv, pos_lim_deriv, neg_lim_deriv)
-                FT_inner = eltype(tps)
-                q = TD.PhasePartition(tps, ts)
-                ρ = TD.air_density(tps, ts)
+            
+            ᶜforce_liq = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+                    cmc.liquid,
+                    thermo_params,
+                    qₜ,
+                    qₗ,
+                    qᵢ,
+                    qᵣ,
+                    qₛ,
+                    ρ,
+                    Tₐ,
+                )
+            )
 
-                # set derivatives to 0 if things are getting clipped
-                if q.vap < FT(0)
-                    pos_lim_deriv = 0
-
-                if q.liq < FT(0)
-                    neg_lim_deriv = 0
-
-                if q.tot + q.liq < FT(0)
-                    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
-                        cm_params,
-                        thp,
-                        qₜ,
-                        qₗ,
-                        qᵢ,
-                        qᵣ,
-                        qₛ,
-                        ρ,
-                        Tₐ,
-                    )
-                else
-                    S = 0
-                    source_deriv = 0
-
-                if S > FT_inner(0)
-                    if S <= limit(TD.vapor_specific_humidity(q), dt, 2)
-                        if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
-                            return deriv
-                        else
-                            return FT_inner(0)
-                        end
-                    else
-                        return -limit_deriv
-                    end
-                else
-                    if abs(S) <= limit(TD.liquid_specific_humidity(q), dt, 2)
-                        if TD.vapor_specific_humidity(q) + TD.liquid_specific_humidity(q) > FT_inner(0)
-                            return -deriv
-                        else
-                            return FT_inner(0)
-                        end
-                    else
-                        return -limit_deriv
-                    end
-                end
-            end
-
-            function ∂ρqᵢ_err_∂ρqᵢ(tps, ts, cmc, dt, deriv, limit_deriv)
-                FT_inner = eltype(tps)
-                q = TD.PhasePartition(tps, ts)
-                ρ = TD.air_density(tps, ts)
-
-                S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
-                    cmc,
+            ᶜforce_ice = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+                    cmc.ice,
                     thp,
                     qₜ,
                     qₗ,
@@ -681,29 +648,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ρ,
                     Tₐ,
                 )
-
-                if S > FT_inner(0)
-                    if S <= limit(TD.vapor_specific_humidity(q), dt, 2)
-                        if TD.vapor_specific_humidity(q) + TD.ice_specific_humidity(q) > FT_inner(0)
-                            return deriv
-                        else
-                            return FT_inner(0)
-                        end
-                    else
-                        return -limit_deriv
-                    end
-                else
-                    if abs(S) <= limit(TD.ice_specific_humidity(q), dt, 2)
-                        if TD.vapor_specific_humidity(q) + TD.ice_specific_humidity(q) > FT_inner(0)
-                            return -deriv
-                        else
-                            return FT_inner(0)
-                        end
-                    else
-                        return -limit_deriv
-                    end
-                end
-            end
+            )
 
             ∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
             ∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
@@ -711,33 +656,33 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ∂ᶜρqₗ_err_∂ᶜρqₜ = matrix[@name(c.ρq_liq), @name(c.ρq_tot)]
             ∂ᶜρqᵢ_err_∂ᶜρqₜ = matrix[@name(c.ρq_ice), @name(c.ρq_tot)]
 
-
-            # plan -- check if things have been clipped or not. if so then don't calc.
-
+            pos_lim = (qₜ - qₗ - qᵢ - qᵣ - qₛ) / (2*float(dt))
             
-
-            #if isdefined(Main, :Infiltrator)
-            #    Main.@infiltrate
-            #end
-            
-            #@. ∂ᶜρqₗ_err_∂ᶜρqₗ -=
-            #    DiagonalMatrixRow(1 / (τₗ * Γₗ(thermo_params, ᶜts)))
             @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
                 DiagonalMatrixRow(
-                    ∂ρqₗ_err_∂ρqᵪ(
-                        thermo_params, ᶜts, (cmc,), dt, (-1 / (τₗ * Γₗ(thermo_params, ᶜts))), (1/(2*float(dt))),
+                    ∂ρqₓ_err_∂ρqᵪ(
+                        thermo_params,
+                        ᶜforce_liq,
+                        (-1 / (τₗ * Γₗ(thermo_params, ᶜts))),
+                        pos_lim,
+                        (-1/(2*float(dt))),
+                        (qₗ/(2*float(dt))),
+                        (1/(2*float(dt))),
                     )
                 )
-            
-            #@. ∂ᶜρqᵢ_err_∂ᶜρqᵢ -=
-            #    DiagonalMatrixRow(1 / (τᵢ * Γᵢ(thermo_params, ᶜts)))
 
             @. ∂ᶜρqᵢ_err_∂ᶜρqᵢ +=
                 DiagonalMatrixRow(
-                    ∂ρqᵢ_err_∂ρqᵪ(
-                        thermo_params, ᶜts, (cmc,), dt, (-1 / (τᵢ * Γᵢ(thermo_params, ᶜts))), (1/(2*float(dt))),
-                        )
+                    ∂ρqₓ_err_∂ρqᵪ(
+                        thermo_params,
+                        ᶜforce_ice,
+                        (-1 / (τᵢ * Γᵢ(thermo_params, ᶜts))),
+                        pos_lim,
+                        (-1/(2*float(dt))),
+                        (qᵢ/(2*float(dt))),
+                        (1/(2*float(dt))),
                     )
+                )
 
             ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
             ᶜ∂T_∂p = @. lazy(1 / (ᶜρ * TD.gas_constant_air(thermo_params, ᶜts)))
@@ -760,23 +705,31 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ),
             )
 
-            #@. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
-            #    (1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts)),
-            #)
-            @. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
-                ∂ρqₗ_err_∂ρqᵪ(
-                    thermo_params, ᶜts, (cmc,), dt, ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))), FT(0)
+            @. ∂ᶜρqₗ_err_∂ᶜρqₜ +=
+                DiagonalMatrixRow(
+                    ∂ρqₓ_err_∂ρqᵪ(
+                        thermo_params,
+                        ᶜforce_liq,
+                        ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜts))),
+                        pos_lim,
+                        (1/(2*float(dt))),
+                        (qₗ/(2*float(dt))),
+                        float(0),
+                    )
                 )
-            )
 
-            #@. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
-            #    (1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts)),
-            #)
-            @. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
-                ∂ρqᵢ_err_∂ρqᵪ(
-                    thermo_params, ᶜts, (cmc,), dt, ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))), FT(0)
+            @. ∂ᶜρqᵢ_err_∂ᶜρqₜ +=
+                DiagonalMatrixRow(
+                    ∂ρqₓ_err_∂ρqᵪ(
+                        thermo_params,
+                        ᶜforce_ice,
+                        ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜts))),
+                        pos_lim,
+                        (1/(2*float(dt))),
+                        (qᵢ/(2*float(dt))),
+                        float(0),
+                    )
                 )
-            )
         end
     end
 
