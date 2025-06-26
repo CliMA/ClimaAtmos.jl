@@ -602,16 +602,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             cmc = CAP.microphysics_cloud_params(params)
             τₗ = cmc.liquid.τ_relax
             τᵢ = cmc.ice.τ_relax
-            # function limit(q, dt, n::Int)
-            #     return q / float(dt) / n
-            # end
-            # function clipped(q)
-            #     if q > 0
-            #         return true
-            #     else
-            #         return false
-            #     end
-            # end
 
             function ∂ρqₓ_err_∂ρqᵪ(tps, force, force_deriv, pos_lim, pos_lim_deriv, neg_lim, neg_lim_deriv)
 
@@ -627,26 +617,26 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ᶜforce_liq = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(
                     cmc.liquid,
                     thermo_params,
-                    qₜ,
-                    qₗ,
-                    qᵢ,
-                    qᵣ,
-                    qₛ,
-                    ρ,
-                    Tₐ,
+                    specific(Y.c.ρq_tot, Y.c.ρ),
+                    specific(Y.c.ρq_liq, Y.c.ρ),
+                    specific(Y.c.ρq_ice, Y.c.ρ),
+                    specific(Y.c.ρq_rai, Y.c.ρ),
+                    specific(Y.c.ρq_sno, Y.c.ρ),
+                    Y.c.ρ,
+                    TD.air_temperature(tps, ᶜts),
                 )
             )
 
             ᶜforce_ice = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(
                     cmc.ice,
                     thp,
-                    qₜ,
-                    qₗ,
-                    qᵢ,
-                    qᵣ,
-                    qₛ,
-                    ρ,
-                    Tₐ,
+                    specific(Y.c.ρq_tot, Y.c.ρ),
+                    specific(Y.c.ρq_liq, Y.c.ρ),
+                    specific(Y.c.ρq_ice, Y.c.ρ),
+                    specific(Y.c.ρq_rai, Y.c.ρ),
+                    specific(Y.c.ρq_sno, Y.c.ρ),
+                    Y.c.ρ,
+                    TD.air_temperature(tps, ᶜts),
                 )
             )
 
