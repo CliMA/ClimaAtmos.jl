@@ -353,10 +353,10 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
-        ᶜmixing_length = p.scratch.ᶜtemp_scalar_2
-        ᶜmixing_length .= mixing_length(Y, p)
-        ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
-        ᶜK_h = eddy_diffusivity(p, ᶜK_u)
+        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
+        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+        ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+        ᶜK_h = ᶜeddy_diffusivity(p, ᶜK_u)
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar
@@ -383,7 +383,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                         turbconv_params,
                         Y.c.sgs⁰.ρatke,
                         ᶜtke⁰,
-                        ᶜmixing_length,
+                        ᶜmixing_length_field,
                     ),
                     Y.c.sgs⁰.ρatke / float(dt),
                 )
@@ -457,10 +457,10 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
-        ᶜmixing_length = p.scratch.ᶜtemp_scalar_2
-        ᶜmixing_length .= mixing_length(Y, p)
-        ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
-        ᶜK_h = eddy_diffusivity(p, ᶜK_u)
+        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
+        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+        ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+        ᶜK_h = ᶜeddy_diffusivity(p, ᶜK_u)
 
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h)
@@ -489,7 +489,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                         turbconv_params,
                         Y.c.sgs⁰.ρatke,
                         ᶜtke⁰,
-                        ᶜmixing_length,
+                        ᶜmixing_length_field,
                     ),
                     Y.c.sgs⁰.ρatke / float(dt),
                 )

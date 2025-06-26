@@ -29,10 +29,10 @@ function edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model::EDOnlyEDMFX)
     (; ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰) = p.precomputed
     turbconv_params = CAP.turbconv_params(p.params)
 
-    ᶜmixing_length = p.scratch.ᶜtemp_scalar
-    ᶜmixing_length .= mixing_length(Y, p)
-    ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
-    ᶜK_h = eddy_diffusivity(p, ᶜK_u)
+    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+    ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+    ᶜK_h = ᶜeddy_diffusivity(p, ᶜK_u)
 
     # shear production
     @. Yₜ.c.sgs⁰.ρatke += 2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate_norm
@@ -76,10 +76,10 @@ function edmfx_tke_tendency!(
 
     if use_prognostic_tke(turbconv_model)
 
-        ᶜmixing_length = p.scratch.ᶜtemp_scalar_2
-        ᶜmixing_length .= mixing_length(Y, p)
-        ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
-        ᶜK_h = eddy_diffusivity(p, ᶜK_u)
+        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
+        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+        ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+        ᶜK_h = ᶜeddy_diffusivity(p, ᶜK_u)
 
         # shear production
         @. Yₜ.c.sgs⁰.ρatke += 2 * ᶜρa⁰ * ᶜK_u * ᶜstrain_rate_norm

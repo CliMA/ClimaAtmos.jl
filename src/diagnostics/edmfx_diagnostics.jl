@@ -1176,10 +1176,12 @@ function compute_lmixw!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    ᶜwall_mixing_length = ᶜmixing_length(state, cache, Val(:wall))
+
     if isnothing(out)
-        return copy(mixing_length(state, cache, :wall))
+        return Base.materialize(ᶜwall_mixing_length)
     else
-        out .= mixing_length(state, cache, :wall)
+        out .= ᶜwall_mixing_length
     end
 end
 
@@ -1205,10 +1207,13 @@ function compute_lmixtke!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+
+    ᶜtke_mixing_length = ᶜmixing_length(state, cache, Val(:tke))
+
     if isnothing(out)
-        return copy(mixing_length(state, cache, :tke))
+        return Base.materialize(ᶜtke_mixing_length)
     else
-        out .= mixing_length(state, cache, :tke)
+        out .= ᶜtke_mixing_length
     end
 end
 
@@ -1234,10 +1239,12 @@ function compute_lmixb!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    ᶜbuoy_mixing_length = ᶜmixing_length(state, cache, Val(:buoy))
+
     if isnothing(out)
-        return copy(mixing_length(state, cache, :buoy))
+        return Base.materialize(ᶜbuoy_mixing_length)
     else
-        out .= mixing_length(state, cache, :buoy)
+        out .= ᶜbuoy_mixing_length
     end
 end
 
@@ -1298,11 +1305,11 @@ function compute_edt!(
     turbconv_params = CAP.turbconv_params(cache.params)
     (; ᶜtke⁰) = cache.precomputed
 
-    ᶜmixing_length = mixing_length(state, cache)
-    ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
-    ᶜK_h = eddy_diffusivity(cache, ᶜK_u)
+    ᶜmixing_length_field = ᶜmixing_length(state, cache)
+    ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+    ᶜK_h = ᶜeddy_diffusivity(cache, ᶜK_u)
     if isnothing(out)
-        return copy(ᶜK_h)
+        return Base.materialize(ᶜK_h)
     else
         out .= ᶜK_h
     end
@@ -1367,11 +1374,11 @@ function compute_evu!(
 )
     turbconv_params = CAP.turbconv_params(cache.params)
     (; ᶜtke⁰) = cache.precomputed
-    ᶜmixing_length = mixing_length(state, cache)
-    ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length)
+    ᶜmixing_length_field = ᶜmixing_length(state, cache)
+    ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
 
     if isnothing(out)
-        return copy(ᶜK_u)
+        return Base.materialize(ᶜK_u)
     else
         out .= ᶜK_u
     end

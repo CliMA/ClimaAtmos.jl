@@ -56,9 +56,9 @@ import ..PrognosticSurfaceTemperature
 import ..draft_area
 import ..compute_gm_mixing_length
 import ..horizontal_integral_at_boundary
-import ..mixing_length
-import ..eddy_diffusivity
-import ..eddy_viscosity
+import ..ᶜmixing_length
+import ..ᶜeddy_diffusivity
+import ..ᶜeddy_viscosity
 import ..turbulent_prandtl_number
 import ..smagorinsky_lilly_length
 import ..compute_eddy_diffusivity_coefficient

@@ -324,7 +324,7 @@ where:
 - `ᶜtke_exch`: TKE exchange term [m^2/s^3].
 - `scale_blending_method`: The method to use for blending physical scales.
 
-Calculates the turbulent mixing length, limited by physical constraints (wall distance,
+Point-wise calculation of the turbulent mixing length, limited by physical constraints (wall distance,
 TKE balance, stability) and grid resolution. Based on 
 Lopez‐Gomez, I., Cohen, Y., He, J., Jaruga, A., & Schneider, T. (2020). 
 A generalized mixing length closure for eddy‐diffusivity mass‐flux schemes of turbulence and convection. 
@@ -333,6 +333,7 @@ Journal of Advances in Modeling Earth Systems, 12, e2020MS002161. https://doi.or
 Returns a `MixingLength{FT}` struct containing the final blended mixing length (`master`) 
 and its constituent physical scales.
 """
+
 function mixing_length_lopez_gomez_2020(
     params,
     ustar,
@@ -530,43 +531,14 @@ function mixing_length_lopez_gomez_2020(
     return MixingLength{FT}(l_final, l_W, l_TKE, l_N, l_grid)
 end
 
-function mixing_length(
-    params,
-    ustar,
-    ᶜz,
-    z_sfc,
-    ᶜdz,
-    sfc_tke,
-    ᶜN²_eff,
-    ᶜtke,
-    obukhov_length,
-    ᶜstrain_rate_norm,
-    ᶜPr,
-    ᶜtke_exch,
-    scale_blending_method,
-    property::Val{P},
-) where {P}
+# GPU-safe field access using Val dispatch
+@inline get_mixing_length_field(ml::MixingLength, ::Val{:master}) = ml.master
+@inline get_mixing_length_field(ml::MixingLength, ::Val{:wall}) = ml.wall
+@inline get_mixing_length_field(ml::MixingLength, ::Val{:tke}) = ml.tke
+@inline get_mixing_length_field(ml::MixingLength, ::Val{:buoy}) = ml.buoy
+@inline get_mixing_length_field(ml::MixingLength, ::Val{:l_grid}) = ml.l_grid
 
-    ᶜmixing_length_tuple = mixing_length_lopez_gomez_2020(
-        params,
-        ustar,
-        ᶜz,
-        z_sfc,
-        ᶜdz,
-        sfc_tke,
-        ᶜN²_eff,
-        ᶜtke,
-        obukhov_length,
-        ᶜstrain_rate_norm,
-        ᶜPr,
-        ᶜtke_exch,
-        scale_blending_method,
-    )
-
-    return getproperty(ᶜmixing_length_tuple, P)
-end
-
-function mixing_length(Y, p, mixing_length_property = :master)
+function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     (; params) = p
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜtke⁰) = p.precomputed
@@ -579,38 +551,26 @@ function mixing_length(Y, p, mixing_length_property = :master)
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
     ᶜprandtl_nvec .= ᶜturbulent_prandtl_number(p)
 
-    ᶜtke_exch = tke_exchange(Y, p)
+    ᶜtke_exch = ᶜtke_exchange(Y, p)
 
-    mixing_length_property = if mixing_length_property == :master
-        Val(:master)
-    elseif mixing_length_property == :wall
-        Val(:wall)
-    elseif mixing_length_property == :tke
-        Val(:tke)
-    elseif mixing_length_property == :buoy
-        Val(:buoy)
-    else
-        error("unknown property $mixing_length_property")
-    end
-
-    return @. lazy(
-        mixing_length(
+    ᶜmixing_length_tuple = @. lazy(
+        mixing_length_lopez_gomez_2020(
             params,
             ustar,
             ᶜz,
             z_sfc,
             ᶜdz,
-            max(sfc_tke, 0),
+            sfc_tke,
             ᶜlinear_buoygrad,
-            max(ᶜtke⁰, 0),
+            ᶜtke⁰,
             obukhov_length,
             ᶜstrain_rate_norm,
             ᶜprandtl_nvec,
             ᶜtke_exch,
             p.atmos.edmfx_model.scale_blending_method,
-            mixing_length_property,
         ),
     )
+    return @. lazy(get_mixing_length_field(ᶜmixing_length_tuple, property))
 end
 
 """
@@ -709,7 +669,7 @@ end
 
 
 """
-    tke_exchange(Y, p)
+    ᶜtke_exchange(Y, p)
 
 Calculates the turbulent kinetic energy (TKE) exchange tendency between the
 environment and updrafts due to detrainment.
@@ -721,7 +681,32 @@ Arguments:
 Returns:
 - The TKE exchange tendency term [m²/s³].
 """
-function tke_exchange(Y, p)
+
+# function ᶜtke_exchange(Y, p)
+#     (; turbconv_model) = p.atmos
+#     n = n_mass_flux_subdomains(turbconv_model)
+#     ᶜρa⁰ =
+#         p.atmos.turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
+
+#     if p.atmos.turbconv_model isa EDOnlyEDMFX
+#         return 0
+#     end
+
+#     ᶜtke_exch_summands =
+#         unrolled_map(UnrolledUtilities.StaticOneTo(n)) do j
+#                 ᶜρaʲ =
+#                     p.atmos.turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($$j).ρa :
+#                     ᶜρaʲs.:($$j)
+#                 ᶜρaʲ * ᶜdetrʲs.:($$j) / ᶜρa⁰ * (
+#                     1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) -
+#                     ᶜtke⁰
+#                 )
+#         end
+#     ᶜtke_exch = @. lazy(+(ᶜtke_exch_summands...))
+
+
+
+function ᶜtke_exchange(Y, p)
     (; turbconv_model) = p.atmos
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜρa⁰ =
@@ -862,33 +847,33 @@ function lamb_smooth_minimum(l, smoothness_param, λ_floor)
 end
 
 """
-    eddy_viscosity(turbconv_params, tke, mixing_length)
+    ᶜeddy_viscosity(turbconv_params, tke, mixing_length)
 
 Calculates the eddy viscosity (K_u) for momentum based on the turbulent
 kinetic energy (TKE) and the mixing length.
 
 Returns K_u in units of [m^2/s].
 """
-function eddy_viscosity(turbconv_params, tke, mixing_length)
+function ᶜeddy_viscosity(turbconv_params, tke, mixing_length)
     c_m = CAP.tke_ed_coeff(turbconv_params)
     return @. lazy(c_m * mixing_length * sqrt(max(tke, 0)))
 end
 
 """
-    eddy_diffusivity(turbconv_params, tke, mixing_length, prandtl_nvec)
+    ᶜeddy_diffusivity(turbconv_params, tke, mixing_length, prandtl_nvec)
 
 Calculates the eddy diffusivity (K_h) for scalars given turbulent kinetic energy (TKE),
 the mixing length, and the turbulent Prandtl number.
 
 Returns K_h in units of [m^2/s].
 """
-function eddy_diffusivity(turbconv_params, tke, mixing_length, prandtl_nvec)
-    K_u = eddy_viscosity(turbconv_params, tke, mixing_length)
+function ᶜeddy_diffusivity(turbconv_params, tke, mixing_length, prandtl_nvec)
+    K_u = ᶜeddy_viscosity(turbconv_params, tke, mixing_length)
     return K_u / prandtl_nvec
 end
 
 
-function eddy_diffusivity(p, K_u)
+function ᶜeddy_diffusivity(p, K_u)
     ᶜprandtl_nvec = ᶜturbulent_prandtl_number(p)
     return @. lazy(K_u / ᶜprandtl_nvec) # prandtl_nvec is already bounded by eps_FT and Pr_max
 end

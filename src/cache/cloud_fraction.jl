@@ -144,8 +144,8 @@ NVTX.@annotate function set_cloud_fraction!(
     # environment
     diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
 
-    ᶜmixing_length = p.scratch.ᶜtemp_scalar
-    ᶜmixing_length .= mixing_length(Y, p)
+    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_field .= ᶜmixing_length(Y, p)
 
     @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,
@@ -153,7 +153,7 @@ NVTX.@annotate function set_cloud_fraction!(
         Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot),
         Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice),
         diagnostic_covariance_coeff,
-        ᶜmixing_length,
+        ᶜmixing_length_field,
         thermo_params,
     )
 
@@ -201,8 +201,8 @@ NVTX.@annotate function set_cloud_fraction!(
     # environment
     diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
 
-    ᶜmixing_length = p.scratch.ᶜtemp_scalar
-    ᶜmixing_length .= mixing_length(Y, p)
+    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_field .= ᶜmixing_length(Y, p)
 
     @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,
@@ -210,7 +210,7 @@ NVTX.@annotate function set_cloud_fraction!(
         Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot⁰),
         Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice⁰),
         diagnostic_covariance_coeff,
-        ᶜmixing_length,
+        ᶜmixing_length_field,
         thermo_params,
     )
 
