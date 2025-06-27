@@ -53,64 +53,128 @@ Arguments:
     return ρa == 0 ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
 end
 
+# Internal method that checks if its input is @name(ρχ) for some variable χ.
+@generated is_ρ_weighted_name(
+    ::MatrixFields.FieldName{name_chain},
+) where {name_chain} =
+    length(name_chain) == 1 && startswith(string(name_chain[1]), "ρ")
+
+# Internal method that converts @name(ρχ) to @name(χ) for some variable χ.
+@generated function specific_tracer_name(
+    ::MatrixFields.FieldName{ρχ_name_chain},
+) where {ρχ_name_chain}
+    χ_symbol = Symbol(string(ρχ_name_chain[1])[(ncodeunits("ρ") + 1):end])
+    return :(@name($χ_symbol))
+end
+
 """
-    tracer_names(field)
+    gs_tracer_names(Y)
 
-Filters and returns the names of the variables from a given state
-vector component, excluding `ρ`, `ρe_tot`, and `uₕ` and SGS fields.
-
-Arguments:
-
-- `field`: A component of the state vector `Y.c`.
-
-Returns:
-
-- A `Tuple` of `ClimaCore.MatrixFields.FieldName`s corresponding to the tracers.
+`Tuple` of `@name`s for the grid-scale tracers in the center field `Y.c`
+(excluding `ρ`, `ρe_tot`, velocities, and SGS fields).
 """
-tracer_names(field) =
-    unrolled_filter(MatrixFields.top_level_names(field)) do name
-        !(
-            name in
-            (@name(ρ), @name(ρe_tot), @name(uₕ), @name(sgs⁰), @name(sgsʲs))
-        )
+gs_tracer_names(Y) =
+    unrolled_filter(MatrixFields.top_level_names(Y.c)) do name
+        is_ρ_weighted_name(name) && !(name in (@name(ρ), @name(ρe_tot)))
     end
 
 """
-    foreach_gs_tracer(f::F, Yₜ, Y) where {F}
+    specific_gs_tracer_names(Y)
 
-Applies a given function `f` to each grid-scale scalar variable (except `ρ` and  `ρe_tot`)
-in the state `Y` and its corresponding tendency `Yₜ`.
-This utility abstracts the process of iterating over all scalars. It uses
-`tracer_names` to identify the relevant variables and `unrolled_foreach` to
-ensure a performant loop. For each tracer, it calls the provided function `f`
-with the tendency field, the state field, and a boolean flag indicating if
-the current tracer is `ρq_tot` (to allow for special handling).
+`Tuple` of the specific tracer names `@name(χ)` that correspond to the
+density-weighted tracer names `@name(ρχ)` in `gs_tracer_names(Y)`.
+"""
+specific_gs_tracer_names(Y) =
+    unrolled_map(specific_tracer_name, gs_tracer_names(Y))
+
+"""
+    ᶜempty(Y)
+
+Lazy center `Field` of empty `NamedTuple`s.
+"""
+ᶜempty(Y) = lazy.(Returns((;)).(Y.c))
+
+"""
+    ᶜgs_tracers(Y)
+
+Lazy center `Field` of `NamedTuple`s that contain the values of all grid-scale
+tracers given by `gs_tracer_names(Y)`.
+"""
+function ᶜgs_tracers(Y)
+    isempty(gs_tracer_names(Y)) && return ᶜempty(Y)
+    ρχ_symbols = unrolled_map(MatrixFields.extract_first, gs_tracer_names(Y))
+    ρχ_fields = unrolled_map(gs_tracer_names(Y)) do ρχ_name
+        MatrixFields.get_field(Y.c, ρχ_name)
+    end
+    return @. lazy(NamedTuple{ρχ_symbols}(tuple(ρχ_fields...)))
+end
+
+"""
+    ᶜspecific_gs_tracers(Y)
+
+Lazy center `Field` of `NamedTuple`s that contain the values of all specific
+grid-scale tracers given by `specific_gs_tracer_names(Y)`.
+"""
+function ᶜspecific_gs_tracers(Y)
+    isempty(gs_tracer_names(Y)) && return ᶜempty(Y)
+    χ_symbols =
+        unrolled_map(MatrixFields.extract_first, specific_gs_tracer_names(Y))
+    χ_fields = unrolled_map(gs_tracer_names(Y)) do ρχ_name
+        ρχ_field = MatrixFields.get_field(Y.c, ρχ_name)
+        @. lazy(specific(ρχ_field, Y.c.ρ))
+    end
+    return @. lazy(NamedTuple{χ_symbols}(tuple(χ_fields...)))
+end
+
+"""
+    foreach_gs_tracer(f, Y_or_similar_values...)
+
+Applies a function `f` to each grid-scale tracer in the state `Y` or any similar
+value like the tendency `Yₜ`. This is used to implement performant loops over
+all tracers given by `gs_tracer_names(Y)`.
+
+Although the first input value needs to be similar to `Y`, the remaining values
+can also be center `Field`s similar to `Y.c`, and they can use specific tracers
+given by `specific_gs_tracer_names(Y)` instead of density-weighted tracers.
 
 Arguments:
 
-- `f`: A function to apply to each grid-scale scalar. It must have the signature `f
-  (ᶜρχₜ, ᶜρχ, ρχ_name)`, where `ᶜρχₜ` is the tendency field, `ᶜρχ`
-  is the state field, and `ρχ_name` is a `MatrixFields.@name` object.
-- `Yₜ`: The tendency state vector.
-- `Y`: The current state vector.
+- `f`: The function applied to each grid-scale tracer, which must have the
+  signature `f(ρχ_or_χ_fields..., ρχ_name)`, where `ρχ_or_χ_fields` are
+  grid-scale tracer subfields (either density-weighted or specific) and
+  `ρχ_name` is the `MatrixFields.FieldName` of the tracer.
+- `Y_or_similar_values`: The state `Y` or similar values like the tendency `Yₜ`.
 
-# Example
+# Examples
 
 ```julia
 foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-    # Apply some operation, e.g., a sponge layer
-    @. ᶜρχₜ += some_sponge_function(ᶜρχ)
+    ᶜρχₜ .+= tendency_of_ρχ(ᶜρχ)
     if ρχ_name == @name(ρq_tot)
-        # Perform an additional operation only for ρq_tot
+        ᶜρχₜ .+= additional_tendency_of_ρq_tot(ᶜρχ)
+    end
+end
+```
+
+```julia
+foreach_gs_tracer(Yₜ, Base.materialize(ᶜspecific_gs_tracers(Y))) do ᶜρχₜ, ᶜχ, ρχ_name
+    ᶜρχₜ .+= Y.c.ρ .* tendency_of_χ(ᶜχ)
+    if ρχ_name == @name(ρq_tot)
+        ᶜρχₜ .+= Y.c.ρ .* additional_tendency_of_q_tot(ᶜχ)
     end
 end
 ```
 """
-foreach_gs_tracer(f::F, Yₜ, Y) where {F} =
-    unrolled_foreach(tracer_names(Y.c)) do scalar_name
-        ᶜρχₜ = MatrixFields.get_field(Yₜ.c, scalar_name)
-        ᶜρχ = MatrixFields.get_field(Y.c, scalar_name)
-        f(ᶜρχₜ, ᶜρχ, scalar_name)
+foreach_gs_tracer(f::F, Y_or_similar_values...) where {F} =
+    unrolled_foreach(gs_tracer_names(Y_or_similar_values[1])) do ρχ_name
+        ρχ_or_χ_fields = unrolled_map(Y_or_similar_values) do value
+            field = value isa Fields.Field ? value : value.c
+            ρχ_or_χ_name =
+                MatrixFields.has_field(field, ρχ_name) ? ρχ_name :
+                specific_tracer_name(ρχ_name)
+            MatrixFields.get_field(field, ρχ_or_χ_name)
+        end
+        f(ρχ_or_χ_fields..., ρχ_name)
     end
 
 """
@@ -204,94 +268,6 @@ function divide_by_ρa(ρaχ, ρa, ρχ, ρ, turbconv_model)
     # will always return NaN when ρa = 0. To avoid this problem, we need to add
     # a special case for ρa = 0.
     return ρa == 0 ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
-end
-
-# Helper functions for manipulating symbols in the generated functions:
-has_prefix(symbol, prefix_symbol) =
-    startswith(string(symbol), string(prefix_symbol))
-remove_prefix(symbol, prefix_symbol) =
-    Symbol(string(symbol)[(ncodeunits(string(prefix_symbol)) + 1):end])
-# Note that we need to use ncodeunits instead of length because prefix_symbol
-# can contain non-ASCII characters like 'ρ'.
-
-"""
-    specific_gs(gs)
-
-Converts every variable of the form `ρχ` in the grid-scale state `gs` into the
-specific variable `χ` by dividing it by `ρ`. All other variables in `gs` are
-omitted from the result.
-"""
-@generated function specific_gs(gs)
-    gs_names = Base._nt_names(gs)
-    relevant_gs_names =
-        filter(name -> has_prefix(name, :ρ) && name != :ρ, gs_names)
-    specific_gs_names = map(name -> remove_prefix(name, :ρ), relevant_gs_names)
-    specific_gs_values = map(name -> :(gs.$name / gs.ρ), relevant_gs_names)
-    return :(NamedTuple{$specific_gs_names}(($(specific_gs_values...),)))
-end
-
-"""
-    specific_sgs(sgs, gs, turbconv_model)
-
-Converts every variable of the form `ρaχ` in the sub-grid-scale state `sgs` into
-the specific variable `χ` by dividing it by `ρa`. All other variables in `sgs`
-are omitted from the result. The division is computed as
-`divide_by_ρa(ρaχ, ρa, ρχ, ρ, turbconv_model)`, which is preferable to simply
-calling `ρaχ / ρa` because it avoids numerical issues that arise when `a` is
-small. The values of `ρ` and `ρχ` are taken from `gs`, but, when `ρχ` is not
-available in `gs` (e.g., when `χ` is a second moment variable like `tke`), its
-value is assumed to be equal to the value of `ρaχ` in `sgs`.
-"""
-@generated function specific_sgs(sgs, gs, turbconv_model)
-    sgs_names = Base._nt_names(sgs)
-    gs_names = Base._nt_names(gs)
-    relevant_sgs_names =
-        filter(name -> has_prefix(name, :ρa) && name != :ρa, sgs_names)
-    specific_sgs_names =
-        map(name -> remove_prefix(name, :ρa), relevant_sgs_names)
-    relevant_gs_names = map(name -> Symbol(:ρ, name), specific_sgs_names)
-    specific_sgs_values = map(
-        (sgs_name, gs_name) -> :(divide_by_ρa(
-            sgs.$sgs_name,
-            sgs.ρa,
-            $(gs_name in gs_names ? :(gs.$gs_name) : :(sgs.$sgs_name)),
-            gs.ρ,
-            turbconv_model,
-        )),
-        relevant_sgs_names,
-        relevant_gs_names,
-    )
-    return :(NamedTuple{$specific_sgs_names}(($(specific_sgs_values...),)))
-end
-
-"""
-    matching_subfields(tendency_field, specific_field)
-
-Given a field that contains the tendencies of variables of the form `ρχ` or
-`ρaχ` and another field that contains the values of specific variables `χ`,
-returns all tuples `(tendency_field.<ρχ or ρaχ>, specific_field.<χ>, :<χ>)`.
-Variables in `tendency_field` that do not have matching variables in
-`specific_field` are omitted, as are variables in `specific_field` that do not
-have matching variables in `tendency_field`. This function is needed to avoid
-allocations due to failures in type inference, which are triggered when the
-`propertynames` of these fields are manipulated during runtime in order to pick
-out the matching subfields (as of Julia 1.8).
-"""
-@generated function matching_subfields(tendency_field, specific_field)
-    tendency_names = Base._nt_names(eltype(tendency_field))
-    specific_names = Base._nt_names(eltype(specific_field))
-    prefix = :ρa in tendency_names ? :ρa : :ρ
-    relevant_specific_names =
-        filter(name -> Symbol(prefix, name) in tendency_names, specific_names)
-    subfield_tuples = map(
-        name -> :((
-            tendency_field.$(Symbol(prefix, name)),
-            specific_field.$name,
-            $(QuoteNode(name)),
-        )),
-        relevant_specific_names,
-    )
-    return :(($(subfield_tuples...),))
 end
 
 """
@@ -400,19 +376,6 @@ u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = divide_by_ρa(
     ρ,
     turbconv_model,
 )
-
-"""
-    remove_energy_var(specific_state)
-
-Creates a copy of `specific_state` with the energy variable
-removed, where `specific_state` is the result of calling, e.g., `specific_gs`,
-`specific_sgsʲs`, or `specific_sgs⁰`.
-"""
-remove_energy_var(specific_state::NamedTuple) =
-    Base.structdiff(specific_state, NamedTuple{(:e_tot,)})
-remove_energy_var(specific_state::Tuple) =
-    map(remove_energy_var, specific_state)
-
 
 import ClimaCore.RecursiveApply: ⊞, ⊠, rzero, rpromote_type
 function mapreduce_with_init(f, op, iter...)
