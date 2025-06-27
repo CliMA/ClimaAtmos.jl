@@ -567,6 +567,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     set_precipitation_cache!(Y, p, p.atmos.precip_model, p.atmos.turbconv_model)
     set_precipitation_surface_fluxes!(Y, p, p.atmos.precip_model)
 
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
     if vert_diff isa DecayWithHeightDiffusion
         (; ᶜK_h) = p.precomputed
         @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.ρ, vert_diff)
