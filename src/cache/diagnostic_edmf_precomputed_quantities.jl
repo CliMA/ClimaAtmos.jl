@@ -362,9 +362,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         uₕ_level = Fields.field_values(Fields.level(Y.c.uₕ, i))
         u³_halflevel = Fields.field_values(Fields.level(ᶠu³, i - half))
         K_level = Fields.field_values(Fields.level(ᶜK, i))
-        h_tot_level = Fields.field_values(Fields.level(ᶜh_tot, i))
+        h_tot_level = Fields.field_values(Fields.level(Base.materialize(ᶜh_tot), i))
         q_tot_level = Fields.field_values(Fields.level(q_tot, i))
-        p_level = Fields.field_values(Fields.level(ᶜp, i))
+        p_level = Fields.field_values(Fields.level(Base.materialize(ᶜp), i))
         Φ_level = Fields.field_values(Fields.level(ᶜΦ, i))
         local_geometry_level = Fields.field_values(
             Fields.level(Fields.local_geometry_field(Y.c), i),
@@ -387,10 +387,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             Fields.field_values(Fields.level(ᶠu³⁰, i - 1 - half))
         u³⁰_data_prev_halflevel = u³⁰_prev_halflevel.components.data.:1
         K_prev_level = Fields.field_values(Fields.level(ᶜK, i - 1))
-        h_tot_prev_level = Fields.field_values(Fields.level(ᶜh_tot, i - 1))
+        h_tot_prev_level = Fields.field_values(Fields.level(Base.materialize(ᶜh_tot), i - 1))
         q_tot_prev_level = Fields.field_values(Fields.level(q_tot, i - 1))
         ts_prev_level = Fields.field_values(Fields.level(ᶜts, i - 1))
-        p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
+        p_prev_level = Fields.field_values(Fields.level(Base.materialize(ᶜp), i - 1))
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
         dz_prev_level = Fields.field_values(Fields.level(ᶜdz, i - 1))
 

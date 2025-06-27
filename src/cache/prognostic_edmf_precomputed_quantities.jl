@@ -232,7 +232,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
         # TODO: replace this with the actual surface area fraction when
         # using prognostic surface area
         @. ᶜaʲ_int_val = FT(turbconv_params.surface_area)
-        ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
+        ᶜh_tot_int_val = Fields.field_values(Fields.level(Base.materialize(ᶜh_tot), 1))
         ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
         ᶜmseʲ_int_val = Fields.field_values(Fields.level(ᶜmseʲ, 1))
         @. ᶜmseʲ_int_val = sgs_scalar_first_interior_bc(
