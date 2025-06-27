@@ -336,7 +336,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ) = alg
     (; matrix) = cache
     (; params) = p
-    (; ᶜΦ, ᶠgradᵥ_ᶜΦ) = p.core
+    (; ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜh_ref) = p.core
     (; ᶠu³, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
     (;
         ∂ᶜK_∂ᶜuₕ,
@@ -419,7 +419,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     MatrixFields.unrolled_foreach(tracer_info) do ρχ_name
         MatrixFields.has_field(Y, ρχ_name) || return
         ᶜχ = if ρχ_name === @name(c.ρe_tot)
-            p.precomputed.ᶜh_tot
+            p.precomputed.ᶜh_tot - p.precomputed.ᶜh_ref
         else
             @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         end
@@ -990,7 +990,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 @. ∂ᶜρe_tot_err_∂ᶠu₃ +=
                     dtγ * ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(
                         ᶠinterp(
-                            (Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - ᶜh_tot) *
+                                (Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - (ᶜh_tot - ᶜh_ref)) *
                             ᶜρʲs.:(1) *
                             ᶜJ *
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
@@ -1002,7 +1002,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 @. ∂ᶜρe_tot_err_∂ᶠu₃ʲ =
                     dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
                         ᶠinterp(
-                            (Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - ᶜh_tot) *
+                                (Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - (ᶜh_tot - ᶜh_ref)) *
                             ᶜρʲs.:(1) *
                             ᶜJ *
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
@@ -1044,7 +1044,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 @. ∂ᶜρe_tot_err_∂ᶜρa =
                     dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
                         (ᶠu³ʲs.:(1) - ᶠu³) *
-                        ᶠinterp((Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - ᶜh_tot)) / ᶠJ,
+                        ᶠinterp((Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - (ᶜh_tot - ᶜh_ref))) / ᶠJ,
                     ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(ᶜJ)
 
                 ∂ᶜρq_tot_err_∂ᶜρa =
