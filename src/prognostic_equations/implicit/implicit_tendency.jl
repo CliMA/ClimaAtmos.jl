@@ -144,7 +144,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
     # Central vertical advection of active tracers (e_tot and q_tot)
-    vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot - ᶜh_ref, dt, Val(:none))
+    vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot .- ᶜh_ref, dt, Val(:none))
     @. Yₜ.c.ρe_tot += vtt
     if !(moisture_model isa DryModel)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
