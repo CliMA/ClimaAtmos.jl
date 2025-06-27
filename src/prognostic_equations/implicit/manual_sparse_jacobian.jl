@@ -419,7 +419,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     MatrixFields.unrolled_foreach(tracer_info) do ρχ_name
         MatrixFields.has_field(Y, ρχ_name) || return
         ᶜχ = if ρχ_name === @name(c.ρe_tot)
-            ᶜh_tot - ᶜh_ref
+            ᶜh_tot .- ᶜh_ref
         else
             @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         end
