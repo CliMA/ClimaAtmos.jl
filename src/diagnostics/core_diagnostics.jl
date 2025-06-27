@@ -1435,7 +1435,7 @@ function compute_cape!(out, state, cache, time)
         lazy.(
             TD.PhaseEquil_pθq.(
                 thermo_params,
-                cache.precomputed.ᶜp,
+                TD.air_pressure.(thermo_params, cache.precomputed.ᶜts),
                 surface_θ_liq_ice,
                 surface_q,
             ),
