@@ -138,13 +138,13 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
-    (; ᶠgradᵥ_ᶜΦ) = p.core
+    (; ᶠgradᵥ_ᶜΦ, ᶜh_ref) = p.core
     (; ᶜh_tot, ᶠu³, ᶜp) = p.precomputed
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
     # Central vertical advection of active tracers (e_tot and q_tot)
-    vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
+    vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot - ᶜh_ref, dt, Val(:none))
     @. Yₜ.c.ρe_tot += vtt
     if !(moisture_model isa DryModel)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
