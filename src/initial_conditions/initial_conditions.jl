@@ -369,12 +369,13 @@ function overwrite_initial_conditions!(
     face_space = Fields.axes(Y.f)
     # Using surface pressure, air temperature and specific humidity
     # from the dataset, compute air pressure.
+    extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
     p_sfc = Fields.level(
-        SpaceVaryingInputs.SpaceVaryingInput(file_path, "p", face_space),
+        SpaceVaryingInputs.SpaceVaryingInput(file_path, "p", face_space, regridder_kwargs = (; extrapolation_bc)),
         Fields.half,
     )
-    ᶜT = SpaceVaryingInputs.SpaceVaryingInput(file_path, "t", center_space)
-    ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(file_path, "q", center_space)
+    ᶜT = SpaceVaryingInputs.SpaceVaryingInput(file_path, "t", center_space, regridder_kwargs = (; extrapolation_bc))
+    ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(file_path, "q", center_space, regridder_kwargs = (; extrapolation_bc))
 
     # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile,
     # recompute the pressure levels assuming hydrostatic balance is maintained.
@@ -400,9 +401,9 @@ function overwrite_initial_conditions!(
     # cell faces.
     vel =
         Geometry.UVWVector.(
-            SpaceVaryingInputs.SpaceVaryingInput(file_path, "u", center_space),
-            SpaceVaryingInputs.SpaceVaryingInput(file_path, "v", center_space),
-            SpaceVaryingInputs.SpaceVaryingInput(file_path, "w", center_space),
+            SpaceVaryingInputs.SpaceVaryingInput(file_path, "u", center_space, regridder_kwargs = (; extrapolation_bc)),
+            SpaceVaryingInputs.SpaceVaryingInput(file_path, "v", center_space, regridder_kwargs = (; extrapolation_bc)),
+            SpaceVaryingInputs.SpaceVaryingInput(file_path, "w", center_space, regridder_kwargs = (; extrapolation_bc)),
         )
     Y.c.uₕ .= C12.(Geometry.UVVector.(vel))
     Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
