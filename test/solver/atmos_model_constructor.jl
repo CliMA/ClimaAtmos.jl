@@ -9,6 +9,123 @@ const FT = Float32
 
 @testset "AtmosModel Constructor Tests" begin
 
+    @testset "Intelligent Defaults" begin
+        @testset "Basic AtmosModel() with defaults" begin
+            # Test that AtmosModel() with no arguments creates a working model with sensible defaults
+            model = CA.AtmosModel()
+
+            # Test hydrology defaults
+            @test model.moisture_model isa CA.DryModel
+            @test model.precip_model isa CA.NoPrecipitation
+            @test model.cloud_model isa CA.GridScaleCloud
+
+            # Test surface defaults
+            @test model.surface_model isa CA.PrescribedSurfaceTemperature
+            @test model.sfc_temperature isa CA.ZonallySymmetricSST
+
+            # Test radiation defaults
+            @test model.insolation isa CA.IdealizedInsolation
+            @test model.radiation_mode === nothing  # No radiation by default
+            @test model.ozone === nothing
+            @test model.co2 === nothing
+
+            # Test numerics defaults
+            @test model.numerics isa CA.AtmosNumerics
+            @test model.numerics.energy_upwinding == Val(:first_order)
+            @test model.numerics.tracer_upwinding == Val(:first_order)
+            @test model.numerics.edmfx_upwinding == Val(:first_order)
+            @test model.numerics.edmfx_sgsflux_upwinding == Val(:none)
+            @test model.numerics.test_dycore_consistency === nothing
+            @test model.numerics.limiter === nothing
+            @test model.numerics.diff_mode isa CA.Explicit
+
+            # Test top-level defaults
+            @test model.disable_surface_flux_tendency == false
+            @test model.hyperdiff === nothing
+            @test model.vert_diff === nothing
+
+            # Test advanced physics defaults (should be nothing/disabled)
+            @test model.forcing_type === nothing
+            @test model.turbconv_model === nothing
+            @test model.non_orographic_gravity_wave === nothing
+            @test model.orographic_gravity_wave === nothing
+            @test model.viscous_sponge === nothing
+            @test model.rayleigh_sponge === nothing
+        end
+
+        @testset "User overrides defaults" begin
+            # Test that user-provided arguments override the defaults
+            model = CA.AtmosModel(;
+                moisture_model = CA.EquilMoistModel(),
+                precip_model = CA.Microphysics1Moment(),
+                radiation_mode = RRTMGPI.ClearSkyRadiation(
+                    false,
+                    false,
+                    false,
+                    false,
+                ),
+                disable_surface_flux_tendency = true,
+            )
+
+            # Test overridden values
+            @test model.moisture_model isa CA.EquilMoistModel
+            @test model.precip_model isa CA.Microphysics1Moment
+            @test model.radiation_mode isa RRTMGPI.ClearSkyRadiation
+            @test model.disable_surface_flux_tendency == true
+
+            # Test that non-overridden defaults are preserved
+            @test model.cloud_model isa CA.GridScaleCloud
+            @test model.surface_model isa CA.PrescribedSurfaceTemperature
+            @test model.insolation isa CA.IdealizedInsolation
+            @test model.numerics.diff_mode isa CA.Explicit
+        end
+
+        @testset "Convenience constructors vs main constructor" begin
+            # Test that convenience constructors work and override defaults appropriately
+            dry_model = CA.DryAtmosModel()
+            @test dry_model.moisture_model isa CA.DryModel
+            @test dry_model.precip_model isa CA.NoPrecipitation
+            @test dry_model.surface_model isa CA.PrescribedSurfaceTemperature
+            @test dry_model.insolation isa CA.IdealizedInsolation
+
+            equil_model = CA.EquilMoistAtmosModel()
+            @test equil_model.moisture_model isa CA.EquilMoistModel  # overridden by convenience constructor
+            @test equil_model.precip_model isa CA.Microphysics0Moment  # overridden by convenience constructor
+            @test equil_model.ozone isa CA.IdealizedOzone  # added by convenience constructor
+            @test equil_model.co2 isa CA.FixedCO2  # added by convenience constructor
+            @test equil_model.numerics.diff_mode isa CA.Explicit  # main constructor default preserved
+
+            nonequil_model = CA.NonEquilMoistAtmosModel()
+            @test nonequil_model.moisture_model isa CA.NonEquilMoistModel  # overridden
+            @test nonequil_model.precip_model isa CA.Microphysics1Moment  # overridden
+            @test nonequil_model.noneq_cloud_formation_mode isa CA.Explicit  # added
+            @test nonequil_model.numerics.diff_mode isa CA.Explicit  # main constructor default preserved
+        end
+
+        @testset "Partial customization" begin
+            # Test that partial customization works well with defaults
+            model = CA.AtmosModel(;
+                forcing_type = CA.HeldSuarezForcing(),
+                hyperdiff = CA.ClimaHyperdiffusion(;
+                    ν₄_vorticity_coeff = 1e15,
+                    ν₄_scalar_coeff = 1e15,
+                    divergence_damping_factor = 1.0,
+                ),
+            )
+
+            # Test that only specified parameters are customized
+            @test model.forcing_type isa CA.HeldSuarezForcing  # customized
+            @test model.hyperdiff isa CA.ClimaHyperdiffusion  # customized
+
+            # Test that all other defaults are preserved
+            @test model.moisture_model isa CA.DryModel  # default
+            @test model.precip_model isa CA.NoPrecipitation  # default
+            @test model.surface_model isa CA.PrescribedSurfaceTemperature  # default
+            @test model.numerics.diff_mode isa CA.Explicit  # default
+            @test model.disable_surface_flux_tendency == false  # default
+        end
+    end
+
     @testset "Documentation Examples" begin
 
         @testset "Basic dry model" begin
@@ -126,7 +243,7 @@ const FT = Float32
 
         # Test defaults for unspecified parameters
         @test model.moisture_model isa CA.DryModel
-        @test model.precip_model === nothing
+        @test model.precip_model isa CA.NoPrecipitation
         @test model.hyperdiff === nothing
         @test model.disable_surface_flux_tendency == false
 

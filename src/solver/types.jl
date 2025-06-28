@@ -517,7 +517,7 @@ Base.@kwdef struct EDMFXModel{
     scale_blending_method::SBM
 end
 
-# Grouped structures to reduce AtmosModel type parameters
+# Grouped structs to reduce AtmosModel type parameters
 
 """
     AtmosHydrology
@@ -722,19 +722,37 @@ end
 """
     AtmosModel(; kwargs...)
 
-Create an AtmosModel using a unified flat interface.
+Create an AtmosModel with sensible defaults.
 
-This constructor allows you to specify individual model components directly as 
-keyword arguments, which are automatically organized into the appropriate grouped 
-sub-structures internally. This interface is used by both interactive users and 
-the config system via `get_atmos()`.
+This constructor provides sensible defaults for a minimal dry atmospheric model with full customization through keyword arguments. 
 
-# Example: Basic dry model
+All model components are automatically organized into appropriate grouped sub-structs 
+internally:
+- [`AtmosHydrology`](@ref)
+- [`AtmosForcing`](@ref)
+- [`AtmosRadiation`](@ref)
+- [`AtmosAdvection`](@ref)
+- [`AtmosTurbconv`](@ref)
+- [`AtmosGravityWave`](@ref)
+- [`AtmosSponge`](@ref)
+- [`AtmosSurface`](@ref)
+- [`AtmosNumerics`](@ref)
+The one exception is the top-level `disable_surface_flux_tendency` field, which is not grouped.
+
+# Example: Minimal model (uses defaults)
+```julia
+model = AtmosModel()  # Creates a basic dry atmospheric model
+```
+
+# Example: Basic dry model with forcing
 ```julia
 model = AtmosModel(;
-    moisture_model = DryModel(),
-    surface_model = PrescribedSurfaceTemperature(),
-    precip_model = NoPrecipitation()
+    forcing_type = HeldSuarezForcing(),
+    hyperdiff = ClimaHyperdiffusion(; 
+        ν₄_vorticity_coeff = 1e15, 
+        ν₄_scalar_coeff = 1e15, 
+        divergence_damping_factor = 1.0
+    )
 )
 ```
 
@@ -743,28 +761,20 @@ model = AtmosModel(;
 model = AtmosModel(;
     moisture_model = EquilMoistModel(),
     precip_model = Microphysics0Moment(),
-    radiation_mode = RRTMGPI.AllSkyRadiation(
-        false, false, InteractiveCloudInRadiation(), false, false, false, false
-    ),
+    radiation_mode = RRTMGPI.AllSkyRadiation(),
     ozone = IdealizedOzone(),
     co2 = FixedCO2()
 )
 ```
 
-# Example: Model with hyperdiffusion and sponge layers
-```julia
-model = AtmosModel(;
-    moisture_model = NonEquilMoistModel(),
-    precip_model = Microphysics1Moment(),
-    hyperdiff = ClimaHyperdiffusion(; 
-        ν₄_vorticity_coeff = 1e15, 
-        ν₄_scalar_coeff = 1e15, 
-        divergence_damping_factor = 1.0
-    ),
-    rayleigh_sponge = RayleighSponge(; zd = 12000.0, α_uₕ = 4.0, α_w = 2.0),
-    disable_surface_flux_tendency = false
-)
-```
+# Default Configuration
+The default AtmosModel provides:
+- **Dry atmosphere**: DryModel() with NoPrecipitation()
+- **Basic surface**: PrescribedSurfaceTemperature() with ZonallySymmetricSST()
+- **Simple clouds**: GridScaleCloud()
+- **Idealized insolation**: IdealizedInsolation()
+- **Conservative numerics**: First-order upwinding with Explicit() timestepping
+- **No advanced physics**: No radiation, turbulence, or forcing by default
 
 # Available Parameters
 
@@ -811,27 +821,44 @@ model = AtmosModel(;
 
 ## Top-level Options  
 - `hyperdiff`: nothing or ClimaHyperdiffusion() instances
-- `numerics`: nothing or AtmosNumerics() instances (includes `diff_mode`: Explicit(), Implicit())
+- `numerics`: AtmosNumerics() instances (includes `diff_mode`: Explicit(), Implicit())
 - `disable_surface_flux_tendency`: Bool
 
 # Notes
-- All parameters are optional and have sensible defaults
 - This unified interface is used by both interactive users and the config system
-- Parameters are automatically grouped into appropriate sub-structures
+- Parameters are automatically grouped into appropriate sub-structs
 - Unknown parameter names produce helpful error messages listing all available options
-- Property access works both ways: `model.moisture_model` and `model.moisture.moisture_model`
-- The Atmos prefix is kind of annoying and could be removed
-
-# Todo 
-- improve documentation
-- add exports?
-- remove the Atmos prefix for grouped types?
+- Property access works both ways: `model.moisture_model` and `model.hydrology.moisture_model`
 """
 function AtmosModel(; kwargs...)
+    # TODO: Break this into separate functions for defaults and kwarg processing 
+    # this is hard to understand and maintain
+
+    # Set defaults that create a minimal viable atmospheric model
+    default_args = (
+        moisture_model = DryModel(),
+        precip_model = NoPrecipitation(),
+        cloud_model = GridScaleCloud(),
+        surface_model = PrescribedSurfaceTemperature(),
+        sfc_temperature = ZonallySymmetricSST(),
+        insolation = IdealizedInsolation(),
+        numerics = AtmosNumerics(
+            energy_upwinding = Val(:first_order),
+            tracer_upwinding = Val(:first_order),
+            edmfx_upwinding = Val(:first_order),
+            edmfx_sgsflux_upwinding = Val(:none),
+            test_dycore_consistency = nothing,
+            limiter = nothing,
+            diff_mode = Explicit(),
+        ),
+
+        # Top-level
+        disable_surface_flux_tendency = false,
+    )
+
     # Process keyword arguments: categorize into grouped types (e.g., hydrology -> AtmosHydrology)
     # vs direct AtmosModel fields (e.g., hyperdiff, numerics). Use GROUPED_PROPERTY_MAP to organize grouped types
-    # into appropriate nested structs, then construct AtmosModel with all top-level fields.
-
+    # into appropriate grouped structs, then construct AtmosModel with all top-level fields.
     group_kwargs = Dict{Symbol, Dict{Symbol, Any}}()
     for (_, group_field) in ATMOS_MODEL_GROUPS
         group_kwargs[group_field] = Dict{Symbol, Any}()
@@ -840,8 +867,21 @@ function AtmosModel(; kwargs...)
     # Kwargs for direct AtmosModel fields (hyperdiff, numerics, vert_diff, disable_surface_flux_tendency)
     atmos_model_kwargs = Dict{Symbol, Any}()
 
-    # Sort kwargs into appropriate groups
+    # Make all kwargs: apply defaults for any missing kwargs, then sort into appropriate groups
+    all_kwargs = Dict{Symbol, Any}()
+
+    # First add defaults
+    for (key, default_value) in pairs(default_args)
+        all_kwargs[key] = default_value
+    end
+
+    # Then add user kwargs (overriding defaults)
     for (key, value) in kwargs
+        all_kwargs[key] = value
+    end
+
+    # Sort kwargs into appropriate groups
+    for (key, value) in all_kwargs
         if haskey(GROUPED_PROPERTY_MAP, key)
             group_field = GROUPED_PROPERTY_MAP[key]
             group_kwargs[group_field][key] = value
@@ -851,7 +891,7 @@ function AtmosModel(; kwargs...)
             available_grouped = sort(collect(keys(GROUPED_PROPERTY_MAP)))
             available_direct = sort([
                 fn for fn in fieldnames(AtmosModel) if fn ∉ [
-                    :moisture,
+                    :hydrology,
                     :forcing,
                     :radiation,
                     :advection,
@@ -998,7 +1038,6 @@ function NonEquilMoistAtmosModel(; kwargs...)
     return AtmosModel(; defaults..., kwargs...)
 end
 
-# ============================================================================
 
 abstract type AbstractCallbackFrequency end
 struct EveryNSteps <: AbstractCallbackFrequency
