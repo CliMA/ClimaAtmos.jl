@@ -85,7 +85,6 @@ function get_atmos(config::AtmosConfig, params)
         FT,
     )
 
-    # Pass individual parameters directly to AtmosModel (unified interface)
     atmos = AtmosModel(;
         # Moisture & Clouds
         moisture_model,
@@ -131,7 +130,6 @@ function get_atmos(config::AtmosConfig, params)
 
         # Diffusion & Sponges
         vert_diff,
-        diff_mode = implicit_diffusion ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
 
@@ -140,7 +138,7 @@ function get_atmos(config::AtmosConfig, params)
         surface_model = get_surface_model(parsed_args),
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
 
-        # Top-level Options
+        # Numerics and Top-level Options
         hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
         numerics = get_numerics(parsed_args),
         disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
@@ -189,6 +187,7 @@ function get_numerics(parsed_args)
     limiter = parsed_args["apply_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
     # wrap each upwinding mode in a Val for dispatch
+    diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
     numerics = AtmosNumerics(;
         energy_upwinding,
         tracer_upwinding,
@@ -196,6 +195,7 @@ function get_numerics(parsed_args)
         edmfx_sgsflux_upwinding,
         limiter,
         test_dycore_consistency = test_dycore,
+        diff_mode,
     )
     @info "numerics $(summary(numerics))"
 
@@ -448,7 +448,7 @@ get_jacobian(ode_algo, Y, atmos, parsed_args) =
             parsed_args["use_dense_jacobian"] ? AutoDenseJacobian() :
             ManualSparseJacobian(
                 DerivativeFlag(has_topography(axes(Y.c))),
-                DerivativeFlag(atmos.diff_mode),
+                DerivativeFlag(atmos.numerics.diff_mode),
                 DerivativeFlag(atmos.sgs_adv_mode),
                 DerivativeFlag(atmos.sgs_entr_detr_mode),
                 DerivativeFlag(atmos.sgs_mf_mode),

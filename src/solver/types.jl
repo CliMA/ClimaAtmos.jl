@@ -454,7 +454,7 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM}
+Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM, DM}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_upwinding::EN_UP
@@ -466,6 +466,9 @@ Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM}
     test_dycore_consistency::DYCORE
 
     limiter::LIM
+
+    """Timestepping mode for diffusion: Explicit() or Implicit()"""
+    diff_mode::DM = nothing
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
@@ -589,16 +592,6 @@ Base.@kwdef struct AtmosGravityWave{NOGW, OGW}
 end
 
 """
-    AtmosVertDiff
-
-Groups vertical diffusion-related models and parameters.
-"""
-Base.@kwdef struct AtmosVertDiff{VD, DM}
-    vert_diff::VD = nothing
-    diff_mode::DM = nothing
-end
-
-"""
     AtmosSponge
 
 Groups sponge-related models and parameters.
@@ -626,7 +619,6 @@ Base.broadcastable(x::AtmosRadiation) = tuple(x)
 Base.broadcastable(x::AtmosAdvection) = tuple(x)
 Base.broadcastable(x::AtmosTurbconv) = tuple(x)
 Base.broadcastable(x::AtmosGravityWave) = tuple(x)
-Base.broadcastable(x::AtmosVertDiff) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
 
@@ -668,7 +660,6 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosAdvection, :advection),
     (AtmosTurbconv, :turbconv),
     (AtmosGravityWave, :gravity_wave),
-    (AtmosVertDiff, :vert_diff),
     (AtmosSponge, :sponge),
     (AtmosSurface, :surface),
 )
@@ -822,7 +813,6 @@ model = AtmosModel(;
 
 ## Diffusion & Sponges
 - `vert_diff`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
-- `diff_mode`: Explicit(), Implicit()
 - `viscous_sponge`: nothing or ViscousSponge() instances
 - `rayleigh_sponge`: nothing or RayleighSponge() instances
 
@@ -833,7 +823,7 @@ model = AtmosModel(;
 
 ## Top-level Options  
 - `hyperdiff`: nothing or ClimaHyperdiffusion() instances
-- `numerics`: nothing or AtmosNumerics() instances
+- `numerics`: nothing or AtmosNumerics() instances (includes `diff_mode`: Explicit(), Implicit())
 - `disable_surface_flux_tendency`: Bool
 
 # Notes
@@ -845,19 +835,21 @@ model = AtmosModel(;
 - The Atmos prefix is kind of annoying and could be removed
 
 # Todo 
-- simplify tests
 - improve documentation
 - add exports?
-- remove the Atmos prefix?
+- remove the Atmos prefix for grouped types?
 """
 function AtmosModel(; kwargs...)
-    # Unified flat interface - organize individual kwargs into groups
+    # Process keyword arguments: categorize into grouped types (e.g., moisture_model -> AtmosMoistureModel)
+    # vs direct AtmosModel fields (e.g., hyperdiff, numerics). Use GROUPED_PROPERTY_MAP to organize grouped types
+    # into appropriate nested structs, then construct AtmosModel with all top-level fields.
+
     group_kwargs = Dict{Symbol, Dict{Symbol, Any}}()
     for (_, group_field) in ATMOS_MODEL_GROUPS
         group_kwargs[group_field] = Dict{Symbol, Any}()
     end
 
-    # Handle direct AtmosModel fields (hyperdiff, numerics, disable_surface_flux_tendency)
+    # Kwargs for direct AtmosModel fields (hyperdiff, numerics, vert_diff, disable_surface_flux_tendency)
     atmos_model_kwargs = Dict{Symbol, Any}()
 
     # Sort kwargs into appropriate groups
@@ -868,7 +860,6 @@ function AtmosModel(; kwargs...)
         elseif key in fieldnames(AtmosModel)
             atmos_model_kwargs[key] = value
         else
-            # Create helpful error message with available parameters
             available_grouped = sort(collect(keys(GROUPED_PROPERTY_MAP)))
             available_direct = sort([
                 fn for fn in fieldnames(AtmosModel) if fn ∉ [
@@ -878,34 +869,31 @@ function AtmosModel(; kwargs...)
                     :advection,
                     :turbconv,
                     :gravity_wave,
-                    :vert_diff,
                     :sponge,
                     :surface,
                 ]
             ])
             available_all = [available_grouped; available_direct]
             error(
-                "Unknown AtmosModel parameter: $key. " *
-                "Available parameters:\n  " *
+                "Unknown AtmosModel argument: $key. " *
+                "Available arguments:\n  " *
                 join(available_all, "\n  "),
             )
         end
     end
 
-    # Construct each group struct with provided parameters
     moisture = AtmosMoistureModel(; group_kwargs[:moisture]...)
     forcing = AtmosForcing(; group_kwargs[:forcing]...)
     radiation = AtmosRadiation(; group_kwargs[:radiation]...)
     advection = AtmosAdvection(; group_kwargs[:advection]...)
     turbconv = AtmosTurbconv(; group_kwargs[:turbconv]...)
     gravity_wave = AtmosGravityWave(; group_kwargs[:gravity_wave]...)
-    vert_diff = AtmosVertDiff(; group_kwargs[:vert_diff]...)
     sponge = AtmosSponge(; group_kwargs[:sponge]...)
     surface = AtmosSurface(; group_kwargs[:surface]...)
 
-    # Extract direct AtmosModel parameters with appropriate defaults
     hyperdiff = get(atmos_model_kwargs, :hyperdiff, nothing)
     numerics = get(atmos_model_kwargs, :numerics, nothing)
+    vert_diff = get(atmos_model_kwargs, :vert_diff, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
 
