@@ -115,7 +115,7 @@ const FT = Float32
         @test model.forcing_type isa CA.HeldSuarezForcing
 
         # Grouped struct access  
-        @test model.moisture isa CA.AtmosMoistureModel
+        @test model.moisture isa CA.AtmosHydrology
         @test model.forcing isa CA.AtmosForcing
         @test model.moisture.moisture_model isa CA.NonEquilMoistModel
         @test model.forcing.forcing_type isa CA.HeldSuarezForcing

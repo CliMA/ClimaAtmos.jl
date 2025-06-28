@@ -520,11 +520,11 @@ end
 # Grouped structures to reduce AtmosModel type parameters
 
 """
-    AtmosMoistureModel
+    AtmosHydrology
 
 Groups moisture-related models and parameters.
 """
-Base.@kwdef struct AtmosMoistureModel{MM, PM, CM, NCFM, CCDPS}
+Base.@kwdef struct AtmosHydrology{MM, PM, CM, NCFM, CCDPS}
     moisture_model::MM = nothing
     precip_model::PM = nothing
     cloud_model::CM = nothing
@@ -613,7 +613,7 @@ Base.@kwdef struct AtmosSurface{ST, SM, SA}
 end
 
 # Add broadcastable for the new grouped types
-Base.broadcastable(x::AtmosMoistureModel) = tuple(x)
+Base.broadcastable(x::AtmosHydrology) = tuple(x)
 Base.broadcastable(x::AtmosForcing) = tuple(x)
 Base.broadcastable(x::AtmosRadiation) = tuple(x)
 Base.broadcastable(x::AtmosAdvection) = tuple(x)
@@ -623,7 +623,7 @@ Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
 
 struct AtmosModel{
-    MOISTURE,
+    HYDROLOGY,
     FORCING,
     RADIATION,
     ADVECTION,
@@ -635,7 +635,7 @@ struct AtmosModel{
     SURFACE,
     NUM,
 }
-    moisture::MOISTURE
+    hydrology::HYDROLOGY
     forcing::FORCING
     radiation::RADIATION
     advection::ADVECTION
@@ -654,7 +654,7 @@ end
 # BACKWARD COMPATIBILITY FOR AtmosModel 
 # Map grouped struct types to their names in AtmosModel struct
 const ATMOS_MODEL_GROUPS = (
-    (AtmosMoistureModel, :moisture),
+    (AtmosHydrology, :hydrology),
     (AtmosForcing, :forcing),
     (AtmosRadiation, :radiation),
     (AtmosAdvection, :advection),
@@ -840,7 +840,7 @@ model = AtmosModel(;
 - remove the Atmos prefix for grouped types?
 """
 function AtmosModel(; kwargs...)
-    # Process keyword arguments: categorize into grouped types (e.g., moisture_model -> AtmosMoistureModel)
+    # Process keyword arguments: categorize into grouped types (e.g., hydrology -> AtmosHydrology)
     # vs direct AtmosModel fields (e.g., hyperdiff, numerics). Use GROUPED_PROPERTY_MAP to organize grouped types
     # into appropriate nested structs, then construct AtmosModel with all top-level fields.
 
@@ -882,7 +882,7 @@ function AtmosModel(; kwargs...)
         end
     end
 
-    moisture = AtmosMoistureModel(; group_kwargs[:moisture]...)
+    moisture = AtmosHydrology(; group_kwargs[:hydrology]...)
     forcing = AtmosForcing(; group_kwargs[:forcing]...)
     radiation = AtmosRadiation(; group_kwargs[:radiation]...)
     advection = AtmosAdvection(; group_kwargs[:advection]...)
