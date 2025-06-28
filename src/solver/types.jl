@@ -751,7 +751,9 @@ model = AtmosModel(;
 model = AtmosModel(;
     moisture_model = EquilMoistModel(),
     precip_model = Microphysics0Moment(),
-    radiation_mode = RRTMGPI.AllSkyRadiation(),
+    radiation_mode = RRTMGPI.AllSkyRadiation(
+        false, false, InteractiveCloudInRadiation(), false, false, false, false
+    ),
     ozone = IdealizedOzone(),
     co2 = FixedCO2()
 )
@@ -984,7 +986,7 @@ Create a dry atmospheric model with sensible defaults for dry simulations.
 # Example
 ```julia
 model = DryAtmosModel(;
-    radiation_mode = RRTMGPI.GrayRadiation(),
+    radiation_mode = RRTMGPI.GrayRadiation(false, false),
     forcing_type = HeldSuarezForcing(),
     hyperdiff = ClimaHyperdiffusion(; ν₄_vorticity_coeff = 1e15, ν₄_scalar_coeff = 1e15, divergence_damping_factor = 1.0)
 )
