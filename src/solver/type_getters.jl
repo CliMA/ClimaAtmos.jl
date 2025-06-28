@@ -86,7 +86,7 @@ function get_atmos(config::AtmosConfig, params)
     )
 
     atmos = AtmosModel(;
-        # Moisture & Clouds
+        # AtmosHydrology - Moisture, Precipitation & Clouds
         moisture_model,
         precip_model,
         cloud_model,
@@ -94,20 +94,22 @@ function get_atmos(config::AtmosConfig, params)
                                      Implicit() : Explicit(),
         call_cloud_diagnostics_per_stage,
 
-        # Forcing & Advection
+        # AtmosForcing
         forcing_type,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         external_forcing = get_external_forcing_model(parsed_args, FT),
+
+        # AtmosAdvection  
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
         advection_test,
 
-        # Radiation
+        # AtmosRadiation
         radiation_mode,
         ozone,
         co2,
         insolation = get_insolation_form(parsed_args),
 
-        # Turbulence & Convection
+        # AtmosTurbconv - Turbulence & Convection
         scm_coriolis = get_scm_coriolis(parsed_args, FT),
         edmfx_model,
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
@@ -118,7 +120,7 @@ function get_atmos(config::AtmosConfig, params)
         sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
         smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
 
-        # Gravity Waves
+        # AtmosGravityWave
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
             parsed_args,
             FT,
@@ -128,17 +130,17 @@ function get_atmos(config::AtmosConfig, params)
             FT,
         ),
 
-        # Diffusion & Sponges
-        vert_diff,
+        # AtmosSponge
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
 
-        # Surface
+        # AtmosSurface
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         surface_model = get_surface_model(parsed_args),
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
 
-        # Numerics and Top-level Options
+        # Top-level options (not grouped)
+        vert_diff,
         hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
         numerics = get_numerics(parsed_args),
         disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],

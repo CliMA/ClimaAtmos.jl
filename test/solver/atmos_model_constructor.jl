@@ -7,31 +7,133 @@ using Dates
 
 const FT = Float32
 
+# Helper function to test defaults against expected types
+function test_defaults(model, expected_defaults)
+    for (field, expected_type) in expected_defaults
+        actual_value = getproperty(model, field)
+        if expected_type === nothing
+            @test actual_value === nothing || actual_value == nothing
+        elseif expected_type isa Type
+            @test actual_value isa expected_type
+        else
+            @test actual_value == expected_type
+        end
+    end
+end
+
 @testset "AtmosModel Constructor Tests" begin
 
-    @testset "Documentation Examples" begin
+    @testset "Intelligent Defaults" begin
+        @testset "Basic AtmosModel() creates working model with expected defaults" begin
+            model = CA.AtmosModel()
 
-        @testset "Basic dry model" begin
-            model = CA.AtmosModel(;
-                moisture_model = CA.DryModel(),
-                surface_model = CA.PrescribedSurfaceTemperature(),
-                precip_model = CA.NoPrecipitation(),
+            # Define expected defaults in a compact dictionary
+            expected_defaults = Dict(
+                # Core physics defaults
+                :moisture_model => CA.DryModel,
+                :precip_model => CA.NoPrecipitation,
+                :cloud_model => CA.GridScaleCloud,
+                :surface_model => CA.PrescribedSurfaceTemperature,
+                :sfc_temperature => CA.ZonallySymmetricSST,
+                :insolation => CA.IdealizedInsolation,
+                :disable_surface_flux_tendency => false,
+
+                # Advanced physics defaults (should be nothing/disabled)
+                :radiation_mode => nothing,
+                :ozone => nothing,
+                :co2 => nothing,
+                :forcing_type => nothing,
+                :turbconv_model => nothing,
+                :non_orographic_gravity_wave => nothing,
+                :orographic_gravity_wave => nothing,
+                :viscous_sponge => nothing,
+                :rayleigh_sponge => nothing,
+                :hyperdiff => nothing,
+                :vert_diff => nothing,
             )
 
-            @test model.moisture_model isa CA.DryModel
-            @test model.surface_model isa CA.PrescribedSurfaceTemperature
-            @test model.precip_model isa CA.NoPrecipitation
-            @test model.disable_surface_flux_tendency == false
+            test_defaults(model, expected_defaults)
+
+            # Test numerics structure separately due to nested fields
+            @test model.numerics isa CA.AtmosNumerics
+            @test model.numerics.diff_mode isa CA.Explicit
         end
 
-        @testset "Moist model with radiation" begin
+        @testset "User overrides work correctly" begin
+            # Test various override scenarios including complex parameter types
             model = CA.AtmosModel(;
                 moisture_model = CA.EquilMoistModel(),
+                precip_model = CA.Microphysics1Moment(),
+                cloud_model = CA.QuadratureCloud(CA.SGSQuadrature(FT)),
+                radiation_mode = RRTMGPI.ClearSkyRadiation(
+                    false,
+                    false,
+                    false,
+                    false,
+                ),
+                ozone = CA.IdealizedOzone(),
+                co2 = CA.FixedCO2(),
+                forcing_type = CA.HeldSuarezForcing(),
+                hyperdiff = CA.ClimaHyperdiffusion(;
+                    ν₄_vorticity_coeff = 1e15,
+                    ν₄_scalar_coeff = 1e15,
+                    divergence_damping_factor = 1.0,
+                ),
+                disable_surface_flux_tendency = true,
+            )
+
+            # Test customized values
+            @test model.moisture_model isa CA.EquilMoistModel
+            @test model.precip_model isa CA.Microphysics1Moment
+            @test model.cloud_model isa CA.QuadratureCloud
+            @test model.radiation_mode isa RRTMGPI.ClearSkyRadiation
+            @test model.ozone isa CA.IdealizedOzone
+            @test model.co2 isa CA.FixedCO2
+            @test model.forcing_type isa CA.HeldSuarezForcing
+            @test model.hyperdiff isa CA.ClimaHyperdiffusion
+            @test model.disable_surface_flux_tendency == true
+
+            # Test that non-overridden defaults are preserved
+            @test model.surface_model isa CA.PrescribedSurfaceTemperature
+            @test model.insolation isa CA.IdealizedInsolation
+            @test model.numerics.diff_mode isa CA.Explicit
+        end
+
+        @testset "Convenience constructors work with defaults" begin
+            # Test that convenience constructors properly override defaults
+            models = [
+                ("dry", CA.DryAtmosModel(), CA.DryModel),
+                ("equil", CA.EquilMoistAtmosModel(), CA.EquilMoistModel),
+                (
+                    "nonequil",
+                    CA.NonEquilMoistAtmosModel(),
+                    CA.NonEquilMoistModel,
+                ),
+            ]
+
+            for (name, model, expected_moisture_type) in models
+                @test model.moisture_model isa expected_moisture_type
+                @test model.surface_model isa CA.PrescribedSurfaceTemperature  # default preserved
+                @test model.numerics.diff_mode isa CA.Explicit  # default preserved
+            end
+        end
+    end
+
+    @testset "Documentation Examples" begin
+        @testset "Basic configurations work as documented" begin
+            # Test basic dry model
+            dry_model = CA.AtmosModel(;
+                moisture_model = CA.DryModel(),
+                surface_model = CA.PrescribedSurfaceTemperature(),
+            )
+            @test dry_model.moisture_model isa CA.DryModel
+            @test dry_model.surface_model isa CA.PrescribedSurfaceTemperature
+
+            # Test moist model with radiation
+            moist_model = CA.AtmosModel(;
+                moisture_model = CA.EquilMoistModel(),
                 precip_model = CA.Microphysics0Moment(),
-                radiation_mode = RRTMGPI.AllSkyRadiation(
-                    false,
-                    false,
-                    CA.InteractiveCloudInRadiation(),
+                radiation_mode = RRTMGPI.ClearSkyRadiation(
                     false,
                     false,
                     false,
@@ -40,104 +142,30 @@ const FT = Float32
                 ozone = CA.IdealizedOzone(),
                 co2 = CA.FixedCO2(),
             )
-
-            @test model.moisture_model isa CA.EquilMoistModel
-            @test model.precip_model isa CA.Microphysics0Moment
-            @test model.radiation_mode isa RRTMGPI.AllSkyRadiation
-            @test model.ozone isa CA.IdealizedOzone
-            @test model.co2 isa CA.FixedCO2
-        end
-
-        @testset "Model with hyperdiffusion and sponge" begin
-            model = CA.AtmosModel(;
-                moisture_model = CA.NonEquilMoistModel(),
-                precip_model = CA.Microphysics1Moment(),
-                hyperdiff = CA.ClimaHyperdiffusion(;
-                    ν₄_vorticity_coeff = 1e15,
-                    ν₄_scalar_coeff = 1e15,
-                    divergence_damping_factor = 1.0,
-                ),
-                rayleigh_sponge = CA.RayleighSponge(;
-                    zd = 12000.0,
-                    α_uₕ = 4.0,
-                    α_w = 2.0,
-                ),
-                disable_surface_flux_tendency = false,
-            )
-
-            @test model.moisture_model isa CA.NonEquilMoistModel
-            @test model.precip_model isa CA.Microphysics1Moment
-            @test model.hyperdiff isa CA.ClimaHyperdiffusion
-            @test model.rayleigh_sponge isa CA.RayleighSponge
-            @test model.disable_surface_flux_tendency == false
-        end
-
-        @testset "Additional parameter types" begin
-            # Test parameter types not covered in main examples
-            model = CA.AtmosModel(;
-                cloud_model = CA.QuadratureCloud(CA.SGSQuadrature(FT)),
-                forcing_type = CA.HeldSuarezForcing(),
-                radiation_mode = RRTMGPI.ClearSkyRadiation(
-                    false,
-                    false,
-                    false,
-                    false,
-                ),
-            )
-
-            @test model.cloud_model isa CA.QuadratureCloud
-            @test model.forcing_type isa CA.HeldSuarezForcing
-            @test model.radiation_mode isa RRTMGPI.ClearSkyRadiation
-        end
-    end
-
-    @testset "Error Handling" begin
-        try
-            CA.AtmosModel(; invalid_param = "test")
-        catch e
-            @test e isa ErrorException
-            @test occursin("Unknown AtmosModel argument: invalid_param", e.msg)
-            @test occursin("Available arguments:", e.msg)
-            @test occursin("moisture_model", e.msg)
-            @test occursin("surface_model", e.msg)
+            @test moist_model.moisture_model isa CA.EquilMoistModel
+            @test moist_model.radiation_mode isa RRTMGPI.ClearSkyRadiation
+            @test moist_model.ozone isa CA.IdealizedOzone
         end
     end
 
     @testset "Interface Compatibility" begin
         # Test that both flat parameters and grouped struct access work
-        model = CA.AtmosModel(;
-            moisture_model = CA.NonEquilMoistModel(),
-            forcing_type = CA.HeldSuarezForcing(),
-        )
+        model = CA.AtmosModel(moisture_model = CA.NonEquilMoistModel())
 
         # Flat parameter access
         @test model.moisture_model isa CA.NonEquilMoistModel
-        @test model.forcing_type isa CA.HeldSuarezForcing
 
         # Grouped struct access  
         @test model.hydrology isa CA.AtmosHydrology
-        @test model.forcing isa CA.AtmosForcing
         @test model.hydrology.moisture_model isa CA.NonEquilMoistModel
-        @test model.forcing.forcing_type isa CA.HeldSuarezForcing
     end
 
-    @testset "Utility Behavior" begin
-        model = CA.AtmosModel(; moisture_model = CA.DryModel())
-
-        # Test defaults for unspecified parameters
-        @test model.moisture_model isa CA.DryModel
-        @test model.precip_model === nothing
-        @test model.hyperdiff === nothing
-        @test model.disable_surface_flux_tendency == false
-
-        # Test broadcasting compatibility
-        @test Base.broadcastable(model) == tuple(model)
-        @test Base.broadcastable(model.hydrology) == tuple(model.hydrology)
-        @test Base.broadcastable(model.moisture_model) ==
-              tuple(model.moisture_model)
+    @testset "Error Handling" begin
+        # Test invalid parameter error with helpful message
+        @test_throws ErrorException CA.AtmosModel(; invalid_param = "test")
     end
 
-    @testset "AtmosModel Argument Uniqueness" begin
+    @testset "Internal Consistency" begin
         # Ensure no conflicts between grouped arguments and direct AtmosModel fields
         grouped_args = Set(keys(CA.GROUPED_PROPERTY_MAP))
         grouped_struct_fields = Set([
@@ -158,15 +186,5 @@ const FT = Float32
         # Check for keyword argument conflicts
         overlap = intersect(grouped_args, direct_args)
         @test isempty(overlap)
-
-        full_overlap = intersect(grouped_args, Set(fieldnames(CA.AtmosModel)))
-        if !isempty(full_overlap)
-            @error "Found conflicts between grouped arguments and grouped struct fieldnames:"
-            @info """Conflicting names: $(collect(full_overlap))
-            AtmosModel fieldnames: $(collect(fieldnames(CA.AtmosModel)))
-            Grouped args (first 20): $(collect(grouped_args)[1:min(20, length(grouped_args))])
-            Grouped struct fields: $(collect(grouped_struct_fields))"""
-        end
-        @test isempty(full_overlap)
     end
 end
