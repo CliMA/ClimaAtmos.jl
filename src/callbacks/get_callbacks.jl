@@ -327,7 +327,8 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         )
     end
 
-    if parsed_args["external_forcing"] == "ReanalysisTimeVarying" &&
+    if parsed_args["external_forcing"] in
+       ["ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal"] &&
        parsed_args["config"] == "column"
         callbacks = (
             callbacks...,

@@ -276,8 +276,10 @@ end
     )
 
     temporary_dir = mktempdir()
-    sim_forcing =
-        CA.get_external_forcing_file_path(parsed_args, data_dir = temporary_dir)
+    sim_forcing = CA.get_external_daily_forcing_file_path(
+        parsed_args,
+        data_dir = temporary_dir,
+    )
 
     @test basename(sim_forcing) ==
           "tv_forcing_0.0_0.0_$(parsed_args["start_date"])_$(parsed_args["start_date"]).nc"
@@ -287,12 +289,11 @@ end
 
     # Generate forcing file
     time_resolution = FT(3600)
-    CA.generate_external_era5_forcing_file(
-        parsed_args["site_latitude"],
-        parsed_args["site_longitude"],
-        parsed_args["start_date"],
+    CA.generate_external_forcing_file(
+        parsed_args,
         sim_forcing,
         FT,
+        smooth_amount = 4,
         time_resolution = time_resolution,
         data_dir = temporary_dir,
     )
@@ -358,8 +359,10 @@ end
 
     input_dir = mktempdir()
     output_dir = mktempdir()
-    sim_forcing =
-        CA.get_external_forcing_file_path(parsed_args, data_dir = output_dir)
+    sim_forcing = CA.get_external_daily_forcing_file_path(
+        parsed_args,
+        data_dir = output_dir,
+    )
 
     # Create mock datasets for multiple days
     start_date = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
@@ -391,7 +394,7 @@ end
         time_resolution = time_resolution,
         input_data_dir = input_dir,
         output_data_dir = output_dir,
-    ) # getting confused on the directories
+    )
 
     # Test the generated file
     processed_data = NCDataset(sim_forcing, "r")
