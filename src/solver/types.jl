@@ -622,30 +622,18 @@ Base.broadcastable(x::AtmosGravityWave) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
 
-struct AtmosModel{
-    HYDROLOGY,
-    FORCING,
-    RADIATION,
-    ADVECTION,
-    TURBCONV,
-    GRAVITY_WAVE,
-    HD,
-    VERT_DIFF,
-    SPONGE,
-    SURFACE,
-    NUM,
-}
-    hydrology::HYDROLOGY
-    forcing::FORCING
-    radiation::RADIATION
-    advection::ADVECTION
-    turbconv::TURBCONV
-    gravity_wave::GRAVITY_WAVE
+struct AtmosModel{H, F, R, A, TC, GW, HD, VD, SP, SU, NU}
+    hydrology::H
+    forcing::F
+    radiation::R
+    advection::A
+    turbconv::TC
+    gravity_wave::GW
     hyperdiff::HD
-    vert_diff::VERT_DIFF
-    sponge::SPONGE
-    surface::SURFACE
-    numerics::NUM
+    vert_diff::VD
+    sponge::SP
+    surface::SU
+    numerics::NU
 
     """Whether to apply surface flux tendency (independent of surface conditions)"""
     disable_surface_flux_tendency::Bool
