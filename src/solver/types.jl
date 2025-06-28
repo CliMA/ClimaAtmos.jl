@@ -659,8 +659,8 @@ struct AtmosModel{
     disable_surface_flux_tendency::Bool
 end
 
-# BACKWARD COMPATIBILITY FOR AtmosModel PROPERTY ACCESS
-# Map grouped struct types to their AtmosModel field names
+# BACKWARD COMPATIBILITY FOR AtmosModel 
+# Map grouped struct types to their names in AtmosModel struct
 const ATMOS_MODEL_GROUPS = (
     (AtmosMoistureModel, :moisture),
     (AtmosForcing, :forcing),
@@ -673,7 +673,8 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosSurface, :surface),
 )
 
-# Auto-generate lookup: property_name => group_field  
+# Auto-generate map from property_name to group_field  
+# Use let closure to avoid polluting module scope with temporary variables
 const GROUPED_PROPERTY_MAP = let
     property_map = Dict{Symbol, Symbol}()
     for (group_type, group_field) in ATMOS_MODEL_GROUPS
@@ -685,7 +686,11 @@ const GROUPED_PROPERTY_MAP = let
 end
 
 # Forward property access: atmos.moisture_model → atmos.moisture.moisture_model
-@generated function Base.getproperty(atmos::AtmosModel, ::Val{property_name}) where {property_name}
+# Use ::Val constant for @generated compile-time access
+@generated function Base.getproperty(
+    atmos::AtmosModel,
+    ::Val{property_name},
+) where {property_name}
     if haskey(GROUPED_PROPERTY_MAP, property_name)
         group_field = GROUPED_PROPERTY_MAP[property_name]
         return quote
@@ -699,7 +704,7 @@ end
     end
 end
 
-@inline Base.getproperty(atmos::AtmosModel, property_name::Symbol) = 
+@inline Base.getproperty(atmos::AtmosModel, property_name::Symbol) =
     getproperty(atmos, Val{property_name}())
 
 Base.broadcastable(x::AtmosModel) = tuple(x)
@@ -738,11 +743,12 @@ end
 """
     AtmosModel(; kwargs...)
 
-Create an AtmosModel with a user-friendly flat interface.
+Create an AtmosModel using a unified flat interface.
 
 This constructor allows you to specify individual model components directly as 
 keyword arguments, which are automatically organized into the appropriate grouped 
-sub-structures internally.
+sub-structures internally. This interface is used by both interactive users and 
+the config system via `get_atmos()`.
 
 # Example: Basic dry model
 ```julia
@@ -832,70 +838,20 @@ model = AtmosModel(;
 
 # Notes
 - All parameters are optional and have sensible defaults
-- The existing config file interface with `get_atmos` remains fully supported
-- Parameters are automatically grouped into appropriate sub-structures corresponding to #3385
-- Unknown parameter names will produce a helpful error message
+- This unified interface is used by both interactive users and the config system
+- Parameters are automatically grouped into appropriate sub-structures
+- Unknown parameter names produce helpful error messages listing all available options
+- Property access works both ways: `model.moisture_model` and `model.moisture.moisture_model`
 - The Atmos prefix is kind of annoying and could be removed
 
-# Todo
-- add tests
-- fix GPU compilation issues
+# Todo 
+- simplify tests
 - improve documentation
 - add exports?
+- remove the Atmos prefix?
 """
 function AtmosModel(; kwargs...)
-    # Check if this is the grouped struct interface (used by get_atmos) 
-    # or the flat interface (new user-friendly interface)
-    group_field_names = [field for (_, field) in ATMOS_MODEL_GROUPS]
-
-    # If any grouped struct fields are provided, use the existing grouped interface
-    if any(key in group_field_names for key in keys(kwargs))
-        # This is the grouped struct interface used by get_atmos
-        # Extract the struct parameters and create AtmosModel directly
-        moisture = get(kwargs, :moisture, AtmosMoistureModel())
-        forcing = get(kwargs, :forcing, AtmosForcing())
-        radiation = get(kwargs, :radiation, AtmosRadiation())
-        advection = get(kwargs, :advection, AtmosAdvection())
-        turbconv = get(kwargs, :turbconv, AtmosTurbconv())
-        gravity_wave = get(kwargs, :gravity_wave, AtmosGravityWave())
-        hyperdiff = get(kwargs, :hyperdiff, nothing)
-        vert_diff = get(kwargs, :vert_diff, AtmosVertDiff())
-        sponge = get(kwargs, :sponge, AtmosSponge())
-        surface = get(kwargs, :surface, AtmosSurface())
-        numerics = get(kwargs, :numerics, nothing)
-        disable_surface_flux_tendency =
-            get(kwargs, :disable_surface_flux_tendency, false)
-
-        # Create AtmosModel directly
-        return AtmosModel{
-            typeof(moisture),
-            typeof(forcing),
-            typeof(radiation),
-            typeof(advection),
-            typeof(turbconv),
-            typeof(gravity_wave),
-            typeof(hyperdiff),
-            typeof(vert_diff),
-            typeof(sponge),
-            typeof(surface),
-            typeof(numerics),
-        }(
-            moisture,
-            forcing,
-            radiation,
-            advection,
-            turbconv,
-            gravity_wave,
-            hyperdiff,
-            vert_diff,
-            sponge,
-            surface,
-            numerics,
-            disable_surface_flux_tendency,
-        )
-    end
-
-    # Otherwise, use the flat interface - organize kwargs into groups
+    # Unified flat interface - organize individual kwargs into groups
     group_kwargs = Dict{Symbol, Dict{Symbol, Any}}()
     for (_, group_field) in ATMOS_MODEL_GROUPS
         group_kwargs[group_field] = Dict{Symbol, Any}()
@@ -947,7 +903,7 @@ function AtmosModel(; kwargs...)
     sponge = AtmosSponge(; group_kwargs[:sponge]...)
     surface = AtmosSurface(; group_kwargs[:surface]...)
 
-    # Create the final AtmosModel directly 
+    # Extract direct AtmosModel parameters with appropriate defaults
     hyperdiff = get(atmos_model_kwargs, :hyperdiff, nothing)
     numerics = get(atmos_model_kwargs, :numerics, nothing)
     disable_surface_flux_tendency =
@@ -981,9 +937,7 @@ function AtmosModel(; kwargs...)
     )
 end
 
-# ============================================================================
-# CONVENIENCE CONSTRUCTORS FOR COMMON CONFIGURATIONS
-# ============================================================================
+# Convenience constructors for common configurations
 
 """
     DryAtmosModel(; kwargs...)
