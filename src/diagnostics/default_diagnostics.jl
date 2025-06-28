@@ -431,7 +431,6 @@ function default_diagnostics(::EDOnlyEDMFX, duration, start_date; output_writer)
     ]
 end
 
-# Forwarding method for AtmosRadiation - bridges to the contained radiation models
 function default_diagnostics(
     atmos_radiation::AtmosRadiation,
     duration,
@@ -439,11 +438,43 @@ function default_diagnostics(
     output_writer,
 )
     diagnostics = []
-    
+
     # Add radiation mode diagnostics
     if atmos_radiation.radiation_mode !== nothing
-        append!(diagnostics, default_diagnostics(atmos_radiation.radiation_mode, duration, start_date; output_writer))
+        append!(
+            diagnostics,
+            default_diagnostics(
+                atmos_radiation.radiation_mode,
+                duration,
+                start_date;
+                output_writer,
+            ),
+        )
     end
-    
+
+    return diagnostics
+end
+
+function default_diagnostics(
+    atmos_turbconv::AtmosTurbconv,
+    duration,
+    start_date;
+    output_writer,
+)
+    diagnostics = []
+
+    # Add turbulence convection model diagnostics
+    if atmos_turbconv.turbconv_model !== nothing
+        append!(
+            diagnostics,
+            default_diagnostics(
+                atmos_turbconv.turbconv_model,
+                duration,
+                start_date;
+                output_writer,
+            ),
+        )
+    end
+
     return diagnostics
 end

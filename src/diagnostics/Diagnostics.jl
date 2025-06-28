@@ -16,6 +16,7 @@ import ..lazy
 import ..AtmosModel
 import ..AtmosHydrology
 import ..AtmosRadiation
+import ..AtmosTurbconv
 import ..AtmosCallback
 import ..EveryNSteps
 
