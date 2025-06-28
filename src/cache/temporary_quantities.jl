@@ -22,6 +22,10 @@ function temporary_quantities(Y, atmos)
         temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),
         temp_field_level_2 = Fields.level(Fields.Field(FT, center_space), 1),
         temp_field_level_3 = Fields.level(Fields.Field(FT, center_space), 1),
+        temp_tuple_field_level = similar(
+            Fields.level(Fields.Field(FT, center_space), 1),
+            Tuple{FT, FT},
+        ),
         temp_data = Fields.field_values(Fields.Field(FT, center_space)),
         temp_data_face_level = Fields.field_values(
             Fields.level(Fields.Field(FT, face_space), half),
