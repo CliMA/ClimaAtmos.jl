@@ -30,7 +30,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
         )
     end
 
-    if p.atmos.diff_mode == Implicit()
+    if p.atmos.numerics.diff_mode == Implicit()
         vertical_diffusion_boundary_layer_tendency!(
             Yₜ,
             Y,

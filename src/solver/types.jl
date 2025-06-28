@@ -454,7 +454,7 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM}
+Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM, DM}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_upwinding::EN_UP
@@ -466,6 +466,9 @@ Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM}
     test_dycore_consistency::DYCORE
 
     limiter::LIM
+
+    """Timestepping mode for diffusion: Explicit() or Implicit()"""
+    diff_mode::DM = nothing
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
@@ -517,11 +520,11 @@ end
 # Grouped structures to reduce AtmosModel type parameters
 
 """
-    AtmosMoistureModel
+    AtmosHydrology
 
 Groups moisture-related models and parameters.
 """
-Base.@kwdef struct AtmosMoistureModel{MM, PM, CM, NCFM, CCDPS}
+Base.@kwdef struct AtmosHydrology{MM, PM, CM, NCFM, CCDPS}
     moisture_model::MM = nothing
     precip_model::PM = nothing
     cloud_model::CM = nothing
@@ -589,16 +592,6 @@ Base.@kwdef struct AtmosGravityWave{NOGW, OGW}
 end
 
 """
-    AtmosVertDiff
-
-Groups vertical diffusion-related models and parameters.
-"""
-Base.@kwdef struct AtmosVertDiff{VD, DM}
-    vert_diff::VD = nothing
-    diff_mode::DM = nothing
-end
-
-"""
     AtmosSponge
 
 Groups sponge-related models and parameters.
@@ -620,68 +613,47 @@ Base.@kwdef struct AtmosSurface{ST, SM, SA}
 end
 
 # Add broadcastable for the new grouped types
-Base.broadcastable(x::AtmosMoistureModel) = tuple(x)
+Base.broadcastable(x::AtmosHydrology) = tuple(x)
 Base.broadcastable(x::AtmosForcing) = tuple(x)
 Base.broadcastable(x::AtmosRadiation) = tuple(x)
 Base.broadcastable(x::AtmosAdvection) = tuple(x)
 Base.broadcastable(x::AtmosTurbconv) = tuple(x)
 Base.broadcastable(x::AtmosGravityWave) = tuple(x)
-Base.broadcastable(x::AtmosVertDiff) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
 
-Base.@kwdef struct AtmosModel{
-    MOISTURE,
-    FORCING,
-    RADIATION,
-    ADVECTION,
-    TURBCONV,
-    GRAVITY_WAVE,
-    HD,
-    VERT_DIFF,
-    SPONGE,
-    SURFACE,
-    NUM,
-}
-    moisture::MOISTURE = AtmosMoistureModel()
-    forcing::FORCING = AtmosForcing()
-    radiation::RADIATION = AtmosRadiation()
-    advection::ADVECTION = AtmosAdvection()
-    turbconv::TURBCONV = AtmosTurbconv()
-    gravity_wave::GRAVITY_WAVE = AtmosGravityWave()
-    hyperdiff::HD = nothing
-    vert_diff::VERT_DIFF = AtmosVertDiff()
-    sponge::SPONGE = AtmosSponge()
-    surface::SURFACE = AtmosSurface()
-    numerics::NUM = nothing
+struct AtmosModel{H, F, R, A, TC, GW, HD, VD, SP, SU, NU}
+    hydrology::H
+    forcing::F
+    radiation::R
+    advection::A
+    turbconv::TC
+    gravity_wave::GW
+    hyperdiff::HD
+    vert_diff::VD
+    sponge::SP
+    surface::SU
+    numerics::NU
 
     """Whether to apply surface flux tendency (independent of surface conditions)"""
-    disable_surface_flux_tendency::Bool = false
+    disable_surface_flux_tendency::Bool
 end
 
-# ============================================================================
-# BACKWARD COMPATIBILITY FOR AtmosModel PROPERTY ACCESS
-# ============================================================================
-# We reduced AtmosModel type parameters from ~33 to ~11 by grouping related fields.
-# Old: atmos.moisture_model  →  New: atmos.moisture.moisture_model
-# 
-# This automatically forwards old property access to the new grouped structure,
-# so existing code continues to work without changes.
-
-# Map grouped struct types to their AtmosModel field names
+# BACKWARD COMPATIBILITY FOR AtmosModel 
+# Map grouped struct types to their names in AtmosModel struct
 const ATMOS_MODEL_GROUPS = (
-    (AtmosMoistureModel, :moisture),
+    (AtmosHydrology, :hydrology),
     (AtmosForcing, :forcing),
     (AtmosRadiation, :radiation),
     (AtmosAdvection, :advection),
     (AtmosTurbconv, :turbconv),
     (AtmosGravityWave, :gravity_wave),
-    (AtmosVertDiff, :vert_diff),
     (AtmosSponge, :sponge),
     (AtmosSurface, :surface),
 )
 
-# Auto-generate lookup: property_name => group_field  
+# Auto-generate map from property_name to group_field  
+# Use let closure to avoid polluting module scope with temporary variables
 const GROUPED_PROPERTY_MAP = let
     property_map = Dict{Symbol, Symbol}()
     for (group_type, group_field) in ATMOS_MODEL_GROUPS
@@ -693,15 +665,26 @@ const GROUPED_PROPERTY_MAP = let
 end
 
 # Forward property access: atmos.moisture_model → atmos.moisture.moisture_model
-function Base.getproperty(atmos::AtmosModel, property_name::Symbol)
+# Use ::Val constant for @generated compile-time access
+@generated function Base.getproperty(
+    atmos::AtmosModel,
+    ::Val{property_name},
+) where {property_name}
     if haskey(GROUPED_PROPERTY_MAP, property_name)
         group_field = GROUPED_PROPERTY_MAP[property_name]
-        group = getfield(atmos, group_field)
-        return getfield(group, property_name)
+        return quote
+            group = getfield(atmos, $(QuoteNode(group_field)))
+            getfield(group, $(QuoteNode(property_name)))
+        end
     else
-        return getfield(atmos, property_name)
+        return quote
+            getfield(atmos, $(QuoteNode(property_name)))
+        end
     end
 end
+
+@inline Base.getproperty(atmos::AtmosModel, property_name::Symbol) =
+    getproperty(atmos, Val{property_name}())
 
 Base.broadcastable(x::AtmosModel) = tuple(x)
 
@@ -735,6 +718,287 @@ function Base.summary(io::IO, atmos::AtmosModel)
         print(io, s)
     end
 end
+
+"""
+    AtmosModel(; kwargs...)
+
+Create an AtmosModel using a unified flat interface.
+
+This constructor allows you to specify individual model components directly as 
+keyword arguments, which are automatically organized into the appropriate grouped 
+sub-structures internally. This interface is used by both interactive users and 
+the config system via `get_atmos()`.
+
+# Example: Basic dry model
+```julia
+model = AtmosModel(;
+    moisture_model = DryModel(),
+    surface_model = PrescribedSurfaceTemperature(),
+    precip_model = NoPrecipitation()
+)
+```
+
+# Example: Moist model with radiation
+```julia
+model = AtmosModel(;
+    moisture_model = EquilMoistModel(),
+    precip_model = Microphysics0Moment(),
+    radiation_mode = RRTMGPI.AllSkyRadiation(
+        false, false, InteractiveCloudInRadiation(), false, false, false, false
+    ),
+    ozone = IdealizedOzone(),
+    co2 = FixedCO2()
+)
+```
+
+# Example: Model with hyperdiffusion and sponge layers
+```julia
+model = AtmosModel(;
+    moisture_model = NonEquilMoistModel(),
+    precip_model = Microphysics1Moment(),
+    hyperdiff = ClimaHyperdiffusion(; 
+        ν₄_vorticity_coeff = 1e15, 
+        ν₄_scalar_coeff = 1e15, 
+        divergence_damping_factor = 1.0
+    ),
+    rayleigh_sponge = RayleighSponge(; zd = 12000.0, α_uₕ = 4.0, α_w = 2.0),
+    disable_surface_flux_tendency = false
+)
+```
+
+# Available Parameters
+
+## Moisture & Clouds
+- `moisture_model`: DryModel(), EquilMoistModel(), NonEquilMoistModel()
+- `precip_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
+- `cloud_model`: GridScaleCloud(), QuadratureCloud(), SGSQuadratureCloud()
+- `noneq_cloud_formation_mode`: Explicit(), Implicit()
+- `call_cloud_diagnostics_per_stage`: nothing or CallCloudDiagnosticsPerStage()
+
+## Radiation
+- `radiation_mode`: RRTMGPI.ClearSkyRadiation(), RRTMGPI.AllSkyRadiation(), etc.
+- `ozone`: IdealizedOzone(), PrescribedOzone()
+- `co2`: FixedCO2(), MaunaLoaCO2()
+- `insolation`: IdealizedInsolation(), TimeVaryingInsolation(), etc.
+
+## Forcing & Advection
+- `forcing_type`: nothing, HeldSuarezForcing()
+- `subsidence`: nothing or Subsidence() instances
+- `external_forcing`: nothing or external forcing objects
+- `ls_adv`: nothing or LargeScaleAdvection() instances
+- `advection_test`: nothing or boolean
+
+## Turbulence & Convection
+- `scm_coriolis`: nothing or SCMCoriolis() instances
+- `edmfx_model`: EDMFXModel() instances
+- `turbconv_model`: nothing, PrognosticEDMFX(), DiagnosticEDMFX(), EDOnlyEDMFX()
+- `sgs_adv_mode`, `sgs_entr_detr_mode`, `sgs_nh_pressure_mode`, `sgs_mf_mode`: Explicit(), Implicit()
+- `smagorinsky_lilly`: nothing or SmagorinskyLilly()
+
+## Gravity Waves
+- `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave() instances  
+- `orographic_gravity_wave`: nothing or OrographicGravityWave() instances
+
+## Diffusion & Sponges
+- `vert_diff`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
+- `viscous_sponge`: nothing or ViscousSponge() instances
+- `rayleigh_sponge`: nothing or RayleighSponge() instances
+
+## Surface
+- `sfc_temperature`: ZonallySymmetricSST(), ZonallyAsymmetricSST(), RCEMIPIISST(), ExternalTVColumnSST()
+- `surface_model`: PrescribedSurfaceTemperature(), PrognosticSurfaceTemperature()
+- `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
+
+## Top-level Options  
+- `hyperdiff`: nothing or ClimaHyperdiffusion() instances
+- `numerics`: nothing or AtmosNumerics() instances (includes `diff_mode`: Explicit(), Implicit())
+- `disable_surface_flux_tendency`: Bool
+
+# Notes
+- All parameters are optional and have sensible defaults
+- This unified interface is used by both interactive users and the config system
+- Parameters are automatically grouped into appropriate sub-structures
+- Unknown parameter names produce helpful error messages listing all available options
+- Property access works both ways: `model.moisture_model` and `model.moisture.moisture_model`
+- The Atmos prefix is kind of annoying and could be removed
+
+# Todo 
+- improve documentation
+- add exports?
+- remove the Atmos prefix for grouped types?
+"""
+function AtmosModel(; kwargs...)
+    # Process keyword arguments: categorize into grouped types (e.g., hydrology -> AtmosHydrology)
+    # vs direct AtmosModel fields (e.g., hyperdiff, numerics). Use GROUPED_PROPERTY_MAP to organize grouped types
+    # into appropriate nested structs, then construct AtmosModel with all top-level fields.
+
+    group_kwargs = Dict{Symbol, Dict{Symbol, Any}}()
+    for (_, group_field) in ATMOS_MODEL_GROUPS
+        group_kwargs[group_field] = Dict{Symbol, Any}()
+    end
+
+    # Kwargs for direct AtmosModel fields (hyperdiff, numerics, vert_diff, disable_surface_flux_tendency)
+    atmos_model_kwargs = Dict{Symbol, Any}()
+
+    # Sort kwargs into appropriate groups
+    for (key, value) in kwargs
+        if haskey(GROUPED_PROPERTY_MAP, key)
+            group_field = GROUPED_PROPERTY_MAP[key]
+            group_kwargs[group_field][key] = value
+        elseif key in fieldnames(AtmosModel)
+            atmos_model_kwargs[key] = value
+        else
+            available_grouped = sort(collect(keys(GROUPED_PROPERTY_MAP)))
+            available_direct = sort([
+                fn for fn in fieldnames(AtmosModel) if fn ∉ [
+                    :moisture,
+                    :forcing,
+                    :radiation,
+                    :advection,
+                    :turbconv,
+                    :gravity_wave,
+                    :sponge,
+                    :surface,
+                ]
+            ])
+            available_all = [available_grouped; available_direct]
+            error(
+                "Unknown AtmosModel argument: $key. " *
+                "Available arguments:\n  " *
+                join(available_all, "\n  "),
+            )
+        end
+    end
+
+    moisture = AtmosHydrology(; group_kwargs[:hydrology]...)
+    forcing = AtmosForcing(; group_kwargs[:forcing]...)
+    radiation = AtmosRadiation(; group_kwargs[:radiation]...)
+    advection = AtmosAdvection(; group_kwargs[:advection]...)
+    turbconv = AtmosTurbconv(; group_kwargs[:turbconv]...)
+    gravity_wave = AtmosGravityWave(; group_kwargs[:gravity_wave]...)
+    sponge = AtmosSponge(; group_kwargs[:sponge]...)
+    surface = AtmosSurface(; group_kwargs[:surface]...)
+
+    hyperdiff = get(atmos_model_kwargs, :hyperdiff, nothing)
+    numerics = get(atmos_model_kwargs, :numerics, nothing)
+    vert_diff = get(atmos_model_kwargs, :vert_diff, nothing)
+    disable_surface_flux_tendency =
+        get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
+
+    return AtmosModel{
+        typeof(moisture),
+        typeof(forcing),
+        typeof(radiation),
+        typeof(advection),
+        typeof(turbconv),
+        typeof(gravity_wave),
+        typeof(hyperdiff),
+        typeof(vert_diff),
+        typeof(sponge),
+        typeof(surface),
+        typeof(numerics),
+    }(
+        moisture,
+        forcing,
+        radiation,
+        advection,
+        turbconv,
+        gravity_wave,
+        hyperdiff,
+        vert_diff,
+        sponge,
+        surface,
+        numerics,
+        disable_surface_flux_tendency,
+    )
+end
+
+# Convenience constructors for common configurations
+
+"""
+    DryAtmosModel(; kwargs...)
+
+Create a dry atmospheric model with sensible defaults for dry simulations.
+
+# Example
+```julia
+model = DryAtmosModel(;
+    radiation_mode = RRTMGPI.GrayRadiation(false, false),
+    forcing_type = HeldSuarezForcing(),
+    hyperdiff = ClimaHyperdiffusion(; ν₄_vorticity_coeff = 1e15, ν₄_scalar_coeff = 1e15, divergence_damping_factor = 1.0)
+)
+```
+"""
+function DryAtmosModel(; kwargs...)
+    defaults = (
+        moisture_model = DryModel(),
+        precip_model = NoPrecipitation(),
+        cloud_model = GridScaleCloud(),
+        surface_model = PrescribedSurfaceTemperature(),
+        sfc_temperature = ZonallySymmetricSST(),
+        insolation = IdealizedInsolation(),
+    )
+    return AtmosModel(; defaults..., kwargs...)
+end
+
+"""
+    EquilMoistAtmosModel(; kwargs...)
+
+Create an equilibrium moist atmospheric model with sensible defaults for moist simulations.
+
+# Example
+```julia
+model = EquilMoistAtmosModel(;
+    precip_model = Microphysics1Moment(),
+    cloud_model = QuadratureCloud(),
+    surface_model = PrognosticSurfaceTemperature()
+)
+```
+"""
+function EquilMoistAtmosModel(; kwargs...)
+    defaults = (
+        moisture_model = EquilMoistModel(),
+        precip_model = Microphysics0Moment(),
+        cloud_model = GridScaleCloud(),
+        surface_model = PrescribedSurfaceTemperature(),
+        sfc_temperature = ZonallySymmetricSST(),
+        insolation = IdealizedInsolation(),
+        ozone = IdealizedOzone(),
+        co2 = FixedCO2(),
+    )
+    return AtmosModel(; defaults..., kwargs...)
+end
+
+"""
+    NonEquilMoistAtmosModel(; kwargs...)
+
+Create a non-equilibrium moist atmospheric model with sensible defaults.
+
+# Example
+```julia
+model = NonEquilMoistAtmosModel(;
+    precip_model = Microphysics2Moment(),
+    cloud_model = SGSQuadratureCloud(),
+    noneq_cloud_formation_mode = Implicit()
+)
+```
+"""
+function NonEquilMoistAtmosModel(; kwargs...)
+    defaults = (
+        moisture_model = NonEquilMoistModel(),
+        precip_model = Microphysics1Moment(),
+        cloud_model = GridScaleCloud(),
+        noneq_cloud_formation_mode = Explicit(),
+        surface_model = PrescribedSurfaceTemperature(),
+        sfc_temperature = ZonallySymmetricSST(),
+        insolation = IdealizedInsolation(),
+        ozone = IdealizedOzone(),
+        co2 = FixedCO2(),
+    )
+    return AtmosModel(; defaults..., kwargs...)
+end
+
+# ============================================================================
 
 abstract type AbstractCallbackFrequency end
 struct EveryNSteps <: AbstractCallbackFrequency

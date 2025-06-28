@@ -85,35 +85,29 @@ function get_atmos(config::AtmosConfig, params)
         FT,
     )
 
-    # Create grouped structs
-    moisture = AtmosMoistureModel(;
+    atmos = AtmosModel(;
+        # Moisture & Clouds
         moisture_model,
         precip_model,
         cloud_model,
         noneq_cloud_formation_mode = implicit_noneq_cloud_formation ?
                                      Implicit() : Explicit(),
         call_cloud_diagnostics_per_stage,
-    )
 
-    forcing = AtmosForcing(;
+        # Forcing & Advection
         forcing_type,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         external_forcing = get_external_forcing_model(parsed_args, FT),
-    )
+        ls_adv = get_large_scale_advection_model(parsed_args, FT),
+        advection_test,
 
-    radiation = AtmosRadiation(;
+        # Radiation
         radiation_mode,
         ozone,
         co2,
         insolation = get_insolation_form(parsed_args),
-    )
 
-    advection = AtmosAdvection(;
-        ls_adv = get_large_scale_advection_model(parsed_args, FT),
-        advection_test,
-    )
-
-    turbconv = AtmosTurbconv(;
+        # Turbulence & Convection
         scm_coriolis = get_scm_coriolis(parsed_args, FT),
         edmfx_model,
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
@@ -123,9 +117,8 @@ function get_atmos(config::AtmosConfig, params)
                                Explicit(),
         sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
         smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
-    )
 
-    gravity_wave = AtmosGravityWave(;
+        # Gravity Waves
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
             parsed_args,
             FT,
@@ -134,35 +127,19 @@ function get_atmos(config::AtmosConfig, params)
             parsed_args,
             FT,
         ),
-    )
 
-    vert_diff_grouped = AtmosVertDiff(;
+        # Diffusion & Sponges
         vert_diff,
-        diff_mode = implicit_diffusion ? Implicit() : Explicit(),
-    )
-
-    sponge = AtmosSponge(;
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
-    )
 
-    surface = AtmosSurface(;
+        # Surface
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         surface_model = get_surface_model(parsed_args),
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
-    )
 
-    atmos = AtmosModel(;
-        moisture,
-        forcing,
-        radiation,
-        advection,
-        turbconv,
-        gravity_wave,
+        # Numerics and Top-level Options
         hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
-        vert_diff = vert_diff_grouped,
-        sponge,
-        surface,
         numerics = get_numerics(parsed_args),
         disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
     )
@@ -210,6 +187,7 @@ function get_numerics(parsed_args)
     limiter = parsed_args["apply_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
     # wrap each upwinding mode in a Val for dispatch
+    diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
     numerics = AtmosNumerics(;
         energy_upwinding,
         tracer_upwinding,
@@ -217,6 +195,7 @@ function get_numerics(parsed_args)
         edmfx_sgsflux_upwinding,
         limiter,
         test_dycore_consistency = test_dycore,
+        diff_mode,
     )
     @info "numerics $(summary(numerics))"
 
@@ -469,7 +448,7 @@ get_jacobian(ode_algo, Y, atmos, parsed_args) =
             parsed_args["use_dense_jacobian"] ? AutoDenseJacobian() :
             ManualSparseJacobian(
                 DerivativeFlag(has_topography(axes(Y.c))),
-                DerivativeFlag(atmos.diff_mode),
+                DerivativeFlag(atmos.numerics.diff_mode),
                 DerivativeFlag(atmos.sgs_adv_mode),
                 DerivativeFlag(atmos.sgs_entr_detr_mode),
                 DerivativeFlag(atmos.sgs_mf_mode),
