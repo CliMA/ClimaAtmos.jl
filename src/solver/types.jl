@@ -685,15 +685,22 @@ const GROUPED_PROPERTY_MAP = let
 end
 
 # Forward property access: atmos.moisture_model → atmos.moisture.moisture_model
-function Base.getproperty(atmos::AtmosModel, property_name::Symbol)
+@generated function Base.getproperty(atmos::AtmosModel, ::Val{property_name}) where {property_name}
     if haskey(GROUPED_PROPERTY_MAP, property_name)
         group_field = GROUPED_PROPERTY_MAP[property_name]
-        group = getfield(atmos, group_field)
-        return getfield(group, property_name)
+        return quote
+            group = getfield(atmos, $(QuoteNode(group_field)))
+            getfield(group, $(QuoteNode(property_name)))
+        end
     else
-        return getfield(atmos, property_name)
+        return quote
+            getfield(atmos, $(QuoteNode(property_name)))
+        end
     end
 end
+
+@inline Base.getproperty(atmos::AtmosModel, property_name::Symbol) = 
+    getproperty(atmos, Val{property_name}())
 
 Base.broadcastable(x::AtmosModel) = tuple(x)
 
