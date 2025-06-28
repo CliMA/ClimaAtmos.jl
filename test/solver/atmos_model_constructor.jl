@@ -115,9 +115,9 @@ const FT = Float32
         @test model.forcing_type isa CA.HeldSuarezForcing
 
         # Grouped struct access  
-        @test model.moisture isa CA.AtmosHydrology
+        @test model.hydrology isa CA.AtmosHydrology
         @test model.forcing isa CA.AtmosForcing
-        @test model.moisture.moisture_model isa CA.NonEquilMoistModel
+        @test model.hydrology.moisture_model isa CA.NonEquilMoistModel
         @test model.forcing.forcing_type isa CA.HeldSuarezForcing
     end
 
@@ -132,7 +132,7 @@ const FT = Float32
 
         # Test broadcasting compatibility
         @test Base.broadcastable(model) == tuple(model)
-        @test Base.broadcastable(model.moisture) == tuple(model.moisture)
+        @test Base.broadcastable(model.hydrology) == tuple(model.hydrology)
         @test Base.broadcastable(model.moisture_model) ==
               tuple(model.moisture_model)
     end
@@ -141,7 +141,7 @@ const FT = Float32
         # Ensure no conflicts between grouped arguments and direct AtmosModel fields
         grouped_args = Set(keys(CA.GROUPED_PROPERTY_MAP))
         grouped_struct_fields = Set([
-            :moisture,
+            :hydrology,
             :forcing,
             :radiation,
             :advection,
@@ -160,7 +160,7 @@ const FT = Float32
         @test isempty(overlap)
 
         full_overlap = intersect(grouped_args, Set(fieldnames(CA.AtmosModel)))
-        if isempty(full_overlap)
+        if !isempty(full_overlap)
             @error "Found conflicts between grouped arguments and grouped struct fieldnames:"
             @info """Conflicting names: $(collect(full_overlap))
             AtmosModel fieldnames: $(collect(fieldnames(CA.AtmosModel)))
