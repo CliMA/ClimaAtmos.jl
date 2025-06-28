@@ -514,85 +514,193 @@ Base.@kwdef struct EDMFXModel{
     scale_blending_method::SBM
 end
 
-Base.@kwdef struct AtmosModel{
-    MM,
-    PM,
-    CM,
-    NCFM,
-    CCDPS,
-    F,
-    S,
-    OZ,
-    CO2,
-    RM,
-    LA,
-    EXTFORCING,
-    EC,
-    AT,
-    EDMFX,
-    TCM,
-    NOGW,
-    OGW,
-    HD,
-    VD,
-    DM,
-    SAM,
-    SEDM,
-    SNPM,
-    SMM,
-    VS,
-    SL,
-    RS,
-    ST,
-    IN,
-    SM,
-    SA,
-    NUM,
-}
+# Grouped structures to reduce AtmosModel type parameters
+
+"""
+    AtmosMoistureModel
+
+Groups moisture-related models and parameters.
+"""
+Base.@kwdef struct AtmosMoistureModel{MM, PM, CM, NCFM, CCDPS}
     moisture_model::MM = nothing
     precip_model::PM = nothing
     cloud_model::CM = nothing
     noneq_cloud_formation_mode::NCFM = nothing
     call_cloud_diagnostics_per_stage::CCDPS = nothing
+end
+
+"""
+    AtmosForcing
+
+Groups forcing-related models and parameters.
+"""
+Base.@kwdef struct AtmosForcing{F, S, EXTFORCING}
     forcing_type::F = nothing
     subsidence::S = nothing
-
-    # Currently only relevant for RRTMGP, but will hopefully become standalone
-    # in the future
-    """What to do with ozone for radiation (when using RRTMGP)"""
-    ozone::OZ = nothing
-    """What to do with co2 for radiation (when using RRTMGP)"""
-    co2::CO2 = nothing
-
-    radiation_mode::RM = nothing
-    ls_adv::LA = nothing
     external_forcing::EXTFORCING = nothing
-    scm_coriolis::EC = nothing
+end
+
+"""
+    AtmosRadiation
+
+Groups radiation-related models and parameters.
+"""
+Base.@kwdef struct AtmosRadiation{RM, OZ, CO2, IN}
+    radiation_mode::RM = nothing
+    ozone::OZ = nothing
+    co2::CO2 = nothing
+    insolation::IN = nothing
+end
+
+"""
+    AtmosAdvection
+
+Groups advection-related models and parameters.
+"""
+Base.@kwdef struct AtmosAdvection{LA, AT}
+    ls_adv::LA = nothing
     advection_test::AT = nothing
+end
+
+"""
+    AtmosTurbconv
+
+Groups turbulence convection-related models and parameters.
+"""
+Base.@kwdef struct AtmosTurbconv{EC, EDMFX, TCM, SAM, SEDM, SNPM, SMM, SL}
+    scm_coriolis::EC = nothing
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
+    sgs_adv_mode::SAM = nothing
+    sgs_entr_detr_mode::SEDM = nothing
+    sgs_nh_pressure_mode::SNPM = nothing
+    sgs_mf_mode::SMM = nothing
+    smagorinsky_lilly::SL = nothing
+end
+
+"""
+    AtmosGravityWave
+
+Groups gravity wave-related models and parameters.
+"""
+Base.@kwdef struct AtmosGravityWave{NOGW, OGW}
     non_orographic_gravity_wave::NOGW = nothing
     orographic_gravity_wave::OGW = nothing
-    hyperdiff::HD = nothing
+end
+
+"""
+    AtmosVertDiff
+
+Groups vertical diffusion-related models and parameters.
+"""
+Base.@kwdef struct AtmosVertDiff{VD, DM}
     vert_diff::VD = nothing
     diff_mode::DM = nothing
-    sgs_adv_mode::SAM = nothing
-    """sgs_entr_detr_mode == Implicit() only works if sgs_adv_mode == Implicit()"""
-    sgs_entr_detr_mode::SEDM = nothing
-    """sgs_nh_pressure_mode == Implicit() only works if sgs_adv_mode == Implicit()"""
-    sgs_nh_pressure_mode::SNPM = nothing
-    """sgs_mf_mode == Implicit() only works if sgs_adv_mode == Implicit() and diff_mode == Implicit()"""
-    sgs_mf_mode::SMM = nothing
+end
+
+"""
+    AtmosSponge
+
+Groups sponge-related models and parameters.
+"""
+Base.@kwdef struct AtmosSponge{VS, RS}
     viscous_sponge::VS = nothing
-    smagorinsky_lilly::SL = nothing
     rayleigh_sponge::RS = nothing
+end
+
+"""
+    AtmosSurface
+
+Groups surface-related models and parameters.
+"""
+Base.@kwdef struct AtmosSurface{ST, SM, SA}
     sfc_temperature::ST = nothing
-    insolation::IN = nothing
-    """Whether to apply surface flux tendency (independent of surface conditions)"""
-    disable_surface_flux_tendency::Bool = false
     surface_model::SM = nothing
     surface_albedo::SA = nothing
+end
+
+# Add broadcastable for the new grouped types
+Base.broadcastable(x::AtmosMoistureModel) = tuple(x)
+Base.broadcastable(x::AtmosForcing) = tuple(x)
+Base.broadcastable(x::AtmosRadiation) = tuple(x)
+Base.broadcastable(x::AtmosAdvection) = tuple(x)
+Base.broadcastable(x::AtmosTurbconv) = tuple(x)
+Base.broadcastable(x::AtmosGravityWave) = tuple(x)
+Base.broadcastable(x::AtmosVertDiff) = tuple(x)
+Base.broadcastable(x::AtmosSponge) = tuple(x)
+Base.broadcastable(x::AtmosSurface) = tuple(x)
+
+Base.@kwdef struct AtmosModel{
+    MOISTURE,
+    FORCING,
+    RADIATION,
+    ADVECTION,
+    TURBCONV,
+    GRAVITY_WAVE,
+    HD,
+    VERT_DIFF,
+    SPONGE,
+    SURFACE,
+    NUM,
+}
+    moisture::MOISTURE = AtmosMoistureModel()
+    forcing::FORCING = AtmosForcing()
+    radiation::RADIATION = AtmosRadiation()
+    advection::ADVECTION = AtmosAdvection()
+    turbconv::TURBCONV = AtmosTurbconv()
+    gravity_wave::GRAVITY_WAVE = AtmosGravityWave()
+    hyperdiff::HD = nothing
+    vert_diff::VERT_DIFF = AtmosVertDiff()
+    sponge::SPONGE = AtmosSponge()
+    surface::SURFACE = AtmosSurface()
     numerics::NUM = nothing
+
+    """Whether to apply surface flux tendency (independent of surface conditions)"""
+    disable_surface_flux_tendency::Bool = false
+end
+
+# ============================================================================
+# BACKWARD COMPATIBILITY FOR AtmosModel PROPERTY ACCESS
+# ============================================================================
+# We reduced AtmosModel type parameters from ~33 to ~11 by grouping related fields.
+# Old: atmos.moisture_model  →  New: atmos.moisture.moisture_model
+# 
+# This automatically forwards old property access to the new grouped structure,
+# so existing code continues to work without changes.
+
+# Map grouped struct types to their AtmosModel field names
+const ATMOS_MODEL_GROUPS = (
+    (AtmosMoistureModel, :moisture),
+    (AtmosForcing, :forcing),
+    (AtmosRadiation, :radiation),
+    (AtmosAdvection, :advection),
+    (AtmosTurbconv, :turbconv),
+    (AtmosGravityWave, :gravity_wave),
+    (AtmosVertDiff, :vert_diff),
+    (AtmosSponge, :sponge),
+    (AtmosSurface, :surface),
+)
+
+# Auto-generate lookup: property_name => group_field  
+const GROUPED_PROPERTY_MAP = let
+    property_map = Dict{Symbol, Symbol}()
+    for (group_type, group_field) in ATMOS_MODEL_GROUPS
+        for property in fieldnames(group_type)
+            property_map[property] = group_field
+        end
+    end
+    property_map
+end
+
+# Forward property access: atmos.moisture_model → atmos.moisture.moisture_model
+function Base.getproperty(atmos::AtmosModel, property_name::Symbol)
+    if haskey(GROUPED_PROPERTY_MAP, property_name)
+        group_field = GROUPED_PROPERTY_MAP[property_name]
+        group = getfield(atmos, group_field)
+        return getfield(group, property_name)
+    else
+        return getfield(atmos, property_name)
+    end
 end
 
 Base.broadcastable(x::AtmosModel) = tuple(x)

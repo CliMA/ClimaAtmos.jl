@@ -85,24 +85,47 @@ function get_atmos(config::AtmosConfig, params)
         FT,
     )
 
-    atmos = AtmosModel(;
+    # Create grouped structs
+    moisture = AtmosMoistureModel(;
         moisture_model,
-        ozone,
-        co2,
-        radiation_mode,
-        subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
-        ls_adv = get_large_scale_advection_model(parsed_args, FT),
-        external_forcing = get_external_forcing_model(parsed_args, FT),
-        scm_coriolis = get_scm_coriolis(parsed_args, FT),
-        advection_test,
-        edmfx_model,
         precip_model,
         cloud_model,
         noneq_cloud_formation_mode = implicit_noneq_cloud_formation ?
                                      Implicit() : Explicit(),
-        forcing_type,
         call_cloud_diagnostics_per_stage,
+    )
+
+    forcing = AtmosForcing(;
+        forcing_type,
+        subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
+        external_forcing = get_external_forcing_model(parsed_args, FT),
+    )
+
+    radiation = AtmosRadiation(;
+        radiation_mode,
+        ozone,
+        co2,
+        insolation = get_insolation_form(parsed_args),
+    )
+
+    advection = AtmosAdvection(;
+        ls_adv = get_large_scale_advection_model(parsed_args, FT),
+        advection_test,
+    )
+
+    turbconv = AtmosTurbconv(;
+        scm_coriolis = get_scm_coriolis(parsed_args, FT),
+        edmfx_model,
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
+        sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
+        sgs_entr_detr_mode = implicit_sgs_entr_detr ? Implicit() : Explicit(),
+        sgs_nh_pressure_mode = implicit_sgs_nh_pressure ? Implicit() :
+                               Explicit(),
+        sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
+        smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
+    )
+
+    gravity_wave = AtmosGravityWave(;
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
             parsed_args,
             FT,
@@ -111,23 +134,37 @@ function get_atmos(config::AtmosConfig, params)
             parsed_args,
             FT,
         ),
-        hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
+    )
+
+    vert_diff_grouped = AtmosVertDiff(;
         vert_diff,
         diff_mode = implicit_diffusion ? Implicit() : Explicit(),
-        sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
-        sgs_entr_detr_mode = implicit_sgs_entr_detr ? Implicit() : Explicit(),
-        sgs_nh_pressure_mode = implicit_sgs_nh_pressure ? Implicit() :
-                               Explicit(),
-        sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
+    )
+
+    sponge = AtmosSponge(;
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
-        smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
+    )
+
+    surface = AtmosSurface(;
         sfc_temperature = get_sfc_temperature_form(parsed_args),
-        insolation = get_insolation_form(parsed_args),
-        disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
         surface_model = get_surface_model(parsed_args),
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
+    )
+
+    atmos = AtmosModel(;
+        moisture,
+        forcing,
+        radiation,
+        advection,
+        turbconv,
+        gravity_wave,
+        hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
+        vert_diff = vert_diff_grouped,
+        sponge,
+        surface,
         numerics = get_numerics(parsed_args),
+        disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
     )
     @assert !@any_reltype(atmos, (UnionAll, DataType))
 
