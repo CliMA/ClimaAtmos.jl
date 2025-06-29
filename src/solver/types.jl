@@ -522,7 +522,7 @@ end
 """
     AtmosHydrology
 
-Groups moisture-related models and parameters.
+Groups moisture-related models and types.
 """
 Base.@kwdef struct AtmosHydrology{MM, PM, CM, NCFM, CCDPS}
     moisture_model::MM = nothing
@@ -535,7 +535,7 @@ end
 """
     AtmosForcing
 
-Groups forcing-related models and parameters.
+Groups forcing-related models and types.
 """
 Base.@kwdef struct AtmosForcing{F, S, EXTFORCING}
     forcing_type::F = nothing
@@ -546,7 +546,7 @@ end
 """
     AtmosRadiation
 
-Groups radiation-related models and parameters.
+Groups radiation-related models and types.
 """
 Base.@kwdef struct AtmosRadiation{RM, OZ, CO2, IN}
     radiation_mode::RM = nothing
@@ -558,7 +558,7 @@ end
 """
     AtmosAdvection
 
-Groups advection-related models and parameters.
+Groups advection-related models and types.
 """
 Base.@kwdef struct AtmosAdvection{LA, AT}
     ls_adv::LA = nothing
@@ -568,7 +568,7 @@ end
 """
     AtmosTurbconv
 
-Groups turbulence convection-related models and parameters.
+Groups turbulence convection-related models and types.
 """
 Base.@kwdef struct AtmosTurbconv{EC, EDMFX, TCM, SAM, SEDM, SNPM, SMM, SL}
     scm_coriolis::EC = nothing
@@ -584,7 +584,7 @@ end
 """
     AtmosGravityWave
 
-Groups gravity wave-related models and parameters.
+Groups gravity wave-related models and types.
 """
 Base.@kwdef struct AtmosGravityWave{NOGW, OGW}
     non_orographic_gravity_wave::NOGW = nothing
@@ -594,7 +594,7 @@ end
 """
     AtmosSponge
 
-Groups sponge-related models and parameters.
+Groups sponge-related models and types.
 """
 Base.@kwdef struct AtmosSponge{VS, RS}
     viscous_sponge::VS = nothing
@@ -604,7 +604,7 @@ end
 """
     AtmosSurface
 
-Groups surface-related models and parameters.
+Groups surface-related models and types.
 """
 Base.@kwdef struct AtmosSurface{ST, SM, SA}
     sfc_temperature::ST = nothing
@@ -776,58 +776,60 @@ The default AtmosModel provides:
 - **Conservative numerics**: First-order upwinding with Explicit() timestepping
 - **No advanced physics**: No radiation, turbulence, or forcing by default
 
-# Available Parameters
+# Available Structs
 
-## Hydrology
+## AtmosHydrology
 - `moisture_model`: DryModel(), EquilMoistModel(), NonEquilMoistModel()
 - `precip_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
 - `cloud_model`: GridScaleCloud(), QuadratureCloud(), SGSQuadratureCloud()
 - `noneq_cloud_formation_mode`: Explicit(), Implicit()
 - `call_cloud_diagnostics_per_stage`: nothing or CallCloudDiagnosticsPerStage()
 
-## Radiation
+## AtmosRadiation
 - `radiation_mode`: RRTMGPI.ClearSkyRadiation(), RRTMGPI.AllSkyRadiation(), etc.
 - `ozone`: IdealizedOzone(), PrescribedOzone()
 - `co2`: FixedCO2(), MaunaLoaCO2()
 - `insolation`: IdealizedInsolation(), TimeVaryingInsolation(), etc.
 
-## Forcing & Advection
+## AtmosForcing
 - `forcing_type`: nothing, HeldSuarezForcing()
 - `subsidence`: nothing or Subsidence() instances
 - `external_forcing`: nothing or external forcing objects
+
+## AtmosAdvection
 - `ls_adv`: nothing or LargeScaleAdvection() instances
 - `advection_test`: nothing or boolean
 
-## Turbulence & Convection
+## AtmosTurbconv
 - `scm_coriolis`: nothing or SCMCoriolis() instances
 - `edmfx_model`: EDMFXModel() instances
 - `turbconv_model`: nothing, PrognosticEDMFX(), DiagnosticEDMFX(), EDOnlyEDMFX()
 - `sgs_adv_mode`, `sgs_entr_detr_mode`, `sgs_nh_pressure_mode`, `sgs_mf_mode`: Explicit(), Implicit()
 - `smagorinsky_lilly`: nothing or SmagorinskyLilly()
 
-## Gravity Waves
+## AtmosGravityWave
 - `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave() instances  
 - `orographic_gravity_wave`: nothing or OrographicGravityWave() instances
 
-## Diffusion & Sponges
-- `vert_diff`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
+## AtmosSponge
 - `viscous_sponge`: nothing or ViscousSponge() instances
 - `rayleigh_sponge`: nothing or RayleighSponge() instances
 
-## Surface
+## AtmosSurface
 - `sfc_temperature`: ZonallySymmetricSST(), ZonallyAsymmetricSST(), RCEMIPIISST(), ExternalTVColumnSST()
 - `surface_model`: PrescribedSurfaceTemperature(), PrognosticSurfaceTemperature()
 - `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
 
 ## Top-level Options  
+- `vert_diff`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
 - `hyperdiff`: nothing or ClimaHyperdiffusion() instances
 - `numerics`: AtmosNumerics() instances (includes `diff_mode`: Explicit(), Implicit())
 - `disable_surface_flux_tendency`: Bool
 
 # Notes
 - This unified interface is used by both interactive users and the config system
-- Parameters are automatically grouped into appropriate sub-structs
-- Unknown parameter names produce helpful error messages listing all available options
+- Arguments are automatically grouped into appropriate sub-structs
+- Unknown argument names produce helpful error messages listing all available options
 - Property access works both ways: `model.moisture_model` and `model.hydrology.moisture_model`
 """
 function AtmosModel(; kwargs...)
