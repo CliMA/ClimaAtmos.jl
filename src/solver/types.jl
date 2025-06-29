@@ -778,7 +778,7 @@ The default AtmosModel provides:
 
 # Available Parameters
 
-## Moisture & Clouds
+## Hydrology
 - `moisture_model`: DryModel(), EquilMoistModel(), NonEquilMoistModel()
 - `precip_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
 - `cloud_model`: GridScaleCloud(), QuadratureCloud(), SGSQuadratureCloud()
