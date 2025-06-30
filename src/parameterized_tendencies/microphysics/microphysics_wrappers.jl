@@ -1,10 +1,13 @@
 # A set of wrappers for using CloudMicrophysics.jl functions inside EDMFX loops
 
 import Thermodynamics as TD
+import ClimaCore.Operators as Operators
 import CloudMicrophysics.Microphysics0M as CM0
 import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics.Microphysics2M as CM2
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
+import CloudMicrophysics.AerosolModel as CMAM
+import CloudMicrophysics.AerosolActivation as CMAA
 import CloudMicrophysics.Parameters as CMP
 
 # Define some aliases and functions to make the code more readable
@@ -23,33 +26,6 @@ end
 function limit(q, dt, n::Int)
     FT = eltype(q)
     return max(FT(0), q) / float(dt) / n
-end
-
-"""
-    ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
-
- - cmc - a struct with cloud and aerosol parameters
- - c_dust, c_seasalt, c_SO4 - dust, seasalt and ammonium sulfate mass concentrations [kg/kg]
- - q_liq - liquid water specific humidity
-
-Returns the liquid cloud droplet number concentration diagnosed based on the
-aerosol loading and cloud liquid water.
-"""
-function ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
-    # We can also add w, T, RH, w' ...
-    # Also consider lookind only at around cloud base height
-    (; α_dust, α_seasalt, α_SO4, α_q_liq) = cmc.aml
-    (; c₀_dust, c₀_seasalt, c₀_SO4, q₀_liq) = cmc.aml
-    N₀ = cmc.N_cloud_liquid_droplets
-
-    FT = eltype(N₀)
-    return N₀ * (
-        FT(1) +
-        α_dust * (log(max(c_dust, eps(FT))) - log(c₀_dust)) +
-        α_seasalt * (log(max(c_seasalt, eps(FT))) - log(c₀_seasalt)) +
-        α_SO4 * (log(max(c_SO4, eps(FT))) - log(c₀_SO4)) +
-        α_q_liq * (log(max(q_liq, eps(FT))) - log(q₀_liq))
-    )
 end
 
 """
@@ -373,46 +349,129 @@ end
 #####
 
 """
-    aerosol_activation_sources(cm_params, thp, ρ, Tₐ, qₜ, qₗ, qᵢ, qᵣ, qₛ, n_dp, n_dp_prescribed, dt)
+    find_cloud_base!(Snₗ, z, cloud_base_Snₗ_and_z)
 
- - cm_params - CloudMicrophysics parameters struct for cloud water or ice condensate
- - thp - Thermodynamics parameters struct
- - ρ - air density
- - Tₐ - air temperature
- - qₜ - total specific humidity
- - qₗ - liquid specific humidity
- - qᵢ - ice specific humidity
- - qᵣ - rain specific humidity
- - qₛ - snow specific humidity
- - n_dp - number concentration droplets (liquid or ice) per mass
- _ n_dp_prescribed - prescribed number concentration of droplets (liquid or ice) per mass
- - dt - model time step
+Finds the cloud base in each vertical column based on the first occurrence of aerosol activation.
 
-Returns the activation rate. #TODO This function temporarily computes activation rate
-based on mass rates and a prescribed droplet mass (no activation parameterization yet).
+This function performs a vertical column-wise reduction to identify the first level (from bottom to
+top) where `Snₗ > 0`, indicating the onset of cloud droplet activation (i.e., cloud base). The result
+is stored in `cloud_base_Snₗ_and_z` as a tuple `(Snₗ, z)` for each column.
+
+# Arguments
+- `Snₗ`: Field of cloud droplet number concentration tendencies [m⁻³/s], from an activation parameterization.
+- `z`: Field of geometric height [m] corresponding to each grid point.
+- `cloud_base_Snₗ_and_z`: Output field to store the `(Snₗ, z)` values at cloud base for each column.
+"""
+function find_cloud_base!(Snₗ, z, cloud_base_Snₗ_and_z)
+    Operators.column_reduce!(
+        ((target_Snₗ_value, target_z_value), (Snₗ_value, z_value)) -> ifelse(
+            target_Snₗ_value == 0 && Snₗ_value > 0,
+            (Snₗ_value, z_value),
+            (target_Snₗ_value, target_z_value),
+        ), # reduction function
+        cloud_base_Snₗ_and_z, # destination for output (a field of tuples)
+        Base.broadcasted(tuple, Snₗ, z),
+    )
+end
+
+"""
+    aerosol_activation_sources(
+        seasalt_num,
+        seasalt_mean_radius,
+        sulfate_num,
+        nₗ,
+        ρ,
+        w,
+        air_params,
+        aerosol_params,
+        arg_params,
+        thermo_params,
+        ts,
+        dt,
+    )
+
+Computes the source term for cloud droplet number concentration per mass due to aerosol activation,
+based on the Abdul-Razzak and Ghan (2000) parameterization.
+
+This function estimates the number of aerosols activated into cloud droplets per mass of air per second
+from a bi-modal aerosol distribution (sea salt and sulfate), given local supersaturation and vertical 
+velocity. The result is returned as a tendency (per second) of liquid droplet number concentration.
+
+# Arguments
+- `seasalt_num`: Number concentration per mass of sea salt aerosols [kg⁻¹].
+- `seasalt_mean_radius`: Mean dry radius of sea salt aerosol mode [m].
+- `sulfate_num`: Number concentration per mass of sulfate aerosols [kg⁻¹].
+- `nₗ`: Cloud droplet number concentration per mass [kg⁻¹].
+- `ρ`: Air density [kg/m³].
+- `w`: Vertical velocity [m/s].
+- `air_params`: Struct containing physical constants related to air.
+- `aerosol_params`: Struct containing aerosol properties, such as hygroscopicity parameters (κ).
+- `arg_params`: Activation scheme parameters specific to Abdul-Razzak and Ghan (2000).
+- `thermo_params`: Thermodynamic parameters for computing saturation, pressure, temperature, etc.
+- `ts`: Thermodynamic state (e.g., prognostic variables) used for evaluating the phase partition.
+- `dt`: Time step (s) over which the activation tendency is applied.
+
+# Returns
+- Tendency of cloud droplet number concentration per mass of air due to aerosol activation [m⁻³/s].
 """
 function aerosol_activation_sources(
-    cm_params::CMP.CloudLiquid{FT},
-    thp,
+    seasalt_num,
+    seasalt_mean_radius,
+    sulfate_num,
+    nₗ,
     ρ,
-    Tₐ,
-    qₜ,
-    qₗ,
-    qᵢ,
-    qᵣ,
-    qₛ,
-    n_dp,
-    n_dp_prescribed,
+    w,
+    cmc,
+    thermo_params,
+    ts,
     dt,
-) where {FT}
-    r_dp = FT(2e-6) # 2 μm
-    m_dp = 4 / 3 * FT(π) * r_dp^3 * cm_params.ρw
-    Sn = cloud_sources(cm_params, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, Tₐ, dt) / m_dp
+)
+
+    FT = eltype(nₗ)
+    air_params = cmc.aps
+    arg_params = cmc.arg
+    aerosol_params = cmc.aerosol
+    q = TD.PhasePartition(thermo_params, ts)
+    T = TD.air_temperature(thermo_params, ts)
+    p = TD.air_pressure(thermo_params, ts)
+    S::FT = TD.supersaturation(thermo_params, q, ρ, T, TD.Liquid())
+
+    seasalt_mode = CMAM.Mode_κ(
+        seasalt_mean_radius,
+        aerosol_params.seasalt_std,
+        seasalt_num * ρ,
+        (FT(1.0),),
+        (FT(1.0),),
+        (FT(0.0),),
+        (aerosol_params.seasalt_kappa,),
+    )
+    sulfate_mode = CMAM.Mode_κ(
+        aerosol_params.sulfate_radius,
+        aerosol_params.sulfate_std,
+        sulfate_num * ρ,
+        (FT(1.0),),
+        (FT(1.0),),
+        (FT(0.0),),
+        (aerosol_params.sulfate_kappa,),
+    )
+
+    aerosol_dist = CMAM.AerosolDistribution((seasalt_mode, sulfate_mode))
+    n_act::FT =
+        CMAA.total_N_activated(
+            arg_params,
+            aerosol_dist,
+            air_params,
+            thermo_params,
+            T,
+            p,
+            w,
+            q,
+        ) / ρ
 
     return ifelse(
-        Sn > FT(0),
-        triangle_inequality_limiter(Sn, limit((n_dp_prescribed - n_dp), dt, 2)),
-        -triangle_inequality_limiter(abs(Sn), limit(n_dp, dt, 2)),
+        S < 0 || isnan(n_act),
+        FT(0),
+        triangle_inequality_limiter(n_act, n_act - nₗ) / dt,
     )
 end
 
