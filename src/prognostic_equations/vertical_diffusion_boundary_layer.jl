@@ -76,12 +76,12 @@ function vertical_diffusion_boundary_layer_tendency!(
 )
     FT = eltype(Y)
     α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
-    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h) = p.precomputed
+    (; ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
     if !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
-        ᶠstrain_rate .= compute_strain_rate_face(ᶜu)
+        ᶠstrain_rate = compute_strain_rate_face(ᶜu_lazy(Y.c.uₕ, Y.f.u₃))
         @. Yₜ.c.uₕ -= C12(
             ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_u) * ᶠstrain_rate) / Y.c.ρ,
         )

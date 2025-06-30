@@ -25,7 +25,7 @@ Specifically, this function calculates:
 Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
 - `Y`: The current state vector.
-- `p`: Cache containing parameters, precomputed fields (e.g., velocities `ᶜu`,
+- `p`: Cache containing parameters, precomputed fields (e.g., velocities
        `ᶜu⁰`, `ᶜuʲs`; pressure `ᶜp`; kinetic energy `ᶜK`; total enthalpy `ᶜh_tot`),
        and core components (e.g., geopotential `ᶜΦ`).
 - `t`: Current simulation time (not directly used in calculations).
@@ -36,12 +36,13 @@ Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, `Yₜ.c.uₕ`, and EDMFX-related fields 
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜK, ᶜp) = p.precomputed
+    (; ᶜK, ᶜp) = p.precomputed
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
     end
 
+    ᶜu = Base.materialize(ᶜu_lazy(Y.c.uₕ, Y.f.u₃))
     @. Yₜ.c.ρ -= wdivₕ(Y.c.ρ * ᶜu)
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
@@ -64,6 +65,8 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         if p.atmos.turbconv_model isa EDOnlyEDMFX
             ᶜu_for_tke_advection = ᶜu
         elseif p.atmos.turbconv_model isa AbstractEDMF
+            ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ,Y.c.ρ, Y.f.u₃)
+            ᶜu⁰ = ᶜu_lazy(Y.c.uₕ, ᶠu³⁰) # Set here (lazy), but used elsewhere
             ᶜu_for_tke_advection = p.precomputed.ᶜu⁰
         else
             error(
@@ -103,12 +106,12 @@ in `Yₜ.c.sgsʲs` if applicable.
 """
 NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜu) = p.precomputed
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
     end
 
+    ᶜu = Base.materialize(ᶜu_lazy(Y.c.uₕ, Y.f.u₃))
     for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
         @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.:($$ρχ_name) * ᶜu)
     end
@@ -158,7 +161,7 @@ Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
 - `Y`: The current state vector.
 - `p`: Cache containing parameters, core fields (e.g., `ᶜf³`, `ᶠf¹²`, `ᶜΦ`),
-       precomputed fields (e.g., `ᶜu`, `ᶠu³`, `ᶜK`, EDMF velocities/TKE if applicable),
+       precomputed fields (e.g., `ᶜK`, EDMF velocities/TKE if applicable),
        atmospheric model settings (`p.atmos.numerics` for upwinding schemes),
        and scratch space.
 - `t`: Current simulation time (not directly used in calculations).
@@ -174,7 +177,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
-    (; ᶜu, ᶠu³, ᶜK) = p.precomputed
+    (; ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
@@ -183,7 +186,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶠu³⁰ =
         advect_tke ?
         (
-            turbconv_model isa EDOnlyEDMFX ? p.precomputed.ᶠu³ :
+            turbconv_model isa EDOnlyEDMFX ? ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃) :
             p.precomputed.ᶠu³⁰
         ) : nothing
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
@@ -193,6 +196,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜω³ = p.scratch.ᶜtemp_CT3
     ᶠω¹² = p.scratch.ᶠtemp_CT12
     ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
+    
+    ᶜu = ᶜu_lazy(Y.c.uₕ, Y.f.u₃)
 
     if point_type <: Geometry.Abstract3DPoint
         @. ᶜω³ = curlₕ(Y.c.uₕ)
@@ -213,6 +218,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
 
     # Full vertical advection of passive tracers (like liq, rai, etc) ...
+    ᶠu³ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
             ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))

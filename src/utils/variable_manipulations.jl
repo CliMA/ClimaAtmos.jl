@@ -1,5 +1,19 @@
 import ClimaCore.MatrixFields: @name
 
+# Interpolates the third contravariant component of Y.c.uₕ to cell faces.
+# Group velocity and kinetic energy computations.
+@inline function ᶜu_lazy(ᶜuₕ, ᶠu₃)
+    return @. lazy(C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃)))
+end
+@inline function ᶠu³_lazy(ᶜuₕ, ᶜρ, ᶠu₃)
+    ᶠuₕ³ = ᶠuₕ³_lazy(ᶜuₕ, ᶜρ)
+    return @. lazy(ᶠuₕ³ + CT3(ᶠu₃))
+end
+@inline function ᶠuₕ³_lazy(ᶜuₕ, ᶜρ)
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
+end
+
 """
     specific(ρχ, ρ)
     specific(ρaχ, ρa, ρχ, ρ, turbconv_model)

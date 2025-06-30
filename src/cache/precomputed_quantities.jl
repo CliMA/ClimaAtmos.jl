@@ -43,8 +43,6 @@ function implicit_precomputed_quantities(Y, atmos)
     n = n_mass_flux_subdomains(turbconv_model)
     gs_quantities = (;
         ᶜspecific = Base.materialize(ᶜspecific_gs_tracers(Y)),
-        ᶜu = similar(Y.c, C123{FT}),
-        ᶠu³ = similar(Y.f, CT3{FT}),
         ᶠu = similar(Y.f, CT123{FT}),
         ᶜK = similar(Y.c, FT),
         ᶜts = similar(Y.c, TST),
@@ -267,10 +265,13 @@ function precomputed_quantities(Y, atmos)
     )
 end
 
-# Interpolates the third contravariant component of Y.c.uₕ to cell faces.
-function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
-    ᶜJ = Fields.local_geometry_field(ᶜρ).J
-    return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
+# This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
+# ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
+function set_velocity_quantities!(ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³, ρ)
+    ᶜu = ᶜu_lazy(ᶜuₕ, ᶠu₃)
+    ᶠu³ = ᶠu³_lazy(ᶜuₕ, ρ, ᶠu₃)
+    ᶜK .= compute_kinetic(ᶜuₕ, ᶠu₃)
+    return nothing
 end
 
 """
@@ -323,14 +324,6 @@ function set_velocity_at_top!(Y, turbconv_model)
     return nothing
 end
 
-# This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
-# ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
-function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
-    @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
-    @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
-    ᶜK .= compute_kinetic(ᶜuₕ, ᶠu₃)
-    return nothing
-end
 
 function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
     ρaʲs(sgsʲs) = map(sgsʲ -> sgsʲ.ρa, sgsʲs)
@@ -455,21 +448,24 @@ quantities are updated.
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, moisture_model, precip_model) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜspecific, ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶜspecific, ᶠu, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
     thermo_args = (thermo_params, moisture_model, precip_model)
 
     ᶜspecific .= ᶜspecific_gs_tracers(Y)
-    @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+    #@. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+    @. ᶠuₕ³ = $ᶠuₕ³_lazy(Y.c.uₕ, Y.c.ρ)
 
     # TODO: We might want to move this to dss! (and rename dss! to something
     # like enforce_constraints!).
     set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     set_velocity_at_top!(Y, turbconv_model)
 
-    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
+    ᶜu = ᶜu_lazy(Y.c.uₕ, Y.f.u₃)
+    ᶠu³ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
+    set_velocity_quantities!(ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³, Y.c.ρ)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     @. ᶠu = CT123(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
     if n > 0
@@ -517,7 +513,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, moisture_model, precip_model, cloud_model) = p.atmos
     (; vert_diff, call_cloud_diagnostics_per_stage) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜts, ᶜp) = p.precomputed
+    (; ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3 # updated in set_implicit_precomputed_quantities!
     thermo_params = CAP.thermodynamics_params(p.params)
 

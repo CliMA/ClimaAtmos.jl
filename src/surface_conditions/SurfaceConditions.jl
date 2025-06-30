@@ -12,7 +12,7 @@ import ..PrescribedSurfaceTemperature
 import ..gcm_driven_timeseries
 
 import ..CT1, ..CT2, ..C12, ..CT12, ..C3
-import ..unit_basis_vector_data, ..projected_vector_data
+import ..unit_basis_vector_data, ..projected_vector_data, ..ᶜu_lazy
 import ..get_wstar
 
 import ClimaCore: DataLayouts, Geometry, Fields

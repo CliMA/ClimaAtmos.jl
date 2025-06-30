@@ -93,7 +93,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜh_tot, ᶜK) = p.precomputed
+    (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.precomputed.sfc_conditions
@@ -104,9 +104,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
 
+    ᶠu³ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
+
     ρ_int_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
     uₕ_int_level = Fields.field_values(Fields.level(Y.c.uₕ, 1))
-    u³_int_halflevel = Fields.field_values(Fields.level(ᶠu³, half))
+    u³_int_halflevel = Fields.field_values(Fields.level(Base.materialize(ᶠu³), half))
     h_tot_int_level = Fields.field_values(Fields.level(ᶜh_tot, 1))
     K_int_level = Fields.field_values(Fields.level(ᶜK, 1))
     q_tot_int_level = Fields.field_values(Fields.level(q_tot, 1))
@@ -305,7 +307,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; dt) = p
     dt = float(dt)
     (; ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
+    (; ᶜp, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
     (;
         ᶜρaʲs,
@@ -343,6 +345,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     ᶜ∇Φ₃ = p.scratch.ᶜtemp_C3
     @. ᶜ∇Φ₃ = ᶜgradᵥ(ᶠΦ)
 
+    ᶠu³ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
+
     z_sfc_halflevel =
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
 
@@ -350,7 +354,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     for i in 2:Spaces.nlevels(axes(Y.c))
         ρ_level = Fields.field_values(Fields.level(Y.c.ρ, i))
         uₕ_level = Fields.field_values(Fields.level(Y.c.uₕ, i))
-        u³_halflevel = Fields.field_values(Fields.level(ᶠu³, i - half))
+        u³_halflevel = Fields.field_values(Fields.level(Base.materialize(ᶠu³), i - half))
         K_level = Fields.field_values(Fields.level(ᶜK, i))
         h_tot_level = Fields.field_values(Fields.level(ᶜh_tot, i))
         q_tot_level = Fields.field_values(Fields.level(q_tot, i))
@@ -372,7 +376,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         ∇Φ₃_prev_level = Fields.field_values(Fields.level(ᶜ∇Φ₃, i - 1))
         ∇Φ₃_data_prev_level = ∇Φ₃_prev_level.components.data.:1
         ρ_prev_level = Fields.field_values(Fields.level(Y.c.ρ, i - 1))
-        u³_prev_halflevel = Fields.field_values(Fields.level(ᶠu³, i - 1 - half))
+        u³_prev_halflevel = Fields.field_values(Fields.level(Base.materialize(ᶠu³), i - 1 - half))
         u³⁰_prev_halflevel =
             Fields.field_values(Fields.level(ᶠu³⁰, i - 1 - half))
         u³⁰_data_prev_halflevel = u³⁰_prev_halflevel.components.data.:1
@@ -960,7 +964,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
-    (; ᶜp, ᶜu, ᶜts) = p.precomputed
+    (; ᶜp, ᶜts) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜtke⁰) = p.precomputed
     (;
@@ -974,13 +978,15 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
+    ᶜu = ᶜu_lazy(Y.c.uₕ, Y.f.u₃)
     if p.atmos.turbconv_model isa DiagnosticEDMFX
         (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs, ᶠu³⁰, ᶜu⁰) = p.precomputed
     elseif p.atmos.turbconv_model isa EDOnlyEDMFX
-        ᶠu³⁰ = p.precomputed.ᶠu³
+        ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ,Y.c.ρ, Y.f.u₃)
         ᶜu⁰ = ᶜu
     end
-    @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))  # Set here, but used in a different function
+
+    ᶜu⁰ = ᶜu_lazy(Y.c.uₕ, ᶠu³⁰) # Set here (lazy), but used elsewhere
 
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
@@ -1039,7 +1045,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
     ρ_int_values = Fields.field_values(Fields.level(Y.c.ρ, 1))
-    u_int_values = Fields.field_values(Fields.level(ᶜu, 1))
+    u_int_values = Fields.field_values(Fields.level(Base.materialize(ᶜu), 1))
     ustar_values = Fields.field_values(ustar)
     int_local_geometry_values =
         Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
