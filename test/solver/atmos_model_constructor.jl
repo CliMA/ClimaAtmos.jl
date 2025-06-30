@@ -23,7 +23,7 @@ end
 
 @testset "AtmosModel Constructor Tests" begin
 
-    @testset "Intelligent Defaults" begin
+    @testset "Sensible Defaults" begin
         @testset "Basic AtmosModel() creates working model with expected defaults" begin
             model = CA.AtmosModel()
 

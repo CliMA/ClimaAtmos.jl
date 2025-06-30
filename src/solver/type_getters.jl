@@ -145,6 +145,7 @@ function get_atmos(config::AtmosConfig, params)
         numerics = get_numerics(parsed_args),
         disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
     )
+    # TODO: Should this go in the AtmosModel constructor?
     @assert !@any_reltype(atmos, (UnionAll, DataType))
 
     @info "AtmosModel: \n$(summary(atmos))"
@@ -450,7 +451,7 @@ get_jacobian(ode_algo, Y, atmos, parsed_args) =
             parsed_args["use_dense_jacobian"] ? AutoDenseJacobian() :
             ManualSparseJacobian(
                 DerivativeFlag(has_topography(axes(Y.c))),
-                DerivativeFlag(atmos.numerics.diff_mode),
+                DerivativeFlag(atmos.diff_mode),
                 DerivativeFlag(atmos.sgs_adv_mode),
                 DerivativeFlag(atmos.sgs_entr_detr_mode),
                 DerivativeFlag(atmos.sgs_mf_mode),

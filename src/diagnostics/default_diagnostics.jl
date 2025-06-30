@@ -437,22 +437,17 @@ function default_diagnostics(
     start_date;
     output_writer,
 )
-    diagnostics = []
-
     # Add radiation mode diagnostics
-    if atmos_radiation.radiation_mode !== nothing
-        append!(
-            diagnostics,
-            default_diagnostics(
-                atmos_radiation.radiation_mode,
-                duration,
-                start_date;
-                output_writer,
-            ),
+    if !isnothing(atmos_radiation.radiation_mode)
+        return default_diagnostics(
+            atmos_radiation.radiation_mode,
+            duration,
+            start_date;
+            output_writer,
         )
+    else
+        return []
     end
-
-    return diagnostics
 end
 
 function default_diagnostics(
@@ -461,20 +456,15 @@ function default_diagnostics(
     start_date;
     output_writer,
 )
-    diagnostics = []
-
     # Add turbulence convection model diagnostics
-    if atmos_turbconv.turbconv_model !== nothing
-        append!(
-            diagnostics,
-            default_diagnostics(
-                atmos_turbconv.turbconv_model,
-                duration,
-                start_date;
-                output_writer,
-            ),
+    if !isnothing(atmos_turbconv.turbconv_model)
+        return default_diagnostics(
+            atmos_turbconv.turbconv_model,
+            duration,
+            start_date;
+            output_writer,
         )
+    else
+        return []
     end
-
-    return diagnostics
 end

@@ -650,6 +650,7 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosGravityWave, :gravity_wave),
     (AtmosSponge, :sponge),
     (AtmosSurface, :surface),
+    (AtmosNumerics, :numerics),
 )
 
 # Auto-generate map from property_name to group_field  
@@ -869,20 +870,10 @@ function AtmosModel(; kwargs...)
     # Kwargs for direct AtmosModel fields (hyperdiff, numerics, vert_diff, disable_surface_flux_tendency)
     atmos_model_kwargs = Dict{Symbol, Any}()
 
-    # Make all kwargs: apply defaults for any missing kwargs, then sort into appropriate groups
-    all_kwargs = Dict{Symbol, Any}()
+    # Merge defaults with kwargs
+    all_kwargs = merge(default_args, kwargs)
 
-    # First add defaults
-    for (key, default_value) in pairs(default_args)
-        all_kwargs[key] = default_value
-    end
-
-    # Then add user kwargs (overriding defaults)
-    for (key, value) in kwargs
-        all_kwargs[key] = value
-    end
-
-    # Sort kwargs into appropriate groups
+    # Sort kwargs into a hierarchy of dicts
     for (key, value) in all_kwargs
         if haskey(GROUPED_PROPERTY_MAP, key)
             group_field = GROUPED_PROPERTY_MAP[key]
@@ -987,15 +978,6 @@ end
     EquilMoistAtmosModel(; kwargs...)
 
 Create an equilibrium moist atmospheric model with sensible defaults for moist simulations.
-
-# Example
-```julia
-model = EquilMoistAtmosModel(;
-    precip_model = Microphysics1Moment(),
-    cloud_model = QuadratureCloud(),
-    surface_model = PrognosticSurfaceTemperature()
-)
-```
 """
 function EquilMoistAtmosModel(; kwargs...)
     defaults = (
@@ -1015,15 +997,6 @@ end
     NonEquilMoistAtmosModel(; kwargs...)
 
 Create a non-equilibrium moist atmospheric model with sensible defaults.
-
-# Example
-```julia
-model = NonEquilMoistAtmosModel(;
-    precip_model = Microphysics2Moment(),
-    cloud_model = SGSQuadratureCloud(),
-    noneq_cloud_formation_mode = Implicit()
-)
-```
 """
 function NonEquilMoistAtmosModel(; kwargs...)
     defaults = (
