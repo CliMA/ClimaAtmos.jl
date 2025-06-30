@@ -215,7 +215,7 @@ function default_diagnostics(
 end
 
 function default_diagnostics(
-    atmos_hydrology::AtmosHydrology,
+    atmos_hydrology::AtmosWater,
     duration,
     start_date;
     output_writer,

@@ -14,7 +14,7 @@ import Thermodynamics as TD
 import ..lazy
 
 import ..AtmosModel
-import ..AtmosHydrology
+import ..AtmosWater
 import ..AtmosRadiation
 import ..AtmosTurbconv
 import ..AtmosCallback

@@ -520,11 +520,11 @@ end
 # Grouped structs to reduce AtmosModel type parameters
 
 """
-    AtmosHydrology
+    AtmosWater
 
 Groups moisture-related models and types.
 """
-Base.@kwdef struct AtmosHydrology{MM, PM, CM, NCFM, CCDPS}
+Base.@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS}
     moisture_model::MM = nothing
     precip_model::PM = nothing
     cloud_model::CM = nothing
@@ -613,7 +613,7 @@ Base.@kwdef struct AtmosSurface{ST, SM, SA}
 end
 
 # Add broadcastable for the new grouped types
-Base.broadcastable(x::AtmosHydrology) = tuple(x)
+Base.broadcastable(x::AtmosWater) = tuple(x)
 Base.broadcastable(x::AtmosForcing) = tuple(x)
 Base.broadcastable(x::AtmosRadiation) = tuple(x)
 Base.broadcastable(x::AtmosAdvection) = tuple(x)
@@ -639,10 +639,9 @@ struct AtmosModel{H, F, R, A, TC, GW, HD, VD, SP, SU, NU}
     disable_surface_flux_tendency::Bool
 end
 
-# BACKWARD COMPATIBILITY FOR AtmosModel 
 # Map grouped struct types to their names in AtmosModel struct
 const ATMOS_MODEL_GROUPS = (
-    (AtmosHydrology, :hydrology),
+    (AtmosWater, :hydrology),
     (AtmosForcing, :forcing),
     (AtmosRadiation, :radiation),
     (AtmosAdvection, :advection),
@@ -653,17 +652,12 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosNumerics, :numerics),
 )
 
-# Auto-generate map from property_name to group_field  
-# Use let closure to avoid polluting module scope with temporary variables
-const GROUPED_PROPERTY_MAP = let
-    property_map = Dict{Symbol, Symbol}()
-    for (group_type, group_field) in ATMOS_MODEL_GROUPS
-        for property in fieldnames(group_type)
-            property_map[property] = group_field
-        end
-    end
-    property_map
-end
+# Auto-generate map from property_name to group_field
+const GROUPED_PROPERTY_MAP = Dict{Symbol, Symbol}(
+    property => group_field for
+    (group_type, group_field) in ATMOS_MODEL_GROUPS for
+    property in fieldnames(group_type)
+)
 
 # Forward property access: atmos.moisture_model → atmos.moisture.moisture_model
 # Use ::Val constant for @generated compile-time access
@@ -729,7 +723,7 @@ This constructor provides sensible defaults for a minimal dry atmospheric model 
 
 All model components are automatically organized into appropriate grouped sub-structs 
 internally:
-- [`AtmosHydrology`](@ref)
+- [`AtmosWater`](@ref)
 - [`AtmosForcing`](@ref)
 - [`AtmosRadiation`](@ref)
 - [`AtmosAdvection`](@ref)
@@ -779,7 +773,7 @@ The default AtmosModel provides:
 
 # Available Structs
 
-## AtmosHydrology
+## AtmosWater
 - `moisture_model`: DryModel(), EquilMoistModel(), NonEquilMoistModel()
 - `precip_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
 - `cloud_model`: GridScaleCloud(), QuadratureCloud(), SGSQuadratureCloud()
@@ -834,76 +828,9 @@ The default AtmosModel provides:
 - Property access works both ways: `model.moisture_model` and `model.hydrology.moisture_model`
 """
 function AtmosModel(; kwargs...)
-    # TODO: Break this into separate functions for defaults and kwarg processing 
-    # this is hard to understand and maintain
+    group_kwargs, atmos_model_kwargs = _partition_atmos_model_kwargs(kwargs)
 
-    # Set defaults that create a minimal viable atmospheric model
-    default_args = (
-        moisture_model = DryModel(),
-        precip_model = NoPrecipitation(),
-        cloud_model = GridScaleCloud(),
-        surface_model = PrescribedSurfaceTemperature(),
-        sfc_temperature = ZonallySymmetricSST(),
-        insolation = IdealizedInsolation(),
-        numerics = AtmosNumerics(
-            energy_upwinding = Val(:first_order),
-            tracer_upwinding = Val(:first_order),
-            edmfx_upwinding = Val(:first_order),
-            edmfx_sgsflux_upwinding = Val(:none),
-            test_dycore_consistency = nothing,
-            limiter = nothing,
-            diff_mode = Explicit(),
-        ),
-
-        # Top-level
-        disable_surface_flux_tendency = false,
-    )
-
-    # Process keyword arguments: categorize into grouped types (e.g., hydrology -> AtmosHydrology)
-    # vs direct AtmosModel fields (e.g., hyperdiff, numerics). Use GROUPED_PROPERTY_MAP to organize grouped types
-    # into appropriate grouped structs, then construct AtmosModel with all top-level fields.
-    group_kwargs = Dict{Symbol, Dict{Symbol, Any}}()
-    for (_, group_field) in ATMOS_MODEL_GROUPS
-        group_kwargs[group_field] = Dict{Symbol, Any}()
-    end
-
-    # Kwargs for direct AtmosModel fields (hyperdiff, numerics, vert_diff, disable_surface_flux_tendency)
-    atmos_model_kwargs = Dict{Symbol, Any}()
-
-    # Merge defaults with kwargs
-    all_kwargs = merge(default_args, kwargs)
-
-    # Sort kwargs into a hierarchy of dicts
-    for (key, value) in all_kwargs
-        if haskey(GROUPED_PROPERTY_MAP, key)
-            group_field = GROUPED_PROPERTY_MAP[key]
-            group_kwargs[group_field][key] = value
-        elseif key in fieldnames(AtmosModel)
-            atmos_model_kwargs[key] = value
-        else
-            available_grouped = sort(collect(keys(GROUPED_PROPERTY_MAP)))
-            available_direct = sort([
-                fn for fn in fieldnames(AtmosModel) if fn ∉ [
-                    :hydrology,
-                    :forcing,
-                    :radiation,
-                    :advection,
-                    :turbconv,
-                    :gravity_wave,
-                    :sponge,
-                    :surface,
-                ]
-            ])
-            available_all = [available_grouped; available_direct]
-            error(
-                "Unknown AtmosModel argument: $key. " *
-                "Available arguments:\n  " *
-                join(available_all, "\n  "),
-            )
-        end
-    end
-
-    moisture = AtmosHydrology(; group_kwargs[:hydrology]...)
+    moisture = AtmosWater(; group_kwargs[:hydrology]...)
     forcing = AtmosForcing(; group_kwargs[:forcing]...)
     radiation = AtmosRadiation(; group_kwargs[:radiation]...)
     advection = AtmosAdvection(; group_kwargs[:advection]...)
@@ -943,6 +870,88 @@ function AtmosModel(; kwargs...)
         surface,
         numerics,
         disable_surface_flux_tendency,
+    )
+end
+
+const _DEFAULT_ATMOS_MODEL_KWARGS = (
+    moisture_model = DryModel(),
+    precip_model = NoPrecipitation(),
+    cloud_model = GridScaleCloud(),
+    surface_model = PrescribedSurfaceTemperature(),
+    sfc_temperature = ZonallySymmetricSST(),
+    insolation = IdealizedInsolation(),
+    numerics = AtmosNumerics(
+        energy_upwinding = Val(:first_order),
+        tracer_upwinding = Val(:first_order),
+        edmfx_upwinding = Val(:first_order),
+        edmfx_sgsflux_upwinding = Val(:none),
+        test_dycore_consistency = nothing,
+        limiter = nothing,
+        diff_mode = Explicit(),
+    ),
+
+    # Top-level
+    disable_surface_flux_tendency = false,
+)
+
+"""
+    _partition_atmos_model_kwargs(kwargs)
+
+Partition the given kwargs into grouped and direct kwargs matching the AtmosModel struct.
+
+Helper function for the AtmosModel constructor.
+"""
+function _partition_atmos_model_kwargs(kwargs)
+
+    # Merge default minimal model arguments with given kwargs
+    all_kwargs = merge(_DEFAULT_ATMOS_MODEL_KWARGS, kwargs)
+
+    # group_kwargs contains a Dict for each group in ATMOS_MODEL_GROUPS
+    group_kwargs = Dict(map(ATMOS_MODEL_GROUPS) do (_, group_field)
+        group_field => Dict{Symbol, Any}()
+    end)
+
+    # Sort kwargs into a hierarchy of dicts matching the AtmosModel struct
+    atmos_model_kwargs = Dict{Symbol, Any}()
+    unknown_args = Symbol[]
+
+    for (key, value) in pairs(all_kwargs)
+        if haskey(GROUPED_PROPERTY_MAP, key)
+            group_field = GROUPED_PROPERTY_MAP[key]
+            group_kwargs[group_field][key] = value
+        elseif key in fieldnames(AtmosModel)
+            atmos_model_kwargs[key] = value
+        else
+            push!(unknown_args, key)
+        end
+    end
+
+    # Throw error for all unknown arguments at once
+    if !isempty(unknown_args)
+        _throw_unknown_atmos_model_argument_error(unknown_args)
+    end
+
+    return group_kwargs, atmos_model_kwargs
+end
+
+"""
+    _throw_unknown_atmos_model_argument_error(unknown_args)
+
+Throw a helpful error message for unknown AtmosModel constructor arguments.
+"""
+function _throw_unknown_atmos_model_argument_error(unknown_args)
+    n_unknown = length(unknown_args)
+    plural = n_unknown > 1 ? "s" : ""
+
+    # All valid arguments: forwarded properties + direct AtmosModel fields
+    available_forwarded = sort(collect(keys(GROUPED_PROPERTY_MAP)))
+    available_direct = sort(collect(fieldnames(AtmosModel)))
+    available_all = sort(unique([available_forwarded; available_direct]))
+
+    error(
+        "Unknown AtmosModel argument$plural: $(join(unknown_args, ", ")). " *
+        "Available arguments:\n  " *
+        join(available_all, "\n  "),
     )
 end
 

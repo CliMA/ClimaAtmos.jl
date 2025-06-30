@@ -86,7 +86,7 @@ function get_atmos(config::AtmosConfig, params)
     )
 
     atmos = AtmosModel(;
-        # AtmosHydrology - Moisture, Precipitation & Clouds
+        # AtmosWater - Moisture, Precipitation & Clouds
         moisture_model,
         precip_model,
         cloud_model,
