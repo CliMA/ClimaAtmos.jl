@@ -1,7 +1,7 @@
-z_max: 60000.0
-z_elem: 63
+z_max: 48000.0
+z_elem: 37
 h_elem: 15
-dz_bottom: 50.0
+dz_bottom: 10.0
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
 co2_model: fixed
@@ -22,8 +22,16 @@ dt: 60secs
 t_end: 12hours
 toml: [toml/diagnostic_edmfx_0M.toml]
 use_itime: true
+
 diagnostics:
   - short_name: [ta, ua, wa, va, rhoa, hur, hus, clw, cli]
     period: 10mins
 
+# initial_condition: "/home/jschmitt/experiments/ecmwf/initial_conditions/era5_init_20250506_0000_on_z2.nc"
 initial_condition: "/home/jschmitt/experiments/ecmwf/era5_init_20250506_0000.nc"
+topo_smoothing: true
+topography: "Earth"
+
+# sponges 
+rayleigh_sponge: true
+
