@@ -96,7 +96,11 @@ horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
-    (; ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶜspecific, ᶜh_tot) = p.precomputed
+    (; ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶜspecific) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, 
+                                                p.precomputed.ᶜts, 
+                                                specific(Y.c.ρe_tot, Y.c.ρ)))
 
     ## Momentum tendencies
     ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(Y.c.ρ)
@@ -123,9 +127,13 @@ import UnrolledUtilities as UU
 
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     FT = eltype(Y)
-    (; sfc_temp_C3, ᶠtemp_scalar) = p.scratch
-    (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, ᶜspecific, ᶜh_tot, sfc_conditions) =
+    (; ᶠtemp_scalar) = p.scratch
+    (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, ᶜspecific, sfc_conditions) =
         p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, 
+                                                p.precomputed.ᶜts, 
+                                                specific(Y.c.ρe_tot, Y.c.ρ)))
     (; ρ_flux_uₕ, ρ_flux_h_tot) = sfc_conditions
 
     # Define operators

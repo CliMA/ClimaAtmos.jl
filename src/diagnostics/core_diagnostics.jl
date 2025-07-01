@@ -166,9 +166,9 @@ add_diagnostic_variable!(
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
         if isnothing(out)
-            return TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜts)
+            return TD.air_pressure.(thermo_params, cache.precomputed.ᶜts)
         else
-            out .= TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜts)
+            out .= TD.air_pressure.(thermo_params, cache.precomputed.ᶜts)
         end
     end,
 )
@@ -181,10 +181,11 @@ add_diagnostic_variable!(
     long_name = "Pressure at Model Full-Levels",
     units = "Pa",
     compute! = (out, state, cache, time) -> begin
+    thermo_params = CAP.thermodynamics_params(cache.params)
         if isnothing(out)
-            return copy(cache.precomputed.ᶜp)
+            return copy(TD.air_pressure.(thermo_params, cache.precomputed.ᶜts))
         else
-            out .= cache.precomputed.ᶜp
+            out .= TD.air_pressure.(thermo_params, cache.precomputed.ᶜts)
         end
     end,
 )
@@ -1434,7 +1435,7 @@ function compute_cape!(out, state, cache, time)
         lazy.(
             TD.PhaseEquil_pθq.(
                 thermo_params,
-                cache.precomputed.ᶜp,
+                TD.air_pressure.(thermo_params, cache.precomputed.ᶜts),
                 surface_θ_liq_ice,
                 surface_q,
             ),

@@ -1,5 +1,34 @@
 import ClimaCore.MatrixFields: @name
 
+
+"""
+    ᶜp(thermo_params, ᶜts)
+
+Return lazy evaluation of air pressure.
+Args:
+    - thermo_params: Thermodynamic parameters accessible from ClimaAtmos.Parameters
+    - ᶜts: Thermodynamic state 
+"""
+@inline function ᶜp(thermo_params, ᶜts)
+    return @. lazy(TD.air_pressure(thermo_params, ᶜts))
+end
+
+"""
+    ᶜh_tot(Y, thermo_params, ᶜts)
+
+Return lazy evaluation of total specific enthalpy.
+Args:
+    - Y: Prognostic state variables
+    - thermo_params: Thermodynamic parameters accessible from ClimaAtmos.Parameters (CAP)
+    - ᶜts: Thermodynamic state 
+"""
+@inline function ᶜh_tot(Y, thermo_params, ᶜts)
+    return @. lazy(TD.total_specific_enthalpy(thermo_params, 
+                                              ᶜts, 
+                                              specific(Y.c.ρe_tot, Y.c.ρ))
+                  )
+end
+
 """
     specific(ρχ, ρ)
     specific(ρaχ, ρa, ρχ, ρ, turbconv_model)

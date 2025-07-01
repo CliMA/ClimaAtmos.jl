@@ -12,22 +12,23 @@ Modify the energy variable in state `Y` given Y and the cache `p` so that
 function set_discrete_hydrostatic_balanced_state!(Y, p)
     FT = Spaces.undertype(axes(Y.c))
     ᶠgradᵥ_ᶜp = similar(Y.f.u₃)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜp = @. Base.materialize(TD.air_pressure(thermo_params, p.precomputed.ᶜts))
     set_discrete_hydrostatic_balanced_pressure!(
-        p.precomputed.ᶜp,
+        ᶜp,
         ᶠgradᵥ_ᶜp,
         Y.c.ρ,
         p.core.ᶠgradᵥ_ᶜΦ,
         FT(CAP.MSLP(p.params)),
     )
-    thermo_params = CAP.thermodynamics_params(p.params)
     if p.atmos.moisture_model isa DryModel
         @. p.precomputed.ᶜts =
-            TD.PhaseDry_ρp(thermo_params, Y.c.ρ, p.precomputed.ᶜp)
+            TD.PhaseDry_ρp(thermo_params, Y.c.ρ, ᶜp)
     elseif p.atmos.moisture_model isa EquilMoistModel
         @. p.precomputed.ᶜts = TD.PhaseEquil_ρpq(
             thermo_params,
             Y.c.ρ,
-            p.precomputed.ᶜp,
+            ᶜp,
             Y.c.ρq_tot / Y.c.ρ,
         )
     else

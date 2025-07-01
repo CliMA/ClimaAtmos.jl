@@ -68,7 +68,10 @@ subsidence_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing    # No subsidence
 function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
     (; moisture_model) = p.atmos
     subsidence_profile = p.atmos.subsidence.prof
-    (; ᶜh_tot) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, 
+                                                p.precomputed.ᶜts, 
+                                                specific(Y.c.ρe_tot, Y.c.ρ)))
 
     ᶠz = Fields.coordinate_field(axes(Y.f)).z
     ᶠlg = Fields.local_geometry_field(Y.f)

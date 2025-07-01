@@ -80,7 +80,7 @@ end
 function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWave)
     ᶜT = p.scratch.ᶜtemp_scalar
     (; params) = p
-    (; ᶜts, ᶜp) = p.precomputed
+    (; ᶜts) = p.precomputed
     (; ᶜdTdz) = p.orographic_gravity_wave
     (;
         topo_k_pbl,
@@ -98,19 +98,21 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     FT = Spaces.undertype(axes(Y.c))
 
     # parameters
-    thermo_params = CAP.thermodynamics_params(params)
+    thermo_params = CAP.thermodynamics_params(p.params)
     grav = FT(CAP.grav(params))
     cp_d = FT(CAP.cp_d(params))
 
     # z
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
+    
+    ᶜp_eager = Base.materialize(ᶜp(thermo_params, ᶜts)) 
 
     # get PBL info
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
     Fields.bycolumn(axes(Y.c.ρ)) do colidx
         parent(topo_k_pbl[colidx]) .=
-            get_pbl(ᶜp[colidx], ᶜT[colidx], ᶜz[colidx], grav, cp_d)
+            get_pbl(ᶜp_eager[colidx], ᶜT[colidx], ᶜz[colidx], grav, cp_d)
     end
 
     # buoyancy frequency at cell centers
@@ -171,7 +173,7 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
             u_phy[colidx],
             v_phy[colidx],
             Y.c.ρ[colidx],
-            ᶜp[colidx],
+            ᶜp_eager[colidx],
             Int(parent(topo_k_pbl[colidx])[1]),
         )
     end
@@ -200,7 +202,7 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
             vforcing[colidx],
             ᶠN[colidx],
             topo_ᶠVτ[colidx],
-            ᶜp[colidx],
+            ᶜp_eager[colidx],
             topo_τ_x[colidx],
             topo_τ_y[colidx],
             topo_τ_l[colidx],
@@ -226,7 +228,7 @@ function calc_nonpropagating_forcing!(
     ᶜvforcing,
     ᶠN,
     ᶠVτ,
-    ᶜp,
+    ᶜp_eager,
     τ_x,
     τ_y,
     τ_l,
@@ -237,7 +239,7 @@ function calc_nonpropagating_forcing!(
     grav,
 )
     FT = eltype(grav)
-    ᶠp = ᶠinterp.(ᶜp)
+    ᶠp = ᶠinterp.(ᶜp_eager)
     # compute k_ref: the upper bound for nonpropagating drag to function
     phase = FT(0)
     zlast = parent(Fields.level(ᶠz, k_pbl + half))[1]
@@ -258,7 +260,7 @@ function calc_nonpropagating_forcing!(
     wtsum = FT(0)
     for k in k_pbl:k_ref
         tmp = Fields.level(weights, k)
-        parent(tmp) .= parent(ᶜp)[k] - parent(ᶠp)[k_ref]
+        parent(tmp) .= parent(ᶜp_eager)[k] - parent(ᶠp)[k_ref]
         wtsum += (parent(ᶠp)[k - 1] - parent(ᶠp)[k]) / parent(weights)[k]
     end
 
@@ -275,14 +277,14 @@ function calc_propagate_forcing!(ᶜuforcing, ᶜvforcing, τ_x, τ_y, τ_l, τ_
     return nothing
 end
 
-function get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
+function get_pbl(ᶜp_eager, ᶜT, ᶜz, grav, cp_d)
     FT = eltype(cp_d)
     idx =
-        (parent(ᶜp) .>= (FT(0.5) * parent(ᶜp)[1])) .& (
+        (parent(ᶜp_eager) .>= (FT(0.5) * parent(ᶜp_eager)[1])) .& (
             (parent(ᶜT)[1] + FT(1.5) .- parent(ᶜT)) .>
             (grav / cp_d * (parent(ᶜz) .- parent(ᶜz)[1]))
         )
-    # parent(ᶜp) .>= (FT(0.5) * parent(ᶜp)[1]) follows the criterion in GFDL codes
+    # parent(ᶜp_eager) .>= (FT(0.5) * parent(ᶜp_eager)[1]) follows the criterion in GFDL codes
     # that the lowest layer that is geq to half of pressure at first face level; while
     # in our code, when interpolate from center to face, the first face level inherits
     # values at the first center level
@@ -389,7 +391,7 @@ function calc_saturation_profile!(
     u_phy,
     v_phy,
     ᶜρ,
-    ᶜp,
+    ᶜp_eager,
     k_pbl,
 )
     (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ϵ) =
@@ -451,7 +453,7 @@ function calc_saturation_profile!(
 
     # If the wave propagates to the top, the residual momentum flux is redistributed throughout the column weighted by pressure
     if parent(τ_sat)[end] > FT(0)
-        ᶠp = ᶠinterp.(ᶜp)
+        ᶠp = ᶠinterp.(ᶜp_eager)
         τ_sat .-=
             parent(τ_sat)[end] .* (parent(ᶠp)[1] .- ᶠp) ./
             (parent(ᶠp)[1] .- parent(ᶠp)[end])
