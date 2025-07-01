@@ -101,19 +101,20 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
-    (; ᶜp) = p.precomputed
+    (; ᶜu, ᶜp) = p.precomputed
     (; ᶜh_ref) = p.core
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
 
-    ᶜu = ᶜu_lazy(Y.c.uₕ, Y.f.u₃)
+    # Conflicting broadcast rules
+    ᶜu = Base.materialize(ᶜu_lazy(Y.c.uₕ, Y.f.u₃))
 
     # Grid scale hyperdiffusion
     @. ᶜ∇²u =
-        C123(wgradₕ(divₕ(ᶜu_lazy))) -
-        C123(wcurlₕ(C123(curlₕ(ᶜu_lazy))))
+        C123(wgradₕ(divₕ(ᶜu))) -
+        C123(wcurlₕ(C123(curlₕ(ᶜu))))
 
     @. ᶜ∇²specific_energy =
         wdivₕ(gradₕ(specific(Y.c.ρe_tot, Y.c.ρ) + ᶜp / Y.c.ρ - ᶜh_ref))

@@ -174,7 +174,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
-    (; ᶜK, ᶠuₕ³) = p.precomputed
+    (; ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
@@ -183,7 +183,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶠu³⁰ =
         advect_tke ?
         (
-            turbconv_model isa EDOnlyEDMFX ? ᶠu³_lazy(ᶠuₕ³, ᶠu₃) :
+            turbconv_model isa EDOnlyEDMFX ? ᶠu³_lazy(compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ), ᶠu₃) :
             p.precomputed.ᶠu³⁰
         ) : nothing
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
@@ -193,6 +193,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜω³ = p.scratch.ᶜtemp_CT3
     ᶠω¹² = p.scratch.ᶠtemp_CT12
     ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
+    
+    ᶜu = ᶜu_lazy(Y.c.uₕ, Y.f.u₃)
 
     if point_type <: Geometry.Abstract3DPoint
         @. ᶜω³ = curlₕ(Y.c.uₕ)
@@ -213,7 +215,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
 
     # Full vertical advection of passive tracers (like liq, rai, etc) ...
-    ᶠu³ = ᶠu³_lazy(ᶠuₕ³, Y.c.u₃)
+    ᶠu³ = ᶠu³_lazy(compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ), Y.f.u₃)
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
             ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))

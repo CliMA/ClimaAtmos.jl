@@ -95,13 +95,40 @@ function compute_strain_rate_center(u::Fields.Field)
         ) / 2,
     )
 end
+function compute_strain_rate_center(u::Broadcast.Broadcasted)
+    @assert eltype(u) <: C123
+    axis_uvw = Geometry.UVWAxis()
+    return @. lazy(
+        (
+            Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))) +
+            adjoint(Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))))
+        ) / 2,
+    )
+end
 
 """
     ϵ .= compute_strain_rate_face(u::Field)
+    ϵ .= compute_strain_rate_face(u::Broadcast.Broadcasted)
 
 Compute the strain_rate at cell faces from velocity at cell centers.
 """
 function compute_strain_rate_face(u::Fields.Field)
+    @assert eltype(u) <: C123
+    ∇ᵥuvw_boundary =
+        Geometry.outer(Geometry.WVector(0), Geometry.UVWVector(0, 0, 0))
+    ᶠgradᵥ = Operators.GradientC2F(
+        bottom = Operators.SetGradient(∇ᵥuvw_boundary),
+        top = Operators.SetGradient(∇ᵥuvw_boundary),
+    )
+    axis_uvw = Geometry.UVWAxis()
+    return @. lazy(
+        (
+            Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))) +
+            adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))))
+        ) / 2,
+    )
+end
+function compute_strain_rate_face(u::Broadcast.Broadcasted)
     @assert eltype(u) <: C123
     ∇ᵥuvw_boundary =
         Geometry.outer(Geometry.WVector(0), Geometry.UVWVector(0, 0, 0))
