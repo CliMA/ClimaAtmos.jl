@@ -452,9 +452,9 @@ version = "0.1.13"
 
 [[deps.CloudMicrophysics]]
 deps = ["ClimaParams", "DocStringExtensions", "ForwardDiff", "LazyArtifacts", "LogExpFunctions", "QuadGK", "RootSolvers", "SpecialFunctions", "Thermodynamics"]
-git-tree-sha1 = "7bc112bf39c90925ca3856ac0fcb4c68d45c952f"
+git-tree-sha1 = "cfc9decc96d616ab3b8d911f843eeb2aafd7d2ad"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.24.2"
+version = "0.25.0"
 
     [deps.CloudMicrophysics.extensions]
     EmulatorModelsExt = ["DataFrames", "MLJ"]
@@ -527,9 +527,9 @@ version = "1.0.0"
 
 [[deps.Compat]]
 deps = ["TOML", "UUIDs"]
-git-tree-sha1 = "8ae8d32e09f0dcf42a36b90d4e17f5dd2e4c4215"
+git-tree-sha1 = "3a3dfb30697e96a440e4149c8c51bf32f818c0f3"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "4.16.0"
+version = "4.17.0"
 weakdeps = ["Dates", "LinearAlgebra"]
 
     [deps.Compat.extensions]
@@ -946,9 +946,9 @@ version = "0.2.0"
 
 [[deps.GPUCompiler]]
 deps = ["ExprTools", "InteractiveUtils", "LLVM", "Libdl", "Logging", "PrecompileTools", "Preferences", "Scratch", "Serialization", "TOML", "Tracy", "UUIDs"]
-git-tree-sha1 = "bbb7004345fb6141989835fc9f2f9e93bba3c806"
+git-tree-sha1 = "71a747c7c0137222dceb799b5643440e8eb6bfce"
 uuid = "61eb1bfa-7361-4325-ad38-22787b887f55"
-version = "1.5.3"
+version = "1.6.0"
 
 [[deps.GPUToolbox]]
 git-tree-sha1 = "15d8b0f5a6dca9bf8c02eeaf6687660dafa638d0"
@@ -1302,9 +1302,9 @@ version = "0.4.10"
 
 [[deps.KernelAbstractions]]
 deps = ["Adapt", "Atomix", "InteractiveUtils", "MacroTools", "PrecompileTools", "Requires", "StaticArrays", "UUIDs"]
-git-tree-sha1 = "602c0e9efadafb8abfe8281c3fbf9cf6f406fc03"
+git-tree-sha1 = "4efa9cec6f308e0f492ea635421638bff81cf6f8"
 uuid = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
-version = "0.9.35"
+version = "0.9.36"
 weakdeps = ["EnzymeCore", "LinearAlgebra", "SparseArrays"]
 
     [deps.KernelAbstractions.extensions]
@@ -2546,9 +2546,9 @@ weakdeps = ["FlameGraphs"]
 
 [[deps.Tracy]]
 deps = ["ExprTools", "LibTracyClient_jll", "Libdl"]
-git-tree-sha1 = "16439d004690d4086da35528f0c6b4d7006d6dae"
+git-tree-sha1 = "91dbaee0f50faa4357f7e9fc69442c7b6364dfe5"
 uuid = "e689c965-62c8-4b79-b2c5-8359227902fd"
-version = "0.1.4"
+version = "0.1.5"
 
     [deps.Tracy.extensions]
     TracyProfilerExt = "TracyProfiler_jll"
