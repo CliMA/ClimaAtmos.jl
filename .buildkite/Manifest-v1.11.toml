@@ -410,9 +410,9 @@ version = "0.2.15"
 
 [[deps.ClimaParams]]
 deps = ["TOML"]
-git-tree-sha1 = "def266f395ac840b9aa530ed888ac6bb2b9726b4"
+git-tree-sha1 = "8f76fb84975762ac8e12fadcb87992b2a92e3966"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "0.10.33"
+version = "0.10.35"
 
 [[deps.ClimaReproducibilityTests]]
 deps = ["OrderedCollections", "PrettyTables"]
@@ -452,9 +452,9 @@ version = "0.1.13"
 
 [[deps.CloudMicrophysics]]
 deps = ["ClimaParams", "DocStringExtensions", "ForwardDiff", "LazyArtifacts", "LogExpFunctions", "QuadGK", "RootSolvers", "SpecialFunctions", "Thermodynamics"]
-git-tree-sha1 = "55810bafe2bc9e0fb9e2a5301ad5009939046690"
+git-tree-sha1 = "7bc112bf39c90925ca3856ac0fcb4c68d45c952f"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.24.1"
+version = "0.24.2"
 
     [deps.CloudMicrophysics.extensions]
     EmulatorModelsExt = ["DataFrames", "MLJ"]
@@ -2263,9 +2263,9 @@ version = "0.9.4"
 
 [[deps.Sixel]]
 deps = ["Dates", "FileIO", "ImageCore", "IndirectArrays", "OffsetArrays", "REPL", "libsixel_jll"]
-git-tree-sha1 = "a8dd0ed8a9e277013fdd4da1a413c748b349b7ec"
+git-tree-sha1 = "0494aed9501e7fb65daba895fb7fd57cc38bc743"
 uuid = "45858cf5-a6b0-47a3-bbea-62219f50df47"
-version = "0.1.4"
+version = "0.1.5"
 
 [[deps.SnoopCompile]]
 deps = ["AbstractTrees", "FlameGraphs", "InteractiveUtils", "OrderedCollections", "Printf", "Profile", "Serialization", "SnoopCompileCore", "YAML"]
