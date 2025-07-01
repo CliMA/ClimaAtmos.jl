@@ -94,23 +94,21 @@ function get_atmos(config::AtmosConfig, params)
                                      Implicit() : Explicit(),
         call_cloud_diagnostics_per_stage,
 
-        # AtmosForcing
-        forcing_type,
+        # SCMSetup - Single-Column Model components
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         external_forcing = get_external_forcing_model(parsed_args, FT),
-
-        # AtmosAdvection  
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
         advection_test,
+        scm_coriolis = get_scm_coriolis(parsed_args, FT),
 
         # AtmosRadiation
         radiation_mode,
         ozone,
         co2,
         insolation = get_insolation_form(parsed_args),
+        held_suarez_forcing = forcing_type,
 
         # AtmosTurbconv - Turbulence & Convection
-        scm_coriolis = get_scm_coriolis(parsed_args, FT),
         edmfx_model,
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
         sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),

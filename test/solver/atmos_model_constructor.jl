@@ -47,7 +47,7 @@ end
             :radiation_mode => nothing,
             :ozone => nothing,
             :co2 => nothing,
-            :forcing_type => nothing,
+            :held_suarez_forcing => nothing,
             :turbconv_model => nothing,
             :non_orographic_gravity_wave => nothing,
             :orographic_gravity_wave => nothing,
@@ -78,7 +78,7 @@ end
             ),
             ozone = CA.IdealizedOzone(),
             co2 = CA.FixedCO2(),
-            forcing_type = CA.HeldSuarezForcing(),
+            held_suarez_forcing = CA.HeldSuarezForcing(),
             hyperdiff = CA.ClimaHyperdiffusion(;
                 ν₄_vorticity_coeff = 1e15,
                 ν₄_scalar_coeff = 1e15,
@@ -94,7 +94,7 @@ end
         @test model.radiation_mode isa RRTMGPI.ClearSkyRadiation
         @test model.ozone isa CA.IdealizedOzone
         @test model.co2 isa CA.FixedCO2
-        @test model.forcing_type isa CA.HeldSuarezForcing
+        @test model.held_suarez_forcing isa CA.HeldSuarezForcing
         @test model.hyperdiff isa CA.ClimaHyperdiffusion
         @test model.disable_surface_flux_tendency == true
 

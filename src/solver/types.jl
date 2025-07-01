@@ -520,6 +520,22 @@ end
 # Grouped structs to reduce AtmosModel type parameters
 
 """
+    SCMSetup
+
+Groups Single-Column Model and Large-Eddy Simulation specific forcing, advection, and setup models.
+
+These components are primarily used internally for testing, calibration, and research purposes
+with single-column model setups. Most external users will not need these components.
+"""
+Base.@kwdef struct SCMSetup{S, EF, LA, AT, SC}
+    subsidence::S = nothing
+    external_forcing::EF = nothing
+    ls_adv::LA = nothing
+    advection_test::AT = nothing
+    scm_coriolis::SC = nothing
+end
+
+"""
     AtmosWater
 
 Groups moisture-related models and types.
@@ -533,36 +549,16 @@ Base.@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS}
 end
 
 """
-    AtmosForcing
-
-Groups forcing-related models and types.
-"""
-Base.@kwdef struct AtmosForcing{F, S, EXTFORCING}
-    forcing_type::F = nothing
-    subsidence::S = nothing
-    external_forcing::EXTFORCING = nothing
-end
-
-"""
     AtmosRadiation
 
 Groups radiation-related models and types.
 """
-Base.@kwdef struct AtmosRadiation{RM, OZ, CO2, IN}
+Base.@kwdef struct AtmosRadiation{RM, OZ, CO2, IN, HS}
     radiation_mode::RM = nothing
     ozone::OZ = nothing
     co2::CO2 = nothing
     insolation::IN = nothing
-end
-
-"""
-    AtmosAdvection
-
-Groups advection-related models and types.
-"""
-Base.@kwdef struct AtmosAdvection{LA, AT}
-    ls_adv::LA = nothing
-    advection_test::AT = nothing
+    held_suarez_forcing::HS = nothing
 end
 
 """
@@ -570,8 +566,7 @@ end
 
 Groups turbulence convection-related models and types.
 """
-Base.@kwdef struct AtmosTurbconv{EC, EDMFX, TCM, SAM, SEDM, SNPM, SMM, SL}
-    scm_coriolis::EC = nothing
+Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SMM, SL}
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     sgs_adv_mode::SAM = nothing
@@ -613,20 +608,18 @@ Base.@kwdef struct AtmosSurface{ST, SM, SA}
 end
 
 # Add broadcastable for the new grouped types
+Base.broadcastable(x::SCMSetup) = tuple(x)
 Base.broadcastable(x::AtmosWater) = tuple(x)
-Base.broadcastable(x::AtmosForcing) = tuple(x)
 Base.broadcastable(x::AtmosRadiation) = tuple(x)
-Base.broadcastable(x::AtmosAdvection) = tuple(x)
 Base.broadcastable(x::AtmosTurbconv) = tuple(x)
 Base.broadcastable(x::AtmosGravityWave) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
 
-struct AtmosModel{H, F, R, A, TC, GW, HD, VD, SP, SU, NU}
+struct AtmosModel{H, SCM, R, TC, GW, HD, VD, SP, SU, NU}
     hydrology::H
-    forcing::F
+    scm_setup::SCM
     radiation::R
-    advection::A
     turbconv::TC
     gravity_wave::GW
     hyperdiff::HD
@@ -642,14 +635,13 @@ end
 # Map grouped struct types to their names in AtmosModel struct
 const ATMOS_MODEL_GROUPS = (
     (AtmosWater, :hydrology),
-    (AtmosForcing, :forcing),
     (AtmosRadiation, :radiation),
-    (AtmosAdvection, :advection),
     (AtmosTurbconv, :turbconv),
     (AtmosGravityWave, :gravity_wave),
     (AtmosSponge, :sponge),
     (AtmosSurface, :surface),
     (AtmosNumerics, :numerics),
+    (SCMSetup, :scm_setup),
 )
 
 # Auto-generate map from property_name to group_field
@@ -724,9 +716,8 @@ This constructor provides sensible defaults for a minimal dry atmospheric model 
 All model components are automatically organized into appropriate grouped sub-structs 
 internally:
 - [`AtmosWater`](@ref)
-- [`AtmosForcing`](@ref)
+- [`SCMSetup`](@ref)
 - [`AtmosRadiation`](@ref)
-- [`AtmosAdvection`](@ref)
 - [`AtmosTurbconv`](@ref)
 - [`AtmosGravityWave`](@ref)
 - [`AtmosSponge`](@ref)
@@ -742,7 +733,6 @@ model = AtmosModel()  # Creates a basic dry atmospheric model
 # Example: Basic dry model with forcing
 ```julia
 model = AtmosModel(;
-    forcing_type = HeldSuarezForcing(),
     hyperdiff = ClimaHyperdiffusion(; 
         ν₄_vorticity_coeff = 1e15, 
         ν₄_scalar_coeff = 1e15, 
@@ -780,23 +770,22 @@ The default AtmosModel provides:
 - `noneq_cloud_formation_mode`: Explicit(), Implicit()
 - `call_cloud_diagnostics_per_stage`: nothing or CallCloudDiagnosticsPerStage()
 
+## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
+Internal testing and calibration components for single-column setups:
+- `subsidence`: nothing or Subsidence() instances (Bomex, Rico, DYCOMS, ISDAC, etc.)
+- `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
+- `ls_adv`: nothing or LargeScaleAdvection() instances
+- `advection_test`: nothing or boolean
+- `scm_coriolis`: nothing or SCMCoriolis() instances
+
 ## AtmosRadiation
 - `radiation_mode`: RRTMGPI.ClearSkyRadiation(), RRTMGPI.AllSkyRadiation(), etc.
 - `ozone`: IdealizedOzone(), PrescribedOzone()
 - `co2`: FixedCO2(), MaunaLoaCO2()
 - `insolation`: IdealizedInsolation(), TimeVaryingInsolation(), etc.
-
-## AtmosForcing
-- `forcing_type`: nothing, HeldSuarezForcing()
-- `subsidence`: nothing or Subsidence() instances
-- `external_forcing`: nothing or external forcing objects
-
-## AtmosAdvection
-- `ls_adv`: nothing or LargeScaleAdvection() instances
-- `advection_test`: nothing or boolean
+- `held_suarez_forcing`: nothing, HeldSuarezForcing() (atmospheric dynamics forcing)
 
 ## AtmosTurbconv
-- `scm_coriolis`: nothing or SCMCoriolis() instances
 - `edmfx_model`: EDMFXModel() instances
 - `turbconv_model`: nothing, PrognosticEDMFX(), DiagnosticEDMFX(), EDOnlyEDMFX()
 - `sgs_adv_mode`, `sgs_entr_detr_mode`, `sgs_nh_pressure_mode`, `sgs_mf_mode`: Explicit(), Implicit()
@@ -831,9 +820,11 @@ function AtmosModel(; kwargs...)
     group_kwargs, atmos_model_kwargs = _partition_atmos_model_kwargs(kwargs)
 
     moisture = AtmosWater(; group_kwargs[:hydrology]...)
-    forcing = AtmosForcing(; group_kwargs[:forcing]...)
+
+    # Create SCM forcing directly
+    scm_setup = SCMSetup(; group_kwargs[:scm_setup]...)
+
     radiation = AtmosRadiation(; group_kwargs[:radiation]...)
-    advection = AtmosAdvection(; group_kwargs[:advection]...)
     turbconv = AtmosTurbconv(; group_kwargs[:turbconv]...)
     gravity_wave = AtmosGravityWave(; group_kwargs[:gravity_wave]...)
     sponge = AtmosSponge(; group_kwargs[:sponge]...)
@@ -847,9 +838,8 @@ function AtmosModel(; kwargs...)
 
     return AtmosModel{
         typeof(moisture),
-        typeof(forcing),
+        typeof(scm_setup),
         typeof(radiation),
-        typeof(advection),
         typeof(turbconv),
         typeof(gravity_wave),
         typeof(hyperdiff),
@@ -859,9 +849,8 @@ function AtmosModel(; kwargs...)
         typeof(numerics),
     }(
         moisture,
-        forcing,
+        scm_setup,
         radiation,
-        advection,
         turbconv,
         gravity_wave,
         hyperdiff,
@@ -966,7 +955,7 @@ Create a dry atmospheric model with sensible defaults for dry simulations.
 ```julia
 model = DryAtmosModel(;
     radiation_mode = RRTMGPI.GrayRadiation(false, false),
-    forcing_type = HeldSuarezForcing(),
+    held_suarez_forcing = HeldSuarezForcing(),
     hyperdiff = ClimaHyperdiffusion(; ν₄_vorticity_coeff = 1e15, ν₄_scalar_coeff = 1e15, divergence_damping_factor = 1.0)
 )
 ```
