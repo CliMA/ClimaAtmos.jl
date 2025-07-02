@@ -448,7 +448,7 @@ compute_husraup!(out, state, cache, time) = compute_husraup!(
     state,
     cache,
     time,
-    cache.atmos.precip_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_husraup!(
@@ -456,7 +456,7 @@ compute_husraup!(
     _,
     _,
     _,
-    precip_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft rain water specific humidity with a 1M precip model and with EDMFX",
@@ -467,7 +467,7 @@ function compute_husraup!(
     state,
     cache,
     time,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -496,7 +496,7 @@ compute_hussnup!(out, state, cache, time) = compute_hussnup!(
     state,
     cache,
     time,
-    cache.atmos.precip_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_hussnup!(
@@ -504,7 +504,7 @@ compute_hussnup!(
     _,
     _,
     _,
-    precip_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft snow specific humidity with a 1M precip model and with EDMFX",
@@ -515,7 +515,7 @@ function compute_hussnup!(
     state,
     cache,
     time,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -1042,7 +1042,7 @@ compute_husraen!(out, state, cache, time) = compute_husraen!(
     state,
     cache,
     time,
-    cache.atmos.precip_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_husraen!(
@@ -1050,7 +1050,7 @@ compute_husraen!(
     _,
     _,
     _,
-    precip_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft rain specific humidity and with a 1M model and with EDMFX",
@@ -1061,7 +1061,7 @@ function compute_husraen!(
     state,
     cache,
     time,
-    precip_model_model::Microphysics1Moment,
+    microphysics_model_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
@@ -1091,7 +1091,7 @@ compute_hussnen!(out, state, cache, time) = compute_hussnen!(
     state,
     cache,
     time,
-    cache.atmos.precip_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_hussnen!(
@@ -1099,7 +1099,7 @@ compute_hussnen!(
     _,
     _,
     _,
-    precip_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft snow specific humidity and with a 1M model and with EDMFX",
@@ -1110,7 +1110,7 @@ function compute_hussnen!(
     state,
     cache,
     time,
-    precip_model_model::Microphysics1Moment,
+    microphysics_model_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
@@ -1256,7 +1256,7 @@ compute_edt!(out, state, cache, time) = compute_edt!(
     state,
     cache,
     time,
-    cache.atmos.vert_diff,
+    cache.atmos.vertical_diffusion,
     cache.atmos.turbconv_model,
 )
 compute_edt!(_, _, _, _, vert_diff::T1, turbconv_model::T2) where {T1, T2} =
@@ -1311,7 +1311,7 @@ compute_evu!(out, state, cache, time) = compute_evu!(
     state,
     cache,
     time,
-    cache.atmos.vert_diff,
+    cache.atmos.vertical_diffusion,
     cache.atmos.turbconv_model,
 )
 compute_evu!(_, _, _, _, vert_diff::T1, turbconv_model::T2) where {T1, T2} =

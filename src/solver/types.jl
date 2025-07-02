@@ -191,9 +191,8 @@ Use monthly-average cloud properties from ERA5.
 struct PrescribedCloudInRadiation <: AbstractCloudInRadiation end
 
 abstract type AbstractSurfaceTemperature end
-struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end
-Base.@kwdef struct PrognosticSurfaceTemperature{FT} <:
-                   AbstractSurfaceTemperature
+struct PrescribedSST <: AbstractSurfaceTemperature end
+Base.@kwdef struct SlabOceanSST{FT} <: AbstractSurfaceTemperature
     # optional slab ocean parameters:
     depth_ocean::FT = 40 # ocean mixed layer depth [m]
     ρ_ocean::FT = 1020 # ocean density [kg / m³]
@@ -545,7 +544,7 @@ Groups moisture-related models and types.
 """
 Base.@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS}
     moisture_model::MM = nothing
-    precip_model::PM = nothing
+    microphysics_model::PM = nothing
     cloud_model::CM = nothing
     noneq_cloud_formation_mode::NCFM = nothing
     call_cloud_diagnostics_per_stage::CCDPS = nothing
@@ -624,7 +623,7 @@ struct AtmosModel{W, SCM, R, TC, GW, VD, SP, SU, NU}
     radiation::R
     turbconv::TC
     gravity_wave::GW
-    vert_diff::VD
+    vertical_diffusion::VD
     sponge::SP
     surface::SU
     numerics::NU
@@ -755,7 +754,7 @@ model = AtmosModel(;
 ```julia
 model = AtmosModel(;
     moisture_model = EquilMoistModel(),
-    precip_model = Microphysics0Moment(),
+    microphysics_model = Microphysics0Moment(),
     radiation_mode = RRTMGPI.AllSkyRadiation(),
     ozone = IdealizedOzone(),
     co2 = FixedCO2()
@@ -765,7 +764,7 @@ model = AtmosModel(;
 # Default Configuration
 The default AtmosModel provides:
 - **Dry atmosphere**: DryModel() with NoPrecipitation()
-- **Basic surface**: PrescribedSurfaceTemperature() with ZonallySymmetricSST()
+- **Basic surface**: PrescribedSST() with ZonallySymmetricSST()
 - **Simple clouds**: GridScaleCloud()
 - **Idealized insolation**: IdealizedInsolation()
 - **Conservative numerics**: First-order upwinding with Explicit() timestepping
@@ -775,7 +774,7 @@ The default AtmosModel provides:
 
 ## AtmosWater
 - `moisture_model`: DryModel(), EquilMoistModel(), NonEquilMoistModel()
-- `precip_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
+- `microphysics_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
 - `cloud_model`: GridScaleCloud(), QuadratureCloud(), SGSQuadratureCloud()
 - `noneq_cloud_formation_mode`: Explicit(), Implicit()
 - `call_cloud_diagnostics_per_stage`: nothing or CallCloudDiagnosticsPerStage()
@@ -813,7 +812,7 @@ Internal testing and calibration components for single-column setups:
 
 ## AtmosSurface
 - `sfc_temperature`: ZonallySymmetricSST(), ZonallyAsymmetricSST(), RCEMIPIISST(), ExternalTVColumnSST()
-- `surface_model`: PrescribedSurfaceTemperature(), PrognosticSurfaceTemperature()
+- `surface_model`: PrescribedSST(), SlabOceanSST()
 - `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
 
 ## AtmosNumerics
@@ -824,7 +823,7 @@ Internal testing and calibration components for single-column setups:
 - `hyperdiff`: nothing or ClimaHyperdiffusion()
 
 ## Top-level Options  
-- `vert_diff`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
+- `vertical_diffusion`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
 - `disable_surface_flux_tendency`: Bool
 """
 function AtmosModel(; kwargs...)
@@ -850,7 +849,7 @@ function AtmosModel(; kwargs...)
     numerics =
         _create_grouped_struct(AtmosNumerics, atmos_model_kwargs, group_kwargs)
 
-    vert_diff = get(atmos_model_kwargs, :vert_diff, nothing)
+    vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
 
@@ -860,7 +859,7 @@ function AtmosModel(; kwargs...)
         typeof(radiation),
         typeof(turbconv),
         typeof(gravity_wave),
-        typeof(vert_diff),
+        typeof(vertical_diffusion),
         typeof(sponge),
         typeof(surface),
         typeof(numerics),
@@ -870,7 +869,7 @@ function AtmosModel(; kwargs...)
         radiation,
         turbconv,
         gravity_wave,
-        vert_diff,
+        vertical_diffusion,
         sponge,
         surface,
         numerics,
@@ -895,9 +894,9 @@ end
 
 const _DEFAULT_ATMOS_MODEL_KWARGS = (
     moisture_model = DryModel(),
-    precip_model = NoPrecipitation(),
+    microphysics_model = NoPrecipitation(),
     cloud_model = GridScaleCloud(),
-    surface_model = PrescribedSurfaceTemperature(),
+    surface_model = PrescribedSST(),
     sfc_temperature = ZonallySymmetricSST(),
     insolation = IdealizedInsolation(),
 
@@ -994,9 +993,9 @@ model = DryAtmosModel(;
 function DryAtmosModel(; kwargs...)
     defaults = (
         moisture_model = DryModel(),
-        precip_model = NoPrecipitation(),
+        microphysics_model = NoPrecipitation(),
         cloud_model = GridScaleCloud(),
-        surface_model = PrescribedSurfaceTemperature(),
+        surface_model = PrescribedSST(),
         sfc_temperature = ZonallySymmetricSST(),
         insolation = IdealizedInsolation(),
     )
@@ -1011,9 +1010,9 @@ Create an equilibrium moist atmospheric model with sensible defaults for moist s
 function EquilMoistAtmosModel(; kwargs...)
     defaults = (
         moisture_model = EquilMoistModel(),
-        precip_model = Microphysics0Moment(),
+        microphysics_model = Microphysics0Moment(),
         cloud_model = GridScaleCloud(),
-        surface_model = PrescribedSurfaceTemperature(),
+        surface_model = PrescribedSST(),
         sfc_temperature = ZonallySymmetricSST(),
         insolation = IdealizedInsolation(),
         ozone = IdealizedOzone(),
@@ -1030,10 +1029,10 @@ Create a non-equilibrium moist atmospheric model with sensible defaults.
 function NonEquilMoistAtmosModel(; kwargs...)
     defaults = (
         moisture_model = NonEquilMoistModel(),
-        precip_model = Microphysics1Moment(),
+        microphysics_model = Microphysics1Moment(),
         cloud_model = GridScaleCloud(),
         noneq_cloud_formation_mode = Explicit(),
-        surface_model = PrescribedSurfaceTemperature(),
+        surface_model = PrescribedSST(),
         sfc_temperature = ZonallySymmetricSST(),
         insolation = IdealizedInsolation(),
         ozone = IdealizedOzone(),

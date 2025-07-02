@@ -36,9 +36,9 @@ end
         expected_defaults = Dict(
             # Core physics defaults
             :moisture_model => CA.DryModel,
-            :precip_model => CA.NoPrecipitation,
+            :microphysics_model => CA.NoPrecipitation,
             :cloud_model => CA.GridScaleCloud,
-            :surface_model => CA.PrescribedSurfaceTemperature,
+            :surface_model => CA.PrescribedSST,
             :sfc_temperature => CA.ZonallySymmetricSST,
             :insolation => CA.IdealizedInsolation,
             :disable_surface_flux_tendency => false,
@@ -53,7 +53,7 @@ end
             :viscous_sponge => nothing,
             :rayleigh_sponge => nothing,
             :hyperdiff => nothing,
-            :vert_diff => nothing,
+            :vertical_diffusion => nothing,
         )
 
         test_defaults(model, expected_defaults)
@@ -68,7 +68,7 @@ end
         # Test various override scenarios including complex parameter types
         model = CA.AtmosModel(;
             moisture_model = CA.EquilMoistModel(),
-            precip_model = CA.Microphysics1Moment(),
+            microphysics_model = CA.Microphysics1Moment(),
             cloud_model = CA.QuadratureCloud(CA.SGSQuadrature(FT)),
             radiation_mode = RRTMGPI.ClearSkyRadiation(
                 false,
@@ -88,7 +88,7 @@ end
 
         # Test customized values
         @test model.moisture_model isa CA.EquilMoistModel
-        @test model.precip_model isa CA.Microphysics1Moment
+        @test model.microphysics_model isa CA.Microphysics1Moment
         @test model.cloud_model isa CA.QuadratureCloud
         @test model.radiation_mode isa RRTMGPI.ClearSkyRadiation
         @test model.ozone isa CA.IdealizedOzone
@@ -98,7 +98,7 @@ end
         @test model.disable_surface_flux_tendency == true
 
         # Test that non-overridden defaults are preserved
-        @test model.surface_model isa CA.PrescribedSurfaceTemperature
+        @test model.surface_model isa CA.PrescribedSST
         @test model.insolation isa CA.IdealizedInsolation
         @test model.numerics.diff_mode isa CA.Explicit
     end
@@ -113,7 +113,7 @@ end
 
         for (name, model, expected_moisture_type) in models
             @test model.moisture_model isa expected_moisture_type
-            @test model.surface_model isa CA.PrescribedSurfaceTemperature  # default preserved
+            @test model.surface_model isa CA.PrescribedSST  # default preserved
             @test model.numerics.diff_mode isa CA.Explicit  # default preserved
             @test isnothing(model.numerics.hyperdiff)  # default preserved
         end
@@ -125,15 +125,15 @@ end
         # Test basic dry model
         dry_model = CA.AtmosModel(;
             moisture_model = CA.DryModel(),
-            surface_model = CA.PrescribedSurfaceTemperature(),
+            surface_model = CA.PrescribedSST(),
         )
         @test dry_model.moisture_model isa CA.DryModel
-        @test dry_model.surface_model isa CA.PrescribedSurfaceTemperature
+        @test dry_model.surface_model isa CA.PrescribedSST
 
         # Test moist model with radiation
         moist_model = CA.AtmosModel(;
             moisture_model = CA.EquilMoistModel(),
-            precip_model = CA.Microphysics0Moment(),
+            microphysics_model = CA.Microphysics0Moment(),
             radiation_mode = RRTMGPI.ClearSkyRadiation(
                 false,
                 false,
@@ -144,6 +144,7 @@ end
             co2 = CA.FixedCO2(),
         )
         @test moist_model.moisture_model isa CA.EquilMoistModel
+        @test moist_model.microphysics_model isa CA.Microphysics0Moment
         @test moist_model.radiation_mode isa RRTMGPI.ClearSkyRadiation
         @test moist_model.ozone isa CA.IdealizedOzone
 

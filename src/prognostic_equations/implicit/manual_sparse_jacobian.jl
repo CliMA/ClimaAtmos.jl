@@ -169,8 +169,9 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             )...,
             (@name(c.uₕ), @name(c.uₕ)) =>
                 !isnothing(atmos.turbconv_model) ||
-                    !disable_momentum_vertical_diffusion(atmos.vert_diff) ?
-                similar(Y.c, TridiagonalRow) : FT(-1) * I,
+                    !disable_momentum_vertical_diffusion(
+                        atmos.vertical_diffusion,
+                    ) ? similar(Y.c, TridiagonalRow) : FT(-1) * I,
         )
     elseif atmos.moisture_model isa DryModel
         MatrixFields.unrolled_map(
@@ -555,7 +556,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         if (
             MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke)) ||
             !isnothing(p.atmos.turbconv_model) ||
-            !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
+            !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         )
             @. ᶜdiffusion_u_matrix =
                 ᶜadvdivᵥ_matrix() ⋅
@@ -650,7 +651,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
         if (
             !isnothing(p.atmos.turbconv_model) ||
-            !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
+            !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         )
             ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
             @. ∂ᶜuₕ_err_∂ᶜuₕ =

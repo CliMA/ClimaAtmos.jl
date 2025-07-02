@@ -125,12 +125,16 @@ end
 
 function get_surface_model(parsed_args)
     prognostic_surface_name = parsed_args["prognostic_surface"]
-    return if prognostic_surface_name in
-              ("false", false, "PrescribedSurfaceTemperature")
-        PrescribedSurfaceTemperature()
-    elseif prognostic_surface_name in
-           ("true", true, "PrognosticSurfaceTemperature")
-        PrognosticSurfaceTemperature()
+    return if prognostic_surface_name in ("false", false, "PrescribedSST")
+        PrescribedSST()
+    elseif prognostic_surface_name in ("true", true, "SlabOceanSST")
+        SlabOceanSST()
+    elseif prognostic_surface_name == "PrognosticSurfaceTemperature"
+        @warn "The `PrognosticSurfaceTemperature` option is deprecated. Use `SlabOceanSST` instead."
+        SlabOceanSST()
+    elseif prognostic_surface_name == "PrescribedSurfaceTemperature"
+        @warn "The `PrescribedSurfaceTemperature` option is deprecated. Use `PrescribedSST` instead."
+        PrescribedSST()
     else
         error("Uncaught surface model `$prognostic_surface_name`.")
     end
@@ -310,18 +314,18 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function get_precipitation_model(parsed_args)
-    precip_model = parsed_args["precip_model"]
-    return if precip_model == nothing || precip_model == "nothing"
+function get_microphysics_model(parsed_args)
+    microphysics_model = parsed_args["precip_model"]
+    return if isnothing(microphysics_model) || microphysics_model == "nothing"
         NoPrecipitation()
-    elseif precip_model == "0M"
+    elseif microphysics_model == "0M"
         Microphysics0Moment()
-    elseif precip_model == "1M"
+    elseif microphysics_model == "1M"
         Microphysics1Moment()
-    elseif precip_model == "2M"
+    elseif microphysics_model == "2M"
         Microphysics2Moment()
     else
-        error("Invalid precip_model $(precip_model)")
+        error("Invalid microphysics_model $(microphysics_model)")
     end
 end
 

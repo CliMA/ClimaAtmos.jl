@@ -272,7 +272,7 @@ prognostic_tke:
   help: "A flag for prognostic TKE [`false` (default), `true`]"
   value: false
 prognostic_surface:
-  help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `PrognosticSurfaceTemperature`, `PrescribedSurfaceTemperature`]"
+  help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `SlabOceanSST`, `PrescribedSST`]"
   value: false
 albedo_model:
   help: "Variable surface albedo [`ConstantAlbedo` (default), `RegressionFunctionAlbedo`, `CouplerAlbedo`]"
