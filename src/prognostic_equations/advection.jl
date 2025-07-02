@@ -368,7 +368,6 @@ function edmfx_sgs_vertical_advection_tendency!(
             FT = eltype(params)
             (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜtsʲs) = p.precomputed
 
-            ᶜinv_ρ̂_∂ρ̂∂z = (@. lazy(divide_by_ρa(FT(1), Y.c.sgsʲs.:($$j).ρa, FT(0), Y.c.ρ, turbconv_model) * ᶜgradᵥ(ᶠinterp(Y.c.sgsʲs.:($$j).ρa))))
             ᶠwₗ³ʲs = (@. lazy( CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₗʲs.:($$j))))))
             ᶠwᵢ³ʲs = (@. lazy( CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwᵢʲs.:($$j))))))
             ᶠwᵣ³ʲs = (@. lazy( CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwᵣʲs.:($$j))))))
@@ -376,7 +375,7 @@ function edmfx_sgs_vertical_advection_tendency!(
 
             ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
 
-            # Flux form vertical advection of rho * area with sedimantation contributions
+            # Flux form vertical advection of rho * area with sedimentation contributions
             vtt = vertical_transport(ᶜρʲs.:($j), ᶠwₗ³ʲs, (@. lazy(ᶜa * Y.c.sgsʲs.:($$j).q_liq)), dt, edmfx_upwinding)
             @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
             vtt = vertical_transport(ᶜρʲs.:($j), ᶠwᵢ³ʲs, (@. lazy(ᶜa * Y.c.sgsʲs.:($$j).q_ice)), dt, edmfx_upwinding)
@@ -400,25 +399,79 @@ function edmfx_sgs_vertical_advection_tendency!(
             @. Yₜ.c.sgsʲs.:($$j).q_tot += (1 - Y.c.sgsʲs.:($$j).q_tot) * va
             @. Yₜ.c.sgsʲs.:($$j).q_sno += va
 
-            # q_tot and moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
+            # mse advective form advection with sedimentation velocity
+            (; ᶜΦ) = p.core
+            thp = CAP.thermodynamics_params(params)
+            ᶜmseₗ = (@. lazy(Y.c.sgsʲs.:($$j).q_liq * (TD.internal_energy_liquid(thp, ᶜtsʲs.:($$j)) + TD.gas_constant_air(thp, ᶜtsʲs.:($$j)) * TD.air_temperature(thp, ᶜtsʲs.:($$j)) + ᶜΦ)))
+            ᶜmseᵢ = (@. lazy(Y.c.sgsʲs.:($$j).q_ice * (TD.internal_energy_ice(thp,    ᶜtsʲs.:($$j)) + TD.gas_constant_air(thp, ᶜtsʲs.:($$j)) * TD.air_temperature(thp, ᶜtsʲs.:($$j)) + ᶜΦ)))
+            ᶜmseᵣ = (@. lazy(Y.c.sgsʲs.:($$j).q_rai * (TD.internal_energy_liquid(thp, ᶜtsʲs.:($$j)) + TD.gas_constant_air(thp, ᶜtsʲs.:($$j)) * TD.air_temperature(thp, ᶜtsʲs.:($$j)) + ᶜΦ)))
+            ᶜmseₛ = (@. lazy(Y.c.sgsʲs.:($$j).q_sno * (TD.internal_energy_ice(thp,    ᶜtsʲs.:($$j)) + TD.gas_constant_air(thp, ᶜtsʲs.:($$j)) * TD.air_temperature(thp, ᶜtsʲs.:($$j)) + ᶜΦ)))
+
+            va = vertical_advection(ᶠwₗ³ʲs, ᶜmseₗ, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse += va
+            va = vertical_advection(ᶠwᵢ³ʲs, ᶜmseᵢ, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse += va
+            va = vertical_advection(ᶠwᵣ³ʲs, ᶜmseᵣ, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse += va
+            va = vertical_advection(ᶠwₛ³ʲs, ᶜmseₛ, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse += va
+
+            # mse, q_tot and moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
+            ᶜinv_ρ̂ = (@. lazy(divide_by_ρa(FT(1), Y.c.sgsʲs.:($$j).ρa, FT(0), Y.c.ρ, turbconv_model)))
+            ᶜ∂ρ̂∂zₗ = (@. lazy(upwind_biased_grad(-1 * Geometry.WVector(ᶜwₗʲs.:($$j)), Y.c.sgsʲs.:($$j).ρa)))
+            ᶜ∂ρ̂∂zᵢ = (@. lazy(upwind_biased_grad(-1 * Geometry.WVector(ᶜwᵢʲs.:($$j)), Y.c.sgsʲs.:($$j).ρa)))
+            ᶜ∂ρ̂∂zᵣ = (@. lazy(upwind_biased_grad(-1 * Geometry.WVector(ᶜwᵣʲs.:($$j)), Y.c.sgsʲs.:($$j).ρa)))
+            ᶜ∂ρ̂∂zₛ = (@. lazy(upwind_biased_grad(-1 * Geometry.WVector(ᶜwₛʲs.:($$j)), Y.c.sgsʲs.:($$j).ρa)))
+
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zₗ, CT3(Geometry.WVector(-1 * ᶜwₗʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_liq * (1 - Y.c.sgsʲs.:($$j).q_tot)
+            @. Yₜ.c.sgsʲs.:($$j).q_liq -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zₗ, CT3(Geometry.WVector(-1 * ᶜwₗʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_liq
+            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zₗ, CT3(Geometry.WVector(-1 * ᶜwₗʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_liq * Y.c.sgsʲs.:($$j).mse - ᶜmseₗ)
+
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zᵢ, CT3(Geometry.WVector(-1 * ᶜwᵢʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_ice * (1 - Y.c.sgsʲs.:($$j).q_tot)
+            @. Yₜ.c.sgsʲs.:($$j).q_ice -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zᵢ, CT3(Geometry.WVector(-1 * ᶜwᵢʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_ice
+            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zᵢ, CT3(Geometry.WVector(-1 * ᶜwᵢʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_ice * Y.c.sgsʲs.:($$j).mse - ᶜmseᵢ)
+
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zᵣ, CT3(Geometry.WVector(-1 * ᶜwᵣʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_rai * (1 - Y.c.sgsʲs.:($$j).q_tot)
+            @. Yₜ.c.sgsʲs.:($$j).q_rai -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zᵣ, CT3(Geometry.WVector(-1 * ᶜwᵣʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_rai
+            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zᵣ, CT3(Geometry.WVector(-1 * ᶜwᵣʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_rai * Y.c.sgsʲs.:($$j).mse - ᶜmseᵣ)
+
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zₛ, CT3(Geometry.WVector(-1 * ᶜwₛʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_sno * (1 - Y.c.sgsʲs.:($$j).q_tot)
+            @. Yₜ.c.sgsʲs.:($$j).q_sno -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zₛ, CT3(Geometry.WVector(-1 * ᶜwₛʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_sno
+            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zₛ, CT3(Geometry.WVector(-1 * ᶜwₛʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_sno * Y.c.sgsʲs.:($$j).mse - ᶜmseₛ)
+#=
+            ᶜinv_ρ̂_∂ρ̂∂z = (@. lazy(divide_by_ρa(FT(1), Y.c.sgsʲs.:($$j).ρa, FT(0), Y.c.ρ, turbconv_model) * ᶜgradᵥ(ᶠinterp(Y.c.sgsʲs.:($$j).ρa))))
             @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwₗʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_liq * (1 - Y.c.sgsʲs.:($$j).q_tot)
             @. Yₜ.c.sgsʲs.:($$j).q_liq -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwₗʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_liq
+            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwₗʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_liq * Y.c.sgsʲs.:($$j).mse - ᶜmseₗ)
+
             @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwᵢʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_ice * (1 - Y.c.sgsʲs.:($$j).q_tot)
             @. Yₜ.c.sgsʲs.:($$j).q_ice -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwᵢʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_ice
+            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwᵢʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_ice * Y.c.sgsʲs.:($$j).mse - ᶜmseᵢ)
+
             @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwᵣʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_rai * (1 - Y.c.sgsʲs.:($$j).q_tot)
             @. Yₜ.c.sgsʲs.:($$j).q_rai -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwᵣʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_rai
+            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwᵣʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_rai * Y.c.sgsʲs.:($$j).mse - ᶜmseᵣ)
+
             @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwₛʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_sno * (1 - Y.c.sgsʲs.:($$j).q_tot)
             @. Yₜ.c.sgsʲs.:($$j).q_sno -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwₛʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_sno
-
-            # q_tot and moisture tracer terms proportional to velocity gradients
+            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwₛʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_sno * Y.c.sgsʲs.:($$j).mse - ᶜmseₛ)
+=#
+            # mse, q_tot and moisture tracer terms proportional to velocity gradients
             @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜdivᵥ(ᶠwₗ³ʲs) * Y.c.sgsʲs.:($$j).q_liq * (1 - Y.c.sgsʲs.:($$j).q_tot)
             @. Yₜ.c.sgsʲs.:($$j).q_liq -= ᶜdivᵥ(ᶠwₗ³ʲs) * Y.c.sgsʲs.:($$j).q_liq
+            @. Yₜ.c.sgsʲs.:($$j).mse   -= ᶜdivᵥ(ᶠwₗ³ʲs) * (Y.c.sgsʲs.:($$j).q_liq * Y.c.sgsʲs.:($$j).mse - ᶜmseₗ)
+
             @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜdivᵥ(ᶠwᵢ³ʲs) * Y.c.sgsʲs.:($$j).q_ice * (1 - Y.c.sgsʲs.:($$j).q_tot)
             @. Yₜ.c.sgsʲs.:($$j).q_ice -= ᶜdivᵥ(ᶠwᵢ³ʲs) * Y.c.sgsʲs.:($$j).q_ice
+            @. Yₜ.c.sgsʲs.:($$j).mse   -= ᶜdivᵥ(ᶠwᵢ³ʲs) * (Y.c.sgsʲs.:($$j).q_ice * Y.c.sgsʲs.:($$j).mse - ᶜmseᵢ)
+
             @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜdivᵥ(ᶠwᵣ³ʲs) * Y.c.sgsʲs.:($$j).q_rai * (1 - Y.c.sgsʲs.:($$j).q_tot)
             @. Yₜ.c.sgsʲs.:($$j).q_rai -= ᶜdivᵥ(ᶠwᵣ³ʲs) * Y.c.sgsʲs.:($$j).q_rai
+            @. Yₜ.c.sgsʲs.:($$j).mse   -= ᶜdivᵥ(ᶠwᵣ³ʲs) * (Y.c.sgsʲs.:($$j).q_rai * Y.c.sgsʲs.:($$j).mse - ᶜmseᵣ)
+
             @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜdivᵥ(ᶠwₛ³ʲs) * Y.c.sgsʲs.:($$j).q_sno * (1 - Y.c.sgsʲs.:($$j).q_tot)
             @. Yₜ.c.sgsʲs.:($$j).q_sno -= ᶜdivᵥ(ᶠwₛ³ʲs) * Y.c.sgsʲs.:($$j).q_sno
+            @. Yₜ.c.sgsʲs.:($$j).mse   -= ᶜdivᵥ(ᶠwₛ³ʲs) * (Y.c.sgsʲs.:($$j).q_sno * Y.c.sgsʲs.:($$j).mse - ᶜmseₛ)
        end
     end
 end
