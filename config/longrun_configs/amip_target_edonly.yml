@@ -1,4 +1,4 @@
-h_elem: 16
+h_elem: 8
 z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
@@ -15,12 +15,16 @@ co2_model: maunaloa
 prescribe_ozone: true
 aerosol_radiation: true
 edmfx_sgs_diffusive_flux: true
+netcdf_interpolation_num_points: [90, 45, 31]
 prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05", "OC1", "OC2", "SO4", "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
 surface_setup: "DefaultMoninObukhov"
 turbconv: "edonly_edmfx"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-dt: "120secs"
+dt: "240secs"
 t_end: "120days"
 toml: [toml/longrun_aquaplanet.toml]
 netcdf_output_at_levels: true
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    period: 5days

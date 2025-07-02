@@ -1,8 +1,9 @@
+h_elem: 8
 z_max: 60000.0
-z_elem: 31
-dz_bottom: 50.0
-dt: "400secs"
-t_end: "1days"
+z_elem: 63
+dz_bottom: 30.0
+dt: "300secs"
+t_end: "120days"
 topography: "Earth"
 rayleigh_sponge: true
 implicit_diffusion: true
