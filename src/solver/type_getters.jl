@@ -398,6 +398,8 @@ function get_initial_condition(parsed_args, atmos)
             atmos.external_forcing.external_forcing_file,
             parsed_args["start_date"],
         )
+    elseif parsed_args["initial_condition"] == "WeatherModel"
+        return ICs.WeatherModel(parsed_args["start_date"], parsed_args["start_time"])
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
