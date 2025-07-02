@@ -826,35 +826,36 @@ Internal testing and calibration components for single-column setups:
 ## Top-level Options  
 - `vert_diff`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
 - `disable_surface_flux_tendency`: Bool
-
 """
 function AtmosModel(; kwargs...)
     group_kwargs, atmos_model_kwargs = _partition_atmos_model_kwargs(kwargs)
 
-    moisture = AtmosWater(; group_kwargs[:water]...)
-
-    # Create SCM forcing directly
-    scm_setup = SCMSetup(; group_kwargs[:scm_setup]...)
-
-    radiation = AtmosRadiation(; group_kwargs[:radiation]...)
-    turbconv = AtmosTurbconv(; group_kwargs[:turbconv]...)
-    gravity_wave = AtmosGravityWave(; group_kwargs[:gravity_wave]...)
-    sponge = AtmosSponge(; group_kwargs[:sponge]...)
-    surface = AtmosSurface(; group_kwargs[:surface]...)
-
-    # Handle numerics - if not provided, create default from individual fields
-    numerics = get(atmos_model_kwargs, :numerics, nothing)
-    if isnothing(numerics)
-        # Create default AtmosNumerics from grouped kwargs if numerics not provided
-        numerics = AtmosNumerics(; group_kwargs[:numerics]...)
-    end
+    # Create grouped structs - use provided complete objects or create from individual fields
+    water = _create_grouped_struct(AtmosWater, atmos_model_kwargs, group_kwargs)
+    scm_setup =
+        _create_grouped_struct(SCMSetup, atmos_model_kwargs, group_kwargs)
+    radiation =
+        _create_grouped_struct(AtmosRadiation, atmos_model_kwargs, group_kwargs)
+    turbconv =
+        _create_grouped_struct(AtmosTurbconv, atmos_model_kwargs, group_kwargs)
+    gravity_wave = _create_grouped_struct(
+        AtmosGravityWave,
+        atmos_model_kwargs,
+        group_kwargs,
+    )
+    sponge =
+        _create_grouped_struct(AtmosSponge, atmos_model_kwargs, group_kwargs)
+    surface =
+        _create_grouped_struct(AtmosSurface, atmos_model_kwargs, group_kwargs)
+    numerics =
+        _create_grouped_struct(AtmosNumerics, atmos_model_kwargs, group_kwargs)
 
     vert_diff = get(atmos_model_kwargs, :vert_diff, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
 
     return AtmosModel{
-        typeof(moisture),
+        typeof(water),
         typeof(scm_setup),
         typeof(radiation),
         typeof(turbconv),
@@ -864,7 +865,7 @@ function AtmosModel(; kwargs...)
         typeof(surface),
         typeof(numerics),
     }(
-        moisture,
+        water,
         scm_setup,
         radiation,
         turbconv,
@@ -875,6 +876,21 @@ function AtmosModel(; kwargs...)
         numerics,
         disable_surface_flux_tendency,
     )
+end
+
+"""
+    _create_grouped_struct(StructType, atmos_model_kwargs, group_kwargs)
+
+Helper function that creates a single grouped struct.
+Uses the ATMOS_MODEL_GROUPS mapping to find the field name from the struct type.
+Uses provided complete object or creates from individual fields.
+"""
+function _create_grouped_struct(StructType, atmos_model_kwargs, group_kwargs)
+    field_name = get(Dict(ATMOS_MODEL_GROUPS), StructType, nothing)
+    @assert !isnothing(field_name) "StructType $StructType not found in ATMOS_MODEL_GROUPS"
+    complete_object = get(atmos_model_kwargs, field_name, nothing)
+    return isnothing(complete_object) ?
+           StructType(; group_kwargs[field_name]...) : complete_object
 end
 
 const _DEFAULT_ATMOS_MODEL_KWARGS = (

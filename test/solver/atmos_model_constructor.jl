@@ -166,6 +166,14 @@ end
     @test model.water.moisture_model isa CA.NonEquilMoistModel
 end
 
+@testset "Complete Grouped Struct Support" begin
+    # Test passing complete grouped struct
+    water = CA.AtmosWater(; moisture_model = CA.EquilMoistModel())
+    model = CA.AtmosModel(; water = water)
+    @test model.water === water
+    @test model.moisture_model isa CA.EquilMoistModel
+end
+
 @testset "Error Handling" begin
     # Test invalid parameter error with helpful message
     @test_throws ErrorException CA.AtmosModel(; w = 2, invalid_param = "test")
