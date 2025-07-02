@@ -20,7 +20,7 @@ function get_atmos(config::AtmosConfig, params)
     FT = eltype(config)
     check_case_consistency(parsed_args)
     moisture_model = get_moisture_model(parsed_args)
-    precip_model = get_precipitation_model(parsed_args)
+    microphysics_model = get_microphysics_model(parsed_args)
     cloud_model = get_cloud_model(parsed_args)
 
     implicit_noneq_cloud_formation =
@@ -92,7 +92,7 @@ function get_atmos(config::AtmosConfig, params)
     atmos = AtmosModel(;
         # AtmosWater - Moisture, Precipitation & Clouds
         moisture_model,
-        precip_model,
+        microphysics_model,
         cloud_model,
         noneq_cloud_formation_mode = implicit_noneq_cloud_formation ?
                                      Implicit() : Explicit(),

@@ -45,7 +45,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
     if (
         p.atmos.moisture_model isa NonEquilMoistModel &&
-        p.atmos.precip_model isa Microphysics1Moment
+        p.atmos.microphysics_model isa Microphysics1Moment
     )
         (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
     end
@@ -117,7 +117,7 @@ function edmfx_sgs_mass_flux_tendency!(
 
         if (
             p.atmos.moisture_model isa NonEquilMoistModel &&
-            p.atmos.precip_model isa Microphysics1Moment
+            p.atmos.microphysics_model isa Microphysics1Moment
         )
             # Liquid, ice, rain and snow specific humidity fluxes
             for j in 1:n
@@ -348,7 +348,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length) = p.precomputed
     if (
         p.atmos.moisture_model isa NonEquilMoistModel &&
-        p.atmos.precip_model isa Microphysics1Moment
+        p.atmos.microphysics_model isa Microphysics1Moment
     )
         (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
     end
@@ -400,7 +400,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
         end
         if (
             p.atmos.moisture_model isa NonEquilMoistModel &&
-            p.atmos.precip_model isa Microphysics1Moment
+            p.atmos.microphysics_model isa Microphysics1Moment
         )
             # Liquid, ice, rain and snow specific humidity diffusion
             α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)

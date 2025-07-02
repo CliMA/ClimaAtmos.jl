@@ -25,7 +25,7 @@ function precipitation_tendency!(
     p,
     t,
     ::EquilMoistModel,
-    precip_model::Microphysics0Moment,
+    microphysics_model::Microphysics0Moment,
     turbconv_model,
 )
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
@@ -61,7 +61,7 @@ function precipitation_tendency!(
     p,
     t,
     ::DryModel,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
     _,
 )
     error("Microphysics1Moment precipitation should not be used with DryModel")
@@ -72,7 +72,7 @@ function precipitation_tendency!(
     p,
     t,
     ::EquilMoistModel,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
     _,
 )
     error(
@@ -85,7 +85,7 @@ function precipitation_tendency!(
     p,
     t,
     ::NonEquilMoistModel,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
     _,
 )
     (; turbconv_model) = p.atmos
@@ -105,7 +105,7 @@ function precipitation_tendency!(
     p,
     t,
     ::NonEquilMoistModel,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
     turbconv_model::DiagnosticEDMFX,
 )
     error("Not implemented yet")
@@ -142,7 +142,7 @@ function precipitation_tendency!(
     p,
     t,
     ::NonEquilMoistModel,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
     # Source terms from EDMFX updrafts
@@ -176,7 +176,7 @@ function precipitation_tendency!(
     p,
     t,
     ::DryModel,
-    precip_model::Microphysics2Moment,
+    microphysics_model::Microphysics2Moment,
     _,
 )
     error("Microphysics2Moment precipitation should not be used with DryModel")
@@ -187,7 +187,7 @@ function precipitation_tendency!(
     p,
     t,
     ::EquilMoistModel,
-    precip_model::Microphysics2Moment,
+    microphysics_model::Microphysics2Moment,
     _,
 )
     error(
@@ -200,7 +200,7 @@ function precipitation_tendency!(
     p,
     t,
     ::NonEquilMoistModel,
-    precip_model::Microphysics2Moment,
+    microphysics_model::Microphysics2Moment,
     _,
 )
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
@@ -223,7 +223,7 @@ function precipitation_tendency!(
     p,
     t,
     ::NonEquilMoistModel,
-    precip_model::Microphysics2Moment,
+    microphysics_model::Microphysics2Moment,
     turbconv_model::DiagnosticEDMFX,
 )
     error("Not implemented yet")
@@ -234,7 +234,7 @@ function precipitation_tendency!(
     p,
     t,
     ::NonEquilMoistModel,
-    precip_model::Microphysics2Moment,
+    microphysics_model::Microphysics2Moment,
     turbconv_model::PrognosticEDMFX,
 )
     error("Not implemented yet")

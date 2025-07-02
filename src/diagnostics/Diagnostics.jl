@@ -29,7 +29,7 @@ import ..DryModel
 import ..EquilMoistModel
 import ..NonEquilMoistModel
 
-# precip_model
+# microphysics_model
 import ..NoPrecipitation
 import ..Microphysics0Moment
 import ..Microphysics1Moment

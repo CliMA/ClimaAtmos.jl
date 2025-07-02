@@ -531,7 +531,7 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     (; ᶜq_tot⁰, ᶜmse⁰, ᶠu₃⁰) = p.precomputed
 
     if p.atmos.moisture_model isa NonEquilMoistModel &&
-       p.atmos.precip_model isa Microphysics1Moment
+       p.atmos.microphysics_model isa Microphysics1Moment
         (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
     end
 
@@ -549,7 +549,7 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
             (ᶜq_tot⁰ - Y.c.sgsʲs.:($$j).q_tot)
 
         if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.precip_model isa Microphysics1Moment
+           p.atmos.microphysics_model isa Microphysics1Moment
             @. Yₜ.c.sgsʲs.:($$j).q_liq +=
                 (ᶜentrʲs.:($$j) .+ ᶜturb_entrʲs.:($$j)) *
                 (ᶜq_liq⁰ - Y.c.sgsʲs.:($$j).q_liq)

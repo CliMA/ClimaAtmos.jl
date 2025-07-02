@@ -545,7 +545,7 @@ Groups moisture-related models and types.
 """
 Base.@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS}
     moisture_model::MM = nothing
-    precip_model::PM = nothing
+    microphysics_model::PM = nothing
     cloud_model::CM = nothing
     noneq_cloud_formation_mode::NCFM = nothing
     call_cloud_diagnostics_per_stage::CCDPS = nothing
@@ -755,7 +755,7 @@ model = AtmosModel(;
 ```julia
 model = AtmosModel(;
     moisture_model = EquilMoistModel(),
-    precip_model = Microphysics0Moment(),
+    microphysics_model = Microphysics0Moment(),
     radiation_mode = RRTMGPI.AllSkyRadiation(),
     ozone = IdealizedOzone(),
     co2 = FixedCO2()
@@ -775,7 +775,7 @@ The default AtmosModel provides:
 
 ## AtmosWater
 - `moisture_model`: DryModel(), EquilMoistModel(), NonEquilMoistModel()
-- `precip_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
+- `microphysics_model`: NoPrecipitation(), Microphysics0Moment(), Microphysics1Moment(), Microphysics2Moment()
 - `cloud_model`: GridScaleCloud(), QuadratureCloud(), SGSQuadratureCloud()
 - `noneq_cloud_formation_mode`: Explicit(), Implicit()
 - `call_cloud_diagnostics_per_stage`: nothing or CallCloudDiagnosticsPerStage()
@@ -895,7 +895,7 @@ end
 
 const _DEFAULT_ATMOS_MODEL_KWARGS = (
     moisture_model = DryModel(),
-    precip_model = NoPrecipitation(),
+    microphysics_model = NoPrecipitation(),
     cloud_model = GridScaleCloud(),
     surface_model = PrescribedSurfaceTemperature(),
     sfc_temperature = ZonallySymmetricSST(),
@@ -994,7 +994,7 @@ model = DryAtmosModel(;
 function DryAtmosModel(; kwargs...)
     defaults = (
         moisture_model = DryModel(),
-        precip_model = NoPrecipitation(),
+        microphysics_model = NoPrecipitation(),
         cloud_model = GridScaleCloud(),
         surface_model = PrescribedSurfaceTemperature(),
         sfc_temperature = ZonallySymmetricSST(),
@@ -1011,7 +1011,7 @@ Create an equilibrium moist atmospheric model with sensible defaults for moist s
 function EquilMoistAtmosModel(; kwargs...)
     defaults = (
         moisture_model = EquilMoistModel(),
-        precip_model = Microphysics0Moment(),
+        microphysics_model = Microphysics0Moment(),
         cloud_model = GridScaleCloud(),
         surface_model = PrescribedSurfaceTemperature(),
         sfc_temperature = ZonallySymmetricSST(),
@@ -1030,7 +1030,7 @@ Create a non-equilibrium moist atmospheric model with sensible defaults.
 function NonEquilMoistAtmosModel(; kwargs...)
     defaults = (
         moisture_model = NonEquilMoistModel(),
-        precip_model = Microphysics1Moment(),
+        microphysics_model = Microphysics1Moment(),
         cloud_model = GridScaleCloud(),
         noneq_cloud_formation_mode = Explicit(),
         surface_model = PrescribedSurfaceTemperature(),

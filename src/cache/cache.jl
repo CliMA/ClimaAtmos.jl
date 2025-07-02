@@ -111,7 +111,7 @@ function build_cache(
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
 
     conservation_check =
-        !(atmos.precip_model isa NoPrecipitation) ?
+        !(atmos.microphysics_model isa NoPrecipitation) ?
         (;
             col_integrated_precip_energy_tendency = zeros(
                 axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),

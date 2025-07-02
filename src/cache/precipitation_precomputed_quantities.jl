@@ -31,7 +31,7 @@ function Kin(ᶜw_precip, ᶜu_air)
 end
 
 """
-    set_precipitation_velocities!(Y, p, moisture_model, precip_model)
+    set_precipitation_velocities!(Y, p, moisture_model, microphysics_model)
 
 Updates the precipitation terminal velocity, cloud sedimentation velocity,
 and their contribution to total water and energy advection.
@@ -46,7 +46,7 @@ function set_precipitation_velocities!(
     Y,
     p,
     moisture_model::NonEquilMoistModel,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
@@ -102,7 +102,7 @@ function set_precipitation_velocities!(
     Y,
     p,
     moisture_model::NonEquilMoistModel,
-    precip_model::Microphysics2Moment,
+    microphysics_model::Microphysics2Moment,
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwnₗ, ᶜwnᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
@@ -182,7 +182,7 @@ function set_precipitation_velocities!(
 end
 
 """
-    set_precipitation_cache!(Y, p, precip_model, turbconv_model)
+    set_precipitation_cache!(Y, p, microphysics_model, turbconv_model)
 
 Computes the cache needed for precipitation tendencies. When run without edmf
 model this involves computing precipitation sources based on the grid mean
@@ -423,7 +423,7 @@ set_precipitation_surface_fluxes!(Y, p, _) = nothing
 function set_precipitation_surface_fluxes!(
     Y,
     p,
-    precip_model::Microphysics0Moment,
+    microphysics_model::Microphysics0Moment,
 )
     ᶜT = p.scratch.ᶜtemp_scalar
     (; ᶜts) = p.precomputed  # assume ᶜts has been updated
@@ -450,7 +450,7 @@ end
 function set_precipitation_surface_fluxes!(
     Y,
     p,
-    precip_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency,) = p.conservation_check

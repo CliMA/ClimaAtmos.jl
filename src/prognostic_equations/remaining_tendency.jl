@@ -236,7 +236,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             Y,
             p,
             p.atmos.moisture_model,
-            p.atmos.precip_model,
+            p.atmos.microphysics_model,
         )
     end
 
@@ -246,7 +246,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         p,
         t,
         p.atmos.turbconv_model,
-        p.atmos.precip_model,
+        p.atmos.microphysics_model,
     )
     precipitation_tendency!(
         Yₜ,
@@ -254,7 +254,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         p,
         t,
         p.atmos.moisture_model,
-        p.atmos.precip_model,
+        p.atmos.microphysics_model,
         p.atmos.turbconv_model,
     )
 

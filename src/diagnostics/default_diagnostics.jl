@@ -223,7 +223,7 @@ function default_diagnostics(
     diagnostics = []
 
     # Add moisture and precipitation model diagnostics
-    for model in (atmos_water.moisture_model, atmos_water.precip_model)
+    for model in (atmos_water.moisture_model, atmos_water.microphysics_model)
         !isnothing(model) && append!(
             diagnostics,
             default_diagnostics(model, duration, start_date; output_writer),

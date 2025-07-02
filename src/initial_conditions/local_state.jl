@@ -9,7 +9,7 @@ abstract type TurbconvState{FT} end
 """
     PrecipState{FT}
 
-A collection of values that are required to initialize the `precip_model` of
+A collection of values that are required to initialize the `microphysics_model` of
 an `AtmosModel`.
 """
 abstract type PrecipState{FT} end
@@ -94,8 +94,8 @@ EDMFState(; tke, draft_area = 0, velocity = Geometry.WVector(0)) =
 """
     NoPrecipState{FT}()
 
-Indicates that no initial conditions are available for the `precip_model`. Any
-values required by the `precip_model` are set to 0.
+Indicates that no initial conditions are available for the `microphysics_model`. Any
+values required by the `microphysics_model` are set to 0.
 """
 struct NoPrecipState{FT} <: PrecipState{FT} end
 
@@ -105,7 +105,7 @@ struct NoPrecipState{FT} <: PrecipState{FT} end
     PrecipState2M(; q_rai, q_sno)
 
 
-Stores the values of `n_liq`, `n_rai`, `q_rai`, and `q_sno` for the `precip_model`.
+Stores the values of `n_liq`, `n_rai`, `q_rai`, and `q_sno` for the `microphysics_model`.
 This struct includes both mass and number densities and can be used for initializing 
 precipitation states in both one-moment and two-moment microphysics schemes. 
 In one-moment schemes, the number densities (`n_liq`, `n_rai`) are ignored.

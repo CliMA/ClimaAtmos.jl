@@ -300,18 +300,18 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function get_precipitation_model(parsed_args)
-    precip_model = parsed_args["precip_model"]
-    return if precip_model == nothing || precip_model == "nothing"
+function get_microphysics_model(parsed_args)
+    microphysics_model = parsed_args["microphysics_model"]
+    return if microphysics_model == nothing || microphysics_model == "nothing"
         NoPrecipitation()
-    elseif precip_model == "0M"
+    elseif microphysics_model == "0M"
         Microphysics0Moment()
-    elseif precip_model == "1M"
+    elseif microphysics_model == "1M"
         Microphysics1Moment()
-    elseif precip_model == "2M"
+    elseif microphysics_model == "2M"
         Microphysics2Moment()
     else
-        error("Invalid precip_model $(precip_model)")
+        error("Invalid microphysics_model $(microphysics_model)")
     end
 end
 
