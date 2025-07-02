@@ -246,6 +246,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         "gray",
         "allsky",
         "allskywithclear",
+        "held_suarez",
         "DYCOMS",
         "TRMM_LBA",
         "ISDAC",
@@ -286,6 +287,8 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
             reset_rng_seed,
             deep_atmosphere,
         )
+    elseif radiation_name == "held_suarez"
+        HeldSuarezForcing()
     elseif radiation_name == "DYCOMS"
         RadiationDYCOMS{FT}()
     elseif radiation_name == "TRMM_LBA"
@@ -352,11 +355,11 @@ end
 function get_forcing_type(parsed_args)
     forcing = parsed_args["forcing"]
     @assert forcing in (nothing, "held_suarez")
-    return if forcing == nothing
-        nothing
-    elseif forcing == "held_suarez"
-        HeldSuarezForcing()
+    if forcing == "held_suarez"
+        @warn "The 'held_suarez' forcing option is deprecated. Use rad='held_suarez' instead to set HeldSuarezForcing as a radiation mode."
+        return HeldSuarezForcing()  # Still return the object for backward compatibility
     end
+    return nothing
 end
 
 struct CallCloudDiagnosticsPerStage end
@@ -372,7 +375,7 @@ end
 
 function get_subsidence_model(parsed_args, radiation_mode, FT)
     subsidence = parsed_args["subsidence"]
-    subsidence == nothing && return nothing
+    isnothing(subsidence) && return nothing
 
     prof = if subsidence == "Bomex"
         APL.Bomex_subsidence(FT)
@@ -382,6 +385,8 @@ function get_subsidence_model(parsed_args, radiation_mode, FT)
         APL.Rico_subsidence(FT)
     elseif subsidence == "DYCOMS"
         @assert radiation_mode isa RadiationDYCOMS
+        # For DYCOMS case, subsidence is linearly proportional to height
+        # with slope equal to the divergence rate specified in radiation mode
         z -> -z * radiation_mode.divergence
     elseif subsidence == "ISDAC"
         APL.ISDAC_subsidence(FT)

@@ -2,10 +2,9 @@ module Diagnostics
 
 import Dates: Month, Day, Hour, DateTime, Period
 
-import ClimaComms
-
 import LinearAlgebra: dot
 
+import ClimaComms
 import ClimaCore:
     Fields, Geometry, InputOutput, Meshes, Spaces, Operators, Domains, Grids
 import ClimaCore.Utilities: half
@@ -15,6 +14,9 @@ import Thermodynamics as TD
 import ..lazy
 
 import ..AtmosModel
+import ..AtmosWater
+import ..AtmosRadiation
+import ..AtmosTurbconv
 import ..AtmosCallback
 import ..EveryNSteps
 
