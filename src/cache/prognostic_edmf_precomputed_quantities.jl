@@ -21,20 +21,23 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     thermo_params = CAP.thermodynamics_params(p.params)
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
-    (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
-    (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
+    (; ᶜK) = p.precomputed
+    (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜts) =
         p.precomputed
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.precip_model isa Microphysics1Moment
         (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
     end
 
+    ᶜp_lazy = ᶜp(thermo_params, ᶜts)
+    ᶜh_tot_lazy = ᶜh_tot(Y,thermo_params, ᶜts)
+
     @. ᶜρa⁰ = ρa⁰(Y.c)
     @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
     @. ᶜmse⁰ = divide_by_ρa(
-        Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
+        Y.c.ρ * (ᶜh_tot_lazy - ᶜK) - ρamse⁺(Y.c.sgsʲs),
         ᶜρa⁰,
-        Y.c.ρ * (ᶜh_tot - ᶜK),
+        Y.c.ρ * (ᶜh_tot_lazy - ᶜK),
         Y.c.ρ,
         turbconv_model,
     )
@@ -83,12 +86,15 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
        p.atmos.precip_model isa Microphysics1Moment
         @. ᶜts⁰ = TD.PhaseNonEquil_phq(
             thermo_params,
-            ᶜp,
+            ᶜp_lazy,
             ᶜmse⁰ - ᶜΦ,
             TD.PhasePartition(ᶜq_tot⁰, ᶜq_liq⁰ + ᶜq_rai⁰, ᶜq_ice⁰ + ᶜq_sno⁰),
         )
     else
-        @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
+        @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, 
+                                    ᶜp_lazy,
+                                    ᶜmse⁰ - ᶜΦ, 
+                                    ᶜq_tot⁰)
     end
     @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
     return nothing
@@ -112,7 +118,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     thermo_params = CAP.thermodynamics_params(p.params)
 
     (; ᶜΦ,) = p.core
-    (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶜtsʲs, ᶜρʲs, ᶜts) = p.precomputed
+
+    ᶜp_lazy = ᶜp(thermo_params, ᶜts)
 
     for j in 1:n
         ᶜuʲ = ᶜuʲs.:($j)
@@ -138,7 +146,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
            p.atmos.precip_model isa Microphysics1Moment
             @. ᶜtsʲ = TD.PhaseNonEquil_phq(
                 thermo_params,
-                ᶜp,
+                ᶜp_lazy,
                 ᶜmseʲ - ᶜΦ,
                 TD.PhasePartition(
                     ᶜq_totʲ,
@@ -147,7 +155,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
                 ),
             )
         else
-            @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
+            @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, 
+                                        ᶜp_lazy,
+                                        ᶜmseʲ - ᶜΦ, 
+                                        ᶜq_totʲ)
         end
         @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
     end
@@ -173,8 +184,11 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
     turbconv_params = CAP.turbconv_params(p.params)
 
     (; ᶜΦ,) = p.core
-    (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ᶜspecific, ᶜK, ᶜtsʲs, ᶜρʲs, ᶜts) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
+
+    ᶜp_lazy = ᶜp(thermo_params, ᶜts)
+    ᶜh_tot_lazy = ᶜh_tot(Y, thermo_params, ᶜts)
 
     for j in 1:n
         ᶜtsʲ = ᶜtsʲs.:($j)
@@ -197,7 +211,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
             Fields.level(Fields.coordinate_field(Y.f).z, Fields.half),
         )
         ᶜρ_int_val = Fields.field_values(Fields.level(Y.c.ρ, 1))
-        ᶜp_int_val = Fields.field_values(Fields.level(ᶜp, 1))
+        ᶜp_int_val = Fields.field_values(Fields.level(Base.materialize(ᶜp_lazy), 1))
         (; ρ_flux_h_tot, ρ_flux_q_tot, ustar, obukhov_length) =
             p.precomputed.sfc_conditions
 
@@ -217,7 +231,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
         # TODO: replace this with the actual surface area fraction when
         # using prognostic surface area
         @. ᶜaʲ_int_val = FT(turbconv_params.surface_area)
-        ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
+        ᶜh_tot_int_val = Fields.field_values(Fields.level(Base.materialize(ᶜh_tot_lazy), 1))
         ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
         ᶜmseʲ_int_val = Fields.field_values(Fields.level(ᶜmseʲ, 1))
         @. ᶜmseʲ_int_val = sgs_scalar_first_interior_bc(
@@ -367,7 +381,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜtke⁰, ᶜu, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
     (;
         ᶜmixing_length_tuple,
         ᶜmixing_length,
@@ -386,6 +400,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜdetrʲs,
         ᶜturb_entrʲs,
         ᶠnh_pressure₃_buoyʲs,
+        ᶜts,
     ) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
 
@@ -398,6 +413,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜvert_div = p.scratch.ᶜtemp_scalar
     ᶜmassflux_vert_div = p.scratch.ᶜtemp_scalar_2
     ᶜw_vert_div = p.scratch.ᶜtemp_scalar_3
+
+    ᶜp_lazy = ᶜp(thermo_params, ᶜts)
+    ᶜh_tot_lazy = ᶜp(thermo_params, ᶜts)
+
     for j in 1:n
         # entrainment/detrainment
         @. ᶜentrʲs.:($$j) = entrainment(
@@ -405,7 +424,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             turbconv_params,
             ᶜz,
             z_sfc,
-            ᶜp,
+            ᶜp_lazy,
             Y.c.ρ,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
@@ -441,7 +460,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             turbconv_params,
             ᶜz,
             z_sfc,
-            ᶜp,
+            ᶜp_lazy,
             Y.c.ρ,
             Y.c.sgsʲs.:($$j).ρa,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),

@@ -48,8 +48,11 @@ function update_temperature_pressure!((; u, p, t)::I) where {I}
     T_min = CAP.optics_lookup_temperature_min(params)
     T_max = CAP.optics_lookup_temperature_max(params)
 
-    (; ᶜts, ᶜp, sfc_conditions) = p.precomputed
+    (; ᶜts, sfc_conditions) = p.precomputed
     model = p.radiation.rrtmgp_model
+
+    # TODO: field2array compat with lazy ops
+    ᶜp = @. TD.air_pressure(thermo_params, ᶜts)
 
     # update surface temperature
     sfc_ts = sfc_conditions.ts
@@ -57,7 +60,7 @@ function update_temperature_pressure!((; u, p, t)::I) where {I}
     @. sfc_T = TD.air_temperature(thermo_params, sfc_ts)
 
     # update layer pressure
-    model.center_pressure .= Fields.field2array(p.precomputed.ᶜp)
+    model.center_pressure .= Fields.field2array(ᶜp)
     # compute layer temperature
     ᶜT = Fields.array2field(model.center_temperature, axes(u.c))
     # TODO: move this to RRTMGP

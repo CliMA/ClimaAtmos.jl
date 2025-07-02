@@ -19,7 +19,6 @@ The following grid-scale quantities are treated implicitly:
     - `ᶜK`: kinetic energy on cell centers
     - `ᶜts`: thermodynamic state on cell centers
     - `ᶜp`: air pressure on cell centers
-    - `ᶜh_tot`: total enthalpy on cell centers
 If the `turbconv_model` is `PrognosticEDMFX`, there also two SGS versions of
 every quantity except for `ᶜp` (which is shared across all subdomains):
     - `_⁰`: value for the environment
@@ -48,8 +47,6 @@ function implicit_precomputed_quantities(Y, atmos)
         ᶠu = similar(Y.f, CT123{FT}),
         ᶜK = similar(Y.c, FT),
         ᶜts = similar(Y.c, TST),
-        ᶜp = similar(Y.c, FT),
-        ᶜh_tot = similar(Y.c, FT),
     )
     sgs_quantities =
         turbconv_model isa AbstractEDMF ? (; ᶜtke⁰ = similar(Y.c, FT)) : (;)
@@ -455,7 +452,7 @@ quantities are updated.
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, moisture_model, precip_model) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜspecific, ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶜspecific, ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -488,12 +485,6 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # TODO: We should think more about these increments before we use them.
     end
     @. ᶜts = ts_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)
-    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
-    @. ᶜh_tot = TD.total_specific_enthalpy(
-        thermo_params,
-        ᶜts,
-        specific(Y.c.ρe_tot, Y.c.ρ),
-    )
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
@@ -517,7 +508,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, moisture_model, precip_model, cloud_model) = p.atmos
     (; vert_diff, call_cloud_diagnostics_per_stage) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜts, ᶜp) = p.precomputed
+    (; ᶜu, ᶜts) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3 # updated in set_implicit_precomputed_quantities!
     thermo_params = CAP.thermodynamics_params(p.params)
 
@@ -581,7 +572,8 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.ρ, vert_diff)
     elseif vert_diff isa VerticalDiffusion
         (; ᶜK_h) = p.precomputed
-        @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vert_diff)
+        ᶜp_lazy = ᶜp(thermo_params, ᶜts)
+        @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp_lazy, vert_diff)
     end
 
     # TODO

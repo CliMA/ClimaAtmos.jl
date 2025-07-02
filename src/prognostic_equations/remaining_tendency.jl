@@ -1,4 +1,3 @@
-
 """
     hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 
@@ -137,7 +136,7 @@ dependencies or operator splitting assumptions.
 """
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
-    (; ᶜh_tot, ᶜspecific) = p.precomputed
+    (; ᶜspecific) = p.precomputed
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
     ᶜρ = Y.c.ρ
@@ -145,7 +144,12 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     (; ls_adv, scm_coriolis) = p.atmos
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜp, sfc_conditions, ᶜts) = p.precomputed
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, 
+                                                p.precomputed.ᶜts, 
+                                                specific(Y.c.ρe_tot, Y.c.ρ)))
+    (; sfc_conditions, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
 
     vst_uₕ = viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge)
     vst_u₃ = viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge)

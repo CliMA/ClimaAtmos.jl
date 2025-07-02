@@ -40,9 +40,10 @@ function edmfx_sgs_mass_flux_tendency!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
-    (; ᶠu³, ᶜh_tot) = p.precomputed
+    (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
     if (
         p.atmos.moisture_model isa NonEquilMoistModel &&
         p.atmos.precip_model isa Microphysics1Moment
@@ -51,6 +52,9 @@ function edmfx_sgs_mass_flux_tendency!(
     end
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+
+    ᶜp_lazy = ᶜp(thermo_params, ᶜts)
+    ᶜh_tot_lazy = ᶜp(thermo_params, ᶜts)
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
         # Enthalpy fluxes. First sum up the draft fluxes
@@ -62,7 +66,7 @@ function edmfx_sgs_mass_flux_tendency!(
         for j in 1:n
             @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
             @. ᶜa_scalar =
-                (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j) - ᶜh_tot) *
+                (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j) - ᶜh_tot_lazy) *
                 draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
             vtt = vertical_transport(
                 ᶜρʲs.:($j),
@@ -75,7 +79,7 @@ function edmfx_sgs_mass_flux_tendency!(
         end
         # Add the environment fluxes
         @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
-        @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
+        @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot_lazy) * draft_area(ᶜρa⁰, ᶜρ⁰)
         vtt = vertical_transport(
             ᶜρ⁰,
             ᶠu³_diff,
@@ -231,16 +235,19 @@ function edmfx_sgs_mass_flux_tendency!(
     t,
     turbconv_model::DiagnosticEDMFX,
 )
-
+    thermo_params = CAP.thermodynamics_params(p.params)
     turbconv_params = CAP.turbconv_params(p.params)
     a_max = CAP.max_area(turbconv_params)
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
-    (; ᶠu³, ᶜh_tot) = p.precomputed
+    (; ᶠu³, ᶜts) = p.precomputed
     (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs) = p.precomputed
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     FT = eltype(Y)
+
+    ᶜp_lazy = ᶜp(thermo_params, ᶜts)
+    ᶜh_tot_lazy = ᶜh_tot(Y, thermo_params, ᶜts)
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
         # Enthalpy fluxes
@@ -253,7 +260,7 @@ function edmfx_sgs_mass_flux_tendency!(
             #     draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j))
             # TODO: remove this filter when mass flux is treated implicitly
             @. ᶜa_scalar =
-                (ᶜmseʲs.:($$j) + ᶜKʲs.:($$j) - ᶜh_tot) * min(
+                (ᶜmseʲs.:($$j) + ᶜKʲs.:($$j) - ᶜh_tot_lazy) * min(
                     min(draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)), a_max),
                     FT(0.02) / max(
                         Geometry.WVector(ᶜinterp(ᶠu³_diff)).components.data.:1,
@@ -448,11 +455,15 @@ function edmfx_sgs_diffusive_flux_tendency!(
     # prognostic fluxes
     FT = Spaces.undertype(axes(Y.c))
     (; dt, params) = p
+    thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜu, ᶜh_tot, ᶜtke⁰, ᶜmixing_length) = p.precomputed
-    (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
+    (; ᶜu, ᶜtke⁰, ᶜmixing_length) = p.precomputed
+    (; ᶜK_u, ᶜK_h, ρatke_flux, ᶜts) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
+
+    ᶜp_lazy = ᶜp(thermo_params, ᶜts)
+    ᶜh_tot_lazy = ᶜh_tot(Y,thermo_params, ᶜts)
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
@@ -465,7 +476,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
-        @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜh_tot)))
+        @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜh_tot_lazy)))
 
         if use_prognostic_tke(turbconv_model)
             # Turbulent TKE transport (diffusion)

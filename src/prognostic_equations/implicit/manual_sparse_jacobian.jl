@@ -337,7 +337,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     (; matrix) = cache
     (; params) = p
     (; ᶜΦ, ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶠu³, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶠu³, ᶜK, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(params)
+    ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, 
+                                                p.precomputed.ᶜts, 
+                                                specific(Y.c.ρe_tot, Y.c.ρ)))
     (;
         ∂ᶜK_∂ᶜuₕ,
         ∂ᶜK_∂ᶠu₃,
@@ -366,7 +371,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     # This term appears a few times in the Jacobian, and is technically
     # minus ∂e_int_∂q_tot
     ∂e_int_∂q_tot = T_0 * (Δcv_v - R_d) - FT(CAP.e_int_v0(params))
-    thermo_params = CAP.thermodynamics_params(params)
 
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
@@ -419,7 +423,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     MatrixFields.unrolled_foreach(tracer_info) do ρχ_name
         MatrixFields.has_field(Y, ρχ_name) || return
         ᶜχ = if ρχ_name === @name(c.ρe_tot)
-            p.precomputed.ᶜh_tot
+            ᶜh_tot
         else
             @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         end
