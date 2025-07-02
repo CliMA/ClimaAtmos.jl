@@ -1,5 +1,5 @@
 #####
-##### External forcing for single column experiments, drawing on 
+##### External forcing for single column experiments, drawing on
 ##### Shen et al. (2022), "A Library of Large-Eddy Simulations Forced by Global
 ##### Climate Models", JAMES 14, e2021MS002631. https://doi.org/10.1029/2021MS002631
 #####
@@ -38,8 +38,8 @@ end
 """
     gcm_vert_advection!(ᶜχₜ, ᶜχ, ᶜls_subsidence)
 
-Computes the vertical advection tendency term for a scalar quantity `χ` given the 
-large-scale subsidence velocity This term arises from the decomposition of vertical 
+Computes the vertical advection tendency term for a scalar quantity `χ` given the
+large-scale subsidence velocity This term arises from the decomposition of vertical
 eddy advection in GCM forcings, as described in Shen et al. (2022, e.g., Equations 9-10).
 
 The term calculated and added to `ᶜχₜ` is of the form:
@@ -47,7 +47,7 @@ The term calculated and added to `ᶜχₜ` is of the form:
 where `<w̃>` is the large-scale mean subsidence velocity (`ᶜls_subsidence`) and
 `∂<χ̃>/∂z` is the vertical gradient of the GCM's time-mean profile of the scalar `χ`.
 
-This function assumes that `ᶜχₜ` already contains the total vertical eddy advection 
+This function assumes that `ᶜχₜ` already contains the total vertical eddy advection
 term (`-<w̃ ∂χ̃/∂z>`), and it subtracts the mean advection to obtain the eddy part.
 
 Arguments:
@@ -160,7 +160,7 @@ This involves:
 - Calculating the full vertical eddy fluctuation term for temperature and moisture by
   combining GCM-diagnosed terms with `gcm_vert_advection!`.
 
-The methodology is that described by Shen et al. (2022) for forcing LES or SCMs with 
+The methodology is that described by Shen et al. (2022) for forcing LES or SCMs with
 GCM output.
 
 Returns:
@@ -204,8 +204,8 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
             zc_forcing,
             params,
         )
-            # Computes subsidence velocity from the hydrostatic approximation 
-            # w \approx - ω α / g, where ω is pressure velocity and α = 1/ρ is 
+            # Computes subsidence velocity from the hydrostatic approximation
+            # w \approx - ω α / g, where ω is pressure velocity and α = 1/ρ is
             # the specific volume
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
@@ -218,7 +218,7 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
 
         function set_insolation!(cc_field)
             # rsdt is TOA insolation on a horizontal plane. We need
-            # total solar irradiance and the solar zenith angle separately. So compute 
+            # total solar irradiance and the solar zenith angle separately. So compute
             #`TSI = rsdt/cos(SZA)`.
             parent(cc_field) .= mean(
                 ds.group[cfsite_number]["rsdt"][:] ./
@@ -407,7 +407,7 @@ function external_forcing_tendency!(
         Val{:first_order}(),
     )
 
-    # Hard set tendencies of ρe_tot and ρq_tot at the top to 0. Otherwise upper 
+    # Hard set tendencies of ρe_tot and ρq_tot at the top to 0. Otherwise upper
     # portion of domain is anomalously cold
     ρe_tot_top = Fields.level(Yₜ.c.ρe_tot, Spaces.nlevels(axes(Y.c)))
     @. ρe_tot_top = 0.0
@@ -551,10 +551,10 @@ end
     external_forcing_cache(Y, external_forcing::ISDACForcing, params)
 
 Returns an empty cache for ISDAC (Indirect and Semi-Direct Aerosol Campaign)
-forcing. ISDAC forcing profiles are analytical functions of height, not requiring 
+forcing. ISDAC forcing profiles are analytical functions of height, not requiring
 pre-loading from files into cached fields.
 """
-external_forcing_cache(Y, external_forcing::ISDACForcing, params) = (;)  # Don't need to cache anything
+external_forcing_cache(Y, external_forcing::ISDACForcing, params, _) = (;)  # Don't need to cache anything
 
 """
     external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
