@@ -624,7 +624,7 @@ struct AtmosModel{W, SCM, R, TC, GW, VD, SP, SU, NU}
     radiation::R
     turbconv::TC
     gravity_wave::GW
-    vert_diff::VD
+    vertical_diffusion::VD
     sponge::SP
     surface::SU
     numerics::NU
@@ -824,7 +824,7 @@ Internal testing and calibration components for single-column setups:
 - `hyperdiff`: nothing or ClimaHyperdiffusion()
 
 ## Top-level Options  
-- `vert_diff`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
+- `vertical_diffusion`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
 - `disable_surface_flux_tendency`: Bool
 """
 function AtmosModel(; kwargs...)
@@ -850,7 +850,7 @@ function AtmosModel(; kwargs...)
     numerics =
         _create_grouped_struct(AtmosNumerics, atmos_model_kwargs, group_kwargs)
 
-    vert_diff = get(atmos_model_kwargs, :vert_diff, nothing)
+    vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
 
@@ -860,7 +860,7 @@ function AtmosModel(; kwargs...)
         typeof(radiation),
         typeof(turbconv),
         typeof(gravity_wave),
-        typeof(vert_diff),
+        typeof(vertical_diffusion),
         typeof(sponge),
         typeof(surface),
         typeof(numerics),
@@ -870,7 +870,7 @@ function AtmosModel(; kwargs...)
         radiation,
         turbconv,
         gravity_wave,
-        vert_diff,
+        vertical_diffusion,
         sponge,
         surface,
         numerics,

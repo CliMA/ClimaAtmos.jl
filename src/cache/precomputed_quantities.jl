@@ -104,7 +104,8 @@ function precomputed_quantities(Y, atmos)
             !(atmos.turbconv_model isa DiagnosticEDMFX)
     @assert !(atmos.moisture_model isa DryModel) ||
             !(atmos.turbconv_model isa PrognosticEDMFX)
-    @assert isnothing(atmos.turbconv_model) || isnothing(atmos.vert_diff)
+    @assert isnothing(atmos.turbconv_model) ||
+            isnothing(atmos.vertical_diffusion)
     TST = thermo_state_type(atmos.moisture_model, FT)
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)
@@ -231,7 +232,7 @@ function precomputed_quantities(Y, atmos)
             precipitation_sgs_quantities...,
         ) : (;)
     vert_diff_quantities =
-        if atmos.vert_diff isa
+        if atmos.vertical_diffusion isa
            Union{VerticalDiffusion, DecayWithHeightDiffusion}
             ᶜK_h = similar(Y.c, FT)
             (; ᶜK_u = ᶜK_h, ᶜK_h) # ᶜK_u aliases ᶜK_h because they are always equal.
@@ -515,7 +516,7 @@ current state `Y`. This is only called before each evaluation of
 """
 NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, moisture_model, precip_model, cloud_model) = p.atmos
-    (; vert_diff, call_cloud_diagnostics_per_stage) = p.atmos
+    (; vertical_diffusion, call_cloud_diagnostics_per_stage) = p.atmos
     (; ᶜΦ) = p.core
     (; ᶜu, ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3 # updated in set_implicit_precomputed_quantities!
@@ -576,12 +577,12 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     set_precipitation_cache!(Y, p, p.atmos.precip_model, p.atmos.turbconv_model)
     set_precipitation_surface_fluxes!(Y, p, p.atmos.precip_model)
 
-    if vert_diff isa DecayWithHeightDiffusion
+    if vertical_diffusion isa DecayWithHeightDiffusion
         (; ᶜK_h) = p.precomputed
-        @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.ρ, vert_diff)
-    elseif vert_diff isa VerticalDiffusion
+        @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
+    elseif vertical_diffusion isa VerticalDiffusion
         (; ᶜK_h) = p.precomputed
-        @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vert_diff)
+        @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vertical_diffusion)
     end
 
     # TODO

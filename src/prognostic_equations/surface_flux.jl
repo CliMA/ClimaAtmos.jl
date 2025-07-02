@@ -106,7 +106,7 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
     FT = eltype(Y)
     (; ᶜh_tot, ᶜspecific, sfc_conditions) = p.precomputed
 
-    if !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
+    if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         btt =
             boundary_tendency_momentum(Y.c.ρ, Y.c.uₕ, sfc_conditions.ρ_flux_uₕ)
         @. Yₜ.c.uₕ -= btt

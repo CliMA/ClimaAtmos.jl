@@ -1256,7 +1256,7 @@ compute_edt!(out, state, cache, time) = compute_edt!(
     state,
     cache,
     time,
-    cache.atmos.vert_diff,
+    cache.atmos.vertical_diffusion,
     cache.atmos.turbconv_model,
 )
 compute_edt!(_, _, _, _, vert_diff::T1, turbconv_model::T2) where {T1, T2} =
@@ -1311,7 +1311,7 @@ compute_evu!(out, state, cache, time) = compute_evu!(
     state,
     cache,
     time,
-    cache.atmos.vert_diff,
+    cache.atmos.vertical_diffusion,
     cache.atmos.turbconv_model,
 )
 compute_evu!(_, _, _, _, vert_diff::T1, turbconv_model::T2) where {T1, T2} =

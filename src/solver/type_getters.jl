@@ -82,7 +82,7 @@ function get_atmos(config::AtmosConfig, params)
         scale_blending_method = get_scale_blending_method(parsed_args),
     )
 
-    vert_diff = get_vertical_diffusion_model(
+    vertical_diffusion = get_vertical_diffusion_model(
         disable_momentum_vertical_diffusion,
         parsed_args,
         params,
@@ -141,7 +141,7 @@ function get_atmos(config::AtmosConfig, params)
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
 
         # Top-level options (not grouped)
-        vert_diff,
+        vertical_diffusion,
         numerics = get_numerics(parsed_args, FT),
         disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
     )
