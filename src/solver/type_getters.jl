@@ -48,7 +48,11 @@ function get_atmos(config::AtmosConfig, params)
     (!isnothing(co2) && !with_rrtmgp) &&
         @warn ("$(co2) does nothing if RRTMGP is not used")
 
-    disable_momentum_vertical_diffusion = forcing_type isa HeldSuarezForcing
+    # HeldSuarezForcing can be set via radiation_mode or legacy forcing option for now
+    final_radiation_mode =
+        forcing_type isa HeldSuarezForcing ? forcing_type : radiation_mode
+    disable_momentum_vertical_diffusion =
+        final_radiation_mode isa HeldSuarezForcing
 
     advection_test = parsed_args["advection_test"]
     @assert advection_test in (false, true)
@@ -102,11 +106,10 @@ function get_atmos(config::AtmosConfig, params)
         scm_coriolis = get_scm_coriolis(parsed_args, FT),
 
         # AtmosRadiation
-        radiation_mode,
+        radiation_mode = final_radiation_mode,
         ozone,
         co2,
         insolation = get_insolation_form(parsed_args),
-        held_suarez_forcing = forcing_type,
 
         # AtmosTurbconv - Turbulence & Convection
         edmfx_model,
@@ -139,8 +142,7 @@ function get_atmos(config::AtmosConfig, params)
 
         # Top-level options (not grouped)
         vert_diff,
-        hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
-        numerics = get_numerics(parsed_args),
+        numerics = get_numerics(parsed_args, FT),
         disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
     )
     # TODO: Should this go in the AtmosModel constructor?
@@ -161,7 +163,7 @@ function get_scale_blending_method(parsed_args)
     end
 end
 
-function get_numerics(parsed_args)
+function get_numerics(parsed_args, FT)
     test_dycore =
         parsed_args["test_dycore_consistency"] ? TestDycoreConsistency() :
         nothing
@@ -189,6 +191,9 @@ function get_numerics(parsed_args)
 
     # wrap each upwinding mode in a Val for dispatch
     diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
+
+    hyperdiff = get_hyperdiffusion_model(parsed_args, FT)
+
     numerics = AtmosNumerics(;
         energy_upwinding,
         tracer_upwinding,
@@ -197,6 +202,7 @@ function get_numerics(parsed_args)
         limiter,
         test_dycore_consistency = test_dycore,
         diff_mode,
+        hyperdiff,
     )
     @info "numerics $(summary(numerics))"
 

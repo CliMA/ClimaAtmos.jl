@@ -215,7 +215,7 @@ function default_diagnostics(
 end
 
 function default_diagnostics(
-    atmos_hydrology::AtmosWater,
+    atmos_water::AtmosWater,
     duration,
     start_date;
     output_writer,
@@ -223,7 +223,7 @@ function default_diagnostics(
     diagnostics = []
 
     # Add moisture and precipitation model diagnostics
-    for model in (atmos_hydrology.moisture_model, atmos_hydrology.precip_model)
+    for model in (atmos_water.moisture_model, atmos_water.precip_model)
         !isnothing(model) && append!(
             diagnostics,
             default_diagnostics(model, duration, start_date; output_writer),

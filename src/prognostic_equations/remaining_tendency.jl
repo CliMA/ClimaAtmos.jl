@@ -141,7 +141,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
     ᶜρ = Y.c.ρ
-    (; radiation_mode, moisture_model, rayleigh_sponge, viscous_sponge) = p.atmos
+    (; radiation_mode, moisture_model, rayleigh_sponge, viscous_sponge) =
+        p.atmos
     (; ls_adv, scm_coriolis) = p.atmos
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)

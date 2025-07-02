@@ -47,7 +47,6 @@ end
             :radiation_mode => nothing,
             :ozone => nothing,
             :co2 => nothing,
-            :held_suarez_forcing => nothing,
             :turbconv_model => nothing,
             :non_orographic_gravity_wave => nothing,
             :orographic_gravity_wave => nothing,
@@ -62,6 +61,7 @@ end
         # Test numerics structure separately due to nested fields
         @test model.numerics isa CA.AtmosNumerics
         @test model.numerics.diff_mode isa CA.Explicit
+        @test isnothing(model.numerics.hyperdiff)
     end
 
     @testset "User overrides work correctly" begin
@@ -78,7 +78,6 @@ end
             ),
             ozone = CA.IdealizedOzone(),
             co2 = CA.FixedCO2(),
-            held_suarez_forcing = CA.HeldSuarezForcing(),
             hyperdiff = CA.ClimaHyperdiffusion(;
                 ν₄_vorticity_coeff = 1e15,
                 ν₄_scalar_coeff = 1e15,
@@ -94,8 +93,8 @@ end
         @test model.radiation_mode isa RRTMGPI.ClearSkyRadiation
         @test model.ozone isa CA.IdealizedOzone
         @test model.co2 isa CA.FixedCO2
-        @test model.held_suarez_forcing isa CA.HeldSuarezForcing
         @test model.hyperdiff isa CA.ClimaHyperdiffusion
+        @test model.numerics.hyperdiff isa CA.ClimaHyperdiffusion
         @test model.disable_surface_flux_tendency == true
 
         # Test that non-overridden defaults are preserved
@@ -116,6 +115,7 @@ end
             @test model.moisture_model isa expected_moisture_type
             @test model.surface_model isa CA.PrescribedSurfaceTemperature  # default preserved
             @test model.numerics.diff_mode isa CA.Explicit  # default preserved
+            @test isnothing(model.numerics.hyperdiff)  # default preserved
         end
     end
 end
@@ -146,6 +146,11 @@ end
         @test moist_model.moisture_model isa CA.EquilMoistModel
         @test moist_model.radiation_mode isa RRTMGPI.ClearSkyRadiation
         @test moist_model.ozone isa CA.IdealizedOzone
+
+        # Test HeldSuarezForcing as radiation mode
+        held_suarez_model =
+            CA.AtmosModel(; radiation_mode = CA.HeldSuarezForcing())
+        @test held_suarez_model.radiation_mode isa CA.HeldSuarezForcing
     end
 end
 
@@ -157,8 +162,8 @@ end
     @test model.moisture_model isa CA.NonEquilMoistModel
 
     # Grouped struct access  
-    @test model.hydrology isa CA.AtmosWater
-    @test model.hydrology.moisture_model isa CA.NonEquilMoistModel
+    @test model.water isa CA.AtmosWater
+    @test model.water.moisture_model isa CA.NonEquilMoistModel
 end
 
 @testset "Error Handling" begin
@@ -170,7 +175,7 @@ end
     # Ensure no conflicts between grouped arguments and direct AtmosModel fields
     grouped_args = Set(keys(CA.GROUPED_PROPERTY_MAP))
     grouped_struct_fields = Set([
-        :hydrology,
+        :water,
         :forcing,
         :radiation,
         :advection,
@@ -179,6 +184,7 @@ end
         :vert_diff,
         :sponge,
         :surface,
+        :numerics,
     ])
     direct_args =
         Set(filter(fn -> fn ∉ grouped_struct_fields, fieldnames(CA.AtmosModel)))

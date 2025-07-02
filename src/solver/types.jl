@@ -279,7 +279,7 @@ Base.@kwdef struct OrographicGravityWave{FT, S} <: AbstractGravityWave
 end
 
 abstract type AbstractForcing end
-struct HeldSuarezForcing <: AbstractForcing end
+struct HeldSuarezForcing end
 struct Subsidence{T} <: AbstractForcing
     prof::T
 end
@@ -454,21 +454,24 @@ struct SmoothMinimumBlending <: AbstractScaleBlendingMethod end
 struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM, DM}
+Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, TDC, LIM, DM, HD}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_upwinding::EN_UP
     tracer_upwinding::TR_UP
     edmfx_upwinding::ED_UP
-    edmfx_sgsflux_upwinding::ED_SG_UP
+    edmfx_sgsflux_upwinding::SG_UP
 
     """Add NaNs to certain equations to track down problems"""
-    test_dycore_consistency::DYCORE
+    test_dycore_consistency::TDC
 
     limiter::LIM
 
     """Timestepping mode for diffusion: Explicit() or Implicit()"""
     diff_mode::DM = nothing
+
+    """Hyperdiffusion model: nothing or ClimaHyperdiffusion()"""
+    hyperdiff::HD = nothing
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
@@ -553,12 +556,11 @@ end
 
 Groups radiation-related models and types.
 """
-Base.@kwdef struct AtmosRadiation{RM, OZ, CO2, IN, HS}
+Base.@kwdef struct AtmosRadiation{RM, OZ, CO2, IN}
     radiation_mode::RM = nothing
     ozone::OZ = nothing
     co2::CO2 = nothing
     insolation::IN = nothing
-    held_suarez_forcing::HS = nothing
 end
 
 """
@@ -616,13 +618,12 @@ Base.broadcastable(x::AtmosGravityWave) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
 
-struct AtmosModel{H, SCM, R, TC, GW, HD, VD, SP, SU, NU}
-    hydrology::H
+struct AtmosModel{W, SCM, R, TC, GW, VD, SP, SU, NU}
+    water::W
     scm_setup::SCM
     radiation::R
     turbconv::TC
     gravity_wave::GW
-    hyperdiff::HD
     vert_diff::VD
     sponge::SP
     surface::SU
@@ -634,7 +635,7 @@ end
 
 # Map grouped struct types to their names in AtmosModel struct
 const ATMOS_MODEL_GROUPS = (
-    (AtmosWater, :hydrology),
+    (AtmosWater, :water),
     (AtmosRadiation, :radiation),
     (AtmosTurbconv, :turbconv),
     (AtmosGravityWave, :gravity_wave),
@@ -725,14 +726,23 @@ internally:
 - [`AtmosNumerics`](@ref)
 The one exception is the top-level `disable_surface_flux_tendency` field, which is not grouped.
 
+# Property Access
+Arguments can be accessed both directly and through grouped structs:
+```julia
+model = AtmosModel(; moisture_model = EquilMoistModel())
+model.moisture_model        # Direct access
+model.water.moisture_model  # Grouped access
+```
+
 # Example: Minimal model (uses defaults)
 ```julia
 model = AtmosModel()  # Creates a basic dry atmospheric model
 ```
 
-# Example: Basic dry model with forcing
+# Example: Dry model with Held-Suarez forcing and hyperdiffusion
 ```julia
 model = AtmosModel(;
+    radiation_mode = HeldSuarezForcing(),
     hyperdiff = ClimaHyperdiffusion(; 
         ν₄_vorticity_coeff = 1e15, 
         ν₄_scalar_coeff = 1e15, 
@@ -741,7 +751,7 @@ model = AtmosModel(;
 )
 ```
 
-# Example: Moist model with radiation
+# Example: Moist model with full radiation
 ```julia
 model = AtmosModel(;
     moisture_model = EquilMoistModel(),
@@ -772,54 +782,56 @@ The default AtmosModel provides:
 
 ## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
 Internal testing and calibration components for single-column setups:
-- `subsidence`: nothing or Subsidence() instances (Bomex, Rico, DYCOMS, ISDAC, etc.)
+- `subsidence`: nothing or Bomex_subsidence, Rico_subsidence, DYCOMS_subsidence, etc
 - `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
-- `ls_adv`: nothing or LargeScaleAdvection() instances
+- `ls_adv`: nothing or LargeScaleAdvection()
 - `advection_test`: nothing or boolean
-- `scm_coriolis`: nothing or SCMCoriolis() instances
+- `scm_coriolis`: nothing or SCMCoriolis()
 
 ## AtmosRadiation
-- `radiation_mode`: RRTMGPI.ClearSkyRadiation(), RRTMGPI.AllSkyRadiation(), etc.
+- `radiation_mode`: Radiation and atmospheric forcing modes
+  - Global radiation: RRTMGPI.ClearSkyRadiation(), RRTMGPI.AllSkyRadiation()
+  - Atmospheric forcing: HeldSuarezForcing() (for idealized dynamics)
+  - SCM-specific: RadiationDYCOMS(), RadiationISDAC(), RadiationTRMM_LBA()
 - `ozone`: IdealizedOzone(), PrescribedOzone()
 - `co2`: FixedCO2(), MaunaLoaCO2()
 - `insolation`: IdealizedInsolation(), TimeVaryingInsolation(), etc.
-- `held_suarez_forcing`: nothing, HeldSuarezForcing() (atmospheric dynamics forcing)
 
 ## AtmosTurbconv
-- `edmfx_model`: EDMFXModel() instances
+- `edmfx_model`: EDMFXModel()
 - `turbconv_model`: nothing, PrognosticEDMFX(), DiagnosticEDMFX(), EDOnlyEDMFX()
 - `sgs_adv_mode`, `sgs_entr_detr_mode`, `sgs_nh_pressure_mode`, `sgs_mf_mode`: Explicit(), Implicit()
 - `smagorinsky_lilly`: nothing or SmagorinskyLilly()
 
 ## AtmosGravityWave
-- `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave() instances  
-- `orographic_gravity_wave`: nothing or OrographicGravityWave() instances
+- `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave()  
+- `orographic_gravity_wave`: nothing or OrographicGravityWave()
 
 ## AtmosSponge
-- `viscous_sponge`: nothing or ViscousSponge() instances
-- `rayleigh_sponge`: nothing or RayleighSponge() instances
+- `viscous_sponge`: nothing or ViscousSponge()
+- `rayleigh_sponge`: nothing or RayleighSponge()
 
 ## AtmosSurface
 - `sfc_temperature`: ZonallySymmetricSST(), ZonallyAsymmetricSST(), RCEMIPIISST(), ExternalTVColumnSST()
 - `surface_model`: PrescribedSurfaceTemperature(), PrognosticSurfaceTemperature()
 - `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
 
+## AtmosNumerics
+- `energy_upwinding`, `tracer_upwinding`, `edmfx_upwinding`, `edmfx_sgsflux_upwinding`: Val() upwinding schemes
+- `test_dycore_consistency`: nothing or TestDycoreConsistency() for debugging
+- `limiter`: nothing or QuasiMonotoneLimiter()
+- `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion
+- `hyperdiff`: nothing or ClimaHyperdiffusion()
+
 ## Top-level Options  
 - `vert_diff`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
-- `hyperdiff`: nothing or ClimaHyperdiffusion() instances
-- `numerics`: AtmosNumerics() instances (includes `diff_mode`: Explicit(), Implicit())
 - `disable_surface_flux_tendency`: Bool
 
-# Notes
-- This unified interface is used by both interactive users and the config system
-- Arguments are automatically grouped into appropriate sub-structs
-- Unknown argument names produce helpful error messages listing all available options
-- Property access works both ways: `model.moisture_model` and `model.hydrology.moisture_model`
 """
 function AtmosModel(; kwargs...)
     group_kwargs, atmos_model_kwargs = _partition_atmos_model_kwargs(kwargs)
 
-    moisture = AtmosWater(; group_kwargs[:hydrology]...)
+    moisture = AtmosWater(; group_kwargs[:water]...)
 
     # Create SCM forcing directly
     scm_setup = SCMSetup(; group_kwargs[:scm_setup]...)
@@ -830,8 +842,13 @@ function AtmosModel(; kwargs...)
     sponge = AtmosSponge(; group_kwargs[:sponge]...)
     surface = AtmosSurface(; group_kwargs[:surface]...)
 
-    hyperdiff = get(atmos_model_kwargs, :hyperdiff, nothing)
+    # Handle numerics - if not provided, create default from individual fields
     numerics = get(atmos_model_kwargs, :numerics, nothing)
+    if isnothing(numerics)
+        # Create default AtmosNumerics from grouped kwargs if numerics not provided
+        numerics = AtmosNumerics(; group_kwargs[:numerics]...)
+    end
+
     vert_diff = get(atmos_model_kwargs, :vert_diff, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
@@ -842,7 +859,6 @@ function AtmosModel(; kwargs...)
         typeof(radiation),
         typeof(turbconv),
         typeof(gravity_wave),
-        typeof(hyperdiff),
         typeof(vert_diff),
         typeof(sponge),
         typeof(surface),
@@ -853,7 +869,6 @@ function AtmosModel(; kwargs...)
         radiation,
         turbconv,
         gravity_wave,
-        hyperdiff,
         vert_diff,
         sponge,
         surface,
@@ -869,15 +884,16 @@ const _DEFAULT_ATMOS_MODEL_KWARGS = (
     surface_model = PrescribedSurfaceTemperature(),
     sfc_temperature = ZonallySymmetricSST(),
     insolation = IdealizedInsolation(),
-    numerics = AtmosNumerics(
-        energy_upwinding = Val(:first_order),
-        tracer_upwinding = Val(:first_order),
-        edmfx_upwinding = Val(:first_order),
-        edmfx_sgsflux_upwinding = Val(:none),
-        test_dycore_consistency = nothing,
-        limiter = nothing,
-        diff_mode = Explicit(),
-    ),
+
+    # AtmosNumerics defaults
+    energy_upwinding = Val(:first_order),
+    tracer_upwinding = Val(:first_order),
+    edmfx_upwinding = Val(:first_order),
+    edmfx_sgsflux_upwinding = Val(:none),
+    test_dycore_consistency = nothing,
+    limiter = nothing,
+    diff_mode = Explicit(),
+    hyperdiff = nothing,
 
     # Top-level
     disable_surface_flux_tendency = false,
@@ -954,8 +970,7 @@ Create a dry atmospheric model with sensible defaults for dry simulations.
 # Example
 ```julia
 model = DryAtmosModel(;
-    radiation_mode = RRTMGPI.GrayRadiation(false, false),
-    held_suarez_forcing = HeldSuarezForcing(),
+    radiation_mode = HeldSuarezForcing(),
     hyperdiff = ClimaHyperdiffusion(; ν₄_vorticity_coeff = 1e15, ν₄_scalar_coeff = 1e15, divergence_damping_factor = 1.0)
 )
 ```
