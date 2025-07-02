@@ -618,8 +618,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     FT = eltype(params)
 
     for j in 1:n
-
-        # compute terminal velocity for precipitation
+        # Compute terminal velocity for precipitation and cloud condensate.
+        # The functions belowreturn physical velocity value in m/s (not a vector).
+        # The value is positive for positive inputs, and when used should be multiplied
+        # by -1 to adhere to the "positive is up" flux convention in Atmos.
         @. ᶜwᵣʲs.:($$j) = CM1.terminal_velocity(
             cmp.pr,
             cmp.tv.rain,
@@ -632,7 +634,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             ᶜρʲs.:($$j),
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_sno),
         )
-        # compute sedimentation velocity for cloud condensate [m/s]
         @. ᶜwₗʲs.:($$j) = CMNe.terminal_velocity(
             cmc.liquid,
             cmc.Ch2022.rain,
