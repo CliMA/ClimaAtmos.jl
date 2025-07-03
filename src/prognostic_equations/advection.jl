@@ -407,6 +407,32 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶜmseᵣ = (@. lazy(Y.c.sgsʲs.:($$j).q_rai * (TD.internal_energy_liquid(thp, ᶜtsʲs.:($$j)) + TD.gas_constant_air(thp, ᶜtsʲs.:($$j)) * TD.air_temperature(thp, ᶜtsʲs.:($$j)) + ᶜΦ)))
             ᶜmseₛ = (@. lazy(Y.c.sgsʲs.:($$j).q_sno * (TD.internal_energy_ice(thp,    ᶜtsʲs.:($$j)) + TD.gas_constant_air(thp, ᶜtsʲs.:($$j)) * TD.air_temperature(thp, ᶜtsʲs.:($$j)) + ᶜΦ)))
 
+#=
+            # option I - RICO works well but we are missing q * mse advective term
+            #va = vertical_advection(ᶠwₗ³ʲs, (@. lazy(ᶜmseₗ - Y.c.sgsʲs.:($$j).q_liq * Y.c.sgsʲs.:($$j).mse)), edmfx_upwinding)
+            va = vertical_advection(ᶠwₗ³ʲs, ᶜmseₗ, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse += va
+            #va = vertical_advection(ᶠwᵢ³ʲs, (@. lazy(ᶜmseᵢ - Y.c.sgsʲs.:($$j).q_ice * Y.c.sgsʲs.:($$j).mse)), edmfx_upwinding)
+            va = vertical_advection(ᶠwᵢ³ʲs, ᶜmseᵢ, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse += va
+            #va = vertical_advection(ᶠwᵣ³ʲs, (@. lazy(ᶜmseᵣ - Y.c.sgsʲs.:($$j).q_rai * Y.c.sgsʲs.:($$j).mse)), edmfx_upwinding)
+            va = vertical_advection(ᶠwᵣ³ʲs, ᶜmseᵣ, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse += va
+            #va = vertical_advection(ᶠwₛ³ʲs, (@. lazy(ᶜmseₛ - Y.c.sgsʲs.:($$j).q_sno * Y.c.sgsʲs.:($$j).mse)), edmfx_upwinding)
+            va = vertical_advection(ᶠwₛ³ʲs, ᶜmseₛ, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse += va
+
+            va = vertical_advection(ᶠwₗ³ʲs, Y.c.sgsʲs.:($j).mse, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse += va * Y.c.sgsʲs.:($$j).q_liq
+            va = vertical_advection(ᶠwᵢ³ʲs, Y.c.sgsʲs.:($j).mse, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse += va * Y.c.sgsʲs.:($$j).q_ice
+            va = vertical_advection(ᶠwᵣ³ʲs, Y.c.sgsʲs.:($j).mse, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse += va * Y.c.sgsʲs.:($$j).q_rai
+            va = vertical_advection(ᶠwₛ³ʲs, Y.c.sgsʲs.:($j).mse, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse += va * Y.c.sgsʲs.:($$j).q_sno
+=#
+            # option II
+            # RICO works well but we are missing mse * q_ advection term
             va = vertical_advection(ᶠwₗ³ʲs, ᶜmseₗ, edmfx_upwinding)
             @. Yₜ.c.sgsʲs.:($$j).mse += va
             va = vertical_advection(ᶠwᵢ³ʲs, ᶜmseᵢ, edmfx_upwinding)
@@ -415,7 +441,16 @@ function edmfx_sgs_vertical_advection_tendency!(
             @. Yₜ.c.sgsʲs.:($$j).mse += va
             va = vertical_advection(ᶠwₛ³ʲs, ᶜmseₛ, edmfx_upwinding)
             @. Yₜ.c.sgsʲs.:($$j).mse += va
-
+#=
+            va = vertical_advection(ᶠwₗ³ʲs, Y.c.sgsʲs.:($j).q_liq, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse -= Y.c.sgsʲs.:($$j).mse * va
+            va = vertical_advection(ᶠwᵢ³ʲs, Y.c.sgsʲs.:($j).q_ice, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse -= Y.c.sgsʲs.:($$j).mse * va
+            va = vertical_advection(ᶠwᵣ³ʲs, Y.c.sgsʲs.:($j).q_rai, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse -= Y.c.sgsʲs.:($$j).mse * va
+            va = vertical_advection(ᶠwₛ³ʲs, Y.c.sgsʲs.:($j).q_sno, edmfx_upwinding)
+            @. Yₜ.c.sgsʲs.:($$j).mse -= Y.c.sgsʲs.:($$j).mse * va
+=#
             # mse, q_tot and moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
             ᶜinv_ρ̂ = (@. lazy(divide_by_ρa(FT(1), Y.c.sgsʲs.:($$j).ρa, FT(0), Y.c.ρ, turbconv_model)))
             ᶜ∂ρ̂∂zₗ = (@. lazy(upwind_biased_grad(-1 * Geometry.WVector(ᶜwₗʲs.:($$j)), Y.c.sgsʲs.:($$j).ρa)))
