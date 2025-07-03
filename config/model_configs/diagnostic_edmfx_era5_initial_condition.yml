@@ -1,21 +1,13 @@
-start_date: "20250627" # lets dispatch on start date and start time 
+z_max: 48000.0
+z_elem: 63
+h_elem: 15
+dz_bottom: 30.0
+start_date: "20250627"
 start_time: "0000"
 initial_condition: "WeatherModel"
 topo_smoothing: true
 topography: "Earth"
-
-# prevent gravity waves at domain top
 rayleigh_sponge: true
-
-output_default_diagnostics: false
-diagnostics:
-  - short_name: [ta, ua, wa, va, rhoa, hur, hus, clw, cli]
-    period: 60mins
-
-z_max: 48000.0
-z_elem: 63
-h_elem: 15
-dz_bottom: 30.0 # currently running with 10m 
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
 co2_model: fixed
@@ -36,3 +28,7 @@ dt: 120secs
 t_end: 12hours
 toml: [toml/diagnostic_edmfx_era5_ic.toml]
 use_itime: true
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [ta, ua, wa, va, rhoa, hur, hus, clw, cli]
+    period: 60mins

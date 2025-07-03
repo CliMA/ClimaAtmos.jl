@@ -51,8 +51,8 @@ end
     to_z_levels(source_file, target_file, target_levels, FT)
 
 Interpolate ERA5 data from native model levels to specified z-levels. Note that 
-to match MoistFromFile, we rename surface pressure, sp, to p. This should change 
-for consistency if we write a new initial condition dispatch.
+to use _overwrite_initial_conditions_from_file! we rename surface pressure, sp, 
+to p. This allows us to share functionality with the Dyamond setup.
 
 # Arguments
 - `source_file` / `target_file`: Path to input / output NetCDF 
@@ -84,7 +84,6 @@ function to_z_levels(source_file, target_file, target_levels, FT)
 
     # Define coordinate variables with clean attributes
     lon_attrib = Dict(
-        "Datatype" => string(FT),
         "standard_name" => "longitude",
         "long_name" => "longitude",
         "units" => "degrees_east",
@@ -93,7 +92,6 @@ function to_z_levels(source_file, target_file, target_levels, FT)
     lon_var[:] = lon
 
     lat_attrib = Dict(
-        "Datatype" => string(FT),
         "standard_name" => "latitude",
         "long_name" => "latitude",
         "units" => "degrees_north",
@@ -103,7 +101,6 @@ function to_z_levels(source_file, target_file, target_levels, FT)
     lat_var[:] = lat
 
     z_attrib = Dict(
-        "Datatype" => string(FT),
         "standard_name" => "altitude",
         "long_name" => "altitude",
         "units" => "m",

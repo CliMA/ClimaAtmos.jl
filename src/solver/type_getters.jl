@@ -635,7 +635,7 @@ function get_sim_info(config::AtmosConfig)
 
     isnothing(restart_file) ||
         @info "Restarting simulation from file $restart_file"
-    epoch = DateTime(parsed_args["start_date"], dateformat"yyyymmdd")
+    epoch = DateTime(parsed_args["start_date"] * parsed_args["start_time"], dateformat"yyyymmddHHMM")
     t_start_int = time_to_seconds(parsed_args["t_start"])
     if !isnothing(restart_file) && t_start_int != 0
         @warn "Non zero `t_start` passed with a restarting simulation. The provided `t_start` will be ignored."

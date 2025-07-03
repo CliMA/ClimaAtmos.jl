@@ -196,8 +196,11 @@ end
     WeatherModel(start_date, start_time)
 
 An `InitialCondition` that initializes the model with an empty state, and then overwrites
- it with the content of the weather model. We assume that the weather initial condition 
- is stored in a correctly named and formatted file in some TODO artifact. 
+it with the content of a NetCDF file that contains the initial conditions, stored in the 
+artifact `weather_model_ic`/raw/era5_raw_YYYYMMDD_HHMM.nc. We interpolate the initial 
+conditions from ERA5 pressure level grid to a z grid, saving to the artifact 
+`weather_model_ic`/init/era5_init_YYYYMMDD_HHMM.nc. It is then interpolated to the model
+ grid in `_overwrite_initial_conditions_from_file!`, which documents the required variables.
 """
 struct WeatherModel <: InitialCondition
     start_date::String
@@ -387,7 +390,7 @@ function overwrite_initial_conditions!(
 end
 
 """
-    overwrite_initial_conditions!(initial_condition::MoistFromFile, Y, thermo_params, config)
+    _overwrite_initial_conditions_from_file!(file_path::String, Y, thermo_params, config)
 
 Given a prognostic state `Y`, an `initial condition` (specifically, where initial values are
 assigned from interpolations of existing datasets), a `thermo_state`, this function
