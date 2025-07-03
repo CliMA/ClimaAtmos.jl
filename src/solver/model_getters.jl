@@ -246,6 +246,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         "gray",
         "allsky",
         "allskywithclear",
+        "held_suarez",
         "DYCOMS",
         "TRMM_LBA",
         "ISDAC",
@@ -286,6 +287,8 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
             reset_rng_seed,
             deep_atmosphere,
         )
+    elseif radiation_name == "held_suarez"
+        HeldSuarezForcing()
     elseif radiation_name == "DYCOMS"
         RadiationDYCOMS{FT}()
     elseif radiation_name == "TRMM_LBA"
@@ -352,11 +355,11 @@ end
 function get_forcing_type(parsed_args)
     forcing = parsed_args["forcing"]
     @assert forcing in (nothing, "held_suarez")
-    return if forcing == nothing
-        nothing
-    elseif forcing == "held_suarez"
-        HeldSuarezForcing()
+    if forcing == "held_suarez"
+        @warn "The 'held_suarez' forcing option is deprecated. Use rad='held_suarez' instead to set HeldSuarezForcing as a radiation mode."
+        return HeldSuarezForcing()  # Still return the object for backward compatibility
     end
+    return nothing
 end
 
 struct CallCloudDiagnosticsPerStage end
@@ -372,7 +375,7 @@ end
 
 function get_subsidence_model(parsed_args, radiation_mode, FT)
     subsidence = parsed_args["subsidence"]
-    subsidence == nothing && return nothing
+    isnothing(subsidence) && return nothing
 
     prof = if subsidence == "Bomex"
         APL.Bomex_subsidence(FT)
@@ -382,6 +385,8 @@ function get_subsidence_model(parsed_args, radiation_mode, FT)
         APL.Rico_subsidence(FT)
     elseif subsidence == "DYCOMS"
         @assert radiation_mode isa RadiationDYCOMS
+        # For DYCOMS case, subsidence is linearly proportional to height
+        # with slope equal to the divergence rate specified in radiation mode
         z -> -z * radiation_mode.divergence
     elseif subsidence == "ISDAC"
         APL.ISDAC_subsidence(FT)
@@ -430,20 +435,21 @@ end
 
 function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
     external_forcing = parsed_args["external_forcing"]
-    @assert external_forcing in
-            (nothing, "GCM", "ReanalysisTimeVarying", "ISDAC")
+    @assert external_forcing in (
+        nothing,
+        "GCM",
+        "ReanalysisTimeVarying",
+        "ReanalysisMonthlyAveragedDiurnal",
+        "ISDAC",
+    )
     reanalysis_required_fields = map(
         x -> parsed_args[x],
-        [
-            "external_forcing",
-            "surface_setup",
-            "surface_temperature",
-            "initial_condition",
-        ],
+        ["surface_setup", "surface_temperature", "initial_condition"],
     )
-    if any(reanalysis_required_fields .== "ReanalysisTimeVarying")
+    if external_forcing in
+       ("ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal")
+        @assert parsed_args["config"] == "column" "ReanalysisTimeVarying and ReanalysisMonthlyAveragedDiurnal are only supported in column mode."
         @assert all(reanalysis_required_fields .== "ReanalysisTimeVarying") "All of external_forcing, surface_setup, surface_temperature and initial_condition must be set to ReanalysisTimeVarying."
-        @assert parsed_args["config"] == "column" "ReanalysisTimeVarying is only supported in column mode."
     end
     return if isnothing(external_forcing)
         nothing
@@ -453,22 +459,48 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
         GCMForcing{FT}(parsed_args["external_forcing_file"], cfsite_number_str)
 
     elseif external_forcing == "ReanalysisTimeVarying"
-        external_forcing_file = get_external_forcing_file_path(parsed_args)
+        external_forcing_file =
+            get_external_daily_forcing_file_path(parsed_args)
         if !isfile(external_forcing_file) ||
-           !check_external_forcing_file_times(
-            external_forcing_file,
-            parsed_args,
-        )
+           !check_daily_forcing_times(external_forcing_file, parsed_args)
             @info "External forcing file $(external_forcing_file) does not exist or does not cover the expected time range. Generating it now."
             # generate forcing from provided era5 data paths
             generate_multiday_era5_external_forcing_file(
                 parsed_args,
                 external_forcing_file,
                 FT,
+                input_data_dir = joinpath(
+                    @clima_artifact("era5_hourly_atmos_raw"),
+                    "daily",
+                ),
             )
         end
 
         ExternalDrivenTVForcing{FT}(external_forcing_file)
+    elseif external_forcing == "ReanalysisMonthlyAveragedDiurnal"
+        external_forcing_file =
+            get_external_monthly_forcing_file_path(parsed_args)
+        # generate single file from monthly averaged diurnal data if it doesn't exist
+        # we'll use ClimaUtilities.TimeVaryingInputs downstream to repeat the data. 
+        if !isfile(external_forcing_file) ||
+           !check_monthly_forcing_times(external_forcing_file, parsed_args)
+            generate_external_forcing_file(
+                parsed_args,
+                external_forcing_file,
+                FT,
+                input_data_dir = joinpath(
+                    @clima_artifact("era5_hourly_atmos_raw"),
+                    "monthly",
+                ),
+                data_strs = [
+                    "monthly_diurnal_profiles",
+                    "monthly_diurnal_inst",
+                    "monthly_diurnal_accum",
+                ],
+            )
+        end
+        ExternalDrivenTVForcing{FT}(external_forcing_file)
+
     elseif external_forcing == "ISDAC"
         ISDACForcing()
     end

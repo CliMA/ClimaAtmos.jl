@@ -78,11 +78,17 @@ function cloud_sources(
     qᵣ,
     qₛ,
     ρ,
-    Tₐ,
+    T,
     dt,
 ) where {FT}
 
     qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
+    qₛₗ = TD.q_vap_saturation_from_density(
+        thp,
+        T,
+        ρ,
+        TD.saturation_vapor_pressure(thp, T, TD.Liquid()),
+    )
 
     if qᵥ + qₗ > FT(0)
         S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
@@ -94,7 +100,7 @@ function cloud_sources(
             qᵣ,
             qₛ,
             ρ,
-            Tₐ,
+            T,
         )
     else
         S = FT(0)
@@ -102,8 +108,8 @@ function cloud_sources(
 
     return ifelse(
         S > FT(0),
-        triangle_inequality_limiter(S, limit(clip(qᵥ), dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(clip(qₗ), dt, 2)),
+        triangle_inequality_limiter(S, limit(qᵥ - qₛₗ, dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(qₗ, dt, 2)),
     )
 end
 function cloud_sources(
@@ -120,6 +126,13 @@ function cloud_sources(
 ) where {FT}
 
     qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
+
+    qₛᵢ = TD.q_vap_saturation_from_density(
+        thp,
+        T,
+        ρ,
+        TD.saturation_vapor_pressure(thp, T, TD.Ice()),
+    )
 
     if qᵥ + qᵢ > FT(0)
         S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
@@ -139,8 +152,8 @@ function cloud_sources(
 
     return ifelse(
         S > FT(0),
-        triangle_inequality_limiter(S, limit(clip(qᵥ), dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(clip(qᵢ), dt, 2)),
+        triangle_inequality_limiter(S, limit(qᵥ - qₛᵢ, dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(qᵢ, dt, 2)),
     )
 end
 
@@ -417,13 +430,13 @@ function aerosol_activation_sources(
 end
 
 """
-    compute_warm_precipitation_sources_2M!(Sᵖ, S₂ᵖ, Snₗᵖ, Snᵣᵖ, Sqₗᵖ, Sqᵣᵖ, ρ, nₗ, nᵣ, qₗ, qᵣ, ts, dt, sb, thp)
+    compute_warm_precipitation_sources_2M!(Sᵖ, S₂ᵖ, Snₗᵖ, Snᵣᵖ, Sqₗᵖ, Sqᵣᵖ, ρ, nₗ, nᵣ, qₜ, qₗ, qᵢ, qᵣ, qₛ, ts, dt, sb, thp)
 
  - Sᵖ, S₂ᵖ - temporary containters to help compute precipitation source terms
  - Snₗᵖ, Snᵣᵖ, Sqₗᵖ, Sqᵣᵖ - cached storage for precipitation source terms
  - ρ - air density
  - nₗ, nᵣ - cloud liquid and rain number concentration per mass [1 / kg of moist air]
- - qₗ, qᵣ - cloud liquid and rain specific humidity
+ - qₜ, qₗ, qᵢ, qᵣ, qₛ - total water, cloud liquid, cloud ice, rain and snow specific humidity
  - ts - thermodynamic state (see td package for details)
  - dt - model time step
  - thp, mp - structs with thermodynamic and microphysics parameters
@@ -441,8 +454,11 @@ function compute_warm_precipitation_sources_2M!(
     ρ,
     nₗ,
     nᵣ,
+    qₜ,
     qₗ,
+    qᵢ,
     qᵣ,
+    qₛ,
     ts,
     dt,
     mp,
@@ -531,8 +547,11 @@ function compute_warm_precipitation_sources_2M!(
                 mp.sb,
                 mp.aps,
                 thp,
-                PP(thp, ts),
+                qₜ,
+                qₗ,
+                qᵢ,
                 qᵣ,
+                qₛ,
                 ρ,
                 ρ * nᵣ,
                 Tₐ(thp, ts),
@@ -548,8 +567,11 @@ function compute_warm_precipitation_sources_2M!(
                 mp.sb,
                 mp.aps,
                 thp,
-                PP(thp, ts),
+                qₜ,
+                qₗ,
+                qᵢ,
                 qᵣ,
+                qₛ,
                 ρ,
                 ρ * nᵣ,
                 Tₐ(thp, ts),
@@ -560,7 +582,7 @@ function compute_warm_precipitation_sources_2M!(
 
     # cloud liquid number adjustment for mass limits
     # TODO: Once CCN number becomes a prognostic variable, these number adjustment tendencies
-    #       should be linked to it. Any increase in droplet number (source here) would imply 
+    #       should be linked to it. Any increase in droplet number (source here) would imply
     #       a corresponding sink in CCN, and vice versa.
     @. Sᵖ = CM2.number_increase_for_mass_limit(
         mp.sb.numadj,

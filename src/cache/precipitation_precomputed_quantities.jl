@@ -360,8 +360,6 @@ function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
     (; ᶜSnₗᵖ, ᶜSnᵣᵖ) = p.precomputed
 
-    (; q_liq, q_rai, n_liq, n_rai) = p.precomputed.ᶜspecific
-
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜS₂ᵖ = p.scratch.ᶜtemp_scalar_2
 
@@ -379,10 +377,13 @@ function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
         ᶜSqₗᵖ,
         ᶜSqᵣᵖ,
         Y.c.ρ,
-        n_liq,
-        n_rai,
-        q_liq,
-        q_rai,
+        lazy.(specific.(Y.c.ρn_liq, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρn_rai, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_tot, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_liq, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_ice, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_rai, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_sno, Y.c.ρ)),
         ᶜts,
         dt,
         cmp,

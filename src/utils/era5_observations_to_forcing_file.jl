@@ -18,17 +18,20 @@ import Insolation.Parameters as IP
 import ClimaParams as CP
 
 """
-    get_external_forcing_file_path(parsed_args; data_dir)
+    get_external_daily_forcing_file_path(parsed_args; data_dir)
 
 Get the path to the external forcing file for a given site and start date.
 When using the BUILDKITE env, a temporary directory is used for the
 external forcing file. Otherwise, the file is expected to stored in the
 era5_hourly_atmos_processed artifact directory.
 """
-function get_external_forcing_file_path(
+function get_external_daily_forcing_file_path(
     parsed_args;
     data_dir = get(ENV, "BUILDKITE", "") == "true" ? mktempdir() :
-               @clima_artifact("era5_hourly_atmos_processed"),
+               joinpath(
+        @clima_artifact("era5_hourly_atmos_processed"),
+        "daily",
+    ),
 )
     start_date = parsed_args["start_date"]
     t_end = get(parsed_args, "t_end", "23hours") # generate a single day file if t_end is not specified
@@ -43,7 +46,6 @@ function get_external_forcing_file_path(
        site_longitude != parsed_args["site_longitude"]
         @info "Rounded site latitude/longitude from ($(parsed_args["site_latitude"]), $(parsed_args["site_longitude"])) to ($(site_latitude), $(site_longitude)) for ERA5 quarter-degree resolution."
     end
-
     return joinpath(
         data_dir,
         "tv_forcing_$(site_latitude)_$(site_longitude)_$(start_date)_$(end_date).nc",
@@ -51,21 +53,81 @@ function get_external_forcing_file_path(
 end
 
 """
-    check_external_forcing_file_times(forcing_file_path, parsed_args)
+    get_external_monthly_forcing_file_path(parsed_args; data_dir)
+
+Get the path to the external forcing file for a given site and start date.
+When using the BUILDKITE env, a temporary directory is used for the
+external forcing file. Otherwise, the file is expected to stored in the
+era5_hourly_atmos_processed artifact directory.
+"""
+function get_external_monthly_forcing_file_path(
+    parsed_args;
+    data_dir = get(ENV, "BUILDKITE", "") == "true" ? mktempdir() :
+               joinpath(
+        @clima_artifact("era5_hourly_atmos_processed"),
+        "monthly",
+    ),
+)
+    start_date = parsed_args["start_date"]
+    # round to era5 quarter degree resolution for site selection
+    site_latitude = round(parsed_args["site_latitude"] * 4) / 4
+    site_longitude = round(parsed_args["site_longitude"] * 4) / 4
+
+    if site_latitude != parsed_args["site_latitude"] ||
+       site_longitude != parsed_args["site_longitude"]
+        @info "Rounded site latitude/longitude from ($(parsed_args["site_latitude"]), $(parsed_args["site_longitude"])) to ($(site_latitude), $(site_longitude)) for ERA5 quarter-degree resolution."
+    end
+    return joinpath(
+        data_dir,
+        "monthly_diurnal_cycle_forcing_$(site_latitude)_$(site_longitude)_$(start_date).nc",
+    )
+end
+
+"""
+    check_daily_forcing_times(forcing_file_path, parsed_args)
 
 Check that the simulation start and end times are within the range of the external forcing file.
+Return true if the forcing file is valid, false otherwise.
 """
-function check_external_forcing_file_times(forcing_file_path, parsed_args)
-    start_date = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
-    t_end = parsed_args["t_end"]
-    end_date = start_date + Dates.Second(time_to_seconds(t_end))
+function check_daily_forcing_times(forcing_file_path, parsed_args)
+    start = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
+    stop = start + Dates.Second(time_to_seconds(parsed_args["t_end"]))
     NCDataset(forcing_file_path) do ds
-        @assert ds["time"][1] <= start_date "Start time $start_date is before the first time step in the forcing file"
-        @assert ds["time"][end] >= end_date "End time $end_date is after the last time step in the forcing file"
+        if ds["time"][1] > start
+            @warn "Start time $start is before the first time step in the forcing file"
+            return false
+        end
+        if ds["time"][end] < stop
+            @warn "End time $stop is after the last time step in the forcing file"
+            return false
+        end
     end
     return true
 end
 
+"""
+    check_monthly_forcing_times(path, parsed_args)
+
+Check the times for the 1 day monthly-averaged forcing file are correct. As we are using 
+ClimaUtilities.TimeVaryingInputs.PeriodicCalendar we require the data to cover one day exactly. 
+Return true if the forcing file is valid, false otherwise.
+"""
+function check_monthly_forcing_times(path, parsed_args)
+    start = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
+    stop = start + Dates.Day(1)
+    NCDataset(path) do ds
+        dt = ds["time"][2] - ds["time"][1]
+        if ds["time"][1] > start
+            @warn "Start time $start is before the first time step in the forcing file"
+            return false
+        end
+        if ds["time"][end] + dt != stop
+            @warn "Forcing should cover one day, following ClimaUtilities.TimeVaryingInputs.PeriodicCalendar indexing"
+            return false
+        end
+    end
+    return true
+end
 
 """
     get_horizontal_tendencies(lat, lon_index, lat_index, column_ds, external_tv_params)
@@ -186,7 +248,21 @@ function get_coszen_inst(
 end
 
 """
-    generate_external_era5_forcing_file(lat, lon, start_date, forcing_file_path, FT; time_resolution = 3600, data_dir = @clima_artifact("era5_hourly_atmos_raw"), smooth_amount = 4)
+    generate_external_era5_forcing_file(
+        lat,
+        lon,
+        start_date,
+        forcing_file_path,
+        FT;
+        input_data_dir,
+        smooth_amount = 4,
+        time_resolution = 3600,
+        data_strs = [
+            "forcing_and_cloud_hourly_profiles",
+            "hourly_inst",
+            "hourly_accum",
+        ],
+    )
 
 Generate an external forcing file for the ClimaAtmos single column model.
 
@@ -196,31 +272,38 @@ and should contain 3 files:
     - Column profile dataset, named "forcing_and_cloud_hourly_profiles_"start_date".nc"
     - Surface sensible and latent heat fluxes, named "hourly_accum_"start_date".nc"
     - Surface temperature, named "hourly_inst_"start_date".nc"
-
-The variables and specific naming convention for these files is better described in the Single Column
-Model section of the documentation.
+The default file names can be overwritten by the `data_strs` argument. Parsed args should contain the site_latitude,
+site_longitude, and start_date. The variables and specific naming convention for these files is better described 
+in the Single Column Model section of the documentation.
 
 # Output
-The output file is written to the `era5_hourly_atmos_processed` artifact directory and contains all
-forcings required to drive the single column model.
+The output file is written to forcing file path, by default stored in the `era5_hourly_atmos_processed` artifact 
+directory joined with `daily` or `monthly` depending on the simulation type. It contains all forcings required to
+drive the single column model.
 
 Note:
 - Single column runs are treated as boxes, so the dimensions of the variables are expanded to
-    `2x2x(pressure levels)x(time)`.
-- This expansion is necessary for interpolation to the model grid and applies even to surface variables
-    in the current implementation.
+    `2x2x(pressure levels)x(time)` to be able to interpolate to the model grid.
 - The end time of the simulation is inferred from the start date and the simulation time, `t_end`.
 """
-function generate_external_era5_forcing_file(
-    lat,
-    lon,
-    start_date,
+function generate_external_forcing_file(
+    parsed_args,
     forcing_file_path,
     FT;
+    input_data_dir,
     smooth_amount = 4,
     time_resolution = FT(3600), # size of accumulated variable period in seconds (3600 for hourly, 86400 for daily and monthly)
-    data_dir = @clima_artifact("era5_hourly_atmos_raw"),
+    data_strs = [
+        "forcing_and_cloud_hourly_profiles",
+        "hourly_inst",
+        "hourly_accum",
+    ],
 )
+    # unpack parsed args
+    lat = parsed_args["site_latitude"]
+    lon = parsed_args["site_longitude"]
+    start_date = parsed_args["start_date"]
+
     external_tv_params = CP.get_parameter_values(
         CP.create_toml_dict(FT),
         [
@@ -231,14 +314,12 @@ function generate_external_era5_forcing_file(
         ],
     )
     # load datasets
-    tvforcing = NCDataset(
-        joinpath(
-            data_dir,
-            "forcing_and_cloud_hourly_profiles_$(start_date).nc",
-        ),
-    )
-    tv_inst = NCDataset(joinpath(data_dir, "hourly_inst_$(start_date).nc"))
-    tv_accum = NCDataset(joinpath(data_dir, "hourly_accum_$(start_date).nc"))
+    tvforcing =
+        NCDataset(joinpath(input_data_dir, "$(data_strs[1])_$(start_date).nc"))
+    tv_inst =
+        NCDataset(joinpath(input_data_dir, "$(data_strs[2])_$(start_date).nc"))
+    tv_accum =
+        NCDataset(joinpath(input_data_dir, "$(data_strs[3])_$(start_date).nc"))
 
     # round to era5 quarter degree resolution for site selection
     lat = round(lat * 4) / 4
@@ -247,8 +328,8 @@ function generate_external_era5_forcing_file(
     # find indexes for site location in pressure file
     lon_index = findfirst(tvforcing["longitude"][:] .== lon)
     lat_index = findfirst(tvforcing["latitude"][:] .== lat)
-    @assert lon_index != nothing "Longitude $lon not found in forcing_and_cloud_hourly_profiles_$(start_date).nc"
-    @assert lat_index != nothing "Latitude $lat not found in forcing_and_cloud_hourly_profiles_$(start_date).nc"
+    @assert !isnothing(lon_index) "Longitude $lon not found in forcing_and_cloud_hourly_profiles_$(start_date).nc"
+    @assert !isnothing(lat_index) "Latitude $lat not found in forcing_and_cloud_hourly_profiles_$(start_date).nc"
     @assert smooth_amount + 1 <
             lon_index <
             length(tvforcing["longitude"][:]) - smooth_amount "Longitude $lon is not covered by profile forcing file with smoothing amount $smooth_amount"
@@ -382,8 +463,8 @@ function generate_external_era5_forcing_file(
     # add latent and sensitble heat fluxes (currently we just set surface conditions based on temperature)
     lon_index_surf = findfirst(tv_accum["longitude"][:] .== lon)
     lat_index_surf = findfirst(tv_accum["latitude"][:] .== lat)
-    @assert lon_index_surf != nothing "Longitude $lon not found in hourly_accum_$(start_date).nc"
-    @assert lat_index_surf != nothing "Latitude $lat not found in hourly_accum_$(start_date).nc"
+    @assert !isnothing(lon_index_surf) "Longitude $lon not found in hourly_accum_$(start_date).nc"
+    @assert !isnothing(lat_index_surf) "Latitude $lat not found in hourly_accum_$(start_date).nc"
     @assert smooth_amount + 1 <
             lon_index_surf <
             length(tv_accum["longitude"][:]) - smooth_amount "Longitude $lon is not covered by accumulated forcing file with smoothing amount $smooth_amount"
@@ -415,8 +496,8 @@ function generate_external_era5_forcing_file(
     # surface temperature
     lon_index_surf2 = findfirst(tv_inst["longitude"][:] .== lon)
     lat_index_surf2 = findfirst(tv_inst["latitude"][:] .== lat)
-    @assert lon_index_surf2 != nothing "Longitude $lon not found in hourly_inst_$(start_date).nc"
-    @assert lat_index_surf2 != nothing "Latitude $lat not found in hourly_inst_$(start_date).nc"
+    @assert !isnothing(lon_index_surf2) "Longitude $lon not found in hourly_inst_$(start_date).nc"
+    @assert !isnothing(lat_index_surf2) "Latitude $lat not found in hourly_inst_$(start_date).nc"
     @assert smooth_amount + 1 <
             lon_index_surf2 <
             length(tv_inst["longitude"][:]) - smooth_amount "Longitude $lon is not covered by accumulated forcing file with smoothing amount $smooth_amount"
@@ -490,21 +571,19 @@ function generate_multiday_era5_external_forcing_file(
             "site_latitude" => parsed_args["site_latitude"],
             "site_longitude" => parsed_args["site_longitude"],
         )
-        single_file_path = get_external_forcing_file_path(
+        single_file_path = get_external_daily_forcing_file_path(
             single_parsed_args;
             data_dir = output_data_dir,
         )
         push!(file_list, single_file_path)
         # generate the external forcing file for this day
         if !isfile(single_file_path)
-            generate_external_era5_forcing_file(
-                parsed_args["site_latitude"],
-                parsed_args["site_longitude"],
-                Dates.format(dd, "yyyymmdd"),
+            generate_external_forcing_file(
+                single_parsed_args,
                 single_file_path,
                 FT;
                 time_resolution = time_resolution,
-                data_dir = input_data_dir,
+                input_data_dir = input_data_dir,
                 smooth_amount = smooth_amount,
             )
         end

@@ -214,9 +214,38 @@ function default_diagnostics(
     return [average_func(moist_diagnostics...; output_writer, start_date)...]
 end
 
+function default_diagnostics(
+    atmos_water::AtmosWater,
+    duration,
+    start_date;
+    output_writer,
+)
+    diagnostics = []
+
+    # Add moisture and precipitation model diagnostics
+    for model in (atmos_water.moisture_model, atmos_water.precip_model)
+        !isnothing(model) && append!(
+            diagnostics,
+            default_diagnostics(model, duration, start_date; output_writer),
+        )
+    end
+
+    return diagnostics
+end
+
 #######################
 # Precipitation model #
 #######################
+function default_diagnostics(
+    ::Microphysics0Moment,
+    duration,
+    start_date;
+    output_writer,
+)
+    # 0-moment microphysics doesn't have additional diagnostics beyond basic moisture
+    return []
+end
+
 function default_diagnostics(
     ::Microphysics1Moment,
     duration,
@@ -400,4 +429,42 @@ function default_diagnostics(::EDOnlyEDMFX, duration, start_date; output_writer)
     return [
         average_func(edonly_edmfx_diagnostics...; output_writer, start_date)...,
     ]
+end
+
+function default_diagnostics(
+    atmos_radiation::AtmosRadiation,
+    duration,
+    start_date;
+    output_writer,
+)
+    # Add radiation mode diagnostics
+    if !isnothing(atmos_radiation.radiation_mode)
+        return default_diagnostics(
+            atmos_radiation.radiation_mode,
+            duration,
+            start_date;
+            output_writer,
+        )
+    else
+        return []
+    end
+end
+
+function default_diagnostics(
+    atmos_turbconv::AtmosTurbconv,
+    duration,
+    start_date;
+    output_writer,
+)
+    # Add turbulence convection model diagnostics
+    if !isnothing(atmos_turbconv.turbconv_model)
+        return default_diagnostics(
+            atmos_turbconv.turbconv_model,
+            duration,
+            start_date;
+            output_writer,
+        )
+    else
+        return []
+    end
 end

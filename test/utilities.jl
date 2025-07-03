@@ -276,73 +276,70 @@ end
     )
 
     temporary_dir = mktempdir()
-    sim_forcing =
-        CA.get_external_forcing_file_path(parsed_args, data_dir = temporary_dir)
+    sim_forcing_daily = CA.get_external_daily_forcing_file_path(
+        parsed_args,
+        data_dir = temporary_dir,
+    )
 
-    @test basename(sim_forcing) ==
-          "tv_forcing_0.0_0.0_$(parsed_args["start_date"])_$(parsed_args["start_date"]).nc"
+    @test basename(sim_forcing_daily) ==
+          "tv_forcing_0.0_0.0_20000506_20000506.nc"
+
+    sim_forcing_monthly = CA.get_external_monthly_forcing_file_path(
+        parsed_args,
+        data_dir = temporary_dir,
+    )
+
+    @test basename(sim_forcing_monthly) ==
+          "monthly_diurnal_cycle_forcing_0.0_0.0_20000506.nc"
 
     # Create mock datasets
     create_mock_era5_datasets(temporary_dir, parsed_args["start_date"], FT)
 
-    # Generate forcing file
+    # Generate forcing file - identical up to file name for single day and monthly forcing files
     time_resolution = FT(3600)
-    CA.generate_external_era5_forcing_file(
-        parsed_args["site_latitude"],
-        parsed_args["site_longitude"],
-        parsed_args["start_date"],
-        sim_forcing,
+    CA.generate_external_forcing_file(
+        parsed_args,
+        sim_forcing_daily,
         FT,
+        smooth_amount = 4,
         time_resolution = time_resolution,
-        data_dir = temporary_dir,
+        input_data_dir = temporary_dir,
     )
 
-    # Format is "ecmwf_var" => "clima_var"
-    fixed_vars = Dict(
-        "q" => "hus",
-        "t" => "ta",
-        "u" => "ua",
-        "v" => "va",
-        "w" => "wap",
-        "z" => "zg",
-        "clwc" => "clw",
-        "ciwc" => "cli",
-        "skt" => "ts",
-    )
-    surface_accum_vars = Dict("slhf" => "hfls", "sshf" => "hfss")
-
-    processed_data = NCDataset(sim_forcing, "r")
+    processed_data = NCDataset(sim_forcing_daily, "r")
 
     # Test fixed variables - this tests that the variables are copied correctly
-    for (era5_var, clima_var) in fixed_vars
-        @test all(
-            x -> all(isapprox.(x, 1, atol = 1e-10)),
-            processed_data[clima_var][:],
-        )
+    for clima_var in ["hus", "ta", "ua", "va", "wap", "zg", "clw", "cli", "ts"]
+        @test all(isapprox.(processed_data[clima_var][:], 1, atol = 1e-10))
     end
 
     # Test accumulated variables - note that the sign is flipped because of differences between ecmwf and clima
-    for (era5_var, clima_var) in surface_accum_vars
+    for clima_var in ["hfls", "hfss"]
         @test all(
-            x -> all(isapprox.(x, -1 / time_resolution, atol = 1e-10)),
-            processed_data[clima_var][:],
+            isapprox.(
+                processed_data[clima_var][:],
+                -1 / time_resolution,
+                atol = 1e-10,
+            ),
         )
     end
 
     # Test gradient variables (should be zero for uniform data)
     gradient_vars = ["tnhusha", "tntha"]
     for var in gradient_vars
-        @test all(
-            x -> all(isapprox.(x, 0, atol = 1e-10)),
-            processed_data[var][:],
-        )
+        @test all(isapprox.(processed_data[var][:], 0, atol = 1e-10))
     end
 
     # Test coszen variable
     @test all(x -> x >= 0 && x <= 1, processed_data["coszen"][:])
 
     # Test time check
-    @test CA.check_external_forcing_file_times(sim_forcing, parsed_args)
+    @test CA.check_daily_forcing_times(sim_forcing_daily, parsed_args)
+
+    # The monthly diurnal case data and processing happen exactly the 
+    # same as single day files (just the source files are different).
+    # So we can test the monthly time check in the same way.
+    @test CA.check_monthly_forcing_times(sim_forcing_daily, parsed_args)
 
     close(processed_data)
 end
@@ -358,8 +355,10 @@ end
 
     input_dir = mktempdir()
     output_dir = mktempdir()
-    sim_forcing =
-        CA.get_external_forcing_file_path(parsed_args, data_dir = output_dir)
+    sim_forcing = CA.get_external_daily_forcing_file_path(
+        parsed_args,
+        data_dir = output_dir,
+    )
 
     # Create mock datasets for multiple days
     start_date = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
@@ -391,7 +390,7 @@ end
         time_resolution = time_resolution,
         input_data_dir = input_dir,
         output_data_dir = output_dir,
-    ) # getting confused on the directories
+    )
 
     # Test the generated file
     processed_data = NCDataset(sim_forcing, "r")
@@ -408,7 +407,7 @@ end
     )
 
     # Test time check
-    @test CA.check_external_forcing_file_times(sim_forcing, parsed_args)
+    @test CA.check_daily_forcing_times(sim_forcing, parsed_args)
 
     # check the vertical tendency function - useful if we implement steady ERA5 forcing
     vert_partial_ds = Dict(

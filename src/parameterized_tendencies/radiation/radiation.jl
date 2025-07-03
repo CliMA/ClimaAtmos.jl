@@ -28,8 +28,12 @@ radiation_model_cache(Y, atmos::AtmosModel, args...) =
 ##### No Radiation
 #####
 
-radiation_model_cache(Y, radiation_mode::Nothing; args...) = (;)
-radiation_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+radiation_model_cache(
+    Y,
+    radiation_mode::Union{Nothing, HeldSuarezForcing};
+    args...,
+) = (;)
+radiation_tendency!(Yₜ, Y, p, t, ::Union{Nothing, HeldSuarezForcing}) = nothing
 
 #####
 ##### RRTMGP Radiation
