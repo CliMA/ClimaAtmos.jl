@@ -34,5 +34,5 @@ cloud_model: "grid_scale"
 precip_model: 0M
 dt: 120secs
 t_end: 12hours
-toml: [toml/diagnostic_edmfx_0M.toml]
+toml: [toml/diagnostic_edmfx_era5_ic.toml]
 use_itime: true
