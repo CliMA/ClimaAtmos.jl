@@ -1,7 +1,6 @@
 agents:
-  queue: clima
+  queue: gcp
   slurm_mem: 8G
-  modules: climacommon/2025_03_18 nsight-systems/2024.6.1
 
 env:
   JULIA_MPI_HAS_CUDA: "true"
@@ -22,8 +21,13 @@ steps:
       - echo "--- Instantiate examples"
       - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'
       - julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'
-      - julia --project=.buildkite -e 'using CUDA; CUDA.precompile_runtime()'
-      - julia --project=.buildkite -e 'using Pkg; Pkg.status()'
+
+      - julia --project=.buildkite -e 'using Pkg; Pkg.add("CUDA"); using CUDA; CUDA.set_runtime_version!(local_toolkit=true)'
+      - julia --project=.buildkite -e 'using Pkg; Pkg.add("MPIPreferences"); using MPIPreferences; use_system_binary(library_names="/sw/openmpi-5.0.5/lib/libmpi", mpiexec="/sw/openmpi-5.0.5/bin/mpiexec", force=true)'
+
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.status()'"
+
 
     agents:
       slurm_gpus: 1
@@ -59,7 +63,7 @@ steps:
         command:
           - mkdir -p baroclinic_wave_helem30_4process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            mpiexec -n 4
             nsys profile --delay 100 --trace=osrt,nvtx,cuda,mpi,ucx --output=baroclinic_wave_helem30_4process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}baroclinic_wave_helem30.yml
@@ -96,7 +100,7 @@ steps:
         command:
           - mkdir -p held_suarez_equil_helem30_4process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            mpiexec -n 4
             nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=held_suarez_equil_helem30_4process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}held_suarez_equil_helem30.yml
@@ -118,7 +122,6 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_diag_1process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
             nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_diag_1process/output_active/report julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_diag_1process.yml
             --job_id gpu_aquaplanet_dyamond_diag_1process
@@ -138,7 +141,6 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ss_1process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
             nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_ss_1process/output_active/report
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
@@ -159,7 +161,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ss_2process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            mpiexec -n 2
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_2process
@@ -179,7 +181,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ss_4process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            mpiexec -n 4
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_4process
@@ -217,7 +219,6 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ws_1process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_1process.yml
             --job_id gpu_aquaplanet_dyamond_ws_1process
@@ -237,7 +238,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ws_2process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            mpiexec -n 2
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_2process.yml
             --job_id gpu_aquaplanet_dyamond_ws_2process
@@ -257,7 +258,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ws_4process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            mpiexec -n 4
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_4process.yml
             --job_id gpu_aquaplanet_dyamond_ws_4process
