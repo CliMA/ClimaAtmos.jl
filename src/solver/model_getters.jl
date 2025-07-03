@@ -301,7 +301,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
 end
 
 function get_microphysics_model(parsed_args)
-    microphysics_model = parsed_args["microphysics_model"]
+    microphysics_model = parsed_args["precip_model"]
     return if microphysics_model == nothing || microphysics_model == "nothing"
         NoPrecipitation()
     elseif microphysics_model == "0M"
