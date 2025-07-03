@@ -1035,6 +1035,18 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_mem: 16GB
+      
+      -label: ":earth_americas: GPU: Diagnostic EDMFX ERA5 Weather Model Initial Condition"
+        command: > 
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_era5_initial_condition.yml
+          --job_id diagnostic_edmfx_era5_initial_condition
+        artifact_paths: "diagnostic_edmfx_era5_initial_condition/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16GB
 
       - label: "GPU: EDOnly EDMFX aquaplanet"
         command: >

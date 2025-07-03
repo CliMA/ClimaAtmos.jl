@@ -1,3 +1,17 @@
+start_date: "20250627" # lets dispatch on start date and start time 
+start_time: "0000"
+initial_condition: "WeatherModel"
+topo_smoothing: true
+topography: "Earth"
+
+# prevent gravity waves at domain top
+rayleigh_sponge: true
+
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [ta, ua, wa, va, rhoa, hur, hus, clw, cli]
+    period: 60mins
+
 z_max: 48000.0
 z_elem: 63
 h_elem: 15
@@ -22,19 +36,3 @@ dt: 120secs
 t_end: 12hours
 toml: [toml/diagnostic_edmfx_0M.toml]
 use_itime: true
-
-diagnostics:
-  - short_name: [ta, ua, wa, va, rhoa, hur, hus, clw, cli]
-    period: 10mins
-
-start_date: "20250627" # lets dispatch on start date and start time 
-start_time: "0000"
-dt_spun_up: 120secs # not implemented yet
-initial_condition: "WeatherModel" #"/home/jschmitt/experiments/ecmwf/initial_conditions/era5_init_20250506_0000_on_z2.nc"
-# initial_condition: "/home/jschmitt/experiments/ecmwf/initial_conditions/era5_init_20250626_0000.nc"
-topo_smoothing: true
-topography: "Earth"
-
-# sponges 
-rayleigh_sponge: true
-

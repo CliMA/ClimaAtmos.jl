@@ -166,9 +166,6 @@ start_date:
 start_time:
   help: "Start time in HHMM format. Used for intializing the weather model"
   value: "0000"
-dt_spun_up:
-  help: "Allows dt to be set to a smaller value for the first hourFor noisy initial conditions, we change the timestep to this value after the first hour to solve faster."
-  value: 10secs 
 forcing:
   help: "Forcing [`nothing` (default), `held_suarez`]"
   value: ~
