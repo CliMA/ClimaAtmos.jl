@@ -78,8 +78,8 @@ function to_z_levels(source_file, target_file, target_levels, FT)
     ncout = NCDataset(target_file, "c", attrib = copy(ncin.attrib))
 
     # Define dimensions
-    defDim(ncout, "lon", size(lon, 1))
-    defDim(ncout, "lat", size(lat, 1))
+    defDim(ncout, "lon", length(lon))
+    defDim(ncout, "lat", length(lat))
     defDim(ncout, "z", length(target_levels))
 
     # Define coordinate variables with clean attributes
