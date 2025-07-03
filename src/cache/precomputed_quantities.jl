@@ -323,14 +323,21 @@ function set_velocity_at_top!(Y, turbconv_model)
     return nothing
 end
 
+@inline function ᶜu_lazy(ᶜuₕ, ᶠu₃)
+    return @. lazy(C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃)))
+end
+@inline function ᶠu³_lazy(ᶠuₕ³, ᶠu₃)
+    return @. lazy(ᶠuₕ³ + CT3(ᶠu₃))
+end
 # This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
 # ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
-function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
-    @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
-    @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
+function set_velocity_quantities!(ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
+    ᶜu = ᶜu_lazy(ᶜuₕ, ᶠu₃)
+    ᶠu³ = ᶠu³_lazy(ᶠuₕ³, ᶠu₃)
     ᶜK .= compute_kinetic(ᶜuₕ, ᶠu₃)
     return nothing
 end
+
 
 function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
     ρaʲs(sgsʲs) = map(sgsʲ -> sgsʲ.ρa, sgsʲs)
@@ -469,7 +476,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     set_velocity_at_top!(Y, turbconv_model)
 
-    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
+    set_velocity_quantities!(ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     @. ᶠu = CT123(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
     if n > 0

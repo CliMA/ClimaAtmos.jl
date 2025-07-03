@@ -960,7 +960,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
-    (; ᶜp, ᶜu, ᶜts) = p.precomputed
+    (; ᶜp, ᶜts) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜtke⁰) = p.precomputed
     (;
@@ -974,6 +974,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
+    ᶜu = ᶜu_lazy(Y.c.uₕ, Y.f.u₃)
     if p.atmos.turbconv_model isa DiagnosticEDMFX
         (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs, ᶠu³⁰, ᶜu⁰) = p.precomputed
     elseif p.atmos.turbconv_model isa EDOnlyEDMFX

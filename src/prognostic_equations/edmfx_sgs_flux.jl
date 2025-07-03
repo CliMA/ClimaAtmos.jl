@@ -450,7 +450,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜu, ᶜh_tot, ᶜtke⁰, ᶜmixing_length) = p.precomputed
+    (; ᶜh_tot, ᶜtke⁰, ᶜmixing_length) = p.precomputed
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
@@ -505,6 +505,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         # Momentum diffusion
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
+        ᶜu = ᶜu_lazy(Y.c.uₕ, Y.f.u₃)
         ᶠstrain_rate .= compute_strain_rate_face(ᶜu)
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
     end
