@@ -1036,7 +1036,7 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16GB
       
-      -label: ":earth_americas: GPU: Diagnostic EDMFX ERA5 Weather Model Initial Condition"
+      - label: ":earth_americas: GPU: Diagnostic EDMFX ERA5 Weather Model Initial Condition"
         command: > 
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_era5_initial_condition.yml
