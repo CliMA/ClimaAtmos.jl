@@ -87,6 +87,9 @@ density-weighted tracer names `@name(ρχ)` in `gs_tracer_names(Y)`.
 specific_gs_tracer_names(Y) =
     unrolled_map(specific_tracer_name, gs_tracer_names(Y))
 
+sedimenting_specific_sgs_tracer_names() =
+  (@name(q_liq), @name(q_ice), @name(q_rai), @name(q_sno))
+
 """
     ᶜempty(Y)
 
@@ -168,13 +171,21 @@ end
 foreach_gs_tracer(f::F, Y_or_similar_values...) where {F} =
     unrolled_foreach(gs_tracer_names(Y_or_similar_values[1])) do ρχ_name
         ρχ_or_χ_fields = unrolled_map(Y_or_similar_values) do value
-            field = value isa Fields.Field ? value : value.c
+            field = value isa Fields.FieldVector ? value.c : value
             ρχ_or_χ_name =
                 MatrixFields.has_field(field, ρχ_name) ? ρχ_name :
                 specific_tracer_name(ρχ_name)
             MatrixFields.get_field(field, ρχ_or_χ_name)
         end
         f(ρχ_or_χ_fields..., ρχ_name)
+    end
+foreach_sgs_tracer(f::F, Y_or_similar_values...) where {F} =
+    unrolled_foreach(sedimenting_specific_sgs_tracer_names()) do χ_name
+        χ_fields = unrolled_map(Y_or_similar_values) do value
+            field = value isa Fields.FieldVector ? value.c.sgsʲs.:1 : value
+            MatrixFields.get_field(field, χ_name)
+        end
+        f(χ_fields..., χ_name)
     end
 
 """

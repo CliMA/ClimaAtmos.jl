@@ -407,30 +407,6 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶜmseᵣ = (@. lazy(Y.c.sgsʲs.:($$j).q_rai * (TD.internal_energy_liquid(thp, ᶜtsʲs.:($$j)) + TD.gas_constant_air(thp, ᶜtsʲs.:($$j)) * TD.air_temperature(thp, ᶜtsʲs.:($$j)) + ᶜΦ)))
             ᶜmseₛ = (@. lazy(Y.c.sgsʲs.:($$j).q_sno * (TD.internal_energy_ice(thp,    ᶜtsʲs.:($$j)) + TD.gas_constant_air(thp, ᶜtsʲs.:($$j)) * TD.air_temperature(thp, ᶜtsʲs.:($$j)) + ᶜΦ)))
 
-#=
-            # option I - RICO works well but we are missing q * mse advective term
-            #va = vertical_advection(ᶠwₗ³ʲs, (@. lazy(ᶜmseₗ - Y.c.sgsʲs.:($$j).q_liq * Y.c.sgsʲs.:($$j).mse)), edmfx_upwinding)
-            va = vertical_advection(ᶠwₗ³ʲs, ᶜmseₗ, edmfx_upwinding)
-            @. Yₜ.c.sgsʲs.:($$j).mse += va
-            #va = vertical_advection(ᶠwᵢ³ʲs, (@. lazy(ᶜmseᵢ - Y.c.sgsʲs.:($$j).q_ice * Y.c.sgsʲs.:($$j).mse)), edmfx_upwinding)
-            va = vertical_advection(ᶠwᵢ³ʲs, ᶜmseᵢ, edmfx_upwinding)
-            @. Yₜ.c.sgsʲs.:($$j).mse += va
-            #va = vertical_advection(ᶠwᵣ³ʲs, (@. lazy(ᶜmseᵣ - Y.c.sgsʲs.:($$j).q_rai * Y.c.sgsʲs.:($$j).mse)), edmfx_upwinding)
-            va = vertical_advection(ᶠwᵣ³ʲs, ᶜmseᵣ, edmfx_upwinding)
-            @. Yₜ.c.sgsʲs.:($$j).mse += va
-            #va = vertical_advection(ᶠwₛ³ʲs, (@. lazy(ᶜmseₛ - Y.c.sgsʲs.:($$j).q_sno * Y.c.sgsʲs.:($$j).mse)), edmfx_upwinding)
-            va = vertical_advection(ᶠwₛ³ʲs, ᶜmseₛ, edmfx_upwinding)
-            @. Yₜ.c.sgsʲs.:($$j).mse += va
-
-            va = vertical_advection(ᶠwₗ³ʲs, Y.c.sgsʲs.:($j).mse, edmfx_upwinding)
-            @. Yₜ.c.sgsʲs.:($$j).mse += va * Y.c.sgsʲs.:($$j).q_liq
-            va = vertical_advection(ᶠwᵢ³ʲs, Y.c.sgsʲs.:($j).mse, edmfx_upwinding)
-            @. Yₜ.c.sgsʲs.:($$j).mse += va * Y.c.sgsʲs.:($$j).q_ice
-            va = vertical_advection(ᶠwᵣ³ʲs, Y.c.sgsʲs.:($j).mse, edmfx_upwinding)
-            @. Yₜ.c.sgsʲs.:($$j).mse += va * Y.c.sgsʲs.:($$j).q_rai
-            va = vertical_advection(ᶠwₛ³ʲs, Y.c.sgsʲs.:($j).mse, edmfx_upwinding)
-            @. Yₜ.c.sgsʲs.:($$j).mse += va * Y.c.sgsʲs.:($$j).q_sno
-=#
             # option II
             # RICO works well but we are missing mse * q_ advection term
             va = vertical_advection(ᶠwₗ³ʲs, ᶜmseₗ, edmfx_upwinding)
@@ -453,44 +429,28 @@ function edmfx_sgs_vertical_advection_tendency!(
 =#
             # mse, q_tot and moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
             ᶜinv_ρ̂ = (@. lazy(divide_by_ρa(FT(1), Y.c.sgsʲs.:($$j).ρa, FT(0), Y.c.ρ, turbconv_model)))
-            ᶜ∂ρ̂∂zₗ = (@. lazy(upwind_biased_grad(-1 * Geometry.WVector(ᶜwₗʲs.:($$j)), Y.c.sgsʲs.:($$j).ρa)))
-            ᶜ∂ρ̂∂zᵢ = (@. lazy(upwind_biased_grad(-1 * Geometry.WVector(ᶜwᵢʲs.:($$j)), Y.c.sgsʲs.:($$j).ρa)))
-            ᶜ∂ρ̂∂zᵣ = (@. lazy(upwind_biased_grad(-1 * Geometry.WVector(ᶜwᵣʲs.:($$j)), Y.c.sgsʲs.:($$j).ρa)))
-            ᶜ∂ρ̂∂zₛ = (@. lazy(upwind_biased_grad(-1 * Geometry.WVector(ᶜwₛʲs.:($$j)), Y.c.sgsʲs.:($$j).ρa)))
 
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zₗ, CT3(Geometry.WVector(-1 * ᶜwₗʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_liq * (1 - Y.c.sgsʲs.:($$j).q_tot)
-            @. Yₜ.c.sgsʲs.:($$j).q_liq -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zₗ, CT3(Geometry.WVector(-1 * ᶜwₗʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_liq
-            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zₗ, CT3(Geometry.WVector(-1 * ᶜwₗʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_liq * Y.c.sgsʲs.:($$j).mse - ᶜmseₗ)
+            moisture_tracer_velocities = (;
+               q_liq = ᶜwₗʲs.:($j),
+               q_ice = ᶜwᵢʲs.:($j),
+               q_rai = ᶜwᵣʲs.:($j),
+               q_sno = ᶜwₛʲs.:($j),
+            )
+            internal_energy_functions = (;
+                q_liq = TD.internal_energy_liquid,
+                q_ice = TD.internal_energy_ice,
+                q_rai = TD.internal_energy_liquid,
+                q_sno = TD.internal_energy_ice,
+            )
+            foreach_sgs_tracer(Yₜ, Y, moisture_tracer_velocities, internal_energy_functions) do ᶜχʲₜ, ᶜχʲ, ᶜwᵪʲ, Iʲ, _
+                ᶜ∂ρ̂∂zʲ = (@. lazy(upwind_biased_grad(-1 * Geometry.WVector(ᶜwᵪʲ), Y.c.sgsʲs.:($$j).ρa)))
+                ᶜmseʲ = (@. lazy(ᶜχʲ * (Iʲ(thp, ᶜtsʲs.:($$j)) + TD.gas_constant_air(thp, ᶜtsʲs.:($$j)) * TD.air_temperature(thp, ᶜtsʲs.:($$j)) + ᶜΦ)))
 
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zᵢ, CT3(Geometry.WVector(-1 * ᶜwᵢʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_ice * (1 - Y.c.sgsʲs.:($$j).q_tot)
-            @. Yₜ.c.sgsʲs.:($$j).q_ice -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zᵢ, CT3(Geometry.WVector(-1 * ᶜwᵢʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_ice
-            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zᵢ, CT3(Geometry.WVector(-1 * ᶜwᵢʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_ice * Y.c.sgsʲs.:($$j).mse - ᶜmseᵢ)
+                @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zʲ, CT3(Geometry.WVector(-1 * ᶜwᵪʲ))) * ᶜχʲ * (1 - Y.c.sgsʲs.:($$j).q_tot)
+                @. ᶜχʲₜ -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zʲ, CT3(Geometry.WVector(-1 * ᶜwᵪʲ))) * ᶜχʲ
+                @. Yₜ.c.sgsʲs.:($$j).mse -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zʲ, CT3(Geometry.WVector(-1 * ᶜwᵪʲ))) * (ᶜχʲ * Y.c.sgsʲs.:($$j).mse - ᶜmseʲ)
+            end
 
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zᵣ, CT3(Geometry.WVector(-1 * ᶜwᵣʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_rai * (1 - Y.c.sgsʲs.:($$j).q_tot)
-            @. Yₜ.c.sgsʲs.:($$j).q_rai -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zᵣ, CT3(Geometry.WVector(-1 * ᶜwᵣʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_rai
-            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zᵣ, CT3(Geometry.WVector(-1 * ᶜwᵣʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_rai * Y.c.sgsʲs.:($$j).mse - ᶜmseᵣ)
-
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zₛ, CT3(Geometry.WVector(-1 * ᶜwₛʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_sno * (1 - Y.c.sgsʲs.:($$j).q_tot)
-            @. Yₜ.c.sgsʲs.:($$j).q_sno -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zₛ, CT3(Geometry.WVector(-1 * ᶜwₛʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_sno
-            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂zₛ, CT3(Geometry.WVector(-1 * ᶜwₛʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_sno * Y.c.sgsʲs.:($$j).mse - ᶜmseₛ)
-#=
-            ᶜinv_ρ̂_∂ρ̂∂z = (@. lazy(divide_by_ρa(FT(1), Y.c.sgsʲs.:($$j).ρa, FT(0), Y.c.ρ, turbconv_model) * ᶜgradᵥ(ᶠinterp(Y.c.sgsʲs.:($$j).ρa))))
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwₗʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_liq * (1 - Y.c.sgsʲs.:($$j).q_tot)
-            @. Yₜ.c.sgsʲs.:($$j).q_liq -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwₗʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_liq
-            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwₗʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_liq * Y.c.sgsʲs.:($$j).mse - ᶜmseₗ)
-
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwᵢʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_ice * (1 - Y.c.sgsʲs.:($$j).q_tot)
-            @. Yₜ.c.sgsʲs.:($$j).q_ice -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwᵢʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_ice
-            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwᵢʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_ice * Y.c.sgsʲs.:($$j).mse - ᶜmseᵢ)
-
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwᵣʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_rai * (1 - Y.c.sgsʲs.:($$j).q_tot)
-            @. Yₜ.c.sgsʲs.:($$j).q_rai -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwᵣʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_rai
-            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwᵣʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_rai * Y.c.sgsʲs.:($$j).mse - ᶜmseᵣ)
-
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwₛʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_sno * (1 - Y.c.sgsʲs.:($$j).q_tot)
-            @. Yₜ.c.sgsʲs.:($$j).q_sno -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwₛʲs.:($$j)))) * Y.c.sgsʲs.:($$j).q_sno
-            @. Yₜ.c.sgsʲs.:($$j).mse   -= dot(ᶜinv_ρ̂_∂ρ̂∂z, CT3(Geometry.WVector(-1 * ᶜwₛʲs.:($$j)))) * (Y.c.sgsʲs.:($$j).q_sno * Y.c.sgsʲs.:($$j).mse - ᶜmseₛ)
-=#
             # mse, q_tot and moisture tracer terms proportional to velocity gradients
             @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜdivᵥ(ᶠwₗ³ʲs) * Y.c.sgsʲs.:($$j).q_liq * (1 - Y.c.sgsʲs.:($$j).q_tot)
             @. Yₜ.c.sgsʲs.:($$j).q_liq -= ᶜdivᵥ(ᶠwₗ³ʲs) * Y.c.sgsʲs.:($$j).q_liq
@@ -510,28 +470,3 @@ function edmfx_sgs_vertical_advection_tendency!(
        end
     end
 end
-
-            #(; ᶜΦ) = p.core
-            #thp = CAP.thermodynamics_params(params)
-
-            #@. ᶜa_scalar = Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ
-            #vtt = vertical_transport(FT(1), (@. lazy( CT3(ᶠinterp(Geometry.WVector(ᶜwᵣʲs.:($$j)))))), ᶜa_scalar, dt, edmfx_upwinding)
-            #@. Yₜ.c.sgsʲs.:($$j).q_rai -= vtt
-            #@. Yₜ.c.sgsʲs.:($$j).q_rai -= ᶜinv_ρ̂_∂ρ̂∂z * ᶜwᵣʲs.:($$j) * (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜϕ)
-
-            #(@. lazy(ᶠu³ʲs.:($$j) - CT3(ᶠinterp(Geometry.WVector(ᶜwₗʲs.:($$j)))))),
-
-            #@. Yₜ.c.sgsʲs.:($$j).mse -= ifelse(
-            #    Y.c.sgsʲs.:($$j).ρa <= eps(FT),
-            #    FT(0),
-            #    (
-            #     1 / Y.c.sgsʲs.:($$j).ρa *
-            #        ᶜdivᵥ(ᶠinterp(Y.c.sgsʲs.:($$j).ρa * (
-            #            Geometry.WVector(ᶜwₗʲs.:($$j)) * (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ)  +
-            #            Geometry.WVector(ᶜwᵢʲs.:($$j)) * (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
-            #            Geometry.WVector(ᶜwᵣʲs.:($$j)) * (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ)  +
-            #            Geometry.WVector(ᶜwₛʲs.:($$j)) * (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
-            #        )))
-            #   )
-            #)
-
