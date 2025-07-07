@@ -3,8 +3,8 @@ z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
 dt: "300secs"
+deep_atmosphere: true
 t_end: "120days"
-topography: "Earth"
 rayleigh_sponge: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
@@ -13,4 +13,8 @@ surface_setup: "DefaultMoninObukhov"
 vert_diff: "DecayWithHeightDiffusion"
 precip_model: "0M"
 cloud_model: "grid_scale"
+netcdf_output_at_levels: true
 toml: [toml/sphere_aquaplanet.toml]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    period: 5days

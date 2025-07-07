@@ -236,7 +236,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρq_tot += vtt - vtt_central
     end
 
-    if isnothing(ᶠf¹²)
+    if isnothing(ᶠf¹²) # SHALLOW ATMOSPHERE
         # shallow atmosphere
         @. Yₜ.c.uₕ -=
             ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
@@ -247,7 +247,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
                 ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
         end
-    else
+    else # DEEP ATMOSPHERE 
         # deep atmosphere
         @. Yₜ.c.uₕ -=
             ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
