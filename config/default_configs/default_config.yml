@@ -161,11 +161,8 @@ bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: false
 start_date:
-  help: "Start date of the simulation"
+  help: "Start date and time of the simulation. Specified as either yyyymmdd (defaults to midnight) or yyyymmdd-HHMM. Examples: [`20100101`, `20100101-0000`]"
   value: "20100101"
-start_time:
-  help: "Start time in HHMM format. Used for intializing the weather model"
-  value: "0000"
 forcing:
   help: "Forcing [`nothing` (default), `held_suarez`]"
   value: ~

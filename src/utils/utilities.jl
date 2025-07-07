@@ -4,6 +4,7 @@
 import ClimaComms
 import ClimaCore: Spaces, Topologies, Fields, Geometry
 import LinearAlgebra: norm_sqr
+using Dates: DateTime, @dateformat_str
 
 is_energy_var(symbol) = symbol in (:ρe_tot, :ρae_tot)
 is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :u₃, :ρw)
@@ -477,6 +478,28 @@ end
 function promote_period(period::Dates.OtherPeriod)
     # For varying periods, we just return them as they are
     return period
+end
+
+"""
+    parse_date(date_str)
+
+Parse a date string into a `DateTime` object. Currently, only the following formats are supported:
+- yyyymmdd
+- yyyymmdd-HHMM
+"""
+function parse_date(date_str)
+    # Define a mapping between allowed formats and corresponding date format 
+    date_format_mapping = Dict(
+        r"^\d{8}$" => dateformat"yyyymmdd",
+        r"^\d{8}-\d{4}$" => dateformat"yyyymmdd-HHMM",
+    )
+    for (pattern, format) in date_format_mapping
+        !isnothing(match(pattern, date_str)) &&
+            return DateTime(date_str, format)
+    end
+    error(
+        "Date string $date_str does not match any of the allowed formats: yyyymmdd or yyyymmdd-HHMM",
+    )
 end
 
 function iscolumn(space)

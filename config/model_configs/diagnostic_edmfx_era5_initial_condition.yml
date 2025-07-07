@@ -2,13 +2,13 @@ z_max: 48000.0
 z_elem: 63
 h_elem: 15
 dz_bottom: 30.0
-start_date: "20250627"
-start_time: "0000"
+start_date: "20250627-0000"
 initial_condition: "WeatherModel"
 discrete_hydrostatic_balance: false # TODO: change to true once we fix discrete hydrostatic balance to work with orography
 topo_smoothing: true
 topography: "Earth"
 rayleigh_sponge: true
+# divergence_damping_factor: 50.0 - TODO: add this when #3888 is resolved
 insolation: "timevarying"
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear

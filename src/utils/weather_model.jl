@@ -1,36 +1,41 @@
 using NCDatasets
 using Dates
 import ClimaInterpolations.Interpolation1D: interpolate1d!, Linear, Flat
+import ..parse_date
 
 """
-    weather_model_data_path(start_date, start_time)
+    weather_model_data_path(start_date)
 
 Get the path to the weather model data for a given start date and time.
 If the data is not found, will attempt to generate it from raw data. If 
 the raw data is not found, throw an error
 
 # Arguments
-- `start_date`: Start date as string YYYYMMDD
-- `start_time`: Start time as string HHMM
+- `start_date`: Start date as string yyyymmdd or yyyymmdd-HHMM
 """
-function weather_model_data_path(start_date, start_time)
-    # get data path
+function weather_model_data_path(start_date)
+    # Parse the date using the existing parse_date function
+    dt = parse_date(start_date)
+
+    # Extract components for filename generation
+    start_date_str = Dates.format(dt, "yyyymmdd")
+    start_time = Dates.format(dt, "HHMM")
     ic_data_path = joinpath(
         @clima_artifact("weather_model_ic"),
         "init",
-        "era5_init_$(start_date)_$(start_time).nc",
+        "era5_init_$(start_date_str)_$(start_time).nc",
     )
     raw_data_path = joinpath(
         @clima_artifact("weather_model_ic"),
         "raw",
-        "era5_raw_$(start_date)_$(start_time).nc",
+        "era5_raw_$(start_date_str)_$(start_time).nc",
     )
 
     if !isfile(ic_data_path)
         @info "Initial condition file $ic_data_path does not exist. Attempting to generate it now..."
         if !isfile(raw_data_path)
-            day = Dates.format(Date(start_date, "yyyymmdd"), "yyyy-mm-dd")
-            time = Dates.format(Time(start_time, "HHMM"), "HH:MM")
+            day = Dates.format(dt, "yyyy-mm-dd")
+            time = Dates.format(dt, "HH:MM")
             error(
                 "Source file $(raw_data_path) does not exist. Please run `python get_initial_conditions.py --output-dir $(@clima_artifact("weather_model_ic"))/raw --date $(day) --time $(time)` to download the data.",
             )
@@ -45,7 +50,6 @@ function weather_model_data_path(start_date, start_time)
     end
     return ic_data_path
 end
-
 
 """
     to_z_levels(source_file, target_file, target_levels, FT)
@@ -123,7 +127,7 @@ function to_z_levels(source_file, target_file, target_levels, FT)
     # See https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2017MS001059
     w_var =
         defVar(ncout, "w", FT, ("lon", "lat", "z"), attrib = ncin["w"].attrib)
-    w_var[:, :, :] .= FT(0)
+    w_var[:, :, :] = zeros(FT, length(lon), length(lat), length(target_levels))
 
     t_var =
         defVar(ncout, "t", FT, ("lon", "lat", "z"), attrib = ncin["t"].attrib)
@@ -180,33 +184,3 @@ function interpz_3d(ztarget, zsource, fsource)
     # permute interpolated data to initial ordering
     return permutedims(ftargetp, (2, 3, 1))
 end
-
-
-
-
-
-
-
-# """
-#     WeatherModel(start_date, start_time)
-
-# An `InitialCondition` that initializes the model with an empty state, and then overwrites
-#  it with the content of the weather model. We assume that the weather initial condition 
-#  is stored in a correctly named and formatted file in some TODO artifact. 
-# """
-# struct WeatherModel <: InitialCondition
-#     start_date::String
-#     start_time::String
-# end
-
-# # get data path from start date and start time
-# start_date = initial_conditions.start_date
-# start_time = initial_conditions.start_time
-# # replace with artifact path
-# rootdir = "/home/jschmitt/experiments/ecmwf/initial_conditions"
-# file_path = joinpath(rootdir, "era5_init_$(start_date)_$(start_time).nc")
-# if !isfile(file_path)
-#     # process using utilities
-#     # TODO: implement
-#     error("Add utilities for processing raw weather model data")
-# end

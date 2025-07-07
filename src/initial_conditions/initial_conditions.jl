@@ -193,7 +193,7 @@ struct MoistFromFile <: InitialCondition
 end
 
 """
-    WeatherModel(start_date, start_time)
+    WeatherModel(start_date)
 
 An `InitialCondition` that initializes the model with an empty state, and then overwrites
 it with the content of a NetCDF file that contains the initial conditions, stored in the 
@@ -204,7 +204,6 @@ conditions from ERA5 pressure level grid to a z grid, saving to the artifact
 """
 struct WeatherModel <: InitialCondition
     start_date::String
-    start_time::String
 end
 
 
@@ -377,10 +376,7 @@ function overwrite_initial_conditions!(
     thermo_params,
 )
     extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
-    file_path = weather_model_data_path(
-        initial_condition.start_date,
-        initial_condition.start_time,
-    )
+    file_path = weather_model_data_path(initial_condition.start_date)
     return _overwrite_initial_conditions_from_file!(
         file_path,
         extrapolation_bc,
