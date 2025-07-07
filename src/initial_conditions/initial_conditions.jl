@@ -419,7 +419,7 @@ function _overwrite_initial_conditions_from_file!(
     face_space = Fields.axes(Y.f)
     # Using surface pressure, air temperature and specific humidity
     # from the dataset, compute air pressure.
-    p_sfc = Fields.level(
+    sfc_p = Fields.level(
         SpaceVaryingInputs.SpaceVaryingInput(
             file_path,
             "p",
@@ -428,6 +428,7 @@ function _overwrite_initial_conditions_from_file!(
         ),
         Fields.half,
     )
+    #Y.c.sfc_p = sfc_p # allocate sfc_p in Y.c so that it is available to the discrete hydrostatic balance function
     ᶜT = SpaceVaryingInputs.SpaceVaryingInput(
         file_path,
         "t",
@@ -456,7 +457,7 @@ function _overwrite_initial_conditions_from_file!(
        (TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT)
     ᶠlnp_over_psfc = zeros(face_space)
     Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
-    ᶠp = p_sfc .* exp.(ᶠlnp_over_psfc)
+    ᶠp = sfc_p .* exp.(ᶠlnp_over_psfc)
     ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp.(ᶠp), ᶜT, ᶜq_tot)
 
     # Assign prognostic variables from equilibrium moisture models
@@ -484,8 +485,8 @@ function _overwrite_initial_conditions_from_file!(
                 regridder_kwargs = regridder_kwargs,
             ),
         )
-    Y.c.uₕ .= C12.(Geometry.UVVector.(vel))
-    Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
+    Y.c.uₕ .= C12.(vel)
+    Y.f.u₃ .= C3.(ᶠinterp.(vel))
     e_kin = similar(ᶜT)
     e_kin .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
     e_pot = Fields.coordinate_field(Y.c).z .* thermo_params.grav
@@ -519,7 +520,7 @@ function _overwrite_initial_conditions_from_file!(
         fill!(Y.c.sgs⁰.ρatke, 0)
     end
 
-    return nothing
+    return Fields.level(ᶜts.p, 1) # sfc_p didn't work because it was data not hte model lowest level 
 end
 
 ##

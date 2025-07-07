@@ -4,20 +4,28 @@ import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
 import .InitialConditions as ICs
 
+function default_surface_pressure(Y, p)
+    FT = eltype(Y)
+    return FT(CAP.MSLP(p.params))
+end
+
 """
     set_discrete_hydrostatic_balanced_state!(Y, p)
 Modify the energy variable in state `Y` given Y and the cache `p` so that
 `Y` is in discrete hydrostatic balance.
 """
-function set_discrete_hydrostatic_balanced_state!(Y, p)
-    FT = Spaces.undertype(axes(Y.c))
+function set_discrete_hydrostatic_balanced_state!(
+    Y,
+    p,
+    sfc_p = default_surface_pressure(Y, p),
+)
     ᶠgradᵥ_ᶜp = similar(Y.f.u₃)
     set_discrete_hydrostatic_balanced_pressure!(
         p.precomputed.ᶜp,
         ᶠgradᵥ_ᶜp,
         Y.c.ρ,
         p.core.ᶠgradᵥ_ᶜΦ,
-        FT(CAP.MSLP(p.params)),
+        sfc_p,
     )
     thermo_params = CAP.thermodynamics_params(p.params)
     if p.atmos.moisture_model isa DryModel
@@ -79,7 +87,8 @@ function set_discrete_hydrostatic_balanced_pressure!(
     ᶜp_data = Fields.field_values(ᶜp)
     ᶠgradᵥ_ᶜp_data = Fields.field_values(ᶠgradᵥ_ᶜp)
     ᶜp_data_lev₋₁ = Spaces.level(ᶜp_data, 1)
-    @. ᶜp_data_lev₋₁ = p1
+    #@. ᶜp_data_lev₋₁ = p1
+    parent(ᶜp_data_lev₋₁) .= parent(p1)
     @inbounds for i in 2:Spaces.nlevels(axes(ᶜp))
         ᶜp_data_lev = Spaces.level(ᶜp_data, i)
         ᶜp_data_lev₋₁ = Spaces.level(ᶜp_data, i - 1)

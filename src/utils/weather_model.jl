@@ -123,7 +123,8 @@ function to_z_levels(source_file, target_file, target_levels, FT)
     # See https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2017MS001059
     w_var =
         defVar(ncout, "w", FT, ("lon", "lat", "z"), attrib = ncin["w"].attrib)
-    w_var[:, :, :] .= FT(0)
+    w_var[:, :, :] =
+        interpz_3d(target_levels, source_z, FT.(ncin["w"][:, :, :, 1]))
 
     t_var =
         defVar(ncout, "t", FT, ("lon", "lat", "z"), attrib = ncin["t"].attrib)

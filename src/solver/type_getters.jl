@@ -781,7 +781,7 @@ function get_simulation(config::AtmosConfig)
         # this call to `overwrite_initial_conditions` overwrites the variables
         # in `Y` (specific to `initial_condition`) with those computed using the
         # `SpaceVaryingInputs` tool.
-        CA.InitialConditions.overwrite_initial_conditions!(
+        sfc_p = CA.InitialConditions.overwrite_initial_conditions!(
             initial_condition,
             Y,
             params.thermodynamics_params,
@@ -806,7 +806,7 @@ function get_simulation(config::AtmosConfig)
     @info "Allocating cache (p): $s"
 
     if config.parsed_args["discrete_hydrostatic_balance"]
-        set_discrete_hydrostatic_balanced_state!(Y, p)
+        set_discrete_hydrostatic_balanced_state!(Y, p, sfc_p)
     end
 
     FT = Spaces.undertype(axes(Y.c))
