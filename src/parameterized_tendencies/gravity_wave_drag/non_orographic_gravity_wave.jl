@@ -141,6 +141,7 @@ function non_orographic_gravity_wave_compute_tendency!(
     #unpack
     ᶜT = p.scratch.ᶜtemp_scalar
     (; ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
     (; params) = p
     (;
         ᶜdTdz,
@@ -159,7 +160,6 @@ function non_orographic_gravity_wave_compute_tendency!(
     ᶜz = Fields.coordinate_field(Y.c).z
     FT = Spaces.undertype(axes(Y.c))
     # parameters
-    thermo_params = CAP.thermodynamics_params(params)
     grav = CAP.grav(params)
 
     # compute buoyancy frequency
@@ -205,12 +205,11 @@ function non_orographic_gravity_wave_compute_tendency!(
         fill!(damp_level, Spaces.nlevels(axes(ᶜz)))
 
     elseif issphere(axes(Y.c))
-        (; ᶜp) = p.precomputed
         (; gw_source_pressure, gw_damp_pressure, source_p_ρ_z_u_v_level) =
             p.non_orographic_gravity_wave
         # source level: the index of the highest level whose pressure is higher than source pressure
 
-        input = Base.Broadcast.broadcasted(tuple, ᶜp, ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel)
+        input = Base.Broadcast.broadcasted(tuple, Base.materialize(ᶜp(thermo_params, ᶜts)), ᶜρ, ᶜz, ᶜu, ᶜv, ᶜlevel)
         Operators.column_reduce!(
             source_p_ρ_z_u_v_level,
             input,
@@ -231,7 +230,7 @@ function non_orographic_gravity_wave_compute_tendency!(
 
         # damp level: the index of the lowest level whose pressure is lower than the damp pressure
 
-        input = Base.Broadcast.broadcasted(tuple, ᶜlevel, ᶜp)
+        input = Base.Broadcast.broadcasted(tuple, ᶜlevel, Base.materialize(ᶜp(thermo_params, ᶜts)))
         Operators.column_reduce!(
             damp_level,
             input;

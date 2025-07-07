@@ -93,12 +93,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜh_tot, ᶜK) = p.precomputed
+    (; ᶠu³, ᶜK) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.precomputed.sfc_conditions
     (; ᶜρaʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
-    (; ᶠu³⁰, ᶜK⁰) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜts) = p.precomputed
 
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
@@ -107,11 +107,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     ρ_int_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
     uₕ_int_level = Fields.field_values(Fields.level(Y.c.uₕ, 1))
     u³_int_halflevel = Fields.field_values(Fields.level(ᶠu³, half))
-    h_tot_int_level = Fields.field_values(Fields.level(ᶜh_tot, 1))
+    h_tot_int_level = Fields.field_values(Fields.level(Base.materialize(ᶜh_tot(Y, thermo_params, ᶜts)), 1))
     K_int_level = Fields.field_values(Fields.level(ᶜK, 1))
     q_tot_int_level = Fields.field_values(Fields.level(q_tot, 1))
 
-    p_int_level = Fields.field_values(Fields.level(ᶜp, 1))
+    p_int_level = Fields.field_values(Fields.level(Base.materialize(ᶜp(thermo_params, ᶜts)), 1))
     Φ_int_level = Fields.field_values(Fields.level(ᶜΦ, 1))
 
     local_geometry_int_level =
@@ -305,7 +305,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; dt) = p
     dt = float(dt)
     (; ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
+    (; ᶠu³, ᶜts, ᶜK) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
     (;
         ᶜρaʲs,
@@ -352,9 +352,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         uₕ_level = Fields.field_values(Fields.level(Y.c.uₕ, i))
         u³_halflevel = Fields.field_values(Fields.level(ᶠu³, i - half))
         K_level = Fields.field_values(Fields.level(ᶜK, i))
-        h_tot_level = Fields.field_values(Fields.level(ᶜh_tot, i))
+        h_tot_level = Fields.field_values(Fields.level(Base.materialize(ᶜh_tot(Y, thermo_params, ᶜts)), i))
         q_tot_level = Fields.field_values(Fields.level(q_tot, i))
-        p_level = Fields.field_values(Fields.level(ᶜp, i))
+        p_level = Fields.field_values(Fields.level(Base.materialize(ᶜp(thermo_params,ᶜts)), i))
         Φ_level = Fields.field_values(Fields.level(ᶜΦ, i))
         local_geometry_level = Fields.field_values(
             Fields.level(Fields.local_geometry_field(Y.c), i),
@@ -377,10 +377,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             Fields.field_values(Fields.level(ᶠu³⁰, i - 1 - half))
         u³⁰_data_prev_halflevel = u³⁰_prev_halflevel.components.data.:1
         K_prev_level = Fields.field_values(Fields.level(ᶜK, i - 1))
-        h_tot_prev_level = Fields.field_values(Fields.level(ᶜh_tot, i - 1))
+        h_tot_prev_level = Fields.field_values(Fields.level(Base.materialize(ᶜh_tot(Y, thermo_params, ᶜts)), i - 1))
         q_tot_prev_level = Fields.field_values(Fields.level(q_tot, i - 1))
         ts_prev_level = Fields.field_values(Fields.level(ᶜts, i - 1))
-        p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
+        p_prev_level = Fields.field_values(Fields.level(Base.materialize(ᶜp(thermo_params, ᶜts)), i - 1))
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
         dz_prev_level = Fields.field_values(Fields.level(ᶜdz, i - 1))
 
@@ -960,7 +960,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
-    (; ᶜp, ᶜu, ᶜts) = p.precomputed
+    (; ᶜu, ᶜts) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜtke⁰) = p.precomputed
     (;

@@ -26,7 +26,7 @@ Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
 - `Y`: The current state vector.
 - `p`: Cache containing parameters, precomputed fields (e.g., velocities `ᶜu`,
-       `ᶜu⁰`, `ᶜuʲs`; pressure `ᶜp`; kinetic energy `ᶜK`; total enthalpy `ᶜh_tot`),
+       `ᶜu⁰`, `ᶜuʲs`; kinetic energy `ᶜK`),
        and core components (e.g., geopotential `ᶜΦ`).
 - `t`: Current simulation time (not directly used in calculations).
 
@@ -36,7 +36,8 @@ Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, `Yₜ.c.uₕ`, and EDMFX-related fields 
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜK, ᶜp) = p.precomputed
+    (; ᶜts, ᶜu, ᶜK) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
@@ -49,8 +50,8 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    (; ᶜh_tot) = p.precomputed
-    @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
+    ᶜh_tot_lazy = ᶜh_tot(Y, thermo_params, ᶜts)
+    @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot_lazy * ᶜu)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
@@ -74,7 +75,8 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
 
     end
 
-    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
+    ᶜp_lazy = ᶜp(thermo_params, ᶜts)
+    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp_lazy) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end
@@ -104,6 +106,7 @@ in `Yₜ.c.sgsʲs` if applicable.
 NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜu) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
@@ -178,7 +181,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
-    (; ᶜspecific) = p.precomputed
+    (; ᶜspecific, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
 
     ᶠu³⁰ =
         advect_tke ?
@@ -222,10 +226,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
     # ... and upwinding correction of energy and total water.
     # (The central advection of energy and total water is done implicitly.)
+    
+    ᶜh_tot_lazy = ᶜh_tot(Y,thermo_params,ᶜts)
     if energy_upwinding != Val(:none)
-        (; ᶜh_tot) = p.precomputed
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot_lazy, float(dt), energy_upwinding)
+        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot_lazy, float(dt), Val(:none))
         @. Yₜ.c.ρe_tot += vtt - vtt_central
     end
 
