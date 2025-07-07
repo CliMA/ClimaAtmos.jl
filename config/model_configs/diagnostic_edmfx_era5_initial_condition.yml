@@ -5,9 +5,11 @@ dz_bottom: 30.0
 start_date: "20250627"
 start_time: "0000"
 initial_condition: "WeatherModel"
+discrete_hydrostatic_balance: false # TODO: change to true once we fix discrete hydrostatic balance to work with orography
 topo_smoothing: true
 topography: "Earth"
 rayleigh_sponge: true
+insolation: "timevarying"
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
 co2_model: fixed
@@ -31,4 +33,6 @@ use_itime: true
 output_default_diagnostics: false
 diagnostics:
   - short_name: [ta, ua, wa, va, rhoa, hur, hus, clw, cli]
+    period: 60mins
+  - short_name: [rsut, rlut, ts, pr]
     period: 60mins
