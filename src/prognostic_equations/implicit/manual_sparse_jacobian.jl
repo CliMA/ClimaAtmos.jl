@@ -724,15 +724,19 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ),
             )
 
+            ᶜdqₛₗ_δqₜ = @.lazy(ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ)
+
+            ᶜdqₛᵢ_δqₜ = @.lazy(ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ)
+
             # clearly write up what dqsl / Dqt is as I need it agian?
             @. ∂ᶜρqₗ_err_∂ᶜρqₜ +=
                 DiagonalMatrixRow(
                     ∂ρqₓ_err_∂ρqᵪ(
                         thermo_params,
                         ᶜforce_liq,
-                        ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
+                        ((1 - ᶜdqₛₗ_δqₜ) / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
                         (qᵥ - qₛₗ) / (2*float(dt)),
-                        (1/(2*float(dt))), # CHANGE
+                        ((1 - ᶜdqₛₗ_δqₜ)/(2*float(dt))), # CHANGE
                         (qₗ/(2*float(dt))),
                         float(0),
                     )
@@ -743,9 +747,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ∂ρqₓ_err_∂ρqᵪ(
                         thermo_params,
                         ᶜforce_ice,
-                        ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
+                        ((1 - ᶜdqₛᵢ_δqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
                         (qᵥ - qₛᵢ) / (2*float(dt)),
-                        (1/(2*float(dt))), # CHANGE
+                        ((1 - ᶜdqₛᵢ_δqₜ)/(2*float(dt))), # CHANGE
                         (qᵢ/(2*float(dt))),
                         float(0),
                     )
