@@ -652,7 +652,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             )
 
             # need to set these -- something like this
-            qₛₗ = @. lazy(TD.q_vap_saturation_from_density(
+            ᶜqₛₗ = @. lazy(TD.q_vap_saturation_from_density(
                     thp,
                     ᶜT,
                     Y.c.ρ,
@@ -660,7 +660,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 )
             )
 
-            qₛᵢ = @. lazy(TD.q_vap_saturation_from_density(
+            ᶜqₛᵢ = @. lazy(TD.q_vap_saturation_from_density(
                     thp,
                     ᶜT,
                     Y.c.ρ,
@@ -668,8 +668,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 )
             )
 
-            qᵥ = @. lazy(qₜ - qₗ - qᵢ - qᵣ - qₛ)
-            pos_lim = (qₜ - qₗ - qᵢ - qᵣ - qₛ) / (2*float(dt))
+            ᶜqᵥ = @. lazy(qₜ - qₗ - qᵢ - qᵣ - qₛ)
 
             ∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
             ∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
@@ -683,7 +682,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         thermo_params,
                         ᶜforce_liq,
                         (-1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
-                        (qᵥ - qₛₗ) / (2*float(dt)),
+                        (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
                         (-1/(2*float(dt))),
                         (qₗ/(2*float(dt))),
                         (1/(2*float(dt))),
@@ -696,7 +695,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         thermo_params,
                         ᶜforce_ice,
                         (-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
-                        (qᵥ - qₛᵢ) / (2*float(dt)),
+                        (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
                         (-1/(2*float(dt))),
                         (qᵢ/(2*float(dt))),
                         (1/(2*float(dt))),
@@ -728,14 +727,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             ᶜdqₛᵢ_δqₜ = @.lazy(ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ)
 
-            # clearly write up what dqsl / Dqt is as I need it agian?
             @. ∂ᶜρqₗ_err_∂ᶜρqₜ +=
                 DiagonalMatrixRow(
                     ∂ρqₓ_err_∂ρqᵪ(
                         thermo_params,
                         ᶜforce_liq,
                         ((1 - ᶜdqₛₗ_δqₜ) / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
-                        (qᵥ - qₛₗ) / (2*float(dt)),
+                        (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
                         ((1 - ᶜdqₛₗ_δqₜ)/(2*float(dt))), # CHANGE
                         (qₗ/(2*float(dt))),
                         float(0),
@@ -748,7 +746,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         thermo_params,
                         ᶜforce_ice,
                         ((1 - ᶜdqₛᵢ_δqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
-                        (qᵥ - qₛᵢ) / (2*float(dt)),
+                        (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
                         ((1 - ᶜdqₛᵢ_δqₜ)/(2*float(dt))), # CHANGE
                         (qᵢ/(2*float(dt))),
                         float(0),
