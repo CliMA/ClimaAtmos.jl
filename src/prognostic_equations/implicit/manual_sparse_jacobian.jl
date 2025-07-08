@@ -560,8 +560,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             # TO DO
             # fix noneq flag not showing up
-            # change tps to thp
-            # add dqsl/dqt derivatives to limiter derivatives
+            # deal with if statement
+            # make sure I am handling force absolute value correctly
 
             p_vapₛₗ(tps, T) = TD.saturation_vapor_pressure(tps, T, TD.Liquid())
             p_vapₛᵢ(tps, T) = TD.saturation_vapor_pressure(tps, T, TD.Ice())
@@ -625,7 +625,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     )
                 )
 
-            ᶜforce_liq = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+            ᶜforceₗ = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(
                     cmc.liquid,
                     thermo_params,
                     specific(Y.c.ρq_tot, Y.c.ρ),
@@ -638,7 +638,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 )
             )
 
-            ᶜforce_ice = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+            ᶜforceᵢ = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(
                     cmc.ice,
                     thp,
                     specific(Y.c.ρq_tot, Y.c.ρ),
@@ -651,7 +651,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 )
             )
 
-            # need to set these -- something like this
             ᶜqₛₗ = @. lazy(TD.q_vap_saturation_from_density(
                     thp,
                     ᶜT,
@@ -668,20 +667,39 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 )
             )
 
-            ᶜqᵥ = @. lazy(qₜ - qₗ - qᵢ - qᵣ - qₛ)
+            ᶜqᵥ = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ) - specific(Y.c.ρq_liq, Y.c.ρ)
+                          - specific(Y.c.ρq_ice, Y.c.ρ), - specific(Y.c.ρq_rai, Y.c.ρ)
+                          - specific(Y.c.ρq_sno, Y.c.ρ))
 
             ∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
             ∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
 
             ∂ᶜρqₗ_err_∂ᶜρqₜ = matrix[@name(c.ρq_liq), @name(c.ρq_tot)]
             ∂ᶜρqᵢ_err_∂ᶜρqₜ = matrix[@name(c.ρq_ice), @name(c.ρq_tot)]
+
+            # move this lower bc need to define qt derivs
+            if ᶜqᵥ - specific(Y.c.ρq_liq, Y.c.ρ) <= FT(0)
+                ᶜδforceₗ_δqₗ = @. lazy(0)
+                ᶜδforceₗ_δqₜ = @. lazy(0)
+            else
+                ᶜδforceₗ_δqₗ = @. lazy(-1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)))
+                ᶜδforceₗ_δqₜ = @. lazy((1 - ᶜdqₛₗ_δqₜ) / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)))
+            end
+
+            if ᶜqᵥ - specific(Y.c.ρq_ice, Y.c.ρ) <= FT(0)
+                ᶜδforceᵢ_δqᵢ = @. lazy(0)
+                ᶜδforceᵢ_δqₜ = @. lazy(0)
+            else
+                ᶜδforceᵢ_δqᵢ = @. lazy(-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)))
+                ᶜδforceᵢ_δqₜ = @. lazy((1 - ᶜdqₛᵢ_δqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)))
+            end
             
             @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
                 DiagonalMatrixRow(
                     ∂ρqₓ_err_∂ρqᵪ(
                         thermo_params,
-                        ᶜforce_liq,
-                        (-1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
+                        ᶜforceₗ,
+                        ᶜδforceₗ_δqₗ,
                         (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
                         (-1/(2*float(dt))),
                         (qₗ/(2*float(dt))),
@@ -693,8 +711,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 DiagonalMatrixRow(
                     ∂ρqₓ_err_∂ρqᵪ(
                         thermo_params,
-                        ᶜforce_ice,
-                        (-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
+                        ᶜforceᵢ,
+                        ᶜδforceᵢ_δqᵢ,
                         (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
                         (-1/(2*float(dt))),
                         (qᵢ/(2*float(dt))),
@@ -732,9 +750,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ∂ρqₓ_err_∂ρqᵪ(
                         thermo_params,
                         ᶜforce_liq,
-                        ((1 - ᶜdqₛₗ_δqₜ) / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
+                        ᶜδforceᵢ_δqₜ,
                         (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
-                        ((1 - ᶜdqₛₗ_δqₜ)/(2*float(dt))), # CHANGE
+                        ((1 - ᶜdqₛₗ_δqₜ)/(2*float(dt))),
                         (qₗ/(2*float(dt))),
                         float(0),
                     )
