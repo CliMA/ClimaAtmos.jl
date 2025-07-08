@@ -560,48 +560,47 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             # TO DO
             # fix noneq flag not showing up
-            # deal with if statement
             # make sure I am handling force absolute value correctly
 
-            p_vapₛₗ(tps, T) = TD.saturation_vapor_pressure(tps, T, TD.Liquid())
-            p_vapₛᵢ(tps, T) = TD.saturation_vapor_pressure(tps, T, TD.Ice())
+            p_vapₛₗ(thp, T) = TD.saturation_vapor_pressure(thp, T, TD.Liquid())
+            p_vapₛᵢ(thp, T) = TD.saturation_vapor_pressure(thp, T, TD.Ice())
 
-            function ∂p_vapₛₗ_∂T(tps, T)
-                Rᵥ = TD.Parameters.R_v(tps)
-                Lᵥ = TD.latent_heat_vapor(tps, T)
-                return p_vapₛₗ(tps, T) * Lᵥ / (Rᵥ * T^2)
+            function ∂p_vapₛₗ_∂T(thp, T)
+                Rᵥ = TD.Parameters.R_v(thp)
+                Lᵥ = TD.latent_heat_vapor(thp, T)
+                return p_vapₛₗ(thp, T) * Lᵥ / (Rᵥ * T^2)
             end
-            function ∂p_vapₛᵢ_∂T(tps, T)
-                Rᵥ = TD.Parameters.R_v(tps)
-                Lₛ = TD.latent_heat_sublim(tps, T)
-                return p_vapₛᵢ(tps, T) * Lₛ / (Rᵥ * T^2)
+            function ∂p_vapₛᵢ_∂T(thp, T)
+                Rᵥ = TD.Parameters.R_v(thp)
+                Lₛ = TD.latent_heat_sublim(thp, T)
+                return p_vapₛᵢ(thp, T) * Lₛ / (Rᵥ * T^2)
             end
             
-            function ∂qₛₗ_∂T(tps, ρ, T)
-                Rᵥ = TD.Parameters.R_v(tps)
-                Lᵥ = TD.latent_heat_vapor(tps, T)
-                qᵥ_sat_liq = TD.q_vap_saturation_from_density(tps, T, ρ, p_vapₛₗ(tps, T))
+            function ∂qₛₗ_∂T(thp, ρ, T)
+                Rᵥ = TD.Parameters.R_v(thp)
+                Lᵥ = TD.latent_heat_vapor(thp, T)
+                qᵥ_sat_liq = TD.q_vap_saturation_from_density(thp, T, ρ, p_vapₛₗ(thp, T))
                 return qᵥ_sat_liq * (Lᵥ / (Rᵥ * T^2) - 1 / T)
             end
-            function ∂qₛᵢ_∂T(tps, ρ, T)
-                Rᵥ = TD.Parameters.R_v(tps)
-                Lₛ = TD.latent_heat_sublim(tps, T)
-                qᵥ_sat_ice = TD.q_vap_saturation_from_density(tps, T, ρ, p_vapₛᵢ(tps, T))
+            function ∂qₛᵢ_∂T(thp, ρ, T)
+                Rᵥ = TD.Parameters.R_v(thp)
+                Lₛ = TD.latent_heat_sublim(thp, T)
+                qᵥ_sat_ice = TD.q_vap_saturation_from_density(thp, T, ρ, p_vapₛᵢ(thp, T))
                 return qᵥ_sat_ice * (Lₛ / (Rᵥ * T^2) - 1 / T)
             end
 
-            function Γₗ(tps, cₚ_air, ρ, T)
-                Lᵥ = TD.latent_heat_vapor(tps, T)
-                return 1 + (Lᵥ / cₚ_air) * ∂qₛₗ_∂T(tps, ρ, T)
+            function Γₗ(thp, cₚ_air, ρ, T)
+                Lᵥ = TD.latent_heat_vapor(thp, T)
+                return 1 + (Lᵥ / cₚ_air) * ∂qₛₗ_∂T(thp, ρ, T)
             end
-            function Γᵢ(tps, cₚ_air, ρ, T)
-                Lₛ = TD.latent_heat_sublim(tps, T)
-                return 1 + (Lₛ / cₚ_air) * ∂qₛᵢ_∂T(tps, ρ, T)
+            function Γᵢ(thp, cₚ_air, ρ, T)
+                Lₛ = TD.latent_heat_sublim(thp, T)
+                return 1 + (Lₛ / cₚ_air) * ∂qₛᵢ_∂T(thp, ρ, T)
             end
 
-            function ∂ρqₓ_err_∂ρqᵪ(tps, force, force_deriv, pos_lim, pos_lim_deriv, neg_lim, neg_lim_deriv)
+            function ∂ρqₓ_err_∂ρqᵪ(thp, force, force_deriv, pos_lim, pos_lim_deriv, neg_lim, neg_lim_deriv)
 
-                FT_inner = eltype(tps)
+                FT_inner = eltype(thp)
 
                 if force > FT_inner(0)
                     return force_deriv + pos_lim_deriv - (force * force_deriv + pos_lim * pos_lim_deriv)/(sqrt((force)^2 + (pos_lim)^2))
@@ -614,9 +613,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             τₗ = cmc.liquid.τ_relax
             τᵢ = cmc.ice.τ_relax
 
-            ᶜT = @. lazy(TD.air_temperature(tps,ts))
+            ᶜT = @. lazy(TD.air_temperature(thp,ts))
             ᶜcₚ_air = @. lazy(TD.cp_m(
-                    tps,
+                    thp,
                     specific(Y.c.ρq_tot, Y.c.ρ),
                     specific(Y.c.ρq_liq, Y.c.ρ),
                     specific(Y.c.ρq_ice, Y.c.ρ),
