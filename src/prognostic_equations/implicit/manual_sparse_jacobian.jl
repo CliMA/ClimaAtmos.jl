@@ -557,6 +557,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
         if p.atmos.moisture_model isa NonEquilMoistModel &&
             use_derivative(noneq_cloud_formation_flag)
+
+            # TO DO
+            # fix noneq flag not showing up
+            # change tps to thp
+            # add dqsl/dqt derivatives to limiter derivatives
+
             p_vapₛₗ(tps, T) = TD.saturation_vapor_pressure(tps, T, TD.Liquid())
             p_vapₛᵢ(tps, T) = TD.saturation_vapor_pressure(tps, T, TD.Ice())
 
@@ -645,13 +651,31 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 )
             )
 
+            # need to set these -- something like this
+            qₛₗ = @. lazy(TD.q_vap_saturation_from_density(
+                    thp,
+                    ᶜT,
+                    Y.c.ρ,
+                    p_vapₛₗ(thp, ᶜT),
+                )
+            )
+
+            qₛᵢ = @. lazy(TD.q_vap_saturation_from_density(
+                    thp,
+                    ᶜT,
+                    Y.c.ρ,
+                    p_vapₛᵢ(thp, ᶜT),
+                )
+            )
+
+            qᵥ = @. lazy(qₜ - qₗ - qᵢ - qᵣ - qₛ)
+            pos_lim = (qₜ - qₗ - qᵢ - qᵣ - qₛ) / (2*float(dt))
+
             ∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
             ∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
 
             ∂ᶜρqₗ_err_∂ᶜρqₜ = matrix[@name(c.ρq_liq), @name(c.ρq_tot)]
             ∂ᶜρqᵢ_err_∂ᶜρqₜ = matrix[@name(c.ρq_ice), @name(c.ρq_tot)]
-
-            pos_lim = (qₜ - qₗ - qᵢ - qᵣ - qₛ) / (2*float(dt))
             
             @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
                 DiagonalMatrixRow(
@@ -659,7 +683,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         thermo_params,
                         ᶜforce_liq,
                         (-1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
-                        pos_lim,
+                        (qᵥ - qₛₗ) / (2*float(dt)),
                         (-1/(2*float(dt))),
                         (qₗ/(2*float(dt))),
                         (1/(2*float(dt))),
@@ -672,7 +696,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         thermo_params,
                         ᶜforce_ice,
                         (-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
-                        pos_lim,
+                        (qᵥ - qₛᵢ) / (2*float(dt)),
                         (-1/(2*float(dt))),
                         (qᵢ/(2*float(dt))),
                         (1/(2*float(dt))),
@@ -700,14 +724,15 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ),
             )
 
+            # clearly write up what dqsl / Dqt is as I need it agian?
             @. ∂ᶜρqₗ_err_∂ᶜρqₜ +=
                 DiagonalMatrixRow(
                     ∂ρqₓ_err_∂ρqᵪ(
                         thermo_params,
                         ᶜforce_liq,
                         ((1 - ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ) / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
-                        pos_lim,
-                        (1/(2*float(dt))),
+                        (qᵥ - qₛₗ) / (2*float(dt)),
+                        (1/(2*float(dt))), # CHANGE
                         (qₗ/(2*float(dt))),
                         float(0),
                     )
@@ -719,8 +744,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         thermo_params,
                         ᶜforce_ice,
                         ((1 - ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
-                        pos_lim,
-                        (1/(2*float(dt))),
+                        (qᵥ - qₛᵢ) / (2*float(dt)),
+                        (1/(2*float(dt))), # CHANGE
                         (qᵢ/(2*float(dt))),
                         float(0),
                     )
