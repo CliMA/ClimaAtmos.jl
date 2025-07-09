@@ -98,13 +98,15 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.precomputed.sfc_conditions
     (; ᶜρaʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
-    (; ᶠu³⁰, ᶜK⁰) = p.precomputed
+    (; ᶜK⁰) = p.precomputed
+
 
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
 
     ᶠu³ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
+    ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
 
     ρ_int_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
     uₕ_int_level = Fields.field_values(Fields.level(Y.c.uₕ, 1))
@@ -196,7 +198,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
 
     ρaʲs_int_level = Fields.field_values(Fields.level(ᶜρaʲs, 1))
     u³ʲs_int_halflevel = Fields.field_values(Fields.level(ᶠu³ʲs, half))
-    u³⁰_int_halflevel = Fields.field_values(Fields.level(ᶠu³⁰, half))
+    u³⁰_int_halflevel = Fields.field_values(Fields.level(Base.materialize(ᶠu³⁰), half))
     K⁰_int_level = Fields.field_values(Fields.level(ᶜK⁰, 1))
     set_diagnostic_edmfx_env_quantities_level!(
         ρ_int_level,
@@ -323,7 +325,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         ᶠnh_pressure³_buoyʲs,
         ᶠnh_pressure³_dragʲs,
     ) = p.precomputed
-    (; ᶠu³⁰, ᶜK⁰, ᶜtke⁰) = p.precomputed
+    (; ᶜK⁰, ᶜtke⁰) = p.precomputed
 
     if precip_model isa Microphysics1Moment
         ᶜq_liqʲs = p.precomputed.ᶜq_liqʲs
@@ -346,6 +348,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     @. ᶜ∇Φ₃ = ᶜgradᵥ(ᶠΦ)
 
     ᶠu³ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
+    ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
 
     z_sfc_halflevel =
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
@@ -378,7 +381,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         ρ_prev_level = Fields.field_values(Fields.level(Y.c.ρ, i - 1))
         u³_prev_halflevel = Fields.field_values(Fields.level(Base.materialize(ᶠu³), i - 1 - half))
         u³⁰_prev_halflevel =
-            Fields.field_values(Fields.level(ᶠu³⁰, i - 1 - half))
+        Fields.field_values(Fields.level(Base.materialize(ᶠu³⁰), i - 1 - half))
         u³⁰_data_prev_halflevel = u³⁰_prev_halflevel.components.data.:1
         K_prev_level = Fields.field_values(Fields.level(ᶜK, i - 1))
         h_tot_prev_level = Fields.field_values(Fields.level(ᶜh_tot, i - 1))
@@ -857,7 +860,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         end
         ρaʲs_level = Fields.field_values(Fields.level(ᶜρaʲs, i))
         u³ʲs_halflevel = Fields.field_values(Fields.level(ᶠu³ʲs, i - half))
-        u³⁰_halflevel = Fields.field_values(Fields.level(ᶠu³⁰, i - half))
+        u³⁰_halflevel = Fields.field_values(Fields.level(Base.materialize(ᶠu³⁰), i - half))
         K⁰_level = Fields.field_values(Fields.level(ᶜK⁰, i))
         set_diagnostic_edmfx_env_quantities_level!(
             ρ_level,
@@ -887,13 +890,14 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
 )
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p.precomputed
-    (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs, ᶠnh_pressure³_buoyʲs, ᶠnh_pressure³_dragʲs) =
+    (; ᶠu³ʲs, ᶜuʲs, ᶠnh_pressure³_buoyʲs, ᶠnh_pressure³_dragʲs) =
         p.precomputed
     (; precip_model) = p.atmos
 
     # set values for the top level
     i_top = Spaces.nlevels(axes(Y.c))
-    u³⁰_halflevel = Fields.field_values(Fields.level(ᶠu³⁰, i_top + half))
+    ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
+    u³⁰_halflevel = Fields.field_values(Fields.level(Base.materialize(ᶠu³⁰), i_top + half))
     @. u³⁰_halflevel = CT3(0)
 
     for j in 1:n
@@ -979,10 +983,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     ᶜlg = Fields.local_geometry_field(Y.c)
 
     ᶜu = ᶜu_lazy(Y.c.uₕ, Y.f.u₃)
+    ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ,Y.c.ρ, Y.f.u₃)
+
     if p.atmos.turbconv_model isa DiagnosticEDMFX
-        (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs, ᶠu³⁰) = p.precomputed
+        (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs) = p.precomputed
     elseif p.atmos.turbconv_model isa EDOnlyEDMFX
-        ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ,Y.c.ρ, Y.f.u₃)
         ᶜu⁰ = ᶜu
     end
 
