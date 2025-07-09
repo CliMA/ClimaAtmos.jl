@@ -980,7 +980,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
 
     ᶜu = ᶜu_lazy(Y.c.uₕ, Y.f.u₃)
     if p.atmos.turbconv_model isa DiagnosticEDMFX
-        (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs, ᶠu³⁰, ᶜu⁰) = p.precomputed
+        (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs, ᶠu³⁰) = p.precomputed
     elseif p.atmos.turbconv_model isa EDOnlyEDMFX
         ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ,Y.c.ρ, Y.f.u₃)
         ᶜu⁰ = ᶜu
