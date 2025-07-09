@@ -29,10 +29,10 @@ z_max:
   value: 30000.0
 vorticity_hyperdiffusion_coefficient:
   help: "Hyperdiffusion coefficient for vorticity (m s-1)"
-  value: 1.5
+  value: 0.1857
 scalar_hyperdiffusion_coefficient:
   help: "Hyperdiffusion coefficient for scalar (m s-1)"
-  value: 1.5
+  value: 0.929738
 # Topography
 topography:
   help: "Define the surface elevation profile [`NoWarp` (default), `Earth`, `DCMIP200`, `Hughes2023`, `Agnesi`, `Schar`, `Cosine2D`, `Cosine3D`]"
@@ -152,7 +152,7 @@ vert_diff:
   help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `DecayWithHeightDiffusion`]"
   value: false
 hyperdiff:
-  help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`), `CAM_SE` (default), `none` (or `false`)]"
+  help: "Hyperdiffusion. Use `CAM_SE` for sensible default values and ClimaHyperdiffusion for user control. [`CAM_SE` (default), `ClimaHyperdiffusion` (or `true`), `none` (or `false`)]"
   value: "CAM_SE"
 smagorinsky_lilly:
   help: "Smagorinsky-Lilly diffusive closure [`false` (default), `true`]"
@@ -177,7 +177,7 @@ moist:
   value: "dry"
 divergence_damping_factor:
   help: "Divergence damping factor"
-  value: 1.0
+  value: 5.0
 rayleigh_sponge:
   help: "Rayleigh sponge [`true`, `false` (default)]"
   value: false
