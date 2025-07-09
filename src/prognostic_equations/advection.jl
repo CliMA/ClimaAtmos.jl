@@ -67,7 +67,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         elseif p.atmos.turbconv_model isa AbstractEDMF
             ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ,Y.c.ρ, Y.f.u₃)
             ᶜu⁰ = ᶜu_lazy(Y.c.uₕ, ᶠu³⁰) # Set here (lazy), but used elsewhere
-            ᶜu_for_tke_advection = p.precomputed.ᶜu⁰
+            ᶜu_for_tke_advection = ᶜu⁰
         else
             error(
                 "Unsupported turbconv_model type for TKE advection: $(typeof(p.atmos.turbconv_model))",
