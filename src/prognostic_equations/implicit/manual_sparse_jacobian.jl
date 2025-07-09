@@ -67,6 +67,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         sgs_advection_flag,
         sgs_mass_flux_flag,
         approximate_solve_iters,
+        noneq_cloud_formation_flag,
     ) = alg
     FT = Spaces.undertype(axes(Y.c))
     CTh = CTh_vector_type(axes(Y.c))
