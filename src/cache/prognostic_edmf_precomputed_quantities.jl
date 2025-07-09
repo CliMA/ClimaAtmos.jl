@@ -370,7 +370,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜtke⁰, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜtke⁰, ᶜp, ᶜρa⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
     (;
         ᶜmixing_length_tuple,
         ᶜmixing_length,
