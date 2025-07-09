@@ -434,6 +434,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         # Momentum diffusion
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
+        ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
         ᶜu⁰ = ᶜu_lazy(Y.c.uₕ, ᶠu³⁰)
         ᶠstrain_rate .= compute_strain_rate_face(ᶜu⁰)
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
