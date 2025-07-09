@@ -687,8 +687,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ᶜ∂p_∂ρqₜ = @. lazy(
                 ᶜkappa_m * ∂e_int_∂q_tot +
                 ᶜ∂kappa_m∂q_tot * (
-                    cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
-                    ∂e_int_∂q_tot * ᶜspecific.q_tot
+                    cp_d * T_0 + specific(Y.c.ρe_tot, Y.c.ρ) - ᶜK - ᶜΦ +
+                    ∂e_int_∂q_tot * specific(Y.c.ρq_tot, Y.c.ρ)
                 ),
             )
 
