@@ -398,6 +398,8 @@ function get_initial_condition(parsed_args, atmos)
             atmos.external_forcing.external_forcing_file,
             parsed_args["start_date"],
         )
+    elseif parsed_args["initial_condition"] == "WeatherModel"
+        return ICs.WeatherModel(parsed_args["start_date"])
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
@@ -630,7 +632,7 @@ function get_sim_info(config::AtmosConfig)
 
     isnothing(restart_file) ||
         @info "Restarting simulation from file $restart_file"
-    epoch = DateTime(parsed_args["start_date"], dateformat"yyyymmdd")
+    epoch = parse_date(parsed_args["start_date"])
     t_start_int = time_to_seconds(parsed_args["t_start"])
     if !isnothing(restart_file) && t_start_int != 0
         @warn "Non zero `t_start` passed with a restarting simulation. The provided `t_start` will be ignored."
