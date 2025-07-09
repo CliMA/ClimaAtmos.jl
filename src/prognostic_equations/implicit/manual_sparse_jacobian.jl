@@ -563,45 +563,45 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             # fix noneq flag not showing up
             # make sure I am handling force absolute value correctly
 
-            p_vapₛₗ(thp, T) = TD.saturation_vapor_pressure(thp, T, TD.Liquid())
-            p_vapₛᵢ(thp, T) = TD.saturation_vapor_pressure(thp, T, TD.Ice())
+            p_vapₛₗ(thermo_params, T) = TD.saturation_vapor_pressure(thermo_params, T, TD.Liquid())
+            p_vapₛᵢ(thermo_params, T) = TD.saturation_vapor_pressure(thermo_params, T, TD.Ice())
 
-            function ∂p_vapₛₗ_∂T(thp, T)
-                Rᵥ = TD.Parameters.R_v(thp)
-                Lᵥ = TD.latent_heat_vapor(thp, T)
-                return p_vapₛₗ(thp, T) * Lᵥ / (Rᵥ * T^2)
+            function ∂p_vapₛₗ_∂T(thermo_params, T)
+                Rᵥ = TD.Parameters.R_v(thermo_params)
+                Lᵥ = TD.latent_heat_vapor(thermo_params, T)
+                return p_vapₛₗ(thermo_params, T) * Lᵥ / (Rᵥ * T^2)
             end
-            function ∂p_vapₛᵢ_∂T(thp, T)
-                Rᵥ = TD.Parameters.R_v(thp)
-                Lₛ = TD.latent_heat_sublim(thp, T)
-                return p_vapₛᵢ(thp, T) * Lₛ / (Rᵥ * T^2)
+            function ∂p_vapₛᵢ_∂T(thermo_params, T)
+                Rᵥ = TD.Parameters.R_v(thermo_params)
+                Lₛ = TD.latent_heat_sublim(thermo_params, T)
+                return p_vapₛᵢ(thermo_params, T) * Lₛ / (Rᵥ * T^2)
             end
             
-            function ∂qₛₗ_∂T(thp, ρ, T)
-                Rᵥ = TD.Parameters.R_v(thp)
-                Lᵥ = TD.latent_heat_vapor(thp, T)
-                qᵥ_sat_liq = TD.q_vap_saturation_from_density(thp, T, ρ, p_vapₛₗ(thp, T))
+            function ∂qₛₗ_∂T(thermo_params, ρ, T)
+                Rᵥ = TD.Parameters.R_v(thermo_params)
+                Lᵥ = TD.latent_heat_vapor(thermo_params, T)
+                qᵥ_sat_liq = TD.q_vap_saturation_from_density(thermo_params, T, ρ, p_vapₛₗ(thermo_params, T))
                 return qᵥ_sat_liq * (Lᵥ / (Rᵥ * T^2) - 1 / T)
             end
-            function ∂qₛᵢ_∂T(thp, ρ, T)
-                Rᵥ = TD.Parameters.R_v(thp)
-                Lₛ = TD.latent_heat_sublim(thp, T)
-                qᵥ_sat_ice = TD.q_vap_saturation_from_density(thp, T, ρ, p_vapₛᵢ(thp, T))
+            function ∂qₛᵢ_∂T(thermo_params, ρ, T)
+                Rᵥ = TD.Parameters.R_v(thermo_params)
+                Lₛ = TD.latent_heat_sublim(thermo_params, T)
+                qᵥ_sat_ice = TD.q_vap_saturation_from_density(thermo_params, T, ρ, p_vapₛᵢ(thermo_params, T))
                 return qᵥ_sat_ice * (Lₛ / (Rᵥ * T^2) - 1 / T)
             end
 
-            function Γₗ(thp, cₚ_air, ρ, T)
-                Lᵥ = TD.latent_heat_vapor(thp, T)
-                return 1 + (Lᵥ / cₚ_air) * ∂qₛₗ_∂T(thp, ρ, T)
+            function Γₗ(thermo_params, cₚ_air, ρ, T)
+                Lᵥ = TD.latent_heat_vapor(thermo_params, T)
+                return 1 + (Lᵥ / cₚ_air) * ∂qₛₗ_∂T(thermo_params, ρ, T)
             end
-            function Γᵢ(thp, cₚ_air, ρ, T)
-                Lₛ = TD.latent_heat_sublim(thp, T)
-                return 1 + (Lₛ / cₚ_air) * ∂qₛᵢ_∂T(thp, ρ, T)
+            function Γᵢ(thermo_params, cₚ_air, ρ, T)
+                Lₛ = TD.latent_heat_sublim(thermo_params, T)
+                return 1 + (Lₛ / cₚ_air) * ∂qₛᵢ_∂T(thermo_params, ρ, T)
             end
 
-            function ∂ρqₓ_err_∂ρqᵪ(thp, force, force_deriv, pos_lim, pos_lim_deriv, neg_lim, neg_lim_deriv)
+            function ∂ρqₓ_err_∂ρqᵪ(thermo_params, force, force_deriv, pos_lim, pos_lim_deriv, neg_lim, neg_lim_deriv)
 
-                FT_inner = eltype(thp)
+                FT_inner = eltype(thermo_params)
 
                 if force > FT_inner(0)
                     return force_deriv + pos_lim_deriv - (force * force_deriv + pos_lim * pos_lim_deriv)/(sqrt((force)^2 + (pos_lim)^2))
@@ -614,9 +614,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             τₗ = cmc.liquid.τ_relax
             τᵢ = cmc.ice.τ_relax
 
-            ᶜT = @. lazy(TD.air_temperature(thp,ts))
+            ᶜT = @. lazy(TD.air_temperature(thermo_params,ts))
             ᶜcₚ_air = @. lazy(TD.cp_m(
-                    thp,
+                    thermo_params,
                     specific(Y.c.ρq_tot, Y.c.ρ),
                     specific(Y.c.ρq_liq, Y.c.ρ),
                     specific(Y.c.ρq_ice, Y.c.ρ),
@@ -640,7 +640,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             ᶜforceᵢ = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(
                     cmc.ice,
-                    thp,
+                    thermo_params,
                     specific(Y.c.ρq_tot, Y.c.ρ),
                     specific(Y.c.ρq_liq, Y.c.ρ),
                     specific(Y.c.ρq_ice, Y.c.ρ),
@@ -652,18 +652,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             )
 
             ᶜqₛₗ = @. lazy(TD.q_vap_saturation_from_density(
-                    thp,
+                    thermo_params,
                     ᶜT,
                     Y.c.ρ,
-                    p_vapₛₗ(thp, ᶜT),
+                    p_vapₛₗ(thermo_params, ᶜT),
                 )
             )
 
             ᶜqₛᵢ = @. lazy(TD.q_vap_saturation_from_density(
-                    thp,
+                    thermo_params,
                     ᶜT,
                     Y.c.ρ,
-                    p_vapₛᵢ(thp, ᶜT),
+                    p_vapₛᵢ(thermo_params, ᶜT),
                 )
             )
 
