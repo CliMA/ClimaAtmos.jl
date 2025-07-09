@@ -42,7 +42,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶜh_tot) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜρa⁰, ᶜρ⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
     if (
         p.atmos.moisture_model isa NonEquilMoistModel &&
         p.atmos.precip_model isa Microphysics1Moment
@@ -53,6 +53,7 @@ function edmfx_sgs_mass_flux_tendency!(
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
     ᶠu³ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
+    ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
         # Enthalpy fluxes. First sum up the draft fluxes
@@ -349,7 +350,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length, ᶠu³⁰) = p.precomputed
+    (; ᶜρa⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length) = p.precomputed
     if (
         p.atmos.moisture_model isa NonEquilMoistModel &&
         p.atmos.precip_model isa Microphysics1Moment
