@@ -186,7 +186,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         advect_tke ?
         (
             turbconv_model isa EDOnlyEDMFX ? ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃) :
-            p.precomputed.ᶠu³⁰
+            ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
         ) : nothing
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
     ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
