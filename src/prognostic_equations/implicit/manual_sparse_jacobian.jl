@@ -614,7 +614,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             τₗ = cmc.liquid.τ_relax
             τᵢ = cmc.ice.τ_relax
 
-            ᶜT = @. lazy(TD.air_temperature(thermo_params,ts))
+            ᶜT = @. lazy(TD.air_temperature(thermo_params,ᶜts))
             ᶜcₚ_air = @. lazy(TD.cp_m(
                     thermo_params,
                     specific(Y.c.ρq_tot, Y.c.ρ),
