@@ -670,11 +670,30 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                           - specific(Y.c.ρq_ice, Y.c.ρ), - specific(Y.c.ρq_rai, Y.c.ρ)
                           - specific(Y.c.ρq_sno, Y.c.ρ))
 
-            ∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
-            ∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
+            ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
+            ᶜ∂T_∂p = @. lazy(1 / (ᶜρ * TD.gas_constant_air(thermo_params, ᶜts)))
 
-            ∂ᶜρqₗ_err_∂ᶜρqₜ = matrix[@name(c.ρq_liq), @name(c.ρq_tot)]
-            ∂ᶜρqᵢ_err_∂ᶜρqₜ = matrix[@name(c.ρq_ice), @name(c.ρq_tot)]
+            # qₛₗ = p_vapₛₗ / p, qₛᵢ = p_vapₛᵢ / p
+            ᶜ∂qₛₗ_∂p = @. lazy(
+                -p_vapₛₗ(thermo_params, ᶜT) / ᶜp^2 +
+                ∂p_vapₛₗ_∂T(thermo_params, ᶜT) * ᶜ∂T_∂p / ᶜp,
+            )
+            ᶜ∂qₛᵢ_∂p = @. lazy(
+                -p_vapₛᵢ(thermo_params, ᶜT) / ᶜp^2 +
+                ∂p_vapₛᵢ_∂T(thermo_params, ᶜT) * ᶜ∂T_∂p / ᶜp,
+            )
+
+            ᶜ∂p_∂ρqₜ = @. lazy(
+                ᶜkappa_m * ∂e_int_∂q_tot +
+                ᶜ∂kappa_m∂q_tot * (
+                    cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
+                    ∂e_int_∂q_tot * ᶜspecific.q_tot
+                ),
+            )
+
+            ᶜdqₛₗ_δqₜ = @.lazy(ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ)
+
+            ᶜdqₛᵢ_δqₜ = @.lazy(ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ)
 
             # move this lower bc need to define qt derivs
             if ᶜqᵥ - specific(Y.c.ρq_liq, Y.c.ρ) <= FT(0)
@@ -692,6 +711,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ᶜδforceᵢ_δqᵢ = @. lazy(-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)))
                 ᶜδforceᵢ_δqₜ = @. lazy((1 - ᶜdqₛᵢ_δqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)))
             end
+
+            ∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
+            ∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
+
+            ∂ᶜρqₗ_err_∂ᶜρqₜ = matrix[@name(c.ρq_liq), @name(c.ρq_tot)]
+            ∂ᶜρqᵢ_err_∂ᶜρqₜ = matrix[@name(c.ρq_ice), @name(c.ρq_tot)]
             
             @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
                 DiagonalMatrixRow(
@@ -718,31 +743,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         (1/(2*float(dt))),
                     )
                 )
-
-            ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
-            ᶜ∂T_∂p = @. lazy(1 / (ᶜρ * TD.gas_constant_air(thermo_params, ᶜts)))
-
-            # qₛₗ = p_vapₛₗ / p, qₛᵢ = p_vapₛᵢ / p
-            ᶜ∂qₛₗ_∂p = @. lazy(
-                -p_vapₛₗ(thermo_params, ᶜT) / ᶜp^2 +
-                ∂p_vapₛₗ_∂T(thermo_params, ᶜT) * ᶜ∂T_∂p / ᶜp,
-            )
-            ᶜ∂qₛᵢ_∂p = @. lazy(
-                -p_vapₛᵢ(thermo_params, ᶜT) / ᶜp^2 +
-                ∂p_vapₛᵢ_∂T(thermo_params, ᶜT) * ᶜ∂T_∂p / ᶜp,
-            )
-
-            ᶜ∂p_∂ρqₜ = @. lazy(
-                ᶜkappa_m * ∂e_int_∂q_tot +
-                ᶜ∂kappa_m∂q_tot * (
-                    cp_d * T_0 + ᶜspecific.e_tot - ᶜK - ᶜΦ +
-                    ∂e_int_∂q_tot * ᶜspecific.q_tot
-                ),
-            )
-
-            ᶜdqₛₗ_δqₜ = @.lazy(ᶜρ * ᶜ∂qₛₗ_∂p * ᶜ∂p_∂ρqₜ)
-
-            ᶜdqₛᵢ_δqₜ = @.lazy(ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ)
 
             @. ∂ᶜρqₗ_err_∂ᶜρqₜ +=
                 DiagonalMatrixRow(
