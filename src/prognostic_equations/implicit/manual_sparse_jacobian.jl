@@ -670,6 +670,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ᶜqᵥ = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ) - specific(Y.c.ρq_liq, Y.c.ρ)
                           - specific(Y.c.ρq_ice, Y.c.ρ) - specific(Y.c.ρq_rai, Y.c.ρ)
                           - specific(Y.c.ρq_sno, Y.c.ρ))
+            ᶜqₗ = specific(Y.c.ρq_liq, Y.c.ρ)
+            ᶜqᵢ = specific(Y.c.ρq_ice, Y.c.ρ)
 
             ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
             ᶜ∂T_∂p = @. lazy(1 / (ᶜρ * TD.gas_constant_air(thermo_params, ᶜts)))
@@ -696,7 +698,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             ᶜdqₛᵢ_δqₜ = @.lazy(ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ)
 
-            if ᶜqᵥ - specific(Y.c.ρq_liq, Y.c.ρ) <= FT(0)
+            if ᶜqᵥ - ᶜqₗ <= FT(0)
                 ᶜδforceₗ_δqₗ = @. lazy(0)
                 ᶜδforceₗ_δqₜ = @. lazy(0)
             else
@@ -704,7 +706,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ᶜδforceₗ_δqₜ = @. lazy((1 - ᶜdqₛₗ_δqₜ) / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)))
             end
 
-            if ᶜqᵥ - specific(Y.c.ρq_ice, Y.c.ρ) <= FT(0)
+            if ᶜqᵥ - ᶜqᵢ <= FT(0)
                 ᶜδforceᵢ_δqᵢ = @. lazy(0)
                 ᶜδforceᵢ_δqₜ = @. lazy(0)
             else
@@ -726,7 +728,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ᶜδforceₗ_δqₗ,
                         (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
                         (-1/(2*float(dt))),
-                        (qₗ/(2*float(dt))),
+                        (ᶜqₗ/(2*float(dt))),
                         (1/(2*float(dt))),
                     )
                 )
@@ -739,7 +741,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ᶜδforceᵢ_δqᵢ,
                         (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
                         (-1/(2*float(dt))),
-                        (qᵢ/(2*float(dt))),
+                        (ᶜqᵢ/(2*float(dt))),
                         (1/(2*float(dt))),
                     )
                 )
@@ -752,7 +754,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ᶜδforceᵢ_δqₜ,
                         (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
                         ((1 - ᶜdqₛₗ_δqₜ)/(2*float(dt))),
-                        (qₗ/(2*float(dt))),
+                        (ᶜqₗ/(2*float(dt))),
                         float(0),
                     )
                 )
@@ -765,7 +767,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ((1 - ᶜdqₛᵢ_δqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
                         (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
                         ((1 - ᶜdqₛᵢ_δqₜ)/(2*float(dt))),
-                        (qᵢ/(2*float(dt))),
+                        (ᶜqᵢ/(2*float(dt))),
                         float(0),
                     )
                 )
