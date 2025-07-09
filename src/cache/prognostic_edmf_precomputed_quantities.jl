@@ -76,6 +76,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
             turbconv_model,
         )
     end
+    
+    ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³, Y.c.ρ)
     # @. ᶜK⁰ += ᶜtke⁰
