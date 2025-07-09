@@ -695,7 +695,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             ᶜdqₛᵢ_δqₜ = @.lazy(ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ)
 
-            # move this lower bc need to define qt derivs
             if ᶜqᵥ - specific(Y.c.ρq_liq, Y.c.ρ) <= FT(0)
                 ᶜδforceₗ_δqₗ = @. lazy(0)
                 ᶜδforceₗ_δqₜ = @. lazy(0)
@@ -764,7 +763,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ᶜforce_ice,
                         ((1 - ᶜdqₛᵢ_δqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))),
                         (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
-                        ((1 - ᶜdqₛᵢ_δqₜ)/(2*float(dt))), # CHANGE
+                        ((1 - ᶜdqₛᵢ_δqₜ)/(2*float(dt))),
                         (qᵢ/(2*float(dt))),
                         float(0),
                     )
