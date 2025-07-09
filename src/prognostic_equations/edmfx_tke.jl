@@ -44,7 +44,7 @@ function edmfx_tke_tendency!(
 )
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs, ᶠu³ʲs) = p.precomputed
-    (; ᶠu³⁰, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰) = p.precomputed
+    (; ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰) = p.precomputed
     (; ᶜK_u, ᶜK_h) = p.precomputed
     ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
     nh_pressure3_buoyʲs =
@@ -57,6 +57,7 @@ function edmfx_tke_tendency!(
     @. ᶜtke_press = 0
 
     ᶠu³ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
+    ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
 
     for j in 1:n
         ᶜρaʲ =

@@ -715,10 +715,12 @@ function compute_waen!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    ᶠu³⁰ = ᶠu³_lazy(state.c.uₕ,state.c.ρ, state.f.u₃)
+    ᶜu⁰ = ᶜu_lazy(state.c.uₕ, ᶠu³⁰) # Set here (lazy), but used elsewhere
     if isnothing(out)
-        return copy(w_component.(Geometry.WVector.(cache.precomputed.ᶜu⁰)))
+        return copy(w_component.(Geometry.WVector.(ᶜu⁰)))
     else
-        out .= w_component.(Geometry.WVector.(cache.precomputed.ᶜu⁰))
+        out .= w_component.(Geometry.WVector.(ᶜu⁰))
     end
 end
 
