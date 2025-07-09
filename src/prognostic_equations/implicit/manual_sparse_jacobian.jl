@@ -668,7 +668,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             )
 
             ᶜqᵥ = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ) - specific(Y.c.ρq_liq, Y.c.ρ)
-                          - specific(Y.c.ρq_ice, Y.c.ρ), - specific(Y.c.ρq_rai, Y.c.ρ)
+                          - specific(Y.c.ρq_ice, Y.c.ρ) - specific(Y.c.ρq_rai, Y.c.ρ)
                           - specific(Y.c.ρq_sno, Y.c.ρ))
 
             ᶜp = @. lazy(TD.air_pressure(thermo_params, ᶜts))
