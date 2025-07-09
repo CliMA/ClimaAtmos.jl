@@ -66,7 +66,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
             ᶜu_for_tke_advection = ᶜu
         elseif p.atmos.turbconv_model isa AbstractEDMF
             ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ,Y.c.ρ, Y.f.u₃)
-            ᶜu⁰ = ᶜu_lazy(Y.c.uₕ, ᶠu³⁰) # Set here (lazy), but used elsewhere
+            ᶜu⁰ = ᶜu_lazy(Y.c.uₕ, ᶠu³⁰) 
             ᶜu_for_tke_advection = ᶜu⁰
         else
             error(
