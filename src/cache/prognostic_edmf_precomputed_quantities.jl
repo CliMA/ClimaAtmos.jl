@@ -136,7 +136,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
         end
 
-        set_velocity_quantities!(ᶜuʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³, ᶜρʲ)
+        set_velocity_quantities!(ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³, ᶜρʲ)
 
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
         if p.atmos.moisture_model isa NonEquilMoistModel &&
