@@ -20,7 +20,7 @@ function get_atmos(config::AtmosConfig, params)
     FT = eltype(config)
     check_case_consistency(parsed_args)
     moisture_model = get_moisture_model(parsed_args)
-    precip_model = get_precipitation_model(parsed_args)
+    microphysics_model = get_microphysics_model(parsed_args)
     cloud_model = get_cloud_model(parsed_args)
 
     implicit_noneq_cloud_formation =
@@ -82,7 +82,7 @@ function get_atmos(config::AtmosConfig, params)
         scale_blending_method = get_scale_blending_method(parsed_args),
     )
 
-    vert_diff = get_vertical_diffusion_model(
+    vertical_diffusion = get_vertical_diffusion_model(
         disable_momentum_vertical_diffusion,
         parsed_args,
         params,
@@ -92,7 +92,7 @@ function get_atmos(config::AtmosConfig, params)
     atmos = AtmosModel(;
         # AtmosWater - Moisture, Precipitation & Clouds
         moisture_model,
-        precip_model,
+        microphysics_model,
         cloud_model,
         noneq_cloud_formation_mode = implicit_noneq_cloud_formation ?
                                      Implicit() : Explicit(),
@@ -141,7 +141,7 @@ function get_atmos(config::AtmosConfig, params)
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
 
         # Top-level options (not grouped)
-        vert_diff,
+        vertical_diffusion,
         numerics = get_numerics(parsed_args, FT),
         disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
     )

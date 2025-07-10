@@ -16,7 +16,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             Y,
             p,
             p.atmos.moisture_model,
-            p.atmos.precip_model,
+            p.atmos.microphysics_model,
         )
     end
 
@@ -36,7 +36,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             Y,
             p,
             t,
-            p.atmos.vert_diff,
+            p.atmos.vertical_diffusion,
         )
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
@@ -133,7 +133,8 @@ vertical_advection(ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. lazy(-(ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    (; moisture_model, turbconv_model, rayleigh_sponge, precip_model) = p.atmos
+    (; moisture_model, turbconv_model, rayleigh_sponge, microphysics_model) =
+        p.atmos
     (; dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -169,7 +170,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ),
         )
     end
-    if precip_model isa Microphysics1Moment
+    if microphysics_model isa Microphysics1Moment
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
@@ -182,7 +183,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ),
         )
     end
-    if precip_model isa Microphysics2Moment
+    if microphysics_model isa Microphysics2Moment
         (; ᶜwnₗ, ᶜwnᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρn_liq -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(

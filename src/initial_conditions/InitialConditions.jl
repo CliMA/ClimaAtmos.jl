@@ -8,8 +8,8 @@ import ..NoPrecipitation
 import ..Microphysics0Moment
 import ..Microphysics1Moment
 import ..Microphysics2Moment
-import ..PrescribedSurfaceTemperature
-import ..PrognosticSurfaceTemperature
+import ..PrescribedSST
+import ..SlabOceanSST
 import ..ᶜinterp
 import ..ᶠinterp
 import ..C3

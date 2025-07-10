@@ -30,7 +30,7 @@ function flux_accumulation!(integrator)
         net_energy_flux_toa[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
             float(Δt)
-        if p.atmos.surface_model isa PrescribedSurfaceTemperature
+        if p.atmos.surface_model isa PrescribedSST
             net_energy_flux_sfc[] +=
                 horizontal_integral_at_boundary(ᶠradiation_flux, half) *
                 float(Δt)

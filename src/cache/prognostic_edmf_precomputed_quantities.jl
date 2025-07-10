@@ -25,7 +25,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
         p.precomputed
     if p.atmos.moisture_model isa NonEquilMoistModel &&
-       p.atmos.precip_model isa Microphysics1Moment
+       p.atmos.microphysics_model isa Microphysics1Moment
         (; ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
     end
 
@@ -46,7 +46,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         turbconv_model,
     )
     if p.atmos.moisture_model isa NonEquilMoistModel &&
-       p.atmos.precip_model isa Microphysics1Moment
+       p.atmos.microphysics_model isa Microphysics1Moment
         @. ᶜq_liq⁰ = divide_by_ρa(
             Y.c.ρq_liq - ρaq_liq⁺(Y.c.sgsʲs),
             ᶜρa⁰,
@@ -80,7 +80,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke⁰
     if p.atmos.moisture_model isa NonEquilMoistModel &&
-       p.atmos.precip_model isa Microphysics1Moment
+       p.atmos.microphysics_model isa Microphysics1Moment
         @. ᶜts⁰ = TD.PhaseNonEquil_phq(
             thermo_params,
             ᶜp,
@@ -125,7 +125,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
         if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.precip_model isa Microphysics1Moment
+           p.atmos.microphysics_model isa Microphysics1Moment
             ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
             ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
             ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
@@ -135,7 +135,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
         if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.precip_model isa Microphysics1Moment
+           p.atmos.microphysics_model isa Microphysics1Moment
             @. ᶜtsʲ = TD.PhaseNonEquil_phq(
                 thermo_params,
                 ᶜp,
@@ -181,7 +181,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
         if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.precip_model isa Microphysics1Moment
+           p.atmos.microphysics_model isa Microphysics1Moment
             ᶜq_liqʲ = Y.c.sgsʲs.:($j).q_liq
             ᶜq_iceʲ = Y.c.sgsʲs.:($j).q_ice
             ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
@@ -247,7 +247,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
             sfc_local_geometry_val,
         )
         if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.precip_model isa Microphysics1Moment
+           p.atmos.microphysics_model isa Microphysics1Moment
             # TODO - any better way to define the cloud and precip tracer flux?
             ᶜq_liq_int_val =
                 Fields.field_values(Fields.level(ᶜspecific.q_liq, 1))
@@ -274,7 +274,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
         ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
         ᶜtsʲ_int_val = Fields.field_values(Fields.level(ᶜtsʲ, 1))
         if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.precip_model isa Microphysics1Moment
+           p.atmos.microphysics_model isa Microphysics1Moment
             @. ᶜtsʲ_int_val = TD.PhaseNonEquil_phq(
                 thermo_params,
                 ᶜp_int_val,
@@ -553,7 +553,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 end
 
 """
-    set_prognostic_edmf_precomputed_quantities_precipitation!(Y, p, precip_model)
+    set_prognostic_edmf_precomputed_quantities_precipitation!(Y, p, microphysics_model)
 
 Updates the precomputed quantities stored in `p` for edmfx precipitation sources.
 """

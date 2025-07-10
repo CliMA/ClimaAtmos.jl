@@ -694,16 +694,16 @@ add_diagnostic_variable!(
 # Precipitation (2d)
 ###
 compute_pr!(out, state, cache, time) =
-    compute_pr!(out, state, cache, time, cache.atmos.precip_model)
-compute_pr!(_, _, _, _, precip_model::T) where {T} =
-    error_diagnostic_variable("pr", precip_model)
+    compute_pr!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_pr!(_, _, _, _, microphysics_model::T) where {T} =
+    error_diagnostic_variable("pr", microphysics_model)
 
 function compute_pr!(
     out,
     state,
     cache,
     time,
-    precip_model::Union{
+    microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
@@ -730,16 +730,16 @@ add_diagnostic_variable!(
 )
 
 compute_prra!(out, state, cache, time) =
-    compute_prra!(out, state, cache, time, cache.atmos.precip_model)
-compute_prra!(_, _, _, _, precip_model::T) where {T} =
-    error_diagnostic_variable("prra", precip_model)
+    compute_prra!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_prra!(_, _, _, _, microphysics_model::T) where {T} =
+    error_diagnostic_variable("prra", microphysics_model)
 
 function compute_prra!(
     out,
     state,
     cache,
     time,
-    precip_model::Union{
+    microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
@@ -763,16 +763,16 @@ add_diagnostic_variable!(
 )
 
 compute_prsn!(out, state, cache, time) =
-    compute_prsn!(out, state, cache, time, cache.atmos.precip_model)
-compute_prsn!(_, _, _, _, precip_model::T) where {T} =
-    error_diagnostic_variable("prsn", precip_model)
+    compute_prsn!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_prsn!(_, _, _, _, microphysics_model::T) where {T} =
+    error_diagnostic_variable("prsn", microphysics_model)
 
 function compute_prsn!(
     out,
     state,
     cache,
     time,
-    precip_model::Union{
+    microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
@@ -799,7 +799,7 @@ add_diagnostic_variable!(
 # Precipitation (3d)
 ###
 compute_husra!(out, state, cache, time) =
-    compute_husra!(out, state, cache, time, cache.atmos.precip_model)
+    compute_husra!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_husra!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("husra", model)
 
@@ -808,7 +808,7 @@ function compute_husra!(
     state,
     cache,
     time,
-    precip_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
 )
     if isnothing(out)
         return state.c.ρq_rai ./ state.c.ρ
@@ -830,7 +830,7 @@ add_diagnostic_variable!(
 )
 
 compute_hussn!(out, state, cache, time) =
-    compute_hussn!(out, state, cache, time, cache.atmos.precip_model)
+    compute_hussn!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hussn!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hussn", model)
 
@@ -839,7 +839,7 @@ function compute_hussn!(
     state,
     cache,
     time,
-    precip_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
 )
     if isnothing(out)
         return state.c.ρq_sno ./ state.c.ρ
@@ -861,7 +861,7 @@ add_diagnostic_variable!(
 )
 
 compute_cdnc!(out, state, cache, time) =
-    compute_cdnc!(out, state, cache, time, cache.atmos.precip_model)
+    compute_cdnc!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_cdnc!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("cdnc", model)
 
@@ -870,7 +870,7 @@ function compute_cdnc!(
     state,
     cache,
     time,
-    precip_model::Microphysics2Moment,
+    microphysics_model::Microphysics2Moment,
 )
     if isnothing(out)
         return state.c.ρn_liq
@@ -892,7 +892,7 @@ add_diagnostic_variable!(
 )
 
 compute_ncra!(out, state, cache, time) =
-    compute_ncra!(out, state, cache, time, cache.atmos.precip_model)
+    compute_ncra!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_ncra!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("ncra", model)
 
@@ -901,7 +901,7 @@ function compute_ncra!(
     state,
     cache,
     time,
-    precip_model::Microphysics2Moment,
+    microphysics_model::Microphysics2Moment,
 )
     if isnothing(out)
         return state.c.ρn_rai

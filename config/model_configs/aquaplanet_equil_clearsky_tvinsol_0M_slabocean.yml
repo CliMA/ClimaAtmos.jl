@@ -10,5 +10,5 @@ approximate_linear_solve_iters: 2
 rad: "clearsky"
 insolation: "timevarying"
 dt_rad: "1hours"
-prognostic_surface: "PrognosticSurfaceTemperature"
+prognostic_surface: "SlabOceanSST"
 check_conservation: true
