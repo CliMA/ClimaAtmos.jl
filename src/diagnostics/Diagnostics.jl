@@ -58,8 +58,8 @@ import ..SlabOceanSST
 import ..draft_area
 import ..compute_gm_mixing_length!
 import ..horizontal_integral_at_boundary
-import ..ρa⁰
-import ..specific_tke
+import ..ᶜρa⁰
+import ..ᶜspecific_tke
 
 # We need the abbreviations for symbols like curl, grad, and so on
 include(joinpath("..", "utils", "abbreviations.jl"))

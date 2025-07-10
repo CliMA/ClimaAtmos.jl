@@ -105,21 +105,24 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     turbconv_params = CAP.turbconv_params(params)
     ᶜts = p.precomputed.ᶜts   #TODO replace
 
-    q_tot = specific(Y.c.ρq_tot, Y.c.ρ)
+    q_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
     ᶜh_tot = @. lazy(
         TD.total_specific_enthalpy(
             thermo_params,
             ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
+            ᶜe_tot,
         ),
     )
 
     ρ_int_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
     uₕ_int_level = Fields.field_values(Fields.level(Y.c.uₕ, 1))
     u³_int_halflevel = Fields.field_values(Fields.level(ᶠu³, half))
-    h_tot_int_level = Fields.field_values(Fields.level(ᶜh_tot, 1))
+    h_tot_int_level =
+        Fields.field_values(Fields.level(Base.materialize(ᶜh_tot), 1))
     K_int_level = Fields.field_values(Fields.level(ᶜK, 1))
-    q_tot_int_level = Fields.field_values(Fields.level(q_tot, 1))
+    q_tot_int_level =
+        Fields.field_values(Fields.level(Base.materialize(q_tot), 1))
 
     p_int_level = Fields.field_values(Fields.level(ᶜp, 1))
     Φ_int_level = Fields.field_values(Fields.level(ᶜΦ, 1))
@@ -330,7 +333,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         ᶠnh_pressure³_buoyʲs,
         ᶠnh_pressure³_dragʲs,
     ) = p.precomputed
-    (; ᶠu³⁰, ᶜK⁰, ᶜtke⁰) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰) = p.precomputed
+
+
 
     if microphysics_model isa Microphysics1Moment
         q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
@@ -354,14 +359,25 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
 
     # integral
-    q_tot = specific(Y.c.ρq_tot, Y.c.ρ)
+    q_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
+    ᶜtke⁰ = ᶜspecific_tke(Y.c.sgs⁰, Y.c, p)
+
     for i in 2:Spaces.nlevels(axes(Y.c))
         ρ_level = Fields.field_values(Fields.level(Y.c.ρ, i))
         uₕ_level = Fields.field_values(Fields.level(Y.c.uₕ, i))
         u³_halflevel = Fields.field_values(Fields.level(ᶠu³, i - half))
         K_level = Fields.field_values(Fields.level(ᶜK, i))
-        h_tot_level = Fields.field_values(Fields.level(ᶜh_tot, i))
-        q_tot_level = Fields.field_values(Fields.level(q_tot, i))
+        h_tot_level =
+            Fields.field_values(Fields.level(Base.materialize(ᶜh_tot), i))
+        q_tot_level =
+            Fields.field_values(Fields.level(Base.materialize(q_tot), i))
         p_level = Fields.field_values(Fields.level(ᶜp, i))
         Φ_level = Fields.field_values(Fields.level(ᶜΦ, i))
         local_geometry_level = Fields.field_values(
@@ -385,8 +401,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             Fields.field_values(Fields.level(ᶠu³⁰, i - 1 - half))
         u³⁰_data_prev_halflevel = u³⁰_prev_halflevel.components.data.:1
         K_prev_level = Fields.field_values(Fields.level(ᶜK, i - 1))
-        h_tot_prev_level = Fields.field_values(Fields.level(ᶜh_tot, i - 1))
-        q_tot_prev_level = Fields.field_values(Fields.level(q_tot, i - 1))
+        h_tot_prev_level =
+            Fields.field_values(Fields.level(Base.materialize(ᶜh_tot), i - 1))
+        q_tot_prev_level =
+            Fields.field_values(Fields.level(Base.materialize(q_tot), i - 1))
         ts_prev_level = Fields.field_values(Fields.level(ᶜts, i - 1))
         p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
@@ -486,7 +504,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     Fields.field_values(Fields.level(ᶜq_iceʲ, i - 1))
             end
 
-            tke_prev_level = Fields.field_values(Fields.level(ᶜtke⁰, i - 1))
+            tke_prev_level = Fields.field_values(
+                Fields.level(Base.materialize(ᶜtke⁰), i - 1),
+            )
 
             @. entrʲ_prev_level = entrainment(
                 thermo_params,
@@ -1015,6 +1035,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     @. ᶜprandtl_nvec =
         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
 
+    ᶜtke⁰ = ᶜspecific_tke(Y.c.sgs⁰, Y.c, p)
+
     ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
     # using ᶜu⁰ would be more correct, but this is more consistent with the
@@ -1025,7 +1047,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
             (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
     end
 
-    sfc_tke = Fields.level(ᶜtke⁰, 1)
+    sfc_tke = Fields.level(Base.materialize(ᶜtke⁰), 1)
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, half)
     @. ᶜmixing_length_tuple = mixing_length(
         params,
@@ -1090,12 +1112,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
 
     # Environment precipitation sources (to be applied to grid mean)
-    q_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
         thermo_params,
         microphys_0m_params,
         dt,
-        specific(Y.c.ρq_tot, Y.c.ρ),
+        ᶜq_tot,
         ᶜts,
     )
     return nothing
