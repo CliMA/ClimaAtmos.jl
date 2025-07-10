@@ -351,7 +351,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         noneq_cloud_formation_flag,
     ) = alg
     (; matrix) = cache
-    (; params) = p
+    (; params, dt) = p
     (; ᶜΦ, ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶠu³, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
     (;
@@ -618,10 +618,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ᶜcₚ_air = @. lazy(TD.cp_m(
                     thermo_params,
                     specific(Y.c.ρq_tot, Y.c.ρ),
-                    specific(Y.c.ρq_liq, Y.c.ρ),
-                    specific(Y.c.ρq_ice, Y.c.ρ),
-                    specific(Y.c.ρq_rai, Y.c.ρ),
-                    specific(Y.c.ρq_sno, Y.c.ρ),
+                    specific(Y.c.ρq_liq, Y.c.ρ)+ specific(Y.c.ρq_rai, Y.c.ρ),
+                    specific(Y.c.ρq_ice, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ),
                     )
                 )
 
@@ -833,7 +831,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
             turbconv_params = CAP.turbconv_params(params)
             c_d = CAP.tke_diss_coeff(turbconv_params)
-            (; dt) = p
             (; ᶜtke⁰, ᶜmixing_length) = p.precomputed
             ᶜρa⁰ =
                 p.atmos.turbconv_model isa PrognosticEDMFX ?
