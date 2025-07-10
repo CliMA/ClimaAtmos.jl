@@ -19,6 +19,6 @@ edmfx_sgs_diffusive_flux: true
 moist: equil
 cloud_model: "quadrature_sgs"
 precip_model: 0M
-dt: 120secs
+dt: 80secs
 t_end: 1hours
 toml: [toml/diagnostic_edmfx_0M.toml]
