@@ -89,7 +89,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     FT = eltype(Y)
     α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜu, ᶜK_u, ᶜK_h) = p.precomputed
+    (; ᶜu, ᶜK_u, ᶜK_h, ᶜts) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
     if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)

@@ -97,6 +97,7 @@ vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     (; ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
 
     ## Momentum tendencies
     ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(Y.c.ρ)
