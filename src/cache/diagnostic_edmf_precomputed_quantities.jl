@@ -991,7 +991,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
         ᶜu⁰ = ᶜu
     end
 
-    ᶜu⁰ = ᶜu_lazy(Y.c.uₕ, ᶠu³⁰) # Set here (lazy), but used elsewhere
+    ᶜu⁰ = ᶜu_lazy(Y.c.uₕ, ᶠu³⁰) 
 
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
