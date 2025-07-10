@@ -461,7 +461,9 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
 
     ᶜu = ᶜu_lazy(Y.c.uₕ, Y.f.u₃)
     ᶠu³ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
+
     set_velocity_quantities!(ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³, Y.c.ρ)
+
     ᶜJ = Fields.local_geometry_field(Y.c).J
     @. ᶠu = CT123(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
     if n > 0
