@@ -21,6 +21,40 @@ is_tracer_var(symbol) = !(
 # https://stackoverflow.com/questions/14687665/very-slow-stdpow-for-bases-very-close-to-1
 fast_pow(x, y) = exp(y * log(x))
 
+
+# Helper function to compute ᶜK inline
+function compute_ᶜK_inline(ᶜuₕ, ᶠu₃)
+    return compute_kinetic(ᶜuₕ, ᶠu₃)
+end
+
+# Helper function to compute ᶜu inline
+function compute_ᶜu_inline(ᶜuₕ, ᶠu₃)
+    return @. lazy(C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃)))
+end
+
+# Helper function to compute ᶠuₕ³ inline
+function compute_ᶠuₕ³_inline(ᶜuₕ, ᶜρ)
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
+end
+
+# Helper function to compute ᶜuʲ inline
+function compute_ᶜuʲ_inline(ᶜuₕ, ᶠu₃ʲ, ᶠuₕ³)
+    return @. lazy(C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃ʲ)))
+end
+
+
+# Helper function to compute ᶠuₕ³ inline
+function compute_ᶠuₕ³_inline(ᶜuₕ, ᶜρ)
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
+end
+
+# Helper function to compute ᶜuʲ inline
+function compute_ᶜuʲ_inline(ᶜuₕ, ᶠu₃ʲ, ᶠuₕ³)
+    return @. lazy(C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃ʲ)))
+end
+
 """
     time_from_filename(file)
 

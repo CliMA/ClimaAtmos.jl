@@ -1,4 +1,26 @@
 #####
+##### Hyperdiffusion tendencies
+#####
+
+import ClimaCore: Fields, Geometry
+
+# Helper function to compute ᶠuₕ³ inline
+function compute_ᶠuₕ³_inline(ᶜuₕ, ᶜρ)
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
+end
+
+# Helper function to compute ᶜu inline
+function compute_ᶜu_inline(ᶜuₕ, ᶠu₃)
+    return @. lazy(C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃)))
+end
+
+# Helper function to compute ᶜuʲ inline for subgrid scale
+function compute_ᶜuʲ_inline(ᶜuₕ, ᶠu₃ʲ, ᶠuₕ³)
+    return @. lazy(C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃ʲ)))
+end
+
+#####
 ##### Hyperdiffusion
 #####
 
@@ -93,6 +115,7 @@ function hyperdiffusion_cache(
     return (; quantities..., ᶜ∇²u, ᶜ∇²uʲs)
 end
 
+
 # This should prep variables that we will dss in
 # dss_hyperdiffusion_tendency_pairs
 NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
@@ -108,10 +131,13 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
 
+    # Inline computation of ᶜu
+    ᶜu = compute_ᶜu_inline(Y.c.uₕ, Y.f.u₃)
+
     # Grid scale hyperdiffusion
     @. ᶜ∇²u =
-        C123(wgradₕ(divₕ(p.precomputed.ᶜu))) -
-        C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜu))))
+        C123(wgradₕ(divₕ(ᶜu))) -
+        C123(wcurlₕ(C123(curlₕ(ᶜu))))
 
     @. ᶜ∇²specific_energy =
         wdivₕ(gradₕ(specific(Y.c.ρe_tot, Y.c.ρ) + ᶜp / Y.c.ρ - ᶜh_ref))
@@ -124,10 +150,13 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     # Sub-grid scale hyperdiffusion
     if turbconv_model isa PrognosticEDMFX
+        ᶠuₕ³ = compute_ᶠuₕ³_inline(Y.c.uₕ, Y.c.ρ)
         for j in 1:n
+            # Inline computation of ᶜuʲ
+            ᶜuʲ = compute_ᶜuʲ_inline(Y.c.uₕ, Y.f.sgsʲs.:($j).u₃, ᶠuₕ³)
             @. ᶜ∇²uʲs.:($$j) =
-                C123(wgradₕ(divₕ(p.precomputed.ᶜuʲs.:($$j)))) -
-                C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜuʲs.:($$j)))))
+                C123(wgradₕ(divₕ(ᶜuʲ))) -
+                C123(wcurlₕ(C123(curlₕ(ᶜuʲ))))
             @. ᶜ∇²mseʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).mse))
             @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
             @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))

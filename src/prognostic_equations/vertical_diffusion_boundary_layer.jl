@@ -5,6 +5,11 @@
 import ClimaCore.Geometry: ⊗
 import ClimaCore.Operators as Operators
 
+# Helper function to compute ᶜu inline
+function compute_ᶜu_inline(ᶜuₕ, ᶠu₃)
+    return @. lazy(C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃)))
+end
+
 """
     vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, vert_diff_model)
@@ -82,10 +87,12 @@ function vertical_diffusion_boundary_layer_tendency!(
 )
     FT = eltype(Y)
     α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
-    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h) = p.precomputed
+    (; ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
     if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
+        # Inline computation of ᶜu
+        ᶜu = compute_ᶜu_inline(Y.c.uₕ, Y.f.u₃)
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
         ᶠstrain_rate .= compute_strain_rate_face(ᶜu)
         @. Yₜ.c.uₕ -= C12(

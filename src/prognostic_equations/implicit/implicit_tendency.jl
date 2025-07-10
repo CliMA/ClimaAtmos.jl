@@ -5,6 +5,12 @@
 import ClimaCore
 import ClimaCore: Fields, Geometry
 
+# Helper function to compute ᶠuₕ³ inline
+function compute_ᶠuₕ³_inline(ᶜuₕ, ᶜρ)
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
+end
+
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
@@ -140,7 +146,11 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜh_tot, ᶠu³, ᶜp) = p.precomputed
+    (; ᶜh_tot, ᶜp) = p.precomputed
+
+    # Inline computation of ᶠu³
+    ᶠuₕ³ = compute_ᶠuₕ³_inline(Y.c.uₕ, Y.c.ρ)
+    ᶠu³ = @. lazy(ᶠuₕ³ + CT3(Y.f.u₃))
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 

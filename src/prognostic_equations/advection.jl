@@ -1,58 +1,72 @@
 #####
-##### Advection and dynamics tendencies
+##### Horizontal advection tendencies
 #####
 
-using LinearAlgebra: ×, dot
-import ClimaCore.Fields as Fields
-import ClimaCore.Geometry as Geometry
+import ClimaCore: Fields, Geometry
+
+# Helper function to compute ᶠuₕ³ inline
+function compute_ᶠuₕ³_inline(ᶜuₕ, ᶜρ)
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
+end
+
+# Helper function to compute ᶜu inline
+function compute_ᶜu_inline(ᶜuₕ, ᶠu₃)
+    return @. lazy(C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃)))
+end
+
+# Helper function to compute ᶜK inline
+function compute_ᶜK_inline(ᶜuₕ, ᶠu₃)
+    return compute_kinetic(ᶜuₕ, ᶠu₃)
+end
+
+# Helper function to compute ᶜuʲ inline for subgrid scale
+function compute_ᶜuʲ_inline(ᶜuₕ, ᶠu₃ʲ, ᶠuₕ³)
+    return @. lazy(C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃ʲ)))
+end
 
 """
     horizontal_dynamics_tendency!(Yₜ, Y, p, t)
 
-Computes tendencies due to horizontal advection for prognostic variables of the
-grid mean and EDMFX subdomains, and also applies horizontal pressure gradient and 
-gravitational acceleration terms for horizontal momentum.
+Computes tendencies due to horizontal advection for the grid-mean dynamics
+variables (density, energy, momentum) and for EDMFX subgrid-scale variables
+if applicable.
 
 Specifically, this function calculates:
-- Horizontal advection of density (`ρ`).
-- Horizontal advection of EDMFX updraft density-area product (`ρaʲ`).
-- Horizontal advection of total energy (`ρe_tot`) using total enthalpy flux.
-- Horizontal advection of EDMFX updraft moist static energy (`mseʲ`).
-- Horizontal advection of turbulent kinetic energy (`ρatke⁰`) if used.
-- Horizontal pressure gradient, kinetic energy gradient, and geopotential gradient
-  forces for horizontal momentum (`uₕ`).
+- Horizontal advection for grid-mean density (`ρ`).
+- Horizontal advection for grid-mean total energy (`ρe_tot`).
+- Horizontal advection for EDMFX updraft density-area product (`ρaʲ`).
+- Horizontal advection for EDMFX updraft moist static energy (`mseʲ`).
+- Horizontal advection for grid-mean TKE (`ρatke⁰`) if using prognostic TKE.
+- Pressure gradient and kinetic energy gradient terms in the horizontal momentum equation.
 
 Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
 - `Y`: The current state vector.
-- `p`: Cache containing parameters, precomputed fields (e.g., velocities `ᶜu`,
-       `ᶜu⁰`, `ᶜuʲs`; pressure `ᶜp`; kinetic energy `ᶜK`; total enthalpy `ᶜh_tot`),
-       and core components (e.g., geopotential `ᶜΦ`).
+- `p`: Cache containing parameters and precomputed fields (e.g., `ᶜp`, `ᶜh_tot`).
 - `t`: Current simulation time (not directly used in calculations).
 
-Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, `Yₜ.c.uₕ`, and EDMFX-related fields in
-`Yₜ.c.sgsʲs` and `Yₜ.c.sgs⁰` if applicable.
+Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, `Yₜ.c.uₕ`, and EDMF fields in `Yₜ.c.sgsʲs` if applicable.
 """
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
-    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    (; turbconv_model) = p.atmos
+    n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜK, ᶜp) = p.precomputed
+    (; ᶜp) = p.precomputed
 
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜuʲs) = p.precomputed
-    end
+    # Inline computation of ᶜu and ᶜK
+    ᶜu = compute_ᶜu_inline(Y.c.uₕ, Y.f.u₃)
+    ᶜK = compute_ᶜK_inline(Y.c.uₕ, Y.f.u₃)
 
     @. Yₜ.c.ρ -= wdivₕ(Y.c.ρ * ᶜu)
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= wdivₕ(Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j))
-        end
-    end
-
     (; ᶜh_tot) = p.precomputed
     @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
+        (; ᶜuʲs) = p.precomputed
+        for j in 1:n
+            @. Yₜ.c.sgsʲs.:($$j).ρa -= wdivₕ(Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j))
+        end
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).mse -=
                 wdivₕ(Y.c.sgsʲs.:($$j).mse * ᶜuʲs.:($$j)) -
@@ -60,11 +74,16 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    if use_prognostic_tke(p.atmos.turbconv_model)
-        if p.atmos.turbconv_model isa EDOnlyEDMFX
-            ᶜu_for_tke_advection = ᶜu
-        elseif p.atmos.turbconv_model isa AbstractEDMF
-            ᶜu_for_tke_advection = p.precomputed.ᶜu⁰
+    if p.atmos.turbconv_model isa AbstractEDMF
+        ᶜu_for_tke_advection = ᶜu
+        if p.atmos.turbconv_model isa PrognosticEDMFX
+            # Inline computation of ᶜu⁰
+            ᶜu⁰ = @. lazy(C123(Y.c.uₕ) + ᶜinterp(C123(p.precomputed.ᶠu₃⁰)))
+            ᶜu_for_tke_advection = ᶜu⁰
+        elseif p.atmos.turbconv_model isa EDOnlyEDMFX
+            # Inline computation of ᶜu⁰
+            ᶜu⁰ = @. lazy(C123(Y.c.uₕ) + ᶜinterp(C123(p.precomputed.ᶠu³⁰)))
+            ᶜu_for_tke_advection = ᶜu⁰
         else
             error(
                 "Unsupported turbconv_model type for TKE advection: $(typeof(p.atmos.turbconv_model))",
@@ -95,7 +114,7 @@ Specifically, this function calculates:
 Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
 - `Y`: The current state vector.
-- `p`: Cache containing parameters and precomputed fields (e.g., velocities `ᶜu`, `ᶜuʲs`).
+- `p`: Cache containing parameters and precomputed fields (e.g., `ᶜuʲs`).
 - `t`: Current simulation time (not directly used in calculations).
 
 Modifies tracer fields in `Yₜ.c` (e.g., `Yₜ.c.ρq_tracer`) and EDMFX moisture fields
@@ -103,7 +122,9 @@ in `Yₜ.c.sgsʲs` if applicable.
 """
 NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜu) = p.precomputed
+    
+    # Inline computation of ᶜu
+    ᶜu = compute_ᶜu_inline(Y.c.uₕ, Y.f.u₃)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
@@ -158,7 +179,7 @@ Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
 - `Y`: The current state vector.
 - `p`: Cache containing parameters, core fields (e.g., `ᶜf³`, `ᶠf¹²`, `ᶜΦ`),
-       precomputed fields (e.g., `ᶜu`, `ᶠu³`, `ᶜK`, EDMF velocities/TKE if applicable),
+       precomputed fields (e.g., EDMF velocities/TKE if applicable),
        atmospheric model settings (`p.atmos.numerics` for upwinding schemes),
        and scratch space.
 - `t`: Current simulation time (not directly used in calculations).
@@ -174,17 +195,23 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
-    (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
     (; ᶜspecific) = p.precomputed
 
+    # Inline computation of ᶜu, ᶠu³, and ᶜK
+    ᶜu = compute_ᶜu_inline(Y.c.uₕ, Y.f.u₃)
+    ᶠuₕ³ = compute_ᶠuₕ³_inline(Y.c.uₕ, Y.c.ρ)
+    ᶠu³ = @. lazy(ᶠuₕ³ + CT3(Y.f.u₃))
+    ᶜK = compute_ᶜK_inline(Y.c.uₕ, Y.f.u₃)
+
     ᶠu³⁰ =
         advect_tke ?
         (
-            turbconv_model isa EDOnlyEDMFX ? p.precomputed.ᶠu³ :
-            p.precomputed.ᶠu³⁰
+            turbconv_model isa EDOnlyEDMFX ? ᶠu³ :
+            # Inline computation of ᶠu³⁰
+            @. lazy(ᶠuₕ³ + CT3(p.precomputed.ᶠu₃⁰))
         ) : nothing
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
     ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
