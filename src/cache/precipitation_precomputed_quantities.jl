@@ -262,14 +262,14 @@ function set_precipitation_cache!(
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
     (; ᶜts⁰, ᶜtsʲs) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
+    ᶜρa⁰_vals = ᶜρa⁰(Y.c, p)
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
-    @. ᶜS_ρq_tot = ᶜSqₜᵖ⁰ * ᶜρa⁰
+    @. ᶜS_ρq_tot = ᶜSqₜᵖ⁰ * ᶜρa⁰_vals
     @. ᶜS_ρe_tot =
         ᶜSqₜᵖ⁰ *
-        ᶜρa⁰ *
+        ᶜρa⁰_vals *
         e_tot_0M_precipitation_sources_helper(thermo_params, ᶜts⁰, ᶜΦ)
     for j in 1:n
         @. ᶜS_ρq_tot += ᶜSqₜᵖʲs.:($$j) * Y.c.sgsʲs.:($$j).ρa
@@ -289,8 +289,11 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     (; ᶜts, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
 
-    q_rai = specific(Y.c.ρq_rai, Y.c.ρ)
-    q_sno = specific(Y.c.ρq_sno, Y.c.ρ)
+    q_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    q_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+    q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+    q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
@@ -364,10 +367,10 @@ function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
     (; ᶜSnₗᵖ, ᶜSnᵣᵖ) = p.precomputed
 
-    q_liq = specific(Y.c.ρq_liq, Y.c.ρ)
-    q_rai = specific(Y.c.ρq_rai, Y.c.ρ)
-    n_liq = specific(Y.c.ρn_liq, Y.c.ρ)
-    n_rai = specific(Y.c.ρn_rai, Y.c.ρ)
+    q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+    q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    n_liq = @. lazy(specific(Y.c.ρn_liq, Y.c.ρ))
+    n_rai = @. lazy(specific(Y.c.ρn_rai, Y.c.ρ))
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜS₂ᵖ = p.scratch.ᶜtemp_scalar_2
@@ -481,20 +484,24 @@ function set_precipitation_surface_fluxes!(
     sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
 
     # Constant extrapolation to surface, consistent with simple downwinding
+    ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+    ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+    ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
     sfc_qᵣ = Fields.Field(
-        Fields.field_values(Fields.level(specific(Y.c.ρq_rai, Y.c.ρ), 1)),
+        Fields.field_values(Fields.level(Base.materialize(ᶜq_rai), 1)),
         sfc_space,
     )
     sfc_qₛ = Fields.Field(
-        Fields.field_values(Fields.level(specific(Y.c.ρq_sno, Y.c.ρ), 1)),
+        Fields.field_values(Fields.level(Base.materialize(ᶜq_sno), 1)),
         sfc_space,
     )
     sfc_qₗ = Fields.Field(
-        Fields.field_values(Fields.level(specific(Y.c.ρq_liq, Y.c.ρ), 1)),
+        Fields.field_values(Fields.level(Base.materialize(ᶜq_liq), 1)),
         sfc_space,
     )
     sfc_qᵢ = Fields.Field(
-        Fields.field_values(Fields.level(specific(Y.c.ρq_ice, Y.c.ρ), 1)),
+        Fields.field_values(Fields.level(Base.materialize(ᶜq_ice), 1)),
         sfc_space,
     )
     sfc_wᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), sfc_space)

@@ -157,13 +157,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.ρe_tot += vtt
     if !(moisture_model isa DryModel)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        vtt = vertical_transport(
-            Y.c.ρ,
-            ᶠu³,
-            ᶜq_tot,
-            dt,
-            Val(:none),
-        )
+        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot += vtt
     end
 

@@ -300,8 +300,9 @@ function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
     return nothing
 end
 
-function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
-    @. ᶜK += ᶜρa⁰ * ᶜinterp(dot(ᶠu₃⁰ - Yf.u₃, CT3(ᶠu₃⁰ - Yf.u₃))) / 2 / Yc.ρ
+function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰_vals, ᶠu₃⁰, turbconv_model)
+    @. ᶜK +=
+        ᶜρa⁰_vals * ᶜinterp(dot(ᶠu₃⁰ - Yf.u₃, CT3(ᶠu₃⁰ - Yf.u₃))) / 2 / Yc.ρ
     for j in 1:n_mass_flux_subdomains(turbconv_model)
         ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
         ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
@@ -454,8 +455,6 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_implicit_closures!(Y, p, t)
-    elseif turbconv_model isa DiagnosticEDMFX
-        set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     elseif !(isnothing(turbconv_model))
         # Do nothing for other turbconv models for now
     end
