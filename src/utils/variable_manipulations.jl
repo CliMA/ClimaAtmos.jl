@@ -296,7 +296,7 @@ Arguments:
 draft_sum(f, sgsʲs) = mapreduce_with_init(f, +, sgsʲs)
 
 """
-    env_value(grid_scale_value, f_draft, gs)    
+    ᶜenv_value(grid_scale_value, f_draft, gs, turbconv_model)
 
 Computes the value of a quantity `ρaχ` in the environment subdomain by subtracting 
 the sum of its values in all draft subdomains from the grid-scale value. 
@@ -304,128 +304,148 @@ the sum of its values in all draft subdomains from the grid-scale value.
 This is based on the domain decomposition principle for density-area weighted 
 quantities: `GridMean(ρχ) = Env(ρaχ) + Sum(Drafts(ρaχ))`.
 
+The function handles both PrognosticEDMFX and DiagnosticEDMFX models:
+- For PrognosticEDMFX: Uses gs.sgsʲs to access draft subdomain states
+- For DiagnosticEDMFX: Uses p.precomputed.ᶜρaʲs for draft area-weighted densities
+
 Arguments:
 - `grid_scale_value`: The `ρa`-weighted grid-scale value of the quantity.
 - `f_draft`: A function that extracts the corresponding value from a draft subdomain state.
-- `gs`: The grid-scale state, which contains the draft subdomain states `gs.sgsʲs`.
+- `gs`: The grid-scale state, which contains the draft subdomain states `gs.sgsʲs` (for PrognosticEDMFX).
+- `turbconv_model`: The turbulence convection model, used to determine how to access draft data.
 """
-function env_value(grid_scale_value, f_draft, gs)
-    return grid_scale_value - draft_sum(f_draft, gs.sgsʲs)
+function ᶜenv_value(
+    grid_scale_value,
+    f_draft,
+    gs,
+    turbconv_model::PrognosticEDMFX,
+)
+    return @. lazy(grid_scale_value - draft_sum(f_draft, gs.sgsʲs))
+end
+
+function ᶜenv_value(
+    grid_scale_value,
+    f_draft,
+    gs,
+    turbconv_model::DiagnosticEDMFX,
+    p,
+)
+    # For DiagnosticEDMFX, we need to access precomputed quantities from p
+    (; ᶜρaʲs) = p.precomputed
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    ᶜdraft_sum_diag = p.scratch.ᶜtemp_scalar_4
+    @. ᶜdraft_sum_diag = 0
+
+    for j in 1:n
+        ᶜρaʲ = ᶜρaʲs.:($j)
+        @. ᶜdraft_sum_diag += f_draft(ᶜρaʲ)
+    end
+    return @. lazy(grid_scale_value - ᶜdraft_sum_diag)
 end
 
 """
-    specific_env_value(χ_name::Symbol, gs, turbconv_model)
+    ᶜspecific_env_value(::Val{χ_name}, gs, p)
 
 Calculates the specific value of a quantity `χ` in the environment (`χ⁰`).
 
 This function uses the domain decomposition principle to first find the
 density-area-weighted environment value (`ρa⁰χ⁰`) and the environment
-density-area (`ρa⁰`). It then computes the specific value using the
+density-weighted environmental area (`ρa⁰`). It then computes the specific value using the
 regularized `specific` function, which provides a stable result even when the
 environment area fraction is very small.
 
 Arguments:
-- `χ_name`: The `Symbol` for the specific quantity `χ` (e.g., `:h_tot`, `:q_tot`).
+- `::Val{χ_name}`: A `Val` type containing the symbol for the specific quantity `χ` (e.g., `Val(:h_tot)`, `Val(:q_tot)`).
 - `gs`: The grid-scale state, containing grid-mean and draft subdomain states.
-- `turbconv_model`: The turbulence convection model, containing parameters for regularization.
+- `p`: The cache, containing precomputed quantities and turbconv_model.
 
 Returns:
 - The specific value of the quantity `χ` in the environment.
 """
-function specific_env_value(χ_name::Symbol, gs, turbconv_model)
+function ᶜspecific_env_value(::Val{χ_name}, gs, p) where {χ_name}
+    turbconv_model = p.atmos.turbconv_model
+
     # Grid-scale density-weighted variable name, e.g., :ρq_tot
     ρχ_name = Symbol(:ρ, χ_name)
 
-    # Numerator: ρa⁰χ⁰ = (gs.ρχ) - (Σ sgsʲ.ρa * sgsʲ.χ)
-    ρaχ⁰ = env_value(
-        getproperty(gs, ρχ_name),
-        sgsʲ -> getproperty(sgsʲ, :ρa) * getproperty(sgsʲ, χ_name),
-        gs,
-    )
+    if turbconv_model isa PrognosticEDMFX
+        # Numerator: ρa⁰χ⁰ = (gs.ρχ) - (Σ sgsʲ.ρa * sgsʲ.χ)
+        ρaχ⁰ = ᶜenv_value(
+            getproperty(gs, ρχ_name),
+            sgsʲ -> getproperty(sgsʲ, :ρa) * getproperty(sgsʲ, χ_name),
+            gs,
+            turbconv_model,
+        )
+        # Denominator: ρa⁰ = gs.ρ - Σ sgsʲ.ρa
+        ᶜρa⁰_vals = ᶜρa⁰(gs, p)
+    else # DiagnosticEDMFX
+        # For DiagnosticEDMFX, we need to compute ρaʲ * χʲ for each draft
+        # Get the specific quantity values for all drafts
+        ᶜχʲs = getproperty(p.precomputed, Symbol(:ᶜ, χ_name, :ʲs))
+        n = n_mass_flux_subdomains(turbconv_model)
 
-    # Denominator: ρa⁰ = gs.ρ - Σ sgsʲ.ρa
-    ρa⁰_val = env_value(gs.ρ, sgsʲ -> sgsʲ.ρa, gs)
+        # Create combined ρaʲ * χʲ values for each draft
+        ᶜρaχʲs_combined = p.scratch.ᶜtemp_scalar_3
+        @. ᶜρaχʲs_combined = 0
+        for j in 1:n
+            ᶜρaʲ = p.precomputed.ᶜρaʲs.:($j)
+            ᶜχʲ = ᶜχʲs.:($j)
+            @. ᶜρaχʲs_combined += ᶜρaʲ * ᶜχʲ
+        end
+
+        # Numerator: ρa⁰χ⁰ = (gs.ρχ) - (Σ ρaʲ * χʲ)
+        ρaχ⁰ = getproperty(gs, ρχ_name) - ᶜρaχʲs_combined
+
+        # Denominator: ρa⁰ = gs.ρ - Σ ρaʲ
+        ᶜρa⁰_vals = ᶜρa⁰(gs, p)
+    end
 
     # Call the 5-argument specific function for regularized division
-    return specific(
-        ρaχ⁰,                      # ρaχ for environment
-        ρa⁰_val,                   # ρa for environment
-        getproperty(gs, ρχ_name),  # Fallback ρχ is the grid-mean value
-        gs.ρ,                      # Fallback ρ is the grid-mean value
-        turbconv_model,
-    )
-end
-
-"""
-    specific_env_mse(gs, p)
-
-Computes the specific moist static energy (`mse`) in the environment (`mse⁰`).
-
-This is a specialized helper function because `mse` is not a grid-scale prognostic
-variable. It first computes the grid-scale moist static energy density (`ρmse`)
-from other grid-scale quantities (`ρ`, total specific enthalpy `h_tot`, specific 
-kinetic energy `K`). It then uses the `env_value` helper to compute the environment's 
-portion of `ρmse` and `ρa` via domain decomposition, and finally calculates the specific 
-value using the regularized `specific` function.
-
-Arguments:
-- `gs`: The grid-scale state (`Y.c`), containing `ρ` and `sgsʲs`.
-- `p`: The cache, containing the `turbconv_model` 
-
-Returns:
-- A `ClimaCore.Fields.Field` containing the specific moist static energy of the
-  environment (`mse⁰`).
-"""
-function specific_env_mse(gs, p)
-    # Get necessary precomputed values from the cache `p`
-    (; ᶜK, ᶜts) = p.precomputed  # TODO: replace by on-the-fly computation
-    (; turbconv_model) = p.atmos
-    thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(gs.ρe_tot, gs.ρ),
+    return @. lazy(
+        specific(
+            ρaχ⁰,                      # ρaχ for environment
+            ᶜρa⁰_vals,                   # ρa for environment
+            getproperty(gs, ρχ_name),  # Fallback ρχ is the grid-mean value
+            gs.ρ,                      # Fallback ρ is the grid-mean value
+            turbconv_model,
         ),
     )
-
-    # 1. Define the grid-scale moist static energy density `ρ * mse`.
-    grid_scale_ρmse = gs.ρ .* (ᶜh_tot .- ᶜK)
-
-    # 2. Compute the environment's density-area-weighted mse (`ρa⁰mse⁰`).
-    ρa⁰mse⁰ = p.scratch.ᶜtemp_scalar
-    @. ρa⁰mse⁰ = env_value(grid_scale_ρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, gs)
-
-    # 3. Compute the environment's density-area product (`ρa⁰`).
-    ρa⁰_val = @. lazy(ρa⁰(gs))
-
-    # 4. Compute and return the final specific environment mse (`mse⁰`).
-    return @. lazy(
-        specific(ρa⁰mse⁰, ρa⁰_val, grid_scale_ρmse, gs.ρ, turbconv_model),
-    )
 end
 
 """
-    ρa⁰(gs)
+    ρa⁰(gs, p)
 
 Computes the environment area-weighted density (`ρa⁰`).
 
-This function uses the `env_value` helper, which applies the domain
+This function uses the `ᶜenv_value` helper, which applies the domain
 decomposition principle (`GridMean = Environment + Sum(Drafts)`) to calculate
 the environment area-weighted density by subtracting the sum of all draft
 subdomain area-weighted densities (`ρaʲ`) from the grid-mean density (`ρ`).
 
 Arguments:
 - `gs`: The grid-scale state, which contains the grid-mean density `gs.ρ` and
-        the draft subdomain states `gs.sgsʲs`.
+        the draft subdomain states `gs.sgsʲs` (for PrognosticEDMFX).
+- `p`: The cache, containing precomputed quantities and turbconv_model.
 
 Returns:
 - The area-weighted density (`ρa⁰`).
 """
-ρa⁰(gs) = env_value(gs.ρ, sgsʲ -> sgsʲ.ρa, gs)
+
+function ᶜρa⁰(gs, p)
+    turbconv_model = p.atmos.turbconv_model
+
+    if turbconv_model isa PrognosticEDMFX
+        return ᶜenv_value(gs.ρ, sgsʲ -> sgsʲ.ρa, gs, turbconv_model)
+    elseif turbconv_model isa DiagnosticEDMFX
+        return ᶜenv_value(gs.ρ, ᶜρaʲ -> ᶜρaʲ, gs, turbconv_model, p)
+    else
+        return gs.ρ
+    end
+end
 
 """
-    specific_tke(sgs⁰, gs, turbconv_model)
+    ᶜspecific_tke(sgs⁰, gs, p)
 
 Computes the specific turbulent kinetic energy (`tke`) in the environment (`tke⁰`).
 
@@ -437,20 +457,90 @@ fraction.
 Arguments:
 - `sgs⁰`: The environment SGS state (`Y.c.sgs⁰`), containing `ρatke`.
 - `gs`: The grid-scale state (`Y.c`), containing the grid-mean density `ρ`.
-- `turbconv_model`: The turbulence convection model, for regularization parameters.
+- `p`: The cache, containing precomputed quantities and turbconv_model.
 
 Returns:
 - The specific TKE of the environment (`tke⁰`).
 """
-function specific_tke(sgs⁰, gs, turbconv_model)
-    ρa⁰_val = ρa⁰(gs)
+function ᶜspecific_tke(sgs⁰, gs, p)
+    turbconv_model = p.atmos.turbconv_model
+    ᶜρa⁰_vals = ᶜρa⁰(gs, p)
 
-    return specific(
+    return @. lazy(specific(
         sgs⁰.ρatke,     # ρaχ for environment TKE
-        ρa⁰_val,        # ρa for environment, now computed internally
+        ᶜρa⁰_vals,        # ρa for environment, now computed internally
         0,              # Fallback ρχ is zero for TKE
         gs.ρ,           # Fallback ρ
         turbconv_model,
+    ))
+end
+
+"""
+    specific_env_mse(gs, p)
+
+Computes the specific moist static energy (`mse`) in the environment (`mse⁰`).
+
+This is a specialized helper function because `mse` is not a grid-scale prognostic
+variable. It first computes the grid-scale moist static energy density (`ρmse`)
+from other grid-scale quantities (`ρ`, total specific enthalpy `h_tot`, specific 
+kinetic energy `K`). It then uses the `ᶜenv_value` helper to compute the environment's 
+portion of `ρmse` and `ρa` via domain decomposition, and finally calculates the specific 
+value using the regularized `specific` function.
+
+Arguments:
+- `gs`: The grid-scale state (`Y.c`), containing `ρ` and `sgsʲs`.
+- `p`: The cache, containing the turbconv_model and precomputed quantities.
+
+Returns:
+- A `ClimaCore.Fields.Field` containing the specific moist static energy of the
+  environment (`mse⁰`).
+"""
+function specific_env_mse(gs, p)
+    turbconv_model = p.atmos.turbconv_model
+
+    # Get necessary precomputed values from the cache `p`
+    (; ᶜK, ᶜts) = p.precomputed  # TODO: replace by on-the-fly computation
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(gs.ρe_tot, gs.ρ),
+        ),
+    )
+
+    # 1. Define the grid-scale moist static energy density `ρ * mse`.
+    grid_scale_ρmse = @. lazy(gs.ρ * (ᶜh_tot - ᶜK))
+
+    # 2. Compute the environment's density-area-weighted mse (`ρa⁰mse⁰`).
+    ρa⁰mse⁰ = p.scratch.ᶜtemp_scalar
+
+    if turbconv_model isa PrognosticEDMFX
+        ρa⁰mse⁰ .= ᶜenv_value(
+            grid_scale_ρmse,
+            sgsʲ -> sgsʲ.ρa * sgsʲ.mse,
+            gs,
+            turbconv_model,
+        )
+    else # DiagnosticEDMFX
+        # For DiagnosticEDMFX, compute ρaʲ * mseʲ for each draft manually
+        n = n_mass_flux_subdomains(turbconv_model)
+        ᶜρaχʲs_combined_mse = p.scratch.ᶜtemp_scalar_2
+        @. ᶜρaχʲs_combined_mse = 0
+        for j in 1:n
+            ᶜρaʲ = p.precomputed.ᶜρaʲs.:($j)
+            ᶜmseʲ = p.precomputed.ᶜmseʲs.:($j)
+            @. ᶜρaχʲs_combined_mse += ᶜρaʲ * ᶜmseʲ
+        end
+        @. ρa⁰mse⁰ = grid_scale_ρmse - ᶜρaχʲs_combined_mse
+    end
+
+    # 3. Compute the environment's density-area product (`ρa⁰`).
+    ᶜρa⁰_vals = ᶜρa⁰(gs, p)
+
+    # 4. Compute and return the final specific environment mse (`mse⁰`).
+    return @. lazy(
+        specific(ρa⁰mse⁰, ᶜρa⁰_vals, grid_scale_ρmse, gs.ρ, turbconv_model),
     )
 end
 
