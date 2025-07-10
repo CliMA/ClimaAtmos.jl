@@ -186,6 +186,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
+    thermo_params = CAP.thermodynamics_params(p.params)
 
     ᶠu³⁰ =
         advect_tke ?
@@ -193,20 +194,18 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             turbconv_model isa EDOnlyEDMFX ? p.precomputed.ᶠu³ :
             p.precomputed.ᶠu³⁰
         ) : nothing
-    ᶜρa⁰ = advect_tke ? (n > 0 ? (@.lazy(ρa⁰(Y.c))) : Y.c.ρ) : nothing
+    ᶜρa⁰_vals = advect_tke ? (n > 0 ? (ᶜρa⁰(Y.c, p)) : lazy(Y.c.ρ)) : nothing
     ᶜρ⁰ = if advect_tke
         if n > 0
-            thermo_params = CAP.thermodynamics_params(p.params)
-            @. TD.air_density(thermo_params, p.precomputed.ᶜts⁰)
+            (; ᶜts⁰) = p.precomputed.ᶜts⁰
+            @. lazy(TD.air_density(thermo_params, ᶜts⁰))
         else
-            Y.c.ρ
+            lazy(Y.c.ρ)
         end
     else
         nothing
     end
-    ᶜtke⁰ =
-        advect_tke ? (@.lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))) :
-        nothing
+    ᶜtke⁰ = advect_tke ? (ᶜspecific_tke(Y.c.sgs⁰, Y.c, p)) : nothing
     ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜω³ = p.scratch.ᶜtemp_CT3
     ᶠω¹² = p.scratch.ᶠtemp_CT12
@@ -285,7 +284,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
 
     if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
-        @. ᶜa_scalar = ᶜtke⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
+        @. ᶜa_scalar = ᶜtke⁰ * draft_area(ᶜρa⁰_vals, ᶜρ⁰)
         vtt = vertical_transport(ᶜρ⁰, ᶠu³⁰, ᶜa_scalar, dt, edmfx_upwinding)
         @. Yₜ.c.sgs⁰.ρatke += vtt
     end
