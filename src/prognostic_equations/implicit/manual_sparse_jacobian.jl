@@ -738,7 +738,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 DiagonalMatrixRow(
                     ∂ρqₓ_err_∂ρqᵪ(
                         thermo_params,
-                        ᶜforce_liq,
+                        ᶜforceₗ,
                         ᶜδforceₗ_δqₜ,
                         (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
                         ((1 - ᶜdqₛₗ_δqₜ)/(2*float(dt))),
@@ -751,7 +751,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 DiagonalMatrixRow(
                     ∂ρqₓ_err_∂ρqᵪ(
                         thermo_params,
-                        ᶜforce_ice,
+                        ᶜforceᵢ,
                         ᶜδforceᵢ_δqₜ,
                         (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
                         ((1 - ᶜdqₛᵢ_δqₜ)/(2*float(dt))),
