@@ -137,7 +137,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
 
         ᶠu³ʲ = ᶠu³_lazy(Y.c.uₕ, ᶜρʲ, ᶠu₃ʲ)
         set_velocity_quantities!(ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³, ᶜρʲ)
-        #Main.@infiltrate
 
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
         if p.atmos.moisture_model isa NonEquilMoistModel &&
