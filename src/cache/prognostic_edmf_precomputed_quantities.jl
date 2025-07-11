@@ -77,9 +77,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         )
     end
     
-
-
-    set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
+    set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model) # Sets \ᶠu₃⁰
     ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, ᶠu₃⁰)
     set_velocity_quantities!(ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³, Y.c.ρ)
 
@@ -137,7 +135,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
         end
 
+        ᶠu³ʲ = ᶠu³_lazy(Y.c.uₕ, ᶜρʲ, ᶠu₃ʲ)
         set_velocity_quantities!(ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³, ᶜρʲ)
+        #Main.@infiltrate
 
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
         if p.atmos.moisture_model isa NonEquilMoistModel &&
