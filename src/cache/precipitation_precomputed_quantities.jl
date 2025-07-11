@@ -112,6 +112,11 @@ function set_precipitation_velocities!(
     cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
 
+    q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+    q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+    q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    q_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+
     # compute the precipitation terminal velocity [m/s]
     # TODO sedimentation of snow is based on the 1M scheme
     @. ᶜwnᵣ = getindex(
@@ -253,17 +258,18 @@ function set_precipitation_cache!(
     ::PrognosticEDMFX,
 )
     (; ᶜΦ) = p.core
-    (; ᶜSqₜᵖ⁰, ᶜSqₜᵖʲs, ᶜρa⁰) = p.precomputed
+    (; ᶜSqₜᵖ⁰, ᶜSqₜᵖʲs) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
     (; ᶜts⁰, ᶜtsʲs) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜρa⁰_vals = ᶜρa⁰(Y.c, p)
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
-    @. ᶜS_ρq_tot = ᶜSqₜᵖ⁰ * ᶜρa⁰
+    @. ᶜS_ρq_tot = ᶜSqₜᵖ⁰ * ᶜρa⁰_vals
     @. ᶜS_ρe_tot =
         ᶜSqₜᵖ⁰ *
-        ᶜρa⁰ *
+        ᶜρa⁰_vals *
         e_tot_0M_precipitation_sources_helper(thermo_params, ᶜts⁰, ᶜΦ)
     for j in 1:n
         @. ᶜS_ρq_tot += ᶜSqₜᵖʲs.:($$j) * Y.c.sgsʲs.:($$j).ρa
@@ -283,7 +289,11 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     (; ᶜts, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
 
-    (; q_tot, q_liq, q_ice, q_rai, q_sno) = p.precomputed.ᶜspecific
+    q_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    q_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+    q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+    q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
@@ -356,6 +366,11 @@ function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
     (; ᶜts) = p.precomputed
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
     (; ᶜSnₗᵖ, ᶜSnᵣᵖ) = p.precomputed
+
+    q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+    q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    n_liq = @. lazy(specific(Y.c.ρn_liq, Y.c.ρ))
+    n_rai = @. lazy(specific(Y.c.ρn_rai, Y.c.ρ))
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜS₂ᵖ = p.scratch.ᶜtemp_scalar_2
@@ -469,14 +484,26 @@ function set_precipitation_surface_fluxes!(
     sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
 
     # Constant extrapolation to surface, consistent with simple downwinding
-    sfc_wᵣ = sfc_lev(ᶜwᵣ)
-    sfc_wₛ = sfc_lev(ᶜwₛ)
-    sfc_wₗ = sfc_lev(ᶜwₗ)
-    sfc_wᵢ = sfc_lev(ᶜwᵢ)
-    sfc_qᵣ = lazy.(specific.(sfc_lev(Y.c.ρq_rai), sfc_ρ))
-    sfc_qₛ = lazy.(specific.(sfc_lev(Y.c.ρq_sno), sfc_ρ))
-    sfc_qₗ = lazy.(specific.(sfc_lev(Y.c.ρq_liq), sfc_ρ))
-    sfc_qᵢ = lazy.(specific.(sfc_lev(Y.c.ρq_ice), sfc_ρ))
+    sfc_qᵣ = Fields.Field(
+        Fields.field_values(Fields.level(specific(Y.c.ρq_rai, Y.c.ρ), 1)),
+        sfc_space,
+    )
+    sfc_qₛ = Fields.Field(
+        Fields.field_values(Fields.level(specific(Y.c.ρq_sno, Y.c.ρ), 1)),
+        sfc_space,
+    )
+    sfc_qₗ = Fields.Field(
+        Fields.field_values(Fields.level(specific(Y.c.ρq_liq, Y.c.ρ), 1)),
+        sfc_space,
+    )
+    sfc_qᵢ = Fields.Field(
+        Fields.field_values(Fields.level(specific(Y.c.ρq_ice, Y.c.ρ), 1)),
+        sfc_space,
+    )
+    sfc_wᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), sfc_space)
+    sfc_wₛ = Fields.Field(Fields.field_values(Fields.level(ᶜwₛ, 1)), sfc_space)
+    sfc_wₗ = Fields.Field(Fields.field_values(Fields.level(ᶜwₗ, 1)), sfc_space)
+    sfc_wᵢ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵢ, 1)), sfc_space)
 
     @. surface_rain_flux = sfc_ρ * (sfc_qᵣ * (-sfc_wᵣ) + sfc_qₗ * (-sfc_wₗ))
     @. surface_snow_flux = sfc_ρ * (sfc_qₛ * (-sfc_wₛ) + sfc_qᵢ * (-sfc_wᵢ))

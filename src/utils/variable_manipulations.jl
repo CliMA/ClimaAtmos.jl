@@ -1,4 +1,5 @@
 import ClimaCore.MatrixFields: @name
+import ClimaCore.RecursiveApply: ⊞, ⊠, rzero, rpromote_type
 
 """
     specific(ρχ, ρ)
@@ -178,198 +179,390 @@ foreach_gs_tracer(f::F, Y_or_similar_values...) where {F} =
     end
 
 """
+    specific(ρχ, ρ)
+    specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
+
+Calculates the specific quantity `χ` (per unit mass) from a density-weighted
+quantity. This function uses multiple dispatch to select the appropriate
+calculation method based on the number of arguments.
+
+**Grid-Scale Method (2 arguments)**
+
+    specific(ρχ, ρ)
+
+Performs a direct division of the density-weighted quantity `ρχ` by the density `ρ`.
+This method is used for grid-mean quantities where the density `ρ` is well-defined
+and non-zero.
+
+**SGS Regularized Method (5 arguments)**
+
+    specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
+
+Calculates the specific quantity `χ` for a subgrid-scale (SGS) component by
+dividing the density-area-weighted quantity `ρaχ` by the density-area
+product `ρa`.
+
+This method includes regularization to handle cases where the SGS area fraction
+(and thus `ρa`) is zero or vanishingly small. It performs a linear interpolation
+between the SGS specific quantity (`ρaχ / ρa`) and the grid-mean specific
+quantity (`ρχ / ρ`). The interpolation weight is computed by `sgs_weight_function`
+to ensure a smooth and numerically stable transition, preventing division by zero.
+Using this regularized version instead of directly computing `ρaχ / ρa` breaks the
+assumption of domain decomposition (sum of SGS domains equals GS) when the approximated 
+area fraction `a` is small.
+
+Arguments:
+- `ρaχ`: The density-area-weighted SGS quantity (e.g., `sgs.ρa * sgs.h_tot`).
+- `ρa`: The density-area product of the SGS component.
+- `ρχ`: The fallback grid-mean density-weighted quantity (e.g., `ρe_tot`, `ρq_tot`).
+- `ρ`: The fallback grid-mean density.
+- `turbconv_model`: The turbulence convection model, containing parameters for regularization (e.g., `a_half`).
+"""
+function specific(ρχ, ρ)
+    return ρχ / ρ
+end
+
+function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
+    # TODO: Replace turbconv_model struct by parameters, and include a_half in 
+    # parameters, not in config
+    weight = sgs_weight_function(ρa / ρ, turbconv_model.a_half)
+    # If ρa is exactly zero, the weight function will be zero, causing the first
+    # term to be NaN (0 * ... / 0). The ifelse handles this case explicitly.
+    return ρa == 0 ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
+end
+
+"""
     sgs_weight_function(a, a_half)
 
-Computes the weight of the SGS variables in the linear interpolation used in
-`divide_by_ρa`. This is a continuously differentiable and monotonically
-increasing function of `a` that is equal to 0 when `a ≤ 0`, is equal to 1 when
-`a ≥ 1`, is equal to `1 / 2` when `a = a_half`, grows very rapidly near
-`a = a_half`, and grows very slowly at all other values of `a`.  If `a_half` is
-sufficiently small, this function is essentially equal to 1 for all `a` more
-than a few times larger than `a_half` (up to floating-point precision).
+Computes a smooth, monotonic weight function `w(a)` that ranges from 0 to 1.
 
-We will now provide a description of how this function was constructed. We need
-the function to be equal to 0 when `a ≤ 0` and equal to 1 when `a ≥ 1`. Since
-the function must also be continuously differentiable, its derivative at these
-values of `a` has to be 0. To obtain a function with these properties, we use a
-piecewise definition:
-    - For all `a < 0`, the function is equal to 0.
-    - For all `a > 1`, the function is equal to 1.
-    - For all `0 ≤ a ≤ 1`, the function is a sigmoid that connects the point
-      `(0, 0)` to the point `(1, 1)`, with a derivative of 0 at these points.
-Most well-known sigmoid functions connect the "points" `(-Inf, 0)` and
-`(Inf, 1)`, not `(0, 0)` and `(1, 1)`. To obtain the desired sigmoid curve, we
-begin with two simple sigmoid functions that go from `(-Inf, 0)` to `(Inf, 1)`
-at different rates. In this case, we use two `tanh` functions, scaled and
-translated so that they lie between 0 and 1:
-    - `fast_sigmoid(a) = (1 + tanh(a)) / 2` and
-    - `slow_sigmoid(a) = (1 + tanh(a / 2)) / 2`.
-Note that the second sigmoid is commonly called the "logistic" function. We then
-take the inverse of the sigmoid that grows more slowly, and we make that the
-input of the sigmoid that grows more quickly:
-    - `sigmoid(a) = fast_sigmoid(slow_sigmoid⁻¹(a)) =
-       (1 + tanh(2 * atanh(2 * a - 1))) / 2`.
-The resulting function goes from `(0, 0)` to `(1, 1)`, and, since the outer
-sigmoid grows more quickly, it has the same asymptotic behavior as the outer
-sigmoid, which means that its derivative at the boundary points is 0. If we had
-instead put the sigmoid that grows more slowly on the outside, the asymptotic
-behavior would come from the inverted inner sigmoid, which means that the
-derivative at the boundary points would be `Inf`.
+This function is used as the interpolation weight in the regularized `specific`
+function. It ensures a numerically stable and smooth transition between a subgrid-scale 
+(SGS) quantity and its grid-mean counterpart, especially when the SGS area fraction `a` 
+is small.
 
-The sigmoid function we have constructed reaches `1 / 2` when `a = 1 / 2`. More
-generally, we need the weight function to reach `1 / 2` when `a` is some small
-value `a_half`. To achieve this, we replace the input to the sigmoid function
-with a smooth, monotonically increasing function that goes through `(0, 0)`,
-`(a_half, 1 / 2)`, and `(1, 1)`. The simplest option is the power function
-    - `power(a) = a^(-1 / log2(a_half))`.
-However, this function does not work well because, when `a_half < 1 / 2`, its
-derivative at `a = 0` is `Inf`, and its derivative at `a = 1` is some positive
-number. Making this power function the input to the sigmoid function causes the
-derivative of the sigmoid to become `Inf` at `a = 0` when `a_half < 1 / 4`, and
-it causes the sigmoid to grow too slowly from `1 / 2` to 1, only reaching 1 when
-`a` is significantly larger than `a_half`. In order to fix this, we transform
-the power function by replacing `a` with `1 - a`, `a_half` with `1 - a_half`,
-and `power(a)` with `1 - power(a)`, which gives us
-    - `power(a) = 1 - (1 - a)^(-1 / log2(1 - a_half))`.
-This transformed function works better because, when `a_half < 1 / 2`, its
-derivative at `a = 0` is some positive number, and its derivative at `a = 1` is
-0. When we make this the input to the sigmoid function, the result has a
-continuous derivative and is essentially equal to 1 for all `a` more than a few
-times larger than `a_half`. So, for all `0 ≤ a ≤ 1`, we define the weight
-function as
-    - `weight(a) = sigmoid(power(a)) =
-       (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2`.
+**Key Properties:**
+- `w(a) = 0` for `a ≤ 0`.
+- `w(a) = 1` for `a ≥ 1`.
+- `w(a_half) = 0.5`.
+- The function is continuously differentiable, with derivatives equal to zero at
+  `a = 0` and `a = 1`, which ensures smooth blending.
+- The functions grows very rapidly near `a = a_half`, and grows very slowly at all other 
+  values of `a`.
+- For small `a_half`, the weight rapidly approaches 1 for values of `a` that are
+  a few times larger than `a_half`.
+
+**Construction Method:**
+The function is piecewise. For `a` between 0 and 1, it is a custom sigmoid curve
+constructed in two main steps to satisfy the key properties:
+1.  **Bounded Sigmoid Creation**: A base sigmoid is created that maps the interval
+    `(0, 1)` to `(0, 1)` with zero derivatives at the endpoints. This is achieved
+    by composing a standard `tanh` function with the inverse of a slower-growing
+    `tanh` function.
+2.  **Midpoint Control**: To ensure the function passes through the control point
+    `(a_half, 0.5)`, the input `a` is first transformed by a specially designed
+    power function (`1 - (1 - a)^k`) before being passed to the bounded sigmoid.
+    This transformation maps `a_half` to `0.5` while preserving differentiability 
+    at the boundaries.
+
+Arguments:
+- `a`: The input SGS area fraction (often approximated as `ρa / ρ`).
+- `a_half`: The value of `a` at which the weight function should be 0.5, controlling
+          the transition point of the sigmoid curve.
+
+Returns:
+- The computed weight, a value between 0 and 1.
 """
-sgs_weight_function(a, a_half) =
-    if a <= 0 # autodiff generates NaNs when a is 0
+function sgs_weight_function(a, a_half)
+    if a < 0
         zero(a)
     elseif a > min(1, 42 * a_half) # autodiff generates NaNs when a is large
         one(a)
     else
         (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2
     end
-
-"""
-    divide_by_ρa(ρaχ, ρa, ρχ, ρ, turbconv_model)
-
-Computes `ρaχ / ρa`, regularizing the result to avoid issues when `a` is small.
-This is done by performing a linear interpolation from `ρaχ / ρa` to `ρχ / ρ`,
-using `sgs_weight_function(ρa / ρ, turbconv_model.a_half)` as the weight of
-`ρaχ / ρa` in the interpolation. Note that `ρa / ρ` is the "anelastic
-approximation" of `a`; we cannot directly use `a` to compute the weight because
-this function needs to be called before `a` has been computed. Also, note that
-using this function instead of directly computing `ρaχ / ρa` breaks the
-assumption of domain decomposition when the approximated `a` is small.
-"""
-function divide_by_ρa(ρaχ, ρa, ρχ, ρ, turbconv_model)
-    weight = sgs_weight_function(ρa / ρ, turbconv_model.a_half)
-    # If ρa = 0, we know that ρa / ρ = 0, which means that weight = 0. However,
-    # 0 * ρaχ / 0 = NaN, regardless of what ρaχ is, so the linear interpolation
-    # will always return NaN when ρa = 0. To avoid this problem, we need to add
-    # a special case for ρa = 0.
-    return ρa == 0 ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
 end
 
 """
-    ρa⁺(gs)
+    draft_sum(f, sgsʲs)
 
-Computes the total mass-flux subdomain area-weighted density, assuming that the
-mass-flux subdomain states are stored in `gs.sgsʲs`.
-"""
-ρa⁺(gs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa, +, gs.sgsʲs)
+Computes the sum of a function `f` applied to each draft subdomain
+state `sgsʲ` in the iterator `sgsʲs`.
 
+Arguments:
+- `f`: A function to apply to each element of `sgsʲs`.
+- `sgsʲs`: An iterator over the draft subdomain states.
 """
-    ρah_tot⁺(sgsʲs)
-
-Computes the total mass-flux subdomain area-weighted ρh_tot, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
-"""
-ρah_tot⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.h_tot, +, sgsʲs)
+draft_sum(f, sgsʲs) = mapreduce_with_init(f, +, sgsʲs)
 
 """
-    ρamse⁺(sgsʲs)
+    ᶜenv_value(grid_scale_value, f_draft, gs, turbconv_model)
 
-Computes the total mass-flux subdomain area-weighted ρmse, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
-"""
-ρamse⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, +, sgsʲs)
+Computes the value of a quantity `ρaχ` in the environment subdomain by subtracting 
+the sum of its values in all draft subdomains from the grid-scale value. 
 
-"""
-    ρaq_tot⁺(sgsʲs)
+This is based on the domain decomposition principle for density-area weighted 
+quantities: `GridMean(ρχ) = Env(ρaχ) + Sum(Drafts(ρaχ))`.
 
-Computes the total mass-flux subdomain area-weighted ρq_tot, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
-"""
-ρaq_tot⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_tot, +, sgsʲs)
+The function handles both PrognosticEDMFX and DiagnosticEDMFX models:
+- For PrognosticEDMFX: Uses gs.sgsʲs to access draft subdomain states
+- For DiagnosticEDMFX: Uses p.precomputed.ᶜρaʲs for draft area-weighted densities
 
+Arguments:
+- `grid_scale_value`: The `ρa`-weighted grid-scale value of the quantity.
+- `f_draft`: A function that extracts the corresponding value from a draft subdomain state.
+- `gs`: The grid-scale state, which contains the draft subdomain states `gs.sgsʲs` (for PrognosticEDMFX).
+- `turbconv_model`: The turbulence convection model, used to determine how to access draft data.
 """
-    ρaq_liq⁺(sgsʲs)
-
-Computes the liquid water mass-flux subdomain area-weighted ρq_liq, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
-"""
-ρaq_liq⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_liq, +, sgsʲs)
-
-"""
-    ρaq_ice⁺(sgsʲs)
-
-Computes the ice water  mass-flux subdomain area-weighted ρq_ice, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
-"""
-ρaq_ice⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_ice, +, sgsʲs)
-
-"""
-    ρaq_rai⁺(sgsʲs)
-
-Computes the rain mass-flux subdomain area-weighted ρq_rai, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
-"""
-ρaq_rai⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_rai, +, sgsʲs)
-
-"""
-    ρaq_sno⁺(sgsʲs)
-
-Computes the snow mass-flux subdomain area-weighted ρq_sno, assuming that the
-mass-flux subdomain states are stored in `sgsʲs`.
-"""
-ρaq_sno⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_sno, +, sgsʲs)
-
-"""
-    ρa⁰(gs)
-
-Computes the environment area-weighted density, assuming that the mass-flux
-subdomain states are stored in `gs.sgsʲs`.
-"""
-ρa⁰(gs) = gs.ρ - mapreduce_with_init(sgsʲ -> sgsʲ.ρa, +, gs.sgsʲs)
-
-"""
-    u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model)
-
-Computes the average mass-flux subdomain vertical velocity `u₃⁺` by dividing the
-total momentum `ρaw⁺` by the total area-weighted density `ρa⁺`, both of which
-are computed from the tuples of subdomain densities and velocities `ρaʲs` and
-`u₃ʲs`. The division is computed using `divide_by_ρa` to avoid issues when `a⁺`
-is small.
-"""
-u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = divide_by_ρa(
-    unrolled_dotproduct(ρaʲs, u₃ʲs),
-    reduce(+, ρaʲs),
-    ρ * u₃,
-    ρ,
-    turbconv_model,
+function ᶜenv_value(
+    grid_scale_value,
+    f_draft,
+    gs,
+    turbconv_model::PrognosticEDMFX,
 )
+    return @. lazy(grid_scale_value - draft_sum(f_draft, gs.sgsʲs))
+end
+
+function ᶜenv_value(
+    grid_scale_value,
+    f_draft,
+    gs,
+    turbconv_model::DiagnosticEDMFX,
+    p,
+)
+    # For DiagnosticEDMFX, we need to access precomputed quantities from p
+    (; ᶜρaʲs) = p.precomputed
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    ᶜdraft_sum_diag = p.scratch.ᶜtemp_scalar_4
+    @. ᶜdraft_sum_diag = 0
+
+    for j in 1:n
+        ᶜρaʲ = ᶜρaʲs.:($j)
+        @. ᶜdraft_sum_diag += f_draft(ᶜρaʲ)
+    end
+    return @. lazy(grid_scale_value - ᶜdraft_sum_diag)
+end
+
+"""
+    ᶜspecific_env_value(::Val{χ_name}, gs, p)
+
+Calculates the specific value of a quantity `χ` in the environment (`χ⁰`).
+
+This function uses the domain decomposition principle to first find the
+density-area-weighted environment value (`ρa⁰χ⁰`) and the environment
+density-weighted environmental area (`ρa⁰`). It then computes the specific value using the
+regularized `specific` function, which provides a stable result even when the
+environment area fraction is very small.
+
+Arguments:
+- `::Val{χ_name}`: A `Val` type containing the symbol for the specific quantity `χ` (e.g., `Val(:h_tot)`, `Val(:q_tot)`).
+- `gs`: The grid-scale state, containing grid-mean and draft subdomain states.
+- `p`: The cache, containing precomputed quantities and turbconv_model.
+
+Returns:
+- The specific value of the quantity `χ` in the environment.
+"""
+function ᶜspecific_env_value(::Val{χ_name}, gs, p) where {χ_name}
+    turbconv_model = p.atmos.turbconv_model
+
+    # Grid-scale density-weighted variable name, e.g., :ρq_tot
+    ρχ_name = Symbol(:ρ, χ_name)
+
+    if turbconv_model isa PrognosticEDMFX
+        # Numerator: ρa⁰χ⁰ = (gs.ρχ) - (Σ sgsʲ.ρa * sgsʲ.χ)
+        ρaχ⁰ = ᶜenv_value(
+            getproperty(gs, ρχ_name),
+            sgsʲ -> getproperty(sgsʲ, :ρa) * getproperty(sgsʲ, χ_name),
+            gs,
+            turbconv_model,
+        )
+        # Denominator: ρa⁰ = gs.ρ - Σ sgsʲ.ρa
+        ᶜρa⁰_vals = ᶜρa⁰(gs, p)
+    else # DiagnosticEDMFX
+        # For DiagnosticEDMFX, we need to compute ρaʲ * χʲ for each draft
+        # Get the specific quantity values for all drafts
+        ᶜχʲs = getproperty(p.precomputed, Symbol(:ᶜ, χ_name, :ʲs))
+        n = n_mass_flux_subdomains(turbconv_model)
+
+        # Create combined ρaʲ * χʲ values for each draft
+        ᶜρaχʲs_combined = p.scratch.ᶜtemp_scalar_3
+        @. ᶜρaχʲs_combined = 0
+        for j in 1:n
+            ᶜρaʲ = p.precomputed.ᶜρaʲs.:($j)
+            ᶜχʲ = ᶜχʲs.:($j)
+            @. ᶜρaχʲs_combined += ᶜρaʲ * ᶜχʲ
+        end
+
+        # Numerator: ρa⁰χ⁰ = (gs.ρχ) - (Σ ρaʲ * χʲ)
+        ρaχ⁰ = getproperty(gs, ρχ_name) - ᶜρaχʲs_combined
+
+        # Denominator: ρa⁰ = gs.ρ - Σ ρaʲ
+        ᶜρa⁰_vals = ᶜρa⁰(gs, p)
+    end
+
+    # Call the 5-argument specific function for regularized division
+    return @. lazy(
+        specific(
+            ρaχ⁰,                      # ρaχ for environment
+            ᶜρa⁰_vals,                   # ρa for environment
+            getproperty(gs, ρχ_name),  # Fallback ρχ is the grid-mean value
+            gs.ρ,                      # Fallback ρ is the grid-mean value
+            turbconv_model,
+        ),
+    )
+end
+
+"""
+    ρa⁰(gs, p)
+
+Computes the environment area-weighted density (`ρa⁰`).
+
+This function uses the `ᶜenv_value` helper, which applies the domain
+decomposition principle (`GridMean = Environment + Sum(Drafts)`) to calculate
+the environment area-weighted density by subtracting the sum of all draft
+subdomain area-weighted densities (`ρaʲ`) from the grid-mean density (`ρ`).
+
+Arguments:
+- `gs`: The grid-scale state, which contains the grid-mean density `gs.ρ` and
+        the draft subdomain states `gs.sgsʲs` (for PrognosticEDMFX).
+- `p`: The cache, containing precomputed quantities and turbconv_model.
+
+Returns:
+- The area-weighted density (`ρa⁰`).
+"""
+
+function ᶜρa⁰(gs, p)
+    turbconv_model = p.atmos.turbconv_model
+
+    if turbconv_model isa PrognosticEDMFX
+        return ᶜenv_value(gs.ρ, sgsʲ -> sgsʲ.ρa, gs, turbconv_model)
+    elseif turbconv_model isa DiagnosticEDMFX
+        return ᶜenv_value(gs.ρ, ᶜρaʲ -> ᶜρaʲ, gs, turbconv_model, p)
+    else
+        return gs.ρ
+    end
+end
+
+"""
+    ᶜspecific_tke(sgs⁰, gs, p)
+
+Computes the specific turbulent kinetic energy (`tke`) in the environment (`tke⁰`).
+
+This is a specialized helper that encapsulates the call to the regularized
+`specific` function for the TKE variable. It provides `0` as the grid-scale
+fallback value (`ρχ_fallback`) in the limit of small environmental area
+fraction.
+
+Arguments:
+- `sgs⁰`: The environment SGS state (`Y.c.sgs⁰`), containing `ρatke`.
+- `gs`: The grid-scale state (`Y.c`), containing the grid-mean density `ρ`.
+- `p`: The cache, containing precomputed quantities and turbconv_model.
+
+Returns:
+- The specific TKE of the environment (`tke⁰`).
+"""
+function ᶜspecific_tke(sgs⁰, gs, p)
+    turbconv_model = p.atmos.turbconv_model
+    ᶜρa⁰_vals = ᶜρa⁰(gs, p)
+
+    return @. lazy(specific(
+        sgs⁰.ρatke,     # ρaχ for environment TKE
+        ᶜρa⁰_vals,        # ρa for environment, now computed internally
+        0,              # Fallback ρχ is zero for TKE
+        gs.ρ,           # Fallback ρ
+        turbconv_model,
+    ))
+end
+
+"""
+    specific_env_mse(gs, p)
+
+Computes the specific moist static energy (`mse`) in the environment (`mse⁰`).
+
+This is a specialized helper function because `mse` is not a grid-scale prognostic
+variable. It first computes the grid-scale moist static energy density (`ρmse`)
+from other grid-scale quantities (`ρ`, total specific enthalpy `h_tot`, specific 
+kinetic energy `K`). It then uses the `ᶜenv_value` helper to compute the environment's 
+portion of `ρmse` and `ρa` via domain decomposition, and finally calculates the specific 
+value using the regularized `specific` function.
+
+Arguments:
+- `gs`: The grid-scale state (`Y.c`), containing `ρ` and `sgsʲs`.
+- `p`: The cache, containing the turbconv_model and precomputed quantities.
+
+Returns:
+- A `ClimaCore.Fields.Field` containing the specific moist static energy of the
+  environment (`mse⁰`).
+"""
+function specific_env_mse(gs, p)
+    turbconv_model = p.atmos.turbconv_model
+
+    # Get necessary precomputed values from the cache `p`
+    (; ᶜK, ᶜts) = p.precomputed  # TODO: replace by on-the-fly computation
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(gs.ρe_tot, gs.ρ),
+        ),
+    )
+
+    # 1. Define the grid-scale moist static energy density `ρ * mse`.
+    grid_scale_ρmse = @. lazy(gs.ρ * (ᶜh_tot - ᶜK))
+
+    # 2. Compute the environment's density-area-weighted mse (`ρa⁰mse⁰`).
+    ρa⁰mse⁰ = p.scratch.ᶜtemp_scalar
+
+    if turbconv_model isa PrognosticEDMFX
+        ρa⁰mse⁰ .= ᶜenv_value(
+            grid_scale_ρmse,
+            sgsʲ -> sgsʲ.ρa * sgsʲ.mse,
+            gs,
+            turbconv_model,
+        )
+    else # DiagnosticEDMFX
+        # For DiagnosticEDMFX, compute ρaʲ * mseʲ for each draft manually
+        n = n_mass_flux_subdomains(turbconv_model)
+        ᶜρaχʲs_combined_mse = p.scratch.ᶜtemp_scalar_2
+        @. ᶜρaχʲs_combined_mse = 0
+        for j in 1:n
+            ᶜρaʲ = p.precomputed.ᶜρaʲs.:($j)
+            ᶜmseʲ = p.precomputed.ᶜmseʲs.:($j)
+            @. ᶜρaχʲs_combined_mse += ᶜρaʲ * ᶜmseʲ
+        end
+        @. ρa⁰mse⁰ = grid_scale_ρmse - ᶜρaχʲs_combined_mse
+    end
+
+    # 3. Compute the environment's density-area product (`ρa⁰`).
+    ᶜρa⁰_vals = ᶜρa⁰(gs, p)
+
+    # 4. Compute and return the final specific environment mse (`mse⁰`).
+    return @. lazy(
+        specific(ρa⁰mse⁰, ᶜρa⁰_vals, grid_scale_ρmse, gs.ρ, turbconv_model),
+    )
+end
 
 """
     u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model)
 
-Computes the environment vertical velocity `u₃⁰` by dividing the environment
-momentum `ρaw⁰` by the environment area-weighted density `ρa⁰`, both of which
-are computed from the domain decomposition of the grid-scale quantities `ρw` and
-`ρ` into the mass-flux subdomain quantities `ρawʲs` and `ρaʲs` and the
-environment quantities. The division is computed using `divide_by_ρa` to avoid
-issues when `a⁰` is small.
+Computes the environment vertical velocity `u₃⁰`.
+
+This function calculates the environment's total vertical momentum (`ρa⁰u₃⁰`) and
+its total area-weighted density (`ρa⁰`) using the domain decomposition principle 
+(GridMean = Env + Sum(Drafts)). It then computes the final specific velocity `u₃⁰` 
+using the regularized `specific` function to ensure numerical stability when the 
+environment area fraction `a⁰` is small.
+
+Arguments:
+- `ρaʲs`: A tuple of area-weighted densities for each draft subdomain.
+- `u₃ʲs`: A tuple of vertical velocities for each draft subdomain.
+- `ρ`: The grid-mean air density.
+- `u₃`: The grid-mean vertical velocity.
+- `turbconv_model`: The turbulence convection model, containing regularization parameters.
 """
-u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = divide_by_ρa(
+u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
     ρ * u₃ - unrolled_dotproduct(ρaʲs, u₃ʲs),
     ρ - reduce(+, ρaʲs),
     ρ * u₃,
@@ -377,14 +570,50 @@ u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = divide_by_ρa(
     turbconv_model,
 )
 
-import ClimaCore.RecursiveApply: ⊞, ⊠, rzero, rpromote_type
+"""
+    mapreduce_with_init(f, op, iter...)
+
+A wrapper for Julia's `mapreduce` function that automatically determines
+the initial value (`init`) for the reduction.
+
+This is useful for iterators whose elements are custom structs or 
+`ClimaCore.Geometry.AxisTensor`s, where the zero element cannot be inferred
+as a simple scalar. It uses `ClimaCore.RecursiveApply` tools (`rzero`,
+`rpromote_type`) to create a type-stable, correctly-structured zero element
+based on the output of the function `f` applied to the first elements of the
+iterators.
+
+Arguments:
+- `f`: The function to apply to each element.
+- `op`: The reduction operator (e.g., `+`, `*`).
+- `iter...`: One or more iterators.
+"""
 function mapreduce_with_init(f, op, iter...)
     r₀ = rzero(rpromote_type(typeof(f(map(first, iter)...))))
     mapreduce(f, op, iter...; init = r₀)
 end
 
-# Inference fails for certain mapreduce calls inside cuda
-# kernels, so let's define a recursive unrolled dot product:
+"""
+    unrolled_dotproduct(a::Tuple, b::Tuple)
+
+Computes the dot product of two `Tuple`s (`a` and `b`) using a recursive,
+manually unrolled implementation.
+
+This function is designed to be type-stable and efficient for CUDA kernels,
+where standard `mapreduce` implementations can otherwise suffer from type-inference 
+failures.
+
+It uses `ClimaCore.RecursiveApply` operators (`⊞` for addition, `⊠` for
+multiplication), which allows it to handle dot products of tuples containing
+complex, nested types such as `ClimaCore.Geometry.AxisTensor`s.
+
+Arguments:
+- `a`: The first `Tuple`.
+- `b`: The second `Tuple`, which must have the same length as `a`.
+
+Returns:
+- The result of the dot product, `Σᵢ a[i] * b[i]`.
+"""
 promote_type_mul(n::Number, x::Geometry.AxisTensor) = typeof(x)
 promote_type_mul(x::Geometry.AxisTensor, n::Number) = typeof(x)
 @inline function unrolled_dotproduct(a::Tuple, b::Tuple)
