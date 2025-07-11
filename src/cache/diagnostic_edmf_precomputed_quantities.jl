@@ -37,13 +37,42 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
     Φ_level,
 )
     FT = eltype(thermo_params)
+
     @. ts_level = TD.PhaseEquil_phq(
+       thermo_params,
+       p_level,
+       mse_level - Φ_level,
+       q_tot_level,
+       8,
+       FT(0.0003),
+    )
+    @. ρ_level = TD.air_density(thermo_params, ts_level)
+    return nothing
+end
+NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
+    thermo_params,
+    ts_level,
+    ρ_level,
+    mse_level,
+    q_tot_level,
+    q_liq_level,
+    q_ice_level,
+    q_rai_level,
+    q_sno_level,
+    p_level,
+    Φ_level,
+)
+    FT = eltype(thermo_params)
+
+    @. ts_level = TD.PhaseNonEquil_phq(
         thermo_params,
         p_level,
         mse_level - Φ_level,
-        q_tot_level,
-        8,
-        FT(0.0003),
+        TD.PhasePartition(
+            q_tot_level,
+            q_liq_level + q_rai_level,
+            q_ice_level + q_sno_level,
+        ),
     )
     @. ρ_level = TD.air_density(thermo_params, ts_level)
     return nothing
@@ -89,7 +118,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     p,
     t,
 )
-    (; turbconv_model) = p.atmos
+    (; turbconv_model, moisture_model, precip_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜΦ) = p.core
@@ -128,6 +157,22 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     ρ_flux_q_tot_sfc_halflevel = Fields.field_values(ρ_flux_q_tot)
     ustar_sfc_halflevel = Fields.field_values(ustar)
     obukhov_length_sfc_halflevel = Fields.field_values(obukhov_length)
+
+    if moisture_model isa NonEquilMoistModel && precip_model isa Microphysics1Moment
+        (; ᶜq_liqʲs, ᶜq_iceʲs, ᶜq_raiʲs, ᶜq_snoʲs) = p.precomputed
+        (; q_liq, q_ice, q_rai, q_sno) = p.precomputed.ᶜspecific
+        (; ρ_flux_q_liq, ρ_flux_q_ice, ρ_flux_q_rai, ρ_flux_q_sno) = p.precomputed.sfc_conditions
+
+        q_liq_int_level = Fields.field_values(Fields.level(q_liq, 1))
+        q_ice_int_level = Fields.field_values(Fields.level(q_ice, 1))
+        q_rai_int_level = Fields.field_values(Fields.level(q_rai, 1))
+        q_sno_int_level = Fields.field_values(Fields.level(q_sno, 1))
+
+        ρ_flux_q_liq_sfc_halflevel = Fields.field_values(ρ_flux_q_liq)
+        ρ_flux_q_ice_sfc_halflevel = Fields.field_values(ρ_flux_q_ice)
+        ρ_flux_q_rai_sfc_halflevel = Fields.field_values(ρ_flux_q_rai)
+        ρ_flux_q_sno_sfc_halflevel = Fields.field_values(ρ_flux_q_sno)
+    end
 
     # boundary condition
     for j in 1:n
@@ -180,15 +225,91 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
             local_geometry_int_level,
             local_geometry_int_halflevel,
         )
-        set_diagnostic_edmfx_draft_quantities_level!(
-            thermo_params,
-            tsʲ_int_level,
-            ρʲ_int_level,
-            mseʲ_int_level,
-            q_totʲ_int_level,
-            p_int_level,
-            Φ_int_level,
-        )
+
+
+        if moisture_model isa NonEquilMoistModel && precip_model isa Microphysics1Moment
+            ᶜq_liqʲ = ᶜq_totʲs.:($j)
+            ᶜq_iceʲ = ᶜq_totʲs.:($j)
+            ᶜq_raiʲ = ᶜq_totʲs.:($j)
+            ᶜq_snoʲ = ᶜq_totʲs.:($j)
+
+            q_liqʲ_int_level = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
+            q_iceʲ_int_level = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
+            q_raiʲ_int_level = Fields.field_values(Fields.level(ᶜq_raiʲ, 1))
+            q_snoʲ_int_level = Fields.field_values(Fields.level(ᶜq_snoʲ, 1))
+
+            @. q_liqʲ_int_level = sgs_scalar_first_interior_bc(
+                z_int_level - z_sfc_halflevel,
+                ρ_int_level,
+                FT(turbconv_params.surface_area),
+                q_liq_int_level,
+                buoyancy_flux_sfc_halflevel,
+                ρ_flux_q_liq_sfc_halflevel,
+                ustar_sfc_halflevel,
+                obukhov_length_sfc_halflevel,
+                local_geometry_int_halflevel,
+            )
+            @. q_iceʲ_int_level = sgs_scalar_first_interior_bc(
+                z_int_level - z_sfc_halflevel,
+                ρ_int_level,
+                FT(turbconv_params.surface_area),
+                q_ice_int_level,
+                buoyancy_flux_sfc_halflevel,
+                ρ_flux_q_ice_sfc_halflevel,
+                ustar_sfc_halflevel,
+                obukhov_length_sfc_halflevel,
+                local_geometry_int_halflevel,
+            )
+            @. q_raiʲ_int_level = sgs_scalar_first_interior_bc(
+                z_int_level - z_sfc_halflevel,
+                ρ_int_level,
+                FT(turbconv_params.surface_area),
+                q_rai_int_level,
+                buoyancy_flux_sfc_halflevel,
+                ρ_flux_q_rai_sfc_halflevel,
+                ustar_sfc_halflevel,
+                obukhov_length_sfc_halflevel,
+                local_geometry_int_halflevel,
+            )
+            @. q_snoʲ_int_level = sgs_scalar_first_interior_bc(
+                z_int_level - z_sfc_halflevel,
+                ρ_int_level,
+                FT(turbconv_params.surface_area),
+                q_sno_int_level,
+                buoyancy_flux_sfc_halflevel,
+                ρ_flux_q_sno_sfc_halflevel,
+                ustar_sfc_halflevel,
+                obukhov_length_sfc_halflevel,
+                local_geometry_int_halflevel,
+            )
+        end
+
+        if moisture_model isa NonEquilMoistModel && precip_model isa Microphysics1Moment
+            set_diagnostic_edmfx_draft_quantities_level!(
+                thermo_params,
+                tsʲ_int_level,
+                ρʲ_int_level,
+                mseʲ_int_level,
+                q_totʲ_int_level,
+                q_liqʲ_int_level,
+                q_iceʲ_int_level,
+                q_raiʲ_int_level,
+                q_snoʲ_int_level,
+                p_int_level,
+                Φ_int_level,
+            )
+        else
+            set_diagnostic_edmfx_draft_quantities_level!(
+                thermo_params,
+                tsʲ_int_level,
+                ρʲ_int_level,
+                mseʲ_int_level,
+                q_totʲ_int_level,
+                p_int_level,
+                Φ_int_level,
+            )
+        end
+
         @. ρaʲ_int_level = ρʲ_int_level * FT(turbconv_params.surface_area)
     end
 
@@ -282,6 +403,7 @@ function compute_ρaʲu³ʲ(
     ρaʲu³ʲ_data +=
         (1 / J_halflevel) *
         (J_prev_level * ρaʲ_prev_level * (entrʲ_prev_level - detrʲ_prev_level))
+
     if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
         ρaʲu³ʲ_data +=
             (1 / J_halflevel) *
@@ -295,7 +417,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     p,
     t,
 )
-    (; turbconv_model, precip_model) = p.atmos
+    (; turbconv_model, precip_model, moisture_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -323,16 +445,15 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     ) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜtke⁰) = p.precomputed
 
-    if precip_model isa Microphysics1Moment
-        ᶜq_liqʲs = p.precomputed.ᶜq_liqʲs
-        ᶜq_iceʲs = p.precomputed.ᶜq_iceʲs
-        q_rai = p.precomputed.ᶜqᵣ
-        q_sno = p.precomputed.ᶜqₛ
+    if moisture_model isa NonEquilMoistModel && precip_model isa Microphysics1Moment
+        (; q_liq, q_ice, q_rai, q_sno) = p.precomputed.ᶜspecific
+        (; ᶜq_liqʲs, ᶜq_iceʲs, ᶜq_raiʲs, ᶜq_snoʲs) = p.precomputed
     end
 
     thermo_params = CAP.thermodynamics_params(params)
     microphys_0m_params = CAP.microphysics_0m_params(params)
     microphys_1m_params = CAP.microphysics_1m_params(params)
+    cloud_params = CAP.microphysics_cloud_params(params)
     turbconv_params = CAP.turbconv_params(params)
 
     ᶠΦ = p.scratch.ᶠtemp_scalar
@@ -384,8 +505,17 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
         dz_prev_level = Fields.field_values(Fields.level(ᶜdz, i - 1))
 
-        if precip_model isa Microphysics1Moment
+        if moisture_model isa NonEquilMoistModel && precip_model isa Microphysics1Moment
+            q_liq_level = Fields.field_values(Fields.level(q_liq, i))
+            q_liq_prev_level = Fields.field_values(Fields.level(q_liq, i - 1))
+
+            q_ice_level = Fields.field_values(Fields.level(q_ice, i))
+            q_ice_prev_level = Fields.field_values(Fields.level(q_ice, i - 1))
+
+            q_rai_level = Fields.field_values(Fields.level(q_rai, i))
             q_rai_prev_level = Fields.field_values(Fields.level(q_rai, i - 1))
+
+            q_sno_level = Fields.field_values(Fields.level(q_sno, i))
             q_sno_prev_level = Fields.field_values(Fields.level(q_sno, i - 1))
         end
 
@@ -412,14 +542,22 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
                 ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵖʲs.:($j)
             end
-            if precip_model isa Microphysics1Moment
-                ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵖʲs.:($j)
-                ᶜS_q_snoʲ = p.precomputed.ᶜSqₛᵖʲs.:($j)
-                ᶜS_e_totʲ = p.precomputed.ᶜSeₜᵖʲs.:($j)
-                ᶜSᵖ = p.scratch.ᶜtemp_scalar
-                ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+            if moisture_model isa NonEquilMoistModel && precip_model isa Microphysics1Moment
+
+                #(; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+
                 ᶜq_liqʲ = ᶜq_liqʲs.:($j)
                 ᶜq_iceʲ = ᶜq_iceʲs.:($j)
+                ᶜq_raiʲ = ᶜq_raiʲs.:($j)
+                ᶜq_snoʲ = ᶜq_snoʲs.:($j)
+
+                ᶜS_q_liqʲ = p.precomputed.ᶜSqₗᵖʲs.:($j)
+                ᶜS_q_iceʲ = p.precomputed.ᶜSqᵢᵖʲs.:($j)
+                ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵖʲs.:($j)
+                ᶜS_q_snoʲ = p.precomputed.ᶜSqₛᵖʲs.:($j)
+
+                ᶜSᵖ = p.scratch.ᶜtemp_scalar
+                ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
             end
 
             ρaʲ_level = Fields.field_values(Fields.level(ᶜρaʲ, i))
@@ -461,20 +599,34 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 else
                     Ref(nothing)
                 end
-            if precip_model isa Microphysics1Moment
-                S_q_raiʲ_prev_level =
-                    Fields.field_values(Fields.level(ᶜS_q_raiʲ, i - 1))
-                S_q_snoʲ_prev_level =
-                    Fields.field_values(Fields.level(ᶜS_q_snoʲ, i - 1))
-                S_e_totʲ_prev_level =
-                    Fields.field_values(Fields.level(ᶜS_e_totʲ, i - 1))
-                Sᵖ_prev_level = Fields.field_values(Fields.level(ᶜSᵖ, i - 1))
-                Sᵖ_snow_prev_level =
-                    Fields.field_values(Fields.level(ᶜSᵖ_snow, i - 1))
+            if moisture_model isa NonEquilMoistModel && precip_model isa Microphysics1Moment
+
+                q_liqʲ_level = Fields.field_values(Fields.level(ᶜq_liqʲ, i))
+                q_iceʲ_level = Fields.field_values(Fields.level(ᶜq_iceʲ, i))
+                q_raiʲ_level = Fields.field_values(Fields.level(ᶜq_raiʲ, i))
+                q_snoʲ_level = Fields.field_values(Fields.level(ᶜq_snoʲ, i))
+
                 q_liqʲ_prev_level =
                     Fields.field_values(Fields.level(ᶜq_liqʲ, i - 1))
                 q_iceʲ_prev_level =
                     Fields.field_values(Fields.level(ᶜq_iceʲ, i - 1))
+                q_raiʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜq_raiʲ, i - 1))
+                q_snoʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜq_snoʲ, i - 1))
+
+                S_q_liqʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜS_q_liqʲ, i - 1))
+                S_q_iceʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜS_q_iceʲ, i - 1))
+                S_q_raiʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜS_q_raiʲ, i - 1))
+                S_q_snoʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜS_q_snoʲ, i - 1))
+
+                Sᵖ_prev_level = Fields.field_values(Fields.level(ᶜSᵖ, i - 1))
+                Sᵖ_snow_prev_level =
+                    Fields.field_values(Fields.level(ᶜSᵖ_snow, i - 1))
             end
 
             tke_prev_level = Fields.field_values(Fields.level(ᶜtke⁰, i - 1))
@@ -579,26 +731,70 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     q_totʲ_prev_level,
                     tsʲ_prev_level,
                 )
-            elseif precip_model isa Microphysics1Moment
+
+            elseif moisture_model isa NonEquilMoistModel && precip_model isa Microphysics1Moment
+
+                # Rain formation from the updrafts
                 compute_precipitation_sources!(
                     Sᵖ_prev_level,
                     Sᵖ_snow_prev_level,
-                    S_q_totʲ_prev_level,
+                    S_q_liqʲ_prev_level,
+                    S_q_iceʲ_prev_level,
                     S_q_raiʲ_prev_level,
                     S_q_snoʲ_prev_level,
-                    S_e_totʲ_prev_level,
                     ρʲ_prev_level,
                     q_totʲ_prev_level,
                     q_liqʲ_prev_level,
                     q_iceʲ_prev_level,
-                    q_rai_prev_level,
-                    q_sno_prev_level,
+                    q_raiʲ_prev_level,
+                    q_snoʲ_prev_level,
                     tsʲ_prev_level,
-                    Φ_prev_level,
                     dt,
                     microphys_1m_params,
                     thermo_params,
                 )
+                # Rain sinks from the updrafts
+                compute_precipitation_sinks!(
+                    Sᵖ_prev_level,
+                    S_q_raiʲ_prev_level,
+                    S_q_snoʲ_prev_level,
+                    ρʲ_prev_level,
+                    q_totʲ_prev_level,
+                    q_liqʲ_prev_level,
+                    q_iceʲ_prev_level,
+                    q_raiʲ_prev_level,
+                    q_snoʲ_prev_level,
+                    tsʲ_prev_level,
+                    dt,
+                    microphys_1m_params,
+                    thermo_params,
+                )
+                # Cloud formation from the updrafts
+                @. S_q_liqʲ_prev_level += cloud_sources(
+                    cloud_params.liquid,
+                    thermo_params,
+                    q_totʲ_prev_level,
+                    q_liqʲ_prev_level,
+                    q_iceʲ_prev_level,
+                    q_raiʲ_prev_level,
+                    q_snoʲ_prev_level,
+                    ρʲ_prev_level,
+                    TD.air_temperature(thermo_params, tsʲ_prev_level),
+                    dt,
+                )
+                @. S_q_iceʲ_prev_level += cloud_sources(
+                    cloud_params.ice,
+                    thermo_params,
+                    q_totʲ_prev_level,
+                    q_liqʲ_prev_level,
+                    q_iceʲ_prev_level,
+                    q_raiʲ_prev_level,
+                    q_snoʲ_prev_level,
+                    ρʲ_prev_level,
+                    TD.air_temperature(thermo_params, tsʲ_prev_level),
+                    dt,
+                )
+
             end
 
             u³ʲ_datau³ʲ_data = p.scratch.temp_data_level
@@ -747,14 +943,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                             )
                         )
                     )
-            elseif precip_model isa Microphysics1Moment
-                @. ρaʲu³ʲ_datamse +=
-                    (1 / local_geometry_halflevel.J) * (
-                        local_geometry_prev_level.J *
-                        ρaʲ_prev_level *
-                        S_e_totʲ_prev_level
-                    )
             end
+            # TODO - this is where I finished adding 1M + NonEq
 
             @. mseʲ_level = ifelse(
                 (
