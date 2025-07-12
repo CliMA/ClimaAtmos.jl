@@ -45,6 +45,71 @@ include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
 ref_job_id = config.parsed_args["reference_job_id"]
 reference_job_id = isnothing(ref_job_id) ? simulation.job_id : ref_job_id
 
+# TODO: Add support for manual Jacobian debugging with the AutoDenseJacobian.
+integrator_has_auto_sparse_jacobian =
+    config.parsed_args["use_auto_jacobian"] &&
+    !config.parsed_args["use_dense_jacobian"]
+debug_manual_jacobian =
+    isnothing(config.parsed_args["debug_manual_jacobian"]) ?
+    config.parsed_args["use_auto_jacobian"] :
+    config.parsed_args["debug_manual_jacobian"]
+if integrator_has_auto_sparse_jacobian && debug_manual_jacobian
+    Y_end = integrator.u
+    t_end = integrator.t
+    dt = integrator.dt
+    timestepper_algorithm = integrator.alg
+    tableau_coefficients =
+        timestepper_algorithm isa CA.CTS.RosenbrockAlgorithm ?
+        timestepper_algorithm.tableau.Γ : timestepper_algorithm.tableau.a_imp
+
+    FT = eltype(Y_end)
+    γs = filter(!iszero, CA.LinearAlgebra.diag(tableau_coefficients))
+    dtγ = FT(float(dt) * γs[end])
+
+    auto_jacobian =
+        timestepper_algorithm isa CA.CTS.RosenbrockAlgorithm ?
+        integrator.cache.W : integrator.cache.newtons_method_cache.j
+    manual_jacobian = CA.Jacobian(auto_jacobian.alg.sparse_alg, Y_end, atmos)
+    CA.update_jacobian!(auto_jacobian, Y_end, p, dtγ, t_end)
+    CA.update_jacobian!(manual_jacobian, Y_end, p, dtγ, t_end)
+    auto_matrix = auto_jacobian.cache.matrix.matrix
+    manual_matrix = manual_jacobian.cache.matrix.matrix
+    auto_scalar_matrix = CA.MatrixFields.scalar_field_matrix(auto_matrix)
+    manual_scalar_matrix = CA.MatrixFields.scalar_field_matrix(manual_matrix)
+    diff_scalar_matrix = auto_scalar_matrix .- manual_scalar_matrix
+
+    @info "Debugging manual Jacobian"
+    for scalar_block_name in keys(auto_scalar_matrix)
+        auto_block = auto_scalar_matrix[scalar_block_name]
+        manual_block = manual_scalar_matrix[scalar_block_name]
+        diff_block = diff_scalar_matrix[scalar_block_name]
+
+        auto_block isa CA.Fields.Field || continue
+
+        println("$scalar_block_name:")
+        println("\t$(eltype(auto_block))")
+        (_, _, lower_band, upper_band) =
+            CA.MatrixFields.band_matrix_info(auto_block)
+        for band in lower_band:upper_band
+            band_index = band - lower_band + 1
+            auto_band_average = mean(abs, auto_block.entries.:($band_index))
+            manual_band_average = mean(abs, manual_block.entries.:($band_index))
+            diff_band_average = mean(abs, diff_block.entries.:($band_index))
+            averages =
+                (auto_band_average, manual_band_average, diff_band_average)
+            percent_error =
+                diff_band_average == auto_band_average == 0 ? FT(0) :
+                diff_band_average / auto_band_average * 100
+            rounded_averages = map(x -> round(x; sigdigits = 2), averages)
+            rounded_percent_error = round(percent_error; sigdigits = 2)
+            println(
+                "\tBand $band averages (auto/manual/difference) and error: \
+                   $(join(rounded_averages, '/')), $rounded_percent_error%",
+            )
+        end
+    end
+end
+
 if sol_res.ret_code == :simulation_crashed
     error(
         "The ClimaAtmos simulation has crashed. See the stack trace for details.",
