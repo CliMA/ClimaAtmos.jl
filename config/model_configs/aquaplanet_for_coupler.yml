@@ -3,12 +3,13 @@ z_max: 60000.0
 z_elem: 63
 dz_bottom: 30.0
 dt: "300secs"
-deep_atmosphere: true
+deep_atmosphere: false
 t_end: "120days"
 rayleigh_sponge: true
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 moist: "equil"
+disable_surface_flux_tendency: true
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "DecayWithHeightDiffusion"
 precip_model: "0M"
