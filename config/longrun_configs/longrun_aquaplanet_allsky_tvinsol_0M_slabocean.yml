@@ -11,7 +11,7 @@ t_end: "360days"
 dt_save_state_to_disk: "30days"
 check_conservation: true
 moist: "equil"
-prognostic_surface: "PrognosticSurfaceTemperature"
+prognostic_surface: "SlabOceanSST"
 albedo_model: "RegressionFunctionAlbedo"
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "DecayWithHeightDiffusion"

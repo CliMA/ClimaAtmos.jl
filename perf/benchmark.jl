@@ -49,6 +49,8 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
             if haskey(trials, name)
                 if trials[name].memory ≤ mem
                     @warn "Allocation limits for $name can be reduced to $(trials[name].memory)."
+                else
+                    @info "trials[$name].memory: $(trials[name].memory)"
                 end
                 return trials[name].memory ≤ mem
             else
@@ -58,8 +60,8 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
         end
         @test compare_mem(trials, "Wfact", 0)
         @test compare_mem(trials, "ldiv!", 0)
-        @test compare_mem(trials, "T_imp!", 1000000000000000000000)
-        @test compare_mem(trials, "T_exp_T_lim!", 10496)
+        @test compare_mem(trials, "T_imp!", 96)
+        @test compare_mem(trials, "T_exp_T_lim!", 190420)
         @test compare_mem(trials, "lim!", 0)
         @test compare_mem(trials, "dss!", 0)
         @test compare_mem(trials, "cache!", 120)

@@ -43,7 +43,7 @@ function atmos_center_variables(ls, atmos_model)
         ls,
         atmos_model.turbconv_model,
         atmos_model.moisture_model,
-        atmos_model.precip_model,
+        atmos_model.microphysics_model,
         gs_vars,
     )
     return (; gs_vars..., sgs_vars...)
@@ -64,7 +64,7 @@ grid_scale_center_variables(ls, atmos_model) = (;
     uₕ = C12(ls.velocity, ls.geometry),
     energy_variables(ls)...,
     moisture_variables(ls, atmos_model.moisture_model)...,
-    precip_variables(ls, atmos_model.precip_model)...,
+    precip_variables(ls, atmos_model.microphysics_model)...,
 )
 
 energy_variables(ls) = (;
@@ -75,8 +75,8 @@ energy_variables(ls) = (;
     )
 )
 
-atmos_surface_field(surface_space, ::PrescribedSurfaceTemperature) = (;)
-function atmos_surface_field(surface_space, ::PrognosticSurfaceTemperature)
+atmos_surface_field(surface_space, ::PrescribedSST) = (;)
+function atmos_surface_field(surface_space, ::SlabOceanSST)
     if :lat in propertynames(Fields.coordinate_field(surface_space))
         return (;
             sfc = map(
@@ -143,7 +143,7 @@ function turbconv_center_variables(
     ls,
     turbconv_model::PrognosticEDMFX,
     moisture_model,
-    precip_model,
+    microphysics_model,
     gs_vars,
 )
     n = n_mass_flux_subdomains(turbconv_model)
@@ -161,7 +161,7 @@ function turbconv_center_variables(
     ls,
     turbconv_model::PrognosticEDMFX,
     moisture_model::NonEquilMoistModel,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
     gs_vars,
 )
     # TODO - Instead of dispatching, should we unify this with the above function?

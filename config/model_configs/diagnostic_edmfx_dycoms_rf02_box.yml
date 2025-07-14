@@ -1,6 +1,6 @@
 initial_condition: DYCOMS_RF02
 subsidence: DYCOMS
-edmf_coriolis: DYCOMS_RF02
+scm_coriolis: DYCOMS_RF02
 rad: DYCOMS
 surface_setup: DYCOMS_RF02
 turbconv: diagnostic_edmfx

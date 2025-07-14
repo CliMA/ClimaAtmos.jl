@@ -23,6 +23,7 @@ include(joinpath("utils", "debug_utils.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
 include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
 include(joinpath("utils", "era5_observations_to_forcing_file.jl"))
+include(joinpath("utils", "weather_model.jl"))
 
 include(joinpath("utils", "AtmosArtifacts.jl"))
 import .AtmosArtifacts as AA
@@ -56,9 +57,12 @@ include(joinpath("prognostic_equations", "pressure_work.jl"))
 include(joinpath("prognostic_equations", "zero_velocity.jl"))
 
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
+include(joinpath("prognostic_equations", "implicit", "jacobian.jl"))
 include(
     joinpath("prognostic_equations", "implicit", "manual_sparse_jacobian.jl"),
 )
+include(joinpath("prognostic_equations", "implicit", "auto_dense_jacobian.jl"))
+include(joinpath("prognostic_equations", "implicit", "autodiff_utils.jl"))
 
 include(joinpath("prognostic_equations", "water_advection.jl"))
 include(joinpath("prognostic_equations", "remaining_tendency.jl"))
@@ -93,7 +97,7 @@ include(
 )
 include(joinpath("prognostic_equations", "hyperdiffusion.jl"))
 include(joinpath("prognostic_equations", "gm_sgs_closures.jl"))
-include(joinpath("prognostic_equations", "edmf_coriolis.jl"))
+include(joinpath("prognostic_equations", "scm_coriolis.jl"))
 include(joinpath("prognostic_equations", "eddy_diffusion_closures.jl"))
 include(joinpath("prognostic_equations", "mass_flux_closures.jl"))
 include(joinpath("prognostic_equations", "edmfx_entr_detr.jl"))

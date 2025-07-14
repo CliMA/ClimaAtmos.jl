@@ -80,7 +80,7 @@ function compute_energyo!(
     cache,
     time,
     surface_model::T,
-) where {T <: PrognosticSurfaceTemperature}
+) where {T <: SlabOceanSST}
     sfc_cρh =
         surface_model.ρ_ocean *
         surface_model.cp_ocean *
@@ -118,7 +118,7 @@ compute_watero!(
     moisture_model::T1,
     surface_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
-    "Can only compute total water of the ocean with a moist model and with PrognosticSurfaceTemperature",
+    "Can only compute total water of the ocean with a moist model and with SlabOceanSST",
 )
 
 function compute_watero!(
@@ -127,7 +127,7 @@ function compute_watero!(
     cache,
     time,
     moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
-    surface_model::PrognosticSurfaceTemperature,
+    surface_model::SlabOceanSST,
 )
     if isnothing(out)
         return [horizontal_integral_at_boundary(state.sfc.water)]

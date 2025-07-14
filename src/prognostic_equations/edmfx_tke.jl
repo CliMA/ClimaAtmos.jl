@@ -1,33 +1,27 @@
 #####
-##### EDMF SGS flux
+##### TKE Tendency for Eddy Diffusion Closure Used in EDMFX
 #####
 
 """
-    tke_dissipation(turbconv_params, ρatke, tke, mixing_length)
+ edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Returns a scalar value representing the TKE dissipation rate
-per unit volume [kg m^-1 s^-3].
+ Applies the tendency from the EDMFX subgrid scale turbulent kinetic energy (TKE)
+ to the prognostic variables.
 
-TKE dissipation is approximated from Taylor's surrogate:
-    D_k = c_d * tke^{3/2} / mixing_length
-This function returns the volumetric dissipation
-    ρ * a_env * D_k = c_d * ρatke * sqrt(abs(tke)) / mixing_length
-where `c_d` is a non-dimensional parameter.
+ This function calculates and applies the changes in the environment TKE
+ (`Yₜ.c.sgs⁰.ρatke`) due to various processes within the EDMFX framework,
+ including shear production, buoyancy production, entrainment, detrainment,
+ turbulent entrainment, pressure work, and dissipation.
 
-Arguments:
-- `turbconv_params`: Turbulence and convection model parameters.
-- `ρatke`: (environmental density) * (environmental area) * tke [kg m^-2 s^-2].
-- `tke`: Turbulent kinetic energy [m^2 s^-2].
-- `mixing_length`: Turbulent mixing length [m].
+ Arguments:
+ - `Yₜ`: The tendency state vector.
+ - `Y`: The current state vector.
+ - `p`: The cache, containing precomputed quantities and parameters.
+ - `t`: The current simulation time.
+ - `turbconv_model`: The turbulence convection model (e.g., `EDOnlyEDMFX`, `PrognosticEDMFX`, `DiagnosticEDMFX`).
+
+ Returns: `nothing`, modifies `Yₜ` in place.
 """
-function tke_dissipation(turbconv_params, ρatke, tke, mixing_length)
-    FT = typeof(tke)
-    c_d = CAP.tke_diss_coeff(turbconv_params)
-    dissipation_rate_vol = c_d * ρatke * sqrt(abs(tke)) / mixing_length
-    return dissipation_rate_vol
-end
-
-
 
 edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
@@ -85,14 +79,14 @@ function edmfx_tke_tendency!(
             ᶜρaʲ =
                 turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
                 p.precomputed.ᶜρaʲs.:($j)
-            # dynamical entr/detr
+            # dynamical entrainment/detrainment
             @. Yₜ.c.sgs⁰.ρatke +=
                 ᶜρaʲ * (
                     ᶜdetrʲs.:($$j) * 1 / 2 *
                     norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) -
                     ᶜentrʲs.:($$j) * ᶜtke⁰
                 )
-            # turbulent entr
+            # turbulent entrainment
             @. Yₜ.c.sgs⁰.ρatke +=
                 ᶜρaʲ *
                 ᶜturb_entrʲs.:($$j) *
@@ -106,4 +100,27 @@ function edmfx_tke_tendency!(
         @. Yₜ.c.sgs⁰.ρatke += ᶜtke_press
     end
     return nothing
+end
+
+"""
+    tke_dissipation(turbconv_params, ρatke, tke, mixing_length)
+
+Returns a scalar value representing the TKE dissipation rate
+per unit volume, ρ * ε_d [kg m^-1 s^-3].
+
+The physical dissipation is calculated as:
+  ρ * ε_d = c_d * ρatke * sqrt(abs(tke)) / mixing_length
+where `c_d` is a parameter.
+
+Arguments:
+- `turbconv_params`: Turbulence and convection model parameters.
+- `ρatke`: ρ_area_weighted * tke [kg m^-2 s^-2].
+- `tke`: Turbulent kinetic energy [m^2 s^-2].
+- `mixing_length`: Turbulent mixing length [m].
+"""
+function tke_dissipation(turbconv_params, ρatke, tke, mixing_length)
+    FT = typeof(tke)
+    c_d = CAP.tke_diss_coeff(turbconv_params)
+    dissipation_rate_vol = c_d * ρatke * sqrt(abs(tke)) / mixing_length
+    return dissipation_rate_vol
 end

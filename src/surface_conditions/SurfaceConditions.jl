@@ -7,8 +7,8 @@ import ..ZonallyAsymmetricSST
 import ..ZonallySymmetricSST
 import ..RCEMIPIISST
 import ..ExternalTVColumnSST
-import ..PrognosticSurfaceTemperature
-import ..PrescribedSurfaceTemperature
+import ..SlabOceanSST
+import ..PrescribedSST
 import ..gcm_driven_timeseries
 
 import ..CT1, ..CT2, ..C12, ..CT12, ..C3

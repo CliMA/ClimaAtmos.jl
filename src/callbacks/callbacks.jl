@@ -30,7 +30,7 @@ function flux_accumulation!(integrator)
         net_energy_flux_toa[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
             float(Δt)
-        if p.atmos.surface_model isa PrescribedSurfaceTemperature
+        if p.atmos.surface_model isa PrescribedSST
             net_energy_flux_sfc[] +=
                 horizontal_integral_at_boundary(ᶠradiation_flux, half) *
                 float(Δt)
@@ -215,7 +215,7 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     max_zenith_angle = FT(π) / 2 - eps(FT)
     irradiance = FT(CAP.tot_solar_irrad(params))
     au = FT(CAP.astro_unit(params))
-    # TODO: Where does this date0 come from?
+    # date0 references the start of the astronomial epoch J2000
     date0 = DateTime("2000-01-01T11:58:56.816")
     d, δ, η_UTC =
         FT.(

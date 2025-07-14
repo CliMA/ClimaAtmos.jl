@@ -33,7 +33,7 @@ function update_surface_conditions!(Y, p, t)
             t,
         )
         sfc_temp_var = Fields.field_values(p.external_forcing.surface_inputs.ts)
-    elseif p.atmos.surface_model isa PrognosticSurfaceTemperature
+    elseif p.atmos.surface_model isa SlabOceanSST
         sfc_temp_var = Fields.field_values(Y.sfc.T)
     else
         sfc_temp_var = nothing
