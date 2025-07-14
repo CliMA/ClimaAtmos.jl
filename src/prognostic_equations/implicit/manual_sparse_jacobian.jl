@@ -561,7 +561,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             use_derivative(noneq_cloud_formation_flag)
 
             # TO DO
-            # fix noneq flag not showing up
+            # add dql/dqr blocks
+            # add dqi/dqs blocks
             # make sure I am handling force absolute value correctly
 
             p_vapₛₗ(thermo_params, T) = TD.saturation_vapor_pressure(thermo_params, T, TD.Liquid())
@@ -697,17 +698,32 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             ᶜdqₛᵢ_δqₜ = @. lazy(ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ)
 
-            ᶜδforceₗ_δqₗ = @. lazy(ifelse(ᶜqᵥ - ᶜqₗ <= 0,0,-1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
-            ᶜδforceₗ_δqₜ = @. lazy(ifelse(ᶜqᵥ - ᶜqₗ <= 0,0,(1 - ᶜdqₛₗ_δqₜ) / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
+            ᶜδforceₗ_δqₗ = @. lazy(ifelse(ᶜqᵥ + ᶜqₗ <= 0,0,-1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
+            ᶜδforceₗ_δqₜ = @. lazy(ifelse(ᶜqᵥ + ᶜqₗ <= 0,0,(1 - ᶜdqₛₗ_δqₜ) / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
 
-            ᶜδforceᵢ_δqᵢ = @. lazy(ifelse(ᶜqᵥ - ᶜqᵢ <= 0,0,-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
-            ᶜδforceᵢ_δqₜ = @. lazy(ifelse(ᶜqᵥ - ᶜqᵢ <= 0,0,(1 - ᶜdqₛᵢ_δqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
+            # COMMENTED OUT UNTIL THE LINEAR SOLVER IS CHANGED
+            # ᶜδforceₗ_δqᵢ = @. lazy(ifelse(ᶜqᵥ + ᶜqₗ <= 0,0,-1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
+            # ᶜδforceₗ_δqᵣ = @. lazy(ifelse(ᶜqᵥ + ᶜqₗ <= 0,0,-1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
+
+            ᶜδforceᵢ_δqᵢ = @. lazy(ifelse(ᶜqᵥ + ᶜqᵢ <= 0,0,-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
+            ᶜδforceᵢ_δqₜ = @. lazy(ifelse(ᶜqᵥ + ᶜqᵢ <= 0,0,(1 - ᶜdqₛᵢ_δqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
+
+            # COMMENTED OUT UNTIL THE LINEAR SOLVER IS CHANGED
+            # ᶜδforceᵢ_δqₗ = @. lazy(ifelse(ᶜqᵥ + ᶜqᵢ <= 0,0,-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
+            # ᶜδforceᵢ_δqₛ = @. lazy(ifelse(ᶜqᵥ + ᶜqᵢ <= 0,0,-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
 
             ∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
             ∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
 
             ∂ᶜρqₗ_err_∂ᶜρqₜ = matrix[@name(c.ρq_liq), @name(c.ρq_tot)]
             ∂ᶜρqᵢ_err_∂ᶜρqₜ = matrix[@name(c.ρq_ice), @name(c.ρq_tot)]
+
+            # COMMENTED OUT UNTIL THE LINEAR SOLVER IS CHANGED
+            # ∂ᶜρqₗ_err_∂ᶜρqᵣ = matrix[@name(c.ρq_liq), @name(c.ρq_rai)]
+            # ∂ᶜρqᵢ_err_∂ᶜρqₛ = matrix[@name(c.ρq_ice), @name(c.ρq_sno)]
+
+            # ∂ᶜρqₗ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_liq), @name(c.ρq_ice)]
+            # ∂ᶜρqᵢ_err_∂ᶜρqₗ = matrix[@name(c.ρq_ice), @name(c.ρq_liq)]
             
             @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
                 DiagonalMatrixRow(
@@ -760,6 +776,60 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         float(0),
                     )
                 )
+
+            #  COMMENTED OUT UNTIL THE LINEAR SOLVER IS CHANGED
+            # @. ∂ᶜρqₗ_err_∂ᶜρqᵣ +=
+            #     DiagonalMatrixRow(
+            #         ∂ρqₓ_err_∂ρqᵪ(
+            #             thermo_params,
+            #             ᶜforceₗ,
+            #             ᶜδforceₗ_δqᵣ,
+            #             (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
+            #             (-1/(2*float(dt))),
+            #             (ᶜqₗ/(2*float(dt))),
+            #             float(0),
+            #         )
+            #     )
+
+            # @. ∂ᶜρqᵢ_err_∂ᶜρqₛ +=
+            #     DiagonalMatrixRow(
+            #         ∂ρqₓ_err_∂ρqᵪ(
+            #             thermo_params,
+            #             ᶜforceᵢ,
+            #             ᶜδforceᵢ_δqₛ,
+            #             (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
+            #             (-1/(2*float(dt))),
+            #             (ᶜqᵢ/(2*float(dt))),
+            #             float(0),
+            #         )
+            #     )
+
+            #  COMMENTED OUT UNTIL THE LINEAR SOLVER IS CHANGED
+            # @. ∂ᶜρqₗ_err_∂ᶜρqᵢ +=
+            #     DiagonalMatrixRow(
+            #         ∂ρqₓ_err_∂ρqᵪ(
+            #             thermo_params,
+            #             ᶜforceₗ,
+            #             ᶜδforceₗ_δqᵢ,
+            #             (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
+            #             (-1/(2*float(dt))),
+            #             (ᶜqₗ/(2*float(dt))),
+            #             float(0),
+            #         )
+            #     )
+
+            # @. ∂ᶜρqᵢ_err_∂ᶜρqₗ +=
+            #     DiagonalMatrixRow(
+            #         ∂ρqₓ_err_∂ρqᵪ(
+            #             thermo_params,
+            #             ᶜforceᵢ,
+            #             ᶜδforceᵢ_δqₗ,
+            #             (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
+            #             (-1/(2*float(dt))),
+            #             (ᶜqᵢ/(2*float(dt))),
+            #             float(0),
+            #         )
+            #     )
         end
     end
 
