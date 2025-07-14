@@ -1854,7 +1854,8 @@ function (initial_condition::Larcform1)(params)
     T, # Issue with type here
     q_tot
     )  # Pa
-    velocity = Geometry.UVVector(FT(5), FT(0))
+    velocity = APL.Larcform1_geostrophic_u(FT)
+    #velocity = Geometry.UVVector(FT(5), FT(0))
     #tke(z) = FT(0)*z # TODO implement actual profile
     #tke = APL.ISDAC_tke(FT)  # m²/s²
 
