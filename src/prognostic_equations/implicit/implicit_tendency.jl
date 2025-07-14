@@ -17,7 +17,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             Y,
             p,
             p.atmos.moisture_model,
-            p.atmos.precip_model,
+            p.atmos.microphysics_model,
         )
     end
 
@@ -37,7 +37,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             Y,
             p,
             t,
-            p.atmos.vert_diff,
+            p.atmos.vertical_diffusion,
         )
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
@@ -59,7 +59,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     # NOTE: This will zero out all momentum tendencies in the edmfx advection test
-    # please DO NOT add additional velocity tendencies after this function
+    # DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)
 
     return nothing
@@ -134,13 +134,14 @@ vertical_advection(ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. lazy(-(ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    (; moisture_model, turbconv_model, rayleigh_sponge, precip_model) = p.atmos
+    (; moisture_model, turbconv_model, rayleigh_sponge, microphysics_model) =
+        p.atmos
     (; dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜh_tot, ᶜspecific, ᶠu³, ᶜp, ᶜts) = p.precomputed
+    (; ᶜh_tot, ᶠu³, ᶜp, ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
@@ -149,7 +150,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     @. Yₜ.c.ρe_tot += vtt
     if !(moisture_model isa DryModel)
-        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜspecific.q_tot, dt, Val(:none))
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot += vtt
     end
 
@@ -160,23 +162,50 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     if moisture_model isa NonEquilMoistModel
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed
         @. Yₜ.c.ρq_liq -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ *
-            ᶠright_bias(Geometry.WVector(-(ᶜwₗ)) * ᶜspecific.q_liq),
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                Geometry.WVector(-(ᶜwₗ)) * specific(Y.c.ρq_liq, Y.c.ρ),
+            ),
         )
         @. Yₜ.c.ρq_ice -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ *
-            ᶠright_bias(Geometry.WVector(-(ᶜwᵢ)) * ᶜspecific.q_ice),
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                Geometry.WVector(-(ᶜwᵢ)) * specific(Y.c.ρq_ice, Y.c.ρ),
+            ),
         )
     end
-    if precip_model isa Microphysics1Moment
+    if microphysics_model isa Microphysics1Moment
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ *
-            ᶠright_bias(Geometry.WVector(-(ᶜwᵣ)) * ᶜspecific.q_rai),
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                Geometry.WVector(-(ᶜwᵣ)) * specific(Y.c.ρq_rai, Y.c.ρ),
+            ),
         )
         @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ *
-            ᶠright_bias(Geometry.WVector(-(ᶜwₛ)) * ᶜspecific.q_sno),
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                Geometry.WVector(-(ᶜwₛ)) * specific(Y.c.ρq_sno, Y.c.ρ),
+            ),
+        )
+    end
+    if microphysics_model isa Microphysics2Moment
+        (; ᶜwnₗ, ᶜwnᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
+        @. Yₜ.c.ρn_liq -= ᶜprecipdivᵥ(
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                Geometry.WVector(-(ᶜwnₗ)) * specific(Y.c.ρn_liq, Y.c.ρ),
+            ),
+        )
+        @. Yₜ.c.ρn_rai -= ᶜprecipdivᵥ(
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                Geometry.WVector(-(ᶜwnᵣ)) * specific(Y.c.ρn_rai, Y.c.ρ),
+            ),
+        )
+        @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                Geometry.WVector(-(ᶜwᵣ)) * specific(Y.c.ρq_rai, Y.c.ρ),
+            ),
+        )
+        @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                Geometry.WVector(-(ᶜwₛ)) * specific(Y.c.ρq_sno, Y.c.ρ),
+            ),
         )
     end
 

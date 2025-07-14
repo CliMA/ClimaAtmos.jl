@@ -30,6 +30,7 @@ end
 @safetestset "Sponge interface tests" begin @time include("parameterized_tendencies/sponge/viscous_sponge.jl") end
 @safetestset "Precipitation interface tests" begin @time include("parameterized_tendencies/microphysics/precipitation.jl") end
 @safetestset "Model getters" begin @time include("solver/model_getters.jl") end
+@safetestset "AtmosModel Constructor" begin @time include("solver/atmos_model_constructor.jl") end
 @safetestset "Topography tests" begin @time include("topography.jl") end
 @safetestset "Restarts" begin @time include("restart.jl") end
 @safetestset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end

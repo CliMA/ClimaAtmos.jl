@@ -4,6 +4,7 @@
 import ClimaComms
 import ClimaCore: Spaces, Topologies, Fields, Geometry
 import LinearAlgebra: norm_sqr
+using Dates: DateTime, @dateformat_str
 
 is_energy_var(symbol) = symbol in (:ρe_tot, :ρae_tot)
 is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :u₃, :ρw)
@@ -210,7 +211,7 @@ function projected_vector_buoy_grad_vars(::Type{V}, v1, v2, v3, lg) where {V}
     return (;
         ∂θv∂z_unsat = V(v1, lg)[1] / ubvd,
         ∂qt∂z_sat = V(v2, lg)[1] / ubvd,
-        ∂θl∂z_sat = V(v3, lg)[1] / ubvd,
+        ∂θli∂z_sat = V(v3, lg)[1] / ubvd,
     )
 end
 
@@ -479,6 +480,28 @@ function promote_period(period::Dates.OtherPeriod)
     return period
 end
 
+"""
+    parse_date(date_str)
+
+Parse a date string into a `DateTime` object. Currently, only the following formats are supported:
+- yyyymmdd
+- yyyymmdd-HHMM
+"""
+function parse_date(date_str)
+    # Define a mapping between allowed formats and corresponding date format 
+    date_format_mapping = Dict(
+        r"^\d{8}$" => dateformat"yyyymmdd",
+        r"^\d{8}-\d{4}$" => dateformat"yyyymmdd-HHMM",
+    )
+    for (pattern, format) in date_format_mapping
+        !isnothing(match(pattern, date_str)) &&
+            return DateTime(date_str, format)
+    end
+    error(
+        "Date string $date_str does not match any of the allowed formats: yyyymmdd or yyyymmdd-HHMM",
+    )
+end
+
 function iscolumn(space)
     # TODO: Our columns are 2+1D boxes with one element at the base. Fix this
     isbox =
@@ -495,4 +518,25 @@ end
 function issphere(space)
     return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
            Domains.SphereDomain
+end
+
+"""
+    clima_to_era5_name_dict()
+
+Returns a dictionary mapping ClimaAtmos variable names to ERA5 variable names.
+"""
+function clima_to_era5_name_dict()
+    Dict(
+        "ua" => "u",
+        "va" => "v",
+        "wap" => "w", # era5 w is in Pa/s, this is confusing notation
+        "hus" => "q",
+        "ta" => "t",
+        "zg" => "z", # era5 z is geopotential in m^2/s^2, this is confusing notation
+        "clw" => "clwc",
+        "cli" => "ciwc",
+        "ts" => "skt",
+        "hfls" => "slhf",
+        "hfss" => "sshf",
+    )
 end

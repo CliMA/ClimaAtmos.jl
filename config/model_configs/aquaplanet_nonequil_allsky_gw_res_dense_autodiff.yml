@@ -1,0 +1,30 @@
+z_max: 60000.0
+z_elem: 31
+dz_bottom: 50.0
+rayleigh_sponge: true
+dt: "360secs"
+t_end: "6hours" # This takes 2 hours to run in CI when t_end is 1 day.
+dt_save_state_to_disk: "6hours"
+vert_diff: "DecayWithHeightDiffusion"
+implicit_diffusion: true
+use_dense_jacobian: true
+update_jacobian_every: dt
+moist: "nonequil"
+precip_model: "1M"
+rad: "allskywithclear"
+aerosol_radiation: true
+prescribe_clouds_in_radiation: true
+radiation_reset_rng_seed: true
+insolation: "timevarying"
+non_orographic_gravity_wave: true
+orographic_gravity_wave: "gfdl_restart"
+surface_setup: "DefaultMoninObukhov"
+prescribe_ozone: true
+prescribed_aerosols: ["SO4", "CB1", "OC1", "DST01", "SSLT01"]
+toml: [toml/sphere_aquaplanet_1M.toml]
+diagnostics:
+  - short_name: [edt, evu, mmrso4, mmrbcpo, mmrocpo, mmrdust, mmrss, loadss, o3, od550aer, odsc550aer]
+    reduction_time: average
+    period: 6hours
+  - short_name: [reffclw, reffcli]
+    period: 6hours

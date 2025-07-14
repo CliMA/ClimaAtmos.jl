@@ -28,8 +28,12 @@ radiation_model_cache(Y, atmos::AtmosModel, args...) =
 ##### No Radiation
 #####
 
-radiation_model_cache(Y, radiation_mode::Nothing; args...) = (;)
-radiation_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+radiation_model_cache(
+    Y,
+    radiation_mode::Union{Nothing, HeldSuarezForcing};
+    args...,
+) = (;)
+radiation_tendency!(Yₜ, Y, p, t, ::Union{Nothing, HeldSuarezForcing}) = nothing
 
 #####
 ##### RRTMGP Radiation
@@ -425,12 +429,16 @@ end
 
 function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS)
     FT = Spaces.undertype(axes(Y.c))
-    NT = NamedTuple{(:z, :ρ, :q_tot), NTuple{3, FT}}
+    # The NT type is needed for the `column_reduce!` call below because
+    # `column_reduce!` computes the output, `isoline_z_ρ_ρq`, in-place. `Y.c.ρ`
+    # and `Y.c.ρq_tot` are input arguments, and `nt1` / `nt2` are output entry
+    # values at each point along the vertical column.
+    NT = NamedTuple{(:z, :ρ, :ρq_tot), NTuple{3, FT}}
     return (;
         ᶜκρq = similar(Y.c, FT),
         ∫_0_∞_κρq = similar(Spaces.level(Y.c, 1), FT),
         ᶠ∫_0_z_κρq = similar(Y.f, FT),
-        isoline_z_ρ_q = similar(Spaces.level(Y.c, 1), NT),
+        isoline_z_ρ_ρq = similar(Spaces.level(Y.c, 1), NT),
         ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
         net_energy_flux_toa = [Geometry.WVector(FT(0))],
         net_energy_flux_sfc = [Geometry.WVector(FT(0))],
@@ -440,13 +448,13 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     @assert !(p.atmos.moisture_model isa DryModel)
 
     (; params) = p
-    (; ᶜspecific, ᶜts) = p.precomputed
-    (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_q, ᶠradiation_flux) =
+    (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_ρq, ᶠradiation_flux) =
         p.radiation
+    (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
     FT = Spaces.undertype(axes(Y.c))
-    NT = NamedTuple{(:z, :ρ, :q_tot), NTuple{3, FT}}
+    NT = NamedTuple{(:z, :ρ, :ρq_tot), NTuple{3, FT}}
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
 
@@ -467,14 +475,14 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     q_tot_isoline = FT(0.008)
     Operators.column_reduce!(
         (nt1, nt2) ->
-            abs(nt1.q_tot - q_tot_isoline) < abs(nt2.q_tot - q_tot_isoline) ?
-            nt1 : nt2,
-        isoline_z_ρ_q,
-        Base.broadcasted(NT ∘ tuple, ᶜz, Y.c.ρ, ᶜspecific.q_tot),
+            abs(specific(nt1.ρq_tot, nt1.ρ) - q_tot_isoline) <
+            abs(specific(nt2.ρq_tot, nt2.ρ) - q_tot_isoline) ? nt1 : nt2,
+        isoline_z_ρ_ρq,
+        Base.broadcasted(NT ∘ tuple, ᶜz, Y.c.ρ, Y.c.ρq_tot),
     )
 
-    zi = isoline_z_ρ_q.z
-    ρi = isoline_z_ρ_q.ρ
+    zi = isoline_z_ρ_ρq.z
+    ρi = isoline_z_ρ_ρq.ρ
 
     # TODO: According to the paper, we should remove the ifelse condition that
     # clips the third term to 0 below zi, and we should also replace cp_d with

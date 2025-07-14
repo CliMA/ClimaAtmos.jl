@@ -15,7 +15,7 @@ Below is the default Bomex configuration:
 job_id: "prognostic_edmfx_bomex_box"
 initial_condition: "Bomex"
 subsidence: "Bomex"
-edmf_coriolis: "Bomex"
+scm_coriolis: "Bomex"
 ls_adv: "Bomex"
 surface_setup: "Bomex"
 turbconv: "prognostic_edmfx"

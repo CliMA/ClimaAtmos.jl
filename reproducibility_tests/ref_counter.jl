@@ -1,4 +1,4 @@
-244
+248
 
 # **README**
 #
@@ -20,6 +20,18 @@
 
 
 #=
+248
+- update deps: climacore 0.14.35
+
+247
+- Hyperdiffusion of enthalpy perturbation
+
+246
+- Prognostic edmf docstrings + refactor + scm_coriolis change
+
+245
+- Add 2M test case to the reproducibility job_id list
+
 244
 - Add a new test case: aquaplanet with 2M microphysics
 

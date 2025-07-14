@@ -31,7 +31,7 @@ function Kin(ᶜw_precip, ᶜu_air)
 end
 
 """
-    set_precipitation_velocities!(Y, p, moisture_model, precip_model)
+    set_precipitation_velocities!(Y, p, moisture_model, microphysics_model)
 
 Updates the precipitation terminal velocity, cloud sedimentation velocity,
 and their contribution to total water and energy advection.
@@ -46,7 +46,7 @@ function set_precipitation_velocities!(
     Y,
     p,
     moisture_model::NonEquilMoistModel,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
@@ -102,10 +102,9 @@ function set_precipitation_velocities!(
     Y,
     p,
     moisture_model::NonEquilMoistModel,
-    precip_model::Microphysics2Moment,
+    microphysics_model::Microphysics2Moment,
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwnₗ, ᶜwnᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
-    (; q_liq, q_ice, q_rai, q_sno) = p.precomputed.ᶜspecific
     (; ᶜΦ) = p.core
 
     cm1c = CAP.microphysics_cloud_params(p.params)
@@ -116,23 +115,53 @@ function set_precipitation_velocities!(
     # compute the precipitation terminal velocity [m/s]
     # TODO sedimentation of snow is based on the 1M scheme
     @. ᶜwnᵣ = getindex(
-        CM2.rain_terminal_velocity(cm2p.sb, cm2p.tv, q_rai, Y.c.ρ, Y.c.ρn_rai),
+        CM2.rain_terminal_velocity(
+            cm2p.sb,
+            cm2p.tv,
+            specific(Y.c.ρq_rai, Y.c.ρ),
+            Y.c.ρ,
+            Y.c.ρn_rai,
+        ),
         1,
     )
     @. ᶜwᵣ = getindex(
-        CM2.rain_terminal_velocity(cm2p.sb, cm2p.tv, q_rai, Y.c.ρ, Y.c.ρn_rai),
+        CM2.rain_terminal_velocity(
+            cm2p.sb,
+            cm2p.tv,
+            specific(Y.c.ρq_rai, Y.c.ρ),
+            Y.c.ρ,
+            Y.c.ρn_rai,
+        ),
         2,
     )
-    @. ᶜwₛ = CM1.terminal_velocity(cm1p.ps, cm1p.tv.snow, Y.c.ρ, q_sno)
+    @. ᶜwₛ = CM1.terminal_velocity(
+        cm1p.ps,
+        cm1p.tv.snow,
+        Y.c.ρ,
+        specific(Y.c.ρq_sno, Y.c.ρ),
+    )
     # compute sedimentation velocity for cloud condensate [m/s]
-    # TODO sedimentation velocities of cloud condensates are based 
+    # TODO sedimentation velocities of cloud condensates are based
     # on the 1M scheme. Sedimentation velocity of cloud number concentration
     # is equal to that of the mass.
-    @. ᶜwnₗ =
-        CMNe.terminal_velocity(cm1c.liquid, cm1c.Ch2022.rain, Y.c.ρ, q_liq)
-    @. ᶜwₗ = CMNe.terminal_velocity(cm1c.liquid, cm1c.Ch2022.rain, Y.c.ρ, q_liq)
-    @. ᶜwᵢ =
-        CMNe.terminal_velocity(cm1c.ice, cm1c.Ch2022.small_ice, Y.c.ρ, q_ice)
+    @. ᶜwnₗ = CMNe.terminal_velocity(
+        cm1c.liquid,
+        cm1c.Ch2022.rain,
+        Y.c.ρ,
+        specific(Y.c.ρq_liq, Y.c.ρ),
+    )
+    @. ᶜwₗ = CMNe.terminal_velocity(
+        cm1c.liquid,
+        cm1c.Ch2022.rain,
+        Y.c.ρ,
+        specific(Y.c.ρq_liq, Y.c.ρ),
+    )
+    @. ᶜwᵢ = CMNe.terminal_velocity(
+        cm1c.ice,
+        cm1c.Ch2022.small_ice,
+        Y.c.ρ,
+        specific(Y.c.ρq_ice, Y.c.ρ),
+    )
 
     # compute their contributions to energy and total water advection
     @. ᶜwₜqₜ =
@@ -153,7 +182,7 @@ function set_precipitation_velocities!(
 end
 
 """
-    set_precipitation_cache!(Y, p, precip_model, turbconv_model)
+    set_precipitation_cache!(Y, p, microphysics_model, turbconv_model)
 
 Computes the cache needed for precipitation tendencies. When run without edmf
 model this involves computing precipitation sources based on the grid mean
@@ -254,7 +283,7 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     (; ᶜts, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
 
-    (; q_rai, q_sno) = p.precomputed.ᶜspecific
+    (; q_tot, q_liq, q_ice, q_rai, q_sno) = p.precomputed.ᶜspecific
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
@@ -274,6 +303,9 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         ᶜSqᵣᵖ,
         ᶜSqₛᵖ,
         Y.c.ρ,
+        q_tot,
+        q_liq,
+        q_ice,
         q_rai,
         q_sno,
         ᶜts,
@@ -288,6 +320,9 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         ᶜSqᵣᵖ,
         ᶜSqₛᵖ,
         Y.c.ρ,
+        q_tot,
+        q_liq,
+        q_ice,
         q_rai,
         q_sno,
         ᶜts,
@@ -322,8 +357,6 @@ function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
     (; ᶜSnₗᵖ, ᶜSnᵣᵖ) = p.precomputed
 
-    (; q_liq, q_rai, n_liq, n_rai) = p.precomputed.ᶜspecific
-
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜS₂ᵖ = p.scratch.ᶜtemp_scalar_2
 
@@ -341,10 +374,13 @@ function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
         ᶜSqₗᵖ,
         ᶜSqᵣᵖ,
         Y.c.ρ,
-        n_liq,
-        n_rai,
-        q_liq,
-        q_rai,
+        lazy.(specific.(Y.c.ρn_liq, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρn_rai, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_tot, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_liq, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_ice, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_rai, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_sno, Y.c.ρ)),
         ᶜts,
         dt,
         cmp,
@@ -387,7 +423,7 @@ set_precipitation_surface_fluxes!(Y, p, _) = nothing
 function set_precipitation_surface_fluxes!(
     Y,
     p,
-    precip_model::Microphysics0Moment,
+    microphysics_model::Microphysics0Moment,
 )
     ᶜT = p.scratch.ᶜtemp_scalar
     (; ᶜts) = p.precomputed  # assume ᶜts has been updated
@@ -414,11 +450,11 @@ end
 function set_precipitation_surface_fluxes!(
     Y,
     p,
-    precip_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency,) = p.conservation_check
-    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜspecific) = p.precomputed
+    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ) = p.precomputed
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     sfc_J = Fields.level(ᶠJ, Fields.half)
@@ -426,31 +462,21 @@ function set_precipitation_surface_fluxes!(
 
     # Jacobian-weighted extrapolation from interior to surface, consistent with
     # the reconstruction of density on cell faces, ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
-    int_J = Fields.Field(Fields.field_values(Fields.level(ᶜJ, 1)), sfc_space)
-    int_ρ = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), sfc_space)
+    sfc_lev(x) =
+        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
+    int_J = sfc_lev(ᶜJ)
+    int_ρ = sfc_lev(Y.c.ρ)
     sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
 
     # Constant extrapolation to surface, consistent with simple downwinding
-    sfc_qᵣ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_rai, 1)),
-        sfc_space,
-    )
-    sfc_qₛ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_sno, 1)),
-        sfc_space,
-    )
-    sfc_qₗ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_liq, 1)),
-        sfc_space,
-    )
-    sfc_qᵢ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_ice, 1)),
-        sfc_space,
-    )
-    sfc_wᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), sfc_space)
-    sfc_wₛ = Fields.Field(Fields.field_values(Fields.level(ᶜwₛ, 1)), sfc_space)
-    sfc_wₗ = Fields.Field(Fields.field_values(Fields.level(ᶜwₗ, 1)), sfc_space)
-    sfc_wᵢ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵢ, 1)), sfc_space)
+    sfc_wᵣ = sfc_lev(ᶜwᵣ)
+    sfc_wₛ = sfc_lev(ᶜwₛ)
+    sfc_wₗ = sfc_lev(ᶜwₗ)
+    sfc_wᵢ = sfc_lev(ᶜwᵢ)
+    sfc_qᵣ = lazy.(specific.(sfc_lev(Y.c.ρq_rai), sfc_ρ))
+    sfc_qₛ = lazy.(specific.(sfc_lev(Y.c.ρq_sno), sfc_ρ))
+    sfc_qₗ = lazy.(specific.(sfc_lev(Y.c.ρq_liq), sfc_ρ))
+    sfc_qᵢ = lazy.(specific.(sfc_lev(Y.c.ρq_ice), sfc_ρ))
 
     @. surface_rain_flux = sfc_ρ * (sfc_qᵣ * (-sfc_wᵣ) + sfc_qₗ * (-sfc_wₗ))
     @. surface_snow_flux = sfc_ρ * (sfc_qₛ * (-sfc_wₛ) + sfc_qᵢ * (-sfc_wᵢ))

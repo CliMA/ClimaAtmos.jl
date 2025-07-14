@@ -4,6 +4,21 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+v0.31.0
+-------
+
+PR [#3886](https://github.com/CliMA/ClimaAtmos.jl/pull/3886) renames `PrognosticSurfaceTemperature` -> `SlabOceanSST`, `PrescribedSurfaceTemperature` -> `PrescribedSST` and deprecates the `prognostic_surface = "Prognostic/PrescribedSurfaceTemperature"` config argument
+
+PR [#3883](https://github.com/CliMA/ClimaAtmos.jl/pull/3883) adds atmosphere initial condition for WeatherQuest from ERA5
+
+PR [#3870](https://github.com/CliMA/ClimaAtmos.jl/pull/3870) adds externally driven SCM models forced by monthly-averaged ERA5
+reanalysis which are less data intensive and more stable. The simulation also employs the new implicit solver yielding a several
+factor speedup. The associated documentation section, "Single Column Model", was also improved.
+
+v0.30.4
+-------
+PR [#3856](https://github.com/CliMA/ClimaAtmos.jl/pull/3856) adds number adjustment tendencies to the two-moment microphysics scheme.
+
 v0.30.3
 -------
 

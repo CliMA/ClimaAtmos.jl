@@ -45,7 +45,7 @@ function compute_rsd!(
             cache.radiation.rrtmgp_model.face_sw_flux_dn,
             axes(state.f),
         )
-        @assert out !== nothing "Output field 'out' must not be `nothing` in this branch"
+        @assert !isnothing(out) "Output field 'out' must not be `nothing` in this branch"
         radiation_mode.deep_atmosphere &&
             apply_geometric_scaling!(out, z_lev, planet_radius, FT)
     end
