@@ -153,27 +153,25 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     )
 
     condensate_blocks =
-    if atmos.moisture_model isa NonEquilMoistModel &&
-        use_derivative(noneq_cloud_formation_flag)
-        (
-            (@name(c.ρq_liq), @name(c.ρq_tot)) => similar(Y.c, DiagonalRow),
-            (@name(c.ρq_ice), @name(c.ρq_tot)) => similar(Y.c, DiagonalRow),
+        if atmos.moisture_model isa NonEquilMoistModel &&
+           use_derivative(noneq_cloud_formation_flag)
+            (
+                (@name(c.ρq_liq), @name(c.ρq_tot)) => similar(Y.c, DiagonalRow),
+                (@name(c.ρq_ice), @name(c.ρq_tot)) => similar(Y.c, DiagonalRow),
 
-            # ql/ql block is assumed to be allocated in diffusion blocks
-            (@name(c.ρq_ice), @name(c.ρq_liq)) => similar(Y.c, DiagonalRow),
+                # ql/ql block is assumed to be allocated in diffusion blocks
+                (@name(c.ρq_ice), @name(c.ρq_liq)) => similar(Y.c, DiagonalRow),
 
-            # qi/qi block is assumed to be allocated in diffusion blocks
-            (@name(c.ρq_liq), @name(c.ρq_ice)) => similar(Y.c, DiagonalRow),
-
-            (@name(c.ρq_liq), @name(c.ρq_rai)) => similar(Y.c, DiagonalRow),
-            (@name(c.ρq_ice), @name(c.ρq_rai)) => similar(Y.c, DiagonalRow),
-
-            (@name(c.ρq_liq), @name(c.ρq_sno)) => similar(Y.c, DiagonalRow),
-            (@name(c.ρq_ice), @name(c.ρq_sno)) => similar(Y.c, DiagonalRow),
-        )
-    else
-        ()
-    end
+                # qi/qi block is assumed to be allocated in diffusion blocks
+                (@name(c.ρq_liq), @name(c.ρq_ice)) => similar(Y.c, DiagonalRow),
+                (@name(c.ρq_liq), @name(c.ρq_rai)) => similar(Y.c, DiagonalRow),
+                (@name(c.ρq_ice), @name(c.ρq_rai)) => similar(Y.c, DiagonalRow),
+                (@name(c.ρq_liq), @name(c.ρq_sno)) => similar(Y.c, DiagonalRow),
+                (@name(c.ρq_ice), @name(c.ρq_sno)) => similar(Y.c, DiagonalRow),
+            )
+        else
+            ()
+        end
 
     diffused_scalar_names = (@name(c.ρe_tot), available_tracer_names...)
     diffusion_blocks = if use_derivative(diffusion_flag)
@@ -584,15 +582,17 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         end
 
         if p.atmos.moisture_model isa NonEquilMoistModel &&
-            use_derivative(noneq_cloud_formation_flag)
+           use_derivative(noneq_cloud_formation_flag)
 
             # TO DO
             # add dql/dqr blocks
             # add dqi/dqs blocks
             # make sure I am handling force absolute value correctly
 
-            p_vapₛₗ(thermo_params, T) = TD.saturation_vapor_pressure(thermo_params, T, TD.Liquid())
-            p_vapₛᵢ(thermo_params, T) = TD.saturation_vapor_pressure(thermo_params, T, TD.Ice())
+            p_vapₛₗ(thermo_params, T) =
+                TD.saturation_vapor_pressure(thermo_params, T, TD.Liquid())
+            p_vapₛᵢ(thermo_params, T) =
+                TD.saturation_vapor_pressure(thermo_params, T, TD.Ice())
 
             function ∂p_vapₛₗ_∂T(thermo_params, T)
                 Rᵥ = TD.Parameters.R_v(thermo_params)
@@ -604,17 +604,27 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 Lₛ = TD.latent_heat_sublim(thermo_params, T)
                 return p_vapₛᵢ(thermo_params, T) * Lₛ / (Rᵥ * T^2)
             end
-            
+
             function ∂qₛₗ_∂T(thermo_params, ρ, T)
                 Rᵥ = TD.Parameters.R_v(thermo_params)
                 Lᵥ = TD.latent_heat_vapor(thermo_params, T)
-                qᵥ_sat_liq = TD.q_vap_saturation_from_density(thermo_params, T, ρ, p_vapₛₗ(thermo_params, T))
+                qᵥ_sat_liq = TD.q_vap_saturation_from_density(
+                    thermo_params,
+                    T,
+                    ρ,
+                    p_vapₛₗ(thermo_params, T),
+                )
                 return qᵥ_sat_liq * (Lᵥ / (Rᵥ * T^2) - 1 / T)
             end
             function ∂qₛᵢ_∂T(thermo_params, ρ, T)
                 Rᵥ = TD.Parameters.R_v(thermo_params)
                 Lₛ = TD.latent_heat_sublim(thermo_params, T)
-                qᵥ_sat_ice = TD.q_vap_saturation_from_density(thermo_params, T, ρ, p_vapₛᵢ(thermo_params, T))
+                qᵥ_sat_ice = TD.q_vap_saturation_from_density(
+                    thermo_params,
+                    T,
+                    ρ,
+                    p_vapₛᵢ(thermo_params, T),
+                )
                 return qᵥ_sat_ice * (Lₛ / (Rᵥ * T^2) - 1 / T)
             end
 
@@ -627,14 +637,26 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 return 1 + (Lₛ / cₚ_air) * ∂qₛᵢ_∂T(thermo_params, ρ, T)
             end
 
-            function ∂ρqₓ_err_∂ρqᵪ(thermo_params, force, force_deriv, pos_lim, pos_lim_deriv, neg_lim, neg_lim_deriv)
+            function ∂ρqₓ_err_∂ρqᵪ(
+                thermo_params,
+                force,
+                force_deriv,
+                pos_lim,
+                pos_lim_deriv,
+                neg_lim,
+                neg_lim_deriv,
+            )
 
                 FT_inner = eltype(thermo_params)
 
                 if force > FT_inner(0)
-                    return force_deriv + pos_lim_deriv - (force * force_deriv + pos_lim * pos_lim_deriv)/(sqrt((force)^2 + (pos_lim)^2))
+                    return force_deriv + pos_lim_deriv -
+                           (force * force_deriv + pos_lim * pos_lim_deriv) /
+                           (sqrt((force)^2 + (pos_lim)^2))
                 else
-                    return - force_deriv - neg_lim_deriv + (force * force_deriv + neg_lim * neg_lim_deriv)/(sqrt((force)^2 + (neg_lim)^2))
+                    return -force_deriv - neg_lim_deriv +
+                           (force * force_deriv + neg_lim * neg_lim_deriv) /
+                           (sqrt((force)^2 + (neg_lim)^2))
                 end
             end
 
@@ -642,16 +664,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             τₗ = cmc.liquid.τ_relax
             τᵢ = cmc.ice.τ_relax
 
-            ᶜT = @. lazy(TD.air_temperature(thermo_params,ᶜts))
-            ᶜcₚ_air = @. lazy(TD.cp_m(
+            ᶜT = @. lazy(TD.air_temperature(thermo_params, ᶜts))
+            ᶜcₚ_air = @. lazy(
+                TD.cp_m(
                     thermo_params,
                     specific(Y.c.ρq_tot, Y.c.ρ),
-                    specific(Y.c.ρq_liq, Y.c.ρ)+ specific(Y.c.ρq_rai, Y.c.ρ),
+                    specific(Y.c.ρq_liq, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ),
                     specific(Y.c.ρq_ice, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ),
-                    )
-                )
+                ),
+            )
 
-            ᶜforceₗ = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+            ᶜforceₗ = @. lazy(
+                CMNe.conv_q_vap_to_q_liq_ice_MM2015(
                     cmc.liquid,
                     thermo_params,
                     specific(Y.c.ρq_tot, Y.c.ρ),
@@ -661,10 +685,11 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     specific(Y.c.ρq_sno, Y.c.ρ),
                     Y.c.ρ,
                     ᶜT,
-                )
+                ),
             )
 
-            ᶜforceᵢ = @. lazy(CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+            ᶜforceᵢ = @. lazy(
+                CMNe.conv_q_vap_to_q_liq_ice_MM2015(
                     cmc.ice,
                     thermo_params,
                     specific(Y.c.ρq_tot, Y.c.ρ),
@@ -674,28 +699,32 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     specific(Y.c.ρq_sno, Y.c.ρ),
                     Y.c.ρ,
                     ᶜT,
-                )
+                ),
             )
 
-            ᶜqₛₗ = @. lazy(TD.q_vap_saturation_from_density(
+            ᶜqₛₗ = @. lazy(
+                TD.q_vap_saturation_from_density(
                     thermo_params,
                     ᶜT,
                     Y.c.ρ,
                     p_vapₛₗ(thermo_params, ᶜT),
-                )
+                ),
             )
 
-            ᶜqₛᵢ = @. lazy(TD.q_vap_saturation_from_density(
+            ᶜqₛᵢ = @. lazy(
+                TD.q_vap_saturation_from_density(
                     thermo_params,
                     ᶜT,
                     Y.c.ρ,
                     p_vapₛᵢ(thermo_params, ᶜT),
-                )
+                ),
             )
 
-            ᶜqᵥ = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ) - specific(Y.c.ρq_liq, Y.c.ρ)
-                          - specific(Y.c.ρq_ice, Y.c.ρ) - specific(Y.c.ρq_rai, Y.c.ρ)
-                          - specific(Y.c.ρq_sno, Y.c.ρ))
+            ᶜqᵥ = @. lazy(
+                specific(Y.c.ρq_tot, Y.c.ρ) - specific(Y.c.ρq_liq, Y.c.ρ) -
+                specific(Y.c.ρq_ice, Y.c.ρ) - specific(Y.c.ρq_rai, Y.c.ρ) -
+                specific(Y.c.ρq_sno, Y.c.ρ),
+            )
             ᶜqₗ = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
             ᶜqᵢ = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
 
@@ -724,21 +753,83 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             ᶜdqₛᵢ_δqₜ = @. lazy(ᶜρ * ᶜ∂qₛᵢ_∂p * ᶜ∂p_∂ρqₜ)
 
-            ᶜδforceₗ_δqₗ = @. lazy(ifelse(ᶜqᵥ + ᶜqₗ <= 0,0,-1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
-            ᶜδforceₗ_δqₜ = @. lazy(ifelse(ᶜqᵥ + ᶜqₗ <= 0,0,(1 - ᶜdqₛₗ_δqₜ) / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
+            ᶜδforceₗ_δqₗ = @. lazy(
+                ifelse(
+                    ᶜqᵥ + ᶜqₗ <= 0,
+                    0,
+                    -1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)),
+                ),
+            )
+            ᶜδforceₗ_δqₜ = @. lazy(
+                ifelse(
+                    ᶜqᵥ + ᶜqₗ <= 0,
+                    0,
+                    (1 - ᶜdqₛₗ_δqₜ) /
+                    (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)),
+                ),
+            )
 
             # COMMENTED OUT UNTIL THE LINEAR SOLVER IS CHANGED
-            ᶜδforceₗ_δqᵢ = @. lazy(ifelse(ᶜqᵥ + ᶜqₗ <= 0,0,-1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
-            ᶜδforceₗ_δqᵣ = @. lazy(ifelse(ᶜqᵥ + ᶜqₗ <= 0,0,-1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
-            ᶜδforceₗ_δqₛ = @. lazy(ifelse(ᶜqᵥ + ᶜqₗ <= 0,0,-1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
+            ᶜδforceₗ_δqᵢ = @. lazy(
+                ifelse(
+                    ᶜqᵥ + ᶜqₗ <= 0,
+                    0,
+                    -1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)),
+                ),
+            )
+            ᶜδforceₗ_δqᵣ = @. lazy(
+                ifelse(
+                    ᶜqᵥ + ᶜqₗ <= 0,
+                    0,
+                    -1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)),
+                ),
+            )
+            ᶜδforceₗ_δqₛ = @. lazy(
+                ifelse(
+                    ᶜqᵥ + ᶜqₗ <= 0,
+                    0,
+                    -1 / (τₗ * Γₗ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)),
+                ),
+            )
 
-            ᶜδforceᵢ_δqᵢ = @. lazy(ifelse(ᶜqᵥ + ᶜqᵢ <= 0,0,-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
-            ᶜδforceᵢ_δqₜ = @. lazy(ifelse(ᶜqᵥ + ᶜqᵢ <= 0,0,(1 - ᶜdqₛᵢ_δqₜ) / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
+            ᶜδforceᵢ_δqᵢ = @. lazy(
+                ifelse(
+                    ᶜqᵥ + ᶜqᵢ <= 0,
+                    0,
+                    -1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)),
+                ),
+            )
+            ᶜδforceᵢ_δqₜ = @. lazy(
+                ifelse(
+                    ᶜqᵥ + ᶜqᵢ <= 0,
+                    0,
+                    (1 - ᶜdqₛᵢ_δqₜ) /
+                    (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)),
+                ),
+            )
 
             # COMMENTED OUT UNTIL THE LINEAR SOLVER IS CHANGED
-            ᶜδforceᵢ_δqₗ = @. lazy(ifelse(ᶜqᵥ + ᶜqᵢ <= 0,0,-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
-            ᶜδforceᵢ_δqᵣ = @. lazy(ifelse(ᶜqᵥ + ᶜqᵢ <= 0,0,-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
-            ᶜδforceᵢ_δqₛ = @. lazy(ifelse(ᶜqᵥ + ᶜqᵢ <= 0,0,-1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT))))
+            ᶜδforceᵢ_δqₗ = @. lazy(
+                ifelse(
+                    ᶜqᵥ + ᶜqᵢ <= 0,
+                    0,
+                    -1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)),
+                ),
+            )
+            ᶜδforceᵢ_δqᵣ = @. lazy(
+                ifelse(
+                    ᶜqᵥ + ᶜqᵢ <= 0,
+                    0,
+                    -1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)),
+                ),
+            )
+            ᶜδforceᵢ_δqₛ = @. lazy(
+                ifelse(
+                    ᶜqᵥ + ᶜqᵢ <= 0,
+                    0,
+                    -1 / (τᵢ * Γᵢ(thermo_params, ᶜcₚ_air, Y.c.ρ, ᶜT)),
+                ),
+            )
 
             ∂ᶜρqₗ_err_∂ᶜρqₗ = matrix[@name(c.ρq_liq), @name(c.ρq_liq)]
             ∂ᶜρqᵢ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_ice), @name(c.ρq_ice)]
@@ -755,138 +846,128 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             ∂ᶜρqₗ_err_∂ᶜρqᵢ = matrix[@name(c.ρq_liq), @name(c.ρq_ice)]
             ∂ᶜρqᵢ_err_∂ᶜρqₗ = matrix[@name(c.ρq_ice), @name(c.ρq_liq)]
-            
-            @. ∂ᶜρqₗ_err_∂ᶜρqₗ +=
-                DiagonalMatrixRow(
-                    ∂ρqₓ_err_∂ρqᵪ(
-                        thermo_params,
-                        ᶜforceₗ,
-                        ᶜδforceₗ_δqₗ,
-                        (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
-                        (-1/(2*float(dt))),
-                        (ᶜqₗ/(2*float(dt))),
-                        (1/(2*float(dt))),
-                    )
-                )
 
-            @. ∂ᶜρqᵢ_err_∂ᶜρqᵢ +=
-                DiagonalMatrixRow(
-                    ∂ρqₓ_err_∂ρqᵪ(
-                        thermo_params,
-                        ᶜforceᵢ,
-                        ᶜδforceᵢ_δqᵢ,
-                        (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
-                        (-1/(2*float(dt))),
-                        (ᶜqᵢ/(2*float(dt))),
-                        (1/(2*float(dt))),
-                    )
-                )
+            @. ∂ᶜρqₗ_err_∂ᶜρqₗ += DiagonalMatrixRow(
+                ∂ρqₓ_err_∂ρqᵪ(
+                    thermo_params,
+                    ᶜforceₗ,
+                    ᶜδforceₗ_δqₗ,
+                    (ᶜqᵥ - ᶜqₛₗ) / (2 * float(dt)),
+                    (-1 / (2 * float(dt))),
+                    (ᶜqₗ / (2 * float(dt))),
+                    (1 / (2 * float(dt))),
+                ),
+            )
 
-            @. ∂ᶜρqₗ_err_∂ᶜρqₜ =
-                DiagonalMatrixRow(
-                    ∂ρqₓ_err_∂ρqᵪ(
-                        thermo_params,
-                        ᶜforceₗ,
-                        ᶜδforceₗ_δqₜ,
-                        (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
-                        ((1 - ᶜdqₛₗ_δqₜ)/(2*float(dt))),
-                        (ᶜqₗ/(2*float(dt))),
-                        float(0),
-                    )
-                )
+            @. ∂ᶜρqᵢ_err_∂ᶜρqᵢ += DiagonalMatrixRow(
+                ∂ρqₓ_err_∂ρqᵪ(
+                    thermo_params,
+                    ᶜforceᵢ,
+                    ᶜδforceᵢ_δqᵢ,
+                    (ᶜqᵥ - ᶜqₛᵢ) / (2 * float(dt)),
+                    (-1 / (2 * float(dt))),
+                    (ᶜqᵢ / (2 * float(dt))),
+                    (1 / (2 * float(dt))),
+                ),
+            )
 
-            @. ∂ᶜρqᵢ_err_∂ᶜρqₜ =
-                DiagonalMatrixRow(
-                    ∂ρqₓ_err_∂ρqᵪ(
-                        thermo_params,
-                        ᶜforceᵢ,
-                        ᶜδforceᵢ_δqₜ,
-                        (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
-                        ((1 - ᶜdqₛᵢ_δqₜ)/(2*float(dt))),
-                        (ᶜqᵢ/(2*float(dt))),
-                        float(0),
-                    )
-                )
+            @. ∂ᶜρqₗ_err_∂ᶜρqₜ = DiagonalMatrixRow(
+                ∂ρqₓ_err_∂ρqᵪ(
+                    thermo_params,
+                    ᶜforceₗ,
+                    ᶜδforceₗ_δqₜ,
+                    (ᶜqᵥ - ᶜqₛₗ) / (2 * float(dt)),
+                    ((1 - ᶜdqₛₗ_δqₜ) / (2 * float(dt))),
+                    (ᶜqₗ / (2 * float(dt))),
+                    float(0),
+                ),
+            )
+
+            @. ∂ᶜρqᵢ_err_∂ᶜρqₜ = DiagonalMatrixRow(
+                ∂ρqₓ_err_∂ρqᵪ(
+                    thermo_params,
+                    ᶜforceᵢ,
+                    ᶜδforceᵢ_δqₜ,
+                    (ᶜqᵥ - ᶜqₛᵢ) / (2 * float(dt)),
+                    ((1 - ᶜdqₛᵢ_δqₜ) / (2 * float(dt))),
+                    (ᶜqᵢ / (2 * float(dt))),
+                    float(0),
+                ),
+            )
 
             #  COMMENTED OUT UNTIL THE LINEAR SOLVER IS CHANGED
-            @. ∂ᶜρqₗ_err_∂ᶜρqᵣ =
-                DiagonalMatrixRow(
-                    ∂ρqₓ_err_∂ρqᵪ(
-                        thermo_params,
-                        ᶜforceₗ,
-                        ᶜδforceₗ_δqᵣ,
-                        (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
-                        (-1/(2*float(dt))),
-                        (ᶜqₗ/(2*float(dt))),
-                        float(0),
-                    )
-                )
+            @. ∂ᶜρqₗ_err_∂ᶜρqᵣ = DiagonalMatrixRow(
+                ∂ρqₓ_err_∂ρqᵪ(
+                    thermo_params,
+                    ᶜforceₗ,
+                    ᶜδforceₗ_δqᵣ,
+                    (ᶜqᵥ - ᶜqₛₗ) / (2 * float(dt)),
+                    (-1 / (2 * float(dt))),
+                    (ᶜqₗ / (2 * float(dt))),
+                    float(0),
+                ),
+            )
 
-            @. ∂ᶜρqₗ_err_∂ᶜρqₛ =
-                DiagonalMatrixRow(
-                    ∂ρqₓ_err_∂ρqᵪ(
-                        thermo_params,
-                        ᶜforceₗ,
-                        ᶜδforceₗ_δqₛ,
-                        (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
-                        (-1/(2*float(dt))),
-                        (ᶜqₗ/(2*float(dt))),
-                        float(0),
-                    )
-                )
+            @. ∂ᶜρqₗ_err_∂ᶜρqₛ = DiagonalMatrixRow(
+                ∂ρqₓ_err_∂ρqᵪ(
+                    thermo_params,
+                    ᶜforceₗ,
+                    ᶜδforceₗ_δqₛ,
+                    (ᶜqᵥ - ᶜqₛₗ) / (2 * float(dt)),
+                    (-1 / (2 * float(dt))),
+                    (ᶜqₗ / (2 * float(dt))),
+                    float(0),
+                ),
+            )
 
-            @. ∂ᶜρqᵢ_err_∂ᶜρqᵣ =
-                DiagonalMatrixRow(
-                    ∂ρqₓ_err_∂ρqᵪ(
-                        thermo_params,
-                        ᶜforceᵢ,
-                        ᶜδforceᵢ_δqᵣ,
-                        (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
-                        (-1/(2*float(dt))),
-                        (ᶜqᵢ/(2*float(dt))),
-                        float(0),
-                    )
-                )
+            @. ∂ᶜρqᵢ_err_∂ᶜρqᵣ = DiagonalMatrixRow(
+                ∂ρqₓ_err_∂ρqᵪ(
+                    thermo_params,
+                    ᶜforceᵢ,
+                    ᶜδforceᵢ_δqᵣ,
+                    (ᶜqᵥ - ᶜqₛᵢ) / (2 * float(dt)),
+                    (-1 / (2 * float(dt))),
+                    (ᶜqᵢ / (2 * float(dt))),
+                    float(0),
+                ),
+            )
 
-            @. ∂ᶜρqᵢ_err_∂ᶜρqₛ =
-                DiagonalMatrixRow(
-                    ∂ρqₓ_err_∂ρqᵪ(
-                        thermo_params,
-                        ᶜforceᵢ,
-                        ᶜδforceᵢ_δqₛ,
-                        (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
-                        (-1/(2*float(dt))),
-                        (ᶜqᵢ/(2*float(dt))),
-                        float(0),
-                    )
-                )
+            @. ∂ᶜρqᵢ_err_∂ᶜρqₛ = DiagonalMatrixRow(
+                ∂ρqₓ_err_∂ρqᵪ(
+                    thermo_params,
+                    ᶜforceᵢ,
+                    ᶜδforceᵢ_δqₛ,
+                    (ᶜqᵥ - ᶜqₛᵢ) / (2 * float(dt)),
+                    (-1 / (2 * float(dt))),
+                    (ᶜqᵢ / (2 * float(dt))),
+                    float(0),
+                ),
+            )
 
             #  COMMENTED OUT UNTIL THE LINEAR SOLVER IS CHANGED
-            @. ∂ᶜρqₗ_err_∂ᶜρqᵢ =
-                DiagonalMatrixRow(
-                    ∂ρqₓ_err_∂ρqᵪ(
-                        thermo_params,
-                        ᶜforceₗ,
-                        ᶜδforceₗ_δqᵢ,
-                        (ᶜqᵥ - ᶜqₛₗ) / (2*float(dt)),
-                        (-1/(2*float(dt))),
-                        (ᶜqₗ/(2*float(dt))),
-                        float(0),
-                    )
-                )
+            @. ∂ᶜρqₗ_err_∂ᶜρqᵢ = DiagonalMatrixRow(
+                ∂ρqₓ_err_∂ρqᵪ(
+                    thermo_params,
+                    ᶜforceₗ,
+                    ᶜδforceₗ_δqᵢ,
+                    (ᶜqᵥ - ᶜqₛₗ) / (2 * float(dt)),
+                    (-1 / (2 * float(dt))),
+                    (ᶜqₗ / (2 * float(dt))),
+                    float(0),
+                ),
+            )
 
-            @. ∂ᶜρqᵢ_err_∂ᶜρqₗ =
-                DiagonalMatrixRow(
-                    ∂ρqₓ_err_∂ρqᵪ(
-                        thermo_params,
-                        ᶜforceᵢ,
-                        ᶜδforceᵢ_δqₗ,
-                        (ᶜqᵥ - ᶜqₛᵢ) / (2*float(dt)),
-                        (-1/(2*float(dt))),
-                        (ᶜqᵢ/(2*float(dt))),
-                        float(0),
-                    )
-                )
+            @. ∂ᶜρqᵢ_err_∂ᶜρqₗ = DiagonalMatrixRow(
+                ∂ρqₓ_err_∂ρqᵪ(
+                    thermo_params,
+                    ᶜforceᵢ,
+                    ᶜδforceᵢ_δqₗ,
+                    (ᶜqᵥ - ᶜqₛᵢ) / (2 * float(dt)),
+                    (-1 / (2 * float(dt))),
+                    (ᶜqᵢ / (2 * float(dt))),
+                    float(0),
+                ),
+            )
         end
     end
 
