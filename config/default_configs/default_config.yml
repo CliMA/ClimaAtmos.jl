@@ -153,7 +153,7 @@ vert_diff:
   value: false
 hyperdiff:
   help: "Hyperdiffusion. Use `CAM_SE` for sensible default values and ClimaHyperdiffusion for user control. [`CAM_SE` (default), `ClimaHyperdiffusion` (or `true`), `none` (or `false`)]"
-  value: "CAM_SE"
+  value: "ClimaHyperdiffusion"
 smagorinsky_lilly:
   help: "Smagorinsky-Lilly diffusive closure [`false` (default), `true`]"
   value: false
@@ -177,7 +177,7 @@ moist:
   value: "dry"
 divergence_damping_factor:
   help: "Divergence damping factor"
-  value: 5.0
+  value: 1.0
 rayleigh_sponge:
   help: "Rayleigh sponge [`true`, `false` (default)]"
   value: false
