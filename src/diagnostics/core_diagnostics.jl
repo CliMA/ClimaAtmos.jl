@@ -1114,6 +1114,88 @@ add_diagnostic_variable!(
     compute! = compute_clivi!,
 )
 
+###
+# Cloud top
+###
+compute_cloud_top!(out, state, cache, time) =
+    compute_clivi!(out, state, cache, time, cache.atmos.moisture_model)
+compute_cloud_top!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("clivi", model)
+
+function compute_cloud_top!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+
+    # function compute_liquid_fraction!(clw, cli) # this should probably be its own diagnostic
+    #     return @. lazy(clw / (clw + cli))
+
+    # did i write this syntax correct? literally no clue
+
+    function find_cloud_top_vals!(clw, cli, z)
+        ((target_clw, target_clw_cli, target_clw_z), (clw, cli, z)) --> ifelse(
+            clw > 1e-6, # SOME THRESHOLD FOR A BIG CLOUD 
+            (clw, cli, z),
+            (target_clw, target_clw_cli, target_clw_z),
+        )
+
+        ((target_cli, target_cli_clw, target_cli_z), (clw, cli, z)) -> ifelse(
+                cli > 1e-6, # SOME THRESHOLD FOR A BIG CLOUD 
+                (clw, cli, z),
+                (target_cli_clw, target_cli, target_cli_z),
+            ),
+
+        # see which is higher
+        return ifelse(
+            target_clw_z > target_cli_z,
+            (target_clw, target_clw_cli, target_clw_z),
+            (target_cli, target_cli_clw, target_cli_z),
+        )
+    end
+
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half))) # CHECK THAT THIS IS RIGHT
+        clw = cache.scratch.ᶜtemp_scalar
+        @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+        cli = cache.scratch.ᶜtemp_scalar
+        @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+        @. z = Fields.coordinate_field(state.c.ρ).z
+
+        Operators.column_reduce!(
+                (target_clw, target_cli, target_z) --> find_cloud_top_vals!(clw, cli, z), # reduction function
+                out, # destination for output (a field of tuples)
+                @. lazy(tuple(target_clw, target_cli, target_z)),
+        )
+        return out
+    else
+        clw = cache.scratch.ᶜtemp_scalar
+        @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+        cli = cache.scratch.ᶜtemp_scalar
+        @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+        @. z = Fields.coordinate_field(state.c.ρ).z
+
+        Operators.column_reduce!(
+                (target_clw, target_cli, target_z) --> find_cloud_top_vals!(clw, cli, z), # reduction function
+                out, # destination for output (a field of tuples)
+                @. lazy(tuple(target_clw, target_cli, target_z)),
+        )
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "clt",
+    long_name = "Cloud Top",
+    standard_name = "cloud_top", # NOT SURE IF STANDARD EXISTS
+    units = "",
+    comments = """
+    The height of the cloud top based on some threshold.
+    """,
+    compute! = compute_cloud_top!,
+)
+
 
 ###
 # Vertical integrated dry static energy (2d)
