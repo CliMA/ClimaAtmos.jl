@@ -23,23 +23,6 @@ function get_atmos(config::AtmosConfig, params)
     microphysics_model = get_microphysics_model(parsed_args)
     cloud_model = get_cloud_model(parsed_args)
 
-    if moisture_model isa DryModel
-        @warn "Running simulations without any moisture present."
-        @assert microphysics_model isa NoPrecipitation
-    end
-    if moisture_model isa EquilMoistModel
-        @warn "Running simulations with equilibrium thermodynamics assumptions."
-        @assert microphysics_model isa
-                Union{NoPrecipitation, Microphysics0Moment}
-    end
-    if moisture_model isa NonEquilMoistModel
-        @assert microphysics_model isa
-                Union{NoPrecipitation, Microphysics1Moment, Microphysics2Moment}
-    end
-    if microphysics_model isa NoPrecipitation
-        @warn "Running simulations without any precipitation formation."
-    end
-
     implicit_noneq_cloud_formation =
         parsed_args["implicit_noneq_cloud_formation"]
     @assert implicit_noneq_cloud_formation in (true, false)
@@ -226,109 +209,6 @@ function get_numerics(parsed_args, FT)
     return numerics
 end
 
-function get_spaces(parsed_args, params, comms_ctx)
-
-    FT = eltype(params)
-    z_elem = Int(parsed_args["z_elem"])
-    z_max = FT(parsed_args["z_max"])
-    dz_bottom = FT(parsed_args["dz_bottom"])
-    bubble = parsed_args["bubble"]
-    deep = parsed_args["deep_atmosphere"]
-
-    h_elem = parsed_args["h_elem"]
-    radius = CAP.planet_radius(params)
-    center_space, face_space = if parsed_args["config"] == "sphere"
-        nh_poly = parsed_args["nh_poly"]
-        quad = Quadratures.GLL{nh_poly + 1}()
-        horizontal_mesh = cubed_sphere_mesh(; radius, h_elem)
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-        z_stretch = if parsed_args["z_stretch"]
-            Meshes.HyperbolicTangentStretching(dz_bottom)
-        else
-            Meshes.Uniform()
-        end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; deep, parsed_args)
-    elseif parsed_args["config"] == "column" # single column
-        @warn "perturb_initstate flag is ignored for single column configuration"
-        FT = eltype(params)
-        Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
-        quad = Quadratures.GL{1}()
-        horizontal_mesh = periodic_rectangle_mesh(;
-            x_max = Δx,
-            y_max = Δx,
-            x_elem = 1,
-            y_elem = 1,
-        )
-        if bubble
-            @warn "Bubble correction not compatible with single column configuration. It will be switched off."
-            bubble = false
-        end
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-        z_stretch = if parsed_args["z_stretch"]
-            Meshes.HyperbolicTangentStretching(dz_bottom)
-        else
-            Meshes.Uniform()
-        end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
-    elseif parsed_args["config"] == "box"
-        FT = eltype(params)
-        nh_poly = parsed_args["nh_poly"]
-        quad = Quadratures.GLL{nh_poly + 1}()
-        x_elem = Int(parsed_args["x_elem"])
-        x_max = FT(parsed_args["x_max"])
-        y_elem = Int(parsed_args["y_elem"])
-        y_max = FT(parsed_args["y_max"])
-        horizontal_mesh = periodic_rectangle_mesh(;
-            x_max = x_max,
-            y_max = y_max,
-            x_elem = x_elem,
-            y_elem = y_elem,
-        )
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-        z_stretch = if parsed_args["z_stretch"]
-            Meshes.HyperbolicTangentStretching(dz_bottom)
-        else
-            Meshes.Uniform()
-        end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args, deep)
-    elseif parsed_args["config"] == "plane"
-        FT = eltype(params)
-        nh_poly = parsed_args["nh_poly"]
-        quad = Quadratures.GLL{nh_poly + 1}()
-        x_elem = Int(parsed_args["x_elem"])
-        x_max = FT(parsed_args["x_max"])
-        horizontal_mesh =
-            periodic_line_mesh(; x_max = x_max, x_elem = x_elem)
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-        z_stretch = if parsed_args["z_stretch"]
-            Meshes.HyperbolicTangentStretching(dz_bottom)
-        else
-            Meshes.Uniform()
-        end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args, deep)
-    end
-    ncols = Fields.ncolumns(center_space)
-    ndofs_total = ncols * z_elem
-    hspace = Spaces.horizontal_space(center_space)
-    quad_style = Spaces.quadrature_style(hspace)
-    Nq = Quadratures.degrees_of_freedom(quad_style)
-
-    @info "Resolution stats: " Nq h_elem z_elem ncols ndofs_total
-    return (;
-        center_space,
-        face_space,
-        horizontal_mesh,
-        quad,
-        z_max,
-        z_elem,
-        z_stretch,
-    )
-end
-
 function get_spaces_restart(Y)
     center_space = axes(Y.c)
     face_space = axes(Y.f)
@@ -337,16 +217,29 @@ end
 
 function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     (; parsed_args, comms_ctx) = config
-    sim_info = get_sim_info(config)
+    (; start_date) = get_sim_info(config)
+    return get_state_restart(
+        restart_file,
+        start_date,
+        atmos_model_hash,
+        comms_ctx,
+        parsed_args["use_itime"],
+    )
+end
 
+function get_state_restart(
+    restart_file,
+    start_date,
+    atmos_model_hash,
+    comms_ctx,
+    use_itime,
+)
     @assert !isnothing(restart_file)
     reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
     # TODO: Do not use InputOutput.HDF5 directly
     t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
-    t_start =
-        parsed_args["use_itime"] ? ITime(t_start; epoch = sim_info.start_date) :
-        t_start
+    t_start = use_itime ? ITime(t_start; epoch = start_date) : t_start
     if "atmos_model_hash" in keys(InputOutput.HDF5.attrs(reader.file))
         atmos_model_hash_in_restart =
             InputOutput.HDF5.read_attribute(reader.file, "atmos_model_hash")
@@ -426,11 +319,27 @@ end
 
 function get_steady_state_velocity(params, Y, parsed_args)
     parsed_args["check_steady_state"] || return nothing
-    parsed_args["initial_condition"] == "ConstantBuoyancyFrequencyProfile" &&
-        parsed_args["mesh_warp_type"] == "Linear" ||
+    return get_steady_state_velocity(
+        params,
+        Y,
+        parsed_args["topography"],
+        parsed_args["initial_condition"],
+        parsed_args["mesh_warp_type"],
+    )
+end
+
+function get_steady_state_velocity(
+    params,
+    Y,
+    topography,
+    initial_condition,
+    mesh_warp_type,
+)
+    initial_condition == "ConstantBuoyancyFrequencyProfile" &&
+        mesh_warp_type == "Linear" ||
         error("The steady-state velocity can currently be computed only for a \
                ConstantBuoyancyFrequencyProfile with Linear mesh warping")
-    topography = parsed_args["topography"]
+
     steady_state_velocity = if topography == "NoWarp"
         steady_state_velocity_no_warp
     elseif topography == "Cosine2D"
@@ -443,19 +352,15 @@ function get_steady_state_velocity(params, Y, parsed_args)
         steady_state_velocity_schar
     else
         error("The steady-state velocity for $topography topography cannot \
-               be computed analytically")
+            be computed analytically")
     end
     top_level = Spaces.nlevels(axes(Y.c)) + Fields.half
     z_top = Fields.level(Fields.coordinate_field(Y.f).z, top_level)
-
-    # TODO: This can be very expensive! It should be moved to a separate CI job.
-    @info "Approximating steady-state velocity"
     s = @timed_str begin
         ᶜu = steady_state_velocity.(params, Fields.coordinate_field(Y.c), z_top)
         ᶠu =
             steady_state_velocity.(params, Fields.coordinate_field(Y.f), z_top)
     end
-    @info "Steady-state velocity approximation completed: $s"
     return (; ᶜu, ᶠu)
 end
 
@@ -751,10 +656,70 @@ function get_comms_context(parsed_args)
     return comms_ctx
 end
 
+function get_domain(parsed_args, params)
+    FT = eltype(params)
+    if parsed_args["config"] == "sphere"
+        SphereDomain{FT}(;
+            radius = CAP.planet_radius(params),
+            h_elem = parsed_args["h_elem"],
+            nh_poly = parsed_args["nh_poly"],
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+            bubble = parsed_args["bubble"],
+            deep_atmosphere = parsed_args["deep_atmosphere"],
+            topography_damping_factor = parsed_args["topography_damping_factor"],
+            mesh_warp_type = parsed_args["mesh_warp_type"],
+            sleve_eta = parsed_args["sleve_eta"],
+            sleve_s = parsed_args["sleve_s"],
+            topo_smoothing = parsed_args["topo_smoothing"],
+        )
+    elseif parsed_args["config"] == "column"
+        ColumnDomain{FT}(;
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+        )
+    elseif parsed_args["config"] == "box"
+        BoxDomain{FT}(;
+            x_elem = parsed_args["x_elem"],
+            x_max = parsed_args["x_max"],
+            y_elem = parsed_args["y_elem"],
+            y_max = parsed_args["y_max"],
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            nh_poly = parsed_args["nh_poly"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+            bubble = parsed_args["bubble"],
+            deep_atmosphere = parsed_args["deep_atmosphere"],
+            periodic_x = true,
+            periodic_y = true,
+        )
+    elseif parsed_args["config"] == "plane"
+        PlaneDomain{FT}(;
+            x_elem = parsed_args["x_elem"],
+            x_max = parsed_args["x_max"],
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            nh_poly = parsed_args["nh_poly"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+            bubble = parsed_args["bubble"],
+            deep_atmosphere = parsed_args["deep_atmosphere"],
+            periodic_x = true,
+        )
+    end
+end
+
 function get_simulation(config::AtmosConfig)
     sim_info = get_sim_info(config)
     params = ClimaAtmosParameters(config)
     atmos = get_atmos(config, params)
+    domain = get_domain(config.parsed_args, params)
+
     job_id = sim_info.job_id
     output_dir = sim_info.output_dir
     @info "Simulation info" job_id output_dir
@@ -779,7 +744,7 @@ function get_simulation(config::AtmosConfig)
         end
         @info "Allocating Y: $s"
     else
-        spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
+        spaces = get_spaces(domain, params, config.comms_ctx)
     end
     initial_condition = get_initial_condition(config.parsed_args, atmos)
     surface_setup = get_surface_setup(config.parsed_args)
@@ -816,7 +781,8 @@ function get_simulation(config::AtmosConfig)
             atmos,
             params,
             surface_setup,
-            sim_info,
+            sim_info.dt,
+            sim_info.start_date,
             tracers.aerosol_names,
             steady_state_velocity,
         )
@@ -847,7 +813,8 @@ function get_simulation(config::AtmosConfig)
                     atmos,
                     Y,
                     p,
-                    sim_info,
+                    sim_info.t_start,
+                    sim_info.start_date,
                     output_dir,
                 )
         end

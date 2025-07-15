@@ -88,11 +88,11 @@ function build_cache(
     atmos,
     params,
     surface_setup,
-    sim_info,
+    dt,
+    start_date,
     aerosol_names,
     steady_state_velocity,
 )
-    (; dt, start_date, output_dir) = sim_info
     FT = eltype(params)
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
