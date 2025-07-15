@@ -23,9 +23,9 @@ surface_setup: "DefaultMoninObukhov"
 turbconv: "edonly_edmfx"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-dt: "250secs"
+dt: "200secs"
 t_end: "20days"
-toml: [toml/aquaplanet_nonequil_120_1200.toml]
+toml: [toml/aquaplanet_nonequil_12_120.toml]
 diagnostics:
   - short_name: [ta, ua, wa, va, rhoa, hur, hus, hussn, husra, clw, cli]
     period: 5days
