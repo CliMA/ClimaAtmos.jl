@@ -35,6 +35,7 @@ end
 @safetestset "Restarts" begin @time include("restart.jl") end
 @safetestset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
 @safetestset "Init with file" begin @time include("test_init_with_file.jl") end
+@safetestset "Composability" begin @time include("composability.jl") end
 
 #! format: on
 
