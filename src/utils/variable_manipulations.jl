@@ -45,6 +45,8 @@ Arguments:
 """
 specific(ρχ, ρ) = ρχ / ρ
 
+ᶜspecific(ρχ, ρ) = @. lazy(ρχ / ρ)
+
 function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     # TODO: Replace turbconv_model struct by parameters, and include a_half in
     # parameters, not in config
@@ -320,14 +322,14 @@ function ᶜspecific_env_value(::Val{χ_name}, gs, p) where {χ_name}
     gs_ρχ_field = getproperty(gs, ρχ_name)
 
     if turbconv_model isa PrognosticEDMFX
-        # Numerator: ρa⁰χ⁰ = (gs.ρχ) - (Σ sgsʲ.ρa * sgsʲ.χ)
-        ρaχ⁰ = ᶜenv_value(
+        # Numerator: ρa⁰χ⁰ = ρχ - (Σ sgsʲ.ρa * sgsʲ.χ)
+        ᶜρaχ⁰ = ᶜenv_value(
             gs_ρχ_field,
             sgsʲ -> getproperty(sgsʲ, :ρa) * getproperty(sgsʲ, χ_name),
             gs,
             turbconv_model,
         )
-        # Denominator: ρa⁰ = gs.ρ - Σ sgsʲ.ρa
+        # Denominator: ρa⁰ = ρ - Σ sgsʲ.ρa
         ᶜρa⁰_vals = ᶜρa⁰(gs, p)
     else # DiagnosticEDMFX
         # For DiagnosticEDMFX, we need to compute ρaʲ * χʲ for each draft
@@ -344,17 +346,17 @@ function ᶜspecific_env_value(::Val{χ_name}, gs, p) where {χ_name}
             @. ᶜρaχʲs_combined += ᶜρaʲ * ᶜχʲ
         end
 
-        # Numerator: ρa⁰χ⁰ = (gs.ρχ) - (Σ ρaʲ * χʲ)
-        ρaχ⁰ = gs_ρχ_field - ᶜρaχʲs_combined
+        # Numerator: ρa⁰χ⁰ = ρχ - (Σ ρaʲ * χʲ)
+        ᶜρaχ⁰ = gs_ρχ_field - ᶜρaχʲs_combined
 
-        # Denominator: ρa⁰ = gs.ρ - Σ ρaʲ
+        # Denominator: ρa⁰ = ρ - Σ ρaʲ
         ᶜρa⁰_vals = ᶜρa⁰(gs, p)
     end
 
     # Call the 5-argument specific function for regularized division
     return @. lazy(
         specific(
-            ρaχ⁰,                      # ρaχ for environment
+            ᶜρaχ⁰,                      # ρaχ for environment
             ᶜρa⁰_vals,                   # ρa for environment
             gs_ρχ_field,               # Fallback ρχ is the grid-mean value
             gs.ρ,                      # Fallback ρ is the grid-mean value
@@ -418,7 +420,7 @@ function ᶜspecific_tke(sgs⁰, gs, p)
 
     # no sgs weighting function needed for EDOnlyEDMFX
     if turbconv_model isa EDOnlyEDMFX
-        return @. lazy(specific(sgs⁰.ρatke, ᶜρa⁰_vals))
+        return ᶜspecific(sgs⁰.ρatke, ᶜρa⁰_vals)
     else
         return @. lazy(specific(
             sgs⁰.ρatke,     # ρaχ for environment TKE

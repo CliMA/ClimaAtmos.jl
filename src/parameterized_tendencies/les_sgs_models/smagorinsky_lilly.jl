@@ -135,6 +135,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, sfc_conditions) = p.precomputed
     (; ρ_flux_uₕ, ρ_flux_h_tot) = sfc_conditions
     (; ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
 
     # Define operators
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
