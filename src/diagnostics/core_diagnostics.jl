@@ -1115,14 +1115,14 @@ add_diagnostic_variable!(
 )
 
 ###
-# Cloud top
+# Cloud top height
 ###
-compute_cloud_top!(out, state, cache, time) =
-    compute_clivi!(out, state, cache, time, cache.atmos.moisture_model)
-compute_cloud_top!(_, _, _, _, model::T) where {T} =
-    error_diagnostic_variable("clivi", model)
+compute_cloud_top_height!(out, state, cache, time) =
+    compute_cloud_top_height!(out, state, cache, time, cache.atmos.moisture_model)
+compute_cloud_top_height!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("cltz", model)
 
-function compute_cloud_top!(
+function compute_cloud_top_height!(
     out,
     state,
     cache,
@@ -1130,7 +1130,7 @@ function compute_cloud_top!(
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     if isnothing(out)
-        out = zeros(axes(Fields.level(state.f, half))) # CHECK THAT THIS IS RIGHT
+        out = similar(axes(Fields.level(state.f, half)), NTuple{3,FT})
         clw = cache.scratch.ᶜtemp_scalar
         @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
         cli = cache.scratch.ᶜtemp_scalar
@@ -1143,7 +1143,7 @@ function compute_cloud_top!(
                 (target_clw, target_clw_cli, target_clw_z),
             ),
             out,
-            @. lazy(tuple(target_clw, target_cli, target_z)),
+            (@. lazy(tuple(clw, cli, z))),
         )
         return out
     else
@@ -1159,15 +1159,15 @@ function compute_cloud_top!(
                 (target_clw, target_clw_cli, target_clw_z),
             ),
             out,
-            @. lazy(tuple(target_clw, target_cli, target_z)),
+            (@. lazy(tuple(clw, cli, z))),
         )
     end
 end
 
 add_diagnostic_variable!(
-    short_name = "clt",
-    long_name = "Cloud Top",
-    standard_name = "cloud_top", # NOT SURE IF STANDARD EXISTS
+    short_name = "cltz",
+    long_name = "Cloud Top Height",
+    standard_name = "cloud_top_height", # NOT SURE IF STANDARD EXISTS
     units = "",
     comments = """
     The height of the cloud top based on some threshold.
@@ -1175,6 +1175,70 @@ add_diagnostic_variable!(
     compute! = compute_cloud_top!,
 )
 
+# ###
+# # Cloud top liquid fraction
+# ###
+# compute_cloud_top_liquid_fraction!(out, state, cache, time) =
+#     compute_cloud_liquid_fraction!(out, state, cache, time, cache.atmos.moisture_model)
+# compute_cloud_top_liquid_fraction!(_, _, _, _, model::T) where {T} =
+#     error_diagnostic_variable("cltlf", model)
+
+# function compute_cloud_top_liquid_fraction!(
+#     out,
+#     state,
+#     cache,
+#     time,
+#     moisture_model::T,
+# ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+
+#     function compute_liquid_fraction(clw, cli)
+#         return clw / (clw + cli)
+
+#     if isnothing(out)
+#         out = zeros(axes(Fields.level(state.f, half))) # CHECK THAT THIS IS RIGHT
+#         clw = cache.scratch.ᶜtemp_scalar
+#         @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+#         cli = cache.scratch.ᶜtemp_scalar
+#         @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+#         @. z = Fields.coordinate_field(state.c.ρ).z
+#         Operators.column_reduce!(
+#             ((target_clw, target_clw_cli, target_clw_z), (clw, cli, z)) -> ifelse(
+#                 clw > 1e-6 || cli > 1e-6, # SOME THRESHOLD FOR A BIG CLOUD 
+#                 (clw, cli, z),
+#                 (target_clw, target_clw_cli, target_clw_z),
+#             ),
+#             out,
+#             @. lazy(compute_liquid_fraction(target_clw, target_cli)),
+#         )
+#         return out
+#     else
+#         clw = cache.scratch.ᶜtemp_scalar
+#         @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+#         cli = cache.scratch.ᶜtemp_scalar
+#         @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+#         @. z = Fields.coordinate_field(state.c.ρ).z
+#         Operators.column_reduce!(
+#             ((target_clw, target_clw_cli, target_clw_z), (clw, cli, z)) -> ifelse(
+#                 clw > 1e-6 || cli > 1e-6, # SOME THRESHOLD FOR A BIG CLOUD 
+#                 (clw, cli, z),
+#                 (target_clw, target_clw_cli, target_clw_z),
+#             ),
+#             out,
+#             @. lazy(tuple(target_clw, target_cli, target_z)),
+#         )
+#     end
+# end
+
+# add_diagnostic_variable!(
+#     short_name = "cltz",
+#     long_name = "Cloud Top Height",
+#     standard_name = "cloud_top_height", # NOT SURE IF STANDARD EXISTS
+#     units = "",
+#     comments = """
+#     The height of the cloud top based on some threshold.
+#     """,
+#     compute! = compute_cloud_top!,
+# )
 
 ###
 # Vertical integrated dry static energy (2d)
