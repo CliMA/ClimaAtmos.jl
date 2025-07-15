@@ -436,7 +436,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ),
             )
         else
-            @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+            ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
         end
 
         if use_derivative(topography_flag)
@@ -461,9 +461,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             ᶠinterp_matrix()
         )
     @. ∂ᶠu₃_err_∂ᶜρe_tot = dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m)
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜe_tot = ᶜspecific(Y.c.ρe_tot, Y.c.ρ)
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
-        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+        ᶜq_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
         ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
         @. ∂ᶠu₃_err_∂ᶜρq_tot =
             dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow((
@@ -619,7 +619,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((1 + ᶜkappa_m) / ᶜρ)
 
         if MatrixFields.has_field(Y, @name(c.ρq_tot))
-            ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+            ᶜq_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
             ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
             ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
             @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
@@ -990,14 +990,16 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ) / abs2(TD.cv_m(thermo_params, ᶜts))
 
                 if MatrixFields.has_field(Y, @name(c.ρq_tot))
-                    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+                    ᶜq_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
                     @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
-                    dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar ⋅
-                    DiagonalMatrixRow((
-                        ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ +
-                        ᶜ∂kappa_m∂q_tot *
-                        (cp_d * T_0 + ᶜe_tot - ᶜK - ᶜΦ + ∂e_int_∂q_tot * ᶜq_tot)
-                    ))
+                        dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar ⋅
+                        DiagonalMatrixRow((
+                            ᶜkappa_m * ∂e_int_∂q_tot / ᶜρ +
+                            ᶜ∂kappa_m∂q_tot * (
+                                cp_d * T_0 + ᶜe_tot - ᶜK - ᶜΦ +
+                                ∂e_int_∂q_tot * ᶜq_tot
+                            )
+                        ))
 
                 else
                     ᶜq_tot = lazy(0)

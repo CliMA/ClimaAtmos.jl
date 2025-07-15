@@ -59,8 +59,8 @@ NVTX.@annotate function set_cloud_fraction!(
             TD.PhasePartition(thermo_params, ᶜts).ice,
         )
     else
-        q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-        q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        q_liq = ᶜspecific(Y.c.ρq_liq, Y.c.ρ)
+        q_ice = ᶜspecific(Y.c.ρq_ice, Y.c.ρ)
         @. cloud_diagnostics_tuple =
             make_named_tuple(ifelse(q_liq + q_ice > 0, 1, 0), q_liq, q_ice)
     end

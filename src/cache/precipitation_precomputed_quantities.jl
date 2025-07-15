@@ -112,10 +112,10 @@ function set_precipitation_velocities!(
     cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
 
-    q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-    q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-    q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-    q_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+    q_liq = ᶜspecific(Y.c.ρq_liq, Y.c.ρ)
+    q_ice = ᶜspecific(Y.c.ρq_ice, Y.c.ρ)
+    q_rai = ᶜspecific(Y.c.ρq_rai, Y.c.ρ)
+    q_sno = ᶜspecific(Y.c.ρq_sno, Y.c.ρ)
 
     # compute the precipitation terminal velocity [m/s]
     # TODO sedimentation of snow is based on the 1M scheme
@@ -289,11 +289,11 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     (; ᶜts, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
 
-    q_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-    q_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-    q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-    q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+    q_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
+    q_rai = ᶜspecific(Y.c.ρq_rai, Y.c.ρ)
+    q_sno = ᶜspecific(Y.c.ρq_sno, Y.c.ρ)
+    q_liq = ᶜspecific(Y.c.ρq_liq, Y.c.ρ)
+    q_ice = ᶜspecific(Y.c.ρq_ice, Y.c.ρ)
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
@@ -367,10 +367,10 @@ function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
     (; ᶜSnₗᵖ, ᶜSnᵣᵖ) = p.precomputed
 
-    q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-    q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-    n_liq = @. lazy(specific(Y.c.ρn_liq, Y.c.ρ))
-    n_rai = @. lazy(specific(Y.c.ρn_rai, Y.c.ρ))
+    q_liq = ᶜspecific(Y.c.ρq_liq, Y.c.ρ)
+    q_rai = ᶜspecific(Y.c.ρq_rai, Y.c.ρ)
+    n_liq = ᶜspecific(Y.c.ρn_liq, Y.c.ρ)
+    n_rai = ᶜspecific(Y.c.ρn_rai, Y.c.ρ)
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜS₂ᵖ = p.scratch.ᶜtemp_scalar_2
@@ -484,10 +484,10 @@ function set_precipitation_surface_fluxes!(
     sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
 
     # Constant extrapolation to surface, consistent with simple downwinding
-    ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-    ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-    ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-    ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+    ᶜq_rai = ᶜspecific(Y.c.ρq_rai, Y.c.ρ)
+    ᶜq_sno = ᶜspecific(Y.c.ρq_sno, Y.c.ρ)
+    ᶜq_liq = ᶜspecific(Y.c.ρq_liq, Y.c.ρ)
+    ᶜq_ice = ᶜspecific(Y.c.ρq_ice, Y.c.ρ)
     sfc_qᵣ = Fields.Field(
         Fields.field_values(Fields.level(Base.materialize(ᶜq_rai), 1)),
         sfc_space,

@@ -107,11 +107,11 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
             specific(Y.c.ρe_tot, Y.c.ρ),
         ),
     )
-    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    ᶜq_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
     subsidence!(Yₜ.c.ρe_tot, Y.c.ρ, ᶠsubsidence³, ᶜh_tot, Val{:first_order}())
     subsidence!(Yₜ.c.ρq_tot, Y.c.ρ, ᶠsubsidence³, ᶜq_tot, Val{:first_order}())
     if moisture_model isa NonEquilMoistModel
-        ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+        ᶜq_liq = ᶜspecific(Y.c.ρq_liq, Y.c.ρ)
         subsidence!(
             Yₜ.c.ρq_liq,
             Y.c.ρ,
@@ -119,7 +119,7 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
             ᶜq_liq,
             Val{:first_order}(),
         )
-        ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        ᶜq_ice = ᶜspecific(Y.c.ρq_ice, Y.c.ρ)
         subsidence!(
             Yₜ.c.ρq_ice,
             Y.c.ρ,

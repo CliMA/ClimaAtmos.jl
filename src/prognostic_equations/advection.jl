@@ -194,13 +194,13 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             turbconv_model isa EDOnlyEDMFX ? p.precomputed.ᶠu³ :
             p.precomputed.ᶠu³⁰
         ) : nothing
-    ᶜρa⁰_vals = advect_tke ? (n > 0 ? (ᶜρa⁰(Y.c, p)) : lazy(Y.c.ρ)) : nothing
+    ᶜρa⁰_vals = advect_tke ? (n > 0 ? (ᶜρa⁰(Y.c, p)) : @. lazy(Y.c.ρ)) : nothing
     ᶜρ⁰ = if advect_tke
         if n > 0
-            (; ᶜts⁰) = p.precomputed.ᶜts⁰
+            (; ᶜts⁰) = p.precomputed
             @. lazy(TD.air_density(thermo_params, ᶜts⁰))
         else
-            lazy(Y.c.ρ)
+            @. lazy(Y.c.ρ)
         end
     else
         nothing
@@ -253,7 +253,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
 
     if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
-        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+        ᶜq_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
         @. Yₜ.c.ρq_tot += vtt - vtt_central
