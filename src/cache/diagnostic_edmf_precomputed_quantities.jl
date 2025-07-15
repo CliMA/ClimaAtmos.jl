@@ -105,15 +105,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     turbconv_params = CAP.turbconv_params(params)
     ᶜts = p.precomputed.ᶜts   #TODO replace
 
-    q_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            ᶜe_tot,
-        ),
-    )
+    q_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
+    ᶜe_tot = ᶜspecific(Y.c.ρe_tot, Y.c.ρ)
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
 
     ρ_int_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
     uₕ_int_level = Fields.field_values(Fields.level(Y.c.uₕ, 1))
@@ -338,8 +332,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
 
     if microphysics_model isa Microphysics1Moment
-        q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-        q_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+        q_rai = ᶜspecific(Y.c.ρq_rai, Y.c.ρ)
+        q_sno = ᶜspecific(Y.c.ρq_sno, Y.c.ρ)
     end
 
     thermo_params = CAP.thermodynamics_params(params)
@@ -359,7 +353,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
 
     # integral
-    q_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    q_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
     ᶜh_tot = @. lazy(
         TD.total_specific_enthalpy(
             thermo_params,
@@ -1112,7 +1106,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
 
     # Environment precipitation sources (to be applied to grid mean)
-    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    ᶜq_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
     @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
         thermo_params,
         microphys_0m_params,

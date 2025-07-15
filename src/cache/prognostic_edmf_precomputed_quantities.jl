@@ -201,7 +201,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
 
         # ... and the first interior point for EDMFX ᶜq_totʲ.
 
-        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+        ᶜq_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
         ᶜq_tot_int_val =
             Fields.field_values(Fields.level(Base.materialize(ᶜq_tot), 1))
         ᶜq_totʲ_int_val = Fields.field_values(Fields.level(ᶜq_totʲ, 1))
@@ -220,31 +220,27 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
            p.atmos.microphysics_model isa Microphysics1Moment
             # TODO - any better way to define the cloud and precip tracer flux?
 
-            ᶜq_liq = @.lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-            ᶜq_ice = @.lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-            ᶜq_rai = @.lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-            ᶜq_sno = @.lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-            ᶜq_liq_int_val = Fields.field_values(
-                Fields.level(Base.materialize(ᶜq_liq), 1),
-            )
+            ᶜq_liq = ᶜspecific(Y.c.ρq_liq, Y.c.ρ)
+            ᶜq_ice = ᶜspecific(Y.c.ρq_ice, Y.c.ρ)
+            ᶜq_rai = ᶜspecific(Y.c.ρq_rai, Y.c.ρ)
+            ᶜq_sno = ᶜspecific(Y.c.ρq_sno, Y.c.ρ)
+            ᶜq_liq_int_val =
+                Fields.field_values(Fields.level(Base.materialize(ᶜq_liq), 1))
             ᶜq_liqʲ_int_val = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
             @. ᶜq_liqʲ_int_val = ᶜq_liq_int_val
 
-            ᶜq_ice_int_val = Fields.field_values(
-                Fields.level(Base.materialize(ᶜq_ice), 1),
-            )
+            ᶜq_ice_int_val =
+                Fields.field_values(Fields.level(Base.materialize(ᶜq_ice), 1))
             ᶜq_iceʲ_int_val = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
             @. ᶜq_iceʲ_int_val = ᶜq_ice_int_val
 
-            ᶜq_rai_int_val = Fields.field_values(
-                Fields.level(Base.materialize(ᶜq_rai), 1),
-            )
+            ᶜq_rai_int_val =
+                Fields.field_values(Fields.level(Base.materialize(ᶜq_rai), 1))
             ᶜq_raiʲ_int_val = Fields.field_values(Fields.level(ᶜq_raiʲ, 1))
             @. ᶜq_raiʲ_int_val = ᶜq_rai_int_val
 
-            ᶜq_sno_int_val = Fields.field_values(
-                Fields.level(Base.materialize(ᶜq_sno), 1),
-            )
+            ᶜq_sno_int_val =
+                Fields.field_values(Fields.level(Base.materialize(ᶜq_sno), 1))
             ᶜq_snoʲ_int_val = Fields.field_values(Fields.level(ᶜq_snoʲ, 1))
             @. ᶜq_snoʲ_int_val = ᶜq_sno_int_val
         end
