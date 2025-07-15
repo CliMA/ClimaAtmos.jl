@@ -1854,7 +1854,9 @@ function (initial_condition::Larcform1)(params)
     T, # Issue with type here
     q_tot
     )  # Pa
-    velocity = APL.Larcform1_geostrophic_u(FT)
+    u = APL.Larcform1_geostrophic_u(FT)
+    v = APL.Larcform1_geostrophic_v(FT)
+    velocity(z) = Geometry.UVVector(u(z), v(z))
     #velocity = Geometry.UVVector(FT(5), FT(0))
     #tke(z) = FT(0)*z # TODO implement actual profile
     #tke = APL.ISDAC_tke(FT)  # m²/s²
@@ -1875,7 +1877,7 @@ function (initial_condition::Larcform1)(params)
                 q_tot,
             ),=#
             thermo_state = TD.PhaseEquil_pTq(thermo_params, p(z), T(z), q_tot(z)), # FIX!
-            velocity = velocity,
+            velocity = velocity(z),
             turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : FT(0)),
         )
     end
