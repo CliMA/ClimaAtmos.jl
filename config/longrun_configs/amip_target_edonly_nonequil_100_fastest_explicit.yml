@@ -24,9 +24,9 @@ turbconv: "edonly_edmfx"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 dt: "100secs"
-t_end: "20days"
+t_end: "10days"
 toml: [toml/aquaplanet_nonequil_1_10.toml]
 diagnostics:
-  - short_name: [ta, ua, wa, va, rhoa, hur, hus, hussn, husra, clw, cli]
-    period: 5days
+  - short_name: [ta, ua, wa, va, rhoa, hur, hus, hussn, husra, clw, cli, cltz]
+    period: 1days
 netcdf_output_at_levels: true
