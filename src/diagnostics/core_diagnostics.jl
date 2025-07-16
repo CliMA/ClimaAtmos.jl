@@ -1192,12 +1192,16 @@ function compute_cloud_top_height!(
     q_cond = cache.scratch.ᶜtemp_scalar
     @. q_cond = clw .+ cli
 
+    @info("q_cond", q_cond)
+
     heaviside_num = cache.scratch.ᶜtemp_scalar
     @. heaviside_num = ifelse(
         q_cond > FT(1e-6),
         (q_cond .* z)^FT(10) .* z,
         FT(0)
     )
+
+    @info("numerator", heaviside_num)
 
     heaviside_denom = cache.scratch.ᶜtemp_scalar
     @. heaviside_denom = ifelse(
@@ -1206,6 +1210,8 @@ function compute_cloud_top_height!(
         FT(0)
     )
 
+    @info("denominator", heaviside_denom)
+
     # do i want to save these like this or just as temporary scalars?
     num = zeros(axes(Fields.level(state.f, half)))
     denom = zeros(axes(Fields.level(state.f, half)))
@@ -1213,9 +1219,16 @@ function compute_cloud_top_height!(
     Operators.column_integral_definite!(num, heaviside_num)
     Operators.column_integral_definite!(denom, heaviside_denom)
 
+    @info("numerator integrated", num)
+    @info("denominator integrated", denom)
+
     out = zeros(axes(Fields.level(state.f, half)))
     # does this need to be lazy?
-    @. out = (num ./ denom)
+    @. out = ifelse(
+        denom > FT(0),
+        (num ./ denom),
+        FT(0),
+    )
 
     return out
         # it is this function
