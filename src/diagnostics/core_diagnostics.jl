@@ -1186,8 +1186,11 @@ function compute_cloud_top_height!(
     @info("numerator integrated", num)
     @info("denominator integrated", denom)
 
-    out = zeros(axes(Fields.level(state.f, half)))
-    out = num ./ denom
+    if isnothing(out)
+        out = num ./ denom
+    else
+        out .= num ./ denom
+    end
     # out = @. lazy(ifelse(
     #     denom > FT(0),
     #     (num / denom),
@@ -1195,9 +1198,9 @@ function compute_cloud_top_height!(
     #     )
     # )
 
-    @info("cloud top height", out)
+    #@info("cloud top height", out)
 
-    return out
+    #return out
         # it is this function
 
     # else
