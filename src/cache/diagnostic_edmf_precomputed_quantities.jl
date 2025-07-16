@@ -25,7 +25,7 @@ import ClimaCore: Spaces, Fields, RecursiveApply
 # ᶜhₚ    - environment total enthalpy at previous level (-1)
 # ᶜKₚ    - environment kinetic energy at previous level (-1)
 # ᶜmseʲₚ - updraft moist static energy at previous level (-1)
-# dt     - model time step
+# dz     - grid box height
 
 # Advection of area and tracers
 function area_advection(ᶠJ, ᶠJₚ, ᶜρaʲₚ, ᶠu³ʲₚ)
@@ -56,8 +56,8 @@ end
 
 # Microphysics sources
  # TODO - check if I should be multiplying by velocity
-function microphysics_sources(ᶠJ, ᶜJₚ, ᶜρaʲₚ, ᶜSʲₚ, ᶠu³ʲₚ, dt)
-    return 1 / ᶠJ * ( ᶜJₚ * ᶜρaʲₚ * ᶜSʲₚ * dt * ᶠu³ʲₚ)
+function microphysics_sources(ᶠJ, ᶜJₚ, ᶜρaʲₚ, ᶜSʲₚ, dz)
+    return 1 / ᶠJ * ( ᶜJₚ * ᶜρaʲₚ * ᶜSʲₚ * dz)
 end
 
 @inline function kinetic_energy(
@@ -924,7 +924,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             if precip_model isa Microphysics0Moment
                 @. ρaʲu³ʲ_data +=
                   microphysics_sources(
-                    local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, S_q_totʲ_prev_level, u³ʲ_data_prev_halflevel, dt
+                    local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, S_q_totʲ_prev_level, dz_prev_level,
                    )
             end
 
@@ -955,7 +955,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 @. ρaʲu³ʲ_datamse += microphysics_sources(
                     local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level,
                     S_q_totʲ_prev_level * e_tot_0M_precipitation_sources_helper(thermo_params, tsʲ_prev_level, Φ_prev_level),
-                    u³ʲ_data_prev_halflevel, dt
+                    dz_prev_level,
                 )
             end
             @. mseʲ_level = ifelse(
@@ -976,8 +976,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 )
             if precip_model isa Microphysics0Moment
                 @. ρaʲu³ʲ_dataq_tot += microphysics_sources(
-                    local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, S_q_totʲ_prev_level, u³ʲ_data_prev_halflevel, dt
-                ) # TODO - check if I should be multiplying by velocity
+                    local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, S_q_totʲ_prev_level, dz_prev_level
+                )
             end
             @. q_totʲ_level = ifelse(
                 kill_updraft,
@@ -1000,7 +1000,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, entrʲ_prev_level, detrʲ_prev_level, turb_entrʲ_prev_level, q_liq_prev_level, q_liqʲ_prev_level,
                     ) +
                     microphysics_sources(
-                        local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, S_q_liqʲ_prev_level, u³ʲ_data_prev_halflevel, dt
+                        local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, S_q_liqʲ_prev_level, dz_prev_level
                     )
                 @. q_liqʲ_level = ifelse(
                     kill_updraft,
@@ -1016,7 +1016,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, entrʲ_prev_level, detrʲ_prev_level, turb_entrʲ_prev_level, q_ice_prev_level, q_iceʲ_prev_level,
                     ) +
                     microphysics_sources(
-                        local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, S_q_iceʲ_prev_level, u³ʲ_data_prev_halflevel, dt
+                        local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, S_q_iceʲ_prev_level, dz_prev_level
                     )
                 @. q_iceʲ_level = ifelse(
                     kill_updraft,
@@ -1032,7 +1032,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, entrʲ_prev_level, detrʲ_prev_level, turb_entrʲ_prev_level, q_rai_prev_level, q_raiʲ_prev_level,
                     ) +
                     microphysics_sources(
-                        local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, S_q_raiʲ_prev_level, u³ʲ_data_prev_halflevel, dt
+                        local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, S_q_raiʲ_prev_level, dz_prev_level
                     )
                 @. q_raiʲ_level = ifelse(
                     kill_updraft,
@@ -1048,7 +1048,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                         local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, entrʲ_prev_level, detrʲ_prev_level, turb_entrʲ_prev_level, q_sno_prev_level, q_snoʲ_prev_level,
                     ) +
                     microphysics_sources(
-                        local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, S_q_snoʲ_prev_level, u³ʲ_data_prev_halflevel, dt
+                        local_geometry_halflevel.J, local_geometry_prev_level.J, ρaʲ_prev_level, S_q_snoʲ_prev_level, dz_prev_level
                     )
                 @. q_snoʲ_level = ifelse(
                     kill_updraft,

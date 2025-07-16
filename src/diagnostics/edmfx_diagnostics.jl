@@ -361,6 +361,20 @@ function compute_clwup!(
         out .= (state.c.sgsʲs.:1).q_liq
     end
 end
+function compute_clwup!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+    turbconv_model::DiagnosticEDMFX,
+)
+    if isnothing(out)
+        return (cache.precomputed.ᶜq_liqʲs.:1)
+    else
+        out .= (cache.precomputed.ᶜq_liqʲs.:1)
+    end
+end
 
 add_diagnostic_variable!(
     short_name = "clwup",
@@ -428,6 +442,20 @@ function compute_cliup!(
         out .= (state.c.sgsʲs.:1).q_ice
     end
 end
+function compute_cliup!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+    turbconv_model::DiagnosticEDMFX,
+)
+    if isnothing(out)
+        return (cache.precomputed.ᶜq_iceʲs.:1)
+    else
+        out .= (cache.precomputed.ᶜq_iceʲs.:1)
+    end
+end
 
 add_diagnostic_variable!(
     short_name = "cliup",
@@ -476,6 +504,20 @@ function compute_husraup!(
         out .= (state.c.sgsʲs.:1).q_rai
     end
 end
+function compute_husraup!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+    turbconv_model::DiagnosticEDMFX,
+)
+    if isnothing(out)
+        return (cache.precomputed.ᶜq_raiʲs.:1)
+    else
+        out .= (cache.precomputed.ᶜq_raiʲs.:1)
+    end
+end
 
 add_diagnostic_variable!(
     short_name = "husraup",
@@ -522,6 +564,20 @@ function compute_hussnup!(
         return (state.c.sgsʲs.:1).q_sno
     else
         out .= (state.c.sgsʲs.:1).q_sno
+    end
+end
+function compute_hussnup!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+    turbconv_model::DiagnosticEDMFX,
+)
+    if isnothing(out)
+        return (cache.precomputed.ᶜq_snoʲs.:1)
+    else
+        out .= (cache.precomputed.ᶜq_snoʲs.:1)
     end
 end
 
@@ -650,13 +706,13 @@ end
 function compute_aren!(out, state, cache, time, turbconv_model::DiagnosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return draft_area.(
+        return 1 .- draft_area.(
             cache.precomputed.ᶜρaʲs.:1,
             TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
         )
     else
         out .=
-            draft_area.(
+            1. - draft_area.(
                 cache.precomputed.ᶜρaʲs.:1,
                 TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
             )
@@ -683,13 +739,27 @@ function compute_rhoaen!(
     state,
     cache,
     time,
-    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
+    turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
         return TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰)
     else
         out .= TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰)
+    end
+end
+function compute_rhoaen!(
+    out,
+    state,
+    cache,
+    time,
+    turbconv_model::DiagnosticEDMFX,
+)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return TD.air_density.(thermo_params, cache.precomputed.ᶜts)
+    else
+        out .= TD.air_density.(thermo_params, cache.precomputed.ᶜts)
     end
 end
 
@@ -746,6 +816,14 @@ function compute_taen!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
         out .= TD.air_temperature.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
+function compute_taen!(out, state, cache, time, turbconv_model::DiagnosticEDMFX)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
+    else
+        out .= TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
+    end
+end
 
 add_diagnostic_variable!(
     short_name = "taen",
@@ -776,6 +854,20 @@ function compute_thetaaen!(
         out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
+function compute_thetaaen!(
+    out,
+    state,
+    cache,
+    time,
+    turbconv_model::DiagnosticEDMFX,
+)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts)
+    else
+        out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts)
+    end
+end
 
 add_diagnostic_variable!(
     short_name = "thetaaen",
@@ -800,6 +892,15 @@ function compute_haen!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
         out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
+function compute_haen!(out, state, cache, time, turbconv_model::DiagnosticEDMFX)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts)
+    else
+        out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts)
+    end
+end
+
 
 add_diagnostic_variable!(
     short_name = "haen",
@@ -849,6 +950,26 @@ function compute_husen!(
             TD.total_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
+function compute_husen!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    turbconv_model::DiagnosticEDMFX,
+)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return TD.total_specific_humidity.(
+            thermo_params,
+            cache.precomputed.ᶜts,
+        )
+    else
+        out .=
+            TD.total_specific_humidity.(thermo_params, cache.precomputed.ᶜts)
+    end
+end
+
 
 add_diagnostic_variable!(
     short_name = "husen",
@@ -894,6 +1015,22 @@ function compute_huren!(
         out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
+function compute_huren!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
+    turbconv_model::DiagnosticEDMFX,
+)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts)
+    else
+        out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts)
+    end
+end
+
 
 add_diagnostic_variable!(
     short_name = "huren",
@@ -948,6 +1085,26 @@ function compute_clwen!(
     state,
     cache,
     time,
+    moisture_model::EquilMoistModel,
+    turbconv_model::DiagnosticEDMFX,
+)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return TD.liquid_specific_humidity.(
+            thermo_params,
+            cache.precomputed.ᶜts,
+        )
+    else
+        out .=
+            TD.liquid_specific_humidity.(thermo_params, cache.precomputed.ᶜts)
+    end
+end
+
+function compute_clwen!(
+    out,
+    state,
+    cache,
+    time,
     moisture_model::NonEquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
@@ -958,6 +1115,23 @@ function compute_clwen!(
         out .= cache.precomputed.ᶜq_liq⁰
     end
 end
+function compute_clwen!(dupa
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+    turbconv_model::DiagnosticEDMFX,
+)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return cache.precomputed.ᶜq_liq⁰
+    else
+        out .= cache.precomputed.ᶜq_liq⁰
+    end
+end
+
+
 
 add_diagnostic_variable!(
     short_name = "clwen",
