@@ -1178,39 +1178,33 @@ function compute_cloud_top_height!(
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
 
-    #if isnothing(out)
-        #out = similar(axes(Fields.level(state.f, half)), NTuple{3,FT})
-
-    clw = cache.scratch.ᶜtemp_scalar
-    @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
-    cli = cache.scratch.ᶜtemp_scalar
-    @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
-    z = Fields.coordinate_field(state.c.ρ).z
+    clw = @. lazy(state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq)
+    cli = @. lazy(state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice)
+    z = Fields.coordinate_field(state.c).z
 
     FT = Spaces.undertype(axes(clw))
 
-    q_cond = cache.scratch.ᶜtemp_scalar
-    @. q_cond = clw .+ cli
+    q_cond = @. lazy(clw + cli)
 
-    @info("q_cond", q_cond)
+    @info("q_cond", Fields.column(q_cond,1,1,1))
 
-    heaviside_num = cache.scratch.ᶜtemp_scalar
-    @. heaviside_num = ifelse(
-        q_cond > FT(1e-6),
-        (q_cond .* z)^FT(10) .* z,
-        FT(0)
+    heaviside_num = @. lazy(ifelse(
+            q_cond > FT(1e-10),
+            (q_cond * z)^FT(10) * z,
+            FT(0)
+        )
     )
 
-    @info("numerator", heaviside_num)
+    @info("numerator", Fields.column(heaviside_num,1,1,1))
 
-    heaviside_denom = cache.scratch.ᶜtemp_scalar
-    @. heaviside_denom = ifelse(
-        q_cond > FT(1e-6),
-        (q_cond .* z)^FT(10),
-        FT(0)
+    heaviside_denom = @. lazy(ifelse(
+            q_cond > FT(1e-10),
+            (q_cond * z)^FT(10),
+            FT(0)
+        )
     )
 
-    @info("denominator", heaviside_denom)
+    @info("denominator", Fields.column(heaviside_denom))
 
     # do i want to save these like this or just as temporary scalars?
     num = zeros(axes(Fields.level(state.f, half)))
@@ -1223,12 +1217,14 @@ function compute_cloud_top_height!(
     @info("denominator integrated", denom)
 
     out = zeros(axes(Fields.level(state.f, half)))
-    # does this need to be lazy?
-    @. out = ifelse(
+    out = @. lazy(ifelse(
         denom > FT(0),
-        (num ./ denom),
+        (num / denom),
         FT(0),
+        )
     )
+
+    @info("cloud top height", out)
 
     return out
         # it is this function
