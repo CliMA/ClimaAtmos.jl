@@ -1226,7 +1226,7 @@ add_diagnostic_variable!(
     short_name = "cltz",
     long_name = "Cloud Top Height",
     standard_name = "cloud_top_height", # NOT SURE IF STANDARD EXISTS
-    units = "kg kg^-1, kg kg^-1, m",
+    units = "m",
     comments = """
     The height of the cloud top based on some threshold.
     """,
