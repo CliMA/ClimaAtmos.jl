@@ -1186,7 +1186,7 @@ function compute_cloud_top_height!(
 
     q_cond = @. lazy(clw + cli)
 
-    @info("q_cond", q_cond)
+    #@info("q_cond", q_cond)
 
     heaviside_num = @. lazy(ifelse(
             q_cond > FT(1e-10),
@@ -1195,7 +1195,7 @@ function compute_cloud_top_height!(
         )
     )
 
-    @info("numerator", heaviside_num)
+    #@info("numerator", heaviside_num)
 
     heaviside_denom = @. lazy(ifelse(
             q_cond > FT(1e-10),
@@ -1204,7 +1204,7 @@ function compute_cloud_top_height!(
         )
     )
 
-    @info("denominator", heaviside_denom)
+    #@info("denominator", heaviside_denom)
 
     # do i want to save these like this or just as temporary scalars?
     num = zeros(axes(Fields.level(state.f, half)))
@@ -1217,12 +1217,13 @@ function compute_cloud_top_height!(
     @info("denominator integrated", denom)
 
     out = zeros(axes(Fields.level(state.f, half)))
-    out = @. lazy(ifelse(
-        denom > FT(0),
-        (num / denom),
-        FT(0),
-        )
-    )
+    out = num ./ denom
+    # out = @. lazy(ifelse(
+    #     denom > FT(0),
+    #     (num / denom),
+    #     FT(0),
+    #     )
+    # )
 
     @info("cloud top height", out)
 
