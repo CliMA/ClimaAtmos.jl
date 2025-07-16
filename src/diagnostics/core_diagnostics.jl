@@ -1160,7 +1160,7 @@ function compute_cloud_top_height!(
 
     heaviside_num = @. lazy(ifelse(
             q_cond > FT(1e-10),
-            (q_cond * z) * z,
+            (q_cond * z)^(1) * z,
             FT(0)
         )
     )
@@ -1169,7 +1169,7 @@ function compute_cloud_top_height!(
 
     heaviside_denom = @. lazy(ifelse(
             q_cond > FT(1e-10),
-            (q_cond * z),
+            (q_cond * z)^(1),
             FT(0)
         )
     )
