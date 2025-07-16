@@ -722,7 +722,7 @@ where `is_mse_file` is `true`.
 """
 function get_computed_mses(;
     job_ids::Vector{String},
-    subfolder::String = "output_active",
+    subfolder::String = joinpath("output_active", "reproducibility_bundle"),
     is_mse_file::Function = default_is_mse_file,
     expected_filename_prefix = "computed_mse",
 )
@@ -733,7 +733,10 @@ function get_computed_mses(;
     isempty(job_ids) && return computed_mses
 
     for job_id in job_ids
-        all_files = readdir(joinpath(job_id, subfolder); join = true)
+        all_files = filter(
+            x -> basename(x) != "prog_state.hdf5",
+            readdir(joinpath(job_id, subfolder); join = true),
+        )
         for file in all_files
             computed_mses[job_id] =
                 if is_mse_file(file, expected_filename_prefix)
