@@ -1100,15 +1100,18 @@ function compute_cloud_top_height!(
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     if isnothing(out)
-        out = similar(axes(Fields.level(state.f, half)), NTuple{3,FT})
         clw = cache.scratch.ᶜtemp_scalar
         @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
         cli = cache.scratch.ᶜtemp_scalar
         @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
-        @. z = Fields.coordinate_field(state.c.ρ).z
+        z = Fields.coordinate_field(state.c.ρ).z
+
+        FT = Spaces.undertype(axes(clw))
+        out = similar(axes(Fields.level(state.f, half)), NTuple{3,FT})
+
         Operators.column_reduce!(
             ((target_clw, target_clw_cli, target_clw_z), (clw, cli, z)) -> ifelse(
-                clw > 1e-6 || cli > 1e-6, # SOME THRESHOLD FOR A BIG CLOUD 
+                clw > FT(1e-6) || cli > FT(1e-6), # SOME THRESHOLD FOR A BIG CLOUD 
                 (clw, cli, z),
                 (target_clw, target_clw_cli, target_clw_z),
             ),
@@ -1121,10 +1124,76 @@ function compute_cloud_top_height!(
         @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
         cli = cache.scratch.ᶜtemp_scalar
         @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
-        @. z = Fields.coordinate_field(state.c.ρ).z
+        z = Fields.coordinate_field(state.c.ρ).z
+
+        FT = Spaces.undertype(axes(clw))
         Operators.column_reduce!(
             ((target_clw, target_clw_cli, target_clw_z), (clw, cli, z)) -> ifelse(
-                clw > 1e-6 || cli > 1e-6, # SOME THRESHOLD FOR A BIG CLOUD 
+                clw > FT(1e-6) || cli > FT(1e-6), # SOME THRESHOLD FOR A BIG CLOUD 
+                (clw, cli, z),
+                (target_clw, target_clw_cli, target_clw_z),
+            ),
+            out,
+            (@. lazy(tuple(clw, cli, z))),
+        )
+    end
+end
+
+#heaviside function version
+function compute_cloud_top_height!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+
+    if isnothing(out)
+        #out = similar(axes(Fields.level(state.f, half)), NTuple{3,FT})
+        out = zeros(axes(Fields.level(state.f, half)))
+        clw = cache.scratch.ᶜtemp_scalar
+        @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+        cli = cache.scratch.ᶜtemp_scalar
+        @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+        z = Fields.coordinate_field(state.c.ρ).z
+
+        FT = Spaces.undertype(axes(clw))
+
+        @. q_cond = clw .+ cli
+
+        heaviside_num = ifelse(
+            q_cond > FT(1e-6),
+            (q_cond .* z)^FT(10) .* z,
+            FT(0)
+        )
+
+        heaviside_denom = ifelse(
+            q_cond > FT(1e-6),
+            (q_cond .* z)^FT(10),
+            FT(0)
+        )
+
+        num = zeros(axes(Fields.level(state.f, half)))
+        denom = zeros(axes(Fields.level(state.f, half)))
+
+        Operators.column_integral_definite!(num, heaviside_num)
+        Operators.column_integral_definite!(denom, heaviside_denom)
+
+        out = num / denom
+
+        return out
+        # it is this function
+
+    else
+        clw = cache.scratch.ᶜtemp_scalar
+        @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
+        cli = cache.scratch.ᶜtemp_scalar
+        @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
+        @. z = Fields.coordinate_field(state.c.ρ).z
+        FT = Spaces.undertype(axes(clw))
+        Operators.column_reduce!(
+            ((target_clw, target_clw_cli, target_clw_z), (clw, cli, z)) -> ifelse(
+                clw > FT(1e-6) || cli > FT(1e-6), # SOME THRESHOLD FOR A BIG CLOUD 
                 (clw, cli, z),
                 (target_clw, target_clw_cli, target_clw_z),
             ),
