@@ -45,7 +45,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜρ⁰ = @. TD.air_density(thermo_params, ᶜts⁰)
-    ᶜρa⁰_vals = ᶜρa⁰(Y.c, p)
+    ᶜρa⁰_vals = ᶜρa⁰(Y, p)
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
@@ -81,7 +81,7 @@ function edmfx_sgs_mass_flux_tendency!(
         @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
 
         ᶜmse⁰ = p.scratch.ᶜtemp_scalar_2
-        ᶜmse⁰ .= specific_env_mse(Y.c, p)
+        ᶜmse⁰ .= ᶜspecific_env_mse(Y, p)
         @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰_vals, ᶜρ⁰)
         vtt = vertical_transport(
             ᶜρ⁰,
@@ -109,7 +109,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 @. Yₜ.c.ρq_tot += vtt
             end
             # Add the environment fluxes
-            ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y.c, p)
+            ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar =
                 (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) *
@@ -128,10 +128,10 @@ function edmfx_sgs_mass_flux_tendency!(
             p.atmos.moisture_model isa NonEquilMoistModel &&
             p.atmos.microphysics_model isa Microphysics1Moment
         )
-            ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y.c, p)
-            ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y.c, p)
-            ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y.c, p)
-            ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y.c, p)
+            ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y, p)
+            ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
+            ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
+            ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
             # Liquid, ice, rain and snow specific humidity fluxes
             for j in 1:n
                 @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
@@ -330,7 +330,7 @@ function edmfx_sgs_mass_flux_tendency!(
         #     CAP.thermodynamics_params(p.params),
         #     p.precomputed.ᶜts⁰,
         # )
-        # ᶜmse⁰ = @.lazy(specific_env_mse(Y.c, p))
+        # ᶜmse⁰ = @.lazy(ᶜspecific_env_mse(Y, p))
         # @. ᶜa_scalar =
         #     (ᶜmse⁰ + p.precomputed.ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
         # vtt = vertical_transport(
@@ -401,8 +401,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; ᶜu⁰, ᶜK⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
     (; ᶜmixing_length, ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
-    ᶜρa⁰_vals = ᶜρa⁰(Y.c, p)
-    ᶜtke⁰ = ᶜspecific_tke(Y.c.sgs⁰, Y.c, p)
+    ᶜρa⁰_vals = ᶜρa⁰(Y, p)
+    ᶜtke⁰ = ᶜspecific_tke(Y, p)
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
@@ -433,7 +433,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
         )
 
         ᶜmse⁰ = p.scratch.ᶜtemp_scalar_2
-        ᶜmse⁰ .= specific_env_mse(Y.c, p)
+        ᶜmse⁰ .= ᶜspecific_env_mse(Y, p)
         @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜmse⁰ + ᶜK⁰)))
         if use_prognostic_tke(turbconv_model)
             # Turbulent TKE transport (diffusion)
@@ -462,7 +462,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(C3(FT(0))),
             )
-            ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y.c, p)
+            ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
             @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_tot⁰)))
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
@@ -471,10 +471,10 @@ function edmfx_sgs_diffusive_flux_tendency!(
             p.atmos.moisture_model isa NonEquilMoistModel &&
             p.atmos.microphysics_model isa Microphysics1Moment
         )
-            ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y.c, p)
-            ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y.c, p)
-            ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y.c, p)
-            ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y.c, p)
+            ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y, p)
+            ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
+            ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
+            ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
             # Liquid, ice, rain and snow specific humidity diffusion
             α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
 
@@ -527,7 +527,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; ᶜu, ᶜts) = p.precomputed
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
-    ᶜtke⁰ = ᶜspecific_tke(Y.c.sgs⁰, Y.c, p)
+    ᶜtke⁰ = ᶜspecific_tke(Y, p)
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 

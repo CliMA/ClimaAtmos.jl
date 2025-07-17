@@ -191,7 +191,7 @@ NVTX.@annotate function set_cloud_fraction!(
     (; ᶜts⁰, cloud_diagnostics_tuple) = p.precomputed
     (; ᶜρʲs, ᶜtsʲs) = p.precomputed
     (; turbconv_model) = p.atmos
-    ᶜρa⁰_vals = ᶜρa⁰(Y.c, p)
+    ᶜρa⁰_vals = ᶜρa⁰(Y, p)
 
     # TODO - we should make this default when using diagnostic edmf
     # environment
@@ -308,6 +308,7 @@ function quad_loop(
         FT = eltype(x1_hat)
         @assert(x1_hat >= FT(0))
         @assert(x2_hat >= FT(0))
+        # note: ᶜthermo_state is used as a pointwise function here
         _ts = thermo_state(thermo_params; p = p_c, θ = x1_hat, q_tot = x2_hat)
         hc = TD.has_condensate(thermo_params, _ts)
 

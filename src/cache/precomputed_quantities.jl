@@ -43,7 +43,7 @@ function implicit_precomputed_quantities(Y, atmos)
         ᶜts = similar(Y.c, TST),
         ᶜp = similar(Y.c, FT),
     )
-    sgs_quantities = turbconv_model isa AbstractEDMF ? (;) : (;)
+    sgs_quantities = (;)
     prognostic_sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
@@ -354,6 +354,7 @@ function thermo_state(
     return get_ts(ρ, p, θ, e_int, q_tot, q_pt)
 end
 
+const FieldOrValue = Union{Fields.Field, Base.AbstractBroadcasted, Real}
 function ᶜthermo_state(
     thermo_params;
     ρ = nothing,
@@ -364,15 +365,15 @@ function ᶜthermo_state(
     q_pt = nothing,
 )
 
-    get_ts(ρ, ::Nothing, θ, ::Nothing, ::Nothing, ::Nothing) =
+    get_ts(ρ::T, ::Nothing, θ::T, ::Nothing, ::Nothing, ::Nothing) where {T <: FieldOrValue} =
         TD.PhaseDry_ρθ(thermo_params, ρ, θ)
-    get_ts(ρ, ::Nothing, θ, ::Nothing, q_tot, ::Nothing) =
+    get_ts(ρ::T, ::Nothing, θ::T, ::Nothing, q_tot::T, ::Nothing) where {T <: FieldOrValue} =
         TD.PhaseEquil_ρθq(thermo_params, ρ, θ, q_tot)
-    get_ts(ρ, ::Nothing, θ, ::Nothing, ::Nothing, q_pt) =
+    get_ts(ρ::T, ::Nothing, θ::T, ::Nothing, ::Nothing, q_pt) where {T <: FieldOrValue} =
         TD.PhaseNonEquil_ρθq(thermo_params, ρ, θ, q_pt)
-    get_ts(ρ, ::Nothing, ::Nothing, e_int, ::Nothing, ::Nothing) =
+    get_ts(ρ::T, ::Nothing, ::Nothing, e_int::T, ::Nothing, ::Nothing) where {T <: FieldOrValue} =
         TD.PhaseDry_ρe(thermo_params, ρ, e_int)
-    get_ts(ρ, ::Nothing, ::Nothing, e_int, q_tot, ::Nothing) =
+    get_ts(ρ::T, ::Nothing, ::Nothing, e_int::T, q_tot::T, ::Nothing) where {T <: FieldOrValue} =
         TD.PhaseEquil_ρeq(
             thermo_params,
             ρ,
@@ -381,19 +382,19 @@ function ᶜthermo_state(
             3,
             eltype(thermo_params)(0.003),
         )
-    get_ts(ρ, ::Nothing, ::Nothing, e_int, ::Nothing, q_pt) =
+    get_ts(ρ::T, ::Nothing, ::Nothing, e_int::T, ::Nothing, q_pt) where {T <: FieldOrValue} =
         TD.PhaseNonEquil(thermo_params, e_int, ρ, q_pt)
-    get_ts(::Nothing, p, θ, ::Nothing, ::Nothing, ::Nothing) =
+    get_ts(::Nothing, p::T, θ::T, ::Nothing, ::Nothing, ::Nothing) where {T <: FieldOrValue} =
         TD.PhaseDry_pθ(thermo_params, p, θ)
-    get_ts(::Nothing, p, θ, ::Nothing, q_tot, ::Nothing) =
+    get_ts(::Nothing, p::T, θ::T, ::Nothing, q_tot::T, ::Nothing) where {T <: FieldOrValue} =
         TD.PhaseEquil_pθq(thermo_params, p, θ, q_tot)
-    get_ts(::Nothing, p, θ, ::Nothing, ::Nothing, q_pt) =
+    get_ts(::Nothing, p::T, θ::T, ::Nothing, ::Nothing, q_pt) where {T <: FieldOrValue} =
         TD.PhaseNonEquil_pθq(thermo_params, p, θ, q_pt)
-    get_ts(::Nothing, p, ::Nothing, e_int, ::Nothing, ::Nothing) =
+    get_ts(::Nothing, p::T, ::Nothing, e_int::T, ::Nothing, ::Nothing) where {T <: FieldOrValue} =
         TD.PhaseDry_pe(thermo_params, p, e_int)
-    get_ts(::Nothing, p, ::Nothing, e_int, q_tot, ::Nothing) =
+    get_ts(::Nothing, p::T, ::Nothing, e_int::T, q_tot::T, ::Nothing) where {T <: FieldOrValue} =
         TD.PhaseEquil_peq(thermo_params, p, e_int, q_tot)
-    get_ts(::Nothing, p, ::Nothing, e_int, ::Nothing, q_pt) =
+    get_ts(::Nothing, p::T, ::Nothing, e_int::T, ::Nothing, q_pt) where {T <: FieldOrValue} =
         TD.PhaseNonEquil_peq(thermo_params, p, e_int, q_pt)
 
     return @. lazy(get_ts(ρ, p, θ, e_int, q_tot, q_pt))
@@ -423,13 +424,6 @@ function thermo_vars(moisture_model, microphysics_model, Y_c, K, Φ)
     return (; energy_var..., moisture_var...)
 end
 
-ts_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ) =
-    ᶜthermo_state(
-        thermo_params;
-        thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)...,
-        ρ,
-    )
-
 ᶜts_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ) =
     ᶜthermo_state(
         thermo_params;
@@ -437,8 +431,8 @@ ts_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ) =
         ρ,
     )
 
-ts_sgs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, p) =
-    thermo_state(
+ᶜts_sgs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, p) =
+    ᶜthermo_state(
         thermo_params;
         thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)...,
         p,
