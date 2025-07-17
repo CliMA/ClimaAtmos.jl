@@ -633,7 +633,7 @@ compute_aren!(_, _, _, _, turbconv_model::T) where {T} =
 
 function compute_aren!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
-    ᶜρa⁰_vals = ᶜρa⁰(state.c, cache)
+    ᶜρa⁰_vals = ᶜρa⁰(state, cache)
     if isnothing(out)
         return draft_area.(
             ᶜρa⁰_vals,
@@ -953,7 +953,7 @@ function compute_clwen!(
     moisture_model::NonEquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
-    ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), state.c, cache)
+    ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), state, cache)
     if isnothing(out)
         return Base.materialize(ᶜq_liq⁰)
     else
@@ -1018,7 +1018,7 @@ function compute_clien!(
     moisture_model::NonEquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
-    ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), state.c, cache)
+    ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), state, cache)
     if isnothing(out)
         return Base.materialize(ᶜq_ice⁰)
     else
@@ -1067,7 +1067,7 @@ function compute_husraen!(
     microphysics_model_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
-    ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), state.c, cache)
+    ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), state, cache)
     if isnothing(out)
         return Base.materialize(ᶜq_rai⁰)
     else
@@ -1116,7 +1116,7 @@ function compute_hussnen!(
     microphysics_model_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
-    ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), state.c, cache)
+    ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), state, cache)
     if isnothing(out)
         return Base.materialize(ᶜq_sno⁰)
     else
@@ -1150,7 +1150,7 @@ function compute_tke!(
     time,
     turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX, DiagnosticEDMFX},
 )
-    ᶜtke = ᶜspecific_tke(state.c.sgs⁰, state.c, cache)
+    ᶜtke = ᶜspecific_tke(state, cache)
     if isnothing(out)
         return Base.materialize(ᶜtke)
     else

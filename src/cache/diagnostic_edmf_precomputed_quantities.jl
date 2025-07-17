@@ -361,7 +361,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             specific(Y.c.ρe_tot, Y.c.ρ),
         ),
     )
-    ᶜtke⁰ = ᶜspecific_tke(Y.c.sgs⁰, Y.c, p)
+    ᶜtke⁰ = ᶜspecific_tke(Y, p)
 
     for i in 2:Spaces.nlevels(axes(Y.c))
         ρ_level = Fields.field_values(Fields.level(Y.c.ρ, i))
@@ -1029,7 +1029,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     @. ᶜprandtl_nvec =
         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
 
-    ᶜtke⁰ = ᶜspecific_tke(Y.c.sgs⁰, Y.c, p)
+    ᶜtke⁰ = ᶜspecific_tke(Y, p)
 
     ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
