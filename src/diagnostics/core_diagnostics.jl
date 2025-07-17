@@ -1160,21 +1160,17 @@ function compute_cloud_top_height!(
 
     heaviside_num = @. lazy(ifelse(
             q_cond > FT(1e-10),
-            (q_cond * z)^(1) * z,
+            (q_cond * z)^(10) * z,
             FT(0)
         )
     )
-
-    #@info("numerator", heaviside_num)
 
     heaviside_denom = @. lazy(ifelse(
             q_cond > FT(1e-10),
-            (q_cond * z)^(1),
+            (q_cond * z)^(10),
             FT(0)
         )
     )
-
-    #@info("denominator", heaviside_denom)
 
     # do i want to save these like this or just as temporary scalars?
     num = zeros(axes(Fields.level(state.f, half)))
@@ -1191,35 +1187,10 @@ function compute_cloud_top_height!(
     else
         out .= num ./ denom
     end
-    # out = @. lazy(ifelse(
-    #     denom > FT(0),
-    #     (num / denom),
-    #     FT(0),
-    #     )
-    # )
 
     @info("cloud top height", out)
 
     return out
-        # it is this function
-
-    # else
-    #     clw = cache.scratch.ᶜtemp_scalar
-    #     @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
-    #     cli = cache.scratch.ᶜtemp_scalar
-    #     @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
-    #     @. z = Fields.coordinate_field(state.c.ρ).z
-    #     FT = Spaces.undertype(axes(clw))
-    #     Operators.column_reduce!(
-    #         ((target_clw, target_clw_cli, target_clw_z), (clw, cli, z)) -> ifelse(
-    #             clw > FT(1e-6) || cli > FT(1e-6), # SOME THRESHOLD FOR A BIG CLOUD 
-    #             (clw, cli, z),
-    #             (target_clw, target_clw_cli, target_clw_z),
-    #         ),
-    #         out,
-    #         (@. lazy(tuple(clw, cli, z))),
-    #     )
-    # end
 end
 
 add_diagnostic_variable!(
