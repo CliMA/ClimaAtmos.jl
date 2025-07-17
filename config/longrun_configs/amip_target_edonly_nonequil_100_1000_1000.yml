@@ -27,6 +27,6 @@ dt: "100secs"
 t_end: "20days"
 toml: [toml/aquaplanet_nonequil_1000_1000.toml]
 diagnostics:
-  - short_name: [ta, ua, wa, va, rhoa, hur, hus, hussn, husra, clw, cli]
+  - short_name: [ta, ua, wa, va, rhoa, hur, hus, hussn, husra, clw, cli, cltz]
     period: 5days
 netcdf_output_at_levels: true
