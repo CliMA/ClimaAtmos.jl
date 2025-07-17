@@ -531,13 +531,13 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     (; ᶠu₃⁰) = p.precomputed
 
     ᶜmse⁰ = p.scratch.ᶜtemp_scalar
-    ᶜmse⁰ .= specific_env_mse(Y.c, p)
+    ᶜmse⁰ .= ᶜspecific_env_mse(Y, p)
     if p.atmos.moisture_model isa NonEquilMoistModel &&
        p.atmos.microphysics_model isa Microphysics1Moment
-        ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y.c, p)
-        ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y.c, p)
-        ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y.c, p)
-        ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y.c, p)
+        ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y, p)
+        ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
+        ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
+        ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
     end
 
     for j in 1:n
@@ -547,7 +547,7 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
 
-        ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y.c, p)
+        ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
 
         @. Yₜ.c.sgsʲs.:($$j).ρa += Y.c.sgsʲs.:($$j).ρa * (ᶜentrʲ - ᶜdetrʲ)
 
