@@ -1230,7 +1230,7 @@ function compute_cloud_top_height!(
 
     @info("cloud top height", out)
 
-    #return out
+    return out
         # it is this function
 
     # else
