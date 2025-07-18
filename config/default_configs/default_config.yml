@@ -177,7 +177,7 @@ moist:
   value: "dry"
 divergence_damping_factor:
   help: "Divergence damping factor"
-  value: 1.0
+  value: 5.0
 rayleigh_sponge:
   help: "Rayleigh sponge [`true`, `false` (default)]"
   value: false

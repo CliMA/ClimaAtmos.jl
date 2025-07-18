@@ -51,6 +51,10 @@ const ᶠinterp = Operators.InterpolateC2F(
     bottom = Operators.Extrapolate(),
     top = Operators.Extrapolate(),
 )
+const ᶠinterp_vel = Operators.InterpolateC2F(
+    bottom = Operators.SetValue(CT12(Float32(0),Float32(0))),
+    top = Operators.Extrapolate(),
+)
 const ᶠwinterp = Operators.WeightedInterpolateC2F(
     bottom = Operators.Extrapolate(),
     top = Operators.Extrapolate(),

@@ -114,6 +114,7 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
 
     btt = boundary_tendency_scalar(ᶜh_tot, sfc_conditions.ρ_flux_h_tot)
     @. Yₜ.c.ρe_tot -= btt
+
     ρ_flux_χ = p.scratch.sfc_temp_C3
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
