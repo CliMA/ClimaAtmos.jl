@@ -112,11 +112,6 @@ function set_precipitation_velocities!(
     cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
 
-    q_liq = ᶜspecific(Y.c.ρq_liq, Y.c.ρ)
-    q_ice = ᶜspecific(Y.c.ρq_ice, Y.c.ρ)
-    q_rai = ᶜspecific(Y.c.ρq_rai, Y.c.ρ)
-    q_sno = ᶜspecific(Y.c.ρq_sno, Y.c.ρ)
-
     # compute the precipitation terminal velocity [m/s]
     # TODO sedimentation of snow is based on the 1M scheme
     @. ᶜwnᵣ = getindex(
@@ -366,11 +361,6 @@ function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
     (; ᶜts) = p.precomputed
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
     (; ᶜSnₗᵖ, ᶜSnᵣᵖ) = p.precomputed
-
-    q_liq = ᶜspecific(Y.c.ρq_liq, Y.c.ρ)
-    q_rai = ᶜspecific(Y.c.ρq_rai, Y.c.ρ)
-    n_liq = ᶜspecific(Y.c.ρn_liq, Y.c.ρ)
-    n_rai = ᶜspecific(Y.c.ρn_rai, Y.c.ρ)
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜS₂ᵖ = p.scratch.ᶜtemp_scalar_2
