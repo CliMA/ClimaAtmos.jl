@@ -302,11 +302,12 @@ end
 
 function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰_vals, ᶠu₃⁰, turbconv_model)
     @. ᶜK +=
-        ᶜρa⁰_vals * ᶜinterp(dot(ᶠu₃⁰ - Yf.u₃, CT3(ᶠu₃⁰ - Yf.u₃))) / 2 / Yc.ρ
+        ᶜρa⁰_vals * ᶜinterp(dot(ᶠu₃⁰ - Y.f.u₃, CT3(ᶠu₃⁰ - Y.f.u₃))) / 2 / Y.c.ρ
     for j in 1:n_mass_flux_subdomains(turbconv_model)
         ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
         ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
-        @. ᶜK += ᶜρaʲ * ᶜinterp(dot(ᶠu₃ʲ - Yf.u₃, CT3(ᶠu₃ʲ - Yf.u₃))) / 2 / Yc.ρ
+        @. ᶜK +=
+            ᶜρaʲ * ᶜinterp(dot(ᶠu₃ʲ - Y.f.u₃, CT3(ᶠu₃ʲ - Y.f.u₃))) / 2 / Y.c.ρ
     end
     return nothing
 end
@@ -365,56 +366,133 @@ function ᶜthermo_state(
     q_pt = nothing,
 )
 
-    get_ts(ρ::T, ::Nothing, θ::T, ::Nothing, ::Nothing, ::Nothing) where {T <: FieldOrValue} =
-        TD.PhaseDry_ρθ(thermo_params, ρ, θ)
-    get_ts(ρ::T, ::Nothing, θ::T, ::Nothing, q_tot::T, ::Nothing) where {T <: FieldOrValue} =
-        TD.PhaseEquil_ρθq(thermo_params, ρ, θ, q_tot)
-    get_ts(ρ::T, ::Nothing, θ::T, ::Nothing, ::Nothing, q_pt) where {T <: FieldOrValue} =
+    get_ts(
+        ρ::T,
+        ::Nothing,
+        θ::T,
+        ::Nothing,
+        ::Nothing,
+        ::Nothing,
+    ) where {T <: FieldOrValue} = TD.PhaseDry_ρθ(thermo_params, ρ, θ)
+    get_ts(
+        ρ::T,
+        ::Nothing,
+        θ::T,
+        ::Nothing,
+        q_tot::T,
+        ::Nothing,
+    ) where {T <: FieldOrValue} = TD.PhaseEquil_ρθq(thermo_params, ρ, θ, q_tot)
+    get_ts(
+        ρ::T,
+        ::Nothing,
+        θ::T,
+        ::Nothing,
+        ::Nothing,
+        q_pt,
+    ) where {T <: FieldOrValue} =
         TD.PhaseNonEquil_ρθq(thermo_params, ρ, θ, q_pt)
-    get_ts(ρ::T, ::Nothing, ::Nothing, e_int::T, ::Nothing, ::Nothing) where {T <: FieldOrValue} =
-        TD.PhaseDry_ρe(thermo_params, ρ, e_int)
-    get_ts(ρ::T, ::Nothing, ::Nothing, e_int::T, q_tot::T, ::Nothing) where {T <: FieldOrValue} =
-        TD.PhaseEquil_ρeq(
-            thermo_params,
-            ρ,
-            e_int,
-            q_tot,
-            3,
-            eltype(thermo_params)(0.003),
-        )
-    get_ts(ρ::T, ::Nothing, ::Nothing, e_int::T, ::Nothing, q_pt) where {T <: FieldOrValue} =
+    get_ts(
+        ρ::T,
+        ::Nothing,
+        ::Nothing,
+        e_int::T,
+        ::Nothing,
+        ::Nothing,
+    ) where {T <: FieldOrValue} = TD.PhaseDry_ρe(thermo_params, ρ, e_int)
+    get_ts(
+        ρ::T,
+        ::Nothing,
+        ::Nothing,
+        e_int::T,
+        q_tot::T,
+        ::Nothing,
+    ) where {T <: FieldOrValue} = TD.PhaseEquil_ρeq(
+        thermo_params,
+        ρ,
+        e_int,
+        q_tot,
+        3,
+        eltype(thermo_params)(0.003),
+    )
+    get_ts(
+        ρ::T,
+        ::Nothing,
+        ::Nothing,
+        e_int::T,
+        ::Nothing,
+        q_pt,
+    ) where {T <: FieldOrValue} =
         TD.PhaseNonEquil(thermo_params, e_int, ρ, q_pt)
-    get_ts(::Nothing, p::T, θ::T, ::Nothing, ::Nothing, ::Nothing) where {T <: FieldOrValue} =
-        TD.PhaseDry_pθ(thermo_params, p, θ)
-    get_ts(::Nothing, p::T, θ::T, ::Nothing, q_tot::T, ::Nothing) where {T <: FieldOrValue} =
-        TD.PhaseEquil_pθq(thermo_params, p, θ, q_tot)
-    get_ts(::Nothing, p::T, θ::T, ::Nothing, ::Nothing, q_pt) where {T <: FieldOrValue} =
+    get_ts(
+        ::Nothing,
+        p::T,
+        θ::T,
+        ::Nothing,
+        ::Nothing,
+        ::Nothing,
+    ) where {T <: FieldOrValue} = TD.PhaseDry_pθ(thermo_params, p, θ)
+    get_ts(
+        ::Nothing,
+        p::T,
+        θ::T,
+        ::Nothing,
+        q_tot::T,
+        ::Nothing,
+    ) where {T <: FieldOrValue} = TD.PhaseEquil_pθq(thermo_params, p, θ, q_tot)
+    get_ts(
+        ::Nothing,
+        p::T,
+        θ::T,
+        ::Nothing,
+        ::Nothing,
+        q_pt,
+    ) where {T <: FieldOrValue} =
         TD.PhaseNonEquil_pθq(thermo_params, p, θ, q_pt)
-    get_ts(::Nothing, p::T, ::Nothing, e_int::T, ::Nothing, ::Nothing) where {T <: FieldOrValue} =
-        TD.PhaseDry_pe(thermo_params, p, e_int)
-    get_ts(::Nothing, p::T, ::Nothing, e_int::T, q_tot::T, ::Nothing) where {T <: FieldOrValue} =
+    get_ts(
+        ::Nothing,
+        p::T,
+        ::Nothing,
+        e_int::T,
+        ::Nothing,
+        ::Nothing,
+    ) where {T <: FieldOrValue} = TD.PhaseDry_pe(thermo_params, p, e_int)
+    get_ts(
+        ::Nothing,
+        p::T,
+        ::Nothing,
+        e_int::T,
+        q_tot::T,
+        ::Nothing,
+    ) where {T <: FieldOrValue} =
         TD.PhaseEquil_peq(thermo_params, p, e_int, q_tot)
-    get_ts(::Nothing, p::T, ::Nothing, e_int::T, ::Nothing, q_pt) where {T <: FieldOrValue} =
+    get_ts(
+        ::Nothing,
+        p::T,
+        ::Nothing,
+        e_int::T,
+        ::Nothing,
+        q_pt,
+    ) where {T <: FieldOrValue} =
         TD.PhaseNonEquil_peq(thermo_params, p, e_int, q_pt)
 
     return @. lazy(get_ts(ρ, p, θ, e_int, q_tot, q_pt))
 end
 
-function thermo_vars(moisture_model, microphysics_model, Y_c, K, Φ)
-    e_tot = ᶜspecific(Y_c.ρe_tot, Y_c.ρ)
+function thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)
+    e_tot = ᶜspecific(ᶜY.ρe_tot, ᶜY.ρ)
     energy_var = (; e_int = @. lazy(e_tot - K - Φ))
 
     moisture_var = if moisture_model isa DryModel
         (;)
     elseif moisture_model isa EquilMoistModel
-        q_tot = ᶜspecific(Y_c.ρq_tot, Y_c.ρ)
+        q_tot = ᶜspecific(ᶜY.ρq_tot, ᶜY.ρ)
         (; q_tot)
     elseif moisture_model isa NonEquilMoistModel
-        q_tot = ᶜspecific(Y_c.ρq_tot, Y_c.ρ)
-        q_liq = ᶜspecific(Y_c.ρq_liq, Y_c.ρ)
-        q_ice = ᶜspecific(Y_c.ρq_ice, Y_c.ρ)
-        q_rai = ᶜspecific(Y_c.ρq_rai, Y_c.ρ)
-        q_sno = ᶜspecific(Y_c.ρq_sno, Y_c.ρ)
+        q_tot = ᶜspecific(ᶜY.ρq_tot, ᶜY.ρ)
+        q_liq = ᶜspecific(ᶜY.ρq_liq, ᶜY.ρ)
+        q_ice = ᶜspecific(ᶜY.ρq_ice, ᶜY.ρ)
+        q_rai = ᶜspecific(ᶜY.ρq_rai, ᶜY.ρ)
+        q_sno = ᶜspecific(ᶜY.ρq_sno, ᶜY.ρ)
         (;
             q_pt = @. lazy(
                 TD.PhasePartition(q_tot, q_liq + q_rai, q_ice + q_sno),

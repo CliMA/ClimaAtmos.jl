@@ -249,8 +249,8 @@ draft_sum(f, sgsʲs) = mapreduce_with_init(f, +, sgsʲs)
     ᶜenv_value(grid_scale_value, f_draft, gs, turbconv_model)
 
 Computes the value of a quantity `ρaχ` in the environment subdomain by subtracting 
-the sum of its values in all draft subdomains from the grid-scale value. Only available
-for environmental area (ᶜρa⁰) for DiagnosticEDMFX.
+the sum of its values in all draft subdomains from the grid-scale value. Available
+for general variables in PrognosticEDMFX and environmental area (ᶜρa⁰) in DiagnosticEDMFX.
 
 This is based on the domain decomposition principle for density-area weighted 
 quantities: `GridMean(ρχ) = Env(ρaχ) + Sum(Drafts(ρaχ))`.
