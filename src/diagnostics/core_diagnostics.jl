@@ -74,9 +74,9 @@ add_diagnostic_variable!(
     comments = "Eastward (zonal) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(u_component.(Geometry.UVector.(cache.precomputed.ᶜu)))
+            return copy(u_component.(Geometry.UVector.(ᶜu_lazy(state.c.uₕ, state.f.u₃))))
         else
-            out .= u_component.(Geometry.UVector.(cache.precomputed.ᶜu))
+            out .= u_component.(Geometry.UVector.(ᶜu_lazy(state.c.uₕ, state.f.u₃)))
         end
     end,
 )
@@ -92,9 +92,9 @@ add_diagnostic_variable!(
     comments = "Northward (meridional) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(v_component.(Geometry.VVector.(cache.precomputed.ᶜu)))
+            return copy(v_component.(Geometry.VVector.(ᶜu_lazy(state.c.uₕ, state.f.u₃))))
         else
-            out .= v_component.(Geometry.VVector.(cache.precomputed.ᶜu))
+            out .= v_component.(Geometry.VVector.(ᶜu_lazy(state.c.uₕ, state.f.u₃)))
         end
     end,
 )
@@ -199,7 +199,8 @@ add_diagnostic_variable!(
     units = "s^-1",
     comments = "Vertical component of relative vorticity",
     compute! = (out, state, cache, time) -> begin
-        vort = @. w_component.(Geometry.WVector(curlₕ(cache.precomputed.ᶜu)))
+        ᶜu = Base.materialize(ᶜu_lazy(state.c.uₕ, state.f.u₃))
+        vort = @. w_component.(Geometry.WVector(curlₕ(ᶜu)))
         # We need to ensure smoothness, so we call DSS
         Spaces.weighted_dss!(vort)
         if isnothing(out)
@@ -552,13 +553,13 @@ add_diagnostic_variable!(
         if isnothing(out)
             return copy(
                 u_component.(
-                    Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1)),
+                    Geometry.UVector.(Fields.level(Base.materialize(ᶜu_lazy(state.c.uₕ, state.f.u₃)), 1)),
                 ),
             )
         else
             out .=
                 u_component.(
-                    Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1)),
+                    Geometry.UVector.(Fields.level(Base.materialize(ᶜu_lazy(state.c.uₕ, state.f.u₃)), 1)),
                 )
         end
     end,
@@ -577,13 +578,13 @@ add_diagnostic_variable!(
         if isnothing(out)
             return copy(
                 v_component.(
-                    Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1)),
-                ),
+                    Geometry.UVector.(Fields.level(Base.materialize(ᶜu_lazy(state.c.uₕ, state.f.u₃)), 1)),
+                )
             )
         else
             out .=
                 v_component.(
-                    Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1)),
+                    Geometry.UVector.(Fields.level(Base.materialize(ᶜu_lazy(state.c.uₕ, state.f.u₃)), 1)),
                 )
         end
     end,
@@ -1369,11 +1370,11 @@ add_diagnostic_variable!(
     comments = "Error of steady-state eastward (zonal) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            u_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
-            u_component.(cache.steady_state_velocity.ᶜu)
+                u_component.(Geometry.UVWVector.(ᶜu_lazy(state.c.uₕ, state.f.u₃))) .-
+                u_component.(cache.steady_state_velocity.ᶜu)
         else
             out .=
-                u_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
+                u_component.(Geometry.UVWVector.(ᶜu_lazy(state.c.uₕ, state.f.u₃))) .-
                 u_component.(cache.steady_state_velocity.ᶜu)
         end
     end,
@@ -1387,11 +1388,11 @@ add_diagnostic_variable!(
     comments = "Error of steady-state northward (meridional) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            v_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
-            v_component.(cache.steady_state_velocity.ᶜu)
+                v_component.(Geometry.UVWVector.(ᶜu_lazy(state.c.uₕ,state.f.u₃))) .-
+                v_component.(cache.steady_state_velocity.ᶜu)
         else
             out .=
-                v_component.(Geometry.UVWVector.(cache.precomputed.ᶜu)) .-
+                v_component.(Geometry.UVWVector.(ᶜu_lazy(state.c.uₕ, state.f.u₃))) .-
                 v_component.(cache.steady_state_velocity.ᶜu)
         end
     end,
