@@ -148,13 +148,15 @@ function precipitation_tendency!(
     # Source terms from EDMFX updrafts
     (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs) = p.precomputed
     # Source terms from EDMFX environment
-    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρa⁰) = p.precomputed
+    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+
+    ᶜρa⁰_vals = ᶜρa⁰(Y, p)
 
     # Update from environment precipitation and cloud formation sources/sinks
-    @. Yₜ.c.ρq_liq += ᶜρa⁰ * ᶜSqₗᵖ⁰
-    @. Yₜ.c.ρq_ice += ᶜρa⁰ * ᶜSqᵢᵖ⁰
-    @. Yₜ.c.ρq_rai += ᶜρa⁰ * ᶜSqᵣᵖ⁰
-    @. Yₜ.c.ρq_sno += ᶜρa⁰ * ᶜSqₛᵖ⁰
+    @. Yₜ.c.ρq_liq += ᶜρa⁰_vals * ᶜSqₗᵖ⁰
+    @. Yₜ.c.ρq_ice += ᶜρa⁰_vals * ᶜSqᵢᵖ⁰
+    @. Yₜ.c.ρq_rai += ᶜρa⁰_vals * ᶜSqᵣᵖ⁰
+    @. Yₜ.c.ρq_sno += ᶜρa⁰_vals * ᶜSqₛᵖ⁰
 
     # Update from the updraft precipitation sources
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
