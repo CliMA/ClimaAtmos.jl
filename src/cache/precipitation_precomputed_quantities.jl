@@ -489,19 +489,19 @@ function set_precipitation_surface_fluxes!(
     ᶜq_liq = ᶜspecific(Y.c.ρq_liq, Y.c.ρ)
     ᶜq_ice = ᶜspecific(Y.c.ρq_ice, Y.c.ρ)
     sfc_qᵣ = Fields.Field(
-        Fields.field_values(Fields.level(Base.materialize(ᶜq_rai), 1)),
+        Fields.field_values(Fields.level(ᶜq_rai, 1)),
         sfc_space,
     )
     sfc_qₛ = Fields.Field(
-        Fields.field_values(Fields.level(Base.materialize(ᶜq_sno), 1)),
+        Fields.field_values(Fields.level(ᶜq_sno, 1)),
         sfc_space,
     )
     sfc_qₗ = Fields.Field(
-        Fields.field_values(Fields.level(Base.materialize(ᶜq_liq), 1)),
+        Fields.field_values(Fields.level(ᶜq_liq, 1)),
         sfc_space,
     )
     sfc_qᵢ = Fields.Field(
-        Fields.field_values(Fields.level(Base.materialize(ᶜq_ice), 1)),
+        Fields.field_values(Fields.level(ᶜq_ice, 1)),
         sfc_space,
     )
     sfc_wᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), sfc_space)
