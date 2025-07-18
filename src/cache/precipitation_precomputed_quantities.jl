@@ -488,26 +488,16 @@ function set_precipitation_surface_fluxes!(
     ᶜq_sno = ᶜspecific(Y.c.ρq_sno, Y.c.ρ)
     ᶜq_liq = ᶜspecific(Y.c.ρq_liq, Y.c.ρ)
     ᶜq_ice = ᶜspecific(Y.c.ρq_ice, Y.c.ρ)
-    sfc_qᵣ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜq_rai, 1)),
-        sfc_space,
-    )
-    sfc_qₛ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜq_sno, 1)),
-        sfc_space,
-    )
-    sfc_qₗ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜq_liq, 1)),
-        sfc_space,
-    )
-    sfc_qᵢ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜq_ice, 1)),
-        sfc_space,
-    )
-    sfc_wᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), sfc_space)
-    sfc_wₛ = Fields.Field(Fields.field_values(Fields.level(ᶜwₛ, 1)), sfc_space)
-    sfc_wₗ = Fields.Field(Fields.field_values(Fields.level(ᶜwₗ, 1)), sfc_space)
-    sfc_wᵢ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵢ, 1)), sfc_space)
+    sfc_qᵣ = Fields.field_values(Fields.level(ᶜq_rai, 1))
+    sfc_qₛ = Fields.field_values(Fields.level(ᶜq_sno, 1))
+
+    sfc_qₗ = Fields.field_values(Fields.level(ᶜq_liq, 1))
+    sfc_qᵢ = Fields.field_values(Fields.level(ᶜq_ice, 1))
+        
+    sfc_wᵣ = Fields.field_values(Fields.level(ᶜwᵣ, 1))
+    sfc_wₛ = Fields.field_values(Fields.level(ᶜwₛ, 1))
+    sfc_wₗ = Fields.field_values(Fields.level(ᶜwₗ, 1))
+    sfc_wᵢ = Fields.field_values(Fields.level(ᶜwᵢ, 1))
 
     @. surface_rain_flux = sfc_ρ * (sfc_qᵣ * (-sfc_wᵣ) + sfc_qₗ * (-sfc_wₗ))
     @. surface_snow_flux = sfc_ρ * (sfc_qₛ * (-sfc_wₛ) + sfc_qᵢ * (-sfc_wᵢ))
