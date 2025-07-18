@@ -608,13 +608,73 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρ⁰, ᶜts⁰) = p.precomputed
     (; ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_rai⁰, ᶜq_sno⁰) = p.precomputed
 
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₜʲs, ᶜwₕʲs) = p.precomputed
+
     # TODO - can I re-use them between js and env?
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    FT = eltype(params)
 
     for j in 1:n
+
+        # compute terminal velocity for precipitation
+        @. ᶜwᵣʲs.:($$j) = CM1.terminal_velocity(
+            cmp.pr,
+            cmp.tv.rain,
+            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
+        )
+        @. ᶜwₛʲs.:($$j) = CM1.terminal_velocity(
+            cmp.ps,
+            cmp.tv.snow,
+            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_sno),
+        )
+        # compute sedimentation velocity for cloud condensate [m/s]
+        @. ᶜwₗʲs.:($$j) = CMNe.terminal_velocity(
+            cmc.liquid,
+            cmc.Ch2022.rain,
+            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_liq),
+        )
+        @. ᶜwᵢʲs.:($$j) = CMNe.terminal_velocity(
+            cmc.ice,
+            cmc.Ch2022.small_ice,
+            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_ice),
+        )
+        # compute their contirbutions to energy and total water advection
+        @. ᶜwₜʲs.:($$j) = ifelse(
+            Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_tot > FT(0),
+            (
+                ᶜwₗʲs.:($$j) * Y.c.sgsʲs.:($$j).q_liq +
+                ᶜwᵢʲs.:($$j) * Y.c.sgsʲs.:($$j).q_ice +
+                ᶜwᵣʲs.:($$j) * Y.c.sgsʲs.:($$j).q_rai +
+                ᶜwₛʲs.:($$j) * Y.c.sgsʲs.:($$j).q_sno
+            ) / Y.c.sgsʲs.:($$j).ρa / Y.c.sgsʲs.:($$j).q_tot,
+            FT(0),
+        )
+        @. ᶜwₕʲs.:($$j) = ifelse(
+            Y.c.sgsʲs.:($$j).ρa * abs(Y.c.sgsʲs.:($$j).mse) > FT(0),
+            (
+                ᶜwₗʲs.:($$j) *
+                Y.c.sgsʲs.:($$j).q_liq *
+                (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                ᶜwᵢʲs.:($$j) *
+                Y.c.sgsʲs.:($$j).q_ice *
+                (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                ᶜwᵣʲs.:($$j) *
+                Y.c.sgsʲs.:($$j).q_rai *
+                (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                ᶜwₛʲs.:($$j) *
+                Y.c.sgsʲs.:($$j).q_sno *
+                (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
+            ) / Y.c.sgsʲs.:($$j).ρa / abs(Y.c.sgsʲs.:($$j).mse),
+            FT(0),
+        )
+
         # Precipitation sources and sinks from the updrafts
         compute_precipitation_sources!(
             ᶜSᵖ,
