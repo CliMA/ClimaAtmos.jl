@@ -44,7 +44,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜρ⁰ = @. TD.air_density(thermo_params, ᶜts⁰)
+    ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
     ᶜρa⁰_vals = ᶜρa⁰(Y, p)
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -80,8 +80,7 @@ function edmfx_sgs_mass_flux_tendency!(
         # Add the environment fluxes
         @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
 
-        ᶜmse⁰ = p.scratch.ᶜtemp_scalar_2
-        ᶜmse⁰ .= ᶜspecific_env_mse(Y, p)
+        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
         @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰_vals, ᶜρ⁰)
         vtt = vertical_transport(
             ᶜρ⁰,
@@ -432,8 +431,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
             bottom = Operators.SetValue(C3(FT(0))),
         )
 
-        ᶜmse⁰ = p.scratch.ᶜtemp_scalar_2
-        ᶜmse⁰ .= ᶜspecific_env_mse(Y, p)
+        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
         @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜmse⁰ + ᶜK⁰)))
         if use_prognostic_tke(turbconv_model)
             # Turbulent TKE transport (diffusion)

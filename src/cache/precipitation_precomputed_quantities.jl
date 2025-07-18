@@ -474,24 +474,28 @@ function set_precipitation_surface_fluxes!(
     sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
 
     # Constant extrapolation to surface, consistent with simple downwinding
-    ᶜq_rai = ᶜspecific(Y.c.ρq_rai, Y.c.ρ)
-    ᶜq_sno = ᶜspecific(Y.c.ρq_sno, Y.c.ρ)
-    ᶜq_liq = ᶜspecific(Y.c.ρq_liq, Y.c.ρ)
-    ᶜq_ice = ᶜspecific(Y.c.ρq_ice, Y.c.ρ)
+    ᶜq_rai = p.scratch.ᶜtemp_scalar
+    ᶜq_sno = p.scratch.ᶜtemp_scalar_2
+    ᶜq_liq = p.scratch.ᶜtemp_scalar_3
+    ᶜq_ice = p.scratch.ᶜtemp_scalar_4
+    ᶜq_rai .= ᶜspecific(Y.c.ρq_rai, Y.c.ρ)
+    ᶜq_sno .= ᶜspecific(Y.c.ρq_sno, Y.c.ρ)
+    ᶜq_liq .= ᶜspecific(Y.c.ρq_liq, Y.c.ρ)
+    ᶜq_ice .= ᶜspecific(Y.c.ρq_ice, Y.c.ρ)
     sfc_qᵣ = Fields.Field(
-        Fields.field_values(Fields.level(Base.materialize(ᶜq_rai), 1)),
+        Fields.field_values(Fields.level(ᶜq_rai, 1)),
         sfc_space,
     )
     sfc_qₛ = Fields.Field(
-        Fields.field_values(Fields.level(Base.materialize(ᶜq_sno), 1)),
+        Fields.field_values(Fields.level(ᶜq_sno, 1)),
         sfc_space,
     )
     sfc_qₗ = Fields.Field(
-        Fields.field_values(Fields.level(Base.materialize(ᶜq_liq), 1)),
+        Fields.field_values(Fields.level(ᶜq_liq, 1)),
         sfc_space,
     )
     sfc_qᵢ = Fields.Field(
-        Fields.field_values(Fields.level(Base.materialize(ᶜq_ice), 1)),
+        Fields.field_values(Fields.level(ᶜq_ice, 1)),
         sfc_space,
     )
     sfc_wᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), sfc_space)

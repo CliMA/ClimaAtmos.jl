@@ -98,7 +98,6 @@ function subsidence_tendency!(Yₜ, Y, p, t, ::Subsidence)
     @. ᶠsubsidence³ =
         subsidence_profile(ᶠz) * CT3(unit_basis_vector_data(CT3, ᶠlg))
 
-    ᶜρ = Y.c.ρ
     # LS Subsidence
     ᶜh_tot = @. lazy(
         TD.total_specific_enthalpy(

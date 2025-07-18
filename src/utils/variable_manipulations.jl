@@ -269,7 +269,7 @@ function ᶜenv_value(
     grid_scale_value,
     f_draft,
     gs,
-    turbconv_model::PrognosticEDMFX,
+    turbconv_model::PrognosticEDMFX
 )
     return @. lazy(grid_scale_value - draft_sum(f_draft, gs.sgsʲs))
 end
@@ -313,10 +313,10 @@ function ᶜspecific_env_value(::Val{χ_name}, Y, p) where {χ_name}
     # environment density-area-weighted mse (`ρa⁰χ⁰`).
     # Numerator: ρa⁰χ⁰ = ρχ - (Σ ρaʲ * χʲ)
     if turbconv_model isa PrognosticEDMFX
-        # Numerator: ρa⁰χ⁰ = ρχ - (Σ sgsʲ.ρa * sgsʲ.χ)
+        #Numerator: ρa⁰χ⁰ = ρχ - (Σ sgsʲ.ρa * sgsʲ.χ)
         ᶜρaχ⁰ = ᶜenv_value(
             ᶜρχ,
-            sgsʲ -> getproperty(sgsʲ, :ρa) * getproperty(sgsʲ, χ_name),
+            sgsʲ -> getfield(sgsʲ, :ρa) * getfield(sgsʲ, χ_name),
             Y.c,
             turbconv_model,
         )
@@ -326,7 +326,7 @@ function ᶜspecific_env_value(::Val{χ_name}, Y, p) where {χ_name}
         n = n_mass_flux_subdomains(turbconv_model)
 
         # Σ ρaʲ * χʲ
-        ᶜρaχʲs_sum = p.scratch.ᶜtemp_scalar
+        ᶜρaχʲs_sum = p.scratch.ᶜtemp_scalar_3
         @. ᶜρaχʲs_sum = 0
         for j in 1:n
             ᶜρaʲ = p.precomputed.ᶜρaʲs.:($j)
@@ -370,9 +370,10 @@ Returns:
 
 function ᶜρa⁰(Y, p)
     turbconv_model = p.atmos.turbconv_model
-
+    # ρ - Σ ρaʲ
     if turbconv_model isa PrognosticEDMFX
         return ᶜenv_value(Y.c.ρ, sgsʲ -> sgsʲ.ρa, Y.c, turbconv_model)
+
     elseif turbconv_model isa DiagnosticEDMFX
         (; ᶜρaʲs) = p.precomputed
         return ᶜenv_value(Y.c.ρ, ᶜρaʲ -> ᶜρaʲ, ᶜρaʲs, turbconv_model)
@@ -464,9 +465,8 @@ function ᶜspecific_env_mse(Y, p)
     elseif turbconv_model isa DiagnosticEDMFX || turbconv_model isa EDOnlyEDMFX
 
         n = n_mass_flux_subdomains(turbconv_model)
-        ᶜρamseʲ_sum = p.scratch.ᶜtemp_scalar
+        ᶜρamseʲ_sum = p.scratch.ᶜtemp_scalar_2
         @. ᶜρamseʲ_sum = 0
-        # Numerator: ρa⁰mse⁰ = ρmse - (Σ ρaʲ * mseʲ)
         for j in 1:n
             ᶜρaʲ = p.precomputed.ᶜρaʲs.:($j)
             ᶜmseʲ = p.precomputed.ᶜmseʲs.:($j)
