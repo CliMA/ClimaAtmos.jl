@@ -7,11 +7,34 @@ replace_parent_type(x::DataLayouts.AbstractData, ::Type{T}) where {T} =
 replace_parent_type(x::Union{Tuple, NamedTuple}, ::Type{T}) where {T} =
     unrolled_map(Base.Fix2(replace_parent_type, T), x)
 
+# Replaces the given precomputed and scratch fields in an AtmosCache.
+function replace_precomputed_and_scratch(cache, precomputed, scratch)
+    new_cache_fields =
+        ntuple(Val(fieldcount(typeof(cache)))) do cache_field_index
+            cache_field_name = fieldname(typeof(cache), cache_field_index)
+            if cache_field_name == :precomputed
+                (; cache.precomputed..., precomputed...)
+            elseif cache_field_name == :scratch
+                (; cache.scratch..., scratch...)
+            else
+                getfield(cache, cache_field_index)
+            end
+        end
+    return AtmosCache(new_cache_fields...)
+end
+
+# The horizontal SpectralElementSpace of the fields in a FieldVector.
+function horizontal_space(field_vector)
+    all_values = Fields._values(field_vector)
+    space = axes(unrolled_argfirst(value -> value isa Fields.Field, all_values))
+    return space isa Spaces.FiniteDifferenceSpace ? nothing :
+           Spaces.horizontal_space(space)
+end
+
 # An iterator over the column indices of all fields in a FieldVector.
 function column_index_iterator(field_vector)
-    all_values = Fields._values(field_vector)
-    first_field = unrolled_argfirst(value -> value isa Fields.Field, all_values)
-    horz_space = Spaces.horizontal_space(axes(first_field))
+    horz_space = horizontal_space(field_vector)
+    isnothing(horz_space) && return ((1, 1, 1),)
     qs = 1:Quadratures.degrees_of_freedom(Spaces.quadrature_style(horz_space))
     hs = Spaces.eachslabindex(horz_space)
     return horz_space isa Spaces.SpectralElementSpace1D ?
@@ -24,31 +47,33 @@ scalar_field_names(field_vector) =
         x isa Fields.Field && eltype(x) == eltype(field_vector)
     end
 
-# An iterator with pairs of the form
-# (scalar_level_index, (scalar_index, level_index)), where scalar_index is an
-# index into scalar_field_names(field_vector), level_index is a vertical index
-# into the scalar field with this name, and scalar_level_index is a unique
-# linear index for each combination of scalar field name and vertical index.
-function scalar_level_index_pairs(field_vector)
+# An iterator with tuples of the form (scalar_index, level_index)), where
+# scalar_index is an index into scalar_field_names(field_vector) and level_index
+# is a vertical index into the scalar field with this name.
+function field_vector_index_iterator(field_vector)
     scalar_names = scalar_field_names(field_vector)
     scalar_index_and_level_pairs =
         unrolled_map(enumerate(scalar_names)) do (scalar_index, name)
             field = MatrixFields.get_field(field_vector, name)
-            is_one_level = field isa Fields.SpectralElementField
+            is_one_level =
+                field isa Union{Fields.PointField, Fields.SpectralElementField}
             Iterators.map(
                 level_index -> (scalar_index, level_index),
                 Base.OneTo(is_one_level ? 1 : Spaces.nlevels(axes(field))),
             )
         end
-    return enumerate(Iterators.flatten(scalar_index_and_level_pairs))
+    return Iterators.flatten(scalar_index_and_level_pairs)
 end
 
-# A view of the data for one point in a field, which can be used like a Ref.
-Base.@propagate_inbounds function point(field, level_index, column_index...)
-    column_field = Fields.column(field, column_index...)
-    column_field isa Fields.PointField && return column_field
-    level_index_offset = Operators.left_idx(axes(column_field)) - 1
-    return Fields.level(column_field, level_index + level_index_offset)
+# A view of one point in a Field or DataLayout, which can be used like a Ref.
+Base.@propagate_inbounds function point(value, level_index, column_index...)
+    column_value = Fields.column(value, column_index...)
+    column_value isa Union{Fields.PointField, DataLayouts.DataF} &&
+        return column_value
+    level_index_offset =
+        column_value isa Fields.Field ?
+        Operators.left_idx(axes(column_value)) - 1 : 0
+    return Fields.level(column_value, level_index + level_index_offset)
 end
 
 # TODO: This needs to be moved into ClimaCore to avoid breaking precompilation.
@@ -89,4 +114,23 @@ end
     val = sqrt(x)
     deriv = iszero(x) ? zero(x) : inv(2 * val)
     return ForwardDiff.dual_definition_retval(tag, val, deriv, partials)
+end
+
+# Ignore all derivative information when comparing Dual numbers. This ensures
+# that conditional statements are equivalent for Dual numbers and Real numbers.
+for func in (:iszero,)
+    @eval @inline Base.$func(arg::ForwardDiff.Dual{Jacobian}) =
+        $func(ForwardDiff.value(arg))
+end
+for func in (:isequal, :isless, :<, :>, :(==), :!=, :<=, :>=)
+    @eval @inline Base.$func(
+        arg1::ForwardDiff.Dual{Jacobian},
+        arg2::ForwardDiff.Dual{Jacobian},
+    ) = $func(ForwardDiff.value(arg1), ForwardDiff.value(arg2))
+    for R in ForwardDiff.AMBIGUOUS_TYPES # Use these types to avoid ambiguities.
+        @eval @inline Base.$func(arg1::ForwardDiff.Dual{Jacobian}, arg2::$R) =
+            $func(ForwardDiff.value(arg1), arg2)
+        @eval @inline Base.$func(arg1::$R, arg2::ForwardDiff.Dual{Jacobian}) =
+            $func(arg1, ForwardDiff.value(arg2))
+    end
 end
