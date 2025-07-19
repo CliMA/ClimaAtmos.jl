@@ -313,13 +313,17 @@ function ᶜspecific_env_value(::Val{χ_name}, Y, p) where {χ_name}
     # environment density-area-weighted mse (`ρa⁰χ⁰`).
     # Numerator: ρa⁰χ⁰ = ρχ - (Σ ρaʲ * χʲ)
     if turbconv_model isa PrognosticEDMFX
-        # Numerator: ρa⁰χ⁰ = ρχ - (Σ sgsʲ.ρa * sgsʲ.χ)
-        ᶜρaχ⁰ = ᶜenv_value(
-            ᶜρχ,
-            sgsʲ -> getproperty(sgsʲ, :ρa) * getproperty(sgsʲ, χ_name),
-            Y.c,
-            turbconv_model,
-        )
+        #Numerator: ρa⁰χ⁰ = ρχ - (Σ sgsʲ.ρa * sgsʲ.χ)
+        n = n_mass_flux_subdomains(turbconv_model)
+        # Σ ρaʲ * χʲ
+        ᶜρaχʲs_sum = p.scratch.ᶜtemp_scalar
+        @. ᶜρaχʲs_sum = 0
+        for j in 1:n
+            sgsʲ = Y.c.sgsʲs.:($j)
+            @. ᶜρaχʲs_sum += sgsʲ.ρa * getproperty(sgsʲ, χ_name)
+        end
+
+        ᶜρaχ⁰ = @. lazy(ᶜρχ - ᶜρaχʲs_sum)
 
     elseif turbconv_model isa DiagnosticEDMFX || turbconv_model isa EDOnlyEDMFX
         ᶜχʲs = getproperty(p.precomputed, Symbol(:ᶜ, χ_name, :ʲs))
@@ -372,10 +376,30 @@ function ᶜρa⁰(Y, p)
     turbconv_model = p.atmos.turbconv_model
 
     if turbconv_model isa PrognosticEDMFX
-        return ᶜenv_value(Y.c.ρ, sgsʲ -> sgsʲ.ρa, Y.c, turbconv_model)
+        n = n_mass_flux_subdomains(turbconv_model)
+
+        # Σ ρaʲ
+        ᶜρaʲs_sum = p.scratch.ᶜtemp_scalar
+        @. ᶜρaʲs_sum = 0
+        for j in 1:n
+            sgsʲ = Y.c.sgsʲs.:($j)
+            @. ᶜρaʲs_sum += sgsʲ.ρa
+        end
+
+        return @. lazy(Y.c.ρ - ᶜρaʲs_sum)
     elseif turbconv_model isa DiagnosticEDMFX
         (; ᶜρaʲs) = p.precomputed
-        return ᶜenv_value(Y.c.ρ, ᶜρaʲ -> ᶜρaʲ, ᶜρaʲs, turbconv_model)
+        n = n_mass_flux_subdomains(turbconv_model)
+
+        # Σ ρaʲ
+        ᶜρaʲs_sum = p.scratch.ᶜtemp_scalar
+        @. ᶜρaʲs_sum = 0
+        for j in 1:n
+            ᶜρaʲ = ᶜρaʲs.:($j)
+            @. ᶜρaʲs_sum += ᶜρaʲ
+        end
+
+        return @. lazy(Y.c.ρ - ᶜρaʲs_sum)
     else
         return Y.c.ρ
     end
@@ -459,8 +483,16 @@ function ᶜspecific_env_mse(Y, p)
     # Numerator: ρa⁰mse⁰ = ρmse - (Σ ρaʲ * mseʲ)
 
     if turbconv_model isa PrognosticEDMFX
-        ρa⁰mse⁰ =
-            ᶜenv_value(ᶜρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Y.c, turbconv_model)
+        n = n_mass_flux_subdomains(turbconv_model)
+
+        # Σ ρaʲ * mseʲ
+        ᶜρamseʲ_sum = p.scratch.ᶜtemp_scalar
+        @. ᶜρamseʲ_sum = 0
+        for j in 1:n
+            sgsʲ = Y.c.sgsʲs.:($j)
+            @. ᶜρamseʲ_sum += sgsʲ.ρa * sgsʲ.mse
+        end
+        ρa⁰mse⁰ = @. lazy(ᶜρmse - ᶜρamseʲ_sum)
     elseif turbconv_model isa DiagnosticEDMFX || turbconv_model isa EDOnlyEDMFX
 
         n = n_mass_flux_subdomains(turbconv_model)
