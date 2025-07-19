@@ -379,7 +379,7 @@ function ᶜρa⁰(Y, p)
         n = n_mass_flux_subdomains(turbconv_model)
 
         # Σ ρaʲ
-        ᶜρaʲs_sum = p.scratch.ᶜtemp_scalar
+        ᶜρaʲs_sum = p.scratch.ᶜtemp_scalar_2
         @. ᶜρaʲs_sum = 0
         for j in 1:n
             sgsʲ = Y.c.sgsʲs.:($j)
@@ -392,7 +392,7 @@ function ᶜρa⁰(Y, p)
         n = n_mass_flux_subdomains(turbconv_model)
 
         # Σ ρaʲ
-        ᶜρaʲs_sum = p.scratch.ᶜtemp_scalar
+        ᶜρaʲs_sum = p.scratch.ᶜtemp_scalar_2
         @. ᶜρaʲs_sum = 0
         for j in 1:n
             ᶜρaʲ = ᶜρaʲs.:($j)
