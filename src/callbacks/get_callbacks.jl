@@ -350,19 +350,35 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
     end
 
     if atmos.non_orographic_gravity_wave isa NonOrographicGravityWave
-        dt_gw =
-            dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_gw"])) :
-            FT(time_to_seconds(parsed_args["dt_gw"]))
-        dt_gw, _, _, _ = promote(dt_gw, t_start, dt, sim_info.t_end)
+        dt_nogw =
+            dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_nogw"])) :
+            FT(time_to_seconds(parsed_args["dt_nogw"]))
+        dt_nogw, _, _, _ = promote(dt_nogw, t_start, dt, sim_info.t_end)
         # We use Millisecond to support fractional seconds, eg. 0.1
-        dt_gw_ms = Dates.Millisecond(1_000 * float(dt_gw))
+        dt_nogw_ms = Dates.Millisecond(1_000 * float(dt_nogw))
         if parsed_args["dt_save_state_to_disk"] != "Inf" &&
-           !CA.isdivisible(dt_save_state_to_disk_dates, dt_gw_ms)
-            @warn "Non-orographic gravity wave period ($(dt_gw_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"
+           !CA.isdivisible(dt_save_state_to_disk_dates, dt_nogw_ms)
+            @warn "Non-orographic gravity wave period ($(dt_nogw_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"
             @warn "This simulation will not be reproducible when restarted"
         end
 
-        callbacks = (callbacks..., call_every_dt(nogw_model_callback!, dt_gw))
+        callbacks = (callbacks..., call_every_dt(nogw_model_callback!, dt_nogw))
+    end
+
+    if atmos.orographic_gravity_wave isa OrographicGravityWave
+        dt_ogw =
+            dt isa ITime ? ITime(time_to_seconds(parsed_args["dt_ogw"])) :
+            FT(time_to_seconds(parsed_args["dt_ogw"]))
+        dt_ogw, _, _, _ = promote(dt_ogw, t_start, dt, sim_info.t_end)
+        # We use Millisecond to support fractional seconds, eg. 0.1
+        dt_ogw_ms = Dates.Millisecond(1_000 * float(dt_ogw))
+        if parsed_args["dt_save_state_to_disk"] != "Inf" &&
+           !CA.isdivisible(dt_save_state_to_disk_dates, dt_ogw_ms)
+            @warn "Orographic gravity wave period ($(dt_ogw_ms)) is not an even divisor of the checkpoint frequency ($dt_save_state_to_disk_dates)"
+            @warn "This simulation will not be reproducible when restarted"
+        end
+
+        callbacks = (callbacks..., call_every_dt(ogw_model_callback!, dt_ogw))
     end
 
     return callbacks

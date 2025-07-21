@@ -236,7 +236,7 @@ function get_orographic_gravity_wave_model(parsed_args, ::Type{FT}) where {FT}
     return if ogw_name == "gfdl_restart"
         FullOrographicGravityWave{FT, String}()
     elseif ogw_name == "raw_topo"
-        FullOrographicGravityWave{FT, String}(topo_info = "raw_topo")
+        FullOrographicGravityWave{FT, String}(topo_info = "raw_topo", topography = parsed_args["topography"])
     elseif ogw_name == "linear"
         LinearOrographicGravityWave{FT, String}(topo_info = "linear")
     else
