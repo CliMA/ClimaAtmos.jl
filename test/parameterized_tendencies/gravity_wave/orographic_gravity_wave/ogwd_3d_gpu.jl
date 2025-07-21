@@ -199,7 +199,6 @@ Y = ClimaCore.to_device(ClimaComms.CUDADevice(), copy(Y))
 
 # pre-compute thermal vars
 thermo_params = CA.TD.Parameters.ThermodynamicsParameters(FT)
-
 thermo_params = ClimaCore.to_device(ClimaComms.CUDADevice(), thermo_params)
 
 ᶜT_cpu = gfdl_ca_temp
@@ -242,7 +241,7 @@ p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_i
 (; topo_d2Vτdz, topo_L1, topo_U_k_field, topo_level_idx) = p.orographic_gravity_wave
 (; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
 (; ᶜweights, ᶜdTdz, ᶜdτ_sat_dz) = p.orographic_gravity_wave
-(; uforcing, vforcing) = p.orographic_gravity_wave
+(; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
 
 # Extract parameters once and pack into tuple
 ogw_params = (;
@@ -377,14 +376,10 @@ CA.calc_saturation_profile!(
     topo_level_idx,
 )
 
-# a place holder to store physical forcing on uv
-# uforcing = zeros(axes(u_phy))
-# vforcing = zeros(axes(v_phy))
-
 # compute drag tendencies due to propagating part
 CA.calc_propagate_forcing!(
-    uforcing,
-    vforcing,
+    ᶜuforcing,
+    ᶜvforcing,
     topo_τ_x,
     topo_τ_y,
     topo_τ_l,
@@ -394,8 +389,8 @@ CA.calc_propagate_forcing!(
 )
 
 CA.calc_nonpropagating_forcing!(
-    uforcing,
-    vforcing,
+    ᶜuforcing,
+    ᶜvforcing,
     ᶠN,
     topo_ᶠVτ,
     ᶠp,
@@ -414,12 +409,12 @@ CA.calc_nonpropagating_forcing!(
 )
 
 # constrain forcing
-@. uforcing = max(FT(-3e-3), min(FT(3e-3), uforcing))
-@. vforcing = max(FT(-3e-3), min(FT(3e-3), vforcing))
+@. ᶜuforcing = max(FT(-3e-3), min(FT(3e-3), ᶜuforcing))
+@. ᶜvforcing = max(FT(-3e-3), min(FT(3e-3), ᶜvforcing))
 
 # Move GPU arrays back to CPU for plotting
-uforcing_cpu = ClimaCore.to_cpu(uforcing)
-vforcing_cpu = ClimaCore.to_cpu(vforcing)
+uforcing_cpu = ClimaCore.to_cpu(ᶜuforcing)
+vforcing_cpu = ClimaCore.to_cpu(ᶜvforcing)
 gfdl_ca_udt_topo_cpu = ClimaCore.to_cpu(gfdl_ca_udt_topo)
 gfdl_ca_vdt_topo_cpu = ClimaCore.to_cpu(gfdl_ca_vdt_topo)
 ᶜz_cpu = ClimaCore.to_cpu(ᶜz)

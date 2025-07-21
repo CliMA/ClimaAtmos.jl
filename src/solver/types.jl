@@ -288,6 +288,7 @@ Base.@kwdef struct FullOrographicGravityWave{FT, S} <: OrographicGravityWave
     a1::FT = 3.0
     Fr_crit::FT = 0.7
     topo_info::S = "gfdl_restart"
+    topography::S = "Earth" # "Earth", ... 
 end
 
 abstract type AbstractForcing end
