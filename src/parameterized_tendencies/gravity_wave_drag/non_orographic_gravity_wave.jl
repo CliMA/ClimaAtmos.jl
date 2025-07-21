@@ -275,9 +275,9 @@ function non_orographic_gravity_wave_compute_tendency!(
 
 end
 
-non_orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+non_orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
-function non_orographic_gravity_wave_tendency!(
+function non_orographic_gravity_wave_apply_tendency!(
     Yₜ,
     Y,
     p,

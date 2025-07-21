@@ -21,8 +21,6 @@ orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
 
 orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 
-orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-
 function get_topo_info(Y, ogw::OrographicGravityWave)
     # For now, the initialisation of the cache is the same for all types of
     # orographic gravity wave drag parameterizations
@@ -34,13 +32,20 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
     elseif ogw.topo_info == "raw_topo"
         # TODO: right now this option may easily crash
         # because we did not incorporate any smoothing when interpolate back to model grid
-        elevation_rll =
-            AA.earth_orography_file_path(; context = ClimaComms.context(Y.c))
-        radius =
+        # elevation_rll =
+        #     AA.earth_orography_file_path(; context = ClimaComms.context(Y.c))
+        earth_radius =
             Spaces.topology(
                 Spaces.horizontal_space(axes(Y.c)),
             ).mesh.domain.radius
-        topo_info = compute_OGW_info(Y, elevation_rll, radius, γ, h_frac)
+        # topo_info = compute_ogw_info(Y, elevation_rll, radius, γ, h_frac)
+        topo_info = compute_ogw_drag(
+            Y,
+            earth_radius,
+            ogw.topography
+        )
+
+
     elseif ogw.topo_info == "linear"
         # For user-defined analytical tests
         topo_info = initialize_drag_input_as_fields(Y, ogw.drag_input)
@@ -52,7 +57,7 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
 
 end
 
-function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info)
+function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info=nothing)
     # For now, the initialisation of the cache is the same for all types of
     # orographic gravity wave drag parameterizations
     @assert Spaces.topology(Spaces.horizontal_space(axes(Y.c))).mesh.domain isa
@@ -60,6 +65,10 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info)
 
     FT = Spaces.undertype(axes(Y.c))
     (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) = ogw
+
+    if topo_info === nothing
+        topo_info = get_topo_info(Y, ogw)
+    end
 
     topo_level_idx = similar(Y.c.ρ, FT)
 
@@ -85,11 +94,6 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info)
         topo_τ_l = similar(Fields.level(Y.c.ρ, 1)),
         topo_τ_p = similar(Fields.level(Y.c.ρ, 1)),
         topo_τ_np = similar(Fields.level(Y.c.ρ, 1)),
-        # topo_τ_x = Fields.Field(FT, axes(Y.f.u₃)),
-        # topo_τ_y = Fields.Field(FT, axes(Y.f.u₃)),
-        # topo_τ_l = Fields.Field(FT, axes(Y.f.u₃)),
-        # topo_τ_p = Fields.Field(FT, axes(Y.f.u₃)),
-        # topo_τ_np = Fields.Field(FT, axes(Y.f.u₃)),
         topo_U_sat = similar(Fields.level(Y.c.ρ, 1)),
         topo_FrU_sat = similar(Fields.level(Y.c.ρ, 1)),
         topo_FrU_max = similar(Fields.level(Y.c.ρ, 1)),
@@ -110,8 +114,8 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info)
         topo_k_pbl_values = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT}),
         topo_info = topo_info,
         ᶜN = similar(Fields.level(Y.c.ρ, 1)),
-        uforcing = similar(Y.c.ρ),
-        vforcing = similar(Y.c.ρ),
+        ᶜuforcing = similar(Y.c.ρ),
+        ᶜvforcing = similar(Y.c.ρ),
         ᶜweights = similar(Y.c.ρ),
         ᶜdTdz = similar(Y.c.ρ),
         ᶜdτ_sat_dz = similar(Y.c.ρ)
@@ -119,7 +123,9 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info)
 
 end
 
-function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::FullOrographicGravityWave)
+orographic_gravity_wave_compute_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+
+function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravityWave)
     ᶜT = p.scratch.ᶜtemp_scalar
     (; params) = p
     (; ᶜts, ᶜp) = p.precomputed
@@ -254,14 +260,24 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::FullOrographicGravit
             grav,
         )
     end
+end
+
+orographic_gravity_wave_apply_tendency!(Yₜ, p, ::Nothing) = nothing
+
+function orographic_gravity_wave_apply_tendency!(
+    Yₜ,
+    p,
+    ::OrographicGravityWave,
+)
+    (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
 
     # constrain forcing
-    @. uforcing = max(FT(-3e-3), min(FT(3e-3), uforcing))
-    @. vforcing = max(FT(-3e-3), min(FT(3e-3), vforcing))
-
-    # convert to covariant vector and add to tendency
+    @. ᶜuforcing = max(FT(-3e-3), min(FT(3e-3), ᶜuforcing))
+    @. ᶜvforcing = max(FT(-3e-3), min(FT(3e-3), ᶜvforcing))
+    
     @. Yₜ.c.uₕ +=
-        Geometry.Covariant12Vector.(Geometry.UVVector.(uforcing, vforcing))
+        Geometry.Covariant12Vector.(Geometry.UVVector.(ᶜuforcing, ᶜvforcing))
+
 end
 
 function calc_nonpropagating_forcing!(
@@ -790,6 +806,81 @@ function calc_saturation_profile!(
 
     return nothing
 end
+
+
+function compute_ogw_drag(
+    Y,
+    earth_radius,
+    topography
+    )
+    FT = eltype(Y)
+    center_space = Fields.axes(Y.c)
+    # face_space = Spaces.face_space(Y.f)
+    face_space = Fields.axes(Y.f)
+    J_bot = Fields.level(Fields.local_geometry_field(face_space).J, half)
+    Δz_bot = Fields.level(Fields.Δz_field(face_space), half)
+    cell_area_bot = Base.broadcasted(/, J_bot, Δz_bot)
+
+    z_surface = Fields.level(Fields.coordinate_field(Y.f).z, half)
+
+    cg_lat = Fields.level(Fields.coordinate_field(Y.f).lat, half)
+
+    if topography == "Earth"
+        real_elev = AA.earth_orography_file_path(; context = ClimaComms.context(center_space),)
+        @info "Loading Earth orography from ETOPO2022 data for OGW drag computation."
+
+
+        #### To-do:
+        # load orography on lat-lon grid and subtract from z_surface
+
+    ### Handle analytical test cases
+    elseif topography == "DCMIP200"
+        topography_function = topography_dcmip200
+    elseif topography == "Hughes2023"
+        topography_function = topography_hughes2023
+    elseif topography == "Agnesi"
+        topography_function = topography_agnesi
+    elseif topography == "Schar"
+        topography_function = topography_schar
+    elseif topography == "Cosine2D"
+        topography_function = topography_cosine_2d
+    elseif topography == "Cosine3D"
+        topography_function = topography_cosine_3d
+    else
+        error("Topography required for orographic gravity wave drag: $topography")
+    end
+
+    real_elev = SpaceVaryingInput(topography_function, face_space)
+    real_elev = Fields.level(real_elev, half)
+    real_elev = max.(0, real_elev)
+
+    hmax = @. real_elev - z_surface
+
+    χ = @. hmax * cell_area_bot * earth_radius / (FT(2) * pi)
+
+    ∇ₕχ = Geometry.UVVector.(gradₕ.(χ))
+
+    ∇ₕhmax = Geometry.UVVector.(gradₕ.(hmax))
+
+    dχdx = ∇ₕχ.components.data.:1
+    dχdy = ∇ₕχ.components.data.:2
+
+    dhdx = ∇ₕhmax.components.data.:1
+    dhdy = ∇ₕhmax.components.data.:2
+
+    # Handle drag vector elements at the antarctic region
+    @. dχdx = ifelse( cg_lat < FT(-88), 0, dχdx)
+    @. dχdy = ifelse( cg_lat < FT(-88), 0, dχdy)
+
+    t11 = dχdx .* dhdx
+    t21 = dχdx .* dhdy
+    t12 = dχdy .* dhdx
+    t22 = dχdy .* dhdy
+
+    return (t11, t21, t12, t22)
+
+end
+
 
 
 
