@@ -130,8 +130,6 @@ CA.calc_base_flux!(
 # @Main.infiltrate
 
 # Move GPU arrays back to CPU for plotting
-# uforcing_cpu = ClimaCore.to_cpu(uforcing)
-# vforcing_cpu = ClimaCore.to_cpu(vforcing)
 topo_τ_x = ClimaCore.to_cpu(topo_τ_x)
 topo_τ_y = ClimaCore.to_cpu(topo_τ_y)
 # ᶜz_cpu = ClimaCore.to_cpu(ᶜz)
