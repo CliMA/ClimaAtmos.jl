@@ -405,7 +405,7 @@ function external_forcing_tendency!(
         ᶜh_tot,
         Val{:first_order}(),
     )
-    ᶜq_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     subsidence!(
         Yₜ.c.ρq_tot,
         Y.c.ρ,

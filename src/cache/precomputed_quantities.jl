@@ -355,162 +355,32 @@ function thermo_state(
     return get_ts(ρ, p, θ, e_int, q_tot, q_pt)
 end
 
-const FieldOrValue = Union{Fields.Field, Base.AbstractBroadcasted, Real}
-function ᶜthermo_state(
-    thermo_params;
-    ρ = nothing,
-    p = nothing,
-    θ = nothing,
-    e_int = nothing,
-    q_tot = nothing,
-    q_pt = nothing,
-)
-
-    get_ts(
-        ρ::T,
-        ::Nothing,
-        θ::T,
-        ::Nothing,
-        ::Nothing,
-        ::Nothing,
-    ) where {T <: FieldOrValue} = TD.PhaseDry_ρθ(thermo_params, ρ, θ)
-    get_ts(
-        ρ::T,
-        ::Nothing,
-        θ::T,
-        ::Nothing,
-        q_tot::T,
-        ::Nothing,
-    ) where {T <: FieldOrValue} = TD.PhaseEquil_ρθq(thermo_params, ρ, θ, q_tot)
-    get_ts(
-        ρ::T,
-        ::Nothing,
-        θ::T,
-        ::Nothing,
-        ::Nothing,
-        q_pt,
-    ) where {T <: FieldOrValue} =
-        TD.PhaseNonEquil_ρθq(thermo_params, ρ, θ, q_pt)
-    get_ts(
-        ρ::T,
-        ::Nothing,
-        ::Nothing,
-        e_int::T,
-        ::Nothing,
-        ::Nothing,
-    ) where {T <: FieldOrValue} = TD.PhaseDry_ρe(thermo_params, ρ, e_int)
-    get_ts(
-        ρ::T,
-        ::Nothing,
-        ::Nothing,
-        e_int::T,
-        q_tot::T,
-        ::Nothing,
-    ) where {T <: FieldOrValue} = TD.PhaseEquil_ρeq(
-        thermo_params,
-        ρ,
-        e_int,
-        q_tot,
-        3,
-        eltype(thermo_params)(0.003),
-    )
-    get_ts(
-        ρ::T,
-        ::Nothing,
-        ::Nothing,
-        e_int::T,
-        ::Nothing,
-        q_pt,
-    ) where {T <: FieldOrValue} =
-        TD.PhaseNonEquil(thermo_params, e_int, ρ, q_pt)
-    get_ts(
-        ::Nothing,
-        p::T,
-        θ::T,
-        ::Nothing,
-        ::Nothing,
-        ::Nothing,
-    ) where {T <: FieldOrValue} = TD.PhaseDry_pθ(thermo_params, p, θ)
-    get_ts(
-        ::Nothing,
-        p::T,
-        θ::T,
-        ::Nothing,
-        q_tot::T,
-        ::Nothing,
-    ) where {T <: FieldOrValue} = TD.PhaseEquil_pθq(thermo_params, p, θ, q_tot)
-    get_ts(
-        ::Nothing,
-        p::T,
-        θ::T,
-        ::Nothing,
-        ::Nothing,
-        q_pt,
-    ) where {T <: FieldOrValue} =
-        TD.PhaseNonEquil_pθq(thermo_params, p, θ, q_pt)
-    get_ts(
-        ::Nothing,
-        p::T,
-        ::Nothing,
-        e_int::T,
-        ::Nothing,
-        ::Nothing,
-    ) where {T <: FieldOrValue} = TD.PhaseDry_pe(thermo_params, p, e_int)
-    get_ts(
-        ::Nothing,
-        p::T,
-        ::Nothing,
-        e_int::T,
-        q_tot::T,
-        ::Nothing,
-    ) where {T <: FieldOrValue} =
-        TD.PhaseEquil_peq(thermo_params, p, e_int, q_tot)
-    get_ts(
-        ::Nothing,
-        p::T,
-        ::Nothing,
-        e_int::T,
-        ::Nothing,
-        q_pt,
-    ) where {T <: FieldOrValue} =
-        TD.PhaseNonEquil_peq(thermo_params, p, e_int, q_pt)
-
-    return @. lazy(get_ts(ρ, p, θ, e_int, q_tot, q_pt))
-end
-
 function thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)
-    e_tot = ᶜspecific(ᶜY.ρe_tot, ᶜY.ρ)
-    energy_var = (; e_int = @. lazy(e_tot - K - Φ))
-
+    energy_var = (; e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ)
     moisture_var = if moisture_model isa DryModel
         (;)
     elseif moisture_model isa EquilMoistModel
-        q_tot = ᶜspecific(ᶜY.ρq_tot, ᶜY.ρ)
-        (; q_tot)
+        (; q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ))
     elseif moisture_model isa NonEquilMoistModel
-        q_tot = ᶜspecific(ᶜY.ρq_tot, ᶜY.ρ)
-        q_liq = ᶜspecific(ᶜY.ρq_liq, ᶜY.ρ)
-        q_ice = ᶜspecific(ᶜY.ρq_ice, ᶜY.ρ)
-        q_rai = ᶜspecific(ᶜY.ρq_rai, ᶜY.ρ)
-        q_sno = ᶜspecific(ᶜY.ρq_sno, ᶜY.ρ)
-        (;
-            q_pt = @. lazy(
-                TD.PhasePartition(q_tot, q_liq + q_rai, q_ice + q_sno),
-            )
+        q_pt_args = (;
+            q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ),
+            q_liq = specific(ᶜY.ρq_liq, ᶜY.ρ) + specific(ᶜY.ρq_rai, ᶜY.ρ),
+            q_ice = specific(ᶜY.ρq_ice, ᶜY.ρ) + specific(ᶜY.ρq_sno, ᶜY.ρ),
         )
+        (; q_pt = TD.PhasePartition(q_pt_args...))
     end
     return (; energy_var..., moisture_var...)
 end
 
-ᶜts_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ) =
-    ᶜthermo_state(
+ts_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ) =
+    thermo_state(
         thermo_params;
         thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)...,
         ρ,
     )
 
-ᶜts_sgs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, p) =
-    ᶜthermo_state(
+ts_sgs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, p) =
+    thermo_state(
         thermo_params;
         thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)...,
         p,
@@ -575,7 +445,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    ᶜts .= ᶜts_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)
+    @. ᶜts = ts_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
     if turbconv_model isa PrognosticEDMFX

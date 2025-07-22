@@ -105,18 +105,16 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     turbconv_params = CAP.turbconv_params(params)
     ᶜts = p.precomputed.ᶜts   #TODO replace
 
-    q_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
-    ᶜe_tot = ᶜspecific(Y.c.ρe_tot, Y.c.ρ)
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
     ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
 
     ρ_int_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
     uₕ_int_level = Fields.field_values(Fields.level(Y.c.uₕ, 1))
     u³_int_halflevel = Fields.field_values(Fields.level(ᶠu³, half))
-    h_tot_int_level =
-        Fields.field_values(Fields.level(ᶜh_tot, 1))
+    h_tot_int_level = Fields.field_values(Fields.level(ᶜh_tot, 1))
     K_int_level = Fields.field_values(Fields.level(ᶜK, 1))
-    q_tot_int_level =
-        Fields.field_values(Fields.level(q_tot, 1))
+    q_tot_int_level = Fields.field_values(Fields.level(ᶜq_tot, 1))
 
     p_int_level = Fields.field_values(Fields.level(ᶜp, 1))
     Φ_int_level = Fields.field_values(Fields.level(ᶜΦ, 1))
@@ -332,8 +330,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
 
     if microphysics_model isa Microphysics1Moment
-        q_rai = ᶜspecific(Y.c.ρq_rai, Y.c.ρ)
-        q_sno = ᶜspecific(Y.c.ρq_sno, Y.c.ρ)
+        q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+        q_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
     end
 
     thermo_params = CAP.thermodynamics_params(params)
@@ -353,7 +351,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
 
     # integral
-    q_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     ᶜh_tot = @. lazy(
         TD.total_specific_enthalpy(
             thermo_params,
@@ -368,10 +366,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         uₕ_level = Fields.field_values(Fields.level(Y.c.uₕ, i))
         u³_halflevel = Fields.field_values(Fields.level(ᶠu³, i - half))
         K_level = Fields.field_values(Fields.level(ᶜK, i))
-        h_tot_level =
-            Fields.field_values(Fields.level(ᶜh_tot, i))
-        q_tot_level =
-            Fields.field_values(Fields.level(q_tot, i))
+        h_tot_level = Fields.field_values(Fields.level(ᶜh_tot, i))
+        q_tot_level = Fields.field_values(Fields.level(ᶜq_tot, i))
         p_level = Fields.field_values(Fields.level(ᶜp, i))
         Φ_level = Fields.field_values(Fields.level(ᶜΦ, i))
         local_geometry_level = Fields.field_values(
@@ -395,10 +391,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             Fields.field_values(Fields.level(ᶠu³⁰, i - 1 - half))
         u³⁰_data_prev_halflevel = u³⁰_prev_halflevel.components.data.:1
         K_prev_level = Fields.field_values(Fields.level(ᶜK, i - 1))
-        h_tot_prev_level =
-            Fields.field_values(Fields.level(ᶜh_tot, i - 1))
-        q_tot_prev_level =
-            Fields.field_values(Fields.level(q_tot, i - 1))
+        h_tot_prev_level = Fields.field_values(Fields.level(ᶜh_tot, i - 1))
+        q_tot_prev_level = Fields.field_values(Fields.level(ᶜq_tot, i - 1))
         ts_prev_level = Fields.field_values(Fields.level(ᶜts, i - 1))
         p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
@@ -498,9 +492,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     Fields.field_values(Fields.level(ᶜq_iceʲ, i - 1))
             end
 
-            tke_prev_level = Fields.field_values(
-                Fields.level(ᶜtke⁰, i - 1),
-            )
+            tke_prev_level = Fields.field_values(Fields.level(ᶜtke⁰, i - 1))
 
             @. entrʲ_prev_level = entrainment(
                 thermo_params,
@@ -1063,7 +1055,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
 
     # Environment precipitation sources (to be applied to grid mean)
-    ᶜq_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
         thermo_params,
         microphys_0m_params,

@@ -45,8 +45,6 @@ Arguments:
 """
 specific(ρχ, ρ) = ρχ / ρ
 
-ᶜspecific(ρχ, ρ) = @. lazy(ρχ / ρ)
-
 function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     # TODO: Replace turbconv_model struct by parameters, and include a_half in
     # parameters, not in config
@@ -407,7 +405,7 @@ function ᶜspecific_tke(Y, p)
 
     # no sgs weighting function needed for EDOnlyEDMFX
     if turbconv_model isa EDOnlyEDMFX
-        return ᶜspecific(sgs⁰.ρatke, ᶜρa⁰_vals)
+        return @. lazy(specific(sgs⁰.ρatke, ᶜρa⁰_vals))
     else
         return @. lazy(
             specific(
