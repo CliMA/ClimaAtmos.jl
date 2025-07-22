@@ -160,7 +160,6 @@ NVTX.@annotate function ogw_model_callback!(integrator)
     p = integrator.p
 
     # To be completed
-    @Main.infiltrate
     orographic_gravity_wave_compute_tendency!(
         Y,
         p,

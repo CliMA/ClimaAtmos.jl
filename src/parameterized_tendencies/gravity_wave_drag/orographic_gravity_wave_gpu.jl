@@ -105,8 +105,8 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info=
         topo_ᶠz_pbl = similar(Fields.level(Y.f.u₃, half)),
         topo_k_pbl_values = similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT}),
         topo_info = topo_info,
-        ᶜbuoyancy_frequency = Fields.level(Fields.Field(FT, center_space), 1),
-        ᶠbuoyancy_frequency = Fields.level(Fields.Field(FT, face_space), half),
+        ᶜbuoyancy_frequency = Fields.Field(FT, center_space),
+        ᶠbuoyancy_frequency = Fields.Field(FT, face_space),
         ᶜuforcing = similar(Y.c.ρ),
         ᶜvforcing = similar(Y.c.ρ),
         ᶜdTdz = similar(Y.c.ρ),
@@ -120,17 +120,21 @@ orographic_gravity_wave_compute_tendency!(Y, p, ::Nothing) = nothing
 function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravityWave)
     # unpack cache and scratch vars
     ᶜT = p.scratch.ᶜtemp_scalar
-    (; ᶜts) = p.precomputed
+    (; ᶜts, ᶜp) = p.precomputed
     (; params) = p
     (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
     (; ᶜdTdz) = p.orographic_gravity_wave
     (; ᶠp_m1) = p.orographic_gravity_wave
-    (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
     (; ᶜbuoyancy_frequency, ᶠbuoyancy_frequency) = p.orographic_gravity_wave
 
     ᶜz = Fields.coordinate_field(Y.c).z
+    ᶠz = Fields.coordinate_field(Y.f).z
+    ᶠdz = Fields.Δz_field(axes(Y.f))
     FT = Spaces.undertype(axes(Y.c))
+
+    ᶜρ = Y.c.ρ
     # parameters
+    cp_d = CAP.cp_d(params)
     thermo_params = CAP.thermodynamics_params(params)
     grav = CAP.grav(params)
 
@@ -139,10 +143,16 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     ᶜdTdz .= Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
     @. ᶜbuoyancy_frequency =
         (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts))
-    ᶜbuoyancy_frequency = @. ifelse(ᶜbuoyancy_frequency < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜbuoyancy_frequency))) # to avoid small numbers
+    @. ᶜbuoyancy_frequency = ifelse(ᶜbuoyancy_frequency < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜbuoyancy_frequency))) # to avoid small numbers
     @. ᶠbuoyancy_frequency = ᶠinterp(ᶜbuoyancy_frequency)
 
     # compute ᶠp and ᶠp_m1
+    # load array from scratch
+    ᶠp = p.scratch.ᶠtemp_scalar
+    @. ᶠp = ᶠinterp(ᶜp)
+    scale_height_values = p.scratch.ᶠtemp_field_level
+    z_extrapolated_values = p.scratch.temp_data_face_level
+
     # explicit scale height approach for pressure extrapolation
     # Fields.level returns by reference
     z_bottom = Fields.level(ᶠz, half)
@@ -150,21 +160,16 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     p_bottom = Fields.level(ᶠp, half)
     p_second = Fields.level(ᶠp, 1 + half)
 
-    ᶠp = p.scratch.ᶠtemp_scalar
-    @. ᶠp = ᶠinterp(p.precomputed.ᶜp)
-    scale_height_values = p.scratch.ᶠtemp_field_level
-    z_extrapolated_values = p.scratch.temp_data_face_level
-
     # Calculate scale height from the two levels
-    @. scale_height_values = (Fields.field_values(z_second) - Fields.field_values(z_bottom)) / log.(Fields.field_values(p_bottom) / Fields.field_values(p_second))
+    Fields.field_values(scale_height_values) .= (Fields.field_values(z_second) .- Fields.field_values(z_bottom)) ./ log.(Fields.field_values(p_bottom) ./ Fields.field_values(p_second))
 
     # Calculate the extrapolated height (one level below bottom)
-    @. z_extrapolated_values = Fields.field_values(z_bottom) - (Fields.field_values(z_second) - Fields.field_values(z_bottom))
+    z_extrapolated_values .= Fields.field_values(z_bottom) .- (Fields.field_values(z_second) .- Fields.field_values(z_bottom))
 
     # Extrapolate pressure using barometric formula: p = p₀ * exp(-z/H)
     Boundary_value = Fields.Field(
         Fields.field_values(p_bottom) .* 
-        exp.((z_extrapolated_values .- Fields.field_values(z_bottom)) ./ scale_height_values),
+        exp.((z_extrapolated_values .- Fields.field_values(z_bottom)) ./ Fields.field_values(scale_height_values)),
         axes(p_bottom)
     )
 
@@ -174,19 +179,26 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
-    ᶜuforcing .= 0
-    ᶜvforcing .= 0
+    @. ᶜuforcing = 0
+    @. ᶜvforcing = 0
 
-    orographic_gravity_wave_forcing(
+    orographic_gravity_wave_forcing!(
         ᶜu,
         ᶜv,
         ᶜbuoyancy_frequency,
         ᶠbuoyancy_frequency,
         ᶜz,
+        ᶠz,
+        ᶠdz,
         ᶜuforcing,
         ᶜvforcing,
+        ᶜρ,
+        ᶜp,
         ᶠp,
         ᶠp_m1,
+        ᶜT,
+        grav,
+        cp_d,
         p,
     ) 
 end
@@ -206,42 +218,44 @@ function orographic_gravity_wave_apply_tendency!(
 end
 
 
-function orographic_gravity_wave_forcing(
-        ᶜu,
-        ᶜv,
+function orographic_gravity_wave_forcing!(
+        u_phy,
+        v_phy,
         ᶜbuoyancy_frequency,
         ᶠbuoyancy_frequency,
         ᶜz,
+        ᶠz,
+        ᶠdz,
         ᶜuforcing,
         ᶜvforcing,
+        ᶜρ,
+        ᶜp,
         ᶠp,
         ᶠp_m1,
-        p
+        ᶜT,
+        grav,
+        cp_d,
+        p,
     )
 
-    p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info))
+    FT = eltype(ᶠbuoyancy_frequency)
+    Δz_bot = Fields.level(ᶠdz, half)
 
-    (; topo_k_pbl, topo_ᶜz_pbl, topo_ᶠz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
+    (; topo_ᶜz_pbl, topo_ᶠz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
         p.orographic_gravity_wave
     (; topo_ᶜτ_sat, topo_ᶠτ_sat) = p.orographic_gravity_wave
     (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
         p.orographic_gravity_wave
-    (; topo_ᶜVτ, topo_ᶠVτ, topo_base_Vτ, topo_tmp_1, topo_tmp_2, topo_k_pbl_values) =
-        p.orographic_gravity_wave
-    (; topo_d2Vτdz, topo_L1, topo_U_k_field, topo_level_idx) = p.orographic_gravity_wave
-    (; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
-    (; ᶜweights, ᶜdTdz, ᶜdτ_sat_dz) = p.orographic_gravity_wave
+    (; topo_ᶠVτ, topo_k_pbl_values, topo_info) = p.orographic_gravity_wave
 
     # Extract parameters
     ogw_params = p.orographic_gravity_wave.ogw_params
 
-    ᶠdz = Fields.Δz_field(axes(Y.f))
-
     # we copy the z_pbl from a cell-centered to face array.
     # the z-values don't change, but this is necessary for
     # calc_nonpropagating_forcing! to work on the GPU
-    topo_ᶜz_pbl .= CA.get_pbl_z(ᶜp, ᶜT, copy(ᶜz), grav, cp_d)
-    parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl)
+    CA.get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, copy(ᶜz), grav, cp_d)
+    parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl) .- 0.5 .* parent(Δz_bot)
     topo_ᶠz_pbl = topo_ᶠz_pbl.components.data.:1
 
     # compute base flux at k_pbl
@@ -265,10 +279,10 @@ function orographic_gravity_wave_forcing(
         topo_tmp_2,
         ogw_params,
         topo_info,
-        copy(Y.c.ρ),
+        ᶜρ,
         u_phy,
         v_phy,
-        ᶜN,
+        ᶜbuoyancy_frequency,
         ᶜz,
         topo_ᶜz_pbl,
         topo_k_pbl_values
@@ -290,13 +304,13 @@ function orographic_gravity_wave_forcing(
         ogw_params,
         topo_FrU_max,
         topo_FrU_min,
-        ᶜN,
+        ᶜbuoyancy_frequency,
         topo_τ_x,
         topo_τ_y,
         topo_τ_p,                   
         u_phy,
         v_phy,
-        copy(Y.c.ρ),
+        ᶜρ,
         ᶜp,
         topo_ᶜz_pbl,
         topo_d2Vτdz,
@@ -314,7 +328,7 @@ function orographic_gravity_wave_forcing(
         topo_τ_y,
         topo_τ_l,
         topo_ᶠτ_sat,
-        copy(Y.c.ρ),
+        ᶜρ,
         ᶜdτ_sat_dz
     )
 
@@ -322,17 +336,15 @@ function orographic_gravity_wave_forcing(
     CA.calc_nonpropagating_forcing!(
         ᶜuforcing,
         ᶜvforcing,
-        ᶠN,
+        ᶠbuoyancy_frequency,
         topo_ᶠVτ,
         ᶠp,
-        ᶜp,
         ᶠp_m1,
         topo_τ_x,
         topo_τ_y,
         topo_τ_l,
         topo_τ_np,
         ᶠz,
-        ᶜz,
         topo_ᶠz_pbl,
         ᶠdz,
         grav,
@@ -351,20 +363,18 @@ function calc_nonpropagating_forcing!(
     ᶠN,
     ᶠVτ,
     ᶠp,
-    ᶜp,
     ᶠp_m1,
     τ_x,
     τ_y,
     τ_l,
     τ_np,
     ᶠz,
-    ᶜz,
     z_pbl,
     ᶠdz,
     grav,
     ᶜweights
 )
-    FT = eltype(grav)
+    FT = eltype(ᶠN)
 
     # Initialize fields for z_ref and phase computation
     z_ref = similar(Fields.level(ᶠz, half), FT)
@@ -473,11 +483,11 @@ function calc_propagate_forcing!(ᶜuforcing, ᶜvforcing, τ_x, τ_y, τ_l, τ_
     return nothing
 end
 
-function get_pbl_z(ᶜp, ᶜT, ᶜz, grav, cp_d)
-    FT = eltype(cp_d)
+function get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
+    FT = eltype(ᶜp)
     
     # Initialize result field to hold z_pbl values
-    result = similar(Fields.level(ᶜp, 1), FT)
+    result = topo_ᶜz_pbl
     
     # Get surface values (first level values)
     p_sfc = Fields.level(ᶜp, 1)
@@ -517,8 +527,6 @@ function get_pbl_z(ᶜp, ᶜT, ᶜz, grav, cp_d)
         # Move to next level
         return z_pbl
     end
-
-    return result
 end
 
 function field_shiftface_down!(ᶠexample_field, ᶠshifted_field, Boundary_value)
@@ -626,6 +634,7 @@ function calc_base_flux!(
         eps(FT),
         -(u_pbl * τ_x + v_pbl * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2))
     )
+    # @Main.infiltrate
     
     # Calculate Froude numbers
     @. Fr_max = max(FT(0), hmax) * N_pbl / Vτ
@@ -639,6 +648,8 @@ function calc_base_flux!(
     @. FrU_min = Fr_min * U_sat
     @. FrU_max = max(Fr_max * U_sat, FrU_min + eps(FT))
     @. FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
+
+    # @Main.infiltrate
     
     # Calculate drag components
     @. τ_l = ((FrU_max)^(2 + γ - ϵ) - (FrU_min)^(2 + γ - ϵ)) / (2 + γ - ϵ)
@@ -895,8 +906,6 @@ function compute_ogw_drag(
     return (t11, t21, t12, t22)
 
 end
-
-
 
 
 ᶜd2dz2(ᶜscalar) =
