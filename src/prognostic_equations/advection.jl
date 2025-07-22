@@ -253,7 +253,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
 
     if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
-        ᶜq_tot = ᶜspecific(Y.c.ρq_tot, Y.c.ρ)
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
         @. Yₜ.c.ρq_tot += vtt - vtt_central
