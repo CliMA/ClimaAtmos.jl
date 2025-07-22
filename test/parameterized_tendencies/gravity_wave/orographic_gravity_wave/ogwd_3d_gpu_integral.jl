@@ -172,10 +172,15 @@ gfdl_ca_p = ᶜinterp2CAlevels(gfdl_z_full, gfdl_p, ᶜlocal_geometry)
 
 # create Y
 Yc = map(ᶜlocal_geometry) do lg
-    return (; ρ = FT(1.0), u_phy = FT(0), v_phy = FT(0), T = FT(0), qt = FT(0))
-end
-Yc.u_phy .= gfdl_ca_ucomp
-Yc.v_phy .= gfdl_ca_vcomp
+    return (; 
+    ρ = FT(1.0), 
+    uₕ = Geometry.Covariant12Vector(Geometry.UVVector(FT(0), FT(0)), lg), 
+    T = FT(0), 
+    qt = FT(0)
+    )
+    end
+Yc.uₕ .= Geometry.Covariant12Vector.(Geometry.UVVector.(gfdl_ca_ucomp, gfdl_ca_vcomp))
+# Yc.uₕ.components.data.:2 .= Geometry.Covariant12Vector.(gfdl_ca_vcomp)
 Yc.T .= gfdl_ca_temp
 Yc.qt .= gfdl_ca_sphum
 Yf = map(ᶠlocal_geometry) do lg
@@ -193,6 +198,7 @@ epsilon = 0.622
 # Initialize cache vars for orographic gravity wave
 ogw = CA.FullOrographicGravityWave{FT, String}()
 
+# @Main.infiltrate
 topo_info = CA.get_topo_info(Y, ogw)
 
 Y = ClimaCore.to_device(ClimaComms.CUDADevice(), copy(Y))
@@ -204,6 +210,7 @@ thermo_params = ClimaCore.to_device(ClimaComms.CUDADevice(), thermo_params)
 ᶜT_cpu = gfdl_ca_temp
 ᶜp_cpu = gfdl_ca_p
 
+ᶜz = Fields.coordinate_field(Y.c).z
 ᶜp = similar(Y.c.T)
 ᶜT = similar(Y.c.T)
 
@@ -216,9 +223,14 @@ cp_m_out = similar(Y.c)
 ᶜts = similar(Y.c, CA.TD.PhaseEquil{FT})
 @. ᶜts = CA.TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, ᶜp, Y.c.qt)
 
+# emulate `p` from a ClimaAtmos run
 atmos = (; turbconv_model = nothing)
-p = (; scratch = CA.temporary_quantities(Y, atmos),
-    orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info)
+atmos = ClimaCore.to_device(ClimaComms.CUDADevice(), atmos)
+p = (; 
+    orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info),
+    scratch = CA.temporary_quantities(Y, atmos),
+    precomputed = (; ᶜts = ᶜts, ᶜp = ᶜp, thermo_params = thermo_params),
+    params = CA.ClimaAtmosParameters(config)
     )
 
 (; topo_ᶜz_pbl, topo_ᶠz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
@@ -234,164 +246,9 @@ p = (; scratch = CA.temporary_quantities(Y, atmos),
 # Extract parameters
 ogw_params = p.orographic_gravity_wave.ogw_params
 
-# operators
-ᶜgradᵥ = Operators.GradientF2C()
-ᶠinterp = Operators.InterpolateC2F(
-    bottom = Operators.Extrapolate(),
-    top = Operators.Extrapolate(),
-)
+CA.orographic_gravity_wave_compute_tendency!(Y, p, ogw)
 
-# z
-ᶜz = Fields.coordinate_field(Y.c).z
-ᶠz = Fields.coordinate_field(Y.f).z
-
-# get PBL info
-topo_ᶜz_pbl .= CA.get_pbl_z!(ᶜp, ᶜT, copy(ᶜz), grav, cp_d)
-# we copy the z_pbl from a cell-centered to face array.
-# the z-values don't change, but this is necessary for
-# calc_nonpropagating_forcing! to work on the GPU
-parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl)
-topo_ᶠz_pbl = topo_ᶠz_pbl.components.data.:1
-
-# buoyancy frequency at cell centers
-ᶜdTdz = Fields.Field(FT, axes(Y.c))
-parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
-ᶜN = @. (grav / ᶜT) * (ᶜdTdz + grav / CA.TD.cp_m(thermo_params, ᶜts)) # this is actually ᶜN^2
-ᶜN = @. ifelse(ᶜN < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜN))) # to avoid small numbers
-
-# prepare physical uv input variables for gravity_wave_forcing()
-u_phy = Y.c.u_phy
-v_phy = Y.c.v_phy
-
-ᶠp = similar(Y.f.u₃).components.data.:1
-ᶠp .= ᶠinterp.(ᶜp)
-ᶠp_m1 = similar(ᶠp)
-
-# explicit scale height approach for pressure extrapolation
-# Fields.level returns by reference
-z_bottom = Fields.level(ᶠz, half)
-z_second = Fields.level(ᶠz, 1 + half)
-p_bottom = Fields.level(ᶠp, half)
-p_second = Fields.level(ᶠp, 1 + half)
-
-# Calculate scale height from the two levels
-scale_height_values = (Fields.field_values(z_second) .- Fields.field_values(z_bottom)) ./ 
-log.(Fields.field_values(p_bottom) ./ Fields.field_values(p_second))
-
-# Calculate the extrapolated height (one level below bottom)
-z_extrapolated_values = Fields.field_values(z_bottom) .- (Fields.field_values(z_second) .- Fields.field_values(z_bottom))
-
-ᶠdz = Fields.Δz_field(axes(Y.f))
-
-# Extrapolate pressure using barometric formula: p = p₀ * exp(-z/H)
-Boundary_value = Fields.Field(
-    Fields.field_values(p_bottom) .* 
-    exp.((z_extrapolated_values .- Fields.field_values(z_bottom)) ./ scale_height_values),
-    axes(p_bottom)
-)
-
-CA.field_shiftface_down!(ᶠp, ᶠp_m1, Boundary_value)
-
-# buoyancy frequency at cell faces
-ᶠN = similar(ᶠz)
-ᶠN .= ᶠinterp.(ᶜN) # alternatively, can be computed from ᶠT and ᶠdTdz
-
-# compute base flux at k_pbl
-# first, we define some scratch quantities...
-topo_base_Vτ = p.scratch.temp_field_level
-topo_tmp_1 = p.scratch.temp_field_level_2
-topo_tmp_2 = p.scratch.temp_field_level_3
-CA.calc_base_flux!(
-    topo_τ_x,
-    topo_τ_y,
-    topo_τ_l,
-    topo_τ_p,
-    topo_τ_np,
-    topo_U_sat,
-    topo_FrU_sat,
-    topo_FrU_max,
-    topo_FrU_min,
-    topo_FrU_clp,
-    topo_base_Vτ,
-    topo_tmp_1,
-    topo_tmp_2,
-    ogw_params,
-    topo_info,
-    copy(Y.c.ρ),
-    u_phy,
-    v_phy,
-    ᶜN,
-    ᶜz,
-    topo_ᶜz_pbl,
-    topo_k_pbl_values
-)
-
-topo_d2Vτdz = p.scratch.ᶜtemp_scalar
-topo_L1 = p.scratch.ᶜtemp_scalar_2
-topo_U_k_field = p.scratch.ᶜtemp_scalar_3
-topo_level_idx = p.scratch.ᶜtemp_scalar_4
-topo_ᶜVτ = p.scratch.ᶜtemp_scalar_5
-CA.calc_saturation_profile!(
-    topo_ᶜτ_sat,
-    topo_ᶠτ_sat,
-    topo_U_sat, 
-    topo_FrU_sat,
-    topo_FrU_clp,
-    topo_ᶜVτ,
-    topo_ᶠVτ,
-    ogw_params,
-    topo_FrU_max,
-    topo_FrU_min,
-    ᶜN,
-    topo_τ_x,
-    topo_τ_y,
-    topo_τ_p,                   
-    u_phy,
-    v_phy,
-    copy(Y.c.ρ),
-    ᶜp,
-    topo_ᶜz_pbl,
-    topo_d2Vτdz,
-    topo_L1,
-    topo_U_k_field,
-    topo_level_idx,
-)
-
-# compute drag tendencies due to propagating part
-ᶜdτ_sat_dz = p.scratch.ᶜtemp_scalar
-CA.calc_propagate_forcing!(
-    ᶜuforcing,
-    ᶜvforcing,
-    topo_τ_x,
-    topo_τ_y,
-    topo_τ_l,
-    topo_ᶠτ_sat,
-    copy(Y.c.ρ),
-    ᶜdτ_sat_dz
-)
-
-ᶜweights = p.scratch.ᶜtemp_scalar
-CA.calc_nonpropagating_forcing!(
-    ᶜuforcing,
-    ᶜvforcing,
-    ᶠN,
-    topo_ᶠVτ,
-    ᶠp,
-    ᶠp_m1,
-    topo_τ_x,
-    topo_τ_y,
-    topo_τ_l,
-    topo_τ_np,
-    ᶠz,
-    topo_ᶠz_pbl,
-    ᶠdz,
-    grav,
-    ᶜweights
-)
-
-# constrain forcing
-@. ᶜuforcing = max(FT(-3e-3), min(FT(3e-3), ᶜuforcing))
-@. ᶜvforcing = max(FT(-3e-3), min(FT(3e-3), ᶜvforcing))
+# (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
 
 # Move GPU arrays back to CPU for plotting
 uforcing_cpu = ClimaCore.to_cpu(ᶜuforcing)
