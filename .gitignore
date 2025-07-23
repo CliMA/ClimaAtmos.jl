@@ -57,4 +57,6 @@ Artifacts.toml
 # misc
 .DS_Store
 .qodo
+
+# ignore notebooks
 *.ipynb
