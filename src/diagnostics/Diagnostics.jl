@@ -64,6 +64,8 @@ include(joinpath("..", "utils", "abbreviations.jl"))
 
 import ClimaDiagnostics
 
+import ClimaDiagnostics: binned_diagnostic
+
 import ClimaDiagnostics:
     DiagnosticVariable, ScheduledDiagnostic, average_pre_output_hook!
 

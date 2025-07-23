@@ -24,6 +24,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
         "max" => (max, nothing),
         "min" => (min, nothing),
         "average" => ((+), CAD.average_pre_output_hook!),
+        "binned" => (:binned, nothing), # Special marker for binned diagnostics
     )
 
     dict_writer = CAD.DictWriter()
@@ -119,6 +120,30 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
                 writer = ALLOWED_WRITERS[writer_ext]
             end
 
+            # Check if this is a binned diagnostic
+            is_binned = reduction_time_func == :binned
+
+            if is_binned
+                # Get bin edges from YAML
+                if !haskey(yaml_diag, "bin_edges")
+                    error(
+                        "Binned diagnostic '$short_name' requires 'bin_edges' to be specified",
+                    )
+                end
+                bin_edges = yaml_diag["bin_edges"]
+
+                # Validate bin edges
+                if !(bin_edges isa Vector) || length(bin_edges) < 2
+                    error("bin_edges must be a vector with at least 2 values")
+                end
+                if !issorted(bin_edges)
+                    error("bin_edges must be sorted in ascending order")
+                end
+
+                # Convert to Float64 to ensure consistency
+                bin_edges = Float64.(bin_edges)
+            end
+
             haskey(yaml_diag, "period") ||
                 error("period keyword required for diagnostics")
 
@@ -153,28 +178,69 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
                     pre_output_hook!,
                 )
             end
-
+            
             if isnothing(reduction_time_func)
                 compute_every = compute_schedule
             else
                 compute_every = CAD.EveryStepSchedule()
             end
-
-            CAD.ScheduledDiagnostic(
-                variable = CAD.get_diagnostic_variable(short_name),
-                output_schedule_func = output_schedule,
-                compute_schedule_func = compute_every,
-                reduction_time_func = reduction_time_func,
-                pre_output_hook! = pre_output_hook!,
-                output_writer = writer,
-                output_short_name = output_short_name,
-            )
+            diagnostic_variable = CAD.get_diagnostic_variable(short_name)
+            # is_binned && Main.@infiltrate
+            if is_binned
+                period_str = get(yaml_diag, "bin_period", "30days")
+                if occursin("months", period_str)
+                    months = match(r"^(\d+)months$", period_str)
+                    isnothing(months) && error(
+                        "$(period_str) has to be of the form <NUM>months, e.g. 2months for 2 months",
+                    )
+                    period_dates = Dates.Month(parse(Int, first(months)))
+                else
+                    period_seconds = FT(time_to_seconds(period_str))
+                    period_dates =
+                        CA.promote_period.(Dates.Second(period_seconds))
+                end
+    
+                output_schedule = CAD.EveryCalendarDtSchedule(
+                    period_dates;
+                    reference_date = start_date,
+                )
+                CAD.binned_diagnostic(
+                    diagnostic_variable,
+                    bin_edges,
+                    compute_schedule,
+                    output_schedule,
+                    writer,
+                    FT,
+                )
+            else
+                # Handle output_short_name properly
+                output_short_name = if isnothing(output_name)
+                    CAD.descriptive_short_name(
+                        diagnostic_variable,
+                        output_schedule,
+                        reduction_time_func,
+                        pre_output_hook!,
+                    )
+                else
+                    output_name
+                end
+        
+                CAD.ScheduledDiagnostic(
+                    variable = diagnostic_variable,
+                    output_schedule_func = output_schedule,
+                    compute_schedule_func = compute_every,
+                    reduction_time_func = reduction_time_func,
+                    pre_output_hook! = pre_output_hook!,
+                    output_writer = writer,
+                    output_short_name = output_short_name,
+                )
+            end
         end
     end
 
     # Flatten the array of arrays of diagnostics
     diagnostics = vcat(diagnostics_ragged...)
-
+    # Main.@infiltrate
     if parsed_args["output_default_diagnostics"]
         diagnostics = [
             CAD.default_diagnostics(
