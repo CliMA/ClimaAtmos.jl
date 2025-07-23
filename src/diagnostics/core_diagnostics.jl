@@ -1503,3 +1503,43 @@ add_diagnostic_variable!(
     comments = "Energy available to a parcel lifted moist adiabatically from the surface. We assume fully reversible phase changes and no precipitation.",
     compute! = compute_cape!,
 )
+
+###
+# Rain water path (2d)
+###
+compute_rwp!(out, state, cache, time) =
+    compute_rwp!(out, state, cache, time, cache.atmos.moisture_model)
+compute_rwp!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("rwp", model)
+
+function compute_rwp!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        rw = cache.scratch.ᶜtemp_scalar
+        @. rw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_rai
+        Operators.column_integral_definite!(out, rw)
+        return out
+    else
+        rw = cache.scratch.ᶜtemp_scalar
+        @. rw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_rai
+        Operators.column_integral_definite!(out, rw)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "rwp",
+    long_name = "Rainwater Path",
+    standard_name = "atmosphere_mass_content_of_rain_liquid_water",
+    units = "kg m-2",
+    comments = """
+    The total mass of liquid water in rain per unit area.
+    (not just the area of the cloudy portion of the column).
+    """,
+    compute! = compute_rwp!,
+)
