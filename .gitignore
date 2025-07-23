@@ -57,4 +57,4 @@ Artifacts.toml
 # misc
 .DS_Store
 .qodo
-.ipynb
+*.ipynb
