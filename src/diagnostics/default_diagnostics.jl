@@ -252,7 +252,7 @@ function default_diagnostics(
     start_date;
     output_writer,
 )
-    precip_diagnostics = ["husra", "hussn"]
+    precip_diagnostics = ["husra", "hussn"] # add diagnostic for lwp here
 
     average_func = frequency_averages(duration)
 
