@@ -49,6 +49,8 @@ if (
     config.parsed_args["debug_approximate_jacobian"] &&
     !config.parsed_args["use_dense_jacobian"]
 )
+    @info "Debugging Jacobian in first column of final state"
+
     Y_end = integrator.u
     t_end = integrator.t
     (; p, dt) = integrator
@@ -105,8 +107,6 @@ if (
         count((1 - size(block, 1)):(size(block, 2) - 1)) do band_index
             any(!iszero, diag(block, band_index))
         end
-
-    @info "Debugging Jacobian in first column of final state"
 
     bandwidth_error_values = map(block_keys) do block_key
         approx_blocks = first(all_approx_blocks)
