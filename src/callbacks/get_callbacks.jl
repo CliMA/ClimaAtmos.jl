@@ -1,6 +1,12 @@
-function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
-
-    (; dt, t_start, start_date) = sim_info
+function get_diagnostics(
+    parsed_args,
+    atmos_model,
+    Y,
+    p,
+    t_start,
+    start_date,
+    output_dir,
+)
 
     FT = Spaces.undertype(axes(Y.c))
     context = ClimaComms.context(axes(Y.c))
