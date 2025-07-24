@@ -471,7 +471,7 @@ function aerosol_activation_sources(
     return ifelse(
         S_max < S || isnan(n_act) || n_act < nₗ,
         FT(0),
-        (n_act - nₗ) / dt,
+        (n_act - nₗ) / float(dt),
     )
 end
 
