@@ -549,7 +549,8 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     sfc_tke = Fields.level(ᶜtke⁰, 1)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
-    ᶜprandtl_nvec .= ᶜturbulent_prandtl_number(p)
+    @. ᶜprandtl_nvec =
+        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
 
     ᶜtke_exch = ᶜtke_exchange(Y, p)
 
@@ -656,15 +657,6 @@ function turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
     # though the formula should typically yield positive values if Pr_n > 0.
     # Also ensure that it's not larger than the Pr_max parameter.
     return min(max(prandtl_nvec, eps_FT), Pr_max)
-end
-
-
-function ᶜturbulent_prandtl_number(p)
-    (; params) = p
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-    return @. lazy(
-        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
-    )
 end
 
 
@@ -829,33 +821,26 @@ function lamb_smooth_minimum(l, smoothness_param, λ_floor)
 end
 
 """
-    ᶜeddy_viscosity(turbconv_params, tke, mixing_length)
+    eddy_viscosity(params, tke, mixing_length)
 
 Calculates the eddy viscosity (K_u) for momentum based on the turbulent
 kinetic energy (TKE) and the mixing length.
 
 Returns K_u in units of [m^2/s].
 """
-function ᶜeddy_viscosity(turbconv_params, tke, mixing_length)
-    c_m = CAP.tke_ed_coeff(turbconv_params)
-    return @. lazy(c_m * mixing_length * sqrt(max(tke, 0)))
+function eddy_viscosity(params, tke, mixing_length)
+    c_m = CAP.tke_ed_coeff(params)
+    return c_m * mixing_length * sqrt(max(tke, 0))
 end
 
 """
-    ᶜeddy_diffusivity(turbconv_params, tke, mixing_length, prandtl_nvec)
+    eddy_diffusivity(K_u, prandtl_number)
 
-Calculates the eddy diffusivity (K_h) for scalars given turbulent kinetic energy (TKE),
-the mixing length, and the turbulent Prandtl number.
+Calculates the eddy diffusivity (K_h) for scalars given the eddy viscosity (K_u)
+and the turbulent Prandtl number.
 
 Returns K_h in units of [m^2/s].
 """
-function ᶜeddy_diffusivity(turbconv_params, tke, mixing_length, prandtl_nvec)
-    K_u = ᶜeddy_viscosity(turbconv_params, tke, mixing_length)
-    return K_u / prandtl_nvec
-end
-
-
-function ᶜeddy_diffusivity(p, K_u)
-    ᶜprandtl_nvec = ᶜturbulent_prandtl_number(p)
-    return @. lazy(K_u / ᶜprandtl_nvec) # prandtl_nvec is already bounded by eps_FT and Pr_max
+function eddy_diffusivity(K_u, prandtl_number)
+    return K_u / prandtl_number # prandtl_nvec is already bounded by eps_FT and Pr_max
 end

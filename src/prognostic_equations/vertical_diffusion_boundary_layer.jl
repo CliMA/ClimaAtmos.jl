@@ -85,11 +85,15 @@ function vertical_diffusion_boundary_layer_tendency!(
     α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
     (; ᶜu, ᶜh_tot, ᶜspecific, ᶜp) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
+    ᶜK_h = p.scratch.ᶜtemp_scalar
     if vertical_diffusion isa DecayWithHeightDiffusion
-        ᶜK_h = compute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
+        ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
     elseif vertical_diffusion isa VerticalDiffusion
-        ᶜK_h =
-            compute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vertical_diffusion)
+        ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(
+            Y.c.uₕ,
+            ᶜp,
+            vertical_diffusion,
+        )
     end
 
     if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
@@ -107,8 +111,8 @@ function vertical_diffusion_boundary_layer_tendency!(
     @. Yₜ.c.ρe_tot -=
         ᶜdivᵥ_ρe_tot(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜh_tot)))
 
-    ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-    ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_2
+    ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_2
+    ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_3
 
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         if ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai))
@@ -117,9 +121,9 @@ function vertical_diffusion_boundary_layer_tendency!(
             @. ᶜK_h_scaled = ᶜK_h
         end
         ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
-        top = Operators.SetValue(C3(0)),
-        bottom = Operators.SetValue(C3(0)),
-    )
+            top = Operators.SetValue(C3(0)),
+            bottom = Operators.SetValue(C3(0)),
+        )
         @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρχ(
             -(
                 ᶠinterp(Y.c.ρ) *

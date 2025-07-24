@@ -550,21 +550,30 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         (; ᶜp) = p.precomputed
         if vertical_diffusion isa DecayWithHeightDiffusion
             ᶜK_h =
-                compute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
+                ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
             ᶜK_u = ᶜK_h
         elseif vertical_diffusion isa VerticalDiffusion
-            ᶜK_h = compute_eddy_diffusivity_coefficient(
+            ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(
                 Y.c.uₕ,
                 ᶜp,
                 vertical_diffusion,
             )
             ᶜK_u = ᶜK_h
         else
-            (; ᶜtke⁰,) = p.precomputed
+            (; ᶜtke⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
             ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
             ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-            ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
-            ᶜK_h = ᶜeddy_diffusivity(p, ᶜK_u)
+            ᶜK_u = @. lazy(
+                eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field),
+            )
+            ᶜprandtl_nvec = @. lazy(
+                turbulent_prandtl_number(
+                    params,
+                    ᶜlinear_buoygrad,
+                    ᶜstrain_rate_norm,
+                ),
+            )
+            ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
         end
 
         α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)

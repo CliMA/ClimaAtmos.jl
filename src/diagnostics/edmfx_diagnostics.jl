@@ -1290,9 +1290,9 @@ function compute_edt!(
 
     if vertical_diffusion isa DecayWithHeightDiffusion
         ᶜK_h =
-            compute_eddy_diffusivity_coefficient(state.c.ρ, vertical_diffusion)
+            ᶜcompute_eddy_diffusivity_coefficient(state.c.ρ, vertical_diffusion)
     elseif vertical_diffusion isa VerticalDiffusion
-        ᶜK_h = compute_eddy_diffusivity_coefficient(
+        ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(
             state.c.uₕ,
             ᶜp,
             vertical_diffusion,
@@ -1314,11 +1314,15 @@ function compute_edt!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     turbconv_params = CAP.turbconv_params(cache.params)
-    (; ᶜtke⁰) = cache.precomputed
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜtke⁰) = cache.precomputed
+    (; params) = cache
 
     ᶜmixing_length_field = ᶜmixing_length(state, cache)
-    ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
-    ᶜK_h = ᶜeddy_diffusivity(cache, ᶜK_u)
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
+    ᶜprandtl_nvec = @. lazy(
+        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+    )
+    ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
     if isnothing(out)
         return Base.materialize(ᶜK_h)
     else
@@ -1371,9 +1375,9 @@ function compute_evu!(
     # this setup assumes ᶜK_u = ᶜK_h
     if vertical_diffusion isa DecayWithHeightDiffusion
         ᶜK_u =
-            compute_eddy_diffusivity_coefficient(state.c.ρ, vertical_diffusion)
+            ᶜcompute_eddy_diffusivity_coefficient(state.c.ρ, vertical_diffusion)
     elseif vertical_diffusion isa VerticalDiffusion
-        ᶜK_u = compute_eddy_diffusivity_coefficient(
+        ᶜK_u = ᶜcompute_eddy_diffusivity_coefficient(
             state.c.uₕ,
             ᶜp,
             vertical_diffusion,
@@ -1397,7 +1401,7 @@ function compute_evu!(
     turbconv_params = CAP.turbconv_params(cache.params)
     (; ᶜtke⁰) = cache.precomputed
     ᶜmixing_length_field = ᶜmixing_length(state, cache)
-    ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
 
     if isnothing(out)
         return Base.materialize(ᶜK_u)

@@ -353,10 +353,21 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
+        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+
         ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
         ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
-        ᶜK_h = ᶜeddy_diffusivity(p, ᶜK_u)
+        ᶜK_u = @. lazy(
+            eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field),
+        )
+        ᶜprandtl_nvec = @. lazy(
+            turbulent_prandtl_number(
+                params,
+                ᶜlinear_buoygrad,
+                ᶜstrain_rate_norm,
+            ),
+        )
+        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar
@@ -457,10 +468,21 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
+        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+
         ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
         ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜK_u = ᶜeddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field)
-        ᶜK_h = ᶜeddy_diffusivity(p, ᶜK_u)
+        ᶜK_u = @. lazy(
+            eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field),
+        )
+        ᶜprandtl_nvec = @. lazy(
+            turbulent_prandtl_number(
+                params,
+                ᶜlinear_buoygrad,
+                ᶜstrain_rate_norm,
+            ),
+        )
+        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
 
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h)
