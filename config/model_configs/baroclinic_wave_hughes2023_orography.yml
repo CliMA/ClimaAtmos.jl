@@ -1,0 +1,12 @@
+initial_condition: "MoistBaroclinicWave"
+topography: "Hughes2023"
+topo_smoothing: true
+moist: equil
+disable_surface_flux_tendency: true
+orographic_gravity_wave: raw_topo
+dt_ogw: "200secs"
+dt: "200secs"
+t_end: "2hours"
+diagnostics:
+  - short_name: [pfull, ua, wa, va, rv, pr, cli, hus, ke]
+    period: 200secs
