@@ -1522,12 +1522,12 @@ function compute_rwp!(
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         rw = cache.scratch.ᶜtemp_scalar
-        @. rw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_rai
+        @. rw = state.c.ρq_rai
         Operators.column_integral_definite!(out, rw)
         return out
     else
         rw = cache.scratch.ᶜtemp_scalar
-        @. rw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_rai
+        @. rw = state.c.ρq_rai
         Operators.column_integral_definite!(out, rw)
     end
 end
