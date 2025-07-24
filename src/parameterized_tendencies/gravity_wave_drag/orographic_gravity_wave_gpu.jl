@@ -39,10 +39,12 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
                 Spaces.horizontal_space(axes(Y.c)),
             ).mesh.domain.radius
         # topo_info = compute_ogw_info(Y, elevation_rll, radius, γ, h_frac)
+
         topo_info = compute_ogw_drag(
             Y,
             earth_radius,
-            ogw.topography
+            ogw.topography,
+            ogw.h_frac,
         )
 
     elseif ogw.topo_info == "linear"
@@ -63,7 +65,7 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info=
             Domains.SphereDomain
 
     FT = Spaces.undertype(axes(Y.c))
-    (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) = ogw
+    (; γ, ε, β, ρscale, L0, a0, a1, Fr_crit) = ogw
 
     if topo_info === nothing
         topo_info = get_topo_info(Y, ogw)
@@ -85,7 +87,7 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info=
             topo_a1 = a1,
             topo_γ = γ,
             topo_β = β,
-            topo_ϵ = ϵ,
+            topo_ε = ε,
         ),
         topo_ᶜτ_sat = Fields.Field(FT, axes(Y.c)),
         topo_ᶠτ_sat = Fields.Field(FT, axes(Y.f.u₃)),
@@ -494,7 +496,6 @@ function get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
     T_sfc = Fields.level(ᶜT, 1)
     z_sfc = Fields.level(ᶜz, 1)
 
-
     half_val = FT(0.5)
     temp_offset = FT(1.5)
     grav_val = FT(grav)
@@ -570,13 +571,13 @@ function calc_base_flux!(
         topo_a1,
         topo_γ,
         topo_β,
-        topo_ϵ,
+        topo_ε,
     ) = ogw_params
     
     FT = eltype(Fr_crit)
     γ = topo_γ
     β = topo_β
-    ϵ = topo_ϵ
+    ε = topo_ε
 
     (; hmax, hmin, t11, t12, t21, t22) = topo_info
     
@@ -626,6 +627,7 @@ function calc_base_flux!(
     N_pbl = k_pbl_values.:4
     
     # Calculate τ components
+    @Main.infiltrate
     @. τ_x = ρ_pbl * N_pbl * (t11 * u_pbl + t21 * v_pbl)
     @. τ_y = ρ_pbl * N_pbl * (t12 * u_pbl + t22 * v_pbl)
     
@@ -652,18 +654,18 @@ function calc_base_flux!(
     # @Main.infiltrate
     
     # Calculate drag components
-    @. τ_l = ((FrU_max)^(2 + γ - ϵ) - (FrU_min)^(2 + γ - ϵ)) / (2 + γ - ϵ)
-    
+    @. τ_l = ((FrU_max)^(2 + γ - ε) - (FrU_min)^(2 + γ - ε)) / (2 + γ - ε)
+
     # Calculate propagating drag
     @. τ_p = topo_a0 * (
-        (FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ) +
-        FrU_sat^(β + 2) * (FrU_max^(γ - ϵ - β) - FrU_clp^(γ - ϵ - β)) / (γ - ϵ - β)
+        (FrU_clp^(2 + γ - ε) - FrU_min^(2 + γ - ε)) / (2 + γ - ε) +
+        FrU_sat^(β + 2) * (FrU_max^(γ - ε - β) - FrU_clp^(γ - ε - β)) / (γ - ε - β)
     )
     
     # Calculate non-propagating drag
     @. τ_np = topo_a1 * U_sat / (1 + β) * (
-        (FrU_max^(1 + γ - ϵ) - FrU_clp^(1 + γ - ϵ)) / (1 + γ - ϵ) -
-        FrU_sat^(β + 1) * (FrU_max^(γ - ϵ - β) - FrU_clp^(γ - ϵ - β)) / (γ - ϵ - β)
+        (FrU_max^(1 + γ - ε) - FrU_clp^(1 + γ - ε)) / (1 + γ - ε) -
+        FrU_sat^(β + 1) * (FrU_max^(γ - ε - β) - FrU_clp^(γ - ε - β)) / (γ - ε - β)
     )
     
     # Apply scaling
@@ -698,13 +700,13 @@ function calc_saturation_profile!(
     level_idx,
 )
     # Extract parameters from tuple
-    (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ϵ) = ogw_params
+    (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ε) = ogw_params
 
     FT = eltype(Fr_crit)
     γ = topo_γ
     β = topo_β
-    ϵ = topo_ϵ
-    
+    ε = topo_ε
+
     # Calculate Vτ at cell faces using field operations
     @. ᶜVτ = max(
         eps(FT),
@@ -784,11 +786,11 @@ function calc_saturation_profile!(
             tau_sat_val = τ_p
         else
             tau_sat_val = topo_a0 * (
-            (local_FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ) +
+            (local_FrU_clp^(2 + γ - ε) - FrU_min^(2 + γ - ε)) / (2 + γ - ε) +
             local_FrU_sat^2 * FrU_sat0^β *
-                (FrU_max^(γ - ϵ - β) - FrU_clp0^(γ - ϵ - β)) / (γ - ϵ - β) +
+                (FrU_max^(γ - ε - β) - FrU_clp0^(γ - ε - β)) / (γ - ε - β) +
             local_FrU_sat^2 *
-                (FrU_clp0^(γ - ϵ) - local_FrU_clp^(γ - ϵ)) / (γ - ϵ)
+                (FrU_clp0^(γ - ε) - local_FrU_clp^(γ - ε)) / (γ - ε)
             )
         end
 
@@ -837,7 +839,8 @@ end
 function compute_ogw_drag(
     Y,
     earth_radius,
-    topography
+    topography,
+    h_frac
     )
     FT = eltype(Y)
     center_space = Fields.axes(Y.c)
@@ -876,11 +879,13 @@ function compute_ogw_drag(
         error("Topography required for orographic gravity wave drag: $topography")
     end
 
+    # @Main.infiltrate
     real_elev = SpaceVaryingInput(topography_function, face_space)
     real_elev = Fields.level(real_elev, half)
     real_elev = max.(0, real_elev)
 
     hmax = @. real_elev - z_surface
+    hmin = @. h_frac * hmax
 
     χ = @. hmax * cell_area_bot * earth_radius / (FT(2) * pi)
 
@@ -903,7 +908,7 @@ function compute_ogw_drag(
     t12 = dχdy .* dhdx
     t22 = dχdy .* dhdy
 
-    return (t11, t21, t12, t22)
+    return (; hmax, hmin, t11, t21, t12, t22)
 
 end
 
