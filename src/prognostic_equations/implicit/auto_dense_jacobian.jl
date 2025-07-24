@@ -53,7 +53,7 @@ function jacobian_cache(alg::AutoDenseJacobian, Y, atmos)
     DA = ClimaComms.array_type(Y)
 
     precomputed = implicit_precomputed_quantities(Y, atmos)
-    scratch = temporary_quantities(Y, atmos)
+    scratch = implicit_temporary_quantities(Y, atmos)
 
     FT_dual = ForwardDiff.Dual{Jacobian, FT, max_simultaneous_derivatives(alg)}
     precomputed_dual = replace_parent_eltype(precomputed, FT_dual)
@@ -112,11 +112,11 @@ function update_column_matrices!(alg::AutoDenseJacobian, cache, Y, p, t)
         ClimaComms.@threaded device begin
             # On multithreaded devices, use one thread for each dual number.
             for column_index in column_indices,
-                (diagonal_ε_index, (_, (scalar_index, level_index))) in
+                (diagonal_entry_ε_index, (_, (scalar_index, level_index))) in
                 enumerate(jacobian_index_to_Y_index_map_partition)
 
                 n_εs_val = Val(max_simultaneous_derivatives(alg))
-                ε_coefficients = ntuple(==(diagonal_ε_index), n_εs_val)
+                ε_coefficients = ntuple(==(diagonal_entry_ε_index), n_εs_val)
                 unrolled_applyat(scalar_index, scalar_names) do name
                     field = MatrixFields.get_field(Y_dual, name)
                     @inbounds point(field, level_index, column_index...)[] +=

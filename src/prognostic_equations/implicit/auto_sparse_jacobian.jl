@@ -1,7 +1,7 @@
 import SparseMatrixColorings
 
 """
-    AutoSparseJacobian(sparse_jacobian_alg, max_padding_bands_per_block)
+    AutoSparseJacobian(sparse_jacobian_alg, [max_padding_bands_per_block])
 
 A [`JacobianAlgorithm`](@ref) that computes the Jacobian using forward-mode
 automatic differentiation, assuming that the Jacobian's sparsity structure is
@@ -11,10 +11,12 @@ introduce errors to the updated entries.
 
 TODO: Add a short explanation of how this algorithm works.
 """
-struct AutoSparseJacobian{A <: SparseJacobian} <: SparseJacobian
+struct AutoSparseJacobian{A <: SparseJacobian, M} <: SparseJacobian
     sparse_jacobian_alg::A
-    max_padding_bands_per_block::Int
+    max_padding_bands_per_block::M
 end
+AutoSparseJacobian(sparse_jacobian_alg) =
+    AutoSparseJacobian(sparse_jacobian_alg, nothing)
 
 function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
     (; sparse_jacobian_alg, max_padding_bands_per_block) = alg
@@ -28,7 +30,7 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
     scalar_names = scalar_field_names(Y) # iterator of names corresponding to f
 
     precomputed = implicit_precomputed_quantities(Y, atmos)
-    scratch = temporary_quantities(Y, atmos)
+    scratch = implicit_temporary_quantities(Y, atmos)
 
     # Allocate ∂R/∂Y and its corresponding linear solver.
     # TODO: Add FieldNameTree(Y) to the matrix in FieldMatrixWithSolver. The
@@ -85,7 +87,9 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
     sparsity_mask = Array{Bool}(undef, N, N)
     sparsity_mask .= false
     padded_sparsity_mask = copy(sparsity_mask)
-    for block_row_name in scalar_names, block_column_name in scalar_names
+    for block_key in Iterators.product(scalar_names, scalar_names)
+        (block_row_name, block_column_name) = block_key
+
         # Get a view of this block's sparsity masks with its row/column indices.
         block_jacobian_row_index_to_Yₜ_index_map =
             Iterators.filter(enumerate(field_vector_indices)) do index_pair
@@ -109,23 +113,78 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         # blocks corresponding to index ranges whose length is -1 (centered
         # around 0 for square blocks and around ±1/2 for non-square blocks).
         (n_rows_in_block, n_columns_in_block) = size(block_sparsity_mask)
-        if (block_row_name, block_column_name) in keys(autodiff_matrix)
-            matrix_field = autodiff_matrix[block_row_name, block_column_name]
+        if block_key in keys(autodiff_matrix)
             (_, _, lower_band, upper_band) =
-                MatrixFields.band_matrix_info(matrix_field)
+                MatrixFields.band_matrix_info(autodiff_matrix[block_key])
         else
             (lower_band, upper_band) =
                 n_rows_in_block == n_columns_in_block ? (1 / 2, -1 / 2) :
                 (n_rows_in_block < n_columns_in_block ? (1, 0) : (0, -1))
         end
 
-        # Expand the range of band indices by up to max_padding_bands_per_block.
-        n_padding_bands_per_side = max_padding_bands_per_block / 2
-        lower_padding_band = ceil(Int, lower_band - n_padding_bands_per_side)
-        upper_padding_band = floor(Int, upper_band + n_padding_bands_per_side)
+        # Symmetrically expand the range of band indices, with the number of
+        # new bands either limited by max_padding_bands_per_block, or hardcoded
+        # for each block when max_padding_bands_per_block is not specified.
+        max_padding_bands = if !isnothing(max_padding_bands_per_block)
+            max_padding_bands_per_block
+        elseif (
+            !(block_key in keys(autodiff_matrix)) &&
+            (block_row_name, block_row_name) in keys(autodiff_matrix)
+        )
+            # Missing off-diagonal blocks whose entries typically have
+            # magnitudes that are larger than (or similar to) diagonal blocks in
+            # the same rows:
+            # - ‖∂ᶜu₁ₜ/∂ᶜρ‖ and ‖∂ᶜu₁ₜ/∂ᶜρaʲ‖ ≳ ‖∂ᶜu₁ₜ/∂ᶜu₁‖, and
+            #   ‖∂ᶜu₂ₜ/∂ᶜρ‖ and ‖∂ᶜu₂ₜ/∂ᶜρaʲ‖ ≳ ‖∂ᶜu₂ₜ/∂ᶜu₂‖, as long as ‖δᶜρ‖ and
+            #   ‖δᶜρaʲ‖ are relatively smaller than ‖δᶜu₁‖ and ‖δᶜu₂‖
+            # - ‖∂ᶜρe_totₜ/∂ᶜρ‖, ‖∂ᶜρe_totₜ/∂ᶜχ‖, and ‖∂ᶜρe_totₜ/∂ᶜρχ‖ ≳
+            #   ‖∂ᶜρe_totₜ/∂ᶜρe_tot‖ when χ is aʲ or any specific humidity, as
+            #   long as ‖δᶜρ‖ and ‖δᶜχ‖ are relatively smaller than ‖δᶜρe_tot‖
+            # - ‖∂ᶜρaʲₜ/∂ᶜρ‖ and ‖∂ᶜρaʲₜ/∂ᶜρq_tot‖ ≳ ‖∂ᶜρaʲₜ/∂ᶜρaʲ‖, as long as
+            #   ‖δᶜρ‖ and ‖δᶜρq_tot‖ are relatively smaller than ‖δᶜρaʲ‖
+            # - ‖∂ᶠu₃ʲₜ/∂ᶜu₁‖ and ‖∂ᶠu₃ʲₜ/∂ᶜu₁‖ ≳ ‖∂ᶠu₃ʲₜ/∂ᶠu₃ʲ‖, as long as
+            #   ‖δᶜu₁‖ and ‖δᶜu₂‖ are relatively smaller than ‖δᶠu₃ʲ‖
+            # Diagonal blocks are critical for conservation and stability, so we
+            # must stop the off-diagonal blocks from introducing errors to them.
+            ᶜuₕ_component_names = (
+                @name(c.uₕ.components.data.:(1)),
+                @name(c.uₕ.components.data.:(2)),
+            )
+            (
+                block_row_name in ᶜuₕ_component_names &&
+                block_column_name in (@name(c.ρ), @name(c.sgsʲs.:(1).ρa)) ||
+                block_row_name == @name(c.ρe_tot) &&
+                block_column_name in (
+                    @name(c.ρ),
+                    @name(c.ρq_liq),
+                    @name(c.ρq_ice),
+                    @name(c.ρq_rai),
+                    @name(c.ρq_sno),
+                    @name(c.sgsʲs.:(1).ρa),
+                    @name(c.sgsʲs.:(1).q_tot),
+                ) ||
+                block_row_name == @name(c.sgsʲs.:(1).ρa) &&
+                block_column_name in (@name(c.ρ), @name(c.ρq_tot)) ||
+                # TODO: (ρaʲ, ρ) is needed to fix ∂ᶜρaʲₜ/∂ᶜmseʲ, not ∂ᶜρaʲₜ/∂ᶜρaʲ
+                block_row_name == @name(f.sgsʲs.:(1).u₃.components.data.:(1)) &&
+                block_column_name in ᶜuₕ_component_names
+            ) ? 3 : 0
+        else
+            0
+        end
+        padded_lower_band = ceil(Int, lower_band - max_padding_bands / 2)
+        padded_upper_band = floor(Int, upper_band + max_padding_bands / 2)
+
+        if verbose
+            n_padding_bands =
+                length(padded_lower_band:padded_upper_band) -
+                length(lower_band:upper_band)
+            n_padding_bands > 0 &&
+                @info "Adding $n_padding_bands padding bands for $block_key"
+        end
 
         # Update the sparsity mask entries corresponding to bands in this block.
-        for band in lower_padding_band:upper_padding_band
+        for band in padded_lower_band:padded_upper_band
             is_not_padding_band = band in lower_band:upper_band
             level_index_min = band < 0 ? 1 - band : 1
             level_index_max =
@@ -152,12 +211,12 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
     n_colors = SparseMatrixColorings.ncolors(best_jacobian_column_coloring)
 
     # When running on GPU devices, divide n_colors into partitions that are each
-    # guaranteed to fit in 70% of the memory that is currently free.
+    # guaranteed to fit in 90% of the memory that is currently free.
     n_partitions = if device isa ClimaComms.AbstractCPUDevice
         1
     else
         free_memory = ClimaComms.free_memory(device)
-        max_memory = free_memory * 7 ÷ 10
+        max_memory = free_memory * 9 ÷ 10
         memory_for_I_matrix = n_colors * parent_memory(Y)
         memory_per_ε =
             (parent_memory(precomputed) + parent_memory(scratch)) +
@@ -191,7 +250,7 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
     # FieldVectors and cached fields with dual numbers instead of real numbers,
     # with dual numbers using the tag "Jacobian" for specialized dispatch
     # TODO: Refactor FieldVector broadcasting so that performance does not
-    # deteriorate if we only store one column of each I_matrix_partition_εs.
+    # deteriorate if we only store one column of each partition_εs.
     FT_dual = ForwardDiff.Dual{Jacobian, FT, n_εs}
     precomputed_dual = replace_parent_eltype(precomputed, FT_dual)
     scratch_dual = replace_parent_eltype(scratch, FT_dual)
@@ -219,29 +278,34 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
     Y_index_to_diagonal_color_map =
         zip(field_vector_indices, jacobian_column_colors)
 
-    # Set the dual numbers in each FieldVector I_matrix_partition_εs so that the
-    # ε components correspond to partitions of the N × N identity matrix ∂Y/∂Y.
-    # Specifically, every column of I_matrix_partition_εs is a vector of N dual
-    # numbers, each of which is stored as a combination of a value and n_εs
-    # partial derivatives. The ε components can be interpreted as representing
-    # N × n_εs slices of a sparse N × n_colors representation of ∂Y/∂Y.
-    # Y_index_to_diagonal_color_map is converted to a DA for GPU compatibility.
+    # Set the dual numbers in each FieldVector partition_εs so that the ε
+    # components correspond to partitions of the N × N identity matrix ∂Y/∂Y.
+    # Specifically, every column of partition_εs is a vector of N dual numbers,
+    # each of which is stored as a combination of a value and n_εs partial
+    # derivatives. The ε components can be interpreted as representing N × n_εs
+    # slices of a sparse N × n_colors representation of ∂Y/∂Y. Convert n_εs to
+    # a Val and Y_index_to_diagonal_color_map to a DA for GPU compatibility, and
+    # drop spatial information from every Field to ensure that this kernel stays
+    # below the GPU parameter memory limit.
+    n_εs_val = Val(n_εs)
+    I_matrix_partitions_data = unrolled_map(I_matrix_partitions) do partition_εs
+        unrolled_map(Fields.field_values, Fields._values(partition_εs))
+    end
     ClimaComms.@threaded device begin
         # On multithreaded devices, use one thread for each dual number.
-        for (partition, I_matrix_partition_εs) in
-            enumerate(I_matrix_partitions),
+        for (partition_index, partition_εs_data) in
+            enumerate(I_matrix_partitions_data),
             column_index in column_indices,
             index_pair in DA(collect(Y_index_to_diagonal_color_map))
 
             ((scalar_index, level_index), diagonal_entry_color) = index_pair
-            ε_offset = (partition - 1) * n_εs
-            diagonal_ε_index =
+            ε_offset = (partition_index - 1) * n_εs
+            diagonal_entry_ε_index =
                 ε_offset < diagonal_entry_color <= ε_offset + n_εs ?
                 diagonal_entry_color - ε_offset : 0
-            n_εs_val = Val(ForwardDiff.npartials(eltype(I_matrix_partition_εs)))
-            ε_coefficients = ntuple(==(diagonal_ε_index), n_εs_val)
+            ε_coefficients = ntuple(==(diagonal_entry_ε_index), n_εs_val)
             unrolled_applyat(scalar_index, scalar_names) do name
-                field = MatrixFields.get_field(I_matrix_partition_εs, name)
+                field = MatrixFields.get_field(partition_εs_data, name)
                 @inbounds point(field, level_index, column_index...)[] =
                     ForwardDiff.Dual{Jacobian}(0, ε_coefficients)
             end
@@ -323,9 +387,9 @@ function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
     scalar_names = scalar_field_names(Y)
     p_dual = append_to_atmos_cache(p, precomputed_dual, scratch_dual)
 
-    for (partition, I_matrix_partition_εs) in enumerate(I_matrix_partitions)
+    for (partition_index, partition_εs) in enumerate(I_matrix_partitions)
         # Set the εs in Y_dual to represent a partition of the identity matrix.
-        Y_dual .= Y .+ I_matrix_partition_εs
+        Y_dual .= Y .+ partition_εs
 
         # Compute ∂p/∂Y * I_matrix_partition and ∂Yₜ/∂Y * I_matrix_partition.
         set_implicit_precomputed_quantities!(Y_dual, p_dual, t)
@@ -353,7 +417,7 @@ function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
                     end
                 ε_coefficients = ForwardDiff.partials(dual_number)
                 n_εs = length(ε_coefficients)
-                ε_offset = (partition - 1) * n_εs
+                ε_offset = (partition_index - 1) * n_εs
                 unrolled_applyat(block_index, matrix_fields_data) do block_data
                     @inbounds entries_data =
                         point(block_data, level_index, column_index...).entries
@@ -365,7 +429,7 @@ function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
                             ε_offset < entry_color <= ε_offset + n_εs ?
                             (@inbounds ε_coefficients[entry_color - ε_offset]) :
                             entry
-                        end
+                        end # TODO: Why does unrolled_map break GPU compilation?
                 end
             end
         end

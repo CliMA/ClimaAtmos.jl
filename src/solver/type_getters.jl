@@ -466,14 +466,9 @@ function get_jacobian(ode_algo, Y, atmos, parsed_args)
             DerivativeFlag(atmos.sgs_nh_pressure_mode),
             parsed_args["approximate_linear_solve_iters"],
         )
-        if parsed_args["use_auto_jacobian"]
-            AutoSparseJacobian(
-                manual_jacobian_algorithm,
-                parsed_args["auto_jacobian_padding_bands"],
-            )
-        else
-            manual_jacobian_algorithm
-        end
+        parsed_args["use_auto_jacobian"] ?
+        AutoSparseJacobian(manual_jacobian_algorithm) :
+        manual_jacobian_algorithm
     end
     @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
     return Jacobian(jacobian_algorithm, Y, atmos)
