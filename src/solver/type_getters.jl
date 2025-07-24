@@ -14,6 +14,144 @@ import ClimaUtilities.TimeManager: ITime
 
 import ClimaDiagnostics
 
+function get_atmos(config::AtmosConfig, params)
+    (; turbconv_params) = params
+    (; parsed_args) = config
+    FT = eltype(config)
+    check_case_consistency(parsed_args)
+    moisture_model = get_moisture_model(parsed_args)
+    microphysics_model = get_microphysics_model(parsed_args)
+    cloud_model = get_cloud_model(parsed_args)
+
+    implicit_noneq_cloud_formation =
+        parsed_args["implicit_noneq_cloud_formation"]
+    @assert implicit_noneq_cloud_formation in (true, false)
+
+    ozone = get_ozone(parsed_args)
+    radiation_mode = get_radiation_mode(parsed_args, FT)
+    forcing_type = get_forcing_type(parsed_args)
+    call_cloud_diagnostics_per_stage =
+        get_call_cloud_diagnostics_per_stage(parsed_args)
+
+    if isnothing(ozone) && radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+        @warn "prescribe_ozone is set to nothing with an RRTMGP model. Resetting to IdealizedOzone. This behavior will stop being supported in some future release"
+        ozone = IdealizedOzone()
+    end
+    co2 = get_co2(parsed_args)
+    with_rrtmgp = radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+    if with_rrtmgp && isnothing(co2)
+        @warn (
+            "co2_model set to nothing with an RRTMGP model. Resetting to FixedCO2"
+        )
+        co2 = FixedCO2()
+    end
+    (!isnothing(co2) && !with_rrtmgp) &&
+        @warn ("$(co2) does nothing if RRTMGP is not used")
+
+    # HeldSuarezForcing can be set via radiation_mode or legacy forcing option for now
+    final_radiation_mode =
+        forcing_type isa HeldSuarezForcing ? forcing_type : radiation_mode
+    disable_momentum_vertical_diffusion =
+        final_radiation_mode isa HeldSuarezForcing
+
+    advection_test = parsed_args["advection_test"]
+    @assert advection_test in (false, true)
+
+    implicit_diffusion = parsed_args["implicit_diffusion"]
+    @assert implicit_diffusion in (true, false)
+
+    implicit_sgs_advection = parsed_args["implicit_sgs_advection"]
+    @assert implicit_sgs_advection in (true, false)
+
+    implicit_sgs_entr_detr = parsed_args["implicit_sgs_entr_detr"]
+    @assert implicit_sgs_entr_detr in (true, false)
+
+    implicit_sgs_nh_pressure = parsed_args["implicit_sgs_nh_pressure"]
+    @assert implicit_sgs_nh_pressure in (true, false)
+
+    implicit_sgs_mass_flux = parsed_args["implicit_sgs_mass_flux"]
+    @assert implicit_sgs_mass_flux in (true, false)
+
+    edmfx_model = EDMFXModel(;
+        entr_model = get_entrainment_model(parsed_args),
+        detr_model = get_detrainment_model(parsed_args),
+        sgs_mass_flux = Val(parsed_args["edmfx_sgs_mass_flux"]),
+        sgs_diffusive_flux = Val(parsed_args["edmfx_sgs_diffusive_flux"]),
+        nh_pressure = Val(parsed_args["edmfx_nh_pressure"]),
+        filter = Val(parsed_args["edmfx_filter"]),
+        scale_blending_method = get_scale_blending_method(parsed_args),
+    )
+
+    vertical_diffusion = get_vertical_diffusion_model(
+        disable_momentum_vertical_diffusion,
+        parsed_args,
+        params,
+        FT,
+    )
+
+    atmos = AtmosModel(;
+        # AtmosWater - Moisture, Precipitation & Clouds
+        moisture_model,
+        microphysics_model,
+        cloud_model,
+        noneq_cloud_formation_mode = implicit_noneq_cloud_formation ?
+                                     Implicit() : Explicit(),
+        call_cloud_diagnostics_per_stage,
+
+        # SCMSetup - Single-Column Model components
+        subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
+        external_forcing = get_external_forcing_model(parsed_args, FT),
+        ls_adv = get_large_scale_advection_model(parsed_args, FT),
+        advection_test,
+        scm_coriolis = get_scm_coriolis(parsed_args, FT),
+
+        # AtmosRadiation
+        radiation_mode = final_radiation_mode,
+        ozone,
+        co2,
+        insolation = get_insolation_form(parsed_args),
+
+        # AtmosTurbconv - Turbulence & Convection
+        edmfx_model,
+        turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
+        sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
+        sgs_entr_detr_mode = implicit_sgs_entr_detr ? Implicit() : Explicit(),
+        sgs_nh_pressure_mode = implicit_sgs_nh_pressure ? Implicit() :
+                               Explicit(),
+        sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
+        smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
+
+        # AtmosGravityWave
+        non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
+            parsed_args,
+            FT,
+        ),
+        orographic_gravity_wave = get_orographic_gravity_wave_model(
+            parsed_args,
+            FT,
+        ),
+
+        # AtmosSponge
+        viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
+        rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
+
+        # AtmosSurface
+        sfc_temperature = get_sfc_temperature_form(parsed_args),
+        surface_model = get_surface_model(parsed_args),
+        surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
+
+        # Top-level options (not grouped)
+        vertical_diffusion,
+        numerics = get_numerics(parsed_args, FT),
+        disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
+    )
+    # TODO: Should this go in the AtmosModel constructor?
+    @assert !@any_reltype(atmos, (UnionAll, DataType))
+
+    @info "AtmosModel: \n$(summary(atmos))"
+    return atmos
+end
+
 function get_scale_blending_method(parsed_args)
     method_name = parsed_args["edmfx_scale_blending"]
     if method_name == "SmoothMinimum"
@@ -71,209 +209,6 @@ function get_numerics(parsed_args, FT)
     return numerics
 end
 
-function get_spaces(domain::PlaneDomain, params, comms_ctx)
-    FT = eltype(params)
-    quad = Quadratures.GLL{domain.nh_poly + 1}()
-    horizontal_mesh = periodic_line_mesh(;
-        x_max = domain.x_max,
-        x_elem = domain.x_elem,
-        periodic = domain.periodic_x,
-    )
-    h_space =
-        make_horizontal_space(horizontal_mesh, quad, comms_ctx, domain.bubble)
-    z_stretch = if domain.z_stretch
-        Meshes.HyperbolicTangentStretching(domain.dz_bottom)
-    else
-        Meshes.Uniform()
-    end
-    center_space, face_space = make_hybrid_spaces(
-        h_space,
-        domain.z_max,
-        domain.z_elem,
-        z_stretch;
-        deep = domain.deep_atmosphere,
-    )
-    return (; center_space, face_space)
-end
-
-function get_spaces(domain::BoxDomain, params, comms_ctx)
-    FT = eltype(params)
-    quad = Quadratures.GLL{domain.nh_poly + 1}()
-    horizontal_mesh = periodic_rectangle_mesh(;
-        x_max = domain.x_max,
-        y_max = domain.y_max,
-        x_elem = domain.x_elem,
-        y_elem = domain.y_elem,
-        periodic = (domain.periodic_x, domain.periodic_y),
-    )
-    h_space =
-        make_horizontal_space(horizontal_mesh, quad, comms_ctx, domain.bubble)
-    z_stretch = if domain.z_stretch
-        Meshes.HyperbolicTangentStretching(domain.dz_bottom)
-    else
-        Meshes.Uniform()
-    end
-    center_space, face_space = make_hybrid_spaces(
-        h_space,
-        domain.z_max,
-        domain.z_elem,
-        z_stretch;
-        deep = domain.deep_atmosphere,
-    )
-    return (; center_space, face_space)
-end
-
-function get_spaces(domain::ColumnDomain, params, comms_ctx)
-    FT = eltype(params)
-    @warn "perturb_initstate flag is ignored for single column configuration"
-    Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
-    quad = Quadratures.GL{1}()
-    horizontal_mesh = periodic_rectangle_mesh(;
-        x_max = Δx,
-        y_max = Δx,
-        x_elem = 1,
-        y_elem = 1,
-        periodic = (true, true),
-    )
-    bubble = false # bubble correction not compatible with single column configuration
-    h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-    z_stretch = if domain.z_stretch
-        Meshes.HyperbolicTangentStretching(domain.dz_bottom)
-    else
-        Meshes.Uniform()
-    end
-    center_space, face_space =
-        make_hybrid_spaces(h_space, domain.z_max, domain.z_elem, z_stretch)
-    return (; center_space, face_space)
-end
-
-function get_spaces(domain::SphereDomain, params, comms_ctx)
-    FT = eltype(params)
-    quad = Quadratures.GLL{domain.nh_poly + 1}()
-    horizontal_mesh = cubed_sphere_mesh(; radius = domain.radius, h_elem = domain.h_elem)
-    h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx, domain.bubble)
-    z_stretch = if domain.z_stretch
-        Meshes.HyperbolicTangentStretching(domain.dz_bottom)
-    else
-        Meshes.Uniform()
-    end
-    center_space, face_space = make_hybrid_spaces(
-        h_space,
-        domain.z_max,
-        domain.z_elem,
-        z_stretch;
-        deep = domain.deep_atmosphere,
-    )
-    return (; center_space, face_space)
-end
-
-#=
-This is the old get_spaces function. We will replace it with the new dispatch-based
-functions. I'm keeping it here for now as a reference.
-=#
-# function get_spaces(parsed_args, params, comms_ctx)
-
-#     FT = eltype(params)
-#     z_elem = Int(parsed_args["z_elem"])
-#     z_max = FT(parsed_args["z_max"])
-#     dz_bottom = FT(parsed_args["dz_bottom"])
-#     bubble = parsed_args["bubble"]
-#     deep = parsed_args["deep_atmosphere"]
-
-#     h_elem = parsed_args["h_elem"]
-#     radius = CAP.planet_radius(params)
-#     center_space, face_space = if parsed_args["config"] == "sphere"
-#         nh_poly = parsed_args["nh_poly"]
-#         quad = Quadratures.GLL{nh_poly + 1}()
-#         horizontal_mesh = cubed_sphere_mesh(; radius, h_elem)
-#         h_space =
-#             make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-#         z_stretch = if parsed_args["z_stretch"]
-#             Meshes.HyperbolicTangentStretching(dz_bottom)
-#         else
-#             Meshes.Uniform()
-#         end
-#         make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; deep, parsed_args)
-#     elseif parsed_args["config"] == "column" # single column
-#         @warn "perturb_initstate flag is ignored for single column configuration"
-#         FT = eltype(params)
-#         Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
-#         quad = Quadratures.GL{1}()
-#         horizontal_mesh = periodic_rectangle_mesh(;
-#             x_max = Δx,
-#             y_max = Δx,
-#             x_elem = 1,
-#             y_elem = 1,
-#         )
-#         if bubble
-#             @warn "Bubble correction not compatible with single column configuration. It will be switched off."
-#             bubble = false
-#         end
-#         h_space =
-#             make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-#         z_stretch = if parsed_args["z_stretch"]
-#             Meshes.HyperbolicTangentStretching(dz_bottom)
-#         else
-#             Meshes.Uniform()
-#         end
-#         make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
-#     elseif parsed_args["config"] == "box"
-#         FT = eltype(params)
-#         nh_poly = parsed_args["nh_poly"]
-#         quad = Quadratures.GLL{nh_poly + 1}()
-#         x_elem = Int(parsed_args["x_elem"])
-#         x_max = FT(parsed_args["x_max"])
-#         y_elem = Int(parsed_args["y_elem"])
-#         y_max = FT(parsed_args["y_max"])
-#         horizontal_mesh = periodic_rectangle_mesh(;
-#             x_max = x_max,
-#             y_max = y_max,
-#             x_elem = x_elem,
-#             y_elem = y_elem,
-#         )
-#         h_space =
-#             make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-#         z_stretch = if parsed_args["z_stretch"]
-#             Meshes.HyperbolicTangentStretching(dz_bottom)
-#         else
-#             Meshes.Uniform()
-#         end
-#         make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args, deep)
-#     elseif parsed_args["config"] == "plane"
-#         FT = eltype(params)
-#         nh_poly = parsed_args["nh_poly"]
-#         quad = Quadratures.GLL{nh_poly + 1}()
-#         x_elem = Int(parsed_args["x_elem"])
-#         x_max = FT(parsed_args["x_max"])
-#         horizontal_mesh =
-#             periodic_line_mesh(; x_max = x_max, x_elem = x_elem)
-#         h_space =
-#             make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-#         z_stretch = if parsed_args["z_stretch"]
-#             Meshes.HyperbolicTangentStretching(dz_bottom)
-#         else
-#             Meshes.Uniform()
-#         end
-#         make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args, deep)
-#     end
-#     ncols = Fields.ncolumns(center_space)
-#     ndofs_total = ncols * z_elem
-#     hspace = Spaces.horizontal_space(center_space)
-#     quad_style = Spaces.quadrature_style(hspace)
-#     Nq = Quadratures.degrees_of_freedom(quad_style)
-
-#     @info "Resolution stats: " Nq h_elem z_elem ncols ndofs_total
-#     return (;
-#         center_space,
-#         face_space,
-#         horizontal_mesh,
-#         quad,
-#         z_max,
-#         z_elem,
-#         z_stretch,
-#     )
-# end
-
 function get_spaces_restart(Y)
     center_space = axes(Y.c)
     face_space = axes(Y.f)
@@ -282,16 +217,29 @@ end
 
 function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     (; parsed_args, comms_ctx) = config
-    sim_info = get_sim_info(config)
+    (; start_date) = get_sim_info(config)
+    return get_state_restart(
+        restart_file,
+        start_date,
+        atmos_model_hash,
+        comms_ctx,
+        parsed_args["use_itime"],
+    )
+end
 
+function get_state_restart(
+    restart_file,
+    start_date,
+    atmos_model_hash,
+    comms_ctx,
+    use_itime,
+)
     @assert !isnothing(restart_file)
     reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
     # TODO: Do not use InputOutput.HDF5 directly
     t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
-    t_start =
-        parsed_args["use_itime"] ? ITime(t_start; epoch = sim_info.start_date) :
-        t_start
+    t_start = use_itime ? ITime(t_start; epoch = start_date) : t_start
     if "atmos_model_hash" in keys(InputOutput.HDF5.attrs(reader.file))
         atmos_model_hash_in_restart =
             InputOutput.HDF5.read_attribute(reader.file, "atmos_model_hash")
@@ -371,11 +319,27 @@ end
 
 function get_steady_state_velocity(params, Y, parsed_args)
     parsed_args["check_steady_state"] || return nothing
-    parsed_args["initial_condition"] == "ConstantBuoyancyFrequencyProfile" &&
-        parsed_args["mesh_warp_type"] == "Linear" ||
+    return get_steady_state_velocity(
+        params,
+        Y,
+        parsed_args["topography"],
+        parsed_args["initial_condition"],
+        parsed_args["mesh_warp_type"],
+    )
+end
+
+function get_steady_state_velocity(
+    params,
+    Y,
+    topography,
+    initial_condition,
+    mesh_warp_type,
+)
+    initial_condition == "ConstantBuoyancyFrequencyProfile" &&
+        mesh_warp_type == "Linear" ||
         error("The steady-state velocity can currently be computed only for a \
                ConstantBuoyancyFrequencyProfile with Linear mesh warping")
-    topography = parsed_args["topography"]
+
     steady_state_velocity = if topography == "NoWarp"
         steady_state_velocity_no_warp
     elseif topography == "Cosine2D"
@@ -388,19 +352,15 @@ function get_steady_state_velocity(params, Y, parsed_args)
         steady_state_velocity_schar
     else
         error("The steady-state velocity for $topography topography cannot \
-               be computed analytically")
+            be computed analytically")
     end
     top_level = Spaces.nlevels(axes(Y.c)) + Fields.half
     z_top = Fields.level(Fields.coordinate_field(Y.f).z, top_level)
-
-    # TODO: This can be very expensive! It should be moved to a separate CI job.
-    @info "Approximating steady-state velocity"
     s = @timed_str begin
         ᶜu = steady_state_velocity.(params, Fields.coordinate_field(Y.c), z_top)
         ᶠu =
             steady_state_velocity.(params, Fields.coordinate_field(Y.f), z_top)
     end
-    @info "Steady-state velocity approximation completed: $s"
     return (; ᶜu, ᶠu)
 end
 
@@ -696,147 +656,114 @@ function get_comms_context(parsed_args)
     return comms_ctx
 end
 
-function get_simulation(config::AtmosConfig)
-    comms_ctx = get_comms_context(config.parsed_args)
-    params = ClimaAtmosParameters(config)
+function get_domain(parsed_args, params)
     FT = eltype(params)
-
-    # Get the domain
-    if config.parsed_args["config"] == "sphere"
-        domain = SphereDomain(
-            FT;
+    if parsed_args["config"] == "sphere"
+        SphereDomain{FT}(;
             radius = CAP.planet_radius(params),
-            h_elem = config.parsed_args["h_elem"],
-            nh_poly = config.parsed_args["nh_poly"],
-            z_elem = config.parsed_args["z_elem"],
-            z_max = config.parsed_args["z_max"],
-            z_stretch = config.parsed_args["z_stretch"],
-            dz_bottom = config.parsed_args["dz_bottom"],
-            bubble = config.parsed_args["bubble"],
-            deep_atmosphere = config.parsed_args["deep_atmosphere"],
+            h_elem = parsed_args["h_elem"],
+            nh_poly = parsed_args["nh_poly"],
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+            bubble = parsed_args["bubble"],
+            deep_atmosphere = parsed_args["deep_atmosphere"],
+            topography_damping_factor = parsed_args["topography_damping_factor"],
+            mesh_warp_type = parsed_args["mesh_warp_type"],
+            sleve_eta = parsed_args["sleve_eta"],
+            sleve_s = parsed_args["sleve_s"],
+            topo_smoothing = parsed_args["topo_smoothing"],
         )
-    elseif config.parsed_args["config"] == "column"
-        domain = ColumnDomain(
-            FT;
-            z_elem = config.parsed_args["z_elem"],
-            z_max = config.parsed_args["z_max"],
-            z_stretch = config.parsed_args["z_stretch"],
-            dz_bottom = config.parsed_args["dz_bottom"],
+    elseif parsed_args["config"] == "column"
+        ColumnDomain{FT}(;
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
         )
-    elseif config.parsed_args["config"] == "box"
-        domain = BoxDomain(
-            FT;
-            x_elem = config.parsed_args["x_elem"],
-            x_max = config.parsed_args["x_max"],
-            y_elem = config.parsed_args["y_elem"],
-            y_max = config.parsed_args["y_max"],
-            z_elem = config.parsed_args["z_elem"],
-            z_max = config.parsed_args["z_max"],
-            nh_poly = config.parsed_args["nh_poly"],
-            z_stretch = config.parsed_args["z_stretch"],
-            dz_bottom = config.parsed_args["dz_bottom"],
-            bubble = config.parsed_args["bubble"],
-            deep_atmosphere = config.parsed_args["deep_atmosphere"],
+    elseif parsed_args["config"] == "box"
+        BoxDomain{FT}(;
+            x_elem = parsed_args["x_elem"],
+            x_max = parsed_args["x_max"],
+            y_elem = parsed_args["y_elem"],
+            y_max = parsed_args["y_max"],
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            nh_poly = parsed_args["nh_poly"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+            bubble = parsed_args["bubble"],
+            deep_atmosphere = parsed_args["deep_atmosphere"],
             periodic_x = true,
             periodic_y = true,
         )
-    elseif config.parsed_args["config"] == "plane"
-        domain = PlaneDomain(
-            FT;
-            x_elem = config.parsed_args["x_elem"],
-            x_max = config.parsed_args["x_max"],
-            z_elem = config.parsed_args["z_elem"],
-            z_max = config.parsed_args["z_max"],
-            nh_poly = config.parsed_args["nh_poly"],
-            z_stretch = config.parsed_args["z_stretch"],
-            dz_bottom = config.parsed_args["dz_bottom"],
-            bubble = config.parsed_args["bubble"],
-            deep_atmosphere = config.parsed_args["deep_atmosphere"],
+    elseif parsed_args["config"] == "plane"
+        PlaneDomain{FT}(;
+            x_elem = parsed_args["x_elem"],
+            x_max = parsed_args["x_max"],
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            nh_poly = parsed_args["nh_poly"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+            bubble = parsed_args["bubble"],
+            deep_atmosphere = parsed_args["deep_atmosphere"],
             periodic_x = true,
         )
     end
-
-    # Get the AtmosModel
-    atmos = get_atmos(config, params)
-    
-    # Get other simulation parameters
-    initial_condition = get_initial_condition(config.parsed_args, atmos)
-    surface_setup = get_surface_setup(config.parsed_args)
-    sim_info = get_sim_info(config)
-    ode_algo_type = getproperty(CTS, Symbol(config.parsed_args["ode_algo"]))
-    callbacks = get_callbacks(config, sim_info, atmos, params, nothing, nothing)
-    diagnostics = if config.parsed_args["enable_diagnostics"]
-        get_diagnostics_from_config(config.parsed_args, atmos)
-    else
-        ()
-    end
-    
-    # Create the simulation
-    simulation = AtmosSimulation(;
-        model = atmos,
-        domain,
-        initial_condition,
-        params,
-        comms_ctx;
-        dt = sim_info.dt,
-        t_span = (sim_info.t_start, sim_info.t_end),
-        ode_algo_type = ode_algo_type,
-        surface_setup = surface_setup,
-        job_id = sim_info.job_id,
-        output_dir = sim_info.output_dir,
-        restart_file = sim_info.restart_file,
-        start_date = sim_info.start_date,
-        tracers = get_tracers(config.parsed_args),
-        callbacks = callbacks,
-        diagnostics = diagnostics,
-    )
-    return simulation
 end
 
-function AtmosSimulation(;
-    model::AtmosModel,
-    domain::AbstractDomain,
-    initial_condition::AbstractInitialCondition,
-    params,
-    comms_ctx;
-    dt,
-    t_span,
-    ode_algo_type::Type{<:CTS.AbstractAlgorithm},
-    surface_setup = nothing,
-    job_id = "atmos_sim",
-    output_dir = "output",
-    restart_file = nothing,
-    start_date = DateTime(0),
-    tracers = nothing,
-    callbacks = (),
-    diagnostics = (),
-)
-    FT = eltype(params)
-    t_start, t_end = t_span
+function get_simulation(config::AtmosConfig)
+    sim_info = get_sim_info(config)
+    params = ClimaAtmosParameters(config)
+    atmos = get_atmos(config, params)
+    domain = get_domain(config.parsed_args, params)
 
-    sim_info = (;
-        job_id,
-        output_dir,
-        restart_file,
-        start_date,
-        dt,
-        t_start,
-        t_end,
+    job_id = sim_info.job_id
+    output_dir = sim_info.output_dir
+    @info "Simulation info" job_id output_dir
+
+    CP.log_parameter_information(
+        config.toml_dict,
+        joinpath(output_dir, "$(job_id)_parameters.toml"),
+        strict = true,
     )
+    YAML.write_file(joinpath(output_dir, "$job_id.yml"), config.parsed_args)
 
-    if !isnothing(restart_file)
-        (Y, t_start) =
-            get_state_restart(restart_file, hash(atmos), comms_ctx)
-        spaces = get_spaces_restart(Y)
-        sim_info = merge(sim_info, (; t_start))
+    if sim_info.restart
+        s = @timed_str begin
+            (Y, t_start) = get_state_restart(
+                config,
+                sim_info.restart_file,
+                hash(atmos),
+            )
+            spaces = get_spaces_restart(Y)
+            # Fix the t_start in sim_info with the one from the restart
+            sim_info = merge(sim_info, (; t_start))
+        end
+        @info "Allocating Y: $s"
     else
-        spaces = get_spaces(domain, params, comms_ctx)
-        Y = ICs.atmos_state(
-            initial_condition(params),
-            model,
-            spaces.center_space,
-            spaces.face_space,
-        )
+        spaces = get_spaces(domain, params, config.comms_ctx)
+    end
+    initial_condition = get_initial_condition(config.parsed_args, atmos)
+    surface_setup = get_surface_setup(config.parsed_args)
+    if !sim_info.restart
+        s = @timed_str begin
+            Y = ICs.atmos_state(
+                initial_condition(params),
+                atmos,
+                spaces.center_space,
+                spaces.face_space,
+            )
+        end
+        @info "Allocating Y: $s"
+
+        # In instances where we wish to interpolate existing datasets, e.g.
+        # NetCDF files containing spatially varying thermodynamic properties,
+        # this call to `overwrite_initial_conditions` overwrites the variables
+        # in `Y` (specific to `initial_condition`) with those computed using the
+        # `SpaceVaryingInputs` tool.
         CA.InitialConditions.overwrite_initial_conditions!(
             initial_condition,
             Y,
@@ -844,44 +771,113 @@ function AtmosSimulation(;
         )
     end
 
-    p = build_cache(
-        Y,
-        model,
-        params,
-        surface_setup,
-        sim_info,
-        isnothing(tracers) ? String[] : tracers.aerosol_names,
-        nothing, # steady_state_velocity
-    )
+    tracers = get_tracers(config.parsed_args)
+    steady_state_velocity =
+        get_steady_state_velocity(params, Y, config.parsed_args)
 
-    ode_algo = ode_configuration(ode_algo_type, Y, model)
-    callback_set = SciMLBase.CallbackSet(callbacks...)
+    s = @timed_str begin
+        p = build_cache(
+            Y,
+            atmos,
+            params,
+            surface_setup,
+            sim_info.dt,
+            sim_info.start_date,
+            tracers.aerosol_names,
+            steady_state_velocity,
+        )
+    end
+    @info "Allocating cache (p): $s"
 
-    integrator_args, integrator_kwargs = args_integrator(
-        Y,
-        p,
-        (t_start, t_end),
-        ode_algo,
-        callback_set,
-    )
-    integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
+    if config.parsed_args["discrete_hydrostatic_balance"]
+        set_discrete_hydrostatic_balanced_state!(Y, p)
+    end
+
+    FT = Spaces.undertype(axes(Y.c))
+    s = @timed_str begin
+        ode_algo = ode_configuration(FT, config.parsed_args)
+    end
+    @info "ode_configuration: $s"
+
+    s = @timed_str begin
+        callback = get_callbacks(config, sim_info, atmos, params, Y, p)
+    end
+    @info "get_callbacks: $s"
 
     # Initialize diagnostics
-    if !isempty(diagnostics)
-        scheduled_diagnostics, writers, _ = get_diagnostics(
-            diagnostics,
-            model,
+    if config.parsed_args["enable_diagnostics"]
+        s = @timed_str begin
+            scheduled_diagnostics, writers, periods_reductions =
+                get_diagnostics(
+                    config.parsed_args,
+                    atmos,
+                    Y,
+                    p,
+                    sim_info.t_start,
+                    sim_info.start_date,
+                    output_dir,
+                )
+        end
+        @info "initializing diagnostics: $s"
+
+        # Check for consistency between diagnostics and checkpoints
+        checkpoint_frequency = checkpoint_frequency_from_parsed_args(
+            config.parsed_args["dt_save_state_to_disk"],
+        )
+
+        if checkpoint_frequency != Inf
+            if any(
+                x -> !CA.isdivisible(checkpoint_frequency, x),
+                periods_reductions,
+            )
+                accum_str =
+                    join(CA.promote_period.(collect(periods_reductions)), ", ")
+                checkpt_str = CA.promote_period(checkpoint_frequency)
+                @warn "The checkpointing frequency (dt_save_state_to_disk = $checkpt_str) should be an integer multiple of all diagnostics accumulation periods ($accum_str) so simulations can be safely restarted from any checkpoint"
+            end
+        end
+    else
+        writers = nothing
+    end
+
+    continuous_callbacks = tuple()
+    discrete_callbacks = callback
+
+    s = @timed_str begin
+        all_callbacks =
+            SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
+    end
+    @info "Prepared SciMLBase.CallbackSet callbacks: $s"
+    steps_cycle_non_diag = n_steps_per_cycle_per_cb(all_callbacks, sim_info.dt)
+    steps_cycle = lcm(steps_cycle_non_diag)
+    @info "n_steps_per_cycle_per_cb (non diagnostics): $steps_cycle_non_diag"
+    @info "n_steps_per_cycle (non diagnostics): $steps_cycle"
+
+    tspan = (sim_info.t_start, sim_info.t_end)
+    s = @timed_str begin
+        integrator_args, integrator_kwargs = args_integrator(
+            config.parsed_args,
             Y,
             p,
-            sim_info,
-            output_dir,
+            tspan,
+            ode_algo,
+            all_callbacks,
         )
-        integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
-            integrator,
-            scheduled_diagnostics,
-        )
-    else
-        writers = ()
+    end
+
+    s = @timed_str begin
+        integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
+    end
+    @info "init integrator: $s"
+
+    if config.parsed_args["enable_diagnostics"]
+        s = @timed_str begin
+            integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
+                integrator,
+                scheduled_diagnostics,
+            )
+        end
+        @info "Added diagnostics: $s"
     end
 
     reset_graceful_exit(output_dir)
@@ -889,13 +885,12 @@ function AtmosSimulation(;
     return AtmosSimulation(
         job_id,
         output_dir,
-        start_date,
-        t_end,
+        sim_info.start_date,
+        sim_info.t_end,
         writers,
         integrator,
     )
 end
-
 
 # Compatibility with old get_integrator
 function get_integrator(config::AtmosConfig)

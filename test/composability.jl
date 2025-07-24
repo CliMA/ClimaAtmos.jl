@@ -11,10 +11,7 @@ using ClimaAtmos.Parameters
         params = ClimaAtmosParameters(FT)
         comms_ctx = ClimaComms.SingletonCommsContext()
 
-        model = AtmosModel(
-            FT,
-            moisture_model = ClimaAtmos.DryModel(),
-        )
+        model = AtmosModel(FT, moisture_model = ClimaAtmos.DryModel())
 
         domain = ColumnDomain(
             FT,
@@ -23,7 +20,7 @@ using ClimaAtmos.Parameters
             z_stretch = false,
             dz_bottom = 100.0,
         )
-        
+
         initial_condition = IsothermalProfile()
 
         simulation = AtmosSimulation(
@@ -84,4 +81,4 @@ using ClimaAtmos.Parameters
         @test simulation.integrator.t == 0.0
         @test simulation.integrator.sol.prob.tspan == (0.0, 300.0)
     end
-end 
+end
