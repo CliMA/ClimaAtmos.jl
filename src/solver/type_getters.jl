@@ -156,6 +156,7 @@ function get_atmos(config::AtmosConfig, params)
         ),
         orographic_gravity_wave = get_orographic_gravity_wave_model(
             parsed_args,
+            params,
             FT,
         ),
 

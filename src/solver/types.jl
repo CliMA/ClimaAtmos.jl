@@ -320,30 +320,30 @@ end
 abstract type OrographicGravityWave <: AbstractGravityWave end
 
 Base.@kwdef struct LinearOrographicGravityWave{FT, S} <: OrographicGravityWave
-    γ::FT = 0.0
-    ϵ::FT = 0.0
-    β::FT = 0.0
-    h_frac::FT = 0.1
-    ρscale::FT = 1.2
-    L0::FT = 80e3
-    a0::FT = 0.0
-    a1::FT = 0.0
-    Fr_crit::FT = 0.7
-    topo_info::S = "linear"
+    # γ::FT = 0.0
+    # ϵ::FT = 0.0
+    # β::FT = 0.0
+    # h_frac::FT = 0.1
+    # ρscale::FT = 1.2
+    # L0::FT = 80e3
+    # a0::FT = 0.0
+    # a1::FT = 0.0
+    # Fr_crit::FT = 0.7
+    # topo_info::S = "linear"
 end
 
 Base.@kwdef struct FullOrographicGravityWave{FT, S} <: OrographicGravityWave
-    γ::FT = 0.4
-    ϵ::FT = 0.0
-    β::FT = 0.5
-    h_frac::FT = 0.1
-    ρscale::FT = 1.2
-    L0::FT = 80e3
-    a0::FT = 0.9
-    a1::FT = 3.0
-    Fr_crit::FT = 0.7
-    topo_info::S = "gfdl_restart"
-    topography::S = "Earth" # "Earth", ... 
+    γ::FT
+    ε::FT
+    β::FT
+    h_frac::FT
+    ρscale::FT
+    L0::FT
+    a0::FT
+    a1::FT
+    Fr_crit::FT
+    topo_info::S
+    topography::S
 end
 
 abstract type AbstractForcing end
