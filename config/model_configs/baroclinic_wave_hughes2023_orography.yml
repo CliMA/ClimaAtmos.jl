@@ -10,3 +10,4 @@ t_end: "2hours"
 diagnostics:
   - short_name: [pfull, ua, wa, va, rv, pr, cli, hus, ke]
     period: 200secs
+toml: [toml/baroclinic_wave_hughes2023_orography.toml]
