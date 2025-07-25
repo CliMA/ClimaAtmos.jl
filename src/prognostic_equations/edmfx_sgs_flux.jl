@@ -40,9 +40,9 @@ function edmfx_sgs_mass_flux_tendency!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
-    (; ᶠu³, ᶜh_tot) = p.precomputed
+    (; ᶜh_tot) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜρa⁰, ᶜρ⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
     if (
         p.atmos.moisture_model isa NonEquilMoistModel &&
         p.atmos.microphysics_model isa Microphysics1Moment
@@ -51,6 +51,9 @@ function edmfx_sgs_mass_flux_tendency!(
     end
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+
+    ᶠu³ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
+    ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
         # Enthalpy fluxes. First sum up the draft fluxes
@@ -236,11 +239,13 @@ function edmfx_sgs_mass_flux_tendency!(
     a_max = CAP.max_area(turbconv_params)
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
-    (; ᶠu³, ᶜh_tot) = p.precomputed
+    (; ᶜh_tot) = p.precomputed
     (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs) = p.precomputed
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     FT = eltype(Y)
+
+    ᶠu³ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
         # Enthalpy fluxes
@@ -345,7 +350,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length) = p.precomputed
+    (; ᶜρa⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length) = p.precomputed
     if (
         p.atmos.moisture_model isa NonEquilMoistModel &&
         p.atmos.microphysics_model isa Microphysics1Moment
@@ -429,6 +434,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         # Momentum diffusion
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
+        ᶠu³⁰ = ᶠu³_lazy(Y.c.uₕ, Y.c.ρ, Y.f.u₃)
+        ᶜu⁰ = ᶜu_lazy(Y.c.uₕ, ᶠu³⁰)
         ᶠstrain_rate .= compute_strain_rate_face(ᶜu⁰)
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
     end
@@ -450,7 +457,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜu, ᶜh_tot, ᶜtke⁰, ᶜmixing_length) = p.precomputed
+    (; ᶜh_tot, ᶜtke⁰, ᶜmixing_length) = p.precomputed
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
@@ -505,6 +512,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         # Momentum diffusion
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
+        ᶜu = ᶜu_lazy(Y.c.uₕ, Y.f.u₃)
         ᶠstrain_rate .= compute_strain_rate_face(ᶜu)
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
     end

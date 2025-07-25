@@ -108,10 +108,13 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
 
+    # Conflicting broadcast rules
+    ᶜu = Base.materialize(ᶜu_lazy(Y.c.uₕ, Y.f.u₃))
+
     # Grid scale hyperdiffusion
     @. ᶜ∇²u =
-        C123(wgradₕ(divₕ(p.precomputed.ᶜu))) -
-        C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜu))))
+        C123(wgradₕ(divₕ(ᶜu))) -
+        C123(wcurlₕ(C123(curlₕ(ᶜu))))
 
     @. ᶜ∇²specific_energy =
         wdivₕ(gradₕ(specific(Y.c.ρe_tot, Y.c.ρ) + ᶜp / Y.c.ρ - ᶜh_ref))

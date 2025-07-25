@@ -48,11 +48,13 @@ function set_precipitation_velocities!(
     moisture_model::NonEquilMoistModel,
     microphysics_model::Microphysics1Moment,
 )
-    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts) = p.precomputed
     (; ᶜΦ) = p.core
     cmc = CAP.microphysics_cloud_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
+
+    ᶜu = ᶜu_lazy(Y.c.uₕ, Y.f.u₃)
 
     # compute the precipitation terminal velocity [m/s]
     @. ᶜwᵣ = CM1.terminal_velocity(
@@ -104,7 +106,7 @@ function set_precipitation_velocities!(
     moisture_model::NonEquilMoistModel,
     microphysics_model::Microphysics2Moment,
 )
-    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwnₗ, ᶜwnᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwnₗ, ᶜwnᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts) = p.precomputed
     (; ᶜΦ) = p.core
 
     cm1c = CAP.microphysics_cloud_params(p.params)
@@ -112,6 +114,7 @@ function set_precipitation_velocities!(
     cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
 
+    ᶜu = ᶜu_lazy(Y.c.uₕ, Y.f.u₃)
     # compute the precipitation terminal velocity [m/s]
     # TODO sedimentation of snow is based on the 1M scheme
     @. ᶜwnᵣ = getindex(
@@ -280,7 +283,7 @@ function set_precipitation_cache!(
 end
 function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     (; dt) = p
-    (; ᶜts, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
+    (; ᶜts, ᶜwᵣ, ᶜwₛ) = p.precomputed
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
 
     (; q_tot, q_liq, q_ice, q_rai, q_sno) = p.precomputed.ᶜspecific
