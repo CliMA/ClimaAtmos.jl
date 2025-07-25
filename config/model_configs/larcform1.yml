@@ -1,5 +1,6 @@
-initial_condition: "Larcform1" # WIP
-surface_setup: "Bomex"     # hijacked
+job_id: "Larcform1"
+initial_condition: "Larcform1"
+surface_setup: "Bomex"     # hijacked for const surface temperature
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false
@@ -25,7 +26,7 @@ y_elem: 2
 #perturb_initstate: false
 dt: 10secs
 dt_rad: 10mins
-t_end: 1hours #"6hours"
+t_end: 20days #"6hours"
 dt_save_state_to_disk: 6days"
 cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage : true
@@ -35,25 +36,33 @@ netcdf_output_at_levels: true
 output_default_diagnostics: false
 rad: allskywithclear
 insolation: "larcform1"
+precip_model: "1M"
 ode_algo: ARS343
 
-diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
-    period: 30mins
-    reduction: average
-  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]
-    period: 30mins
-    reduction: average
-  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
-    period: 30mins
-    reduction: average
-  - short_name: [rlut, rlutcs, rsut, rsdt, rsutcs, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv]
-    period: 30mins
-    reduction: average
+diagnostics: # profiles, scalar fields 
+  - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, hus, hur, ua, va, wa, rlu, rld] #, rhoa, ua, va, wa, hur, hus, hussfc, evspsbl]
+    period: 10mins
+    reduction: average, inst
+  - short_name: [rldt, rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs]  # rldt should be zero
+    period: 10mins
+    reduction: average, inst
+
+# diagnostics:
+#  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+#    period: 30mins
+#    reduction: inst, average
+#  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]
+#    period: 30mins
+#    reduction: average
+#  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
+#    period: 30mins
+#    reduction: average
+#  - short_name: [rlut, rlutcs, rsut, rsdt, rsutcs, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv]
+#    period: 30mins
+#    reduction: average
 
 # TODO:
 # ensure advective tendencies are set to zero
-# Set surface temperature to 250 K (diagnostic: ts)
 # - surface_temperature 
 # Consider surface-atmosphere interactions [Persson et al., 1999]
 # set run length to 20 days (analysis on first 10 days)
