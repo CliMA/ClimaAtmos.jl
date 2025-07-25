@@ -140,7 +140,15 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜh_tot, ᶠu³, ᶜp) = p.precomputed
+    (; ᶠu³, ᶜp, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
