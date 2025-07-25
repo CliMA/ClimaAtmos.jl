@@ -81,16 +81,27 @@ function vertical_diffusion_boundary_layer_tendency!(
     ::Union{VerticalDiffusion, DecayWithHeightDiffusion},
 )
     FT = eltype(Y)
+    (; vertical_diffusion) = p.atmos
     α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
-    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h) = p.precomputed
+    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜp) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
+    ᶜK_h = p.scratch.ᶜtemp_scalar
+    if vertical_diffusion isa DecayWithHeightDiffusion
+        ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
+    elseif vertical_diffusion isa VerticalDiffusion
+        ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(
+            Y.c.uₕ,
+            ᶜp,
+            vertical_diffusion,
+        )
+    end
 
     if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
         ᶠstrain_rate .= compute_strain_rate_face(ᶜu)
         @. Yₜ.c.uₕ -= C12(
-            ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_u) * ᶠstrain_rate) / Y.c.ρ,
-        )
+            ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠstrain_rate) / Y.c.ρ,
+        ) # assumes ᶜK_u = ᶜK_h
     end
 
     ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
@@ -100,18 +111,19 @@ function vertical_diffusion_boundary_layer_tendency!(
     @. Yₜ.c.ρe_tot -=
         ᶜdivᵥ_ρe_tot(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜh_tot)))
 
-    ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-    ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_2
-    ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
-        top = Operators.SetValue(C3(0)),
-        bottom = Operators.SetValue(C3(0)),
-    )
+    ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_2
+    ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_3
+
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         if ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai))
             @. ᶜK_h_scaled = α_vert_diff_tracer * ᶜK_h
         else
             @. ᶜK_h_scaled = ᶜK_h
         end
+        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
+            top = Operators.SetValue(C3(0)),
+            bottom = Operators.SetValue(C3(0)),
+        )
         @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρχ(
             -(
                 ᶠinterp(Y.c.ρ) *
