@@ -105,8 +105,10 @@ function compute_strain_rate_face(u::Fields.Field)
     @assert eltype(u) <: C123
     ∇ᵥuvw_boundary =
         Geometry.outer(Geometry.WVector(0), Geometry.UVWVector(0, 0, 0))
+    uvw_boundary = Geometry.UVWVector(0, 0, 0)
     ᶠgradᵥ = Operators.GradientC2F(
-        bottom = Operators.SetGradient(∇ᵥuvw_boundary),
+        bottom = Operators.SetValue(uvw_boundary),
+        #bottom = Operators.SetGradient(∇ᵥuvw_boundary),
         top = Operators.SetGradient(∇ᵥuvw_boundary),
     )
     axis_uvw = Geometry.UVWAxis()

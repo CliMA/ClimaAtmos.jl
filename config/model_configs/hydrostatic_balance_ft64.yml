@@ -5,10 +5,14 @@ t_end: "120days"
 discrete_hydrostatic_balance: true
 moist: equil
 deep_atmosphere: true
-hyperdiff: false
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+hyperdiff: true
 perturb_initstate: false
+precip_model: "0M"
+vert_diff: "DecayWithHeightDiffusion"
 disable_surface_flux_tendency: false
-FLOAT_TYPE: "Float64"
+FLOAT_TYPE: "Float32"
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa]
     period: 30days

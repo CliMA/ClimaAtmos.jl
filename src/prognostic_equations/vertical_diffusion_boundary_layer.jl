@@ -79,6 +79,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     (; ᶜu, ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
+
     if !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
         ᶠstrain_rate .= compute_strain_rate_face(ᶜu)

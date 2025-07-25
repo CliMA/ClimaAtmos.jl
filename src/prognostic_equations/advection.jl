@@ -119,7 +119,7 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
                 wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
                 Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
             if p.atmos.moisture_model isa NonEquilMoistModel &&
-               p.atmos.precip_model isa Microphysics1Moment
+               p.atmos.microphysics_model isa Microphysics1Moment
                 @. Yₜ.c.sgsʲs.:($$j).q_liq -=
                     wdivₕ(Y.c.sgsʲs.:($$j).q_liq * ᶜuʲs.:($$j)) -
                     Y.c.sgsʲs.:($$j).q_liq * wdivₕ(ᶜuʲs.:($$j))
@@ -236,19 +236,19 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρq_tot += vtt - vtt_central
     end
 
-   # if isnothing(ᶠf¹²) # SHALLOW ATMOSPHERE
-   #     # shallow atmosphere
-   #     @. Yₜ.c.uₕ -=
-   #         ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
-   #         (ᶜf³ + ᶜω³) × CT12(ᶜu)
-   #     @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-   #     for j in 1:n
-   #         @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-   #             ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-   #             ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-   #     end
-   # else # DEEP ATMOSPHERE 
-        # deep atmosphere
+    #if isnothing(ᶠf¹²)
+    #    # shallow atmosphere
+    #    @. Yₜ.c.uₕ -=
+    #        ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
+    #        (ᶜf³ + ᶜω³) × CT12(ᶜu)
+    #    @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+    #    for j in 1:n
+    #        @. Yₜ.f.sgsʲs.:($$j).u₃ -=
+    #            ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
+    #            ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
+    #    end
+    #else
+    #    # deep atmosphere
         @. Yₜ.c.uₕ -=
             ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
             (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
@@ -258,16 +258,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
                 ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
         end
-        ### shallow atmosphere
-        #@. Yₜ.c.uₕ -=
-        #    ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
-        #    (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        #@. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        #for j in 1:n
-        #    @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-        #        ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-        #        ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        #end
     #end
 
     if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
@@ -373,7 +363,7 @@ function edmfx_sgs_vertical_advection_tendency!(
         )
         @. Yₜ.c.sgsʲs.:($$j).q_tot += va
         if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.precip_model isa Microphysics1Moment
+           p.atmos.microphysics_model isa Microphysics1Moment
             # TODO - add precipitation terminal velocity
             # TODO - add cloud sedimentation velocity
             # TODO - add their contributions to mean energy and mass

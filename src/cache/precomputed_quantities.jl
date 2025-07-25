@@ -297,8 +297,6 @@ function surface_velocity(ᶠu₃, ᶠuₕ³)
     sfc_u₃ = Fields.level(ᶠu₃.components.data.:1, half)
     sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
     sfc_g³³ = g³³_field(axes(sfc_u₃))
-    test_variable = @. -sfc_uₕ³ / sfc_g³³
-    Main.@infiltrate
     return @. lazy(-sfc_uₕ³ / sfc_g³³) # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
 end
 

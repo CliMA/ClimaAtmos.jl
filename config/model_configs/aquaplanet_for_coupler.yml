@@ -3,21 +3,21 @@ z_max: 60000.0
 z_elem: 43
 dz_bottom: 30.0
 dt: "300secs"
-deep_atmosphere: false
+deep_atmosphere: true
 t_end: "240days"
 rayleigh_sponge: true
 moist: "equil"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-precip_model: nothing
-disable_surface_flux_tendency: false
+precip_model: "0M"
+disable_surface_flux_tendency: true
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "DecayWithHeightDiffusion"
 cloud_model: "grid_scale"
 netcdf_output_at_levels: true
 toml: [toml/sphere_aquaplanet.toml]
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc]
     period: 30days
 #diagnostics:
 #  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa]

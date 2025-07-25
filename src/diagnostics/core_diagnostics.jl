@@ -40,6 +40,7 @@
 #     error_diagnostic_variable("relative humidity makes sense only for moist models")
 
 # General helper functions for undefined diagnostics for a particular model
+using LinearAlgebra: ×
 error_diagnostic_variable(
     message = "Cannot compute $variable with model = $T",
 ) = error(message)
@@ -560,6 +561,77 @@ add_diagnostic_variable!(
                 u_component.(
                     Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1)),
                 )
+        end
+    end,
+)
+
+###
+# Near-surface U velocity (2d covariant)
+###
+add_diagnostic_variable!(
+    short_name = "uasc",
+    long_name = "Eastward Near-Surface Wind",
+    standard_name = "eastward_wind",
+    units = "m s^-1",
+    comments = "Eastward component of the wind at the bottom cell center of the atmosphere",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(
+                    Geometry.Covariant1Vector.(Fields.level(cache.precomputed.ᶜu, 1)).components.data.:1,
+            )
+        else
+            out .=
+                    Geometry.Covariant1Vector.(Fields.level(cache.precomputed.ᶜu, 1)).components.data.:1
+        end
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "vasc",
+    long_name = "Eastward Near-Surface Wind",
+    standard_name = "eastward_wind",
+    units = "m s^-1",
+    comments = "Eastward component of the wind at the bottom cell center of the atmosphere",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(
+                    Geometry.Covariant2Vector.(Fields.level(cache.precomputed.ᶜu, 1)).components.data.:1,
+            )
+        else
+            out .=
+                    Geometry.Covariant2Vector.(Fields.level(cache.precomputed.ᶜu, 1)).components.data.:1
+        end
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "wasc",
+    long_name = "Eastward Near-Surface Wind",
+    standard_name = "eastward_wind",
+    units = "m s^-1",
+    comments = "Eastward component of the wind at the bottom cell center of the atmosphere",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(
+                    C3.(Fields.level(cache.precomputed.ᶜu, 1)).components.data.:1,
+            )
+        else
+            out .=
+                    C3.(Fields.level(cache.precomputed.ᶜu, 1)).components.data.:1
+        end
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "ctend",
+    long_name = "Coriolis Tendency Contribution",
+    standard_name = "coriolis tendency",
+    units = "ms⁻²",
+    comments = "Vertical coroilis contribution",
+    compute! = (out, state, cache, time) -> begin
+        coriolis = copy((Geometry.WVector.(cache.core.ᶠf¹² .× ᶠinterp.(CT12.(cache.precomputed.ᶜu)))).components.data.:1)
+        Spaces.weighted_dss!(coriolis)
+        if isnothing(out)
+            return copy(coriolis)
+        else
+            out .= coriolis
         end
     end,
 )

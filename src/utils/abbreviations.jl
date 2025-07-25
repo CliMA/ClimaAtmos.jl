@@ -59,6 +59,10 @@ const ᶠwinterp = Operators.WeightedInterpolateC2F(
     bottom = Operators.Extrapolate(),
     top = Operators.Extrapolate(),
 )
+const ᶠwinterp_vel = Operators.WeightedInterpolateC2F(
+    bottom = Operators.SetValue(CT12(Float32(0),Float32(0))),
+    top = Operators.Extrapolate(),
+)
 
 # TODO: Replace these boundary conditions with NaN's, since they are
 # meaningless and we only need to specify them in order to be able to
