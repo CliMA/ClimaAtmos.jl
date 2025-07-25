@@ -627,7 +627,7 @@ function calc_base_flux!(
     N_pbl = k_pbl_values.:4
     
     # Calculate τ components
-    @Main.infiltrate
+    # @Main.infiltrate
     @. τ_x = ρ_pbl * N_pbl * (t11 * u_pbl + t21 * v_pbl)
     @. τ_y = ρ_pbl * N_pbl * (t12 * u_pbl + t22 * v_pbl)
     
@@ -844,7 +844,6 @@ function compute_ogw_drag(
     )
     FT = eltype(Y)
     center_space = Fields.axes(Y.c)
-    # face_space = Spaces.face_space(Y.f)
     face_space = Fields.axes(Y.f)
     J_bot = Fields.level(Fields.local_geometry_field(face_space).J, half)
     Δz_bot = Fields.level(Fields.Δz_field(face_space), half)
@@ -884,6 +883,7 @@ function compute_ogw_drag(
     real_elev = Fields.level(real_elev, half)
     real_elev = max.(0, real_elev)
 
+    # @Main.infiltrate
     hmax = @. real_elev - z_surface
     hmin = @. h_frac * hmax
 
@@ -903,10 +903,15 @@ function compute_ogw_drag(
     @. dχdx = ifelse( cg_lat < FT(-88), 0, dχdx)
     @. dχdy = ifelse( cg_lat < FT(-88), 0, dχdy)
 
-    t11 = dχdx .* dhdx
-    t21 = dχdx .* dhdy
-    t12 = dχdy .* dhdx
-    t22 = dχdy .* dhdy
+    # We convert the face-centered drag vector elements to cell-centered
+    # quantities as these are used to compute the physics associated with the
+    # orographic gravity wave drag in the cell.
+    hmax = Fields.Field(Fields.field_values(hmax), center_space)
+    hmin = Fields.Field(Fields.field_values(hmin), center_space)
+    t11 = Fields.Field(Fields.field_values(dχdx .* dhdx), center_space)
+    t21 = Fields.Field(Fields.field_values(dχdx .* dhdy), center_space)
+    t12 = Fields.Field(Fields.field_values(dχdy .* dhdx), center_space)
+    t22 = Fields.Field(Fields.field_values(dχdy .* dhdy), center_space)
 
     return (; hmax, hmin, t11, t21, t12, t22)
 
