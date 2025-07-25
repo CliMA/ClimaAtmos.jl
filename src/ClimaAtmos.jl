@@ -88,7 +88,7 @@ include(
     joinpath(
         "parameterized_tendencies",
         "gravity_wave_drag",
-        "orographic_gravity_wave.jl",
+        "orographic_gravity_wave_gpu.jl",
     ),
 )
 include(joinpath("prognostic_equations", "hyperdiffusion.jl"))
