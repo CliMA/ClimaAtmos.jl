@@ -414,3 +414,14 @@ The source terms functions treat negative specific humidities as zeros,
   so the simulations should be stable even with small negative numbers.
 
 We do not apply hyperdiffusion for precipitation tracers.
+
+### Aerosol Activation for 2-Moment Microphysics
+
+Aerosol activation uses functions from the [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl) library, based on the Abdul-Razzak and Ghan (ARG) parameterization. ARG predicts the number of activated cloud droplets assuming a parcel of clear air rising adiabatically. This formulation is traditionally applied only at cloud base, where the maximum supersaturation typically occurs.
+
+To enable ARG to be used locally (i.e., without explicitly identifying cloud base), CloudMicrophysics.jl implements a modified equation for the maximum supersaturation that accounts for the presence of pre-existing liquid and ice particles. This allows activation to be applied inside clouds. To ensure that activation occurs only where physically appropriate, we apply additional clipping logic:
+
+- If the predicted maximum supersaturation is less than the local supersaturation (i.e., supersaturation is decreasing), aerosol activation is not applied.
+- If the predicted number of activated droplets is less than the existing local cloud droplet number concentration, activation is also suppressed.
+
+This ensures that droplet activation occurs only in physically meaningful regions—typically near cloud base—even though the activation routine can be applied throughout the domain.

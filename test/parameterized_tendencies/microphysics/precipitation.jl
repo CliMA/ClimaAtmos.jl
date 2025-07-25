@@ -179,6 +179,7 @@ end
             "precip_model" => "2M",
             "config" => "column",
             "output_default_diagnostics" => false,
+            "prescribed_aerosols" => ["SSLT01"],
         ),
         job_id = "precipitation_2M",
     )

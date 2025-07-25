@@ -47,7 +47,7 @@ allocs_limit["flame_aquaplanet_progedmf"] = 774_712
 allocs_limit["flame_aquaplanet_progedmf_dense_autodiff"] = 774_712
 allocs_limit["flame_diffusion"] = 138_432
 allocs_limit["flame_threaded"] = 2047_736
-allocs_limit["flame_callbacks"] = 391_864
+allocs_limit["flame_callbacks"] = 391_942
 allocs_limit["flame_gravity_wave"] = 581_381_976
 # Ideally, we would like to track all the allocations, but this becomes too
 # expensive there is too many of them. Here, we set the default sample rate to
