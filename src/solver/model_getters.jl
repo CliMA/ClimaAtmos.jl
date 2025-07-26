@@ -254,11 +254,9 @@ end
 function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) where {FT}
     ogw_name = parsed_args["orographic_gravity_wave"]
     @assert ogw_name in (nothing, "gfdl_restart", "raw_topo", "linear")
-    return if ogw_name == "gfdl_restart"
-        FullOrographicGravityWave{FT, String}()
-    elseif ogw_name == "raw_topo"
+    return if ogw_name == "raw_topo" || ogw_name == "gfdl_restart"
         γ = params.orographic_gravity_wave_params.γ
-        ε = params.orographic_gravity_wave_params.ϵ
+        ϵ = params.orographic_gravity_wave_params.ϵ
         β = params.orographic_gravity_wave_params.β
         h_frac = params.orographic_gravity_wave_params.h_frac
         ρscale = params.orographic_gravity_wave_params.ρscale
@@ -269,7 +267,7 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
         topo_info = params.orographic_gravity_wave_params.topo_info
         topography = parsed_args["topography"]
         # @Main.infiltrate
-        FullOrographicGravityWave{FT, String}(; γ, ε, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
+        FullOrographicGravityWave{FT, String}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
     elseif ogw_name == "linear"
         LinearOrographicGravityWave(; topo_info = "linear")
     else
