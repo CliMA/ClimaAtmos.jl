@@ -59,7 +59,7 @@ function edmfx_tke_tendency!(
     FT = eltype(p.params)
 
 
-    ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : @. lazy(Y.c.ρ)
+    ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
     nh_pressure3_buoyʲs =
         turbconv_model isa PrognosticEDMFX ?
         p.precomputed.ᶠnh_pressure₃_buoyʲs : p.precomputed.ᶠnh_pressure³_buoyʲs
@@ -101,7 +101,7 @@ function edmfx_tke_tendency!(
         # buoyancy production
         @. Yₜ.c.sgs⁰.ρatke -= ᶜρa⁰ * ᶜK_h * ᶜlinear_buoygrad
 
-        ᶜtke⁰ = ᶜspecific_tke(Y, p)
+        ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
 
         # entrainment and detraiment
         # using ᶜu⁰ and local geometry results in allocation

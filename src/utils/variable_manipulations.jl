@@ -375,23 +375,12 @@ function ρa⁰(ρ, sgsʲs, turbconv_model)
         return env_value(ρ, sgsʲ -> sgsʲ.ρa, sgsʲs)
 
     elseif turbconv_model isa DiagnosticEDMFX
-        (; ᶜρaʲs) = p.precomputed
         return env_value(ρ, ᶜρaʲ -> ᶜρaʲ, sgsʲs)
     else
-        return Y.c.ρ
+        return ρ
     end
 end
 
-"""
-Arguments:
-- `ρ`: The model state, which contains the grid-mean density `Y.c.ρ` and
-        the draft subdomain states `Y.c.sgsʲs` (for PrognosticEDMFX).
-- `sgsʲs`: Y.c.sgsʲs for prognostic of The cache, containing precomputed quantities and turbconv_model.
-"""
-function ρa⁰(ρ, sgsʲs)
-    # ρ - Σ ρaʲ
-    return env_value(ρ, sgsʲ -> sgsʲ.ρa, sgsʲs)
-end
 
 """
     ᶜspecific_tke(Y, p)
@@ -404,47 +393,28 @@ fallback value (`ρχ_fallback`) in the limit of small environmental area
 fraction.
 
 Arguments:
-- `Y`: The state, containing the grid-mean density `ρ` and the environment SGS state `Y.c.sgs⁰`.
-- `p`: The cache, containing precomputed quantities and turbconv_model.
+- `ρ`: The grid-mean density `ρ` and the environment SGS state `Y.c.sgs⁰`.
+- `ρatke`: The cache, containing precomputed quantities and turbconv_model.
+- `ρa⁰`: The environment area-weighted density.
 
 Returns:
 - The specific TKE of the environment (`tke⁰`).
 """
-function ᶜspecific_tke(Y, p)
-    turbconv_model = p.atmos.turbconv_model
-    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+function specific_tke(ρ, ρatke, ρa⁰, turbconv_model)
 
-    sgs⁰ = Y.c.sgs⁰
-
-    # no sgs weighting function needed for EDOnlyEDMFX
-    if turbconv_model isa EDOnlyEDMFX
-        return @. lazy(specific(sgs⁰.ρatke, ᶜρa⁰))
-    else
-        return @. lazy(
-            specific(
-                sgs⁰.ρatke,     # ρaχ for environment TKE
-                ᶜρa⁰,        # ρa for environment, now computed internally
-                0,              # Fallback ρχ is zero for TKE
-                Y.c.ρ,           # Fallback ρ
-                turbconv_model,
-            ),
+    if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
+        return specific(
+            ρatke,    # ρaχ for environment TKE
+            ρa⁰, # ρa for environment, now computed internally
+            0,         # Fallback ρχ is zero for TKE
+            ρ,        # Fallback ρ
+            turbconv_model,
         )
+    else
+        return specific(ρatke, ρa⁰)
     end
 end
 
-function specific_tke(ᶜρ, ᶜρatke, ᶜρa⁰, turbconv_model)
-    return specific(
-            ᶜρatke,    # ρaχ for environment TKE
-            ᶜρa⁰, # ρa for environment, now computed internally
-            0,         # Fallback ρχ is zero for TKE
-            ᶜρ,        # Fallback ρ
-            turbconv_model,
-        )
-end
-
-function specific_tke(ᶜρatke, ᶜρa⁰, ::EDOnlyEDMFX)
-    return specific(ᶜρatke, ᶜρa⁰)
-end
 
 """
     ᶜspecific_env_mse(Y, p)

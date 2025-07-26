@@ -1150,7 +1150,17 @@ function compute_tke!(
     time,
     turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX, DiagnosticEDMFX},
 )
-    ᶜtke = ᶜspecific_tke(state, cache)
+    if turbconv_model isa PrognosticEDMFX
+        sgsʲs = state.c.sgsʲs
+    elseif turbconv_model isa DiagnosticEDMFX
+        (; ᶜρaʲs) = cache.precomputed
+        sgsʲs = ᶜρaʲs
+    else
+        sgsʲs = nothing
+    end
+
+    ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, sgsʲs, turbconv_model))
+    ᶜtke = @. lazy(specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
     if isnothing(out)
         return Base.materialize(ᶜtke)
     else
