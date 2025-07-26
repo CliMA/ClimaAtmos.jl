@@ -245,7 +245,6 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
         Fr_crit = params.orographic_gravity_wave_params.Fr_crit
         topo_info = params.orographic_gravity_wave_params.topo_info
         topography = parsed_args["topography"]
-        # @Main.infiltrate
         FullOrographicGravityWave{FT, String}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
     elseif ogw_name == "linear"
         LinearOrographicGravityWave(; topo_info = "linear")

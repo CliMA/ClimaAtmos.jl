@@ -262,7 +262,6 @@ function orographic_gravity_wave_forcing!(
     get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
     parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl) .- 0.5 .* parent(Δz_bot)
     topo_ᶠz_pbl = topo_ᶠz_pbl.components.data.:1
-    @Main.infiltrate
 
     # compute base flux at k_pbl
     calc_base_flux!(
@@ -895,12 +894,10 @@ function compute_ogw_drag(
         error("Topography required for orographic gravity wave drag: $topography")
     end
 
-    # @Main.infiltrate
     real_elev = SpaceVaryingInput(topography_function, face_space)
     real_elev = Fields.level(real_elev, half)
     real_elev = max.(0, real_elev)
 
-    # @Main.infiltrate
     hmax = @. real_elev - z_surface
     hmin = @. h_frac * hmax
 
