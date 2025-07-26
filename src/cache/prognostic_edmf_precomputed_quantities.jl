@@ -362,7 +362,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶠlg = Fields.local_geometry_field(Y.f)
     ᶜtke⁰ = ᶜspecific_tke(Y, p)
-    ᶜρa⁰_vals = ᶜρa⁰(Y, p)
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
     ᶜvert_div = p.scratch.ᶜtemp_scalar
     ᶜmassflux_vert_div = p.scratch.ᶜtemp_scalar_2
@@ -480,7 +480,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     for j in 1:n
         ᶠu³ʲ = ᶠu³ʲs.:($j)
         @. ᶜtke_exch +=
-            Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / ᶜρa⁰_vals *
+            Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / ᶜρa⁰ *
             (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
     end
 
@@ -507,7 +507,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     @. ᶜK_h = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
-    ρa_sfc_values = Fields.field_values(Fields.level(ᶜρa⁰_vals, 1)) # TODO: replace by surface value
+    ρa_sfc_values = Fields.field_values(Fields.level(ᶜρa⁰, 1)) # TODO: replace by surface value
     ustar_values = Fields.field_values(ustar)
     sfc_local_geometry_values = Fields.field_values(
         Fields.level(Fields.local_geometry_field(Y.f), half),

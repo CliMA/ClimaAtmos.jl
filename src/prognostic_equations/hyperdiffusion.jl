@@ -150,7 +150,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
-        ᶜρa⁰_vals = ᶜρa⁰(Y, p)
+        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
     if use_prognostic_tke(turbconv_model)
@@ -175,7 +175,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     # Sub-grid scale hyperdiffusion continued
     if (turbconv_model isa PrognosticEDMFX) && diffuse_tke
-        @. Yₜ.c.sgs⁰.ρatke -= ν₄_vorticity * wdivₕ(ᶜρa⁰_vals * gradₕ(ᶜ∇²tke⁰))
+        @. Yₜ.c.sgs⁰.ρatke -= ν₄_vorticity * wdivₕ(ᶜρa⁰ * gradₕ(ᶜ∇²tke⁰))
     end
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n

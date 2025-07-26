@@ -58,7 +58,7 @@ import ..SlabOceanSST
 import ..draft_area
 import ..compute_gm_mixing_length!
 import ..horizontal_integral_at_boundary
-import ..ᶜρa⁰
+import ..ρa⁰
 import ..ᶜspecific_tke
 import ..ᶜspecific_env_value
 

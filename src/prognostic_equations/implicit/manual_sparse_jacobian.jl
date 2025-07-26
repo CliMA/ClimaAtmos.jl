@@ -626,8 +626,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             turbconv_model = p.atmos.turbconv_model
             ᶜmixing_length = p.precomputed.ᶜmixing_length
             ᶜtke⁰ = ᶜspecific_tke(Y, p)
-            ᶜρa⁰_vals =
-                p.atmos.turbconv_model isa PrognosticEDMFX ? ᶜρa⁰(Y, p) : Y.c.ρ
+            ᶜρa⁰ =
+                p.atmos.turbconv_model isa PrognosticEDMFX ? (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : @. lazy(Y.c.ρ)
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
             @inline tke_dissipation_rate_tendency(tke⁰, mixing_length) =
@@ -648,13 +648,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 dtγ * (
                     ᶜdiffusion_u_matrix -
                     DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
-                ) ⋅ DiagonalMatrixRow(-(ᶜtke⁰) / ᶜρa⁰_vals)
+                ) ⋅ DiagonalMatrixRow(-(ᶜtke⁰) / ᶜρa⁰)
             @. ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
                 dtγ * (
                     (
                         ᶜdiffusion_u_matrix -
                         DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
-                    ) ⋅ DiagonalMatrixRow(1 / ᶜρa⁰_vals) - DiagonalMatrixRow(
+                    ) ⋅ DiagonalMatrixRow(1 / ᶜρa⁰) - DiagonalMatrixRow(
                         tke_dissipation_rate_tendency(ᶜtke⁰, ᶜmixing_length),
                     )
                 ) - (I,)
