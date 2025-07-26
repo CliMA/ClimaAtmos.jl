@@ -226,7 +226,7 @@ p = (; scratch = CA.temporary_quantities(Y, atmos),
 (; topo_ᶜτ_sat, topo_ᶠτ_sat) = p.orographic_gravity_wave
 (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
     p.orographic_gravity_wave
-(; topo_ᶠVτ, topo_k_pbl_values) =
+(; topo_ᶠVτ, values_at_z_pbl) =
     p.orographic_gravity_wave
 (; ᶜdTdz) = p.orographic_gravity_wave
 (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
@@ -323,7 +323,7 @@ CA.calc_base_flux!(
     ᶜN,
     ᶜz,
     topo_ᶜz_pbl,
-    topo_k_pbl_values
+    values_at_z_pbl
 )
 
 topo_d2Vτdz = p.scratch.ᶜtemp_scalar
