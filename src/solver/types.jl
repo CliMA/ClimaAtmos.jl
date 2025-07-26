@@ -293,7 +293,7 @@ end
 
 Base.@kwdef struct FullOrographicGravityWave{FT, S} <: OrographicGravityWave
     γ::FT
-    ε::FT
+    ϵ::FT
     β::FT
     h_frac::FT
     ρscale::FT
