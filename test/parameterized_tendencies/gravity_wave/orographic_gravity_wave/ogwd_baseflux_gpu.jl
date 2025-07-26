@@ -78,7 +78,7 @@ p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_i
     p.orographic_gravity_wave
 (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
     p.orographic_gravity_wave
-(; topo_base_Vτ, topo_tmp_1, topo_tmp_2, topo_k_pbl_values) =
+(; topo_base_Vτ, topo_tmp_1, topo_tmp_2, values_at_z_pbl) =
     p.orographic_gravity_wave
 (; hmax, hmin, t11, t12, t21, t22) = topo_info_gpu
 
@@ -125,7 +125,7 @@ CA.calc_base_flux!(
     v_phy,
     Y.c.N,
     FT(16000),
-    topo_k_pbl_values
+    values_at_z_pbl
 )
 # @Main.infiltrate
 
