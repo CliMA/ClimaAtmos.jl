@@ -59,7 +59,7 @@ function edmfx_tke_tendency!(
     FT = eltype(p.params)
 
 
-    ᶜρa⁰_vals = turbconv_model isa PrognosticEDMFX ? ᶜρa⁰(Y, p) : Y.c.ρ
+    ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : @. lazy(Y.c.ρ)
     nh_pressure3_buoyʲs =
         turbconv_model isa PrognosticEDMFX ?
         p.precomputed.ᶠnh_pressure₃_buoyʲs : p.precomputed.ᶠnh_pressure³_buoyʲs
@@ -97,9 +97,9 @@ function edmfx_tke_tendency!(
         ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
 
         # shear production
-        @. Yₜ.c.sgs⁰.ρatke += 2 * ᶜρa⁰_vals * ᶜK_u * ᶜstrain_rate_norm
+        @. Yₜ.c.sgs⁰.ρatke += 2 * ᶜρa⁰ * ᶜK_u * ᶜstrain_rate_norm
         # buoyancy production
-        @. Yₜ.c.sgs⁰.ρatke -= ᶜρa⁰_vals * ᶜK_h * ᶜlinear_buoygrad
+        @. Yₜ.c.sgs⁰.ρatke -= ᶜρa⁰ * ᶜK_h * ᶜlinear_buoygrad
 
         ᶜtke⁰ = ᶜspecific_tke(Y, p)
 

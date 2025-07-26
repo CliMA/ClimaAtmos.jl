@@ -257,14 +257,14 @@ function set_precipitation_cache!(
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
     (; ᶜts⁰, ᶜtsʲs) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜρa⁰_vals = ᶜρa⁰(Y, p)
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
-    @. ᶜS_ρq_tot = ᶜSqₜᵖ⁰ * ᶜρa⁰_vals
+    @. ᶜS_ρq_tot = ᶜSqₜᵖ⁰ * ᶜρa⁰
     @. ᶜS_ρe_tot =
         ᶜSqₜᵖ⁰ *
-        ᶜρa⁰_vals *
+        ᶜρa⁰ *
         e_tot_0M_precipitation_sources_helper(thermo_params, ᶜts⁰, ᶜΦ)
     for j in 1:n
         @. ᶜS_ρq_tot += ᶜSqₜᵖʲs.:($$j) * Y.c.sgsʲs.:($$j).ρa

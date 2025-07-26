@@ -194,7 +194,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             turbconv_model isa EDOnlyEDMFX ? p.precomputed.ᶠu³ :
             p.precomputed.ᶠu³⁰
         ) : nothing
-    ᶜρa⁰_vals = advect_tke ? (n > 0 ? (ᶜρa⁰(Y, p)) : @. lazy(Y.c.ρ)) : nothing
+    ᶜρa⁰ = advect_tke ? (n > 0 ? (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : @. lazy(Y.c.ρ)) : nothing
     ᶜρ⁰ = if advect_tke
         if n > 0
             (; ᶜts⁰) = p.precomputed
@@ -284,7 +284,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
 
     if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
-        @. ᶜa_scalar = ᶜtke⁰ * draft_area(ᶜρa⁰_vals, ᶜρ⁰)
+        @. ᶜa_scalar = ᶜtke⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
         vtt = vertical_transport(ᶜρ⁰, ᶠu³⁰, ᶜa_scalar, dt, edmfx_upwinding)
         @. Yₜ.c.sgs⁰.ρatke += vtt
     end

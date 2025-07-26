@@ -681,7 +681,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 dtγ * (
                     ᶜdiffusion_u_matrix -
                     DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
-                ) ⋅ DiagonalMatrixRow(-(ᶜtke⁰) / ᶜρa⁰_vals)
+                ) ⋅ DiagonalMatrixRow(-(ᶜtke⁰) / ᶜρa⁰)
             @. ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
                 dtγ * (
                     (

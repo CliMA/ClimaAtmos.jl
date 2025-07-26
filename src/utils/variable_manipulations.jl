@@ -241,7 +241,7 @@ Arguments:
 - `f`: A function to apply to each element of `sgsʲs`.
 - `sgsʲs`: An iterator over the draft subdomain states.
 """
-draft_sum(f, sgsʲs) = mapreduce_with_init(f, +, sgsʲs)
+draft_sum(f, sgsʲs) = unrolled_sum(f, sgsʲs)
 
 """
     ᶜenv_value(grid_scale_value, f_draft, gs, turbconv_model)
@@ -267,19 +267,20 @@ function ᶜenv_value(
     grid_scale_value,
     f_draft,
     gs,
-    turbconv_model::PrognosticEDMFX
-)
-    return @. lazy(grid_scale_value - draft_sum(f_draft, gs.sgsʲs))
-end
-
-function ᶜenv_value(
-    grid_scale_value,
-    f_draft,
-    gs,
-    turbconv_model::DiagnosticEDMFX,
 )
     return @. lazy(grid_scale_value - draft_sum(f_draft, gs))
 end
+
+
+function env_value(
+    grid_scale_value,
+    f_draft,
+    gs,
+)
+    return grid_scale_value - draft_sum(f_draft, gs)
+end
+
+
 
 """
     ᶜspecific_env_value(::Val{χ_name}, Y, p)
@@ -312,12 +313,14 @@ function ᶜspecific_env_value(::Val{χ_name}, Y, p) where {χ_name}
     # Numerator: ρa⁰χ⁰ = ρχ - (Σ ρaʲ * χʲ)
     if turbconv_model isa PrognosticEDMFX
         #Numerator: ρa⁰χ⁰ = ρχ - (Σ sgsʲ.ρa * sgsʲ.χ)
+
         ᶜρaχ⁰ = ᶜenv_value(
             ᶜρχ,
             sgsʲ -> getfield(sgsʲ, :ρa) * getfield(sgsʲ, χ_name),
-            Y.c,
-            turbconv_model,
+            Y.c.sgsʲs,
         )
+        # Denominator: ρa⁰ = ρ - Σ ρaʲ
+        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
     elseif turbconv_model isa DiagnosticEDMFX || turbconv_model isa EDOnlyEDMFX
         ᶜχʲs = getproperty(p.precomputed, Symbol(:ᶜ, χ_name, :ʲs))
@@ -333,14 +336,13 @@ function ᶜspecific_env_value(::Val{χ_name}, Y, p) where {χ_name}
         end
 
         ᶜρaχ⁰ = @. lazy(ᶜρχ - ᶜρaχʲs_sum)
+        # Denominator: ρa⁰ = ρ - Σ ρaʲ
+        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, p.precomputed.ᶜρaʲs, turbconv_model))
     end
-
-    # Denominator: ρa⁰ = ρ - Σ ρaʲ
-    ᶜρa⁰_vals = ᶜρa⁰(Y, p)
 
     return @. lazy(specific(
         ᶜρaχ⁰,                      # ρaχ for environment
-        ᶜρa⁰_vals,                   # ρa for environment
+        ᶜρa⁰,                   # ρa for environment
         ᶜρχ,               # Fallback ρχ is the grid-mean value
         Y.c.ρ,                      # Fallback ρ is the grid-mean value
         turbconv_model,
@@ -358,26 +360,37 @@ the environment area-weighted density by subtracting the sum of all draft
 subdomain area-weighted densities (`ρaʲ`) from the grid-mean density (`ρ`).
 
 Arguments:
-- `Y`: The model state, which contains the grid-mean density `Y.c.ρ` and
-        the draft subdomain states `Y.c.sgsʲs` (for PrognosticEDMFX).
-- `p`: The cache, containing precomputed quantities and turbconv_model.
+- `ρ`: Grid-mean density
+- `sgsʲs`: Iterable of draft subdomain quantities.
+            PrognosticEDMFX: Y.c.sgsʲs
+            DiagnosticEDMFX: p.precomputed.ᶜρaʲs
 
 Returns:
 - The area-weighted density (`ρa⁰`).
 """
 
-function ᶜρa⁰(Y, p)
-    turbconv_model = p.atmos.turbconv_model
+function ρa⁰(ρ, sgsʲs, turbconv_model)
     # ρ - Σ ρaʲ
     if turbconv_model isa PrognosticEDMFX
-        return ᶜenv_value(Y.c.ρ, sgsʲ -> sgsʲ.ρa, Y.c, turbconv_model)
+        return env_value(ρ, sgsʲ -> sgsʲ.ρa, sgsʲs)
 
     elseif turbconv_model isa DiagnosticEDMFX
         (; ᶜρaʲs) = p.precomputed
-        return ᶜenv_value(Y.c.ρ, ᶜρaʲ -> ᶜρaʲ, ᶜρaʲs, turbconv_model)
+        return env_value(ρ, ᶜρaʲ -> ᶜρaʲ, sgsʲs)
     else
         return Y.c.ρ
     end
+end
+
+"""
+Arguments:
+- `ρ`: The model state, which contains the grid-mean density `Y.c.ρ` and
+        the draft subdomain states `Y.c.sgsʲs` (for PrognosticEDMFX).
+- `sgsʲs`: Y.c.sgsʲs for prognostic of The cache, containing precomputed quantities and turbconv_model.
+"""
+function ρa⁰(ρ, sgsʲs)
+    # ρ - Σ ρaʲ
+    return env_value(ρ, sgsʲ -> sgsʲ.ρa, sgsʲs)
 end
 
 """
@@ -399,24 +412,38 @@ Returns:
 """
 function ᶜspecific_tke(Y, p)
     turbconv_model = p.atmos.turbconv_model
-    ᶜρa⁰_vals = ᶜρa⁰(Y, p)
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
     sgs⁰ = Y.c.sgs⁰
 
     # no sgs weighting function needed for EDOnlyEDMFX
     if turbconv_model isa EDOnlyEDMFX
-        return @. lazy(specific(sgs⁰.ρatke, ᶜρa⁰_vals))
+        return @. lazy(specific(sgs⁰.ρatke, ᶜρa⁰))
     else
         return @. lazy(
             specific(
                 sgs⁰.ρatke,     # ρaχ for environment TKE
-                ᶜρa⁰_vals,        # ρa for environment, now computed internally
+                ᶜρa⁰,        # ρa for environment, now computed internally
                 0,              # Fallback ρχ is zero for TKE
                 Y.c.ρ,           # Fallback ρ
                 turbconv_model,
             ),
         )
     end
+end
+
+function specific_tke(ᶜρ, ᶜρatke, ᶜρa⁰, turbconv_model)
+    return specific(
+            ᶜρatke,    # ρaχ for environment TKE
+            ᶜρa⁰, # ρa for environment, now computed internally
+            0,         # Fallback ρχ is zero for TKE
+            ᶜρ,        # Fallback ρ
+            turbconv_model,
+        )
+end
+
+function specific_tke(ᶜρatke, ᶜρa⁰, ::EDOnlyEDMFX)
+    return specific(ᶜρatke, ᶜρa⁰)
 end
 
 """
@@ -459,24 +486,25 @@ function ᶜspecific_env_mse(Y, p)
 
     if turbconv_model isa PrognosticEDMFX
         ρa⁰mse⁰ =
-            ᶜenv_value(ᶜρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Y.c, turbconv_model)
+            ᶜenv_value(ᶜρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Y.c.sgsʲs)
+            ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     elseif turbconv_model isa DiagnosticEDMFX || turbconv_model isa EDOnlyEDMFX
 
         n = n_mass_flux_subdomains(turbconv_model)
+        (; ᶜρaʲs) = p.precomputed
         ᶜρamseʲ_sum = p.scratch.ᶜtemp_scalar_2
         @. ᶜρamseʲ_sum = 0
         for j in 1:n
-            ᶜρaʲ = p.precomputed.ᶜρaʲs.:($j)
+            ᶜρaʲ = ᶜρaʲs.:($j)
             ᶜmseʲ = p.precomputed.ᶜmseʲs.:($j)
             @. ᶜρamseʲ_sum += ᶜρaʲ * ᶜmseʲ
         end
         ρa⁰mse⁰ = @. lazy(ᶜρmse - ᶜρamseʲ_sum)
+        # Denominator: ρa⁰ = ρ - Σ ρaʲ
+        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, ᶜρaʲs, turbconv_model))
     end
 
-    # Denominator: ρa⁰ = ρ - Σ ρaʲ
-    ᶜρa⁰_vals = ᶜρa⁰(Y, p)
-
-    return @. lazy(specific(ρa⁰mse⁰, ᶜρa⁰_vals, ᶜρmse, Y.c.ρ, turbconv_model))
+    return @. lazy(specific(ρa⁰mse⁰, ᶜρa⁰, ᶜρmse, Y.c.ρ, turbconv_model))
 end
 
 """

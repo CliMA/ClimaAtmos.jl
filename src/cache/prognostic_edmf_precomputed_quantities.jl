@@ -354,7 +354,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶠlg = Fields.local_geometry_field(Y.f)
     ᶜtke⁰ = ᶜspecific_tke(Y, p)
-    ᶜρa⁰_vals = ᶜρa⁰(Y, p)
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
     ᶜvert_div = p.scratch.ᶜtemp_scalar
     ᶜmassflux_vert_div = p.scratch.ᶜtemp_scalar_2
@@ -464,7 +464,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
-    ρa_sfc_values = Fields.field_values(Fields.level(ᶜρa⁰_vals, 1)) # TODO: replace by surface value
+    ρa_sfc_values = Fields.field_values(Fields.level(ᶜρa⁰, 1)) # TODO: replace by surface value
     ustar_values = Fields.field_values(ustar)
     sfc_local_geometry_values = Fields.field_values(
         Fields.level(Fields.local_geometry_field(Y.f), half),

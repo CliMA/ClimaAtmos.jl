@@ -45,7 +45,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
-    ᶜρa⁰_vals = ᶜρa⁰(Y, p)
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
@@ -81,7 +81,7 @@ function edmfx_sgs_mass_flux_tendency!(
         @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
 
         ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-        @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰_vals, ᶜρ⁰)
+        @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
         vtt = vertical_transport(
             ᶜρ⁰,
             ᶠu³_diff,
@@ -112,7 +112,7 @@ function edmfx_sgs_mass_flux_tendency!(
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar =
                 (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) *
-                draft_area(ᶜρa⁰_vals, ᶜρ⁰)
+                draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
@@ -187,7 +187,7 @@ function edmfx_sgs_mass_flux_tendency!(
 
             @. ᶜa_scalar =
                 (ᶜq_liq⁰ - specific(Y.c.ρq_liq, Y.c.ρ)) *
-                draft_area(ᶜρa⁰_vals, ᶜρ⁰)
+                draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
@@ -199,7 +199,7 @@ function edmfx_sgs_mass_flux_tendency!(
 
             @. ᶜa_scalar =
                 (ᶜq_ice⁰ - specific(Y.c.ρq_ice, Y.c.ρ)) *
-                draft_area(ᶜρa⁰_vals, ᶜρ⁰)
+                draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
@@ -211,7 +211,7 @@ function edmfx_sgs_mass_flux_tendency!(
 
             @. ᶜa_scalar =
                 (ᶜq_rai⁰ - specific(Y.c.ρq_rai, Y.c.ρ)) *
-                draft_area(ᶜρa⁰_vals, ᶜρ⁰)
+                draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
@@ -223,7 +223,7 @@ function edmfx_sgs_mass_flux_tendency!(
 
             @. ᶜa_scalar =
                 (ᶜq_sno⁰ - specific(Y.c.ρq_sno, Y.c.ρ)) *
-                draft_area(ᶜρa⁰_vals, ᶜρ⁰)
+                draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
@@ -400,7 +400,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; ᶜu⁰, ᶜK⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
     (; ᶜmixing_length, ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
-    ᶜρa⁰_vals = ᶜρa⁰(Y, p)
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     ᶜtke⁰ = ᶜspecific_tke(Y, p)
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
@@ -421,9 +421,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
         )
         ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_h = ᶠinterp(ᶜρa⁰_vals) * ᶠinterp(ᶜK_h)
+        @. ᶠρaK_h = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_u = ᶠinterp(ᶜρa⁰_vals) * ᶠinterp(ᶜK_u)
+        @. ᶠρaK_u = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_u)
 
         # Total enthalpy diffusion
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(

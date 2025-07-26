@@ -300,9 +300,9 @@ function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
     return nothing
 end
 
-function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰_vals, ᶠu₃⁰, turbconv_model)
+function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
     @. ᶜK +=
-        ᶜρa⁰_vals * ᶜinterp(dot(ᶠu₃⁰ - Y.f.u₃, CT3(ᶠu₃⁰ - Y.f.u₃))) / 2 / Y.c.ρ
+        ᶜρa⁰ * ᶜinterp(dot(ᶠu₃⁰ - Y.f.u₃, CT3(ᶠu₃⁰ - Y.f.u₃))) / 2 / Y.c.ρ
     for j in 1:n_mass_flux_subdomains(turbconv_model)
         ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
         ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
