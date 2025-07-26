@@ -98,7 +98,6 @@ u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
 v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
 # Compute base flux
-# @Main.infiltrate
 CA.calc_base_flux!(
     topo_τ_x,
     topo_τ_y,
@@ -127,7 +126,6 @@ CA.calc_base_flux!(
     FT(16000),
     values_at_z_pbl
 )
-# @Main.infiltrate
 
 # Move GPU arrays back to CPU for plotting
 topo_τ_x = ClimaCore.to_cpu(topo_τ_x)
