@@ -209,7 +209,6 @@ topography = "Earth"
 
 ogw = CA.FullOrographicGravityWave{FT, String}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
 
-# @Main.infiltrate
 topo_info = CA.get_topo_info(Y, ogw)
 
 Y = ClimaCore.to_device(ClimaComms.CUDADevice(), copy(Y))
