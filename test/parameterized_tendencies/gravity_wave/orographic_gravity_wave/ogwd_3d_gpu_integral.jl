@@ -195,8 +195,19 @@ cp_d = 1004.0
 epsilon = 0.622
 @. Y.c.ρ = gfdl_ca_p / Y.c.T / R_d / (1 - Y.c.qt + Y.c.qt / epsilon)
 
-# Initialize cache vars for orographic gravity wave
-ogw = CA.FullOrographicGravityWave{FT, String}()
+γ = 0.4
+ϵ = 0.0
+β = 0.5
+h_frac = 0.1
+ρscale = 1.2
+L0 = 80000.0
+a0 = 0.9
+a1 = 3.0
+Fr_crit = 0.7
+topo_info = "gfdl_restart"
+topography = "Earth"
+
+ogw = CA.FullOrographicGravityWave{FT, String}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
 
 # @Main.infiltrate
 topo_info = CA.get_topo_info(Y, ogw)
@@ -238,7 +249,7 @@ p = (;
 (; topo_ᶜτ_sat, topo_ᶠτ_sat) = p.orographic_gravity_wave
 (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
     p.orographic_gravity_wave
-(; topo_ᶠVτ, topo_k_pbl_values) =
+(; topo_ᶠVτ, values_at_z_pbl) =
     p.orographic_gravity_wave
 (; ᶜdTdz) = p.orographic_gravity_wave
 (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
