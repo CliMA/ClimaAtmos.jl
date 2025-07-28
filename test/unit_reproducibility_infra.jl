@@ -608,6 +608,7 @@ end
         d1 = make_mse(mses1, dir, "d1")
         d2 = make_mse(mses2, dir, "d2")
         d3 = make_mse(mses3, dir, "d3")
+        d3 = make_mse(mses3, dir, "d3")
 
         job_ids = ["d1", "d2", "d3"]
         computed_mses = get_computed_mses(;
@@ -641,6 +642,7 @@ end
         d1 = make_mse(mses1, dir, "d1")
         d2 = make_mse(mses2, dir, "d2"; mse_file = "comuted_mse.dat") # intentional typo
         d3 = make_mse(mses3, dir, "d3")
+        Base.touch(joinpath(d3, "prog_state.hdf5")) # not an mse file
 
         job_ids = ["d1", "d2", "d3"]
         computed_mses = get_computed_mses(;
