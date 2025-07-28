@@ -1476,6 +1476,96 @@ function pair_edmf_names(short_names)
     return grouped_vars
 end
 
+EDMFBoxPlotsPerturbed = Union{
+    Val{:test_prognostic_edmfx_dycoms_rf02_column},
+}
+
+# Function where DYCOMS gets plotted.
+function make_plots(
+    sim_type::Union{EDMFBoxPlotsPerturbed}, #Edit right here
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+
+    precip_names =
+        sim_type isa EDMFBoxPlotsWithPrecip ?
+        ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen") : ()
+
+    short_names = [
+        "wa",
+        "waup",
+        "ta",
+        "taup",
+        "hus",
+        "husup",
+        "arup",
+        "tke",
+        "ua",
+        "thetaa",
+        "thetaaup",
+        "ha",
+        "haup",
+        "hur",
+        "hurup",
+        "lmix",
+        "cl",
+        "clw",
+        "clwup",
+        "cli",
+        "cliup",
+        precip_names...,
+    ]
+    reduction = "inst"
+
+    available_periods = ClimaAnalysis.available_periods(
+        simdirs[1];
+        short_name = short_names[1],
+        reduction,
+    )
+    if "5m" in available_periods
+        period = "5m"
+    elseif "10m" in available_periods
+        period = "10m"
+    elseif "30m" in available_periods
+        period = "30m"
+    end
+
+    short_name_tuples = pair_edmf_names(short_names)
+    var_groups_zt =
+        map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
+            return [
+                slice(
+                    get(simdir; short_name, reduction, period),
+                    x = 0.0,
+                    y = 0.0,
+                ) for short_name in name_tuple
+            ]
+        end
+
+    var_groups_z = [
+        ([slice(v, time = LAST_SNAP) for v in group]...,) for
+        group in var_groups_zt
+    ]
+
+    tmp_file = make_plots_generic(
+        output_paths,
+        output_name = "tmp",
+        var_groups_z;
+        plot_fn = plot_edmf_vert_profile!,
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+
+    make_plots_generic(
+        output_paths,
+        vcat(var_groups_zt...),
+        plot_fn = plot_parsed_attribute_title!,
+        summary_files = [tmp_file],
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+end
+
 function make_plots(
     sim_type::Union{EDMFBoxPlots, EDMFBoxPlotsWithPrecip},
     output_paths::Vector{<:AbstractString},
