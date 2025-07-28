@@ -1150,36 +1150,70 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
     u_func_name = Symbol(IC, IC == :Dycoms_RF01 ? :_u0 : :_u)
     v_func_name = Symbol(IC, IC == :Dycoms_RF01 ? :_v0 : :_v)
     tke_func_name = Symbol(IC, :_tke_prescribed)
-    @eval function (initial_condition::$IC_Type)(params)
-        (; prognostic_tke, q_tot_0_dycoms_rf02, theta_0_dycoms_rf02, theta_i_dycoms_rf02, z_i_dycoms_rf02) = initial_condition #unpack values
-        FT = eltype(params)
-        thermo_params = CAP.thermodynamics_params(params)
-        p_0 = FT(101780.0)
-        θ = $θ_func_name(FT, FT(theta_0_dycoms_rf02), FT(theta_i_dycoms_rf02), FT(z_i_dycoms_rf02)) # Change function signature here. θ = APL.$θ_func_name(FT).
-        q_tot = $q_tot_func_name(FT, FT(q_tot_0_dycoms_rf02), FT(z_i_dycoms_rf02)) # Change function signature here. q_tot = APL.$q_tot_func_name(FT)
-        p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
-        u = APL.$u_func_name(FT)
-        v = APL.$v_func_name(FT)
-        #tke = APL.$tke_func_name(FT)
-        tke = APL.Dycoms_RF01_tke_prescribed(FT) #TODO - dont have the tke profile for Dycoms_RF02
-        function local_state(local_geometry)
-            (; z) = local_geometry.coordinates
-            return LocalState(;
-                params,
-                geometry = local_geometry,
-                thermo_state = TD.PhaseEquil_pθq(
-                    thermo_params,
-                    p(z),
-                    θ(z),
-                    q_tot(z),
-                ),
-                velocity = Geometry.UVVector(u(z), v(z)),
-                turbconv_state = EDMFState(;
-                    tke = prognostic_tke ? FT(0) : tke(z),
-                ),
-            )
+    if IC == :Dycoms_RF02
+        @eval function (initial_condition::$IC_Type)(params)
+            (; prognostic_tke, q_tot_0_dycoms_rf02, theta_0_dycoms_rf02, theta_i_dycoms_rf02, z_i_dycoms_rf02) = initial_condition #unpack values
+            FT = eltype(params)
+            thermo_params = CAP.thermodynamics_params(params)
+            p_0 = FT(101780.0)
+            θ = $θ_func_name(FT, FT(theta_0_dycoms_rf02), FT(theta_i_dycoms_rf02), FT(z_i_dycoms_rf02)) # Change function signature here.
+            q_tot = $q_tot_func_name(FT, FT(q_tot_0_dycoms_rf02), FT(z_i_dycoms_rf02)) # Change function signature here.
+            p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
+            u = APL.$u_func_name(FT)
+            v = APL.$v_func_name(FT)
+            #tke = APL.$tke_func_name(FT)
+            tke = APL.Dycoms_RF01_tke_prescribed(FT) #TODO - dont have the tke profile for Dycoms_RF02
+            function local_state(local_geometry)
+                (; z) = local_geometry.coordinates
+                return LocalState(;
+                    params,
+                    geometry = local_geometry,
+                    thermo_state = TD.PhaseEquil_pθq(
+                        thermo_params,
+                        p(z),
+                        θ(z),
+                        q_tot(z),
+                    ),
+                    velocity = Geometry.UVVector(u(z), v(z)),
+                    turbconv_state = EDMFState(;
+                        tke = prognostic_tke ? FT(0) : tke(z),
+                    ),
+                )
+            end
+            return local_state
         end
-        return local_state
+    else
+        @eval function (initial_condition::$IC_Type)(params)
+            (; prognostic_tke, q_tot_0_dycoms_rf02, theta_0_dycoms_rf02, theta_i_dycoms_rf02, z_i_dycoms_rf02) = initial_condition #unpack values
+            FT = eltype(params)
+            thermo_params = CAP.thermodynamics_params(params)
+            p_0 = FT(101780.0)
+            θ = APL.$θ_func_name(FT)
+            q_tot = APL.$q_tot_func_name(FT)
+            p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
+            u = APL.$u_func_name(FT)
+            v = APL.$v_func_name(FT)
+            #tke = APL.$tke_func_name(FT)
+            tke = APL.Dycoms_RF01_tke_prescribed(FT) #TODO - dont have the tke profile for Dycoms_RF02
+            function local_state(local_geometry)
+                (; z) = local_geometry.coordinates
+                return LocalState(;
+                    params,
+                    geometry = local_geometry,
+                    thermo_state = TD.PhaseEquil_pθq(
+                        thermo_params,
+                        p(z),
+                        θ(z),
+                        q_tot(z),
+                    ),
+                    velocity = Geometry.UVVector(u(z), v(z)),
+                    turbconv_state = EDMFState(;
+                        tke = prognostic_tke ? FT(0) : tke(z),
+                    ),
+                )
+            end
+            return local_state
+        end
     end
 end
 

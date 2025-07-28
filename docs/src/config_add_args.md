@@ -48,15 +48,16 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
     θ_func_name = Symbol(IC, :_θ_liq_ice)
     q_tot_func_name = Symbol(IC, :_q_tot)
     ...
-    @eval function (initial_condition::$IC_Type)(params)
-        (; prognostic_tke, q_tot_0_dycoms_rf02, theta_0_dycoms_rf02, theta_i_dycoms_rf02, z_i_dycoms_rf02) = initial_condition #unpack the new arguments here. These arguments will be provided through the model .yml file.
-        FT = eltype(params)
-       ...
-        if IC == :Dycoms_RF02
+    if IC == :Dycoms_RF02
+        @eval function (initial_condition::$IC_Type)(params)
+            (; prognostic_tke, q_tot_0_dycoms_rf02, theta_0_dycoms_rf02, theta_i_dycoms_rf02, z_i_dycoms_rf02) = initial_condition #unpack the new arguments here. These arguments will be provided through the model .yml file.
+            FT = eltype(params)
+        ...
             θ = $θ_func_name(FT, FT(theta_0_dycoms_rf02), FT(theta_i_dycoms_rf02), FT(z_i_dycoms_rf02)) # Change function signature here.
             q_tot = $q_tot_func_name(FT, FT(q_tot_0_dycoms_rf02), FT(z_i_dycoms_rf02)) # Change function signature here.
         end 
-       ...
+    else
+        ...
     end
 end
 ```
@@ -65,10 +66,10 @@ end
 Now that we have added a new keyword argument to be used in initial conditions, it is time to define the keyword argument in the yml files responsible for configuring the model runs. In the .yml file for running a DYCOMS-RF02 single column experiment, we add and adjust the following lines: 
 
 ```
-q_tot_0_dycoms_rf02: 9.45 # Define variables here
-theta_0_dycoms_rf02: 288.3 # Define variables here
-theta_i_dycoms_rf02: 295.0 # Define variables here
-z_i_dycoms_rf02: 795.0 # Define variables here
+q_tot_0_dycoms_rf02: 9.45 # Define variables here.
+theta_0_dycoms_rf02: 288.3 # Define variables here.
+theta_i_dycoms_rf02: 295.0 # Define variables here.
+z_i_dycoms_rf02: 795.0 # Define variables here.
 ```
 
 These are the same default values being used by the original APL function, but we can modify it in the .yml file if we want to test different initial conditions. Additionally, we need to provide a backup default value in the case that the keyword argument is not used or provided in the setup .yml file. To do this, we go to default_config.yml and add the following:
@@ -106,4 +107,4 @@ Finally, we need to update type_getters.jl with our new keyword arguments as wel
 
 With this step complete, we are now ready to pass a new keyword argument that we defined ourselves to modify or change the initial conditions. 
 
-The recommended workflow is the create multiple copies of the .yml files and label them according to the initial conditions used. For example, the default file might look like "q_tot_9.45_theta_0_288.3_theta_i_295.0_z_i_795.0_prognostic_edmfx_dycoms_rf02_column.yml".
+The recommended workflow is the create multiple copies of the .yml files and label them according to the initial conditions used. For example, the default file might look like "prognostic_edmfx_dycoms_rf02_column_prescribed_Nd_5.0e8_q_tot_9.45_theta_0_288.3_theta_i_295.0_z_i_795.0_.yml".
