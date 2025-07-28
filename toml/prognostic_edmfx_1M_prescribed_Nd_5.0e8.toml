@@ -1,0 +1,56 @@
+[zd_rayleigh]
+value = 40000.0
+
+[zd_viscous]
+value = 40000.0
+
+[EDMF_surface_area]
+value = 0.1
+
+[EDMF_min_area]
+value = 1.0e-5
+
+[EDMF_max_area]
+value = 0.7
+
+[entr_inv_tau]
+value = 0.0001
+
+[entr_coeff]
+value = 0.1
+
+[min_area_limiter_scale]
+value = 0
+
+[detr_inv_tau]
+value = 0
+
+[detr_coeff]
+value = 0
+
+[detr_buoy_coeff]
+value = 0
+
+[detr_vertdiv_coeff]
+value = 0
+
+[detr_massflux_vertdiv_coeff]
+value = 1
+
+[max_area_limiter_scale]
+value = 0
+
+[pressure_normalmode_drag_coeff]
+value = 40.0
+
+[tracer_vertical_diffusion_factor]
+value = 0
+
+[condensation_evaporation_timescale]
+value = 100
+
+[sublimation_deposition_timescale]
+value = 100
+
+[prescribed_cloud_droplet_number_concentration]
+value = 5.0e8
