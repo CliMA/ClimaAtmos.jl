@@ -1155,12 +1155,8 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
         FT = eltype(params)
         thermo_params = CAP.thermodynamics_params(params)
         p_0 = FT(101780.0)
-        θ = APL.$θ_func_name(FT)
-        q_tot = APL.$q_tot_func_name(FT)
-        if IC == :Dycoms_RF02
-            θ = $θ_func_name(FT, FT(theta_0_dycoms_rf02), FT(theta_i_dycoms_rf02), FT(z_i_dycoms_rf02)) # Change function signature here.
-            q_tot = $q_tot_func_name(FT, FT(q_tot_0_dycoms_rf02), FT(z_i_dycoms_rf02)) # Change function signature here.
-        end 
+        θ = $θ_func_name(FT, FT(theta_0_dycoms_rf02), FT(theta_i_dycoms_rf02), FT(z_i_dycoms_rf02)) # Change function signature here. θ = APL.$θ_func_name(FT).
+        q_tot = $q_tot_func_name(FT, FT(q_tot_0_dycoms_rf02), FT(z_i_dycoms_rf02)) # Change function signature here. q_tot = APL.$q_tot_func_name(FT)
         p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
         u = APL.$u_func_name(FT)
         v = APL.$v_func_name(FT)
