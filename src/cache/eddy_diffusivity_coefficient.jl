@@ -1,4 +1,4 @@
-function compute_eddy_diffusivity_coefficient(
+function ᶜcompute_eddy_diffusivity_coefficient(
     ᶜρ,
     vert_diff::DecayWithHeightDiffusion,
 )
@@ -9,7 +9,7 @@ function compute_eddy_diffusivity_coefficient(
     )
 end
 
-function compute_eddy_diffusivity_coefficient(
+function ᶜcompute_eddy_diffusivity_coefficient(
     ᶜuₕ,
     ᶜp,
     vert_diff::VerticalDiffusion,

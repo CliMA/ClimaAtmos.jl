@@ -60,7 +60,7 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
         end
         @test compare_mem(trials, "Wfact", 0)
         @test compare_mem(trials, "ldiv!", 0)
-        @test compare_mem(trials, "T_imp!", 96)
+        @test compare_mem(trials, "T_imp!", 0)
         @test compare_mem(trials, "T_exp_T_lim!", 190420)
         @test compare_mem(trials, "lim!", 0)
         @test compare_mem(trials, "dss!", 0)
