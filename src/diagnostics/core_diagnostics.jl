@@ -1505,7 +1505,7 @@ end
 add_diagnostic_variable!(
     short_name = "rwp",
     long_name = "Rainwater Path",
-    standard_name = "atmosphere_mass_content_of_rain_liquid_water",
+    standard_name = "atmosphere_mass_content_of_rain_liquid_water", # make sure that this is the right standard name
     units = "kg m-2",
     comments = """
     The total mass of liquid water in rain per unit area.
