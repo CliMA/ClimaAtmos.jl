@@ -1160,7 +1160,9 @@ function compute_tke!(
     end
 
     ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, sgsʲs, turbconv_model))
-    ᶜtke = @. lazy(specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    ᶜtke = @. lazy(
+        specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+    )
     if isnothing(out)
         return Base.materialize(ᶜtke)
     else

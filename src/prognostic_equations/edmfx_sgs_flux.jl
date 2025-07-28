@@ -111,8 +111,7 @@ function edmfx_sgs_mass_flux_tendency!(
             ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar =
-                (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) *
-                draft_area(ᶜρa⁰, ᶜρ⁰)
+                (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
@@ -186,8 +185,7 @@ function edmfx_sgs_mass_flux_tendency!(
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
 
             @. ᶜa_scalar =
-                (ᶜq_liq⁰ - specific(Y.c.ρq_liq, Y.c.ρ)) *
-                draft_area(ᶜρa⁰, ᶜρ⁰)
+                (ᶜq_liq⁰ - specific(Y.c.ρq_liq, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
@@ -198,8 +196,7 @@ function edmfx_sgs_mass_flux_tendency!(
             @. Yₜ.c.ρq_liq += vtt
 
             @. ᶜa_scalar =
-                (ᶜq_ice⁰ - specific(Y.c.ρq_ice, Y.c.ρ)) *
-                draft_area(ᶜρa⁰, ᶜρ⁰)
+                (ᶜq_ice⁰ - specific(Y.c.ρq_ice, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
@@ -210,8 +207,7 @@ function edmfx_sgs_mass_flux_tendency!(
             @. Yₜ.c.ρq_ice += vtt
 
             @. ᶜa_scalar =
-                (ᶜq_rai⁰ - specific(Y.c.ρq_rai, Y.c.ρ)) *
-                draft_area(ᶜρa⁰, ᶜρ⁰)
+                (ᶜq_rai⁰ - specific(Y.c.ρq_rai, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,
@@ -222,8 +218,7 @@ function edmfx_sgs_mass_flux_tendency!(
             @. Yₜ.c.ρq_rai += vtt
 
             @. ᶜa_scalar =
-                (ᶜq_sno⁰ - specific(Y.c.ρq_sno, Y.c.ρ)) *
-                draft_area(ᶜρa⁰, ᶜρ⁰)
+                (ᶜq_sno⁰ - specific(Y.c.ρq_sno, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
                 ᶠu³_diff,

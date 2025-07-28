@@ -263,20 +263,12 @@ Arguments:
 - `gs`: The grid-scale iteration object, which contains the draft subdomain states `gs.sgsʲs` (for PrognosticEDMFX) from the state `Y.c`, or `ᶜρaʲs` in the cache for DiagnosticEDMFX.
 - `turbconv_model`: The turbulence convection model, used to determine how to access draft data.
 """
-function ᶜenv_value(
-    grid_scale_value,
-    f_draft,
-    gs,
-)
+function ᶜenv_value(grid_scale_value, f_draft, gs)
     return @. lazy(grid_scale_value - draft_sum(f_draft, gs))
 end
 
 
-function env_value(
-    grid_scale_value,
-    f_draft,
-    gs,
-)
+function env_value(grid_scale_value, f_draft, gs)
     return grid_scale_value - draft_sum(f_draft, gs)
 end
 
@@ -455,9 +447,8 @@ function ᶜspecific_env_mse(Y, p)
     # Numerator: ρa⁰mse⁰ = ρmse - (Σ ρaʲ * mseʲ)
 
     if turbconv_model isa PrognosticEDMFX
-        ρa⁰mse⁰ =
-            ᶜenv_value(ᶜρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Y.c.sgsʲs)
-            ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+        ρa⁰mse⁰ = ᶜenv_value(ᶜρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Y.c.sgsʲs)
+        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     elseif turbconv_model isa DiagnosticEDMFX || turbconv_model isa EDOnlyEDMFX
 
         n = n_mass_flux_subdomains(turbconv_model)
