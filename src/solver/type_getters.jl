@@ -364,13 +364,21 @@ function get_initial_condition(parsed_args, atmos)
         "LifeCycleTan2018",
         "ARM_SGP",
         "DYCOMS_RF01",
-        "DYCOMS_RF02",
+        # "DYCOMS_RF02", Move to separate elseif statement.
         "Rico",
         "TRMM_LBA",
         "SimplePlume",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
             parsed_args["prognostic_tke"],
+        )
+    elseif parsed_args["initial_condition"] == "DYCOMS_RF02"
+        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
+            parsed_args["prognostic_tke"],
+            parsed_args["q_tot_0_dycoms_rf02"], # Add parsed args here.
+            parsed_args["theta_0_dycoms_rf02"], # Add parsed args here.
+            parsed_args["theta_i_dycoms_rf02"], # Add parsed args here.
+            parsed_args["z_i_dycoms_rf02"], # Add parsed args here.
         )
     elseif parsed_args["initial_condition"] == "ISDAC"
         ICs.ISDAC(

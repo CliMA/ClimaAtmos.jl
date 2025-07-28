@@ -271,6 +271,18 @@ toml:
 prognostic_tke:
   help: "A flag for prognostic TKE [`false` (default), `true`]"
   value: false
+q_tot_0_dycoms_rf02: # Additional variables here.
+  help: "Surface total water mixing ratio for DYCOMS RF02."
+  value: 9.45 # Default value.
+theta_0_dycoms_rf02: # Additional variables here.
+  help: "Surface liquid-ice potential temperature for DYCOMS RF02."
+  value: 288.3 # Default value.
+theta_i_dycoms_rf02: # Additional variables here.
+  help: "Initial boundary layer liquid-ice potential temperature for DYCOMS RF02."
+  value: 295.0 # Default value.
+z_i_dycoms_rf02: # Additional variables here.
+  help: "Initial boundary layer height."
+  value: 795.0 # Default value.
 prognostic_surface:
   help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `SlabOceanSST`, `PrescribedSST`]"
   value: false

@@ -1,0 +1,47 @@
+initial_condition: DYCOMS_RF02
+subsidence: DYCOMS
+scm_coriolis: DYCOMS_RF02
+rad: DYCOMS
+surface_setup: DYCOMS_RF02
+turbconv: "prognostic_edmfx"
+implicit_diffusion: false
+approximate_linear_solve_iters: 2
+edmfx_upwinding: first_order
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_filter: true
+prognostic_tke: true
+q_tot_0_dycoms_rf02: 9.45 # Define variables here
+theta_0_dycoms_rf02: 288.3 # Define variables here
+theta_i_dycoms_rf02: 295.0 # Define variables here
+z_i_dycoms_rf02: 1200.0 # Define variables here
+moist: "nonequil"
+cloud_model: "quadrature_sgs"
+precip_model: "1M"
+call_cloud_diagnostics_per_stage: true
+config: "column"
+x_elem: 2
+y_elem: 2
+z_elem: 30
+z_max: 1500
+z_stretch: false
+perturb_initstate: false
+dt: 10secs
+t_end: 6hours
+dt_save_state_to_disk: 10mins
+toml: [toml/prognostic_edmfx_1M_prescribed_Nd_5e8.toml]
+netcdf_interpolation_num_points: [8, 8, 30]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr, lwp, rwp]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, husraup, hussnup]
+    period: 10mins
+  - short_name: [waen, taen, thetaaen, haen, husen, huren, clwen, clien, husraen, hussnen, tke]
+    period: 10mins
+  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
+    period: 10mins
+  - short_name: [husra, hussn]
+    period: 10mins
