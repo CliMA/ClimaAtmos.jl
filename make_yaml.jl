@@ -12,7 +12,6 @@ output_dir = "LWP_N_config"
 
 function modify_yaml(data::Dict, q_tot_0, theta_0, theta_i, z_i, toml)
 
-    data["some_key"] = "new_value"
     data["q_tot_0_dycoms_rf02"] = q_tot_0
     data["theta_0_dycoms_rf02"] = theta_0
     data["theta_i_dycoms_rf02"] = theta_i
