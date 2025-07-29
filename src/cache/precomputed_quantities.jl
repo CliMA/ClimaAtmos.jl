@@ -37,7 +37,7 @@ For every other `AbstractEDMF`, only `ᶜtke⁰` is added as a precomputed quant
 TODO: Rename `ᶜK` to `ᶜκ`.
 """
 function implicit_precomputed_quantities(Y, atmos)
-    (; moisture_model, turbconv_model, precip_model) = atmos
+    (; moisture_model, turbconv_model, microphysics_model) = atmos
     FT = eltype(Y)
     TST = thermo_state_type(moisture_model, FT)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -57,7 +57,7 @@ function implicit_precomputed_quantities(Y, atmos)
         (
             turbconv_model isa PrognosticEDMFX &&
             moisture_model isa NonEquilMoistModel &&
-            precip_model isa Microphysics1Moment
+            microphysics_model isa Microphysics1Moment
         ) ?
         (;
             ᶜq_liq⁰ = similar(Y.c, FT),
@@ -104,7 +104,8 @@ function precomputed_quantities(Y, atmos)
             !(atmos.turbconv_model isa DiagnosticEDMFX)
     @assert !(atmos.moisture_model isa DryModel) ||
             !(atmos.turbconv_model isa PrognosticEDMFX)
-    @assert isnothing(atmos.turbconv_model) || isnothing(atmos.vert_diff)
+    @assert isnothing(atmos.turbconv_model) ||
+            isnothing(atmos.vertical_diffusion)
     TST = thermo_state_type(atmos.moisture_model, FT)
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)
@@ -113,7 +114,6 @@ function precomputed_quantities(Y, atmos)
     gs_quantities = (;
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
-        ᶜmixing_length = similar(Y.c, FT),
         ᶜlinear_buoygrad = similar(Y.c, FT),
         ᶜstrain_rate_norm = similar(Y.c, FT),
         sfc_conditions = similar(Spaces.level(Y.f, half), SCT),
@@ -127,10 +127,10 @@ function precomputed_quantities(Y, atmos)
     sedimentation_quantities =
         atmos.moisture_model isa NonEquilMoistModel ?
         (; ᶜwₗ = similar(Y.c, FT), ᶜwᵢ = similar(Y.c, FT)) : (;)
-    if atmos.precip_model isa Microphysics0Moment
+    if atmos.microphysics_model isa Microphysics0Moment
         precipitation_quantities =
             (; ᶜS_ρq_tot = similar(Y.c, FT), ᶜS_ρe_tot = similar(Y.c, FT))
-    elseif atmos.precip_model isa Microphysics1Moment
+    elseif atmos.microphysics_model isa Microphysics1Moment
         precipitation_quantities = (;
             ᶜwᵣ = similar(Y.c, FT),
             ᶜwₛ = similar(Y.c, FT),
@@ -139,7 +139,7 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵣᵖ = similar(Y.c, FT),
             ᶜSqₛᵖ = similar(Y.c, FT),
         )
-    elseif atmos.precip_model isa Microphysics2Moment
+    elseif atmos.microphysics_model isa Microphysics2Moment
         precipitation_quantities = (;
             ᶜwᵣ = similar(Y.c, FT),
             ᶜwₛ = similar(Y.c, FT),
@@ -156,9 +156,9 @@ function precomputed_quantities(Y, atmos)
         precipitation_quantities = (;)
     end
     precipitation_sgs_quantities =
-        atmos.precip_model isa Microphysics0Moment ?
+        atmos.microphysics_model isa Microphysics0Moment ?
         (; ᶜSqₜᵖʲs = similar(Y.c, NTuple{n, FT}), ᶜSqₜᵖ⁰ = similar(Y.c, FT)) :
-        atmos.precip_model isa Microphysics1Moment ?
+        atmos.microphysics_model isa Microphysics1Moment ?
         (;
             ᶜSqₗᵖʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqᵢᵖʲs = similar(Y.c, NTuple{n, FT}),
@@ -172,9 +172,6 @@ function precomputed_quantities(Y, atmos)
     advective_sgs_quantities =
         atmos.turbconv_model isa PrognosticEDMFX ?
         (;
-            ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
-            ᶜK_u = similar(Y.c, FT),
-            ᶜK_h = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             bdmr_l = similar(Y.c, BidiagonalMatrixRow{FT}),
             bdmr_r = similar(Y.c, BidiagonalMatrixRow{FT}),
@@ -192,11 +189,8 @@ function precomputed_quantities(Y, atmos)
     edonly_quantities =
         atmos.turbconv_model isa EDOnlyEDMFX ?
         (;
-            ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
             ᶜtke⁰ = similar(Y.c, FT),
-            ᶜK_u = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
-            ᶜK_h = similar(Y.c, FT),
         ) : (;)
 
     sgs_quantities = (;
@@ -224,20 +218,9 @@ function precomputed_quantities(Y, atmos)
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶜK⁰ = similar(Y.c, FT),
-            ᶜmixing_length_tuple = similar(Y.c, MixingLength{FT}),
-            ᶜK_u = similar(Y.c, FT),
-            ᶜK_h = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             precipitation_sgs_quantities...,
         ) : (;)
-    vert_diff_quantities =
-        if atmos.vert_diff isa
-           Union{VerticalDiffusion, DecayWithHeightDiffusion}
-            ᶜK_h = similar(Y.c, FT)
-            (; ᶜK_u = ᶜK_h, ᶜK_h) # ᶜK_u aliases ᶜK_h because they are always equal.
-        else
-            (;)
-        end
     smagorinsky_lilly_quantities =
         if atmos.smagorinsky_lilly isa SmagorinskyLilly
             uvw_vec = UVW(FT(0), FT(0), FT(0))
@@ -258,7 +241,6 @@ function precomputed_quantities(Y, atmos)
         advective_sgs_quantities...,
         edonly_quantities...,
         diagnostic_sgs_quantities...,
-        vert_diff_quantities...,
         sedimentation_quantities...,
         precipitation_quantities...,
         surface_precip_fluxes...,
@@ -398,7 +380,7 @@ function thermo_state(
     return get_ts(ρ, p, θ, e_int, q_tot, q_pt)
 end
 
-function thermo_vars(moisture_model, precip_model, ᶜY, K, Φ)
+function thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)
     energy_var = (; e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ)
     moisture_var = if moisture_model isa DryModel
         (;)
@@ -415,17 +397,19 @@ function thermo_vars(moisture_model, precip_model, ᶜY, K, Φ)
     return (; energy_var..., moisture_var...)
 end
 
-ts_gs(thermo_params, moisture_model, precip_model, ᶜY, K, Φ, ρ) = thermo_state(
-    thermo_params;
-    thermo_vars(moisture_model, precip_model, ᶜY, K, Φ)...,
-    ρ,
-)
+ts_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ) =
+    thermo_state(
+        thermo_params;
+        thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)...,
+        ρ,
+    )
 
-ts_sgs(thermo_params, moisture_model, precip_model, ᶜY, K, Φ, p) = thermo_state(
-    thermo_params;
-    thermo_vars(moisture_model, precip_model, ᶜY, K, Φ)...,
-    p,
-)
+ts_sgs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, p) =
+    thermo_state(
+        thermo_params;
+        thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)...,
+        p,
+    )
 
 function eddy_diffusivity_coefficient_H(D₀, H, z_sfc, z)
     return D₀ * exp(-(z - z_sfc) / H)
@@ -453,13 +437,13 @@ elsewhere, but doing it here ensures that it occurs whenever the precomputed
 quantities are updated.
 """
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
-    (; turbconv_model, moisture_model, precip_model) = p.atmos
+    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
     (; ᶜΦ) = p.core
     (; ᶜspecific, ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
-    thermo_args = (thermo_params, moisture_model, precip_model)
+    thermo_args = (thermo_params, moisture_model, microphysics_model)
 
     ᶜspecific .= ᶜspecific_gs_tracers(Y)
     @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
@@ -514,8 +498,9 @@ current state `Y`. This is only called before each evaluation of
 `implicit_tendency!` and `remaining_tendency!`.
 """
 NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
-    (; turbconv_model, moisture_model, precip_model, cloud_model) = p.atmos
-    (; vert_diff, call_cloud_diagnostics_per_stage) = p.atmos
+    (; turbconv_model, moisture_model, microphysics_model, cloud_model) =
+        p.atmos
+    (; vertical_diffusion, call_cloud_diagnostics_per_stage) = p.atmos
     (; ᶜΦ) = p.core
     (; ᶜu, ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3 # updated in set_implicit_precomputed_quantities!
@@ -534,19 +519,13 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
             ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
     end
 
-    # TODO: It is too slow to calculate mixing length at every timestep
-    # if isnothing(turbconv_model)
-    #     (; ᶜmixing_length) = p.precomputed
-    #     compute_gm_mixing_length!(ᶜmixing_length, Y, p)
-    # end
-
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_precipitation!(
             Y,
             p,
-            p.atmos.precip_model,
+            p.atmos.microphysics_model,
         )
     end
     if turbconv_model isa DiagnosticEDMFX
@@ -558,7 +537,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
             Y,
             p,
             t,
-            p.atmos.precip_model,
+            p.atmos.microphysics_model,
         )
     end
     if turbconv_model isa EDOnlyEDMFX
@@ -570,19 +549,16 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         Y,
         p,
         p.atmos.moisture_model,
-        p.atmos.precip_model,
+        p.atmos.microphysics_model,
     )
     # Needs to be done after edmf precipitation is computed in sub-domains
-    set_precipitation_cache!(Y, p, p.atmos.precip_model, p.atmos.turbconv_model)
-    set_precipitation_surface_fluxes!(Y, p, p.atmos.precip_model)
-
-    if vert_diff isa DecayWithHeightDiffusion
-        (; ᶜK_h) = p.precomputed
-        @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.ρ, vert_diff)
-    elseif vert_diff isa VerticalDiffusion
-        (; ᶜK_h) = p.precomputed
-        @. ᶜK_h = $compute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vert_diff)
-    end
+    set_precipitation_cache!(
+        Y,
+        p,
+        p.atmos.microphysics_model,
+        p.atmos.turbconv_model,
+    )
+    set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
 
     # TODO
     if call_cloud_diagnostics_per_stage isa CallCloudDiagnosticsPerStage

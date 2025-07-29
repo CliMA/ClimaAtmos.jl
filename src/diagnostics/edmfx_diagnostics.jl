@@ -448,7 +448,7 @@ compute_husraup!(out, state, cache, time) = compute_husraup!(
     state,
     cache,
     time,
-    cache.atmos.precip_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_husraup!(
@@ -456,7 +456,7 @@ compute_husraup!(
     _,
     _,
     _,
-    precip_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft rain water specific humidity with a 1M precip model and with EDMFX",
@@ -467,7 +467,7 @@ function compute_husraup!(
     state,
     cache,
     time,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -496,7 +496,7 @@ compute_hussnup!(out, state, cache, time) = compute_hussnup!(
     state,
     cache,
     time,
-    cache.atmos.precip_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_hussnup!(
@@ -504,7 +504,7 @@ compute_hussnup!(
     _,
     _,
     _,
-    precip_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft snow specific humidity with a 1M precip model and with EDMFX",
@@ -515,7 +515,7 @@ function compute_hussnup!(
     state,
     cache,
     time,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -1042,7 +1042,7 @@ compute_husraen!(out, state, cache, time) = compute_husraen!(
     state,
     cache,
     time,
-    cache.atmos.precip_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_husraen!(
@@ -1050,7 +1050,7 @@ compute_husraen!(
     _,
     _,
     _,
-    precip_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft rain specific humidity and with a 1M model and with EDMFX",
@@ -1061,7 +1061,7 @@ function compute_husraen!(
     state,
     cache,
     time,
-    precip_model_model::Microphysics1Moment,
+    microphysics_model_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
@@ -1091,7 +1091,7 @@ compute_hussnen!(out, state, cache, time) = compute_hussnen!(
     state,
     cache,
     time,
-    cache.atmos.precip_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_hussnen!(
@@ -1099,7 +1099,7 @@ compute_hussnen!(
     _,
     _,
     _,
-    precip_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
     "Can only compute updraft snow specific humidity and with a 1M model and with EDMFX",
@@ -1110,7 +1110,7 @@ function compute_hussnen!(
     state,
     cache,
     time,
-    precip_model_model::Microphysics1Moment,
+    microphysics_model_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
@@ -1176,10 +1176,12 @@ function compute_lmixw!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    ᶜwall_mixing_length = ᶜmixing_length(state, cache, Val(:wall))
+
     if isnothing(out)
-        return copy(cache.precomputed.ᶜmixing_length_tuple.wall)
+        return Base.materialize(ᶜwall_mixing_length)
     else
-        out .= cache.precomputed.ᶜmixing_length_tuple.wall
+        out .= ᶜwall_mixing_length
     end
 end
 
@@ -1205,10 +1207,13 @@ function compute_lmixtke!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+
+    ᶜtke_mixing_length = ᶜmixing_length(state, cache, Val(:tke))
+
     if isnothing(out)
-        return copy(cache.precomputed.ᶜmixing_length_tuple.tke)
+        return Base.materialize(ᶜtke_mixing_length)
     else
-        out .= cache.precomputed.ᶜmixing_length_tuple.tke
+        out .= ᶜtke_mixing_length
     end
 end
 
@@ -1234,10 +1239,12 @@ function compute_lmixb!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    ᶜbuoy_mixing_length = ᶜmixing_length(state, cache, Val(:buoy))
+
     if isnothing(out)
-        return copy(cache.precomputed.ᶜmixing_length_tuple.buoy)
+        return Base.materialize(ᶜbuoy_mixing_length)
     else
-        out .= cache.precomputed.ᶜmixing_length_tuple.buoy
+        out .= ᶜbuoy_mixing_length
     end
 end
 
@@ -1256,26 +1263,45 @@ compute_edt!(out, state, cache, time) = compute_edt!(
     state,
     cache,
     time,
-    cache.atmos.vert_diff,
+    cache.atmos.vertical_diffusion,
     cache.atmos.turbconv_model,
 )
-compute_edt!(_, _, _, _, vert_diff::T1, turbconv_model::T2) where {T1, T2} =
-    error_diagnostic_variable(
-        "Can only compute heat diffusivity with vertical diffusion or EDMFX",
-    )
+compute_edt!(
+    _,
+    _,
+    _,
+    _,
+    vertical_diffusion::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute heat diffusivity with vertical diffusion or EDMFX",
+)
 
 function compute_edt!(
     out,
     state,
     cache,
     time,
-    vert_diff::Union{VerticalDiffusion, DecayWithHeightDiffusion},
+    vertical_diffusion::Union{VerticalDiffusion, DecayWithHeightDiffusion},
     turbconv_model::Nothing,
 )
+    (; vertical_diffusion) = cache.atmos
+    (; ᶜp) = cache.precomputed
+
+    if vertical_diffusion isa DecayWithHeightDiffusion
+        ᶜK_h =
+            ᶜcompute_eddy_diffusivity_coefficient(state.c.ρ, vertical_diffusion)
+    elseif vertical_diffusion isa VerticalDiffusion
+        ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(
+            state.c.uₕ,
+            ᶜp,
+            vertical_diffusion,
+        )
+    end
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_h)
+        return copy(ᶜK_h)
     else
-        out .= cache.precomputed.ᶜK_h
+        out .= ᶜK_h
     end
 end
 
@@ -1284,13 +1310,23 @@ function compute_edt!(
     state,
     cache,
     time,
-    vert_diff::Nothing,
+    vertical_diffusion::Nothing,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    turbconv_params = CAP.turbconv_params(cache.params)
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜtke⁰) = cache.precomputed
+    (; params) = cache
+
+    ᶜmixing_length_field = ᶜmixing_length(state, cache)
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
+    ᶜprandtl_nvec = @. lazy(
+        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+    )
+    ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_h)
+        return Base.materialize(ᶜK_h)
     else
-        out .= cache.precomputed.ᶜK_h
+        out .= ᶜK_h
     end
 end
 
@@ -1311,26 +1347,46 @@ compute_evu!(out, state, cache, time) = compute_evu!(
     state,
     cache,
     time,
-    cache.atmos.vert_diff,
+    cache.atmos.vertical_diffusion,
     cache.atmos.turbconv_model,
 )
-compute_evu!(_, _, _, _, vert_diff::T1, turbconv_model::T2) where {T1, T2} =
-    error_diagnostic_variable(
-        "Can only compute momentum diffusivity with vertical diffusion or EDMFX",
-    )
+compute_evu!(
+    _,
+    _,
+    _,
+    _,
+    vertical_diffusion::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute momentum diffusivity with vertical diffusion or EDMFX",
+)
 
 function compute_evu!(
     out,
     state,
     cache,
     time,
-    vert_diff::Union{VerticalDiffusion, DecayWithHeightDiffusion},
+    vertical_diffusion::Union{VerticalDiffusion, DecayWithHeightDiffusion},
     turbconv_model::Nothing,
 )
+    (; vertical_diffusion) = cache.atmos
+    (; ᶜp) = cache.precomputed
+
+    # this setup assumes ᶜK_u = ᶜK_h
+    if vertical_diffusion isa DecayWithHeightDiffusion
+        ᶜK_u =
+            ᶜcompute_eddy_diffusivity_coefficient(state.c.ρ, vertical_diffusion)
+    elseif vertical_diffusion isa VerticalDiffusion
+        ᶜK_u = ᶜcompute_eddy_diffusivity_coefficient(
+            state.c.uₕ,
+            ᶜp,
+            vertical_diffusion,
+        )
+    end
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_u)
+        return copy(ᶜK_u)
     else
-        out .= cache.precomputed.ᶜK_u
+        out .= ᶜK_u
     end
 end
 
@@ -1339,13 +1395,18 @@ function compute_evu!(
     state,
     cache,
     time,
-    vert_diff::Nothing,
+    vertical_diffusion::Nothing,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    turbconv_params = CAP.turbconv_params(cache.params)
+    (; ᶜtke⁰) = cache.precomputed
+    ᶜmixing_length_field = ᶜmixing_length(state, cache)
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
+
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_u)
+        return Base.materialize(ᶜK_u)
     else
-        out .= cache.precomputed.ᶜK_u
+        out .= ᶜK_u
     end
 end
 

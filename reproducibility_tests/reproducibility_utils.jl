@@ -722,7 +722,7 @@ where `is_mse_file` is `true`.
 """
 function get_computed_mses(;
     job_ids::Vector{String},
-    subfolder::String = "output_active",
+    subfolder::String = joinpath("output_active", "reproducibility_bundle"),
     is_mse_file::Function = default_is_mse_file,
     expected_filename_prefix = "computed_mse",
 )
@@ -733,14 +733,14 @@ function get_computed_mses(;
     isempty(job_ids) && return computed_mses
 
     for job_id in job_ids
-        all_files = readdir(joinpath(job_id, subfolder); join = true)
-        for file in all_files
-            computed_mses[job_id] =
-                if is_mse_file(file, expected_filename_prefix)
-                    parse_file(file)
-                else
-                    false
-                end
+        all_files = filter(
+            file -> is_mse_file(file, expected_filename_prefix),
+            readdir(joinpath(job_id, subfolder); join = true),
+        )
+        computed_mses[job_id] = false
+        for file in all_files # this just parses and returns the last file sorted by name
+            computed_mses[job_id] = parse_file(file)
+            # TODO:Some sort of combined MSE for all comparisons, or just return latest commit
         end
     end
     return computed_mses

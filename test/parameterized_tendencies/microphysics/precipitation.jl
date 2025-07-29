@@ -32,12 +32,12 @@ import Test: @test
     ᶜYₜ = zero(Y)
 
     # Set all model choices
-    (; turbconv_model, moisture_model, precip_model) = p.atmos
+    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
 
     # Test cache to verify expected variables exist in tendency function
-    CA.set_precipitation_velocities!(Y, p, moisture_model, precip_model)
-    CA.set_precipitation_cache!(Y, p, precip_model, turbconv_model)
-    CA.set_precipitation_surface_fluxes!(Y, p, precip_model)
+    CA.set_precipitation_velocities!(Y, p, moisture_model, microphysics_model)
+    CA.set_precipitation_cache!(Y, p, microphysics_model, turbconv_model)
+    CA.set_precipitation_surface_fluxes!(Y, p, microphysics_model)
     test_varnames = (
         :ᶜS_ρq_tot,
         :ᶜS_ρe_tot,
@@ -62,7 +62,7 @@ import Test: @test
         p,
         FT(0),
         moisture_model,
-        precip_model,
+        microphysics_model,
         turbconv_model,
     )
     @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
@@ -74,7 +74,7 @@ import Test: @test
         Y,
         p,
         moisture_model,
-        precip_model,
+        microphysics_model,
     ) isa Nothing
 end
 
@@ -97,12 +97,12 @@ end
     ᶜYₜ = zero(Y)
 
     # Set all model choices
-    (; turbconv_model, moisture_model, precip_model) = p.atmos
+    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
 
     # Test cache to verify expected variables exist in tendency function
-    CA.set_precipitation_velocities!(Y, p, moisture_model, precip_model)
-    CA.set_precipitation_cache!(Y, p, precip_model, turbconv_model)
-    CA.set_precipitation_surface_fluxes!(Y, p, precip_model)
+    CA.set_precipitation_velocities!(Y, p, moisture_model, microphysics_model)
+    CA.set_precipitation_cache!(Y, p, microphysics_model, turbconv_model)
+    CA.set_precipitation_surface_fluxes!(Y, p, microphysics_model)
     test_varnames = (
         :ᶜSqₗᵖ,
         :ᶜSqᵢᵖ,
@@ -131,7 +131,7 @@ end
         p,
         FT(0),
         moisture_model,
-        precip_model,
+        microphysics_model,
         turbconv_model,
     )
 
@@ -153,7 +153,7 @@ end
     @assert iszero(ᶜYₜ.c.ρ)
 
     # test nonequilibrium cloud condensate
-    CA.cloud_condensate_tendency!(ᶜYₜ, Y, p, moisture_model, precip_model)
+    CA.cloud_condensate_tendency!(ᶜYₜ, Y, p, moisture_model, microphysics_model)
     @assert !any(isnan, ᶜYₜ.c.ρq_liq)
     @assert !any(isnan, ᶜYₜ.c.ρq_ice)
 
@@ -179,6 +179,7 @@ end
             "precip_model" => "2M",
             "config" => "column",
             "output_default_diagnostics" => false,
+            "prescribed_aerosols" => ["SSLT01"],
         ),
         job_id = "precipitation_2M",
     )
@@ -188,12 +189,12 @@ end
     ᶜYₜ = zero(Y)
 
     # Set all model choices
-    (; turbconv_model, moisture_model, precip_model) = p.atmos
+    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
 
     # Test cache to verify expected variables exist in tendency function
-    CA.set_precipitation_velocities!(Y, p, moisture_model, precip_model)
-    CA.set_precipitation_cache!(Y, p, precip_model, turbconv_model)
-    CA.set_precipitation_surface_fluxes!(Y, p, precip_model)
+    CA.set_precipitation_velocities!(Y, p, moisture_model, microphysics_model)
+    CA.set_precipitation_cache!(Y, p, microphysics_model, turbconv_model)
+    CA.set_precipitation_surface_fluxes!(Y, p, microphysics_model)
     test_varnames = (
         :ᶜSqₗᵖ,
         :ᶜSqᵢᵖ,
@@ -223,7 +224,7 @@ end
         p,
         FT(0),
         moisture_model,
-        precip_model,
+        microphysics_model,
         turbconv_model,
     )
 
@@ -249,7 +250,7 @@ end
     @assert iszero(ᶜYₜ.c.ρ)
 
     # test nonequilibrium cloud condensate
-    CA.cloud_condensate_tendency!(ᶜYₜ, Y, p, moisture_model, precip_model)
+    CA.cloud_condensate_tendency!(ᶜYₜ, Y, p, moisture_model, microphysics_model)
     @assert !any(isnan, ᶜYₜ.c.ρq_liq)
     @assert !any(isnan, ᶜYₜ.c.ρq_ice)
     @assert !any(isnan, ᶜYₜ.c.ρn_liq)

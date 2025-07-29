@@ -274,10 +274,40 @@ add_diagnostic_variable!(
     or from mixing length closure with EDMF SGS model.
     """,
     compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.ᶜmixing_length)
+        turbconv_model = cache.atmos.turbconv_model
+        # TODO: consolidate remaining mixing length types
+        # (smagorinsky_lilly, dz) into a single mixing length function
+        if isa(turbconv_model, PrognosticEDMFX) ||
+           isa(turbconv_model, DiagnosticEDMFX) ||
+           isa(turbconv_model, EDOnlyEDMFX)
+            ᶜmixing_length_field = ᶜmixing_length(state, cache)
         else
-            out .= cache.precomputed.ᶜmixing_length
+            (; params) = cache
+            (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+            ᶜdz = Fields.Δz_field(axes(state.c))
+            ᶜprandtl_nvec = @. lazy(
+                turbulent_prandtl_number(
+                    params,
+                    ᶜlinear_buoygrad,
+                    ᶜstrain_rate_norm,
+                ),
+            )
+            ᶜmixing_length_field = @. lazy(
+                smagorinsky_lilly_length(
+                    CAP.c_smag(params),
+                    sqrt(max(ᶜlinear_buoygrad, 0)),   # N_eff
+                    ᶜdz,
+                    ᶜprandtl_nvec,
+                    ᶜstrain_rate_norm,
+                ),
+            )
+        end
+
+
+        if isnothing(out)
+            return Base.materialize(ᶜmixing_length_field)
+        else
+            out .= ᶜmixing_length_field
         end
     end,
 )
@@ -766,16 +796,16 @@ add_diagnostic_variable!(
 # Precipitation (2d)
 ###
 compute_pr!(out, state, cache, time) =
-    compute_pr!(out, state, cache, time, cache.atmos.precip_model)
-compute_pr!(_, _, _, _, precip_model::T) where {T} =
-    error_diagnostic_variable("pr", precip_model)
+    compute_pr!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_pr!(_, _, _, _, microphysics_model::T) where {T} =
+    error_diagnostic_variable("pr", microphysics_model)
 
 function compute_pr!(
     out,
     state,
     cache,
     time,
-    precip_model::Union{
+    microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
@@ -802,16 +832,16 @@ add_diagnostic_variable!(
 )
 
 compute_prra!(out, state, cache, time) =
-    compute_prra!(out, state, cache, time, cache.atmos.precip_model)
-compute_prra!(_, _, _, _, precip_model::T) where {T} =
-    error_diagnostic_variable("prra", precip_model)
+    compute_prra!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_prra!(_, _, _, _, microphysics_model::T) where {T} =
+    error_diagnostic_variable("prra", microphysics_model)
 
 function compute_prra!(
     out,
     state,
     cache,
     time,
-    precip_model::Union{
+    microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
@@ -835,16 +865,16 @@ add_diagnostic_variable!(
 )
 
 compute_prsn!(out, state, cache, time) =
-    compute_prsn!(out, state, cache, time, cache.atmos.precip_model)
-compute_prsn!(_, _, _, _, precip_model::T) where {T} =
-    error_diagnostic_variable("prsn", precip_model)
+    compute_prsn!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_prsn!(_, _, _, _, microphysics_model::T) where {T} =
+    error_diagnostic_variable("prsn", microphysics_model)
 
 function compute_prsn!(
     out,
     state,
     cache,
     time,
-    precip_model::Union{
+    microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
@@ -871,7 +901,7 @@ add_diagnostic_variable!(
 # Precipitation (3d)
 ###
 compute_husra!(out, state, cache, time) =
-    compute_husra!(out, state, cache, time, cache.atmos.precip_model)
+    compute_husra!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_husra!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("husra", model)
 
@@ -880,7 +910,7 @@ function compute_husra!(
     state,
     cache,
     time,
-    precip_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
 )
     if isnothing(out)
         return state.c.ρq_rai ./ state.c.ρ
@@ -902,7 +932,7 @@ add_diagnostic_variable!(
 )
 
 compute_hussn!(out, state, cache, time) =
-    compute_hussn!(out, state, cache, time, cache.atmos.precip_model)
+    compute_hussn!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hussn!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hussn", model)
 
@@ -911,7 +941,7 @@ function compute_hussn!(
     state,
     cache,
     time,
-    precip_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
 )
     if isnothing(out)
         return state.c.ρq_sno ./ state.c.ρ
@@ -933,7 +963,7 @@ add_diagnostic_variable!(
 )
 
 compute_cdnc!(out, state, cache, time) =
-    compute_cdnc!(out, state, cache, time, cache.atmos.precip_model)
+    compute_cdnc!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_cdnc!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("cdnc", model)
 
@@ -942,7 +972,7 @@ function compute_cdnc!(
     state,
     cache,
     time,
-    precip_model::Microphysics2Moment,
+    microphysics_model::Microphysics2Moment,
 )
     if isnothing(out)
         return state.c.ρn_liq
@@ -964,7 +994,7 @@ add_diagnostic_variable!(
 )
 
 compute_ncra!(out, state, cache, time) =
-    compute_ncra!(out, state, cache, time, cache.atmos.precip_model)
+    compute_ncra!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_ncra!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("ncra", model)
 
@@ -973,7 +1003,7 @@ function compute_ncra!(
     state,
     cache,
     time,
-    precip_model::Microphysics2Moment,
+    microphysics_model::Microphysics2Moment,
 )
     if isnothing(out)
         return state.c.ρn_rai

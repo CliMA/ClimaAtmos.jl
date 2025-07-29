@@ -43,7 +43,7 @@ function get_insolation_form(parsed_args)
     elseif insolation == "timevarying"
         # TODO: Remove this argument once we have support for integer time and
         # we can easily convert from time to date
-        start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd")
+        start_date = parse_date(parsed_args["start_date"])
         TimeVaryingInsolation(start_date)
     elseif insolation == "rcemipii"
         RCEMIPIIInsolation()
@@ -66,17 +66,27 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
             ν₄_scalar_coeff,
             divergence_damping_factor,
         )
-    elseif hyperdiff_name in ("CAM_SE",)
+    elseif hyperdiff_name == "CAM_SE"
         # To match hyperviscosity coefficients in:
         #    https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2017MS001257
         #    for equation A18 and A19
         # Need to scale by (1.1e5 / (sqrt(4 * pi / 6) * 6.371e6 / (3*30)) )^3  ≈ 1.238
-        @info "Using CAM_SE hyperdiffusion. vorticity_hyperdiffusion_coefficient, \
-               scalar_hyperdiffusion_coefficient and divergence_damping_factor in the config \
-               will be ignored."
+        # These are re-scaled by the grid resolution in function ν₄(hyperdiff, Y)
         ν₄_vorticity_coeff = FT(0.150 * 1.238)
         ν₄_scalar_coeff = FT(0.751 * 1.238)
         divergence_damping_factor = FT(5)
+        # Ensure the user isn't trying to set the values manually from the config as CAM_SE defines a set of hyperdiffusion coefficients
+        coeff_pairs = [
+            (ν₄_vorticity_coeff, "vorticity_hyperdiffusion_coefficient"),
+            (ν₄_scalar_coeff, "scalar_hyperdiffusion_coefficient"),
+            (divergence_damping_factor, "divergence_damping_factor"),
+        ]
+
+        for (cam_coef, config_coef) in coeff_pairs
+            # check to machine precision
+            config_val = FT(parsed_args[config_coef])
+            @assert isapprox(cam_coef, config_val, atol = 1e-8) "CAM_SE hyperdiffusion overwrites $config_coef, use hyperdiff: ClimaHyperdiffusion to set this value manually in the config instead."
+        end
         return ClimaHyperdiffusion(;
             ν₄_vorticity_coeff,
             ν₄_scalar_coeff,
@@ -115,12 +125,16 @@ end
 
 function get_surface_model(parsed_args)
     prognostic_surface_name = parsed_args["prognostic_surface"]
-    return if prognostic_surface_name in
-              ("false", false, "PrescribedSurfaceTemperature")
-        PrescribedSurfaceTemperature()
-    elseif prognostic_surface_name in
-           ("true", true, "PrognosticSurfaceTemperature")
-        PrognosticSurfaceTemperature()
+    return if prognostic_surface_name in ("false", false, "PrescribedSST")
+        PrescribedSST()
+    elseif prognostic_surface_name in ("true", true, "SlabOceanSST")
+        SlabOceanSST()
+    elseif prognostic_surface_name == "PrognosticSurfaceTemperature"
+        @warn "The `PrognosticSurfaceTemperature` option is deprecated. Use `SlabOceanSST` instead."
+        SlabOceanSST()
+    elseif prognostic_surface_name == "PrescribedSurfaceTemperature"
+        @warn "The `PrescribedSurfaceTemperature` option is deprecated. Use `PrescribedSST` instead."
+        PrescribedSST()
     else
         error("Uncaught surface model `$prognostic_surface_name`.")
     end
@@ -246,6 +260,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         "gray",
         "allsky",
         "allskywithclear",
+        "held_suarez",
         "DYCOMS",
         "TRMM_LBA",
         "ISDAC",
@@ -286,6 +301,8 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
             reset_rng_seed,
             deep_atmosphere,
         )
+    elseif radiation_name == "held_suarez"
+        HeldSuarezForcing()
     elseif radiation_name == "DYCOMS"
         RadiationDYCOMS{FT}()
     elseif radiation_name == "TRMM_LBA"
@@ -297,18 +314,18 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function get_precipitation_model(parsed_args)
-    precip_model = parsed_args["precip_model"]
-    return if precip_model == nothing || precip_model == "nothing"
+function get_microphysics_model(parsed_args)
+    microphysics_model = parsed_args["precip_model"]
+    return if isnothing(microphysics_model) || microphysics_model == "nothing"
         NoPrecipitation()
-    elseif precip_model == "0M"
+    elseif microphysics_model == "0M"
         Microphysics0Moment()
-    elseif precip_model == "1M"
+    elseif microphysics_model == "1M"
         Microphysics1Moment()
-    elseif precip_model == "2M"
+    elseif microphysics_model == "2M"
         Microphysics2Moment()
     else
-        error("Invalid precip_model $(precip_model)")
+        error("Invalid microphysics_model $(microphysics_model)")
     end
 end
 
@@ -352,11 +369,11 @@ end
 function get_forcing_type(parsed_args)
     forcing = parsed_args["forcing"]
     @assert forcing in (nothing, "held_suarez")
-    return if forcing == nothing
-        nothing
-    elseif forcing == "held_suarez"
-        HeldSuarezForcing()
+    if forcing == "held_suarez"
+        @warn "The 'held_suarez' forcing option is deprecated. Use rad='held_suarez' instead to set HeldSuarezForcing as a radiation mode."
+        return HeldSuarezForcing()  # Still return the object for backward compatibility
     end
+    return nothing
 end
 
 struct CallCloudDiagnosticsPerStage end
@@ -372,7 +389,7 @@ end
 
 function get_subsidence_model(parsed_args, radiation_mode, FT)
     subsidence = parsed_args["subsidence"]
-    subsidence == nothing && return nothing
+    isnothing(subsidence) && return nothing
 
     prof = if subsidence == "Bomex"
         APL.Bomex_subsidence(FT)
@@ -382,6 +399,8 @@ function get_subsidence_model(parsed_args, radiation_mode, FT)
         APL.Rico_subsidence(FT)
     elseif subsidence == "DYCOMS"
         @assert radiation_mode isa RadiationDYCOMS
+        # For DYCOMS case, subsidence is linearly proportional to height
+        # with slope equal to the divergence rate specified in radiation mode
         z -> -z * radiation_mode.divergence
     elseif subsidence == "ISDAC"
         APL.ISDAC_subsidence(FT)
@@ -430,20 +449,21 @@ end
 
 function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
     external_forcing = parsed_args["external_forcing"]
-    @assert external_forcing in
-            (nothing, "GCM", "ReanalysisTimeVarying", "ISDAC")
+    @assert external_forcing in (
+        nothing,
+        "GCM",
+        "ReanalysisTimeVarying",
+        "ReanalysisMonthlyAveragedDiurnal",
+        "ISDAC",
+    )
     reanalysis_required_fields = map(
         x -> parsed_args[x],
-        [
-            "external_forcing",
-            "surface_setup",
-            "surface_temperature",
-            "initial_condition",
-        ],
+        ["surface_setup", "surface_temperature", "initial_condition"],
     )
-    if any(reanalysis_required_fields .== "ReanalysisTimeVarying")
+    if external_forcing in
+       ("ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal")
+        @assert parsed_args["config"] == "column" "ReanalysisTimeVarying and ReanalysisMonthlyAveragedDiurnal are only supported in column mode."
         @assert all(reanalysis_required_fields .== "ReanalysisTimeVarying") "All of external_forcing, surface_setup, surface_temperature and initial_condition must be set to ReanalysisTimeVarying."
-        @assert parsed_args["config"] == "column" "ReanalysisTimeVarying is only supported in column mode."
     end
     return if isnothing(external_forcing)
         nothing
@@ -453,22 +473,48 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
         GCMForcing{FT}(parsed_args["external_forcing_file"], cfsite_number_str)
 
     elseif external_forcing == "ReanalysisTimeVarying"
-        external_forcing_file = get_external_forcing_file_path(parsed_args)
+        external_forcing_file =
+            get_external_daily_forcing_file_path(parsed_args)
         if !isfile(external_forcing_file) ||
-           !check_external_forcing_file_times(
-            external_forcing_file,
-            parsed_args,
-        )
+           !check_daily_forcing_times(external_forcing_file, parsed_args)
             @info "External forcing file $(external_forcing_file) does not exist or does not cover the expected time range. Generating it now."
             # generate forcing from provided era5 data paths
             generate_multiday_era5_external_forcing_file(
                 parsed_args,
                 external_forcing_file,
                 FT,
+                input_data_dir = joinpath(
+                    @clima_artifact("era5_hourly_atmos_raw"),
+                    "daily",
+                ),
             )
         end
 
         ExternalDrivenTVForcing{FT}(external_forcing_file)
+    elseif external_forcing == "ReanalysisMonthlyAveragedDiurnal"
+        external_forcing_file =
+            get_external_monthly_forcing_file_path(parsed_args)
+        # generate single file from monthly averaged diurnal data if it doesn't exist
+        # we'll use ClimaUtilities.TimeVaryingInputs downstream to repeat the data. 
+        if !isfile(external_forcing_file) ||
+           !check_monthly_forcing_times(external_forcing_file, parsed_args)
+            generate_external_forcing_file(
+                parsed_args,
+                external_forcing_file,
+                FT,
+                input_data_dir = joinpath(
+                    @clima_artifact("era5_hourly_atmos_raw"),
+                    "monthly",
+                ),
+                data_strs = [
+                    "monthly_diurnal_profiles",
+                    "monthly_diurnal_inst",
+                    "monthly_diurnal_accum",
+                ],
+            )
+        end
+        ExternalDrivenTVForcing{FT}(external_forcing_file)
+
     elseif external_forcing == "ISDAC"
         ISDACForcing()
     end

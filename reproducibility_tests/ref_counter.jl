@@ -1,4 +1,4 @@
-247
+250
 
 # **README**
 #
@@ -20,6 +20,17 @@
 
 
 #=
+250
+- Add ARG aerosol activation for 2M microphysics; increase the allocation limit for `flame_callbacks`
+  from 391864 to 391942 to account for additional allocations when constructing `ClimaAtmosParameters` 
+  with the new aerosol parameters in `microphysics_2m_parameters`.
+
+249
+- Remove viscosity, diffusivity, and mixing length from precomputed quantities
+
+248
+- update deps: climacore 0.14.35
+
 247
 - Hyperdiffusion of enthalpy perturbation
 

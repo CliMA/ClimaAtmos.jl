@@ -48,7 +48,7 @@ solver. Certain groups of derivatives can be toggled on or off by setting their
 - `approximate_solve_iters::Int`: number of iterations to take for the
   approximate linear solve required when the `diffusion_flag` is `UseDerivative`
 """
-struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6} <: JacobianAlgorithm
+struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6} <: SparseJacobian
     topography_flag::F1
     diffusion_flag::F2
     sgs_advection_flag::F3
@@ -169,8 +169,9 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             )...,
             (@name(c.uₕ), @name(c.uₕ)) =>
                 !isnothing(atmos.turbconv_model) ||
-                    !disable_momentum_vertical_diffusion(atmos.vert_diff) ?
-                similar(Y.c, TridiagonalRow) : FT(-1) * I,
+                    !disable_momentum_vertical_diffusion(
+                        atmos.vertical_diffusion,
+                    ) ? similar(Y.c, TridiagonalRow) : FT(-1) * I,
         )
     elseif atmos.moisture_model isa DryModel
         MatrixFields.unrolled_map(
@@ -543,8 +544,39 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     end
 
     if use_derivative(diffusion_flag)
+        turbconv_params = CAP.turbconv_params(params)
+        FT = eltype(params)
+        (; vertical_diffusion) = p.atmos
+        (; ᶜp) = p.precomputed
+        if vertical_diffusion isa DecayWithHeightDiffusion
+            ᶜK_h =
+                ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
+            ᶜK_u = ᶜK_h
+        elseif vertical_diffusion isa VerticalDiffusion
+            ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(
+                Y.c.uₕ,
+                ᶜp,
+                vertical_diffusion,
+            )
+            ᶜK_u = ᶜK_h
+        else
+            (; ᶜtke⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+            ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
+            ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+            ᶜK_u = @. lazy(
+                eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field),
+            )
+            ᶜprandtl_nvec = @. lazy(
+                turbulent_prandtl_number(
+                    params,
+                    ᶜlinear_buoygrad,
+                    ᶜstrain_rate_norm,
+                ),
+            )
+            ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+        end
+
         α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
-        (; ᶜK_h, ᶜK_u) = p.precomputed
         @. ᶜdiffusion_h_matrix =
             ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅
             ᶠgradᵥ_matrix()
@@ -555,7 +587,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         if (
             MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke)) ||
             !isnothing(p.atmos.turbconv_model) ||
-            !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
+            !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         )
             @. ᶜdiffusion_u_matrix =
                 ᶜadvdivᵥ_matrix() ⋅
@@ -612,11 +644,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             turbconv_params = CAP.turbconv_params(params)
             c_d = CAP.tke_diss_coeff(turbconv_params)
             (; dt) = p
-            (; ᶜtke⁰, ᶜmixing_length) = p.precomputed
+            (; ᶜtke⁰) = p.precomputed
             ᶜρa⁰ =
                 p.atmos.turbconv_model isa PrognosticEDMFX ?
                 p.precomputed.ᶜρa⁰ : ᶜρ
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
+
+            ᶜmixing_length_field = ᶜmixing_length(Y, p)
 
             @inline tke_dissipation_rate_tendency(tke⁰, mixing_length) =
                 tke⁰ >= 0 ? c_d * sqrt(tke⁰) / mixing_length : 1 / float(dt)
@@ -626,8 +660,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
             ᶜdissipation_matrix_diagonal = p.scratch.ᶜtemp_scalar
             @. ᶜdissipation_matrix_diagonal =
-                ᶜρatke⁰ *
-                ∂tke_dissipation_rate_tendency_∂tke⁰(ᶜtke⁰, ᶜmixing_length)
+                ᶜρatke⁰ * ∂tke_dissipation_rate_tendency_∂tke⁰(
+                    ᶜtke⁰,
+                    ᶜmixing_length_field,
+                )
 
             ∂ᶜρatke⁰_err_∂ᶜρ = matrix[@name(c.sgs⁰.ρatke), @name(c.ρ)]
             ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
@@ -643,14 +679,17 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ᶜdiffusion_u_matrix -
                         DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
                     ) ⋅ DiagonalMatrixRow(1 / ᶜρa⁰) - DiagonalMatrixRow(
-                        tke_dissipation_rate_tendency(ᶜtke⁰, ᶜmixing_length),
+                        tke_dissipation_rate_tendency(
+                            ᶜtke⁰,
+                            ᶜmixing_length_field,
+                        ),
                     )
                 ) - (I,)
         end
 
         if (
             !isnothing(p.atmos.turbconv_model) ||
-            !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
+            !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         )
             ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
             @. ∂ᶜuₕ_err_∂ᶜuₕ =

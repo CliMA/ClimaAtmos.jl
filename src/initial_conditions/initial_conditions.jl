@@ -192,7 +192,23 @@ struct MoistFromFile <: InitialCondition
     file_path::String
 end
 
-function (initial_condition::MoistFromFile)(params)
+"""
+    WeatherModel(start_date)
+
+An `InitialCondition` that initializes the model with an empty state, and then overwrites
+it with the content of a NetCDF file that contains the initial conditions, stored in the 
+artifact `weather_model_ic`/raw/era5_raw_YYYYMMDD_HHMM.nc. We interpolate the initial 
+conditions from ERA5 pressure level grid to a z grid, saving to the artifact 
+weather_model_ic/init/era5_init_YYYYMMDD_HHMM.nc. It is then interpolated to the model
+grid in `_overwrite_initial_conditions_from_file!`, which documents the required variables.
+Recall running `ClimaUtilities.ClimaArtiffacts.@clima_artifact("weather_model_ic")` gets 
+the artifact path.
+"""
+struct WeatherModel <: InitialCondition
+    start_date::String
+end
+
+function (initial_condition::Union{MoistFromFile, WeatherModel})(params)
     function local_state(local_geometry)
         FT = eltype(params)
         grav = CAP.grav(params)
@@ -340,8 +356,38 @@ function overwrite_initial_conditions!(
     return nothing
 end
 
+# Restored original MoistFromFile function behavior
+function overwrite_initial_conditions!(
+    initial_condition::MoistFromFile,
+    Y,
+    thermo_params,
+)
+    return _overwrite_initial_conditions_from_file!(
+        initial_condition.file_path,
+        nothing, # use default extrapolation bc
+        Y,
+        thermo_params,
+    )
+end
+
+# WeatherModel function using the shared implementation
+function overwrite_initial_conditions!(
+    initial_condition::WeatherModel,
+    Y,
+    thermo_params,
+)
+    extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
+    file_path = weather_model_data_path(initial_condition.start_date)
+    return _overwrite_initial_conditions_from_file!(
+        file_path,
+        extrapolation_bc,
+        Y,
+        thermo_params,
+    )
+end
+
 """
-    overwrite_initial_conditions!(initial_condition::MoistFromFile, Y, thermo_params, config)
+    _overwrite_initial_conditions_from_file!(file_path::String, Y, thermo_params, config)
 
 Given a prognostic state `Y`, an `initial condition` (specifically, where initial values are
 assigned from interpolations of existing datasets), a `thermo_state`, this function
@@ -357,12 +403,13 @@ We expect the file to contain the following variables:
 - `u, v, w`, for velocity,
 - `cswc, crwc` for snow and rain water content (for 1 moment microphysics).
 """
-function overwrite_initial_conditions!(
-    initial_conditions::MoistFromFile,
+function _overwrite_initial_conditions_from_file!(
+    file_path::String,
+    extrapolation_bc,
     Y,
     thermo_params,
 )
-    file_path = initial_conditions.file_path
+    regridder_kwargs = isnothing(extrapolation_bc) ? () : (; extrapolation_bc)
     isfile(file_path) || error("$(file_path) is not a file")
     @info "Overwriting initial conditions with data from file $(file_path)"
     center_space = Fields.axes(Y.c)
@@ -370,11 +417,26 @@ function overwrite_initial_conditions!(
     # Using surface pressure, air temperature and specific humidity
     # from the dataset, compute air pressure.
     p_sfc = Fields.level(
-        SpaceVaryingInputs.SpaceVaryingInput(file_path, "p", face_space),
+        SpaceVaryingInputs.SpaceVaryingInput(
+            file_path,
+            "p",
+            face_space,
+            regridder_kwargs = regridder_kwargs,
+        ),
         Fields.half,
     )
-    ᶜT = SpaceVaryingInputs.SpaceVaryingInput(file_path, "t", center_space)
-    ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(file_path, "q", center_space)
+    ᶜT = SpaceVaryingInputs.SpaceVaryingInput(
+        file_path,
+        "t",
+        center_space,
+        regridder_kwargs = regridder_kwargs,
+    )
+    ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(
+        file_path,
+        "q",
+        center_space,
+        regridder_kwargs = regridder_kwargs,
+    )
 
     # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile,
     # recompute the pressure levels assuming hydrostatic balance is maintained.
@@ -400,9 +462,24 @@ function overwrite_initial_conditions!(
     # cell faces.
     vel =
         Geometry.UVWVector.(
-            SpaceVaryingInputs.SpaceVaryingInput(file_path, "u", center_space),
-            SpaceVaryingInputs.SpaceVaryingInput(file_path, "v", center_space),
-            SpaceVaryingInputs.SpaceVaryingInput(file_path, "w", center_space),
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "u",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ),
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "v",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ),
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "w",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ),
         )
     Y.c.uₕ .= C12.(Geometry.UVVector.(vel))
     Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
@@ -423,12 +500,14 @@ function overwrite_initial_conditions!(
                 file_path,
                 "cswc",
                 center_space,
+                regridder_kwargs = regridder_kwargs,
             ) .* Y.c.ρ
         Y.c.ρq_rai .=
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "crwc",
                 center_space,
+                regridder_kwargs = regridder_kwargs,
             ) .* Y.c.ρ
     end
 
