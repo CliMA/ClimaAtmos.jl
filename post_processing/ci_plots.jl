@@ -1402,6 +1402,7 @@ EDMFBoxPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_trmm_column},
     Val{:prognostic_edmfx_dycoms_rf02_column},
 }
+
 """
     plot_edmf_vert_profile!(grid_loc, var_group)
 
@@ -1423,6 +1424,34 @@ function plot_edmf_vert_profile!(grid_loc, var_group)
         CairoMakie.lines!(ax, var.data, z, label = short_name(var))
     end
     length(var_group) > 1 && Makie.axislegend(ax)
+end
+
+"""
+    plot_edmf_timeseries!(grid_loc, var_group)
+Helper function for `make_plots_generic`. Takes a list of variables and plots
+a timeseries.
+"""
+function plot_edmf_timeseries!(grid_loc, var_group)
+    t = ClimaAnalysis.times(var_group[1])
+    units = ClimaAnalysis.units(var_group[1])
+    t_units = ClimaAnalysis.dim_units(var_group[1], "time")
+
+    # Create an axis without setting ylims
+    ax = CairoMakie.Axis(
+        grid_loc[1, 1],
+        xlabel = "time [$t_units]",
+        ylabel = "$(short_name(var_group[1])) [$units]",
+        title = parse_var_attributes(var_group[1]),
+    )
+
+    # Plot each variable
+    for var in var_group
+        CairoMakie.lines!(ax, t, var.data, label = short_name(var))
+    end
+    length(var_group) > 1 && Makie.axislegend(ax)
+
+    # This ensures autoscaling AFTER all lines are drawn
+    Makie.autolimits!(ax)
 end
 
 
@@ -1488,7 +1517,7 @@ function make_plots(
     simdirs = SimDir.(output_paths)
 
     precip_names =
-        sim_type isa EDMFBoxPlotsWithPrecip ?
+        sim_type isa EDMFBoxPlotsPerturbed ?
         ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen") : ()
 
     short_names = [
@@ -1514,6 +1543,11 @@ function make_plots(
         "cli",
         "cliup",
         precip_names...,
+    ]
+
+    lwp_rwp = [
+        "lwp",
+        "rwp",
     ]
     reduction = "inst"
 
@@ -1542,6 +1576,18 @@ function make_plots(
             ]
         end
 
+    lwp_rwp_short_name_tuples = pair_edmf_names(lwp_rwp)
+    var_groups_t =
+        map_comparison(simdirs, lwp_rwp_short_name_tuples) do simdir, name_tuple
+            return [
+                slice(
+                    get(simdir; short_name, reduction, period),
+                    x = 0.0,
+                    y = 0.0,
+                ) for short_name in name_tuple
+            ]
+        end
+
     var_groups_z = [
         ([slice(v, time = LAST_SNAP) for v in group]...,) for
         group in var_groups_zt
@@ -1561,6 +1607,15 @@ function make_plots(
         vcat(var_groups_zt...),
         plot_fn = plot_parsed_attribute_title!,
         summary_files = [tmp_file],
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+
+    lwp_rwp_file = make_plots_generic(
+        output_paths,
+        output_name = "lwp_rwp",
+        var_groups_t,
+        plot_fn = plot_edmf_timeseries!,
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,
     )
