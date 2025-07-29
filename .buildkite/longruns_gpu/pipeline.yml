@@ -22,6 +22,8 @@ steps:
     command:
       - echo "--- Instantiate examples"
       - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'
+      - julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name="Thermodynamics", rev="main"))'
+      - julia --project=.buildkite -e 'using Pkg; Pkg.resolve()'
       - julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'
       - julia --project=.buildkite -e 'using CUDA; CUDA.precompile_runtime()'
       - julia --project=.buildkite -e 'using Pkg; Pkg.status()'
