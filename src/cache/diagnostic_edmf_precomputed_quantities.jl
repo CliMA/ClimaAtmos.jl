@@ -5,6 +5,46 @@ import NVTX
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields, RecursiveApply
 
+###
+### Helper functions for the diagnosic edmf integral
+###
+# ᶠJ     - Jacobian at half level below (-1/2)
+# ᶜJₚ    - Jacobian at previous level below (-1)
+# ᶠJₚ    - Jacobian at previous half level below (-3/2)
+# ᶜρaʲₚ  - updraft density * area at previous level below (-1)
+# ᶜρʲₚ   - updraft density at previous level below (-1)
+# ᶜρₚ    - environment density at previous level below (-1)
+# ᶜ∇ϕ₃ₚ  - covariant geopotential gradient at previous level below (-1)
+# ᶠu³ʲₚ  - contravariant updraft velocity at previous half level below [1/s] (-3/2)
+# ᶜϵʲₚ   - entrainment at previous level (-1)
+# ᶜδʲₚ   - detrainment at previous level (-1)
+# ᶜϵₜʲₚ  - turbulent entrainment at previous level (-1)
+# ᶜSʲₚ   - microphysics sources and sinks at previous level (-1)
+# ᶜtracerʲₚ - updraft property at previous level (-1)
+# ᶜtracerₚ  - environment property at previous level (-1)
+
+# Advection of area, mse and tracers
+function diag_edmf_advection(ᶠJ, ᶠJₚ, ᶜρaʲₚ, ᶠu³ʲₚ, ᶜtracerʲₚ)
+    return (1 / ᶠJ) * (ᶠJₚ * ᶜρaʲₚ * ᶠu³ʲₚ * ᶜtracerʲₚ)
+end
+# Entrainment/detrainment of area, mse and tracers
+# Note that updraft area entrainment does not include turbulent entrainment.
+# In order to re-use the same function for all tracers, we pass in ones
+# as updraft and environment tracers for area fraction.
+function entr_detr(ᶠJ, ᶜJₚ, ᶜρaʲₚ, ᶜϵʲₚ, ᶜδʲₚ, ᶜϵₜʲₚ, ᶜtracerₚ, ᶜtracerʲₚ)
+    return (1 / ᶠJ) * (
+        ᶜJₚ * ᶜρaʲₚ * ((ᶜϵʲₚ + ᶜϵₜʲₚ) * ᶜtracerₚ - (ᶜδʲₚ + ᶜϵₜʲₚ) * ᶜtracerʲₚ)
+    )
+end
+# Buoyancy term for mse
+function mse_buoyancy(ᶠJ, ᶜJₚ, ᶜρaʲₚ, ᶠu³ʲₚ, ᶜρʲₚ, ᶜρₚ, ᶜ∇Φ₃ₚ)
+    return (1 / ᶠJ) * (ᶜJₚ * ᶜρaʲₚ * ᶠu³ʲₚ * (ᶜρʲₚ - ᶜρₚ) / ᶜρʲₚ * ᶜ∇Φ₃ₚ)
+end
+# Microphysics sources
+function microphysics_sources(ᶠJ, ᶜJₚ, ᶜρaʲₚ, ᶜSʲₚ)
+    return (1 / ᶠJ) * (ᶜJₚ * ᶜρaʲₚ * ᶜSʲₚ)
+end
+
 @inline function kinetic_energy(
     uₕ_level,
     u³_halflevel,
@@ -266,33 +306,6 @@ function compute_u³ʲ_u³ʲ(
             )
         )
     return u³ʲ_u³ʲ
-end
-
-function compute_ρaʲu³ʲ(
-    J_halflevel,
-    J_prev_level,
-    J_prev_halflevel,
-    ρaʲ_prev_level,
-    entrʲ_prev_level,
-    detrʲ_prev_level,
-    u³ʲ_data_prev_halflevel,
-    S_q_totʲ_prev_level,
-    microphysics_model,
-)
-
-    ρaʲu³ʲ_data =
-        (1 / J_halflevel) *
-        (J_prev_halflevel * ρaʲ_prev_level * u³ʲ_data_prev_halflevel)
-
-    ρaʲu³ʲ_data +=
-        (1 / J_halflevel) *
-        (J_prev_level * ρaʲ_prev_level * (entrʲ_prev_level - detrʲ_prev_level))
-    if microphysics_model isa Union{Microphysics0Moment, Microphysics1Moment}
-        ρaʲu³ʲ_data +=
-            (1 / J_halflevel) *
-            (J_prev_level * ρaʲ_prev_level * S_q_totʲ_prev_level)
-    end
-    return ρaʲu³ʲ_data
 end
 
 NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
@@ -696,160 +709,148 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ρaʲu³ʲ_data = p.scratch.temp_data_level_2
             ρaʲu³ʲ_datamse = ρaʲu³ʲ_dataq_tot = p.scratch.temp_data_level_3
 
-            @. ρaʲu³ʲ_data = compute_ρaʲu³ʲ(
-                local_geometry_halflevel.J,
-                local_geometry_prev_level.J,
-                local_geometry_prev_halflevel.J,
-                ρaʲ_prev_level,
-                entrʲ_prev_level,
-                detrʲ_prev_level,
-                u³ʲ_data_prev_halflevel,
-                S_q_totʲ_prev_level,
-                microphysics_model,
-            )
-
-            @. u³ʲ_halflevel = ifelse(
-                (
-                    (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
-                ),
-                u³_halflevel,
-                CT3(sqrt(max(0, u³ʲ_datau³ʲ_data))),
-            )
-            @. ρaʲ_level = ifelse(
-                (
-                    (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
-                ),
-                0,
-                ρaʲu³ʲ_data / sqrt(max(0, u³ʲ_datau³ʲ_data)),
-            )
-
-            @. ρaʲu³ʲ_datamse =
-                (1 / local_geometry_halflevel.J) * (
-                    local_geometry_prev_halflevel.J *
-                    ρaʲ_prev_level *
-                    u³ʲ_data_prev_halflevel *
-                    mseʲ_prev_level
-                )
-            @. ρaʲu³ʲ_datamse +=
-                (1 / local_geometry_halflevel.J) * (
-                    local_geometry_prev_level.J *
-                    ρaʲ_prev_level *
-                    u³ʲ_data_prev_halflevel *
-                    (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level *
-                    ∇Φ₃_data_prev_level
-                )
-            @. ρaʲu³ʲ_datamse +=
-                (1 / local_geometry_halflevel.J) * (
-                    local_geometry_prev_level.J *
-                    ρaʲ_prev_level *
-                    (
-                        (entrʲ_prev_level + turb_entrʲ_prev_level) *
-                        (h_tot_prev_level - K_prev_level) -
-                        (detrʲ_prev_level + turb_entrʲ_prev_level) *
-                        mseʲ_prev_level
-                    )
+            ###
+            ### Area fraction
+            ###
+            @. ρaʲu³ʲ_data =
+                diag_edmf_advection(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_halflevel.J,
+                    ρaʲ_prev_level,
+                    u³ʲ_data_prev_halflevel,
+                    FT(1),
+                ) + entr_detr(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    entrʲ_prev_level,
+                    detrʲ_prev_level,
+                    turb_entrʲ_prev_level,
+                    FT(1),
+                    FT(1),
                 )
             if microphysics_model isa Microphysics0Moment
-                @. ρaʲu³ʲ_datamse +=
-                    (1 / local_geometry_halflevel.J) * (
-                        local_geometry_prev_level.J *
-                        ρaʲ_prev_level *
-                        (
-                            S_q_totʲ_prev_level *
-                            e_tot_0M_precipitation_sources_helper(
-                                thermo_params,
-                                tsʲ_prev_level,
-                                Φ_prev_level,
-                            )
-                        )
-                    )
-            elseif microphysics_model isa Microphysics1Moment
-                @. ρaʲu³ʲ_datamse +=
-                    (1 / local_geometry_halflevel.J) * (
-                        local_geometry_prev_level.J *
-                        ρaʲ_prev_level *
-                        S_e_totʲ_prev_level
-                    )
+                @. ρaʲu³ʲ_data += microphysics_sources(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    S_q_totʲ_prev_level,
+                )
             end
 
+            # Change current level velocity and density * area fraction
+            kill_updraft = @. lazy(
+                (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) |
+                (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level)),
+            )
+            @. u³ʲ_halflevel = ifelse(
+                kill_updraft,
+                u³_halflevel,
+                CT3(sqrt(max(FT(0), u³ʲ_datau³ʲ_data))),
+            )
+            @. ρaʲ_level = ifelse(
+                kill_updraft,
+                FT(0),
+                ρaʲu³ʲ_data / sqrt(max(FT(0), u³ʲ_datau³ʲ_data)),
+            )
+
+            ###
+            ### Moist static energy
+            ###
+            @. ρaʲu³ʲ_datamse =
+                diag_edmf_advection(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_halflevel.J,
+                    ρaʲ_prev_level,
+                    u³ʲ_data_prev_halflevel,
+                    mseʲ_prev_level,
+                ) +
+                mse_buoyancy(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    u³ʲ_data_prev_halflevel,
+                    ρʲ_prev_level,
+                    ρ_prev_level,
+                    ∇Φ₃_data_prev_level,
+                ) +
+                entr_detr(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    entrʲ_prev_level,
+                    detrʲ_prev_level,
+                    turb_entrʲ_prev_level,
+                    h_tot_prev_level - K_prev_level,
+                    mseʲ_prev_level,
+                )
+            if microphysics_model isa Microphysics0Moment
+                @. ρaʲu³ʲ_datamse += microphysics_sources(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    S_q_totʲ_prev_level *
+                    e_tot_0M_precipitation_sources_helper(
+                        thermo_params,
+                        tsʲ_prev_level,
+                        Φ_prev_level,
+                    ),
+                )
+            end
             @. mseʲ_level = ifelse(
-                (
-                    (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
-                ),
+                kill_updraft,
                 h_tot_level - K_level,
                 ρaʲu³ʲ_datamse / ρaʲu³ʲ_data,
             )
 
+            ###
+            ### Total water
+            ###
             @. ρaʲu³ʲ_dataq_tot =
-                (1 / local_geometry_halflevel.J) * (
-                    local_geometry_prev_halflevel.J *
-                    ρaʲ_prev_level *
-                    u³ʲ_data_prev_halflevel *
-                    q_totʲ_prev_level
+                diag_edmf_advection(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_halflevel.J,
+                    ρaʲ_prev_level,
+                    u³ʲ_data_prev_halflevel,
+                    q_totʲ_prev_level,
+                ) + entr_detr(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    entrʲ_prev_level,
+                    detrʲ_prev_level,
+                    turb_entrʲ_prev_level,
+                    q_tot_prev_level,
+                    q_totʲ_prev_level,
                 )
-            @. ρaʲu³ʲ_dataq_tot +=
-                (1 / local_geometry_halflevel.J) * (
-                    local_geometry_prev_level.J *
-                    ρaʲ_prev_level *
-                    (
-                        (entrʲ_prev_level + turb_entrʲ_prev_level) *
-                        q_tot_prev_level -
-                        (detrʲ_prev_level + turb_entrʲ_prev_level) *
-                        q_totʲ_prev_level
-                    )
+            if microphysics_model isa Microphysics0Moment
+                @. ρaʲu³ʲ_dataq_tot += microphysics_sources(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    S_q_totʲ_prev_level,
                 )
-            if microphysics_model isa
-               Union{Microphysics0Moment, Microphysics1Moment}
-                @. ρaʲu³ʲ_dataq_tot +=
-                    (1 / local_geometry_halflevel.J) * (
-                        local_geometry_prev_level.J *
-                        ρaʲ_prev_level *
-                        S_q_totʲ_prev_level
-                    )
             end
-
             @. q_totʲ_level = ifelse(
-                (
-                    (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
-                ),
+                kill_updraft,
                 q_tot_level,
                 ρaʲu³ʲ_dataq_tot / ρaʲu³ʲ_data,
             )
 
             # set updraft to grid-mean if vertical velocity is too small
             if i > 2
-                @. ρaʲ_level = ifelse(
-                    (
-                        u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
-                        ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level
-                    ),
-                    0,
-                    ρaʲ_level,
+                kill_updraft_2 = @. lazy(
+                    u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
+                    ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) /
+                    ρʲ_prev_level,
                 )
-                @. u³ʲ_halflevel = ifelse(
-                    (
-                        u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
-                        ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level
-                    ),
-                    u³_halflevel,
-                    u³ʲ_halflevel,
-                )
-                @. mseʲ_level = ifelse(
-                    (
-                        u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
-                        ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level
-                    ),
-                    h_tot_level - K_level,
-                    mseʲ_level,
-                )
-                @. q_totʲ_level = ifelse(
-                    (
-                        u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
-                        ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level
-                    ),
-                    q_tot_level,
-                    q_totʲ_level,
-                )
+                @. ρaʲ_level = ifelse(kill_updraft_2, FT(0), ρaʲ_level)
+                @. u³ʲ_halflevel =
+                    ifelse(kill_updraft_2, u³_halflevel, u³ʲ_halflevel)
+                @. mseʲ_level =
+                    ifelse(kill_updraft_2, h_tot_level - K_level, mseʲ_level)
+                @. q_totʲ_level =
+                    ifelse(kill_updraft_2, q_tot_level, q_totʲ_level)
             end
 
             @. Kʲ_level = kinetic_energy(
