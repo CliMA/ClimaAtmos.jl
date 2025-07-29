@@ -56,6 +56,7 @@ ClimaAtmos.Jacobian
 ClimaAtmos.JacobianAlgorithm
 ClimaAtmos.ManualSparseJacobian
 ClimaAtmos.AutoDenseJacobian
+ClimaAtmos.AutoSparseJacobian
 ```
 
 ### Internals
