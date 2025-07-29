@@ -40,14 +40,30 @@ end
 const default_FT = Float32
 
 #= TODOs
-- [ ] Document discrepancies between get_simulation and AtmosSimulation constructors
-- [ ] Handle diagnostics and callbacks in separate functions, keep current behavior
+- [x] Document discrepancies between get_simulation and AtmosSimulation constructors
+- Unimportant differences:
+  - get_simulation uses config-based approach with parsed_args, AtmosSimulation uses direct parameters
+  - get_simulation handles output directory generation with styles (activelink, removepreexisting)
+  - get_simulation has parameter logging (TOML, YAML) and file output
+  - get_simulation has checkpoint frequency validation against diagnostics
+  - get_simulation supports distributed computing contexts
+  - get_simulation has graceful exit handling
+  - get_simulation uses ode_configuration() vs direct ode_algo parameter
+  - get_simulation supports tracers from parsed_args vs direct tracers parameter
+Important differences (future work):
+  - get_simulation has extensive logging and timing (@timed_str, @info)
+  - get_simulation supports restart file detection and auto-detection
+  - get_simulation supports ITime vs regular time handling
+  - get_simulation has more complex steady_state_velocity calculation
+  - get_simulation has more sophisticated callback handling (continuous vs discrete)
+  - get_simulation uses enable_diagnostics flag vs direct diagnostics parameter
+- [ ] Handle diagnostics and callbacks in separate functions, keep current behavior, add default diagnostics 
 - [ ] Ensure FT is propagated consistently with default structs (params, domain)
 - [ ] Deal with domain not having topography
 - [ ] Ensure output writers are set up correctly
 - [ ] Ensure same defaults between constructors
 - [ ] See what else can be unified between the two constructors
-- [ ] Add unit tests for the constructors, with informative error messages
+- [ ] Add unit tests for the AtmosSimulation constructor, with informative error messages
 - [ ] Add documentation
 =#
 
