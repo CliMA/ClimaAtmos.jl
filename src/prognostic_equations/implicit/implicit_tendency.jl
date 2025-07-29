@@ -141,11 +141,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜh_tot, ᶠu³, ᶜp) = p.precomputed
-    ᶜdivᵥ_ρ = Operators.DivergenceF2C(
-        bottom = Operators.SetValue(Geometry.Covariant3Vector(0)),
-        top = Operators.SetValue(Geometry.Covariant3Vector(0))
-    )
-    @. Yₜ.c.ρ -= ᶜdivᵥ_ρ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
+    
+    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
     # Central vertical advection of active tracers (e_tot and q_tot)
     vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
