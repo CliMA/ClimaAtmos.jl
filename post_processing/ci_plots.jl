@@ -1505,11 +1505,12 @@ function pair_edmf_names(short_names)
     return grouped_vars
 end
 
+vals = [Val{Symbol(first(split(f, ".yml")))} for f in readdir("LWP_N_config")]
 EDMFBoxPlotsPerturbed = Union{
-    Val{:test_prognostic_edmfx_dycoms_rf02_column},
+    vals...,
 }
 
-# Function where DYCOMS gets plotted.
+# Function where DYCOMS perturbed gets plotted.
 function make_plots(
     sim_type::Union{EDMFBoxPlotsPerturbed}, #Edit right here
     output_paths::Vector{<:AbstractString},
