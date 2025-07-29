@@ -263,8 +263,10 @@ function compute_coriolis(ᶜcoord, ᶠcoord, params)
             ᶜf³ = @. CT3(CT123(coriolis_deep(ᶜcoord)))
             ᶠf¹² = @. CT12(CT123(coriolis_deep(ᶠcoord)))
         else
-            ᶜf³ = @. CT3(CT123(coriolis_shallow(ᶜcoord)))
-            ᶠf¹² = @. CT12(CT123(coriolis_shallow(ᶠcoord)))
+            #ᶜf³ = @. CT3(CT123(coriolis_shallow(ᶜcoord)))
+            #ᶠf¹² = @. CT12(CT123(coriolis_shallow(ᶠcoord)))
+            ᶜf³ = @. CT3(CT123(coriolis_deep(ᶜcoord)))
+            ᶠf¹² = @. CT12(CT123(coriolis_deep(ᶠcoord)))
         end
     else
         f = CAP.f_plane_coriolis_frequency(params)

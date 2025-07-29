@@ -1,0 +1,16 @@
+initial_condition: "DryBaroclinicWave"
+dt: "4secs"
+t_end: "43200secs"
+h_elem: 16
+z_elem: 39
+dz_bottom: 30
+z_max: 30000
+rayleigh_sponge: true
+toml: [toml/baroclinicwave_smallplanet.toml]
+disable_surface_flux_tendency: true
+diagnostics:
+  - short_name: [pfull, ua, wa, va, rv, ta, ke]
+    period: 432secs
+  - short_name: [pfull, ua, wa, va, rv, ta, ke]
+    period: 1days
+    writer: h5

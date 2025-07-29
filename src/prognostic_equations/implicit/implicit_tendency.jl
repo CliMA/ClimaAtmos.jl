@@ -140,8 +140,11 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜh_tot, ᶠu³, ᶜp) = p.precomputed
-
-    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
+    ᶜdivᵥ_ρ = Operators.DivergenceF2C(
+        bottom = Operators.SetValue(Geometry.Covariant3Vector(0)),
+        top = Operators.SetValue(Geometry.Covariant3Vector(0))
+    )
+    @. Yₜ.c.ρ -= ᶜdivᵥ_ρ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
     # Central vertical advection of active tracers (e_tot and q_tot)
     vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
@@ -208,7 +211,6 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     # TODO - decide if this needs to be explicit or implicit
     #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
-
     @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜp) / ᶠinterp(Y.c.ρ) + ᶠgradᵥ_ᶜΦ
 
     if rayleigh_sponge isa RayleighSponge

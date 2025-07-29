@@ -3,7 +3,7 @@ z_max: 60000.0
 z_elem: 43
 dz_bottom: 30.0
 dt: "300secs"
-deep_atmosphere: true
+deep_atmosphere: false
 t_end: "240days"
 rayleigh_sponge: true
 moist: "equil"
@@ -17,7 +17,11 @@ cloud_model: "grid_scale"
 netcdf_output_at_levels: true
 toml: [toml/sphere_aquaplanet.toml]
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, uasc, vasc, wasc]
+    period: 30days
+diagnostics:
+  - short_name: [uasc, wasc, vasc, uas, ctend]
+    reduction: average
     period: 30days
 #diagnostics:
 #  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa]

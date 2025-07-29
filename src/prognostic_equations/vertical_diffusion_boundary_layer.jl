@@ -13,13 +13,13 @@ Computes and applies tendencies due to vertical turbulent diffusion,
 representing mixing processes within the planetary boundary layer and free atmosphere.
 
 This function is dispatched based on the type of the vertical diffusion model
-(`vert_diff_model`), which is accessed via `p.atmos.vert_diff`.
+(`vert_diff_model`), which is accessed via `p.atmos.vertical_diffusion`.
 
 **Dispatch details:**
 
 1.  **`vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)`**:
     This is the main entry point, which internally calls the more specific method
-    using `p.atmos.vert_diff` to determine the diffusion model.
+    using `p.atmos.vertical_diffusion` to determine the diffusion model.
 
 2.  **`vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, ::Nothing)`**:
     If the `vert_diff_model` is `Nothing` (i.e., vertical diffusion is turned off
@@ -54,7 +54,7 @@ Arguments for all methods:
 - `Y`: The current state vector.
 - `p`: Cache containing parameters (e.g., `p.params` for `CAP.α_vert_diff_tracer`),
        precomputed fields (e.g., `ᶜK_u`, `ᶜK_h`, `ᶜh_tot`, `ᶜspecific` tracer values),
-       atmospheric model configurations (like `p.atmos.vert_diff`), and scratch space.
+       atmospheric model configurations (like `p.atmos.vertical_diffusion`), and scratch space.
 - `t`: Current simulation time (not directly used in diffusion calculations).
 - `vert_diff_model` (for dispatched methods): The specific vertical diffusion model instance.
 
@@ -63,7 +63,13 @@ various tracer fields such as `Yₜ.c.ρq_tot`).
 """
 
 vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t) =
-    vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, p.atmos.vert_diff)
+    vertical_diffusion_boundary_layer_tendency!(
+        Yₜ,
+        Y,
+        p,
+        t,
+        p.atmos.vertical_diffusion,
+    )
 
 vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
@@ -78,7 +84,6 @@ function vertical_diffusion_boundary_layer_tendency!(
     α_vert_diff_tracer = CAP.α_vert_diff_tracer(p.params)
     (; ᶜu, ᶜh_tot, ᶜspecific, ᶜK_u, ᶜK_h) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
-
 
     if !disable_momentum_vertical_diffusion(p.atmos.vert_diff)
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
