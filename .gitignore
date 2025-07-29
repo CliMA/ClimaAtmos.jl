@@ -60,3 +60,5 @@ Artifacts.toml
 
 # ignore notebooks
 *.ipynb
+
+LWP_N_config
