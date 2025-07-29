@@ -318,7 +318,7 @@ function edmfx_sgs_mass_flux_tendency!(
         # TODO: the following adds the environment flux to the tendency
         # Make active and test later
         # @. ᶠu³_diff = p.precomputed.ᶠu³⁰ - ᶠu³
-        # ᶜρa⁰ = @.lazy(ρa⁰(Y.c))
+        # ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)
         # ᶜρ⁰ = p.scratch.ᶜtemp_scalar_2
         # @. ᶜρ⁰ = TD.air_density(
         #     CAP.thermodynamics_params(p.params),
@@ -393,7 +393,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
     (; ᶜu⁰, ᶜK⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-    (; ᶜmixing_length, ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
+    (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
@@ -520,13 +520,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; ᶜu, ᶜts) = p.precomputed
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
-    if turbconv_model isa DiagnosticEDMFX
-        (; ᶜρaʲs) = p.precomputed
-        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, ᶜρaʲs, turbconv_model))
-    elseif turbconv_model isa EDOnlyEDMFX
-        ᶜρa⁰ = Y.c.ρ
-    end
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, Y.c.ρ, turbconv_model))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 

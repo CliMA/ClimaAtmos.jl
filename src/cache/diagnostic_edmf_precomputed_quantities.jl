@@ -359,8 +359,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             specific(Y.c.ρe_tot, Y.c.ρ),
         ),
     )
-    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, ᶜρaʲs, turbconv_model))
-    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, Y.c.ρ, turbconv_model))
 
     for i in 2:Spaces.nlevels(axes(Y.c))
         ρ_level = Fields.field_values(Fields.level(Y.c.ρ, i))
@@ -987,12 +987,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     ᶜlg = Fields.local_geometry_field(Y.c)
 
     if p.atmos.turbconv_model isa DiagnosticEDMFX
-        (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs, ᶠu³⁰, ᶜu⁰) = p.precomputed
-        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, ᶜρaʲs, turbconv_model))
+        (; ᶠu³⁰, ᶜu⁰) = p.precomputed
     elseif p.atmos.turbconv_model isa EDOnlyEDMFX
         ᶠu³⁰ = p.precomputed.ᶠu³
         ᶜu⁰ = ᶜu
-        ᶜρa⁰ = Y.c.ρ
     end
     @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))  # Set here, but used in a different function
 

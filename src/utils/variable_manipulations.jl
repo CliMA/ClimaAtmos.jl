@@ -328,8 +328,8 @@ function ᶜspecific_env_value(::Val{χ_name}, Y, p) where {χ_name}
         end
 
         ᶜρaχ⁰ = @. lazy(ᶜρχ - ᶜρaχʲs_sum)
-        # Denominator: ρa⁰ = ρ - Σ ρaʲ
-        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, p.precomputed.ᶜρaʲs, turbconv_model))
+        # Denominator: ρa⁰ = ρ - Σ ρaʲ, assume ᶜρa⁰ = ρ
+        ᶜρa⁰ = Y.c.ρ
     end
 
     return @. lazy(specific(
@@ -342,23 +342,21 @@ function ᶜspecific_env_value(::Val{χ_name}, Y, p) where {χ_name}
 end
 
 """
-    ρa⁰(Y, p)
+    ρa⁰(ρ, sgsʲs, turbconv_model)
 
 Computes the environment area-weighted density (`ρa⁰`).
 
-This function uses the `ᶜenv_value` helper, which applies the domain
-decomposition principle (`GridMean = Environment + Sum(Drafts)`) to calculate
-the environment area-weighted density by subtracting the sum of all draft
-subdomain area-weighted densities (`ρaʲ`) from the grid-mean density (`ρ`).
+This function calculates the environment area-weighted density by subtracting the sum of all draft subdomain area-weighted densities (`ρaʲ`) from the grid-mean density (`ρ`), following the domain decomposition principle (`GridMean = Environment + Sum(Drafts)`).
 
 Arguments:
-- `ρ`: Grid-mean density
+- `ρ`: Grid-mean density.
 - `sgsʲs`: Iterable of draft subdomain quantities.
-            PrognosticEDMFX: Y.c.sgsʲs
-            DiagnosticEDMFX: p.precomputed.ᶜρaʲs
+    - For `PrognosticEDMFX`: typically `Y.c.sgsʲs`
+    - For `DiagnosticEDMFX`: typically `p.precomputed.ᶜρaʲs`
+- `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`, or others).
 
 Returns:
-- The area-weighted density (`ρa⁰`).
+- The area-weighted density of the environment (`ρa⁰`).
 """
 
 function ρa⁰(ρ, sgsʲs, turbconv_model)
@@ -375,19 +373,20 @@ end
 
 
 """
-    ᶜspecific_tke(Y, p)
+    specific_tke(ρ, ρatke, ρa⁰, turbconv_model)
 
-Computes the specific turbulent kinetic energy (`tke`) in the environment (`tke⁰`).
+Computes the specific turbulent kinetic energy (TKE) in the environment.
 
-This is a specialized helper that encapsulates the call to the regularized
-`specific` function for the TKE variable. It provides `0` as the grid-scale
-fallback value (`ρχ_fallback`) in the limit of small environmental area
-fraction.
+This function returns the specific TKE of the environment by regularizing the
+area-weighted TKE density (`ρatke`) with the environment area-weighted density
+(`ρa⁰`). In the limit of vanishing environment area fraction, the fallback value
+for TKE is zero.
 
 Arguments:
-- `ρ`: The grid-mean density `ρ` and the environment SGS state `Y.c.sgs⁰`.
-- `ρatke`: The cache, containing precomputed quantities and turbconv_model.
-- `ρa⁰`: The environment area-weighted density.
+- `ρ`: Grid-mean density.
+- `ρatke`: Area-weighted TKE density in the environment.
+- `ρa⁰`: Area-weighted density of the environment.
+- `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, `DiagnosticEDMFX`, or others).
 
 Returns:
 - The specific TKE of the environment (`tke⁰`).
@@ -461,8 +460,8 @@ function ᶜspecific_env_mse(Y, p)
             @. ᶜρamseʲ_sum += ᶜρaʲ * ᶜmseʲ
         end
         ρa⁰mse⁰ = @. lazy(ᶜρmse - ᶜρamseʲ_sum)
-        # Denominator: ρa⁰ = ρ - Σ ρaʲ
-        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, ᶜρaʲs, turbconv_model))
+        # Denominator: ρa⁰ = ρ - Σ ρaʲ, assume ᶜρa⁰ = ρ
+        ᶜρa⁰ = Y.c.ρ
     end
 
     return @. lazy(specific(ρa⁰mse⁰, ᶜρa⁰, ᶜρmse, Y.c.ρ, turbconv_model))

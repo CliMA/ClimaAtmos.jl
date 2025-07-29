@@ -196,8 +196,10 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         ) : nothing
     ᶜρa⁰ =
         advect_tke ?
-        (n > 0 ? (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ) :
-        nothing
+        (
+            turbconv_model isa PrognosticEDMFX ?
+            (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
+        ) : nothing
     ᶜρ⁰ = if advect_tke
         if n > 0
             (; ᶜts⁰) = p.precomputed

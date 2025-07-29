@@ -559,6 +559,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     end
 
     if use_derivative(diffusion_flag)
+        (; turbconv_model) = p.atmos
         turbconv_params = CAP.turbconv_params(params)
         FT = eltype(params)
         (; vertical_diffusion) = p.atmos
@@ -575,7 +576,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             )
             ᶜK_u = ᶜK_h
         else
-            (; ᶜtke⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+            (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+            ᶜρa⁰ =
+                p.atmos.turbconv_model isa PrognosticEDMFX ?
+                (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
+            ᶜtke⁰ = @. lazy(
+                specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+            )
             ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
             ᶜmixing_length_field .= ᶜmixing_length(Y, p)
             ᶜK_u = @. lazy(
@@ -658,11 +665,15 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             turbconv_model = p.atmos.turbconv_model
             ᶜρa⁰ =
                 p.atmos.turbconv_model isa PrognosticEDMFX ?
-                (@.lazy(ρa⁰(Y.c))) : Y.c.ρ
-            ᶜtke⁰ = @. lazy(specific_tke(Y.c.sgs⁰, Y.c, turbconv_model))
+                (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
+            ᶜtke⁰ = @. lazy(
+                specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+            )
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
-            ᶜmixing_length_field = ᶜmixing_length(Y, p)
+            # scratch to prevent GPU Kernel parameter memory error
+            ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
+            ᶜmixing_length_field .= ᶜmixing_length(Y, p)
 
             @inline tke_dissipation_rate_tendency(tke⁰, mixing_length) =
                 tke⁰ >= 0 ? c_d * sqrt(tke⁰) / mixing_length : 1 / float(dt)

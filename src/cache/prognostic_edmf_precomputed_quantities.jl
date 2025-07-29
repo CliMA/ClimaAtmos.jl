@@ -8,7 +8,7 @@ import ClimaCore: Spaces, Fields
 """
     set_prognostic_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
 
-Updates the edmf environment precomputed quantities stored in `p` for edmfx.
+Updates the edmf environment precomputed quantities stored in `p` for prognostic edmfx.
 """
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     Y,
@@ -336,7 +336,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜtke⁰, ᶜu, ᶜp, ᶠu³⁰, ᶜts⁰) = p.precomputed
+    (; ᶜu, ᶜp, ᶠu³⁰, ᶜts⁰) = p.precomputed
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ρatke_flux) = p.precomputed
     (;
         ᶜuʲs,

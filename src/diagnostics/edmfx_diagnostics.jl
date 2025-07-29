@@ -1152,14 +1152,11 @@ function compute_tke!(
 )
     if turbconv_model isa PrognosticEDMFX
         sgsʲs = state.c.sgsʲs
-    elseif turbconv_model isa DiagnosticEDMFX
-        (; ᶜρaʲs) = cache.precomputed
-        sgsʲs = ᶜρaʲs
+        ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, sgsʲs, turbconv_model))
     else
-        sgsʲs = nothing
+        ᶜρa⁰ = state.c.ρ
     end
 
-    ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, sgsʲs, turbconv_model))
     ᶜtke = @. lazy(
         specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
     )
@@ -1330,9 +1327,15 @@ function compute_edt!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     turbconv_params = CAP.turbconv_params(cache.params)
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜtke⁰) = cache.precomputed
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
     (; params) = cache
 
+    ᶜρa⁰ =
+        turbconv_model isa PrognosticEDMFX ?
+        (@. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))) : state.c.ρ
+    ᶜtke⁰ = @. lazy(
+        specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+    )
     ᶜmixing_length_field = ᶜmixing_length(state, cache)
     ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
     ᶜprandtl_nvec = @. lazy(
@@ -1415,7 +1418,13 @@ function compute_evu!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     turbconv_params = CAP.turbconv_params(cache.params)
-    (; ᶜtke⁰) = cache.precomputed
+
+    ᶜρa⁰ =
+        turbconv_model isa PrognosticEDMFX ?
+        (@. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))) : state.c.ρ
+    ᶜtke⁰ = @. lazy(
+        specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+    )
     ᶜmixing_length_field = ᶜmixing_length(state, cache)
     ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
 
