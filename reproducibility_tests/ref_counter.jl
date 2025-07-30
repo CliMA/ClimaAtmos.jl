@@ -1,4 +1,4 @@
-261
+262
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+262
+- Add vertical diffusion to prognostic EDMF updrafts
+
 261
 - Ignore the implicit solver Jacobian for the tracer-density block from diffusion
 

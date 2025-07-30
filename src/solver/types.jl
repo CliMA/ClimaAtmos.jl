@@ -513,7 +513,8 @@ Base.@kwdef struct EDMFXModel{
     ESMF <: ValTF,
     ESDF <: ValTF,
     ENP <: ValTF,
-    EVR <: ValTF,
+    EVD <: ValTF,
+    EF <: ValTF,
     SBM <: AbstractScaleBlendingMethod,
 }
     entr_model::EEM = nothing
@@ -521,7 +522,8 @@ Base.@kwdef struct EDMFXModel{
     sgs_mass_flux::ESMF = Val(false)
     sgs_diffusive_flux::ESDF = Val(false)
     nh_pressure::ENP = Val(false)
-    filter::EVR = Val(false)
+    vertical_diffusion::EVD = Val(false)
+    filter::EF = Val(false)
     scale_blending_method::SBM
 end
 

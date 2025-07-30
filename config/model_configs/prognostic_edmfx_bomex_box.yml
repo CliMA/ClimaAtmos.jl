@@ -14,6 +14,7 @@ edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
 moist: "equil"
