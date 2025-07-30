@@ -4,7 +4,7 @@ z_elem: 43
 dz_bottom: 30.0
 dt: "300secs"
 deep_atmosphere: true
-t_end: "240days"
+t_end: "600secs"
 rayleigh_sponge: true
 moist: "equil"
 implicit_diffusion: true
@@ -12,7 +12,7 @@ approximate_linear_solve_iters: 2
 precip_model: "0M"
 disable_surface_flux_tendency: false
 surface_setup: "DefaultMoninObukhov"
-vert_diff: true
+vert_diff: "DecayWithHeightDiffusion"
 cloud_model: "grid_scale"
 netcdf_output_at_levels: true
 toml: [toml/sphere_aquaplanet.toml]
