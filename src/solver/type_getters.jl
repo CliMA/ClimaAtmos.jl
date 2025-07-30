@@ -95,6 +95,7 @@ function get_atmos(config::AtmosConfig, params)
         sgs_mass_flux = Val(parsed_args["edmfx_sgs_mass_flux"]),
         sgs_diffusive_flux = Val(parsed_args["edmfx_sgs_diffusive_flux"]),
         nh_pressure = Val(parsed_args["edmfx_nh_pressure"]),
+        vertical_diffusion = Val(parsed_args["edmfx_vertical_diffusion"]),
         filter = Val(parsed_args["edmfx_filter"]),
         scale_blending_method = get_scale_blending_method(parsed_args),
     )
