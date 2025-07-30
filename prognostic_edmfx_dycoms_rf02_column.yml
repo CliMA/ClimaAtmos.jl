@@ -17,7 +17,7 @@ prognostic_tke: true
 q_tot_0_dycoms_rf02: 9.45 # Define variables here
 theta_0_dycoms_rf02: 288.3 # Define variables here
 theta_i_dycoms_rf02: 295.0 # Define variables here
-z_i_dycoms_rf02: 1200.0 # Define variables here
+z_i_dycoms_rf02: 795.0 # Define variables here
 moist: "nonequil"
 cloud_model: "quadrature_sgs"
 precip_model: "1M"
