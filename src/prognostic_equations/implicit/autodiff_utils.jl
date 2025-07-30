@@ -143,6 +143,29 @@ end
     return ForwardDiff.dual_definition_retval(tag, val, deriv, partials)
 end
 
+# Set the derivative of max(x, y) to handle cases where x == y. When x == y,
+# the derivative is set to the derivative of x (the first argument) to ensure
+# continuity and avoid numerical issues. This is a common approach in automatic
+# differentiation for max functions.
+
+@inline function Base.max(d::ForwardDiff.Dual{Jacobian}, r::Integer)
+    tag = Val(Jacobian)
+    x = ForwardDiff.value(d)
+    partials = ForwardDiff.partials(d)
+    val = max(x, r)
+    deriv = 1
+    return ForwardDiff.dual_definition_retval(tag, val, deriv, partials)
+end
+
+# @inline function Base.clamp(d::ForwardDiff.Dual{Jacobian}, r1::FT, r2::FT) where {FT}
+#     tag = Val(Jacobian)
+#     x = ForwardDiff.value(d)
+#     partials = ForwardDiff.partials(d)
+#     val = clamp(x, r1, r2)
+#     deriv = 1
+#     return ForwardDiff.dual_definition_retval(tag, val, deriv, partials)
+# end
+
 # Ignore all derivative information when comparing Duals to other Numbers. This
 # ensures that conditional statements are always equivalent for Duals and Reals.
 for func in (:iszero,)
