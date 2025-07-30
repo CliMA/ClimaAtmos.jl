@@ -118,6 +118,31 @@ function edmfx_nh_pressure_drag_tendency!(
     end
 end
 
+edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+
+function edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
+    FT = eltype(p.params)
+    n = n_mass_flux_subdomains(turbconv_model)
+    ᶜK_h = p.scratch.ᶜtemp_scalar
+    @. ᶜK_h = 0
+    ᶜdivᵥ_mse = Operators.DivergenceF2C(
+        top = Operators.SetValue(C3(0)),
+        bottom = Operators.SetValue(C3(0)),
+    )
+    ᶜdivᵥ_q_tot = Operators.DivergenceF2C(
+        top = Operators.SetValue(C3(0)),
+        bottom = Operators.SetValue(C3(0)),
+    )
+
+    for j in 1:n
+        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+        ᶜmseʲ = Y.c.sgsʲs.:($j).mse
+        ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+        @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜdivᵥ_mse(-(ᶠinterp(ᶜρaʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) / max(ᶜρaʲ, eps(FT))
+        @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρaʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / max(ᶜρaʲ, eps(FT))
+    end
+end
+
 """
     edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model)
 
