@@ -23,7 +23,7 @@ end
 
 for qtot0 in [6.5, 8.5, 10.5]
     for theta0 in [284.0, 287.0, 290.0, 294.0]
-        for theta_jump in [-10.0, -8.0, -6.0]
+        for theta_jump in [6.0, 8.0, 10.0]
             for zi in [500, 800, 1000, 1300]
                 for N in [30e6, 100e6, 250e6, 500e6]
                     thetai = theta0 + theta_jump
