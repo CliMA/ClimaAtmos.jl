@@ -541,11 +541,16 @@ end
 function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     (; params) = p
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
-    (; ᶜtke⁰) = p.precomputed
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜdz = Fields.Δz_field(axes(Y.c))
+
+    turbconv_model = p.atmos.turbconv_model
+    ᶜρa⁰ =
+        turbconv_model isa PrognosticEDMFX ?
+        (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
     sfc_tke = Fields.level(ᶜtke⁰, 1)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
@@ -677,11 +682,12 @@ function ᶜtke_exchange(Y, p)
     (; turbconv_model) = p.atmos
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜρa⁰ =
-        p.atmos.turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
-
+        p.atmos.turbconv_model isa PrognosticEDMFX ?
+        (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜdetrʲs, ᶜtke⁰, ᶠu³⁰, ᶠu³ʲs) = p.precomputed
+        (; ᶜdetrʲs, ᶠu³⁰, ᶠu³ʲs) = p.precomputed
         ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
         @. ᶜtke_exch = 0
         for j in 1:n
@@ -694,7 +700,7 @@ function ᶜtke_exchange(Y, p)
 
         return ᶜtke_exch
     elseif p.atmos.turbconv_model isa DiagnosticEDMFX
-        (; ᶜdetrʲs, ᶜtke⁰, ᶠu³⁰, ᶠu³ʲs, ᶜρaʲs) = p.precomputed
+        (; ᶜdetrʲs, ᶠu³⁰, ᶠu³ʲs, ᶜρaʲs) = p.precomputed
         ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
         @. ᶜtke_exch = 0
         for j in 1:n
