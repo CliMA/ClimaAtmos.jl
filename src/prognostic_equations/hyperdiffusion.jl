@@ -117,7 +117,11 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         wdivₕ(gradₕ(specific(Y.c.ρe_tot, Y.c.ρ) + ᶜp / Y.c.ρ - ᶜh_ref))
 
     if diffuse_tke
-        (; ᶜtke⁰) = p.precomputed
+        ᶜρa⁰ =
+            turbconv_model isa PrognosticEDMFX ?
+            (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
+        ᶜtke⁰ =
+            @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
         (; ᶜ∇²tke⁰) = p.hyperdiff
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜtke⁰))
     end
@@ -148,14 +152,12 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     diffuse_tke = use_prognostic_tke(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; ᶜp) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜρa⁰) = p.precomputed
+        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
     if use_prognostic_tke(turbconv_model)
-        (; ᶜtke⁰) = p.precomputed
         (; ᶜ∇²tke⁰) = p.hyperdiff
     end
 

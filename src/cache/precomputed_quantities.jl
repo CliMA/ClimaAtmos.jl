@@ -3,6 +3,7 @@
 #####
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
+using Base.Broadcast: materialize
 
 """
     implicit_precomputed_quantities(Y, atmos)
@@ -11,28 +12,20 @@ Allocates precomputed quantities that are treated implicitly (i.e., updated
 on each iteration of the implicit solver). This includes all quantities related
 to velocity and thermodynamics that are used in the implicit tendency.
 
-The following grid-scale quantities are treated implicitly:
-    - `ᶜspecific`: specific quantities on cell centers (for every prognostic
-        quantity `ρχ`, there is a corresponding specific quantity `χ`)
+The following grid-scale quantities are treated implicitly and are precomputed:
     - `ᶜu`: covariant velocity on cell centers
     - `ᶠu`: contravariant velocity on cell faces
     - `ᶜK`: kinetic energy on cell centers
     - `ᶜts`: thermodynamic state on cell centers
     - `ᶜp`: air pressure on cell centers
-    - `ᶜh_tot`: total enthalpy on cell centers
 If the `turbconv_model` is `PrognosticEDMFX`, there also two SGS versions of
 every quantity except for `ᶜp` (which is shared across all subdomains):
     - `_⁰`: value for the environment
     - `_ʲs`: a tuple of values for the mass-flux subdomains
 In addition, there are several other SGS quantities for `PrognosticEDMFX`:
-    - `ᶜtke⁰`: turbulent kinetic energy of the environment on cell centers
-    - `ᶜρa⁰`: area-weighted air density of the environment on cell centers
-    - `ᶜmse⁰`: moist static energy of the environment on cell centers
-    - `ᶜq_tot⁰`: total specific humidity of the environment on cell centers
-    - `ᶜρ⁰`: air density of the environment on cell centers
     - `ᶜρʲs`: a tuple of the air densities of the mass-flux subdomains on cell
         centers
-For every other `AbstractEDMF`, only `ᶜtke⁰` is added as a precomputed quantity.
+
 
 TODO: Rename `ᶜK` to `ᶜκ`.
 """
@@ -49,34 +42,16 @@ function implicit_precomputed_quantities(Y, atmos)
         ᶜK = similar(Y.c, FT),
         ᶜts = similar(Y.c, TST),
         ᶜp = similar(Y.c, FT),
-        ᶜh_tot = similar(Y.c, FT),
     )
-    sgs_quantities =
-        turbconv_model isa AbstractEDMF ? (; ᶜtke⁰ = similar(Y.c, FT)) : (;)
-    moisture_sgs_quantities =
-        (
-            turbconv_model isa PrognosticEDMFX &&
-            moisture_model isa NonEquilMoistModel &&
-            microphysics_model isa Microphysics1Moment
-        ) ?
-        (;
-            ᶜq_liq⁰ = similar(Y.c, FT),
-            ᶜq_ice⁰ = similar(Y.c, FT),
-            ᶜq_rai⁰ = similar(Y.c, FT),
-            ᶜq_sno⁰ = similar(Y.c, FT),
-        ) : (;)
+    sgs_quantities = (;)
     prognostic_sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
-            ᶜρa⁰ = similar(Y.c, FT),
-            ᶜmse⁰ = similar(Y.c, FT),
-            ᶜq_tot⁰ = similar(Y.c, FT),
             ᶠu₃⁰ = similar(Y.f, C3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜK⁰ = similar(Y.c, FT),
             ᶜts⁰ = similar(Y.c, TST),
-            ᶜρ⁰ = similar(Y.c, FT),
             ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
             ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
@@ -84,7 +59,6 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
             ᶠnh_pressure₃_dragʲs = similar(Y.f, NTuple{n, C3{FT}}),
-            moisture_sgs_quantities...,
         ) : (;)
     return (; gs_quantities..., sgs_quantities..., prognostic_sgs_quantities...)
 end
@@ -188,10 +162,7 @@ function precomputed_quantities(Y, atmos)
 
     edonly_quantities =
         atmos.turbconv_model isa EDOnlyEDMFX ?
-        (;
-            ᶜtke⁰ = similar(Y.c, FT),
-            ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
-        ) : (;)
+        (; ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),) : (;)
 
     sgs_quantities = (;
         ᶜgradᵥ_θ_virt = Fields.Field(C3{FT}, cspace),
@@ -328,11 +299,12 @@ function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
 end
 
 function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
-    @. ᶜK += ᶜρa⁰ * ᶜinterp(dot(ᶠu₃⁰ - Yf.u₃, CT3(ᶠu₃⁰ - Yf.u₃))) / 2 / Yc.ρ
+    @. ᶜK += ᶜρa⁰ * ᶜinterp(dot(ᶠu₃⁰ - Y.f.u₃, CT3(ᶠu₃⁰ - Y.f.u₃))) / 2 / Y.c.ρ
     for j in 1:n_mass_flux_subdomains(turbconv_model)
         ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
         ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
-        @. ᶜK += ᶜρaʲ * ᶜinterp(dot(ᶠu₃ʲ - Yf.u₃, CT3(ᶠu₃ʲ - Yf.u₃))) / 2 / Yc.ρ
+        @. ᶜK +=
+            ᶜρaʲ * ᶜinterp(dot(ᶠu₃ʲ - Y.f.u₃, CT3(ᶠu₃ʲ - Y.f.u₃))) / 2 / Y.c.ρ
     end
     return nothing
 end
@@ -439,13 +411,12 @@ quantities are updated.
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, moisture_model, microphysics_model) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜspecific, ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
     thermo_args = (thermo_params, moisture_model, microphysics_model)
 
-    ᶜspecific .= ᶜspecific_gs_tracers(Y)
     @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
 
     # TODO: We might want to move this to dss! (and rename dss! to something
@@ -473,19 +444,13 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     end
     @. ᶜts = ts_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
-    @. ᶜh_tot = TD.total_specific_enthalpy(
-        thermo_params,
-        ᶜts,
-        specific(Y.c.ρe_tot, Y.c.ρ),
-    )
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_implicit_closures!(Y, p, t)
-    elseif turbconv_model isa AbstractEDMF
-        (; ᶜtke⁰) = p.precomputed
-        @. ᶜtke⁰ = Y.c.sgs⁰.ρatke / Y.c.ρ
+    elseif !(isnothing(turbconv_model))
+        # Do nothing for other turbconv models for now
     end
 end
 

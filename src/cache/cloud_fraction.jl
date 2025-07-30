@@ -59,15 +59,10 @@ NVTX.@annotate function set_cloud_fraction!(
             TD.PhasePartition(thermo_params, ᶜts).ice,
         )
     else
-        @. cloud_diagnostics_tuple = make_named_tuple(
-            ifelse(
-                specific(Y.c.ρq_liq, Y.c.ρ) + specific(Y.c.ρq_ice, Y.c.ρ) > 0,
-                1,
-                0,
-            ),
-            specific(Y.c.ρq_liq, Y.c.ρ),
-            specific(Y.c.ρq_ice, Y.c.ρ),
-        )
+        q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+        q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        @. cloud_diagnostics_tuple =
+            make_named_tuple(ifelse(q_liq + q_ice > 0, 1, 0), q_liq, q_ice)
     end
 end
 
@@ -194,8 +189,9 @@ NVTX.@annotate function set_cloud_fraction!(
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜts⁰, cloud_diagnostics_tuple) = p.precomputed
-    (; ᶜρʲs, ᶜtsʲs, ᶜρa⁰, ᶜρ⁰) = p.precomputed
+    (; ᶜρʲs, ᶜtsʲs) = p.precomputed
     (; turbconv_model) = p.atmos
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
     # TODO - we should make this default when using diagnostic edmf
     # environment
@@ -217,9 +213,9 @@ NVTX.@annotate function set_cloud_fraction!(
     # weight cloud diagnostics by environmental area
     @. cloud_diagnostics_tuple *= NamedTuple{(:cf, :q_liq, :q_ice)}(
         tuple(
-            draft_area(ᶜρa⁰, ᶜρ⁰),
-            draft_area(ᶜρa⁰, ᶜρ⁰),
-            draft_area(ᶜρa⁰, ᶜρ⁰),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
         ),
     )
     # updrafts

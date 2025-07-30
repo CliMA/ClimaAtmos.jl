@@ -64,6 +64,9 @@ import ..eddy_viscosity
 import ..turbulent_prandtl_number
 import ..smagorinsky_lilly_length
 import ..ᶜcompute_eddy_diffusivity_coefficient
+import ..ρa⁰
+import ..specific_tke
+import ..ᶜspecific_env_value
 
 
 # We need the abbreviations for symbols like curl, grad, and so on

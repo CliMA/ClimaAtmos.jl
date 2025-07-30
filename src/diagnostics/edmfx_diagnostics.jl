@@ -633,15 +633,16 @@ compute_aren!(_, _, _, _, turbconv_model::T) where {T} =
 
 function compute_aren!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))
     if isnothing(out)
         return draft_area.(
-            cache.precomputed.ᶜρa⁰,
+            ᶜρa⁰,
             TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰),
         )
     else
         out .=
             draft_area.(
-                cache.precomputed.ᶜρa⁰,
+                ᶜρa⁰,
                 TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰),
             )
     end
@@ -943,6 +944,7 @@ function compute_clwen!(
             TD.liquid_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
+
 function compute_clwen!(
     out,
     state,
@@ -951,11 +953,11 @@ function compute_clwen!(
     moisture_model::NonEquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), state, cache)
     if isnothing(out)
-        return cache.precomputed.ᶜq_liq⁰
+        return Base.materialize(ᶜq_liq⁰)
     else
-        out .= cache.precomputed.ᶜq_liq⁰
+        out .= ᶜq_liq⁰
     end
 end
 
@@ -1007,6 +1009,7 @@ function compute_clien!(
         out .= TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
+
 function compute_clien!(
     out,
     state,
@@ -1015,11 +1018,11 @@ function compute_clien!(
     moisture_model::NonEquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), state, cache)
     if isnothing(out)
-        return cache.precomputed.ᶜq_ice⁰
+        return Base.materialize(ᶜq_ice⁰)
     else
-        out .= cache.precomputed.ᶜq_ice⁰
+        out .= ᶜq_ice⁰
     end
 end
 
@@ -1064,11 +1067,11 @@ function compute_husraen!(
     microphysics_model_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), state, cache)
     if isnothing(out)
-        return cache.precomputed.ᶜq_rai⁰
+        return Base.materialize(ᶜq_rai⁰)
     else
-        out .= cache.precomputed.ᶜq_rai⁰
+        out .= ᶜq_rai⁰
     end
 end
 
@@ -1113,11 +1116,11 @@ function compute_hussnen!(
     microphysics_model_model::Microphysics1Moment,
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), state, cache)
     if isnothing(out)
-        return cache.precomputed.ᶜq_sno⁰
+        return Base.materialize(ᶜq_sno⁰)
     else
-        out .= cache.precomputed.ᶜq_sno⁰
+        out .= ᶜq_sno⁰
     end
 end
 
@@ -1147,10 +1150,20 @@ function compute_tke!(
     time,
     turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX, DiagnosticEDMFX},
 )
-    if isnothing(out)
-        return copy(cache.precomputed.ᶜtke⁰)
+    if turbconv_model isa PrognosticEDMFX
+        sgsʲs = state.c.sgsʲs
+        ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, sgsʲs, turbconv_model))
     else
-        out .= cache.precomputed.ᶜtke⁰
+        ᶜρa⁰ = state.c.ρ
+    end
+
+    ᶜtke = @. lazy(
+        specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+    )
+    if isnothing(out)
+        return Base.materialize(ᶜtke)
+    else
+        out .= ᶜtke
     end
 end
 
@@ -1314,9 +1327,15 @@ function compute_edt!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     turbconv_params = CAP.turbconv_params(cache.params)
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜtke⁰) = cache.precomputed
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
     (; params) = cache
 
+    ᶜρa⁰ =
+        turbconv_model isa PrognosticEDMFX ?
+        (@. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))) : state.c.ρ
+    ᶜtke⁰ = @. lazy(
+        specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+    )
     ᶜmixing_length_field = ᶜmixing_length(state, cache)
     ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
     ᶜprandtl_nvec = @. lazy(
@@ -1399,7 +1418,13 @@ function compute_evu!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     turbconv_params = CAP.turbconv_params(cache.params)
-    (; ᶜtke⁰) = cache.precomputed
+
+    ᶜρa⁰ =
+        turbconv_model isa PrognosticEDMFX ?
+        (@. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))) : state.c.ρ
+    ᶜtke⁰ = @. lazy(
+        specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+    )
     ᶜmixing_length_field = ᶜmixing_length(state, cache)
     ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
 

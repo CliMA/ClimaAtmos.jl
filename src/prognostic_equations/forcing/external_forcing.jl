@@ -337,7 +337,7 @@ function external_forcing_tendency!(
     # horizontal advection, vertical fluctuation, nudging, subsidence (need to add),
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜts, ᶜh_tot) = p.precomputed
+    (; ᶜts) = p.precomputed
     (;
         ᶜdTdt_fluc,
         ᶜdqtdt_fluc,
@@ -358,6 +358,13 @@ function external_forcing_tendency!(
     @. ᶜuₕ_nudge = C12(Geometry.UVVector(ᶜu_nudge, ᶜv_nudge), ᶜlg)
     @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind
 
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
     # nudging tendency
     ᶜdTdt_nudging = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
@@ -580,7 +587,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜts, ᶜh_tot, ᶜp) = p.precomputed
+    (; ᶜts, ᶜp) = p.precomputed
 
     ᶜinv_τ_scalar = APL.ISDAC_inv_τ_scalar(FT)  # s⁻¹
     ᶜinv_τ_wind = APL.ISDAC_inv_τ_wind(FT)  # s⁻¹
