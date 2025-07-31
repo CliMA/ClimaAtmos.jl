@@ -533,13 +533,14 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
     ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
 
-    if p.atmos.moisture_model isa NonEquilMoistModel &&
-       p.atmos.microphysics_model isa Microphysics1Moment
-        ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y, p)
-        ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
-        ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
-        ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
-    end
+    microphysics_tracers = (
+        (@name(c.sgsʲs.:(1).q_liq), :q_liq),
+        (@name(c.sgsʲs.:(1).q_ice), :q_ice),
+        (@name(c.sgsʲs.:(1).q_rai), :q_rai),
+        (@name(c.sgsʲs.:(1).q_sno), :q_sno),
+        (@name(c.sgsʲs.:(1).n_liq), :n_liq),
+        (@name(c.sgsʲs.:(1).n_rai), :n_rai),
+    )
 
     for j in 1:n
         ᶜentrʲ = ᶜentrʲs.:($j)
@@ -555,16 +556,12 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         @. Yₜ.c.sgsʲs.:($$j).q_tot +=
             (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_tot⁰ - ᶜq_totʲ)
 
-        if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.microphysics_model isa Microphysics1Moment
-            @. Yₜ.c.sgsʲs.:($$j).q_liq +=
-                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_liq⁰ - Y.c.sgsʲs.:($$j).q_liq)
-            @. Yₜ.c.sgsʲs.:($$j).q_ice +=
-                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_ice⁰ - Y.c.sgsʲs.:($$j).q_ice)
-            @. Yₜ.c.sgsʲs.:($$j).q_rai +=
-                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_rai⁰ - Y.c.sgsʲs.:($$j).q_rai)
-            @. Yₜ.c.sgsʲs.:($$j).q_sno +=
-                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_sno⁰ - Y.c.sgsʲs.:($$j).q_sno)
+        MatrixFields.unrolled_foreach(microphysics_tracers) do (χʲ_name, χ_name)
+            MatrixFields.has_field(Y, χʲ_name) || return
+            ᶜχ⁰ = ᶜspecific_env_value(Val(χ_name), Y, p)
+            ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+            ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
+            @. ᶜχʲₜ += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜχ⁰ - ᶜχʲ)
         end
 
         @. Yₜ.f.sgsʲs.:($$j).u₃ +=

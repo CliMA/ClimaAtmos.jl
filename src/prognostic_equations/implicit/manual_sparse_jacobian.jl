@@ -107,6 +107,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         @name(c.sgsʲs.:(1).q_ice),
         @name(c.sgsʲs.:(1).q_rai),
         @name(c.sgsʲs.:(1).q_sno),
+        @name(c.sgsʲs.:(1).n_liq),
+        @name(c.sgsʲs.:(1).n_rai),
     )
     available_sgs_tracer_names =
         MatrixFields.unrolled_filter(is_in_Y, sgs_tracer_names)

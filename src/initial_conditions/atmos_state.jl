@@ -161,7 +161,7 @@ function turbconv_center_variables(
     ls,
     turbconv_model::PrognosticEDMFX,
     moisture_model::NonEquilMoistModel,
-    microphysics_model::Microphysics1Moment,
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
     gs_vars,
 )
     # TODO - Instead of dispatching, should we unify this with the above function?
@@ -173,22 +173,41 @@ function turbconv_center_variables(
         TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
         CAP.grav(ls.params) * ls.geometry.coordinates.z
     q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
-    q_liq = TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state)
-    q_ice = TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state)
+    q_liq = TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state) # - q_rai ?
+    q_ice = TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state) # - q_sno ?
     q_rai = ls.precip_state.q_rai
     q_sno = ls.precip_state.q_sno
-    sgsʲs = ntuple(
-        _ -> (;
-            ρa = ρa,
-            mse = mse,
-            q_tot = q_tot,
-            q_liq = q_liq,
-            q_ice = q_ice,
-            q_rai = q_rai,
-            q_sno = q_sno,
-        ),
-        Val(n),
-    )
+    n_liq = ls.precip_state.n_liq
+    n_rai = ls.precip_state.n_rai
+    if microphysics_model isa Microphysics1Moment
+        sgsʲs = ntuple(
+            _ -> (;
+                ρa = ρa,
+                mse = mse,
+                q_tot = q_tot,
+                q_liq = q_liq,
+                q_ice = q_ice,
+                q_rai = q_rai,
+                q_sno = q_sno,
+            ),
+            Val(n),
+        )
+    elseif microphysics_model isa Microphysics2Moment
+        sgsʲs = ntuple(
+            _ -> (;
+                ρa = ρa,
+                mse = mse,
+                q_tot = q_tot,
+                q_liq = q_liq,
+                q_ice = q_ice,
+                q_rai = q_rai,
+                q_sno = q_sno,
+                n_liq = n_liq,
+                n_rai = n_rai,
+            ),
+            Val(n),
+        )
+    end
     return (; sgs⁰, sgsʲs)
 end
 

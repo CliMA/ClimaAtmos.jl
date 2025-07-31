@@ -23,7 +23,7 @@ Arguments:
 - `t`: The current simulation time.
 - `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`).
 - `microphysics_model`: The precipitation model (e.g., `Microphysics0Moment`,
-                  `Microphysics1Moment`).
+  `Microphysics1Moment`, `Microphysics2Moment`).
 
 Returns: `nothing`, modifies `Yₜ` in place.
 """
@@ -82,6 +82,29 @@ function edmfx_precipitation_tendency!(
         @. Yₜ.c.sgsʲs.:($$j).q_ice += ᶜSqᵢᵖʲs.:($$j)
         @. Yₜ.c.sgsʲs.:($$j).q_rai += ᶜSqᵣᵖʲs.:($$j)
         @. Yₜ.c.sgsʲs.:($$j).q_sno += ᶜSqₛᵖʲs.:($$j)
+    end
+    return nothing
+end
+
+function edmfx_precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    turbconv_model::PrognosticEDMFX,
+    microphysics_model::Microphysics2Moment,
+)
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜSnₗᵖʲs, ᶜSnᵣᵖʲs) = p.precomputed
+
+    for j in 1:n
+        @. Yₜ.c.sgsʲs.:($$j).q_liq += ᶜSqₗᵖʲs.:($$j)
+        @. Yₜ.c.sgsʲs.:($$j).q_ice += ᶜSqᵢᵖʲs.:($$j)
+        @. Yₜ.c.sgsʲs.:($$j).q_rai += ᶜSqᵣᵖʲs.:($$j)
+        @. Yₜ.c.sgsʲs.:($$j).q_sno += ᶜSqₛᵖʲs.:($$j)
+        @. Yₜ.c.sgsʲs.:($$j).n_liq += ᶜSnₗᵖʲs.:($$j)
+        @. Yₜ.c.sgsʲs.:($$j).n_rai += ᶜSnᵣᵖʲs.:($$j)
     end
     return nothing
 end
