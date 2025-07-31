@@ -30,7 +30,7 @@ edmfx_filter: true
 prognostic_tke: true
 precip_model: "1M"
 prescribe_ozone: false
-moist: "nonequil"
+moist: "equil"
 config: "column"
 z_max: 60e3
 z_elem: 63
@@ -49,5 +49,5 @@ output_default_diagnostics: false
 rad: allskywithclear
 insolation: "externaldriventv"
 diagnostics:
-  - short_name: [lwp, iwp] # CHANGE TO LWP, IWP -- eventually cloud top
+  - short_name: [clw, cli] # CHANGE TO LWP, IWP -- eventually cloud top
     period: 10mins
