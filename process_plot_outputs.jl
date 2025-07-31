@@ -4,6 +4,7 @@
 A script to organize all of the output paths by their initial conditions.
 """
 
+# Dependencies.
 import ClimaAnalysis
 import CairoMakie
 import ClimaAnalysis.Visualize as viz
