@@ -1391,15 +1391,18 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_bomex_box},
     Val{:rcemipii_box_diagnostic_edmfx},
     Val{:prognostic_edmfx_soares_column},
-    Val{:diagnostic_edmfx_dycoms_rf02_box},
-    Val{:diagnostic_edmfx_rico_box},
-    Val{:diagnostic_edmfx_trmm_box},
     Val{:diagnostic_edmfx_trmm_stretched_box},
 }
 
 EDMFBoxPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_trmm_column},
+}
+
+DiagEDMFBoxPlotsWithPrecip = Union{
+    Val{:diagnostic_edmfx_dycoms_rf02_box},
+    Val{:diagnostic_edmfx_rico_box},
+    Val{:diagnostic_edmfx_trmm_box},
 }
 """
     plot_edmf_vert_profile!(grid_loc, var_group)
@@ -1476,14 +1479,23 @@ function pair_edmf_names(short_names)
 end
 
 function make_plots(
-    sim_type::Union{EDMFBoxPlots, EDMFBoxPlotsWithPrecip},
+    sim_type::Union{
+        EDMFBoxPlots,
+        EDMFBoxPlotsWithPrecip,
+        DiagEDMFBoxPlotsWithPrecip,
+    },
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
 
-    precip_names =
-        sim_type isa EDMFBoxPlotsWithPrecip ?
-        ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen") : ()
+    if sim_type isa EDMFBoxPlotsWithPrecip
+        precip_names =
+            ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen")
+    elseif sim_type isa DiagEDMFBoxPlotsWithPrecip
+        precip_names = ("husra", "hussn", "husraup", "hussnup")
+    else
+        precip_names = ()
+    end
 
     short_names = [
         "wa",

@@ -23,6 +23,23 @@ function get_atmos(config::AtmosConfig, params)
     microphysics_model = get_microphysics_model(parsed_args)
     cloud_model = get_cloud_model(parsed_args)
 
+    if moisture_model isa DryModel
+        @warn "Running simulations without any moisture present."
+        @assert microphysics_model isa NoPrecipitation
+    end
+    if moisture_model isa EquilMoistModel
+        @warn "Running simulations with equilibrium thermodynamics assumptions."
+        @assert microphysics_model isa
+                Union{NoPrecipitation, Microphysics0Moment}
+    end
+    if moisture_model isa NonEquilMoistModel
+        @assert microphysics_model isa
+                Union{NoPrecipitation, Microphysics1Moment, Microphysics2Moment}
+    end
+    if microphysics_model isa NoPrecipitation
+        @warn "Running simulations without any precipitation formation."
+    end
+
     implicit_noneq_cloud_formation =
         parsed_args["implicit_noneq_cloud_formation"]
     @assert implicit_noneq_cloud_formation in (true, false)
