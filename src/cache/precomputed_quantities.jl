@@ -318,12 +318,6 @@ function thermo_state(
     q_tot = nothing,
     q_pt = nothing,
 )
-    get_ts(ρ::Real, ::Nothing, θ::Real, ::Nothing, ::Nothing, ::Nothing) =
-        TD.PhaseDry_ρθ(thermo_params, ρ, θ)
-    get_ts(ρ::Real, ::Nothing, θ::Real, ::Nothing, q_tot::Real, ::Nothing) =
-        TD.PhaseEquil_ρθq(thermo_params, ρ, θ, q_tot)
-    get_ts(ρ::Real, ::Nothing, θ::Real, ::Nothing, ::Nothing, q_pt) =
-        TD.PhaseNonEquil_ρθq(thermo_params, ρ, θ, q_pt)
     get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, ::Nothing, ::Nothing) =
         TD.PhaseDry_ρe(thermo_params, ρ, e_int)
     get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, q_tot::Real, ::Nothing) =
@@ -337,18 +331,8 @@ function thermo_state(
         )
     get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, ::Nothing, q_pt) =
         TD.PhaseNonEquil(thermo_params, e_int, ρ, q_pt)
-    get_ts(::Nothing, p::Real, θ::Real, ::Nothing, ::Nothing, ::Nothing) =
-        TD.PhaseDry_pθ(thermo_params, p, θ)
     get_ts(::Nothing, p::Real, θ::Real, ::Nothing, q_tot::Real, ::Nothing) =
         TD.PhaseEquil_pθq(thermo_params, p, θ, q_tot)
-    get_ts(::Nothing, p::Real, θ::Real, ::Nothing, ::Nothing, q_pt) =
-        TD.PhaseNonEquil_pθq(thermo_params, p, θ, q_pt)
-    get_ts(::Nothing, p::Real, ::Nothing, e_int::Real, ::Nothing, ::Nothing) =
-        TD.PhaseDry_pe(thermo_params, p, e_int)
-    get_ts(::Nothing, p::Real, ::Nothing, e_int::Real, q_tot::Real, ::Nothing) =
-        TD.PhaseEquil_peq(thermo_params, p, e_int, q_tot)
-    get_ts(::Nothing, p::Real, ::Nothing, e_int::Real, ::Nothing, q_pt) =
-        TD.PhaseNonEquil_peq(thermo_params, p, e_int, q_pt)
     return get_ts(ρ, p, θ, e_int, q_tot, q_pt)
 end
 
@@ -374,13 +358,6 @@ ts_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ) =
         thermo_params;
         thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)...,
         ρ,
-    )
-
-ts_sgs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, p) =
-    thermo_state(
-        thermo_params;
-        thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)...,
-        p,
     )
 
 function eddy_diffusivity_coefficient_H(D₀, H, z_sfc, z)
