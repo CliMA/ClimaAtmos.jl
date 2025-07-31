@@ -57,6 +57,23 @@ function make_edmf_vec(paths::Vector{String})
 end
 
 """
+    group_by_fields(emdfparams, field)
+
+Takes a vector of EDMFParam objects and returns a dictionary where they're 
+grouped by values of a specific field.
+"""
+function group_by_field(edmfparams::Vector{EDMFParams}, field::Symbol)
+    grouped = Dict{Any, Vector{EDMFParams}}()
+
+    for edmfparam in edmfparams
+        key = getproperty(edmfparam, field)
+        push!(get!(grouped, key, Vector{EDMFParams}()), edmfparam)
+    end
+
+    return grouped
+end
+
+"""
     plot_1M_edmf(output_dir, emdfparams)
 
 # Plots all LWP over time for EDMF+1M outputs. Uses LWP over time since no CDNC.
@@ -80,10 +97,21 @@ function plot_1M_edmf(output_dir::String, edmfparams::Vector{EDMFParams})
             joinpath(output_dir, "$out", "output_0000")
         )
 
-        lwp = get(simdir; short_name="lwp", reduction="inst", period="10m")
-        lwp_slice = slice(lwp, x=0.0, y=0.0)
-        rwp = get(simdir; short_name="rwp", reduction="inst", period="10m")
-        rwp_slice = slice(rwp, x=0.0, y=0.0)
+        lwp = ClimaAnalysis.get(
+            simdir; 
+            short_name="lwp", 
+            reduction="inst", 
+            period="10m"
+            )
+        lwp_slice = ClimaAnalysis.slice(lwp, x=0.0, y=0.0)
+
+        rwp = ClimaAnalysis.get(
+            simdir; 
+            short_name="rwp", 
+            reduction="inst",
+            period="10m"
+            )
+        rwp_slice = ClimaAnalysis.slice(rwp, x=0.0, y=0.0)
         t = ClimaAnalysis.times(lwp_slice)
 
         rwp_lwp_slice = rwp_slice.data ./ lwp_slice.data
