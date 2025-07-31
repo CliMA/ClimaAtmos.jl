@@ -22,7 +22,7 @@ steps:
     command:
       - echo "--- Instantiate examples"
       - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'
-      - julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name="Thermodynamics", rev="main"))'
+      - julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name="Thermodynamics", rev="zs/newtonsad"))'
       - julia --project=.buildkite -e 'using Pkg; Pkg.resolve()'
       - julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'
       - julia --project=.buildkite -e 'using CUDA; CUDA.precompile_runtime()'
@@ -84,16 +84,16 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
           JOB_NAME: "longrun_moist_baroclinic_wave"
       
-      - label: ":computer: baroclinic wave equilmoist 1M"
-        command:
-          - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/output_active/*"
-        agents:
-          slurm_gpus: 1
-          slurm_time: 12:00:00
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-          JOB_NAME: "longrun_moist_baroclinic_wave_1M"
+      # - label: ":computer: baroclinic wave equilmoist 1M"
+      #   command:
+      #     - srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml --job_id $$JOB_NAME
+      #   artifact_paths: "$$JOB_NAME/output_active/*"
+      #   agents:
+      #     slurm_gpus: 1
+      #     slurm_time: 12:00:00
+      #   env:
+      #     CLIMACOMMS_DEVICE: "CUDA"
+      #     JOB_NAME: "longrun_moist_baroclinic_wave_1M"
 
   #     - label: ":computer: baroclinic wave equilmoist high res"
   #       command:
