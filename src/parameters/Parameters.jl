@@ -43,7 +43,6 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2} <: ATCP
     detr_coeff::FT
     detr_buoy_coeff::FT
     detr_vertdiv_coeff::FT
-    pi_groups_coeff::FT
     entr_pi_const::FT
     entr_param_vec::VFT1
     turb_entr_param_vec::VFT2

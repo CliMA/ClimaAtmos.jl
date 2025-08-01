@@ -152,7 +152,6 @@ function entrainment(
     end
 
     g = TDP.grav(thermo_params)
-    pi_groups_coeff = CAP.pi_groups_coeff(turbconv_params)
     entr_pi_const = CAP.entr_pi_const(turbconv_params)
     ref_H = ᶜp / (ᶜρ * g) # Pressure scale height
 
@@ -177,7 +176,7 @@ function entrainment(
         entr_param_vec[3] * abs(Π₃) +
         entr_param_vec[4] * abs(Π₄) +
         entr_param_vec[5] * abs(Π₅) +
-        entr_pi_const) * pi_groups_coeff
+        entr_pi_const)
 
     inv_timescale_factor = abs(ᶜwʲ - ᶜw⁰) / elev_above_sfc
 

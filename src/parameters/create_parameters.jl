@@ -222,7 +222,6 @@ function TurbulenceConvectionParameters(
         :entr_coeff => :entr_coeff,
         :detr_coeff => :detr_coeff,
         :EDMF_surface_area => :surface_area,
-        :pi_groups_coeff => :pi_groups_coeff,
         :entr_pi_const => :entr_pi_const,
         :entr_param_vec => :entr_param_vec,
         :turb_entr_param_vec => :turb_entr_param_vec,
