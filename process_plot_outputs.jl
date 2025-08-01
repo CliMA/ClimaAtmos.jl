@@ -73,11 +73,11 @@ function group_by_field(edmfparams::Vector{EDMFParams}, field::Symbol)
 end
 
 """
-    plot_1M_edmf(output_dir, emdfparams)
+    plot_1M_edmf_timeseries!(emdfparams, ax)
 
-# Base plotting function for LWP over time on an Axis object.
+Base plotting function for 1 moment LWP over time on an Axis object.
 """
-function plot_1M_edmf(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis)
+function plot_1M_edmf_timeseries!(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis)
     all_paths = [edmfparam.path for edmfparam in edmfparams]
 
     # For each path in the given vector, add it on the the Axis object.
@@ -123,31 +123,140 @@ function plot_1M_edmf(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis)
 end
 
 """
+    plot_1M_edmf_N!(emdfparams, ax)
+
+Base plotting function for 1 moment LWP vs N on an Axis object.
 """
-function plot_1M_basic(edmfparams::Vector{EDMFParams} ; title::String="LWP Over Time")
+function plot_1M_edmf_N(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis)
+    # TODO: Implement.
+end
+
+"""
+    plot_2M_edmf_N!(emdfparams, ax)
+
+Base plotting function for 2 moment LWP over time on an Axis object.
+"""
+function plot_2M_edmf_timeseries!(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis)
+    # TODO: Implement.
+end
+
+"""
+    plot_2M_edmf_N!(emdfparams, ax)
+
+Base plotting function for 2 moment LWP vs N on an Axis object.
+"""
+function plot_2M_edmf_N!(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis)
+    # TODO: Implement.
+end
+
+"""
+    decide_plotting!(edmfparams, ax, is_1M, is_time)
+
+Decides which Axis plotting function to call based on is_1M and is_time.
+"""
+function decide_plotting!(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis; is_1M::Bool=false, is_time::Bool=false)
+    if is_1M # 1 Moment plotting.
+        if is_time
+            plot_1M_edmf_timeseries!(edmfparams, ax)
+        else
+            # plot_1M_edmf_N(edmfparams, ax) TODO: IMPLEMENT!
+        end
+    else # 2 Moment plotting.
+        if is_time
+            # plot_2M_edmf_timeseries(edmfparams, ax) TODO: IMPLEMENT!
+        else
+            # plot_2M_edmf_N(edmfparams, ax) TODO: IMPLEMENT!
+        end
+    end
+end
+
+"""
+    decide_title(is_1M, is_time)
+
+Decides which labels to use based on is_1M and is_time.
+"""
+function decide_title(is_1M::Bool=false, is_time::Bool=false)
+    # Title add on.
+    if is_1M
+        title_M = "1M+EDMF"
+        save_M = "1M_EDMF"
+    else
+        title_M = "2M+EDMF"
+        save_M ="2M_EDMF"
+    end
+
+    # Axis labels setup.
+    if is_time
+        title = "$title_M LWP Over Time"
+        xlab = "t [s]"
+        ylab = "lwp [g m-2]"
+        save_title = "$(save_M)_timeseries.png"
+    else
+        title = "$title_M LWP vs N"
+        xlab = "lwp [g m-2]"
+        ylab = "N"
+        save_title = "$(save_M)_LWP_N.png"
+    end
+
+    return save_title, title, xlab, ylab
+end
+
+"""
+    plot_edmf(edmfparams, is_1M, is_time, save)
+
+Generates a basic plot without separation by initial conditions.
+"""
+function plot_edmf(edmfparams::Vector{EDMFParams}; is_1M::Bool=false, is_time::Bool=false, save::Bool=false, replace_save::String="", replace_title::String="")
     # Base figure.
     fig = CairoMakie.Figure(size = (600, 450))
+
+    # Unpack results from decide_title.
+    save_title, title, xlab, ylab = decide_title(is_1M, is_time)
+
+    if replace_save != ""
+        save_title = replace_save
+    end
+
+    if replace_title != ""
+        title = replace_title
+    end
+
     ax = CairoMakie.Axis(
         fig[1, 1],
-        xlabel = "t [s]",
-        ylabel = "lwp [g m-2]",
+        xlabel = xlab,
+        ylabel = ylab,
         title = title,
         yscale = log10,
         )
     CairoMakie.ylims!(ax, (1, 1e4))
 
-    plot_1M_edmf(edmfparams, ax)
+    decide_plotting!(edmfparams, ax, is_1M=is_1M, is_time=is_time)
 
     CairoMakie.Colorbar(fig[1, 2], label = "RWP/LWP")
+
+    if save
+        CairoMakie.save(save_title, fig)
+    end
 
     return fig
 end 
 
 """
 """
-function compare_1M_edmf(edmfparams::Vector{EDMFParams}, plotparams::Dict{Symbol, Vector{Float64}}; split_by::Symbol=:none)
+function compare_edmf(edmfparams::Vector{EDMFParams}, plotparams::Dict{Symbol, Vector{Float64}}; split_by::Symbol=:none, is_1M::Bool=false, is_time::Bool=false, save::Bool=false, replace_save::String="", replace_title::String="")
     # Keep all params specified in plotparams dictionary.
     keep_params = edmfparams
+
+    # Unpack results from decide_title.
+    save_title, title, xlab, ylab = decide_title(is_1M, is_time)
+
+    if replace_save != ""
+        save_title = replace_save
+    end
+
+    if replace_title != ""
+        title = replace_title
+    end
 
     for (key, values) in plotparams
         edmfparam_add = Vector{EDMFParams}()
@@ -167,7 +276,6 @@ function compare_1M_edmf(edmfparams::Vector{EDMFParams}, plotparams::Dict{Symbol
         n = length(keys(grouped))
         max_col = 2
         max_row = ceil(Int, n / max_col)
-
         index = 1
 
         fig = CairoMakie.Figure(size = (500 * max_col, 450 * max_row))
@@ -177,20 +285,33 @@ function compare_1M_edmf(edmfparams::Vector{EDMFParams}, plotparams::Dict{Symbol
             col = mod(index - 1, 2) + 1
             ax = CairoMakie.Axis(
             fig[row, col],
-            xlabel = "t [s]",
-            ylabel = "lwp [g m-2]",
+            xlabel = xlab,
+            ylabel = ylab,
             title = "$split_by = $key | $verbose_title",
             yscale = log10,
             )
             CairoMakie.ylims!(ax, (1, 1e4))
             index += 1
-            plot_1M_edmf(values, ax)
+
+            decide_plotting!(values, ax, is_1M=is_1M, is_time=is_time)
+
         end
 
         CairoMakie.Colorbar(fig[:, max_col+1], label = "RWP/LWP")
 
     else
-        fig = plot_1M_basic(keep_params)
+        fig = plot_edmf(
+            keep_params, 
+            is_1M=is_1M, 
+            is_time=is_time, 
+            save=save, 
+            replace_save=replace_save, 
+            replace_title=replace_title
+            )
+    end
+
+    if save
+        CairoMakie.save(save_title, fig) # TODO: Fix this.
     end
 
     return fig
