@@ -165,7 +165,15 @@ or clarification that you can take care of while you are here.
 
 Here is an example of a docstring:
 
-TODO: add example
+```
+"""
+    InitialCondition
+
+A mechanism for specifying the `LocalState` of an `AtmosModel` at every point in
+the domain. Given some `initial_condition`, calling `initial_condition(params)`
+returns a function of the form `local_state(local_geometry)::LocalState`.
+"""
+```
 
 You can preview how the Documentation will look like after merging by building the documentation 
 locally. From the main directory of your local repository call
