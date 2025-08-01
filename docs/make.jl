@@ -10,6 +10,10 @@ include(joinpath(@__DIR__, "src", "config_table.jl"))
 doctest(ClimaAtmos; plugins = [bib])
 disable_logging(Base.CoreLogging.BelowMinLevel) # Re-enable all logging
 
+example_pages = [
+"Perturbation Experiments" => "perturbation_experiments.md"
+]
+
 makedocs(;
     plugins = [bib],
     modules = [ClimaAtmos],
@@ -38,8 +42,9 @@ makedocs(;
         "Implicit Solver" => "implicit_solver.md",
         "Radiative Equilibrium" => "radiative_equilibrium.md",
         "Single Column Model" => "single_column_prospect.md",
-        "Restarts and checkpoints" => "restarts.md",
+        "Restarts and Checkpoints" => "restarts.md",
         "REPL scripts" => "repl_scripts.md",
+        "Examples" => example_pages,
         "Configuration" => "config.md",
         "Parameters" => "parameters.md",
         "Longruns" => "longruns.md",
