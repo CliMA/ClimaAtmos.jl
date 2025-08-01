@@ -54,11 +54,12 @@ Returns:
 - The limited force value.
 
 Reference:
-- Horn, M. (2012). "ASAMgpu V1.0 – a moist fully compressible atmospheric model using 
+- Horn, M. (2012). "ASAMgpu V1.0 – a moist fully compressible atmospheric model using
     graphics processing units (GPUs)". Geoscientific Model Development,
     5, 345–353. https://doi.org/10.5194/gmd-5-345-2012
 """
 
 function triangle_inequality_limiter(force, limit)
-    return force + limit - sqrt(force^2 + limit^2)
+    FT = eltype(force)
+    return force == FT(0) ? force : force + limit - sqrt(force^2 + limit^2)
 end
