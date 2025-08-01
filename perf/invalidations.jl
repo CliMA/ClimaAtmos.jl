@@ -8,7 +8,7 @@ using SnoopCompileCore
 invalidations = @snoop_invalidations begin
     (; config_file, job_id) = CA.commandline_kwargs()
     config = CA.AtmosConfig(config_file; job_id)
-    include(joinpath(dirname(@__DIR__), "examples", "hybrid", "driver.jl"))
+    include(joinpath(dirname(@__DIR__), ".buildkite", "ci_driver.jl"))
     nothing
 end;
 

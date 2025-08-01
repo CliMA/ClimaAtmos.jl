@@ -18,7 +18,7 @@ function print_repl_script(config)
     ib *= """\n"""
     ib *= """config = CA.AtmosConfig(config_dict);\n"""
     ib *= """\n"""
-    ib *= """include("examples/hybrid/driver.jl")\n"""
+    ib *= """include(".buildkite/ci_driver.jl")\n"""
     println(ib)
 end
 

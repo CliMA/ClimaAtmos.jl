@@ -1,11 +1,11 @@
 #=
 Run this script with, for example:
 ```
-julia --project=examples perf/benchmark_step.jl --h_elem 6
+julia --project=.buildkite perf/benchmark_step.jl --h_elem 6
 ```
 Or, interactively,
 ```
-julia --project=examples
+julia --project=.buildkite
 push!(ARGS, "--h_elem", "6")
 # push!(ARGS, "--device", "CPUSingleThreaded") # uncomment to run on CPU
 include(joinpath("perf", "benchmark_step.jl"));
