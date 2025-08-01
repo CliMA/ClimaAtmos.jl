@@ -108,33 +108,27 @@ function precipitation_tendency!(
     microphysics_model::Microphysics1Moment,
     turbconv_model::DiagnosticEDMFX,
 )
-    error("Not implemented yet")
-    ## Source terms from EDMFX environment
-    #(; ᶜSeₜᵖ⁰, ᶜSqₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
-    ## Source terms from EDMFX updrafts
-    #(; ᶜSeₜᵖʲs, ᶜSqₜᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs) = p.precomputed
-    ## Grid mean precipitation sinks
-    #(; ᶜSqₜᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜSeₜᵖ) = p.precipitation
+    # Source terms from EDMFX environment
+    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+    # Source terms from EDMFX updrafts
+    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs) = p.precomputed
 
-    #(; ᶜρaʲs) = p.precomputed
+    (; ᶜρaʲs) = p.precomputed
 
-    ## Update from environment precipitation sources
-    ## and the grid mean precipitation sinks
-    #@. Yₜ.c.ρ += Y.c.ρ * (ᶜSqₜᵖ⁰ + ᶜSqₜᵖ)
-    #@. Yₜ.c.ρq_tot += Y.c.ρ * (ᶜSqₜᵖ⁰ + ᶜSqₜᵖ)
-    #@. Yₜ.c.ρe_tot += Y.c.ρ * (ᶜSeₜᵖ⁰ + ᶜSeₜᵖ)
-    #@. Yₜ.c.ρq_rai += Y.c.ρ * (ᶜSqᵣᵖ⁰ + ᶜSqᵣᵖ)
-    #@. Yₜ.c.ρq_sno += Y.c.ρ * (ᶜSqₛᵖ⁰ + ᶜSqₛᵖ)
+    # Update from environment precipitation sources
+    @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜSqₗᵖ⁰
+    @. Yₜ.c.ρq_ice += Y.c.ρ * ᶜSqᵢᵖ⁰
+    @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜSqᵣᵖ⁰
+    @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜSqₛᵖ⁰
 
-    ## Update from the updraft precipitation sources
-    #n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    #for j in 1:n
-    #    @. Yₜ.c.ρ += ᶜρaʲs.:($$j) * ᶜSqₜᵖʲs.:($$j)
-    #    @. Yₜ.c.ρq_tot += ᶜρaʲs.:($$j) * ᶜSqₜᵖʲs.:($$j)
-    #    @. Yₜ.c.ρe_tot += ᶜρaʲs.:($$j) * ᶜSeₜᵖʲs.:($$j)
-    #    @. Yₜ.c.ρq_rai += ᶜρaʲs.:($$j) * ᶜSqᵣᵖʲs.:($$j)
-    #    @. Yₜ.c.ρq_sno += ᶜρaʲs.:($$j) * ᶜSqₛᵖʲs.:($$j)
-    #end
+    # Update from the updraft precipitation sources
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    for j in 1:n
+        @. Yₜ.c.ρq_liq += ᶜρaʲs.:($$j) * ᶜSqₗᵖʲs.:($$j)
+        @. Yₜ.c.ρq_ice += ᶜρaʲs.:($$j) * ᶜSqᵢᵖʲs.:($$j)
+        @. Yₜ.c.ρq_rai += ᶜρaʲs.:($$j) * ᶜSqᵣᵖʲs.:($$j)
+        @. Yₜ.c.ρq_sno += ᶜρaʲs.:($$j) * ᶜSqₛᵖʲs.:($$j)
+    end
 end
 function precipitation_tendency!(
     Yₜ,
