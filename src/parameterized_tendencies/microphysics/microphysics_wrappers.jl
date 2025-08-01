@@ -127,6 +127,12 @@ function cloud_sources(
         S = FT(0)
     end
 
+    # Additional condition to avoid creating ice in conditions above freezing
+    # Representing the lack of INPs in warm temperatures
+    if T > thp.T_freeze && S > FT(0)
+        S = FT(0)
+    end
+
     return ifelse(
         S > FT(0),
         triangle_inequality_limiter(S, limit(qᵥ - qₛᵢ, dt, 2)),
@@ -383,7 +389,7 @@ Computes the source term for cloud droplet number concentration per mass due to 
 based on the Abdul-Razzak and Ghan (2000) parameterization.
 
 This function estimates the number of aerosols activated into cloud droplets per mass of air per second
-from a bi-modal aerosol distribution (sea salt and sulfate), given local supersaturation and vertical 
+from a bi-modal aerosol distribution (sea salt and sulfate), given local supersaturation and vertical
 velocity. The result is returned as a tendency (per second) of liquid droplet number concentration.
 
 # Arguments
