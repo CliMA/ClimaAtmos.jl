@@ -122,7 +122,7 @@ end
 
 To instantiate the environment:
 ```
-julia --project=examples
+julia --project=.buildkite
 ```
 
 Then, to run interactively:
@@ -141,7 +141,7 @@ CA.benchmark_step!(integrator, Y₀);
 Alternatively, this can be run non-interactively,
 with adjusted flags as:
 ```
-julia --project=examples perf/benchmark_step.jl --h_elem 6
+julia --project=.buildkite perf/benchmark_step.jl --h_elem 6
 ```
 
 See [`argparse_settings`](@ref) for the

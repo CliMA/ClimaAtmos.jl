@@ -1,5 +1,5 @@
 #=
-julia --project=examples
+julia --project=.buildkite
 using Revise; include("test/parameterized_tendencies/sponge/rayleigh_sponge.jl")
 =#
 using ClimaComms
