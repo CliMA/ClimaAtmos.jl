@@ -1,4 +1,4 @@
-251
+252
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+252
+- Limit the noise in ice and snow 1M microphysics scheme in cloud formation and
+  limiter formulation.
+
 251
 - Remove ᶜtke⁰, ᶜh_tot, ᶜmse⁰, ᶜρ⁰, and specific quantities from precomputed quantities cache.
   Introduce helper functions to compute sums over draft, environmental volumetric variables,
@@ -27,7 +31,7 @@
 
 250
 - Add ARG aerosol activation for 2M microphysics; increase the allocation limit for `flame_callbacks`
-  from 391864 to 391942 to account for additional allocations when constructing `ClimaAtmosParameters` 
+  from 391864 to 391942 to account for additional allocations when constructing `ClimaAtmosParameters`
   with the new aerosol parameters in `microphysics_2m_parameters`.
 
 249
