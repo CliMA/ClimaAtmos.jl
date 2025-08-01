@@ -127,8 +127,59 @@ end
 
 Base plotting function for 1 moment LWP vs N on an Axis object.
 """
-function plot_1M_edmf_N(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis)
-    # TODO: Implement.
+function plot_1M_edmf_N!(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis)
+    all_paths = [(edmfparam.path, edmfparam.N) for edmfparam in edmfparams]
+
+    # For each path in the given vector, add it on the the Axis object.
+    for (out, prescribed_N) in all_paths
+        simdir = ClimaAnalysis.SimDir(
+            joinpath("$out", "output_0000")
+        )
+
+        # Liquid water path.
+        lwp = ClimaAnalysis.get(
+            simdir; 
+            short_name="lwp", 
+            reduction="inst", 
+            period="10m"
+            )
+        lwp_slice = ClimaAnalysis.slice(lwp, x=0.0, y=0.0)
+        lwp_data = lwp_slice.data * 1e3
+
+        # Rain water path.
+        rwp = ClimaAnalysis.get(
+            simdir; 
+            short_name="rwp", 
+            reduction="inst",
+            period="10m"
+            )
+        rwp_slice = ClimaAnalysis.slice(rwp, x=0.0, y=0.0)
+        rwp_data = rwp_slice.data * 1e3
+
+        # Number concentration.
+        N = fill(prescribed_N, length(lwp_data)) * 1e-6
+
+        # RWP/LWP for the color bar.
+        rwp_lwp_data = rwp_data ./ lwp_data
+        rwp_lwp_filtered = [isfinite(c) ? c : 0.0 for c in rwp_lwp_data]
+
+        CairoMakie.scatter!(
+            ax,  
+            lwp_data, # Convert from kg m^-2 to g m^-2.
+            N,
+            color=rwp_lwp_filtered, # Ratio so don't need to convert.
+            markersize = 5,
+            colormap = :viridis, 
+            colorrange = (0, 1)
+            )
+        
+        CairoMakie.scatter!(
+            ax,  
+            lwp_data[1], # Convert from kg m^-2 to g m^-2.
+            N[1],
+            color = :grey, 
+            )
+    end
 end
 
 """
@@ -159,7 +210,7 @@ function decide_plotting!(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis; i
         if is_time
             plot_1M_edmf_timeseries!(edmfparams, ax)
         else
-            # plot_1M_edmf_N(edmfparams, ax) TODO: IMPLEMENT!
+            plot_1M_edmf_N!(edmfparams, ax)
         end
     else # 2 Moment plotting.
         if is_time
@@ -191,14 +242,18 @@ function decide_title(is_1M::Bool=false, is_time::Bool=false)
         xlab = "t [s]"
         ylab = "lwp [g m-2]"
         save_title = "$(save_M)_timeseries.png"
+        xlims = nothing
+        ylims = (1, 1e4)
     else
         title = "$title_M LWP vs N"
         xlab = "lwp [g m-2]"
         ylab = "N"
         save_title = "$(save_M)_LWP_N.png"
+        xlims = (1, 1e3)
+        ylims = (1, 1e3)
     end
 
-    return save_title, title, xlab, ylab
+    return save_title, title, xlab, ylab, xlims, ylims
 end
 
 """
@@ -211,7 +266,7 @@ function plot_edmf(edmfparams::Vector{EDMFParams}; is_1M::Bool=false, is_time::B
     fig = CairoMakie.Figure(size = (600, 450))
 
     # Unpack results from decide_title.
-    save_title, title, xlab, ylab = decide_title(is_1M, is_time)
+    save_title, title, xlab, ylab, xlims, ylims = decide_title(is_1M, is_time)
 
     if replace_save != ""
         save_title = replace_save
@@ -226,9 +281,13 @@ function plot_edmf(edmfparams::Vector{EDMFParams}; is_1M::Bool=false, is_time::B
         xlabel = xlab,
         ylabel = ylab,
         title = title,
+        xscale = is_time ? identity : log10,
         yscale = log10,
         )
-    CairoMakie.ylims!(ax, (1, 1e4))
+    if !is_time
+        CairoMakie.xlims!(ax, xlims)
+    end
+    CairoMakie.ylims!(ax, ylims)
 
     decide_plotting!(edmfparams, ax, is_1M=is_1M, is_time=is_time)
 
@@ -248,7 +307,7 @@ function compare_edmf(edmfparams::Vector{EDMFParams}, plotparams::Dict{Symbol, V
     keep_params = edmfparams
 
     # Unpack results from decide_title.
-    save_title, title, xlab, ylab = decide_title(is_1M, is_time)
+    save_title, title, xlab, ylab, xlims, ylims = decide_title(is_1M, is_time)
 
     if replace_save != ""
         save_title = replace_save
@@ -274,7 +333,7 @@ function compare_edmf(edmfparams::Vector{EDMFParams}, plotparams::Dict{Symbol, V
         verbose_title = join(["$key: $values" for (key, values) in plotparams if key != split_by], ", ")
 
         n = length(keys(grouped))
-        max_col = 2
+        max_col = n > 1 ? 2 : 1
         max_row = ceil(Int, n / max_col)
         index = 1
 
@@ -288,9 +347,13 @@ function compare_edmf(edmfparams::Vector{EDMFParams}, plotparams::Dict{Symbol, V
             xlabel = xlab,
             ylabel = ylab,
             title = "$split_by = $key | $verbose_title",
+            xscale = is_time ? identity : log10,
             yscale = log10,
             )
-            CairoMakie.ylims!(ax, (1, 1e4))
+            if !is_time
+                CairoMakie.xlims!(ax, xlims)
+            end
+            CairoMakie.ylims!(ax, ylims)
             index += 1
 
             decide_plotting!(values, ax, is_1M=is_1M, is_time=is_time)
