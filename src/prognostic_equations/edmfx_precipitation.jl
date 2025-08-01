@@ -78,17 +78,10 @@ function edmfx_precipitation_tendency!(
     # TODO what about the mass end energy outflow via bottom boundary?
 
     for j in 1:n
-        @. Yₜ.c.sgsʲs.:($$j).q_liq +=
-            ᶜSqₗᵖʲs.:($$j) * (1 - Y.c.sgsʲs.:($$j).q_liq)
-
-        @. Yₜ.c.sgsʲs.:($$j).q_ice +=
-            ᶜSqᵢᵖʲs.:($$j) * (1 - Y.c.sgsʲs.:($$j).q_ice)
-
-        @. Yₜ.c.sgsʲs.:($$j).q_rai +=
-            ᶜSqᵣᵖʲs.:($$j) * (1 - Y.c.sgsʲs.:($$j).q_rai)
-
-        @. Yₜ.c.sgsʲs.:($$j).q_sno +=
-            ᶜSqₛᵖʲs.:($$j) * (1 - Y.c.sgsʲs.:($$j).q_sno)
+        @. Yₜ.c.sgsʲs.:($$j).q_liq += ᶜSqₗᵖʲs.:($$j)
+        @. Yₜ.c.sgsʲs.:($$j).q_ice += ᶜSqᵢᵖʲs.:($$j)
+        @. Yₜ.c.sgsʲs.:($$j).q_rai += ᶜSqᵣᵖʲs.:($$j)
+        @. Yₜ.c.sgsʲs.:($$j).q_sno += ᶜSqₛᵖʲs.:($$j)
     end
     return nothing
 end
