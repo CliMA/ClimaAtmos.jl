@@ -171,7 +171,7 @@ function precomputed_quantities(Y, atmos)
     )
 
     diagnostic_edmf_precipitation_quantities =
-        atmos.precip_model isa Microphysics1Moment ?
+        atmos.microphysics_model isa Microphysics1Moment ?
         (;
             ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),

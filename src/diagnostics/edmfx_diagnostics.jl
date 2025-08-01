@@ -509,7 +509,7 @@ function compute_husraup!(
     state,
     cache,
     time,
-    moisture_model::NonEquilMoistModel,
+    moisture_model::Microphysics1Moment,
     turbconv_model::DiagnosticEDMFX,
 )
     if isnothing(out)
@@ -571,7 +571,7 @@ function compute_hussnup!(
     state,
     cache,
     time,
-    moisture_model::NonEquilMoistModel,
+    moisture_model::Microphysics1Moment,
     turbconv_model::DiagnosticEDMFX,
 )
     if isnothing(out)

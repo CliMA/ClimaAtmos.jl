@@ -158,7 +158,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     p,
     t,
 )
-    (; turbconv_model, moisture_model, precip_model) = p.atmos
+    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜΦ) = p.core
@@ -203,23 +203,25 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     ustar_sfc_halflevel = Fields.field_values(ustar)
     obukhov_length_sfc_halflevel = Fields.field_values(obukhov_length)
 
-    if moisture_model isa NonEquilMoistModel && precip_model isa Microphysics1Moment
+    if moisture_model isa NonEquilMoistModel && microphysics_model isa Microphysics1Moment
         (; ᶜq_liqʲs, ᶜq_iceʲs, ᶜq_raiʲs, ᶜq_snoʲs) = p.precomputed
-        (; q_liq, q_ice, q_rai, q_sno) = p.precomputed.ᶜspecific
+
+        ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+        ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+        ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+
+        q_liq_int_level = Fields.field_values(Fields.level(ᶜq_liq, 1))
+        q_ice_int_level = Fields.field_values(Fields.level(ᶜq_ice, 1))
+        q_rai_int_level = Fields.field_values(Fields.level(ᶜq_rai, 1))
+        q_sno_int_level = Fields.field_values(Fields.level(ᶜq_sno, 1))
+
         # TODO
         #(; ρ_flux_q_liq, ρ_flux_q_ice, ρ_flux_q_rai, ρ_flux_q_sno) = p.precomputed.sfc_conditions
-
-        q_liq_int_level = Fields.field_values(Fields.level(q_liq, 1))
-        q_ice_int_level = Fields.field_values(Fields.level(q_ice, 1))
-        q_rai_int_level = Fields.field_values(Fields.level(q_rai, 1))
-        q_sno_int_level = Fields.field_values(Fields.level(q_sno, 1))
-
         #ρ_flux_q_liq_sfc_halflevel = Fields.field_values(ρ_flux_q_liq)
         #ρ_flux_q_ice_sfc_halflevel = Fields.field_values(ρ_flux_q_ice)
         #ρ_flux_q_rai_sfc_halflevel = Fields.field_values(ρ_flux_q_rai)
         #ρ_flux_q_sno_sfc_halflevel = Fields.field_values(ρ_flux_q_sno)
-
-        # TODO
         ρ_flux_q_liq_sfc_halflevel = FT(0)
         ρ_flux_q_ice_sfc_halflevel = FT(0)
         ρ_flux_q_rai_sfc_halflevel = FT(0)
@@ -278,12 +280,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
             local_geometry_int_halflevel,
         )
 
-
-        if moisture_model isa NonEquilMoistModel && precip_model isa Microphysics1Moment
-            ᶜq_liqʲ = ᶜq_totʲs.:($j)
-            ᶜq_iceʲ = ᶜq_totʲs.:($j)
-            ᶜq_raiʲ = ᶜq_totʲs.:($j)
-            ᶜq_snoʲ = ᶜq_totʲs.:($j)
+        if moisture_model isa NonEquilMoistModel && microphysics_model isa Microphysics1Moment
+            ᶜq_liqʲ = ᶜq_liqʲs.:($j)
+            ᶜq_iceʲ = ᶜq_iceʲs.:($j)
+            ᶜq_raiʲ = ᶜq_raiʲs.:($j)
+            ᶜq_snoʲ = ᶜq_snoʲs.:($j)
 
             q_liqʲ_int_level = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
             q_iceʲ_int_level = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
@@ -336,7 +337,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
             )
         end
 
-        if moisture_model isa NonEquilMoistModel && precip_model isa Microphysics1Moment
+        if moisture_model isa NonEquilMoistModel && microphysics_model isa Microphysics1Moment
             set_diagnostic_edmfx_draft_quantities_level!(
                 thermo_params,
                 tsʲ_int_level,
@@ -469,10 +470,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; ᶠu³⁰, ᶜK⁰) = p.precomputed
 
     if moisture_model isa NonEquilMoistModel && microphysics_model isa Microphysics1Moment
-        q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-        q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-        q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-        q_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+        ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+        ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+        ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
 
         (; ᶜq_liqʲs, ᶜq_iceʲs, ᶜq_raiʲs, ᶜq_snoʲs) = p.precomputed
     end
@@ -544,17 +545,17 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         dz_prev_level = Fields.field_values(Fields.level(ᶜdz, i - 1))
 
         if moisture_model isa NonEquilMoistModel && microphysics_model isa Microphysics1Moment
-            q_liq_level = Fields.field_values(Fields.level(q_liq, i))
-            q_liq_prev_level = Fields.field_values(Fields.level(q_liq, i - 1))
+            q_liq_level = Fields.field_values(Fields.level(ᶜq_liq, i))
+            q_liq_prev_level = Fields.field_values(Fields.level(ᶜq_liq, i - 1))
 
-            q_ice_level = Fields.field_values(Fields.level(q_ice, i))
-            q_ice_prev_level = Fields.field_values(Fields.level(q_ice, i - 1))
+            q_ice_level = Fields.field_values(Fields.level(ᶜq_ice, i))
+            q_ice_prev_level = Fields.field_values(Fields.level(ᶜq_ice, i - 1))
 
-            q_rai_level = Fields.field_values(Fields.level(q_rai, i))
-            q_rai_prev_level = Fields.field_values(Fields.level(q_rai, i - 1))
+            q_rai_level = Fields.field_values(Fields.level(ᶜq_rai, i))
+            q_rai_prev_level = Fields.field_values(Fields.level(ᶜq_rai, i - 1))
 
-            q_sno_level = Fields.field_values(Fields.level(q_sno, i))
-            q_sno_prev_level = Fields.field_values(Fields.level(q_sno, i - 1))
+            q_sno_level = Fields.field_values(Fields.level(ᶜq_sno, i))
+            q_sno_prev_level = Fields.field_values(Fields.level(ᶜq_sno, i - 1))
         end
 
         local_geometry_prev_level = Fields.field_values(
@@ -1074,6 +1075,44 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     ρaʲu³ʲ_dataq_ / ρaʲu³ʲ_data,
                 )
 
+                ρaʲu³ʲ_dataq_tmp = p.scratch.temp_data_level_3_tmp
+
+                @info(" ")
+                @info(extrema(local_geometry_halflevel.J))
+                @info(extrema(local_geometry_prev_halflevel.J))
+                @info(extrema(ρaʲ_prev_level))
+                @info(extrema(u³ʲ_data_prev_halflevel))
+                @info(extrema(q_iceʲ_prev_level)) #TODO - how does this guy become non-zero
+                @info(extrema(ρaʲu³ʲ_data))
+
+                @. ρaʲu³ʲ_dataq_tmp =
+                    diag_edmf_advection(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_halflevel.J,
+                        ρaʲ_prev_level,
+                        u³ʲ_data_prev_halflevel,
+                        q_iceʲ_prev_level,
+                    )
+                @info("q_ice advection ", extrema(ρaʲu³ʲ_dataq_tmp))
+                @. ρaʲu³ʲ_dataq_tmp = entr_detr(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_level.J,
+                        ρaʲ_prev_level,
+                        entrʲ_prev_level,
+                        detrʲ_prev_level,
+                        turb_entrʲ_prev_level,
+                        q_ice_prev_level,
+                        q_iceʲ_prev_level,
+                    )
+                @info("q_ice entrainment ", extrema(ρaʲu³ʲ_dataq_tmp))
+                @. ρaʲu³ʲ_dataq_tmp = microphysics_sources(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_level.J,
+                        ρaʲ_prev_level,
+                        S_q_iceʲ_prev_level,
+                    )
+                @info("q_ice microphysics sources ", extrema(ρaʲu³ʲ_dataq_tmp))
+
                 @. ρaʲu³ʲ_dataq_ =
                     diag_edmf_advection(
                         local_geometry_halflevel.J,
@@ -1176,6 +1215,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 if microphysics_model isa Microphysics1Moment && moisture_model isa NonEquilMoistModel
                     @. q_liqʲ_level =
                         ifelse(kill_updraft_2, q_liq_level, q_liqʲ_level)
+                    @info(extrema(kill_updraft_2), extrema(q_ice_level), extrema(q_iceʲ_level))
                     @. q_iceʲ_level =
                         ifelse(kill_updraft_2, q_ice_level, q_iceʲ_level)
                     @. q_raiʲ_level =
@@ -1191,7 +1231,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 local_geometry_level,
                 local_geometry_halflevel,
             )
-            if moisture_model isa NonEquilMoistModel && precip_model isa Microphysics1Moment
+            if moisture_model isa NonEquilMoistModel && microphysics_model isa Microphysics1Moment
                 set_diagnostic_edmfx_draft_quantities_level!(
                     thermo_params,
                     tsʲ_level,
