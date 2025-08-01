@@ -2,10 +2,10 @@
 # Creating custom arguments for perturbation experiments
 In cases where it is of interest to run ensembles of the same model configuration but with perturbed initial conditions, it may be of use to add new keyword arguments to the .yml file. The idea is to allow modifications to initial conditions to be passed directly through the .yml file and then creating multiple copies of the files but with different variations and combinations of these parameters. 
 
-As an example, we will explore modifying the total water mixing ratio (`q_tot_0`) and liquid-ice potential temperature profiles (`theta_0` & `theta_i`) in the DYCOMS-RF02 simulation setup. 
+As an example, we will explore modifying the total water mixing ratio (`q_tot_0`), liquid-ice potential temperature profiles (`theta_0` & `theta_i`), and initial boundary layer height (`z_i`) in the DYCOMS-RF02 simulation setup. 
 
 ### Modify initial_conditions.jl
-To start, we need to go to the part of the source code responsible for defining the initial conditions. For both of the DYCOMS research flight simulation setups, the total water mixing ratio (`q_tot_0`) and liquid-ice potential temperature (`theta_0` & `theta_i`) are pulled from another library called AtmosphericProfilesLibrary (APL).
+To start, we need to go to the part of the source code responsible for defining the initial conditions. For both of the DYCOMS research flight simulation setups, the total water mixing ratio and liquid-ice potential temperature are pulled from another library called AtmosphericProfilesLibrary (APL).
 
 There are many ways to modify the functions to allow for perturbation to the initial conditions, but for the sake of this example we will overwrite the function signature with our own version where we can pass in our own custom profiles. We must import the functions from the APL library and then define a new function with the same signature. This looks like:
 
