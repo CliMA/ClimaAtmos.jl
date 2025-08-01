@@ -2540,8 +2540,8 @@ version = "1.0.2"
 
 [[deps.Thermodynamics]]
 deps = ["DocStringExtensions", "ForwardDiff", "KernelAbstractions", "Random", "RootSolvers"]
-git-tree-sha1 = "4e1bead1e4084c099ef18c625e98d1d787fc19b7"
-repo-rev = "zs/remove_ft"
+git-tree-sha1 = "1a0e57d536d10f5bf3c7d0ab8e672321f2f89778"
+repo-rev = "zs/test_derivatives"
 repo-url = "https://github.com/CliMA/Thermodynamics.jl.git"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 version = "0.12.15"
