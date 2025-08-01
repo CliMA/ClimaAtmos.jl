@@ -1,6 +1,7 @@
 import ClimaCore
 import ClimaUtilities
 import ClimaCore: Domains, Spaces, Topologies
+import ClimaDiagnostics
 import RRTMGP
 
 # To allow for backwards compatibility of ClimaCore:
@@ -95,4 +96,34 @@ if pkgversion(ClimaUtilities) < v"0.1.20"
 else
     WallTimeInfo = ClimaUtilities.OnlineLogging.WallTimeInfo
     report_walltime = ClimaUtilities.OnlineLogging.report_walltime
+end
+
+if pkgversion(ClimaDiagnostics) < v"0.2.14"
+    function default_netcdf_points(space, parsed_args)
+        # Estimate the number of points we need to cover the entire domain
+        # ncolumns is the number of local columns
+        tot_num_columns =
+            ClimaComms.nprocs(ClimaComms.context(space)) *
+            Fields.ncolumns(space)
+        if parsed_args["config"] == "plane"
+            num1, num2 = tot_num_columns, 0
+        elseif parsed_args["config"] == "sphere"
+            num2 = round(Int, sqrt(tot_num_columns / 2))
+            num1 = 2num2
+        elseif parsed_args["config"] == "box"
+            num2 = round(Int, sqrt(tot_num_columns))
+            num1 = num2
+        elseif parsed_args["config"] == "column"
+            # We need at least two points horizontally because our column is
+            # actually a box
+            num1, num2 = 2, 2
+        else
+            error("Uncaught case")
+        end
+        return (num1, num2, Spaces.nlevels(space))
+    end
+else
+    function default_netcdf_points(space, _)
+        return ClimaDiagnostics.Writers.default_num_points(space)
+    end
 end
