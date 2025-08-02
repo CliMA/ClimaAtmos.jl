@@ -75,6 +75,7 @@ import Test: @test
         p,
         moisture_model,
         microphysics_model,
+        turbconv_model,
     ) isa Nothing
 end
 
@@ -153,7 +154,14 @@ end
     @assert iszero(ᶜYₜ.c.ρ)
 
     # test nonequilibrium cloud condensate
-    CA.cloud_condensate_tendency!(ᶜYₜ, Y, p, moisture_model, microphysics_model)
+    CA.cloud_condensate_tendency!(
+        ᶜYₜ,
+        Y,
+        p,
+        moisture_model,
+        microphysics_model,
+        turbconv_model,
+    )
     @assert !any(isnan, ᶜYₜ.c.ρq_liq)
     @assert !any(isnan, ᶜYₜ.c.ρq_ice)
 
@@ -250,7 +258,14 @@ end
     @assert iszero(ᶜYₜ.c.ρ)
 
     # test nonequilibrium cloud condensate
-    CA.cloud_condensate_tendency!(ᶜYₜ, Y, p, moisture_model, microphysics_model)
+    CA.cloud_condensate_tendency!(
+        ᶜYₜ,
+        Y,
+        p,
+        moisture_model,
+        microphysics_model,
+        turbconv_model,
+    )
     @assert !any(isnan, ᶜYₜ.c.ρq_liq)
     @assert !any(isnan, ᶜYₜ.c.ρq_ice)
     @assert !any(isnan, ᶜYₜ.c.ρn_liq)

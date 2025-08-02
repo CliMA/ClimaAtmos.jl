@@ -2,7 +2,7 @@
 ##### DryModel, EquilMoistModel
 #####
 
-cloud_condensate_tendency!(Yₜ, Y, p, _, _) = nothing
+cloud_condensate_tendency!(Yₜ, Y, p, _, _, _) = nothing
 
 #####
 ##### NonEquilMoistModel
@@ -14,6 +14,7 @@ function cloud_condensate_tendency!(
     p,
     ::NonEquilMoistModel,
     ::Union{NoPrecipitation, Microphysics0Moment},
+    _,
 )
     error(
         "NonEquilMoistModel can only be run with Microphysics1Moment or Microphysics2Moment precipitation",
@@ -26,6 +27,7 @@ function cloud_condensate_tendency!(
     p,
     ::NonEquilMoistModel,
     ::Microphysics1Moment,
+    _,
 )
     (; ᶜts) = p.precomputed
     (; params, dt) = p
@@ -69,6 +71,7 @@ function cloud_condensate_tendency!(
     p,
     ::NonEquilMoistModel,
     ::Microphysics2Moment,
+    _,
 )
     (; ᶜts) = p.precomputed
     (; params, dt) = p
@@ -169,4 +172,39 @@ function cloud_condensate_tendency!(
         dt,
     )
     @. Yₜ.c.ρn_liq += Y.c.ρ * Snₗ
+end
+
+#####
+##### PrognosticEDMF and DiagnosticEDMF
+#####
+
+function cloud_condensate_tendency!(
+    Yₜ,
+    Y,
+    p,
+    ::NonEquilMoistModel,
+    ::Union{NoPrecipitation, Microphysics0Moment},
+    ::Union{PrognosticEDMFX, DiagnosticEDMFX},
+)
+    nothing
+end
+function cloud_condensate_tendency!(
+    Yₜ,
+    Y,
+    p,
+    ::NonEquilMoistModel,
+    ::Microphysics1Moment,
+    ::Union{PrognosticEDMFX, DiagnosticEDMFX},
+)
+    nothing
+end
+function cloud_condensate_tendency!(
+    Yₜ,
+    Y,
+    p,
+    ::NonEquilMoistModel,
+    ::Microphysics2Moment,
+    ::Union{PrognosticEDMFX, DiagnosticEDMFX},
+)
+    nothing
 end

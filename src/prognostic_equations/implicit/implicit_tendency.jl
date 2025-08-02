@@ -17,6 +17,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             p,
             p.atmos.moisture_model,
             p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
         )
     end
 
