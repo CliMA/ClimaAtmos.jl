@@ -252,18 +252,11 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
     ogw_name = parsed_args["orographic_gravity_wave"]
     @assert ogw_name in (nothing, "gfdl_restart", "raw_topo", "linear")
     return if ogw_name == "raw_topo" || ogw_name == "gfdl_restart"
-        γ = params.orographic_gravity_wave_params.γ
-        ϵ = params.orographic_gravity_wave_params.ϵ
-        β = params.orographic_gravity_wave_params.β
-        h_frac = params.orographic_gravity_wave_params.h_frac
-        ρscale = params.orographic_gravity_wave_params.ρscale
-        L0 = params.orographic_gravity_wave_params.L0
-        a0 = params.orographic_gravity_wave_params.a0
-        a1 = params.orographic_gravity_wave_params.a1
-        Fr_crit = params.orographic_gravity_wave_params.Fr_crit
-        topo_info = params.orographic_gravity_wave_params.topo_info
-        topography = parsed_args["topography"]
-        FullOrographicGravityWave{FT, String}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
+        (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) =
+           params.orographic_gravity_wave_params
+        topo_info = Val(Symbol(parsed_args["orographic_gravity_wave"]))
+        topography = Val(Symbol(parsed_args["topography"]))
+        FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
     elseif ogw_name == "linear"
         LinearOrographicGravityWave(; topo_info = "linear")
     else

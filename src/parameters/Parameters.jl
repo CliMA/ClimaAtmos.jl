@@ -78,7 +78,6 @@ Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
     a0::FT                   # linear_drag_coefficient: a_0 = 0.9, coefficient for propagating wave drag
     a1::FT                   # nonlinear_drag_coefficient: a_1 = 3.0, coefficient for nonpropagating (blocked) drag
     Fr_crit::FT              # critical_froude_number: Fr_crit = 0.7, critical Froude number h̃_c = Fr_crit
-    topo_info::String        # topography_info: topography data source ("linear", "gfdl_restart", "raw_topo")
 end
 
 Base.@kwdef struct ClimaAtmosParameters{

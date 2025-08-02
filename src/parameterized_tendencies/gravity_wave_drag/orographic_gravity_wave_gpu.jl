@@ -25,11 +25,11 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
     # For now, the initialisation of the cache is the same for all types of
     # orographic gravity wave drag parameterizations
 
-    if ogw.topo_info == "gfdl_restart"
+    if ogw.topo_info == Val(:gfdl_restart)
         topo_path = @clima_artifact("topo_drag", ClimaComms.context(Y.c))
         orographic_info_rll = joinpath(topo_path, "topo_drag.res.nc")
         topo_info = regrid_OGW_info(Y, orographic_info_rll)
-    elseif ogw.topo_info == "raw_topo"
+    elseif ogw.topo_info == Val(:raw_topo)
         # TODO: right now this option may easily crash
         # because we did not incorporate any smoothing when interpolate back to model grid
         # elevation_rll =
@@ -47,11 +47,11 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
             ogw.h_frac,
         )
 
-    elseif ogw.topo_info == "linear"
+    elseif ogw.topo_info == Val(:linear)
         # For user-defined analytical tests
         topo_info = initialize_drag_input_as_fields(Y, ogw.drag_input)
     else
-        error("topo_info must be one of gfdl_restart, raw_topo, or linear")
+        error("topo_info must be a symbol of type gfdl_restart, raw_topo, or linear")
     end
 
     return topo_info
@@ -70,8 +70,6 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info=
     if topo_info === nothing
         topo_info = get_topo_info(Y, ogw)
     end
-
-    # topo_level_idx = similar(Y.c.ρ, FT)
 
     center_space, face_space = axes(Y.c), axes(Y.f)
 
@@ -139,8 +137,8 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
     ᶜρ = Y.c.ρ
     # parameters
     cp_d = CAP.cp_d(params)
-    thermo_params = CAP.thermodynamics_params(params)
     grav = CAP.grav(params)
+    thermo_params = CAP.thermodynamics_params(params)
 
     # compute buoyancy frequency
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
@@ -861,9 +859,10 @@ function compute_ogw_drag(
     FT = eltype(Y)
     center_space = Fields.axes(Y.c)
     face_space = Fields.axes(Y.f)
+    ᶜsurface_space = Fields.level(center_space, 1)
     J_bot = Fields.level(Fields.local_geometry_field(face_space).J, half)
     Δz_bot = Fields.level(Fields.Δz_field(face_space), half)
-    cell_area_bot = Base.broadcasted(/, J_bot, Δz_bot)
+    cell_area_bot = @. J_bot / Δz_bot
 
     z_surface = Fields.level(Fields.coordinate_field(Y.f).z, half)
 
@@ -878,17 +877,17 @@ function compute_ogw_drag(
         # load orography on lat-lon grid and subtract from z_surface
 
     ### Handle analytical test cases
-    elseif topography == "DCMIP200"
+    elseif topography == Val(:DCMIP200)
         topography_function = topography_dcmip200
-    elseif topography == "Hughes2023"
+    elseif topography == Val(:Hughes2023)
         topography_function = topography_hughes2023
-    elseif topography == "Agnesi"
+    elseif topography == Val(:Agnesi)
         topography_function = topography_agnesi
-    elseif topography == "Schar"
+    elseif topography == Val(:Schar)
         topography_function = topography_schar
-    elseif topography == "Cosine2D"
+    elseif topography == Val(:Cosine2d)
         topography_function = topography_cosine_2d
-    elseif topography == "Cosine3D"
+    elseif topography == Val(:Cosine3d)
         topography_function = topography_cosine_3d
     else
         error("Topography required for orographic gravity wave drag: $topography")
@@ -896,16 +895,16 @@ function compute_ogw_drag(
 
     real_elev = SpaceVaryingInput(topography_function, face_space)
     real_elev = Fields.level(real_elev, half)
-    real_elev = max.(0, real_elev)
+    @. real_elev = max(0, real_elev)
 
     hmax = @. real_elev - z_surface
     hmin = @. h_frac * hmax
 
-    χ = @. hmax * cell_area_bot * earth_radius / (FT(2) * pi)
+    χ = @. hmax * cell_area_bot * earth_radius / (FT(2) * FT(pi))
 
-    ∇ₕχ = Geometry.UVVector.(gradₕ.(χ))
-
-    ∇ₕhmax = Geometry.UVVector.(gradₕ.(hmax))
+    # @Main.infiltrate
+    ∇ₕχ = @. Geometry.UVVector(gradₕ(χ))
+    ∇ₕhmax = @. Geometry.UVVector(gradₕ(hmax))
 
     dχdx = ∇ₕχ.components.data.:1
     dχdy = ∇ₕχ.components.data.:2
@@ -920,13 +919,15 @@ function compute_ogw_drag(
     # We convert the face-centered drag vector elements to cell-centered
     # quantities as these are used to compute the physics associated with the
     # orographic gravity wave drag in the cell.
-    hmax = Fields.Field(Fields.field_values(hmax), center_space)
-    hmin = Fields.Field(Fields.field_values(hmin), center_space)
-    t11 = Fields.Field(Fields.field_values(dχdx .* dhdx), center_space)
-    t21 = Fields.Field(Fields.field_values(dχdx .* dhdy), center_space)
-    t12 = Fields.Field(Fields.field_values(dχdy .* dhdx), center_space)
-    t22 = Fields.Field(Fields.field_values(dχdy .* dhdy), center_space)
+    @Main.infiltrate
+    hmax = Fields.Field(Fields.field_values(hmax), ᶜsurface_space)
+    hmin = Fields.Field(Fields.field_values(hmin), ᶜsurface_space)
+    t11 = Fields.Field(Fields.field_values(dχdx .* dhdx), ᶜsurface_space)
+    t21 = Fields.Field(Fields.field_values(dχdx .* dhdy), ᶜsurface_space)
+    t12 = Fields.Field(Fields.field_values(dχdy .* dhdx), ᶜsurface_space)
+    t22 = Fields.Field(Fields.field_values(dχdy .* dhdy), ᶜsurface_space)
 
+    # @Main.infiltrate
     return (; hmax, hmin, t11, t21, t12, t22)
 
 end
@@ -938,3 +939,4 @@ end
 ᶜddz(ᶠscalar) = lazy.(Geometry.WVector.(ᶜgradᵥ.(ᶠscalar)).components.data.:1)
 
 ᶠddz(ᶜscalar) = lazy.(Geometry.WVector.(ᶠgradᵥ.(ᶜscalar)).components.data.:1)
+
