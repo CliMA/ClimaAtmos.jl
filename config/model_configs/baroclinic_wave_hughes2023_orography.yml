@@ -2,12 +2,14 @@ initial_condition: "MoistBaroclinicWave"
 topography: "Hughes2023"
 topo_smoothing: true
 moist: equil
+precip_model: nothing
 disable_surface_flux_tendency: true
-orographic_gravity_wave: raw_topo
+orographic_gravity_wave: "raw_topo"
 dt_ogw: "200secs"
 dt: "200secs"
-t_end: "2hours"
-diagnostics:
-  - short_name: [pfull, ua, wa, va, rv, pr, cli, hus, ke]
-    period: 200secs
+t_end: "1days"
+output_dir: "baroclinic_wave_hughes2023_orography"
 toml: [toml/baroclinic_wave_hughes2023_orography.toml]
+diagnostics:
+  - short_name: [ua, va, wa, pfull, rhoa, orog]
+    period: 1hours

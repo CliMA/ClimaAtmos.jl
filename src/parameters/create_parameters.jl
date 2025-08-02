@@ -394,7 +394,6 @@ function OrographicGravityWaveParameters(
         :linear_drag_coefficient => :a0, # a_0 = 0.9
         :nonlinear_drag_coefficient => :a1, # a_1 = 3.0
         :critical_froude_number => :Fr_crit, # Fr_crit = 0.7
-        :topography_data_source => :topo_info, # "linear", "gfdl_restart", "raw_topo"
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     parameters = merge(parameters, overrides)
