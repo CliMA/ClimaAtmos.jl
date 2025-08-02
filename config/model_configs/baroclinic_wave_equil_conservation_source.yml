@@ -1,5 +1,4 @@
 initial_condition: "MoistBaroclinicWave"
-dt: "400secs"
 t_end: "10days"
 moist: "equil"
 surface_setup: DefaultMoninObukhov

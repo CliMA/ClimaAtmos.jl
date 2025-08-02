@@ -1,12 +1,7 @@
-h_elem: 30
-z_max: 60000.0
-z_elem: 63
-dz_bottom: 30.0
-dt: "90secs"
+implicit_diffusion: false
+approximate_linear_solve_iters: 1
 t_end: "360days"
 forcing: "held_suarez"
-rayleigh_sponge: true
-viscous_sponge: true
 dt_save_state_to_disk: "10days"
 disable_surface_flux_tendency: true
 toml: [toml/longrun_held_suarez.toml]
