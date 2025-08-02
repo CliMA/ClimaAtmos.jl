@@ -1,13 +1,8 @@
-z_max: 60000.0
-z_elem: 31
-dz_bottom: 50.0
-rayleigh_sponge: true
+viscous_sponge: false
 dt: "360secs"
 t_end: "1days"
 dt_save_state_to_disk: "24hours"
 vert_diff: "DecayWithHeightDiffusion"
-implicit_diffusion: true
-approximate_linear_solve_iters: 2
 moist: "nonequil"
 precip_model: "2M"
 rad: "allskywithclear"

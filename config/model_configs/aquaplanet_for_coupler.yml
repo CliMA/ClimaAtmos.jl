@@ -1,12 +1,6 @@
-z_max: 60000.0
-z_elem: 31
-dz_bottom: 50.0
-dt: "400secs"
+viscous_sponge: false
 t_end: "1days"
 topography: "Earth"
-rayleigh_sponge: true
-implicit_diffusion: true
-approximate_linear_solve_iters: 2
 moist: "equil"
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "DecayWithHeightDiffusion"

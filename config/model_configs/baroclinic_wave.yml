@@ -1,6 +1,5 @@
 dt_save_state_to_disk: "2days"
 initial_condition: "DryBaroclinicWave"
-dt: "400secs"
 t_end: "10days"
 disable_surface_flux_tendency: true
 diagnostics:
