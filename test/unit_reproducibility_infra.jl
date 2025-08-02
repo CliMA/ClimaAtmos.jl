@@ -1,5 +1,5 @@
 #=
-julia --project=examples
+julia --project=.buildkite
 using Revise; include("test/unit_reproducibility_infra.jl")
 =#
 using Test

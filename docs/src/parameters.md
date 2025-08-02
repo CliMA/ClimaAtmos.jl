@@ -23,6 +23,6 @@ In the config file, enter:
 ```
 toml: parameters.toml
 ```
-In order to run the model, type: `julia --project=examples --config_file config.yaml`.
+In order to run the model, type: `julia --project=.buildkite --config_file config.yaml`.
 Note that the `--config_file` argument can take several config files, so if you have a separate config file you would like to use,
 you can simply add it to the end of the command line arguments. Alternatively, you can just add your TOML config to the existing config file.
