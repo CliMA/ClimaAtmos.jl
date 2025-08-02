@@ -1,10 +1,10 @@
 h_elem: 12
 z_elem: 25
+rayleigh_sponge: false
+viscous_sponge: false
 dt: "1secs"
 t_end: "10secs"
 log_progress: false
-implicit_diffusion: true
-approximate_linear_solve_iters: 2
 moist: "equil"
 surface_setup: "DefaultMoninObukhov"
 rad: "allskywithclear"

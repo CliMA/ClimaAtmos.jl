@@ -1,9 +1,6 @@
 dt_save_state_to_disk: "Inf"
 output_default_diagnostics: false
 h_elem: 60
-z_max: 60000.0
-z_elem: 63
-dz_bottom: 30.0
 rayleigh_sponge: true
 viscous_sponge: true
 moist: "equil"
@@ -13,10 +10,7 @@ insolation: "timevarying"
 dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 vert_diff: "DecayWithHeightDiffusion"
-implicit_diffusion: true
-approximate_linear_solve_iters: 2
 surface_setup: "DefaultMoninObukhov"
-dt: "90secs"
 t_end: "1days"
 toml: [toml/longrun_aquaplanet.toml]
 prescribe_ozone: true

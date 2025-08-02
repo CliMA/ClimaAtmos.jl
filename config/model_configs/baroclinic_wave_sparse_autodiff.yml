@@ -3,7 +3,6 @@ initial_condition: "DryBaroclinicWave"
 use_auto_jacobian: true
 update_jacobian_every: dt
 debug_jacobian: true
-dt: "400secs"
 t_end: "10days"
 disable_surface_flux_tendency: true
 diagnostics:

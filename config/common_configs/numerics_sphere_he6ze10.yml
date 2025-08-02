@@ -1,0 +1,11 @@
+config: sphere
+h_elem: 6 # 550 km
+nh_poly: 3
+z_elem: 10
+z_max: 30000.0
+dz_bottom: 500.0
+dt: 400secs
+ode_algo: ARS343
+hyperdiff: CAM_SE
+rayleigh_sponge: false
+viscous_sponge: false
