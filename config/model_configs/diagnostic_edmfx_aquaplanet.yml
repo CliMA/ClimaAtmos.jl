@@ -1,13 +1,9 @@
-z_max: 60000.0
-z_elem: 31
-dz_bottom: 50.0
-rayleigh_sponge: true
+dt: 120secs
+viscous_sponge: false
 surface_setup: DefaultMoninObukhov
 rad: clearsky
 co2_model: fixed
 turbconv: diagnostic_edmfx
-implicit_diffusion: true
-approximate_linear_solve_iters: 2
 prognostic_tke: true
 edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
@@ -18,7 +14,6 @@ edmfx_sgs_diffusive_flux: true
 moist: equil
 cloud_model: "quadrature_sgs"
 precip_model: 0M
-dt: 120secs
 t_end: 3hours
 reproducibility_test: true
 toml: [toml/diagnostic_edmfx_0M.toml]

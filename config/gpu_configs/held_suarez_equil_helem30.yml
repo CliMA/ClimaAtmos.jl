@@ -1,10 +1,5 @@
-h_elem: 30
-z_elem: 63
-z_max: 60000.0
-dz_bottom: 30.0
-rayleigh_sponge: true
-viscous_sponge: true
-dt: "90secs"
+implicit_diffusion: false
+approximate_linear_solve_iters: 1
 t_end: "1days"
 dt_save_state_to_disk: "Inf"
 output_default_diagnostics: false

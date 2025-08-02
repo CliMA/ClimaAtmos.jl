@@ -4,9 +4,7 @@ dt: 10secs
 t_end: 61mins
 dt_save_state_to_disk: "Inf"
 log_progress: false
-rayleigh_sponge: true
-viscous_sponge: true
-implicit_diffusion: true
+approximate_linear_solve_iters: 1
 implicit_sgs_advection: true
 implicit_sgs_entr_detr: true
 implicit_sgs_nh_pressure: true

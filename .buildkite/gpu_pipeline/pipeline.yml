@@ -11,6 +11,7 @@ env:
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
   SLURM_KILL_BAD_EXIT: 1
   SLURM_GRES_FLAGS: "allow-task-sharing"
+  COMMON_CONFIG_PATH: "config/common_configs/"
   GPU_CONFIG_PATH: "config/gpu_configs/"
   MODEL_CONFIG_PATH: "config/model_configs/"
   CLIMAATMOS_GC_NSTEPS: 10
@@ -44,6 +45,7 @@ steps:
           - >
             nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=baroclinic_wave_helem30/output_active/report
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he30ze43.yml
             --config_file ${GPU_CONFIG_PATH}baroclinic_wave_helem30.yml
             --job_id baroclinic_wave_helem30
         artifact_paths: "baroclinic_wave_helem30/output_active/*"
@@ -62,6 +64,7 @@ steps:
             srun --cpu-bind=threads --cpus-per-task=4
             nsys profile --delay 100 --trace=osrt,nvtx,cuda,mpi,ucx --output=baroclinic_wave_helem30_4process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he30ze43.yml
             --config_file ${GPU_CONFIG_PATH}baroclinic_wave_helem30.yml
             --job_id baroclinic_wave_helem30_4process
         artifact_paths: "baroclinic_wave_helem30_4process/output_active/*"
@@ -81,6 +84,7 @@ steps:
           - >
             nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=held_suarez_equil_helem30/output_active/report
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he30ze63.yml
             --config_file ${GPU_CONFIG_PATH}held_suarez_equil_helem30.yml
             --job_id held_suarez_equil_helem30
         artifact_paths: "held_suarez_equil_helem30/output_active/*"
@@ -99,6 +103,7 @@ steps:
             srun --cpu-bind=threads --cpus-per-task=4
             nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=held_suarez_equil_helem30_4process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he30ze63.yml
             --config_file ${GPU_CONFIG_PATH}held_suarez_equil_helem30.yml
             --job_id held_suarez_equil_helem30_4process
         artifact_paths: "held_suarez_equil_helem30_4process/output_active/*"
@@ -120,6 +125,7 @@ steps:
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_diag_1process/output_active/report julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he30ze63.yml
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_diag_1process.yml
             --job_id gpu_aquaplanet_dyamond_diag_1process
         artifact_paths: "gpu_aquaplanet_dyamond_diag_1process/output_active/*"
@@ -141,6 +147,7 @@ steps:
             srun --cpu-bind=threads --cpus-per-task=4
             nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond_ss_1process/output_active/report
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he30ze63.yml
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_1process
         artifact_paths: "gpu_aquaplanet_dyamond_ss_1process/output_active/*"
@@ -161,6 +168,7 @@ steps:
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he30ze63.yml
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_2process
         artifact_paths: "gpu_aquaplanet_dyamond_ss_2process/output_active/*"
@@ -181,6 +189,7 @@ steps:
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he30ze63.yml
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss.yml
             --job_id gpu_aquaplanet_dyamond_ss_4process
         artifact_paths: "gpu_aquaplanet_dyamond_ss_4process/output_active/*"
@@ -219,6 +228,7 @@ steps:
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he30ze63.yml
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_1process.yml
             --job_id gpu_aquaplanet_dyamond_ws_1process
         artifact_paths: "gpu_aquaplanet_dyamond_ws_1process/output_active/*"
@@ -239,6 +249,7 @@ steps:
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he30ze63.yml
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_2process.yml
             --job_id gpu_aquaplanet_dyamond_ws_2process
         artifact_paths: "gpu_aquaplanet_dyamond_ws_2process/output_active/*"
@@ -259,6 +270,7 @@ steps:
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he30ze63.yml
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_4process.yml
             --job_id gpu_aquaplanet_dyamond_ws_4process
         artifact_paths: "gpu_aquaplanet_dyamond_ws_4process/output_active/*"
@@ -300,6 +312,7 @@ steps:
           - >
             nsys profile --delay 200 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_diagedmf/output_active/report
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
+            --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he16ze63.yml
             --config_file ${MODEL_CONFIG_PATH}aquaplanet_diagedmf.yml
             --job_id gpu_aquaplanet_diagedmf
         artifact_paths: "gpu_aquaplanet_diagedmf/output_active/*"
@@ -316,7 +329,8 @@ steps:
       - label: "gpu_aquaplanet_diagedmf_benchmark"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
-          --config_file ${MODEL_CONFIG_PATH}aquaplanet_diagedmf.yml
+          --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he16ze63.yml
+          --config_file ${MODEL_CONFIG_PATH}diagnostic_edmfx_aquaplanet.yml
           --job_id gpu_aquaplanet_diagedmf_benchmark
         artifact_paths: "gpu_aquaplanet_diagedmf_benchmark/output_active/*"
         env:
@@ -334,7 +348,8 @@ steps:
           - >
             nsys profile --delay 100 --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_progedmf/output_active/report
             julia --threads=3 --color=yes --project=.buildkite .buildkite/ci_driver.jl
-            --config_file ${MODEL_CONFIG_PATH}aquaplanet_progedmf.yml
+            --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he16ze63.yml
+            --config_file ${MODEL_CONFIG_PATH}prognostic_edmfx_aquaplanet.yml
             --job_id gpu_aquaplanet_progedmf
         artifact_paths: "gpu_aquaplanet_progedmf/output_active/*"
         env:
@@ -350,7 +365,8 @@ steps:
       - label: "gpu_aquaplanet_progedmf_benchmark"
         command: >
           julia --color=yes --project=.buildkite perf/benchmark.jl
-          --config_file ${MODEL_CONFIG_PATH}aquaplanet_progedmf.yml
+          --config_file ${COMMON_CONFIG_PATH}numerics_sphere_he16ze63.yml
+          --config_file ${MODEL_CONFIG_PATH}prognostic_edmfx_aquaplanet.yml
           --job_id gpu_aquaplanet_progedmf_benchmark
         artifact_paths: "gpu_aquaplanet_progedmf_benchmark/output_active/*"
         env:

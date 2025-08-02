@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 main
 -------
+PR [#3917](https://github.com/CliMA/ClimaAtmos.jl/pull/3917) adds common numercis configs for different resolutions. 
+These configurations are intended to serve as the default settings. Please modify them only if you are certain of the implications.
 
 v0.31.0
 -------

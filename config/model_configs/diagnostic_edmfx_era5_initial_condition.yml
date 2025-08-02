@@ -1,7 +1,9 @@
+h_elem: 15
 z_max: 48000.0
 z_elem: 63
-h_elem: 15
 dz_bottom: 30.0
+dt: 120secs
+t_end: 12hours
 start_date: "20250627-0000"
 initial_condition: "WeatherModel"
 discrete_hydrostatic_balance: false # TODO: change to true once we fix discrete hydrostatic balance to work with orography
@@ -31,8 +33,6 @@ edmfx_sgs_diffusive_flux: true
 moist: equil
 cloud_model: "grid_scale"
 precip_model: 0M
-dt: 120secs
-t_end: 12hours
 toml: [toml/diagnostic_edmfx_era5_ic.toml]
 use_itime: true
 output_default_diagnostics: false

@@ -1,10 +1,5 @@
-z_max: 60000.0
-z_elem: 63
-dz_bottom: 30.0
 rad: "clearsky"
 idealized_h2o: true
-hyperdiff: false
-config: "column"
 initial_condition: "IsothermalProfile"
 t_end: "654days"
 dt: "3hours"

@@ -1,9 +1,9 @@
-h_elem: 30
 z_max: 55000.0
-z_elem: 63
-dz_bottom: 30.0
+rayleigh_sponge: false
+viscous_sponge: false
+implicit_diffusion: false
+approximate_linear_solve_iters: 1
 dt_save_state_to_disk: "10days"
-dt: "90secs"
 t_end: "360days"
 perturb_initstate: false
 discrete_hydrostatic_balance: true

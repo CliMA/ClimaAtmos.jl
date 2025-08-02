@@ -1,6 +1,5 @@
 FLOAT_TYPE: "Float64"
 initial_condition: "MoistBaroclinicWave"
-dt: "400secs"
 t_end: "5days"
 moist: "equil"
 disable_surface_flux_tendency: true
