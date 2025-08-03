@@ -312,6 +312,14 @@ steps:
         artifact_paths: "baroclinic_wave_equil_conservation_source/output_active/*"
         agents:
           slurm_mem: 16GB
+      
+      - label: ":computer: baroclinic wave nonequil moist check conservation with sources"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_nonequil_conservation_source.yml
+          --job_id baroclinic_wave_nonequil_conservation_source
+        artifact_paths: "baroclinic_wave_nonequil_conservation_source/output_active/*"
+        agents:
+          slurm_mem: 16GB
 
   - group: "Sphere Examples (Dycore)"
     steps:
