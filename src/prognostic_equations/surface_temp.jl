@@ -78,8 +78,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
     end
 
     # 2. Turbulent surface energy fluxes (sensible + latent heat) from surface to atmosphere
-    if !isnothing(p.atmos.vertical_diffusion) ||
-       !isnothing(p.atmos.turbconv_model)
+    if !(p.atmos.disable_surface_flux_tendency)
         turb_e_flux_sfc_to_atm =
             Geometry.WVector.(
                 p.precomputed.sfc_conditions.ρ_flux_h_tot
@@ -119,8 +118,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanSST)
     # --- WATER BALANCE (if moisture is active) ---
     if !(p.atmos.moisture_model isa DryModel)
         # 1. Turbulent surface water fluxes (evaporation/condensation)
-        if !isnothing(p.atmos.vertical_diffusion) ||
-           !isnothing(p.atmos.turbconv_model)
+        if !(p.atmos.disable_surface_flux_tendency)
             sfc_turb_w_flux =
                 Geometry.WVector.(
                     p.precomputed.sfc_conditions.ρ_flux_q_tot
