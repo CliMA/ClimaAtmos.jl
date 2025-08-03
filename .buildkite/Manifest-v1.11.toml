@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "04945e2a7116cfacb2d57340f477dbe23e208227"
+project_hash = "a25db2ac38461b28c1b3a6176008dee03780354b"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "be7ae030256b8ef14a441726c4c37766b90b93a3"
@@ -1818,7 +1818,7 @@ version = "2.5.4+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.5+0"
+version = "0.8.1+2"
 
 [[deps.OpenMPI_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Hwloc_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MPIPreferences", "TOML", "Zlib_jll"]
@@ -2539,8 +2539,10 @@ uuid = "b718987f-49a8-5099-9789-dcd902bef87d"
 version = "1.0.2"
 
 [[deps.Thermodynamics]]
-deps = ["DocStringExtensions", "KernelAbstractions", "Random", "RootSolvers"]
-git-tree-sha1 = "bff801ad0a9bbb5c1bf38ffe89a83907a1b145cd"
+deps = ["DocStringExtensions", "ForwardDiff", "KernelAbstractions", "Random", "RootSolvers"]
+git-tree-sha1 = "1c6b10882d535f28b5c79be9d8d782a12f5592f9"
+repo-rev = "zs/test_autodiff"
+repo-url = "https://github.com/CliMA/Thermodynamics.jl.git"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 version = "0.12.15"
 weakdeps = ["ClimaParams"]
