@@ -28,7 +28,7 @@ job_id: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp"
 
 Then run the simulation with the following command:
 ```
-julia --project=examples examples/hybrid/driver.jl --config_file path_to_mysim.yml
+julia --project=.buildkite .buildkite/ci_driver.jl --config_file path_to_mysim.yml
 ```
 
 The configuration in the yaml file above can be changed to adjust to the kind of simulation desired. Options such as t\_end can be increased to the desired simulation time. Other arguments such as radiation type can be changed based on the options in `default_config.yml`.
@@ -36,7 +36,7 @@ The configuration in the yaml file above can be changed to adjust to the kind of
 After a simulation is ran the output files should be available in the output folder, where hdf5 files store all the simulation's data, and two mp4s should be produced with a vertical temperature profile and a vertical wind profile which change over time. If you want to quickly access data from the final day of the simulation simply add a -i to the command line input, like so:
 
 ```
-julia -i --project=examples examples/hybrid/driver.jl --config_file filepath
+julia -i --project=.buildkite .buildkite/ci_driver.jl --config_file filepath
 ```
 
 This will bring you into a julia environment where the current state of the simulation can be accessed. Run propertynames(Y) and propertynames(p) to see accessible values, some examples:

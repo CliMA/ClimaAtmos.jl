@@ -7,7 +7,7 @@ The only exception is true/false strings. These need quotes around them, or they
 
 To start the model with a custom configuration, run:
 
-`julia --project=examples examples/hybrid/driver.jl --config_file <yaml>`
+`julia --project=.buildkite .buildkite/ci_driver.jl --config_file <yaml>`
 
 ### Example
 Below is the default Bomex configuration:
