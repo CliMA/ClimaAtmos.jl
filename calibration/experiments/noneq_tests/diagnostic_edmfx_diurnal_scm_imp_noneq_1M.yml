@@ -3,10 +3,18 @@ initial_condition: "ReanalysisTimeVarying"
 external_forcing: "ReanalysisMonthlyAveragedDiurnal"
 surface_setup: "ReanalysisTimeVarying"
 surface_temperature: "ReanalysisTimeVarying"
-start_date: "20070701"
-site_latitude: 17.0 # CAN PLAY W THIS LOCATION AS WELL
-site_longitude: -149.0
-turbconv: "prognostic_edmfx" # TEST DIAGNOSTIC
+start_date: "20070401"
+site_latitude: -20.0
+site_longitude: -77.5
+
+# use diagnostic EDMF 
+turbconv: "diagnostic_edmfx"
+z_max: 60e3
+z_elem: 150
+netcdf_output_at_levels: true
+t_end: "264hours" # 11 days
+dt: "40secs"
+dz_bottom: 30
 
 # solve implicitly
 implicit_diffusion: true
@@ -22,32 +30,35 @@ tracer_upwinding: vanleer_limiter
 energy_upwinding: vanleer_limiter
 rayleigh_sponge: true
 edmfx_entr_model: "PiGroups"
-edmfx_detr_model: "PiGroups"
+edmfx_detr_model: "SmoothArea"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 edmfx_filter: true
 prognostic_tke: true
-precip_model: "1M"
+precip_model: "0M"
 prescribe_ozone: false
-moist: "nonequil"
+moist: "equil"
 config: "column"
-z_max: 60e3
-z_elem: 63
 z_stretch: true
-dz_bottom: 30
 perturb_initstate: false
-dt: "10secs"
 dt_rad: "10mins"
-t_end: "30hours"
-cloud_model: "grid_scale"
+cloud_model: "quadrature_sgs"
 call_cloud_diagnostics_per_stage: true
-toml: [toml/prognostic_edmfx_calibrated.toml] # THESE PARAMS ARE FOR 1M NOT 0M
-netcdf_output_at_levels: true
-netcdf_interpolation_num_points: [2, 2, 60] # if doing DIAGNOSTIC -- SPEAK 2 JULES ABT NEW PARAMS
+toml: [toml/diagnostic_precalibrated.toml]
+# toml: [tomls/diagnostic_precalibrated.toml, tomls/deep_forcing_relaxation.toml]
 output_default_diagnostics: false
 rad: allskywithclear
 insolation: "externaldriventv"
 diagnostics:
-  - short_name: [lwp, clivi] # CHANGE TO LWP, IWP -- eventually cloud top
-    period: 10mins
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    period: 1hours
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, tke]
+    period: 1hours
+  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
+    period: 1hours
+  - short_name: [rlut, rlutcs, rsut, rsutcs, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv]
+    period: 1hours
+  - reduction_time: max
+    short_name: tke
+    period: 1hours
