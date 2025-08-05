@@ -433,6 +433,12 @@ else
         YAML.load_file(
             joinpath(
                 @__DIR__,
+                "../config/common_configs/numerics_sphere_he16ze63.yml",
+            ),
+        ),
+        YAML.load_file(
+            joinpath(
+                @__DIR__,
                 "../config/longrun_configs/amip_target_diagedmf.yml",
             ),
         ),
