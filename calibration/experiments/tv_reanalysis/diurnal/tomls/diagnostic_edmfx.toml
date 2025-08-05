@@ -1,0 +1,15 @@
+[detr_inv_tau]
+value = 0
+type = "float"
+
+[min_area_limiter_scale]
+value = 0
+type = "float"
+
+[max_area_limiter_scale]
+value = 0
+type = "float"
+
+[zd_rayleigh]
+value = 20000.0
+type = "float"

@@ -375,8 +375,8 @@ function external_forcing_tendency!(
 
     ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
     ᶜdqtdt_sum = p.scratch.ᶜtemp_scalar_2
-    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_nudging + ᶜdTdt_fluc 
-    @. ᶜdqtdt_sum = ᶜdqtdt_hadv + ᶜdqtdt_nudging + ᶜdqtdt_fluc
+    @. ᶜdTdt_sum =  ᶜdTdt_nudging + ᶜdTdt_fluc # ᶜdTdt_hadv +
+    @. ᶜdqtdt_sum = ᶜdqtdt_nudging + ᶜdqtdt_fluc # ᶜdqtdt_hadv + 
 
     T_0 = TD.Parameters.T_0(thermo_params)
     Lv_0 = TD.Parameters.LH_v0(thermo_params)
