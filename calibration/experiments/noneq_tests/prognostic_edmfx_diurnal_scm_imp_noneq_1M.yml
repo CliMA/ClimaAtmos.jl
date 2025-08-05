@@ -30,7 +30,7 @@ edmfx_filter: true
 prognostic_tke: true
 precip_model: "1M"
 prescribe_ozone: false
-moist: "equil"
+moist: "nonequil"
 config: "column"
 z_max: 60e3
 z_elem: 63
@@ -40,7 +40,7 @@ perturb_initstate: false
 dt: "50secs"
 dt_rad: "10mins"
 t_end: "30hours"
-cloud_model: "quadrature_sgs"
+cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage: true
 toml: [toml/prognostic_edmfx_calibrated.toml] # THESE PARAMS ARE FOR 1M NOT 0M
 netcdf_output_at_levels: true
@@ -49,5 +49,5 @@ output_default_diagnostics: false
 rad: allskywithclear
 insolation: "externaldriventv"
 diagnostics:
-  - short_name: [clw, cli] # CHANGE TO LWP, IWP -- eventually cloud top
+  - short_name: [lwp, clivi] # CHANGE TO LWP, IWP -- eventually cloud top
     period: 10mins
