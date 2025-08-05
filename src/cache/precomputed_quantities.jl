@@ -170,6 +170,15 @@ function precomputed_quantities(Y, atmos)
         ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
     )
 
+    diagnostic_precipitation_sgs_quantities =
+        atmos.microphysics_model isa Microphysics1Moment ?
+        (;
+            ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_raiʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_snoʲs = similar(Y.c, NTuple{n, FT}),
+        ) : (;)
+
     diagnostic_sgs_quantities =
         atmos.turbconv_model isa DiagnosticEDMFX ?
         (;
@@ -191,6 +200,7 @@ function precomputed_quantities(Y, atmos)
             ᶜK⁰ = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             precipitation_sgs_quantities...,
+            diagnostic_precipitation_sgs_quantities...,
         ) : (;)
     smagorinsky_lilly_quantities =
         if atmos.smagorinsky_lilly isa SmagorinskyLilly
