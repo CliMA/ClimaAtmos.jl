@@ -229,11 +229,11 @@ Decides which labels to use based on is_1M and is_time.
 function decide_title(is_1M::Bool=false, is_time::Bool=false)
     # Title add on.
     if is_1M
-        title_M = "1M+EDMF"
-        save_M = "1M_EDMF"
+        title_M = "EDMF+1M"
+        save_M = "EDMF_1M"
     else
-        title_M = "2M+EDMF"
-        save_M ="2M_EDMF"
+        title_M = "EDMF+2M"
+        save_M ="EDMF_2M"
     end
 
     # Axis labels setup.
@@ -243,13 +243,13 @@ function decide_title(is_1M::Bool=false, is_time::Bool=false)
         ylab = "lwp [g m-2]"
         save_title = "$(save_M)_timeseries.png"
         xlims = nothing
-        ylims = (1, 1e4)
+        ylims = (1e-1, 1e4)
     else
         title = "$title_M LWP vs N"
         xlab = "lwp [g m-2]"
         ylab = "N"
         save_title = "$(save_M)_LWP_N.png"
-        xlims = (1, 1e3)
+        xlims = (1e-1, 1e3)
         ylims = (1, 1e3)
     end
 
