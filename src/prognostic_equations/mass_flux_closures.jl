@@ -138,8 +138,10 @@ function edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, turbconv_model::Progn
         ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
-        @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜdivᵥ_mse(-(ᶠinterp(ᶜρaʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) / max(ᶜρaʲ, eps(FT))
-        @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρaʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / max(ᶜρaʲ, eps(FT))
+        # @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜdivᵥ_mse(-(ᶠinterp(ᶜρaʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) / max(ᶜρaʲ, eps(FT))
+        # @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρaʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / max(ᶜρaʲ, eps(FT))
+        @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜdivᵥ_mse(-(ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ)))
+        @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ)))
     end
 end
 
