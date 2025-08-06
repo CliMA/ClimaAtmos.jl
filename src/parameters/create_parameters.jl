@@ -109,6 +109,7 @@ atmos_name_map = (;
     :c_smag => :c_smag,
     :alpha_rayleigh_w => :alpha_rayleigh_w,
     :alpha_rayleigh_uh => :alpha_rayleigh_uh,
+    :alpha_rayleigh_sgs_tracer => :alpha_rayleigh_sgs_tracer,
     :astronomical_unit => :astro_unit,
     :held_suarez_T_equator_dry => :T_equator_dry,
     :drag_layer_vertical_extent => :σ_b,

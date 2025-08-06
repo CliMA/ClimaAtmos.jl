@@ -1,4 +1,4 @@
-253
+254
 
 # **README**
 #
@@ -20,6 +20,12 @@
 
 
 #=
+254
+- Use rayleigh and viscous sponges in the prognostic_edmfx_aquaplanet
+
+253
+- Update deps, specifically ClimaParams.jl and Thermodynamics.jl
+
 252
 - Update deps, specifically RootSolvers.jl
 
