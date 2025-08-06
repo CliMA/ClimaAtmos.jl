@@ -335,7 +335,8 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
             CM.CloudDiagnostics.effective_radius_Liu_Hallet_97(
                 cmc.liquid,
                 u.c.ρ,
-                cloud_liquid_water_content / max(eps(FT), cloud_fraction),
+                max(FT(0), cloud_liquid_water_content) /
+                max(eps(FT), cloud_fraction),
                 ml_N_cloud_liquid_droplets(
                     (cmc,),
                     dust_aero_conc,
