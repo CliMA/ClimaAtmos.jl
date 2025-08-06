@@ -185,8 +185,8 @@ foreach_gs_tracer(f::F, Y_or_similar_values...) where {F} =
 Computes a smooth, monotonic weight function `w(a)` that ranges from 0 to 1.
 
 This function is used as the interpolation weight in the regularized `specific`
-function. It ensures a numerically stable and smooth transition between a subgrid-scale 
-(SGS) quantity and its grid-mean counterpart, especially when the SGS area fraction `a` 
+function. It ensures a numerically stable and smooth transition between a subgrid-scale
+(SGS) quantity and its grid-mean counterpart, especially when the SGS area fraction `a`
 is small.
 
 **Key Properties:**
@@ -195,7 +195,7 @@ is small.
 - `w(a_half) = 0.5`.
 - The function is continuously differentiable, with derivatives equal to zero at
   `a = 0` and `a = 1`, which ensures smooth blending.
-- The functions grows very rapidly near `a = a_half`, and grows very slowly at all other 
+- The functions grows very rapidly near `a = a_half`, and grows very slowly at all other
   values of `a`.
 - For small `a_half`, the weight rapidly approaches 1 for values of `a` that are
   a few times larger than `a_half`.
@@ -210,7 +210,7 @@ constructed in two main steps to satisfy the key properties:
 2.  **Midpoint Control**: To ensure the function passes through the control point
     `(a_half, 0.5)`, the input `a` is first transformed by a specially designed
     power function (`1 - (1 - a)^k`) before being passed to the bounded sigmoid.
-    This transformation maps `a_half` to `0.5` while preserving differentiability 
+    This transformation maps `a_half` to `0.5` while preserving differentiability
     at the boundaries.
 
 Arguments:
@@ -246,11 +246,11 @@ draft_sum(f, sgsʲs) = unrolled_sum(f, sgsʲs)
 """
     ᶜenv_value(grid_scale_value, f_draft, gs, turbconv_model)
 
-Computes the value of a quantity `ρaχ` in the environment subdomain by subtracting 
+Computes the value of a quantity `ρaχ` in the environment subdomain by subtracting
 the sum of its values in all draft subdomains from the grid-scale value. Available
 for general variables in PrognosticEDMFX and environmental area (ᶜρa⁰) in DiagnosticEDMFX.
 
-This is based on the domain decomposition principle for density-area weighted 
+This is based on the domain decomposition principle for density-area weighted
 quantities: `GridMean(ρχ) = Env(ρaχ) + Sum(Drafts(ρaχ))`.
 
 The function handles both PrognosticEDMFX and DiagnosticEDMFX models:
@@ -315,21 +315,7 @@ function ᶜspecific_env_value(::Val{χ_name}, Y, p) where {χ_name}
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
     elseif turbconv_model isa DiagnosticEDMFX || turbconv_model isa EDOnlyEDMFX
-        ᶜχʲs = getproperty(p.precomputed, Symbol(:ᶜ, χ_name, :ʲs))
-        n = n_mass_flux_subdomains(turbconv_model)
-
-        # Σ ρaʲ * χʲ
-        ᶜρaχʲs_sum = p.scratch.ᶜtemp_scalar_3
-        @. ᶜρaχʲs_sum = 0
-        for j in 1:n
-            ᶜρaʲ = p.precomputed.ᶜρaʲs.:($j)
-            ᶜχʲ = ᶜχʲs.:($j)
-            @. ᶜρaχʲs_sum += ᶜρaʲ * ᶜχʲ
-        end
-
-        ᶜρaχ⁰ = @. lazy(ᶜρχ - ᶜρaχʲs_sum)
-        # Denominator: ρa⁰ = ρ - Σ ρaʲ, assume ᶜρa⁰ = ρ
-        ᶜρa⁰ = Y.c.ρ
+        error("Not implemented. You should use grid mean values.")
     end
 
     return @. lazy(specific(
@@ -414,9 +400,9 @@ Computes the specific moist static energy (`mse`) in the environment (`mse⁰`).
 
 This is a specialized helper function because `mse` is not a grid-scale prognostic
 variable. It first computes the grid-scale moist static energy density (`ρmse`)
-from other grid-scale quantities (`ρ`, total specific enthalpy `h_tot`, specific 
-kinetic energy `K`). It then uses the `ᶜenv_value` helper to compute the environment's 
-portion of `ρmse` and `ρa` via domain decomposition, and finally calculates the specific 
+from other grid-scale quantities (`ρ`, total specific enthalpy `h_tot`, specific
+kinetic energy `K`). It then uses the `ᶜenv_value` helper to compute the environment's
+portion of `ρmse` and `ρa` via domain decomposition, and finally calculates the specific
 value using the regularized `specific` function.
 
 Arguments:
@@ -473,9 +459,9 @@ end
 Computes the environment vertical velocity `u₃⁰`.
 
 This function calculates the environment's total vertical momentum (`ρa⁰u₃⁰`) and
-its total area-weighted density (`ρa⁰`) using the domain decomposition principle 
-(GridMean = Env + Sum(Drafts)). It then computes the final specific velocity `u₃⁰` 
-using the regularized `specific` function to ensure numerical stability when the 
+its total area-weighted density (`ρa⁰`) using the domain decomposition principle
+(GridMean = Env + Sum(Drafts)). It then computes the final specific velocity `u₃⁰`
+using the regularized `specific` function to ensure numerical stability when the
 environment area fraction `a⁰` is small.
 
 Arguments:
@@ -499,7 +485,7 @@ u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
 A wrapper for Julia's `mapreduce` function that automatically determines
 the initial value (`init`) for the reduction.
 
-This is useful for iterators whose elements are custom structs or 
+This is useful for iterators whose elements are custom structs or
 `ClimaCore.Geometry.AxisTensor`s, where the zero element cannot be inferred
 as a simple scalar. It uses `ClimaCore.RecursiveApply` tools (`rzero`,
 `rpromote_type`) to create a type-stable, correctly-structured zero element
@@ -523,7 +509,7 @@ Computes the dot product of two `Tuple`s (`a` and `b`) using a recursive,
 manually unrolled implementation.
 
 This function is designed to be type-stable and efficient for CUDA kernels,
-where standard `mapreduce` implementations can otherwise suffer from type-inference 
+where standard `mapreduce` implementations can otherwise suffer from type-inference
 failures.
 
 It uses `ClimaCore.RecursiveApply` operators (`⊞` for addition, `⊠` for

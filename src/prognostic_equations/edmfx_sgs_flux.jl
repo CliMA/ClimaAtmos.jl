@@ -1,5 +1,5 @@
 #####
-##### Tendencies applied to the grid-mean atmospheric state due to subgrid-scale (SGS) 
+##### Tendencies applied to the grid-mean atmospheric state due to subgrid-scale (SGS)
 ##### fluxes computed by the EDMFX scheme
 #####
 
@@ -12,7 +12,7 @@ divergence of subgrid-scale (SGS) mass fluxes from EDMFX updrafts and the enviro
 This involves terms of the form `- ∂(ρₖ aₖ w′ₖ ϕ′ₖ)/∂z`, where `k` denotes
 an SGS component (updraft `j` or environment `0`), `aₖ` is the area fraction,
 `w′ₖ` is the vertical velocity deviation from the grid mean, and `ϕ′ₖ` is the
-deviation of a conserved variable `ϕ` (such as total enthalpy or specific humidity) 
+deviation of a conserved variable `ϕ` (such as total enthalpy or specific humidity)
 from its grid-mean value. These terms represent the redistribution of energy and tracers
 by the resolved SGS circulations relative to the grid mean flow.
 
@@ -51,7 +51,7 @@ function edmfx_sgs_mass_flux_tendency!(
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
         # Enthalpy fluxes. First sum up the draft fluxes
-        # TODO: Isolate assembly of flux term pattern to a function and 
+        # TODO: Isolate assembly of flux term pattern to a function and
         # reuse (both in prognostic and diagnostic EDMFX)
         # [best after removal of precomputed quantities]
         ᶠu³_diff = p.scratch.ᶠtemp_CT3
@@ -434,7 +434,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(ρatke_flux),
             )
-            # Add flux divergence and dissipation term, relaxing TKE to zero 
+            # Add flux divergence and dissipation term, relaxing TKE to zero
             # in one time step if tke < 0
             @. Yₜ.c.sgs⁰.ρatke -=
                 ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) + ifelse(
@@ -510,7 +510,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
 )
 
     # Assumes envinronmental area fraction is 1 (so draft area fraction is negligible)
-    # TODO: Relax this assumption and construct diagnostic EDMF fluxes in parallel to 
+    # TODO: Relax this assumption and construct diagnostic EDMF fluxes in parallel to
     # prognostic fluxes
     FT = Spaces.undertype(axes(Y.c))
     (; dt, params) = p
@@ -565,7 +565,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(ρatke_flux),
             )
-            # Add flux divergence and dissipation term, relaxing TKE to zero 
+            # Add flux divergence and dissipation term, relaxing TKE to zero
             # in one time step if tke < 0
             @. Yₜ.c.sgs⁰.ρatke -=
                 ᶜdivᵥ_ρatke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) + ifelse(
@@ -592,16 +592,48 @@ function edmfx_sgs_diffusive_flux_tendency!(
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
         end
+        if (
+            p.atmos.moisture_model isa NonEquilMoistModel &&
+            p.atmos.microphysics_model isa Microphysics1Moment
+        )
+            α = CAP.α_vert_diff_tracer(params)
 
-        # TODO: add liquid, ice, rain and snow specific humidity diffusion
+            ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
+            ᶜdivᵥ_ρq = Operators.DivergenceF2C(
+                top = Operators.SetValue(C3(FT(0))),
+                bottom = Operators.SetValue(C3(FT(0))),
+            )
+            microphysics_tracers = (
+                (@name(c.ρq_liq), @name(q_liq)),
+                (@name(c.ρq_ice), @name(q_ice)),
+                (@name(c.ρq_rai), @name(q_rai)),
+                (@name(c.ρq_sno), @name(q_sno)),
+            )
+            MatrixFields.unrolled_foreach(
+                microphysics_tracers,
+            ) do (ρqʲ_name, name)
+                MatrixFields.has_field(Y, ρqʲ_name) || return
+
+                ᶜρqʲ = MatrixFields.get_field(Y, ρqʲ_name)
+                ᶜρqʲₜ = MatrixFields.get_field(Yₜ, ρqʲ_name)
+                ᶜqʲ = (@. lazy(specific(ᶜρqʲ, Y.c.ρ)))
+
+                if name in (@name(q_liq), @name(q_ice))
+                    @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * ᶠgradᵥ(ᶜqʲ)))
+                elseif name in (@name(q_rai), @name(q_sno))
+                    @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α * ᶠgradᵥ(ᶜqʲ)))
+                else
+                    error("Unsupported moisture tracer variable")
+                end
+                @. ᶜρqʲₜ -= ᶜρχₜ_diffusion
+            end
+        end
 
         # Momentum diffusion
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
         ᶠstrain_rate .= compute_strain_rate_face(ᶜu)
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
     end
-
-    # TODO: Add tracer fluxes
 
     return nothing
 end
