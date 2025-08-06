@@ -124,7 +124,7 @@ function edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, turbconv_model::Progn
     FT = eltype(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜK_h = p.scratch.ᶜtemp_scalar
-    @. ᶜK_h = FT(0.1)
+    @. ᶜK_h = FT(0)
     ᶜdivᵥ_mse = Operators.DivergenceF2C(
         top = Operators.SetValue(C3(0)),
         bottom = Operators.SetValue(C3(0)),
