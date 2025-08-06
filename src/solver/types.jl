@@ -238,6 +238,7 @@ Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
     zd::FT
     α_uₕ::FT
     α_w::FT
+    α_sgs_tracer::FT
 end
 
 abstract type AbstractGravityWave end

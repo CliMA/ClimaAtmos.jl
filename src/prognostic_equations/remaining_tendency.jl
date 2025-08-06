@@ -139,12 +139,13 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
     ᶜρ = Y.c.ρ
-    (; radiation_mode, moisture_model, turbconv_model) = p.atmos
+    (; radiation_mode, moisture_model, turbconv_model, microphysics_model) =
+        p.atmos
     (; rayleigh_sponge, viscous_sponge) = p.atmos
     (; ls_adv, scm_coriolis) = p.atmos
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜp, sfc_conditions, ᶜts) = p.precomputed
+    (; ᶜp, sfc_conditions, ᶜts, ᶜK) = p.precomputed
 
     ᶜh_tot = @. lazy(
         TD.total_specific_enthalpy(
@@ -157,6 +158,55 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     vst_u₃ = viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge)
     vst_ρe_tot = viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge)
     rst_uₕ = rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge)
+
+    if use_prognostic_tke(turbconv_model)
+        rst_ρatke =
+            rayleigh_sponge_tendency_sgs_tracer(Y.c.sgs⁰.ρatke, rayleigh_sponge)
+        @. Yₜ.c.sgs⁰.ρatke += rst_ρatke
+    end
+    if turbconv_model isa PrognosticEDMFX
+        ᶜmse = @. lazy(ᶜh_tot - ᶜK)
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+        n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+        for j in 1:n
+            rst_sgs_mse = rayleigh_sponge_tendency_sgs_tracer(
+                Y.c.sgsʲs.:($j).mse,
+                ᶜmse,
+                rayleigh_sponge,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).mse += rst_sgs_mse
+            rst_sgs_q_tot = rayleigh_sponge_tendency_sgs_tracer(
+                Y.c.sgsʲs.:($j).q_tot,
+                ᶜq_tot,
+                rayleigh_sponge,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_tot += rst_sgs_q_tot
+        end
+        if moisture_model isa NonEquilMoistModel &&
+           microphysics_model isa Microphysics1Moment
+            # TODO: This doesn't work for multiple updrafts
+            moisture_species = (
+                (@name(c.sgsʲs.:(1).q_liq), @name(c.ρq_liq)),
+                (@name(c.sgsʲs.:(1).q_ice), @name(c.ρq_ice)),
+                (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai)),
+                (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno)),
+            )
+            MatrixFields.unrolled_foreach(
+                moisture_species,
+            ) do (sgs_q_name, ρq_name)
+                ᶜρq = MatrixFields.get_field(Y, ρq_name)
+                ᶜq = @. lazy(specific(ᶜρq, Y.c.ρ))
+                ᶜsgs_q = MatrixFields.get_field(Y, sgs_q_name)
+                ᶜsgs_qₜ = MatrixFields.get_field(Yₜ, sgs_q_name)
+                rst_sgs_q = rayleigh_sponge_tendency_sgs_tracer(
+                    ᶜsgs_q,
+                    ᶜq,
+                    rayleigh_sponge,
+                )
+                @. ᶜsgs_qₜ += rst_sgs_q
+            end
+        end
+    end
     # For HeldSuarezForcing, the radiation_mode is used as the forcing parameter
     forcing = radiation_mode isa HeldSuarezForcing ? radiation_mode : nothing
     hs_args = (ᶜuₕ, ᶜp, params, sfc_conditions.ts, moisture_model, forcing)
