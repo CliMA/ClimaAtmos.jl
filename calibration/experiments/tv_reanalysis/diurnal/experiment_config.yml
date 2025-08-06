@@ -11,19 +11,20 @@ slurm_mem_per_cpu: "25G"
 slurm_cpus_per_task: 1
 
 
-y_var_names: [ta, hus, clw] # calibration variables clw
+y_var_names: [lwp, clivi] # calibration variables clw
 log_vars: [""] # take log(var) when forming y, g
 z_max : 4000 # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
-dims_per_var : 53 # num dimensions per variable (num cells in vertical profile below z_max)
-z_cal_grid: # calibration grid (stretch-grid parameters). In general, `z_elem` should be the same for all types
-  shallow:
-    z_max: 4000.0
-    z_elem: 66
-    dz_bottom: 30
-  deep:
-    z_max: 15000.0
-    z_elem: 30
-    dz_bottom: 30
+dims_per_var : 1 # num dimensions per variable (num cells in vertical profile below z_max)
+# don't need to specify z_cal_grid for 0D profiles
+# z_cal_grid: # calibration grid (stretch-grid parameters). In general, `z_elem` should be the same for all types
+#   shallow:
+#     z_max: 4000.0
+#     z_elem: 66
+#     dz_bottom: 30
+#   deep:
+#     z_max: 15000.0
+#     z_elem: 30
+#     dz_bottom: 30
 
 
 # eki_timestep: 0.1 # timestep of eki, if using default
@@ -37,6 +38,8 @@ norm_factors_by_var:
   ta: [252.8, 31.1699]
   hus: [0.00203968, 0.00346363]
   clw: [0.000004257, 0.00002] # for physical space
+  lwp: [1, 1]
+  clivi: [1, 1]
   #clw: [-9.32234, 3.10897] # for log space
 
 # change how we weight the different variables in the loss function. 
@@ -45,6 +48,8 @@ const_noise_by_var:
   ta: 0.0025 # 5% noise
   hus: 0.0025
   clw: 0.01 # 10% noise 
+  lwp: 0.01
+  clivi: 0.01
 
 forcing_toml_files:
   shallow: "tomls/shallow_forcing_relaxation.toml"

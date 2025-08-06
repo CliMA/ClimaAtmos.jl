@@ -17,17 +17,14 @@ experiment_config_path = "experiment_config.yml"
 # load experiment config
 experiment_config = YAML.load_file(experiment_config_path)
 
-g_start = experiment_config["g_t_start_sec"]
-g_end = experiment_config["g_t_end_sec"]
-ensemble_size = experiment_config["ensemble_size"]
+# unpack all experiment_config vars into scope
+for (key, value) in experiment_config
+    @eval $(Symbol(key)) = $value
+end
 
-# load case data
-output_dir = experiment_config["output_dir"]
-
-model_config = experiment_config["model_config"]
+# load case data - variables now directly available from config unpacking
 model_config_dict = YAML.load_file(model_config)
 atmos_config = CA.AtmosConfig(model_config_dict)
-z_max = experiment_config["z_max"]
 
 zc_model = get_z_grid(atmos_config; z_max)
 
@@ -51,12 +48,11 @@ function get_season(start_date_str)
     return get(season_map, start_date_str, "Unknown")
 end
 
-y_names = ["ta", "hus", "clw"]
-norm_factors_dict = experiment_config["norm_factors_by_var"]
-log_vars = experiment_config["log_vars"]
+# These variables are now directly available from the config unpacking:
+# y_var_names, norm_factors_by_var, log_vars, g_t_start_sec, g_t_end_sec, etc.
 
 # Get simulation data for all ensemble members
-all_sim_data = Dict(var_name => [] for var_name in y_names)
+all_sim_data = Dict(var_name => [] for var_name in y_var_names)
 
 @info "Loading simulation data for $ensemble_size ensemble members..."
 
@@ -72,14 +68,14 @@ for m in 1:ensemble_size
     end
     
     try
-        for var_name in y_names
+        for var_name in y_var_names
             simdir = SimDir(sim_dir)
             var_data = process_profile_variable(
                 simdir,
                 var_name;
                 reduction = "inst",
-                t_start = g_start,
-                t_end = g_end,
+                t_start = g_t_start_sec,
+                t_end = g_t_end_sec,
                 z_max = z_max,
                 norm_factors_dict = nothing,  # Don't normalize for plotting physical space
                 log_vars = [],
@@ -109,14 +105,14 @@ obs_end = Dates.DateTime(start_date, "yyyymmdd") + Dates.Day(1)
 
 # Get observation data for each variable separately
 obs_data = Dict()
-for var_name in y_names
+for var_name in y_var_names
     obs_var = get_obs(
         forcing_file_path,
         [var_name],
         obs_start,
         obs_end;
         normalize = false,  # Don't normalize for plotting physical space
-        norm_factors_dict = norm_factors_dict,
+        norm_factors_dict = norm_factors_by_var,
         z_scm = zc_model,
         log_vars = [""],
     )
@@ -133,7 +129,7 @@ var_info = Dict(
     "clw" => ("Cloud Liquid Water", "kg/kg")
 )
 
-for var_name in y_names
+for var_name in y_var_names
     p = Plots.plot(
         xlabel = "$(var_info[var_name][1]) ($(var_info[var_name][2]))",
         ylabel = "Height (m)",
