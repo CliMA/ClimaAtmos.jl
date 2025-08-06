@@ -1,3 +1,11 @@
+[condensation_evaporation_timescale]
+value = 1200
+type = "float"
+
+[sublimation_deposition_timescale]
+value = 1200
+type = "float"
+
 [mixing_length_tke_surf_scale]
 value = 0.5507468907407347
 type = "float"

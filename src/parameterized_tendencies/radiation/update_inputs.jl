@@ -342,7 +342,7 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
                     dust_aero_conc,
                     seasalt_aero_conc,
                     SO4_aero_conc,
-                    lwp_col,
+                    max(FT(0), lwp_col),
                 ),
                 FT(0),
                 FT(0),

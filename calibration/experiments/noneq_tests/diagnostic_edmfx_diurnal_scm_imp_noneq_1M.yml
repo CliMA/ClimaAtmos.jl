@@ -3,9 +3,12 @@ initial_condition: "ReanalysisTimeVarying"
 external_forcing: "ReanalysisMonthlyAveragedDiurnal"
 surface_setup: "ReanalysisTimeVarying"
 surface_temperature: "ReanalysisTimeVarying"
-start_date: "20070401"
-site_latitude: -20.0
-site_longitude: -77.5
+start_date: "20070701"
+site_latitude: 17.0 # CAN PLAY W THIS LOCATION AS WELL
+site_longitude: -149.0
+# start_date: "20070401"
+# site_latitude: -20.0
+# site_longitude: -77.5
 
 # use diagnostic EDMF 
 turbconv: "diagnostic_edmfx"
@@ -13,7 +16,7 @@ z_max: 60e3
 z_elem: 150
 netcdf_output_at_levels: true
 t_end: "264hours" # 11 days
-dt: "40secs"
+dt: "3secs"
 dz_bottom: 30
 
 # solve implicitly
@@ -36,16 +39,16 @@ edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 edmfx_filter: true
 prognostic_tke: true
-precip_model: "0M"
+precip_model: "1M"
 prescribe_ozone: false
-moist: "equil"
+moist: "nonequil"
 config: "column"
 z_stretch: true
 perturb_initstate: false
 dt_rad: "10mins"
-cloud_model: "quadrature_sgs"
+cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage: true
-toml: [toml/diagnostic_precalibrated.toml]
+toml: [calibration/experiments/noneq_tests/toml/diagnostic_precalibrated.toml]
 # toml: [tomls/diagnostic_precalibrated.toml, tomls/deep_forcing_relaxation.toml]
 output_default_diagnostics: false
 rad: allskywithclear
