@@ -121,8 +121,8 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵢᵖ = similar(Y.c, FT),
             ᶜSqᵣᵖ = similar(Y.c, FT),
             ᶜSqₛᵖ = similar(Y.c, FT),
-            ᶜwnₗ = similar(Y.c, FT),
-            ᶜwnᵣ = similar(Y.c, FT),
+            ᶜwₙₗ = similar(Y.c, FT),
+            ᶜwₙᵣ = similar(Y.c, FT),
             ᶜSnₗᵖ = similar(Y.c, FT),
             ᶜSnᵣᵖ = similar(Y.c, FT),
         )
@@ -531,6 +531,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         p,
         p.atmos.moisture_model,
         p.atmos.microphysics_model,
+        p.atmos.turbconv_model,
     )
     # Needs to be done after edmf precipitation is computed in sub-domains
     set_precipitation_cache!(

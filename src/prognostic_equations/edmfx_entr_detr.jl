@@ -531,15 +531,15 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     (; ᶠu₃⁰) = p.precomputed
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-    ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
+    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
 
     microphysics_tracers = (
-        (@name(c.sgsʲs.:(1).q_liq), :q_liq),
-        (@name(c.sgsʲs.:(1).q_ice), :q_ice),
-        (@name(c.sgsʲs.:(1).q_rai), :q_rai),
-        (@name(c.sgsʲs.:(1).q_sno), :q_sno),
-        (@name(c.sgsʲs.:(1).n_liq), :n_liq),
-        (@name(c.sgsʲs.:(1).n_rai), :n_rai),
+        (@name(c.sgsʲs.:(1).q_liq), @name(q_liq)),
+        (@name(c.sgsʲs.:(1).q_ice), @name(q_ice)),
+        (@name(c.sgsʲs.:(1).q_rai), @name(q_rai)),
+        (@name(c.sgsʲs.:(1).q_sno), @name(q_sno)),
+        (@name(c.sgsʲs.:(1).n_liq), @name(n_liq)),
+        (@name(c.sgsʲs.:(1).n_rai), @name(n_rai)),
     )
 
     for j in 1:n
@@ -558,7 +558,7 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
 
         MatrixFields.unrolled_foreach(microphysics_tracers) do (χʲ_name, χ_name)
             MatrixFields.has_field(Y, χʲ_name) || return
-            ᶜχ⁰ = ᶜspecific_env_value(Val(χ_name), Y, p)
+            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
             ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
             ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
             @. ᶜχʲₜ += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜχ⁰ - ᶜχʲ)
