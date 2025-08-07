@@ -14625,3 +14625,3248 @@ WARNING: redefinition of constant Main.experiment_config_dict. This may fail, ca
 └ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
 [ Info: Mean constrained parameter(s): [9.00472716511697, 0.010394638318197655, 1691.2395776713965, 20.898407276945203, -6.630050375413024, -8.033889696361117, -9.245262488661648, -1.5810553051721419, 0.9013875455787773, 0.14341349673744877, 0.21609543833219327, 7.094455612260741, 0.3079393283584424, 0.40320539187209087, 0.005072270118926339, 0.9224909386554304, 0.422414396765888]
 [ Info: Covariance-weighted error: 63.84449550045427
+┌ Warning: `job_id` is empty and likely not passed to AtmosConfig
+└ @ ClimaAtmos /central/groups/esm/jschmitt/ClimaAtmos.jl/src/solver/types.jl:1190
+┌ Info: Making AtmosConfig with config files: 
+└    /central/groups/esm/jschmitt/ClimaAtmos.jl/src/solver/../../config/default_configs/default_config.yml
+[ Info: Starting 100 workers.
+[ Info: Starting SLURM job julia-1079623: `srun -J julia-1079623 -n 100 -D /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal --cpus-per-task=1 --mem-per-cpu=25G -t 12:00:00 -o .julia-1079623-17545272992.out -- /central/groups/esm/software/julia/julia-1.11.5/bin/julia --worker=Jo9nYBXvBgzLn59y`
+[ Info: Worker launch (after 0 s): No output file ".julia-1079623-17545272992.out" yet
+[ Info: Worker launch (after 0 s): No output file ".julia-1079623-17545272992.out" yet
+srun: Warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 100 with the number of requested nodes 31. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 2s on host 172.18.28.10, port 9156
+[ Info: Worker ready after 2s on host 172.18.28.10, port 9157
+[ Info: Worker ready after 2s on host 172.18.28.27, port 9314
+[ Info: Worker ready after 2s on host 172.18.29.98, port 9738
+[ Info: Worker ready after 2s on host 172.18.28.113, port 9927
+[ Info: Worker ready after 2s on host 172.18.28.65, port 9924
+[ Info: Worker ready after 2s on host 172.18.28.116, port 9124
+[ Info: Worker ready after 2s on host 172.18.28.116, port 9125
+[ Info: Worker ready after 2s on host 172.18.28.116, port 9126
+[ Info: Worker ready after 2s on host 172.18.28.119, port 9298
+[ Info: Worker ready after 2s on host 172.18.28.119, port 9297
+[ Info: Worker ready after 2s on host 172.26.29.143, port 9283
+[ Info: Worker ready after 2s on host 172.26.29.143, port 9282
+[ Info: Worker ready after 2s on host 172.18.28.194, port 9621
+[ Info: Worker ready after 2s on host 172.18.28.194, port 9622
+[ Info: Worker ready after 2s on host 172.26.29.143, port 9284
+[ Info: Worker ready after 2s on host 172.18.28.27, port 9313
+[ Info: Worker ready after 2s on host 172.18.28.77, port 9876
+[ Info: Worker ready after 2s on host 172.18.28.191, port 9526
+[ Info: Worker ready after 2s on host 172.26.29.148, port 9287
+[ Info: Worker ready after 2s on host 172.26.29.148, port 9288
+[ Info: Worker ready after 2s on host 172.18.28.145, port 9147
+[ Info: Worker ready after 2s on host 172.18.28.193, port 9385
+[ Info: Worker ready after 2s on host 172.18.28.193, port 9384
+[ Info: Worker ready after 2s on host 172.18.29.132, port 9597
+[ Info: Worker ready after 2s on host 172.18.28.194, port 9620
+[ Info: Worker ready after 2s on host 172.18.28.108, port 9136
+[ Info: Worker ready after 2s on host 172.18.28.108, port 9135
+[ Info: Worker ready after 2s on host 172.18.28.215, port 9780
+[ Info: Worker ready after 2s on host 172.31.28.86, port 9172
+[ Info: Worker ready after 2s on host 172.31.28.86, port 9175
+[ Info: Worker ready after 2s on host 172.31.28.86, port 9173
+[ Info: Worker ready after 2s on host 172.18.28.73, port 9381
+[ Info: Worker ready after 2s on host 172.18.28.73, port 9383
+[ Info: Worker ready after 2s on host 172.31.28.86, port 9174
+[ Info: Worker ready after 2s on host 172.18.28.215, port 9779
+[ Info: Worker ready after 2s on host 172.18.28.15, port 9971
+[ Info: Worker ready after 2s on host 172.31.28.68, port 9326
+[ Info: Worker ready after 2s on host 172.31.28.68, port 9328
+[ Info: Worker ready after 2s on host 172.31.28.68, port 9329
+[ Info: Worker ready after 2s on host 172.26.29.142, port 9962
+[ Info: Worker ready after 2s on host 172.26.29.142, port 9958
+[ Info: Worker ready after 2s on host 172.26.29.142, port 9956
+[ Info: Worker ready after 2s on host 172.26.29.142, port 9954
+[ Info: Worker ready after 2s on host 172.26.29.142, port 9960
+[ Info: Worker ready after 2s on host 172.31.28.90, port 9550
+[ Info: Worker ready after 2s on host 172.31.28.90, port 9551
+[ Info: Worker ready after 2s on host 172.31.28.90, port 9549
+[ Info: Worker ready after 2s on host 172.31.28.62, port 9714
+[ Info: Worker ready after 2s on host 172.31.28.62, port 9719
+[ Info: Worker ready after 2s on host 172.31.28.62, port 9720
+[ Info: Worker ready after 2s on host 172.31.28.62, port 9721
+[ Info: Worker ready after 2s on host 172.31.28.62, port 9716
+[ Info: Worker ready after 2s on host 172.31.28.62, port 9722
+[ Info: Worker ready after 2s on host 172.26.29.142, port 9959
+[ Info: Worker ready after 2s on host 172.26.29.142, port 9961
+[ Info: Worker ready after 2s on host 172.26.29.142, port 9963
+[ Info: Worker ready after 2s on host 172.26.29.142, port 9964
+[ Info: Worker ready after 2s on host 172.26.29.142, port 9965
+[ Info: Worker ready after 2s on host 172.26.29.142, port 9957
+[ Info: Worker ready after 2s on host 172.26.29.142, port 9955
+[ Info: Worker ready after 2s on host 172.31.28.68, port 9327
+[ Info: Worker ready after 2s on host 172.31.28.62, port 9718
+[ Info: Worker ready after 2s on host 172.31.28.62, port 9715
+[ Info: Worker ready after 2s on host 172.31.28.62, port 9717
+[ Info: Worker ready after 2s on host 172.31.28.62, port 9713
+[ Info: Worker ready after 2s on host 172.18.28.63, port 9352
+[ Info: Worker ready after 2s on host 172.18.28.63, port 9351
+[ Info: Worker ready after 2s on host 172.18.28.73, port 9382
+[ Info: Worker ready after 2s on host 172.31.28.70, port 9843
+[ Info: Worker ready after 2s on host 172.31.28.70, port 9844
+[ Info: Worker ready after 2s on host 172.31.28.70, port 9845
+[ Info: Worker ready after 2s on host 172.31.28.70, port 9846
+[ Info: Worker ready after 2s on host 172.18.29.146, port 9534
+[ Info: Worker ready after 2s on host 172.18.29.146, port 9536
+[ Info: Worker ready after 2s on host 172.18.29.146, port 9538
+[ Info: Worker ready after 2s on host 172.18.28.114, port 9172
+[ Info: Worker ready after 2s on host 172.18.28.114, port 9173
+[ Info: Worker ready after 2s on host 172.18.28.236, port 9476
+[ Info: Worker ready after 2s on host 172.18.28.236, port 9480
+[ Info: Worker ready after 2s on host 172.18.28.236, port 9478
+[ Info: Worker ready after 2s on host 172.18.28.236, port 9474
+[ Info: Worker ready after 2s on host 172.18.28.236, port 9475
+[ Info: Worker ready after 2s on host 172.18.28.236, port 9477
+[ Info: Worker ready after 2s on host 172.18.28.236, port 9479
+[ Info: Worker ready after 2s on host 172.18.28.236, port 9473
+[ Info: Worker ready after 2s on host 172.18.28.236, port 9481
+[ Info: Worker ready after 2s on host 172.26.29.139, port 9545
+[ Info: Worker ready after 2s on host 172.26.29.139, port 9546
+[ Info: Worker ready after 2s on host 172.18.29.146, port 9533
+[ Info: Worker ready after 2s on host 172.18.29.146, port 9537
+[ Info: Worker ready after 2s on host 172.18.29.146, port 9539
+[ Info: Worker ready after 2s on host 172.18.29.146, port 9540
+[ Info: Worker ready after 2s on host 172.18.29.146, port 9535
+[ Info: Worker ready after 2s on host 172.31.28.64, port 9917
+[ Info: Worker ready after 2s on host 172.31.28.64, port 9918
+[ Info: Worker ready after 2s on host 172.31.28.64, port 9916
+[ Info: Worker ready after 2s on host 172.31.28.64, port 9915
+[ Info: Worker ready after 2s on host 172.26.29.139, port 9544
+[ Info: Worker ready after 2s on host 172.26.29.139, port 9543
+WARNING: redefinition of constant Main.experiment_config. This may fail, cause incorrect answers, or produce other errors.
+WARNING: redefinition of constant Main.experiment_config_dict. This may fail, cause incorrect answers, or produce other errors.
+[ Info: Copied tomls/diagnostic_edmfx.toml to /central/groups/esm/jschmitt/calibrations/diurnal_diag_4/configs/tomls/diagnostic_edmfx.toml
+[ Info: Copied forcing config /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/tomls/deep_forcing_relaxation.toml to /central/groups/esm/jschmitt/calibrations/diurnal_diag_4/configs/tomls/deep_forcing_relaxation.toml
+[ Info: Copied forcing config /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/tomls/shallow_forcing_relaxation.toml to /central/groups/esm/jschmitt/calibrations/diurnal_diag_4/configs/tomls/shallow_forcing_relaxation.toml
+[ Info: Dict{String, Any}("site_longitude" => -72.5, "start_date" => "20070101", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -75.0, "start_date" => "20070101", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -77.5, "start_date" => "20070101", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -80.0, "start_date" => "20070101", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -82.5, "start_date" => "20070101", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -85.0, "start_date" => "20070101", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -90.0, "start_date" => "20070101", "site_latitude" => -18.5)
+[ Info: Dict{String, Any}("site_longitude" => -95.0, "start_date" => "20070101", "site_latitude" => -17.0)
+[ Info: Dict{String, Any}("site_longitude" => -100.0, "start_date" => "20070101", "site_latitude" => -15.5)
+[ Info: Dict{String, Any}("site_longitude" => -105.0, "start_date" => "20070101", "site_latitude" => -14.0)
+[ Info: Dict{String, Any}("site_longitude" => -110.0, "start_date" => "20070101", "site_latitude" => -12.5)
+[ Info: Dict{String, Any}("site_longitude" => -115.0, "start_date" => "20070101", "site_latitude" => -11.0)
+[ Info: Dict{String, Any}("site_longitude" => -120.0, "start_date" => "20070101", "site_latitude" => -9.5)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20070101", "site_latitude" => -8.0)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20070101", "site_latitude" => 35.0)
+[ Info: Dict{String, Any}("site_longitude" => -129.0, "start_date" => "20070101", "site_latitude" => 32.0)
+[ Info: Dict{String, Any}("site_longitude" => -133.0, "start_date" => "20070101", "site_latitude" => 29.0)
+[ Info: Dict{String, Any}("site_longitude" => -141.0, "start_date" => "20070101", "site_latitude" => 23.0)
+[ Info: Dict{String, Any}("site_longitude" => -145.0, "start_date" => "20070101", "site_latitude" => 20.0)
+[ Info: Dict{String, Any}("site_longitude" => -149.0, "start_date" => "20070101", "site_latitude" => 17.0)
+[ Info: Dict{String, Any}("site_longitude" => -72.5, "start_date" => "20070401", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -75.0, "start_date" => "20070401", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -77.5, "start_date" => "20070401", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -80.0, "start_date" => "20070401", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -82.5, "start_date" => "20070401", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -85.0, "start_date" => "20070401", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -90.0, "start_date" => "20070401", "site_latitude" => -18.5)
+[ Info: Dict{String, Any}("site_longitude" => -95.0, "start_date" => "20070401", "site_latitude" => -17.0)
+[ Info: Dict{String, Any}("site_longitude" => -100.0, "start_date" => "20070401", "site_latitude" => -15.5)
+[ Info: Dict{String, Any}("site_longitude" => -105.0, "start_date" => "20070401", "site_latitude" => -14.0)
+[ Info: Dict{String, Any}("site_longitude" => -110.0, "start_date" => "20070401", "site_latitude" => -12.5)
+[ Info: Dict{String, Any}("site_longitude" => -115.0, "start_date" => "20070401", "site_latitude" => -11.0)
+[ Info: Dict{String, Any}("site_longitude" => -120.0, "start_date" => "20070401", "site_latitude" => -9.5)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20070401", "site_latitude" => -8.0)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20070401", "site_latitude" => 35.0)
+[ Info: Dict{String, Any}("site_longitude" => -129.0, "start_date" => "20070401", "site_latitude" => 32.0)
+[ Info: Dict{String, Any}("site_longitude" => -133.0, "start_date" => "20070401", "site_latitude" => 29.0)
+[ Info: Dict{String, Any}("site_longitude" => -141.0, "start_date" => "20070401", "site_latitude" => 23.0)
+[ Info: Dict{String, Any}("site_longitude" => -145.0, "start_date" => "20070401", "site_latitude" => 20.0)
+[ Info: Dict{String, Any}("site_longitude" => -149.0, "start_date" => "20070401", "site_latitude" => 17.0)
+[ Info: Dict{String, Any}("site_longitude" => -72.5, "start_date" => "20070701", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -75.0, "start_date" => "20070701", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -77.5, "start_date" => "20070701", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -80.0, "start_date" => "20070701", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -82.5, "start_date" => "20070701", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -85.0, "start_date" => "20070701", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -90.0, "start_date" => "20070701", "site_latitude" => -18.5)
+[ Info: Dict{String, Any}("site_longitude" => -95.0, "start_date" => "20070701", "site_latitude" => -17.0)
+[ Info: Dict{String, Any}("site_longitude" => -100.0, "start_date" => "20070701", "site_latitude" => -15.5)
+[ Info: Dict{String, Any}("site_longitude" => -105.0, "start_date" => "20070701", "site_latitude" => -14.0)
+[ Info: Dict{String, Any}("site_longitude" => -110.0, "start_date" => "20070701", "site_latitude" => -12.5)
+[ Info: Dict{String, Any}("site_longitude" => -115.0, "start_date" => "20070701", "site_latitude" => -11.0)
+[ Info: Dict{String, Any}("site_longitude" => -120.0, "start_date" => "20070701", "site_latitude" => -9.5)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20070701", "site_latitude" => -8.0)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20070701", "site_latitude" => 35.0)
+[ Info: Dict{String, Any}("site_longitude" => -129.0, "start_date" => "20070701", "site_latitude" => 32.0)
+[ Info: Dict{String, Any}("site_longitude" => -133.0, "start_date" => "20070701", "site_latitude" => 29.0)
+[ Info: Dict{String, Any}("site_longitude" => -141.0, "start_date" => "20070701", "site_latitude" => 23.0)
+[ Info: Dict{String, Any}("site_longitude" => -145.0, "start_date" => "20070701", "site_latitude" => 20.0)
+[ Info: Dict{String, Any}("site_longitude" => -149.0, "start_date" => "20070701", "site_latitude" => 17.0)
+[ Info: Dict{String, Any}("site_longitude" => -72.5, "start_date" => "20071001", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -75.0, "start_date" => "20071001", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -77.5, "start_date" => "20071001", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -80.0, "start_date" => "20071001", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -82.5, "start_date" => "20071001", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -85.0, "start_date" => "20071001", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -90.0, "start_date" => "20071001", "site_latitude" => -18.5)
+[ Info: Dict{String, Any}("site_longitude" => -95.0, "start_date" => "20071001", "site_latitude" => -17.0)
+[ Info: Dict{String, Any}("site_longitude" => -100.0, "start_date" => "20071001", "site_latitude" => -15.5)
+[ Info: Dict{String, Any}("site_longitude" => -105.0, "start_date" => "20071001", "site_latitude" => -14.0)
+[ Info: Dict{String, Any}("site_longitude" => -110.0, "start_date" => "20071001", "site_latitude" => -12.5)
+[ Info: Dict{String, Any}("site_longitude" => -115.0, "start_date" => "20071001", "site_latitude" => -11.0)
+[ Info: Dict{String, Any}("site_longitude" => -120.0, "start_date" => "20071001", "site_latitude" => -9.5)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20071001", "site_latitude" => -8.0)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20071001", "site_latitude" => 35.0)
+[ Info: Dict{String, Any}("site_longitude" => -129.0, "start_date" => "20071001", "site_latitude" => 32.0)
+[ Info: Dict{String, Any}("site_longitude" => -133.0, "start_date" => "20071001", "site_latitude" => 29.0)
+[ Info: Dict{String, Any}("site_longitude" => -141.0, "start_date" => "20071001", "site_latitude" => 23.0)
+[ Info: Dict{String, Any}("site_longitude" => -145.0, "start_date" => "20071001", "site_latitude" => 20.0)
+[ Info: Dict{String, Any}("site_longitude" => -149.0, "start_date" => "20071001", "site_latitude" => 17.0)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-72.5_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-75.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-77.5_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-80.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-82.5_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-85.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-18.5_-90.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-17.0_-95.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-15.5_-100.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-14.0_-105.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-12.5_-110.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-11.0_-115.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-9.5_-120.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-8.0_-125.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_35.0_-125.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_32.0_-129.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_29.0_-133.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_23.0_-141.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_20.0_-145.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_17.0_-149.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-72.5_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-75.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-77.5_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-80.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-82.5_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-85.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-18.5_-90.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-17.0_-95.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-15.5_-100.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-14.0_-105.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-12.5_-110.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-11.0_-115.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-9.5_-120.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-8.0_-125.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_35.0_-125.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_32.0_-129.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_29.0_-133.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_23.0_-141.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_20.0_-145.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_17.0_-149.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-72.5_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-75.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-77.5_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-80.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-82.5_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-85.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-18.5_-90.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-17.0_-95.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-15.5_-100.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-14.0_-105.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-12.5_-110.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-11.0_-115.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-9.5_-120.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-8.0_-125.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_35.0_-125.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_32.0_-129.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_29.0_-133.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_23.0_-141.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_20.0_-145.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_17.0_-149.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-72.5_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-75.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-77.5_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-80.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-82.5_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-85.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-18.5_-90.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-17.0_-95.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-15.5_-100.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-14.0_-105.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-12.5_-110.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-11.0_-115.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-9.5_-120.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-8.0_-125.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_35.0_-125.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_32.0_-129.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_29.0_-133.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_23.0_-141.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_20.0_-145.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_17.0_-149.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: Obtained Observations...
+┌ Info: Initializing calibration
+│   n_iterations = 10
+│   ensemble_size = 100
+└   output_dir = "/central/groups/esm/jschmitt/calibrations/diurnal_diag_4"
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 100
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#169".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#11#14"{Float64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#12#15"{Float64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#13#16"{Float64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#5#8".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#6#9".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#7#10".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 100 on worker 2
+[ Info: Running member 99 on worker 3
+[ Info: Running member 98 on worker 4
+[ Info: Running member 97 on worker 5
+[ Info: Running member 96 on worker 6
+[ Info: Running member 95 on worker 7
+[ Info: Running member 94 on worker 8
+[ Info: Running member 93 on worker 9
+[ Info: Running member 92 on worker 10
+[ Info: Running member 91 on worker 11
+[ Info: Running member 90 on worker 12
+[ Info: Running member 89 on worker 13
+[ Info: Running member 88 on worker 14
+[ Info: Running member 87 on worker 15
+[ Info: Running member 86 on worker 16
+[ Info: Running member 85 on worker 17
+[ Info: Running member 84 on worker 18
+[ Info: Running member 83 on worker 19
+[ Info: Running member 82 on worker 20
+[ Info: Running member 81 on worker 21
+[ Info: Running member 80 on worker 22
+[ Info: Running member 79 on worker 23
+[ Info: Running member 78 on worker 24
+[ Info: Running member 77 on worker 25
+[ Info: Running member 76 on worker 26
+[ Info: Running member 75 on worker 27
+[ Info: Running member 74 on worker 28
+[ Info: Running member 73 on worker 29
+[ Info: Running member 72 on worker 30
+[ Info: Running member 71 on worker 31
+[ Info: Running member 70 on worker 32
+[ Info: Running member 69 on worker 33
+[ Info: Running member 68 on worker 34
+[ Info: Running member 67 on worker 35
+[ Info: Running member 66 on worker 36
+[ Info: Running member 65 on worker 37
+[ Info: Running member 64 on worker 38
+[ Info: Running member 63 on worker 39
+[ Info: Running member 62 on worker 40
+[ Info: Running member 61 on worker 41
+[ Info: Running member 60 on worker 42
+[ Info: Running member 59 on worker 43
+[ Info: Running member 58 on worker 44
+[ Info: Running member 57 on worker 45
+[ Info: Running member 56 on worker 46
+[ Info: Running member 55 on worker 47
+[ Info: Running member 54 on worker 48
+[ Info: Running member 53 on worker 49
+[ Info: Running member 52 on worker 50
+[ Info: Running member 51 on worker 51
+[ Info: Running member 50 on worker 52
+[ Info: Running member 49 on worker 53
+[ Info: Running member 48 on worker 54
+[ Info: Running member 47 on worker 55
+[ Info: Running member 46 on worker 56
+[ Info: Running member 45 on worker 57
+[ Info: Running member 44 on worker 58
+[ Info: Running member 43 on worker 59
+[ Info: Running member 42 on worker 60
+[ Info: Running member 41 on worker 61
+[ Info: Running member 40 on worker 62
+[ Info: Running member 39 on worker 63
+[ Info: Running member 38 on worker 64
+[ Info: Running member 37 on worker 65
+[ Info: Running member 36 on worker 66
+[ Info: Running member 35 on worker 67
+[ Info: Running member 34 on worker 68
+[ Info: Running member 33 on worker 69
+[ Info: Running member 32 on worker 70
+[ Info: Running member 31 on worker 71
+[ Info: Running member 30 on worker 72
+[ Info: Running member 29 on worker 73
+[ Info: Running member 28 on worker 74
+[ Info: Running member 27 on worker 75
+[ Info: Running member 26 on worker 76
+[ Info: Running member 25 on worker 77
+[ Info: Running member 24 on worker 78
+[ Info: Running member 23 on worker 79
+[ Info: Running member 22 on worker 80
+[ Info: Running member 21 on worker 81
+[ Info: Running member 20 on worker 82
+[ Info: Running member 19 on worker 83
+[ Info: Running member 18 on worker 84
+[ Info: Running member 17 on worker 85
+[ Info: Running member 16 on worker 86
+[ Info: Running member 15 on worker 87
+[ Info: Running member 14 on worker 88
+[ Info: Running member 13 on worker 89
+[ Info: Running member 12 on worker 90
+[ Info: Running member 11 on worker 91
+[ Info: Running member 10 on worker 92
+[ Info: Running member 9 on worker 93
+[ Info: Running member 8 on worker 94
+[ Info: Running member 7 on worker 95
+[ Info: Running member 6 on worker 96
+[ Info: Running member 5 on worker 97
+[ Info: Running member 4 on worker 98
+[ Info: Running member 3 on worker 99
+[ Info: Running member 2 on worker 100
+[ Info: Running member 1 on worker 101
+┌ Warning: Error running on worker 21
+│   exception =
+│    On worker 21:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 71
+│   exception =
+│    On worker 71:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 24
+│   exception =
+│    On worker 24:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 7
+│   exception =
+│    On worker 7:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 93
+│   exception =
+│    On worker 93:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 77
+│   exception =
+│    On worker 77:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 57
+│   exception =
+│    On worker 57:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 101
+│   exception =
+│    On worker 101:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 66
+│   exception =
+│    On worker 66:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 81
+│   exception =
+│    On worker 81:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+[ Info: Iteration 0 time: 21 minutes, 58 seconds, 683 milliseconds
+┌ Info: Error during observation map for ensemble member 1
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 2
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 3
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 4
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 5
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 6
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 7
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 8
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 9
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 10
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 11
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 12
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 13
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 14
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 15
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 16
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 17
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 18
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 19
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 20
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 21
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 22
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 23
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 24
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 25
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 26
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 27
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 28
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 29
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 30
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 31
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 32
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 33
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 34
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 35
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 36
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 37
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 38
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 39
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 40
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 41
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 42
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 43
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 44
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 45
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 46
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 47
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 48
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 49
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 50
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 51
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 52
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 53
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 54
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 55
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 56
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 57
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 58
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 59
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 60
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 61
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 62
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 63
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 64
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 65
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 66
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 67
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 68
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 69
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 70
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 71
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 72
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 73
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 74
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 75
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 76
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 77
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 78
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 79
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 80
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 81
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 82
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 83
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 84
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 85
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 86
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 87
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 88
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 89
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 90
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 91
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 92
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 93
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 94
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 95
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 96
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 97
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 98
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 99
+└   err = KeyError: key "z" not found
+┌ Info: Error during observation map for ensemble member 100
+└   err = KeyError: key "z" not found
+┌ Warning: More than 50% of runs produced NaNs (100/100).
+│ Iterating... but consider increasing model stability.
+│ This will affect optimization result.
+└ @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/Avr8u/src/EnsembleKalmanProcess.jl:1150
+[ Info: Iteration 0 (prior)
+[ Info: Covariance trace: 114.02787717773383
+[ Info: Iteration 1 (T=NaN)
+┌ Warning: More than 50% of runs produced NaNs (100/100).
+│ Iterating... but consider increasing model stability.
+│ This will affect optimization result.
+└ @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/Avr8u/src/EnsembleKalmanProcess.jl:1150
+[ Info: 100 particle failure(s) detected. Handler used: SampleSuccGauss.
+ERROR: LoadError: ArgumentError: matrix contains Infs or NaNs
+Stacktrace:
+  [1] chkfinite
+    @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/LinearAlgebra/src/lapack.jl:105 [inlined]
+  [2] getrf!(A::Matrix{Float64}, ipiv::Vector{Int64}; check::Bool)
+    @ LinearAlgebra.LAPACK /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/LinearAlgebra/src/lapack.jl:582
+  [3] getrf!
+    @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/LinearAlgebra/src/lapack.jl:580 [inlined]
+  [4] getrf!
+    @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/LinearAlgebra/src/lapack.jl:787 [inlined]
+  [5] #lu!#182
+    @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/LinearAlgebra/src/lu.jl:91 [inlined]
+  [6] lu!
+    @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/LinearAlgebra/src/lu.jl:90 [inlined]
+  [7] lu!
+    @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/LinearAlgebra/src/lu.jl:89 [inlined]
+  [8] _lu
+    @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/LinearAlgebra/src/lu.jl:347 [inlined]
+  [9] lu(::Matrix{Float64}; kwargs::@Kwargs{})
+    @ LinearAlgebra /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/LinearAlgebra/src/lu.jl:341
+ [10] lu
+    @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/LinearAlgebra/src/lu.jl:341 [inlined]
+ [11] \(A::Matrix{Float64}, B::Matrix{Float64})
+    @ LinearAlgebra /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/LinearAlgebra/src/generic.jl:1132
+ [12] eki_update(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{Float64, Int64, EnsembleKalmanProcesses.Inversion{Float64, Nothing, Nothing}, EnsembleKalmanProcesses.DataMisfitController{Float64, String}, EnsembleKalmanProcesses.DefaultAccelerator, Vector{EnsembleKalmanProcesses.UpdateGroup}, Nothing}, u::Matrix{Float64}, g::Matrix{Float64}, y::Matrix{Float64}, obs_noise_cov::Matrix{Float64}, prior_mean::Nothing, prior_cov::Nothing)
+    @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/Avr8u/src/EnsembleKalmanInversion.jl:181
+ [13] (::EnsembleKalmanProcesses.var"#failsafe_update#169")(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{Float64, Int64, EnsembleKalmanProcesses.Inversion{Float64, Nothing, Nothing}, EnsembleKalmanProcesses.DataMisfitController{Float64, String}, EnsembleKalmanProcesses.DefaultAccelerator, Vector{EnsembleKalmanProcesses.UpdateGroup}, Nothing}, u::Matrix{Float64}, g::Matrix{Float64}, y::Matrix{Float64}, obs_noise_cov::Matrix{Float64}, failed_ens::Vector{Int64}, prior_mean::Nothing, scaled_prior_cov::Nothing)
+    @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/Avr8u/src/EnsembleKalmanInversion.jl:98
+ [14] update_ensemble!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{Float64, Int64, EnsembleKalmanProcesses.Inversion{Float64, Nothing, Nothing}, EnsembleKalmanProcesses.DataMisfitController{Float64, String}, EnsembleKalmanProcesses.DefaultAccelerator, Vector{EnsembleKalmanProcesses.UpdateGroup}, Nothing}, g::Matrix{Float64}, process::EnsembleKalmanProcesses.Inversion{Float64, Nothing, Nothing}, u_idx::Vector{Int64}, g_idx::Vector{Int64}; deterministic_forward_map::Bool, failed_ens::Nothing, kwargs::@Kwargs{group_idx::Int64})
+    @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/Avr8u/src/EnsembleKalmanInversion.jl:257
+ [15] update_ensemble!
+    @ ~/.julia/packages/EnsembleKalmanProcesses/Avr8u/src/EnsembleKalmanInversion.jl:208 [inlined]
+ [16] update_ensemble!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{Float64, Int64, EnsembleKalmanProcesses.Inversion{Float64, Nothing, Nothing}, EnsembleKalmanProcesses.DataMisfitController{Float64, String}, EnsembleKalmanProcesses.DefaultAccelerator, Vector{EnsembleKalmanProcesses.UpdateGroup}, Nothing}, g_in::Matrix{Float64}; multiplicative_inflation::Bool, additive_inflation::Bool, additive_inflation_cov::Matrix{Float64}, s::Float64, Δt_new::Nothing, ekp_kwargs::@Kwargs{})
+    @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/Avr8u/src/EnsembleKalmanProcess.jl:1361
+ [17] update_ensemble!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{Float64, Int64, EnsembleKalmanProcesses.Inversion{Float64, Nothing, Nothing}, EnsembleKalmanProcesses.DataMisfitController{Float64, String}, EnsembleKalmanProcesses.DefaultAccelerator, Vector{EnsembleKalmanProcesses.UpdateGroup}, Nothing}, g_in::Matrix{Float64})
+    @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/Avr8u/src/EnsembleKalmanProcess.jl:1321
+ [18] update_ensemble!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{Float64, Int64, EnsembleKalmanProcesses.Inversion{Float64, Nothing, Nothing}, EnsembleKalmanProcesses.DataMisfitController{Float64, String}, EnsembleKalmanProcesses.DefaultAccelerator, Vector{EnsembleKalmanProcesses.UpdateGroup}, Nothing}, G_ens::Matrix{Float64}, output_dir::String, iteration::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{EnsembleKalmanProcesses.ParameterDistributions.ParameterDistributionType, EnsembleKalmanProcesses.ParameterDistributions.Constraint, String})
+    @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/ekp_interface.jl:331
+ [19] observation_map_and_update!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{Float64, Int64, EnsembleKalmanProcesses.Inversion{Float64, Nothing, Nothing}, EnsembleKalmanProcesses.DataMisfitController{Float64, String}, EnsembleKalmanProcesses.DefaultAccelerator, Vector{EnsembleKalmanProcesses.UpdateGroup}, Nothing}, output_dir::String, iteration::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{EnsembleKalmanProcesses.ParameterDistributions.ParameterDistributionType, EnsembleKalmanProcesses.ParameterDistributions.Constraint, String})
+    @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/ekp_interface.jl:346
+ [20] calibrate(b::Type{WorkerBackend}, ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{Float64, Int64, EnsembleKalmanProcesses.Inversion{Float64, Nothing, Nothing}, EnsembleKalmanProcesses.DataMisfitController{Float64, String}, EnsembleKalmanProcesses.DefaultAccelerator, Vector{EnsembleKalmanProcesses.UpdateGroup}, Nothing}, n_iterations::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{EnsembleKalmanProcesses.ParameterDistributions.ParameterDistributionType, EnsembleKalmanProcesses.ParameterDistributions.Constraint, String}, output_dir::String; failure_rate::Float64, worker_pool::WorkerPool)
+    @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/backends.jl:294
+ [21] top-level scope
+    @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/run_calibration.jl:201
+in expression starting at /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/run_calibration.jl:201
+┌ Warning: `job_id` is empty and likely not passed to AtmosConfig
+└ @ ClimaAtmos /central/groups/esm/jschmitt/ClimaAtmos.jl/src/solver/types.jl:1190
+┌ Info: Making AtmosConfig with config files: 
+└    /central/groups/esm/jschmitt/ClimaAtmos.jl/src/solver/../../config/default_configs/default_config.yml
+[ Info: Starting 100 workers.
+[ Info: Starting SLURM job julia-2596346: `srun -J julia-2596346 -n 100 -D /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal --cpus-per-task=1 --mem-per-cpu=25G -t 12:00:00 -o .julia-2596346-17545855052.out -- /central/groups/esm/software/julia/julia-1.11.5/bin/julia --worker=y4evsBactqpchOOZ`
+[ Info: Worker launch (after 0 s): No output file ".julia-2596346-17545855052.out" yet
+[ Info: Worker launch (after 0 s): No output file ".julia-2596346-17545855052.out" yet
+srun: Warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 100 with the number of requested nodes 31. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 3s on host 172.18.29.146, port 9556
+[ Info: Worker ready after 3s on host 172.18.29.24, port 9053
+[ Info: Worker ready after 3s on host 172.18.28.244, port 9159
+[ Info: Worker ready after 3s on host 172.18.28.244, port 9157
+[ Info: Worker ready after 3s on host 172.18.28.244, port 9160
+[ Info: Worker ready after 3s on host 172.18.28.244, port 9158
+[ Info: Worker ready after 3s on host 172.18.29.24, port 9054
+[ Info: Worker ready after 3s on host 172.18.29.24, port 9052
+[ Info: Worker ready after 3s on host 172.18.29.24, port 9050
+[ Info: Worker ready after 3s on host 172.18.29.24, port 9051
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9689
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9685
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9683
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9687
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9857
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9859
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9861
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9855
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9690
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9688
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9686
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9684
+[ Info: Worker ready after 3s on host 172.18.29.144, port 9632
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9682
+[ Info: Worker ready after 3s on host 172.18.29.61, port 9990
+[ Info: Worker ready after 3s on host 172.18.29.61, port 9992
+[ Info: Worker ready after 3s on host 172.18.29.61, port 9991
+[ Info: Worker ready after 3s on host 172.18.29.132, port 9585
+[ Info: Worker ready after 3s on host 172.18.28.252, port 9970
+[ Info: Worker ready after 3s on host 172.18.28.232, port 9795
+[ Info: Worker ready after 3s on host 172.18.28.132, port 9243
+[ Info: Worker ready after 3s on host 172.18.28.251, port 9699
+[ Info: Worker ready after 3s on host 172.18.29.147, port 9751
+[ Info: Worker ready after 3s on host 172.18.28.249, port 9326
+[ Info: Worker ready after 3s on host 172.18.28.130, port 9179
+[ Info: Worker ready after 3s on host 172.26.29.139, port 9212
+[ Info: Worker ready after 3s on host 172.18.29.6, port 9219
+[ Info: Worker ready after 3s on host 172.18.29.6, port 9217
+[ Info: Worker ready after 3s on host 172.18.29.6, port 9215
+[ Info: Worker ready after 3s on host 172.18.29.6, port 9214
+[ Info: Worker ready after 3s on host 172.18.29.6, port 9216
+[ Info: Worker ready after 3s on host 172.18.29.6, port 9218
+[ Info: Worker ready after 3s on host 172.26.29.139, port 9214
+[ Info: Worker ready after 3s on host 172.26.29.149, port 9982
+[ Info: Worker ready after 3s on host 172.18.29.16, port 9385
+[ Info: Worker ready after 3s on host 172.18.29.7, port 9265
+[ Info: Worker ready after 3s on host 172.18.29.7, port 9267
+[ Info: Worker ready after 3s on host 172.18.29.64, port 9293
+[ Info: Worker ready after 3s on host 172.26.29.139, port 9213
+[ Info: Worker ready after 3s on host 172.18.29.22, port 9088
+[ Info: Worker ready after 3s on host 172.18.29.22, port 9087
+[ Info: Worker ready after 3s on host 172.18.29.7, port 9266
+[ Info: Worker ready after 3s on host 172.18.29.64, port 9290
+[ Info: Worker ready after 3s on host 172.18.29.64, port 9292
+[ Info: Worker ready after 3s on host 172.18.29.31, port 9151
+[ Info: Worker ready after 3s on host 172.18.29.31, port 9152
+[ Info: Worker ready after 3s on host 172.18.29.31, port 9148
+[ Info: Worker ready after 3s on host 172.18.29.31, port 9150
+[ Info: Worker ready after 3s on host 172.18.29.22, port 9085
+[ Info: Worker ready after 3s on host 172.18.28.245, port 9155
+[ Info: Worker ready after 3s on host 172.18.28.245, port 9157
+[ Info: Worker ready after 3s on host 172.18.28.245, port 9158
+[ Info: Worker ready after 3s on host 172.18.28.245, port 9156
+[ Info: Worker ready after 3s on host 172.18.28.245, port 9154
+[ Info: Worker ready after 3s on host 172.18.29.64, port 9291
+[ Info: Worker ready after 3s on host 172.18.29.22, port 9086
+[ Info: Worker ready after 3s on host 172.18.29.31, port 9149
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9856
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9858
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9860
+[ Info: Worker ready after 3s on host 172.18.29.16, port 9386
+[ Info: Worker ready after 3s on host 172.18.29.16, port 9384
+[ Info: Worker ready after 3s on host 172.18.28.249, port 9325
+[ Info: Worker ready after 3s on host 172.18.28.249, port 9327
+[ Info: Worker ready after 3s on host 172.18.29.6, port 9220
+[ Info: Worker ready after 3s on host 172.18.28.243, port 9997
+[ Info: Worker ready after 3s on host 172.18.28.243, port 9995
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9896
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9722
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9724
+[ Info: Worker ready after 3s on host 172.18.29.63, port 9489
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9723
+[ Info: Worker ready after 3s on host 172.18.28.254, port 9477
+[ Info: Worker ready after 3s on host 172.18.28.254, port 9476
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9897
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9895
+[ Info: Worker ready after 3s on host 172.18.29.63, port 9490
+[ Info: Worker ready after 3s on host 172.18.28.243, port 9998
+[ Info: Worker ready after 3s on host 172.18.28.243, port 9996
+[ Info: Worker ready after 3s on host 172.18.29.27, port 9980
+[ Info: Worker ready after 3s on host 172.18.29.3, port 9297
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9892
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9894
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9718
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9719
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9720
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9721
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9891
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9893
+[ Info: Worker ready after 3s on host 172.18.29.3, port 9296
+ERROR: LoadError: TaskFailedException
+
+    nested task error: cannot declare Main.experiment_config constant; it already has a value
+    Stacktrace:
+     [1] top-level scope
+       @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/run_calibration.jl:57
+     [2] eval
+       @ ./boot.jl:430 [inlined]
+     [3] (::Distributed.var"#172#174"{Module, Expr})()
+       @ Distributed /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/macros.jl:233
+Stacktrace:
+ [1] sync_end(c::Channel{Any})
+   @ Base ./task.jl:466
+ [2] macro expansion
+   @ ./task.jl:499 [inlined]
+ [3] remotecall_eval(m::Module, procs::Vector{Int64}, ex::Expr)
+   @ Distributed /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/macros.jl:219
+ [4] top-level scope
+   @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/macros.jl:203
+in expression starting at /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/run_calibration.jl:46
+┌ Warning: `job_id` is empty and likely not passed to AtmosConfig
+└ @ ClimaAtmos /central/groups/esm/jschmitt/ClimaAtmos.jl/src/solver/types.jl:1190
+┌ Info: Making AtmosConfig with config files: 
+└    /central/groups/esm/jschmitt/ClimaAtmos.jl/src/solver/../../config/default_configs/default_config.yml
+[ Info: Starting 100 workers.
+[ Info: Starting SLURM job julia-3586053: `srun -J julia-3586053 -n 100 -D /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal --cpus-per-task=1 --mem-per-cpu=25G -t 12:00:00 -o .julia-3586053-17545859751.out -- /central/groups/esm/software/julia/julia-1.11.5/bin/julia --worker=qsaWnqKB21dktsyV`
+[ Info: Worker launch (after 0 s): No output file ".julia-3586053-17545859751.out" yet
+[ Info: Worker launch (after 0 s): No output file ".julia-3586053-17545859751.out" yet
+srun: Warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 100 with the number of requested nodes 27. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 3s on host 172.18.29.64, port 9832
+[ Info: Worker ready after 3s on host 172.18.29.64, port 9834
+[ Info: Worker ready after 3s on host 172.18.29.24, port 9314
+[ Info: Worker ready after 3s on host 172.18.29.64, port 9835
+[ Info: Worker ready after 3s on host 172.18.29.22, port 9599
+[ Info: Worker ready after 3s on host 172.18.29.22, port 9596
+[ Info: Worker ready after 3s on host 172.18.29.22, port 9598
+[ Info: Worker ready after 3s on host 172.18.29.31, port 9733
+[ Info: Worker ready after 3s on host 172.18.29.24, port 9313
+[ Info: Worker ready after 3s on host 172.18.29.24, port 9311
+[ Info: Worker ready after 3s on host 172.18.29.24, port 9315
+[ Info: Worker ready after 3s on host 172.18.29.31, port 9732
+[ Info: Worker ready after 3s on host 172.18.29.31, port 9730
+[ Info: Worker ready after 3s on host 172.18.29.31, port 9734
+[ Info: Worker ready after 3s on host 172.18.29.24, port 9312
+[ Info: Worker ready after 3s on host 172.18.29.22, port 9597
+[ Info: Worker ready after 3s on host 172.18.29.31, port 9731
+[ Info: Worker ready after 3s on host 172.18.29.64, port 9833
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9482
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9486
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9484
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9480
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9562
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9563
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9561
+[ Info: Worker ready after 3s on host 172.18.28.130, port 9083
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9782
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9784
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9780
+[ Info: Worker ready after 3s on host 172.18.29.65, port 9859
+[ Info: Worker ready after 3s on host 172.18.29.65, port 9857
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9778
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9481
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9483
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9485
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9487
+[ Info: Worker ready after 3s on host 172.18.29.23, port 9479
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9401
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9403
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9402
+[ Info: Worker ready after 3s on host 172.18.29.61, port 9829
+[ Info: Worker ready after 3s on host 172.18.29.61, port 9831
+[ Info: Worker ready after 3s on host 172.18.29.61, port 9830
+[ Info: Worker ready after 3s on host 172.18.29.70, port 9563
+[ Info: Worker ready after 3s on host 172.18.29.70, port 9562
+[ Info: Worker ready after 3s on host 172.18.29.70, port 9561
+[ Info: Worker ready after 3s on host 172.18.29.70, port 9560
+[ Info: Worker ready after 3s on host 172.18.29.73, port 9285
+[ Info: Worker ready after 3s on host 172.18.28.236, port 9406
+[ Info: Worker ready after 3s on host 172.18.29.73, port 9286
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9560
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9558
+[ Info: Worker ready after 3s on host 172.18.29.72, port 9001
+[ Info: Worker ready after 3s on host 172.18.29.72, port 9000
+[ Info: Worker ready after 3s on host 172.18.29.72, port 9998
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9559
+[ Info: Worker ready after 3s on host 172.18.29.28, port 9557
+[ Info: Worker ready after 3s on host 172.18.29.72, port 9999
+[ Info: Worker ready after 3s on host 172.18.28.144, port 9832
+[ Info: Worker ready after 3s on host 172.18.29.66, port 9256
+[ Info: Worker ready after 3s on host 172.18.29.66, port 9259
+[ Info: Worker ready after 3s on host 172.18.29.66, port 9258
+[ Info: Worker ready after 3s on host 172.18.29.69, port 9873
+[ Info: Worker ready after 3s on host 172.18.29.71, port 9742
+[ Info: Worker ready after 3s on host 172.18.29.69, port 9875
+[ Info: Worker ready after 3s on host 172.18.29.69, port 9876
+[ Info: Worker ready after 3s on host 172.18.29.71, port 9741
+[ Info: Worker ready after 3s on host 172.18.29.71, port 9739
+[ Info: Worker ready after 3s on host 172.18.29.69, port 9874
+[ Info: Worker ready after 3s on host 172.18.29.71, port 9740
+[ Info: Worker ready after 3s on host 172.18.29.66, port 9257
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9779
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9781
+[ Info: Worker ready after 3s on host 172.18.29.18, port 9783
+[ Info: Worker ready after 3s on host 172.18.29.16, port 9333
+[ Info: Worker ready after 3s on host 172.18.29.65, port 9858
+[ Info: Worker ready after 3s on host 172.18.28.137, port 9274
+[ Info: Worker ready after 3s on host 172.18.29.63, port 9579
+[ Info: Worker ready after 3s on host 172.18.29.16, port 9332
+[ Info: Worker ready after 3s on host 172.18.29.16, port 9334
+[ Info: Worker ready after 3s on host 172.18.29.77, port 9442
+[ Info: Worker ready after 3s on host 172.18.29.77, port 9444
+[ Info: Worker ready after 3s on host 172.18.29.77, port 9440
+[ Info: Worker ready after 3s on host 172.18.29.77, port 9441
+[ Info: Worker ready after 3s on host 172.18.29.77, port 9445
+[ Info: Worker ready after 3s on host 172.18.29.77, port 9443
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9397
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9399
+[ Info: Worker ready after 3s on host 172.18.29.74, port 9267
+[ Info: Worker ready after 3s on host 172.18.29.77, port 9439
+[ Info: Worker ready after 3s on host 172.18.28.134, port 9604
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9400
+[ Info: Worker ready after 3s on host 172.18.29.21, port 9398
+[ Info: Worker ready after 3s on host 172.18.29.63, port 9580
+[ Info: Worker ready after 3s on host 172.18.29.74, port 9266
+[ Info: Worker ready after 3s on host 172.18.29.74, port 9268
+[ Info: Worker ready after 3s on host 172.18.29.78, port 9255
+[ Info: Worker ready after 3s on host 172.18.29.78, port 9254
+[ Info: Worker ready after 3s on host 172.18.29.78, port 9256
+[ Info: Worker ready after 3s on host 172.18.29.27, port 9541
+WARNING: redefinition of constant Main.experiment_config_dict. This may fail, cause incorrect answers, or produce other errors.
+[ Info: Copied tomls/diagnostic_edmfx.toml to /central/groups/esm/jschmitt/calibrations/diurnal_diag_5/configs/tomls/diagnostic_edmfx.toml
+[ Info: Copied forcing config /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/tomls/deep_forcing_relaxation.toml to /central/groups/esm/jschmitt/calibrations/diurnal_diag_5/configs/tomls/deep_forcing_relaxation.toml
+[ Info: Copied forcing config /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/tomls/shallow_forcing_relaxation.toml to /central/groups/esm/jschmitt/calibrations/diurnal_diag_5/configs/tomls/shallow_forcing_relaxation.toml
+[ Info: Dict{String, Any}("site_longitude" => -72.5, "start_date" => "20070101", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -75.0, "start_date" => "20070101", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -77.5, "start_date" => "20070101", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -80.0, "start_date" => "20070101", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -82.5, "start_date" => "20070101", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -85.0, "start_date" => "20070101", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -90.0, "start_date" => "20070101", "site_latitude" => -18.5)
+[ Info: Dict{String, Any}("site_longitude" => -95.0, "start_date" => "20070101", "site_latitude" => -17.0)
+[ Info: Dict{String, Any}("site_longitude" => -100.0, "start_date" => "20070101", "site_latitude" => -15.5)
+[ Info: Dict{String, Any}("site_longitude" => -105.0, "start_date" => "20070101", "site_latitude" => -14.0)
+[ Info: Dict{String, Any}("site_longitude" => -110.0, "start_date" => "20070101", "site_latitude" => -12.5)
+[ Info: Dict{String, Any}("site_longitude" => -115.0, "start_date" => "20070101", "site_latitude" => -11.0)
+[ Info: Dict{String, Any}("site_longitude" => -120.0, "start_date" => "20070101", "site_latitude" => -9.5)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20070101", "site_latitude" => -8.0)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20070101", "site_latitude" => 35.0)
+[ Info: Dict{String, Any}("site_longitude" => -129.0, "start_date" => "20070101", "site_latitude" => 32.0)
+[ Info: Dict{String, Any}("site_longitude" => -133.0, "start_date" => "20070101", "site_latitude" => 29.0)
+[ Info: Dict{String, Any}("site_longitude" => -141.0, "start_date" => "20070101", "site_latitude" => 23.0)
+[ Info: Dict{String, Any}("site_longitude" => -145.0, "start_date" => "20070101", "site_latitude" => 20.0)
+[ Info: Dict{String, Any}("site_longitude" => -149.0, "start_date" => "20070101", "site_latitude" => 17.0)
+[ Info: Dict{String, Any}("site_longitude" => -72.5, "start_date" => "20070401", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -75.0, "start_date" => "20070401", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -77.5, "start_date" => "20070401", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -80.0, "start_date" => "20070401", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -82.5, "start_date" => "20070401", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -85.0, "start_date" => "20070401", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -90.0, "start_date" => "20070401", "site_latitude" => -18.5)
+[ Info: Dict{String, Any}("site_longitude" => -95.0, "start_date" => "20070401", "site_latitude" => -17.0)
+[ Info: Dict{String, Any}("site_longitude" => -100.0, "start_date" => "20070401", "site_latitude" => -15.5)
+[ Info: Dict{String, Any}("site_longitude" => -105.0, "start_date" => "20070401", "site_latitude" => -14.0)
+[ Info: Dict{String, Any}("site_longitude" => -110.0, "start_date" => "20070401", "site_latitude" => -12.5)
+[ Info: Dict{String, Any}("site_longitude" => -115.0, "start_date" => "20070401", "site_latitude" => -11.0)
+[ Info: Dict{String, Any}("site_longitude" => -120.0, "start_date" => "20070401", "site_latitude" => -9.5)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20070401", "site_latitude" => -8.0)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20070401", "site_latitude" => 35.0)
+[ Info: Dict{String, Any}("site_longitude" => -129.0, "start_date" => "20070401", "site_latitude" => 32.0)
+[ Info: Dict{String, Any}("site_longitude" => -133.0, "start_date" => "20070401", "site_latitude" => 29.0)
+[ Info: Dict{String, Any}("site_longitude" => -141.0, "start_date" => "20070401", "site_latitude" => 23.0)
+[ Info: Dict{String, Any}("site_longitude" => -145.0, "start_date" => "20070401", "site_latitude" => 20.0)
+[ Info: Dict{String, Any}("site_longitude" => -149.0, "start_date" => "20070401", "site_latitude" => 17.0)
+[ Info: Dict{String, Any}("site_longitude" => -72.5, "start_date" => "20070701", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -75.0, "start_date" => "20070701", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -77.5, "start_date" => "20070701", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -80.0, "start_date" => "20070701", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -82.5, "start_date" => "20070701", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -85.0, "start_date" => "20070701", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -90.0, "start_date" => "20070701", "site_latitude" => -18.5)
+[ Info: Dict{String, Any}("site_longitude" => -95.0, "start_date" => "20070701", "site_latitude" => -17.0)
+[ Info: Dict{String, Any}("site_longitude" => -100.0, "start_date" => "20070701", "site_latitude" => -15.5)
+[ Info: Dict{String, Any}("site_longitude" => -105.0, "start_date" => "20070701", "site_latitude" => -14.0)
+[ Info: Dict{String, Any}("site_longitude" => -110.0, "start_date" => "20070701", "site_latitude" => -12.5)
+[ Info: Dict{String, Any}("site_longitude" => -115.0, "start_date" => "20070701", "site_latitude" => -11.0)
+[ Info: Dict{String, Any}("site_longitude" => -120.0, "start_date" => "20070701", "site_latitude" => -9.5)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20070701", "site_latitude" => -8.0)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20070701", "site_latitude" => 35.0)
+[ Info: Dict{String, Any}("site_longitude" => -129.0, "start_date" => "20070701", "site_latitude" => 32.0)
+[ Info: Dict{String, Any}("site_longitude" => -133.0, "start_date" => "20070701", "site_latitude" => 29.0)
+[ Info: Dict{String, Any}("site_longitude" => -141.0, "start_date" => "20070701", "site_latitude" => 23.0)
+[ Info: Dict{String, Any}("site_longitude" => -145.0, "start_date" => "20070701", "site_latitude" => 20.0)
+[ Info: Dict{String, Any}("site_longitude" => -149.0, "start_date" => "20070701", "site_latitude" => 17.0)
+[ Info: Dict{String, Any}("site_longitude" => -72.5, "start_date" => "20071001", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -75.0, "start_date" => "20071001", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -77.5, "start_date" => "20071001", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -80.0, "start_date" => "20071001", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -82.5, "start_date" => "20071001", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -85.0, "start_date" => "20071001", "site_latitude" => -20.0)
+[ Info: Dict{String, Any}("site_longitude" => -90.0, "start_date" => "20071001", "site_latitude" => -18.5)
+[ Info: Dict{String, Any}("site_longitude" => -95.0, "start_date" => "20071001", "site_latitude" => -17.0)
+[ Info: Dict{String, Any}("site_longitude" => -100.0, "start_date" => "20071001", "site_latitude" => -15.5)
+[ Info: Dict{String, Any}("site_longitude" => -105.0, "start_date" => "20071001", "site_latitude" => -14.0)
+[ Info: Dict{String, Any}("site_longitude" => -110.0, "start_date" => "20071001", "site_latitude" => -12.5)
+[ Info: Dict{String, Any}("site_longitude" => -115.0, "start_date" => "20071001", "site_latitude" => -11.0)
+[ Info: Dict{String, Any}("site_longitude" => -120.0, "start_date" => "20071001", "site_latitude" => -9.5)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20071001", "site_latitude" => -8.0)
+[ Info: Dict{String, Any}("site_longitude" => -125.0, "start_date" => "20071001", "site_latitude" => 35.0)
+[ Info: Dict{String, Any}("site_longitude" => -129.0, "start_date" => "20071001", "site_latitude" => 32.0)
+[ Info: Dict{String, Any}("site_longitude" => -133.0, "start_date" => "20071001", "site_latitude" => 29.0)
+[ Info: Dict{String, Any}("site_longitude" => -141.0, "start_date" => "20071001", "site_latitude" => 23.0)
+[ Info: Dict{String, Any}("site_longitude" => -145.0, "start_date" => "20071001", "site_latitude" => 20.0)
+[ Info: Dict{String, Any}("site_longitude" => -149.0, "start_date" => "20071001", "site_latitude" => 17.0)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-72.5_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-75.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-77.5_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-80.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-82.5_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-85.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-18.5_-90.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-17.0_-95.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-15.5_-100.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-14.0_-105.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-12.5_-110.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-11.0_-115.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-9.5_-120.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-8.0_-125.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_35.0_-125.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_32.0_-129.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_29.0_-133.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_23.0_-141.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_20.0_-145.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_17.0_-149.0_20070101.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-72.5_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-75.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-77.5_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-80.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-82.5_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-85.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-18.5_-90.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-17.0_-95.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-15.5_-100.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-14.0_-105.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-12.5_-110.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-11.0_-115.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-9.5_-120.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-8.0_-125.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_35.0_-125.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_32.0_-129.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_29.0_-133.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_23.0_-141.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_20.0_-145.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_17.0_-149.0_20070401.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-72.5_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-75.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-77.5_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-80.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-82.5_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-85.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-18.5_-90.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-17.0_-95.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-15.5_-100.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-14.0_-105.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-12.5_-110.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-11.0_-115.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-9.5_-120.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-8.0_-125.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_35.0_-125.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_32.0_-129.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_29.0_-133.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_23.0_-141.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_20.0_-145.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_17.0_-149.0_20070701.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-72.5_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-75.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-77.5_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-80.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-82.5_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-20.0_-85.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-18.5_-90.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-17.0_-95.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-15.5_-100.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-14.0_-105.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-12.5_-110.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-11.0_-115.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-9.5_-120.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_-8.0_-125.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_35.0_-125.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_32.0_-129.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_29.0_-133.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_23.0_-141.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_20.0_-145.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: /groups/esm/ClimaArtifacts/artifacts/era5_hourly_atmos_processed/monthly/monthly_diurnal_cycle_forcing_17.0_-149.0_20071001.nc
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: obs_data size: (273,)
+[ Info: Obtained Observations...
+┌ Info: Initializing calibration
+│   n_iterations = 10
+│   ensemble_size = 100
+└   output_dir = "/central/groups/esm/jschmitt/calibrations/diurnal_diag_5"
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 100
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#169".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#11#14"{Float64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#12#15"{Float64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#13#16"{Float64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#5#8".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#6#9".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#7#10".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 100 on worker 2
+[ Info: Running member 99 on worker 3
+[ Info: Running member 98 on worker 4
+[ Info: Running member 97 on worker 5
+[ Info: Running member 96 on worker 6
+[ Info: Running member 95 on worker 7
+[ Info: Running member 94 on worker 8
+[ Info: Running member 93 on worker 9
+[ Info: Running member 92 on worker 10
+[ Info: Running member 91 on worker 11
+[ Info: Running member 90 on worker 12
+[ Info: Running member 89 on worker 13
+[ Info: Running member 88 on worker 14
+[ Info: Running member 87 on worker 15
+[ Info: Running member 86 on worker 16
+[ Info: Running member 85 on worker 17
+[ Info: Running member 84 on worker 18
+[ Info: Running member 83 on worker 19
+[ Info: Running member 82 on worker 20
+[ Info: Running member 81 on worker 21
+[ Info: Running member 80 on worker 22
+[ Info: Running member 79 on worker 23
+[ Info: Running member 78 on worker 24
+[ Info: Running member 77 on worker 25
+[ Info: Running member 76 on worker 26
+[ Info: Running member 75 on worker 27
+[ Info: Running member 74 on worker 28
+[ Info: Running member 73 on worker 29
+[ Info: Running member 72 on worker 30
+[ Info: Running member 71 on worker 31
+[ Info: Running member 70 on worker 32
+[ Info: Running member 69 on worker 33
+[ Info: Running member 68 on worker 34
+[ Info: Running member 67 on worker 35
+[ Info: Running member 66 on worker 36
+[ Info: Running member 65 on worker 37
+[ Info: Running member 64 on worker 38
+[ Info: Running member 63 on worker 39
+[ Info: Running member 62 on worker 40
+[ Info: Running member 61 on worker 41
+[ Info: Running member 60 on worker 42
+[ Info: Running member 59 on worker 43
+[ Info: Running member 58 on worker 44
+[ Info: Running member 57 on worker 45
+[ Info: Running member 56 on worker 46
+[ Info: Running member 55 on worker 47
+[ Info: Running member 54 on worker 48
+[ Info: Running member 53 on worker 49
+[ Info: Running member 52 on worker 50
+[ Info: Running member 51 on worker 51
+[ Info: Running member 50 on worker 52
+[ Info: Running member 49 on worker 53
+[ Info: Running member 48 on worker 54
+[ Info: Running member 47 on worker 55
+[ Info: Running member 46 on worker 56
+[ Info: Running member 45 on worker 57
+[ Info: Running member 44 on worker 58
+[ Info: Running member 43 on worker 59
+[ Info: Running member 42 on worker 60
+[ Info: Running member 41 on worker 61
+[ Info: Running member 40 on worker 62
+[ Info: Running member 39 on worker 63
+[ Info: Running member 38 on worker 64
+[ Info: Running member 37 on worker 65
+[ Info: Running member 36 on worker 66
+[ Info: Running member 35 on worker 67
+[ Info: Running member 34 on worker 68
+[ Info: Running member 33 on worker 69
+[ Info: Running member 32 on worker 70
+[ Info: Running member 31 on worker 71
+[ Info: Running member 30 on worker 72
+[ Info: Running member 29 on worker 73
+[ Info: Running member 28 on worker 74
+[ Info: Running member 27 on worker 75
+[ Info: Running member 26 on worker 76
+[ Info: Running member 25 on worker 77
+[ Info: Running member 24 on worker 78
+[ Info: Running member 23 on worker 79
+[ Info: Running member 22 on worker 80
+[ Info: Running member 21 on worker 81
+[ Info: Running member 20 on worker 82
+[ Info: Running member 19 on worker 83
+[ Info: Running member 18 on worker 84
+[ Info: Running member 17 on worker 85
+[ Info: Running member 16 on worker 86
+[ Info: Running member 15 on worker 87
+[ Info: Running member 14 on worker 88
+[ Info: Running member 13 on worker 89
+[ Info: Running member 12 on worker 90
+[ Info: Running member 11 on worker 91
+[ Info: Running member 10 on worker 92
+[ Info: Running member 9 on worker 93
+[ Info: Running member 8 on worker 94
+[ Info: Running member 7 on worker 95
+[ Info: Running member 6 on worker 96
+[ Info: Running member 5 on worker 97
+[ Info: Running member 4 on worker 98
+[ Info: Running member 3 on worker 99
+[ Info: Running member 2 on worker 100
+[ Info: Running member 1 on worker 101
+┌ Warning: Error running on worker 32
+│   exception =
+│    On worker 32:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 4
+│   exception =
+│    On worker 4:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+[ Info: Iteration 0 time: 25 minutes, 11 seconds, 725 milliseconds
+┌ Info: Error during observation map for ensemble member 70
+└   err = Simulation failed.
+┌ Info: Error during observation map for ensemble member 98
+└   err = Simulation failed.
+┌ Warning: Detected 12 clashes where forward map evaluations are exactly equal (and not NaN), this is likely to cause `LinearAlgebra` difficulty. Please check forward evaluations for bugs.
+└ @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/Avr8u/src/EnsembleKalmanProcess.jl:1240
+[ Info: Termination condition of scheduler `DataMisfitController` will be exceeded during the next iteration.
+[ Info: Iteration 0 (prior)
+[ Info: Covariance trace: 127.54522956786498
+[ Info: Iteration 1 (T=1.0)
+[ Info: 2 particle failure(s) detected. Handler used: SampleSuccGauss.
+┌ Info: Covariance-weighted error: 6.725861732857768
+│ Covariance trace: 126.91209541842298
+└ Covariance trace ratio (current/previous): 0.9950360029019736
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#169".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [9.201242373815942, 0.030807309761129602, 907.9318218124438, 10.739596928495812, -3.4504144010688713, -13.510629921928048, -3.694984579253516, -6.156474421575362, 0.7133787046863741, 0.10807751879215645, 0.16970581990729683, 9.009062263674949, 0.6198493597951185, 0.5408839915006355, 0.00584254105846615, 0.8147856519297573, 0.4832492694028221]
+[ Info: Covariance-weighted error: 6.725861732857768
+[ Info: Running Iteration 1
+[ Info: Running member 100 on worker 32
+[ Info: Running member 99 on worker 4
+[ Info: Running member 98 on worker 67
+[ Info: Running member 97 on worker 62
+[ Info: Running member 96 on worker 49
+[ Info: Running member 95 on worker 51
+[ Info: Running member 94 on worker 65
+[ Info: Running member 93 on worker 5
+[ Info: Running member 92 on worker 54
+[ Info: Running member 91 on worker 47
+[ Info: Running member 90 on worker 3
+[ Info: Running member 89 on worker 59
+[ Info: Running member 88 on worker 55
+[ Info: Running member 87 on worker 6
+[ Info: Running member 86 on worker 45
+[ Info: Running member 85 on worker 46
+[ Info: Running member 84 on worker 61
+[ Info: Running member 83 on worker 7
+[ Info: Running member 82 on worker 66
+[ Info: Running member 81 on worker 72
+[ Info: Running member 80 on worker 8
+[ Info: Running member 79 on worker 48
+[ Info: Running member 78 on worker 11
+[ Info: Running member 77 on worker 68
+[ Info: Running member 76 on worker 69
+[ Info: Running member 75 on worker 17
+[ Info: Running member 74 on worker 63
+[ Info: Running member 73 on worker 64
+[ Info: Running member 72 on worker 56
+[ Info: Running member 71 on worker 19
+[ Info: Running member 70 on worker 71
+[ Info: Running member 69 on worker 70
+[ Info: Running member 68 on worker 2
+[ Info: Running member 67 on worker 9
+[ Info: Running member 66 on worker 16
+[ Info: Running member 65 on worker 12
+[ Info: Running member 64 on worker 15
+[ Info: Running member 63 on worker 10
+[ Info: Running member 62 on worker 13
+[ Info: Running member 61 on worker 14
+[ Info: Running member 60 on worker 18
+[ Info: Running member 59 on worker 41
+[ Info: Running member 58 on worker 24
+[ Info: Running member 57 on worker 40
+[ Info: Running member 56 on worker 20
+[ Info: Running member 55 on worker 22
+[ Info: Running member 54 on worker 39
+[ Info: Running member 53 on worker 30
+[ Info: Running member 52 on worker 29
+[ Info: Running member 51 on worker 23
+[ Info: Running member 50 on worker 25
+[ Info: Running member 49 on worker 50
+[ Info: Running member 48 on worker 28
+[ Info: Running member 47 on worker 21
+[ Info: Running member 46 on worker 33
+[ Info: Running member 45 on worker 76
+[ Info: Running member 44 on worker 26
+[ Info: Running member 43 on worker 43
+[ Info: Running member 42 on worker 42
+[ Info: Running member 41 on worker 44
+[ Info: Running member 40 on worker 80
+[ Info: Running member 39 on worker 81
+[ Info: Running member 38 on worker 27
+[ Info: Running member 37 on worker 31
+[ Info: Running member 36 on worker 36
+[ Info: Running member 35 on worker 34
+[ Info: Running member 34 on worker 38
+[ Info: Running member 33 on worker 37
+[ Info: Running member 32 on worker 35
+[ Info: Running member 31 on worker 96
+[ Info: Running member 30 on worker 60
+[ Info: Running member 29 on worker 97
+[ Info: Running member 28 on worker 84
+[ Info: Running member 27 on worker 82
+[ Info: Running member 26 on worker 92
+[ Info: Running member 25 on worker 87
+[ Info: Running member 24 on worker 86
+[ Info: Running member 23 on worker 83
+[ Info: Running member 22 on worker 85
+[ Info: Running member 21 on worker 91
+[ Info: Running member 20 on worker 78
+[ Info: Running member 19 on worker 90
+[ Info: Running member 18 on worker 77
+[ Info: Running member 17 on worker 95
+[ Info: Running member 16 on worker 75
+[ Info: Running member 15 on worker 74
+[ Info: Running member 14 on worker 73
+[ Info: Running member 13 on worker 89
+[ Info: Running member 12 on worker 88
+[ Info: Running member 11 on worker 79
+[ Info: Running member 10 on worker 52
+[ Info: Running member 9 on worker 98
+[ Info: Running member 8 on worker 53
+[ Info: Running member 7 on worker 94
+[ Info: Running member 6 on worker 58
+[ Info: Running member 5 on worker 99
+[ Info: Running member 4 on worker 93
+[ Info: Running member 3 on worker 100
+[ Info: Running member 2 on worker 101
+[ Info: Running member 1 on worker 57
+┌ Warning: Error running on worker 94
+│   exception =
+│    On worker 94:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 2
+│   exception =
+│    On worker 2:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 86
+│   exception =
+│    On worker 86:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 31
+│   exception =
+│    On worker 31:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 33
+│   exception =
+│    On worker 33:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 80
+│   exception =
+│    On worker 80:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 97
+│   exception =
+│    On worker 97:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 50
+│   exception =
+│    On worker 50:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 45
+│   exception =
+│    On worker 45:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 62
+│   exception =
+│    On worker 62:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 73
+│   exception =
+│    On worker 73:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 70
+│   exception =
+│    On worker 70:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+[ Info: Iteration 1 time: 8 minutes, 39 seconds, 781 milliseconds
+┌ Info: Error during observation map for ensemble member 7
+└   err = Simulation failed.
+┌ Info: Error during observation map for ensemble member 14
+└   err = Simulation failed.
+┌ Info: Error during observation map for ensemble member 24
+└   err = Simulation failed.
+┌ Info: Error during observation map for ensemble member 29
+└   err = Simulation failed.
+┌ Info: Error during observation map for ensemble member 37
+└   err = Simulation failed.
+┌ Info: Error during observation map for ensemble member 40
+└   err = Simulation failed.
+┌ Info: Error during observation map for ensemble member 46
+└   err = Simulation failed.
+┌ Info: Error during observation map for ensemble member 49
+└   err = Simulation failed.
+┌ Info: Error during observation map for ensemble member 68
+└   err = Simulation failed.
+┌ Info: Error during observation map for ensemble member 86
+└   err = Simulation failed.
+┌ Info: Error during observation map for ensemble member 97
+└   err = Simulation failed.
+┌ Warning: Termination condition of scheduler `DataMisfitController` has been exceeded. 
+│ on_terminate="continue" selected. Proceeding with algorithm
+└ @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/Avr8u/src/LearningRateSchedulers.jl:298
+[ Info: Iteration 2 (T=1.5498472280628581)
+[ Info: 11 particle failure(s) detected. Handler used: SampleSuccGauss.
+┌ Info: Covariance-weighted error: 11.972228891952692
+│ Covariance trace: 132.59415478117108
+└ Covariance trace ratio (current/previous): 1.0447716141161694
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#169".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [9.461677813876783, 0.02956689868430175, 978.3130844014914, 12.56132113957279, -2.269810169921548, -10.953306710626787, -3.6971545104818806, -4.657704710312253, 0.6837798891750788, 0.10864650387245818, 0.17101230644268814, 9.0686811394739, 0.6636184019059775, 0.5861557332439264, 0.006321770202012735, 0.8001318175380103, 0.4771246636908594]
+[ Info: Covariance-weighted error: 11.972228891952692
+[ Info: Running Iteration 2
+[ Info: Running member 100 on worker 94
+[ Info: Running member 99 on worker 2
+[ Info: Running member 98 on worker 86
+[ Info: Running member 97 on worker 31
+[ Info: Running member 96 on worker 33
+[ Info: Running member 95 on worker 80
+[ Info: Running member 94 on worker 97
+[ Info: Running member 93 on worker 50
+[ Info: Running member 92 on worker 45
+[ Info: Running member 91 on worker 62
+[ Info: Running member 90 on worker 73
+[ Info: Running member 89 on worker 7
+[ Info: Running member 88 on worker 59
+[ Info: Running member 87 on worker 48
+[ Info: Running member 86 on worker 68
+[ Info: Running member 85 on worker 63
+[ Info: Running member 84 on worker 55
+[ Info: Running member 83 on worker 46
+[ Info: Running member 82 on worker 5
+[ Info: Running member 81 on worker 3
+[ Info: Running member 80 on worker 41
+[ Info: Running member 79 on worker 49
+[ Info: Running member 78 on worker 70
+[ Info: Running member 77 on worker 4
+[ Info: Running member 76 on worker 6
+[ Info: Running member 75 on worker 72
+[ Info: Running member 74 on worker 9
+[ Info: Running member 73 on worker 11
+[ Info: Running member 72 on worker 19
+[ Info: Running member 71 on worker 67
+[ Info: Running member 70 on worker 71
+[ Info: Running member 69 on worker 47
+[ Info: Running member 68 on worker 54
+[ Info: Running member 67 on worker 61
+[ Info: Running member 66 on worker 65
+[ Info: Running member 65 on worker 64
+[ Info: Running member 64 on worker 17
+[ Info: Running member 63 on worker 69
+[ Info: Running member 62 on worker 56
+[ Info: Running member 61 on worker 8
+[ Info: Running member 60 on worker 12
+[ Info: Running member 59 on worker 16
+[ Info: Running member 58 on worker 29
+[ Info: Running member 57 on worker 66
+[ Info: Running member 56 on worker 51
+[ Info: Running member 55 on worker 40
+[ Info: Running member 54 on worker 24
+[ Info: Running member 53 on worker 23
+[ Info: Running member 52 on worker 18
+[ Info: Running member 51 on worker 22
+[ Info: Running member 50 on worker 25
+[ Info: Running member 49 on worker 15
+[ Info: Running member 48 on worker 13
+[ Info: Running member 47 on worker 14
+[ Info: Running member 46 on worker 39
+[ Info: Running member 45 on worker 81
+[ Info: Running member 44 on worker 76
+[ Info: Running member 43 on worker 35
+[ Info: Running member 42 on worker 28
+[ Info: Running member 41 on worker 10
+[ Info: Running member 40 on worker 21
+[ Info: Running member 39 on worker 43
+[ Info: Running member 38 on worker 30
+[ Info: Running member 37 on worker 20
+[ Info: Running member 36 on worker 26
+[ Info: Running member 35 on worker 42
+[ Info: Running member 34 on worker 34
+[ Info: Running member 33 on worker 38
+[ Info: Running member 32 on worker 37
+[ Info: Running member 31 on worker 36
+[ Info: Running member 30 on worker 32
+[ Info: Running member 29 on worker 44
+[ Info: Running member 28 on worker 84
+[ Info: Running member 27 on worker 96
+[ Info: Running member 26 on worker 95
+[ Info: Running member 25 on worker 83
+[ Info: Running member 24 on worker 82
+[ Info: Running member 23 on worker 91
+[ Info: Running member 22 on worker 87
+[ Info: Running member 21 on worker 85
+[ Info: Running member 20 on worker 27
+[ Info: Running member 19 on worker 77
+[ Info: Running member 18 on worker 90
+[ Info: Running member 17 on worker 60
+[ Info: Running member 16 on worker 88
+[ Info: Running member 15 on worker 92
+[ Info: Running member 14 on worker 78
+[ Info: Running member 13 on worker 74
+[ Info: Running member 12 on worker 75
+[ Info: Running member 11 on worker 89
+[ Info: Running member 10 on worker 101
+[ Info: Running member 9 on worker 52
+[ Info: Running member 8 on worker 53
+[ Info: Running member 7 on worker 79
+[ Info: Running member 6 on worker 100
+[ Info: Running member 5 on worker 98
+[ Info: Running member 4 on worker 99
+[ Info: Running member 3 on worker 93
+[ Info: Running member 2 on worker 58
+[ Info: Running member 1 on worker 57
+┌ Warning: Error running on worker 70
+│   exception =
+│    On worker 70:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 6
+│   exception =
+│    On worker 6:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 91
+│   exception =
+│    On worker 91:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+[ Info: Iteration 2 time: 8 minutes, 29 seconds, 910 milliseconds
+┌ Info: Error during observation map for ensemble member 23
+└   err = Simulation failed.
+┌ Info: Error during observation map for ensemble member 76
+└   err = Simulation failed.
+┌ Info: Error during observation map for ensemble member 78
+└   err = Simulation failed.
+[ Info: Iteration 3 (T=2.5518199741696987)
+[ Info: 3 particle failure(s) detected. Handler used: SampleSuccGauss.
+┌ Info: Covariance-weighted error: 4.870603909621166
+│ Covariance trace: 134.24989241101142
+└ Covariance trace ratio (current/previous): 1.012487259582241
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#169".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [9.56474210716987, 0.029793527371719933, 1051.963188177473, 13.87238070073203, -1.242358253096264, -8.808852540044676, -3.6588941147032967, -3.24497392798788, 0.6655513196862715, 0.10926852879408051, 0.16874284284937494, 9.12628341887072, 0.714186585260562, 0.6285649384698021, 0.006563125736895635, 0.7713322706545945, 0.4837040052082512]
+[ Info: Covariance-weighted error: 4.870603909621166
+[ Info: Running Iteration 3
+[ Info: Running member 100 on worker 70
+[ Info: Running member 99 on worker 6
+[ Info: Running member 98 on worker 91
+[ Info: Running member 97 on worker 51
+[ Info: Running member 96 on worker 55
+[ Info: Running member 95 on worker 17
+[ Info: Running member 94 on worker 61
+[ Info: Running member 93 on worker 2
+[ Info: Running member 92 on worker 68
+[ Info: Running member 91 on worker 7
+[ Info: Running member 90 on worker 45
+[ Info: Running member 89 on worker 49
+[ Info: Running member 88 on worker 4
+[ Info: Running member 87 on worker 64
+[ Info: Running member 86 on worker 5
+[ Info: Running member 85 on worker 71
+[ Info: Running member 84 on worker 69
+[ Info: Running member 83 on worker 72
+[ Info: Running member 82 on worker 48
+[ Info: Running member 81 on worker 54
+[ Info: Running member 80 on worker 67
+[ Info: Running member 79 on worker 16
+[ Info: Running member 78 on worker 56
+[ Info: Running member 77 on worker 63
+[ Info: Running member 76 on worker 3
+[ Info: Running member 75 on worker 59
+[ Info: Running member 74 on worker 62
+[ Info: Running member 73 on worker 47
+[ Info: Running member 72 on worker 46
+[ Info: Running member 71 on worker 66
+[ Info: Running member 70 on worker 8
+[ Info: Running member 69 on worker 65
+[ Info: Running member 68 on worker 9
+[ Info: Running member 67 on worker 11
+[ Info: Running member 66 on worker 14
+[ Info: Running member 65 on worker 18
+[ Info: Running member 64 on worker 19
+[ Info: Running member 63 on worker 12
+[ Info: Running member 62 on worker 24
+[ Info: Running member 61 on worker 29
+[ Info: Running member 60 on worker 13
+[ Info: Running member 59 on worker 22
+[ Info: Running member 58 on worker 40
+[ Info: Running member 57 on worker 39
+[ Info: Running member 56 on worker 41
+[ Info: Running member 55 on worker 10
+[ Info: Running member 54 on worker 15
+[ Info: Running member 53 on worker 33
+[ Info: Running member 52 on worker 23
+[ Info: Running member 51 on worker 25
+[ Info: Running member 50 on worker 76
+[ Info: Running member 49 on worker 20
+[ Info: Running member 48 on worker 28
+[ Info: Running member 47 on worker 21
+[ Info: Running member 46 on worker 42
+[ Info: Running member 45 on worker 30
+[ Info: Running member 44 on worker 80
+[ Info: Running member 43 on worker 81
+[ Info: Running member 42 on worker 43
+[ Info: Running member 41 on worker 50
+[ Info: Running member 40 on worker 36
+[ Info: Running member 39 on worker 38
+[ Info: Running member 38 on worker 26
+[ Info: Running member 37 on worker 35
+[ Info: Running member 36 on worker 37
+[ Info: Running member 35 on worker 44
+[ Info: Running member 34 on worker 32
+[ Info: Running member 33 on worker 34
+[ Info: Running member 32 on worker 31
+[ Info: Running member 31 on worker 97
+[ Info: Running member 30 on worker 96
+[ Info: Running member 29 on worker 84
+[ Info: Running member 28 on worker 86
+[ Info: Running member 27 on worker 27
+[ Info: Running member 26 on worker 83
+[ Info: Running member 25 on worker 85
+[ Info: Running member 24 on worker 95
+[ Info: Running member 23 on worker 82
+[ Info: Running member 22 on worker 87
+[ Info: Running member 21 on worker 90
+[ Info: Running member 20 on worker 77
+[ Info: Running member 19 on worker 60
+[ Info: Running member 18 on worker 92
+[ Info: Running member 17 on worker 74
+[ Info: Running member 16 on worker 75
+[ Info: Running member 15 on worker 73
+[ Info: Running member 14 on worker 88
+[ Info: Running member 13 on worker 78
+[ Info: Running member 12 on worker 89
+[ Info: Running member 11 on worker 52
+[ Info: Running member 10 on worker 93
+[ Info: Running member 9 on worker 94
+[ Info: Running member 8 on worker 79
+[ Info: Running member 7 on worker 101
+[ Info: Running member 6 on worker 98
+[ Info: Running member 5 on worker 53
+[ Info: Running member 4 on worker 58
+[ Info: Running member 3 on worker 99
+[ Info: Running member 2 on worker 100
+[ Info: Running member 1 on worker 57
+┌ Warning: Error running on worker 81
+│   exception =
+│    On worker 81:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 45
+│   exception =
+│    On worker 45:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 29
+│   exception =
+│    On worker 29:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46
+┌ Warning: Error running on worker 56
+│   exception =
+│    On worker 56:
+│    The ClimaAtmos simulation has crashed. See the stack trace for details.
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] run_atmos_simulation
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:33
+│      [3] iterate
+│        @ ./generator.jl:48 [inlined]
+│      [4] _collect
+│        @ ./array.jl:811
+│      [5] collect_similar
+│        @ ./array.jl:720
+│      [6] map
+│        @ ./abstractarray.jl:3371
+│      [7] forward_model
+│        @ /central/groups/esm/jschmitt/ClimaAtmos.jl/calibration/experiments/tv_reanalysis/diurnal/model_interface.jl:99
+│      [8] #invokelatest#2
+│        @ ./essentials.jl:1055
+│      [9] invokelatest
+│        @ ./essentials.jl:1052
+│     [10] #114
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [11] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [12] run_work_thunk
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [13] #100
+│        @ /central/groups/esm/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/BSy2J/src/workers.jl:46

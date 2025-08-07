@@ -1,9 +1,9 @@
 prior_path: priors/prior_diagnostic_pi_entr_smooth_entr_detr_coarse_amip_new.toml
 ensemble_size: 100
 n_iterations: 10
-batch_size: 3 # number of cases per iteration
+batch_size: 1 # number of cases per iteration
 model_config : diagnostic_edmfx_diurnal_scm_imp.yml
-output_dir : /central/groups/esm/jschmitt/calibrations/diurnal_diag_3 # output dir
+output_dir : /central/groups/esm/jschmitt/calibrations/diurnal_diag_5 # output dir
 
 # Slurm resource configuration
 slurm_time: "12:00:00"
@@ -13,7 +13,7 @@ slurm_cpus_per_task: 1
 
 y_var_names: [lwp, clivi] # calibration variables clw
 log_vars: [""] # take log(var) when forming y, g
-z_max : 4000 # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
+z_max : nothing # spatial subsetting: use statistics from [0, z_max] (in [m]) for calibration
 dims_per_var : 1 # num dimensions per variable (num cells in vertical profile below z_max)
 # don't need to specify z_cal_grid for 0D profiles
 # z_cal_grid: # calibration grid (stretch-grid parameters). In general, `z_elem` should be the same for all types
@@ -38,8 +38,8 @@ norm_factors_by_var:
   ta: [252.8, 31.1699]
   hus: [0.00203968, 0.00346363]
   clw: [0.000004257, 0.00002] # for physical space
-  lwp: [1, 1]
-  clivi: [1, 1]
+  lwp: [0, 1] # i.e. no normalization
+  clivi: [0, 1] # i.e. no normalization
   #clw: [-9.32234, 3.10897] # for log space
 
 # change how we weight the different variables in the loss function. 

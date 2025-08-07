@@ -93,9 +93,8 @@ function process_profile_variable(
 )
 
     var_i = get(simdir; short_name = y_name, reduction)
-
     # subset vertical coordinate
-    if !isnothing(z_max)
+    if !isnothing(z_max) && z_max != "nothing"
         z_window = filter(x -> x <= z_max, var_i.dims["z"])
         var_i = window(var_i, "z", right = maximum(z_window))
     end

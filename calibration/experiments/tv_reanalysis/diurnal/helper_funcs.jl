@@ -7,6 +7,7 @@ import Interpolations
 using JLD2
 using Dates
 using ClimaUtilities.ClimaArtifacts
+using NaNStatistics
 
 FT = Float64
 # batch over locations
@@ -413,4 +414,63 @@ function ensemble_data(
         end
     end
     return G_ensemble
+end
+
+
+function get_modis_obs(
+    var_name,
+    lat, 
+    lon,
+    start_date;
+    return_mean = true,
+    # time_window_days = 30  # Use monthly average
+)
+    @assert lat >= -90 && lat <= 90 "Latitude out of bounds: $lat"
+    @assert lon >= -180 && lon <= 180 "Please convert longitude to -180 to 180 / out of bounds: $lon"
+    
+    # Load MODIS data from artifact
+    modis_data = NCDataset(joinpath(@clima_artifact("modis_lwp_iwp"), "modis_lwp_iwp.nc"))
+    
+    lon_idx = findmin(abs.(modis_data["longitude"][:] .- lon))[2]
+    lat_idx = findmin(abs.(modis_data["latitude"][:] .- lat))[2]
+
+    # Create observation time window around the start date
+    obs_start = Dates.DateTime(start_date, "yyyymmdd")
+    #obs_end = obs_start + Dates.Day(time_window_days)
+    
+    # Find all time indices within the observation window
+    #time_idx = findall(modis_data["time"][:] .>= obs_start .&& modis_data["time"][:] .< obs_end)
+    time_idx = findall(Dates.month.(modis_data["time"][:]) .==Dates.month(obs_start)) # select all data for the month
+    
+    if length(time_idx) == 0
+        @warn "No MODIS data found for site ($(lat), $(lon)) in time window"
+        close(modis_data)
+        return NaN
+    end
+    
+    # Get the data and compute time mean
+    obs_data = modis_data[var_name][:, lat_idx, lon_idx]
+    @info "obs_data size: $(size(obs_data))"
+    close(modis_data)
+    if return_mean
+        return nanmean(obs_data)
+    else
+        return obs_data
+    end
+end
+
+function get_modis_Σ_obs(
+    var_names,
+    lat,
+    lon,
+    start_date;
+    time_window_days = 30,  # Use monthly average
+    measurement_error = 0.01,
+)
+    # get the obs data
+    obs_data = [get_modis_obs(var_name, lat, lon, start_date, return_mean = false) for var_name in var_names]
+    # get the covariance matrix
+    Σ_obs = nancov(hcat(obs_data...))
+    #Σ_obs = EKP.SVDplusD(EKP.tsvd_cov_from_samples(obs_data), Diagonal(measurement_error)) # need to fix nans if we want to use this in prod
+    return Σ_obs
 end

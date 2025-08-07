@@ -7,7 +7,7 @@ import TOML
 using Distributions
 using Distributed
 using Random
-using Flux
+# using Flux
 using Logging
 
 import JLD2
@@ -20,8 +20,7 @@ include("model_interface.jl")
 
 # load configs
 experiment_dir = dirname(Base.active_project())
-const experiment_config =
-    YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
+experiment_config = YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
 # unpack experiment_config vars into scope
 for (key, value) in experiment_config
@@ -55,8 +54,7 @@ addprocs(
 
     experiment_dir = dirname(Base.active_project())
     const model_interface = joinpath(experiment_dir, "model_interface.jl")
-    const experiment_config =
-        YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
+    experiment_config = YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
     include(model_interface)
 
@@ -139,7 +137,7 @@ start_dates, lats, lons, convection_type, num_sites = get_era5_calibration_libra
 ref_paths = []
 obs_vec = []
 
-zc_model = get_z_grid(atmos_config; z_max)
+# zc_model = get_z_grid(atmos_config; z_max)
 
 for i in 1:num_sites
     # get forcing file path 
@@ -157,28 +155,14 @@ for i in 1:num_sites
     obs_start = Dates.DateTime(start_dates[i], "yyyymmdd")
     obs_end = Dates.DateTime(start_dates[i], "yyyymmdd") + Dates.Second(86399)
 
-    y_obs = get_obs(
-        forcing_file_path,
-        experiment_config["y_var_names"],
-        obs_start,
-        obs_end;
-        normalize = true,
-        norm_factors_dict = norm_factors_by_var,
-        z_scm = zc_model,
-        log_vars = log_vars,
-    )
+    # Map simulation variables to MODIS variables
+    sim_to_modis = Dict("lwp" => "lwp", "clivi" => "iwp")
+    modis_vars = [sim_to_modis[var_name] for var_name in experiment_config["y_var_names"]]
+    
+    y_obs = [get_modis_obs(var_name, lats[i], lons[i], start_dates[i]) for var_name in modis_vars]
+
     # build noise covariance matrix - diagonal with rescaled noise
-    Σ_obs = get_Σ_obs(
-        lats[i],
-        lons[i],
-        start_dates, # get covariance from the seasonal cycle - wrong but try for now
-        experiment_config["y_var_names"],
-        covariance_structure = covariance_structure,
-        normalize = true,
-        norm_factors_dict = norm_factors_by_var,
-        z_scm = zc_model,
-        log_vars = log_vars,
-    )
+    Σ_obs = get_modis_Σ_obs(modis_vars, lats[i], lons[i], start_dates[i])
 
     push!(
         obs_vec,
