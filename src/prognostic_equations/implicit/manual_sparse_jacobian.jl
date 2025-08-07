@@ -540,7 +540,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ᶠright_bias_matrix() ⋅
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwₚ) / ᶜρ) - (I,)
         end
-
     end
 
     if use_derivative(diffusion_flag)
@@ -551,7 +550,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         if vertical_diffusion isa DecayWithHeightDiffusion
             ᶜK_h =
                 ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
-            ᶜK_u = ᶜK_h
+            ᶜK_u = ᶜK_h 
         elseif vertical_diffusion isa VerticalDiffusion
             ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(
                 Y.c.uₕ,

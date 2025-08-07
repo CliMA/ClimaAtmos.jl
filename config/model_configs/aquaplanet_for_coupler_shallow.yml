@@ -12,7 +12,7 @@ approximate_linear_solve_iters: 2
 precip_model: "0M"
 disable_surface_flux_tendency: false
 surface_setup: "DefaultMoninObukhov"
-vert_diff: "DecayWithHeightDiffusion"
+vert_diff: true
 cloud_model: "grid_scale"
 netcdf_output_at_levels: true
 toml: [toml/sphere_aquaplanet.toml]
@@ -23,6 +23,3 @@ diagnostics:
   - short_name: [uasc, wasc, vasc, uas, ctend]
     reduction: average
     period: 30days
-#diagnostics:
-#  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa]
-#    period: 5days
