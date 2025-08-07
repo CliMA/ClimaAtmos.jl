@@ -1,5 +1,6 @@
 ClimaAtmos.jl Release Notes
 ============================
+PR [#9999] Makes a test change
 
 main
 -------
