@@ -1,4 +1,4 @@
-254
+255
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+255
+- Add radiation tendency to prognostic edmf updrafts
+
 254
 - Use rayleigh and viscous sponges in the prognostic_edmfx_aquaplanet
 
