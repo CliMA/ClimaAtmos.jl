@@ -567,7 +567,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
     (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜts⁰) = p.precomputed
 
-    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₜʲs, ᶜwₕʲs) = p.precomputed
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₜʲs, ᶜwₕʲs, ᶜuʲs) = p.precomputed
 
     # TODO - can I re-use them between js and env?
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
@@ -612,7 +612,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
                 ᶜwᵢʲs.:($$j) * Y.c.sgsʲs.:($$j).q_ice +
                 ᶜwᵣʲs.:($$j) * Y.c.sgsʲs.:($$j).q_rai +
                 ᶜwₛʲs.:($$j) * Y.c.sgsʲs.:($$j).q_sno
-            ) / Y.c.sgsʲs.:($$j).q_tot,
+            ),
             FT(0),
         )
         @. ᶜwₕʲs.:($$j) = ifelse(
@@ -620,17 +620,17 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             (
                 ᶜwₗʲs.:($$j) *
                 Y.c.sgsʲs.:($$j).q_liq *
-                (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwₗʲs.:($j), ᶜuʲs.:($j)))) +
                 ᶜwᵢʲs.:($$j) *
                 Y.c.sgsʲs.:($$j).q_ice *
-                (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwᵢʲs.:($j), ᶜuʲs.:($j)))) +
                 ᶜwᵣʲs.:($$j) *
                 Y.c.sgsʲs.:($$j).q_rai *
-                (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwᵣʲs.:($j), ᶜuʲs.:($j)))) +
                 ᶜwₛʲs.:($$j) *
                 Y.c.sgsʲs.:($$j).q_sno *
-                (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
-            ) / abs(Y.c.sgsʲs.:($$j).mse),
+                (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwₛʲs.:($j), ᶜuʲs.:($j))))
+            ),
             FT(0),
         )
 
