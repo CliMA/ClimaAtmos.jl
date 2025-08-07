@@ -17,6 +17,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             p,
             p.atmos.moisture_model,
             p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
         )
     end
 
@@ -70,32 +71,32 @@ end
 # expressions are less convoluted?
 
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    ᶠJ = Fields.local_geometry_field(ᶠu³).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠu³ * ᶠinterp(ᶜχ))))
 end
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    ᶠJ = Fields.local_geometry_field(ᶠu³).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))))
 end
 @static if pkgversion(ClimaCore) ≥ v"0.14.22"
     function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
-        ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-        ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
+        ᶜJ = Fields.local_geometry_field(ᶜρ).J
+        ᶠJ = Fields.local_geometry_field(ᶠu³).J
         return @. lazy(
             -(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠlin_vanleer(ᶠu³, ᶜχ, dt))),
         )
     end
 end
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    ᶠJ = Fields.local_geometry_field(ᶠu³).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind3(ᶠu³, ᶜχ))))
 end
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:boris_book})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    ᶠJ = Fields.local_geometry_field(ᶠu³).J
     return @. lazy(
         -(ᶜadvdivᵥ(
             ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * (
@@ -109,8 +110,8 @@ function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:boris_book})
     )
 end
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    ᶠJ = Fields.local_geometry_field(ᶠu³).J
     return @. lazy(
         -(ᶜadvdivᵥ(
             ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * (
@@ -137,10 +138,18 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         p.atmos
     (; dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
-    ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
-    ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜh_tot, ᶠu³, ᶜp) = p.precomputed
+    (; ᶠu³, ᶜp, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
 
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
