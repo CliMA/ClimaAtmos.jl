@@ -18,7 +18,7 @@ import ClimaParams
     bubble = true # false
     parsed_args =
         Dict{String, Any}("topography" => "NoWarp", "topo_smoothing" => false)
-    comms_ctx = ClimaComms.context()
+    comms_ctx = ClimaComms.context(ClimaComms.CPUSingleThreaded())
     deep = false
 
     # constants
