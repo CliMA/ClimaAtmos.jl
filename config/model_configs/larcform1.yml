@@ -1,4 +1,4 @@
-job_id: "Larcform1"
+job_id: "Larcform1_1M"
 initial_condition: "Larcform1"
 surface_setup: "Bomex"     # hijacked for const surface temperature
 turbconv: "prognostic_edmfx"
@@ -14,7 +14,7 @@ edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 edmfx_filter: true
 #prognostic_tke: true
-moist: "equil"
+moist: "nonequil"
 config: "column"
 z_max: 9000.0
 dz_bottom: 20.0
@@ -40,12 +40,12 @@ precip_model: "1M"
 ode_algo: ARS343
 
 diagnostics: # profiles, scalar fields 
-  - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, hus, hur, ua, va, wa, rlu, rld] #, rhoa, ua, va, wa, hur, hus, hussfc, evspsbl]
-    period: 10mins
-    reduction: average, inst
-  - short_name: [rldt, rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs]  # rldt should be zero
-    period: 10mins
-    reduction: average, inst
+  - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, prsn, hus, hur, ua, va, wa, rlu, rld, hfes, rhoa] 
+    period: 6hours
+    reduction: average
+  - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs]  # rldt should be zero
+    period: 6hours
+    reduction: average
 
 # diagnostics:
 #  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
