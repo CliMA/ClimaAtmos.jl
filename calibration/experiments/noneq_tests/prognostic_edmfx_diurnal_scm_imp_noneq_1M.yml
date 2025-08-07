@@ -37,7 +37,7 @@ z_elem: 63
 z_stretch: true
 dz_bottom: 30
 perturb_initstate: false
-dt: "3secs"
+dt: "10secs"
 dt_rad: "10mins"
 t_end: "30hours"
 cloud_model: "grid_scale"
