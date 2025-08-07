@@ -419,7 +419,15 @@ end
 
 function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     (; ᶠradiation_flux) = p.radiation
+    (; turbconv_model) = p.atmos
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜρʲs) = p.precomputed
+        n = n_mass_flux_subdomains(turbconv_model)
+        for j in 1:n
+            @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜdivᵥ(ᶠradiation_flux) / ᶜρʲs.:($$j)
+        end
+    end
     return nothing
 end
 
