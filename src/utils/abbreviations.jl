@@ -72,7 +72,7 @@ const ᶠcurlᵥ = Operators.CurlC2F(
     bottom = Operators.SetCurl(CT12(0, 0)),
     top = Operators.SetCurl(CT12(0, 0)),
 )
-
+const upwind_biased_grad = Operators.UpwindBiasedGradient()
 const ᶠupwind1 = Operators.UpwindBiasedProductC2F()
 const ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
     bottom = Operators.ThirdOrderOneSided(),
