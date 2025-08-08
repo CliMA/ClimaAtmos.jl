@@ -98,7 +98,8 @@ Specifically, this function calculates:
 - Horizontal advection for EDMFX updraft total specific humidity (`q_totʲ`).
 - Horizontal advection for other EDMFX updraft moisture species (`q_liqʲ`, `q_iceʲ`,
   `q_raiʲ`, `q_snoʲ`) if using a `NonEquilMoistModel` and `Microphysics1Moment`
-  precipitation model.
+  precipitation model. If the `Microphysics2Moment` model is used instead, `n_liqʲ`` 
+  and `n_raiʲ` are also advected.
 
 Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
@@ -126,8 +127,10 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
                 wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
                 Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
-            if p.atmos.moisture_model isa NonEquilMoistModel &&
-               p.atmos.microphysics_model isa Microphysics1Moment
+            if p.atmos.moisture_model isa NonEquilMoistModel && (
+                p.atmos.microphysics_model isa Microphysics1Moment ||
+                p.atmos.microphysics_model isa Microphysics2Moment
+            )
                 @. Yₜ.c.sgsʲs.:($$j).q_liq -=
                     wdivₕ(Y.c.sgsʲs.:($$j).q_liq * ᶜuʲs.:($$j)) -
                     Y.c.sgsʲs.:($$j).q_liq * wdivₕ(ᶜuʲs.:($$j))
@@ -140,6 +143,15 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
                 @. Yₜ.c.sgsʲs.:($$j).q_sno -=
                     wdivₕ(Y.c.sgsʲs.:($$j).q_sno * ᶜuʲs.:($$j)) -
                     Y.c.sgsʲs.:($$j).q_sno * wdivₕ(ᶜuʲs.:($$j))
+            end
+            if p.atmos.moisture_model isa NonEquilMoistModel &&
+               p.atmos.microphysics_model isa Microphysics2Moment
+                @. Yₜ.c.sgsʲs.:($$j).n_liq -=
+                    wdivₕ(Y.c.sgsʲs.:($$j).n_liq * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).n_liq * wdivₕ(ᶜuʲs.:($$j))
+                @. Yₜ.c.sgsʲs.:($$j).n_rai -=
+                    wdivₕ(Y.c.sgsʲs.:($$j).n_rai * ᶜuʲs.:($$j)) -
+                    Y.c.sgsʲs.:($$j).n_rai * wdivₕ(ᶜuʲs.:($$j))
             end
         end
     end
@@ -308,7 +320,8 @@ This function handles:
 - Vertical advection of updraft density-area product (`ρaʲ`).
 - Vertical advection of updraft moist static energy (`mseʲ`) and total specific humidity (`q_totʲ`).
 - Vertical advection of other updraft moisture species (`q_liqʲ`, `q_iceʲ`, `q_raiʲ`, `q_snoʲ`)
-  if using a `NonEquilMoistModel` and `Microphysics1Moment` precipitation model.
+  if using a `NonEquilMoistModel` and `Microphysics1Moment` precipitation model. If the `Microphysics2Moment` 
+  model is used instead, `n_liqʲ` and `n_raiʲ` are also advected.
 - Buoyancy forcing terms in the updraft vertical momentum (`u₃ʲ`) equation, including
   adjustments for non-hydrostatic pressure.
 - Buoyancy production/conversion terms in the updraft `mseʲ` equation.
@@ -490,6 +503,21 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜdivᵥ(ᶠw³ʲ) * ᶜqʲ * (1 - Y.c.sgsʲs.:($$j).q_tot)
                 @. ᶜqʲₜ -= ᶜdivᵥ(ᶠw³ʲ) * ᶜqʲ
             end
+        end
+        if p.atmos.moisture_model isa NonEquilMoistModel &&
+           p.atmos.microphysics_model isa Microphysics2Moment
+            # TODO add sedimentation for number concentrations
+
+            sgs_microphysics_tracers =
+                (:q_liq, :q_ice, :q_rai, :q_sno, :n_liq, :n_rai)
+
+            for χ_name in sgs_microphysics_tracers
+                ᶜχʲ = getproperty(Y.c.sgsʲs.:($j), χ_name)
+                va = vertical_advection(ᶠu³ʲs.:($j), ᶜχʲ, edmfx_upwinding)
+                ᶜχʲₜ = getproperty(Yₜ.c.sgsʲs.:($j), χ_name)
+                @. ᶜχʲₜ += va
+            end
+
         end
     end
 end
