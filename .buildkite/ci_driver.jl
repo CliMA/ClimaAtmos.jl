@@ -5,8 +5,8 @@
 # (See also Base.type_limited_string_from_context())
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 # PrecompileCI is a local package that forces commonly used methods to be precompiled,
-# allowing them to be reused between Julia sessions. 
-# To load in the precompiled methods, run `using PrecompileCI` before loading ClimaAtmos. 
+# allowing them to be reused between Julia sessions.
+# To load in the precompiled methods, run `using PrecompileCI` before loading ClimaAtmos.
 # To see what methods are precompiled, open julia: `julia --project=.buildkite/PrecompileCI`
 # and run `using PrecompileTools; PrecompileTools.verbose[] = true; include(".buildkite/PrecompileCI/src/PrecompileCI.jl")`
 haskey(ENV, "CI") && (using PrecompileCI)
