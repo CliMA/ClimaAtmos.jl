@@ -249,7 +249,15 @@ function make_plots_generic(
     grid_pos = 1
 
     for var in vars
+        # Print info about variable we're plotting and where
+        if isa(var, Tuple)
+            var_name = parse_var_attributes(var[1])
+        else
+            var_name = parse_var_attributes(var)
+        end
+        println("Plotting variable: $(var_name) in grid position: $(grid_pos)")
         if grid_pos > MAX_PLOTS_PER_PAGE
+            println("Starting new page")
             fig = makefig()
             grid = gridlayout()
             grid_pos = 1
