@@ -43,7 +43,11 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
+    (; ᶜwₜqₜ, ᶜwₜhₜ, ᶜwₜʲs, ᶜwₕʲs) = p.precomputed # TODO - cleanup the names here
+
     thermo_params = CAP.thermodynamics_params(p.params)
+    cmp = CAP.microphysics_1m_params(p.params)
+    cmc = CAP.microphysics_cloud_params(p.params)
     ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     (; dt) = p
@@ -94,7 +98,10 @@ function edmfx_sgs_mass_flux_tendency!(
         if !(p.atmos.moisture_model isa DryModel)
             # Specific humidity fluxes: First sum up the draft fluxes
             for j in 1:n
-                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
+                @. ᶠu³_diff = (
+                    (ᶠu³ʲs.:($$j) + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜʲs.:($$j))))) - 
+                    (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜqₜ))))
+                )
                 @. ᶜa_scalar =
                     (Y.c.sgsʲs.:($$j).q_tot - specific(Y.c.ρq_tot, Y.c.ρ)) *
                     draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
@@ -109,7 +116,45 @@ function edmfx_sgs_mass_flux_tendency!(
             end
             # Add the environment fluxes
             ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
-            @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
+            if p.atmos.moisture_model isa NonEquilMoistModel &&
+                p.atmos.microphysics_model isa Microphysics1Moment
+
+                ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y, p)
+                ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
+                ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
+                ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
+
+                ᶠwₜ³⁰ = @. lazy(
+                    ᶜq_rai⁰ * CT3(ᶠinterp(Geometry.WVector(-1 * CM1.terminal_velocity(
+                        cmp.pr,
+                        cmp.tv.rain,
+                        ᶜρ⁰,
+                        max(zero(Y.c.ρ), ᶜq_rai⁰),
+                    )))) +
+                    ᶜq_sno⁰ * CT3(ᶠinterp(Geometry.WVector(-1 * CM1.terminal_velocity(
+                        cmp.ps,
+                        cmp.tv.snow,
+                        ᶜρ⁰,
+                        max(zero(Y.c.ρ), ᶜq_sno⁰),
+                    )))) +
+                    ᶜq_liq⁰ * CT3(ᶠinterp(Geometry.WVector(-1 * CMNe.terminal_velocity(
+                        cmc.liquid,
+                        cmc.Ch2022.rain,
+                        ᶜρ⁰,
+                        max(zero(Y.c.ρ), ᶜq_liq⁰),
+                     )))) +
+                    ᶜq_ice⁰ * CT3(ᶠinterp(Geometry.WVector(-1 * CMNe.terminal_velocity(
+                        cmc.ice,
+                        cmc.Ch2022.small_ice,
+                        ᶜρ⁰,
+                        max(zero(Y.c.ρ), ᶜq_ice⁰),
+                )))))
+            end
+
+            @. ᶠu³_diff = (
+                (ᶠu³⁰ + ᶠwₜ³⁰) -
+                (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜqₜ))))
+            )
             @. ᶜa_scalar =
                 (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
@@ -123,25 +168,30 @@ function edmfx_sgs_mass_flux_tendency!(
         end
 
         microphysics_tracers = (
-            (@name(c.sgsʲs.:(1).q_liq), @name(c.ρq_liq), :q_liq),
-            (@name(c.sgsʲs.:(1).q_ice), @name(c.ρq_ice), :q_ice),
-            (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai), :q_rai),
-            (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno), :q_sno),
-            (@name(c.sgsʲs.:(1).n_liq), @name(c.ρn_liq), :n_liq),
-            (@name(c.sgsʲs.:(1).n_rai), @name(c.ρn_rai), :n_rai),
+            (@name(c.sgsʲs.:(1).q_liq), @name(c.ρq_liq), :q_liq, @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
+            (@name(c.sgsʲs.:(1).q_ice), @name(c.ρq_ice), :q_ice, @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
+            (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai), :q_rai, @name(ᶜwᵣʲs.:(1)), @name(ᶜwᵣ)),
+            (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno), :q_sno, @name(ᶜwₛʲs.:(1)), @name(ᶜwₛ)),
+            (@name(c.sgsʲs.:(1).n_liq), @name(c.ρn_liq), :n_liq, @name(ᶜwₗʲs.:(1)), @name(ᶜwnₗ)), #TODO - compute as number weighted velocity
+            (@name(c.sgsʲs.:(1).n_rai), @name(c.ρn_rai), :n_rai, @name(ᶜwᵣʲs.:(1)), @name(ᶜwnᵣ)), #TODO - update after 2M scheme is merged
         )
 
         # Liquid, ice, rain and snow specific humidity fluxes
         for j in 1:n
-            @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
-
+            
             MatrixFields.unrolled_foreach(
                 microphysics_tracers,
-            ) do (χʲ_name, ρχ_name, χ_name)
+            ) do (χʲ_name, ρχ_name, χ_name, wʲ_name, w_name)
                 MatrixFields.has_field(Y, ρχ_name) || return
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
                 ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
+
+                ᶠw³ʲ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * wʲ_name)))))
+                ᶠw³ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * w_name)))))
+
+                @. ᶠu³_diff = (ᶠu³ʲs.:($$j) + ᶠw³ʲ) - (ᶠu³ + ᶠw³)
+
                 @. ᶜa_scalar =
                     (ᶜχʲ - ᶜχ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                 vtt = vertical_transport(
@@ -156,14 +206,73 @@ function edmfx_sgs_mass_flux_tendency!(
             end
 
         end
-        @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
+        if p.atmos.moisture_model isa NonEquilMoistModel &&
+            p.atmos.microphysics_model isa Microphysics1Moment
+        
+        ᶜw⁰ₗ = @. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * CMNe.terminal_velocity(
+            cmc.liquid,
+            cmc.Ch2022.rain,
+            ᶜρ⁰,
+            max(zero(Y.c.ρ),ᶜspecific_env_value(Val(:q_liq), Y, p)),
+        )))))
+
+        ᶜw⁰ᵢ = @. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * CMNe.terminal_velocity(
+            cmc.ice,
+            cmc.Ch2022.small_ice,
+            ᶜρ⁰,
+            max(zero(Y.c.ρ),ᶜspecific_env_value(Val(:q_ice), Y, p)),
+        )))))
+
+        ᶜw⁰ᵣ = @. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * CM1.terminal_velocity(
+            cmp.pr,
+            cmp.tv.rain,
+            ᶜρ⁰,
+            max(zero(Y.c.ρ), ᶜspecific_env_value(Val(:q_rai), Y, p)),
+        )))))
+
+        ᶜw⁰ₛ = @. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * CM1.terminal_velocity(
+            cmp.ps,
+            cmp.tv.snow,
+            ᶜρ⁰,
+            max(zero(Y.c.ρ), ᶜspecific_env_value(Val(:q_sno), Y, p)),
+        )))))
+
+        # TODO - update after 2M scheme is merged
+        #ᶜwn⁰ₗ = @. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * CMNe.terminal_velocity(
+        #    cmc.liquid,
+        #    cmc.Ch2022.rain,
+        #    ᶜρ⁰,
+        #    max(zero(Y.c.ρ),ᶜspecific_env_value(Val(:q_liq), Y, p)),
+        #)))))
+        #ᶜwn⁰ᵣ = @. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * CM1.terminal_velocity(
+        #    cmp.pr,
+        #    cmp.tv.rain,
+        #    ᶜρ⁰,
+        #    max(zero(Y.c.ρ), ᶜspecific_env_value(Val(:q_rai), Y, p)),
+        #)))))
+
+        env_terminal_velocities = Dict(
+            :q_liq => ᶜw⁰ₗ,
+            :q_ice => ᶜw⁰ᵢ,
+            :q_rai => ᶜw⁰ᵣ,
+            :q_sno => ᶜw⁰ₛ,
+            #:n_liq => ᶜwn⁰ₗ,
+            #:n_rai => ᶜwn⁰ᵣ,
+        )
+        end
+
         MatrixFields.unrolled_foreach(
             microphysics_tracers,
-        ) do (χʲ_name, ρχ_name, χ_name)
+        ) do (_, ρχ_name, χ_name, _, w_name)
             MatrixFields.has_field(Y, ρχ_name) || return
             ᶜχ⁰ = ᶜspecific_env_value(Val(χ_name), Y, p)
             ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
             ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
+
+            ᶠw³ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * w_name)))))
+            
+            @. ᶠu³_diff = (ᶠu³⁰ + env_terminal_velocities[χ_name]) - (ᶠu³ + ᶠw³)
+
             @. ᶜa_scalar = (ᶜχ⁰ - ᶜχ) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
@@ -175,7 +284,6 @@ function edmfx_sgs_mass_flux_tendency!(
             ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
             @. ᶜρχₜ += vtt
         end
-        # TODO - compute sedimentation and terminal velocities
         # TODO - add w q_tot, w h_tot terms associated with sedimentation/falling
         # TODO - add vertical momentum fluxes
     end
