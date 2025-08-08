@@ -28,7 +28,7 @@ model_config = "diagnostic_edmfx_diurnal_scm_imp_noneq_1M.yml"
 # load configs and directories 
 #model_config_dict = YAML.load_file(model_config)
 atmos_config = CA.AtmosConfig(model_config) # ADD PARAM DICT HERE W TRUTH VALS
-zc_model = get_z_grid(atmos_config; z_max)
+#zc_model = get_z_grid(atmos_config; z_max)
 
 
 # add workers
@@ -58,6 +58,28 @@ addprocs(
 
 end
 
+@info "Generating observations"
+parameter_file = CAL.parameter_path(output_dir, 0, 0)
+mkpath(dirname(parameter_file))
+touch(parameter_file)
+simulation = CAL.forward_model(0, 0)
+
+observations = Vector{Float64}(undef, 1)
+observations .= process_member_data(SimDir(simulation.output_dir))
+
+ekp_obj = EKP.EnsembleKalmanProcess(
+    EKP.construct_initial_ensemble(prior, ensemble_size),
+    observation_series,
+    EKP.Inversion();
+    localization_method = EKP.Localizers.NoLocalization(),
+    failure_handler_method = EKP.SampleSuccGauss(),
+    accelerator = EKP.DefaultAccelerator(),
+    scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+    verbose= true,
+)
+
+eki = CAL.calibrate(CAL.WorkerBackend, ekp_obj, n_iterations, prior, output_dir; failure_rate = 0.9)
+
 # ### define minibatcher
 # rfs_minibatcher =
 #     EKP.FixedMinibatcher(collect(1:experiment_config["batch_size"]))
@@ -65,71 +87,71 @@ end
 
 # SET UP OBS AND CREATE EKP STRUCT
 
-EnsembleKalmanProcess(
-    params::AbstractMatrix{FT},
-    observation_series::OS,
-    obs_noise_cov::Union{AbstractMatrix{FT}, UniformScaling{FT}},
-    process::P;
-    scheduler = DefaultScheduler(1),
-    Δt = FT(1),
-    rng::AbstractRNG = Random.GLOBAL_RNG,
-    failure_handler_method::FM = IgnoreFailures(),
-    localization_method::LM = NoLocalization(),
-    verbose::Bool = false,
-) where {FT <: AbstractFloat, P <: Process, FM <: FailureHandlingMethod, LM <: LocalizationMethod, OS <: ObservationSeries}
+# EnsembleKalmanProcess(
+#     params::AbstractMatrix{FT},
+#     observation_series::OS,
+#     obs_noise_cov::Union{AbstractMatrix{FT}, UniformScaling{FT}},
+#     process::P;
+#     scheduler = DefaultScheduler(1),
+#     Δt = FT(1),
+#     rng::AbstractRNG = Random.GLOBAL_RNG,
+#     failure_handler_method::FM = IgnoreFailures(),
+#     localization_method::LM = NoLocalization(),
+#     verbose::Bool = false,
+# ) where {FT <: AbstractFloat, P <: Process, FM <: FailureHandlingMethod, LM <: LocalizationMethod, OS <: ObservationSeries}
 
-###  EKI hyperparameters/settings
-@info "Initializing calibration" n_iterations ensemble_size output_dir
-CAL.initialize(
-    ensemble_size,
-    observations,
-    prior,
-    output_dir;
-    scheduler = EKP.DataMisfitController(on_terminate = "continue"),
-    localization_method = EKP.Localizers.NoLocalization(),
-    failure_handler_method = EKP.SampleSuccGauss(),
-    accelerator = EKP.DefaultAccelerator(),
-)
+# ###  EKI hyperparameters/settings
+# @info "Initializing calibration" n_iterations ensemble_size output_dir
+# CAL.initialize(
+#     ensemble_size,
+#     observations,
+#     prior,
+#     output_dir;
+#     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
+#     localization_method = EKP.Localizers.NoLocalization(),
+#     failure_handler_method = EKP.SampleSuccGauss(),
+#     accelerator = EKP.DefaultAccelerator(),
+# )
 
-eki = nothing
-hpc_kwargs = CAL.kwargs(
-    time = 60,
-    mem_per_cpu = "12G",
-    cpus_per_task = batch_size + 1,
-    ntasks = 1,
-    nodes = 1,
-    reservation = "clima",
-)
-module_load_str = CAL.module_load_string(CAL.CaltechHPCBackend)
-for iter in 0:(n_iterations - 1)
-    @info "Iteration $iter"
-    jobids = map(1:ensemble_size) do member
-        @info "Running ensemble member $member"
-        CAL.slurm_model_run(
-            iter,
-            member,
-            output_dir,
-            experiment_dir,
-            model_interface,
-            module_load_str;
-            hpc_kwargs,
-        )
-    end
+# eki = nothing
+# hpc_kwargs = CAL.kwargs(
+#     time = 60,
+#     mem_per_cpu = "12G",
+#     cpus_per_task = batch_size + 1,
+#     ntasks = 1,
+#     nodes = 1,
+#     reservation = "clima",
+# )
+# module_load_str = CAL.module_load_string(CAL.CaltechHPCBackend)
+# for iter in 0:(n_iterations - 1)
+#     @info "Iteration $iter"
+#     jobids = map(1:ensemble_size) do member
+#         @info "Running ensemble member $member"
+#         CAL.slurm_model_run(
+#             iter,
+#             member,
+#             output_dir,
+#             experiment_dir,
+#             model_interface,
+#             module_load_str;
+#             hpc_kwargs,
+#         )
+#     end
 
-    statuses = CAL.wait_for_jobs(
-        jobids,
-        output_dir,
-        iter,
-        experiment_dir,
-        model_interface,
-        module_load_str;
-        hpc_kwargs,
-        verbose = false,
-        reruns = 0,
-    )
-    CAL.report_iteration_status(statuses, output_dir, iter)
-    @info "Completed iteration $iter, updating ensemble"
-    G_ensemble = CAL.observation_map(iter; config_dict = experiment_config)
-    CAL.save_G_ensemble(output_dir, iter, G_ensemble)
-    eki = CAL.update_ensemble(output_dir, iter, prior)
-end
+#     statuses = CAL.wait_for_jobs(
+#         jobids,
+#         output_dir,
+#         iter,
+#         experiment_dir,
+#         model_interface,
+#         module_load_str;
+#         hpc_kwargs,
+#         verbose = false,
+#         reruns = 0,
+#     )
+#     CAL.report_iteration_status(statuses, output_dir, iter)
+#     @info "Completed iteration $iter, updating ensemble"
+#     G_ensemble = CAL.observation_map(iter; config_dict = experiment_config)
+#     CAL.save_G_ensemble(output_dir, iter, G_ensemble)
+#     eki = CAL.update_ensemble(output_dir, iter, prior)
+# end
