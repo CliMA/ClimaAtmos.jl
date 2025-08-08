@@ -231,7 +231,7 @@ function make_plots_generic(
                 normalized_path =
                     lpad(path, LABEL_LENGTH + 1, " ")[(end - LABEL_LENGTH):end]
 
-                CairoMakie.Label(fig[0, col], path)
+                CairoMakie.Label(fig[0, col], normalized_path)
             end
         end
         return fig
@@ -249,11 +249,20 @@ function make_plots_generic(
     grid_pos = 1
 
     for var in vars
+        # Print info about variable we're plotting and where
+        if isa(var, Tuple)
+            var_name = parse_var_attributes(var[1])
+        else
+            var_name = parse_var_attributes(var)
+        end
         if grid_pos > MAX_PLOTS_PER_PAGE
+            println("Starting new page")
             fig = makefig()
             grid = gridlayout()
             grid_pos = 1
         end
+
+        println("Plotting variable: $(var_name) in grid position: $(grid_pos)")
 
         plot_fn(grid[grid_pos], var, args...; kwargs...)
         grid_pos += 1
@@ -1606,25 +1615,20 @@ function make_plots(::EDMFSpherePlots, output_paths::Vector{<:AbstractString})
 
     short_name_tuples = pair_edmf_names(short_names)
 
-    # The hierarchy is:
-    # - A vector looping over variables
-    #     - Containing, a vector looping over latitudes
-    #     - Containing, tuples with one or two variables
-    #   - Repeated for each simdir
-    # All of this is flattened out to be a vector of tuples (with the two gridmean/updraft
-    # variables)
+    # Create a flat sequence of variable groups iterating over variable,
+    # latitude, and simulation directory
     var_groups_zt = vcat(
-        map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
-            return [
-                (
+        [
+            map_comparison(simdirs, latitudes) do simdir, lat
+                return (
                     slice(
                         get(simdir; short_name, reduction, period),
                         lon = 0.0,
                         lat = lat,
                     ) for short_name in name_tuple
-                ) for lat in latitudes
-            ]
-        end...,
+                )
+            end for name_tuple in short_name_tuples
+        ]...,
     )
 
     var_groups_z = [
