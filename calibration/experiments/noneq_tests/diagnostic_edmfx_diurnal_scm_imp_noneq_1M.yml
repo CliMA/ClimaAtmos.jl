@@ -48,20 +48,11 @@ perturb_initstate: false
 dt_rad: "10mins"
 cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage: true
-toml: [calibration/experiments/noneq_tests/toml/diagnostic_precalibrated.toml]
+toml: [toml/diagnostic_precalibrated.toml]
 # toml: [tomls/diagnostic_precalibrated.toml, tomls/deep_forcing_relaxation.toml]
 output_default_diagnostics: false
 rad: allskywithclear
 insolation: "externaldriventv"
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
-    period: 1hours
-  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, tke]
-    period: 1hours
-  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
-    period: 1hours
-  - short_name: [rlut, rlutcs, rsut, rsutcs, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv]
-    period: 1hours
-  - reduction_time: max
-    short_name: tke
+  - short_name: [lwp, clivi]
     period: 1hours
