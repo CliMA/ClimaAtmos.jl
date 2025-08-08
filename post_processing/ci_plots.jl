@@ -231,7 +231,7 @@ function make_plots_generic(
                 normalized_path =
                     lpad(path, LABEL_LENGTH + 1, " ")[(end - LABEL_LENGTH):end]
 
-                CairoMakie.Label(fig[0, col], path)
+                CairoMakie.Label(fig[0, col], normalized_path)
             end
         end
         return fig
