@@ -369,6 +369,80 @@ end
 #####
 
 """
+    compute_prescribed_aerosol_properties!(
+        seasalt_num,
+        seasalt_mean_radius,
+        sulfate_num,
+        prescribed_aerosol_field,
+        aerosol_params,
+    )
+
+Computes the number concentrations (per unit mass of air) of prescribed sea salt and sulfate aerosols, as well as
+the geometric mean radius of sea salt aerosol, and writes the results in-place.
+
+# Arguments
+- `seasalt_num`: Array to be overwritten with the total number concentration of sea salt aerosol [kg⁻¹].
+- `seasalt_mean_radius`: Array to be overwritten with the geometric mean radius of sea salt aerosol [m].
+- `sulfate_num`: Array to be overwritten with the total number concentration of sulfate aerosol [kg⁻¹].
+- `prescribed_aerosol_field`: A container holding mass mixing ratios of aerosol tracers (e.g., `:SSLT01`, `:SO4`).
+- `aerosol_params`: Parameters defining aerosol properties (e.g., density, mode radius, geometric standard deviation, hygroscopicity).
+
+# Notes
+- Sea salt number concentration and mean radius are computed by aggregating contributions from all available `:SSLT0X` modes.
+- If no sea salt is present, the mean radius is set to zero to avoid division by zero.
+- Aerosol mass is converted to number using assumed particle radii and densities.
+"""
+
+
+function compute_prescribed_aerosol_properties!(
+    seasalt_num,
+    seasalt_mean_radius,
+    sulfate_num,
+    prescribed_aerosol_field,
+    aerosol_params,
+)
+
+    FT = eltype(aerosol_params)
+    @. seasalt_num = 0
+    @. seasalt_mean_radius = 0
+    @. sulfate_num = 0
+
+    # Get aerosol concentrations if available
+    seasalt_names = [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
+    sulfate_names = [:SO4]
+    for aerosol_name in propertynames(prescribed_aerosol_field)
+        if aerosol_name in seasalt_names
+            seasalt_particle_radius = getproperty(
+                aerosol_params,
+                Symbol(string(aerosol_name) * "_radius"),
+            )
+            seasalt_particle_mass =
+                FT(4 / 3 * pi) *
+                seasalt_particle_radius^3 *
+                aerosol_params.seasalt_density
+            seasalt_mass = getproperty(prescribed_aerosol_field, aerosol_name)
+            @. seasalt_num += seasalt_mass / seasalt_particle_mass
+            @. seasalt_mean_radius +=
+                seasalt_mass / seasalt_particle_mass *
+                log(seasalt_particle_radius)
+        elseif aerosol_name in sulfate_names
+            sulfate_particle_mass =
+                FT(4 / 3 * pi) *
+                aerosol_params.sulfate_radius^3 *
+                aerosol_params.sulfate_density
+            sulfate_mass = getproperty(prescribed_aerosol_field, aerosol_name)
+            @. sulfate_num += sulfate_mass / sulfate_particle_mass
+        end
+    end
+    # Compute geometric mean radius of the log-normal distribution:
+    # exp(weighted average of log(radius))
+    @. seasalt_mean_radius =
+        ifelse(seasalt_num == 0, 0, exp(seasalt_mean_radius / seasalt_num))
+
+end
+
+
+"""
     aerosol_activation_sources(
         seasalt_num,
         seasalt_mean_radius,
@@ -439,7 +513,7 @@ function aerosol_activation_sources(
     seasalt_mode = CMAM.Mode_κ(
         seasalt_mean_radius,
         aerosol_params.seasalt_std,
-        seasalt_num * ρ,
+        max(0, seasalt_num) * ρ,
         (FT(1),),
         (FT(1),),
         (FT(0),),
@@ -448,7 +522,7 @@ function aerosol_activation_sources(
     sulfate_mode = CMAM.Mode_κ(
         aerosol_params.sulfate_radius,
         aerosol_params.sulfate_std,
-        sulfate_num * ρ,
+        max(0, sulfate_num) * ρ,
         (FT(1),),
         (FT(1),),
         (FT(0),),
@@ -464,7 +538,7 @@ function aerosol_activation_sources(
         thermo_params,
         T,
         p,
-        w,
+        max(0, w),
         qₜ,
         qₗ,
         qᵢ,

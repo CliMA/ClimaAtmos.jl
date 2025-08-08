@@ -1405,6 +1405,7 @@ EDMFBoxPlots = Union{
 
 EDMFBoxPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column},
+    Val{:prognostic_edmfx_rico_column_2M},
     Val{:prognostic_edmfx_trmm_column},
     Val{:prognostic_edmfx_dycoms_rf02_column},
 }
@@ -1499,8 +1500,25 @@ function make_plots(
     simdirs = SimDir.(output_paths)
 
     if sim_type isa EDMFBoxPlotsWithPrecip
-        precip_names =
-            ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen")
+        if sim_type isa Val{:prognostic_edmfx_rico_column_2M}
+            precip_names = (
+                "husra",
+                "hussn",
+                "husraup",
+                "hussnup",
+                "husraen",
+                "hussnen",
+                "cdnc",
+                "ncra",
+                "cdncup",
+                "ncraup",
+                "cdncen",
+                "ncraen",
+            )
+        else
+            precip_names =
+                ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen")
+        end
     elseif sim_type isa DiagEDMFBoxPlotsWithPrecip
         precip_names = ("husra", "hussn", "husraup", "hussnup")
     else

@@ -304,7 +304,7 @@ add_diagnostic_variable!(
 )
 
 ###
-# Updraft liquid water specific humidity (3d)
+# Updraft liquid water specific humidity and number mixing ratio (3d)
 ###
 compute_clwup!(out, state, cache, time) = compute_clwup!(
     out,
@@ -385,6 +385,51 @@ add_diagnostic_variable!(
     the mass of air (including the water in all phases) in the first updraft.
     """,
     compute! = compute_clwup!,
+)
+
+compute_cdncup!(out, state, cache, time) = compute_cdncup!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_cdncup!(
+    _,
+    _,
+    _,
+    _,
+    microphysics_model::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute updraft rain number mixing ratio with a 2M precip model and with EDMFX",
+)
+
+function compute_cdncup!(
+    out,
+    state,
+    cache,
+    time,
+    microphysics_model_model::Microphysics2Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    if isnothing(out)
+        return (state.c.sgsʲs.:1).n_liq
+    else
+        out .= (state.c.sgsʲs.:1).n_liq
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "cdncup",
+    long_name = "Updraft Number Mixing Ratio of Cloud Liquid Water",
+    units = "kg^-1",
+    comments = """
+    This is calculated as the number of cloud water droplets in the updraft divided by
+    the mass of air (including the water in all phases) in the updraft.
+    """,
+    compute! = compute_cdncup!,
 )
 
 ###
@@ -469,7 +514,7 @@ add_diagnostic_variable!(
 )
 
 ###
-# Updraft rain water specific humidity (3d)
+# Updraft rain water specific humidity and number mixing ratio (3d)
 ###
 compute_husraup!(out, state, cache, time) = compute_husraup!(
     out,
@@ -487,7 +532,7 @@ compute_husraup!(
     microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
-    "Can only compute updraft rain water specific humidity with a 1M precip model and with EDMFX",
+    "Can only compute updraft rain water specific humidity with a 1M or 2M precip model and with EDMFX",
 )
 
 function compute_husraup!(
@@ -495,7 +540,7 @@ function compute_husraup!(
     state,
     cache,
     time,
-    microphysics_model::Microphysics1Moment,
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -530,6 +575,51 @@ add_diagnostic_variable!(
     compute! = compute_husraup!,
 )
 
+compute_ncraup!(out, state, cache, time) = compute_ncraup!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_ncraup!(
+    _,
+    _,
+    _,
+    _,
+    microphysics_model::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute updraft rain number mixing ratio with a 2M precip model and with EDMFX",
+)
+
+function compute_ncraup!(
+    out,
+    state,
+    cache,
+    time,
+    microphysics_model_model::Microphysics2Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    if isnothing(out)
+        return (state.c.sgsʲs.:1).n_rai
+    else
+        out .= (state.c.sgsʲs.:1).n_rai
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "ncraup",
+    long_name = "Updraft Number Mixing Ratio of Rain",
+    units = "kg^-1",
+    comments = """
+    This is calculated as the number of raindrops in the updraft divided by
+    the mass of air (including the water in all phases) in the updraft.
+    """,
+    compute! = compute_ncraup!,
+)
+
 ###
 # Updraft snow specific humidity (3d)
 ###
@@ -549,7 +639,7 @@ compute_hussnup!(
     microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
-    "Can only compute updraft snow specific humidity with a 1M precip model and with EDMFX",
+    "Can only compute updraft snow specific humidity with a 1M or 2M precip model and with EDMFX",
 )
 
 function compute_hussnup!(
@@ -557,7 +647,7 @@ function compute_hussnup!(
     state,
     cache,
     time,
-    microphysics_model::Microphysics1Moment,
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
@@ -962,7 +1052,7 @@ add_diagnostic_variable!(
 )
 
 ###
-# Environment liquid water specific humidity (3d)
+# Environment liquid water specific humidity and number mixing ratio (3d)
 ###
 compute_clwen!(out, state, cache, time) = compute_clwen!(
     out,
@@ -1028,6 +1118,52 @@ add_diagnostic_variable!(
     the mass of air (including the water in all phases) in the environment.
     """,
     compute! = compute_clwen!,
+)
+
+compute_cdncen!(out, state, cache, time) = compute_cdncen!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_cdncen!(
+    _,
+    _,
+    _,
+    _,
+    microphysics_model::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute updraft cloud liquid water number mixing ratio with a 2M model and with EDMFX",
+)
+
+function compute_cdncen!(
+    out,
+    state,
+    cache,
+    time,
+    microphysics_model_model::Microphysics2Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    ᶜn_liq⁰ = ᶜspecific_env_value(Val(:n_liq), state, cache)
+    if isnothing(out)
+        return Base.materialize(ᶜn_liq⁰)
+    else
+        out .= ᶜn_liq⁰
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "cdncen",
+    long_name = "Environment Number Mixing Ratio of Cloud Liquid Water",
+    units = "kg^-1",
+    comments = """
+    This is calculated as the number of cloud liquid droplets in the environment divided by
+    the mass of air (including the water in all phases) in the environment.
+    """,
+    compute! = compute_cdncen!,
 )
 
 ###
@@ -1096,7 +1232,7 @@ add_diagnostic_variable!(
 )
 
 ###
-# Environment rain water specific humidity (3d)
+# Environment rain water specific humidity and number mixing ratio (3d)
 ###
 compute_husraen!(out, state, cache, time) = compute_husraen!(
     out,
@@ -1114,7 +1250,7 @@ compute_husraen!(
     microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
-    "Can only compute updraft rain specific humidity and with a 1M model and with EDMFX",
+    "Can only compute updraft rain specific humidity with a 1M or 2M model and with EDMFX",
 )
 
 function compute_husraen!(
@@ -1122,7 +1258,7 @@ function compute_husraen!(
     state,
     cache,
     time,
-    microphysics_model_model::Microphysics1Moment,
+    microphysics_model_model::Union{Microphysics1Moment, Microphysics2Moment},
     turbconv_model::PrognosticEDMFX,
 )
     ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), state, cache)
@@ -1144,6 +1280,52 @@ add_diagnostic_variable!(
     compute! = compute_husraen!,
 )
 
+compute_ncraen!(out, state, cache, time) = compute_ncraen!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_ncraen!(
+    _,
+    _,
+    _,
+    _,
+    microphysics_model::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute updraft rain number mixing ratio with a 2M model and with EDMFX",
+)
+
+function compute_ncraen!(
+    out,
+    state,
+    cache,
+    time,
+    microphysics_model_model::Microphysics2Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    ᶜn_rai⁰ = ᶜspecific_env_value(Val(:n_rai), state, cache)
+    if isnothing(out)
+        return Base.materialize(ᶜn_rai⁰)
+    else
+        out .= ᶜn_rai⁰
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "ncraen",
+    long_name = "Environment Number Mixing Ratio of Rain",
+    units = "kg^-1",
+    comments = """
+    This is calculated as the number of raindrops in the environment divided by
+    the mass of air (including the water in all phases) in the environment.
+    """,
+    compute! = compute_ncraen!,
+)
+
 ###
 # Environment snow water specific humidity (3d)
 ###
@@ -1163,7 +1345,7 @@ compute_hussnen!(
     microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
-    "Can only compute updraft snow specific humidity and with a 1M model and with EDMFX",
+    "Can only compute updraft snow specific humidity with a 1M or 2M model and with EDMFX",
 )
 
 function compute_hussnen!(
@@ -1171,7 +1353,7 @@ function compute_hussnen!(
     state,
     cache,
     time,
-    microphysics_model_model::Microphysics1Moment,
+    microphysics_model_model::Union{Microphysics1Moment, Microphysics2Moment},
     turbconv_model::PrognosticEDMFX,
 )
     ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), state, cache)
