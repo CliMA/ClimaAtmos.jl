@@ -37,9 +37,9 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2} <: ATCP
     min_updraft_top::FT
     pressure_normalmode_buoy_coeff1::FT
     pressure_normalmode_drag_coeff::FT
-    entr_tau::FT
+    entr_inv_tau::FT
     entr_coeff::FT
-    detr_tau::FT
+    detr_inv_tau::FT
     detr_coeff::FT
     detr_buoy_coeff::FT
     detr_vertdiv_coeff::FT
