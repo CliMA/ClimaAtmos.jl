@@ -19,7 +19,7 @@ const prior_ice = PD.constrained_gaussian("τᵢ", 2000, 300, 100, 10000) # real
 
 const prior = PD.combine_distributions([prior_1, prior_2])
 
-model_config = "prognostic_edmfx_diurnal_scm_imp_noneq_1M.yml"
+model_config = "diagnostic_edmfx_diurnal_scm_imp_noneq_1M.yml"
 
 # WRITE & PASS IN MY GROUND TRUTH GUYS
 τₗ_truth = 800
@@ -27,7 +27,7 @@ model_config = "prognostic_edmfx_diurnal_scm_imp_noneq_1M.yml"
 
 # load configs and directories 
 #model_config_dict = YAML.load_file(model_config)
-atmos_config = CA.AtmosConfig(model_config_dict) # ADD PARAM DICT HERE W TRUTH VALS
+atmos_config = CA.AtmosConfig(model_config) # ADD PARAM DICT HERE W TRUTH VALS
 zc_model = get_z_grid(atmos_config; z_max)
 
 

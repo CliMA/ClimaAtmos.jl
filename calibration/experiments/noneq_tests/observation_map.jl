@@ -6,8 +6,26 @@ using JLD2
 using Statistics
 using YAML
 
+# FROM TUTORIAL
+const days = 86_400
+function CAL.observation_map(iteration)
+    single_member_dims = (1,)
+    G_ensemble = Array{Float64}(undef, single_member_dims..., ensemble_size)
 
+    for m in 1:ensemble_size
+        member_path = CAL.path_to_ensemble_member(output_dir, iteration, m)
+        simdir_path = joinpath(member_path, "output_active")
+        if isdir(simdir_path)
+            simdir = SimDir(simdir_path)
+            G_ensemble[:, m] .= process_member_data(simdir)
+        else
+            G_ensemble[:, m] .= NaN
+        end
+    end
+    return G_ensemble
+end
 
+# FROM JULIAN
 function CAL.observation_map(
     iteration;
     config_dict = YAML.load_file(
