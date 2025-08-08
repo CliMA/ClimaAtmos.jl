@@ -25,6 +25,13 @@ function CAL.observation_map(iteration)
     return G_ensemble
 end
 
+function process_member_data(simdir::SimDir)
+    isempty(simdir.vars) && return NaN
+    rsut =
+        get(simdir; short_name = "rsut", reduction = "average", period = "30d")
+    return slice(average_xy(rsut); time = 30days).data
+end
+
 # FROM JULIAN
 function CAL.observation_map(
     iteration;
