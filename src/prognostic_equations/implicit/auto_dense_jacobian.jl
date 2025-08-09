@@ -48,7 +48,7 @@ AutoDenseJacobian(max_simultaneous_derivatives = 32) =
 # The number of derivatives computed simultaneously by AutoDenseJacobian.
 max_simultaneous_derivatives(::AutoDenseJacobian{S}) where {S} = S
 
-function jacobian_cache(alg::AutoDenseJacobian, Y, atmos)
+function jacobian_cache(alg::AutoDenseJacobian, Y, atmos; kwargs...)
     FT = eltype(Y)
     DA = ClimaComms.array_type(Y)
 

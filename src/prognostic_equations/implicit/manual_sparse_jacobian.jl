@@ -58,7 +58,13 @@ struct ManualSparseJacobian{F1, F2, F3, F4, F5, F6} <: SparseJacobian
     approximate_solve_iters::Int
 end
 
-function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
+function jacobian_cache(
+    alg::ManualSparseJacobian,
+    Y,
+    atmos;
+    auto_pad = false,
+    kwargs...,
+)
     (;
         topography_flag,
         diffusion_flag,
@@ -74,6 +80,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
     BidiagonalRow_C3 = BidiagonalMatrixRow{C3{FT}}
     TridiagonalRow_ACTh = TridiagonalMatrixRow{Adjoint{FT, CTh{FT}}}
     BidiagonalRow_ACT3 = BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
+    QuaddiagonalRow_ACT3 = QuaddiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
     BidiagonalRow_C3xACTh =
         BidiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CTh{FT})')}
     DiagonalRow_C3xACT3 =
@@ -128,7 +135,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         (@name(c.ρ), sfc_if_available...),
     )
 
-    active_scalar_names = (@name(c.ρ), @name(c.ρe_tot), ρq_tot_if_available...)
+    active_scalar_names_except_ρe = (@name(c.ρ), ρq_tot_if_available...)
+    active_scalar_names = (@name(c.ρe_tot), active_scalar_names_except_ρe...)
     advection_blocks = (
         (
             use_derivative(topography_flag) ?
@@ -141,8 +149,12 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         )...,
         MatrixFields.unrolled_map(
             name -> (name, @name(f.u₃)) => similar(Y.c, BidiagonalRow_ACT3),
-            active_scalar_names,
+            active_scalar_names_except_ρe,
         )...,
+        (@name(c.ρe_tot), @name(f.u₃)) => similar(
+            Y.c,
+            auto_pad ? QuaddiagonalRow_ACT3 : BidiagonalRow_ACT3,
+        ),
         MatrixFields.unrolled_map(
             name -> (@name(f.u₃), name) => similar(Y.f, BidiagonalRow_C3),
             active_scalar_names,
