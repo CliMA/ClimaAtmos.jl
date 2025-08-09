@@ -262,8 +262,8 @@ function TurbulenceConvectionParameters(
         :mixing_length_static_stab_coeff => :static_stab_coeff,
         :pressure_normalmode_buoy_coeff1 =>
             :pressure_normalmode_buoy_coeff1,
-        :detr_inv_tau => :detr_tau,
-        :entr_inv_tau => :entr_tau,
+        :detr_inv_tau => :detr_inv_tau,
+        :entr_inv_tau => :entr_inv_tau,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     parameters = merge(parameters, overrides)

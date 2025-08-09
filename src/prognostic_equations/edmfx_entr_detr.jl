@@ -168,7 +168,7 @@ function entrainment(
     )
 
     entr_param_vec = CAP.entr_param_vec(turbconv_params)
-    entr_inv_tau = CAP.entr_tau(turbconv_params)
+    entr_inv_tau = CAP.entr_inv_tau(turbconv_params)
     pi_sum =
         entr_param_vec[1] * abs(Π₁) +
         entr_param_vec[2] * abs(Π₂) +
@@ -206,7 +206,7 @@ function entrainment(
 )
     FT = eltype(thermo_params)
     entr_mult_limiter_coeff = CAP.entr_mult_limiter_coeff(turbconv_params)
-    entr_inv_tau = CAP.entr_tau(turbconv_params)
+    entr_inv_tau = CAP.entr_inv_tau(turbconv_params)
     entr_coeff = CAP.entr_coeff(turbconv_params)
     min_area_limiter_scale = CAP.min_area_limiter_scale(turbconv_params)
     min_area_limiter_power = CAP.min_area_limiter_power(turbconv_params)
@@ -456,7 +456,7 @@ function detrainment(
     ::BuoyancyVelocityDetrainment,
 )
     FT = eltype(thermo_params)
-    detr_inv_tau = CAP.detr_tau(turbconv_params)
+    detr_inv_tau = CAP.detr_inv_tau(turbconv_params)
     detr_coeff = CAP.detr_coeff(turbconv_params)
     detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
     detr_vertdiv_coeff = CAP.detr_vertdiv_coeff(turbconv_params)
