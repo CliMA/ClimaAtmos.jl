@@ -265,7 +265,8 @@ function default_diagnostics(
     start_date;
     output_writer,
 )
-    precip_diagnostics = ["husra", "hussn", "cdnc", "ncra"]
+    precip_diagnostics =
+        ["husra", "hussn", "cdnc", "ncra"]
 
     average_func = frequency_averages(duration)
 
