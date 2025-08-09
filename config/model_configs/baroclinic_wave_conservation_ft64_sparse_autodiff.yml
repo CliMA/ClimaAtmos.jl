@@ -1,0 +1,14 @@
+FLOAT_TYPE: "Float64"
+initial_condition: "DryBaroclinicWave"
+t_end: "5days"
+dt_save_state_to_disk: "5days"
+disable_surface_flux_tendency: true
+use_auto_jacobian: true
+update_jacobian_every: dt
+debug_jacobian: true
+check_conservation: true
+diagnostics:
+  - short_name: [massa, energya]
+    period: 1days
+    writer: dict
+use_itime: true
