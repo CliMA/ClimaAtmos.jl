@@ -172,6 +172,9 @@ bubble:
 start_date:
   help: "Start date and time of the simulation. Specified as either yyyymmdd (defaults to midnight) or yyyymmdd-HHMM. Examples: [`20100101`, `20100101-0000`]"
   value: "20100101"
+era5_initial_condition_dir:
+  help: "Directory containing ERA5 initial condition files. Filenames inferred from start_date [none (default)]. Generated with `https://github.com/CliMA/WeatherQuest`."
+  value: ~
 forcing:
   help: "Forcing [`nothing` (default), `held_suarez`]"
   value: ~
