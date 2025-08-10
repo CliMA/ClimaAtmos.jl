@@ -423,7 +423,10 @@ function get_initial_condition(parsed_args, atmos)
             parsed_args["start_date"],
         )
     elseif parsed_args["initial_condition"] == "WeatherModel"
-        return ICs.WeatherModel(parsed_args["start_date"])
+        return ICs.WeatherModel(
+            parsed_args["start_date"],
+            parsed_args["era5_initial_condition_dir"],
+        )
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
