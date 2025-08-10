@@ -91,7 +91,7 @@ use_dense_jacobian:
   value: false
 use_auto_jacobian:
   help: "Whether to populate the entries of the sparse Jacobian matrix using forward-mode automatic differentiation with sparse matrix coloring (only used when `use_dense_jacobian` is `false`) [`true`, `false` (default)]"
-  value: false
+  value: true # TODO: Change this to false.
 auto_jacobian_padding_bands:
   help: "Target number of bands to add in every block of the sparse Jacobian matrix, eliminating errors from Jacobian entries that lie outside of the default sparsity pattern; when unspecified, each block gets a predetermined number of padding bands based on the typical magnitudes of its entries (only used when `use_auto_jacobian` is `true`)"
   value: ~
@@ -100,7 +100,7 @@ update_jacobian_every:
   value: "solve"
 debug_jacobian:
   help: "Whether to print summary information about the Jacobian matrix, including comparisons of different algorithms evaluated on the first column of the final state against the exact Jacobian [`true`, `false` (default)]"
-  value: false
+  value: true # TODO: Change this to false.
 # Radiation
 rad:
   help: "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`]"
