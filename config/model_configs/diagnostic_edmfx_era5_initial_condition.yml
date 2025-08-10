@@ -4,7 +4,8 @@ z_elem: 63
 dz_bottom: 30.0
 dt: 120secs
 t_end: 12hours
-start_date: "20250627-0000"
+# start_date: "20250627-0000"
+start_date: "20250701"
 initial_condition: "WeatherModel"
 discrete_hydrostatic_balance: false # TODO: change to true once we fix discrete hydrostatic balance to work with orography
 topo_smoothing: true
@@ -15,7 +16,6 @@ hyperdiff: ClimaHyperdiffusion
 divergence_damping_factor: 50.0 # large value to damp IC waves
 scalar_hyperdiffusion_coefficient: 0.929738
 vorticity_hyperdiffusion_coefficient: 0.1857
-
 insolation: "timevarying"
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
@@ -33,11 +33,11 @@ edmfx_sgs_diffusive_flux: true
 moist: equil
 cloud_model: "grid_scale"
 precip_model: 0M
-toml: [toml/diagnostic_edmfx_era5_ic.toml]
+toml: [/net/sampo/data1/cchristo/clima/ClimaAtmos.jl/toml/diagnostic_edmfx_era5_ic.toml]
 use_itime: true
 output_default_diagnostics: false
 diagnostics:
-  - short_name: [ta, ua, wa, va, rhoa, hur, hus, clw, cli]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
     period: 60mins
   - short_name: [rsut, rlut, ts, pr, mslp]
     period: 60mins

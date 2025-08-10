@@ -377,7 +377,17 @@ function overwrite_initial_conditions!(
     thermo_params,
 )
     extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
-    file_path = weather_model_data_path(initial_condition.start_date)
+
+    # Extract face coordinates and compute center midpoints
+    z_coords = Fields.axes(Y.c).grid.vertical_grid.topology.mesh.faces
+    
+    # Compute center coordinates as midpoints between faces
+    face_z_values = [z.z for z in z_coords]
+    center_z_values = [(face_z_values[i] + face_z_values[i+1])/2 for i in 1:length(face_z_values)-1]
+    
+    target_levels = Array(center_z_values)
+    
+    file_path = weather_model_data_path(initial_condition.start_date, target_levels)
     return _overwrite_initial_conditions_from_file!(
         file_path,
         extrapolation_bc,
@@ -495,6 +505,24 @@ function _overwrite_initial_conditions_from_file!(
         )
     end
     if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
+        # Y.c.ρq_sno .=
+        #     SpaceVaryingInputs.SpaceVaryingInput(
+        #         file_path,
+        #         "cswc",
+        #         center_space,
+        #         regridder_kwargs = regridder_kwargs,
+        #     ) .* Y.c.ρ
+        # Y.c.ρq_rai .=
+        #     SpaceVaryingInputs.SpaceVaryingInput(
+        #         file_path,
+        #         "crwc",
+        #         center_space,
+        #         regridder_kwargs = regridder_kwargs,
+        #     ) .* Y.c.ρ
+        # Y.c.ρq_sno .= 0
+        # Y.c.ρq_rai .= 0
+        # fill!(Y.c.ρq_sno, 0)
+        # fill!(Y.c.ρq_rai, 0)
         Y.c.ρq_sno .=
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
@@ -506,6 +534,20 @@ function _overwrite_initial_conditions_from_file!(
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "crwc",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ) .* Y.c.ρ
+        Y.c.ρq_liq .=
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "clwc",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ) .* Y.c.ρ
+        Y.c.ρq_ice .=
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "ciwc",
                 center_space,
                 regridder_kwargs = regridder_kwargs,
             ) .* Y.c.ρ

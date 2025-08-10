@@ -4,7 +4,7 @@ import ClimaInterpolations.Interpolation1D: interpolate1d!, Linear, Flat
 import ..parse_date
 
 """
-    weather_model_data_path(start_date)
+    weather_model_data_path(start_date, target_levels)
 
 Get the path to the weather model data for a given start date and time.
 If the data is not found, will attempt to generate it from raw data. If 
@@ -12,42 +12,78 @@ the raw data is not found, throw an error
 
 # Arguments
 - `start_date`: Start date as string yyyymmdd or yyyymmdd-HHMM
+- `target_levels`: Vector of target altitude levels (in meters) to interpolate to
 """
-function weather_model_data_path(start_date)
+# function weather_model_data_path(start_date, target_levels)
+#     # Parse the date using the existing parse_date function
+#     dt = parse_date(start_date)
+
+#     # Extract components for filename generation
+#     start_date_str = Dates.format(dt, "yyyymmdd")
+#     start_time = Dates.format(dt, "HHMM")
+#     ic_data_path = joinpath(
+#         @clima_artifact("weather_model_ic"),
+#         "init",
+#         "era5_init_$(start_date_str)_$(start_time).nc",
+#     )
+#     raw_data_path = joinpath(
+#         @clima_artifact("weather_model_ic"),
+#         "raw",
+#         "era5_raw_$(start_date_str)_$(start_time).nc",
+#     )
+
+#     if !isfile(ic_data_path)
+#         @info "Initial condition file $ic_data_path does not exist. Attempting to generate it now..."
+#         if !isfile(raw_data_path)
+#             day = Dates.format(dt, "yyyy-mm-dd")
+#             time = Dates.format(dt, "HH:MM")
+#             error(
+#                 "Source file $(raw_data_path) does not exist. Please run `python get_initial_conditions.py --output-dir $(@clima_artifact("weather_model_ic"))/raw --date $(day) --time $(time)` to download the data.",
+#             )
+#         end
+
+#         @info "Interpolating raw weather model data onto z-levels"
+#         to_z_levels(raw_data_path, ic_data_path, target_levels, Float32)
+#     end
+#     return ic_data_path
+# end
+
+
+# function weather_model_data_path(start_date)
+#     return "/net/sampo/data1/cchristo/clima/WeatherQuest/processing/data/era5_init_processed_20250701_1200.nc"
+# end
+
+function weather_model_data_path(start_date, target_levels)
     # Parse the date using the existing parse_date function
     dt = parse_date(start_date)
 
     # Extract components for filename generation
     start_date_str = Dates.format(dt, "yyyymmdd")
     start_time = Dates.format(dt, "HHMM")
-    ic_data_path = joinpath(
-        @clima_artifact("weather_model_ic"),
-        "init",
-        "era5_init_$(start_date_str)_$(start_time).nc",
-    )
-    raw_data_path = joinpath(
-        @clima_artifact("weather_model_ic"),
-        "raw",
-        "era5_raw_$(start_date_str)_$(start_time).nc",
-    )
+    # ic_data_path = joinpath(
+    #     @clima_artifact("weather_model_ic"),
+    #     "init",
+    #     "era5_init_$(start_date_str)_$(start_time).nc",
+    # )
+    # raw_data_path = joinpath(
+    #     @clima_artifact("weather_model_ic"),
+    #     "raw",
+    #     "era5_raw_$(start_date_str)_$(start_time).nc",
+    # )
+    # ic_data_path = "/net/sampo/data1/cchristo/clima/WeatherQuest/processing/data/era5_init_processed_internal_20250701_1200.nc"
+    # raw_data_path = "/net/sampo/data1/cchristo/clima/WeatherQuest/processing/data/era5_raw_20250701_1200.nc"
+
+
+    ic_data_path = "/net/sampo/data1/cchristo/clima/WeatherQuest/processing/data/era5_init_processed_internal_20100101_0000_v2.nc"
+    raw_data_path = "/net/sampo/data1/cchristo/clima/WeatherQuest/processing/data/era5_raw_20100101_0000.nc"
 
     if !isfile(ic_data_path)
-        @info "Initial condition file $ic_data_path does not exist. Attempting to generate it now..."
-        if !isfile(raw_data_path)
-            day = Dates.format(dt, "yyyy-mm-dd")
-            time = Dates.format(dt, "HH:MM")
-            error(
-                "Source file $(raw_data_path) does not exist. Please run `python get_initial_conditions.py --output-dir $(@clima_artifact("weather_model_ic"))/raw --date $(day) --time $(time)` to download the data.",
-            )
-        end
-        # get target levels - TODO: make this more flexible
-        target_level_path =
-            joinpath(@clima_artifact("weather_model_ic"), "target_levels.txt")
-        target_levels = parse.(Float32, readlines(target_level_path))
-
         @info "Interpolating raw weather model data onto z-levels"
         to_z_levels(raw_data_path, ic_data_path, target_levels, Float32)
+    else
+        @info "Using existing interpolated file: $ic_data_path"
     end
+
     return ic_data_path
 end
 
