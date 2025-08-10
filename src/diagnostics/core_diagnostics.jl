@@ -1508,7 +1508,7 @@ add_diagnostic_variable!(
 # Rain water path (2d)
 ###
 compute_rwp!(out, state, cache, time) =
-    compute_rwp!(out, state, cache, time, cache.atmos.moisture_model)
+    compute_rwp!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_rwp!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("rwp", model)
 
@@ -1518,7 +1518,7 @@ function compute_rwp!(
     cache,
     time,
     moisture_model::T,
-) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+) where {T <: Union{Microphysics1Moment, Microphysics2Moment}}
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         rw = cache.scratch.ᶜtemp_scalar
