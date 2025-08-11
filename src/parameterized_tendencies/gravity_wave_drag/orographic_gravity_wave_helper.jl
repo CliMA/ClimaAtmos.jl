@@ -81,6 +81,7 @@ end
     - earth_radius: radius of the Earth
 """
 function calc_velocity_potential(elev, lon, lat, earth_radius)
+    @info "Computing velocity potential..."
     FT = eltype(elev)
     @. elev = max(0, elev)
 
@@ -184,7 +185,7 @@ end
     - earth_radius: radius of the Earth
 """
 function calc_hpoz_latlon(elev, lon, lat, earth_radius)
-    @info "computing hmax..."
+    @info "Computing hmax..."
     FT = eltype(elev)
 
     # remove ocean topography
@@ -370,4 +371,32 @@ function move_topo_info_to_gpu(Y, topo_info)
 )
 
     return topo_info
+end
+
+function gen_fn(parsed_args)
+    ### generate output filename
+    # get grid info necessary to specify unique output file
+    topography = parsed_args["topography"]
+    topo_smoothing = parsed_args["topo_smoothing"]
+    topo_damping_factor = parsed_args["topography_damping_factor"]
+    h_elem = parsed_args["h_elem"]
+
+    # construct output filename
+    output_filename = "computed_drag_$(topography)_$(topo_smoothing)_$(topo_damping_factor)_$(h_elem)"
+    ###
+    return (; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem)
+end
+
+
+function load_preprocessed_topography(parsed_args)
+    (; output_filename,) = gen_fn(parsed_args)
+
+    reader = InputOutput.HDF5Reader(
+        joinpath(@__DIR__, "../../../$(output_filename).hdf5"),
+        ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded()),
+    )
+    computed_drag = InputOutput.read_field(reader, "computed_drag")
+
+    Base.close(reader)
+    return computed_drag
 end

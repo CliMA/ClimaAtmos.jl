@@ -8,7 +8,7 @@ orographic_gravity_wave: "raw_topo"
 dt_ogw: "200secs"
 dt: "200secs"
 t_end: "1days"
-output_dir: "baroclinic_wave_hughes2023_orography"
+output_dir: "output/baroclinic_wave_hughes2023_orography"
 toml: [toml/baroclinic_wave_hughes2023_orography.toml]
 diagnostics:
   - short_name: [ua, va, wa, pfull, rhoa, orog]
