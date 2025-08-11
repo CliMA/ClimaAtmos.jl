@@ -1,0 +1,78 @@
+[rain_autoconversion_timescale]
+value = 5777.697315577852
+type = "float"
+
+[mixing_length_tke_surf_scale]
+value = 0.5507468907407347
+type = "float"
+
+[mixing_length_diss_coeff]
+value = 0.13515021886991527
+type = "float"
+
+[diagnostic_covariance_coeff]
+value = 1.858712542728056
+type = "float"
+
+[entr_param_vec]
+value = [0.8232451844623447, 0.058776909570673115, 0.3812876963832981, 1.7521400508808318, -0.32149828410236075, -0.019764881527468917, -0.05926889361439075, 0.3610260801159997, 0.5411236315642174, -0.4681505113638351, 1.0674945161351919, 0.38794618444184004]
+type = "float"
+
+[EDMF_surface_area]
+value = 0.09964843547415161
+type = "float"
+
+[mixing_length_eddy_viscosity_coefficient]
+value = 0.12938179994984028
+type = "float"
+
+[snow_autoconversion_timescale]
+value = 145.68541447981468
+type = "float"
+
+[turb_entr_param_vec]
+value = [0.026950324299085678, 3594.4850754174017]
+type = "float"
+
+[pressure_normalmode_drag_coeff]
+value = 25.872050045766862
+type = "float"
+
+[mixing_length_Prandtl_number_0]
+value = 1.0831106562777666
+type = "float"
+
+[mixing_length_static_stab_coeff]
+value = 0.21375280743443664
+type = "float"
+
+[pressure_normalmode_buoy_coeff1]
+value = 0.17622092079471174
+type = "float"
+
+[EDMF_min_area]
+value = 1.0e-5
+
+[EDMF_max_area]
+value = 0.7
+
+[min_area_limiter_scale]
+value = 0
+
+[detr_inv_tau]
+value = 0
+
+[detr_coeff]
+value = 0
+
+[detr_buoy_coeff]
+value = 0
+
+[detr_vertdiv_coeff]
+value = 0
+
+[max_area_limiter_scale]
+value = 0
+
+[zd_rayleigh]
+value = 20000.0
