@@ -462,9 +462,9 @@ version = "0.1.13"
 
 [[deps.CloudMicrophysics]]
 deps = ["ClimaParams", "DocStringExtensions", "ForwardDiff", "LazyArtifacts", "LogExpFunctions", "RootSolvers", "SpecialFunctions", "StaticArrays", "Thermodynamics"]
-git-tree-sha1 = "755a88a92c3281975eec4da19dbbec8839c607aa"
+git-tree-sha1 = "3a938de9cf21b603108aa273d973997fbd8c882d"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.26.2"
+version = "0.26.4"
 
     [deps.CloudMicrophysics.extensions]
     EmulatorModelsExt = ["DataFrames", "MLJ"]
