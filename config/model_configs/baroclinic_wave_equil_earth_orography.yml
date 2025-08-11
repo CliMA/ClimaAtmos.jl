@@ -1,0 +1,12 @@
+dt_save_state_to_disk: "1days"
+rayleigh_sponge: true
+topo_smoothing: true
+initial_condition: "MoistBaroclinicWave"
+dt: "450secs"
+t_end: "450secs"
+ode_algo: "ARS343"
+precip_model: "0M"
+topography: "Earth"
+moist: "equil"
+orographic_gravity_wave: "raw_topo"
+apply_limiter: true
