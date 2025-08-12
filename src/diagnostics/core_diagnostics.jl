@@ -1503,3 +1503,36 @@ add_diagnostic_variable!(
     comments = "Energy available to a parcel lifted moist adiabatically from the surface. We assume fully reversible phase changes and no precipitation.",
     compute! = compute_cape!,
 )
+
+function compute_mslp!(out, state, cache, time)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    g = TD.Parameters.grav(thermo_params)
+    R_m_surf = Fields.level(
+        lazy.(TD.gas_constant_air.(thermo_params, cache.precomputed.ᶜts)),
+        1,
+    )
+
+    # get pressure, temperature, and height at the lowest atmospheric level
+    p_level = Fields.level(cache.precomputed.ᶜp, 1)
+    t_level = Fields.level(
+        lazy.(TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)),
+        1,
+    )
+    z_level = Fields.level(Fields.coordinate_field(state.c.ρ).z, 1)
+
+    # compute sea level pressure using the hypsometric equation
+    if isnothing(out)
+        return @. p_level * exp(g * z_level / (R_m_surf * t_level))
+    else
+        @. out = p_level * exp(g * z_level / (R_m_surf * t_level))
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "mslp",
+    long_name = "Mean Sea Level Pressure",
+    standard_name = "mean_sea_level_pressure",
+    units = "Pa",
+    comments = "Mean sea level pressure computed from the hypsometric equation",
+    compute! = compute_mslp!,
+)

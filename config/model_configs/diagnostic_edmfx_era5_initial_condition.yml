@@ -39,5 +39,5 @@ output_default_diagnostics: false
 diagnostics:
   - short_name: [ta, ua, wa, va, rhoa, hur, hus, clw, cli]
     period: 60mins
-  - short_name: [rsut, rlut, ts, pr]
+  - short_name: [rsut, rlut, ts, pr, mslp]
     period: 60mins
