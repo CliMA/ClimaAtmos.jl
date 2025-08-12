@@ -104,6 +104,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     # Sponge
     alpha_rayleigh_w::FT
     alpha_rayleigh_uh::FT
+    alpha_rayleigh_sgs_tracer::FT
     zd_viscous::FT
     zd_rayleigh::FT
     kappa_2_sponge::FT
