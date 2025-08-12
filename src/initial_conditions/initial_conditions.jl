@@ -1108,7 +1108,7 @@ hydrostatically balanced pressure profile.
 """
 Base.@kwdef struct DYCOMS_RF01 <: InitialCondition
     prognostic_tke::Bool = false
-    
+
 end
 
 # Redefine the profile functions here.
@@ -1122,12 +1122,13 @@ Dycoms_RF02_θ_liq_ice(::Type{FT}, theta_0, theta_i, z_i) where {FT} =
     end)
 
 """ [Ackerman2009](@cite) """
-Dycoms_RF02_q_tot(::Type{FT}, q_tot_0, z_i) where {FT} =
-    APL.ZProfile(z -> if z <= z_i
+Dycoms_RF02_q_tot(::Type{FT}, q_tot_0, z_i) where {FT} = APL.ZProfile(
+    z -> if z <= z_i
         FT(q_tot_0) / FT(1000.0)
     else
         (FT(5) - FT(3) * (FT(1) - exp(-(z - FT(z_i)) / FT(500)))) / FT(1000)
-    end)
+    end,
+)
 
 """
     DYCOMS_RF02
@@ -1137,10 +1138,10 @@ hydrostatically balanced pressure profile.
 """
 Base.@kwdef struct DYCOMS_RF02 <: InitialCondition
     prognostic_tke::Bool = false
-    q_tot_0_dycoms_rf02 # Define variables here
-    theta_0_dycoms_rf02 # Define variables here
-    theta_i_dycoms_rf02 # Define variables here
-    z_i_dycoms_rf02 # Define variables here
+    q_tot_0_dycoms_rf02::Any # Define variables here
+    theta_0_dycoms_rf02::Any # Define variables here
+    theta_i_dycoms_rf02::Any # Define variables here
+    z_i_dycoms_rf02::Any # Define variables here
 end
 
 for IC in (:Dycoms_RF01, :Dycoms_RF02)
@@ -1152,12 +1153,27 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
     tke_func_name = Symbol(IC, :_tke_prescribed)
     if IC == :Dycoms_RF02
         @eval function (initial_condition::$IC_Type)(params)
-            (; prognostic_tke, q_tot_0_dycoms_rf02, theta_0_dycoms_rf02, theta_i_dycoms_rf02, z_i_dycoms_rf02) = initial_condition #unpack values
+            (;
+                prognostic_tke,
+                q_tot_0_dycoms_rf02,
+                theta_0_dycoms_rf02,
+                theta_i_dycoms_rf02,
+                z_i_dycoms_rf02,
+            ) = initial_condition #unpack values
             FT = eltype(params)
             thermo_params = CAP.thermodynamics_params(params)
             p_0 = FT(101780.0)
-            θ = $θ_func_name(FT, FT(theta_0_dycoms_rf02), FT(theta_i_dycoms_rf02), FT(z_i_dycoms_rf02)) # Change function signature here.
-            q_tot = $q_tot_func_name(FT, FT(q_tot_0_dycoms_rf02), FT(z_i_dycoms_rf02)) # Change function signature here.
+            θ = $θ_func_name(
+                FT,
+                FT(theta_0_dycoms_rf02),
+                FT(theta_i_dycoms_rf02),
+                FT(z_i_dycoms_rf02),
+            ) # Change function signature here.
+            q_tot = $q_tot_func_name(
+                FT,
+                FT(q_tot_0_dycoms_rf02),
+                FT(z_i_dycoms_rf02),
+            ) # Change function signature here.
             p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
             u = APL.$u_func_name(FT)
             v = APL.$v_func_name(FT)
@@ -1184,7 +1200,13 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
         end
     else
         @eval function (initial_condition::$IC_Type)(params)
-            (; prognostic_tke, q_tot_0_dycoms_rf02, theta_0_dycoms_rf02, theta_i_dycoms_rf02, z_i_dycoms_rf02) = initial_condition #unpack values
+            (;
+                prognostic_tke,
+                q_tot_0_dycoms_rf02,
+                theta_0_dycoms_rf02,
+                theta_i_dycoms_rf02,
+                z_i_dycoms_rf02,
+            ) = initial_condition #unpack values
             FT = eltype(params)
             thermo_params = CAP.thermodynamics_params(params)
             p_0 = FT(101780.0)

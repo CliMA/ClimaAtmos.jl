@@ -1,4 +1,4 @@
-252
+255
 
 # **README**
 #
@@ -20,6 +20,18 @@
 
 
 #=
+255
+- Add radiation tendency to prognostic edmf updrafts
+
+254
+- Use rayleigh and viscous sponges in the prognostic_edmfx_aquaplanet
+
+253
+- Update deps, specifically ClimaParams.jl and Thermodynamics.jl
+
+252
+- Update deps, specifically RootSolvers.jl
+
 252
 - Limit the noise in ice and snow 1M microphysics scheme in cloud formation and
   limiter formulation.

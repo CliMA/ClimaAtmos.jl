@@ -148,6 +148,29 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵢᵖ⁰ = similar(Y.c, FT),
             ᶜSqᵣᵖ⁰ = similar(Y.c, FT),
             ᶜSqₛᵖ⁰ = similar(Y.c, FT),
+        ) :
+        atmos.microphysics_model isa Microphysics2Moment ?
+        (;
+            ᶜSqₗᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqᵢᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqᵣᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqₛᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSnₗᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSnᵣᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜwₛʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜwₜʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜwₕʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜwₙₗʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜwₙᵣʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqₗᵖ⁰ = similar(Y.c, FT),
+            ᶜSqᵢᵖ⁰ = similar(Y.c, FT),
+            ᶜSqᵣᵖ⁰ = similar(Y.c, FT),
+            ᶜSqₛᵖ⁰ = similar(Y.c, FT),
+            ᶜSnₗᵖ⁰ = similar(Y.c, FT),
+            ᶜSnᵣᵖ⁰ = similar(Y.c, FT),
         ) : (;)
     advective_sgs_quantities =
         atmos.turbconv_model isa PrognosticEDMFX ?

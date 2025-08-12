@@ -388,7 +388,7 @@ function get_initial_condition(parsed_args, atmos)
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
             parsed_args["prognostic_tke"],
         )
-    elseif parsed_args["initial_condition"] == "DYCOMS_RF02"
+    elseif parsed_args["initial_condition"] in ["DYCOMS_RF02"]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
             parsed_args["prognostic_tke"],
             parsed_args["q_tot_0_dycoms_rf02"],
@@ -434,9 +434,10 @@ end
 function get_steady_state_velocity(params, Y, parsed_args)
     parsed_args["check_steady_state"] || return nothing
     parsed_args["initial_condition"] == "ConstantBuoyancyFrequencyProfile" &&
-        parsed_args["mesh_warp_type"] == "Linear" ||
-        error("The steady-state velocity can currently be computed only for a \
-               ConstantBuoyancyFrequencyProfile with Linear mesh warping")
+        parsed_args["mesh_warp_type"] == "Linear" || 
+        error(
+        "The steady-state velocity can currently be computed only for a \
+        ConstantBuoyancyFrequencyProfile with Linear mesh warping")
     topography = parsed_args["topography"]
     steady_state_velocity = if topography == "NoWarp"
         steady_state_velocity_no_warp

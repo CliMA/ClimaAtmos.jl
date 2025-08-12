@@ -135,7 +135,6 @@ function build_cache(
     p_ref = similar(ᶜz)
     q_tot_ref = similar(ᶜz)
     cv_m = similar(ᶜz)
-    R_m = similar(ᶜz)
     thermo_params = CAP.thermodynamics_params(params)
     decay_scale_height = FT(8000)
 
@@ -158,15 +157,12 @@ function build_cache(
     @. q_tot_ref =
         TD.q_vap_from_RH_liquid(thermo_params, p_ref, T_ref, rel_hum_ref)
     @. cv_m = TD.cv_m(thermo_params, TD.PhasePartition(q_tot_ref, FT(0), FT(0)))
-    @. R_m = TD.gas_constant_air(
-        thermo_params,
-        TD.PhasePartition(q_tot_ref, FT(0), FT(0)),
-    )
 
     ᶜh_ref = @. TD.total_specific_enthalpy(
+        thermo_params,
         cv_m * (T_ref - T_0) + grav * ᶜz,
-        R_m,
         T_ref,
+        TD.PhasePartition(q_tot_ref, FT(0), FT(0)),
     )
 
     core = (

@@ -391,8 +391,10 @@ function edmfx_sgs_vertical_advection_tendency!(
             @. ᶜχʲₜ += va
         end
 
-        if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.microphysics_model isa Microphysics1Moment
+        if p.atmos.moisture_model isa NonEquilMoistModel && (
+            p.atmos.microphysics_model isa Microphysics1Moment ||
+            p.atmos.microphysics_model isa Microphysics2Moment
+        )
             # TODO - add contibutions to sgs mass flux from tracer sedimentation
             # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
 
@@ -490,6 +492,60 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜdivᵥ(ᶠw³ʲ) * ᶜqʲ * (1 - Y.c.sgsʲs.:($$j).q_tot)
                 @. ᶜqʲₜ -= ᶜdivᵥ(ᶠw³ʲ) * ᶜqʲ
             end
+        end
+        if p.atmos.moisture_model isa NonEquilMoistModel &&
+           p.atmos.microphysics_model isa Microphysics2Moment
+
+            FT = eltype(params)
+
+            # Sedimentation velocities for microphysics number concentrations
+            # (or any tracers that does not directly participate in variations of q_tot and mse)
+            sgs_microphysics_tracers = (
+                (@name(c.sgsʲs.:(1).n_liq), @name(ᶜwₙₗʲs.:(1))),
+                (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
+            )
+
+            MatrixFields.unrolled_foreach(
+                sgs_microphysics_tracers,
+            ) do (χʲ_name, χʲ_name)
+                MatrixFields.has_field(Y, χʲ_name) || return
+
+                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
+                ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
+                ᶠw³ʲ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwʲ)))))
+                ᶜw³ʲ = (@. lazy(CT3(Geometry.WVector(-1 * ᶜwʲ))))
+
+                # Advective form advection of moisture tracers with the grid mean velocity
+                va = vertical_advection(ᶠu³ʲs.:($j), ᶜχʲ, edmf_upwnd)
+                @. ᶜχʲₜ += va
+
+                # Advective form advection of moisture tracers with sedimentation velocities
+                va = vertical_advection(ᶠw³ʲ, ᶜχʲ, edmf_upwnd)
+                @. ᶜχʲₜ += va
+
+                # moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
+                ᶜinv_ρ̂ = (@. lazy(
+                    specific(
+                        FT(1),
+                        Y.c.sgsʲs.:($$j).ρa,
+                        FT(0),
+                        Y.c.ρ,
+                        turbconv_model,
+                    ),
+                ))
+                ᶜ∂ρ̂∂z = (@. lazy(
+                    upwind_biased_grad(
+                        -1 * Geometry.WVector(ᶜwʲ),
+                        Y.c.sgsʲs.:($$j).ρa,
+                    ),
+                ))
+                @. ᶜχʲₜ -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂z, ᶜw³ʲ) * ᶜχʲ
+
+                # moisture tracer term proportional to velocity gradients
+                @. ᶜχʲₜ -= ᶜdivᵥ(ᶠw³ʲ) * ᶜχʲ
+            end
+
         end
     end
 end

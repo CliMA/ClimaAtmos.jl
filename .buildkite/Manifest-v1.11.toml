@@ -461,10 +461,10 @@ uuid = "fb6a15b2-703c-40df-9091-08a04967cfa9"
 version = "0.1.13"
 
 [[deps.CloudMicrophysics]]
-deps = ["ClimaParams", "DocStringExtensions", "ForwardDiff", "LazyArtifacts", "LogExpFunctions", "QuadGK", "RootSolvers", "SpecialFunctions", "StaticArrays", "Thermodynamics"]
-git-tree-sha1 = "8f7137d8bb3098d6c46b2c3f859fb873d5b28abd"
+deps = ["ClimaParams", "DocStringExtensions", "ForwardDiff", "LazyArtifacts", "LogExpFunctions", "RootSolvers", "SpecialFunctions", "StaticArrays", "Thermodynamics"]
+git-tree-sha1 = "3a938de9cf21b603108aa273d973997fbd8c882d"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.26.1"
+version = "0.26.4"
 
     [deps.CloudMicrophysics.extensions]
     EmulatorModelsExt = ["DataFrames", "MLJ"]

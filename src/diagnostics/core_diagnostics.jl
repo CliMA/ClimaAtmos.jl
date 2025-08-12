@@ -1026,7 +1026,7 @@ add_diagnostic_variable!(
     short_name = "clwvi",
     long_name = "Condensed Water Path",
     standard_name = "atmosphere_mass_content_of_cloud_condensed_water",
-    units = "kg m-2",
+    units = "kg m^-2",
     comments = """
     Mass of condensed (liquid + ice) water in the column divided by the area of the column
     (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
@@ -1066,7 +1066,7 @@ add_diagnostic_variable!(
     short_name = "lwp",
     long_name = "Liquid Water Path",
     standard_name = "atmosphere_mass_content_of_cloud_liquid_water",
-    units = "kg m-2",
+    units = "kg m^-2",
     comments = """
     The total mass of liquid water in cloud per unit area.
     (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
@@ -1106,7 +1106,7 @@ add_diagnostic_variable!(
     short_name = "clivi",
     long_name = "Ice Water Path",
     standard_name = "atmosphere_mass_content_of_cloud_ice",
-    units = "kg m-2",
+    units = "kg m^-2",
     comments = """
     The total mass of ice in cloud per unit area.
     (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
@@ -1502,4 +1502,80 @@ add_diagnostic_variable!(
     units = "J kg^-1",
     comments = "Energy available to a parcel lifted moist adiabatically from the surface. We assume fully reversible phase changes and no precipitation.",
     compute! = compute_cape!,
+)
+
+###
+# Mean sea level pressure (2d)
+###
+function compute_mslp!(out, state, cache, time)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    g = TD.Parameters.grav(thermo_params)
+    R_m_surf = Fields.level(
+        lazy.(TD.gas_constant_air.(thermo_params, cache.precomputed.ᶜts)),
+        1,
+    )
+
+    # get pressure, temperature, and height at the lowest atmospheric level
+    p_level = Fields.level(cache.precomputed.ᶜp, 1)
+    t_level = Fields.level(
+        lazy.(TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)),
+        1,
+    )
+    z_level = Fields.level(Fields.coordinate_field(state.c.ρ).z, 1)
+
+    # compute sea level pressure using the hypsometric equation
+    if isnothing(out)
+        return @. p_level * exp(g * z_level / (R_m_surf * t_level))
+    else
+        @. out = p_level * exp(g * z_level / (R_m_surf * t_level))
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "mslp",
+    long_name = "Mean Sea Level Pressure",
+    standard_name = "mean_sea_level_pressure",
+    units = "Pa",
+    comments = "Mean sea level pressure computed from the hypsometric equation",
+    compute! = compute_mslp!,
+)
+
+###
+# Rainwater path (2d)
+###
+compute_rwp!(out, state, cache, time) =
+    compute_rwp!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_rwp!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("rwp", model)
+
+function compute_rwp!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{Microphysics1Moment, Microphysics2Moment}}
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        rw = cache.scratch.ᶜtemp_scalar
+        @. rw = state.c.ρq_rai
+        Operators.column_integral_definite!(out, rw)
+        return out
+    else
+        rw = cache.scratch.ᶜtemp_scalar
+        @. rw = state.c.ρq_rai
+        Operators.column_integral_definite!(out, rw)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "rwp",
+    long_name = "Rainwater Path",
+    standard_name = "atmosphere_mass_content_of_rainwater",
+    units = "kg m^-2",
+    comments = """
+    The total mass of rainwater per unit area.
+    (not just the area of the cloudy portion of the column).
+    """,
+    compute! = compute_rwp!,
 )

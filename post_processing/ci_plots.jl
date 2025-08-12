@@ -227,11 +227,11 @@ function make_plots_generic(
             for (col, path) in enumerate(output_path)
                 # CairoMakie seems to use this Label to determine the width of the figure.
                 # Here we normalize the length so that all the columns have the same width.
-                LABEL_LENGTH = 40
+                LABEL_LENGTH = 50
                 normalized_path =
                     lpad(path, LABEL_LENGTH + 1, " ")[(end - LABEL_LENGTH):end]
 
-                CairoMakie.Label(fig[0, col], path)
+                CairoMakie.Label(fig[0, col], normalized_path)
             end
         end
         return fig
@@ -1588,25 +1588,20 @@ function make_plots(::EDMFSpherePlots, output_paths::Vector{<:AbstractString})
 
     short_name_tuples = pair_edmf_names(short_names)
 
-    # The hierarchy is:
-    # - A vector looping over variables
-    #     - Containing, a vector looping over latitudes
-    #     - Containing, tuples with one or two variables
-    #   - Repeated for each simdir
-    # All of this is flattened out to be a vector of tuples (with the two gridmean/updraft
-    # variables)
+    # Create a flat sequence of variable groups iterating over variable,
+    # latitude, and simulation directory
     var_groups_zt = vcat(
-        map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
-            return [
-                (
+        [
+            map_comparison(simdirs, latitudes) do simdir, lat
+                return (
                     slice(
                         get(simdir; short_name, reduction, period),
                         lon = 0.0,
                         lat = lat,
                     ) for short_name in name_tuple
-                ) for lat in latitudes
-            ]
-        end...,
+                )
+            end for name_tuple in short_name_tuples
+        ]...,
     )
 
     var_groups_z = [

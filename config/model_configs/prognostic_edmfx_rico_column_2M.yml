@@ -1,0 +1,42 @@
+initial_condition: "Rico"
+subsidence: "Rico"
+ls_adv: "Rico"
+surface_setup: "Rico"
+turbconv: "prognostic_edmfx"
+implicit_diffusion: true
+implicit_sgs_advection: false
+approximate_linear_solve_iters: 2
+edmfx_upwinding: first_order
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_filter: true
+prognostic_tke: true
+moist: "nonequil"
+cloud_model: "quadrature_sgs"
+call_cloud_diagnostics_per_stage: true
+precip_model: "2M"
+config: "column"
+z_max: 4e3
+x_elem: 2
+y_elem: 2
+z_elem: 100
+z_stretch: false
+perturb_initstate: false
+dt: "5secs"
+t_end: "180mins"
+dt_save_state_to_disk: "60mins"
+toml: [toml/prognostic_edmfx_1M.toml]
+netcdf_interpolation_num_points: [8, 8, 100]
+prescribed_aerosols: ["SO4", "CB1", "OC1", "DST01", "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, cdnc, hussfc, evspsbl, pr]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, cdncup, husraup, hussnup, ncraup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, cdncen, husraen, hussnen, ncraen, tke]
+    period: 10mins
+  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
+    period: 10mins
+  - short_name: [husra, hussn, ncra]
+    period: 10mins
