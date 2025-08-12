@@ -1,16 +1,20 @@
-precip_model: "0M"
-initial_condition: "MoistBaroclinicWave"
 dt: "450secs"
 deep_atmosphere: false
 dz_bottom: 30.0
-z_elem: 30
+z_elem: 20
 t_end: "200days"
-moist: "equil"
 disable_surface_flux_tendency: true
+precip_model: "0M"
+initial_condition: "MoistBaroclinicWave"
+#initial_condition: "DryBaroclinicWave"
+moist: "equil"
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
+#diagnostics:
+#  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc]
+#    period: 30days
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa]
     period: 30days

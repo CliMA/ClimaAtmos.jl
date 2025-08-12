@@ -124,10 +124,6 @@ function vertical_diffusion_boundary_layer_tendency!(
         else
             @. ᶜK_h_scaled = ᶜK_h
         end
-        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(0)),
-            bottom = Operators.SetValue(C3(0)),
-        )
         @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρχ(
             -(
                 ᶠinterp(Y.c.ρ) *

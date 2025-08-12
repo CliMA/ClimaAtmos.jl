@@ -490,7 +490,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     end
 
     if !(p.atmos.moisture_model isa DryModel)
-        #TODO: tetsing explicit vs implicit
+        #TODO: testing explicit vs implicit
         #@. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
         #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
         #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
@@ -504,7 +504,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
         ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
         @. ∂ᶜρe_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρq_tot))
-        #TODO: tetsing explicit vs implicit
+        #TODO: testing explicit vs implicit
         #@. ∂ᶜρe_tot_err_∂ᶜρq_tot =
         #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
         #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
@@ -518,7 +518,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
         ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
         @. ∂ᶜρq_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρq_tot_err_∂ᶜρq_tot)) - (I,)
-        #TODO: tetsing explicit vs implicit
+        #TODO: testing explicit vs implicit
         #@. ∂ᶜρq_tot_err_∂ᶜρq_tot =
         #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
         #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
@@ -605,7 +605,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((1 + ᶜkappa_m) / ᶜρ)
 
         if MatrixFields.has_field(Y, @name(c.ρq_tot))
-            ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
+            #∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
             ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
             @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((
@@ -621,7 +621,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
-
         MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, _)
             MatrixFields.has_field(Y, ρχ_name) || return
             ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
@@ -635,7 +634,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             )
             @. ∂ᶜρχ_err_∂ᶜρ =
                 dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(-(ᶜχ) / ᶜρ)
-            @. ∂ᶜρχ_err_∂ᶜρχ +=
+            @. ∂ᶜρχ_err_∂ᶜρχ =
                 dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
 
