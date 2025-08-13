@@ -107,7 +107,7 @@ function set_precipitation_velocities!(
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwnₗ, ᶜwnᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
 
-    cm1c = CAP.microphysics_cloud_params(p.params)
+    cmc = CAP.microphysics_cloud_params(p.params)
     cm1p = CAP.microphysics_1m_params(p.params)
     cm2p = CAP.microphysics_2m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
@@ -117,20 +117,20 @@ function set_precipitation_velocities!(
     @. ᶜwnᵣ = getindex(
         CM2.rain_terminal_velocity(
             cm2p.sb,
-            cm2p.tv,
-            specific(Y.c.ρq_rai, Y.c.ρ),
+            cm2p.rtv,
+            max(zero(Y.c.ρ), specific(Y.c.ρq_rai, Y.c.ρ)),
             Y.c.ρ,
-            Y.c.ρn_rai,
+            max(zero(Y.c.ρ), Y.c.ρn_rai),
         ),
         1,
     )
     @. ᶜwᵣ = getindex(
         CM2.rain_terminal_velocity(
             cm2p.sb,
-            cm2p.tv,
-            specific(Y.c.ρq_rai, Y.c.ρ),
+            cm2p.rtv,
+            max(zero(Y.c.ρ), specific(Y.c.ρq_rai, Y.c.ρ)),
             Y.c.ρ,
-            Y.c.ρn_rai,
+            max(zero(Y.c.ρ), Y.c.ρn_rai),
         ),
         2,
     )
@@ -138,29 +138,35 @@ function set_precipitation_velocities!(
         cm1p.ps,
         cm1p.tv.snow,
         Y.c.ρ,
-        specific(Y.c.ρq_sno, Y.c.ρ),
+        max(zero(Y.c.ρ), specific(Y.c.ρq_sno, Y.c.ρ)),
     )
     # compute sedimentation velocity for cloud condensate [m/s]
-    # TODO sedimentation velocities of cloud condensates are based
-    # on the 1M scheme. Sedimentation velocity of cloud number concentration
-    # is equal to that of the mass.
-    @. ᶜwnₗ = CMNe.terminal_velocity(
-        cm1c.liquid,
-        cm1c.Ch2022.rain,
-        Y.c.ρ,
-        specific(Y.c.ρq_liq, Y.c.ρ),
+    # TODO sedimentation of ice is based on the 1M scheme
+    @. ᶜwnₗ = getindex(
+        CM2.cloud_terminal_velocity(
+            cm2p.sb.pdf_c,
+            cm2p.ctv,
+            max(zero(Y.c.ρ), specific(Y.c.ρq_liq, Y.c.ρ)),
+            Y.c.ρ,
+            max(zero(Y.c.ρ), Y.c.ρn_liq),
+        ),
+        1,
     )
-    @. ᶜwₗ = CMNe.terminal_velocity(
-        cm1c.liquid,
-        cm1c.Ch2022.rain,
-        Y.c.ρ,
-        specific(Y.c.ρq_liq, Y.c.ρ),
+    @. ᶜwₗ = getindex(
+        CM2.cloud_terminal_velocity(
+            cm2p.sb.pdf_c,
+            cm2p.ctv,
+            max(zero(Y.c.ρ), specific(Y.c.ρq_liq, Y.c.ρ)),
+            Y.c.ρ,
+            max(zero(Y.c.ρ), Y.c.ρn_liq),
+        ),
+        2,
     )
     @. ᶜwᵢ = CMNe.terminal_velocity(
-        cm1c.ice,
-        cm1c.Ch2022.small_ice,
+        cmc.ice,
+        cmc.Ch2022.small_ice,
         Y.c.ρ,
-        specific(Y.c.ρq_ice, Y.c.ρ),
+        max(zero(Y.c.ρ), specific(Y.c.ρq_ice, Y.c.ρ)),
     )
 
     # compute their contributions to energy and total water advection

@@ -769,8 +769,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
 )
 
     (; params, dt) = p
+    (; ᶜΦ,) = p.core
     thp = CAP.thermodynamics_params(params)
-    cmp = CAP.microphysics_2m_params(params)
+    cm1p = CAP.microphysics_1m_params(p.params)
+    cm2p = CAP.microphysics_2m_params(p.params)
     cmc = CAP.microphysics_cloud_params(params)
 
     (;
@@ -786,6 +788,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     ) = p.precomputed
     (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜSnₗᵖ⁰, ᶜSnᵣᵖ⁰, ᶜts⁰, ᶜu⁰) =
         p.precomputed
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs, ᶜwₜʲs, ᶜwₕʲs) = p.precomputed
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜS₂ᵖ = p.scratch.ᶜtemp_scalar_2
@@ -801,7 +804,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             seasalt_mean_radius,
             sulfate_num,
             p.tracers.prescribed_aerosols_field,
-            cmp.aerosol,
+            cm2p.aerosol,
         )
     else
         @. seasalt_num = 0
@@ -811,7 +814,95 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
 
     # Compute sources
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    FT = eltype(params)
     for j in 1:n
+
+        # compute terminal velocity for precipitation
+        # TODO sedimentation of snow is based on the 1M scheme
+        @. ᶜwₙᵣʲs.:($$j) = getindex(
+            CM2.rain_terminal_velocity(
+                cm2p.sb,
+                cm2p.rtv,
+                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
+                ᶜρʲs.:($$j),
+                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).n_rai),
+            ),
+            1,
+        )
+        @. ᶜwᵣʲs.:($$j) = getindex(
+            CM2.rain_terminal_velocity(
+                cm2p.sb,
+                cm2p.rtv,
+                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
+                ᶜρʲs.:($$j),
+                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).n_rai),
+            ),
+            2,
+        )
+        @. ᶜwₛʲs.:($$j) = CM1.terminal_velocity(
+            cm1p.ps,
+            cm1p.tv.snow,
+            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_sno),
+        )
+        # compute sedimentation velocity for cloud condensate [m/s]
+        # TODO sedimentation of ice is based on the 1M scheme
+        @. ᶜwₙₗʲs.:($$j) = getindex(
+            CM2.cloud_terminal_velocity(
+                cm2p.sb.pdf_c,
+                cm2p.ctv,
+                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_liq),
+                ᶜρʲs.:($$j),
+                max(zero(Y.c.ρ), ᶜρʲs.:($$j) * Y.c.sgsʲs.:($$j).n_liq),
+            ),
+            1,
+        )
+        @. ᶜwₗʲs.:($$j) = getindex(
+            CM2.cloud_terminal_velocity(
+                cm2p.sb.pdf_c,
+                cm2p.ctv,
+                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_liq),
+                ᶜρʲs.:($$j),
+                max(zero(Y.c.ρ), ᶜρʲs.:($$j) * Y.c.sgsʲs.:($$j).n_liq),
+            ),
+            2,
+        )
+        @. ᶜwᵢʲs.:($$j) = CMNe.terminal_velocity(
+            cmc.ice,
+            cmc.Ch2022.small_ice,
+            ᶜρʲs.:($$j),
+            max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_ice),
+        )
+        # compute their contirbutions to energy and total water advection
+        @. ᶜwₜʲs.:($$j) = ifelse(
+            Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_tot > FT(0),
+            (
+                ᶜwₗʲs.:($$j) * Y.c.sgsʲs.:($$j).q_liq +
+                ᶜwᵢʲs.:($$j) * Y.c.sgsʲs.:($$j).q_ice +
+                ᶜwᵣʲs.:($$j) * Y.c.sgsʲs.:($$j).q_rai +
+                ᶜwₛʲs.:($$j) * Y.c.sgsʲs.:($$j).q_sno
+            ) / Y.c.sgsʲs.:($$j).q_tot,
+            FT(0),
+        )
+        @. ᶜwₕʲs.:($$j) = ifelse(
+            Y.c.sgsʲs.:($$j).ρa * abs(Y.c.sgsʲs.:($$j).mse) > FT(0),
+            (
+                ᶜwₗʲs.:($$j) *
+                Y.c.sgsʲs.:($$j).q_liq *
+                (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                ᶜwᵢʲs.:($$j) *
+                Y.c.sgsʲs.:($$j).q_ice *
+                (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                ᶜwᵣʲs.:($$j) *
+                Y.c.sgsʲs.:($$j).q_rai *
+                (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                ᶜwₛʲs.:($$j) *
+                Y.c.sgsʲs.:($$j).q_sno *
+                (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
+            ) / abs(Y.c.sgsʲs.:($$j).mse),
+            FT(0),
+        )
+
         # Precipitation sources and sinks from the updrafts
         compute_warm_precipitation_sources_2M!(
             ᶜSᵖ,
@@ -830,7 +921,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             Y.c.sgsʲs.:($j).q_sno,
             ᶜtsʲs.:($j),
             dt,
-            cmp,
+            cm2p,
             thp,
         )
         @. ᶜSqᵢᵖʲs.:($$j) = 0
@@ -870,7 +961,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             Y.c.sgsʲs.:($$j).n_liq + Y.c.sgsʲs.:($$j).n_rai,
             ᶜρʲs.:($$j),
             max(0, w_component.(Geometry.WVector.(ᶜuʲs.:($$j)))),
-            (cmp,),
+            (cm2p,),
             thp,
             ᶜtsʲs.:($$j),
             dt,
@@ -903,7 +994,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜq_sno⁰,
         ᶜts⁰,
         dt,
-        cmp,
+        cm2p,
         thp,
     )
     @. ᶜSqᵢᵖ⁰ = 0
@@ -943,7 +1034,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         ᶜn_liq⁰ + ᶜn_rai⁰,
         ᶜρ⁰,
         w_component.(Geometry.WVector.(ᶜu⁰)),
-        (cmp,),
+        (cm2p,),
         thp,
         ᶜts⁰,
         dt,

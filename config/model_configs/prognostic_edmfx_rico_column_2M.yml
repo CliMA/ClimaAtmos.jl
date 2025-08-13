@@ -3,7 +3,7 @@ subsidence: "Rico"
 ls_adv: "Rico"
 surface_setup: "Rico"
 turbconv: "prognostic_edmfx"
-implicit_diffusion: false
+implicit_diffusion: true
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
 edmfx_upwinding: first_order
@@ -25,9 +25,9 @@ y_elem: 2
 z_elem: 100
 z_stretch: false
 perturb_initstate: false
-dt: "10secs"
-t_end: "6hours"
-dt_save_state_to_disk: "10mins"
+dt: "5secs"
+t_end: "180mins"
+dt_save_state_to_disk: "60mins"
 toml: [toml/prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [8, 8, 100]
 prescribed_aerosols: ["SO4", "CB1", "OC1", "DST01", "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
