@@ -412,15 +412,15 @@ function OrographicGravityWaveParameters(
     overrides = NamedTuple(),
 )
     name_map = (;
-        :mountain_height_width_exponent => :γ, # L ∝ h^γ (equation 14, paper suggests γ ≈ 0.4)
-        :number_density_exponent => :ϵ, # number density of orography in a grid cell, n(h) ∝ h^(-ε)
-        :mountain_shape_parameter => :β, # L(z) = L_b(1 - z/h)^β (equation 12), β=1 for triangular mountains and β<1 for blunt mounrains, β>1 for pointy mountains
-        :critical_height_threshold => :h_frac, # h_crit = h_frac * (V / N)
-        :density_scale_factor => :ρscale,
-        :reference_mountain_width => :L0, # L_0 = 80 km 
-        :linear_drag_coefficient => :a0, # a_0 = 0.9
-        :nonlinear_drag_coefficient => :a1, # a_1 = 3.0
-        :critical_froude_number => :Fr_crit, # Fr_crit = 0.7
+        :ogw_mountain_height_width_exponent => :γ, # L ∝ h^γ (equation 14, paper suggests γ ≈ 0.4)
+        :ogw_number_density_exponent => :ϵ, # number density of orography in a grid cell, n(h) ∝ h^(-ε)
+        :ogw_mountain_shape_parameter => :β, # L(z) = L_b(1 - z/h)^β (equation 12), β=1 for triangular mountains and β<1 for blunt mounrains, β>1 for pointy mountains
+        :ogw_critical_height_threshold => :h_frac, # h_crit = h_frac * (V / N)
+        :ogw_density_scale_factor => :ρscale,
+        :ogw_reference_mountain_width => :L0, # L_0 = 80 km 
+        :ogw_linear_drag_coefficient => :a0, # a_0 = 0.9
+        :ogw_nonlinear_drag_coefficient => :a1, # a_1 = 3.0
+        :ogw_critical_froude_number => :Fr_crit, # Fr_crit = 0.7
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     parameters = merge(parameters, overrides)
