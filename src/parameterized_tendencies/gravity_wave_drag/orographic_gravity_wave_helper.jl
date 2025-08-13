@@ -368,7 +368,7 @@ function move_topo_info_to_gpu(Y, topo_info)
         t22 = t22,
         hmin = hmin,
         hmax = hmax,
-)
+    )
 
     return topo_info
 end
