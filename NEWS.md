@@ -4,10 +4,13 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+### Add RWP diagnostic
+PR [#3946](https://github.com/CliMA/ClimaAtmos.jl/pull/3946) adds rainwater path diagnostic variable.
+
 v0.31.1
 -------
 
-PR [#3917](https://github.com/CliMA/ClimaAtmos.jl/pull/3917) adds common numercis configs for different resolutions. 
+PR [#3917](https://github.com/CliMA/ClimaAtmos.jl/pull/3917) adds common numerics configs for different resolutions. 
 These configurations are intended to serve as the default settings. Please modify them only if you are certain of the implications.
 
 v0.31.0

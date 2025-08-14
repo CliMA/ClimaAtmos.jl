@@ -1026,7 +1026,7 @@ add_diagnostic_variable!(
     short_name = "clwvi",
     long_name = "Condensed Water Path",
     standard_name = "atmosphere_mass_content_of_cloud_condensed_water",
-    units = "kg m-2",
+    units = "kg m^-2",
     comments = """
     Mass of condensed (liquid + ice) water in the column divided by the area of the column
     (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
@@ -1066,7 +1066,7 @@ add_diagnostic_variable!(
     short_name = "lwp",
     long_name = "Liquid Water Path",
     standard_name = "atmosphere_mass_content_of_cloud_liquid_water",
-    units = "kg m-2",
+    units = "kg m^-2",
     comments = """
     The total mass of liquid water in cloud per unit area.
     (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
@@ -1106,7 +1106,7 @@ add_diagnostic_variable!(
     short_name = "clivi",
     long_name = "Ice Water Path",
     standard_name = "atmosphere_mass_content_of_cloud_ice",
-    units = "kg m-2",
+    units = "kg m^-2",
     comments = """
     The total mass of ice in cloud per unit area.
     (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
@@ -1504,6 +1504,9 @@ add_diagnostic_variable!(
     compute! = compute_cape!,
 )
 
+###
+# Mean sea level pressure (2d)
+###
 function compute_mslp!(out, state, cache, time)
     thermo_params = CAP.thermodynamics_params(cache.params)
     g = TD.Parameters.grav(thermo_params)
@@ -1535,4 +1538,44 @@ add_diagnostic_variable!(
     units = "Pa",
     comments = "Mean sea level pressure computed from the hypsometric equation",
     compute! = compute_mslp!,
+)
+
+###
+# Rainwater path (2d)
+###
+compute_rwp!(out, state, cache, time) =
+    compute_rwp!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_rwp!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("rwp", model)
+
+function compute_rwp!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{Microphysics1Moment, Microphysics2Moment}}
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        rw = cache.scratch.ᶜtemp_scalar
+        @. rw = state.c.ρq_rai
+        Operators.column_integral_definite!(out, rw)
+        return out
+    else
+        rw = cache.scratch.ᶜtemp_scalar
+        @. rw = state.c.ρq_rai
+        Operators.column_integral_definite!(out, rw)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "rwp",
+    long_name = "Rainwater Path",
+    standard_name = "atmosphere_mass_content_of_rainwater",
+    units = "kg m^-2",
+    comments = """
+    The total mass of rainwater per unit area.
+    (not just the area of the cloudy portion of the column).
+    """,
+    compute! = compute_rwp!,
 )
