@@ -50,7 +50,7 @@ function edmfx_sgs_mass_flux_tendency!(
         p.atmos.microphysics_model isa Microphysics1Moment ||
         p.atmos.microphysics_model isa Microphysics2Moment
     )
-        (; ᶜwₜʲs, ᶜwₕʲs) = p.precomputed # TODO - cleanup the names here
+        (; ᶜwₜʲs, ᶜwₕʲs) = p.precomputed
     end
 
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -77,17 +77,19 @@ function edmfx_sgs_mass_flux_tendency!(
                 specific(Y.c.ρe_tot, Y.c.ρ),
             ),
         )
-        ᶜwₜ = p.scratch.ᶜtemp_scalar_2
-        ᶜwₕ = p.scratch.ᶜtemp_scalar_3
-        @. ᶜwₜ = ifelse(
-            Y.c.ρq_tot < eps(FT),
-            FT(0),
-            ᶜwₜqₜ.components.data.:1 / specific(Y.c.ρq_tot, Y.c.ρ),
+        ᶜwₜ = @. lazy(
+            ifelse(
+                Y.c.ρq_tot < eps(FT),
+                FT(0),
+                ᶜwₜqₜ.components.data.:1 / specific(Y.c.ρq_tot, Y.c.ρ),
+            ),
         )
-        @. ᶜwₕ = ifelse(
-            Y.c.ρe_tot < eps(FT),
-            FT(0),
-            ᶜwₕhₜ.components.data.:1 / specific(Y.c.ρe_tot, Y.c.ρ),
+        ᶜwₕ = @. lazy(
+            ifelse(
+                Y.c.ρe_tot < eps(FT),
+                FT(0),
+                ᶜwₕhₜ.components.data.:1 / specific(Y.c.ρe_tot, Y.c.ρ),
+            ),
         )
         if p.atmos.moisture_model isa NonEquilMoistModel &&
            p.atmos.microphysics_model isa Microphysics1Moment
@@ -97,21 +99,19 @@ function edmfx_sgs_mass_flux_tendency!(
             ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
             ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
 
-            ᶜwₗ⁰ = @. lazy(
-                CMNe.terminal_velocity(
-                    cmc.liquid,
-                    cmc.Ch2022.rain,
-                    ᶜρ⁰,
-                    max(zero(Y.c.ρ), ᶜq_liq⁰),
-                ),
+            ᶜwₗ⁰ = p.scratch.ᶜtemp_scalar_2
+            ᶜwᵢ⁰ = p.scratch.ᶜtemp_scalar_3
+            @. ᶜwₗ⁰ = CMNe.terminal_velocity(
+                cmc.liquid,
+                cmc.Ch2022.rain,
+                ᶜρ⁰,
+                max(zero(Y.c.ρ), ᶜq_liq⁰),
             )
-            ᶜwᵢ⁰ = @. lazy(
-                CMNe.terminal_velocity(
-                    cmc.ice,
-                    cmc.Ch2022.small_ice,
-                    ᶜρ⁰,
-                    max(zero(Y.c.ρ), ᶜq_ice⁰),
-                ),
+            @. ᶜwᵢ⁰ = CMNe.terminal_velocity(
+                cmc.ice,
+                cmc.Ch2022.small_ice,
+                ᶜρ⁰,
+                max(zero(Y.c.ρ), ᶜq_ice⁰),
             )
             ᶜwᵣ⁰ = @. lazy(
                 CM1.terminal_velocity(
@@ -129,6 +129,7 @@ function edmfx_sgs_mass_flux_tendency!(
                     max(zero(Y.c.ρ), ᶜq_sno⁰),
                 ),
             )
+            env_tvs = (; ᶜwₗ⁰, ᶜwᵢ⁰, ᶜwᵣ⁰, ᶜwₛ⁰)
 
         elseif p.atmos.moisture_model isa NonEquilMoistModel &&
                p.atmos.microphysics_model isa Microphysics2Moment
@@ -140,29 +141,25 @@ function edmfx_sgs_mass_flux_tendency!(
             ᶜn_liq⁰ = ᶜspecific_env_value(Val(:n_liq), Y, p)
             ᶜn_rai⁰ = ᶜspecific_env_value(Val(:n_rai), Y, p)
 
-            ᶜwₙᵣ⁰ = @. lazy(
-                getindex(
-                    CM2.rain_terminal_velocity(
-                        cm2p.sb,
-                        cm2p.rtv,
-                        max(zero(Y.c.ρ), ᶜq_rai⁰),
-                        ᶜρ⁰,
-                        max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
-                    ),
-                    1,
+            ᶜwₙᵣ⁰ = getindex(
+                CM2.rain_terminal_velocity(
+                    cm2p.sb,
+                    cm2p.rtv,
+                    max(zero(Y.c.ρ), ᶜq_rai⁰),
+                    ᶜρ⁰,
+                    max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
                 ),
+                1,
             )
-            ᶜwᵣ⁰ = @. lazy(
-                getindex(
-                    CM2.rain_terminal_velocity(
-                        cm2p.sb,
-                        cm2p.rtv,
-                        max(zero(Y.c.ρ), ᶜq_rai⁰),
-                        ᶜρ⁰,
-                        max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
-                    ),
-                    2,
+            ᶜwᵣ⁰ = getindex(
+                CM2.rain_terminal_velocity(
+                    cm2p.sb,
+                    cm2p.rtv,
+                    max(zero(Y.c.ρ), ᶜq_rai⁰),
+                    ᶜρ⁰,
+                    max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
                 ),
+                2,
             )
             ᶜwₛ⁰ = @. lazy(
                 CM1.terminal_velocity(
@@ -204,6 +201,7 @@ function edmfx_sgs_mass_flux_tendency!(
                     max(zero(Y.c.ρ), ᶜq_ice⁰),
                 ),
             )
+            env_tvs = (; ᶜwₙᵣ⁰, ᶜwᵣ⁰, ᶜwₛ⁰, ᶜwₙₗ⁰, ᶜwₗ⁰, ᶜwᵢ⁰)
 
         end
 
@@ -244,29 +242,29 @@ function edmfx_sgs_mass_flux_tendency!(
 
             ᶠwₕ³⁰ = @. lazy(
                 ifelse(
-                    ᶜmse⁰ + ᶜK⁰ > 0,
+                    ᶠinterp(ᶜmse⁰ + ᶜK⁰) > 0,
                     (
                         ᶠinterp(
                             ᶜq_liq⁰ *
-                            (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ) * # + $(Kin(ᶜwₗ⁰, ᶜu⁰))) *
+                            (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwₗ⁰, ᶜu⁰))) *
                             CT3(Geometry.WVector(-1 * ᶜwₗ⁰)),
                         ) +
                         ᶠinterp(
                             ᶜq_ice⁰ *
-                            (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ) * # + $(Kin(ᶜwᵢ⁰, ᶜu⁰))) *
+                            (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwᵢ⁰, ᶜu⁰))) *
                             CT3(Geometry.WVector(-1 * ᶜwᵢ⁰)),
                         ) +
                         ᶠinterp(
                             ᶜq_rai⁰ *
-                            (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ) * # + $(Kin(ᶜwᵣ⁰, ᶜu⁰))) *
+                            (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwᵣ⁰, ᶜu⁰))) *
                             CT3(Geometry.WVector(-1 * ᶜwᵣ⁰)),
                         ) +
                         ᶠinterp(
                             ᶜq_sno⁰ *
-                            (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ) * # + $(Kin(ᶜwₛ⁰, ᶜu⁰))) *
+                            (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwₛ⁰, ᶜu⁰))) *
                             CT3(Geometry.WVector(-1 * ᶜwₛ⁰)),
                         )
-                    ) / (ᶜmse⁰ + ᶜK⁰),
+                    ) / ᶠinterp(ᶜmse⁰ + ᶜK⁰),
                     FT(0),
                 ),
             )
@@ -330,7 +328,7 @@ function edmfx_sgs_mass_flux_tendency!(
 
                 ᶠwₜ³⁰ = @. lazy(
                     ifelse(
-                        ᶜq_tot⁰ > FT(0),
+                        ᶠinterp(ᶜq_tot⁰) > FT(0),
                         (
                             ᶠinterp(
                                 ᶜq_liq⁰ * CT3(Geometry.WVector(-1 * ᶜwₗ⁰)),
@@ -342,7 +340,7 @@ function edmfx_sgs_mass_flux_tendency!(
                                 ᶜq_rai⁰ * CT3(Geometry.WVector(-1 * ᶜwᵣ⁰)),
                             ) +
                             ᶠinterp(ᶜq_sno⁰ * CT3(Geometry.WVector(-1 * ᶜwₛ⁰)))
-                        ) / ᶜq_tot⁰,
+                        ) / ᶠinterp(ᶜq_tot⁰),
                         FT(0),
                     ),
                 )
@@ -374,7 +372,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 @name(c.ρq_liq),
                 :q_liq,
                 @name(ᶜwₗʲs.:(1)),
-                @name(ᶜwₗ⁰),
+                :ᶜwₗ⁰,
                 @name(ᶜwₗ)
             ),
             (
@@ -382,7 +380,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 @name(c.ρq_ice),
                 :q_ice,
                 @name(ᶜwᵢʲs.:(1)),
-                @name(ᶜwᵢ⁰),
+                :ᶜwᵢ⁰,
                 @name(ᶜwᵢ)
             ),
             (
@@ -390,7 +388,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 @name(c.ρq_rai),
                 :q_rai,
                 @name(ᶜwᵣʲs.:(1)),
-                @name(ᶜwᵣ⁰),
+                :ᶜwᵣ⁰,
                 @name(ᶜwᵣ)
             ),
             (
@@ -398,7 +396,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 @name(c.ρq_sno),
                 :q_sno,
                 @name(ᶜwₛʲs.:(1)),
-                @name(ᶜwₛ⁰),
+                :ᶜwₛ⁰,
                 @name(ᶜwₛ)
             ),
             (
@@ -406,7 +404,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 @name(c.ρn_liq),
                 :n_liq,
                 @name(ᶜwₙₗʲs.:(1)),
-                @name(ᶜwₙₗ⁰),
+                :ᶜwₙₗ⁰,
                 @name(ᶜwₙₗ)
             ),
             (
@@ -414,7 +412,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 @name(c.ρn_rai),
                 :n_rai,
                 @name(ᶜwₙᵣʲs.:(1)),
-                @name(ᶜwₙᵣ⁰),
+                :ᶜwₙᵣ⁰,
                 @name(ᶜwₙᵣ)
             ),
         )
@@ -457,14 +455,14 @@ function edmfx_sgs_mass_flux_tendency!(
                 end
             end
             MatrixFields.unrolled_foreach(
-                microphysics_1M_tracers,
+                microphysics_tracers,
             ) do (_, ρχ_name, χ_name, _, w⁰_name, w_name)
                 MatrixFields.has_field(Y, ρχ_name) || return
 
                 ᶜχ⁰ = ᶜspecific_env_value(Val(χ_name), Y, p)
                 ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
                 ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-                ᶜw⁰ = MatrixFields.get_field(p.precomputed, w⁰_name)
+                ᶜw⁰ = getfield(env_tvs, w⁰_name)
                 ᶜw = MatrixFields.get_field(p.precomputed, w_name)
 
                 ᶠw³⁰ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜw⁰)))))
