@@ -121,8 +121,8 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵢᵖ = similar(Y.c, FT),
             ᶜSqᵣᵖ = similar(Y.c, FT),
             ᶜSqₛᵖ = similar(Y.c, FT),
-            ᶜwnₗ = similar(Y.c, FT),
-            ᶜwnᵣ = similar(Y.c, FT),
+            ᶜwₙₗ = similar(Y.c, FT),
+            ᶜwₙᵣ = similar(Y.c, FT),
             ᶜSnₗᵖ = similar(Y.c, FT),
             ᶜSnᵣᵖ = similar(Y.c, FT),
         )

@@ -98,9 +98,9 @@ function edmfx_sgs_mass_flux_tendency!(
             ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
             ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
             ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
-
             ᶜwₗ⁰ = p.scratch.ᶜtemp_scalar_2
             ᶜwᵢ⁰ = p.scratch.ᶜtemp_scalar_3
+
             @. ᶜwₗ⁰ = CMNe.terminal_velocity(
                 cmc.liquid,
                 cmc.Ch2022.rain,
@@ -140,26 +140,31 @@ function edmfx_sgs_mass_flux_tendency!(
             ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
             ᶜn_liq⁰ = ᶜspecific_env_value(Val(:n_liq), Y, p)
             ᶜn_rai⁰ = ᶜspecific_env_value(Val(:n_rai), Y, p)
+            ᶜwᵢ⁰ = p.scratch.ᶜtemp_scalar_2
 
-            ᶜwₙᵣ⁰ = getindex(
-                CM2.rain_terminal_velocity(
-                    cm2p.sb,
-                    cm2p.rtv,
-                    max(zero(Y.c.ρ), ᶜq_rai⁰),
-                    ᶜρ⁰,
-                    max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
+            ᶜwₙᵣ⁰ = @. lazy(
+                getindex(
+                    CM2.rain_terminal_velocity(
+                        cm2p.sb,
+                        cm2p.rtv,
+                        max(zero(Y.c.ρ), ᶜq_rai⁰),
+                        ᶜρ⁰,
+                        max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
+                    ),
+                    1,
                 ),
-                1,
             )
-            ᶜwᵣ⁰ = getindex(
-                CM2.rain_terminal_velocity(
-                    cm2p.sb,
-                    cm2p.rtv,
-                    max(zero(Y.c.ρ), ᶜq_rai⁰),
-                    ᶜρ⁰,
-                    max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
+            ᶜwᵣ⁰ = @. lazy(
+                getindex(
+                    CM2.rain_terminal_velocity(
+                        cm2p.sb,
+                        cm2p.rtv,
+                        max(zero(Y.c.ρ), ᶜq_rai⁰),
+                        ᶜρ⁰,
+                        max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
+                    ),
+                    2,
                 ),
-                2,
             )
             ᶜwₛ⁰ = @. lazy(
                 CM1.terminal_velocity(
@@ -193,13 +198,11 @@ function edmfx_sgs_mass_flux_tendency!(
                     2,
                 ),
             )
-            ᶜwᵢ⁰ = @. lazy(
-                CMNe.terminal_velocity(
-                    cmc.ice,
-                    cmc.Ch2022.small_ice,
-                    ᶜρ⁰,
-                    max(zero(Y.c.ρ), ᶜq_ice⁰),
-                ),
+            @. ᶜwᵢ⁰ = CMNe.terminal_velocity(
+                cmc.ice,
+                cmc.Ch2022.small_ice,
+                ᶜρ⁰,
+                max(zero(Y.c.ρ), ᶜq_ice⁰),
             )
             env_tvs = (; ᶜwₙᵣ⁰, ᶜwᵣ⁰, ᶜwₛ⁰, ᶜwₙₗ⁰, ᶜwₗ⁰, ᶜwᵢ⁰)
 
@@ -366,6 +369,7 @@ function edmfx_sgs_mass_flux_tendency!(
             @. Yₜ.c.ρq_tot += vtt
         end
 
+        # Microphysics tracers fluxes
         microphysics_tracers = (
             (
                 @name(c.sgsʲs.:(1).q_liq),
@@ -417,7 +421,6 @@ function edmfx_sgs_mass_flux_tendency!(
             ),
         )
 
-        # Liquid, ice, rain and snow specific humidity fluxes
         if p.atmos.moisture_model isa NonEquilMoistModel && (
             p.atmos.microphysics_model isa Microphysics1Moment ||
             p.atmos.microphysics_model isa Microphysics2Moment

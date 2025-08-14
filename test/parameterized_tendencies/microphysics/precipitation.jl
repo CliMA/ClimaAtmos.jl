@@ -216,8 +216,8 @@ end
         :ᶜwᵢ,
         :ᶜwᵣ,
         :ᶜwₛ,
-        :ᶜwnₗ,
-        :ᶜwnᵣ,
+        :ᶜwₙₗ,
+        :ᶜwₙᵣ,
         :ᶜwₜqₜ,
         :ᶜwₕhₜ,
     )
@@ -250,8 +250,8 @@ end
     @assert !any(isnan, p.precomputed.ᶜwᵢ)
     @assert !any(isnan, p.precomputed.ᶜwᵣ)
     @assert !any(isnan, p.precomputed.ᶜwₛ)
-    @assert !any(isnan, p.precomputed.ᶜwnₗ)
-    @assert !any(isnan, p.precomputed.ᶜwnᵣ)
+    @assert !any(isnan, p.precomputed.ᶜwₙₗ)
+    @assert !any(isnan, p.precomputed.ᶜwₙᵣ)
 
     # test water budget
     @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
@@ -275,8 +275,8 @@ end
     @test minimum(p.precomputed.ᶜwᵢ) >= FT(0)
     @test minimum(p.precomputed.ᶜwᵣ) >= FT(0)
     @test minimum(p.precomputed.ᶜwₛ) >= FT(0)
-    @test minimum(p.precomputed.ᶜwnₗ) >= FT(0)
-    @test minimum(p.precomputed.ᶜwnᵣ) >= FT(0)
+    @test minimum(p.precomputed.ᶜwₙₗ) >= FT(0)
+    @test minimum(p.precomputed.ᶜwₙᵣ) >= FT(0)
 
     # test if cloud fraction diagnostics make sense
     @assert !any(isnan, p.precomputed.cloud_diagnostics_tuple.cf)
