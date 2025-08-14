@@ -47,7 +47,8 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶜwₜqₜ, ᶜwₕhₜ, ᶜwₜʲs, ᶜwₕʲs) = p.precomputed # TODO - cleanup the names here
 
     thermo_params = CAP.thermodynamics_params(p.params)
-    cmp = CAP.microphysics_1m_params(p.params)
+    cm1p = CAP.microphysics_1m_params(p.params)
+    cm2p = CAP.microphysics_1m_params(p.params)
     cmc = CAP.microphysics_cloud_params(p.params)
     ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
@@ -69,44 +70,141 @@ function edmfx_sgs_mass_flux_tendency!(
             ),
         )
         if p.atmos.moisture_model isa NonEquilMoistModel &&
-            p.atmos.microphysics_model isa Microphysics1Moment
+           p.atmos.microphysics_model isa Microphysics1Moment
 
             ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y, p)
             ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
             ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
             ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
 
-            ᶜwₗ⁰ = @. lazy(CMNe.terminal_velocity(
-                cmc.liquid,
-                cmc.Ch2022.rain,
+            ᶜwₗ⁰ = @. lazy(
+                CMNe.terminal_velocity(
+                    cmc.liquid,
+                    cmc.Ch2022.rain,
+                    ᶜρ⁰,
+                    max(zero(Y.c.ρ), ᶜq_liq⁰),
+                ),
+            )
+            ᶜwᵢ⁰ = @. lazy(
+                CMNe.terminal_velocity(
+                    cmc.ice,
+                    cmc.Ch2022.small_ice,
+                    ᶜρ⁰,
+                    max(zero(Y.c.ρ), ᶜq_ice⁰),
+                ),
+            )
+            ᶜwᵣ⁰ = @. lazy(
+                CM1.terminal_velocity(
+                    cm1p.pr,
+                    cm1p.tv.rain,
+                    ᶜρ⁰,
+                    max(zero(Y.c.ρ), ᶜq_rai⁰),
+                ),
+            )
+            ᶜwₛ⁰ = @. lazy(
+                CM1.terminal_velocity(
+                    cm1p.ps,
+                    cm1p.tv.snow,
+                    ᶜρ⁰,
+                    max(zero(Y.c.ρ), ᶜq_sno⁰),
+                ),
+            )
+
+        elseif p.atmos.moisture_model isa NonEquilMoistModel &&
+               p.atmos.microphysics_model isa Microphysics2Moment
+
+            ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y, p)
+            ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
+            ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
+            ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
+            ᶜn_liq⁰ = ᶜspecific_env_value(Val(:n_liq), Y, p)
+            ᶜn_rai⁰ = ᶜspecific_env_value(Val(:n_rai), Y, p)
+
+            @. ᶜwₙᵣ⁰ = getindex(
+                CM2.rain_terminal_velocity(
+                    cm2p.sb,
+                    cm2p.rtv,
+                    max(zero(Y.c.ρ), ᶜq_rai⁰),
+                    ᶜρ⁰,
+                    max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
+                ),
+                1,
+            )
+            @. ᶜwᵣ⁰ = getindex(
+                CM2.rain_terminal_velocity(
+                    cm2p.sb,
+                    cm2p.rtv,
+                    max(zero(Y.c.ρ), ᶜq_rai⁰),
+                    ᶜρ⁰,
+                    max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
+                ),
+                2,
+            )
+            @. ᶜwₛ⁰ = CM1.terminal_velocity(
+                cm1p.ps,
+                cm1p.tv.snow,
                 ᶜρ⁰,
-                max(zero(Y.c.ρ), ᶜq_liq⁰)))
-            ᶜwᵢ⁰ = @. lazy(CMNe.terminal_velocity(
+                max(zero(Y.c.ρ), ᶜq_sno⁰),
+            )
+            @. ᶜwₙₗ⁰ = getindex(
+                CM2.cloud_terminal_velocity(
+                    cm2p.sb.pdf_c,
+                    cm2p.ctv,
+                    max(zero(Y.c.ρ), ᶜq_liq⁰),
+                    ᶜρ⁰,
+                    max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_liq⁰),
+                ),
+                1,
+            )
+            @. ᶜwₗ⁰ = getindex(
+                CM2.cloud_terminal_velocity(
+                    cm2p.sb.pdf_c,
+                    cm2p.ctv,
+                    max(zero(Y.c.ρ), ᶜq_liq⁰),
+                    ᶜρ⁰,
+                    max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_liq⁰),
+                ),
+                2,
+            )
+            @. ᶜwᵢ⁰ = CMNe.terminal_velocity(
                 cmc.ice,
                 cmc.Ch2022.small_ice,
                 ᶜρ⁰,
-                max(zero(Y.c.ρ), ᶜq_ice⁰)))
-            ᶜwᵣ⁰ = @. lazy(CM1.terminal_velocity(
-                cmp.pr,
-                cmp.tv.rain,
-                ᶜρ⁰,
-                max(zero(Y.c.ρ), ᶜq_rai⁰)))
-            ᶜwₛ⁰ = @. lazy(CM1.terminal_velocity(
-                cmp.ps,
-                cmp.tv.snow,
-                ᶜρ⁰,
-                max(zero(Y.c.ρ), ᶜq_sno⁰)))
+                max(zero(Y.c.ρ), ᶜq_ice⁰),
+            )
+
         end
 
         for j in 1:n
-            if p.atmos.moisture_model isa NonEquilMoistModel &&
-                p.atmos.microphysics_model isa Microphysics1Moment
+            if p.atmos.moisture_model isa NonEquilMoistModel && (
+                p.atmos.microphysics_model isa Microphysics1Moment ||
+                p.atmos.microphysics_model isa Microphysics2Moment
+            )
                 @. ᶠu³_diff = (
-                    (ᶠu³ʲs.:($$j) + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕʲs.:($$j))))) -
-                    (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕhₜ))))
+                    (
+                        ᶠu³ʲs.:($$j) +
+                        CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕʲs.:($$j))))
+                    ) - (
+                        ᶠu³ + CT3(
+                            ᶠinterp(
+                                Geometry.WVector(
+                                    -1 * ᶜwₕhₜ / specific(Y.c.ρe_tot, Y.c.ρ),
+                                ),
+                            ),
+                        )
+                    )
                 )
             else
-                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕhₜ))))
+                @. ᶠu³_diff =
+                    ᶠu³ʲs.:($$j) - (
+                        ᶠu³ + CT3(
+                            ᶠinterp(
+                                Geometry.WVector(
+                                    -1 * ᶜwₕhₜ / specific(Y.c.ρe_tot, Y.c.ρ),
+                                ),
+                            ),
+                        )
+                    )
             end
             @. ᶜa_scalar =
                 (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j) - ᶜh_tot) *
@@ -121,30 +219,62 @@ function edmfx_sgs_mass_flux_tendency!(
             @. Yₜ.c.ρe_tot += vtt
         end
         # Add the environment fluxes
-        if p.atmos.moisture_model isa NonEquilMoistModel &&
-            p.atmos.microphysics_model isa Microphysics1Moment
+        if p.atmos.moisture_model isa NonEquilMoistModel && (
+            p.atmos.microphysics_model isa Microphysics1Moment ||
+            p.atmos.microphysics_model isa Microphysics2Moment
+        )
 
-            #TODO - some weird matrix multiplication bug here
-            #=
             ᶠwₕ³⁰ = @. lazy(
-                ᶠinterp(ᶜq_liq⁰ * (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwₗ⁰, ᶜu⁰))) * CT3(Geometry.WVector(-1 * ᶜwₗ⁰))) +
-                ᶠinterp(ᶜq_ice⁰ * (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwᵢ⁰, ᶜu⁰))) * CT3(Geometry.WVector(-1 * ᶜwᵢ⁰))) +
-                ᶠinterp(ᶜq_rai⁰ * (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwᵣ⁰, ᶜu⁰))) * CT3(Geometry.WVector(-1 * ᶜwᵣ⁰))) +
-                ᶠinterp(ᶜq_sno⁰ * (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwₛ⁰, ᶜu⁰))) * CT3(Geometry.WVector(-1 * ᶜwₛ⁰)))
-            )
-            =#
-            ᶠwₕ³⁰ = @. lazy(
-                ᶠinterp(ᶜq_liq⁰ * (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ) * CT3(Geometry.WVector(-1 * ᶜwₗ⁰))) +
-                ᶠinterp(ᶜq_ice⁰ * (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ) * CT3(Geometry.WVector(-1 * ᶜwᵢ⁰))) +
-                ᶠinterp(ᶜq_rai⁰ * (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ) * CT3(Geometry.WVector(-1 * ᶜwᵣ⁰))) +
-                ᶠinterp(ᶜq_sno⁰ * (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ) * CT3(Geometry.WVector(-1 * ᶜwₛ⁰)))
+                ifelse(
+                    ᶜmse⁰ + ᶜK⁰ > 0,
+                    (
+                        ᶠinterp(
+                            ᶜq_liq⁰ *
+                            (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwₗ⁰, ᶜu⁰))) *
+                            CT3(Geometry.WVector(-1 * ᶜwₗ⁰)),
+                        ) +
+                        ᶠinterp(
+                            ᶜq_ice⁰ *
+                            (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwᵢ⁰, ᶜu⁰))) *
+                            CT3(Geometry.WVector(-1 * ᶜwᵢ⁰)),
+                        ) +
+                        ᶠinterp(
+                            ᶜq_rai⁰ *
+                            (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwᵣ⁰, ᶜu⁰))) *
+                            CT3(Geometry.WVector(-1 * ᶜwᵣ⁰)),
+                        ) +
+                        ᶠinterp(
+                            ᶜq_sno⁰ *
+                            (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwₛ⁰, ᶜu⁰))) *
+                            CT3(Geometry.WVector(-1 * ᶜwₛ⁰)),
+                        )
+                    ) / (ᶜmse⁰ + ᶜK⁰),
+                    FT(0),
+                ),
             )
             @. ᶠu³_diff = (
-                (ᶠu³⁰ + ᶠwₕ³⁰) -
-                (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕhₜ ))))
+                (ᶠu³⁰ + ᶠwₕ³⁰) - (
+                    ᶠu³ + CT3(
+                        ᶠinterp(
+                            Geometry.WVector(
+                                -1 * ᶜwₕhₜ / specific(Y.c.ρe_tot, Y.c.ρ),
+                            ),
+                        ),
+                    )
+                )
             )
         else
-            @. ᶠu³_diff = (ᶠu³⁰ - (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕhₜ)))))
+            @. ᶠu³_diff = (
+                ᶠu³⁰ - (
+                    ᶠu³ + CT3(
+                        ᶠinterp(
+                            Geometry.WVector(
+                                -1 * ᶜwₕhₜ / specific(Y.c.ρe_tot, Y.c.ρ),
+                            ),
+                        ),
+                    )
+                )
+            )
         end
         ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
         @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
@@ -160,14 +290,39 @@ function edmfx_sgs_mass_flux_tendency!(
         if !(p.atmos.moisture_model isa DryModel)
             # Specific humidity fluxes: First sum up the draft fluxes
             for j in 1:n
-                if p.atmos.moisture_model isa NonEquilMoistModel &&
-                    p.atmos.microphysics_model isa Microphysics1Moment
+                if p.atmos.moisture_model isa NonEquilMoistModel && (
+                    p.atmos.microphysics_model isa Microphysics1Moment ||
+                    p.atmos.microphysics_model isa Microphysics2Moment
+                )
                     @. ᶠu³_diff = (
-                        (ᶠu³ʲs.:($$j) + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜʲs.:($$j))))) -
-                        (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜqₜ))))
+                        (
+                            ᶠu³ʲs.:($$j) + CT3(
+                                ᶠinterp(Geometry.WVector(-1 * ᶜwₜʲs.:($$j))),
+                            )
+                        ) - (
+                            ᶠu³ + CT3(
+                                ᶠinterp(
+                                    Geometry.WVector(
+                                        -1 * ᶜwₜqₜ /
+                                        specific(Y.c.ρq_tot, Y.c.ρ),
+                                    ),
+                                ),
+                            )
+                        )
                     )
                 else
-                    @. ᶠu³_diff = (ᶠu³ʲs.:($$j) - (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜqₜ)))))
+                    @. ᶠu³_diff = (
+                        ᶠu³ʲs.:($$j) - (
+                            ᶠu³ + CT3(
+                                ᶠinterp(
+                                    Geometry.WVector(
+                                        -1 * ᶜwₜqₜ /
+                                        specific(Y.c.ρq_tot, Y.c.ρ),
+                                    ),
+                                ),
+                            )
+                        )
+                    )
                 end
                 @. ᶜa_scalar =
                     (Y.c.sgsʲs.:($$j).q_tot - specific(Y.c.ρq_tot, Y.c.ρ)) *
@@ -184,21 +339,50 @@ function edmfx_sgs_mass_flux_tendency!(
             # Add the environment fluxes
             ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
             if p.atmos.moisture_model isa NonEquilMoistModel &&
-                p.atmos.microphysics_model isa Microphysics1Moment
+               p.atmos.microphysics_model isa Microphysics1Moment
 
                 ᶠwₜ³⁰ = @. lazy(
-                    ᶠinterp(ᶜq_liq⁰ * CT3(Geometry.WVector(-1 * ᶜwₗ⁰))) +
-                    ᶠinterp(ᶜq_ice⁰ * CT3(Geometry.WVector(-1 * ᶜwᵢ⁰))) +
-                    ᶠinterp(ᶜq_rai⁰ * CT3(Geometry.WVector(-1 * ᶜwᵣ⁰))) +
-                    ᶠinterp(ᶜq_sno⁰ * CT3(Geometry.WVector(-1 * ᶜwₛ⁰)))
+                    ifelse(
+                        ᶜq_tot⁰ > FT(0),
+                        (
+                            ᶠinterp(
+                                ᶜq_liq⁰ * CT3(Geometry.WVector(-1 * ᶜwₗ⁰)),
+                            ) +
+                            ᶠinterp(
+                                ᶜq_ice⁰ * CT3(Geometry.WVector(-1 * ᶜwᵢ⁰)),
+                            ) +
+                            ᶠinterp(
+                                ᶜq_rai⁰ * CT3(Geometry.WVector(-1 * ᶜwᵣ⁰)),
+                            ) +
+                            ᶠinterp(ᶜq_sno⁰ * CT3(Geometry.WVector(-1 * ᶜwₛ⁰)))
+                        ) / ᶜq_tot⁰,
+                        FT(0),
+                    ),
                 )
 
                 @. ᶠu³_diff = (
-                    (ᶠu³⁰ + ᶠwₜ³⁰) -
-                    (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜqₜ))))
+                    (ᶠu³⁰ + ᶠwₜ³⁰) - (
+                        ᶠu³ + CT3(
+                            ᶠinterp(
+                                Geometry.WVector(
+                                    -1 * ᶜwₜqₜ / specific(Y.c.ρq_tot, Y.c.ρ),
+                                ),
+                            ),
+                        )
+                    )
                 )
             else
-                @. ᶠu³_diff = (ᶠu³⁰ - (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜqₜ)))))
+                @. ᶠu³_diff = (
+                    ᶠu³⁰ - (
+                        ᶠu³ + CT3(
+                            ᶠinterp(
+                                Geometry.WVector(
+                                    -1 * ᶜwₜqₜ / specific(Y.c.ρq_tot, Y.c.ρ),
+                                ),
+                            ),
+                        )
+                    )
+                )
             end
 
             @. ᶜa_scalar =
@@ -213,30 +397,69 @@ function edmfx_sgs_mass_flux_tendency!(
             @. Yₜ.c.ρq_tot += vtt
         end
 
-        # TODO - Add 2M tracer velocities when sedimentation in the updrafts is added
-        microphysics_1M_tracers = (
-            (@name(c.sgsʲs.:(1).q_liq), @name(c.ρq_liq), :q_liq, @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
-            (@name(c.sgsʲs.:(1).q_ice), @name(c.ρq_ice), :q_ice, @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
-            (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai), :q_rai, @name(ᶜwᵣʲs.:(1)), @name(ᶜwᵣ)),
-            (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno), :q_sno, @name(ᶜwₛʲs.:(1)), @name(ᶜwₛ)),
-        )
-        microphysics_2M_tracers = (
-            (@name(c.sgsʲs.:(1).q_liq), @name(c.ρq_liq), :q_liq, @name(ᶜwₗ)),
-            (@name(c.sgsʲs.:(1).q_ice), @name(c.ρq_ice), :q_ice, @name(ᶜwᵢ)),
-            (@name(c.sgsʲs.:(1).q_rai), @name(c.ρq_rai), :q_rai, @name(ᶜwᵣ)),
-            (@name(c.sgsʲs.:(1).q_sno), @name(c.ρq_sno), :q_sno, @name(ᶜwₛ)),
-            (@name(c.sgsʲs.:(1).n_liq), @name(c.ρn_liq), :n_liq, @name(ᶜwnₗ)),
-            (@name(c.sgsʲs.:(1).n_rai), @name(c.ρn_rai), :n_rai, @name(ᶜwnᵣ)),
+        microphysics_tracers = (
+            (
+                @name(c.sgsʲs.:(1).q_liq),
+                @name(c.ρq_liq),
+                :q_liq,
+                @name(ᶜwₗʲs.:(1)),
+                @name(ᶜwₗ⁰),
+                @name(ᶜwₗ)
+            ),
+            (
+                @name(c.sgsʲs.:(1).q_ice),
+                @name(c.ρq_ice),
+                :q_ice,
+                @name(ᶜwᵢʲs.:(1)),
+                @name(ᶜwᵢ⁰),
+                @name(ᶜwᵢ)
+            ),
+            (
+                @name(c.sgsʲs.:(1).q_rai),
+                @name(c.ρq_rai),
+                :q_rai,
+                @name(ᶜwᵣʲs.:(1)),
+                @name(ᶜwᵣ⁰),
+                @name(ᶜwᵣ)
+            ),
+            (
+                @name(c.sgsʲs.:(1).q_sno),
+                @name(c.ρq_sno),
+                :q_sno,
+                @name(ᶜwₛʲs.:(1)),
+                @name(ᶜwₛ⁰),
+                @name(ᶜwₛ)
+            ),
+            (
+                @name(c.sgsʲs.:(1).n_liq),
+                @name(c.ρn_liq),
+                :n_liq,
+                @name(ᶜwₙₗʲs.:(1)),
+                @name(ᶜwₙₗ⁰),
+                @name(ᶜwₙₗ)
+            ),
+            (
+                @name(c.sgsʲs.:(1).n_rai),
+                @name(c.ρn_rai),
+                :n_rai,
+                @name(ᶜwₙᵣʲs.:(1)),
+                @name(ᶜwₙᵣ⁰),
+                @name(ᶜwₙᵣ)
+            ),
         )
 
         # Liquid, ice, rain and snow specific humidity fluxes
-        if p.atmos.moisture_model isa NonEquilMoistModel &&
-            p.atmos.microphysics_model isa Microphysics1Moment
+        if p.atmos.moisture_model isa NonEquilMoistModel && (
+            p.atmos.microphysics_model isa Microphysics1Moment ||
+            p.atmos.microphysics_model isa Microphysics2Moment
+        )
 
             for j in 1:n
                 MatrixFields.unrolled_foreach(
-                    microphysics_1M_tracers,
-                ) do (χʲ_name, ρχ_name, _, wʲ_name, w_name)
+                    microphysics_tracers,
+                ) do (χʲ_name, ρχ_name, _, wʲ_name, _, w_name)
+                    MatrixFields.has_field(Y, ρχ_name) || return
+
                     ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                     ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
                     ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
@@ -249,7 +472,8 @@ function edmfx_sgs_mass_flux_tendency!(
                     @. ᶠu³_diff = (ᶠu³ʲs.:($$j) + ᶠw³ʲ) - (ᶠu³ + ᶠw³)
 
                     @. ᶜa_scalar =
-                        (ᶜχʲ - ᶜχ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+                        (ᶜχʲ - ᶜχ) *
+                        draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                     vtt = vertical_transport(
                         ᶜρʲs.:($j),
                         ᶠu³_diff,
@@ -263,84 +487,19 @@ function edmfx_sgs_mass_flux_tendency!(
             end
             MatrixFields.unrolled_foreach(
                 microphysics_1M_tracers,
-            ) do (_, ρχ_name, χ_name, _, w_name)
+            ) do (_, ρχ_name, χ_name, _, w⁰_name, w_name)
+                MatrixFields.has_field(Y, ρχ_name) || return
+
                 ᶜχ⁰ = ᶜspecific_env_value(Val(χ_name), Y, p)
                 ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
                 ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
+                ᶜw⁰ = MatrixFields.get_field(p.precomputed, w_name)
                 ᶜw = MatrixFields.get_field(p.precomputed, w_name)
 
+                ᶠw³⁰ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜw⁰)))))
                 ᶠw³ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜw)))))
 
-                named_tuple_of_env_velocities = (; q_liq = ᶜwₗ⁰, q_ice = ᶜwᵢ⁰, q_rai = ᶜwᵣ⁰, q_sno = ᶜwₛ⁰)
-                ᶜw⁰_tmp = p.scratch.ᶜtemp_scalar_3
-                # TODO
-                #ᶜw⁰_tmp .= named_tuple_of_env_velocities.(Val(χ_name))
-                if χ_name == :q_liq
-                    ᶜw⁰_tmp = ᶜwₗ⁰
-                elseif χ_name == :q_ice
-                    ᶜw⁰_tmp = ᶜwᵢ⁰
-                elseif χ_name == :q_rai
-                    ᶜw⁰_tmp = ᶜwᵣ⁰
-                elseif χ_name == :q_sno
-                    ᶜw⁰_tmp = ᶜwₛ⁰
-                else
-                    error("Wrong microphysics tracer")
-                end
-                ᶠw³⁰ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜw⁰_tmp)))))
-
                 @. ᶠu³_diff = (ᶠu³⁰ + ᶠw³⁰) - (ᶠu³ + ᶠw³)
-
-                @. ᶜa_scalar = (ᶜχ⁰ - ᶜχ) * draft_area(ᶜρa⁰, ᶜρ⁰)
-                vtt = vertical_transport(
-                    ᶜρ⁰,
-                    ᶠu³_diff,
-                    ᶜa_scalar,
-                    dt,
-                    edmfx_sgsflux_upwinding,
-                )
-                ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
-                @. ᶜρχₜ += vtt
-            end
-        end
-        if p.atmos.moisture_model isa NonEquilMoistModel &&
-            p.atmos.microphysics_model isa Microphysics2Moment
-
-            for j in 1:n
-                MatrixFields.unrolled_foreach(
-                    microphysics_2M_tracers,
-                ) do (χʲ_name, ρχ_name, _)
-                    ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-                    ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
-                    ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-
-                    ᶠw³ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * MatrixFields.get_field(p.precomputed, w_name))))))
-
-                    @. ᶠu³_diff = ᶠu³ʲs.:($$j) - (ᶠu³ + ᶠw³)
-
-                    @. ᶜa_scalar =
-                        (ᶜχʲ - ᶜχ) * draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-                    vtt = vertical_transport(
-                        ᶜρʲs.:($j),
-                        ᶠu³_diff,
-                        ᶜa_scalar,
-                        dt,
-                        edmfx_sgsflux_upwinding,
-                    )
-                    ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
-                    @. ᶜρχₜ += vtt
-                end
-            end
-            MatrixFields.unrolled_foreach(
-                microphysics_1M_tracers,
-            ) do (_, ρχ_name, χ_name, _, w_name)
-                ᶜχ⁰ = ᶜspecific_env_value(Val(χ_name), Y, p)
-                ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
-                ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-
-                ᶠw³ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * MatrixFields.get_field(p.precomputed, w_name))))))
-
-                @. ᶠu³_diff = ᶠu³⁰ - (ᶠu³ + ᶠw³)
-
                 @. ᶜa_scalar = (ᶜχ⁰ - ᶜχ) * draft_area(ᶜρa⁰, ᶜρ⁰)
                 vtt = vertical_transport(
                     ᶜρ⁰,
