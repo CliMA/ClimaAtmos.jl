@@ -127,57 +127,69 @@ function edmfx_sgs_mass_flux_tendency!(
             ᶜn_liq⁰ = ᶜspecific_env_value(Val(:n_liq), Y, p)
             ᶜn_rai⁰ = ᶜspecific_env_value(Val(:n_rai), Y, p)
 
-            @. ᶜwₙᵣ⁰ = getindex(
-                CM2.rain_terminal_velocity(
-                    cm2p.sb,
-                    cm2p.rtv,
-                    max(zero(Y.c.ρ), ᶜq_rai⁰),
-                    ᶜρ⁰,
-                    max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
+            @. ᶜwₙᵣ⁰ = @. lazy(
+                getindex(
+                    CM2.rain_terminal_velocity(
+                        cm2p.sb,
+                        cm2p.rtv,
+                        max(zero(Y.c.ρ), ᶜq_rai⁰),
+                        ᶜρ⁰,
+                        max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
+                    ),
+                    1,
                 ),
-                1,
             )
-            @. ᶜwᵣ⁰ = getindex(
-                CM2.rain_terminal_velocity(
-                    cm2p.sb,
-                    cm2p.rtv,
-                    max(zero(Y.c.ρ), ᶜq_rai⁰),
-                    ᶜρ⁰,
-                    max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
+            ᶜwᵣ⁰ = @. lazy(
+                getindex(
+                    CM2.rain_terminal_velocity(
+                        cm2p.sb,
+                        cm2p.rtv,
+                        max(zero(Y.c.ρ), ᶜq_rai⁰),
+                        ᶜρ⁰,
+                        max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
+                    ),
+                    2,
                 ),
-                2,
             )
-            @. ᶜwₛ⁰ = CM1.terminal_velocity(
-                cm1p.ps,
-                cm1p.tv.snow,
-                ᶜρ⁰,
-                max(zero(Y.c.ρ), ᶜq_sno⁰),
-            )
-            @. ᶜwₙₗ⁰ = getindex(
-                CM2.cloud_terminal_velocity(
-                    cm2p.sb.pdf_c,
-                    cm2p.ctv,
-                    max(zero(Y.c.ρ), ᶜq_liq⁰),
+            ᶜwₛ⁰ = @. lazy(
+                CM1.terminal_velocity(
+                    cm1p.ps,
+                    cm1p.tv.snow,
                     ᶜρ⁰,
-                    max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_liq⁰),
+                    max(zero(Y.c.ρ), ᶜq_sno⁰),
                 ),
-                1,
             )
-            @. ᶜwₗ⁰ = getindex(
-                CM2.cloud_terminal_velocity(
-                    cm2p.sb.pdf_c,
-                    cm2p.ctv,
-                    max(zero(Y.c.ρ), ᶜq_liq⁰),
+            ᶜwₙₗ⁰ = @. lazy(
+                getindex(
+                    CM2.cloud_terminal_velocity(
+                        cm2p.sb.pdf_c,
+                        cm2p.ctv,
+                        max(zero(Y.c.ρ), ᶜq_liq⁰),
+                        ᶜρ⁰,
+                        max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_liq⁰),
+                    ),
+                    1,
+                ),
+            )
+            ᶜwₗ⁰ = @. lazy(
+                getindex(
+                    CM2.cloud_terminal_velocity(
+                        cm2p.sb.pdf_c,
+                        cm2p.ctv,
+                        max(zero(Y.c.ρ), ᶜq_liq⁰),
+                        ᶜρ⁰,
+                        max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_liq⁰),
+                    ),
+                    2,
+                ),
+            )
+            ᶜwᵢ⁰ = @. lazy(
+                CMNe.terminal_velocity(
+                    cmc.ice,
+                    cmc.Ch2022.small_ice,
                     ᶜρ⁰,
-                    max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_liq⁰),
+                    max(zero(Y.c.ρ), ᶜq_ice⁰),
                 ),
-                2,
-            )
-            @. ᶜwᵢ⁰ = CMNe.terminal_velocity(
-                cmc.ice,
-                cmc.Ch2022.small_ice,
-                ᶜρ⁰,
-                max(zero(Y.c.ρ), ᶜq_ice⁰),
             )
 
         end
@@ -231,6 +243,7 @@ function edmfx_sgs_mass_flux_tendency!(
             p.atmos.microphysics_model isa Microphysics2Moment
         )
 
+            ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
             ᶠwₕ³⁰ = @. lazy(
                 ifelse(
                     ᶜmse⁰ + ᶜK⁰ > 0,
@@ -283,7 +296,6 @@ function edmfx_sgs_mass_flux_tendency!(
                 )
             )
         end
-        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
         @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
         vtt = vertical_transport(
             ᶜρ⁰,
