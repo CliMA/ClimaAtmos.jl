@@ -616,7 +616,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             FT(0),
         )
         @. ᶜwₕʲs.:($$j) = ifelse(
-            Y.c.sgsʲs.:($$j).ρa * abs(Y.c.sgsʲs.:($$j).mse + ᶜKʲs) > FT(0),
+            Y.c.sgsʲs.:($$j).ρa * abs(Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j)) > FT(0),
             (
                 ᶜwₗʲs.:($$j) *
                 Y.c.sgsʲs.:($$j).q_liq *
@@ -886,7 +886,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             FT(0),
         )
         @. ᶜwₕʲs.:($$j) = ifelse(
-            Y.c.sgsʲs.:($$j).ρa * abs(Y.c.sgsʲs.:($$j).mse + ᶜKʲs) > FT(0),
+            Y.c.sgsʲs.:($$j).ρa * abs(Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j)) > FT(0),
             (
                 ᶜwₗʲs.:($$j) *
                 Y.c.sgsʲs.:($$j).q_liq *
