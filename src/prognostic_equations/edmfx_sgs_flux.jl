@@ -82,12 +82,12 @@ function edmfx_sgs_mass_flux_tendency!(
         @. ᶜwₜ = ifelse(
             Y.c.ρq_tot < eps(FT),
             FT(0),
-            ᶜwₜqₜ / specific(Y.c.ρq_tot, Y.c.ρ),
+            ᶜwₜqₜ.components.data.:1 / specific(Y.c.ρq_tot, Y.c.ρ),
         )
         @. ᶜwₕ = ifelse(
             Y.c.ρe_tot < eps(FT),
             FT(0),
-            ᶜwₕhₜ / specific(Y.c.ρe_tot, Y.c.ρ),
+            ᶜwₕhₜ.components.data.:1 / specific(Y.c.ρe_tot, Y.c.ρ),
         )
         if p.atmos.moisture_model isa NonEquilMoistModel &&
            p.atmos.microphysics_model isa Microphysics1Moment
@@ -464,7 +464,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 ᶜχ⁰ = ᶜspecific_env_value(Val(χ_name), Y, p)
                 ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
                 ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-                ᶜw⁰ = MatrixFields.get_field(p.precomputed, w_name)
+                ᶜw⁰ = MatrixFields.get_field(p.precomputed, w⁰_name)
                 ᶜw = MatrixFields.get_field(p.precomputed, w_name)
 
                 ᶠw³⁰ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜw⁰)))))
