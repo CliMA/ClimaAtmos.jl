@@ -61,6 +61,7 @@ function edmfx_sgs_mass_flux_tendency!(
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    FT = eltype(Y)
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
         # Enthalpy fluxes. First sum up the draft fluxes
@@ -127,7 +128,7 @@ function edmfx_sgs_mass_flux_tendency!(
             ᶜn_liq⁰ = ᶜspecific_env_value(Val(:n_liq), Y, p)
             ᶜn_rai⁰ = ᶜspecific_env_value(Val(:n_rai), Y, p)
 
-            @. ᶜwₙᵣ⁰ = @. lazy(
+            ᶜwₙᵣ⁰ = @. lazy(
                 getindex(
                     CM2.rain_terminal_velocity(
                         cm2p.sb,
