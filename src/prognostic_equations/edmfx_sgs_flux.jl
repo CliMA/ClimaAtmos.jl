@@ -77,6 +77,18 @@ function edmfx_sgs_mass_flux_tendency!(
                 specific(Y.c.ρe_tot, Y.c.ρ),
             ),
         )
+        ᶜwₜ = p.scratch.ᶜtemp_scalar_2
+        ᶜwₕ = p.scratch.ᶜtemp_scalar_3
+        @. ᶜwₜ = ifelse(
+            Y.c.ρq_tot < eps(FT),
+            FT(0),
+            ᶜwₜqₜ / specific(Y.c.ρq_tot, Y.c.ρ),
+        )
+        @. ᶜwₕ = ifelse(
+            Y.c.ρe_tot < eps(FT),
+            FT(0),
+            ᶜwₕhₜ / specific(Y.c.ρe_tot, Y.c.ρ),
+        )
         if p.atmos.moisture_model isa NonEquilMoistModel &&
            p.atmos.microphysics_model isa Microphysics1Moment
 
@@ -204,27 +216,12 @@ function edmfx_sgs_mass_flux_tendency!(
                     (
                         ᶠu³ʲs.:($$j) +
                         CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕʲs.:($$j))))
-                    ) - (
-                        ᶠu³ + CT3(
-                            ᶠinterp(
-                                Geometry.WVector(
-                                    -1 * ᶜwₕhₜ / specific(Y.c.ρe_tot, Y.c.ρ),
-                                ),
-                            ),
-                        )
-                    )
+                    ) - (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ))))
                 )
             else
                 @. ᶠu³_diff =
-                    ᶠu³ʲs.:($$j) - (
-                        ᶠu³ + CT3(
-                            ᶠinterp(
-                                Geometry.WVector(
-                                    -1 * ᶜwₕhₜ / specific(Y.c.ρe_tot, Y.c.ρ),
-                                ),
-                            ),
-                        )
-                    )
+                    ᶠu³ʲs.:($$j) -
+                    (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ))))
             end
             @. ᶜa_scalar =
                 (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j) - ᶜh_tot) *
@@ -274,28 +271,12 @@ function edmfx_sgs_mass_flux_tendency!(
                 ),
             )
             @. ᶠu³_diff = (
-                (ᶠu³⁰ + ᶠwₕ³⁰) - (
-                    ᶠu³ + CT3(
-                        ᶠinterp(
-                            Geometry.WVector(
-                                -1 * ᶜwₕhₜ / specific(Y.c.ρe_tot, Y.c.ρ),
-                            ),
-                        ),
-                    )
-                )
+                (ᶠu³⁰ + ᶠwₕ³⁰) -
+                (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ))))
             )
         else
-            @. ᶠu³_diff = (
-                ᶠu³⁰ - (
-                    ᶠu³ + CT3(
-                        ᶠinterp(
-                            Geometry.WVector(
-                                -1 * ᶜwₕhₜ / specific(Y.c.ρe_tot, Y.c.ρ),
-                            ),
-                        ),
-                    )
-                )
-            )
+            @. ᶠu³_diff =
+                (ᶠu³⁰ - (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ)))))
         end
         @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
         vtt = vertical_transport(
@@ -319,29 +300,13 @@ function edmfx_sgs_mass_flux_tendency!(
                             ᶠu³ʲs.:($$j) + CT3(
                                 ᶠinterp(Geometry.WVector(-1 * ᶜwₜʲs.:($$j))),
                             )
-                        ) - (
-                            ᶠu³ + CT3(
-                                ᶠinterp(
-                                    Geometry.WVector(
-                                        -1 * ᶜwₜqₜ /
-                                        specific(Y.c.ρq_tot, Y.c.ρ),
-                                    ),
-                                ),
-                            )
-                        )
+                        ) -
+                        (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜ))))
                     )
                 else
                     @. ᶠu³_diff = (
-                        ᶠu³ʲs.:($$j) - (
-                            ᶠu³ + CT3(
-                                ᶠinterp(
-                                    Geometry.WVector(
-                                        -1 * ᶜwₜqₜ /
-                                        specific(Y.c.ρq_tot, Y.c.ρ),
-                                    ),
-                                ),
-                            )
-                        )
+                        ᶠu³ʲs.:($$j) -
+                        (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜ))))
                     )
                 end
                 @. ᶜa_scalar =
@@ -383,28 +348,12 @@ function edmfx_sgs_mass_flux_tendency!(
                 )
 
                 @. ᶠu³_diff = (
-                    (ᶠu³⁰ + ᶠwₜ³⁰) - (
-                        ᶠu³ + CT3(
-                            ᶠinterp(
-                                Geometry.WVector(
-                                    -1 * ᶜwₜqₜ / specific(Y.c.ρq_tot, Y.c.ρ),
-                                ),
-                            ),
-                        )
-                    )
+                    (ᶠu³⁰ + ᶠwₜ³⁰) -
+                    (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜ))))
                 )
             else
-                @. ᶠu³_diff = (
-                    ᶠu³⁰ - (
-                        ᶠu³ + CT3(
-                            ᶠinterp(
-                                Geometry.WVector(
-                                    -1 * ᶜwₜqₜ / specific(Y.c.ρq_tot, Y.c.ρ),
-                                ),
-                            ),
-                        )
-                    )
-                )
+                @. ᶠu³_diff =
+                    (ᶠu³⁰ - (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜ)))))
             end
 
             @. ᶜa_scalar =
