@@ -934,6 +934,15 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":umbrella: Prognostic EDMFX Rico with 2-moment in a column"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_rico_column_2M.yml
+          --job_id prognostic_edmfx_rico_column_2M
+        artifact_paths: "prognostic_edmfx_rico_column_2M/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":umbrella: Prognostic EDMFX TRMM in a column"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
