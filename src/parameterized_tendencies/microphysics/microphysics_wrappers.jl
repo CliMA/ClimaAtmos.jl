@@ -60,7 +60,7 @@ function cloud_sources(
 ) where {FT}
 
     qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
-    qₛₗ = TD.q_vap_saturation_from_density(
+    qₛₗ = TD.q_vap_from_p_vap(
         thp,
         T,
         ρ,
@@ -104,7 +104,7 @@ function cloud_sources(
 
     qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
 
-    qₛᵢ = TD.q_vap_saturation_from_density(
+    qₛᵢ = TD.q_vap_from_p_vap(
         thp,
         T,
         ρ,
