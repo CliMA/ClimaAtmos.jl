@@ -237,13 +237,13 @@ function edmfx_sgs_mass_flux_tendency!(
             )
             @. Yₜ.c.ρe_tot += vtt
         end
+        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
         # Add the environment fluxes
         if p.atmos.moisture_model isa NonEquilMoistModel && (
             p.atmos.microphysics_model isa Microphysics1Moment ||
             p.atmos.microphysics_model isa Microphysics2Moment
         )
 
-            ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
             ᶠwₕ³⁰ = @. lazy(
                 ifelse(
                     ᶜmse⁰ + ᶜK⁰ > 0,
