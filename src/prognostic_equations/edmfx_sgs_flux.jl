@@ -55,7 +55,7 @@ function edmfx_sgs_mass_flux_tendency!(
 
     thermo_params = CAP.thermodynamics_params(p.params)
     cm1p = CAP.microphysics_1m_params(p.params)
-    cm2p = CAP.microphysics_1m_params(p.params)
+    cm2p = CAP.microphysics_2m_params(p.params)
     cmc = CAP.microphysics_cloud_params(p.params)
     ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
@@ -251,22 +251,22 @@ function edmfx_sgs_mass_flux_tendency!(
                     (
                         ᶠinterp(
                             ᶜq_liq⁰ *
-                            (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwₗ⁰, ᶜu⁰))) *
+                            (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ) * # + $(Kin(ᶜwₗ⁰, ᶜu⁰))) *
                             CT3(Geometry.WVector(-1 * ᶜwₗ⁰)),
                         ) +
                         ᶠinterp(
                             ᶜq_ice⁰ *
-                            (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwᵢ⁰, ᶜu⁰))) *
+                            (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ) * # + $(Kin(ᶜwᵢ⁰, ᶜu⁰))) *
                             CT3(Geometry.WVector(-1 * ᶜwᵢ⁰)),
                         ) +
                         ᶠinterp(
                             ᶜq_rai⁰ *
-                            (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwᵣ⁰, ᶜu⁰))) *
+                            (Iₗ(thermo_params, ᶜts⁰) + ᶜΦ) * # + $(Kin(ᶜwᵣ⁰, ᶜu⁰))) *
                             CT3(Geometry.WVector(-1 * ᶜwᵣ⁰)),
                         ) +
                         ᶠinterp(
                             ᶜq_sno⁰ *
-                            (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ + $(Kin(ᶜwₛ⁰, ᶜu⁰))) *
+                            (Iᵢ(thermo_params, ᶜts⁰) + ᶜΦ) * # + $(Kin(ᶜwₛ⁰, ᶜu⁰))) *
                             CT3(Geometry.WVector(-1 * ᶜwₛ⁰)),
                         )
                     ) / (ᶜmse⁰ + ᶜK⁰),
