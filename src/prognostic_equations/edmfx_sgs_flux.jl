@@ -44,7 +44,13 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶜΦ,) = p.core
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts, ᶜu⁰) = p.precomputed
-    (; ᶜwₜqₜ, ᶜwₕhₜ, ᶜwₜʲs, ᶜwₕʲs) = p.precomputed # TODO - cleanup the names here
+
+    if p.atmos.moisture_model isa NonEquilMoistModel && (
+        p.atmos.microphysics_model isa Microphysics1Moment ||
+        p.atmos.microphysics_model isa Microphysics2Moment
+    )
+        (; ᶜwₜqₜ, ᶜwₕhₜ, ᶜwₜʲs, ᶜwₕʲs) = p.precomputed # TODO - cleanup the names here
+    end
 
     thermo_params = CAP.thermodynamics_params(p.params)
     cm1p = CAP.microphysics_1m_params(p.params)
@@ -338,8 +344,10 @@ function edmfx_sgs_mass_flux_tendency!(
             end
             # Add the environment fluxes
             ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
-            if p.atmos.moisture_model isa NonEquilMoistModel &&
-               p.atmos.microphysics_model isa Microphysics1Moment
+            if p.atmos.moisture_model isa NonEquilMoistModel && (
+                p.atmos.microphysics_model isa Microphysics1Moment ||
+                p.atmos.microphysics_model isa Microphysics2Moment
+            )
 
                 ᶠwₜ³⁰ = @. lazy(
                     ifelse(
