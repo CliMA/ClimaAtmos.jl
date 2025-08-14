@@ -631,7 +631,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
                 ᶜwₛʲs.:($$j) *
                 Y.c.sgsʲs.:($$j).q_sno *
                 (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwₛʲs.:($j), ᶜuʲs.:($j))))
-            ) / abs(Y.c.sgsʲs.:($$j).mse + ᶜKʲs),
+            ) / abs(Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j)),
             FT(0),
         )
 
@@ -902,7 +902,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
                 ᶜwₛʲs.:($$j) *
                 Y.c.sgsʲs.:($$j).q_sno *
                 (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwₛʲs.:($j), ᶜuʲs.:($j))))
-            ) / abs(Y.c.sgsʲs.:($$j).mse + ᶜKʲs),
+            ) / abs(Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j)),
             FT(0),
         )
 
