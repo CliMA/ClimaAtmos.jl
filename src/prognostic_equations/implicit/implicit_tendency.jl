@@ -193,15 +193,15 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         )
     end
     if microphysics_model isa Microphysics2Moment
-        (; ᶜwnₗ, ᶜwnᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
+        (; ᶜwₙₗ, ᶜwₙᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρn_liq -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwnₗ)) * specific(Y.c.ρn_liq, Y.c.ρ),
+                Geometry.WVector(-(ᶜwₙₗ)) * specific(Y.c.ρn_liq, Y.c.ρ),
             ),
         )
         @. Yₜ.c.ρn_rai -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwnᵣ)) * specific(Y.c.ρn_rai, Y.c.ρ),
+                Geometry.WVector(-(ᶜwₙᵣ)) * specific(Y.c.ρn_rai, Y.c.ρ),
             ),
         )
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(

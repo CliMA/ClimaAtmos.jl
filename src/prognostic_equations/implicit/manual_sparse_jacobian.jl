@@ -498,8 +498,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         (@name(c.ρq_ice), @name(ᶜwᵢ)),
         (@name(c.ρq_rai), @name(ᶜwᵣ)),
         (@name(c.ρq_sno), @name(ᶜwₛ)),
-        (@name(c.ρn_liq), @name(ᶜwnₗ)),
-        (@name(c.ρn_rai), @name(ᶜwnᵣ)),
+        (@name(c.ρn_liq), @name(ᶜwₙₗ)),
+        (@name(c.ρn_rai), @name(ᶜwₙᵣ)),
     )
     if !(p.atmos.moisture_model isa DryModel) || use_derivative(diffusion_flag)
         ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]

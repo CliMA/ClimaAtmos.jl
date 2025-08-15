@@ -104,7 +104,7 @@ function set_precipitation_velocities!(
     moisture_model::NonEquilMoistModel,
     microphysics_model::Microphysics2Moment,
 )
-    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwnₗ, ᶜwnᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
 
     cmc = CAP.microphysics_cloud_params(p.params)
@@ -114,7 +114,7 @@ function set_precipitation_velocities!(
 
     # compute the precipitation terminal velocity [m/s]
     # TODO sedimentation of snow is based on the 1M scheme
-    @. ᶜwnᵣ = getindex(
+    @. ᶜwₙᵣ = getindex(
         CM2.rain_terminal_velocity(
             cm2p.sb,
             cm2p.rtv,
@@ -142,7 +142,7 @@ function set_precipitation_velocities!(
     )
     # compute sedimentation velocity for cloud condensate [m/s]
     # TODO sedimentation of ice is based on the 1M scheme
-    @. ᶜwnₗ = getindex(
+    @. ᶜwₙₗ = getindex(
         CM2.cloud_terminal_velocity(
             cm2p.sb.pdf_c,
             cm2p.ctv,
