@@ -1,4 +1,4 @@
-259
+260
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+260
+- Change environment TKE to grid-mean TKE
+
 259
 - Fix env boundary values when setting implicit and explicit cache
 

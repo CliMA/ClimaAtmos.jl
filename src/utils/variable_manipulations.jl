@@ -387,12 +387,7 @@ end
 """
     specific_tke(ρ, ρatke, ρa⁰, turbconv_model)
 
-Computes the specific turbulent kinetic energy (TKE) in the environment.
-
-This function returns the specific TKE of the environment by regularizing the
-area-weighted TKE density (`ρatke`) with the environment area-weighted density
-(`ρa⁰`). In the limit of vanishing environment area fraction, the fallback value
-for TKE is zero.
+Computes the grid-meanspecific turbulent kinetic energy (TKE).
 
 Arguments:
 - `ρ`: Grid-mean density.
@@ -403,21 +398,8 @@ Arguments:
 Returns:
 - The specific TKE of the environment (`tke⁰`).
 """
-function specific_tke(ρ, ρatke, ρa⁰, turbconv_model)
-
-    if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
-        return specific(
-            ρatke,    # ρaχ for environment TKE
-            ρa⁰, # ρa for environment, now computed internally
-            0,         # Fallback ρχ is zero for TKE
-            ρ,        # Fallback ρ
-            turbconv_model,
-        )
-    else
-        return specific(ρatke, ρa⁰)
-    end
-end
-
+# TODO: Remove this function once we are confident about the TKE equation
+specific_tke(ρ, ρatke, ρa⁰, turbconv_model) = specific(ρatke, ρ)
 
 """
     ᶜspecific_env_mse(Y, p)
