@@ -286,6 +286,12 @@ steps:
           --job_id baroclinic_wave_conservation
         artifact_paths: "baroclinic_wave_conservation/output_active/*"
 
+      - label: ":computer: baroclinic wave check conservation float64 sparse autodiff"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_conservation_ft64_sparse_autodiff.yml
+          --job_id baroclinic_wave_conservation_ft64_sparse_autodiff
+        artifact_paths: "baroclinic_wave_conservation_ft64_sparse_autodiff/output_active/*"
+
       - label: ":computer: baroclinic wave moist check conservation"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation.yml
@@ -303,7 +309,6 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_equil_conservation_ft64_sparse_autodiff.yml
           --job_id baroclinic_wave_equil_conservation_ft64_sparse_autodiff
         artifact_paths: "baroclinic_wave_equil_conservation_ft64_sparse_autodiff/output_active/*"
-        soft_fail: true
 
       - label: ":computer: baroclinic wave moist check conservation with sources"
         command: >

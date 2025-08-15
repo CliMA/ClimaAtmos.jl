@@ -4,7 +4,7 @@
 A description of how to compute the matrix ``∂R/∂Y``, where ``R(Y)`` denotes the
 residual of an implicit step with the state ``Y``. Concrete implementations of
 this abstract type should define 3 methods:
- - `jacobian_cache(alg::JacobianAlgorithm, Y, atmos; [verbose])`
+ - `jacobian_cache(alg::JacobianAlgorithm, Y, atmos; kwargs...)`
  - `update_jacobian!(alg::JacobianAlgorithm, cache, Y, p, dtγ, t)`
  - `invert_jacobian!(alg::JacobianAlgorithm, cache, ΔY, R)`
 To facilitate debugging, concrete implementations should also define
@@ -17,24 +17,21 @@ abstract type JacobianAlgorithm end
 abstract type SparseJacobian <: JacobianAlgorithm end
 
 """
-    Jacobian(alg, Y, atmos; [verbose])
+    Jacobian(alg, Y, atmos; kwargs...)
 
 Wrapper for a [`JacobianAlgorithm`](@ref) and its cache, which it uses to update
-and invert the Jacobian. The optional `verbose` flag specifies whether debugging
-information should be printed during initialization.
+and invert the Jacobian. Optional keyword arguments can also be passed to
+some algorithms during construction.
 """
 struct Jacobian{A <: JacobianAlgorithm, C}
     alg::A
     cache::C
 end
-function Jacobian(alg, Y, atmos; verbose = false)
+function Jacobian(alg, Y, atmos; kwargs...)
     krylov_cache = (; ΔY_krylov = similar(Y), R_krylov = similar(Y))
-    cache = (; jacobian_cache(alg, Y, atmos; verbose)..., krylov_cache...)
+    cache = (; jacobian_cache(alg, Y, atmos; kwargs...)..., krylov_cache...)
     return Jacobian(alg, cache)
 end
-
-# Ignore the verbose flag in jacobian_cache when it is not needed.
-jacobian_cache(alg, Y, atmos; verbose) = jacobian_cache(alg, Y, atmos)
 
 # ClimaTimeSteppers.jl calls zero(jac_prototype) to initialize the Jacobian, but
 # we don't need to allocate a second Jacobian for this (in particular, the exact

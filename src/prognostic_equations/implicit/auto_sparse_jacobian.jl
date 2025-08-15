@@ -23,7 +23,13 @@ end
 AutoSparseJacobian(sparse_jacobian_alg) =
     AutoSparseJacobian(sparse_jacobian_alg, nothing)
 
-function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
+function jacobian_cache(
+    alg::AutoSparseJacobian,
+    Y,
+    atmos;
+    verbose = true,
+    kwargs...,
+)
     (; sparse_jacobian_alg, padding_bands_per_block) = alg
 
     FT = eltype(Y)
@@ -38,10 +44,13 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
     scratch = implicit_temporary_quantities(Y, atmos)
 
     # Allocate ∂R/∂Y and its corresponding linear solver.
+    sparse_jacobian_cache =
+        jacobian_cache(sparse_jacobian_alg, Y, atmos; verbose, auto_pad = true)
+
     # TODO: Add FieldNameTree(Y) to the matrix in FieldMatrixWithSolver. The
     # tree is needed to evaluate scalar_tendency_matrix[autodiff_matrix_keys].
-    # (; matrix) = jacobian_cache(sparse_jacobian_alg, Y, atmos)
-    matrix_without_tree = jacobian_cache(sparse_jacobian_alg, Y, atmos).matrix
+    # (; matrix) = sparse_jacobian_cache
+    matrix_without_tree = sparse_jacobian_cache.matrix
     tree = MatrixFields.FieldNameTree(Y)
     matrix = MatrixFields.FieldMatrixWithSolver(
         MatrixFields.replace_name_tree(matrix_without_tree.matrix, tree),
@@ -138,6 +147,17 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         max_padding_bands = if !isnothing(padding_bands_per_block)
             padding_bands_per_block
         elseif (
+            block_row_name == @name(c.ρe_tot) &&
+            block_column_name in
+            (@name(c.ρ), @name(c.ρe_tot), uₕ_component_names...) &&
+            !(block_key in keys(autodiff_matrix))
+        )
+            # ‖∂ᶜρe_totₜ/∂ᶜχ‖ ≳ ‖∂ᶜρe_totₜ/∂ᶠu₃‖ / 10^12 for any center field ᶜχ.
+            # The ∂ᶜρe_totₜ/∂ᶠu₃ block is critical for conservation of energy,
+            # and even relative errors as small as one part in a trillion can
+            # noticeably degrade conservation with Float64 precision.
+            3
+        elseif (
             (
                 block_row_name in uₕ_component_names &&
                 block_column_name in (mass_names..., @name(c.sgs⁰.ρatke)) ||
@@ -169,7 +189,7 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
             #   relatively smaller than ‖δᶜρaʲ‖.
             # - ‖∂ᶠu₃ʲₜ/∂ᶜu₁‖ and ‖∂ᶠu₃ʲₜ/∂ᶜu₁‖ ≳ ‖∂ᶠu₃ʲₜ/∂ᶠu₃ʲ‖, as long as
             #   ‖δᶜu₁‖ and ‖δᶜu₂‖ are relatively smaller than ‖δᶠu₃ʲ‖.
-            # Diagonal blocks are critical for conservation and stability, so
+            # Diagonal blocks are important for conservation and stability, so
             # these potential errors from off-diagonal blocks should be avoided.
             3
         elseif (
