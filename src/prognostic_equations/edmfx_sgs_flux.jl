@@ -263,8 +263,8 @@ function edmfx_sgs_mass_flux_tendency!(
             if sedimentation_modelling
                 @. ᶠu³_diff =
                     ᶠu³ʲs.:($$j) +
-                    CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕʲs.:($$j))))
-                -(ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ))))
+                    CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕʲs.:($$j)))) -
+                    (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ))))
             else
                 @. ᶠu³_diff =
                     ᶠu³ʲs.:($$j) -
