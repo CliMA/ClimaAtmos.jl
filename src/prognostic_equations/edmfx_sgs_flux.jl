@@ -351,58 +351,58 @@ function edmfx_sgs_mass_flux_tendency!(
         if sedimentation_modelling
             microphysics_tracers = (
                 (
-                    @name(c.sgsʲs.:(1).q_liq),
                     @name(c.ρq_liq),
-                    :q_liq,
+                    @name(ᶜwₗ),
+                    @name(c.sgsʲs.:(1).q_liq),
                     @name(ᶜwₗʲs.:(1)),
+                    :q_liq,
                     :ᶜwₗ⁰,
-                    @name(ᶜwₗ)
                 ),
                 (
-                    @name(c.sgsʲs.:(1).q_ice),
                     @name(c.ρq_ice),
-                    :q_ice,
+                    @name(ᶜwᵢ),
+                    @name(c.sgsʲs.:(1).q_ice),
                     @name(ᶜwᵢʲs.:(1)),
+                    :q_ice,
                     :ᶜwᵢ⁰,
-                    @name(ᶜwᵢ)
                 ),
                 (
-                    @name(c.sgsʲs.:(1).q_rai),
                     @name(c.ρq_rai),
-                    :q_rai,
+                    @name(ᶜwᵣ),
+                    @name(c.sgsʲs.:(1).q_rai),
                     @name(ᶜwᵣʲs.:(1)),
+                    :q_rai,
                     :ᶜwᵣ⁰,
-                    @name(ᶜwᵣ)
                 ),
                 (
-                    @name(c.sgsʲs.:(1).q_sno),
                     @name(c.ρq_sno),
-                    :q_sno,
+                    @name(ᶜwₛ),
+                    @name(c.sgsʲs.:(1).q_sno),
                     @name(ᶜwₛʲs.:(1)),
+                    :q_sno,
                     :ᶜwₛ⁰,
-                    @name(ᶜwₛ)
                 ),
                 (
-                    @name(c.sgsʲs.:(1).n_liq),
                     @name(c.ρn_liq),
-                    :n_liq,
+                    @name(ᶜwₙₗ),
+                    @name(c.sgsʲs.:(1).n_liq),
                     @name(ᶜwₙₗʲs.:(1)),
+                    :n_liq,
                     :ᶜwₙₗ⁰,
-                    @name(ᶜwₙₗ)
                 ),
                 (
-                    @name(c.sgsʲs.:(1).n_rai),
                     @name(c.ρn_rai),
-                    :n_rai,
+                    @name(ᶜwₙᵣ),
+                    @name(c.sgsʲs.:(1).n_rai),
                     @name(ᶜwₙᵣʲs.:(1)),
+                    :n_rai,
                     :ᶜwₙᵣ⁰,
-                    @name(ᶜwₙᵣ)
                 ),
             )
             for j in 1:n
                 MatrixFields.unrolled_foreach(
                     microphysics_tracers,
-                ) do (χʲ_name, ρχ_name, _, wʲ_name, _, w_name)
+                ) do (ρχ_name, w_name, χʲ_name, wʲ_name, _, _)
                     MatrixFields.has_field(Y, ρχ_name) || return
 
                     ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
@@ -432,7 +432,7 @@ function edmfx_sgs_mass_flux_tendency!(
             end
             MatrixFields.unrolled_foreach(
                 microphysics_tracers,
-            ) do (_, ρχ_name, χ_name, _, w⁰_name, w_name)
+            ) do (ρχ_name, w_name, _, _, χ_name, w⁰_name)
                 MatrixFields.has_field(Y, ρχ_name) || return
 
                 ᶜχ⁰ = ᶜspecific_env_value(Val(χ_name), Y, p)
