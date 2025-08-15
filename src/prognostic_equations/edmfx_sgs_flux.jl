@@ -46,13 +46,6 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts, ᶜu⁰) = p.precomputed
     (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
 
-    if p.atmos.moisture_model isa NonEquilMoistModel && (
-        p.atmos.microphysics_model isa Microphysics1Moment ||
-        p.atmos.microphysics_model isa Microphysics2Moment
-    )
-        (; ᶜwₜʲs, ᶜwₕʲs) = p.precomputed
-    end
-
     thermo_params = CAP.thermodynamics_params(p.params)
     cm1p = CAP.microphysics_1m_params(p.params)
     cm2p = CAP.microphysics_2m_params(p.params)
@@ -60,23 +53,22 @@ function edmfx_sgs_mass_flux_tendency!(
     ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     (; dt) = p
-    ᶜJ = Fields.local_geometry_field(Y.c).J
     FT = eltype(Y)
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
-        # Enthalpy fluxes. First sum up the draft fluxes
-        # TODO: Isolate assembly of flux term pattern to a function and
-        # reuse (both in prognostic and diagnostic EDMFX)
-        # [best after removal of precomputed quantities]
-        ᶠu³_diff = p.scratch.ᶠtemp_CT3
-        ᶜa_scalar = p.scratch.ᶜtemp_scalar
-        ᶜh_tot = @. lazy(
-            TD.total_specific_enthalpy(
-                thermo_params,
-                ᶜts,
-                specific(Y.c.ρe_tot, Y.c.ρ),
-            ),
-        )
+
+        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
+        if !(p.atmos.moisture_model isa DryModel)
+            ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
+        end
+        sedimentation_modelling =
+            p.atmos.moisture_model isa NonEquilMoistModel && (
+                p.atmos.microphysics_model isa Microphysics1Moment ||
+                p.atmos.microphysics_model isa Microphysics2Moment
+            )
+
+        # Compute sedimentation velocities (if not available in cache)
+        # gs velocity of qtot
         ᶜwₜ = @. lazy(
             ifelse(
                 Y.c.ρq_tot < eps(FT),
@@ -84,6 +76,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 ᶜwₜqₜ.components.data.:1 / specific(Y.c.ρq_tot, Y.c.ρ),
             ),
         )
+        # gs velocity of htot
         ᶜwₕ = @. lazy(
             ifelse(
                 Y.c.ρe_tot < eps(FT),
@@ -91,6 +84,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 ᶜwₕhₜ.components.data.:1 / specific(Y.c.ρe_tot, Y.c.ρ),
             ),
         )
+        # env velocities
         if p.atmos.moisture_model isa NonEquilMoistModel &&
            p.atmos.microphysics_model isa Microphysics1Moment
 
@@ -207,42 +201,8 @@ function edmfx_sgs_mass_flux_tendency!(
             env_tvs = (; ᶜwₙᵣ⁰, ᶜwᵣ⁰, ᶜwₛ⁰, ᶜwₙₗ⁰, ᶜwₗ⁰, ᶜwᵢ⁰)
 
         end
-
-        for j in 1:n
-            if p.atmos.moisture_model isa NonEquilMoistModel && (
-                p.atmos.microphysics_model isa Microphysics1Moment ||
-                p.atmos.microphysics_model isa Microphysics2Moment
-            )
-                @. ᶠu³_diff = (
-                    (
-                        ᶠu³ʲs.:($$j) +
-                        CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕʲs.:($$j))))
-                    ) - (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ))))
-                )
-            else
-                @. ᶠu³_diff =
-                    ᶠu³ʲs.:($$j) -
-                    (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ))))
-            end
-            @. ᶜa_scalar =
-                (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j) - ᶜh_tot) *
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-            vtt = vertical_transport(
-                ᶜρʲs.:($j),
-                ᶠu³_diff,
-                ᶜa_scalar,
-                dt,
-                edmfx_sgsflux_upwinding,
-            )
-            @. Yₜ.c.ρe_tot += vtt
-        end
-        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-        # Add the environment fluxes
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
-        )
-
+        if sedimentation_modelling
+            (; ᶜwₜʲs, ᶜwₕʲs) = p.precomputed
             ᶠwₕ³⁰ = @. lazy(
                 ifelse(
                     ᶠinterp(ᶜmse⁰ + ᶜK⁰) > 0,
@@ -271,13 +231,63 @@ function edmfx_sgs_mass_flux_tendency!(
                     FT(0),
                 ),
             )
-            @. ᶠu³_diff = (
-                (ᶠu³⁰ + ᶠwₕ³⁰) -
-                (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ))))
+            ᶠwₜ³⁰ = @. lazy(
+                ifelse(
+                    ᶠinterp(ᶜq_tot⁰) > FT(0),
+                    (
+                        ᶠinterp(ᶜq_liq⁰ * CT3(Geometry.WVector(-1 * ᶜwₗ⁰))) +
+                        ᶠinterp(ᶜq_ice⁰ * CT3(Geometry.WVector(-1 * ᶜwᵢ⁰))) +
+                        ᶠinterp(ᶜq_rai⁰ * CT3(Geometry.WVector(-1 * ᶜwᵣ⁰))) +
+                        ᶠinterp(ᶜq_sno⁰ * CT3(Geometry.WVector(-1 * ᶜwₛ⁰)))
+                    ) / ᶠinterp(ᶜq_tot⁰),
+                    FT(0),
+                ),
             )
+        end
+
+        # Enthalpy fluxes. First sum up the draft fluxes
+        # TODO: Isolate assembly of flux term pattern to a function and
+        # reuse (both in prognostic and diagnostic EDMFX)
+        # [best after removal of precomputed quantities]
+        ᶠu³_diff = p.scratch.ᶠtemp_CT3
+        ᶜa_scalar = p.scratch.ᶜtemp_scalar
+        ᶜh_tot = @. lazy(
+            TD.total_specific_enthalpy(
+                thermo_params,
+                ᶜts,
+                specific(Y.c.ρe_tot, Y.c.ρ),
+            ),
+        )
+        for j in 1:n
+            if sedimentation_modelling
+                @. ᶠu³_diff =
+                    ᶠu³ʲs.:($$j) +
+                    CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕʲs.:($$j))))
+                -(ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ))))
+            else
+                @. ᶠu³_diff =
+                    ᶠu³ʲs.:($$j) -
+                    (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ))))
+            end
+            @. ᶜa_scalar =
+                (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j) - ᶜh_tot) *
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+            vtt = vertical_transport(
+                ᶜρʲs.:($j),
+                ᶠu³_diff,
+                ᶜa_scalar,
+                dt,
+                edmfx_sgsflux_upwinding,
+            )
+            @. Yₜ.c.ρe_tot += vtt
+        end
+        # Add the environment fluxes
+        if sedimentation_modelling
+            @. ᶠu³_diff =
+                ᶠu³⁰ + ᶠwₕ³⁰ - (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ))))
         else
             @. ᶠu³_diff =
-                (ᶠu³⁰ - (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ)))))
+                ᶠu³⁰ - (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕ))))
         end
         @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
         vtt = vertical_transport(
@@ -292,23 +302,15 @@ function edmfx_sgs_mass_flux_tendency!(
         if !(p.atmos.moisture_model isa DryModel)
             # Specific humidity fluxes: First sum up the draft fluxes
             for j in 1:n
-                if p.atmos.moisture_model isa NonEquilMoistModel && (
-                    p.atmos.microphysics_model isa Microphysics1Moment ||
-                    p.atmos.microphysics_model isa Microphysics2Moment
-                )
-                    @. ᶠu³_diff = (
-                        (
-                            ᶠu³ʲs.:($$j) + CT3(
-                                ᶠinterp(Geometry.WVector(-1 * ᶜwₜʲs.:($$j))),
-                            )
-                        ) -
+                if sedimentation_modelling
+                    @. ᶠu³_diff =
+                        ᶠu³ʲs.:($$j) +
+                        CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜʲs.:($$j)))) -
                         (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜ))))
-                    )
                 else
-                    @. ᶠu³_diff = (
+                    @. ᶠu³_diff =
                         ᶠu³ʲs.:($$j) -
                         (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜ))))
-                    )
                 end
                 @. ᶜa_scalar =
                     (Y.c.sgsʲs.:($$j).q_tot - specific(Y.c.ρq_tot, Y.c.ρ)) *
@@ -323,38 +325,13 @@ function edmfx_sgs_mass_flux_tendency!(
                 @. Yₜ.c.ρq_tot += vtt
             end
             # Add the environment fluxes
-            ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
-            if p.atmos.moisture_model isa NonEquilMoistModel && (
-                p.atmos.microphysics_model isa Microphysics1Moment ||
-                p.atmos.microphysics_model isa Microphysics2Moment
-            )
-
-                ᶠwₜ³⁰ = @. lazy(
-                    ifelse(
-                        ᶠinterp(ᶜq_tot⁰) > FT(0),
-                        (
-                            ᶠinterp(
-                                ᶜq_liq⁰ * CT3(Geometry.WVector(-1 * ᶜwₗ⁰)),
-                            ) +
-                            ᶠinterp(
-                                ᶜq_ice⁰ * CT3(Geometry.WVector(-1 * ᶜwᵢ⁰)),
-                            ) +
-                            ᶠinterp(
-                                ᶜq_rai⁰ * CT3(Geometry.WVector(-1 * ᶜwᵣ⁰)),
-                            ) +
-                            ᶠinterp(ᶜq_sno⁰ * CT3(Geometry.WVector(-1 * ᶜwₛ⁰)))
-                        ) / ᶠinterp(ᶜq_tot⁰),
-                        FT(0),
-                    ),
-                )
-
-                @. ᶠu³_diff = (
-                    (ᶠu³⁰ + ᶠwₜ³⁰) -
+            if sedimentation_modelling
+                @. ᶠu³_diff =
+                    ᶠu³⁰ + ᶠwₜ³⁰ -
                     (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜ))))
-                )
             else
                 @. ᶠu³_diff =
-                    (ᶠu³⁰ - (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜ)))))
+                    ᶠu³⁰ - (ᶠu³ + CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜ))))
             end
 
             @. ᶜa_scalar =
@@ -370,62 +347,57 @@ function edmfx_sgs_mass_flux_tendency!(
         end
 
         # Microphysics tracers fluxes
-        microphysics_tracers = (
-            (
-                @name(c.sgsʲs.:(1).q_liq),
-                @name(c.ρq_liq),
-                :q_liq,
-                @name(ᶜwₗʲs.:(1)),
-                :ᶜwₗ⁰,
-                @name(ᶜwₗ)
-            ),
-            (
-                @name(c.sgsʲs.:(1).q_ice),
-                @name(c.ρq_ice),
-                :q_ice,
-                @name(ᶜwᵢʲs.:(1)),
-                :ᶜwᵢ⁰,
-                @name(ᶜwᵢ)
-            ),
-            (
-                @name(c.sgsʲs.:(1).q_rai),
-                @name(c.ρq_rai),
-                :q_rai,
-                @name(ᶜwᵣʲs.:(1)),
-                :ᶜwᵣ⁰,
-                @name(ᶜwᵣ)
-            ),
-            (
-                @name(c.sgsʲs.:(1).q_sno),
-                @name(c.ρq_sno),
-                :q_sno,
-                @name(ᶜwₛʲs.:(1)),
-                :ᶜwₛ⁰,
-                @name(ᶜwₛ)
-            ),
-            (
-                @name(c.sgsʲs.:(1).n_liq),
-                @name(c.ρn_liq),
-                :n_liq,
-                @name(ᶜwₙₗʲs.:(1)),
-                :ᶜwₙₗ⁰,
-                @name(ᶜwₙₗ)
-            ),
-            (
-                @name(c.sgsʲs.:(1).n_rai),
-                @name(c.ρn_rai),
-                :n_rai,
-                @name(ᶜwₙᵣʲs.:(1)),
-                :ᶜwₙᵣ⁰,
-                @name(ᶜwₙᵣ)
-            ),
-        )
-
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
-        )
-
+        if sedimentation_modelling
+            microphysics_tracers = (
+                (
+                    @name(c.sgsʲs.:(1).q_liq),
+                    @name(c.ρq_liq),
+                    :q_liq,
+                    @name(ᶜwₗʲs.:(1)),
+                    :ᶜwₗ⁰,
+                    @name(ᶜwₗ)
+                ),
+                (
+                    @name(c.sgsʲs.:(1).q_ice),
+                    @name(c.ρq_ice),
+                    :q_ice,
+                    @name(ᶜwᵢʲs.:(1)),
+                    :ᶜwᵢ⁰,
+                    @name(ᶜwᵢ)
+                ),
+                (
+                    @name(c.sgsʲs.:(1).q_rai),
+                    @name(c.ρq_rai),
+                    :q_rai,
+                    @name(ᶜwᵣʲs.:(1)),
+                    :ᶜwᵣ⁰,
+                    @name(ᶜwᵣ)
+                ),
+                (
+                    @name(c.sgsʲs.:(1).q_sno),
+                    @name(c.ρq_sno),
+                    :q_sno,
+                    @name(ᶜwₛʲs.:(1)),
+                    :ᶜwₛ⁰,
+                    @name(ᶜwₛ)
+                ),
+                (
+                    @name(c.sgsʲs.:(1).n_liq),
+                    @name(c.ρn_liq),
+                    :n_liq,
+                    @name(ᶜwₙₗʲs.:(1)),
+                    :ᶜwₙₗ⁰,
+                    @name(ᶜwₙₗ)
+                ),
+                (
+                    @name(c.sgsʲs.:(1).n_rai),
+                    @name(c.ρn_rai),
+                    :n_rai,
+                    @name(ᶜwₙᵣʲs.:(1)),
+                    :ᶜwₙᵣ⁰,
+                    @name(ᶜwₙᵣ)
+                ),
+            )
             for j in 1:n
                 MatrixFields.unrolled_foreach(
                     microphysics_tracers,
