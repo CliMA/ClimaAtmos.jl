@@ -51,7 +51,7 @@ addprocs(
     #include("observation_map.jl")
 
     experiment_dir = dirname(Base.active_project())
-    const model_interface = joinpath(experiment_dir, "model_interface.jl")
+    const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")
     # const experiment_config =
     #     YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
