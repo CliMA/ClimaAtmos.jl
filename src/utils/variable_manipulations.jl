@@ -403,21 +403,7 @@ Arguments:
 Returns:
 - The specific TKE of the environment (`tke⁰`).
 """
-function specific_tke(ρ, ρatke, ρa⁰, turbconv_model)
-
-    if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
-        return specific(
-            ρatke,    # ρaχ for environment TKE
-            ρa⁰, # ρa for environment, now computed internally
-            0,         # Fallback ρχ is zero for TKE
-            ρ,        # Fallback ρ
-            turbconv_model,
-        )
-    else
-        return specific(ρatke, ρa⁰)
-    end
-end
-
+specific_tke(ρ, ρatke, ρa⁰, turbconv_model) = specific(ρatke, ρ)
 
 """
     ᶜspecific_env_mse(Y, p)
