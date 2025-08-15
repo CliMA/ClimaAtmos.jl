@@ -45,13 +45,6 @@ include(joinpath("cache", "cloud_fraction.jl"))
 include(joinpath("cache", "surface_albedo.jl"))
 
 include(joinpath("initial_conditions", "InitialConditions.jl"))
-include(
-    joinpath(
-        "parameterized_tendencies",
-        "turbulence_convection",
-        "tc_functions.jl",
-    ),
-)
 include(joinpath("surface_conditions", "SurfaceConditions.jl"))
 include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
 
