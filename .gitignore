@@ -60,10 +60,6 @@ Artifacts.toml
 
 # ignore LWP-N related files
 LWP_N*
-make_yaml.jl
-process_plot_outputs.jl
-driver.jl
-ci_plots_extension.jl
 
 # ignore notebooks
 *.ipynb
