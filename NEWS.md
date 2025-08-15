@@ -4,6 +4,9 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+v0.31.2
+-------
+
 ### Add RWP diagnostic
 PR [#3946](https://github.com/CliMA/ClimaAtmos.jl/pull/3946) adds rainwater path diagnostic variable.
 
