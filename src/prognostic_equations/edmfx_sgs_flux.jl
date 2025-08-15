@@ -68,20 +68,20 @@ function edmfx_sgs_mass_flux_tendency!(
             )
 
         # Compute sedimentation velocities (if not available in cache)
-        # gs velocity of qtot
-        ᶜwₜ = @. lazy(
-            ifelse(
-                Y.c.ρq_tot < eps(FT),
-                FT(0),
-                ᶜwₜqₜ.components.data.:1 / specific(Y.c.ρq_tot, Y.c.ρ),
-            ),
-        )
         # gs velocity of htot
         ᶜwₕ = @. lazy(
             ifelse(
                 Y.c.ρe_tot < eps(FT),
                 FT(0),
                 ᶜwₕhₜ.components.data.:1 / specific(Y.c.ρe_tot, Y.c.ρ),
+            ),
+        )
+        # gs velocity of qtot
+        ᶜwₜ = @. lazy(
+            ifelse(
+                Y.c.ρq_tot < eps(FT),
+                FT(0),
+                ᶜwₜqₜ.components.data.:1 / specific(Y.c.ρq_tot, Y.c.ρ),
             ),
         )
         # env velocities
@@ -201,6 +201,7 @@ function edmfx_sgs_mass_flux_tendency!(
             env_tvs = (; ᶜwₙᵣ⁰, ᶜwᵣ⁰, ᶜwₛ⁰, ᶜwₙₗ⁰, ᶜwₗ⁰, ᶜwᵢ⁰)
 
         end
+        # sgs velocities of htot and qtot
         if sedimentation_modelling
             (; ᶜwₜʲs, ᶜwₕʲs) = p.precomputed
             ᶠwₕ³⁰ = @. lazy(
