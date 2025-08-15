@@ -309,10 +309,11 @@ function surface_state_to_conditions(
                     ts,
                     SF.PointValueScheme(),
                 )
-                gustiness = get_wstar(buoyancy_flux)
                 # TODO: We are assuming that the average mixed layer depth is
                 # always 1000 meters. This needs to be adjusted for deep
                 # convective cases like TRMM.
+                zi = FT(1000)
+                gustiness = cbrt(max(buoyancy_flux * zi, 0))
             else
                 gustiness = surf_state.gustiness
             end
