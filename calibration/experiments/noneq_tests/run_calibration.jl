@@ -17,6 +17,10 @@ const prior = PD.combine_distributions(prior_vec)
 
 model_config = "diagnostic_edmfx_diurnal_scm_imp_noneq_1M.yml"
 
+ensemble_size = 10 # what should i be setting this to?
+n_iterations = 10
+output_dir = "EKI_output"
+
 # WRITE & PASS IN MY GROUND TRUTH GUYS
 # τₗ_truth = 800
 # τᵢ_truth = 5000
@@ -30,6 +34,7 @@ push!(config_dict["toml"], truth_toml)
 atmos_config = CA.AtmosConfig(config_dict) # ADD PARAM DICT HERE W TRUTH VALS
 diag_sim = CA.AtmosSimulation(atmos_config)
 CA.solve_atmos!(diag_sim)
+
 
 
 # add workers
@@ -78,7 +83,6 @@ ekp_obj = EKP.EnsembleKalmanProcess(
     verbose= true,
 )
 
-n_iterations = 10
-output_dir = "EKI_output"
+
 
 eki = CAL.calibrate(CAL.WorkerBackend, ekp_obj, n_iterations, prior, output_dir; failure_rate = 0.9)
