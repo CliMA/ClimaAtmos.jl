@@ -17,10 +17,11 @@ function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
     FT = eltype(elev)
     bfscale = FT(1e-2)
 
+    # @Main.infiltrate
     # compute ∇h
     @. elev = max(0, elev)
     dhdx, dhdy = calc_∇A(elev, lon, lat, earth_radius)
-
+    # @Main.infiltrate
     # compute ∇χ
     # dχdx, dχdy = -bfscale .* calc_∇A(χ, lon, lat, earth_radius)
     # TODO: This needs to be double checked with Steve Garner.
@@ -28,11 +29,11 @@ function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
     # later divided again when creating the file that contains the actual T tensor
     # being used.
     dχdx, dχdy = .-calc_∇A(χ, lon, lat, earth_radius)
-
+    # @Main.infiltrate
     # for antarctic
     dχdx[:, lat .< FT(-88)] .= FT(0)
     dχdy[:, lat .< FT(-88)] .= FT(0)
-
+    # @Main.infiltrate
     t11 = dχdx .* dhdx
     t21 = dχdx .* dhdy
     t12 = dχdy .* dhdx
@@ -74,104 +75,147 @@ end
 """
     calc_velocity_potential(elev, lon, lat, earth_radius)
     
-    Calculate velocity potential
+    Calculate velocity potential - corrected version matching Fortran implementation
     - elev: surface elevation
-    - lon: longitude
-    - lat: latitude
-    - earth_radius: radius of the Earth 
+    - lon: longitude vector
+    - lat: latitude vector  
+    - earth_radius: radius of the Earth
 """
 function calc_velocity_potential(elev, lon, lat, earth_radius)
     @info "Computing velocity potential..."
     FT = eltype(elev)
+    
+    # Ensure non-negative elevation
     @. elev = max(0, elev)
-
-    dlat = lat[2] - lat[1]
-    dlon = lon[2] - lon[1]
-
-    scale =
-        sind(40) ./ earth_radius ./ sind.(max.(FT(20), abs.(lat))) .* FT(100e3) # FT(200e3) is used in the codes sent by Steve Garner
-
-    # compute weights for the spatial running mean using the Blackman kernel
-    ilat_range = Int.(round.(scale ./ deg2rad(dlat)))
-    ilon_range =
-        min.(
-            Int.(round.(scale ./ (deg2rad(dlon) .* cosd.(lat)))),
-            Int(round(length(lon) / 8)),
-        )
-
-    χ = zeros(size(elev))
-    for (i, ilon) in enumerate(lon)
-        for (j, jlat) in enumerate(lat)
-            # irange may not need clipping at the boundaries since it is on the closed lat circle
-            irange =
-                max(i - ilon_range[j], 1):min(i + ilon_range[j], length(lon))
-            jrange =
-                max(j - ilat_range[j], 1):min(j + ilat_range[j], length(lat))
-
-            # compute weights for spatial (area) integration
-            arc =
-                acos.(
-                    min.(
-                        FT(1),
-                        reshape(
-                            repeat(
-                                cosd(jlat) .* cosd.(lat[jrange]),
-                                length(irange),
-                            ),
-                            length(jrange),
-                            :,
-                        )' .* reshape(
-                            repeat(cosd.(ilon .- lon[irange]), length(jrange)),
-                            length(irange),
-                            :,
-                        ) .+
-                        reshape(
-                            repeat(
-                                sind(jlat) .* sind.(lat[jrange]),
-                                length(irange),
-                            ),
-                            length(jrange),
-                            :,
-                        )',
-                    )
-                )
-            arc1 = arc ./ max.(arc, scale[j])
-            wts =
-                reshape(
-                    repeat(cosd.(lat[jrange]), length(irange)),
-                    length(jrange),
-                    :,
-                )' ./ (arc .+ eps(FT)) .* (
-                    FT(0.42) .+ FT(0.50) .* cos.(pi * arc1) .+
-                    FT(0.08) .* cos.(FT(2) * pi * arc1)
-                )
-            if (i != irange[1] - 1) & (j != jrange[1] - 1)
-                wts[i - irange[1] + 1, j - jrange[1] + 1] = FT(0)
+    
+    nx, ny = size(elev)
+    @assert nx == length(lon)
+    @assert ny == length(lat)
+    
+    # Grid spacing in radians
+    dlam = deg2rad(lon[2] - lon[1])  # longitude spacing in radians
+    dphi = deg2rad(lat[2] - lat[1])  # latitude spacing in radians
+    
+    # Pre-compute trigonometric values for latitude
+    phi = deg2rad.(lat)
+    cosphi = cos.(phi)
+    sinphi = sin.(phi)
+    
+    # Pre-compute cosine values for longitude differences
+    # Fortran: do i=0,lx; cosdlam(i) = cos(i*dlam); enddo
+    cosdlam = [cos(i * dlam) for i in 0:nx]
+    
+    # Scale parameter (matching Fortran's scale array)
+    scale = sind(40) ./ earth_radius ./ sind.(max.(FT(20), abs.(lat))) .* FT(100e3)
+    
+    # Initialize output
+    χ = zeros(FT, nx, ny)
+    
+    # Main loop over output grid points
+    for j in 1:ny
+        # Skip poles (matching Fortran: if abs(lat(j)) > 89 cycle)
+        if abs(lat[j]) > 89
+            continue
+        end
+        
+        cj = cosphi[j]
+        sj = sinphi[j]
+        dlamj = dlam * cj
+        
+        # Compute search radii in grid points
+        # Fortran: idiff = int( scale(j)/dlamj ); idiff = min(idiff,lx/8)
+        # Handle potential division by very small dlamj at high latitudes
+        if dlamj > FT(1e-10)
+            idiff = Int(trunc(scale[j] / dlamj))  # Fortran int() is truncation, not rounding
+        else
+            idiff = div(nx, 8)  # Use maximum allowed value
+        end
+        idiff = min(idiff, div(nx, 8))
+        jdiff = Int(trunc(scale[j] / dphi))  # Fortran int() is truncation
+        
+        # Latitude bounds for integration
+        # Fortran: ja = max( ly1, j - jdiff ); jb = min( ly2, j + jdiff )
+        ja = max(1, j - jdiff)
+        jb = min(ny, j + jdiff)
+        
+        # Additional safety check to prevent excessive ranges
+        if (jb - ja) > div(ny, 2)
+            jdiff = min(jdiff, div(ny, 4))
+            ja = max(1, j - jdiff)
+            jb = min(ny, j + jdiff)
+        end
+        
+        # Pre-compute weights for this latitude
+        # Fortran: real, dimension(0:lx/8+1,ly1:ly2) :: wt
+        wt = zeros(FT, idiff + 1, ny)
+        
+        # Fortran: do j1=ja+1,jb
+        for j1 in (ja+1):jb
+            cj1 = cosphi[j1]
+            sj1 = sinphi[j1]
+            ccj = cj * cj1
+            ssj = sj * sj1
+            
+            # Fortran: do i2=0,idiff
+            for i2 in 0:idiff
+                # Great circle distance
+                arc = acos(min(FT(1), ccj * cosdlam[i2+1] + ssj))
+                arc1 = arc / max(arc, scale[j])
+                
+                # Blackman window weight
+                wt[i2+1, j1] = cj1 / (arc + FT(1e-12)) * 
+                    (FT(0.42) + FT(0.50) * cos(π * arc1) + FT(0.08) * cos(2π * arc1))
             end
-            # calculate the spatial integration
-            χ[i, j] = sum(wts .* elev[irange, jrange])
+            
+            # Zero weight at same point (matching Fortran: if (j == j1) wt(0,j1) = 0.)
+            if j == j1
+                wt[1, j1] = FT(0)
+            end
+        end
+        
+        # Now compute the convolution for each longitude
+        # Fortran: do i=ix1,ix2
+        for i in 1:nx
+            # Longitude bounds for integration
+            # Fortran: ia = max( lx1, i - idiff ); ib = min( lx2, i + idiff )
+            ia = max(1, i - idiff)
+            ib = min(nx, i + idiff)
+            
+            # Accumulate weighted sum
+            # Fortran: do j1=ja+1,jb; do i1=ia+1,ib
+            for j1 in (ja+1):jb
+                for i1 in (ia+1):ib
+                    # Fortran: i2 = iabs(i-i1)
+                    i2 = abs(i - i1)
+                    χ[i, j] += wt[i2+1, j1] * elev[i1, j1]
+                end
+            end
         end
     end
-    @. χ = χ * deg2rad(dlon) * deg2rad(dlat)
-    for (j, jlat) in enumerate(lat)
-        rij = sqrt((deg2rad(dlon) * cosd(jlat))^2 + deg2rad(dlat)^2)
-        for (i, ilon) in enumerate(lon)
-            χ[i, j] =
-                χ[i, j] +
-                elev[i, j] *
-                FT(2) *
-                (
-                    deg2rad(dlon) *
-                    cosd(jlat) *
-                    log((rij + deg2rad(dlat)) / (deg2rad(dlon) * cosd(jlat))) +
-                    deg2rad(dlat) *
-                    log((rij + deg2rad(dlon) * cosd(jlat)) / deg2rad(dlon))
-                )
+    
+    # Apply area element scaling
+    χ .*= (dlam * dphi)
+    
+    # Add the singular part of the integral
+    for j in 1:ny
+        cj = cosphi[j]
+        dlamj = dlam * cj
+        rij = sqrt(dlamj^2 + dphi^2)
+        
+        for i in 1:nx
+            χ[i, j] += elev[i, j] * FT(2) * (
+                dlamj * log((rij + dphi) / dlamj) + 
+                dphi * log((rij + dlamj) / dphi)
+            )
         end
     end
-
-    @. χ = χ * (earth_radius / FT(2) / pi)
-
+    
+    # Final scaling
+    χ .*= (earth_radius / (FT(2) * π))
+    
+    # Set polar values to zero (matching calc_hpoz_latlon approach)
+    χ[:, abs.(lat) .> FT(89)] .= FT(0)
+    
     return χ
 end
 
