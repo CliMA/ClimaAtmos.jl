@@ -63,39 +63,46 @@ end
 Y = Fields.FieldVector(c = Yc, f = Yf)
 
 # Initialize cache vars for orographic gravity wave
-ogw = CA.FullOrographicGravityWave{FT, String}()
+γ = 0.4
+ϵ = 0.0
+β = 0.5
+h_frac = 0.1
+ρscale = 1.2
+L0 = 80000.0
+a0 = 0.9
+a1 = 3.0
+Fr_crit = 0.7
+topo_info = Val(:gfdl_restart)
+topography = "Earth"
+ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
 topo_info = CA.get_topo_info(Y, ogw)
 
 # Move cache and arrays to the GPU
 Y = ClimaCore.to_device(ClimaComms.CUDADevice(), copy(Y))
-topo_info_gpu = CA.move_topo_info_to_gpu(Y, topo_info)
+ᶜtarget_space = Spaces.axes(Y.c)
+topo_info_gpu = CA.move_topo_info_to_gpu(topo_info, ᶜtarget_space)
 
-p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info_gpu))
-
+atmos = (; turbconv_model = nothing)
+atmos = cu(atmos)
+p = (; scratch = CA.temporary_quantities(Y, atmos),
+    orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info)
+    )
 
 # Unpack cache vars
-(; topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
+(; topo_ᶜz_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
     p.orographic_gravity_wave
 (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
     p.orographic_gravity_wave
-(; topo_base_Vτ, topo_tmp_1, topo_tmp_2, values_at_z_pbl) =
+(; values_at_z_pbl) =
     p.orographic_gravity_wave
-(; hmax, hmin, t11, t12, t21, t22) = topo_info_gpu
 
-# Extract parameters once and pack into tuple
-ogw_params = (;
-    Fr_crit = p.orographic_gravity_wave.Fr_crit,
-    topo_ρscale = p.orographic_gravity_wave.topo_ρscale,
-    topo_L0 = p.orographic_gravity_wave.topo_L0,
-    topo_a0 = p.orographic_gravity_wave.topo_a0,
-    topo_a1 = p.orographic_gravity_wave.topo_a1,
-    topo_γ = p.orographic_gravity_wave.topo_γ,
-    topo_β = p.orographic_gravity_wave.topo_β,
-    topo_ϵ = p.orographic_gravity_wave.topo_ϵ,
-)
+# Extract parameters
+ogw_params = p.orographic_gravity_wave.ogw_params
 
 u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
 v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+
+ᶜz = Fields.coordinate_field(Y.c).z
 
 # Compute base flux
 CA.calc_base_flux!(
@@ -104,27 +111,24 @@ CA.calc_base_flux!(
     topo_τ_l,
     topo_τ_p,
     topo_τ_np,
+    #
     topo_U_sat,
     topo_FrU_sat,
+    topo_FrU_clp,
     topo_FrU_max,
     topo_FrU_min,
-    topo_FrU_clp,
-    topo_base_Vτ,
-    topo_tmp_1,
-    topo_tmp_2,
+    topo_ᶜz_pbl,
+    #
+    values_at_z_pbl,
+    #
     ogw_params,
-    hmax,
-    hmin,
-    t11,
-    t12,
-    t21,
-    t22,
-    copy(Y.c.ρ),
+    topo_info_gpu,
+    #
+    Y.c.ρ,
     u_phy,
     v_phy,
+    ᶜz,
     Y.c.N,
-    FT(16000),
-    values_at_z_pbl
 )
 
 # Move GPU arrays back to CPU for plotting
