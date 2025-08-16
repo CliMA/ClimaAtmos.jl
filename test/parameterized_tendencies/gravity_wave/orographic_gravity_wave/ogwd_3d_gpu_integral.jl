@@ -215,27 +215,30 @@ Y = ClimaCore.to_device(ClimaComms.CUDADevice(), copy(Y))
 
 # pre-compute thermal vars
 thermo_params = CA.TD.Parameters.ThermodynamicsParameters(FT)
-thermo_params = ClimaCore.to_device(ClimaComms.CUDADevice(), thermo_params)
+# thermo_params = ClimaCore.to_device(ClimaComms.CUDADevice(), thermo_params)
 
 ᶜT_cpu = gfdl_ca_temp
 ᶜp_cpu = gfdl_ca_p
 
 ᶜz = Fields.coordinate_field(Y.c).z
-ᶜp = similar(Y.c.T)
-ᶜT = similar(Y.c.T)
 
-parent(ᶜp) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(ᶜp_cpu)))
-parent(ᶜT) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(ᶜT_cpu)))
+ᶜp = ClimaCore.to_device(ClimaComms.CUDADevice(), ᶜp_cpu)
+ᶜT = ClimaCore.to_device(ClimaComms.CUDADevice(), ᶜT_cpu)
 
-topo_info = CA.move_topo_info_to_gpu(Y, topo_info)
+ᶜtarget_space = Spaces.axes(Y.c)
+ᶜp = Fields.Field(Fields.field_values(ᶜp), ᶜtarget_space)
+ᶜT = Fields.Field(Fields.field_values(ᶜT), ᶜtarget_space)
 
-cp_m_out = similar(Y.c)
+topo_info = CA.move_topo_info_to_gpu(topo_info, ᶜtarget_space)
+
 ᶜts = similar(Y.c, CA.TD.PhaseEquil{FT})
-@. ᶜts = CA.TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, ᶜp, Y.c.qt)
+ᶜts = @. CA.TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, ᶜp, Y.c.qt)
+ᶜts = Fields.Field(Fields.field_values(ᶜts), ᶜtarget_space)
 
 # emulate `p` from a ClimaAtmos run
 atmos = (; turbconv_model = nothing)
-atmos = ClimaCore.to_device(ClimaComms.CUDADevice(), atmos)
+atmos = cu(atmos)
+# atmos = cu(ClimaComms.CUDADevice(), atmos)
 p = (; 
     orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw, topo_info),
     scratch = CA.temporary_quantities(Y, atmos),
