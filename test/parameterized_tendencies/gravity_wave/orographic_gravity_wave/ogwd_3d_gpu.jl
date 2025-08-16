@@ -191,7 +191,18 @@ epsilon = 0.622
 @. Y.c.ρ = gfdl_ca_p / Y.c.T / R_d / (1 - Y.c.qt + Y.c.qt / epsilon)
 
 # Initialize cache vars for orographic gravity wave
-ogw = CA.FullOrographicGravityWave{FT, String}()
+γ = 0.4
+ϵ = 0.0
+β = 0.5
+h_frac = 0.1
+ρscale = 1.2
+L0 = 80000.0
+a0 = 0.9
+a1 = 3.0
+Fr_crit = 0.7
+topo_info = Val(:gfdl_restart)
+topography = "Earth"
+ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
 
 topo_info = CA.get_topo_info(Y, ogw)
 
@@ -199,22 +210,23 @@ Y = ClimaCore.to_device(ClimaComms.CUDADevice(), copy(Y))
 
 # pre-compute thermal vars
 thermo_params = CA.TD.Parameters.ThermodynamicsParameters(FT)
-thermo_params = ClimaCore.to_device(ClimaComms.CUDADevice(), thermo_params)
+# thermo_params = ClimaCore.to_device(ClimaComms.CUDADevice(), thermo_params)
 
 ᶜT_cpu = gfdl_ca_temp
 ᶜp_cpu = gfdl_ca_p
 
-ᶜp = similar(Y.c.T)
-ᶜT = similar(Y.c.T)
+ᶜp = ClimaCore.to_device(ClimaComms.CUDADevice(), ᶜp_cpu)
+ᶜT = ClimaCore.to_device(ClimaComms.CUDADevice(), ᶜT_cpu)
 
-parent(ᶜp) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(ᶜp_cpu)))
-parent(ᶜT) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(ᶜT_cpu)))
+ᶜtarget_space = Spaces.axes(Y.c)
+ᶜp = Fields.Field(Fields.field_values(ᶜp), ᶜtarget_space)
+ᶜT = Fields.Field(Fields.field_values(ᶜT), ᶜtarget_space)
 
-topo_info = CA.move_topo_info_to_gpu(Y, topo_info)
+topo_info = CA.move_topo_info_to_gpu(topo_info, ᶜtarget_space)
 
-cp_m_out = similar(Y.c)
 ᶜts = similar(Y.c, CA.TD.PhaseEquil{FT})
-@. ᶜts = CA.TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, ᶜp, Y.c.qt)
+ᶜts = @. CA.TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, ᶜp, Y.c.qt)
+ᶜts = Fields.Field(Fields.field_values(ᶜts), ᶜtarget_space)
 
 atmos = (; turbconv_model = nothing)
 p = (; scratch = CA.temporary_quantities(Y, atmos),
@@ -230,6 +242,7 @@ p = (; scratch = CA.temporary_quantities(Y, atmos),
     p.orographic_gravity_wave
 (; ᶜdTdz) = p.orographic_gravity_wave
 (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
+(; ᶜmask, ᶠp_ref) = p.orographic_gravity_wave
 
 # Extract parameters
 ogw_params = p.orographic_gravity_wave.ogw_params
@@ -246,7 +259,7 @@ ogw_params = p.orographic_gravity_wave.ogw_params
 ᶠz = Fields.coordinate_field(Y.f).z
 
 # get PBL info
-topo_ᶜz_pbl .= CA.get_pbl_z!(ᶜp, ᶜT, copy(ᶜz), grav, cp_d)
+CA.get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
 # we copy the z_pbl from a cell-centered to face array.
 # the z-values don't change, but this is necessary for
 # calc_nonpropagating_forcing! to work on the GPU
@@ -296,65 +309,60 @@ CA.field_shiftface_down!(ᶠp, ᶠp_m1, Boundary_value)
 ᶠN = similar(ᶠz)
 ᶠN .= ᶠinterp.(ᶜN) # alternatively, can be computed from ᶠT and ᶠdTdz
 
+ᶜρ = Y.c.ρ
+ᶜbuoyancy_frequency = ᶜN
+ᶠbuoyancy_frequency = ᶠN
+
 # compute base flux at k_pbl
-# first, we define some scratch quantities...
-topo_base_Vτ = p.scratch.temp_field_level
-topo_tmp_1 = p.scratch.temp_field_level_2
-topo_tmp_2 = p.scratch.temp_field_level_3
 CA.calc_base_flux!(
     topo_τ_x,
     topo_τ_y,
     topo_τ_l,
     topo_τ_p,
     topo_τ_np,
+    #
     topo_U_sat,
     topo_FrU_sat,
+    topo_FrU_clp,
     topo_FrU_max,
     topo_FrU_min,
-    topo_FrU_clp,
-    topo_base_Vτ,
-    topo_tmp_1,
-    topo_tmp_2,
+    topo_ᶜz_pbl,
+    #
+    values_at_z_pbl,
+    #
     ogw_params,
     topo_info,
-    copy(Y.c.ρ),
+    #
+    ᶜρ,
     u_phy,
     v_phy,
-    ᶜN,
     ᶜz,
-    topo_ᶜz_pbl,
-    values_at_z_pbl
+    ᶜbuoyancy_frequency,
 )
 
-topo_d2Vτdz = p.scratch.ᶜtemp_scalar
-topo_L1 = p.scratch.ᶜtemp_scalar_2
-topo_U_k_field = p.scratch.ᶜtemp_scalar_3
-topo_level_idx = p.scratch.ᶜtemp_scalar_4
-topo_ᶜVτ = p.scratch.ᶜtemp_scalar_5
 CA.calc_saturation_profile!(
-    topo_ᶜτ_sat,
     topo_ᶠτ_sat,
-    topo_U_sat, 
+    topo_ᶠVτ,
+    #
+    topo_U_sat,
     topo_FrU_sat,
     topo_FrU_clp,
-    topo_ᶜVτ,
-    topo_ᶠVτ,
-    ogw_params,
     topo_FrU_max,
     topo_FrU_min,
-    ᶜN,
+    topo_ᶜτ_sat,
     topo_τ_x,
     topo_τ_y,
-    topo_τ_p,                   
+    topo_τ_p,
+    topo_ᶜz_pbl,
+    #
+    ogw_params,
+    #
+    ᶜρ,
     u_phy,
     v_phy,
-    copy(Y.c.ρ),
     ᶜp,
-    topo_ᶜz_pbl,
-    topo_d2Vτdz,
-    topo_L1,
-    topo_U_k_field,
-    topo_level_idx,
+    ᶜbuoyancy_frequency,
+    ᶜz,
 )
 
 # compute drag tendencies due to propagating part
@@ -366,27 +374,38 @@ CA.calc_propagate_forcing!(
     topo_τ_y,
     topo_τ_l,
     topo_ᶠτ_sat,
-    copy(Y.c.ρ),
-    ᶜdτ_sat_dz
+    ᶜdτ_sat_dz,
+    ᶜρ,
 )
 
 ᶜweights = p.scratch.ᶜtemp_scalar
+ᶜdiff = p.scratch.ᶜtemp_scalar_2
+ᶜwtsum = p.scratch.temp_field_level
+ᶠz_ref = p.scratch.ᶠtemp_field_level
 CA.calc_nonpropagating_forcing!(
     ᶜuforcing,
     ᶜvforcing,
-    ᶠN,
-    topo_ᶠVτ,
-    ᶠp,
-    ᶠp_m1,
+    #
     topo_τ_x,
     topo_τ_y,
     topo_τ_l,
     topo_τ_np,
-    ᶠz,
+    topo_ᶠVτ,
     topo_ᶠz_pbl,
+    #
+    ᶠz_ref,
+    ᶠp_ref,
+    ᶜmask,
+    ᶜweights,
+    ᶜdiff,
+    ᶜwtsum,
+    #
+    ᶠp,
+    ᶠp_m1,
+    ᶠbuoyancy_frequency,
+    ᶠz,
     ᶠdz,
     grav,
-    ᶜweights
 )
 
 # constrain forcing
