@@ -345,21 +345,20 @@ function get_topo_ll(orographic_info_rll)
 end
 
 
-function move_topo_info_to_gpu(Y, topo_info)
-    t11 = similar(Fields.level(Y.c.ρ, 1))
-    t12 = similar(Fields.level(Y.c.ρ, 1))
-    t21 = similar(Fields.level(Y.c.ρ, 1))
-    t22 = similar(Fields.level(Y.c.ρ, 1))
-    hmin = similar(Fields.level(Y.c.ρ, 1))
-    hmax = similar(Fields.level(Y.c.ρ, 1))
+function move_topo_info_to_gpu(topo_info, ᶜtarget_space)
+    t11 = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info.t11)
+    t12 = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info.t12)
+    t21 = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info.t21)
+    t22 = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info.t22)
+    hmin = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info.hmin)
+    hmax = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info.hmax)
 
-    parent(t11) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.t11)))
-    parent(t12) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.t12)))
-    parent(t21) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.t21)))
-    parent(t22) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.t22)))
-    parent(hmin) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.hmin)))
-    parent(hmax) .= ClimaCore.to_device(ClimaComms.CUDADevice(), copy(parent(topo_info.hmax)))
-    # )
+    t11 = Fields.Field(Fields.field_values(t11), ᶜtarget_space)
+    t12 = Fields.Field(Fields.field_values(t12), ᶜtarget_space)
+    t21 = Fields.Field(Fields.field_values(t21), ᶜtarget_space)
+    t22 = Fields.Field(Fields.field_values(t22), ᶜtarget_space)
+    hmin = Fields.Field(Fields.field_values(hmin), ᶜtarget_space)
+    hmax = Fields.Field(Fields.field_values(hmax), ᶜtarget_space)
 
     topo_info = (; 
         t11 = t11,
