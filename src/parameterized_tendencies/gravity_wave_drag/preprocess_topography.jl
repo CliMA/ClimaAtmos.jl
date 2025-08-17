@@ -33,7 +33,6 @@ function _write_computed_drag!(computed_drag, parsed_args, config)
     InputOutput.HDF5.write_attribute(hdfwriter.file, "h_elem", h_elem)
 
     @info "Writing computed drag data to $(output_filename).hdf5"
-    # @Main.infiltrate
     # write computed drag data to the HDF5 file
     InputOutput.write!(hdfwriter, computed_drag, "computed_drag")
 
@@ -100,11 +99,12 @@ function _diagnostics(datafile_rll)
     
     (; lon, lat, hmax, hmin, t11, t12, t21, t22) = nt
 
+    @. hmax = max(0, hmax)
+    @. hmin = max(0, hmin)
+
     ENV["GKSwstype"] = "nul"
     output_dir = joinpath(@__DIR__, "preprocess_topography")
     mkpath(output_dir)
-
-    @Main.infiltrate
 
     fig = generate_empty_figure();
     title = "hmax"
@@ -124,7 +124,7 @@ function _diagnostics(datafile_rll)
         X = lon,
         Y = lat,
         Z = t11[:, :, 1],
-        levels = range(minimum(t11), maximum(t11); length = 10),
+        levels = range(-50, 30; length = 40),
         title,
         p_loc = (2, 1),
         yreversed = false,
@@ -135,7 +135,7 @@ function _diagnostics(datafile_rll)
         X = lon,
         Y = lat,
         Z = t21[:, :, 1],
-        levels = range(minimum(t21), maximum(t21); length = 10),
+        levels = range(-50, 30; length = 40),
         title,
         p_loc = (3, 1),
         yreversed = false,
@@ -157,7 +157,7 @@ function _diagnostics(datafile_rll)
         X = lon,
         Y = lat,
         Z = t12[:, :, 1],
-        levels = range(minimum(t12), maximum(t12); length = 10),
+        levels = range(-50, 30; length = 40),
         title,
         p_loc = (2, 2),
         yreversed = false,
@@ -168,7 +168,7 @@ function _diagnostics(datafile_rll)
         X = lon,
         Y = lat,
         Z = t22[:, :, 1],
-        levels = range(minimum(t22), maximum(t22); length = 10),
+        levels = range(-50, 30; length = 40),
         title,
         p_loc = (3, 2),
         yreversed = false,
