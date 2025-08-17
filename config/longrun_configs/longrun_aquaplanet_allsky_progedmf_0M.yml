@@ -1,7 +1,9 @@
 implicit_sgs_advection: true
 implicit_sgs_mass_flux: true
+implicit_sgs_entr_detr: true
+implicit_sgs_nh_pressure: true
 max_newton_iters_ode: 3
-dt: "20secs"
+dt: "30secs"
 t_end: "60days"
 dt_save_state_to_disk: "30days"
 moist: "equil"
