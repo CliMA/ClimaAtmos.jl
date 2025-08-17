@@ -61,7 +61,8 @@ hr_z = hr_z[:,latidx]
 
 earth_radius = FT(6.371229e6)
 hr_hmax = CA.calc_hpoz_latlon(hr_z, hr_lon, hr_lat, earth_radius);
-print("done")
+
+# @Main.infiltrate
 # interpolate hmax to gfdl lat/lon grid
 li_hmax = linear_interpolation( (hr_lon, hr_lat), hr_hmax, extrapolation_bc = (Periodic(), Flat()), )
 hr_hmax_interp = zeros(size(gfdl_hmax))
@@ -81,6 +82,17 @@ p2 = contourf(gfdl_lon, gfdl_lat, hr_hmax_interp[:,:,1]', clim=(-2500,2500), col
 p = plot(p1,p2, layout = (2,1), size = (1500,1600));
 png(p, "./hr_hmax_4min_100e3.png")
 
+# %% Plot hr_max comparison
+max_abs_gfdl_hmax = maximum(abs.(gfdl_hmax))
+max_abs_hr_hmax = maximum(abs.(hr_hmax))
+
+p1 = contourf(gfdl_lon, gfdl_lat, gfdl_hmax', clim=(-max_abs_gfdl_hmax, max_abs_gfdl_hmax), color=:balance, title="GFDL hmax");
+p2 = contourf(hr_lon, hr_lat, hr_hmax', clim=(-max_abs_hr_hmax, max_abs_hr_hmax), color=:balance, title="HR hmax");
+p = plot(p1,p2, layout = (2,1), size = (1500,1600));
+png(p, "./hr_max_comparison.png")
+
+@info "hmax done"
+
 # ## save hmax to nc
 # ds = NCDataset("./oro_test/hr_hmax.nc", "c")
 # defDim(ds, "lon", length(hr_lon))
@@ -99,7 +111,7 @@ png(p, "./hr_hmax_4min_100e3.png")
 elev_data = AA.earth_orography_file_path(; context = comms_ctx)
 # elev_data = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
 
-skip_pt = 10
+skip_pt = 6
 nt = NCDataset(elev_data, "r") do ds
 	lon = FT.(Array(ds["lon"]))[1:skip_pt:end]
 	lat = FT.(Array(ds["lat"]))[1:skip_pt:end]
@@ -110,17 +122,17 @@ end
 
 # @Main.infiltrate
 
-latidx = FT(-75) .< lat .< FT(-70)  # Exclude latitudes beyond ±80° 
-lonidx = FT(-100) .< lon .< FT(-50)  # Exclude longitudes beyond ±180°
-lat = lat[latidx]
-lon = lon[lonidx]
-elev = elev[lonidx,latidx]
-
-# latidx = abs.(lat) .!= FT(90)  # Exclude poles
+# latidx = FT(-75) .< lat .< FT(-70)  # Exclude latitudes beyond ±80° 
+# lonidx = FT(-100) .< lon .< FT(-50)  # Exclude longitudes beyond ±180°
 # lat = lat[latidx]
-# # lon = lon[latidx]
-# elev = elev[:,latidx]
+# lon = lon[lonidx]
+# elev = elev[lonidx,latidx]
 
+latidx = abs.(lat) .<= FT(89)  # Exclude poles
+lat = lat[latidx]
+elev = elev[:,latidx]
+
+# @Main.infiltrate
 
 # latidx = FT(-85) .< gfdl_lat .< FT(-80)  # Exclude latitudes beyond ±80° 
 # lonidx = FT(50) .< gfdl_lon .< FT(55)  # Exclude longitudes beyond ±180°
@@ -152,8 +164,11 @@ earth_radius = FT(6.371229e6)
 # 
 
 χ = CA.calc_velocity_potential(elev, lon, lat, earth_radius);
+# @Main.infiltrate
 hr_t11, hr_t21, hr_t12, hr_t22 = CA.calc_orographic_tensor(elev, χ, lon, lat, earth_radius);
 
+
+# @Main.infiltrate
 # %% Calculate color limits once
 ENV["GKSwstype"] = "nul"
 
@@ -171,7 +186,7 @@ max_abs_hr_t22 = maximum(abs.(hr_t22))*val
 
 
 # # %% Debug: Check for NaN values
-# println("hr_t11 size: ", size(hr_t11))
+println("hr_t11 size: ", size(hr_t11))
 # println("Number of NaN values in hr_t11: ", sum(isnan.(hr_t11)))
 # println("hr_t11 range: ", extrema(hr_t11[.!isnan.(hr_t11)]))
 
@@ -192,27 +207,51 @@ p = plot(p1,p2, layout = (2,1), size = (1500,1600));
 png(p, "./cut.png")
 
 
+p1 = heatmap(lon, lat, elev', color=:balance, title="elev_data");
+p = plot(p1, layout = (2,1), size = (1500,800));
+png(p, "./elev_data.png")
+
 # %% Plot t11 comparison
-p1 = contourf(gfdl_lon, gfdl_lat, gfdl_t11', clim=(-max_abs_gfdl_t11, max_abs_gfdl_t11), color=:balance, title="GFDL t11");
-p2 = contourf(lon, lat, hr_t11', clim=(-max_abs_hr_t11, max_abs_hr_t11), color=:balance, title="HR t11");
+# Convert GFDL longitude from 0-360° to -180-180° convention to match HR data
+# Find the split point where longitude > 180°
+split_idx = findfirst(gfdl_lon .> 180.0)
+if split_idx !== nothing
+    # Reorder longitude coordinates
+    gfdl_lon_aligned = vcat(gfdl_lon[split_idx:end] .- 360.0, gfdl_lon[1:split_idx-1])
+    # Reorder data arrays accordingly
+    gfdl_t11_aligned = vcat(gfdl_t11[split_idx:end, :], gfdl_t11[1:split_idx-1, :])
+    gfdl_t12_aligned = vcat(gfdl_t12[split_idx:end, :], gfdl_t12[1:split_idx-1, :])
+    gfdl_t21_aligned = vcat(gfdl_t21[split_idx:end, :], gfdl_t21[1:split_idx-1, :])
+    gfdl_t22_aligned = vcat(gfdl_t22[split_idx:end, :], gfdl_t22[1:split_idx-1, :])
+else
+    # No reordering needed
+    gfdl_lon_aligned = gfdl_lon
+    gfdl_t11_aligned = gfdl_t11
+    gfdl_t12_aligned = gfdl_t12
+    gfdl_t21_aligned = gfdl_t21
+    gfdl_t22_aligned = gfdl_t22
+end
+
+p1 = heatmap(gfdl_lon_aligned, gfdl_lat, gfdl_t11_aligned', clim=(-max_abs_gfdl_t11, max_abs_gfdl_t11), color=:balance, title="GFDL t11");
+p2 = heatmap(lon, lat, hr_t11', clim=(-max_abs_gfdl_t11, max_abs_gfdl_t11), color=:balance, title="HR t11");
 p = plot(p1,p2, layout = (2,1), size = (1500,1600));
 png(p, "./t11_comparison.png")
 
 # %% Plot t12 comparison
-p1 = contourf(gfdl_lon, gfdl_lat, gfdl_t12', clim=(-max_abs_gfdl_t12, max_abs_gfdl_t12), color=:balance, title="GFDL t12");
-p2 = contourf(lon, lat, hr_t12', clim=(-max_abs_hr_t12, max_abs_hr_t12), color=:balance, title="HR t12");
+p1 = heatmap(gfdl_lon_aligned, gfdl_lat, gfdl_t12_aligned', clim=(-max_abs_gfdl_t12, max_abs_gfdl_t12), color=:balance, title="GFDL t12");
+p2 = heatmap(lon, lat, hr_t12', clim=(-max_abs_gfdl_t12, max_abs_gfdl_t12), color=:balance, title="HR t12");
 p = plot(p1,p2, layout = (2,1), size = (1500,1600));
 png(p, "./t12_comparison.png")
 
 # %% Plot t21 comparison
-p1 = contourf(gfdl_lon, gfdl_lat, gfdl_t21', clim=(-max_abs_gfdl_t21, max_abs_gfdl_t21), color=:balance, title="GFDL t21");
-p2 = contourf(lon, lat, hr_t21', clim=(-max_abs_hr_t21, max_abs_hr_t21), color=:balance, title="HR t21");
+p1 = heatmap(gfdl_lon_aligned, gfdl_lat, gfdl_t21_aligned', clim=(-max_abs_gfdl_t21, max_abs_gfdl_t21), color=:balance, title="GFDL t21");
+p2 = heatmap(lon, lat, hr_t21', clim=(-max_abs_gfdl_t21, max_abs_gfdl_t21), color=:balance, title="HR t21");
 p = plot(p1,p2, layout = (2,1), size = (1500,1600));
 png(p, "./t21_comparison.png")
 
 # %% Plot t22 comparison
-p1 = contourf(gfdl_lon, gfdl_lat, gfdl_t22', clim=(-max_abs_gfdl_t22, max_abs_gfdl_t22), color=:balance, title="GFDL t22");
-p2 = contourf(lon, lat, hr_t22', clim=(-max_abs_hr_t22, max_abs_hr_t22), color=:balance, title="HR t22");
+p1 = heatmap(gfdl_lon_aligned, gfdl_lat, gfdl_t22_aligned', clim=(-max_abs_gfdl_t22, max_abs_gfdl_t22), color=:balance, title="GFDL t22");
+p2 = heatmap(lon, lat, hr_t22', clim=(-max_abs_gfdl_t22, max_abs_gfdl_t22), color=:balance, title="HR t22");
 p = plot(p1,p2, layout = (2,1), size = (1500,1600));
 png(p, "./t22_comparison.png")
 
