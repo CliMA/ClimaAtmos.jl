@@ -128,6 +128,7 @@ function edmfx_vertical_diffusion_tendency!(
     turbconv_model::PrognosticEDMFX,
 )
     FT = eltype(p.params)
+    (; ᶜρʲs) = p.precomputed
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜK_h = p.scratch.ᶜtemp_scalar
     @. ᶜK_h = FT(1)
@@ -141,17 +142,13 @@ function edmfx_vertical_diffusion_tendency!(
     )
 
     for j in 1:n
-        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+        ᶜρʲ = ᶜρʲs.:($j)
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
-        ᶜinv_ρaʲ =
-            (@. lazy(specific(FT(1), ᶜρaʲ, FT(0), Y.c.ρ, turbconv_model)))
         @. Yₜ.c.sgsʲs.:($$j).mse -=
-            ᶜdivᵥ_mse(-(ᶠinterp(ᶜρaʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) *
-            ᶜinv_ρaʲ
+            ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
         @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-            ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρaʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) *
-            ᶜinv_ρaʲ
+            ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
     end
 end
 
