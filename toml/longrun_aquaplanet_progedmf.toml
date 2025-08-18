@@ -4,6 +4,9 @@ value = 40000.0
 [zd_viscous]
 value = 40000.0
 
+[alpha_rayleigh_sgs_tracer]
+value = 1e-3
+
 [precipitation_timescale]
 value = 600
 
