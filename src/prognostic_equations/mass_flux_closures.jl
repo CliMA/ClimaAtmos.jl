@@ -127,8 +127,10 @@ function edmfx_vertical_diffusion_tendency!(
     t,
     turbconv_model::PrognosticEDMFX,
 )
+    (; params) = p
+    (; ᶜts, ᶜK, ᶜρʲs) = p.precomputed
     FT = eltype(p.params)
-    (; ᶜρʲs) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(params)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜK_h = p.scratch.ᶜtemp_scalar
     @. ᶜK_h = FT(1)
@@ -141,14 +143,28 @@ function edmfx_vertical_diffusion_tendency!(
         bottom = Operators.SetValue(C3(0)),
     )
 
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
+    ᶜmse = @. lazy(ᶜh_tot - ᶜK)
     for j in 1:n
         ᶜρʲ = ᶜρʲs.:($j)
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
         @. Yₜ.c.sgsʲs.:($$j).mse -=
-            ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
+            ᶜdivᵥ_mse(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmse))) / Y.c.ρ
         @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-            ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
+            ᶜdivᵥ_q_tot(
+                -(
+                    ᶠinterp(Y.c.ρ) *
+                    ᶠinterp(ᶜK_h) *
+                    ᶠgradᵥ(specific(Y.c.ρq_tot, Y.c.ρ))
+                ),
+            ) / Y.c.ρ
     end
 end
 
