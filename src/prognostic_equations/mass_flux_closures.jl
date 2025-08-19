@@ -131,9 +131,8 @@ function edmfx_vertical_diffusion_tendency!(
     (; ᶜts, ᶜK, ᶜρʲs) = p.precomputed
     FT = eltype(p.params)
     thermo_params = CAP.thermodynamics_params(params)
+    turbconv_params = CAP.turbconv_params(params)
     n = n_mass_flux_subdomains(turbconv_model)
-    ᶜK_h = p.scratch.ᶜtemp_scalar
-    @. ᶜK_h = FT(1)
     ᶜdivᵥ_mse = Operators.DivergenceF2C(
         top = Operators.SetValue(C3(0)),
         bottom = Operators.SetValue(C3(0)),
@@ -142,6 +141,18 @@ function edmfx_vertical_diffusion_tendency!(
         top = Operators.SetValue(C3(0)),
         bottom = Operators.SetValue(C3(0)),
     )
+
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    # scratch to prevent GPU Kernel parameter memory error
+    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
+    ᶜprandtl_nvec = @. lazy(
+        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+    )
+    ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
 
     ᶜh_tot = @. lazy(
         TD.total_specific_enthalpy(
@@ -155,6 +166,7 @@ function edmfx_vertical_diffusion_tendency!(
         ᶜρʲ = ᶜρʲs.:($j)
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+
         @. Yₜ.c.sgsʲs.:($$j).mse -=
             ᶜdivᵥ_mse(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmse))) / Y.c.ρ
         @. Yₜ.c.sgsʲs.:($$j).q_tot -=
