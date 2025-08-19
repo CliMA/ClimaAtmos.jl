@@ -108,32 +108,6 @@ function edmfx_tke_tendency!(
         # buoyancy production
         @. Yₜ.c.sgs⁰.ρatke -= ᶜρa⁰ * ᶜK_h * ᶜlinear_buoygrad
 
-        ᶜtke⁰ =
-            @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
-
-        # entrainment and detraiment
-        # using ᶜu⁰ and local geometry results in allocation
-        for j in 1:n
-            ᶜρaʲ =
-                turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
-                p.precomputed.ᶜρaʲs.:($j)
-            # dynamical entrainment/detrainment
-            @. Yₜ.c.sgs⁰.ρatke +=
-                ᶜρaʲ * (
-                    ᶜdetrʲs.:($$j) * 1 / 2 *
-                    norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) -
-                    ᶜentrʲs.:($$j) * ᶜtke⁰
-                )
-            # turbulent entrainment
-            @. Yₜ.c.sgs⁰.ρatke +=
-                ᶜρaʲ *
-                ᶜturb_entrʲs.:($$j) *
-                (
-                    norm(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) *
-                    norm(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³)) - ᶜtke⁰
-                )
-        end
-
         # pressure work
         @. Yₜ.c.sgs⁰.ρatke += ᶜtke_press
     end
