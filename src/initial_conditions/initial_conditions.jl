@@ -177,6 +177,7 @@ function (initial_condition::DecayingProfile)(params)
             params,
             geometry = local_geometry,
             thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+            velocity = Geometry.UVVector(FT(10), FT(0))
         )
     end
     return local_state

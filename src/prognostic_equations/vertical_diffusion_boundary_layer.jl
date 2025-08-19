@@ -102,7 +102,7 @@ function vertical_diffusion_boundary_layer_tendency!(
         ᶜdivᵥ_strain = Operators.DivergenceF2C(
             bottom = Operators.SetValue(zero(Fields.level(ᶠstrain_rate, half))), 
             top = Operators.SetValue(zero(Fields.level(ᶠstrain_rate, half))), 
-            )
+        )
         @. Yₜ.c.uₕ -= C12(
             ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠstrain_rate) / Y.c.ρ,
         ) # assumes ᶜK_u = ᶜK_h
@@ -124,6 +124,10 @@ function vertical_diffusion_boundary_layer_tendency!(
         else
             @. ᶜK_h_scaled = ᶜK_h
         end
+        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
+            top = Operators.SetValue(C3(0)),
+            bottom = Operators.SetValue(C3(0)),
+        )
         @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρχ(
             -(
                 ᶠinterp(Y.c.ρ) *

@@ -1,20 +1,18 @@
-dt: "450secs"
-deep_atmosphere: false
+dt: "400secs"
+deep_atmosphere: true
 dz_bottom: 30.0
-z_elem: 20
-t_end: "200days"
-disable_surface_flux_tendency: true
+z_elem: 30
+t_end: "100days"
 precip_model: "0M"
 initial_condition: "MoistBaroclinicWave"
 #initial_condition: "DryBaroclinicWave"
 moist: "equil"
 surface_setup: "DefaultMoninObukhov"
+disable_surface_flux_tendency: false
 vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
 #diagnostics:
 #  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc]
 #    period: 30days
-diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa]
-    period: 30days
+FLOAT_TYPE: Float32

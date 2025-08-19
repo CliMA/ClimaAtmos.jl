@@ -59,10 +59,6 @@ const ᶠinterp_vel = Operators.InterpolateC2F(
     bottom = Operators.SetValue(CT12(Float32(0),Float32(0))),
     top = Operators.Extrapolate(),
 )
-const ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
-    top = Operators.SetValue(C3(0)),
-    bottom = Operators.SetValue(C3(0)),
-)
 const ᶠwinterp = Operators.WeightedInterpolateC2F(
     bottom = Operators.Extrapolate(),
     top = Operators.Extrapolate(),
@@ -109,7 +105,10 @@ const ᶠfct_zalesak = Operators.FCTZalesak(
         constraint = Operators.MonotoneLocalExtrema(), # (Mono5)
     )
 end
-
+const ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
+        top = Operators.SetValue(C3(0)),
+        bottom = Operators.SetValue(C3(0)),
+    )
 const ᶜinterp_matrix = MatrixFields.operator_matrix(ᶜinterp)
 const ᶜleft_bias_matrix = MatrixFields.operator_matrix(ᶜleft_bias)
 const ᶜright_bias_matrix = MatrixFields.operator_matrix(ᶜright_bias)

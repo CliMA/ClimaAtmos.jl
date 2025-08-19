@@ -129,4 +129,13 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
             @. Yₜ.c.ρ -= btt
         end
     end
+
+    #ᶠf¹² = p.core.ᶠf¹²
+    #ᶜu = p.precomputed.ᶜu
+    #tempterm = @. ᶠinterp(Y.c.ρ) * (ᶠf¹² × ᶠinterp(CT12(ᶜu)))
+    #ᶠgradᵥ_p = Operators.GradientC2F(
+    #    top = Operators.SetGradient(C3(0)),
+    #    bottom = Operators.SetGradient(tempterm),
+    #)
+    #@. Yₜ.f.u₃ -= ᶠgradᵥ_p(FT(0) * p.precomputed.ᶜp)
 end

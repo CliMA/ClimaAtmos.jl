@@ -1,18 +1,16 @@
 dt: "300secs"
-z_elem: 43
-dz_bottom: 30.0
-t_end: "120days"
-discrete_hydrostatic_balance: true
-moist: equil
 deep_atmosphere: true
+dz_bottom: 30.0
+z_elem: 30
+t_end: "120days"
+rayleigh_sponge: true
+discrete_hydrostatic_balance: false
+perturb_initstate: false
+precip: "0M"
+moist: "equil"
+surface_setup: "DefaultMoninObukhov"
+disable_surface_flux_tendency: false
+vert_diff: "DecayWithHeightDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-hyperdiff: true
-perturb_initstate: false
-precip_model: "0M"
-vert_diff: "DecayWithHeightDiffusion"
-disable_surface_flux_tendency: false
 FLOAT_TYPE: "Float32"
-diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa]
-    period: 30days
