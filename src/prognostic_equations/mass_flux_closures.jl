@@ -164,19 +164,23 @@ function edmfx_vertical_diffusion_tendency!(
     ᶜmse = @. lazy(ᶜh_tot - ᶜK)
     for j in 1:n
         ᶜρʲ = ᶜρʲs.:($j)
+        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+        ᶜinv_ρaʲ =
+            (@. lazy(specific(FT(1), ᶜρaʲ, FT(0), Y.c.ρ, turbconv_model)))
 
         @. Yₜ.c.sgsʲs.:($$j).mse -=
-            ᶜdivᵥ_mse(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmse))) / Y.c.ρ
+            ᶜdivᵥ_mse(-(ᶠinterp(ᶜρaʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmse))) *
+            ᶜinv_ρaʲ
         @. Yₜ.c.sgsʲs.:($$j).q_tot -=
             ᶜdivᵥ_q_tot(
                 -(
-                    ᶠinterp(Y.c.ρ) *
+                    ᶠinterp(ᶜρaʲ) *
                     ᶠinterp(ᶜK_h) *
                     ᶠgradᵥ(specific(Y.c.ρq_tot, Y.c.ρ))
                 ),
-            ) / Y.c.ρ
+            ) * ᶜinv_ρaʲ
     end
 end
 
