@@ -11,7 +11,8 @@ function implicit_temporary_quantities(Y, atmos)
     FT = Spaces.undertype(center_space)
     uvw_vec = UVW(FT(0), FT(0), FT(0))
     return (;
-        ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠρaK_h, ᶠρaK_u
+        ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠρaK_h
+        ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠρaK_u
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜρχₜ_diffusion, ᶜa_scalar
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜKᵥʲ
         ᶜtemp_scalar_3 = Fields.Field(FT, center_space), # ᶜK_h_scaled
@@ -27,7 +28,8 @@ function temporary_quantities(Y, atmos)
     CTh = CTh_vector_type(Y.c)
     uvw_vec = UVW(FT(0), FT(0), FT(0))
     return (;
-        ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
+        ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_h
+        ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠρK_u
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜtke_exch
         ᶜtemp_scalar_3 = Fields.Field(FT, center_space),
