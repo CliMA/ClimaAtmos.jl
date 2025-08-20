@@ -1377,9 +1377,11 @@ EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_dycoms_rf01_explicit_box},
     Val{:prognostic_edmfx_adv_test_column},
     Val{:prognostic_edmfx_gabls_column},
+    Val{:prognostic_edmfx_gabls_column_sparse_autodiff},
     Val{:prognostic_edmfx_bomex_fixtke_column},
     Val{:prognostic_edmfx_bomex_column},
-    Val{:prognostic_edmfx_bomex_column_implicit},
+    Val{:prognostic_edmfx_bomex_implicit_column},
+    Val{:prognostic_edmfx_bomex_column_sparse_autodiff},
     Val{:prognostic_edmfx_bomex_stretched_column},
     Val{:prognostic_edmfx_bomex_pigroup_column},
     Val{:prognostic_edmfx_bomex_implicit_column},
@@ -1398,7 +1400,9 @@ EDMFBoxPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_rico_column_2M},
     Val{:prognostic_edmfx_trmm_column},
+    Val{:prognostic_edmfx_trmm_column_sparse_autodiff},
     Val{:prognostic_edmfx_dycoms_rf02_column},
+    Val{:prognostic_edmfx_dycoms_rf02_column_sparse_autodiff},
 }
 
 DiagEDMFBoxPlotsWithPrecip = Union{
