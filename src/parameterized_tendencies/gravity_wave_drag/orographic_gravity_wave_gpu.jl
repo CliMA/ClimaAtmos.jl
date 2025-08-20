@@ -30,15 +30,10 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
         orographic_info_rll = joinpath(topo_path, "topo_drag.res.nc")
         topo_info = regrid_OGW_info(Y, orographic_info_rll)
     elseif ogw.topo_info == Val(:raw_topo)
-        # TODO: right now this option may easily crash
-        # because we did not incorporate any smoothing when interpolate back to model grid
-        # elevation_rll =
-        #     AA.earth_orography_file_path(; context = ClimaComms.context(Y.c))
         earth_radius =
             Spaces.topology(
                 Spaces.horizontal_space(axes(Y.c)),
             ).mesh.domain.radius
-        # topo_info = compute_ogw_info(Y, elevation_rll, radius, γ, h_frac)
 
         topo_info = compute_ogw_drag(
             Y,
@@ -637,6 +632,7 @@ function calc_base_flux!(
     v_pbl = values_at_z_pbl.:3
     N_pbl = values_at_z_pbl.:4
 
+    # @Main.infiltrate
     # Calculate τ components
     @. τ_x = ρ_pbl * N_pbl * (t11 * u_pbl + t21 * v_pbl)
     @. τ_y = ρ_pbl * N_pbl * (t12 * u_pbl + t22 * v_pbl)
@@ -869,12 +865,14 @@ function compute_ogw_drag(
     cg_lat = Fields.level(Fields.coordinate_field(Y.f).lat, half)
 
     if topography == Val(:Earth)
-        real_elev = AA.earth_orography_file_path(; context = ClimaComms.context(center_space),)
-        @info "Loading Earth orography from ETOPO2022 data for OGW drag computation."
+        #### To-dos:
+        # 1. load orography on lat-lon grid and subtract from z_surface
+        # 2. use clima grid info, e.g., grid area
 
-
-        #### To-do:
-        # load orography on lat-lon grid and subtract from z_surface
+        # to be replaced by an artifact 
+        filename = "computed_drag_Earth_true_5_16"
+        topo_info = load_preprocessed_topography(filename)
+        return set_topo_info_target_space(topo_info, ᶜsurface_space)
 
     ### Handle analytical test cases
     elseif topography == Val(:DCMIP200)
@@ -893,48 +891,40 @@ function compute_ogw_drag(
         error("Topography required for orographic gravity wave drag: $topography")
     end
 
-    if topography != Val(:Earth)
+    real_elev = SpaceVaryingInput(topography_function, face_space)
+    real_elev = Fields.level(real_elev, half)
+    @. real_elev = max(0, real_elev)
 
-        real_elev = SpaceVaryingInput(topography_function, face_space)
-        real_elev = Fields.level(real_elev, half)
-        @. real_elev = max(0, real_elev)
+    hmax = @. real_elev - z_surface
+    hmin = @. h_frac * hmax
 
-        hmax = @. real_elev - z_surface
-        hmin = @. h_frac * hmax
+    χ = @. hmax * cell_area_bot * earth_radius / (FT(2) * FT(pi))
 
-        χ = @. hmax * cell_area_bot * earth_radius / (FT(2) * FT(pi))
+    # @Main.infiltrate
+    ∇ₕχ = @. Geometry.UVVector(gradₕ(χ))
+    ∇ₕhmax = @. Geometry.UVVector(gradₕ(hmax))
 
-        # @Main.infiltrate
-        ∇ₕχ = @. Geometry.UVVector(gradₕ(χ))
-        ∇ₕhmax = @. Geometry.UVVector(gradₕ(hmax))
+    dχdx = ∇ₕχ.components.data.:1
+    dχdy = ∇ₕχ.components.data.:2
 
-        dχdx = ∇ₕχ.components.data.:1
-        dχdy = ∇ₕχ.components.data.:2
+    dhdx = ∇ₕhmax.components.data.:1
+    dhdy = ∇ₕhmax.components.data.:2
 
-        dhdx = ∇ₕhmax.components.data.:1
-        dhdy = ∇ₕhmax.components.data.:2
+    # Handle drag vector elements at the antarctic region
+    @. dχdx = ifelse( cg_lat < FT(-88), 0, dχdx)
+    @. dχdy = ifelse( cg_lat < FT(-88), 0, dχdy)
 
-        # Handle drag vector elements at the antarctic region
-        @. dχdx = ifelse( cg_lat < FT(-88), 0, dχdx)
-        @. dχdy = ifelse( cg_lat < FT(-88), 0, dχdy)
+    # We convert the face-centered drag vector elements to cell-centered
+    # quantities as these are used to compute the physics associated with the
+    # orographic gravity wave drag in the cell.
+    hmax = Fields.Field(Fields.field_values(hmax), ᶜsurface_space)
+    hmin = Fields.Field(Fields.field_values(hmin), ᶜsurface_space)
+    t11 = Fields.Field(Fields.field_values(dχdx .* dhdx), ᶜsurface_space)
+    t21 = Fields.Field(Fields.field_values(dχdx .* dhdy), ᶜsurface_space)
+    t12 = Fields.Field(Fields.field_values(dχdy .* dhdx), ᶜsurface_space)
+    t22 = Fields.Field(Fields.field_values(dχdy .* dhdy), ᶜsurface_space)
 
-        # We convert the face-centered drag vector elements to cell-centered
-        # quantities as these are used to compute the physics associated with the
-        # orographic gravity wave drag in the cell.
-        hmax = Fields.Field(Fields.field_values(hmax), ᶜsurface_space)
-        hmin = Fields.Field(Fields.field_values(hmin), ᶜsurface_space)
-        t11 = Fields.Field(Fields.field_values(dχdx .* dhdx), ᶜsurface_space)
-        t21 = Fields.Field(Fields.field_values(dχdx .* dhdy), ᶜsurface_space)
-        t12 = Fields.Field(Fields.field_values(dχdy .* dhdx), ᶜsurface_space)
-        t22 = Fields.Field(Fields.field_values(dχdy .* dhdy), ᶜsurface_space)
-
-        return (; hmax, hmin, t11, t21, t12, t22)
-
-    else
-
-        
-
-    end
+    return (; hmax, hmin, t11, t21, t12, t22)
 
 end
 
