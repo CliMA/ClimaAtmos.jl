@@ -77,22 +77,24 @@ function print_jacobian_summary(integrator)
     dense_bandwidth_values = map(block_keys) do block_key
         bandwidth(dense_blocks[block_key])
     end
-    sparse_bandwidth_values = map(block_keys) do block_key
-        sparse_blocks = first(all_sparse_blocks)
-        haskey(sparse_blocks, block_key) ?
-        (
-            sparse_blocks[block_key] isa UniformScaling ? 1 :
-            bandwidth(sparse_blocks[block_key])
-        ) : 0
-    end
-    missing_bandwidth_values =
-        max.(dense_bandwidth_values .- sparse_bandwidth_values, 0)
-    @info "dense, number of nonzero bands per block:"
+    @info "dense, nonzero bands per block:"
     pretty_table(dense_bandwidth_values; bandwidth_table_kwargs...)
-    @info "sparse, number of nonzero bands per block:"
-    pretty_table(sparse_bandwidth_values; bandwidth_table_kwargs...)
-    @info "dense - sparse, number of missing nonzero bands per block:"
-    pretty_table(missing_bandwidth_values; bandwidth_table_kwargs...)
+    for (sparse_name, sparse_blocks) in pairs(all_sparse_blocks)
+        sparse_bandwidth_values = map(block_keys) do block_key
+            haskey(sparse_blocks, block_key) ?
+            (
+                sparse_blocks[block_key] isa UniformScaling ?
+                1 - iszero(sparse_blocks[block_key]) :
+                bandwidth(sparse_blocks[block_key])
+            ) : 0
+        end
+        missing_bandwidth_values =
+            max.(dense_bandwidth_values .- sparse_bandwidth_values, 0)
+        @info "$sparse_name sparse, nonzero bands per block:"
+        pretty_table(sparse_bandwidth_values; bandwidth_table_kwargs...)
+        @info "dense - $sparse_name sparse, missing nonzero bands per block:"
+        pretty_table(missing_bandwidth_values; bandwidth_table_kwargs...)
+    end
     println("<$('='^70)>\n")
 
     rms(block) = sqrt(mean(abs2.(block)))
