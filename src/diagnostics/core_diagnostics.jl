@@ -915,7 +915,7 @@ add_diagnostic_variable!(
     standard_name = "number_concentration_of_cloud_liquid_water_particles_in_air",
     units = "m^-3",
     comments = """
-    This is calculated as the number of cloud liquid water droplets in the grid 
+    This is calculated as the number of cloud liquid water droplets in the grid
     cell divided by the cell volume.
     """,
     compute! = compute_cdnc!,
@@ -1479,7 +1479,7 @@ function compute_cape!(out, state, cache, time)
     ᶜbuoyancy = cache.scratch.ᶜtemp_scalar
     ᶜbuoyancy .= g .* (parcel_Tv .- env_Tv) ./ env_Tv
 
-    # restrict to tropospheric buoyancy (generously below 20km) TODO: integrate from LFC to LNB 
+    # restrict to tropospheric buoyancy (generously below 20km) TODO: integrate from LFC to LNB
     FT = Spaces.undertype(axes(ᶜbuoyancy))
     ᶜbuoyancy .=
         ᶜbuoyancy .*
@@ -1553,7 +1553,7 @@ function compute_rwp!(
     state,
     cache,
     time,
-    moisture_model::T,
+    microphysics_model::T,
 ) where {T <: Union{Microphysics1Moment, Microphysics2Moment}}
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))

@@ -411,13 +411,27 @@ function compute_cdncup!(
     state,
     cache,
     time,
-    microphysics_model_model::Microphysics2Moment,
+    microphysics_model::Microphysics2Moment,
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
         return (state.c.sgsʲs.:1).n_liq
     else
         out .= (state.c.sgsʲs.:1).n_liq
+    end
+end
+function compute_cdncup!(
+    out,
+    state,
+    cache,
+    time,
+    microphysics_model::Microphysics2Moment,
+    turbconv_model::DiagnosticEDMFX,
+)
+    if isnothing(out)
+        return (cache.precomputed.ᶜn_liqʲs.:1)
+    else
+        out .= (cache.precomputed.ᶜn_liqʲs.:1)
     end
 end
 
@@ -554,7 +568,7 @@ function compute_husraup!(
     state,
     cache,
     time,
-    moisture_model::Microphysics1Moment,
+    moisture_model::Union{Microphysics1Moment, Microphysics2Moment},
     turbconv_model::DiagnosticEDMFX,
 )
     if isnothing(out)
@@ -606,6 +620,20 @@ function compute_ncraup!(
         return (state.c.sgsʲs.:1).n_rai
     else
         out .= (state.c.sgsʲs.:1).n_rai
+    end
+end
+function compute_ncraup!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::Microphysics2Moment,
+    turbconv_model::DiagnosticEDMFX,
+)
+    if isnothing(out)
+        return (cache.precomputed.ᶜn_raiʲs.:1)
+    else
+        out .= (cache.precomputed.ᶜn_raiʲs.:1)
     end
 end
 
@@ -661,7 +689,7 @@ function compute_hussnup!(
     state,
     cache,
     time,
-    moisture_model::Microphysics1Moment,
+    moisture_model::Union{Microphysics1Moment, Microphysics2Moment},
     turbconv_model::DiagnosticEDMFX,
 )
     if isnothing(out)
