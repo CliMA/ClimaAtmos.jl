@@ -53,10 +53,17 @@ function edmfx_tke_tendency!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     n = n_mass_flux_subdomains(turbconv_model)
-    (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs, ᶠu³ʲs) = p.precomputed
-    (; ᶠu³⁰, ᶠu³, ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed
+    (; ᶜturb_entrʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
+    (; ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed
     turbconv_params = CAP.turbconv_params(p.params)
     FT = eltype(p.params)
+    
+    # Compute velocity quantities on demand
+    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+    @. ᶠuₕ³ = compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+    ᶜu = compute_ᶜu(Y, ᶠuₕ³)
+    ᶠu³ = compute_ᶠu³(Y, ᶠuₕ³)
+    ᶜu⁰, ᶠu³⁰, _ = compute_environment_velocity_quantities(Y, ᶠuₕ³, turbconv_model)
 
 
     ᶜρa⁰ =
@@ -74,9 +81,12 @@ function edmfx_tke_tendency!(
         ᶜρaʲ =
             turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
             p.precomputed.ᶜρaʲs.:($j)
+        # Compute SGS velocity on demand
+        _, ᶠu³ʲ, _ = compute_sgs_velocity_quantities(Y, ᶠuₕ³, turbconv_model, j)
+        
         @. ᶜtke_press +=
             ᶜρaʲ *
-            adjoint(ᶜinterp.(ᶠu³ʲs.:($$j) - ᶠu³⁰)) *
+            adjoint(ᶜinterp.(ᶠu³ʲ - ᶠu³⁰)) *
             ᶜinterp(
                 C3((nh_pressure3_buoyʲs.:($$j)) + nh_pressure3_dragʲs.:($$j)),
             )
@@ -117,11 +127,14 @@ function edmfx_tke_tendency!(
             ᶜρaʲ =
                 turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
                 p.precomputed.ᶜρaʲs.:($j)
+            # Compute SGS velocity on demand for entrainment/detrainment
+            _, ᶠu³ʲ, _ = compute_sgs_velocity_quantities(Y, ᶠuₕ³, turbconv_model, j)
+            
             # dynamical entrainment/detrainment
             @. Yₜ.c.sgs⁰.ρatke +=
                 ᶜρaʲ * (
                     ᶜdetrʲs.:($$j) * 1 / 2 *
-                    norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) -
+                    norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲ)) -
                     ᶜentrʲs.:($$j) * ᶜtke⁰
                 )
             # turbulent entrainment
@@ -129,7 +142,7 @@ function edmfx_tke_tendency!(
                 ᶜρaʲ *
                 ᶜturb_entrʲs.:($$j) *
                 (
-                    norm(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) *
+                    norm(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲ)) *
                     norm(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³)) - ᶜtke⁰
                 )
         end

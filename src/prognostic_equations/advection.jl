@@ -112,46 +112,52 @@ in `Yₜ.c.sgsʲs` if applicable.
 """
 NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜu) = p.precomputed
+    # Velocity quantities are now computed on demand
 
-    if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜuʲs) = p.precomputed
-    end
+    # SGS velocity quantities are now computed on demand
 
+    # Compute velocity on demand for tracer advection
+    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+    @. ᶠuₕ³ = compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+    ᶜu = compute_ᶜu(Y, ᶠuₕ³)
+    
     for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
         @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.:($$ρχ_name) * ᶜu)
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
+            # Compute SGS velocity on demand
+            ᶜuʲ, _, _ = compute_sgs_velocity_quantities(Y, ᶠuₕ³, p.atmos.turbconv_model, j)
+            
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
-                Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
+                wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲ) -
+                Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲ)
             if p.atmos.moisture_model isa NonEquilMoistModel && (
                 p.atmos.microphysics_model isa Microphysics1Moment ||
                 p.atmos.microphysics_model isa Microphysics2Moment
             )
                 @. Yₜ.c.sgsʲs.:($$j).q_liq -=
-                    wdivₕ(Y.c.sgsʲs.:($$j).q_liq * ᶜuʲs.:($$j)) -
-                    Y.c.sgsʲs.:($$j).q_liq * wdivₕ(ᶜuʲs.:($$j))
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_liq * ᶜuʲ) -
+                    Y.c.sgsʲs.:($$j).q_liq * wdivₕ(ᶜuʲ)
                 @. Yₜ.c.sgsʲs.:($$j).q_ice -=
-                    wdivₕ(Y.c.sgsʲs.:($$j).q_ice * ᶜuʲs.:($$j)) -
-                    Y.c.sgsʲs.:($$j).q_ice * wdivₕ(ᶜuʲs.:($$j))
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_ice * ᶜuʲ) -
+                    Y.c.sgsʲs.:($$j).q_ice * wdivₕ(ᶜuʲ)
                 @. Yₜ.c.sgsʲs.:($$j).q_rai -=
-                    wdivₕ(Y.c.sgsʲs.:($$j).q_rai * ᶜuʲs.:($$j)) -
-                    Y.c.sgsʲs.:($$j).q_rai * wdivₕ(ᶜuʲs.:($$j))
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_rai * ᶜuʲ) -
+                    Y.c.sgsʲs.:($$j).q_rai * wdivₕ(ᶜuʲ)
                 @. Yₜ.c.sgsʲs.:($$j).q_sno -=
-                    wdivₕ(Y.c.sgsʲs.:($$j).q_sno * ᶜuʲs.:($$j)) -
-                    Y.c.sgsʲs.:($$j).q_sno * wdivₕ(ᶜuʲs.:($$j))
+                    wdivₕ(Y.c.sgsʲs.:($$j).q_sno * ᶜuʲ) -
+                    Y.c.sgsʲs.:($$j).q_sno * wdivₕ(ᶜuʲ)
             end
             if p.atmos.moisture_model isa NonEquilMoistModel &&
                p.atmos.microphysics_model isa Microphysics2Moment
                 @. Yₜ.c.sgsʲs.:($$j).n_liq -=
-                    wdivₕ(Y.c.sgsʲs.:($$j).n_liq * ᶜuʲs.:($$j)) -
-                    Y.c.sgsʲs.:($$j).n_liq * wdivₕ(ᶜuʲs.:($$j))
+                    wdivₕ(Y.c.sgsʲs.:($$j).n_liq * ᶜuʲ) -
+                    Y.c.sgsʲs.:($$j).n_liq * wdivₕ(ᶜuʲ)
                 @. Yₜ.c.sgsʲs.:($$j).n_rai -=
-                    wdivₕ(Y.c.sgsʲs.:($$j).n_rai * ᶜuʲs.:($$j)) -
-                    Y.c.sgsʲs.:($$j).n_rai * wdivₕ(ᶜuʲs.:($$j))
+                    wdivₕ(Y.c.sgsʲs.:($$j).n_rai * ᶜuʲ) -
+                    Y.c.sgsʲs.:($$j).n_rai * wdivₕ(ᶜuʲ)
             end
         end
     end
@@ -194,18 +200,30 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
-    (; ᶜu, ᶠu³, ᶜK, ᶜts) = p.precomputed
+    (; ᶜts) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
-    (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
+    # SGS velocity quantities are now computed on demand
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    ᶠu³⁰ =
-        advect_tke ?
-        (
-            turbconv_model isa EDOnlyEDMFX ? p.precomputed.ᶠu³ :
-            p.precomputed.ᶠu³⁰
-        ) : nothing
+    # Compute velocity quantities on demand
+    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+    @. ᶠuₕ³ = compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+    ᶜu = compute_ᶜu(Y, ᶠuₕ³)
+    ᶠu³ = compute_ᶠu³(Y, ᶠuₕ³)
+    ᶜK = compute_ᶜK(ᶜu)
+    
+    # For TKE advection, compute environment velocity
+    if advect_tke
+        if turbconv_model isa EDOnlyEDMFX
+            ᶜu⁰, ᶠu³⁰, ᶜK⁰ = compute_environment_velocity_quantities(Y, ᶠuₕ³, turbconv_model)
+        else
+            # For other EDMFX models, compute from sgs velocities
+            ᶜu⁰, ᶠu³⁰, ᶜK⁰ = compute_environment_velocity_quantities(Y, ᶠuₕ³, turbconv_model)
+        end
+    else
+        ᶠu³⁰ = nothing
+    end
     ᶜρa⁰ =
         advect_tke ?
         (
@@ -286,9 +304,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             (ᶜf³ + ᶜω³) × CT12(ᶜu)
         @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
         for j in 1:n
+            # Compute SGS velocity quantities on demand
+            ᶜuʲ, _, ᶜKʲ = compute_sgs_velocity_quantities(Y, ᶠuₕ³, turbconv_model, j)
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
+                ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲ)) +
+                ᶠgradᵥ(ᶜKʲ)
         end
     else
         # deep atmosphere
@@ -297,9 +317,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
         @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
         for j in 1:n
+            # Compute SGS velocity quantities on demand
+            ᶜuʲ, _, ᶜKʲ = compute_sgs_velocity_quantities(Y, ᶠuₕ³, turbconv_model, j)
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
+                (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲ)) +
+                ᶠgradᵥ(ᶜKʲ)
         end
     end
 
@@ -351,7 +373,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; edmfx_upwinding) = p.atmos.numerics
-    (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs) = p.precomputed
+    (; ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
 
     turbconv_params = CAP.turbconv_params(params)
@@ -362,11 +384,9 @@ function edmfx_sgs_vertical_advection_tendency!(
     for j in 1:n
         # TODO: Add a biased GradientF2F operator in ClimaCore
         @. ᶜu₃ʲ = ᶜinterp(Y.f.sgsʲs.:($$j).u₃)
-        @. ᶜKᵥʲ = ifelse(
-            ᶜu₃ʲ.components.data.:1 > 0,
-            ᶜleft_bias(ᶠKᵥʲs.:($$j)),
-            ᶜright_bias(ᶠKᵥʲs.:($$j)),
-        )
+        # Compute Kᵥ on demand from velocity
+        ᶜuʲ, _, _ = compute_sgs_velocity_quantities(Y, p.scratch.ᶠtemp_CT3, turbconv_model, j)
+        @. ᶜKᵥʲ = (adjoint(CT3(ᶜu₃ʲ)) * ᶜu₃ʲ) / 2
         # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
         # and calcuate the buoyancy term relative to the grid-mean density.
         # We also include the buoyancy term in the nonhydrostatic pressure closure here.
@@ -385,8 +405,13 @@ function edmfx_sgs_vertical_advection_tendency!(
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
         edmf_upwnd = edmfx_upwinding
 
+        # Compute velocity on demand for vertical advection
+        ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+        @. ᶠuₕ³ = compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+        _, ᶠu³ʲ, _ = compute_sgs_velocity_quantities(Y, ᶠuₕ³, turbconv_model, j)
+        
         # Flux form vertical advection of area farction with the grid mean velocity
-        vtt = vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmf_upwnd)
+        vtt = vertical_transport(ᶜρʲs.:($j), ᶠu³ʲ, ᶜa, dt, edmf_upwnd)
         @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
 
         # Advective form advection of mse and q_tot with the grid mean velocity
@@ -400,7 +425,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
             ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
 
-            va = vertical_advection(ᶠu³ʲs.:($j), ᶜχʲ, edmf_upwnd)
+            va = vertical_advection(ᶠu³ʲ, ᶜχʲ, edmf_upwnd)
             @. ᶜχʲₜ += va
         end
 
@@ -444,7 +469,7 @@ function edmfx_sgs_vertical_advection_tendency!(
 
                 # Advective form advection of moisture tracers with the grid mean velocity
                 # Eq (2) term (1) in the writeup
-                va = vertical_advection(ᶠu³ʲs.:($j), ᶜqʲ, edmf_upwnd)
+                va = vertical_advection(ᶠu³ʲ, ᶜqʲ, edmf_upwnd)
                 @. ᶜqʲₜ += va
 
                 # Advective form advection of q_tot and moisture tracers with sedimentation velocities

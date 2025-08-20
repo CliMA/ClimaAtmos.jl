@@ -1353,13 +1353,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
-    if p.atmos.turbconv_model isa DiagnosticEDMFX
-        (; ᶠu³⁰, ᶜu⁰) = p.precomputed
-    elseif p.atmos.turbconv_model isa EDOnlyEDMFX
-        ᶠu³⁰ = p.precomputed.ᶠu³
-        ᶜu⁰ = ᶜu
-    end
-    @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))  # Set here, but used in a different function
+    # Velocity quantities are now computed on the fly as needed
 
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
@@ -1374,15 +1368,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     )
 
     # TODO: Currently the shear production only includes vertical gradients
-    ᶠu⁰ = p.scratch.ᶠtemp_C123
-    @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
-    ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
-    ᶜstrain_rate .= compute_strain_rate_center(ᶠu⁰)
-    @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
+    # Velocity quantities are now computed on the fly as needed
+    # Strain rate computation moved to on-demand calculation
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
     ρ_int_values = Fields.field_values(Fields.level(Y.c.ρ, 1))
-    u_int_values = Fields.field_values(Fields.level(ᶜu, 1))
     ustar_values = Fields.field_values(ustar)
     int_local_geometry_values =
         Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))

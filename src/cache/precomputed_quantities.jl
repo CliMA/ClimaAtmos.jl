@@ -5,6 +5,9 @@ import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
 using Base.Broadcast: materialize
 
+# Import the velocity computation functions
+import ..ClimaAtmos: compute_ᶜu, compute_ᶠu³, compute_ᶜK, compute_ᶠu, compute_sgs_velocity_quantities, compute_environment_velocity_quantities
+
 """
     implicit_precomputed_quantities(Y, atmos)
 
@@ -13,9 +16,6 @@ on each iteration of the implicit solver). This includes all quantities related
 to velocity and thermodynamics that are used in the implicit tendency.
 
 The following grid-scale quantities are treated implicitly and are precomputed:
-    - `ᶜu`: covariant velocity on cell centers
-    - `ᶠu`: contravariant velocity on cell faces
-    - `ᶜK`: kinetic energy on cell centers
     - `ᶜts`: thermodynamic state on cell centers
     - `ᶜp`: air pressure on cell centers
 If the `turbconv_model` is `PrognosticEDMFX`, there also two SGS versions of
@@ -26,6 +26,8 @@ In addition, there are several other SGS quantities for `PrognosticEDMFX`:
     - `ᶜρʲs`: a tuple of the air densities of the mass-flux subdomains on cell
         centers
 
+Note: Velocity quantities (ᶜu, ᶠu³, ᶜK) are no longer precomputed and are
+computed on the fly as needed to reduce memory usage and improve performance.
 
 TODO: Rename `ᶜK` to `ᶜκ`.
 """
@@ -36,10 +38,6 @@ function implicit_precomputed_quantities(Y, atmos)
     n = n_mass_flux_subdomains(turbconv_model)
     gs_quantities = (;
         ᶜspecific = Base.materialize(ᶜspecific_gs_tracers(Y)),
-        ᶜu = similar(Y.c, C123{FT}),
-        ᶠu³ = similar(Y.f, CT3{FT}),
-        ᶠu = similar(Y.f, CT123{FT}),
-        ᶜK = similar(Y.c, FT),
         ᶜts = similar(Y.c, TST),
         ᶜp = similar(Y.c, FT),
     )
@@ -47,18 +45,9 @@ function implicit_precomputed_quantities(Y, atmos)
     prognostic_sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
-            ᶠu₃⁰ = similar(Y.f, C3{FT}),
-            ᶜu⁰ = similar(Y.c, C123{FT}),
-            ᶠu³⁰ = similar(Y.f, CT3{FT}),
-            ᶜK⁰ = similar(Y.c, FT),
             ᶜts⁰ = similar(Y.c, TST),
-            ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
-            ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
-            ᶜKʲs = similar(Y.c, NTuple{n, FT}),
-            ᶠKᵥʲs = similar(Y.f, NTuple{n, FT}),
             ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
-            ᶠnh_pressure₃_dragʲs = similar(Y.f, NTuple{n, C3{FT}}),
         ) : (;)
     return (; gs_quantities..., sgs_quantities..., prognostic_sgs_quantities...)
 end
@@ -212,9 +201,6 @@ function precomputed_quantities(Y, atmos)
         atmos.turbconv_model isa DiagnosticEDMFX ?
         (;
             ᶜρaʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
-            ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
-            ᶜKʲs = similar(Y.c, NTuple{n, FT}),
             ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
             ᶜmseʲs = similar(Y.c, NTuple{n, FT}),
@@ -224,9 +210,6 @@ function precomputed_quantities(Y, atmos)
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
             ᶠnh_pressure³_buoyʲs = similar(Y.f, NTuple{n, CT3{FT}}),
             ᶠnh_pressure³_dragʲs = similar(Y.f, NTuple{n, CT3{FT}}),
-            ᶠu³⁰ = similar(Y.f, CT3{FT}),
-            ᶜu⁰ = similar(Y.c, C123{FT}),
-            ᶜK⁰ = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             precipitation_sgs_quantities...,
             diagnostic_precipitation_sgs_quantities...,
@@ -263,6 +246,77 @@ end
 function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
     ᶜJ = Fields.local_geometry_field(ᶜρ).J
     return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
+end
+
+"""
+    compute_ᶜu(Y, ᶠuₕ³)
+
+Computes the covariant velocity on cell centers from the horizontal velocity
+and vertical velocity components.
+"""
+function compute_ᶜu(Y, ᶠuₕ³)
+    return @. C123(Y.c.uₕ) + ᶜinterp(C123(Y.f.u₃))
+end
+
+"""
+    compute_ᶠu³(Y, ᶠuₕ³)
+
+Computes the contravariant velocity on cell faces from the horizontal velocity
+and vertical velocity components.
+"""
+function compute_ᶠu³(Y, ᶠuₕ³)
+    return @. ᶠuₕ³ + CT3(Y.f.u₃)
+end
+
+"""
+    compute_ᶜK(ᶜu)
+
+Computes the kinetic energy on cell centers from the velocity field.
+"""
+function compute_ᶜK(ᶜu)
+    return @. norm_sqr(ᶜu) / 2
+end
+
+"""
+    compute_ᶠu(Y, ᶜu, ᶠu³)
+
+Computes the full velocity on faces from the cell-center velocity and
+face velocity components.
+"""
+function compute_ᶠu(Y, ᶜu, ᶠu³)
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    return @. CT123(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
+end
+
+"""
+    compute_sgs_velocity_quantities(Y, ᶠuₕ³, turbconv_model, j)
+
+Computes the subgrid-scale velocity quantities for a specific mass-flux subdomain.
+"""
+function compute_sgs_velocity_quantities(Y, ᶠuₕ³, turbconv_model, j)
+    ᶜuʲ = @. C123(Y.c.uₕ) + ᶜinterp(C123(Y.f.sgsʲs.:($j).u₃))
+    ᶠu³ʲ = @. ᶠuₕ³ + CT3(Y.f.sgsʲs.:($j).u₃)
+    ᶜKʲ = @. norm_sqr(ᶜuʲ) / 2
+    return ᶜuʲ, ᶠu³ʲ, ᶜKʲ
+end
+
+"""
+    compute_environment_velocity_quantities(Y, ᶠuₕ³, turbconv_model)
+
+Computes the environment velocity quantities for EDMFX models.
+"""
+function compute_environment_velocity_quantities(Y, ᶠuₕ³, turbconv_model)
+    if turbconv_model isa EDOnlyEDMFX
+        ᶜu⁰ = @. C123(Y.c.uₕ) + ᶜinterp(C123(Y.f.u₃))
+        ᶠu³⁰ = @. ᶠuₕ³ + CT3(Y.f.u₃)
+        ᶜK⁰ = @. norm_sqr(ᶜu⁰) / 2
+    else
+        # For other EDMFX models, compute from sgs velocities
+        ᶜu⁰ = @. C123(Y.c.uₕ) + ᶜinterp(C123(Y.f.u₃))
+        ᶠu³⁰ = @. ᶠuₕ³ + CT3(Y.f.u₃)
+        ᶜK⁰ = @. norm_sqr(ᶜu⁰) / 2
+    end
+    return ᶜu⁰, ᶠu³⁰, ᶜK⁰
 end
 
 """
@@ -315,14 +369,7 @@ function set_velocity_at_top!(Y, turbconv_model)
     return nothing
 end
 
-# This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
-# ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
-function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
-    @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
-    @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
-    ᶜK .= compute_kinetic(ᶜuₕ, ᶠu₃)
-    return nothing
-end
+# Velocity quantities are now computed on demand as needed
 
 function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
     ρaʲs(sgsʲs) = map(sgsʲ -> sgsʲ.ρa, sgsʲs)
@@ -427,7 +474,7 @@ quantities are updated.
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, moisture_model, microphysics_model) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp) = p.precomputed
+    (; ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -440,24 +487,10 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     set_velocity_at_top!(Y, turbconv_model)
 
-    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    @. ᶠu = CT123(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
-    if n > 0
-        # TODO: In the following increments to ᶜK, we actually need to add
-        # quantities of the form ᶜρaχ⁰ / ᶜρ⁰ and ᶜρaχʲ / ᶜρʲ to ᶜK, rather than
-        # quantities of the form ᶜρaχ⁰ / ᶜρ and ᶜρaχʲ / ᶜρ. However, we cannot
-        # compute ᶜρ⁰ and ᶜρʲ without first computing ᶜts⁰ and ᶜtsʲ, both of
-        # which depend on the value of ᶜp, which in turn depends on ᶜts. Since
-        # ᶜts depends on ᶜK, this
-        # means that the amount by which ᶜK needs to be incremented is a
-        # function of ᶜK itself. So, unless we run a nonlinear solver here, this
-        # circular dependency will prevent us from computing the exact value of
-        # ᶜK. For now, we will make the anelastic approximation ᶜρ⁰ ≈ ᶜρʲ ≈ ᶜρ.
-        # add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
-        # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
-        # TODO: We should think more about these increments before we use them.
-    end
+    # Velocity quantities are now computed on demand as needed
+    # SGS kinetic energy increments are now computed on demand as needed
+    # Compute kinetic energy on demand for thermodynamic state
+    ᶜK = compute_ᶜK(compute_ᶜu(Y, ᶠuₕ³))
     @. ᶜts = ts_gs(thermo_args..., Y.c, ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
@@ -483,7 +516,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         p.atmos
     (; vertical_diffusion, call_cloud_diagnostics_per_stage) = p.atmos
     (; ᶜΦ) = p.core
-    (; ᶜu, ᶜts, ᶜp) = p.precomputed
+    (; ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3 # updated in set_implicit_precomputed_quantities!
     thermo_params = CAP.thermodynamics_params(p.params)
 

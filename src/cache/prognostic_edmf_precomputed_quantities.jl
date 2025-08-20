@@ -21,14 +21,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     thermo_params = CAP.thermodynamics_params(p.params)
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
-    (; ᶜp, ᶜK) = p.precomputed
-    (; ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰) = p.precomputed
+    (; ᶜp) = p.precomputed
+    (; ᶜts⁰) = p.precomputed
 
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
 
-    set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
-    set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
+    # Velocity quantities are now computed on the fly as needed
     # @. ᶜK⁰ += ᶜtke⁰
     ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
 
@@ -73,14 +72,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     thermo_params = CAP.thermodynamics_params(p.params)
 
     (; ᶜΦ,) = p.core
-    (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ᶜp, ᶜtsʲs, ᶜρʲs) = p.precomputed
 
     for j in 1:n
-        ᶜuʲ = ᶜuʲs.:($j)
-        ᶠu³ʲ = ᶠu³ʲs.:($j)
-        ᶜKʲ = ᶜKʲs.:($j)
-        ᶠKᵥʲ = ᶠKᵥʲs.:($j)
-        ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
         ᶜtsʲ = ᶜtsʲs.:($j)
         ᶜρʲ = ᶜρʲs.:($j)
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
@@ -95,8 +89,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
         end
 
-        set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
-        @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
+        # Velocity quantities are now computed on the fly as needed
         if p.atmos.moisture_model isa NonEquilMoistModel && (
             p.atmos.microphysics_model isa Microphysics1Moment ||
             p.atmos.microphysics_model isa Microphysics2Moment

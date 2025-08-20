@@ -73,7 +73,7 @@ function cloud_condensate_tendency!(
     ::Microphysics2Moment,
     _,
 )
-    (; ᶜts, ᶜu) = p.precomputed
+    (; ᶜts) = p.precomputed
     (; params, dt) = p
     thp = CAP.thermodynamics_params(params)
     cmp = CAP.microphysics_2m_params(params)
@@ -124,22 +124,27 @@ function cloud_condensate_tendency!(
     )
 
     # Compute aerosol activation (ARG 2000)
-    @. Yₜ.c.ρn_liq +=
-        Y.c.ρ * aerosol_activation_sources(
-            seasalt_num,
-            seasalt_mean_radius,
-            sulfate_num,
-            specific(Y.c.ρq_tot, Y.c.ρ),
-            specific(Y.c.ρq_liq + Y.c.ρq_rai, Y.c.ρ),
-            specific(Y.c.ρq_ice + Y.c.ρq_sno, Y.c.ρ),
-            specific(Y.c.ρn_liq + Y.c.ρn_rai, Y.c.ρ),
-            Y.c.ρ,
-            w_component.(Geometry.WVector.(ᶜu)),
-            (cmp,),
-            thp,
-            ᶜts,
-            dt,
-        )
+            # Compute velocity on demand for aerosol activation
+        ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+        @. ᶠuₕ³ = compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+        ᶜu = compute_ᶜu(Y, ᶠuₕ³)
+        
+        @. Yₜ.c.ρn_liq +=
+            Y.c.ρ * aerosol_activation_sources(
+                seasalt_num,
+                seasalt_mean_radius,
+                sulfate_num,
+                specific(Y.c.ρq_tot, Y.c.ρ),
+                specific(Y.c.ρq_liq + Y.c.ρq_rai, Y.c.ρ),
+                specific(Y.c.ρq_ice + Y.c.ρq_sno, Y.c.ρ),
+                specific(Y.c.ρn_liq + Y.c.ρn_rai, Y.c.ρ),
+                Y.c.ρ,
+                w_component.(Geometry.WVector.(ᶜu)),
+                (cmp,),
+                thp,
+                ᶜts,
+                dt,
+            )
 end
 
 #####

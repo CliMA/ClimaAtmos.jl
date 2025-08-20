@@ -117,10 +117,14 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
 
-    # Grid scale hyperdiffusion
+    # Grid scale hyperdiffusion - compute velocity on demand
+    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+    @. ᶠuₕ³ = compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+    ᶜu = compute_ᶜu(Y, ᶠuₕ³)
+    
     @. ᶜ∇²u =
-        C123(wgradₕ(divₕ(p.precomputed.ᶜu))) -
-        C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜu))))
+        C123(wgradₕ(divₕ(ᶜu))) -
+        C123(wcurlₕ(C123(curlₕ(ᶜu))))
 
     @. ᶜ∇²specific_energy =
         wdivₕ(gradₕ(specific(Y.c.ρe_tot, Y.c.ρ) + ᶜp / Y.c.ρ - ᶜh_ref))
@@ -138,9 +142,12 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # Sub-grid scale hyperdiffusion
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n
+            # Compute SGS velocity on demand
+            ᶜuʲ, _, _ = compute_sgs_velocity_quantities(Y, p.scratch.ᶠtemp_CT3, turbconv_model, j)
+            
             @. ᶜ∇²uʲs.:($$j) =
-                C123(wgradₕ(divₕ(p.precomputed.ᶜuʲs.:($$j)))) -
-                C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜuʲs.:($$j)))))
+                C123(wgradₕ(divₕ(ᶜuʲ))) -
+                C123(wcurlₕ(C123(curlₕ(ᶜuʲ))))
             @. ᶜ∇²mseʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).mse))
             @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
             @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
