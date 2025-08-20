@@ -4,14 +4,11 @@ import ClimaAtmos as CA
 import ClimaCore: InputOutput, Spaces, Fields
 import ClimaComms
 
-
 # Save the computed drag data to a NetCDF file for diagnostics
 using NCDatasets
 using ClimaCoreTempestRemap # for apply_remap
 
-# include("../gw_plotutils.jl")
-
-const FT = Float64
+const FT = Float32
 
 include(
     joinpath(pkgdir(CA), "post_processing/remap", "remap_helpers.jl"),
@@ -174,8 +171,6 @@ function _diagnostics(datafile_rll)
         yreversed = false,
     )
 
-    # @Main.infiltrate
-
     CairoMakie.save(joinpath(output_dir, "diagnostics.png"), fig)
 end
 
@@ -183,8 +178,6 @@ if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()
     config = CA.AtmosConfig(config_file; job_id)
 end
-
-# simulation = CA.get_simulation(config)
 
 sim_info = CA.get_sim_info(config)
 params = CA.ClimaAtmosParameters(config)
@@ -214,7 +207,7 @@ earth_radius = Spaces.topology(hspace).mesh.domain.radius
 elevation_data =
     CA.AA.earth_orography_file_path(; context = ClimaComms.context(Y.c))
 
-load_preprocessed_topography = true
+load_preprocessed_topography = false
 
 if load_preprocessed_topography
     (; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem) = CA.gen_fn(parsed_args)
@@ -231,6 +224,3 @@ datafile_cg, weightfile = _save_nc_data(output_filename, topo_cg, spaces)
 
 datafile_rll = _remap_nc_data()
 _diagnostics(datafile_rll)
-
-# after saving the HDF5 files, load the HDF5 output and do a remapping
-# For this, we need ...
