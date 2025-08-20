@@ -1694,23 +1694,46 @@ function make_plots(
     )
 end
 
-
-
 Larcform1Plots = Val{:larcform1}
 function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
-    short_names = ["ta", "thetaa", "pfull"]
-    reduction = "inst"
-    period = "10mins"
-    vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return get(simdir; short_name, reduction)
+
+
+    short_names_2D = ["ta", "thetaa", "pfull", "clw", "cli", "hus", "hur", "ua", "va", "wa", "rlu", "rld", "rhoa"]
+    short_names_1D = ["rlut", "rlus", "rlds", "evspsbl", "lwp", "rsdt", "rlutcs", "rldscs", "hfes", "cl", "pr", "prsn"]
+    reduction = "average"
+
+    vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
+    slice(get(simdir; short_name, reduction), x=0, y=0)
     end
+
+    vars_1D = map_comparison(simdirs, short_names_1D) do simdir, short_name
+        slice(get(simdir; short_name, reduction), x=0, y=0)
+    end
+
     make_plots_generic(
         output_paths,
-        vars,
-        x = 0.0,
-        y = 0.0,
+        vars_2D,
         time = FIRST_SNAP,
-        more_kwargs = Dict(:axis => Dict(:dim_on_y => true)),
+        MAX_NUM_COLS = 2,
+        output_name = "summary_profiles_initial",
+        more_kwargs = YLINEARSCALE
     )
+
+    make_plots_generic(
+        output_paths,
+        vars_2D,
+        time = LAST_SNAP,
+        MAX_NUM_COLS = 2,
+        output_name = "summary_profiles_last",
+        more_kwargs = YLINEARSCALE
+    )
+    
+    make_plots_generic(
+        output_paths,
+        vars_1D,
+        MAX_NUM_COLS = 2,
+        output_name = "summary_timeseries",
+    )
+
 end
