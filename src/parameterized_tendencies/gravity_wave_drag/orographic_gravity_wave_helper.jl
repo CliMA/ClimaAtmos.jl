@@ -358,12 +358,23 @@ function move_topo_info_to_gpu(topo_info, ᶜtarget_space)
     hmin = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info.hmin)
     hmax = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info.hmax)
 
-    t11 = Fields.Field(Fields.field_values(t11), ᶜtarget_space)
-    t12 = Fields.Field(Fields.field_values(t12), ᶜtarget_space)
-    t21 = Fields.Field(Fields.field_values(t21), ᶜtarget_space)
-    t22 = Fields.Field(Fields.field_values(t22), ᶜtarget_space)
-    hmin = Fields.Field(Fields.field_values(hmin), ᶜtarget_space)
-    hmax = Fields.Field(Fields.field_values(hmax), ᶜtarget_space)
+    return set_target_spaces(
+        (; t11, t12, t21, t22, hmin, hmax),
+        ᶜtarget_space,
+    )
+end
+
+function set_topo_info_target_space(topo_info, ᶜtarget_space)
+    (; t11, t12, t21, t22, hmin, hmax) = topo_info
+    FT = eltype(t11)
+
+    val = FT(0.01)
+    t11 = Fields.Field(Fields.field_values(t11), ᶜtarget_space) .* val
+    t12 = Fields.Field(Fields.field_values(t12), ᶜtarget_space) .* val
+    t21 = Fields.Field(Fields.field_values(t21), ᶜtarget_space) .* val
+    t22 = Fields.Field(Fields.field_values(t22), ᶜtarget_space) .* val
+    hmin = Fields.Field(Fields.field_values(hmin), ᶜtarget_space) .* FT(3.0)
+    hmax = Fields.Field(Fields.field_values(hmax), ᶜtarget_space) 
 
     topo_info = (; 
         t11 = t11,
@@ -392,12 +403,26 @@ function gen_fn(parsed_args)
 end
 
 
-function load_preprocessed_topography(parsed_args)
+function load_preprocessed_topography(parsed_args::Dict{String, Any})
+    @info "loading topography drag vector"
     (; output_filename,) = gen_fn(parsed_args)
 
     reader = InputOutput.HDF5Reader(
         joinpath(@__DIR__, "../../../$(output_filename).hdf5"),
         ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded()),
+    )
+    computed_drag = InputOutput.read_field(reader, "computed_drag")
+
+    Base.close(reader)
+    return computed_drag
+end
+
+# For direct filename
+function load_preprocessed_topography(filename::String)
+    @info "loading topography drag vector"
+    reader = InputOutput.HDF5Reader(
+        joinpath(@__DIR__, "../../../$(filename).hdf5"),
+        ClimaComms.SingletonCommsContext(),
     )
     computed_drag = InputOutput.read_field(reader, "computed_drag")
 
