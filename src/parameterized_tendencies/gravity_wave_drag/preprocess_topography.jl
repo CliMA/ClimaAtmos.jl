@@ -4,14 +4,11 @@ import ClimaAtmos as CA
 import ClimaCore: InputOutput, Spaces, Fields
 import ClimaComms
 
-
 # Save the computed drag data to a NetCDF file for diagnostics
 using NCDatasets
 using ClimaCoreTempestRemap # for apply_remap
 
-# include("../gw_plotutils.jl")
-
-const FT = Float64
+const FT = Float32
 
 include(
     joinpath(pkgdir(CA), "post_processing/remap", "remap_helpers.jl"),
@@ -214,7 +211,7 @@ earth_radius = Spaces.topology(hspace).mesh.domain.radius
 elevation_data =
     CA.AA.earth_orography_file_path(; context = ClimaComms.context(Y.c))
 
-load_preprocessed_topography = true
+load_preprocessed_topography = false
 
 if load_preprocessed_topography
     (; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem) = CA.gen_fn(parsed_args)
