@@ -1409,6 +1409,7 @@ DiagEDMFBoxPlotsWithPrecip = Union{
     Val{:diagnostic_edmfx_dycoms_rf02_box},
     Val{:diagnostic_edmfx_rico_box},
     Val{:diagnostic_edmfx_trmm_box},
+    Val{:diagnostic_edmfx_dycoms_rf02_column},
 }
 """
     plot_edmf_vert_profile!(grid_loc, var_group)
