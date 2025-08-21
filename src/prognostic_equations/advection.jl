@@ -72,7 +72,8 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         if p.atmos.turbconv_model isa EDOnlyEDMFX
             ᶜu_for_tke_advection = ᶜu
         elseif p.atmos.turbconv_model isa AbstractEDMF
-            ᶜu_for_tke_advection = p.precomputed.ᶜu⁰
+            # Use the already computed environment velocity
+            ᶜu_for_tke_advection = ᶜu⁰
         else
             error(
                 "Unsupported turbconv_model type for TKE advection: $(typeof(p.atmos.turbconv_model))",

@@ -131,9 +131,9 @@ end
 
     # Define a function for updating these fields, given the temperature at the
     # surface and the current cache p.
-    function update_surface_fields!(sfc_ts, sfc_conditions, surface_T, p)
+    function update_surface_fields!(sfc_ts, sfc_conditions, surface_T, p, Y)
         (; params) = p
-        (; ᶜts, ᶜu) = p.precomputed
+        (; ᶜts) = p.precomputed
         thermo_params = CAP.thermodynamics_params(params)
         surface_params = CAP.surface_fluxes_params(params)
 
@@ -145,6 +145,11 @@ end
         int_local_geometry_values = Fields.field_values(int_local_geometry)
         int_z_values = Fields.field_values(int_local_geometry.coordinates.z)
         int_ts_values = Fields.field_values(Fields.level(ᶜts, 1))
+        
+        # Compute velocity on demand since it's no longer precomputed
+        ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+        @. ᶠuₕ³ = CA.compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+        ᶜu = CA.compute_ᶜu(Y, ᶠuₕ³)
         int_u_values = Fields.field_values(Fields.level(ᶜu, 1))
 
         @. sfc_ts_values = surface_ts(surface_T, int_ts_values, thermo_params)
@@ -197,12 +202,12 @@ end
 
     # Test that set_surface_conditions! can be used to update the surface
     # temperature to T1 and then to T2.
-    update_surface_fields!(sfc_ts, sfc_conditions, FT(T1), p)
+    update_surface_fields!(sfc_ts, sfc_conditions, FT(T1), p, Y)
     CA.SurfaceConditions.set_surface_conditions!(p, sfc_conditions, sfc_ts)
     sfc_T =
         @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)
     @test all(isequal(T1), parent(sfc_T))
-    update_surface_fields!(sfc_ts, sfc_conditions, FT(T2), p)
+    update_surface_fields!(sfc_ts, sfc_conditions, FT(T2), p, Y)
     CA.SurfaceConditions.set_surface_conditions!(p, sfc_conditions, sfc_ts)
     sfc_T =
         @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)

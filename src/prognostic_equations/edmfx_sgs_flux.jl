@@ -3,6 +3,9 @@
 ##### fluxes computed by the EDMFX scheme
 #####
 
+# Import velocity computation functions
+import ..ClimaAtmos: compute_ᶠuₕ³, compute_environment_velocity_quantities
+
 """
     edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
 
@@ -40,10 +43,15 @@ function edmfx_sgs_mass_flux_tendency!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
-    (; ᶠu³) = p.precomputed
-    (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
+    (; ᶜρʲs) = p.precomputed
+    (; ᶜts⁰, ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
+    # Compute velocity quantities on demand
+    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+    @. ᶠuₕ³ = compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+    ᶜu, ᶠu³, ᶜK = compute_environment_velocity_quantities(Y, ᶠuₕ³, turbconv_model)
+    ᶜu⁰, ᶠu³⁰, ᶜK⁰ = compute_environment_velocity_quantities(Y, ᶠuₕ³, turbconv_model)
+    
     ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     (; dt) = p
@@ -344,9 +352,14 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜu⁰, ᶜK⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
+    # Compute velocity quantities on demand
+    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+    @. ᶠuₕ³ = compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+    ᶜu⁰, _, ᶜK⁰ = compute_environment_velocity_quantities(Y, ᶠuₕ³, turbconv_model)
+    
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
 

@@ -6,6 +6,9 @@ Updates the value of `p.precomputed.sfc_conditions` based on the current state `
 is not a PrescribedSurface.
 """
 
+# Import velocity computation functions
+import ..ClimaAtmos: compute_ᶠuₕ³, compute_ᶜu
+
 function update_surface_conditions!(Y, p, t)
     # Need to extract the field values so that we can do
     # a DataLayout broadcast rather than a Field broadcast
@@ -15,12 +18,16 @@ function update_surface_conditions!(Y, p, t)
     )
     int_local_geometry_values =
         Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
-    (; ᶜts, ᶜu, sfc_conditions) = p.precomputed
+    (; ᶜts, sfc_conditions) = p.precomputed
     (; params, sfc_setup, atmos) = p
     thermo_params = CAP.thermodynamics_params(params)
     surface_fluxes_params = CAP.surface_fluxes_params(params)
     surface_temp_params = CAP.surface_temp_params(params)
     int_ts_values = Fields.field_values(Fields.level(ᶜts, 1))
+    # Compute velocity on demand since it's no longer precomputed
+    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+    @. ᶠuₕ³ = compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+    ᶜu = compute_ᶜu(Y, ᶠuₕ³)
     int_u_values = Fields.field_values(Fields.level(ᶜu, 1))
     int_z_values =
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
