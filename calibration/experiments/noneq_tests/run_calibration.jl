@@ -5,6 +5,8 @@ import EnsembleKalmanProcesses as EKP
 import YAML
 import JLD2
 using LinearAlgebra
+using Distributions
+using Distributed
 
 include("observation_map.jl")
 
