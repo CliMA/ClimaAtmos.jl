@@ -435,19 +435,7 @@ function ᶜspecific_env_mse(Y, p)
         ρa⁰mse⁰ = ᶜenv_value(ᶜρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Y.c.sgsʲs)
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     elseif turbconv_model isa DiagnosticEDMFX || turbconv_model isa EDOnlyEDMFX
-
-        n = n_mass_flux_subdomains(turbconv_model)
-        (; ᶜρaʲs) = p.precomputed
-        ᶜρamseʲ_sum = p.scratch.ᶜtemp_scalar_2
-        @. ᶜρamseʲ_sum = 0
-        for j in 1:n
-            ᶜρaʲ = ᶜρaʲs.:($j)
-            ᶜmseʲ = p.precomputed.ᶜmseʲs.:($j)
-            @. ᶜρamseʲ_sum += ᶜρaʲ * ᶜmseʲ
-        end
-        ρa⁰mse⁰ = @. lazy(ᶜρmse - ᶜρamseʲ_sum)
-        # Denominator: ρa⁰ = ρ - Σ ρaʲ, assume ᶜρa⁰ = ρ
-        ᶜρa⁰ = Y.c.ρ
+        error("Not implemented. You should use grid mean values.")
     end
 
     return @. lazy(specific(ρa⁰mse⁰, ᶜρa⁰, ᶜρmse, Y.c.ρ, turbconv_model))

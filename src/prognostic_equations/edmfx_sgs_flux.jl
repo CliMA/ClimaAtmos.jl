@@ -369,7 +369,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
         ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h)
-        ᶠρaK_u = p.scratch.ᶠtemp_scalar
+        ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
         @. ᶠρaK_u = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_u)
 
         # Total enthalpy diffusion
@@ -497,7 +497,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h)
-        ᶠρaK_u = p.scratch.ᶠtemp_scalar
+        ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
         @. ᶠρaK_u = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_u)
 
         # Total enthalpy diffusion

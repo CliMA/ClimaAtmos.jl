@@ -1,4 +1,4 @@
-255
+256
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+256
+- Fix a bug in EDMF diffusive flux
+
 255
 - Add radiation tendency to prognostic edmf updrafts
 
