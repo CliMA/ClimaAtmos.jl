@@ -1128,5 +1128,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     zero_velocity_jacobian!(matrix, Y, p, t)
 end
 
-invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R) =
+const debug_array = Any[];
+function invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R) =
+    # DEBUG 
+    # use p_{multiple instances for each config}
+    # OUT
     LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
+end
