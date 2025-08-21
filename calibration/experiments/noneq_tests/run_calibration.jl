@@ -40,8 +40,8 @@ CA.solve_atmos!(diag_sim)
 addprocs(
     CAL.SlurmManager(20),
     t = 10*60,
-    #mem_per_cpu = experiment_config["slurm_mem_per_cpu"],
-    #cpus_per_task = experiment_config["slurm_cpus_per_task"],
+    mem_per_cpu = "25G",
+    cpus_per_task = 1,
 )
 
 @everywhere begin
@@ -51,7 +51,7 @@ addprocs(
     import JLD2
     import YAML
 
-    #include("observation_map.jl")
+    include("observation_map.jl")
 
     experiment_dir = dirname(Base.active_project())
     const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")
