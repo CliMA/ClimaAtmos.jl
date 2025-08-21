@@ -411,7 +411,8 @@ function set_precipitation_cache!(
     ::Microphysics2Moment,
     ::DiagnosticEDMFX,
 )
-    error("Not implemented yet")
+    # Nothing needs to be done on the grid mean. The Sources are computed
+    # in edmf sub-domains.
     return nothing
 end
 function set_precipitation_cache!(
