@@ -686,7 +686,7 @@ function moist_baroclinic_wave_values(z, ϕ, λ, params, perturb, deep_atmospher
     T = T_v / (1 + ε * q_tot) # This is the formula used in the paper.
 
     # This is the actual formula, which would be consistent with TD:
-    # T = T_v * (1 + q_tot) / (1 + q_tot * CAP.molmass_ratio(params))
+    # T = T_v * (1 + q_tot) / (1 + q_tot * CAP.Rv_over_Rd(params))
 
     return (; T, p, q_tot, u, v)
 end
@@ -1221,7 +1221,7 @@ function (initial_condition::TRMM_LBA)(params)
     # in Pressel et al., 2015). Note that the measured profiles are different from the
     # ones required for hydrostatic balance.
     # TODO: Move this to APL.
-    molmass_ratio = TD.Parameters.molmass_ratio(thermo_params)
+    Rv_over_Rd = TD.Parameters.Rv_over_Rd(thermo_params)
     measured_p = APL.TRMM_LBA_p(FT)
     measured_RH = APL.TRMM_LBA_RH(FT)
     measured_z_values = APL.TRMM_LBA_z(FT)
@@ -1229,8 +1229,8 @@ function (initial_condition::TRMM_LBA)(params)
         p_v_sat = TD.saturation_vapor_pressure(thermo_params, T(z), TD.Liquid())
         denominator =
             measured_p(z) - p_v_sat +
-            (1 / molmass_ratio) * p_v_sat * measured_RH(z) / 100
-        q_v_sat = p_v_sat * (1 / molmass_ratio) / denominator
+            (1 / Rv_over_Rd) * p_v_sat * measured_RH(z) / 100
+        q_v_sat = p_v_sat * (1 / Rv_over_Rd) / denominator
         return q_v_sat * measured_RH(z) / 100
     end
     q_tot = Intp.extrapolate(

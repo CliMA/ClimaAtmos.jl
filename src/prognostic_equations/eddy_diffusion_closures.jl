@@ -120,7 +120,7 @@ function buoyancy_gradients(
     FT = eltype(bg_model)
 
     g = TDP.grav(thermo_params)
-    molmass_ratio = TDP.molmass_ratio(thermo_params)
+    Rv_over_Rd = TDP.Rv_over_Rd(thermo_params)
     R_d = TDP.R_d(thermo_params)
     R_v = TDP.R_v(thermo_params)
 
@@ -159,7 +159,7 @@ function buoyancy_gradients(
         qv_sat = get_qv_sat(thermo_params, bg_model)
         ∂b∂θli_sat = (
             ∂b∂θv *
-            (1 + molmass_ratio * (1 + lh / R_v / t_sat) * qv_sat - qt_sat) /
+            (1 + Rv_over_Rd * (1 + lh / R_v / t_sat) * qv_sat - qt_sat) /
             (1 + lh * lh / cp_m / R_v / t_sat / t_sat * qv_sat)
         )
         ∂b∂qt_sat =
