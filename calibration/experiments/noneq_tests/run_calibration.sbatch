@@ -1,9 +1,9 @@
 #!/bin/bash
 
+#SBATCH --ntasks=10  # number of processor cores (i.e. tasks)
 #SBATCH --time=06:00:00   # walltime
-#SBATCH --nodes=1   # number of nodes
-#SBATCH --ntasks=1  # number of processor cores (i.e. tasks)
-#SBATCH --mem=5G   # memory per CPU core
+#SBATCH --mem-per-cpu=25G   # memory per CPU core
+#SBATCH --cpus-per-task=1   # CPUs per task
 #SBATCH --mail-user=oalcabes@caltech.edu
 #SBATCH --mail-type=BEGIN
 #SBATCH --mail-type=END
@@ -12,9 +12,6 @@
 #SBATCH --output=noneq_calibration.out
 
 module purge
-export MODULEPATH="/groups/esm/modules:$MODULEPATH"
-module load climacommon/2024_05_27
+module load climacommon
 
-julia --project=. run_calibration.jl
-
-echo finished
+julia --project=. run_calibration.jl 2>&1 | tee -a workers.txt

@@ -50,6 +50,9 @@ addprocs(
     import ClimaAtmos as CA
     import JLD2
     import YAML
+    using LinearAlgebra
+    using Distributions
+    using Distributed
 
     include("observation_map.jl")
 

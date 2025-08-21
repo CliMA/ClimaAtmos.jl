@@ -1,0 +1,64 @@
+Precompiling ClimaCalibrate...
+    779.3 ms  ✓ ADTypes
+    637.8 ms  ✓ Preferences
+    822.3 ms  ✓ FiniteDiff
+   1161.4 ms  ✓ ChainRulesCore
+    553.9 ms  ✓ PrecompileTools
+    707.0 ms  ✓ ADTypes → ADTypesConstructionBaseExt
+    773.6 ms  ✓ JLLWrappers
+    836.6 ms  ✓ FiniteDiff → FiniteDiffSparseArraysExt
+    615.1 ms  ✓ ArrayInterface → ArrayInterfaceChainRulesCoreExt
+   1029.9 ms  ✓ AbstractFFTs → AbstractFFTsChainRulesCoreExt
+    987.2 ms  ✓ ADTypes → ADTypesChainRulesCoreExt
+   1058.4 ms  ✓ ChainRulesCore → ChainRulesCoreSparseArraysExt
+   2264.3 ms  ✓ DifferentiationInterface
+   2106.3 ms  ✓ LogExpFunctions → LogExpFunctionsChainRulesCoreExt
+   1737.6 ms  ✓ LLVMOpenMP_jll
+   1389.8 ms  ✓ x264_jll
+   1530.2 ms  ✓ x265_jll
+   1470.0 ms  ✓ OpenSSL_jll
+   1475.1 ms  ✓ Libffi_jll
+   1449.1 ms  ✓ Libuuid_jll
+   1508.6 ms  ✓ OpenSpecFun_jll
+   1521.6 ms  ✓ Ogg_jll
+   1038.8 ms  ✓ Libiconv_jll
+   2627.0 ms  ✓ RecipesBase
+   1304.7 ms  ✓ FriBidi_jll
+   2095.7 ms  ✓ IntelOpenMP_jll
+   1012.6 ms  ✓ OpenBLAS32_jll
+   1042.3 ms  ✓ libpng_jll
+   1098.2 ms  ✓ LAME_jll
+   1026.6 ms  ✓ libaom_jll
+   1006.8 ms  ✓ Expat_jll
+   1146.8 ms  ✓ Graphite2_jll
+   1217.1 ms  ✓ Arpack_jll
+   1274.4 ms  ✓ LZO_jll
+   1543.1 ms  ✓ Xorg_libXdmcp_jll
+   1636.7 ms  ✓ Xorg_libXau_jll
+   1144.4 ms  ✓ Opus_jll
+    922.7 ms  ✓ Bzip2_jll
+   1654.9 ms  ✓ Xorg_xtrans_jll
+   1182.2 ms  ✓ libfdk_aac_jll
+   1152.0 ms  ✓ FFTW_jll
+   1190.9 ms  ✓ oneTBB_jll
+   1075.0 ms  ✓ DifferentiationInterface → DifferentiationInterfaceFiniteDiffExt
+   1269.2 ms  ✓ Rmath_jll
+   1999.0 ms  ✓ Libmount_jll
+   1403.1 ms  ✓ DifferentiationInterface → DifferentiationInterfaceSparseArraysExt
+   2012.2 ms  ✓ DifferentiationInterface → DifferentiationInterfaceChainRulesCoreExt
+   1778.8 ms  ✓ Pixman_jll
+   1754.6 ms  ✓ libvorbis_jll
+   1566.8 ms  ✓ StringEncodings
+   1181.3 ms  ✓ SCS_jll
+   1191.8 ms  ✓ GettextRuntime_jll
+   1172.7 ms  ✓ Arpack
+    858.5 ms  ✓ CodecBzip2
+   1143.9 ms  ✓ FreeType2_jll
+   1463.7 ms  ✓ Rmath
+   2209.8 ms  ✓ Xorg_libxcb_jll
+   3165.0 ms  ✓ SpecialFunctions
+   1951.3 ms  ✓ MKL_jll
+   1232.4 ms  ✓ Fontconfig_jll
+   1574.8 ms  ✓ YAML
+   1588.4 ms  ✓ Glib_jll
+    841.9 ms  ✓ Xorg_libX11_jll
