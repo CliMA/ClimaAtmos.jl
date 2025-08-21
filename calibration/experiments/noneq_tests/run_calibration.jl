@@ -21,10 +21,6 @@ ensemble_size = 10 # what should i be setting this to?
 n_iterations = 10
 output_dir = "EKI_output"
 
-# WRITE & PASS IN MY GROUND TRUTH GUYS
-# τₗ_truth = 800
-# τᵢ_truth = 5000
-
 config_dict = YAML.load_file(model_config)
 truth_toml = "toml/diagnostic_precalibrated_truth.toml"
 
@@ -82,7 +78,5 @@ ekp_obj = EKP.EnsembleKalmanProcess(
     scheduler = EKP.DataMisfitController(on_terminate = "continue"),
     verbose= true,
 )
-
-
 
 eki = CAL.calibrate(CAL.WorkerBackend, ekp_obj, n_iterations, prior, output_dir; failure_rate = 0.9)
