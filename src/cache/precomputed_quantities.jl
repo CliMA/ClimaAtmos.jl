@@ -26,9 +26,6 @@ In addition, there are several other SGS quantities for `PrognosticEDMFX`:
     - `ᶜρʲs`: a tuple of the air densities of the mass-flux subdomains on cell
         centers
 
-Note: Velocity quantities (ᶜu, ᶠu³, ᶜK) are no longer precomputed and are
-computed on the fly as needed to reduce memory usage and improve performance.
-
 TODO: Rename `ᶜK` to `ᶜκ`.
 """
 function implicit_precomputed_quantities(Y, atmos)
