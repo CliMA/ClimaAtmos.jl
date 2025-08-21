@@ -16,7 +16,7 @@ A structure for the output paths and their corresponding initial conditions.
 """
 Base.@kwdef struct EDMFParams
     path::String
-    diag_prog::String
+    edmf::String
     qtot0::Float64
     theta0::Float64
     thetai::Float64
@@ -39,7 +39,7 @@ function parse_folder_name(path::String)
     # Construct EDMFParams object.
     return EDMFParams(
         path = path,
-        diag_prog = m.captures[1], 
+        edmf = m.captures[1], 
         qtot0 = parse(Float64, m.captures[2]), #[6.5, 8.5, 10.5]
         theta0 = parse(Float64, m.captures[3]), #[284, 287, 291, 294]
         thetai = parse(Float64, m.captures[4]), #[6.0, 8.0, 10.0]
@@ -115,17 +115,16 @@ function plot_1M_edmf_timeseries!(
         rwp_data = rwp_skip.data * 1e3
 
         # Time.
-        t = ClimaAnalysis.times(lwp_skip)
+        t = ClimaAnalysis.times(lwp_skip) / 3600
 
         # RWP/LWP for the color bar.
         rwp_lwp_data = rwp_data ./ lwp_data
-        rwp_lwp_filtered = [isfinite(c) ? c : 0.0 for c in rwp_lwp_data]
 
         CairoMakie.lines!(
             ax,
             t,
             lwp_data,
-            color = rwp_lwp_filtered, # Ratio so don't need to convert.
+            color = rwp_lwp_data, # Ratio so don't need to convert.
             colormap = :viridis,
             colorrange = (0, 1),
         )
@@ -171,13 +170,12 @@ function plot_1M_edmf_N!(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis)
 
         # RWP/LWP for the color bar.
         rwp_lwp_data = rwp_data ./ lwp_data
-        rwp_lwp_filtered = [isfinite(c) ? c : 0.0 for c in rwp_lwp_data]
 
         CairoMakie.scatter!(
             ax,
             lwp_data,
             N,
-            color = rwp_lwp_filtered, # Ratio so don't need to convert.
+            color = rwp_lwp_data, # Ratio so don't need to convert.
             markersize = 5,
             colormap = :viridis,
             colorrange = (0, 1),
@@ -257,7 +255,7 @@ function decide_title(is_1M::Bool = false, is_time::Bool = false)
     # Axis labels setup.
     if is_time
         title = "$title_M LWP Over Time"
-        xlab = "t [s]"
+        xlab = "t [hr]"
         ylab = "lwp [g m-2]"
         save_title = "$(save_M)_timeseries.png"
         xlims = nothing
@@ -265,7 +263,7 @@ function decide_title(is_1M::Bool = false, is_time::Bool = false)
     else
         title = "$title_M LWP vs N"
         xlab = "lwp [g m-2]"
-        ylab = "N"
+        ylab = "N [cm-3]"
         save_title = "$(save_M)_LWP_N.png"
         xlims = (0.5e0, 0.5e3)
         ylims = (1, 1e3)
@@ -275,7 +273,7 @@ function decide_title(is_1M::Bool = false, is_time::Bool = false)
 end
 
 """
-    plot_edmf(edmfparams, is_1M, is_time, save)
+    plot_edmf(edmfparams, is_1M, is_time, save, replace_save, replace_title)
 
 Generates a basic plot without separation by initial conditions.
 """
@@ -326,10 +324,14 @@ function plot_edmf(
 end
 
 """
+    compare_edmf(edmfparams, plotparams, split_by, is_1M, is_time, save, replace_save, replace_title)
+
+Generates plots that are separated out based on their intial conditions for 
+easier comparison.
 """
 function compare_edmf(
     edmfparams::Vector{EDMFParams},
-    plotparams::Dict{Symbol, Vector{Float64}};
+    plotparams::Dict{Symbol, Vector{Any}};
     split_by::Symbol = :none,
     is_1M::Bool = false,
     is_time::Bool = false,
@@ -366,8 +368,8 @@ function compare_edmf(
         grouped = group_by_field(keep_params, split_by)
         verbose_title = join(
             [
-                "$key: $values" for
-                (key, values) in plotparams if key != split_by
+                replace("$key: $value", "Any" => "") for
+                (key, value) in plotparams if key != split_by
             ],
             ", ",
         )
@@ -386,7 +388,7 @@ function compare_edmf(
                 fig[row, col],
                 xlabel = xlab,
                 ylabel = ylab,
-                title = "$split_by = $key | $verbose_title",
+                title = "$split_by = $key \n$verbose_title",
                 xscale = is_time ? identity : log10,
                 yscale = log10,
             )
@@ -419,4 +421,34 @@ function compare_edmf(
 
     return fig
 
+end
+
+"""
+"""
+function keep(edmfparam::EDMFParams)
+    path = edmfparam.path
+
+    simdir = ClimaAnalysis.SimDir(joinpath("$path", "output_0000"))
+
+    # Liquid water path.
+    lwp = ClimaAnalysis.get(
+        simdir;
+        short_name = "lwp",
+        reduction = "inst",
+        period = "10m",
+    )
+    lwp_slice = ClimaAnalysis.slice(lwp, x = 0.0, y = 0.0)
+    lwp_skip = ClimaAnalysis.window(lwp_slice, "time", left=7200)
+    lwp_data = lwp_skip.data * 1e3 # Convert from kg m^-2 to g m^-2.
+
+    above_cond = all(lwp_data .> 0.5)
+    full_len = length(lwp_data) == 61
+    
+    return  above_cond & full_len
+end
+
+"""
+"""
+function filter_runs(edmfparams::Vector{EDMFParams})
+    return [edmfparam for edmfparam in edmfparams if keep(edmfparam)]
 end
