@@ -69,9 +69,12 @@ observations = process_member_data(SimDir(diag_sim.output_dir))
 noise = Diagonal([0.1*EKP.I, 0.1*EKP.I])
 
 observation = EKP.Observation(
-    observations,
-    noise,
-)
+                    Dict(
+                    "samples" => observations,
+                    "covariances" => noise,
+                    "names" => "water_paths",
+                )
+            )
 
 ekp_obj = EKP.EnsembleKalmanProcess(
     EKP.construct_initial_ensemble(prior, ensemble_size),
