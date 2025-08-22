@@ -315,21 +315,9 @@ function radiation_model_cache(
         if aerosol_radiation && !(any(
             x -> x in aerosol_names,
             [
-                "DST01",
-                "DST02",
-                "DST03",
-                "DST04",
-                "DST05",
-                "SSLT01",
-                "SSLT02",
-                "SSLT03",
-                "SSLT04",
-                "SSLT05",
-                "SO4",
-                "CB1",
-                "CB2",
-                "OC1",
-                "OC2",
+                "DST01", "DST02", "DST03", "DST04", "DST05",
+                "SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05",
+                "SO4", "CB1", "CB2", "OC1", "OC2",
             ],
         ))
             error(
@@ -505,11 +493,7 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
         radiation_mode.F1 * exp(-(ᶠ∫_0_z_κρq)) +
         ifelse(
             ᶠz > zi,
-            ρi *
-            cp_d *
-            radiation_mode.divergence *
-            radiation_mode.alpha_z *
-            (cbrt(ᶠz - zi)^4 / 4 + zi * cbrt(ᶠz - zi)),
+            ρi * cp_d * radiation_mode.divergence * radiation_mode.alpha_z * (cbrt(ᶠz - zi)^4 / 4 + zi * cbrt(ᶠz - zi)),
             FT(0),
         ),
     )

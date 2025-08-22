@@ -47,37 +47,22 @@ Returns the condensation/evaporation or deposition/sublimation rate for
 non-equilibrium Morrison and Milbrandt 2015 cloud formation.
 """
 function cloud_sources(
-    cm_params::CMP.CloudLiquid{FT},
-    thp,
-    qₜ,
-    qₗ,
-    qᵢ,
-    qᵣ,
-    qₛ,
-    ρ,
-    T,
-    dt,
+    cm_params::CMP.CloudLiquid{FT}, thp,
+    qₜ, qₗ, qᵢ, qᵣ, qₛ,
+    ρ, T, dt,
 ) where {FT}
 
     qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
     qₛₗ = TD.q_vap_from_p_vap(
-        thp,
-        T,
-        ρ,
+        thp, T, ρ,
         TD.saturation_vapor_pressure(thp, T, TD.Liquid()),
     )
 
     if qᵥ + qₗ > FT(0)
         S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
-            cm_params,
-            thp,
-            qₜ,
-            qₗ,
-            qᵢ,
-            qᵣ,
-            qₛ,
-            ρ,
-            T,
+            cm_params, thp,
+            qₜ, qₗ, qᵢ, qᵣ, qₛ,
+            ρ, T,
         )
     else
         S = FT(0)
@@ -90,38 +75,22 @@ function cloud_sources(
     )
 end
 function cloud_sources(
-    cm_params::CMP.CloudIce{FT},
-    thp,
-    qₜ,
-    qₗ,
-    qᵢ,
-    qᵣ,
-    qₛ,
-    ρ,
-    T,
-    dt,
+    cm_params::CMP.CloudIce{FT}, thp,
+    qₜ, qₗ, qᵢ, qᵣ, qₛ,
+    ρ, T, dt,
 ) where {FT}
 
     qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
 
     qₛᵢ = TD.q_vap_from_p_vap(
-        thp,
-        T,
-        ρ,
-        TD.saturation_vapor_pressure(thp, T, TD.Ice()),
+        thp, T, ρ, TD.saturation_vapor_pressure(thp, T, TD.Ice()),
     )
 
     if qᵥ + qᵢ > FT(0)
         S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
-            cm_params,
-            thp,
-            qₜ,
-            qₗ,
-            qᵢ,
-            qᵣ,
-            qₛ,
-            ρ,
-            T,
+            cm_params, thp,
+            qₜ, qₗ, qᵢ, qᵣ, qₛ,
+            ρ, T,
         )
     else
         S = FT(0)
@@ -194,22 +163,12 @@ where i stands for total, rain or snow.
 Also returns the total energy source term due to the microphysics processes.
 """
 function compute_precipitation_sources!(
-    Sᵖ,
-    Sᵖ_snow,
-    Sqₗᵖ,
-    Sqᵢᵖ,
-    Sqᵣᵖ,
-    Sqₛᵖ,
-    ρ,
-    qₜ,
-    qₗ,
-    qᵢ,
-    qᵣ,
-    qₛ,
-    ts,
-    dt,
-    mp,
-    thp,
+    # source caches
+    Sᵖ, Sᵖ_snow, Sqₗᵖ, Sqᵢᵖ, Sqᵣᵖ, Sqₛᵖ,
+    # thermodynamic variables
+    ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, ts,
+    # time step, microphysics parameters, thermodynamic parameters
+    dt, mp, thp,
 )
     FT = eltype(thp)
     @. Sqₗᵖ = FT(0)
@@ -319,19 +278,9 @@ where i stands for total, rain or snow.
 Also returns the total energy source term due to the microphysics processes.
 """
 function compute_precipitation_sinks!(
-    Sᵖ,
-    Sqᵣᵖ,
-    Sqₛᵖ,
-    ρ,
-    qₜ,
-    qₗ,
-    qᵢ,
-    qᵣ,
-    qₛ,
-    ts,
-    dt,
-    mp,
-    thp,
+    Sᵖ, Sqᵣᵖ, Sqₛᵖ,  # source caches
+    ρ, qₜ, qₗ, qᵢ, qᵣ, qₛ, ts,  # thermodynamic variables
+    dt, mp, thp,  # time step, microphysics parameters, thermodynamic parameters
 )
     FT = eltype(thp)
     sps = (mp.ps, mp.tv.snow, mp.aps, thp)
@@ -483,19 +432,9 @@ velocity. The result is returned as a tendency (per second) of liquid droplet nu
 - Tendency of cloud liquid droplet number concentration per mass of air due to aerosol activation [m⁻³/s].
 """
 function aerosol_activation_sources(
-    seasalt_num,
-    seasalt_mean_radius,
-    sulfate_num,
-    qₜ,
-    qₗ,
-    qᵢ,
-    nₗ,
-    ρ,
-    w,
-    cmp,
-    thermo_params,
-    ts,
-    dt,
+    seasalt_num, seasalt_mean_radius, sulfate_num,
+    qₜ, qₗ, qᵢ, nₗ, ρ, w,
+    cmp, thermo_params, ts, dt,
 )
 
     FT = eltype(nₗ)
@@ -511,39 +450,21 @@ function aerosol_activation_sources(
     end
 
     seasalt_mode = CMAM.Mode_κ(
-        seasalt_mean_radius,
-        aerosol_params.seasalt_std,
+        seasalt_mean_radius, aerosol_params.seasalt_std,
         max(0, seasalt_num) * ρ,
-        (FT(1),),
-        (FT(1),),
-        (FT(0),),
-        (aerosol_params.seasalt_kappa,),
+        (FT(1),), (FT(1),), (FT(0),), (aerosol_params.seasalt_kappa,),
     )
     sulfate_mode = CMAM.Mode_κ(
-        aerosol_params.sulfate_radius,
-        aerosol_params.sulfate_std,
+        aerosol_params.sulfate_radius, aerosol_params.sulfate_std,
         max(0, sulfate_num) * ρ,
-        (FT(1),),
-        (FT(1),),
-        (FT(0),),
-        (aerosol_params.sulfate_kappa,),
+        (FT(1),), (FT(1),), (FT(0),), (aerosol_params.sulfate_kappa,),
     )
 
     aerosol_dist = CMAM.AerosolDistribution((seasalt_mode, sulfate_mode))
 
     args = (
-        arg_params,
-        aerosol_dist,
-        air_params,
-        thermo_params,
-        T,
-        p,
-        max(0, w),
-        qₜ,
-        qₗ,
-        qᵢ,
-        ρ * nₗ,
-        FT(0),
+        arg_params, aerosol_dist, air_params, thermo_params,
+        T, p, max(0, w), qₜ, qₗ, qᵢ, ρ * nₗ, FT(0),
     ) #assuming no ice particles because we don't track n_ice for now
     S_max = CMAA.max_supersaturation(args...)
     n_act = CMAA.total_N_activated(args...) / ρ
@@ -571,24 +492,14 @@ Computes precipitation number and mass sources due to warm precipitation process
 [Seifert and Beheng (2006) scheme](https://clima.github.io/CloudMicrophysics.jl/dev/Microphysics2M/).
 """
 function compute_warm_precipitation_sources_2M!(
-    Sᵖ,
-    S₂ᵖ,
-    Snₗᵖ,
-    Snᵣᵖ,
-    Sqₗᵖ,
-    Sqᵣᵖ,
+    Sᵖ, S₂ᵖ,
+    Snₗᵖ, Snᵣᵖ, Sqₗᵖ, Sqᵣᵖ,
     ρ,
-    nₗ,
-    nᵣ,
-    qₜ,
-    qₗ,
-    qᵢ,
-    qᵣ,
-    qₛ,
+    nₗ, nᵣ,
+    qₜ, qₗ, qᵢ, qᵣ, qₛ,
     ts,
     dt,
-    mp,
-    thp,
+    mp, thp,
 )
 
     FT = eltype(thp)
@@ -599,14 +510,7 @@ function compute_warm_precipitation_sources_2M!(
 
     # auto-conversion (mass)
     @. Sᵖ = triangle_inequality_limiter(
-        CM2.autoconversion(
-            mp.sb.acnv,
-            mp.sb.pdf_c,
-            qₗ,
-            qᵣ,
-            ρ,
-            ρ * nₗ,
-        ).dq_rai_dt,
+        CM2.autoconversion(mp.sb.acnv, mp.sb.pdf_c, qₗ, qᵣ, ρ, ρ * nₗ).dq_rai_dt,
         limit(qₗ, dt, 5), # cap rate to at most 20% of qₗ per timestep to ensure stability
     )
     @. Sqₗᵖ -= Sᵖ
@@ -614,14 +518,7 @@ function compute_warm_precipitation_sources_2M!(
 
     # auto-conversion (number) and liquid self-collection
     @. Sᵖ = triangle_inequality_limiter(
-        CM2.autoconversion(
-            mp.sb.acnv,
-            mp.sb.pdf_c,
-            qₗ,
-            qᵣ,
-            ρ,
-            ρ * nₗ,
-        ).dN_liq_dt / ρ,
+        CM2.autoconversion(mp.sb.acnv, mp.sb.pdf_c, qₗ, qᵣ, ρ, ρ * nₗ).dN_liq_dt / ρ,
         limit(nₗ, dt, 10),
     )
     # triangle_inequality_limiter assumes positive rates and limits.
@@ -639,8 +536,7 @@ function compute_warm_precipitation_sources_2M!(
     # rain self-collection and breakup
     @. Sᵖ =
         -triangle_inequality_limiter(
-            -CM2.rain_self_collection(mp.sb.pdf_r, mp.sb.self, qᵣ, ρ, ρ * nᵣ) /
-            ρ,
+            -CM2.rain_self_collection(mp.sb.pdf_r, mp.sb.self, qᵣ, ρ, ρ * nᵣ) / ρ,
             limit(nᵣ, dt, 5),
         )
     @. S₂ᵖ = triangle_inequality_limiter(
@@ -669,19 +565,7 @@ function compute_warm_precipitation_sources_2M!(
     # evaporation (mass)
     @. Sᵖ =
         -triangle_inequality_limiter(
-            -CM2.rain_evaporation(
-                mp.sb,
-                mp.aps,
-                thp,
-                qₜ,
-                qₗ,
-                qᵢ,
-                qᵣ,
-                qₛ,
-                ρ,
-                ρ * nᵣ,
-                Tₐ(thp, ts),
-            ).evap_rate_1,
+            -CM2.rain_evaporation(mp.sb, mp.aps, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, ρ * nᵣ, Tₐ(thp, ts)).evap_rate_1,
             limit(qᵣ, dt, 5),
         )
     @. Sqᵣᵖ += Sᵖ
@@ -689,19 +573,7 @@ function compute_warm_precipitation_sources_2M!(
     # evaporation (number)
     @. Sᵖ =
         -triangle_inequality_limiter(
-            -CM2.rain_evaporation(
-                mp.sb,
-                mp.aps,
-                thp,
-                qₜ,
-                qₗ,
-                qᵢ,
-                qᵣ,
-                qₛ,
-                ρ,
-                ρ * nᵣ,
-                Tₐ(thp, ts),
-            ).evap_rate_0 / ρ,
+            -CM2.rain_evaporation(mp.sb, mp.aps, thp, qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, ρ * nᵣ, Tₐ(thp, ts)).evap_rate_0 / ρ,
             limit(nᵣ, dt, 5),
         )
     @. Snᵣᵖ += Sᵖ
@@ -710,42 +582,18 @@ function compute_warm_precipitation_sources_2M!(
     # TODO: Once CCN number becomes a prognostic variable, these number adjustment tendencies
     #       should be linked to it. Any increase in droplet number (source here) would imply
     #       a corresponding sink in CCN, and vice versa.
-    @. Sᵖ = CM2.number_increase_for_mass_limit(
-        mp.sb.numadj,
-        mp.sb.pdf_c.xc_max,
-        qₗ,
-        ρ,
-        ρ * nₗ,
-    )
+    @. Sᵖ = CM2.number_increase_for_mass_limit(mp.sb.numadj, mp.sb.pdf_c.xc_max, qₗ, ρ, ρ * nₗ)
     @. S₂ᵖ =
         -triangle_inequality_limiter(
-            -CM2.number_decrease_for_mass_limit(
-                mp.sb.numadj,
-                mp.sb.pdf_c.xc_min,
-                qₗ,
-                ρ,
-                ρ * nₗ,
-            ),
+            -CM2.number_decrease_for_mass_limit(mp.sb.numadj, mp.sb.pdf_c.xc_min, qₗ, ρ, ρ * nₗ),
             limit(nₗ, dt, 5),
         )
     @. Snₗᵖ = Sᵖ + S₂ᵖ
     # rain number adjustment for mass limits
-    @. Sᵖ = CM2.number_increase_for_mass_limit(
-        mp.sb.numadj,
-        mp.sb.pdf_r.xr_max,
-        qᵣ,
-        ρ,
-        ρ * nᵣ,
-    )
+    @. Sᵖ = CM2.number_increase_for_mass_limit(mp.sb.numadj, mp.sb.pdf_r.xr_max, qᵣ, ρ, ρ * nᵣ)
     @. S₂ᵖ =
         -triangle_inequality_limiter(
-            -CM2.number_decrease_for_mass_limit(
-                mp.sb.numadj,
-                mp.sb.pdf_r.xr_min,
-                qᵣ,
-                ρ,
-                ρ * nᵣ,
-            ),
+            -CM2.number_decrease_for_mass_limit(mp.sb.numadj, mp.sb.pdf_r.xr_min, qᵣ, ρ, ρ * nᵣ),
             limit(nᵣ, dt, 5),
         )
     @. Snᵣᵖ += Sᵖ + S₂ᵖ

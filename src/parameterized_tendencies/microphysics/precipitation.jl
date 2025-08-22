@@ -9,24 +9,14 @@ precipitation_tendency!(Yₜ, Y, p, t, _, ::NoPrecipitation, _) = nothing
 #####
 
 function precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::DryModel,
-    ::Microphysics0Moment,
-    _,
+    Yₜ, Y, p, t,
+    ::DryModel, ::Microphysics0Moment, _,
 )
     error("Microphysics0Moment precipitation should not be run with DryModel.")
 end
 function precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::EquilMoistModel,
-    microphysics_model::Microphysics0Moment,
-    turbconv_model,
+    Yₜ, Y, p, t,
+    ::EquilMoistModel, microphysics_model::Microphysics0Moment, turbconv_model,
 )
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
 
@@ -38,13 +28,8 @@ function precipitation_tendency!(
     return nothing
 end
 function precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::NonEquilMoistModel,
-    ::Microphysics0Moment,
-    _,
+    Yₜ, Y, p, t,
+    ::NonEquilMoistModel, ::Microphysics0Moment, _,
 )
     error(
         "Microphysics0Moment precipitation and NonEquilibriumMost model precipitation_tendency has not been implemented.",
@@ -56,37 +41,22 @@ end
 #####
 
 function precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::DryModel,
-    microphysics_model::Microphysics1Moment,
-    _,
+    Yₜ, Y, p, t,
+    ::DryModel, microphysics_model::Microphysics1Moment, _,
 )
     error("Microphysics1Moment precipitation should not be used with DryModel")
 end
 function precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::EquilMoistModel,
-    microphysics_model::Microphysics1Moment,
-    _,
+    Yₜ, Y, p, t,
+    ::EquilMoistModel, microphysics_model::Microphysics1Moment, _,
 )
     error(
         "Microphysics1Moment precipitation and EquilMoistModel precipitation_tendency is not implemented",
     )
 end
 function precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::NonEquilMoistModel,
-    microphysics_model::Microphysics1Moment,
-    _,
+    Yₜ, Y, p, t,
+    ::NonEquilMoistModel, microphysics_model::Microphysics1Moment, _,
 )
     (; turbconv_model) = p.atmos
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
@@ -100,13 +70,8 @@ function precipitation_tendency!(
     return nothing
 end
 function precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::NonEquilMoistModel,
-    microphysics_model::Microphysics1Moment,
-    turbconv_model::DiagnosticEDMFX,
+    Yₜ, Y, p, t,
+    ::NonEquilMoistModel, microphysics_model::Microphysics1Moment, turbconv_model::DiagnosticEDMFX,
 )
     # Source terms from EDMFX environment
     (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
@@ -131,13 +96,8 @@ function precipitation_tendency!(
     end
 end
 function precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::NonEquilMoistModel,
-    microphysics_model::Microphysics1Moment,
-    turbconv_model::PrognosticEDMFX,
+    Yₜ, Y, p, t,
+    ::NonEquilMoistModel, microphysics_model::Microphysics1Moment, turbconv_model::PrognosticEDMFX,
 )
     # Source terms from EDMFX updrafts
     (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs) = p.precomputed
@@ -167,37 +127,22 @@ end
 #####
 
 function precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::DryModel,
-    microphysics_model::Microphysics2Moment,
-    _,
+    Yₜ, Y, p, t,
+    ::DryModel, microphysics_model::Microphysics2Moment, _,
 )
     error("Microphysics2Moment precipitation should not be used with DryModel")
 end
 function precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::EquilMoistModel,
-    microphysics_model::Microphysics2Moment,
-    _,
+    Yₜ, Y, p, t,
+    ::EquilMoistModel, microphysics_model::Microphysics2Moment, _,
 )
     error(
         "Microphysics2Moment precipitation and EquilMoistModel precipitation_tendency is not implemented",
     )
 end
 function precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::NonEquilMoistModel,
-    microphysics_model::Microphysics2Moment,
-    _,
+    Yₜ, Y, p, t,
+    ::NonEquilMoistModel, microphysics_model::Microphysics2Moment, _,
 )
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
     (; ᶜSnₗᵖ, ᶜSnᵣᵖ) = p.precomputed
@@ -214,24 +159,14 @@ function precipitation_tendency!(
     return nothing
 end
 function precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::NonEquilMoistModel,
-    microphysics_model::Microphysics2Moment,
-    turbconv_model::DiagnosticEDMFX,
+    Yₜ, Y, p, t,
+    ::NonEquilMoistModel, microphysics_model::Microphysics2Moment, turbconv_model::DiagnosticEDMFX,
 )
     error("Not implemented yet")
 end
 function precipitation_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::NonEquilMoistModel,
-    microphysics_model::Microphysics2Moment,
-    turbconv_model::PrognosticEDMFX,
+    Yₜ, Y, p, t,
+    ::NonEquilMoistModel, microphysics_model::Microphysics2Moment, turbconv_model::PrognosticEDMFX,
 )
     # Source terms from EDMFX updrafts
     (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜSnₗᵖʲs, ᶜSnᵣᵖʲs) = p.precomputed
