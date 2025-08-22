@@ -9,6 +9,7 @@ using Distributions
 using Distributed
 
 include("observation_map.jl")
+include("model_interface.jl")
 
 #const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
@@ -17,23 +18,30 @@ prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 500, 
 
 const prior = PD.combine_distributions(prior_vec)
 
-model_config = "diagnostic_edmfx_diurnal_scm_imp_noneq_1M.yml"
 
 ensemble_size = 10
 n_iterations = 10
 output_dir = "EKI_output"
 
-config_dict = YAML.load_file(model_config)
-truth_toml = "toml/diagnostic_precalibrated_truth.toml"
+run_truth = false
 
-# load configs and directories -- running truth!
-push!(config_dict["toml"], truth_toml)
-@show config_dict["toml"]
-atmos_config = CA.AtmosConfig(config_dict) # ADD PARAM DICT HERE W TRUTH VALS
-diag_sim = CA.AtmosSimulation(atmos_config)
-CA.solve_atmos!(diag_sim)
+if run_truth
 
+    model_config = "diagnostic_edmfx_diurnal_scm_imp_noneq_1M.yml"
 
+    config_dict = YAML.load_file(model_config)
+    truth_toml = "toml/diagnostic_precalibrated_truth.toml"
+
+    # load configs and directories -- running truth!
+    push!(config_dict["toml"], truth_toml)
+    @show config_dict["toml"]
+    atmos_config = CA.AtmosConfig(config_dict) # ADD PARAM DICT HERE W TRUTH VALS
+    diag_sim = CA.AtmosSimulation(atmos_config)
+    CA.solve_atmos!(diag_sim)
+    truth_out_dir = diag_sim.output_dir
+else
+    truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_active"
+end
 
 # add workers
 @info "Starting $ensemble_size workers."
@@ -55,6 +63,7 @@ addprocs(
     using Distributed
 
     include("observation_map.jl")
+    include("model_interface.jl")
 
     experiment_dir = dirname(Base.active_project())
     #const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")
@@ -65,7 +74,7 @@ addprocs(
 
 end
 
-observations = process_member_data(SimDir(diag_sim.output_dir))
+observations = process_member_data(SimDir(truth_out_dir))
 noise = Diagonal([0.1*EKP.I, 0.1*EKP.I])
 
 observation = EKP.Observation(
