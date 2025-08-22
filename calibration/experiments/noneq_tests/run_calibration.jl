@@ -19,7 +19,7 @@ const prior = PD.combine_distributions(prior_vec)
 
 model_config = "diagnostic_edmfx_diurnal_scm_imp_noneq_1M.yml"
 
-ensemble_size = 10 # what should i be setting this to?
+ensemble_size = 10
 n_iterations = 10
 output_dir = "EKI_output"
 
@@ -38,8 +38,8 @@ CA.solve_atmos!(diag_sim)
 # add workers
 @info "Starting $ensemble_size workers."
 addprocs(
-    CAL.SlurmManager(20),
-    t = 10*60,
+    CAL.SlurmManager(Int(ensemble_size)),
+    t = "6:00:00",
     mem_per_cpu = "25G",
     cpus_per_task = 1,
 )
@@ -57,11 +57,11 @@ addprocs(
     include("observation_map.jl")
 
     experiment_dir = dirname(Base.active_project())
-    const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")
+    #const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")
     # const experiment_config =
     #     YAML.load_file(joinpath(experiment_dir, "experiment_config.yml"))
 
-    include(model_interface)
+    #include(model_interface)
 
 end
 
