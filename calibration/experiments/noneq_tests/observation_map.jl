@@ -29,9 +29,9 @@ end
 function process_member_data(simdir::SimDir)
     isempty(simdir.vars) && return NaN
     lwp =
-        get(simdir; short_name = "lwp", reduction = "instantaneous", period = "1hours")
+        get(simdir; short_name = "lwp", reduction = "inst", period = "1h")
     iwp =
-        get(simdir; short_name = "clivi", reduction = "instantaneous", period = "1hours")
+        get(simdir; short_name = "clivi", reduction = "inst", period = "1h")
     return [slice(lwp; time = 264hours).data..., slice(iwp; time = 264hours).data..., ]
 end
 
