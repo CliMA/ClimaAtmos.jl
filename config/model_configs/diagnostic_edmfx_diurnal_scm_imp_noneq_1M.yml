@@ -54,5 +54,5 @@ output_default_diagnostics: false
 rad: allskywithclear
 insolation: "externaldriventv"
 diagnostics:
-  - short_name: [lwp, clivi]
+  - short_name: [lwp, clivi, cltz]
     period: 1hours
