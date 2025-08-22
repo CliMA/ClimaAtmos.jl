@@ -42,9 +42,7 @@ struct AllSkyRadiation{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
     reset_rng_seed::Bool
     deep_atmosphere::Bool
 end
-struct AllSkyRadiationWithClearSkyDiagnostics{
-    ACR <: AbstractCloudInRadiation,
-} <: AbstractRRTMGPMode
+struct AllSkyRadiationWithClearSkyDiagnostics{ACR <: AbstractCloudInRadiation} <: AbstractRRTMGPMode
     idealized_h2o::Bool
     idealized_clouds::Bool
     cloud::ACR
@@ -241,17 +239,10 @@ function extrap!(::UseSurfaceTempAtBottom, p, T, p⁺, T⁺, p⁺⁺, T⁺⁺, T
     @. T = Tₛ
     @. p = p⁺ * (T / T⁺)^(cₚ / R)
 end
-function extrap!(
-    ::HydrostaticBottom,
-    p,
-    T,
-    z,
-    p⁺,
-    T⁺,
-    z⁺,
-    p⁺⁺,
-    T⁺⁺,
-    z⁺⁺,
+function extrap!(::HydrostaticBottom,
+    p, T, z,
+    p⁺, T⁺, z⁺,
+    p⁺⁺, T⁺⁺, z⁺⁺,
     Tₛ,
     params,
 )
@@ -293,15 +284,10 @@ function Base.propertynames(model::RRTMGPModel, private::Bool = false)
 end
 
 get_radiation_method(m::GrayRadiation) = RRTMGP.GrayRadiation()
-get_radiation_method(m::ClearSkyRadiation) =
-    RRTMGP.ClearSkyRadiation(m.aerosol_radiation)
-get_radiation_method(m::AllSkyRadiation) =
-    RRTMGP.AllSkyRadiation(m.aerosol_radiation, m.reset_rng_seed)
+get_radiation_method(m::ClearSkyRadiation) = RRTMGP.ClearSkyRadiation(m.aerosol_radiation)
+get_radiation_method(m::AllSkyRadiation) = RRTMGP.AllSkyRadiation(m.aerosol_radiation, m.reset_rng_seed)
 get_radiation_method(m::AllSkyRadiationWithClearSkyDiagnostics) =
-    RRTMGP.AllSkyRadiationWithClearSkyDiagnostics(
-        m.aerosol_radiation,
-        m.reset_rng_seed,
-    )
+    RRTMGP.AllSkyRadiationWithClearSkyDiagnostics(m.aerosol_radiation, m.reset_rng_seed)
 
 """
     RRTMGPModel(params; kwargs...)
@@ -431,15 +417,8 @@ RRTMGPModel(
     use_global_means_for_well_mixed_gases::Bool = false,
     kwargs...,
 ) = _RRTMGPModel(
-    params,
-    context,
-    radiation_mode;
-    ncol,
-    domain_nlay,
-    interpolation,
-    bottom_extrapolation,
-    use_global_means_for_well_mixed_gases,
-    kwargs...,
+    params, context, radiation_mode;
+    ncol, domain_nlay, interpolation, bottom_extrapolation, use_global_means_for_well_mixed_gases, kwargs...,
 )
 
 # TODO: make this the new interface for the next breaking release.
@@ -461,11 +440,7 @@ function _RRTMGPModel(
     dict = Dict(kwargs)
     nlay = domain_nlay + Int(radiation_mode.add_isothermal_boundary_layer)
     grid_params = RRTMGP.RRTMGPGridParams(
-        FT;
-        context,
-        nlay,
-        ncol,
-        isothermal_boundary_layer = radiation_mode.add_isothermal_boundary_layer,
+        FT; context, nlay, ncol, isothermal_boundary_layer = radiation_mode.add_isothermal_boundary_layer,
     )
     op = RRTMGP.Optics.TwoStream(grid_params)
     if use_global_means_for_well_mixed_gases && radiation_mode isa GrayRadiation
@@ -528,11 +503,7 @@ function _RRTMGPModel(
         flux_sw2 = RRTMGP.Fluxes.FluxSW(grid_params)
         set_and_save!(flux_sw2.flux_up, "face_clear_sw_flux_up", t...)
         set_and_save!(flux_sw2.flux_dn, "face_clear_sw_flux_dn", t...)
-        set_and_save!(
-            flux_sw2.flux_dn_dir,
-            "face_clear_sw_direct_flux_dn",
-            t...,
-        )
+        set_and_save!(flux_sw2.flux_dn_dir, "face_clear_sw_direct_flux_dn", t...)
         set_and_save!(flux_sw2.flux_net, "face_clear_sw_flux", t...)
     end
 
@@ -553,13 +524,7 @@ function _RRTMGPModel(
     else
         inc_flux_diffuse = nothing
     end
-    bcs_sw = RRTMGP.BCs.SwBCs(
-        cos_zenith,
-        toa_flux,
-        sfc_alb_direct,
-        inc_flux_diffuse,
-        sfc_alb_diffuse,
-    )
+    bcs_sw = RRTMGP.BCs.SwBCs(cos_zenith, toa_flux, sfc_alb_direct, inc_flux_diffuse, sfc_alb_diffuse)
 
     set_and_save!(similar(flux_lw.flux_net), "face_flux", t...)
     if radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
@@ -602,12 +567,9 @@ function _RRTMGPModel(
         otp = RRTMGP.AtmosphericStates.GrayOpticalThicknessOGorman2008(FT)
         as = RRTMGP.AtmosphericStates.GrayAtmosphericState(
             lat,
-            p_lay,
-            p_lev,
-            t_lay,
-            t_lev,
-            z_lev,
-            t_sfc,
+            p_lay, p_lev,
+            t_lay, t_lev,
+            z_lev, t_sfc,
             otp,
         )
     else
@@ -679,13 +641,10 @@ function _RRTMGPModel(
             end
 
             cloud_state = RRTMGP.AtmosphericStates.CloudState(
-                cld_r_eff_liq,
-                cld_r_eff_ice,
-                cld_path_liq,
-                cld_path_ice,
+                cld_r_eff_liq, cld_r_eff_ice,
+                cld_path_liq, cld_path_ice,
                 cld_frac,
-                cld_mask_lw,
-                cld_mask_sw,
+                cld_mask_lw, cld_mask_sw,
                 cld_overlap,
                 ice_rgh,
             )
@@ -705,21 +664,9 @@ function _RRTMGPModel(
             aero_mass = DA{FT}(undef, n_aerosols, nlay, ncol)
 
             aerosol_names = [
-                "dust1",
-                "ss1",
-                "so4",
-                "bcpi",
-                "bcpo",
-                "ocpi",
-                "ocpo",
-                "dust2",
-                "dust3",
-                "dust4",
-                "dust5",
-                "ss2",
-                "ss3",
-                "ss4",
-                "ss5",
+                "dust1", "ss1", "so4", "bcpi", "bcpo", "ocpi", "ocpo",
+                "dust2", "dust3", "dust4", "dust5",
+                "ss2", "ss3", "ss4", "ss5",
             ]
             for (i, name) in enumerate(aerosol_names)
                 if occursin("dust", name) || occursin("ss", name)
@@ -740,45 +687,23 @@ function _RRTMGPModel(
                 )
             end
             aerosol_state = RRTMGP.AtmosphericStates.AerosolState(
-                aod_sw_ext,
-                aod_sw_sca,
-                aero_mask,
-                aero_size,
-                aero_mass,
+                aod_sw_ext, aod_sw_sca, aero_mask, aero_size, aero_mass,
             )
         else
             aerosol_state = nothing
         end
         as = RRTMGP.AtmosphericStates.AtmosphericState(
-            lon,
-            lat,
+            lon, lat,
             # layerdata contains `col_dry`, `p_lay`, and `t_lay`
             layerdata,
-            p_lev,
-            t_lev,
-            t_sfc,
+            p_lev, t_lev, t_sfc,
             vmr,
-            cloud_state,
-            aerosol_state,
+            cloud_state, aerosol_state,
         )
     end
 
-    sw_solver = RRTMGP.RTE.TwoStreamSWRTE(
-        context,
-        op,
-        src_sw,
-        bcs_sw,
-        fluxb_sw,
-        flux_sw,
-    )
-    lw_solver = RRTMGP.RTE.TwoStreamLWRTE(
-        context,
-        op,
-        src_lw,
-        bcs_lw,
-        fluxb_lw,
-        flux_lw,
-    )
+    sw_solver = RRTMGP.RTE.TwoStreamSWRTE(context, op, src_sw, bcs_sw, fluxb_sw, flux_sw)
+    lw_solver = RRTMGP.RTE.TwoStreamLWRTE(context, op, src_lw, bcs_lw, fluxb_lw, flux_lw)
 
     if requires_z(interpolation) || requires_z(bottom_extrapolation)
         z_lay = DA{FT}(undef, nlay, ncol)
@@ -805,13 +730,9 @@ function _RRTMGPModel(
 
     return RRTMGPModel(
         radiation_mode,
-        interpolation,
-        bottom_extrapolation,
-        lookups,
-        params,
-        lw_solver,
-        sw_solver,
-        as,
+        interpolation, bottom_extrapolation,
+        lookups, params,
+        lw_solver, sw_solver, as,
         NamedTuple(views),
         metric_scaling,
     )
@@ -909,10 +830,8 @@ NVTX.@annotate function update_fluxes!(model, seedval)
 end
 
 get_p_min(model) = get_p_min(model.as, model.lookups)
-get_p_min(as::RRTMGP.AtmosphericStates.GrayAtmosphericState, lookups) =
-    zero(eltype(as.p_lay))
-get_p_min(as::RRTMGP.AtmosphericStates.AtmosphericState, lookups) =
-    lookups.lookup_lw.p_ref_min # TODO: verify correctness
+get_p_min(as::RRTMGP.AtmosphericStates.GrayAtmosphericState, lookups) = zero(eltype(as.p_lay))
+get_p_min(as::RRTMGP.AtmosphericStates.AtmosphericState, lookups) = lookups.lookup_lw.p_ref_min # TODO: verify correctness
 
 function update_implied_values!(model)
     (; p_lev, t_lev, t_sfc) = model.as
@@ -956,22 +875,19 @@ are the same as in the layer below it)
 function update_boundary_layer!(model)
     as = model.as
     p_min = get_p_min(model)
-    @views AS.getview_p_lay(model.as)[end, :] .=
-        (as.p_lev[end - 1, :] .+ p_min) ./ 2
+    @views AS.getview_p_lay(model.as)[end, :] .= (as.p_lev[end - 1, :] .+ p_min) ./ 2
     @views as.p_lev[end, :] .= p_min
     @views AS.getview_t_lay(model.as)[end, :] .= as.t_lev[end - 1, :]
     @views as.t_lev[end, :] .= as.t_lev[end - 1, :]
     if !(model.radiation_mode isa GrayRadiation)
-        @views AS.getview_rel_hum(model.as)[end, :] .=
-            AS.getview_rel_hum(model.as)[end - 1, :]
+        @views AS.getview_rel_hum(model.as)[end, :] .= AS.getview_rel_hum(model.as)[end - 1, :]
     end
     update_boundary_layer_vmr!(model.radiation_mode, as)
     update_boundary_layer_cloud!(model.radiation_mode, as)
     update_boundary_layer_aerosol!(model.radiation_mode, as)
 end
 update_boundary_layer_vmr!(::GrayRadiation, as) = nothing
-update_boundary_layer_vmr!(radiation_mode, as) =
-    update_boundary_layer_vmr!(as.vmr)
+update_boundary_layer_vmr!(radiation_mode, as) = update_boundary_layer_vmr!(as.vmr)
 function update_boundary_layer_vmr!(vmr::RRTMGP.Vmrs.VmrGM)
     @views vmr.vmr_h2o[end, :] .= vmr.vmr_h2o[end - 1, :]
     @views vmr.vmr_o3[end, :] .= vmr.vmr_o3[end - 1, :]
@@ -979,36 +895,24 @@ end
 update_boundary_layer_vmr!(vmr::RRTMGP.Vmrs.Vmr) =
     @views vmr.vmr[:, end, :] .= vmr.vmr[:, end - 1, :]
 
-update_boundary_layer_cloud!(::Union{GrayRadiation, ClearSkyRadiation}, _) =
-    nothing
-update_boundary_layer_cloud!(
-    ::Union{AllSkyRadiation, AllSkyRadiationWithClearSkyDiagnostics},
-    as,
-) = update_boundary_layer_cloud!(as.cloud_state)
+update_boundary_layer_cloud!(::Union{GrayRadiation, ClearSkyRadiation}, _) = nothing
+update_boundary_layer_cloud!(::Union{AllSkyRadiation, AllSkyRadiationWithClearSkyDiagnostics}, as) =
+    update_boundary_layer_cloud!(as.cloud_state)
 
 function update_boundary_layer_cloud!(cloud_state)
-    @views cloud_state.cld_r_eff_liq[end, :] .=
-        cloud_state.cld_r_eff_liq[end - 1, :]
-    @views cloud_state.cld_r_eff_ice[end, :] .=
-        cloud_state.cld_r_eff_ice[end - 1, :]
-    @views cloud_state.cld_path_liq[end, :] .=
-        cloud_state.cld_path_liq[end - 1, :]
-    @views cloud_state.cld_path_ice[end, :] .=
-        cloud_state.cld_path_ice[end - 1, :]
+    @views cloud_state.cld_r_eff_liq[end, :] .= cloud_state.cld_r_eff_liq[end - 1, :]
+    @views cloud_state.cld_r_eff_ice[end, :] .= cloud_state.cld_r_eff_ice[end - 1, :]
+    @views cloud_state.cld_path_liq[end, :] .= cloud_state.cld_path_liq[end - 1, :]
+    @views cloud_state.cld_path_ice[end, :] .= cloud_state.cld_path_ice[end - 1, :]
     @views cloud_state.cld_frac[end, :] .= cloud_state.cld_frac[end - 1, :]
 end
 
 update_boundary_layer_aerosol!(::GrayRadiation, _) = nothing
-update_boundary_layer_aerosol!(::AbstractRRTMGPMode, as) =
-    update_boundary_layer_aerosol!(as.aerosol_state)
+update_boundary_layer_aerosol!(::AbstractRRTMGPMode, as) = update_boundary_layer_aerosol!(as.aerosol_state)
 update_boundary_layer_aerosol!(::Nothing) = nothing
-function update_boundary_layer_aerosol!(
-    aerosol_state::RRTMGP.AtmosphericStates.AerosolState,
-)
-    @views aerosol_state.aero_size[:, end, :] .=
-        aerosol_state.aero_size[:, end - 1, :]
-    @views aerosol_state.aero_mass[:, end, :] .=
-        aerosol_state.aero_mass[:, end - 1, :]
+function update_boundary_layer_aerosol!(aerosol_state::RRTMGP.AtmosphericStates.AerosolState)
+    @views aerosol_state.aero_size[:, end, :] .= aerosol_state.aero_size[:, end - 1, :]
+    @views aerosol_state.aero_mass[:, end, :] .= aerosol_state.aero_mass[:, end - 1, :]
 end
 
 function clip_values!(model)
@@ -1033,27 +937,20 @@ update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_gas!(
     model.as.lat,
 )
 get_vmr_h2o(vmr::RRTMGP.Vmrs.VmrGM, idx_gases_sw) = vmr.vmr_h2o
-get_vmr_h2o(vmr::RRTMGP.Vmrs.Vmr, idx_gases_sw) =
-    view(vmr.vmr, idx_gases_sw["h2o"], :, :)
+get_vmr_h2o(vmr::RRTMGP.Vmrs.Vmr, idx_gases_sw) = view(vmr.vmr, idx_gases_sw["h2o"], :, :)
 
 NVTX.@annotate update_lw_fluxes!(::GrayRadiation, model) =
     RRTMGP.RTESolver.solve_lw!(model.lw_solver, model.as, model.metric_scaling)
 NVTX.@annotate update_lw_fluxes!(::ClearSkyRadiation, model) =
     RRTMGP.RTESolver.solve_lw!(
-        model.lw_solver,
-        model.as,
-        model.lookups.lookup_lw,
-        nothing,
-        model.lookups.lookup_lw_aero,
+        model.lw_solver, model.as,
+        model.lookups.lookup_lw, nothing, model.lookups.lookup_lw_aero,
         model.metric_scaling,
     )
 NVTX.@annotate update_lw_fluxes!(::AllSkyRadiation, model) =
     RRTMGP.RTESolver.solve_lw!(
-        model.lw_solver,
-        model.as,
-        model.lookups.lookup_lw,
-        model.lookups.lookup_lw_cld,
-        model.lookups.lookup_lw_aero,
+        model.lw_solver, model.as,
+        model.lookups.lookup_lw, model.lookups.lookup_lw_cld, model.lookups.lookup_lw_aero,
         model.metric_scaling,
     )
 NVTX.@annotate function update_lw_fluxes!(
@@ -1061,22 +958,16 @@ NVTX.@annotate function update_lw_fluxes!(
     model,
 )
     RRTMGP.RTESolver.solve_lw!(
-        model.lw_solver,
-        model.as,
-        model.lookups.lookup_lw,
-        nothing,
-        model.lookups.lookup_lw_aero,
+        model.lw_solver, model.as,
+        model.lookups.lookup_lw, nothing, model.lookups.lookup_lw_aero,
         model.metric_scaling,
     )
     parent(model.face_clear_lw_flux_up) .= parent(model.face_lw_flux_up)
     parent(model.face_clear_lw_flux_dn) .= parent(model.face_lw_flux_dn)
     parent(model.face_clear_lw_flux) .= parent(model.face_lw_flux)
     RRTMGP.RTESolver.solve_lw!(
-        model.lw_solver,
-        model.as,
-        model.lookups.lookup_lw,
-        model.lookups.lookup_lw_cld,
-        model.lookups.lookup_lw_aero,
+        model.lw_solver, model.as,
+        model.lookups.lookup_lw, model.lookups.lookup_lw_cld, model.lookups.lookup_lw_aero,
         model.metric_scaling,
     )
 end
@@ -1085,20 +976,14 @@ NVTX.@annotate update_sw_fluxes!(::GrayRadiation, model) =
     RRTMGP.RTESolver.solve_sw!(model.sw_solver, model.as, model.metric_scaling)
 NVTX.@annotate update_sw_fluxes!(::ClearSkyRadiation, model) =
     RRTMGP.RTESolver.solve_sw!(
-        model.sw_solver,
-        model.as,
-        model.lookups.lookup_sw,
-        nothing,
-        model.lookups.lookup_sw_aero,
+        model.sw_solver, model.as,
+        model.lookups.lookup_sw, nothing, model.lookups.lookup_sw_aero,
         model.metric_scaling,
     )
 NVTX.@annotate update_sw_fluxes!(::AllSkyRadiation, model) =
     RRTMGP.RTESolver.solve_sw!(
-        model.sw_solver,
-        model.as,
-        model.lookups.lookup_sw,
-        model.lookups.lookup_sw_cld,
-        model.lookups.lookup_sw_aero,
+        model.sw_solver, model.as,
+        model.lookups.lookup_sw, model.lookups.lookup_sw_cld, model.lookups.lookup_sw_aero,
         model.metric_scaling,
     )
 NVTX.@annotate function update_sw_fluxes!(
@@ -1106,24 +991,17 @@ NVTX.@annotate function update_sw_fluxes!(
     model,
 )
     RRTMGP.RTESolver.solve_sw!(
-        model.sw_solver,
-        model.as,
-        model.lookups.lookup_sw,
-        nothing,
-        model.lookups.lookup_sw_aero,
+        model.sw_solver, model.as,
+        model.lookups.lookup_sw, nothing, model.lookups.lookup_sw_aero,
         model.metric_scaling,
     )
     parent(model.face_clear_sw_flux_up) .= parent(model.face_sw_flux_up)
     parent(model.face_clear_sw_flux_dn) .= parent(model.face_sw_flux_dn)
-    parent(model.face_clear_sw_direct_flux_dn) .=
-        parent(model.face_sw_direct_flux_dn)
+    parent(model.face_clear_sw_direct_flux_dn) .= parent(model.face_sw_direct_flux_dn)
     parent(model.face_clear_sw_flux) .= parent(model.face_sw_flux)
     RRTMGP.RTESolver.solve_sw!(
-        model.sw_solver,
-        model.as,
-        model.lookups.lookup_sw,
-        model.lookups.lookup_sw_cld,
-        model.lookups.lookup_sw_aero,
+        model.sw_solver, model.as,
+        model.lookups.lookup_sw, model.lookups.lookup_sw_cld, model.lookups.lookup_sw_aero,
         model.metric_scaling,
     )
 end
@@ -1133,8 +1011,7 @@ function update_net_fluxes!(_, model)
 
 end
 function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
-    model.face_clear_flux .=
-        model.face_clear_lw_flux .+ model.face_clear_sw_flux
+    model.face_clear_flux .= model.face_clear_lw_flux .+ model.face_clear_sw_flux
     model.face_flux .= model.face_lw_flux .+ model.face_sw_flux
 end
 

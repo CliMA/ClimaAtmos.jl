@@ -125,10 +125,7 @@ function ∂FΔU_∂Fh_approximation(params, η, k_x, k_y, z_top)
         g / u * (
             im * k_h² / k_x * μ_sfc * ∂FΔη_z_∂Fh +
             ((1 - m_sfc) * ∂FΔη_xh_∂Fh + r * ∂FΔη_yh_∂Fh) * ∂FΔη_z_∂Fh +
-            β *
-            r *
-            (-r * ∂FΔη_x_sfc_∂Fh + ∂FΔη_y_sfc_∂Fh) *
-            (1 + ν_sfc * (1 - a))
+            β * r * (-r * ∂FΔη_x_sfc_∂Fh + ∂FΔη_y_sfc_∂Fh) * (1 + ν_sfc * (1 - a))
         )
 
     k_η² =
@@ -149,8 +146,7 @@ function ∂FΔU_∂Fh_approximation(params, η, k_x, k_y, z_top)
         ∂Δf_∂Fh / k_η² +
         (sqrt(d_sfc / d) * (im * k_x * u - ∂Δf_sfc_∂Fh / k_η_sfc²)) *
         exp(plus_or_minus * im * sqrt(Complex(k_η²)) * η)
-    ∂²FΔw_∂Fh∂η =
-        plus_or_minus * im * sqrt(Complex(k_η²)) * (∂FΔw_∂Fh - ∂Δf_∂Fh / k_η²)
+    ∂²FΔw_∂Fh∂η = plus_or_minus * im * sqrt(Complex(k_η²)) * (∂FΔw_∂Fh - ∂Δf_∂Fh / k_η²)
 
     ∂FΔp_∂Fh =
         -(im * k_x / k_h² * g * d) * (
@@ -260,13 +256,9 @@ function steady_state_velocity_agnesi(params, coord, z_top)
     n_efolding_intervals = -log(eps(FT))
     k_x_max = n_efolding_intervals / a
     return steady_state_velocity_mountain_2d(
-        topography_agnesi,
-        topography_agnesi_Fh,
+        topography_agnesi, topography_agnesi_Fh,
         params,
-        coord,
-        z_top,
-        x_center,
-        k_x_max,
+        coord, z_top, x_center, k_x_max,
     )
 end
 
@@ -284,12 +276,8 @@ function steady_state_velocity_schar(params, coord, z_top)
     n_efolding_intervals = -log(eps(FT))
     k_x_max = k_peak + 2 * sqrt(n_efolding_intervals) / a
     return steady_state_velocity_mountain_2d(
-        topography_schar,
-        topography_schar_Fh,
+        topography_schar, topography_schar_Fh,
         params,
-        coord,
-        z_top,
-        x_center,
-        k_x_max,
+        coord, z_top, x_center, k_x_max,
     )
 end

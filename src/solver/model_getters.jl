@@ -13,8 +13,7 @@ end
 function get_sfc_temperature_form(parsed_args)
     surface_temperature = parsed_args["surface_temperature"]
     @assert surface_temperature in (
-        "ZonallyAsymmetric",
-        "ZonallySymmetric",
+        "ZonallyAsymmetric", "ZonallySymmetric",
         "RCEMIPII",
         "ReanalysisTimeVarying",
     )
@@ -61,11 +60,7 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
             FT(parsed_args["vorticity_hyperdiffusion_coefficient"])
         ν₄_scalar_coeff = FT(parsed_args["scalar_hyperdiffusion_coefficient"])
         divergence_damping_factor = FT(parsed_args["divergence_damping_factor"])
-        return ClimaHyperdiffusion(;
-            ν₄_vorticity_coeff,
-            ν₄_scalar_coeff,
-            divergence_damping_factor,
-        )
+        return ClimaHyperdiffusion(; ν₄_vorticity_coeff, ν₄_scalar_coeff, divergence_damping_factor)
     elseif hyperdiff_name == "CAM_SE"
         # To match hyperviscosity coefficients in:
         #    https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2017MS001257
@@ -100,24 +95,16 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
 end
 
 function get_vertical_diffusion_model(
-    disable_momentum_vertical_diffusion,
-    parsed_args,
-    params,
-    ::Type{FT},
+    disable_momentum_vertical_diffusion, parsed_args, params, ::Type{FT},
 ) where {FT}
     vert_diff_name = parsed_args["vert_diff"]
     vdp = CAP.vert_diff_params(params)
     return if vert_diff_name in ("false", false, "none")
         nothing
     elseif vert_diff_name in ("true", true, "VerticalDiffusion")
-        VerticalDiffusion{disable_momentum_vertical_diffusion, FT}(;
-            C_E = vdp.C_E,
-        )
+        VerticalDiffusion{disable_momentum_vertical_diffusion, FT}(; C_E = vdp.C_E)
     elseif vert_diff_name in ("DecayWithHeightDiffusion",)
-        DecayWithHeightDiffusion{disable_momentum_vertical_diffusion, FT}(;
-            H = vdp.H,
-            D₀ = vdp.D₀,
-        )
+        DecayWithHeightDiffusion{disable_momentum_vertical_diffusion, FT}(; H = vdp.H, D₀ = vdp.D₀)
     else
         error("Uncaught diffusion model `$vert_diff_name`.")
     end
@@ -145,9 +132,7 @@ function get_surface_albedo_model(parsed_args, params, ::Type{FT}) where {FT}
     return if albedo_name in ("ConstantAlbedo",)
         ConstantAlbedo{FT}(; α = params.idealized_ocean_albedo)
     elseif albedo_name in ("RegressionFunctionAlbedo",)
-        isnothing(parsed_args["rad"]) && error(
-            "Radiation model not specified, so cannot use RegressionFunctionAlbedo",
-        )
+        isnothing(parsed_args["rad"]) && error("Radiation model not specified, so cannot use RegressionFunctionAlbedo")
         RegressionFunctionAlbedo{FT}(; n = params.water_refractive_index)
     elseif albedo_name in ("CouplerAlbedo",)
         CouplerAlbedo()
@@ -201,19 +186,11 @@ function get_non_orographic_gravity_wave_model(
             NonOrographicGravityWave{FT}(; Bw = 1.2, Bn = 0.0, Bt_0 = 4e-3)
         elseif parsed_args["config"] == "sphere"
             NonOrographicGravityWave{FT}(;
-                Bw = 0.4,
-                Bn = 0.0,
-                cw = 35.0,
-                cw_tropics = 35.0,
-                cn = 2.0,
-                Bt_0 = 0.0043,
-                Bt_n = 0.0,
-                Bt_eq = 0.0043,
-                Bt_s = 0.0,
-                ϕ0_n = 15,
-                ϕ0_s = -15,
-                dϕ_n = 10,
-                dϕ_s = -10,
+                Bw = 0.4, Bn = 0.0,
+                cw = 35.0, cw_tropics = 35.0, cn = 2.0,
+                Bt_0 = 0.0043, Bt_n = 0.0, Bt_eq = 0.0043, Bt_s = 0.0,
+                ϕ0_n = 15, ϕ0_s = -15,
+                dϕ_n = 10, dϕ_s = -10,
             )
         else
             error("Uncaught case")
@@ -255,16 +232,10 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     radiation_name = parsed_args["rad"]
     deep_atmosphere = parsed_args["deep_atmosphere"]
     @assert radiation_name in (
-        nothing,
-        "nothing",
-        "clearsky",
-        "gray",
-        "allsky",
-        "allskywithclear",
+        nothing, "nothing",
+        "clearsky", "gray", "allsky", "allskywithclear",
         "held_suarez",
-        "DYCOMS",
-        "TRMM_LBA",
-        "ISDAC",
+        "DYCOMS", "TRMM_LBA", "ISDAC",
     )
     if !(radiation_name in ("allsky", "allskywithclear")) && reset_rng_seed
         @warn "reset_rng_seed does not have any effect with $radiation_name radiation option"
@@ -277,16 +248,11 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         RRTMGPI.GrayRadiation(add_isothermal_boundary_layer, deep_atmosphere)
     elseif radiation_name == "clearsky"
         RRTMGPI.ClearSkyRadiation(
-            idealized_h2o,
-            add_isothermal_boundary_layer,
-            aerosol_radiation,
-            deep_atmosphere,
+            idealized_h2o, add_isothermal_boundary_layer, aerosol_radiation, deep_atmosphere,
         )
     elseif radiation_name == "allsky"
         RRTMGPI.AllSkyRadiation(
-            idealized_h2o,
-            idealized_clouds,
-            cloud,
+            idealized_h2o, idealized_clouds, cloud,
             add_isothermal_boundary_layer,
             aerosol_radiation,
             reset_rng_seed,
@@ -294,9 +260,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         )
     elseif radiation_name == "allskywithclear"
         RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(
-            idealized_h2o,
-            idealized_clouds,
-            cloud,
+            idealized_h2o, idealized_clouds, cloud,
             add_isothermal_boundary_layer,
             aerosol_radiation,
             reset_rng_seed,
@@ -453,8 +417,7 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
     @assert external_forcing in (
         nothing,
         "GCM",
-        "ReanalysisTimeVarying",
-        "ReanalysisMonthlyAveragedDiurnal",
+        "ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal",
         "ISDAC",
     )
     reanalysis_required_fields = map(
@@ -481,37 +444,22 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
             @info "External forcing file $(external_forcing_file) does not exist or does not cover the expected time range. Generating it now."
             # generate forcing from provided era5 data paths
             generate_multiday_era5_external_forcing_file(
-                parsed_args,
-                external_forcing_file,
-                FT,
-                input_data_dir = joinpath(
-                    @clima_artifact("era5_hourly_atmos_raw"),
-                    "daily",
-                ),
+                parsed_args, external_forcing_file, FT,
+                input_data_dir = joinpath(@clima_artifact("era5_hourly_atmos_raw"), "daily"),
             )
         end
 
         ExternalDrivenTVForcing{FT}(external_forcing_file)
     elseif external_forcing == "ReanalysisMonthlyAveragedDiurnal"
-        external_forcing_file =
-            get_external_monthly_forcing_file_path(parsed_args)
+        external_forcing_file = get_external_monthly_forcing_file_path(parsed_args)
         # generate single file from monthly averaged diurnal data if it doesn't exist
         # we'll use ClimaUtilities.TimeVaryingInputs downstream to repeat the data. 
         if !isfile(external_forcing_file) ||
            !check_monthly_forcing_times(external_forcing_file, parsed_args)
             generate_external_forcing_file(
-                parsed_args,
-                external_forcing_file,
-                FT,
-                input_data_dir = joinpath(
-                    @clima_artifact("era5_hourly_atmos_raw"),
-                    "monthly",
-                ),
-                data_strs = [
-                    "monthly_diurnal_profiles",
-                    "monthly_diurnal_inst",
-                    "monthly_diurnal_accum",
-                ],
+                parsed_args, external_forcing_file, FT,
+                input_data_dir = joinpath(@clima_artifact("era5_hourly_atmos_raw"), "monthly"),
+                data_strs = ["monthly_diurnal_profiles", "monthly_diurnal_inst", "monthly_diurnal_accum"],
             )
         end
         ExternalDrivenTVForcing{FT}(external_forcing_file)
@@ -556,13 +504,7 @@ end
 
 function get_turbconv_model(FT, parsed_args, turbconv_params)
     turbconv = parsed_args["turbconv"]
-    @assert turbconv in (
-        nothing,
-        "edmfx",
-        "prognostic_edmfx",
-        "diagnostic_edmfx",
-        "edonly_edmfx",
-    )
+    @assert turbconv in (nothing, "edmfx", "prognostic_edmfx", "diagnostic_edmfx", "edonly_edmfx")
 
     return if turbconv == "prognostic_edmfx"
         N = parsed_args["updraft_number"]

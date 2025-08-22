@@ -125,28 +125,17 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     # compute base flux at k_pbl
     Fields.bycolumn(axes(Y.c.ρ)) do colidx
         calc_base_flux!(
-            topo_τ_x[colidx],
-            topo_τ_y[colidx],
-            topo_τ_l[colidx],
-            topo_τ_p[colidx],
-            topo_τ_np[colidx],
-            topo_U_sat[colidx],
-            topo_FrU_sat[colidx],
-            topo_FrU_max[colidx],
-            topo_FrU_min[colidx],
-            topo_FrU_clp[colidx],
-            p,
-            max(0, parent(hmax[colidx])[1]),
-            max(0, parent(hmin[colidx])[1]),
-            parent(t11[colidx])[1],
-            parent(t12[colidx])[1],
-            parent(t21[colidx])[1],
-            parent(t22[colidx])[1],
-            parent(Y.c.ρ[colidx]),
-            parent(u_phy[colidx]),
-            parent(v_phy[colidx]),
-            parent(ᶜN[colidx]),
-            Int(parent(topo_k_pbl[colidx])[1]),
+            # τ components (linear, propagating, non‑propagating)
+            topo_τ_x[colidx], topo_τ_y[colidx], topo_τ_l[colidx], topo_τ_p[colidx], topo_τ_np[colidx],
+            # Saturation / Froude-derived velocity & limits
+            topo_U_sat[colidx], topo_FrU_sat[colidx], topo_FrU_max[colidx], topo_FrU_min[colidx], topo_FrU_clp[colidx],
+            p,  # pressure placeholder
+            max(0, parent(hmax[colidx])[1]), max(0, parent(hmin[colidx])[1]),  # Orographic extrema (hmax, hmin)
+            # Orientation tensor components (t11, t12, t21, t22)
+            parent(t11[colidx])[1], parent(t12[colidx])[1], parent(t21[colidx])[1], parent(t22[colidx])[1],
+            # density (ρ), resolved flow (ρ, u, v), buoyancy frequency (N)
+            parent(Y.c.ρ[colidx]), parent(u_phy[colidx]), parent(v_phy[colidx]), parent(ᶜN[colidx]),
+            Int(parent(topo_k_pbl[colidx])[1]),  # PBL index (integer level)
         )
     end
 
@@ -156,22 +145,15 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     # compute saturation profile
     Fields.bycolumn(axes(Y.c.ρ)) do colidx
         calc_saturation_profile!(
-            topo_ᶠτ_sat[colidx],
-            topo_U_sat[colidx],
-            topo_FrU_sat[colidx],
-            topo_FrU_clp[colidx],
-            topo_ᶠVτ[colidx],
-            p,
-            topo_FrU_max[colidx],
-            topo_FrU_min[colidx],
-            ᶠN[colidx],
-            topo_τ_x[colidx],
-            topo_τ_y[colidx],
-            topo_τ_p[colidx],
-            u_phy[colidx],
-            v_phy[colidx],
-            Y.c.ρ[colidx],
-            ᶜp[colidx],
+            # Outputs / evolving face profiles
+            topo_ᶠτ_sat[colidx], topo_U_sat[colidx], topo_FrU_sat[colidx], topo_FrU_clp[colidx], topo_ᶠVτ[colidx],
+            # Forcing / Froude limits & stability
+            p, topo_FrU_max[colidx], topo_FrU_min[colidx], ᶠN[colidx],
+            # Base stresses (& linear drag τ_p used as source below PBL top)
+            topo_τ_x[colidx], topo_τ_y[colidx], topo_τ_p[colidx],
+            # Resolved flow & thermodynamic state (u, v, ρ, p_center)
+            u_phy[colidx], v_phy[colidx], Y.c.ρ[colidx], ᶜp[colidx],
+            # PBL index
             Int(parent(topo_k_pbl[colidx])[1]),
         )
     end
@@ -183,32 +165,20 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     # compute drag tendencies due to propagating part
     Fields.bycolumn(axes(Y.c.ρ)) do colidx
         calc_propagate_forcing!(
-            uforcing[colidx],
-            vforcing[colidx],
-            topo_τ_x[colidx],
-            topo_τ_y[colidx],
-            topo_τ_l[colidx],
-            topo_ᶠτ_sat[colidx],
-            Y.c.ρ[colidx],
+            uforcing[colidx], vforcing[colidx],  # Output tendencies (momentum forcing)
+            topo_τ_x[colidx], topo_τ_y[colidx], topo_τ_l[colidx], topo_ᶠτ_sat[colidx],  # stress components
+            Y.c.ρ[colidx],  # density, for converting stress divergence to acceleration
         )
     end
 
     # compute drag tendencies due to non-propagating part
     Fields.bycolumn(axes(Y.c.ρ)) do colidx
         calc_nonpropagating_forcing!(
-            uforcing[colidx],
-            vforcing[colidx],
-            ᶠN[colidx],
-            topo_ᶠVτ[colidx],
-            ᶜp[colidx],
-            topo_τ_x[colidx],
-            topo_τ_y[colidx],
-            topo_τ_l[colidx],
-            topo_τ_np[colidx],
-            ᶠz[colidx],
-            ᶜz[colidx],
-            Int(parent(topo_k_pbl[colidx])[1]),
-            grav,
+            uforcing[colidx], vforcing[colidx],  # Output tendencies (momentum forcing)
+            ᶠN[colidx], topo_ᶠVτ[colidx], ᶜp[colidx],  # Stability, velocity scale, pressure
+            topo_τ_x[colidx], topo_τ_y[colidx], topo_τ_l[colidx], topo_τ_np[colidx],  # Stress & non‑propagating drag
+            ᶠz[colidx], ᶜz[colidx],  # Geometric heights (faces & centers)
+            Int(parent(topo_k_pbl[colidx])[1]), grav,  # PBL index & gravity constant
         )
     end
 
