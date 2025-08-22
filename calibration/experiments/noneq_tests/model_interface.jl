@@ -17,7 +17,7 @@ function CAL.forward_model(iteration, member, config_dict = nothing)
     experiment_dir = dirname(Base.active_project())
     if isnothing(config_dict)
         config_dict =
-            YAML.load_file(joinpath(experiment_dir, "prognostic_edmfx_diurnal_scm_imp_noneq_1M.yml"))
+            YAML.load_file(joinpath(experiment_dir, "diagnostic_edmfx_diurnal_scm_imp_noneq_1M.yml"))
     end
     output_dir = config_dict["output_dir"]
     member_path = path_to_ensemble_member(output_dir, iteration, member)
