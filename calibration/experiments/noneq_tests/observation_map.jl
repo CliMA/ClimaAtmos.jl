@@ -10,7 +10,7 @@ using YAML
 const days = 86_400
 const hours = 60*60
 function CAL.observation_map(iteration)
-    single_member_dims = (1,)
+    single_member_dims = (2,)
     G_ensemble = Array{Float64}(undef, single_member_dims..., ensemble_size)
 
     for m in 1:ensemble_size
