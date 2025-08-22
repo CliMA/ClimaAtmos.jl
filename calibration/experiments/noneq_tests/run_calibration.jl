@@ -19,7 +19,7 @@ prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 500, 
 const prior = PD.combine_distributions(prior_vec)
 
 
-ensemble_size = 10
+ensemble_size = 20
 n_iterations = 10
 output_dir = "EKI_output"
 
@@ -64,6 +64,10 @@ addprocs(
 
     include("observation_map.jl")
     include("model_interface.jl")
+
+    ensemble_size = 10
+    n_iterations = 10
+    output_dir = "EKI_output"
 
     experiment_dir = dirname(Base.active_project())
     #const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")
