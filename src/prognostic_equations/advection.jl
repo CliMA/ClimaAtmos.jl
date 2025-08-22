@@ -481,10 +481,17 @@ function edmfx_sgs_vertical_advection_tendency!(
                         turbconv_model,
                     ),
                 ))
+                ᶜinv_ρ̂ = @. lazy(1 / ᶜρʲs.:($$j))
                 ᶜ∂ρ̂∂z = (@. lazy(
                     upwind_biased_grad(
                         -1 * Geometry.WVector(ᶜwʲ),
                         Y.c.sgsʲs.:($$j).ρa,
+                    ),
+                ))
+                ᶜ∂ρ̂∂z = (@. lazy(
+                    upwind_biased_grad(
+                        -1 * Geometry.WVector(ᶜwʲ),
+                        ᶜρʲs.:($$j),
                     ),
                 ))
                 @. Yₜ.c.sgsʲs.:($$j).mse -=
