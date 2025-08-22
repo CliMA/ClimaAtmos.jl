@@ -234,19 +234,19 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
             ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
             ᶜq_liq_int_val = Fields.field_values(Fields.level(ᶜq_liq, 1))
             ᶜq_liqʲ_int_val = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
-            @. ᶜq_liqʲ_int_val = ᶜq_liq_int_val
+            @. ᶜq_liqʲ_int_val = max(0, ᶜq_liq_int_val)
 
             ᶜq_ice_int_val = Fields.field_values(Fields.level(ᶜq_ice, 1))
             ᶜq_iceʲ_int_val = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
-            @. ᶜq_iceʲ_int_val = ᶜq_ice_int_val
+            @. ᶜq_iceʲ_int_val = max(0, ᶜq_ice_int_val)
 
             ᶜq_rai_int_val = Fields.field_values(Fields.level(ᶜq_rai, 1))
             ᶜq_raiʲ_int_val = Fields.field_values(Fields.level(ᶜq_raiʲ, 1))
-            @. ᶜq_raiʲ_int_val = ᶜq_rai_int_val
+            @. ᶜq_raiʲ_int_val = max(0, ᶜq_rai_int_val)
 
             ᶜq_sno_int_val = Fields.field_values(Fields.level(ᶜq_sno, 1))
             ᶜq_snoʲ_int_val = Fields.field_values(Fields.level(ᶜq_snoʲ, 1))
-            @. ᶜq_snoʲ_int_val = ᶜq_sno_int_val
+            @. ᶜq_snoʲ_int_val = max(0, ᶜq_sno_int_val)
         end
         if p.atmos.moisture_model isa NonEquilMoistModel &&
            p.atmos.microphysics_model isa Microphysics2Moment
