@@ -413,7 +413,7 @@ function calc_saturation_profile!(
         -(ᶠd2udz * τ_x + ᶠd2vdz * τ_y) / max(eps(FT), sqrt(τ_x^2 + τ_y^2)),
     )
     L1 = @. topo_L0 *
-       max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶠVτ * ᶠd2Vτdz / ᶠN^2))
+            max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶠVτ * ᶠd2Vτdz / ᶠN^2))
     # the coefficient FT(2.0) is the correction for coarse sampling of d2v/dz2
     FrU_clp0 = FrU_clp
     FrU_sat0 = FrU_sat

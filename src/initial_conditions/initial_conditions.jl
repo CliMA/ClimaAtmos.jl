@@ -450,7 +450,7 @@ function _overwrite_initial_conditions_from_file!(
     # p is then updated with the integral result, given p_sfc,
     # following which the thermodynamic state is constructed.
     ᶜ∂lnp∂z = @. -thermo_params.grav /
-       (TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT)
+                 (TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT)
     ᶠlnp_over_psfc = zeros(face_space)
     Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
     ᶠp = p_sfc .* exp.(ᶠlnp_over_psfc)
