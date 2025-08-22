@@ -79,7 +79,7 @@ addprocs(
 end
 
 observations = process_member_data(SimDir(truth_out_dir))
-noise = Diagonal([0.1*EKP.I, 0.1*EKP.I])
+noise = diagm(ones(2)) #Diagonal([0.1*diagm(ones(2)), 0.1*diagm(ones(2))])
 
 observation = EKP.Observation(
                     Dict(
