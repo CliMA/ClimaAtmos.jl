@@ -65,7 +65,7 @@ addprocs(
     include("observation_map.jl")
     include("model_interface.jl")
 
-    ensemble_size = 10
+    ensemble_size = 20
     n_iterations = 10
     output_dir = "EKI_output"
 
