@@ -1128,5 +1128,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     zero_velocity_jacobian!(matrix, Y, p, t)
 end
 
-invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R) =
+function invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R)
+    Main.@infiltrate
     LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
+end
