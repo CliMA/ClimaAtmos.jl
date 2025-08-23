@@ -138,6 +138,25 @@ function build_cache(
     thermo_params = CAP.thermodynamics_params(params)
     decay_scale_height = FT(8000)
 
+    # Updated Reference Enthalpy for hyperdiffusion computation
+    ᶠz = Fields.coordinate_field(Y.f).z
+    ᶠη = similar(ᶠz)
+    ᶠz_sfc = Fields.level(Fields.coordinate_field(Y.c).z, half)
+    ᶠz_top = Fields.level(Fields.coordinate_field(Y.f).z, Spaces.nlevels(Y.c)+half)
+    Φₛ = @. grav * ᶠz_sfc
+    R_d = CAP.R_d(params)
+    p₀ = FT(1e6)
+    @. ᶠη = (ᶠz_top - ᶠz) / (ᶠz_top - ᶠz_sfc)
+    T_ref_0 = FT(96)
+    T_ref_1 = FT(192)
+    T_ref = FT(288)
+    T_ref =  T_ref_0 + T_ref_1 * Π_ref
+    pₛ_ref = @. p₀ * exp(- Φₛ / R_d / T_ref) 
+    # A and B are polynomial functions of `η` the hybrid pressure coordinate
+    A = 
+    B = 
+    @. p_ref = A * p₀ + pₛ_ref * B
+
     # Reference State
     temp_profile = TD.TemperatureProfiles.DecayingTemperatureProfile{FT}(
         thermo_params,
