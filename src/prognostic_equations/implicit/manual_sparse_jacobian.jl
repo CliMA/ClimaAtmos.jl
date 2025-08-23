@@ -1129,6 +1129,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 end
 
 function invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R)
-    Main.@infiltrate
+    @show Geometry.WVector.(R.f.u₃)
     LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
 end
