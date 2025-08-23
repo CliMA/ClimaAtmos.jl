@@ -119,3 +119,8 @@ struct PrecipStateMassNum{FT} <: PrecipState{FT}
 end
 PrecipStateMassNum(; n_liq = 0, n_rai = 0, q_rai = 0, q_sno = 0) =
     PrecipStateMassNum{typeof(q_rai)}(n_liq, n_rai, q_rai, q_sno)
+
+@kwdef struct PrecipState2MP3{FT} <: PrecipState{FT}
+    warm::PrecipStateMassNum{FT}
+    cold::@NamedTuple{n_ice::FT, q_ice::FT, q_rim::FT, b_rim::FT}
+end
