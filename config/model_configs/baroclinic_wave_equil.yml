@@ -1,11 +1,14 @@
+dt: "100secs"
+deep_atmosphere: true
+dz_bottom: 30.0
+z_elem: 20
+t_end: "65days"
 precip_model: "0M"
-dt_save_state_to_disk: "2days"
-reproducibility_test: true
 initial_condition: "MoistBaroclinicWave"
-dt: "450secs"
-t_end: "10days"
 moist: "equil"
+surface_setup: "DefaultMoninObukhov"
 disable_surface_flux_tendency: true
-diagnostics:
-  - short_name: [pfull, wa, va, rv, hus, ke]
-    period: 1days
+vert_diff: "DecayWithHeightDiffusion"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+FLOAT_TYPE: Float32
