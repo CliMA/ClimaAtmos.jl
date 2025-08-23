@@ -48,11 +48,14 @@ NVTX.@annotate update_jacobian!(jacobian, Y, p, dtγ, t) =
     update_jacobian!(jacobian.alg, jacobian.cache, Y, p, safe_float(dtγ, Y), t)
 
 # ClimaTimeSteppers.jl calls this to perform each linear solve.
-NVTX.@annotate LinearAlgebra.ldiv!(
+NVTX.@annotate function LinearAlgebra.ldiv!(
     ΔY::Fields.FieldVector,
     jacobian::Jacobian,
     R::Fields.FieldVector,
-) = invert_jacobian!(jacobian.alg, jacobian.cache, ΔY, R)
+)    
+    @show Geometry.WVector.(R.f.u₃)
+    invert_jacobian!(jacobian.alg, jacobian.cache, ΔY, R)
+end
 
 # This is called by Krylov.jl from inside ClimaTimeSteppers.jl. See
 # https://github.com/JuliaSmoothOptimizers/Krylov.jl/issues/605 for a related
