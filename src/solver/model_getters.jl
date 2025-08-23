@@ -325,6 +325,8 @@ function get_microphysics_model(parsed_args)
         Microphysics1Moment()
     elseif microphysics_model == "2M"
         Microphysics2Moment()
+    elseif microphysics_model == "2MP3"
+        Microphysics2MomentP3()
     else
         error("Invalid microphysics_model $(microphysics_model)")
     end
