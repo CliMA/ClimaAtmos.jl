@@ -15,7 +15,7 @@ function get_les_calibration_library()
     # AMIP data: July, NE Pacific
     # cfsite_numbers = (17, 18, 22, 23, 30, 94)
     # cfsite_numbers = (17, 22, 23, 30, 33, 94)
-    cfsite_numbers = (17, 21, 23, 30, 33)# 94)
+    cfsite_numbers = (17, 21, 23, )# 30, 33)# 94)
     # cfsite_numbers = (30, 33,)# 94)
 
     # cfsite_numbers = (17, 30,)# 94)
