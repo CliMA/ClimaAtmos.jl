@@ -33,8 +33,12 @@ function get_atmos(config::AtmosConfig, params)
                 Union{NoPrecipitation, Microphysics0Moment}
     end
     if moisture_model isa NonEquilMoistModel
-        @assert microphysics_model isa
-                Union{NoPrecipitation, Microphysics1Moment, Microphysics2Moment}
+        @assert microphysics_model isa Union{
+            NoPrecipitation,
+            Microphysics1Moment,
+            Microphysics2Moment,
+            Microphysics2MomentP3,
+        }
     end
     if microphysics_model isa NoPrecipitation
         @warn "Running simulations without any precipitation formation."
@@ -400,6 +404,7 @@ function get_initial_condition(parsed_args, atmos)
         "DryDensityCurrentProfile",
         "RisingThermalBubbleProfile",
         "PrecipitatingColumn",
+        "ColdPrecipitatingColumn",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
     elseif isfile(parsed_args["initial_condition"])

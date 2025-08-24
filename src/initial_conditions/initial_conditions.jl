@@ -1315,6 +1315,58 @@ function (initial_condition::PrecipitatingColumn)(params)
 end
 
 """
+    PrecipitatingColumn
+
+A 1-dimensional cold precipitating column test
+"""
+struct ColdPrecipitatingColumn <: InitialCondition end
+
+function (initial_condition::ColdPrecipitatingColumn)(params)
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    p_0 = FT(101300.0)
+    qᵣ = prescribed_prof(FT, 2000, 5000, 1e-6)
+    qₗ = prescribed_prof(FT, 4000, 5500, 2e-5)
+    qᵢ = prescribed_prof(FT, 6000, 9000, 1e-5)
+    nᵢ = prescribed_prof(FT, 6000, 9000, 1e6)
+    nₗ = prescribed_prof(FT, 4000, 5500, 1e7)
+    nᵣ = prescribed_prof(FT, 2000, 5000, 1e3)
+    zero = Returns(FT(0))
+    θ = APL.Rico_θ_liq_ice(FT)
+    q_tot = APL.Rico_q_tot(FT)
+    u = prescribed_prof(FT, 0, Inf, 0)
+    v = prescribed_prof(FT, 0, Inf, 0)
+    p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
+    function local_state(geometry)
+        (; z) = geometry.coordinates
+        thermo_state = TD.PhaseNonEquil_pθq(
+            thermo_params,
+            p(z),
+            θ(z),
+            TD.PhasePartition(q_tot(z), qₗ(z) + qᵣ(z), qᵢ(z)),
+        )
+        # TODO: Decouple warm and cold 2M (w/o P3), to eliminate need for dummy `q_sno` here
+        warm = PrecipStateMassNum(;
+            n_liq = nₗ(z),
+            n_rai = nᵣ(z),
+            q_rai = qᵣ(z),
+            q_sno = zero(z),
+        )
+        cold =
+            (; n_ice = nᵢ(z), q_ice = qᵢ(z), q_rim = zero(z), b_rim = zero(z))
+        return LocalState(;
+            params,
+            geometry,
+            thermo_state,
+            velocity = Geometry.UVVector(u(z), v(z)),
+            turbconv_state = nothing,
+            precip_state = PrecipState2MP3(; warm, cold),
+        )
+    end
+    return local_state
+end
+
+"""
     GCMDriven <: InitialCondition
 
 The `InitialCondition` from a provided GCM forcing file, with data type `DType`.

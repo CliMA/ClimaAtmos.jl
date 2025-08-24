@@ -34,6 +34,7 @@ import ..NoPrecipitation
 import ..Microphysics0Moment
 import ..Microphysics1Moment
 import ..Microphysics2Moment
+import ..Microphysics2MomentP3
 
 # radiation
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
