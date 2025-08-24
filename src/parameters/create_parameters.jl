@@ -63,7 +63,8 @@ function ClimaAtmosParameters(
         cm_model isa Microphysics0Moment || (microphysics_0m_params = nothing)
         cm_model isa Union{Microphysics1Moment, Microphysics2Moment} ||
             (microphysics_1m_params = nothing)
-        cm_model isa Microphysics2Moment || (microphysics_2m_params = nothing)
+        cm_model isa Union{Microphysics2Moment, Microphysics2MomentP3} ||
+            (microphysics_2m_params = nothing)
         cm_model isa Microphysics2MomentP3 ||
             (microphysics_2mp3_params = nothing)
     end
