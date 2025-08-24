@@ -1,4 +1,4 @@
-256
+257
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+257
+- Redefine sedimentation velocity for Prognostic EDMF with 1-moment or 2-moment microphysics
+  on the grid scale; fix a bug in EDMFx SGS mass flux.
+
 256
 - Fix a bug in EDMF diffusive flux
 
