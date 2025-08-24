@@ -4,6 +4,9 @@ value = 1.0e-5
 [EDMF_max_area]
 value = 0.7
 
+[entr_inv_tau]
+value = 0
+
 [min_area_limiter_scale]
 value = 0
 
