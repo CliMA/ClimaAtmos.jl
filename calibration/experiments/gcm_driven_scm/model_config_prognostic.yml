@@ -10,6 +10,8 @@ approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
 edmfx_upwinding: "first_order"
 rayleigh_sponge: true
+# edmfx_entr_model: "Generalized"
+# edmfx_detr_model: "Generalized"
 edmfx_entr_model: "PiGroups"
 edmfx_detr_model: "SmoothArea"
 precip_model: 0M
@@ -38,7 +40,6 @@ perturb_initstate: false
 dt: "10secs"
 dt_rad: "30mins"
 t_end: "72hours"
-
 dt_save_to_disk: "10mins"
 call_cloud_diagnostics_per_stage : true
 toml: [scm_tomls/prognostic_edmfx.toml]

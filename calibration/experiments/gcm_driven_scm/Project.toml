@@ -18,7 +18,3 @@ JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
-
-[compat]
-EnsembleKalmanProcesses = "=2.1.2"
-ClimaCalibrate = "=0.0.13"
