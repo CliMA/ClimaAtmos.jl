@@ -1,10 +1,13 @@
-prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_0M_v1.toml
-ensemble_size: 100
-n_iterations: 8
-batch_size: 5 # number of cases per iteration
+# prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_0M_v1.toml
+prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_dev.toml
+# prior_path: prior_prognostic.toml
+ensemble_size: 10
+n_iterations: 4
+batch_size: 3 # number of cases per iteration
 # model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
 model_config : model_config_prognostic_impl.yml
-output_dir : /central/scratch/cchristo/debug/exp16
+# model_config : model_config_prognostic.yml
+output_dir : /central/scratch/cchristo/debug/exp26
 
 # Slurm resource configuration
 slurm_time: "02:00:00"
