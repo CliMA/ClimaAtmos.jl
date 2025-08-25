@@ -381,28 +381,20 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶜgradᵥ(CAP.grav(params) * ᶠz) / ᶜρʲs.:($$j)
     end
 
+    edmf_upwnd = edmfx_upwinding
     for j in 1:n
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
-        edmf_upwnd = edmfx_upwinding
 
         # Flux form vertical advection of area farction with the grid mean velocity
         vtt = vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmf_upwnd)
         @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
 
         # Advective form advection of mse and q_tot with the grid mean velocity
-        # TODO - make it work for multiple updrafts
-        if j > 1
-            error("Below code doesn't work for multiple updrafts")
-        end
-        sgs_q_tot_mse = (@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot))
-        MatrixFields.unrolled_foreach(sgs_q_tot_mse) do χʲ_name
-            MatrixFields.has_field(Y, χʲ_name) || return
-            ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-            ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
+        va = vertical_advection(ᶠu³ʲs.:($j), Y.c.sgsʲs.:($j).mse, edmf_upwnd)
+        @. Yₜ.c.sgsʲs.:($$j).mse += va
 
-            va = vertical_advection(ᶠu³ʲs.:($j), ᶜχʲ, edmf_upwnd)
-            @. ᶜχʲₜ += va
-        end
+        va = vertical_advection(ᶠu³ʲs.:($j), Y.c.sgsʲs.:($j).q_tot, edmf_upwnd)
+        @. Yₜ.c.sgsʲs.:($$j).q_tot += va
 
         if p.atmos.moisture_model isa NonEquilMoistModel && (
             p.atmos.microphysics_model isa Microphysics1Moment ||
@@ -410,7 +402,10 @@ function edmfx_sgs_vertical_advection_tendency!(
         )
             # TODO - add contibutions to sgs mass flux from tracer sedimentation
             # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
-
+            # TODO - make it work for multiple updrafts
+            if j > 1
+                error("Below code doesn't work for multiple updrafts")
+            end
             FT = eltype(params)
             thp = CAP.thermodynamics_params(params)
             (; ᶜΦ) = p.core
