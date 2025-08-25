@@ -215,13 +215,10 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     max_zenith_angle = FT(π) / 2 - eps(FT)
     irradiance = FT(CAP.tot_solar_irrad(params))
     au = FT(CAP.astro_unit(params))
-    # date0 references the start of the astronomial epoch J2000
-    date0 = DateTime("2000-01-01T11:58:56.816")
     d, δ, η_UTC =
         FT.(
             Insolation.helper_instantaneous_zenith_angle(
                 current_datetime,
-                date0,
                 insolation_params,
             ),
         )
