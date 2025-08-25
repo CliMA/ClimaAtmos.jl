@@ -145,17 +145,20 @@ function build_cache(
     ᶠz_top = Fields.level(Fields.coordinate_field(Y.f).z, Spaces.nlevels(Y.c)+half)
     Φₛ = @. grav * ᶠz_sfc
     R_d = CAP.R_d(params)
+    cp_d = CAP.cp_d(params)
+    Γ₀ = FT(6.5)
     p₀ = FT(1e6)
     @. ᶠη = (ᶠz_top - ᶠz) / (ᶠz_top - ᶠz_sfc)
-    T_ref_0 = FT(96)
-    T_ref_1 = FT(192)
     T_ref = FT(288)
-    T_ref =  T_ref_0 + T_ref_1 * Π_ref
+    T_1 = FT(Γ₀ * T_ref * cp_d / grav)
+    T_0 = T_ref - T_1
     pₛ_ref = @. p₀ * exp(- Φₛ / R_d / T_ref) 
     # A and B are polynomial functions of `η` the hybrid pressure coordinate
     A = 
     B = 
     @. p_ref = A * p₀ + pₛ_ref * B
+    @. Π_ref = (p_ref / p₀) ^ (R_d / cp_d)
+    T_ref =  T_0 + T_1 * Π_ref
 
     # Reference State
     temp_profile = TD.TemperatureProfiles.DecayingTemperatureProfile{FT}(
