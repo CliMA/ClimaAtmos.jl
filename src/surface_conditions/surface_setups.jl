@@ -297,3 +297,13 @@ function (::ISDAC)(params)
     parameterization = MoninObukhov(; z0, fluxes = HeatFluxes(; lhf, shf))
     return SurfaceState(; parameterization, T, p)
 end
+
+struct Larcform1 end
+function (::Larcform1)(params)
+    # Adapted from ISDAC surface conditions
+    FT = eltype(params)
+    T = FT(250)  # K
+    z0 = FT(4e-4)  # m  surface roughness length
+    parameterization = MoninObukhov(; z0)
+    return SurfaceState(; parameterization, T)
+end
