@@ -233,16 +233,8 @@ function get_coszen_inst(
 
     date = DateTime(date)
 
-    date0 = DateTime("2000-01-01T11:58:56.816")
-
-    S, μ = Insolation.solar_flux_and_cos_sza(
-        date,
-        date0,
-        od,
-        FT(lon),
-        FT(lat),
-        param_set,
-    )
+    S, μ =
+        Insolation.solar_flux_and_cos_sza(date, od, FT(lon), FT(lat), param_set)
 
     return μ, S * μ
 end
@@ -306,12 +298,7 @@ function generate_external_forcing_file(
 
     external_tv_params = CP.get_parameter_values(
         CP.create_toml_dict(FT),
-        [
-            "gravitational_acceleration",
-            "planet_radius",
-            "gas_constant",
-            "molar_mass_dry_air",
-        ],
+        ["gravitational_acceleration", "planet_radius", "gas_constant_dry_air"],
     )
     # load datasets
     tvforcing =
@@ -358,9 +345,9 @@ function generate_external_forcing_file(
 
     # compute subsidence
     pressure = tvforcing["pressure_level"] .* 100 # convert hPa to Pa
-    R_d =
-        external_tv_params.gas_constant / external_tv_params.molar_mass_dry_air # J/(kg*K)
-    ρ = pressure ./ (R_d .* sim_forcing["ta"])
+    ρ =
+        pressure ./
+        (external_tv_params.gas_constant_dry_air .* sim_forcing["ta"])
     sim_forcing["rho"] = ρ # air density
     sim_forcing["wa"] =
         .-sim_forcing["wap"] ./

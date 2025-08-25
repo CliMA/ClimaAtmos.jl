@@ -1,4 +1,4 @@
-257
+258
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+258
+- Update deps, specifically ClimaParams.jl and Thermodynamics.jl
+
 257
 - Redefine sedimentation velocity for Prognostic EDMF with 1-moment or 2-moment microphysics
   on the grid scale; fix a bug in EDMFx SGS mass flux.
