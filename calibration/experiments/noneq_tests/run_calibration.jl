@@ -21,7 +21,7 @@ const prior = PD.combine_distributions(prior_vec)
 
 ensemble_size = 20
 n_iterations = 10
-output_dir = "EKI_output"
+output_dir = "/home/oalcabes/EKI_output/test_1"
 
 run_truth = false
 
@@ -67,7 +67,7 @@ addprocs(
 
     ensemble_size = 20
     n_iterations = 10
-    output_dir = "EKI_output"
+    output_dir = "/home/oalcabes/EKI_output/test_1"
 
     experiment_dir = dirname(Base.active_project())
     #const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")
@@ -79,7 +79,7 @@ addprocs(
 end
 
 observations = process_member_data(SimDir(truth_out_dir))
-noise = diagm(ones(2)) #Diagonal([0.1*diagm(ones(2)), 0.1*diagm(ones(2))])
+noise = diagm(ones(2))*1e-4 #Diagonal([0.1*diagm(ones(2)), 0.1*diagm(ones(2))])
 
 observation = EKP.Observation(
                     Dict(
