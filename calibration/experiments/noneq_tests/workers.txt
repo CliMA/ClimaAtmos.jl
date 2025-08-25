@@ -18,3 +18,1358 @@
 │ Failure handler: SampleSuccGauss
 │ Scheduler: DataMisfitController
 └ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Resuming member 10 on worker 2 (incomplete run detected)
+[ Info: Resuming member 9 on worker 3 (incomplete run detected)
+[ Info: Resuming member 8 on worker 4 (incomplete run detected)
+[ Info: Resuming member 7 on worker 5 (incomplete run detected)
+[ Info: Resuming member 6 on worker 6 (incomplete run detected)
+[ Info: Resuming member 5 on worker 7 (incomplete run detected)
+[ Info: Resuming member 4 on worker 8 (incomplete run detected)
+[ Info: Resuming member 3 on worker 9 (incomplete run detected)
+[ Info: Resuming member 2 on worker 10 (incomplete run detected)
+[ Info: Resuming member 1 on worker 11 (incomplete run detected)
+┌ Warning: Error running on worker 4
+│   exception =
+│    On worker 4:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 5
+│   exception =
+│    On worker 5:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 2
+│   exception =
+│    On worker 2:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 3
+│   exception =
+│    On worker 3:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 6
+│   exception =
+│    On worker 6:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 7
+│   exception =
+│    On worker 7:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 8
+│   exception =
+│    On worker 8:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 10
+│   exception =
+│    On worker 10:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 9
+│   exception =
+│    On worker 9:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 11
+│   exception =
+│    On worker 11:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+ERROR: LoadError: Execution halted: Iteration 0 had a 100.0% failure rate, exceeding the maximum allowed threshold of 90.0%.
+Stacktrace:
+ [1] 
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:58
+ [2] run_worker_iteration
+   @ ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:14 [inlined]
+ [3] macro expansion
+   @ ./timing.jl:581 [inlined]
+ [4] calibrate(b::Type{…}, ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, n_iterations::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…}, output_dir::String; failure_rate::Float64, worker_pool::WorkerPool)
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/backends.jl:279
+ [5] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:99
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:99
+[ Info: Starting 10 workers.
+[ Info: Starting SLURM job julia-396679: `srun -J julia-396679 -n 10 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-396679-17558981555.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=dFBhK7EjZuxN9kFA`
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9903
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9905
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9899
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9901
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9898
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9900
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9906
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9907
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9904
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9902
+┌ Warning: For 2 parameters, the recommended minimum ensemble size (`N_ens`) is 20. Got `N_ens` = 10`.
+└ @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/EnsembleKalmanProcess.jl:266
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 10
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Resuming member 10 on worker 2 (incomplete run detected)
+[ Info: Resuming member 9 on worker 3 (incomplete run detected)
+[ Info: Resuming member 8 on worker 4 (incomplete run detected)
+[ Info: Resuming member 7 on worker 5 (incomplete run detected)
+[ Info: Resuming member 6 on worker 6 (incomplete run detected)
+[ Info: Resuming member 5 on worker 7 (incomplete run detected)
+[ Info: Resuming member 4 on worker 8 (incomplete run detected)
+[ Info: Resuming member 3 on worker 9 (incomplete run detected)
+[ Info: Resuming member 2 on worker 10 (incomplete run detected)
+[ Info: Resuming member 1 on worker 11 (incomplete run detected)
+┌ Warning: Error running on worker 3
+│   exception =
+│    On worker 3:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 2
+│   exception =
+│    On worker 2:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 5
+│   exception =
+│    On worker 5:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 4
+│   exception =
+│    On worker 4:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 6
+│   exception =
+│    On worker 6:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 7
+│   exception =
+│    On worker 7:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 8
+│   exception =
+│    On worker 8:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 10
+│   exception =
+│    On worker 10:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 9
+│   exception =
+│    On worker 9:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 11
+│   exception =
+│    On worker 11:
+│    KeyError: key "output_dir" not found
+│    Stacktrace:
+│     [1] getindex
+│       @ ./dict.jl:477
+│     [2] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:22
+│     [3] forward_model
+│       @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [4] #invokelatest#2
+│       @ ./essentials.jl:1055
+│     [5] invokelatest
+│       @ ./essentials.jl:1052
+│     [6] #114
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [7] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [8] run_work_thunk
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [9] #100
+│       @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+ERROR: LoadError: Execution halted: Iteration 0 had a 100.0% failure rate, exceeding the maximum allowed threshold of 90.0%.
+Stacktrace:
+ [1] 
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:58
+ [2] run_worker_iteration
+   @ ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:14 [inlined]
+ [3] macro expansion
+   @ ./timing.jl:581 [inlined]
+ [4] calibrate(b::Type{…}, ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, n_iterations::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…}, output_dir::String; failure_rate::Float64, worker_pool::WorkerPool)
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/backends.jl:279
+ [5] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:103
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:103
+[ Info: Starting 10 workers.
+[ Info: Starting SLURM job julia-399353: `srun -J julia-399353 -n 10 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-399353-17558986044.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=8fQzv5mu1IGR3Rfy`
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9456
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9458
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9460
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9462
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9455
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9457
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9459
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9461
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9463
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9464
+┌ Warning: For 2 parameters, the recommended minimum ensemble size (`N_ens`) is 20. Got `N_ens` = 10`.
+└ @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/EnsembleKalmanProcess.jl:266
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 10
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Resuming member 10 on worker 2 (incomplete run detected)
+[ Info: Resuming member 9 on worker 3 (incomplete run detected)
+[ Info: Resuming member 8 on worker 4 (incomplete run detected)
+[ Info: Resuming member 7 on worker 5 (incomplete run detected)
+[ Info: Resuming member 6 on worker 6 (incomplete run detected)
+[ Info: Resuming member 5 on worker 7 (incomplete run detected)
+[ Info: Resuming member 4 on worker 8 (incomplete run detected)
+[ Info: Resuming member 3 on worker 9 (incomplete run detected)
+[ Info: Resuming member 2 on worker 10 (incomplete run detected)
+[ Info: Resuming member 1 on worker 11 (incomplete run detected)
+[ Info: Iteration 0 time: 38 minutes, 35 seconds, 177 milliseconds
+ERROR: LoadError: DimensionMismatch: array could not be broadcast to match destination
+Stacktrace:
+ [1] check_broadcast_shape
+   @ ./broadcast.jl:552 [inlined]
+ [2] check_broadcast_axes
+   @ ./broadcast.jl:555 [inlined]
+ [3] instantiate
+   @ ./broadcast.jl:310 [inlined]
+ [4] materialize!
+   @ ./broadcast.jl:883 [inlined]
+ [5] materialize!(dest::SubArray{…}, bc::Base.Broadcast.Broadcasted{…})
+   @ Base.Broadcast ./broadcast.jl:880
+ [6] observation_map(iteration::Int64)
+   @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/observation_map.jl:21
+ [7] observation_map_and_update!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, output_dir::String, iteration::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…})
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/ekp_interface.jl:342
+ [8] calibrate(b::Type{…}, ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, n_iterations::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…}, output_dir::String; failure_rate::Float64, worker_pool::WorkerPool)
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/backends.jl:294
+ [9] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:103
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:103
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-419299: `srun -J julia-419299 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-419299-17559013410.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=J9fTpeu2DOS8nizC`
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9450
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9452
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9462
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9464
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9454
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9456
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9458
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9460
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9448
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9446
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9447
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9449
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9451
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9453
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9455
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9457
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9459
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9461
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9463
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9465
+┌ Warning: For 2 parameters, the recommended minimum ensemble size (`N_ens`) is 20. Got `N_ens` = 10`.
+└ @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/EnsembleKalmanProcess.jl:266
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 10
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 10 on worker 2
+[ Info: Running member 9 on worker 3
+[ Info: Running member 8 on worker 4
+[ Info: Running member 7 on worker 5
+[ Info: Running member 6 on worker 6
+[ Info: Running member 5 on worker 7
+[ Info: Running member 4 on worker 8
+[ Info: Running member 3 on worker 9
+[ Info: Running member 2 on worker 10
+[ Info: Running member 1 on worker 11
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-421471: `srun -J julia-421471 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-421471-17559016016.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=W1De5fMe4UvQNjJj`
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9540
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9542
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9544
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9546
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9548
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9550
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9552
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9554
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9556
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9558
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9541
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9543
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9545
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9547
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9549
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9551
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9553
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9555
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9557
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9559
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 13
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 19
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+[ Info: Iteration 0 time: 40 minutes, 2 seconds, 984 milliseconds
+ERROR: LoadError: DimensionMismatch: array could not be broadcast to match destination
+Stacktrace:
+ [1] check_broadcast_shape
+   @ ./broadcast.jl:552 [inlined]
+ [2] check_broadcast_axes
+   @ ./broadcast.jl:555 [inlined]
+ [3] instantiate
+   @ ./broadcast.jl:310 [inlined]
+ [4] materialize!
+   @ ./broadcast.jl:883 [inlined]
+ [5] materialize!(dest::SubArray{…}, bc::Base.Broadcast.Broadcasted{…})
+   @ Base.Broadcast ./broadcast.jl:880
+ [6] observation_map(iteration::Int64)
+   @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/observation_map.jl:21
+ [7] observation_map_and_update!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, output_dir::String, iteration::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…})
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/ekp_interface.jl:342
+ [8] calibrate(b::Type{…}, ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, n_iterations::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…}, output_dir::String; failure_rate::Float64, worker_pool::WorkerPool)
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/backends.jl:294
+ [9] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:103
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:103
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-464735: `srun -J julia-464735 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-464735-17559047488.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=1wGIA4jiYMgfsTJo`
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9889
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9891
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9893
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9895
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9897
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9899
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9905
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9907
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9901
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9903
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9892
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9894
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9896
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9898
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9900
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9902
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9904
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9906
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9908
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9890
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Skipping completed member 20 (found checkpoint)
+[ Info: Skipping completed member 19 (found checkpoint)
+[ Info: Skipping completed member 18 (found checkpoint)
+[ Info: Skipping completed member 17 (found checkpoint)
+[ Info: Skipping completed member 16 (found checkpoint)
+[ Info: Skipping completed member 15 (found checkpoint)
+[ Info: Skipping completed member 14 (found checkpoint)
+[ Info: Skipping completed member 13 (found checkpoint)
+[ Info: Skipping completed member 12 (found checkpoint)
+[ Info: Skipping completed member 11 (found checkpoint)
+[ Info: Skipping completed member 10 (found checkpoint)
+[ Info: Skipping completed member 9 (found checkpoint)
+[ Info: Skipping completed member 8 (found checkpoint)
+[ Info: Skipping completed member 7 (found checkpoint)
+[ Info: Skipping completed member 6 (found checkpoint)
+[ Info: Skipping completed member 5 (found checkpoint)
+[ Info: Skipping completed member 4 (found checkpoint)
+[ Info: Skipping completed member 3 (found checkpoint)
+[ Info: Skipping completed member 2 (found checkpoint)
+[ Info: Skipping completed member 1 (found checkpoint)
+[ Info: Iteration 0 time: 127 milliseconds
+ERROR: LoadError: MethodError: Cannot `convert` an object of type UniformScaling{Float64} to an object of type Float64
+The function `convert` exists, but no method is defined for this combination of argument types.
+
+Closest candidates are:
+  convert(::Type{T}, !Matched::Unitful.Quantity) where T<:Real
+   @ Unitful ~/.julia/packages/Unitful/sxiHA/src/conversion.jl:167
+  convert(::Type{T}, !Matched::Unitful.Level) where T<:Real
+   @ Unitful ~/.julia/packages/Unitful/sxiHA/src/logarithm.jl:46
+  convert(::Type{T}, !Matched::Unitful.Gain) where T<:Real
+   @ Unitful ~/.julia/packages/Unitful/sxiHA/src/logarithm.jl:87
+  ...
+
+Stacktrace:
+  [1] setindex!
+    @ ./array.jl:994 [inlined]
+  [2] setindex!
+    @ ./subarray.jl:372 [inlined]
+  [3] _setindex!
+    @ ./abstractarray.jl:1443 [inlined]
+  [4] setindex!
+    @ ./abstractarray.jl:1413 [inlined]
+  [5] macro expansion
+    @ ./broadcast.jl:973 [inlined]
+  [6] macro expansion
+    @ ./simdloop.jl:77 [inlined]
+  [7] copyto!
+    @ ./broadcast.jl:972 [inlined]
+  [8] copyto!
+    @ ./broadcast.jl:925 [inlined]
+  [9] materialize!
+    @ ./broadcast.jl:883 [inlined]
+ [10] materialize!
+    @ ./broadcast.jl:880 [inlined]
+ [11] lmul_cov!(out::Matrix{…}, a::Diagonal{…}, X::Matrix{…}, idx1::UnitRange{…}, idx2::UnitRange{…})
+    @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/Observations.jl:1271
+ [12] lmul_without_build(A::Vector{Diagonal{UniformScaling{Float64}, Vector{UniformScaling{Float64}}}}, X::Matrix{Float64})
+    @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/Observations.jl:1322
+ [13] lmul_obs_noise_cov_inv(os::EnsembleKalmanProcesses.ObservationSeries{…}, X::Matrix{…})
+    @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/Observations.jl:1382
+ [14] lmul_obs_noise_cov_inv(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, X::Matrix{…})
+    @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/EnsembleKalmanProcess.jl:802
+ [15] calculate_timestep!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, g::Matrix{…}, Δt_new::Nothing, scheduler::EnsembleKalmanProcesses.DataMisfitController{…})
+    @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/LearningRateSchedulers.jl:311
+ [16] calculate_timestep!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, g::Matrix{…}, Δt_new::Nothing)
+    @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/LearningRateSchedulers.jl:169
+ [17] update_ensemble!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, g_in::Matrix{…}; multiplicative_inflation::Bool, additive_inflation::Bool, additive_inflation_cov::Matrix{…}, s::Float64, Δt_new::Nothing, ekp_kwargs::@Kwargs{})
+    @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/EnsembleKalmanProcess.jl:1343
+ [18] update_ensemble!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, g_in::Matrix{…})
+    @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/EnsembleKalmanProcess.jl:1321
+ [19] update_ensemble!
+    @ ~/.julia/packages/ClimaCalibrate/bSNlZ/src/ekp_interface.jl:331 [inlined]
+ [20] observation_map_and_update!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, output_dir::String, iteration::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…})
+    @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/ekp_interface.jl:346
+ [21] calibrate(b::Type{…}, ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, n_iterations::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…}, output_dir::String; failure_rate::Float64, worker_pool::WorkerPool)
+    @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/backends.jl:294
+ [22] top-level scope
+    @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:103
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:103
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-467445: `srun -J julia-467445 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-467445-17559053726.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=xWW8lJh1BfTVvERa`
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9536
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9538
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9540
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9542
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9544
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9546
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9548
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9550
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9552
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9554
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9537
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9539
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9541
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9543
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9545
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9547
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9549
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9551
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9553
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9555
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Skipping completed member 20 (found checkpoint)
+[ Info: Skipping completed member 19 (found checkpoint)
+[ Info: Skipping completed member 18 (found checkpoint)
+[ Info: Skipping completed member 17 (found checkpoint)
+[ Info: Skipping completed member 16 (found checkpoint)
+[ Info: Skipping completed member 15 (found checkpoint)
+[ Info: Skipping completed member 14 (found checkpoint)
+[ Info: Skipping completed member 13 (found checkpoint)
+[ Info: Skipping completed member 12 (found checkpoint)
+[ Info: Skipping completed member 11 (found checkpoint)
+[ Info: Skipping completed member 10 (found checkpoint)
+[ Info: Skipping completed member 9 (found checkpoint)
+[ Info: Skipping completed member 8 (found checkpoint)
+[ Info: Skipping completed member 7 (found checkpoint)
+[ Info: Skipping completed member 6 (found checkpoint)
+[ Info: Skipping completed member 5 (found checkpoint)
+[ Info: Skipping completed member 4 (found checkpoint)
+[ Info: Skipping completed member 3 (found checkpoint)
+[ Info: Skipping completed member 2 (found checkpoint)
+[ Info: Skipping completed member 1 (found checkpoint)
+[ Info: Iteration 0 time: 134 milliseconds
+[ Info: Termination condition of scheduler `DataMisfitController` will be exceeded during the next iteration.
+[ Info: Iteration 0 (prior)
+[ Info: Covariance trace: 0.15188029659745927
+[ Info: Iteration 1 (T=1.0)
+┌ Info: Covariance-weighted error: 8.316412832331036e-5
+│ Covariance trace: 0.15200279537031372
+└ Covariance trace ratio (current/previous): 1.0008065481540316
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [494.7093479244968, 1963.8814768791626]
+[ Info: Covariance-weighted error: 8.316412832331036e-5
+[ Info: Running Iteration 1
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 13
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 19
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+[ Info: Iteration 1 time: 39 minutes, 49 seconds, 775 milliseconds
+┌ Warning: Termination condition of scheduler `DataMisfitController` has been exceeded. 
+│ on_terminate="continue" selected. Proceeding with algorithm
+└ @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/LearningRateSchedulers.jl:298
+[ Info: Iteration 2 (T=2786.2753940534494)
+┌ Info: Covariance-weighted error: 7.004527785677349e-5
+│ Covariance trace: 0.15052671017942365
+└ Covariance trace ratio (current/previous): 0.9902890918072
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [495.41801933909335, 1958.3032529319225]
+[ Info: Covariance-weighted error: 7.004527785677349e-5
+[ Info: Running Iteration 2
+[ Info: Running member 20 on worker 7
+[ Info: Running member 19 on worker 6
+[ Info: Running member 18 on worker 14
+[ Info: Running member 17 on worker 13
+[ Info: Running member 16 on worker 12
+[ Info: Running member 15 on worker 16
+[ Info: Running member 14 on worker 15
+[ Info: Running member 13 on worker 17
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 20
+[ Info: Running member 9 on worker 19
+[ Info: Running member 8 on worker 9
+[ Info: Running member 7 on worker 21
+[ Info: Running member 6 on worker 3
+[ Info: Running member 5 on worker 8
+[ Info: Running member 4 on worker 2
+[ Info: Running member 3 on worker 18
+[ Info: Running member 2 on worker 4
+[ Info: Running member 1 on worker 5
+[ Info: Iteration 2 time: 25 minutes, 27 seconds, 114 milliseconds
+[ Info: Iteration 3 (T=5404.409699530282)
+┌ Info: Covariance-weighted error: 8.376752317154882e-5
+│ Covariance trace: 0.14978209401259102
+└ Covariance trace ratio (current/previous): 0.9950532622021363
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [492.11941131985, 1953.094628196328]
+[ Info: Covariance-weighted error: 8.376752317154882e-5
+[ Info: Running Iteration 3
+[ Info: Running member 20 on worker 13
+[ Info: Running member 19 on worker 12
+[ Info: Running member 18 on worker 7
+[ Info: Running member 17 on worker 14
+[ Info: Running member 16 on worker 19
+[ Info: Running member 15 on worker 6
+[ Info: Running member 14 on worker 11
+[ Info: Running member 13 on worker 15
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 18
+[ Info: Running member 10 on worker 16
+[ Info: Running member 9 on worker 17
+[ Info: Running member 8 on worker 8
+[ Info: Running member 7 on worker 9
+[ Info: Running member 6 on worker 20
+[ Info: Running member 5 on worker 21
+[ Info: Running member 4 on worker 2
+[ Info: Running member 3 on worker 3
+[ Info: Running member 2 on worker 4
+[ Info: Running member 1 on worker 5
+[ Info: Iteration 3 time: 25 minutes, 27 seconds, 214 milliseconds
+[ Info: Iteration 4 (T=7647.010416918832)
+┌ Info: Covariance-weighted error: 0.00013196731072513356
+│ Covariance trace: 0.14709138826914672
+└ Covariance trace ratio (current/previous): 0.9820358650933395
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [487.2904460886966, 1942.7920297712071]
+[ Info: Covariance-weighted error: 0.00013196731072513356
+[ Info: Running Iteration 4
+[ Info: Running member 20 on worker 13
+[ Info: Running member 19 on worker 12
+[ Info: Running member 18 on worker 14
+[ Info: Running member 17 on worker 7
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 16
+[ Info: Running member 14 on worker 15
+[ Info: Running member 13 on worker 17
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 19
+[ Info: Running member 9 on worker 8
+[ Info: Running member 8 on worker 18
+[ Info: Running member 7 on worker 9
+[ Info: Running member 6 on worker 3
+[ Info: Running member 5 on worker 2
+[ Info: Running member 4 on worker 20
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 4
+[ Info: Running member 1 on worker 5
+[ Info: Iteration 4 time: 25 minutes, 11 seconds, 394 milliseconds
+[ Info: Iteration 5 (T=32864.65308894921)
+┌ Info: Covariance-weighted error: 1.476841359692483e-6
+│ Covariance trace: 0.13383139917782302
+└ Covariance trace ratio (current/previous): 0.9098520365647738
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [481.2967565591209, 1975.7739380956737]
+[ Info: Covariance-weighted error: 1.476841359692483e-6
+[ Info: Running Iteration 5
+[ Info: Running member 20 on worker 13
+[ Info: Running member 19 on worker 12
+[ Info: Running member 18 on worker 7
+[ Info: Running member 17 on worker 6
+[ Info: Running member 16 on worker 9
+[ Info: Running member 15 on worker 8
+[ Info: Running member 14 on worker 14
+[ Info: Running member 13 on worker 19
+[ Info: Running member 12 on worker 18
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 15
+[ Info: Running member 9 on worker 17
+[ Info: Running member 8 on worker 10
+[ Info: Running member 7 on worker 16
+[ Info: Running member 6 on worker 3
+[ Info: Running member 5 on worker 2
+[ Info: Running member 4 on worker 21
+[ Info: Running member 3 on worker 20
+[ Info: Running member 2 on worker 4
+[ Info: Running member 1 on worker 5
+[ Info: Iteration 5 time: 24 minutes, 54 seconds, 801 milliseconds
+[ Info: Iteration 6 (T=51400.90996690786)
+┌ Info: Covariance-weighted error: 2.7511967022599367e-6
+│ Covariance trace: 0.13373420212056047
+└ Covariance trace ratio (current/previous): 0.9992737350288522
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [481.3653476999946, 1976.5825197030472]
+[ Info: Covariance-weighted error: 2.7511967022599367e-6
+[ Info: Running Iteration 6
+[ Info: Running member 20 on worker 7
+[ Info: Running member 19 on worker 14
+[ Info: Running member 18 on worker 6
+[ Info: Running member 17 on worker 9
+[ Info: Running member 16 on worker 8
+[ Info: Running member 15 on worker 16
+[ Info: Running member 14 on worker 15
+[ Info: Running member 13 on worker 13
+[ Info: Running member 12 on worker 12
+[ Info: Running member 11 on worker 19
+[ Info: Running member 10 on worker 11
+[ Info: Running member 9 on worker 17
+[ Info: Running member 8 on worker 10
+[ Info: Running member 7 on worker 18
+[ Info: Running member 6 on worker 4
+[ Info: Running member 5 on worker 2
+[ Info: Running member 4 on worker 5
+[ Info: Running member 3 on worker 20
+[ Info: Running member 2 on worker 3
+[ Info: Running member 1 on worker 21
+[ Info: Iteration 6 time: 25 minutes, 14 seconds, 457 milliseconds
+[ Info: Iteration 7 (T=56059.36075250415)
+┌ Info: Covariance-weighted error: 1.6119843577573293e-5
+│ Covariance trace: 0.1340232415983087
+└ Covariance trace ratio (current/previous): 1.0021612981059822
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [481.1336984818771, 1975.7580151488473]
+[ Info: Covariance-weighted error: 1.6119843577573293e-5
+[ Info: Running Iteration 7
+[ Info: Running member 20 on worker 13
+[ Info: Running member 19 on worker 12
+[ Info: Running member 18 on worker 7
+[ Info: Running member 17 on worker 9
+[ Info: Running member 16 on worker 14
+[ Info: Running member 15 on worker 8
+[ Info: Running member 14 on worker 11
+[ Info: Running member 13 on worker 6
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 15
+[ Info: Running member 10 on worker 17
+[ Info: Running member 9 on worker 19
+[ Info: Running member 8 on worker 16
+[ Info: Running member 7 on worker 18
+[ Info: Running member 6 on worker 3
+[ Info: Running member 5 on worker 2
+[ Info: Running member 4 on worker 20
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 4
+[ Info: Running member 1 on worker 5
+[ Info: Iteration 7 time: 25 minutes, 1 second, 498 milliseconds
+[ Info: Iteration 8 (T=58641.46972163226)
+┌ Info: Covariance-weighted error: 0.0001417678845089588
+│ Covariance trace: 0.12998630940099504
+└ Covariance trace ratio (current/previous): 0.9698788646717481
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [495.74450452879125, 1999.1557875825529]
+[ Info: Covariance-weighted error: 0.0001417678845089588
+[ Info: Running Iteration 8
+[ Info: Running member 20 on worker 14
+[ Info: Running member 19 on worker 7
+[ Info: Running member 18 on worker 10
+[ Info: Running member 17 on worker 6
+[ Info: Running member 16 on worker 11
+[ Info: Running member 15 on worker 8
+[ Info: Running member 14 on worker 13
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 12
+[ Info: Running member 11 on worker 15
+[ Info: Running member 10 on worker 16
+[ Info: Running member 9 on worker 3
+[ Info: Running member 8 on worker 17
+[ Info: Running member 7 on worker 19
+[ Info: Running member 6 on worker 2
+[ Info: Running member 5 on worker 18
+[ Info: Running member 4 on worker 20
+[ Info: Running member 3 on worker 4
+[ Info: Running member 2 on worker 21
+[ Info: Running member 1 on worker 5
+[ Info: Iteration 8 time: 25 minutes, 13 seconds, 530 milliseconds
+[ Info: Iteration 9 (T=69179.83468241469)
+┌ Info: Covariance-weighted error: 1.7616082845073326e-5
+│ Covariance trace: 0.12963138463140023
+└ Covariance trace ratio (current/previous): 0.9972695219117276
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [496.1929262585235, 2023.5144392280345]
+[ Info: Covariance-weighted error: 1.7616082845073326e-5
+[ Info: Running Iteration 9
+[ Info: Running member 20 on worker 13
+[ Info: Running member 19 on worker 12
+[ Info: Running member 18 on worker 7
+[ Info: Running member 17 on worker 6
+[ Info: Running member 16 on worker 14
+[ Info: Running member 15 on worker 9
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 11
+[ Info: Running member 12 on worker 15
+[ Info: Running member 11 on worker 10
+[ Info: Running member 10 on worker 19
+[ Info: Running member 9 on worker 18
+[ Info: Running member 8 on worker 3
+[ Info: Running member 7 on worker 2
+[ Info: Running member 6 on worker 17
+[ Info: Running member 5 on worker 21
+[ Info: Running member 4 on worker 16
+[ Info: Running member 3 on worker 20
+[ Info: Running member 2 on worker 4
+[ Info: Running member 1 on worker 5
+[ Info: Iteration 9 time: 25 minutes, 51 seconds, 985 milliseconds
+[ Info: Iteration 10 (T=74003.60324026748)
+┌ Info: Covariance-weighted error: 2.8455798358159002e-5
+│ Covariance trace: 0.1289339780557049
+└ Covariance trace ratio (current/previous): 0.9946200792525793
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [502.0353776070072, 1974.8643869004527]
+[ Info: Covariance-weighted error: 2.8455798358159002e-5

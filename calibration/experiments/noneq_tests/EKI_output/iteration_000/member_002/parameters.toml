@@ -1,7 +1,0 @@
-[condensation_evaporation_timescale]
-value = 520.0860852461635
-type = "float"
-
-[sublimation_deposition_timescale]
-value = 1709.236419234605
-type = "float"
