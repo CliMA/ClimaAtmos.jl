@@ -1201,6 +1201,67 @@ add_diagnostic_variable!(
     compute! = compute_clvi!,
 )
 
+###
+# Cloud top height
+###
+compute_cloud_top_height!(out, state, cache, time) = compute_cloud_top_height!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.moisture_model,
+)
+compute_cloud_top_height!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("cltz", model)
+
+#heaviside function version
+function compute_cloud_top_height!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+
+    clw = @. lazy(state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq)
+    cli = @. lazy(state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice)
+    z = Fields.coordinate_field(state.c).z
+
+    FT = Spaces.undertype(axes(clw))
+
+    q_cond = @. lazy(clw + cli)
+
+    heaviside_num =
+        @. lazy(ifelse(q_cond > FT(1e-10), (q_cond * z)^(4) * z, FT(0)))
+
+    heaviside_denom =
+        @. lazy(ifelse(q_cond > FT(1e-10), (q_cond * z)^(4), FT(0)))
+
+    num = zeros(axes(Fields.level(state.f, half)))
+    denom = zeros(axes(Fields.level(state.f, half)))
+
+    Operators.column_integral_definite!(num, heaviside_num)
+    Operators.column_integral_definite!(denom, heaviside_denom)
+
+    if isnothing(out)
+        out = num ./ denom
+    else
+        out .= num ./ denom
+    end
+
+    return out
+end
+
+add_diagnostic_variable!(
+    short_name = "cltz",
+    long_name = "Cloud Top Height",
+    standard_name = "cloud_top_height", # NOT SURE IF STANDARD EXISTS
+    units = "m",
+    comments = """
+    The height of the cloud top based on some threshold.
+    """,
+    compute! = compute_cloud_top_height!,
+)
 
 ###
 # Column integrated total specific humidity (2d)
