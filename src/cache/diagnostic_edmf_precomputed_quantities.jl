@@ -83,8 +83,8 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
         p_level,
         mse_level - Φ_level,
         q_tot_level,
-        8,
-        FT(0.0003),
+        20,
+        FT(0.0004),
     )
     @. ρ_level = TD.air_density(thermo_params, ts_level)
     return nothing

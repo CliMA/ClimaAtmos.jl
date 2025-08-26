@@ -70,19 +70,19 @@ function weather_model_data_path(start_date, target_levels)
     #     "raw",
     #     "era5_raw_$(start_date_str)_$(start_time).nc",
     # )
-    # ic_data_path = "/net/sampo/data1/cchristo/clima/WeatherQuest/processing/data/era5_init_processed_internal_20250701_1200.nc"
-    # raw_data_path = "/net/sampo/data1/cchristo/clima/WeatherQuest/processing/data/era5_raw_20250701_1200.nc"
+    ic_data_path = "/net/sampo/data1/cchristo/clima/WeatherQuest/processing/data/era5_init_processed_internal_20250701_0000.nc"
+    raw_data_path = "/net/sampo/data1/cchristo/clima/WeatherQuest/processing/data/era5_raw_20250701_0000.nc"
 
 
-    ic_data_path = "/net/sampo/data1/cchristo/clima/WeatherQuest/processing/data/era5_init_processed_internal_20100101_0000_v2.nc"
-    raw_data_path = "/net/sampo/data1/cchristo/clima/WeatherQuest/processing/data/era5_raw_20100101_0000.nc"
+    # ic_data_path = "/net/sampo/data1/cchristo/clima/WeatherQuest/processing/data/era5_init_processed_internal_20100101_0000_v2.nc"
+    # raw_data_path = "/net/sampo/data1/cchristo/clima/WeatherQuest/processing/data/era5_raw_20100101_0000.nc"
 
-    if !isfile(ic_data_path)
-        @info "Interpolating raw weather model data onto z-levels"
-        to_z_levels(raw_data_path, ic_data_path, target_levels, Float32)
-    else
-        @info "Using existing interpolated file: $ic_data_path"
-    end
+    # if !isfile(ic_data_path)
+    @info "Interpolating raw weather model data onto z-levels"
+    to_z_levels(raw_data_path, ic_data_path, target_levels, Float32)
+    # else
+    #     @info "Using existing interpolated file: $ic_data_path"
+    # end
 
     return ic_data_path
 end
@@ -110,6 +110,7 @@ function to_z_levels(source_file, target_file, target_levels, FT)
 
     # assert ncin has required variables
     req_vars = ["u", "v", "w", "t", "q", "skt", "sp"]
+    opt_vars = ["crwc", "cswc", "clwc", "ciwc"]
     @assert all(map(x -> x in (keys(ncin)), req_vars)) "Source file $source_file is missing subset of the required variables: $req_vars"
 
     # Read and cast coordinates to FT type
@@ -202,6 +203,22 @@ function to_z_levels(source_file, target_file, target_levels, FT)
         defVar(ncout, "p", FT, ("lon", "lat", "z"), attrib = ncin["sp"].attrib)
     for k in 1:length(target_levels)
         sp_var[:, :, k] = FT.(ncin["sp"][:, :, 1])
+    end
+
+    # Interpolate optional cloud water content variables if available
+    for var_name in opt_vars
+        if haskey(ncin, var_name)
+            @info "Interpolating optional variable: $var_name"
+            var_data = ncin[var_name][:, :, :, 1]
+            var_var = defVar(
+                ncout,
+                var_name,
+                FT,
+                ("lon", "lat", "z"),
+                attrib = ncin[var_name].attrib,
+            )
+            var_var[:, :, :] = interpz_3d(target_levels, source_z, FT.(var_data))
+        end
     end
 
     # Close files

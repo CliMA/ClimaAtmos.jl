@@ -505,6 +505,7 @@ function _overwrite_initial_conditions_from_file!(
         )
     end
     if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
+        @show "Setting ρq_sno and ρq_rai from era5"
         # Y.c.ρq_sno .=
         #     SpaceVaryingInputs.SpaceVaryingInput(
         #         file_path,
