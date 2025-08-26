@@ -1,10 +1,3 @@
-"""
-    make_yaml.jl
-
-A script to automate the creation of YAML files with the specified initial
-conditions.
-"""
-
 # Dependencies.
 import YAML
 
