@@ -383,26 +383,27 @@ function edmfx_sgs_vertical_advection_tendency!(
 
     for j in 1:n
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
-        edmf_upwnd = edmfx_upwinding
 
         # Flux form vertical advection of area farction with the grid mean velocity
-        vtt = vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmf_upwnd)
+        vtt =
+            vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmfx_upwinding)
         @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
 
         # Advective form advection of mse and q_tot with the grid mean velocity
-        # TODO - make it work for multiple updrafts
-        if j > 1
-            error("Below code doesn't work for multiple updrafts")
-        end
-        sgs_q_tot_mse = (@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot))
-        MatrixFields.unrolled_foreach(sgs_q_tot_mse) do χʲ_name
-            MatrixFields.has_field(Y, χʲ_name) || return
-            ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-            ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
+        # Note: This allocates because the function is too long
+        va = vertical_advection(
+            ᶠu³ʲs.:($j),
+            Y.c.sgsʲs.:($j).mse,
+            edmfx_upwinding,
+        )
+        @. Yₜ.c.sgsʲs.:($$j).mse += va
 
-            va = vertical_advection(ᶠu³ʲs.:($j), ᶜχʲ, edmf_upwnd)
-            @. ᶜχʲₜ += va
-        end
+        va = vertical_advection(
+            ᶠu³ʲs.:($j),
+            Y.c.sgsʲs.:($j).q_tot,
+            edmfx_upwinding,
+        )
+        @. Yₜ.c.sgsʲs.:($$j).q_tot += va
 
         if p.atmos.moisture_model isa NonEquilMoistModel && (
             p.atmos.microphysics_model isa Microphysics1Moment ||
@@ -410,7 +411,10 @@ function edmfx_sgs_vertical_advection_tendency!(
         )
             # TODO - add contibutions to sgs mass flux from tracer sedimentation
             # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
-
+            # TODO - make it work for multiple updrafts
+            if j > 1
+                error("Below code doesn't work for multiple updrafts")
+            end
             FT = eltype(params)
             thp = CAP.thermodynamics_params(params)
             (; ᶜΦ) = p.core
@@ -439,17 +443,23 @@ function edmfx_sgs_vertical_advection_tendency!(
 
                 # Flux form vertical advection of rho * area with sedimentation velocities
                 # Eq (4) term (3) in the writeup
-                vtt = vertical_transport(ᶜρʲs.:($j), ᶠw³ʲ, ᶜaqʲ, dt, edmf_upwnd)
+                vtt = vertical_transport(
+                    ᶜρʲs.:($j),
+                    ᶠw³ʲ,
+                    ᶜaqʲ,
+                    dt,
+                    edmfx_upwinding,
+                )
                 @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
 
                 # Advective form advection of moisture tracers with the grid mean velocity
                 # Eq (2) term (1) in the writeup
-                va = vertical_advection(ᶠu³ʲs.:($j), ᶜqʲ, edmf_upwnd)
+                va = vertical_advection(ᶠu³ʲs.:($j), ᶜqʲ, edmfx_upwinding)
                 @. ᶜqʲₜ += va
 
                 # Advective form advection of q_tot and moisture tracers with sedimentation velocities
                 # Eq (1-2) term (2)
-                va = vertical_advection(ᶠw³ʲ, ᶜqʲ, edmf_upwnd)
+                va = vertical_advection(ᶠw³ʲ, ᶜqʲ, edmfx_upwinding)
                 @. Yₜ.c.sgsʲs.:($$j).q_tot += (1 - Y.c.sgsʲs.:($$j).q_tot) * va
                 @. ᶜqʲₜ += va
                 # Advective form advection of mse with sedimentation velocity
@@ -465,9 +475,9 @@ function edmfx_sgs_vertical_advection_tendency!(
                 else
                     error("Unsupported moisture tracer variable")
                 end
-                va = vertical_advection(ᶠw³ʲ, ᶜqʲ .* ᶜmse_li, edmf_upwnd)
+                va = vertical_advection(ᶠw³ʲ, ᶜqʲ .* ᶜmse_li, edmfx_upwinding)
                 @. Yₜ.c.sgsʲs.:($$j).mse += va
-                va = vertical_advection(ᶠw³ʲ, ᶜqʲ, edmf_upwnd)
+                va = vertical_advection(ᶠw³ʲ, ᶜqʲ, edmfx_upwinding)
                 @. Yₜ.c.sgsʲs.:($$j).mse -= Y.c.sgsʲs.:($$j).mse * va
 
                 # mse, q_tot and moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
@@ -530,11 +540,11 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜw³ʲ = (@. lazy(CT3(Geometry.WVector(-1 * ᶜwʲ))))
 
                 # Advective form advection of moisture tracers with the grid mean velocity
-                va = vertical_advection(ᶠu³ʲs.:($j), ᶜχʲ, edmf_upwnd)
+                va = vertical_advection(ᶠu³ʲs.:($j), ᶜχʲ, edmfx_upwinding)
                 @. ᶜχʲₜ += va
 
                 # Advective form advection of moisture tracers with sedimentation velocities
-                va = vertical_advection(ᶠw³ʲ, ᶜχʲ, edmf_upwnd)
+                va = vertical_advection(ᶠw³ʲ, ᶜχʲ, edmfx_upwinding)
                 @. ᶜχʲₜ += va
 
                 # moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
