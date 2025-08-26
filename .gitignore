@@ -60,11 +60,3 @@ Artifacts.toml
 
 # ignore LWP-N related files
 LWP_N*
-
-# ignore notebooks
-*.ipynb
-# ignore LWP-N related files
-LWP_N*
-
-# ignore notebooks
-*.ipynb

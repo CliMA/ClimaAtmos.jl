@@ -1,9 +1,3 @@
-"""
-    process_plot_output.jl
-
-A script to organize all of the output paths by their initial conditions.
-"""
-
 # Dependencies.
 import ClimaAnalysis
 import CairoMakie
@@ -39,7 +33,7 @@ function parse_folder_name(path::String)
     # Construct EDMFParams object.
     return EDMFParams(
         path = path,
-        edmf = m.captures[1], 
+        edmf = m.captures[1],
         qtot0 = parse(Float64, m.captures[2]), #[6.5, 8.5, 10.5]
         theta0 = parse(Float64, m.captures[3]), #[284, 287, 291, 294]
         thetai = parse(Float64, m.captures[4]), #[6.0, 8.0, 10.0]
@@ -100,7 +94,7 @@ function plot_1M_edmf_timeseries!(
             period = "10m",
         )
         lwp_slice = ClimaAnalysis.slice(lwp, x = 0.0, y = 0.0)
-        lwp_skip = ClimaAnalysis.window(lwp_slice, "time", left=7200)
+        lwp_skip = ClimaAnalysis.window(lwp_slice, "time", left = 7200)
         lwp_data = lwp_skip.data * 1e3
 
         # Rain water path.
@@ -111,7 +105,7 @@ function plot_1M_edmf_timeseries!(
             period = "10m",
         )
         rwp_slice = ClimaAnalysis.slice(rwp, x = 0.0, y = 0.0)
-        rwp_skip = ClimaAnalysis.window(rwp_slice, "time", left=7200)
+        rwp_skip = ClimaAnalysis.window(rwp_slice, "time", left = 7200)
         rwp_data = rwp_skip.data * 1e3
 
         # Time.
@@ -151,7 +145,7 @@ function plot_1M_edmf_N!(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis)
             period = "10m",
         )
         lwp_slice = ClimaAnalysis.slice(lwp, x = 0.0, y = 0.0)
-        lwp_skip = ClimaAnalysis.window(lwp_slice, "time", left=7200)
+        lwp_skip = ClimaAnalysis.window(lwp_slice, "time", left = 7200)
         lwp_data = lwp_skip.data * 1e3 # Convert from kg m^-2 to g m^-2.
 
         # Rain water path.
@@ -162,7 +156,7 @@ function plot_1M_edmf_N!(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis)
             period = "10m",
         )
         rwp_slice = ClimaAnalysis.slice(rwp, x = 0.0, y = 0.0)
-        rwp_skip = ClimaAnalysis.window(rwp_slice, "time", left=7200)
+        rwp_skip = ClimaAnalysis.window(rwp_slice, "time", left = 7200)
         rwp_data = rwp_skip.data * 1e3 # Convert from kg m^-2 to g m^-2.
 
         # Number concentration.
@@ -181,12 +175,7 @@ function plot_1M_edmf_N!(edmfparams::Vector{EDMFParams}, ax::CairoMakie.Axis)
             colorrange = (0, 1),
         )
 
-        CairoMakie.scatter!(
-            ax,
-            lwp_data[1],
-            N[1],
-            color = :grey,
-        )
+        CairoMakie.scatter!(ax, lwp_data[1], N[1], color = :grey)
     end
 end
 
@@ -438,13 +427,13 @@ function keep(edmfparam::EDMFParams)
         period = "10m",
     )
     lwp_slice = ClimaAnalysis.slice(lwp, x = 0.0, y = 0.0)
-    lwp_skip = ClimaAnalysis.window(lwp_slice, "time", left=7200)
+    lwp_skip = ClimaAnalysis.window(lwp_slice, "time", left = 7200)
     lwp_data = lwp_skip.data * 1e3 # Convert from kg m^-2 to g m^-2.
 
     above_cond = all(lwp_data .> 0.5)
     full_len = length(lwp_data) == 61
-    
-    return  above_cond & full_len
+
+    return above_cond & full_len
 end
 
 """

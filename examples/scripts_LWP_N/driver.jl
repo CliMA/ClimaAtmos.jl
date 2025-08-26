@@ -6,10 +6,8 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import ClimaComms
 ClimaComms.@import_required_backends
-import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
-
 
 if !(@isdefined config)
     (; config_file, job_id) = CA.commandline_kwargs()

@@ -1,12 +1,20 @@
+include(joinpath(pkgdir(CA), "all_paths.jl"))
 include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
 
-DiagEDMF = [
-    Val{Symbol(replace(f, ".yml" => ""))} for
-    f in readdir(joinpath(pkgdir(CA), "LWP_N_config_diagnostic"))
+DiagEDMF1M = [
+    Val{Symbol(replace(f, ".yml" => ""))} for f in readdir(diagnostic_1M_config)
 ]
-ProgEDMF = [
-    Val{Symbol(replace(f, ".yml" => ""))} for
-    f in readdir(joinpath(pkgdir(CA), "LWP_N_config_prognostic"))
+
+DiagEDMF2M = [
+    Val{Symbol(replace(f, ".yml" => ""))} for f in readdir(diagnostic_2M_config)
+]
+
+ProgEDMF1M = [
+    Val{Symbol(replace(f, ".yml" => ""))} for f in readdir(prognostic_1M_config)
+]
+
+ProgEDMF2M = [
+    Val{Symbol(replace(f, ".yml" => ""))} for f in readdir(prognostic_2M_config)
 ]
 
 function plot_edmf_vert_profile_and_time!(grid_loc, var_group)
@@ -53,7 +61,7 @@ function plot_edmf_vert_profile_and_time!(grid_loc, var_group)
 end
 
 function make_plots(
-    sim_type::Union{DiagEDMF..., ProgEDMF...},
+    sim_type::Union{DiagEDMF1M..., ProgEDMF1M...},
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -90,7 +98,7 @@ function make_plots(
         precip_names...,
     ]
 
-    lwp_rwp = ["lwp", "rwp"]
+    time_var = ["lwp", "rwp"]
 
     reduction = "inst"
 
@@ -125,7 +133,110 @@ function make_plots(
     ]
 
     var_groups_t =
-        map_comparison(simdirs, pair_edmf_names(lwp_rwp)) do simdir, name_tuple
+        map_comparison(simdirs, pair_edmf_names(time_var)) do simdir, name_tuple
+            return [
+                slice(
+                    get(simdir; short_name, reduction, period),
+                    x = 0.0,
+                    y = 0.0,
+                ) for short_name in name_tuple
+            ]
+        end
+
+    tmp_file = make_plots_generic(
+        output_paths,
+        output_name = "tmp",
+        vcat(var_groups_t, var_groups_z);
+        plot_fn = plot_edmf_vert_profile_and_time!,
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+
+    make_plots_generic(
+        output_paths,
+        vcat(var_groups_zt...),
+        plot_fn = plot_parsed_attribute_title!,
+        summary_files = [tmp_file],
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+end
+
+function make_plots(
+    sim_type::Union{DiagEDMF2M..., ProgEDMF2M...},
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+
+    if sim_type in ProgEDMF
+        precip_names =
+            ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen")
+    else
+        precip_names = ("husra", "hussn", "husraup", "hussnup")
+    end
+
+    short_names = [
+        "wa",
+        "waup",
+        "ta",
+        "taup",
+        "hus",
+        "husup",
+        "arup",
+        "tke",
+        "ua",
+        "thetaa",
+        "thetaaup",
+        "ha",
+        "haup",
+        "hur",
+        "hurup",
+        "lmix",
+        "cl",
+        "clw",
+        "clwup",
+        "cli",
+        "cliup",
+        "cdncup",
+        precip_names...,
+    ]
+
+    time_var = ["lwp", "rwp", "cdnc"]
+
+    reduction = "inst"
+
+    available_periods = ClimaAnalysis.available_periods(
+        simdirs[1];
+        short_name = short_names[1],
+        reduction,
+    )
+    if "5m" in available_periods
+        period = "5m"
+    elseif "10m" in available_periods
+        period = "10m"
+    elseif "30m" in available_periods
+        period = "30m"
+    end
+
+    short_name_tuples = pair_edmf_names(short_names)
+    var_groups_zt =
+        map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
+            return [
+                slice(
+                    get(simdir; short_name, reduction, period),
+                    x = 0.0,
+                    y = 0.0,
+                ) for short_name in name_tuple
+            ]
+        end
+
+    var_groups_z = [
+        ([slice(v, time = LAST_SNAP) for v in group]...,) for
+        group in var_groups_zt
+    ]
+
+    var_groups_t =
+        map_comparison(simdirs, pair_edmf_names(time_var)) do simdir, name_tuple
             return [
                 slice(
                     get(simdir; short_name, reduction, period),
