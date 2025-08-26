@@ -150,7 +150,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 #     microphysics_tracers,
                 # ) do (ρχ_name, χʲ_name, _)
                 for (ρχ_name, χʲ_name, _) in microphysics_tracers
-                    MatrixFields.has_field(Y, ρχ_name) || return
+                    MatrixFields.has_field(Y, ρχ_name) || continue
 
                     ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                     ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
@@ -175,7 +175,7 @@ function edmfx_sgs_mass_flux_tendency!(
             #     microphysics_tracers,
             # ) do (ρχ_name, _, χ_name)
             for (ρχ_name, _, χ_name) in microphysics_tracers
-                MatrixFields.has_field(Y, ρχ_name) || return
+                MatrixFields.has_field(Y, ρχ_name) || continue
 
                 ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
                 ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
