@@ -192,7 +192,23 @@ struct MoistFromFile <: InitialCondition
     file_path::String
 end
 
-function (initial_condition::MoistFromFile)(params)
+"""
+    WeatherModel(start_date)
+
+An `InitialCondition` that initializes the model with an empty state, and then overwrites
+it with the content of a NetCDF file that contains the initial conditions, stored in the 
+artifact `weather_model_ic`/raw/era5_raw_YYYYMMDD_HHMM.nc. We interpolate the initial 
+conditions from ERA5 pressure level grid to a z grid, saving to the artifact 
+weather_model_ic/init/era5_init_YYYYMMDD_HHMM.nc. It is then interpolated to the model
+grid in `_overwrite_initial_conditions_from_file!`, which documents the required variables.
+Recall running `ClimaUtilities.ClimaArtiffacts.@clima_artifact("weather_model_ic")` gets 
+the artifact path.
+"""
+struct WeatherModel <: InitialCondition
+    start_date::String
+end
+
+function (initial_condition::Union{MoistFromFile, WeatherModel})(params)
     function local_state(local_geometry)
         FT = eltype(params)
         grav = CAP.grav(params)
@@ -340,8 +356,38 @@ function overwrite_initial_conditions!(
     return nothing
 end
 
+# Restored original MoistFromFile function behavior
+function overwrite_initial_conditions!(
+    initial_condition::MoistFromFile,
+    Y,
+    thermo_params,
+)
+    return _overwrite_initial_conditions_from_file!(
+        initial_condition.file_path,
+        nothing, # use default extrapolation bc
+        Y,
+        thermo_params,
+    )
+end
+
+# WeatherModel function using the shared implementation
+function overwrite_initial_conditions!(
+    initial_condition::WeatherModel,
+    Y,
+    thermo_params,
+)
+    extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
+    file_path = weather_model_data_path(initial_condition.start_date)
+    return _overwrite_initial_conditions_from_file!(
+        file_path,
+        extrapolation_bc,
+        Y,
+        thermo_params,
+    )
+end
+
 """
-    overwrite_initial_conditions!(initial_condition::MoistFromFile, Y, thermo_params, config)
+    _overwrite_initial_conditions_from_file!(file_path::String, Y, thermo_params, config)
 
 Given a prognostic state `Y`, an `initial condition` (specifically, where initial values are
 assigned from interpolations of existing datasets), a `thermo_state`, this function
@@ -357,12 +403,13 @@ We expect the file to contain the following variables:
 - `u, v, w`, for velocity,
 - `cswc, crwc` for snow and rain water content (for 1 moment microphysics).
 """
-function overwrite_initial_conditions!(
-    initial_conditions::MoistFromFile,
+function _overwrite_initial_conditions_from_file!(
+    file_path::String,
+    extrapolation_bc,
     Y,
     thermo_params,
 )
-    file_path = initial_conditions.file_path
+    regridder_kwargs = isnothing(extrapolation_bc) ? () : (; extrapolation_bc)
     isfile(file_path) || error("$(file_path) is not a file")
     @info "Overwriting initial conditions with data from file $(file_path)"
     center_space = Fields.axes(Y.c)
@@ -370,11 +417,26 @@ function overwrite_initial_conditions!(
     # Using surface pressure, air temperature and specific humidity
     # from the dataset, compute air pressure.
     p_sfc = Fields.level(
-        SpaceVaryingInputs.SpaceVaryingInput(file_path, "p", face_space),
+        SpaceVaryingInputs.SpaceVaryingInput(
+            file_path,
+            "p",
+            face_space,
+            regridder_kwargs = regridder_kwargs,
+        ),
         Fields.half,
     )
-    ᶜT = SpaceVaryingInputs.SpaceVaryingInput(file_path, "t", center_space)
-    ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(file_path, "q", center_space)
+    ᶜT = SpaceVaryingInputs.SpaceVaryingInput(
+        file_path,
+        "t",
+        center_space,
+        regridder_kwargs = regridder_kwargs,
+    )
+    ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(
+        file_path,
+        "q",
+        center_space,
+        regridder_kwargs = regridder_kwargs,
+    )
 
     # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile,
     # recompute the pressure levels assuming hydrostatic balance is maintained.
@@ -400,15 +462,29 @@ function overwrite_initial_conditions!(
     # cell faces.
     vel =
         Geometry.UVWVector.(
-            SpaceVaryingInputs.SpaceVaryingInput(file_path, "u", center_space),
-            SpaceVaryingInputs.SpaceVaryingInput(file_path, "v", center_space),
-            SpaceVaryingInputs.SpaceVaryingInput(file_path, "w", center_space),
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "u",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ),
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "v",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ),
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "w",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ),
         )
     Y.c.uₕ .= C12.(Geometry.UVVector.(vel))
     Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
     e_kin = similar(ᶜT)
-    bc_kinetic = compute_kinetic(Y.c.uₕ, Y.f.u₃)
-    @. e_kin = bc_kinetic
+    e_kin .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
     e_pot = Fields.coordinate_field(Y.c).z .* thermo_params.grav
     Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
     if hasproperty(Y.c, :ρq_tot)
@@ -424,12 +500,14 @@ function overwrite_initial_conditions!(
                 file_path,
                 "cswc",
                 center_space,
+                regridder_kwargs = regridder_kwargs,
             ) .* Y.c.ρ
         Y.c.ρq_rai .=
             SpaceVaryingInputs.SpaceVaryingInput(
                 file_path,
                 "crwc",
                 center_space,
+                regridder_kwargs = regridder_kwargs,
             ) .* Y.c.ρ
     end
 
@@ -610,7 +688,7 @@ function moist_baroclinic_wave_values(z, ϕ, λ, params, perturb, deep_atmospher
     T = T_v / (1 + ε * q_tot) # This is the formula used in the paper.
 
     # This is the actual formula, which would be consistent with TD:
-    # T = T_v * (1 + q_tot) / (1 + q_tot * CAP.molmass_ratio(params))
+    # T = T_v * (1 + q_tot) / (1 + q_tot * CAP.Rv_over_Rd(params))
 
     return (; T, p, q_tot, u, v)
 end
@@ -1145,7 +1223,7 @@ function (initial_condition::TRMM_LBA)(params)
     # in Pressel et al., 2015). Note that the measured profiles are different from the
     # ones required for hydrostatic balance.
     # TODO: Move this to APL.
-    molmass_ratio = TD.Parameters.molmass_ratio(thermo_params)
+    Rv_over_Rd = TD.Parameters.Rv_over_Rd(thermo_params)
     measured_p = APL.TRMM_LBA_p(FT)
     measured_RH = APL.TRMM_LBA_RH(FT)
     measured_z_values = APL.TRMM_LBA_z(FT)
@@ -1153,8 +1231,8 @@ function (initial_condition::TRMM_LBA)(params)
         p_v_sat = TD.saturation_vapor_pressure(thermo_params, T(z), TD.Liquid())
         denominator =
             measured_p(z) - p_v_sat +
-            (1 / molmass_ratio) * p_v_sat * measured_RH(z) / 100
-        q_v_sat = p_v_sat * (1 / molmass_ratio) / denominator
+            (1 / Rv_over_Rd) * p_v_sat * measured_RH(z) / 100
+        q_v_sat = p_v_sat * (1 / Rv_over_Rd) / denominator
         return q_v_sat * measured_RH(z) / 100
     end
     q_tot = Intp.extrapolate(
@@ -1206,6 +1284,8 @@ function (initial_condition::PrecipitatingColumn)(params)
     qₛ = prescribed_prof(FT, 5000, 8000, 2e-6)
     qₗ = prescribed_prof(FT, 4000, 5500, 2e-5)
     qᵢ = prescribed_prof(FT, 6000, 9000, 1e-5)
+    nₗ = prescribed_prof(FT, 4000, 5500, 1e7)
+    nᵣ = prescribed_prof(FT, 2000, 5000, 1e3)
     θ = APL.Rico_θ_liq_ice(FT)
     q_tot = APL.Rico_q_tot(FT)
     u = prescribed_prof(FT, 0, Inf, 0)
@@ -1225,7 +1305,12 @@ function (initial_condition::PrecipitatingColumn)(params)
             thermo_state = ts,
             velocity = Geometry.UVVector(u(z), v(z)),
             turbconv_state = nothing,
-            precip_state = PrecipState1M(; q_rai = qᵣ(z), q_sno = qₛ(z)),
+            precip_state = PrecipStateMassNum(;
+                n_liq = nₗ(z),
+                n_rai = nᵣ(z),
+                q_rai = qᵣ(z),
+                q_sno = qₛ(z),
+            ),
         )
     end
     return local_state

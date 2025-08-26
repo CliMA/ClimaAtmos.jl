@@ -96,7 +96,8 @@ horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
-    (; ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶜspecific, ᶜh_tot) = p.precomputed
+    (; ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
 
     ## Momentum tendencies
     ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(Y.c.ρ)
@@ -104,28 +105,37 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLill
     @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_smag) / ᶠρ)
 
     ## Total energy tendency
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
     @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(ᶜh_tot))
 
     ## Tracer diffusion and associated mass changes
-    for (ᶜρχₜ, ᶜχ, χ_name) in CA.matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
-        ᶜρχₜ_diffusion =
-            @. p.scratch.ᶜtemp_scalar = wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(ᶜχ))
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+        ᶜρχₜ_diffusion = @. lazy(wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(ᶜχ)))
         @. ᶜρχₜ += ᶜρχₜ_diffusion
         # Rain and snow does not affect the mass
-        if χ_name ∉ (:q_rai, :q_sno)
+        if ρχ_name == @name(ρq_tot)
             @. Yₜ.c.ρ += ᶜρχₜ_diffusion
         end
     end
 
 end
 
+import UnrolledUtilities as UU
+
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     FT = eltype(Y)
-    (; sfc_temp_C3, ᶠtemp_scalar, ᶜtemp_scalar) = p.scratch
-    (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, ᶜspecific, ᶜh_tot, sfc_conditions) =
-        p.precomputed
+    (; sfc_temp_C3, ᶠtemp_scalar) = p.scratch
+    (; ᶜτ_smag, ᶠτ_smag, ᶠD_smag, sfc_conditions) = p.precomputed
     (; ρ_flux_uₕ, ρ_flux_h_tot) = sfc_conditions
+    (; ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
 
     # Define operators
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
@@ -152,21 +162,27 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     @. Yₜ.f.u₃ -= C3(ᶠdivᵥ(Y.c.ρ * ᶜτ_smag) / ᶠρ)
 
     ## Total energy tendency
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜh_tot)))
 
     ## Tracer diffusion and associated mass changes
-    for (ᶜρχₜ, ᶜχ, χ_name) in CA.matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
+    ᶜdivᵥ_ρχ = Operators.DivergenceF2C(;
+        top = Operators.SetValue(C3(FT(0))),
+        bottom = Operators.SetValue(C3(FT(0))),
+    )
 
-        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(;
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
-        )
-
-        ᶜ∇ᵥρD∇χₜ = @. ᶜtemp_scalar = ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜχ)))
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ᶜ∇ᵥρD∇χₜ =
+            @. lazy(ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ)))))
         @. ᶜρχₜ -= ᶜ∇ᵥρD∇χₜ
         # Rain and snow does not affect the mass
-        if χ_name == :q_tot
+        if ρχ_name == @name(ρq_tot)
             @. Yₜ.c.ρ -= ᶜ∇ᵥρD∇χₜ
         end
     end

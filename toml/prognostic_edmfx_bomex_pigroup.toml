@@ -37,6 +37,10 @@ type = "float"
 value = 1.4362168064049219
 type = "float"
 
+[entr_inv_tau]
+value = 0
+type = "float"
+
 [entr_param_vec]
 value = [-1.2633841186916668, -0.4599815783034937, -0.46293146485015296, 1.4203614863252911, 0.5642481281364011, 0.32604896101664416, -0.09664796099945236, 0.7220191192213364, 0.16903223715665835, 3.2461705926260187, -1.028004360914299, 0.3402928311687101]
 type = "float"
@@ -59,10 +63,6 @@ type = "float"
 
 [mixing_length_Prandtl_number_0]
 value = 0.8133326091843176
-type = "float"
-
-[entr_inv_tau]
-value = 0.00018836212008341437
 type = "float"
 
 [mixing_length_static_stab_coeff]

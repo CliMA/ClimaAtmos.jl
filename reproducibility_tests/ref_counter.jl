@@ -1,4 +1,4 @@
-236
+258
 
 # **README**
 #
@@ -20,12 +20,92 @@
 
 
 #=
+258
+- Update deps, specifically ClimaParams.jl and Thermodynamics.jl
+
+257
+- Redefine sedimentation velocity for Prognostic EDMF with 1-moment or 2-moment microphysics
+  on the grid scale; fix a bug in EDMFx SGS mass flux.
+
+256
+- Fix a bug in EDMF diffusive flux
+
+255
+- Add radiation tendency to prognostic edmf updrafts
+
+254
+- Use rayleigh and viscous sponges in the prognostic_edmfx_aquaplanet
+
+253
+- Update deps, specifically ClimaParams.jl and Thermodynamics.jl
+
+252
+- Update deps, specifically RootSolvers.jl
+
+252
+- Limit the noise in ice and snow 1M microphysics scheme in cloud formation and
+  limiter formulation.
+
+251
+- Remove ᶜtke⁰, ᶜh_tot, ᶜmse⁰, ᶜρ⁰, and specific quantities from precomputed quantities cache.
+  Introduce helper functions to compute sums over draft, environmental volumetric variables,
+  and specific env variables.
+
+250
+- Add ARG aerosol activation for 2M microphysics; increase the allocation limit for `flame_callbacks`
+  from 391864 to 391942 to account for additional allocations when constructing `ClimaAtmosParameters`
+  with the new aerosol parameters in `microphysics_2m_parameters`.
+
+249
+- Remove viscosity, diffusivity, and mixing length from precomputed quantities
+
+248
+- update deps: climacore 0.14.35
+
+247
+- Hyperdiffusion of enthalpy perturbation
+
+246
+- Prognostic edmf docstrings + refactor + scm_coriolis change
+
+245
+- Add 2M test case to the reproducibility job_id list
+
+244
+- Add a new test case: aquaplanet with 2M microphysics
+
+243
+- Consolidate eddy diffusivity logic in eddy_diffusion_closures.jl and mass flux
+  logic in mass_flux_closures.jl, update buoyancy calculations to be consistent throughout
+  (use geopotential gradient instead of g parameter), add helper functions for computing
+  diffusivity/viscosity, adds l_grid to MixingLength output struct. Includes more docstrings
+  and comments.
+
+242
+- Use ustar^3 surface tke boundary condition
+
+241
+- Add triangle inequality limiter from Horn (2012) and apply it in microphysics
+
+240
+- Fix a bug in viscous sponge
+
+239
+- Update mixing length formulation
+
+238
+- Limit by Pr_max = 10 (new default in ClimaParams v0.10.30)
+
+237
+- Changed the formulation of the Richardson and Prandtl numbers. We are now limiting by
+  Pr_max = 100 instead of Ri_max = 0.25. Different behavior for stable and neutral conditions.
+
 236
-- Radiation fluxes in runs with the `deep_atmosphere` configuration now take into account the 
+- Radiation fluxes in runs with the `deep_atmosphere` configuration now take into account the
   column expansion with height. Affects only cases with `DeepSphericalGlobalGeometry`.
 
 235
-- Related to #3775, the computation and update of non-orographic gravity wave (NOGW) 
+- Related to #3775, the computation and update of non-orographic gravity wave (NOGW)
   are now separated into callback and tendencies update, affecting the NOGW-related
   tests.
 
@@ -66,7 +146,7 @@
   (This only affects prognostic edmf)
 
 225
-- Move nonhydrostatic pressure drag calculation to precomputed quantities and 
+- Move nonhydrostatic pressure drag calculation to precomputed quantities and
   remove one reproducibility job
   (This only affects prognostic edmf)
 

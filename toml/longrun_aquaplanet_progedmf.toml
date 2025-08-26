@@ -4,11 +4,11 @@ value = 40000.0
 [zd_viscous]
 value = 40000.0
 
+[alpha_rayleigh_sgs_tracer]
+value = 1e-3
+
 [precipitation_timescale]
 value = 600
-
-[EDMF_surface_area]
-value = 0
 
 [EDMF_min_area]
 value = 1.0e-5

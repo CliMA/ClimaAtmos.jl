@@ -1,0 +1,14 @@
+config: sphere
+h_elem: 30 # 110 km
+nh_poly: 3
+z_elem: 63
+z_max: 60000.0
+dz_bottom: 30.0
+dt: 90secs
+ode_algo: ARS343
+hyperdiff: CAM_SE
+rayleigh_sponge: true
+viscous_sponge: true
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1

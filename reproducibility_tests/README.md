@@ -4,7 +4,7 @@ This document outlines how reproducibility tests work and how to update PRs to p
 
 ## The basic idea of how reproducibility tests work
 
-When a particular job opts-in to testing reproducibilitys (using the `reproducibility_test` command line option and the `julia --project=examples reproducibility_tests/test_mse.jl` command), we compare the solution dataset (the prognostic state at the last timestep) of that job with a reference dataset.
+When a particular job opts-in to testing reproducibilitys (using the `reproducibility_test` command line option and the `julia --project=.buildkite reproducibility_tests/test_mse.jl` command), we compare the solution dataset (the prognostic state at the last timestep) of that job with a reference dataset.
 
 We don't always have a reference to compare against, due to what we'll call **failure modes**. For a full list of failure modes, see [Failure modes](#Failure-modes), but here are a few examples:
 
@@ -45,7 +45,7 @@ Note: We currently do not prepend the folder names by the reference counter, how
 
 ## Allowing flaky tests
 
-Users can add the flag `test_broken_report_flakiness` to the `test_mse.jl` script: `julia --project=examples reproducibility_tests/test_mse.jl --test_broken_report_flakiness true`, which will have the following behavior:
+Users can add the flag `test_broken_report_flakiness` to the `test_mse.jl` script: `julia --project=.buildkite reproducibility_tests/test_mse.jl --test_broken_report_flakiness true`, which will have the following behavior:
 
  - If the test is not reproducible (i.e., flaky) when compared against `N` comparable references, then the test will pass and be reported as broken.
  - If the test is reproducible when compared against `N` comparable references, then the test will fail `@test_broken`, and users will be asked to fix the broken test. At which point you can remove the `--test_broken_report_flakiness true` flag from that particular job, reinforcing a strict reproducibility constraint.
@@ -64,7 +64,7 @@ To update the mse tables:
 
 To add a new reproducibility test:
 
- - Set the command-line `reproducibility_test` to true, and add `julia --color=yes --project=examples reproducibility_tests/test_mse.jl --job_id [job_id] --out_dir [job_id]` as a separate command for the new (or existing) job
+ - Set the command-line `reproducibility_test` to true, and add `julia --color=yes --project=.buildkite reproducibility_tests/test_mse.jl --job_id [job_id] --out_dir [job_id]` as a separate command for the new (or existing) job
  - Copy the `all_best_mse` dict template from the job's log
  - Paste the `all_best_mse` dict template into `reproducibility_test/reproducibility_test_job_ids.jl`
 
@@ -90,7 +90,7 @@ We cannot (easily) compare the output with a reference if we change the spatial 
 
 ## A detailed procedure of how reproducibility tests are performed
 
-Reprodicibility tests are performed at the end of `examples/hybrid/driver.jl`, after a simulation completes, and relies on a unique job id (`job_id`). Here is an outline of the reproducibility test procedure:
+Reprodicibility tests are performed at the end of `.buildkite/ci_driver.jl`, after a simulation completes, and relies on a unique job id (`job_id`). Here is an outline of the reproducibility test procedure:
 
  0) Run a simulation, with a particular `job_id`, to the final time.
  1) Load a list of job IDs in `reproducibility_test_job_ids.jl`.

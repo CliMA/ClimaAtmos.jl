@@ -29,10 +29,10 @@ z_max:
   value: 30000.0
 vorticity_hyperdiffusion_coefficient:
   help: "Hyperdiffusion coefficient for vorticity (m s-1)"
-  value: 1.5
+  value: 0.1857
 scalar_hyperdiffusion_coefficient:
   help: "Hyperdiffusion coefficient for scalar (m s-1)"
-  value: 1.5
+  value: 0.929738
 # Topography
 topography:
   help: "Define the surface elevation profile [`NoWarp` (default), `Earth`, `DCMIP200`, `Hughes2023`, `Agnesi`, `Schar`, `Cosine2D`, `Cosine3D`]"
@@ -86,6 +86,21 @@ eisenstat_walker_forcing_alpha:
 jvp_step_adjustment:
   help: "Amount by which the step size of the forward difference approximation of the Jacobian-vector product in the Krylov method should be scaled (only used if `use_krylov_method` is `true`)"
   value: 1.0
+use_dense_jacobian:
+  help: "Whether to use a dense Jacobian matrix that is computed using forward-mode automatic differentiation and inverted using LU factorization [`true`, `false` (default)]"
+  value: false
+use_auto_jacobian:
+  help: "Whether to populate the entries of the sparse Jacobian matrix using forward-mode automatic differentiation with sparse matrix coloring (only used when `use_dense_jacobian` is `false`) [`true`, `false` (default)]"
+  value: false
+auto_jacobian_padding_bands:
+  help: "Target number of bands to add in every block of the sparse Jacobian matrix, eliminating errors from Jacobian entries that lie outside of the default sparsity pattern; when unspecified, each block gets a predetermined number of padding bands based on the typical magnitudes of its entries (only used when `use_auto_jacobian` is `true`)"
+  value: ~
+update_jacobian_every:
+  help: "Frequency at which the Jacobian matrix should be updated (once per timestep, once per timestepper stage, or once per linear solve) [`dt`, `stage`, `solve` (default)]"
+  value: "solve"
+debug_jacobian:
+  help: "Whether to print summary information about the Jacobian matrix, including comparisons of different algorithms evaluated on the first column of the final state against the exact Jacobian [`true`, `false` (default)]"
+  value: false
 # Radiation
 rad:
   help: "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`]"
@@ -146,7 +161,7 @@ vert_diff:
   help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `DecayWithHeightDiffusion`]"
   value: false
 hyperdiff:
-  help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
+  help: "Hyperdiffusion. Use `CAM_SE` for sensible default values and ClimaHyperdiffusion for user control. [`CAM_SE` (default), `ClimaHyperdiffusion` (or `true`), `none` (or `false`)]"
   value: "CAM_SE"
 smagorinsky_lilly:
   help: "Smagorinsky-Lilly diffusive closure [`false` (default), `true`]"
@@ -155,7 +170,7 @@ bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: false
 start_date:
-  help: "Start date of the simulation"
+  help: "Start date and time of the simulation. Specified as either yyyymmdd (defaults to midnight) or yyyymmdd-HHMM. Examples: [`20100101`, `20100101-0000`]"
   value: "20100101"
 forcing:
   help: "Forcing [`nothing` (default), `held_suarez`]"
@@ -164,14 +179,14 @@ test_dycore_consistency:
   help: "Test dycore consistency [`false` (default), `true`]"
   value: false
 dt_save_state_to_disk:
-  help: "Time between saving the state to disk. Examples: [`10secs`, `1hours`, `1months`, `Inf` (do not save)]"
+  help: "Time between saving the state to disk. Examples: [`10secs`, `1hours`, `1months`, `Inf` (do not save, default)]"
   value: "Inf"
 moist:
   help: "Moisture model [`dry` (default), `equil`, `nonequil`]"
   value: "dry"
 divergence_damping_factor:
   help: "Divergence damping factor"
-  value: 1.0
+  value: 5.0
 rayleigh_sponge:
   help: "Rayleigh sponge [`true`, `false` (default)]"
   value: false
@@ -185,7 +200,7 @@ surface_temperature:
   help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric', 'RCEMIPII', `Reanalysis`, `ReanalysisTimeVarying`]"
   value: "ZonallySymmetric"
 initial_condition:
-  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
+  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
   value: "DecayingProfile"
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
@@ -242,7 +257,7 @@ ls_adv:
   help: "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"
   value: ~
 external_forcing:
-  help: "External forcing for single column experiments [`nothing` (default), `GCM`, `Reanalysis`, `ReanalysisTimeVarying`]"
+  help: "External forcing for single column experiments [`nothing` (default), `GCM`, `Reanalysis`, `ReanalysisTimeVarying`, `ReanalysisMonthlyAveragedDiurnal`]"
   value: ~
 external_forcing_file:
   help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions. Used for GCM-driven SCM and ISDAC setup [`nothing` (default), `path/to/file`]"
@@ -266,7 +281,7 @@ prognostic_tke:
   help: "A flag for prognostic TKE [`false` (default), `true`]"
   value: false
 prognostic_surface:
-  help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `PrognosticSurfaceTemperature`, `PrescribedSurfaceTemperature`]"
+  help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `SlabOceanSST`, `PrescribedSST`]"
   value: false
 albedo_model:
   help: "Variable surface albedo [`ConstantAlbedo` (default), `RegressionFunctionAlbedo`, `CouplerAlbedo`]"
@@ -324,6 +339,9 @@ turbconv:
 advection_test:
   help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"
   value: false
+edmfx_scale_blending:
+  help: "Method for blending physical scales in EDMFX mixing length calculation. [`SmoothMinimum` (default), `HardMinimum`]"
+  value: "SmoothMinimum"
 implicit_sgs_advection:
   help: "Whether to treat the subgrid-scale vertical advection tendency implicitly [`false` (default), `true`]"
   value: false
@@ -338,8 +356,8 @@ implicit_sgs_nh_pressure:
 implicit_sgs_mass_flux:
   help: "Whether to treat the subgrid-scale mass flux tendency implicitly or explicitly in grid-mean equations. Currently updraft only with Jacobian terms 0. [`false` (default), `true`]. Setting it to true only works if both implicit_sgs_advection and implicit_diffusion are set to true."
   value: false
-edmf_coriolis:
-  help: "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
+scm_coriolis:
+  help: "SCM Coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
   value: ~
 edmfx_filter:
   help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
@@ -349,10 +367,10 @@ edmfx_nh_pressure:
   in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
   value: false
 edmfx_entr_model:
-  help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`, `GeneralizedHarmonics`]"
+  help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`]"
   value: ~
 edmfx_detr_model:
-  help: "EDMFX detrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`, `GeneralizedHarmonics`]"
+  help: "EDMFX detrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`]"
   value: ~
 edmfx_upwinding:
   help: "EDMFX upwinding mode [`none` (default), `first_order`, `third_order`]"

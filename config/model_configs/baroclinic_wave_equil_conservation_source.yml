@@ -1,9 +1,8 @@
 initial_condition: "MoistBaroclinicWave"
-dt: "400secs"
 t_end: "10days"
 moist: "equil"
 surface_setup: DefaultMoninObukhov
-prognostic_surface: "PrognosticSurfaceTemperature"
+prognostic_surface: "SlabOceanSST"
 rad: "clearsky"
 precip_model: "0M"
 vert_diff: true

@@ -6,7 +6,6 @@ import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
-import LinearAlgebra
 import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
 import Logging
@@ -21,8 +20,25 @@ function get_atmos(config::AtmosConfig, params)
     FT = eltype(config)
     check_case_consistency(parsed_args)
     moisture_model = get_moisture_model(parsed_args)
-    precip_model = get_precipitation_model(parsed_args)
+    microphysics_model = get_microphysics_model(parsed_args)
     cloud_model = get_cloud_model(parsed_args)
+
+    if moisture_model isa DryModel
+        @warn "Running simulations without any moisture present."
+        @assert microphysics_model isa NoPrecipitation
+    end
+    if moisture_model isa EquilMoistModel
+        @warn "Running simulations with equilibrium thermodynamics assumptions."
+        @assert microphysics_model isa
+                Union{NoPrecipitation, Microphysics0Moment}
+    end
+    if moisture_model isa NonEquilMoistModel
+        @assert microphysics_model isa
+                Union{NoPrecipitation, Microphysics1Moment, Microphysics2Moment}
+    end
+    if microphysics_model isa NoPrecipitation
+        @warn "Running simulations without any precipitation formation."
+    end
 
     implicit_noneq_cloud_formation =
         parsed_args["implicit_noneq_cloud_formation"]
@@ -49,7 +65,11 @@ function get_atmos(config::AtmosConfig, params)
     (!isnothing(co2) && !with_rrtmgp) &&
         @warn ("$(co2) does nothing if RRTMGP is not used")
 
-    disable_momentum_vertical_diffusion = forcing_type isa HeldSuarezForcing
+    # HeldSuarezForcing can be set via radiation_mode or legacy forcing option for now
+    final_radiation_mode =
+        forcing_type isa HeldSuarezForcing ? forcing_type : radiation_mode
+    disable_momentum_vertical_diffusion =
+        final_radiation_mode isa HeldSuarezForcing
 
     advection_test = parsed_args["advection_test"]
     @assert advection_test in (false, true)
@@ -76,9 +96,10 @@ function get_atmos(config::AtmosConfig, params)
         sgs_diffusive_flux = Val(parsed_args["edmfx_sgs_diffusive_flux"]),
         nh_pressure = Val(parsed_args["edmfx_nh_pressure"]),
         filter = Val(parsed_args["edmfx_filter"]),
+        scale_blending_method = get_scale_blending_method(parsed_args),
     )
 
-    vert_diff = get_vertical_diffusion_model(
+    vertical_diffusion = get_vertical_diffusion_model(
         disable_momentum_vertical_diffusion,
         parsed_args,
         params,
@@ -86,23 +107,38 @@ function get_atmos(config::AtmosConfig, params)
     )
 
     atmos = AtmosModel(;
+        # AtmosWater - Moisture, Precipitation & Clouds
         moisture_model,
-        ozone,
-        co2,
-        radiation_mode,
-        subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
-        ls_adv = get_large_scale_advection_model(parsed_args, FT),
-        external_forcing = get_external_forcing_model(parsed_args, FT),
-        edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
-        advection_test,
-        edmfx_model,
-        precip_model,
+        microphysics_model,
         cloud_model,
         noneq_cloud_formation_mode = implicit_noneq_cloud_formation ?
                                      Implicit() : Explicit(),
-        forcing_type,
         call_cloud_diagnostics_per_stage,
+
+        # SCMSetup - Single-Column Model components
+        subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
+        external_forcing = get_external_forcing_model(parsed_args, FT),
+        ls_adv = get_large_scale_advection_model(parsed_args, FT),
+        advection_test,
+        scm_coriolis = get_scm_coriolis(parsed_args, FT),
+
+        # AtmosRadiation
+        radiation_mode = final_radiation_mode,
+        ozone,
+        co2,
+        insolation = get_insolation_form(parsed_args),
+
+        # AtmosTurbconv - Turbulence & Convection
+        edmfx_model,
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
+        sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
+        sgs_entr_detr_mode = implicit_sgs_entr_detr ? Implicit() : Explicit(),
+        sgs_nh_pressure_mode = implicit_sgs_nh_pressure ? Implicit() :
+                               Explicit(),
+        sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
+        smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
+
+        # AtmosGravityWave
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
             parsed_args,
             FT,
@@ -111,31 +147,40 @@ function get_atmos(config::AtmosConfig, params)
             parsed_args,
             FT,
         ),
-        hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
-        vert_diff,
-        diff_mode = implicit_diffusion ? Implicit() : Explicit(),
-        sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
-        sgs_entr_detr_mode = implicit_sgs_entr_detr ? Implicit() : Explicit(),
-        sgs_nh_pressure_mode = implicit_sgs_nh_pressure ? Implicit() :
-                               Explicit(),
-        sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
+
+        # AtmosSponge
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
-        smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
+
+        # AtmosSurface
         sfc_temperature = get_sfc_temperature_form(parsed_args),
-        insolation = get_insolation_form(parsed_args),
-        disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
         surface_model = get_surface_model(parsed_args),
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
-        numerics = get_numerics(parsed_args),
+
+        # Top-level options (not grouped)
+        vertical_diffusion,
+        numerics = get_numerics(parsed_args, FT),
+        disable_surface_flux_tendency = parsed_args["disable_surface_flux_tendency"],
     )
+    # TODO: Should this go in the AtmosModel constructor?
     @assert !@any_reltype(atmos, (UnionAll, DataType))
 
     @info "AtmosModel: \n$(summary(atmos))"
     return atmos
 end
 
-function get_numerics(parsed_args)
+function get_scale_blending_method(parsed_args)
+    method_name = parsed_args["edmfx_scale_blending"]
+    if method_name == "SmoothMinimum"
+        return SmoothMinimumBlending()
+    elseif method_name == "HardMinimum"
+        return HardMinimumBlending()
+    else
+        error("Unknown edmfx_scale_blending method: $method_name")
+    end
+end
+
+function get_numerics(parsed_args, FT)
     test_dycore =
         parsed_args["test_dycore_consistency"] ? TestDycoreConsistency() :
         nothing
@@ -162,6 +207,10 @@ function get_numerics(parsed_args)
     limiter = parsed_args["apply_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
     # wrap each upwinding mode in a Val for dispatch
+    diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
+
+    hyperdiff = get_hyperdiffusion_model(parsed_args, FT)
+
     numerics = AtmosNumerics(;
         energy_upwinding,
         tracer_upwinding,
@@ -169,6 +218,8 @@ function get_numerics(parsed_args)
         edmfx_sgsflux_upwinding,
         limiter,
         test_dycore_consistency = test_dycore,
+        diff_mode,
+        hyperdiff,
     )
     @info "numerics $(summary(numerics))"
 
@@ -364,6 +415,8 @@ function get_initial_condition(parsed_args, atmos)
             atmos.external_forcing.external_forcing_file,
             parsed_args["start_date"],
         )
+    elseif parsed_args["initial_condition"] == "WeatherModel"
+        return ICs.WeatherModel(parsed_args["start_date"])
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
@@ -415,54 +468,30 @@ function get_surface_setup(parsed_args)
     return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
 end
 
-is_explicit_CTS_algo_type(alg_or_tableau) =
-    alg_or_tableau <: CTS.ERKAlgorithmName
-
-is_imex_CTS_algo_type(alg_or_tableau) =
-    alg_or_tableau <: CTS.IMEXARKAlgorithmName
-
-is_implicit_type(alg_or_tableau) = is_imex_CTS_algo_type(alg_or_tableau)
-
-is_imex_CTS_algo(::CTS.IMEXAlgorithm) = true
-is_imex_CTS_algo(::CTS.RosenbrockAlgorithm) = true
-is_imex_CTS_algo(::SciMLBase.AbstractODEAlgorithm) = false
-
-is_implicit(ode_algo) = is_imex_CTS_algo(ode_algo)
-
-is_rosenbrock(::SciMLBase.AbstractODEAlgorithm) = false
-use_transform(ode_algo) =
-    !(is_imex_CTS_algo(ode_algo) || is_rosenbrock(ode_algo))
-
-additional_integrator_kwargs(::SciMLBase.AbstractODEAlgorithm) = (;
-    adaptive = false,
-    progress = isinteractive(),
-    progress_steps = isinteractive() ? 1 : 1000,
-)
-additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
-    kwargshandle = CTS.DiffEqBase.KeywordArgSilent, # allow custom kwargs
-    adjustfinal = true,
-    # TODO: enable progress bars in ClimaTimeSteppers
-)
-
-is_cts_algo(::SciMLBase.AbstractODEAlgorithm) = false
-is_cts_algo(::CTS.DistributedODEAlgorithm) = true
-
-function jac_kwargs(ode_algo, Y, atmos, parsed_args)
-    if is_implicit(ode_algo)
-        A = ImplicitEquationJacobian(
-            Y,
-            atmos;
-            approximate_solve_iters = parsed_args["approximate_linear_solve_iters"],
-            transform_flag = use_transform(ode_algo),
-        )
-        if use_transform(ode_algo)
-            return (; jac_prototype = A, Wfact_t = Wfact!)
-        else
-            return (; jac_prototype = A, Wfact = Wfact!)
-        end
+function get_jacobian(ode_algo, Y, atmos, parsed_args)
+    ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
+        return nothing
+    jacobian_algorithm = if parsed_args["use_dense_jacobian"]
+        AutoDenseJacobian()
     else
-        return NamedTuple()
+        manual_jacobian_algorithm = ManualSparseJacobian(
+            DerivativeFlag(has_topography(axes(Y.c))),
+            DerivativeFlag(atmos.diff_mode),
+            DerivativeFlag(atmos.sgs_adv_mode),
+            DerivativeFlag(atmos.sgs_entr_detr_mode),
+            DerivativeFlag(atmos.sgs_mf_mode),
+            DerivativeFlag(atmos.sgs_nh_pressure_mode),
+            parsed_args["approximate_linear_solve_iters"],
+        )
+        parsed_args["use_auto_jacobian"] ?
+        AutoSparseJacobian(
+            manual_jacobian_algorithm,
+            parsed_args["auto_jacobian_padding_bands"],
+        ) : manual_jacobian_algorithm
     end
+    @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
+    verbose = parsed_args["debug_jacobian"]
+    return Jacobian(jacobian_algorithm, Y, atmos; verbose)
 end
 
 #=
@@ -472,19 +501,30 @@ Returns the ode algorithm
 =#
 function ode_configuration(::Type{FT}, parsed_args) where {FT}
     ode_name = parsed_args["ode_algo"]
-    alg_or_tableau = getproperty(CTS, Symbol(ode_name))
-    @info "Using ODE config: `$alg_or_tableau`"
-    if ode_name == "SSPKnoth"
-        return CTS.RosenbrockAlgorithm(CTS.tableau(CTS.SSPKnoth()))
-    end
-
-    if is_explicit_CTS_algo_type(alg_or_tableau)
-        return CTS.ExplicitAlgorithm(alg_or_tableau())
-    elseif !is_implicit_type(alg_or_tableau)
-        return alg_or_tableau()
-    elseif is_imex_CTS_algo_type(alg_or_tableau)
+    ode_algo_name = getproperty(CTS, Symbol(ode_name))
+    @info "Using ODE config: `$ode_algo_name`"
+    return if ode_algo_name <: CTS.RosenbrockAlgorithmName
+        if parsed_args["update_jacobian_every"] != "solve"
+            @warn "Rosenbrock algorithms in ClimaTimeSteppers currently only \
+                   support `update_jacobian_every` = \"solve\""
+        end
+        CTS.RosenbrockAlgorithm(CTS.tableau(ode_algo_name()))
+    elseif ode_algo_name <: CTS.ERKAlgorithmName
+        CTS.ExplicitAlgorithm(ode_algo_name())
+    else
+        @assert ode_algo_name <: CTS.IMEXARKAlgorithmName
         newtons_method = CTS.NewtonsMethod(;
             max_iters = parsed_args["max_newton_iters_ode"],
+            update_j = if parsed_args["update_jacobian_every"] == "dt"
+                CTS.UpdateEvery(CTS.NewTimeStep)
+            elseif parsed_args["update_jacobian_every"] == "stage"
+                CTS.UpdateEvery(CTS.NewNewtonSolve)
+            elseif parsed_args["update_jacobian_every"] == "solve"
+                CTS.UpdateEvery(CTS.NewNewtonIteration)
+            else
+                error("Unknown value of `update_jacobian_every`: \
+                       $(parsed_args["update_jacobian_every"])")
+            end,
             krylov_method = if parsed_args["use_krylov_method"]
                 CTS.KrylovMethod(;
                     jacobian_free_jvp = CTS.ForwardDiffJVP(;
@@ -511,9 +551,7 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
                 nothing
             end,
         )
-        return CTS.IMEXAlgorithm(alg_or_tableau(), newtons_method)
-    else
-        return alg_or_tableau(; linsolve = linsolve!)
+        CTS.IMEXAlgorithm(ode_algo_name(), newtons_method)
     end
 end
 
@@ -618,7 +656,7 @@ function get_sim_info(config::AtmosConfig)
 
     isnothing(restart_file) ||
         @info "Restarting simulation from file $restart_file"
-    epoch = DateTime(parsed_args["start_date"], dateformat"yyyymmdd")
+    epoch = parse_date(parsed_args["start_date"])
     t_start_int = time_to_seconds(parsed_args["t_start"])
     if !isnothing(restart_file) && t_start_int != 0
         @warn "Non zero `t_start` passed with a restarting simulation. The provided `t_start` will be ignored."
@@ -658,38 +696,30 @@ end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; atmos, dt) = p
-
     s = @timed_str begin
-        func = if parsed_args["split_ode"]
-            implicit_func = SciMLBase.ODEFunction(
-                implicit_tendency!;
-                jac_kwargs(ode_algo, Y, atmos, parsed_args)...,
-                tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
-            )
-            if is_cts_algo(ode_algo)
-                CTS.ClimaODEFunction(;
-                    T_exp_T_lim! = remaining_tendency!,
-                    T_imp! = implicit_func,
-                    # Can we just pass implicit_tendency! and jac_prototype etc.?
-                    lim! = limiters_func!,
-                    dss!,
-                    cache! = set_precomputed_quantities!,
-                    cache_imp! = set_implicit_precomputed_quantities!,
-                )
-            else
-                SciMLBase.SplitFunction(implicit_func, remaining_tendency!)
-            end
-        else
-            remaining_tendency! # should be total_tendency!
-        end
+        T_imp! = SciMLBase.ODEFunction(
+            implicit_tendency!;
+            jac_prototype = get_jacobian(ode_algo, Y, atmos, parsed_args),
+            Wfact = update_jacobian!,
+        )
+        tendency_function = CTS.ClimaODEFunction(;
+            T_exp_T_lim! = remaining_tendency!,
+            T_imp!,
+            lim! = limiters_func!,
+            dss!,
+            cache! = set_precomputed_quantities!,
+            cache_imp! = set_implicit_precomputed_quantities!,
+        )
     end
     @info "Define ode function: $s"
-    problem = SciMLBase.ODEProblem(func, Y, tspan, p)
+    problem = SciMLBase.ODEProblem(tendency_function, Y, tspan, p)
     t_begin, t_end, _ = promote(tspan[1], tspan[2], p.dt)
     # Save solution to integrator.sol at the beginning and end
     saveat = [t_begin, t_end]
     args = (problem, ode_algo)
-    kwargs = (; saveat, callback, dt, additional_integrator_kwargs(ode_algo)...)
+    allow_custom_kwargs = (; kwargshandle = CTS.DiffEqBase.KeywordArgSilent)
+    kwargs =
+        (; saveat, callback, dt, adjustfinal = true, allow_custom_kwargs...)
     return (args, kwargs)
 end
 

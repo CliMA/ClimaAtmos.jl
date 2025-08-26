@@ -2,11 +2,14 @@ module ClimaAtmos
 
 using NVTX
 import Adapt
+import LinearAlgebra
 import NullBroadcasts: NullBroadcasted
 import LazyBroadcast
 import LazyBroadcast: lazy
 import Thermodynamics as TD
 import Thermodynamics
+import ClimaCore.MatrixFields: @name
+
 
 include("compat.jl")
 include(joinpath("parameters", "Parameters.jl"))
@@ -22,6 +25,7 @@ include(joinpath("utils", "debug_utils.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
 include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
 include(joinpath("utils", "era5_observations_to_forcing_file.jl"))
+include(joinpath("utils", "weather_model.jl"))
 
 include(joinpath("utils", "AtmosArtifacts.jl"))
 import .AtmosArtifacts as AA
@@ -41,13 +45,6 @@ include(joinpath("cache", "cloud_fraction.jl"))
 include(joinpath("cache", "surface_albedo.jl"))
 
 include(joinpath("initial_conditions", "InitialConditions.jl"))
-include(
-    joinpath(
-        "parameterized_tendencies",
-        "turbulence_convection",
-        "tc_functions.jl",
-    ),
-)
 include(joinpath("surface_conditions", "SurfaceConditions.jl"))
 include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
 
@@ -55,7 +52,13 @@ include(joinpath("prognostic_equations", "pressure_work.jl"))
 include(joinpath("prognostic_equations", "zero_velocity.jl"))
 
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
-include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))
+include(joinpath("prognostic_equations", "implicit", "jacobian.jl"))
+include(
+    joinpath("prognostic_equations", "implicit", "manual_sparse_jacobian.jl"),
+)
+include(joinpath("prognostic_equations", "implicit", "auto_dense_jacobian.jl"))
+include(joinpath("prognostic_equations", "implicit", "auto_sparse_jacobian.jl"))
+include(joinpath("prognostic_equations", "implicit", "autodiff_utils.jl"))
 
 include(joinpath("prognostic_equations", "water_advection.jl"))
 include(joinpath("prognostic_equations", "remaining_tendency.jl"))
@@ -90,9 +93,9 @@ include(
 )
 include(joinpath("prognostic_equations", "hyperdiffusion.jl"))
 include(joinpath("prognostic_equations", "gm_sgs_closures.jl"))
-include(joinpath("prognostic_equations", "edmf_coriolis.jl"))
-include(joinpath("prognostic_equations", "buoyancy_gradients.jl"))
-include(joinpath("prognostic_equations", "edmfx_closures.jl"))
+include(joinpath("prognostic_equations", "scm_coriolis.jl"))
+include(joinpath("prognostic_equations", "eddy_diffusion_closures.jl"))
+include(joinpath("prognostic_equations", "mass_flux_closures.jl"))
 include(joinpath("prognostic_equations", "edmfx_entr_detr.jl"))
 include(joinpath("prognostic_equations", "edmfx_tke.jl"))
 include(joinpath("prognostic_equations", "edmfx_sgs_flux.jl"))

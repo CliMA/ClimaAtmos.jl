@@ -304,7 +304,7 @@ add_diagnostic_variable!(
 )
 
 ###
-# Updraft liquid water specific humidity (3d)
+# Updraft liquid water specific humidity and number mixing ratio (3d)
 ###
 compute_clwup!(out, state, cache, time) = compute_clwup!(
     out,
@@ -361,6 +361,20 @@ function compute_clwup!(
         out .= (state.c.sgsʲs.:1).q_liq
     end
 end
+function compute_clwup!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+    turbconv_model::DiagnosticEDMFX,
+)
+    if isnothing(out)
+        return (cache.precomputed.ᶜq_liqʲs.:1)
+    else
+        out .= (cache.precomputed.ᶜq_liqʲs.:1)
+    end
+end
 
 add_diagnostic_variable!(
     short_name = "clwup",
@@ -371,6 +385,51 @@ add_diagnostic_variable!(
     the mass of air (including the water in all phases) in the first updraft.
     """,
     compute! = compute_clwup!,
+)
+
+compute_cdncup!(out, state, cache, time) = compute_cdncup!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_cdncup!(
+    _,
+    _,
+    _,
+    _,
+    microphysics_model::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute updraft rain number mixing ratio with a 2M precip model and with EDMFX",
+)
+
+function compute_cdncup!(
+    out,
+    state,
+    cache,
+    time,
+    microphysics_model_model::Microphysics2Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    if isnothing(out)
+        return (state.c.sgsʲs.:1).n_liq
+    else
+        out .= (state.c.sgsʲs.:1).n_liq
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "cdncup",
+    long_name = "Updraft Number Mixing Ratio of Cloud Liquid Water",
+    units = "kg^-1",
+    comments = """
+    This is calculated as the number of cloud water droplets in the updraft divided by
+    the mass of air (including the water in all phases) in the updraft.
+    """,
+    compute! = compute_cdncup!,
 )
 
 ###
@@ -428,6 +487,20 @@ function compute_cliup!(
         out .= (state.c.sgsʲs.:1).q_ice
     end
 end
+function compute_cliup!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::NonEquilMoistModel,
+    turbconv_model::DiagnosticEDMFX,
+)
+    if isnothing(out)
+        return (cache.precomputed.ᶜq_iceʲs.:1)
+    else
+        out .= (cache.precomputed.ᶜq_iceʲs.:1)
+    end
+end
 
 add_diagnostic_variable!(
     short_name = "cliup",
@@ -441,14 +514,14 @@ add_diagnostic_variable!(
 )
 
 ###
-# Updraft rain water specific humidity (3d)
+# Updraft rain water specific humidity and number mixing ratio (3d)
 ###
 compute_husraup!(out, state, cache, time) = compute_husraup!(
     out,
     state,
     cache,
     time,
-    cache.atmos.precip_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_husraup!(
@@ -456,10 +529,10 @@ compute_husraup!(
     _,
     _,
     _,
-    precip_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
-    "Can only compute updraft rain water specific humidity with a 1M precip model and with EDMFX",
+    "Can only compute updraft rain water specific humidity with a 1M or 2M precip model and with EDMFX",
 )
 
 function compute_husraup!(
@@ -467,13 +540,27 @@ function compute_husraup!(
     state,
     cache,
     time,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
         return (state.c.sgsʲs.:1).q_rai
     else
         out .= (state.c.sgsʲs.:1).q_rai
+    end
+end
+function compute_husraup!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::Microphysics1Moment,
+    turbconv_model::DiagnosticEDMFX,
+)
+    if isnothing(out)
+        return (cache.precomputed.ᶜq_raiʲs.:1)
+    else
+        out .= (cache.precomputed.ᶜq_raiʲs.:1)
     end
 end
 
@@ -488,6 +575,51 @@ add_diagnostic_variable!(
     compute! = compute_husraup!,
 )
 
+compute_ncraup!(out, state, cache, time) = compute_ncraup!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_ncraup!(
+    _,
+    _,
+    _,
+    _,
+    microphysics_model::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute updraft rain number mixing ratio with a 2M precip model and with EDMFX",
+)
+
+function compute_ncraup!(
+    out,
+    state,
+    cache,
+    time,
+    microphysics_model_model::Microphysics2Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    if isnothing(out)
+        return (state.c.sgsʲs.:1).n_rai
+    else
+        out .= (state.c.sgsʲs.:1).n_rai
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "ncraup",
+    long_name = "Updraft Number Mixing Ratio of Rain",
+    units = "kg^-1",
+    comments = """
+    This is calculated as the number of raindrops in the updraft divided by
+    the mass of air (including the water in all phases) in the updraft.
+    """,
+    compute! = compute_ncraup!,
+)
+
 ###
 # Updraft snow specific humidity (3d)
 ###
@@ -496,7 +628,7 @@ compute_hussnup!(out, state, cache, time) = compute_hussnup!(
     state,
     cache,
     time,
-    cache.atmos.precip_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_hussnup!(
@@ -504,10 +636,10 @@ compute_hussnup!(
     _,
     _,
     _,
-    precip_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
-    "Can only compute updraft snow specific humidity with a 1M precip model and with EDMFX",
+    "Can only compute updraft snow specific humidity with a 1M or 2M precip model and with EDMFX",
 )
 
 function compute_hussnup!(
@@ -515,13 +647,27 @@ function compute_hussnup!(
     state,
     cache,
     time,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
     turbconv_model::PrognosticEDMFX,
 )
     if isnothing(out)
         return (state.c.sgsʲs.:1).q_sno
     else
         out .= (state.c.sgsʲs.:1).q_sno
+    end
+end
+function compute_hussnup!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::Microphysics1Moment,
+    turbconv_model::DiagnosticEDMFX,
+)
+    if isnothing(out)
+        return (cache.precomputed.ᶜq_snoʲs.:1)
+    else
+        out .= (cache.precomputed.ᶜq_snoʲs.:1)
     end
 end
 
@@ -633,15 +779,16 @@ compute_aren!(_, _, _, _, turbconv_model::T) where {T} =
 
 function compute_aren!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))
     if isnothing(out)
         return draft_area.(
-            cache.precomputed.ᶜρa⁰,
+            ᶜρa⁰,
             TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰),
         )
     else
         out .=
             draft_area.(
-                cache.precomputed.ᶜρa⁰,
+                ᶜρa⁰,
                 TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰),
             )
     end
@@ -650,12 +797,14 @@ end
 function compute_aren!(out, state, cache, time, turbconv_model::DiagnosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return draft_area.(
+        return 1 .-
+               draft_area.(
             cache.precomputed.ᶜρaʲs.:1,
             TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
         )
     else
         out .=
+            1.0 -
             draft_area.(
                 cache.precomputed.ᶜρaʲs.:1,
                 TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
@@ -683,7 +832,7 @@ function compute_rhoaen!(
     state,
     cache,
     time,
-    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
+    turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -903,7 +1052,7 @@ add_diagnostic_variable!(
 )
 
 ###
-# Environment liquid water specific humidity (3d)
+# Environment liquid water specific humidity and number mixing ratio (3d)
 ###
 compute_clwen!(out, state, cache, time) = compute_clwen!(
     out,
@@ -943,6 +1092,7 @@ function compute_clwen!(
             TD.liquid_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
+
 function compute_clwen!(
     out,
     state,
@@ -951,11 +1101,11 @@ function compute_clwen!(
     moisture_model::NonEquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), state, cache)
     if isnothing(out)
-        return cache.precomputed.ᶜq_liq⁰
+        return Base.materialize(ᶜq_liq⁰)
     else
-        out .= cache.precomputed.ᶜq_liq⁰
+        out .= ᶜq_liq⁰
     end
 end
 
@@ -968,6 +1118,52 @@ add_diagnostic_variable!(
     the mass of air (including the water in all phases) in the environment.
     """,
     compute! = compute_clwen!,
+)
+
+compute_cdncen!(out, state, cache, time) = compute_cdncen!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_cdncen!(
+    _,
+    _,
+    _,
+    _,
+    microphysics_model::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute updraft cloud liquid water number mixing ratio with a 2M model and with EDMFX",
+)
+
+function compute_cdncen!(
+    out,
+    state,
+    cache,
+    time,
+    microphysics_model_model::Microphysics2Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    ᶜn_liq⁰ = ᶜspecific_env_value(@name(n_liq), state, cache)
+    if isnothing(out)
+        return Base.materialize(ᶜn_liq⁰)
+    else
+        out .= ᶜn_liq⁰
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "cdncen",
+    long_name = "Environment Number Mixing Ratio of Cloud Liquid Water",
+    units = "kg^-1",
+    comments = """
+    This is calculated as the number of cloud liquid droplets in the environment divided by
+    the mass of air (including the water in all phases) in the environment.
+    """,
+    compute! = compute_cdncen!,
 )
 
 ###
@@ -1007,6 +1203,7 @@ function compute_clien!(
         out .= TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
+
 function compute_clien!(
     out,
     state,
@@ -1015,11 +1212,11 @@ function compute_clien!(
     moisture_model::NonEquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), state, cache)
     if isnothing(out)
-        return cache.precomputed.ᶜq_ice⁰
+        return Base.materialize(ᶜq_ice⁰)
     else
-        out .= cache.precomputed.ᶜq_ice⁰
+        out .= ᶜq_ice⁰
     end
 end
 
@@ -1035,14 +1232,14 @@ add_diagnostic_variable!(
 )
 
 ###
-# Environment rain water specific humidity (3d)
+# Environment rain water specific humidity and number mixing ratio (3d)
 ###
 compute_husraen!(out, state, cache, time) = compute_husraen!(
     out,
     state,
     cache,
     time,
-    cache.atmos.precip_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_husraen!(
@@ -1050,10 +1247,10 @@ compute_husraen!(
     _,
     _,
     _,
-    precip_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
-    "Can only compute updraft rain specific humidity and with a 1M model and with EDMFX",
+    "Can only compute updraft rain specific humidity with a 1M or 2M model and with EDMFX",
 )
 
 function compute_husraen!(
@@ -1061,14 +1258,14 @@ function compute_husraen!(
     state,
     cache,
     time,
-    precip_model_model::Microphysics1Moment,
+    microphysics_model_model::Union{Microphysics1Moment, Microphysics2Moment},
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), state, cache)
     if isnothing(out)
-        return cache.precomputed.ᶜq_rai⁰
+        return Base.materialize(ᶜq_rai⁰)
     else
-        out .= cache.precomputed.ᶜq_rai⁰
+        out .= ᶜq_rai⁰
     end
 end
 
@@ -1083,6 +1280,52 @@ add_diagnostic_variable!(
     compute! = compute_husraen!,
 )
 
+compute_ncraen!(out, state, cache, time) = compute_ncraen!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.microphysics_model,
+    cache.atmos.turbconv_model,
+)
+compute_ncraen!(
+    _,
+    _,
+    _,
+    _,
+    microphysics_model::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute updraft rain number mixing ratio with a 2M model and with EDMFX",
+)
+
+function compute_ncraen!(
+    out,
+    state,
+    cache,
+    time,
+    microphysics_model_model::Microphysics2Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), state, cache)
+    if isnothing(out)
+        return Base.materialize(ᶜn_rai⁰)
+    else
+        out .= ᶜn_rai⁰
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "ncraen",
+    long_name = "Environment Number Mixing Ratio of Rain",
+    units = "kg^-1",
+    comments = """
+    This is calculated as the number of raindrops in the environment divided by
+    the mass of air (including the water in all phases) in the environment.
+    """,
+    compute! = compute_ncraen!,
+)
+
 ###
 # Environment snow water specific humidity (3d)
 ###
@@ -1091,7 +1334,7 @@ compute_hussnen!(out, state, cache, time) = compute_hussnen!(
     state,
     cache,
     time,
-    cache.atmos.precip_model,
+    cache.atmos.microphysics_model,
     cache.atmos.turbconv_model,
 )
 compute_hussnen!(
@@ -1099,10 +1342,10 @@ compute_hussnen!(
     _,
     _,
     _,
-    precip_model::T1,
+    microphysics_model::T1,
     turbconv_model::T2,
 ) where {T1, T2} = error_diagnostic_variable(
-    "Can only compute updraft snow specific humidity and with a 1M model and with EDMFX",
+    "Can only compute updraft snow specific humidity with a 1M or 2M model and with EDMFX",
 )
 
 function compute_hussnen!(
@@ -1110,14 +1353,14 @@ function compute_hussnen!(
     state,
     cache,
     time,
-    precip_model_model::Microphysics1Moment,
+    microphysics_model_model::Union{Microphysics1Moment, Microphysics2Moment},
     turbconv_model::PrognosticEDMFX,
 )
-    thermo_params = CAP.thermodynamics_params(cache.params)
+    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), state, cache)
     if isnothing(out)
-        return cache.precomputed.ᶜq_sno⁰
+        return Base.materialize(ᶜq_sno⁰)
     else
-        out .= cache.precomputed.ᶜq_sno⁰
+        out .= ᶜq_sno⁰
     end
 end
 
@@ -1147,10 +1390,20 @@ function compute_tke!(
     time,
     turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX, DiagnosticEDMFX},
 )
-    if isnothing(out)
-        return copy(cache.precomputed.ᶜtke⁰)
+    if turbconv_model isa PrognosticEDMFX
+        sgsʲs = state.c.sgsʲs
+        ᶜρa⁰ = @. lazy(ρa⁰(state.c.ρ, sgsʲs, turbconv_model))
     else
-        out .= cache.precomputed.ᶜtke⁰
+        ᶜρa⁰ = state.c.ρ
+    end
+
+    ᶜtke = @. lazy(
+        specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+    )
+    if isnothing(out)
+        return Base.materialize(ᶜtke)
+    else
+        out .= ᶜtke
     end
 end
 
@@ -1176,10 +1429,12 @@ function compute_lmixw!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    ᶜwall_mixing_length = ᶜmixing_length(state, cache, Val(:wall))
+
     if isnothing(out)
-        return copy(cache.precomputed.ᶜmixing_length_tuple.wall)
+        return Base.materialize(ᶜwall_mixing_length)
     else
-        out .= cache.precomputed.ᶜmixing_length_tuple.wall
+        out .= ᶜwall_mixing_length
     end
 end
 
@@ -1205,10 +1460,13 @@ function compute_lmixtke!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+
+    ᶜtke_mixing_length = ᶜmixing_length(state, cache, Val(:tke))
+
     if isnothing(out)
-        return copy(cache.precomputed.ᶜmixing_length_tuple.tke)
+        return Base.materialize(ᶜtke_mixing_length)
     else
-        out .= cache.precomputed.ᶜmixing_length_tuple.tke
+        out .= ᶜtke_mixing_length
     end
 end
 
@@ -1234,10 +1492,12 @@ function compute_lmixb!(
     time,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    ᶜbuoy_mixing_length = ᶜmixing_length(state, cache, Val(:buoy))
+
     if isnothing(out)
-        return copy(cache.precomputed.ᶜmixing_length_tuple.buoy)
+        return Base.materialize(ᶜbuoy_mixing_length)
     else
-        out .= cache.precomputed.ᶜmixing_length_tuple.buoy
+        out .= ᶜbuoy_mixing_length
     end
 end
 
@@ -1256,26 +1516,45 @@ compute_edt!(out, state, cache, time) = compute_edt!(
     state,
     cache,
     time,
-    cache.atmos.vert_diff,
+    cache.atmos.vertical_diffusion,
     cache.atmos.turbconv_model,
 )
-compute_edt!(_, _, _, _, vert_diff::T1, turbconv_model::T2) where {T1, T2} =
-    error_diagnostic_variable(
-        "Can only compute heat diffusivity with vertical diffusion or EDMFX",
-    )
+compute_edt!(
+    _,
+    _,
+    _,
+    _,
+    vertical_diffusion::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute heat diffusivity with vertical diffusion or EDMFX",
+)
 
 function compute_edt!(
     out,
     state,
     cache,
     time,
-    vert_diff::Union{VerticalDiffusion, DecayWithHeightDiffusion},
+    vertical_diffusion::Union{VerticalDiffusion, DecayWithHeightDiffusion},
     turbconv_model::Nothing,
 )
+    (; vertical_diffusion) = cache.atmos
+    (; ᶜp) = cache.precomputed
+
+    if vertical_diffusion isa DecayWithHeightDiffusion
+        ᶜK_h =
+            ᶜcompute_eddy_diffusivity_coefficient(state.c.ρ, vertical_diffusion)
+    elseif vertical_diffusion isa VerticalDiffusion
+        ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(
+            state.c.uₕ,
+            ᶜp,
+            vertical_diffusion,
+        )
+    end
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_h)
+        return copy(ᶜK_h)
     else
-        out .= cache.precomputed.ᶜK_h
+        out .= ᶜK_h
     end
 end
 
@@ -1284,13 +1563,29 @@ function compute_edt!(
     state,
     cache,
     time,
-    vert_diff::Nothing,
+    vertical_diffusion::Nothing,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    turbconv_params = CAP.turbconv_params(cache.params)
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+    (; params) = cache
+
+    ᶜρa⁰ =
+        turbconv_model isa PrognosticEDMFX ?
+        (@. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))) : state.c.ρ
+    ᶜtke⁰ = @. lazy(
+        specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+    )
+    ᶜmixing_length_field = ᶜmixing_length(state, cache)
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
+    ᶜprandtl_nvec = @. lazy(
+        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+    )
+    ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_h)
+        return Base.materialize(ᶜK_h)
     else
-        out .= cache.precomputed.ᶜK_h
+        out .= ᶜK_h
     end
 end
 
@@ -1311,26 +1606,46 @@ compute_evu!(out, state, cache, time) = compute_evu!(
     state,
     cache,
     time,
-    cache.atmos.vert_diff,
+    cache.atmos.vertical_diffusion,
     cache.atmos.turbconv_model,
 )
-compute_evu!(_, _, _, _, vert_diff::T1, turbconv_model::T2) where {T1, T2} =
-    error_diagnostic_variable(
-        "Can only compute momentum diffusivity with vertical diffusion or EDMFX",
-    )
+compute_evu!(
+    _,
+    _,
+    _,
+    _,
+    vertical_diffusion::T1,
+    turbconv_model::T2,
+) where {T1, T2} = error_diagnostic_variable(
+    "Can only compute momentum diffusivity with vertical diffusion or EDMFX",
+)
 
 function compute_evu!(
     out,
     state,
     cache,
     time,
-    vert_diff::Union{VerticalDiffusion, DecayWithHeightDiffusion},
+    vertical_diffusion::Union{VerticalDiffusion, DecayWithHeightDiffusion},
     turbconv_model::Nothing,
 )
+    (; vertical_diffusion) = cache.atmos
+    (; ᶜp) = cache.precomputed
+
+    # this setup assumes ᶜK_u = ᶜK_h
+    if vertical_diffusion isa DecayWithHeightDiffusion
+        ᶜK_u =
+            ᶜcompute_eddy_diffusivity_coefficient(state.c.ρ, vertical_diffusion)
+    elseif vertical_diffusion isa VerticalDiffusion
+        ᶜK_u = ᶜcompute_eddy_diffusivity_coefficient(
+            state.c.uₕ,
+            ᶜp,
+            vertical_diffusion,
+        )
+    end
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_u)
+        return copy(ᶜK_u)
     else
-        out .= cache.precomputed.ᶜK_u
+        out .= ᶜK_u
     end
 end
 
@@ -1339,13 +1654,24 @@ function compute_evu!(
     state,
     cache,
     time,
-    vert_diff::Nothing,
+    vertical_diffusion::Nothing,
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
+    turbconv_params = CAP.turbconv_params(cache.params)
+
+    ᶜρa⁰ =
+        turbconv_model isa PrognosticEDMFX ?
+        (@. lazy(ρa⁰(state.c.ρ, state.c.sgsʲs, turbconv_model))) : state.c.ρ
+    ᶜtke⁰ = @. lazy(
+        specific_tke(state.c.ρ, state.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
+    )
+    ᶜmixing_length_field = ᶜmixing_length(state, cache)
+    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
+
     if isnothing(out)
-        return copy(cache.precomputed.ᶜK_u)
+        return Base.materialize(ᶜK_u)
     else
-        out .= cache.precomputed.ᶜK_u
+        out .= ᶜK_u
     end
 end
 

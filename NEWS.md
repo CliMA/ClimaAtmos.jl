@@ -4,6 +4,49 @@ ClimaAtmos.jl Release Notes
 main
 -------
 
+v0.31.2
+-------
+
+### Add RWP diagnostic
+PR [#3946](https://github.com/CliMA/ClimaAtmos.jl/pull/3946) adds rainwater path diagnostic variable.
+
+v0.31.1
+-------
+
+PR [#3917](https://github.com/CliMA/ClimaAtmos.jl/pull/3917) adds common numerics configs for different resolutions. 
+These configurations are intended to serve as the default settings. Please modify them only if you are certain of the implications.
+
+v0.31.0
+-------
+
+PR [#3886](https://github.com/CliMA/ClimaAtmos.jl/pull/3886) renames `PrognosticSurfaceTemperature` -> `SlabOceanSST`, `PrescribedSurfaceTemperature` -> `PrescribedSST` and deprecates the `prognostic_surface = "Prognostic/PrescribedSurfaceTemperature"` config argument
+
+PR [#3883](https://github.com/CliMA/ClimaAtmos.jl/pull/3883) adds atmosphere initial condition for WeatherQuest from ERA5
+
+PR [#3870](https://github.com/CliMA/ClimaAtmos.jl/pull/3870) adds externally driven SCM models forced by monthly-averaged ERA5
+reanalysis which are less data intensive and more stable. The simulation also employs the new implicit solver yielding a several
+factor speedup. The associated documentation section, "Single Column Model", was also improved.
+
+v0.30.4
+-------
+PR [#3856](https://github.com/CliMA/ClimaAtmos.jl/pull/3856) adds number adjustment tendencies to the two-moment microphysics scheme.
+
+v0.30.3
+-------
+
+### Add diagnostic for CAPE
+PR [#3820](https://github.com/CliMA/ClimaAtmos.jl/pull/3820) adds support for computing convective available potential energy (CAPE), or the vertical integral of the buoyancy differential between a parcel lifted from the surface and the environment. Exemplified in the TRMM deep convection case.
+
+v0.30.2
+-------
+
+### Add limiting by max Prandtl number
+This is part of a larger refactoring of the Eddy Diffusivity code for EDMF
+
+v0.30.1
+-------
+
+
 v0.30.0
 -------
 

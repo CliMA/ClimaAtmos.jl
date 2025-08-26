@@ -7,15 +7,14 @@ The only exception is true/false strings. These need quotes around them, or they
 
 To start the model with a custom configuration, run:
 
-`julia --project=examples examples/hybrid/driver.jl --config_file <yaml>`
+`julia --project=.buildkite .buildkite/ci_driver.jl --config_file <yaml>`
 
 ### Example
 Below is the default Bomex configuration:
 ```
-job_id: "prognostic_edmfx_bomex_box"
 initial_condition: "Bomex"
 subsidence: "Bomex"
-edmf_coriolis: "Bomex"
+scm_coriolis: "Bomex"
 ls_adv: "Bomex"
 surface_setup: "Bomex"
 turbconv: "prognostic_edmfx"
@@ -63,6 +62,36 @@ The `help` field is optional if you don't plan on making a permanent change to t
 
 See below for the full list of configuration arguments.
 
+# Common Configurations
+
+ClimaAtmos provides a set of common numerical configurations that can be used as building blocks for different types of simulations. These configurations are located in `config/common_configs/` and contain standardized settings for grid resolution, time stepping, and numerical schemes.
+
+## Available Common Configurations
+
+### Column Configurations
+- **`numerics_column_ze63.yml`**: Single column configuration with 63 vertical levels
+
+### Sphere Configurations
+- **`numerics_sphere_he6ze10.yml`**: Spherical configuration with 6 horizontal elements (550km), 10 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
+
+- **`numerics_sphere_he6ze31.yml`**: Spherical configuration with 6 horizontal elements (550km) , 31 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+
+- **`numerics_sphere_he16ze63.yml`**: Spherical configuration with 16 horizontal elements (206km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+
+- **`numerics_sphere_he30ze43.yml`**: Spherical configuration with 30 horizontal elements (110km), 43 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
+
+- **`numerics_sphere_he30ze63.yml`**: Spherical configuration with 30 horizontal elements (110km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+
+## Using Common Configurations
+
+Common configurations are designed to be used in combination with model-specific configurations. In the CI pipeline and when running simulations, you can specify multiple configuration files:
+
+```bash
+julia --project=.buildkite .buildkite/ci_driver.jl \
+  --config_file config/common_configs/numerics_sphere_he16ze63.yml \
+  --config_file config/model_configs/your_model_config.yml
+```
+
+The common configuration provides the numerical setup (grid, time stepping, etc.), while the model configuration provides the physical setup (physics schemes, initial conditions, etc.). The model configuration will override any conflicting settings from the common configuration. Please modify them only if you are certain of the implications.
 
 # Default Configuration
-

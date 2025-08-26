@@ -7,8 +7,9 @@ import ..NonEquilMoistModel
 import ..NoPrecipitation
 import ..Microphysics0Moment
 import ..Microphysics1Moment
-import ..PrescribedSurfaceTemperature
-import ..PrognosticSurfaceTemperature
+import ..Microphysics2Moment
+import ..PrescribedSST
+import ..SlabOceanSST
 import ..ᶜinterp
 import ..ᶠinterp
 import ..C3
@@ -22,6 +23,7 @@ import ..gcm_driven_profile
 import ..gcm_height
 import ..gcm_driven_profile_tmean
 import ..constant_buoyancy_frequency_initial_state
+import ..weather_model_data_path
 
 import Thermodynamics.TemperatureProfiles:
     DecayingTemperatureProfile, DryAdiabaticProfile

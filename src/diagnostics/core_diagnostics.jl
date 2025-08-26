@@ -273,10 +273,40 @@ add_diagnostic_variable!(
     or from mixing length closure with EDMF SGS model.
     """,
     compute! = (out, state, cache, time) -> begin
-        if isnothing(out)
-            return copy(cache.precomputed.ᶜmixing_length)
+        turbconv_model = cache.atmos.turbconv_model
+        # TODO: consolidate remaining mixing length types
+        # (smagorinsky_lilly, dz) into a single mixing length function
+        if isa(turbconv_model, PrognosticEDMFX) ||
+           isa(turbconv_model, DiagnosticEDMFX) ||
+           isa(turbconv_model, EDOnlyEDMFX)
+            ᶜmixing_length_field = ᶜmixing_length(state, cache)
         else
-            out .= cache.precomputed.ᶜmixing_length
+            (; params) = cache
+            (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+            ᶜdz = Fields.Δz_field(axes(state.c))
+            ᶜprandtl_nvec = @. lazy(
+                turbulent_prandtl_number(
+                    params,
+                    ᶜlinear_buoygrad,
+                    ᶜstrain_rate_norm,
+                ),
+            )
+            ᶜmixing_length_field = @. lazy(
+                smagorinsky_lilly_length(
+                    CAP.c_smag(params),
+                    sqrt(max(ᶜlinear_buoygrad, 0)),   # N_eff
+                    ᶜdz,
+                    ᶜprandtl_nvec,
+                    ᶜstrain_rate_norm,
+                ),
+            )
+        end
+
+
+        if isnothing(out)
+            return Base.materialize(ᶜmixing_length_field)
+        else
+            out .= ᶜmixing_length_field
         end
     end,
 )
@@ -552,13 +582,13 @@ add_diagnostic_variable!(
         if isnothing(out)
             return copy(
                 u_component.(
-                    Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1))
+                    Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1)),
                 ),
             )
         else
             out .=
                 u_component.(
-                    Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1))
+                    Geometry.UVector.(Fields.level(cache.precomputed.ᶜu, 1)),
                 )
         end
     end,
@@ -577,13 +607,13 @@ add_diagnostic_variable!(
         if isnothing(out)
             return copy(
                 v_component.(
-                    Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1))
+                    Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1)),
                 ),
             )
         else
             out .=
                 v_component.(
-                    Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1))
+                    Geometry.VVector.(Fields.level(cache.precomputed.ᶜu, 1)),
                 )
         end
     end,
@@ -694,19 +724,20 @@ add_diagnostic_variable!(
 # Precipitation (2d)
 ###
 compute_pr!(out, state, cache, time) =
-    compute_pr!(out, state, cache, time, cache.atmos.precip_model)
-compute_pr!(_, _, _, _, precip_model::T) where {T} =
-    error_diagnostic_variable("pr", precip_model)
+    compute_pr!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_pr!(_, _, _, _, microphysics_model::T) where {T} =
+    error_diagnostic_variable("pr", microphysics_model)
 
 function compute_pr!(
     out,
     state,
     cache,
     time,
-    precip_model::Union{
+    microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
+        Microphysics2Moment,
     },
 )
     if isnothing(out)
@@ -729,19 +760,20 @@ add_diagnostic_variable!(
 )
 
 compute_prra!(out, state, cache, time) =
-    compute_prra!(out, state, cache, time, cache.atmos.precip_model)
-compute_prra!(_, _, _, _, precip_model::T) where {T} =
-    error_diagnostic_variable("prra", precip_model)
+    compute_prra!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_prra!(_, _, _, _, microphysics_model::T) where {T} =
+    error_diagnostic_variable("prra", microphysics_model)
 
 function compute_prra!(
     out,
     state,
     cache,
     time,
-    precip_model::Union{
+    microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
+        Microphysics2Moment,
     },
 )
     if isnothing(out)
@@ -761,19 +793,20 @@ add_diagnostic_variable!(
 )
 
 compute_prsn!(out, state, cache, time) =
-    compute_prsn!(out, state, cache, time, cache.atmos.precip_model)
-compute_prsn!(_, _, _, _, precip_model::T) where {T} =
-    error_diagnostic_variable("prsn", precip_model)
+    compute_prsn!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_prsn!(_, _, _, _, microphysics_model::T) where {T} =
+    error_diagnostic_variable("prsn", microphysics_model)
 
 function compute_prsn!(
     out,
     state,
     cache,
     time,
-    precip_model::Union{
+    microphysics_model::Union{
         NoPrecipitation,
         Microphysics0Moment,
         Microphysics1Moment,
+        Microphysics2Moment,
     },
 )
     if isnothing(out)
@@ -796,7 +829,7 @@ add_diagnostic_variable!(
 # Precipitation (3d)
 ###
 compute_husra!(out, state, cache, time) =
-    compute_husra!(out, state, cache, time, cache.atmos.precip_model)
+    compute_husra!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_husra!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("husra", model)
 
@@ -805,7 +838,7 @@ function compute_husra!(
     state,
     cache,
     time,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
 )
     if isnothing(out)
         return state.c.ρq_rai ./ state.c.ρ
@@ -827,7 +860,7 @@ add_diagnostic_variable!(
 )
 
 compute_hussn!(out, state, cache, time) =
-    compute_hussn!(out, state, cache, time, cache.atmos.precip_model)
+    compute_hussn!(out, state, cache, time, cache.atmos.microphysics_model)
 compute_hussn!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("hussn", model)
 
@@ -836,7 +869,7 @@ function compute_hussn!(
     state,
     cache,
     time,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
 )
     if isnothing(out)
         return state.c.ρq_sno ./ state.c.ρ
@@ -855,6 +888,68 @@ add_diagnostic_variable!(
     the mass of air (dry air + water vapor + cloud condensate) in the grid cells.
     """,
     compute! = compute_hussn!,
+)
+
+compute_cdnc!(out, state, cache, time) =
+    compute_cdnc!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_cdnc!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("cdnc", model)
+
+function compute_cdnc!(
+    out,
+    state,
+    cache,
+    time,
+    microphysics_model::Microphysics2Moment,
+)
+    if isnothing(out)
+        return state.c.ρn_liq
+    else
+        out .= state.c.ρn_liq
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "cdnc",
+    long_name = "Cloud Liquid Droplet Number Concentration",
+    standard_name = "number_concentration_of_cloud_liquid_water_particles_in_air",
+    units = "m^-3",
+    comments = """
+    This is calculated as the number of cloud liquid water droplets in the grid 
+    cell divided by the cell volume.
+    """,
+    compute! = compute_cdnc!,
+)
+
+compute_ncra!(out, state, cache, time) =
+    compute_ncra!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_ncra!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("ncra", model)
+
+function compute_ncra!(
+    out,
+    state,
+    cache,
+    time,
+    microphysics_model::Microphysics2Moment,
+)
+    if isnothing(out)
+        return state.c.ρn_rai
+    else
+        out .= state.c.ρn_rai
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "ncra",
+    long_name = "Raindrop Number Concentration",
+    standard_name = "number_concentration_of_raindrops_in_air",
+    units = "m^-3",
+    comments = """
+    This is calculated as the number of raindrops in the grid cell divided
+    by the cell volume.
+    """,
+    compute! = compute_ncra!,
 )
 
 ###
@@ -931,7 +1026,7 @@ add_diagnostic_variable!(
     short_name = "clwvi",
     long_name = "Condensed Water Path",
     standard_name = "atmosphere_mass_content_of_cloud_condensed_water",
-    units = "kg m-2",
+    units = "kg m^-2",
     comments = """
     Mass of condensed (liquid + ice) water in the column divided by the area of the column
     (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
@@ -971,7 +1066,7 @@ add_diagnostic_variable!(
     short_name = "lwp",
     long_name = "Liquid Water Path",
     standard_name = "atmosphere_mass_content_of_cloud_liquid_water",
-    units = "kg m-2",
+    units = "kg m^-2",
     comments = """
     The total mass of liquid water in cloud per unit area.
     (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
@@ -1011,7 +1106,7 @@ add_diagnostic_variable!(
     short_name = "clivi",
     long_name = "Ice Water Path",
     standard_name = "atmosphere_mass_content_of_cloud_ice",
-    units = "kg m-2",
+    units = "kg m^-2",
     comments = """
     The total mass of ice in cloud per unit area.
     (not just the area of the cloudy portion of the column). It doesn't include precipitating hydrometeors.
@@ -1348,4 +1443,139 @@ add_diagnostic_variable!(
                 w_component.(cache.steady_state_velocity.ᶠu)
         end
     end,
+)
+
+###
+# Convective Available Potential Energy (2d)
+###
+function compute_cape!(out, state, cache, time)
+    thermo_params = lazy.(CAP.thermodynamics_params(cache.params))
+    g = lazy.(TD.Parameters.grav(thermo_params))
+
+    # Get surface parcel properties
+    surface_thermal_state = lazy.(cache.precomputed.sfc_conditions.ts)
+    surface_q =
+        lazy.(TD.total_specific_humidity.(thermo_params, surface_thermal_state))
+    surface_θ_liq_ice =
+        lazy.(TD.liquid_ice_pottemp.(thermo_params, surface_thermal_state))
+
+    # Create parcel thermodynamic states at each level based on energy & moisture at surface
+    parcel_ts_moist =
+        lazy.(
+            TD.PhaseEquil_pθq.(
+                thermo_params,
+                cache.precomputed.ᶜp,
+                surface_θ_liq_ice,
+                surface_q,
+            ),
+        )
+
+    # Calculate virtual temperatures for parcel & environment
+    parcel_Tv = lazy.(TD.virtual_temperature.(thermo_params, parcel_ts_moist))
+    env_Tv =
+        lazy.(TD.virtual_temperature.(thermo_params, cache.precomputed.ᶜts))
+
+    # Calculate buoyancy from the difference in virtual temperatures
+    ᶜbuoyancy = cache.scratch.ᶜtemp_scalar
+    ᶜbuoyancy .= g .* (parcel_Tv .- env_Tv) ./ env_Tv
+
+    # restrict to tropospheric buoyancy (generously below 20km) TODO: integrate from LFC to LNB 
+    FT = Spaces.undertype(axes(ᶜbuoyancy))
+    ᶜbuoyancy .=
+        ᶜbuoyancy .*
+        ifelse.(
+            Fields.coordinate_field(state.c.ρ).z .< FT(20000.0),
+            FT(1.0),
+            FT(0.0),
+        )
+
+    # Integrate positive buoyancy to get CAPE
+    out′ = isnothing(out) ? zeros(axes(Fields.level(state.f, half))) : out
+    Operators.column_integral_definite!(out′, lazy.(max.(ᶜbuoyancy, 0)))
+    return out′
+end
+
+add_diagnostic_variable!(
+    short_name = "cape",
+    long_name = "Convective Available Potential Energy",
+    standard_name = "convective_available_potential_energy",
+    units = "J kg^-1",
+    comments = "Energy available to a parcel lifted moist adiabatically from the surface. We assume fully reversible phase changes and no precipitation.",
+    compute! = compute_cape!,
+)
+
+###
+# Mean sea level pressure (2d)
+###
+function compute_mslp!(out, state, cache, time)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    g = TD.Parameters.grav(thermo_params)
+    R_m_surf = Fields.level(
+        lazy.(TD.gas_constant_air.(thermo_params, cache.precomputed.ᶜts)),
+        1,
+    )
+
+    # get pressure, temperature, and height at the lowest atmospheric level
+    p_level = Fields.level(cache.precomputed.ᶜp, 1)
+    t_level = Fields.level(
+        lazy.(TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)),
+        1,
+    )
+    z_level = Fields.level(Fields.coordinate_field(state.c.ρ).z, 1)
+
+    # compute sea level pressure using the hypsometric equation
+    if isnothing(out)
+        return @. p_level * exp(g * z_level / (R_m_surf * t_level))
+    else
+        @. out = p_level * exp(g * z_level / (R_m_surf * t_level))
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "mslp",
+    long_name = "Mean Sea Level Pressure",
+    standard_name = "mean_sea_level_pressure",
+    units = "Pa",
+    comments = "Mean sea level pressure computed from the hypsometric equation",
+    compute! = compute_mslp!,
+)
+
+###
+# Rainwater path (2d)
+###
+compute_rwp!(out, state, cache, time) =
+    compute_rwp!(out, state, cache, time, cache.atmos.microphysics_model)
+compute_rwp!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("rwp", model)
+
+function compute_rwp!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{Microphysics1Moment, Microphysics2Moment}}
+    if isnothing(out)
+        out = zeros(axes(Fields.level(state.f, half)))
+        rw = cache.scratch.ᶜtemp_scalar
+        @. rw = state.c.ρq_rai
+        Operators.column_integral_definite!(out, rw)
+        return out
+    else
+        rw = cache.scratch.ᶜtemp_scalar
+        @. rw = state.c.ρq_rai
+        Operators.column_integral_definite!(out, rw)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "rwp",
+    long_name = "Rainwater Path",
+    standard_name = "atmosphere_mass_content_of_rainwater",
+    units = "kg m^-2",
+    comments = """
+    The total mass of rainwater per unit area.
+    (not just the area of the cloudy portion of the column).
+    """,
+    compute! = compute_rwp!,
 )

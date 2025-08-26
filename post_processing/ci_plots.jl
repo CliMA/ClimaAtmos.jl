@@ -227,11 +227,11 @@ function make_plots_generic(
             for (col, path) in enumerate(output_path)
                 # CairoMakie seems to use this Label to determine the width of the figure.
                 # Here we normalize the length so that all the columns have the same width.
-                LABEL_LENGTH = 40
+                LABEL_LENGTH = 50
                 normalized_path =
                     lpad(path, LABEL_LENGTH + 1, " ")[(end - LABEL_LENGTH):end]
 
-                CairoMakie.Label(fig[0, col], path)
+                CairoMakie.Label(fig[0, col], normalized_path)
             end
         end
         return fig
@@ -621,7 +621,10 @@ function make_plots(
 end
 
 function make_plots(
-    ::Val{:single_column_precipitation_test},
+    sim_type::Union{
+        Val{:single_column_precipitation_test},
+        Val{:single_column_precipitation_2M_test},
+    },
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -629,7 +632,17 @@ function make_plots(
     # TODO: Move this plotting code into the same framework as the other ones
     simdir = simdirs[1]
 
-    short_names = ["hus", "clw", "cli", "husra", "hussn", "ta"]
+    if sim_type isa Val{:single_column_precipitation_test}
+        short_names = ["hus", "clw", "cli", "husra", "hussn", "ta"]
+        figsize = (1200, 600)
+        pr_row = 3
+    else
+        short_names =
+            ["hus", "clw", "cli", "husra", "hussn", "ta", "cdnc", "ncra"]
+        figsize = (1200, 800)
+        pr_row = 4
+    end
+
     vars = [
         slice(get(simdir; short_name), x = 0.0, y = 0.0) for
         short_name in short_names
@@ -637,7 +650,7 @@ function make_plots(
 
     # We first prepare the axes with all the nice labels with ClimaAnalysis, then we use
     # CairoMakie to add the additional lines.
-    fig = CairoMakie.Figure(; size = (1200, 600))
+    fig = CairoMakie.Figure(; size = figsize)
 
     p_loc = [1, 1]
 
@@ -677,7 +690,7 @@ function make_plots(
     viz.line_plot1D!(
         fig,
         slice(surface_precip, x = 0.0, y = 0.0);
-        p_loc = [3, 1:3],
+        p_loc = [pr_row, 1:3],
     )
 
     file_path = joinpath(output_paths[1], "summary.pdf")
@@ -1130,6 +1143,7 @@ AquaplanetPlots = Union{
     Val{:edonly_edmfx_aquaplanet},
     Val{:mpi_sphere_aquaplanet_rhoe_equil_clearsky},
     Val{:aquaplanet_nonequil_allsky_gw_res},
+    Val{:aquaplanet_nonequil_allsky_gw_res_2M},
     Val{:rcemipii_sphere_diagnostic_edmfx},
     Val{:longrun_aquaplanet_allsky_0M},
     Val{:longrun_aquaplanet_allsky_diagedmf_0M},
@@ -1141,11 +1155,17 @@ AquaplanetPlots = Union{
     Val{:amip_target_edonly},
 }
 
-function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
+function make_plots(
+    sim_type::AquaplanetPlots,
+    output_paths::Vector{<:AbstractString},
+)
     simdirs = SimDir.(output_paths)
 
     reduction = "average"
-    short_names_3D = ["ua", "ta", "hus"]
+    short_names_3D =
+        sim_type isa Val{:aquaplanet_nonequil_allsky_gw_res_2M} ?
+        ["ua", "ta", "hus", "clw", "cli", "husra", "hussn", "cdnc", "ncra"] :
+        ["ua", "ta", "hus"]
     short_names_2D = [
         "rsdt",
         "rsds",
@@ -1357,9 +1377,11 @@ EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_dycoms_rf01_explicit_box},
     Val{:prognostic_edmfx_adv_test_column},
     Val{:prognostic_edmfx_gabls_column},
+    Val{:prognostic_edmfx_gabls_column_sparse_autodiff},
     Val{:prognostic_edmfx_bomex_fixtke_column},
     Val{:prognostic_edmfx_bomex_column},
-    Val{:prognostic_edmfx_bomex_column_implicit},
+    Val{:prognostic_edmfx_bomex_implicit_column},
+    Val{:prognostic_edmfx_bomex_column_sparse_autodiff},
     Val{:prognostic_edmfx_bomex_stretched_column},
     Val{:prognostic_edmfx_bomex_pigroup_column},
     Val{:prognostic_edmfx_bomex_implicit_column},
@@ -1371,15 +1393,22 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_bomex_box},
     Val{:rcemipii_box_diagnostic_edmfx},
     Val{:prognostic_edmfx_soares_column},
-    Val{:diagnostic_edmfx_dycoms_rf02_box},
-    Val{:diagnostic_edmfx_rico_box},
-    Val{:diagnostic_edmfx_trmm_box},
     Val{:diagnostic_edmfx_trmm_stretched_box},
 }
 
 EDMFBoxPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column},
+    Val{:prognostic_edmfx_rico_column_2M},
     Val{:prognostic_edmfx_trmm_column},
+    Val{:prognostic_edmfx_trmm_column_sparse_autodiff},
+    Val{:prognostic_edmfx_dycoms_rf02_column},
+    Val{:prognostic_edmfx_dycoms_rf02_column_sparse_autodiff},
+}
+
+DiagEDMFBoxPlotsWithPrecip = Union{
+    Val{:diagnostic_edmfx_dycoms_rf02_box},
+    Val{:diagnostic_edmfx_rico_box},
+    Val{:diagnostic_edmfx_trmm_box},
 }
 """
     plot_edmf_vert_profile!(grid_loc, var_group)
@@ -1456,14 +1485,40 @@ function pair_edmf_names(short_names)
 end
 
 function make_plots(
-    sim_type::Union{EDMFBoxPlots, EDMFBoxPlotsWithPrecip},
+    sim_type::Union{
+        EDMFBoxPlots,
+        EDMFBoxPlotsWithPrecip,
+        DiagEDMFBoxPlotsWithPrecip,
+    },
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
 
-    precip_names =
-        sim_type isa EDMFBoxPlotsWithPrecip ?
-        ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen") : ()
+    if sim_type isa EDMFBoxPlotsWithPrecip
+        if sim_type isa Val{:prognostic_edmfx_rico_column_2M}
+            precip_names = (
+                "husra",
+                "hussn",
+                "husraup",
+                "hussnup",
+                "husraen",
+                "hussnen",
+                "cdnc",
+                "ncra",
+                "cdncup",
+                "ncraup",
+                "cdncen",
+                "ncraen",
+            )
+        else
+            precip_names =
+                ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen")
+        end
+    elseif sim_type isa DiagEDMFBoxPlotsWithPrecip
+        precip_names = ("husra", "hussn", "husraup", "hussnup")
+    else
+        precip_names = ()
+    end
 
     short_names = [
         "wa",
@@ -1555,25 +1610,20 @@ function make_plots(::EDMFSpherePlots, output_paths::Vector{<:AbstractString})
 
     short_name_tuples = pair_edmf_names(short_names)
 
-    # The hierarchy is:
-    # - A vector looping over variables
-    #     - Containing, a vector looping over latitudes
-    #     - Containing, tuples with one or two variables
-    #   - Repeated for each simdir
-    # All of this is flattened out to be a vector of tuples (with the two gridmean/updraft
-    # variables)
+    # Create a flat sequence of variable groups iterating over variable,
+    # latitude, and simulation directory
     var_groups_zt = vcat(
-        map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
-            return [
-                (
+        [
+            map_comparison(simdirs, latitudes) do simdir, lat
+                return (
                     slice(
                         get(simdir; short_name, reduction, period),
                         lon = 0.0,
                         lat = lat,
                     ) for short_name in name_tuple
-                ) for lat in latitudes
-            ]
-        end...,
+                )
+            end for name_tuple in short_name_tuples
+        ]...,
     )
 
     var_groups_z = [

@@ -5,6 +5,46 @@ import NVTX
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields, RecursiveApply
 
+###
+### Helper functions for the diagnosic edmf integral
+###
+# ᶠJ     - Jacobian at half level below (-1/2)
+# ᶜJₚ    - Jacobian at previous level below (-1)
+# ᶠJₚ    - Jacobian at previous half level below (-3/2)
+# ᶜρaʲₚ  - updraft density * area at previous level below (-1)
+# ᶜρʲₚ   - updraft density at previous level below (-1)
+# ᶜρₚ    - environment density at previous level below (-1)
+# ᶜ∇ϕ₃ₚ  - covariant geopotential gradient at previous level below (-1)
+# ᶠu³ʲₚ  - contravariant updraft velocity at previous half level below [1/s] (-3/2)
+# ᶜϵʲₚ   - entrainment at previous level (-1)
+# ᶜδʲₚ   - detrainment at previous level (-1)
+# ᶜϵₜʲₚ  - turbulent entrainment at previous level (-1)
+# ᶜSʲₚ   - microphysics sources and sinks at previous level (-1)
+# ᶜtracerʲₚ - updraft property at previous level (-1)
+# ᶜtracerₚ  - environment property at previous level (-1)
+
+# Advection of area, mse and tracers
+function diag_edmf_advection(ᶠJ, ᶠJₚ, ᶜρaʲₚ, ᶠu³ʲₚ, ᶜtracerʲₚ)
+    return (1 / ᶠJ) * (ᶠJₚ * ᶜρaʲₚ * ᶠu³ʲₚ * ᶜtracerʲₚ)
+end
+# Entrainment/detrainment of area, mse and tracers
+# Note that updraft area entrainment does not include turbulent entrainment.
+# In order to re-use the same function for all tracers, we pass in ones
+# as updraft and environment tracers for area fraction.
+function entr_detr(ᶠJ, ᶜJₚ, ᶜρaʲₚ, ᶜϵʲₚ, ᶜδʲₚ, ᶜϵₜʲₚ, ᶜtracerₚ, ᶜtracerʲₚ)
+    return (1 / ᶠJ) * (
+        ᶜJₚ * ᶜρaʲₚ * ((ᶜϵʲₚ + ᶜϵₜʲₚ) * ᶜtracerₚ - (ᶜδʲₚ + ᶜϵₜʲₚ) * ᶜtracerʲₚ)
+    )
+end
+# Buoyancy term for mse
+function mse_buoyancy(ᶠJ, ᶜJₚ, ᶜρaʲₚ, ᶠu³ʲₚ, ᶜρʲₚ, ᶜρₚ, ᶜ∇Φ₃ₚ)
+    return (1 / ᶠJ) * (ᶜJₚ * ᶜρaʲₚ * ᶠu³ʲₚ * (ᶜρʲₚ - ᶜρₚ) / ᶜρʲₚ * ᶜ∇Φ₃ₚ)
+end
+# Microphysics sources
+function microphysics_sources(ᶠJ, ᶜJₚ, ᶜρaʲₚ, ᶜSʲₚ)
+    return (1 / ᶠJ) * (ᶜJₚ * ᶜρaʲₚ * ᶜSʲₚ)
+end
+
 @inline function kinetic_energy(
     uₕ_level,
     u³_halflevel,
@@ -37,6 +77,7 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
     Φ_level,
 )
     FT = eltype(thermo_params)
+
     @. ts_level = TD.PhaseEquil_phq(
         thermo_params,
         p_level,
@@ -44,6 +85,34 @@ NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
         q_tot_level,
         8,
         FT(0.0003),
+    )
+    @. ρ_level = TD.air_density(thermo_params, ts_level)
+    return nothing
+end
+NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
+    thermo_params,
+    ts_level,
+    ρ_level,
+    mse_level,
+    q_tot_level,
+    q_liq_level,
+    q_ice_level,
+    q_rai_level,
+    q_sno_level,
+    p_level,
+    Φ_level,
+)
+    FT = eltype(thermo_params)
+
+    @. ts_level = TD.PhaseNonEquil_phq(
+        thermo_params,
+        p_level,
+        mse_level - Φ_level,
+        TD.PhasePartition(
+            q_tot_level,
+            q_liq_level + q_rai_level,
+            q_ice_level + q_sno_level,
+        ),
     )
     @. ρ_level = TD.air_density(thermo_params, ts_level)
     return nothing
@@ -61,7 +130,7 @@ NVTX.@annotate function set_diagnostic_edmfx_env_quantities_level!(
     local_geometry_halflevel,
     turbconv_model,
 )
-    @. u³⁰_halflevel = divide_by_ρa(
+    @. u³⁰_halflevel = specific(
         ρ_level * u³_halflevel -
         unrolled_dotproduct(ρaʲs_level, u³ʲs_halflevel),
         ρ_level,
@@ -89,27 +158,32 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     p,
     t,
 )
-    (; turbconv_model) = p.atmos
+    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜh_tot, ᶜK) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
+    (; ᶜp, ᶠu³, ᶜK) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.precomputed.sfc_conditions
     (; ᶜρaʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰) = p.precomputed
 
     (; params) = p
+
     thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
+    ᶜts = p.precomputed.ᶜts   #TODO replace
+
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
 
     ρ_int_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
     uₕ_int_level = Fields.field_values(Fields.level(Y.c.uₕ, 1))
     u³_int_halflevel = Fields.field_values(Fields.level(ᶠu³, half))
     h_tot_int_level = Fields.field_values(Fields.level(ᶜh_tot, 1))
     K_int_level = Fields.field_values(Fields.level(ᶜK, 1))
-    q_tot_int_level = Fields.field_values(Fields.level(q_tot, 1))
+    q_tot_int_level = Fields.field_values(Fields.level(ᶜq_tot, 1))
 
     p_int_level = Fields.field_values(Fields.level(ᶜp, 1))
     Φ_int_level = Fields.field_values(Fields.level(ᶜΦ, 1))
@@ -128,6 +202,28 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
     ρ_flux_q_tot_sfc_halflevel = Fields.field_values(ρ_flux_q_tot)
     ustar_sfc_halflevel = Fields.field_values(ustar)
     obukhov_length_sfc_halflevel = Fields.field_values(obukhov_length)
+
+    if moisture_model isa NonEquilMoistModel &&
+       microphysics_model isa Microphysics1Moment
+        (; ᶜq_liqʲs, ᶜq_iceʲs, ᶜq_raiʲs, ᶜq_snoʲs) = p.precomputed
+
+        ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+        ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+        ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+
+        q_liq_int_level = Fields.field_values(Fields.level(ᶜq_liq, 1))
+        q_ice_int_level = Fields.field_values(Fields.level(ᶜq_ice, 1))
+        q_rai_int_level = Fields.field_values(Fields.level(ᶜq_rai, 1))
+        q_sno_int_level = Fields.field_values(Fields.level(ᶜq_sno, 1))
+
+        # TODO consider adding them to p.precomputed.sfc_conditions
+        # Though they will always be zero.
+        ρ_flux_q_liq_sfc_halflevel = FT(0)
+        ρ_flux_q_ice_sfc_halflevel = FT(0)
+        ρ_flux_q_rai_sfc_halflevel = FT(0)
+        ρ_flux_q_sno_sfc_halflevel = FT(0)
+    end
 
     # boundary condition
     for j in 1:n
@@ -180,15 +276,92 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
             local_geometry_int_level,
             local_geometry_int_halflevel,
         )
-        set_diagnostic_edmfx_draft_quantities_level!(
-            thermo_params,
-            tsʲ_int_level,
-            ρʲ_int_level,
-            mseʲ_int_level,
-            q_totʲ_int_level,
-            p_int_level,
-            Φ_int_level,
-        )
+
+        if moisture_model isa NonEquilMoistModel &&
+           microphysics_model isa Microphysics1Moment
+            ᶜq_liqʲ = ᶜq_liqʲs.:($j)
+            ᶜq_iceʲ = ᶜq_iceʲs.:($j)
+            ᶜq_raiʲ = ᶜq_raiʲs.:($j)
+            ᶜq_snoʲ = ᶜq_snoʲs.:($j)
+
+            q_liqʲ_int_level = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
+            q_iceʲ_int_level = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
+            q_raiʲ_int_level = Fields.field_values(Fields.level(ᶜq_raiʲ, 1))
+            q_snoʲ_int_level = Fields.field_values(Fields.level(ᶜq_snoʲ, 1))
+
+            @. q_liqʲ_int_level = sgs_scalar_first_interior_bc(
+                z_int_level - z_sfc_halflevel,
+                ρ_int_level,
+                FT(turbconv_params.surface_area),
+                q_liq_int_level,
+                buoyancy_flux_sfc_halflevel,
+                ρ_flux_q_liq_sfc_halflevel,
+                ustar_sfc_halflevel,
+                obukhov_length_sfc_halflevel,
+                local_geometry_int_halflevel,
+            )
+            @. q_iceʲ_int_level = sgs_scalar_first_interior_bc(
+                z_int_level - z_sfc_halflevel,
+                ρ_int_level,
+                FT(turbconv_params.surface_area),
+                q_ice_int_level,
+                buoyancy_flux_sfc_halflevel,
+                ρ_flux_q_ice_sfc_halflevel,
+                ustar_sfc_halflevel,
+                obukhov_length_sfc_halflevel,
+                local_geometry_int_halflevel,
+            )
+            @. q_raiʲ_int_level = sgs_scalar_first_interior_bc(
+                z_int_level - z_sfc_halflevel,
+                ρ_int_level,
+                FT(turbconv_params.surface_area),
+                q_rai_int_level,
+                buoyancy_flux_sfc_halflevel,
+                ρ_flux_q_rai_sfc_halflevel,
+                ustar_sfc_halflevel,
+                obukhov_length_sfc_halflevel,
+                local_geometry_int_halflevel,
+            )
+            @. q_snoʲ_int_level = sgs_scalar_first_interior_bc(
+                z_int_level - z_sfc_halflevel,
+                ρ_int_level,
+                FT(turbconv_params.surface_area),
+                q_sno_int_level,
+                buoyancy_flux_sfc_halflevel,
+                ρ_flux_q_sno_sfc_halflevel,
+                ustar_sfc_halflevel,
+                obukhov_length_sfc_halflevel,
+                local_geometry_int_halflevel,
+            )
+        end
+
+        if moisture_model isa NonEquilMoistModel &&
+           microphysics_model isa Microphysics1Moment
+            set_diagnostic_edmfx_draft_quantities_level!(
+                thermo_params,
+                tsʲ_int_level,
+                ρʲ_int_level,
+                mseʲ_int_level,
+                q_totʲ_int_level,
+                q_liqʲ_int_level,
+                q_iceʲ_int_level,
+                q_raiʲ_int_level,
+                q_snoʲ_int_level,
+                p_int_level,
+                Φ_int_level,
+            )
+        else
+            set_diagnostic_edmfx_draft_quantities_level!(
+                thermo_params,
+                tsʲ_int_level,
+                ρʲ_int_level,
+                mseʲ_int_level,
+                q_totʲ_int_level,
+                p_int_level,
+                Φ_int_level,
+            )
+        end
+
         @. ρaʲ_int_level = ρʲ_int_level * FT(turbconv_params.surface_area)
     end
 
@@ -263,39 +436,12 @@ function compute_u³ʲ_u³ʲ(
     return u³ʲ_u³ʲ
 end
 
-function compute_ρaʲu³ʲ(
-    J_halflevel,
-    J_prev_level,
-    J_prev_halflevel,
-    ρaʲ_prev_level,
-    entrʲ_prev_level,
-    detrʲ_prev_level,
-    u³ʲ_data_prev_halflevel,
-    S_q_totʲ_prev_level,
-    precip_model,
-)
-
-    ρaʲu³ʲ_data =
-        (1 / J_halflevel) *
-        (J_prev_halflevel * ρaʲ_prev_level * u³ʲ_data_prev_halflevel)
-
-    ρaʲu³ʲ_data +=
-        (1 / J_halflevel) *
-        (J_prev_level * ρaʲ_prev_level * (entrʲ_prev_level - detrʲ_prev_level))
-    if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
-        ρaʲu³ʲ_data +=
-            (1 / J_halflevel) *
-            (J_prev_level * ρaʲ_prev_level * S_q_totʲ_prev_level)
-    end
-    return ρaʲu³ʲ_data
-end
-
 NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     Y,
     p,
     t,
 )
-    (; turbconv_model, precip_model) = p.atmos
+    (; turbconv_model, microphysics_model, moisture_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -304,9 +450,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; params) = p
     (; dt) = p
     dt = float(dt)
-    (; ᶜΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
+    (; ᶜΦ, ᶜgradᵥ_ᶠΦ) = p.core
+    (; ᶜp, ᶠu³, ᶜts, ᶜK) = p.precomputed
     (;
         ᶜρaʲs,
         ᶠu³ʲs,
@@ -321,16 +466,22 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         ᶠnh_pressure³_buoyʲs,
         ᶠnh_pressure³_dragʲs,
     ) = p.precomputed
-    (; ᶠu³⁰, ᶜK⁰, ᶜtke⁰) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰) = p.precomputed
 
-    if precip_model isa Microphysics1Moment
-        q_rai = p.precomputed.ᶜqᵣ
-        q_sno = p.precomputed.ᶜqₛ
+    if moisture_model isa NonEquilMoistModel &&
+       microphysics_model isa Microphysics1Moment
+        ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+        ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+        ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+
+        (; ᶜq_liqʲs, ᶜq_iceʲs, ᶜq_raiʲs, ᶜq_snoʲs) = p.precomputed
     end
 
     thermo_params = CAP.thermodynamics_params(params)
     microphys_0m_params = CAP.microphysics_0m_params(params)
     microphys_1m_params = CAP.microphysics_1m_params(params)
+    cloud_params = CAP.microphysics_cloud_params(params)
     turbconv_params = CAP.turbconv_params(params)
 
     ᶠΦ = p.scratch.ᶠtemp_scalar
@@ -345,13 +496,24 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
 
     # integral
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(
+        TD.total_specific_enthalpy(
+            thermo_params,
+            ᶜts,
+            specific(Y.c.ρe_tot, Y.c.ρ),
+        ),
+    )
+
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, Y.c.ρ, turbconv_model))
+
     for i in 2:Spaces.nlevels(axes(Y.c))
         ρ_level = Fields.field_values(Fields.level(Y.c.ρ, i))
         uₕ_level = Fields.field_values(Fields.level(Y.c.uₕ, i))
         u³_halflevel = Fields.field_values(Fields.level(ᶠu³, i - half))
         K_level = Fields.field_values(Fields.level(ᶜK, i))
         h_tot_level = Fields.field_values(Fields.level(ᶜh_tot, i))
-        q_tot_level = Fields.field_values(Fields.level(q_tot, i))
+        q_tot_level = Fields.field_values(Fields.level(ᶜq_tot, i))
         p_level = Fields.field_values(Fields.level(ᶜp, i))
         Φ_level = Fields.field_values(Fields.level(ᶜΦ, i))
         local_geometry_level = Fields.field_values(
@@ -376,15 +538,25 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         u³⁰_data_prev_halflevel = u³⁰_prev_halflevel.components.data.:1
         K_prev_level = Fields.field_values(Fields.level(ᶜK, i - 1))
         h_tot_prev_level = Fields.field_values(Fields.level(ᶜh_tot, i - 1))
-        q_tot_prev_level = Fields.field_values(Fields.level(q_tot, i - 1))
+        q_tot_prev_level = Fields.field_values(Fields.level(ᶜq_tot, i - 1))
         ts_prev_level = Fields.field_values(Fields.level(ᶜts, i - 1))
         p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
         dz_prev_level = Fields.field_values(Fields.level(ᶜdz, i - 1))
 
-        if precip_model isa Microphysics1Moment
-            q_rai_prev_level = Fields.field_values(Fields.level(q_rai, i - 1))
-            q_sno_prev_level = Fields.field_values(Fields.level(q_sno, i - 1))
+        if moisture_model isa NonEquilMoistModel &&
+           microphysics_model isa Microphysics1Moment
+            q_liq_level = Fields.field_values(Fields.level(ᶜq_liq, i))
+            q_liq_prev_level = Fields.field_values(Fields.level(ᶜq_liq, i - 1))
+
+            q_ice_level = Fields.field_values(Fields.level(ᶜq_ice, i))
+            q_ice_prev_level = Fields.field_values(Fields.level(ᶜq_ice, i - 1))
+
+            q_rai_level = Fields.field_values(Fields.level(ᶜq_rai, i))
+            q_rai_prev_level = Fields.field_values(Fields.level(ᶜq_rai, i - 1))
+
+            q_sno_level = Fields.field_values(Fields.level(ᶜq_sno, i))
+            q_sno_prev_level = Fields.field_values(Fields.level(ᶜq_sno, i - 1))
         end
 
         local_geometry_prev_level = Fields.field_values(
@@ -407,13 +579,21 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ᶠnh_pressure³_buoyʲ = ᶠnh_pressure³_buoyʲs.:($j)
             ᶠnh_pressure³_dragʲ = ᶠnh_pressure³_dragʲs.:($j)
 
-            if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
+            if microphysics_model isa Microphysics0Moment
                 ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵖʲs.:($j)
             end
-            if precip_model isa Microphysics1Moment
+            if moisture_model isa NonEquilMoistModel &&
+               microphysics_model isa Microphysics1Moment
+                ᶜq_liqʲ = ᶜq_liqʲs.:($j)
+                ᶜq_iceʲ = ᶜq_iceʲs.:($j)
+                ᶜq_raiʲ = ᶜq_raiʲs.:($j)
+                ᶜq_snoʲ = ᶜq_snoʲs.:($j)
+
+                ᶜS_q_liqʲ = p.precomputed.ᶜSqₗᵖʲs.:($j)
+                ᶜS_q_iceʲ = p.precomputed.ᶜSqᵢᵖʲs.:($j)
                 ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵖʲs.:($j)
                 ᶜS_q_snoʲ = p.precomputed.ᶜSqₛᵖʲs.:($j)
-                ᶜS_e_totʲ = p.precomputed.ᶜSeₜᵖʲs.:($j)
+
                 ᶜSᵖ = p.scratch.ᶜtemp_scalar
                 ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
             end
@@ -434,6 +614,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             q_totʲ_prev_level =
                 Fields.field_values(Fields.level(ᶜq_totʲ, i - 1))
             ρʲ_prev_level = Fields.field_values(Fields.level(ᶜρʲ, i - 1))
+            ᶜgradᵥ_ᶠΦ_prev_level =
+                Fields.field_values(Fields.level(ᶜgradᵥ_ᶠΦ, i - 1))
             tsʲ_prev_level = Fields.field_values(Fields.level(ᶜtsʲ, i - 1))
             entrʲ_prev_level = Fields.field_values(Fields.level(ᶜentrʲ, i - 1))
             detrʲ_prev_level = Fields.field_values(Fields.level(ᶜdetrʲ, i - 1))
@@ -448,20 +630,37 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             scale_height =
                 CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
 
-            S_q_totʲ_prev_level =
-                if precip_model isa
-                   Union{Microphysics0Moment, Microphysics1Moment}
-                    Fields.field_values(Fields.level(ᶜS_q_totʲ, i - 1))
-                else
-                    Ref(nothing)
-                end
-            if precip_model isa Microphysics1Moment
+            S_q_totʲ_prev_level = if microphysics_model isa Microphysics0Moment
+                Fields.field_values(Fields.level(ᶜS_q_totʲ, i - 1))
+            else
+                Ref(nothing)
+            end
+            if moisture_model isa NonEquilMoistModel &&
+               microphysics_model isa Microphysics1Moment
+
+                q_liqʲ_level = Fields.field_values(Fields.level(ᶜq_liqʲ, i))
+                q_iceʲ_level = Fields.field_values(Fields.level(ᶜq_iceʲ, i))
+                q_raiʲ_level = Fields.field_values(Fields.level(ᶜq_raiʲ, i))
+                q_snoʲ_level = Fields.field_values(Fields.level(ᶜq_snoʲ, i))
+
+                q_liqʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜq_liqʲ, i - 1))
+                q_iceʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜq_iceʲ, i - 1))
+                q_raiʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜq_raiʲ, i - 1))
+                q_snoʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜq_snoʲ, i - 1))
+
+                S_q_liqʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜS_q_liqʲ, i - 1))
+                S_q_iceʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜS_q_iceʲ, i - 1))
                 S_q_raiʲ_prev_level =
                     Fields.field_values(Fields.level(ᶜS_q_raiʲ, i - 1))
                 S_q_snoʲ_prev_level =
                     Fields.field_values(Fields.level(ᶜS_q_snoʲ, i - 1))
-                S_e_totʲ_prev_level =
-                    Fields.field_values(Fields.level(ᶜS_e_totʲ, i - 1))
+
                 Sᵖ_prev_level = Fields.field_values(Fields.level(ᶜSᵖ, i - 1))
                 Sᵖ_snow_prev_level =
                     Fields.field_values(Fields.level(ᶜSᵖ_snow, i - 1))
@@ -482,7 +681,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     local_geometry_prev_halflevel,
                 ),
                 TD.relative_humidity(thermo_params, tsʲ_prev_level),
-                ᶜphysical_buoyancy(thermo_params, ρ_prev_level, ρʲ_prev_level),
+                vertical_buoyancy_acceleration(
+                    ρ_prev_level,
+                    ρʲ_prev_level,
+                    ᶜgradᵥ_ᶠΦ_prev_level,
+                    local_geometry_prev_halflevel,
+                ),
                 get_physical_w(
                     u³_prev_halflevel,
                     local_geometry_prev_halflevel,
@@ -553,10 +757,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             nh_pressure³_dragʲ_data_prev_halflevel =
                 nh_pressure³_dragʲ_prev_halflevel.components.data.:1
 
-            # Updraft q_tot sources from precipitation formation
-            # To be applied in updraft continuity, moisture and energy
-            # for updrafts and grid mean
-            if precip_model isa Microphysics0Moment
+            # Microphysics sources and sinks. To be applied in updraft continuity,
+            # moisture and energy equations for updrafts and grid mean.
+
+            # 0-moment microphysics: sink of q_tot from precipitation removal
+            if microphysics_model isa Microphysics0Moment
                 @. S_q_totʲ_prev_level = q_tot_0M_precipitation_sources(
                     thermo_params,
                     microphys_0m_params,
@@ -564,23 +769,72 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     q_totʲ_prev_level,
                     tsʲ_prev_level,
                 )
-            elseif precip_model isa Microphysics1Moment
+                # 1-moment microphysics: cloud water (liquid and ice) and
+                # precipitation (rain and snow) sources. q_tot is constant, because
+                # all the species are considered a part of the working fluid.
+            elseif moisture_model isa NonEquilMoistModel &&
+                   microphysics_model isa Microphysics1Moment
+                # Rain formation from the updrafts
                 compute_precipitation_sources!(
                     Sᵖ_prev_level,
                     Sᵖ_snow_prev_level,
-                    S_q_totʲ_prev_level,
+                    S_q_liqʲ_prev_level,
+                    S_q_iceʲ_prev_level,
                     S_q_raiʲ_prev_level,
                     S_q_snoʲ_prev_level,
-                    S_e_totʲ_prev_level,
                     ρʲ_prev_level,
-                    q_rai_prev_level,
-                    q_sno_prev_level,
+                    q_totʲ_prev_level,
+                    q_liqʲ_prev_level,
+                    q_iceʲ_prev_level,
+                    q_raiʲ_prev_level,
+                    q_snoʲ_prev_level,
                     tsʲ_prev_level,
-                    Φ_prev_level,
                     dt,
                     microphys_1m_params,
                     thermo_params,
                 )
+                # Rain sinks from the updrafts
+                compute_precipitation_sinks!(
+                    Sᵖ_prev_level,
+                    S_q_raiʲ_prev_level,
+                    S_q_snoʲ_prev_level,
+                    ρʲ_prev_level,
+                    q_totʲ_prev_level,
+                    q_liqʲ_prev_level,
+                    q_iceʲ_prev_level,
+                    q_raiʲ_prev_level,
+                    q_snoʲ_prev_level,
+                    tsʲ_prev_level,
+                    dt,
+                    microphys_1m_params,
+                    thermo_params,
+                )
+                # Cloud formation from the updrafts
+                @. S_q_liqʲ_prev_level += cloud_sources(
+                    cloud_params.liquid,
+                    thermo_params,
+                    q_totʲ_prev_level,
+                    q_liqʲ_prev_level,
+                    q_iceʲ_prev_level,
+                    q_raiʲ_prev_level,
+                    q_snoʲ_prev_level,
+                    ρʲ_prev_level,
+                    TD.air_temperature(thermo_params, tsʲ_prev_level),
+                    dt,
+                )
+                @. S_q_iceʲ_prev_level += cloud_sources(
+                    cloud_params.ice,
+                    thermo_params,
+                    q_totʲ_prev_level,
+                    q_liqʲ_prev_level,
+                    q_iceʲ_prev_level,
+                    q_raiʲ_prev_level,
+                    q_snoʲ_prev_level,
+                    ρʲ_prev_level,
+                    TD.air_temperature(thermo_params, tsʲ_prev_level),
+                    dt,
+                )
+
             end
 
             u³ʲ_datau³ʲ_data = p.scratch.temp_data_level
@@ -605,7 +859,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             @. u³ʲ_halflevel = ifelse(
                 ((u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT))),
                 u³_halflevel,
-                CT3(sqrt(max(0, u³ʲ_datau³ʲ_data))),
+                CT3(sqrt(max(FT(0), u³ʲ_datau³ʲ_data))),
             )
 
             u³ʲ_data_halflevel = u³ʲ_halflevel.components.data.:1
@@ -644,6 +898,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 FT(0), # mass flux divergence is not implemented for diagnostic edmf
                 w_vert_div_level,
                 tke_prev_level,
+                ᶜgradᵥ_ᶠΦ_prev_level,
                 p.atmos.edmfx_model.detr_model,
             )
 
@@ -661,159 +916,287 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ρaʲu³ʲ_data = p.scratch.temp_data_level_2
             ρaʲu³ʲ_datamse = ρaʲu³ʲ_dataq_tot = p.scratch.temp_data_level_3
 
-            @. ρaʲu³ʲ_data = compute_ρaʲu³ʲ(
-                local_geometry_halflevel.J,
-                local_geometry_prev_level.J,
-                local_geometry_prev_halflevel.J,
-                ρaʲ_prev_level,
-                entrʲ_prev_level,
-                detrʲ_prev_level,
-                u³ʲ_data_prev_halflevel,
-                S_q_totʲ_prev_level,
-                precip_model,
-            )
-
-            @. u³ʲ_halflevel = ifelse(
-                (
-                    (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
-                ),
-                u³_halflevel,
-                CT3(sqrt(max(0, u³ʲ_datau³ʲ_data))),
-            )
-            @. ρaʲ_level = ifelse(
-                (
-                    (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
-                ),
-                0,
-                ρaʲu³ʲ_data / sqrt(max(0, u³ʲ_datau³ʲ_data)),
-            )
-
-            @. ρaʲu³ʲ_datamse =
-                (1 / local_geometry_halflevel.J) * (
-                    local_geometry_prev_halflevel.J *
-                    ρaʲ_prev_level *
-                    u³ʲ_data_prev_halflevel *
-                    mseʲ_prev_level
+            ###
+            ### Area fraction
+            ###
+            @. ρaʲu³ʲ_data =
+                diag_edmf_advection(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_halflevel.J,
+                    ρaʲ_prev_level,
+                    u³ʲ_data_prev_halflevel,
+                    FT(1),
+                ) + entr_detr(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    entrʲ_prev_level,
+                    detrʲ_prev_level,
+                    turb_entrʲ_prev_level,
+                    FT(1),
+                    FT(1),
                 )
-            @. ρaʲu³ʲ_datamse +=
-                (1 / local_geometry_halflevel.J) * (
-                    local_geometry_prev_level.J *
-                    ρaʲ_prev_level *
-                    u³ʲ_data_prev_halflevel *
-                    (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level *
-                    ∇Φ₃_data_prev_level
+            if microphysics_model isa Microphysics0Moment
+                @. ρaʲu³ʲ_data += microphysics_sources(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    S_q_totʲ_prev_level,
                 )
-            @. ρaʲu³ʲ_datamse +=
-                (1 / local_geometry_halflevel.J) * (
-                    local_geometry_prev_level.J *
-                    ρaʲ_prev_level *
-                    (
-                        (entrʲ_prev_level + turb_entrʲ_prev_level) *
-                        (h_tot_prev_level - K_prev_level) -
-                        (detrʲ_prev_level + turb_entrʲ_prev_level) *
-                        mseʲ_prev_level
-                    )
-                )
-            if precip_model isa Microphysics0Moment
-                @. ρaʲu³ʲ_datamse +=
-                    (1 / local_geometry_halflevel.J) * (
-                        local_geometry_prev_level.J *
-                        ρaʲ_prev_level *
-                        (
-                            S_q_totʲ_prev_level *
-                            e_tot_0M_precipitation_sources_helper(
-                                thermo_params,
-                                tsʲ_prev_level,
-                                Φ_prev_level,
-                            )
-                        )
-                    )
-            elseif precip_model isa Microphysics1Moment
-                @. ρaʲu³ʲ_datamse +=
-                    (1 / local_geometry_halflevel.J) * (
-                        local_geometry_prev_level.J *
-                        ρaʲ_prev_level *
-                        S_e_totʲ_prev_level
-                    )
             end
 
+            # Change current level velocity and density * area fraction
+            kill_updraft = @. lazy(
+                (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) |
+                (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level)),
+            )
+            @. u³ʲ_halflevel = ifelse(
+                kill_updraft,
+                u³_halflevel,
+                CT3(sqrt(max(FT(0), u³ʲ_datau³ʲ_data))),
+            )
+            @. ρaʲ_level = ifelse(
+                kill_updraft,
+                FT(0),
+                ρaʲu³ʲ_data / sqrt(max(FT(0), u³ʲ_datau³ʲ_data)),
+            )
+
+            ###
+            ### Moist static energy
+            ###
+            @. ρaʲu³ʲ_datamse =
+                diag_edmf_advection(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_halflevel.J,
+                    ρaʲ_prev_level,
+                    u³ʲ_data_prev_halflevel,
+                    mseʲ_prev_level,
+                ) +
+                mse_buoyancy(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    u³ʲ_data_prev_halflevel,
+                    ρʲ_prev_level,
+                    ρ_prev_level,
+                    ∇Φ₃_data_prev_level,
+                ) +
+                entr_detr(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    entrʲ_prev_level,
+                    detrʲ_prev_level,
+                    turb_entrʲ_prev_level,
+                    h_tot_prev_level - K_prev_level,
+                    mseʲ_prev_level,
+                )
+            if microphysics_model isa Microphysics0Moment
+                @. ρaʲu³ʲ_datamse += microphysics_sources(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    S_q_totʲ_prev_level *
+                    e_tot_0M_precipitation_sources_helper(
+                        thermo_params,
+                        tsʲ_prev_level,
+                        Φ_prev_level,
+                    ),
+                )
+            end
             @. mseʲ_level = ifelse(
-                (
-                    (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
-                ),
+                kill_updraft,
                 h_tot_level - K_level,
                 ρaʲu³ʲ_datamse / ρaʲu³ʲ_data,
             )
 
+            ###
+            ### Total water
+            ###
             @. ρaʲu³ʲ_dataq_tot =
-                (1 / local_geometry_halflevel.J) * (
-                    local_geometry_prev_halflevel.J *
-                    ρaʲ_prev_level *
-                    u³ʲ_data_prev_halflevel *
-                    q_totʲ_prev_level
+                diag_edmf_advection(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_halflevel.J,
+                    ρaʲ_prev_level,
+                    u³ʲ_data_prev_halflevel,
+                    q_totʲ_prev_level,
+                ) + entr_detr(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    entrʲ_prev_level,
+                    detrʲ_prev_level,
+                    turb_entrʲ_prev_level,
+                    q_tot_prev_level,
+                    q_totʲ_prev_level,
                 )
-            @. ρaʲu³ʲ_dataq_tot +=
-                (1 / local_geometry_halflevel.J) * (
-                    local_geometry_prev_level.J *
-                    ρaʲ_prev_level *
-                    (
-                        (entrʲ_prev_level + turb_entrʲ_prev_level) *
-                        q_tot_prev_level -
-                        (detrʲ_prev_level + turb_entrʲ_prev_level) *
-                        q_totʲ_prev_level
-                    )
+            if microphysics_model isa Microphysics0Moment
+                @. ρaʲu³ʲ_dataq_tot += microphysics_sources(
+                    local_geometry_halflevel.J,
+                    local_geometry_prev_level.J,
+                    ρaʲ_prev_level,
+                    S_q_totʲ_prev_level,
                 )
-            if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
-                @. ρaʲu³ʲ_dataq_tot +=
-                    (1 / local_geometry_halflevel.J) * (
-                        local_geometry_prev_level.J *
-                        ρaʲ_prev_level *
-                        S_q_totʲ_prev_level
-                    )
             end
-
             @. q_totʲ_level = ifelse(
-                (
-                    (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
-                ),
+                kill_updraft,
                 q_tot_level,
                 ρaʲu³ʲ_dataq_tot / ρaʲu³ʲ_data,
             )
 
+            ###
+            ### 1-moment microphysics tracers
+            ###
+            if microphysics_model isa Microphysics1Moment &&
+               moisture_model isa NonEquilMoistModel
+                # TODO - loop over tracres
+                ρaʲu³ʲ_dataq_ = p.scratch.temp_data_level_3
+                @. ρaʲu³ʲ_dataq_ =
+                    diag_edmf_advection(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_halflevel.J,
+                        ρaʲ_prev_level,
+                        u³ʲ_data_prev_halflevel,
+                        q_liqʲ_prev_level,
+                    ) +
+                    entr_detr(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_level.J,
+                        ρaʲ_prev_level,
+                        entrʲ_prev_level,
+                        detrʲ_prev_level,
+                        turb_entrʲ_prev_level,
+                        q_liq_prev_level,
+                        q_liqʲ_prev_level,
+                    ) +
+                    microphysics_sources(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_level.J,
+                        ρaʲ_prev_level,
+                        S_q_liqʲ_prev_level,
+                    )
+                @. q_liqʲ_level = ifelse(
+                    kill_updraft,
+                    q_liq_level,
+                    ρaʲu³ʲ_dataq_ / ρaʲu³ʲ_data,
+                )
+
+                @. ρaʲu³ʲ_dataq_ =
+                    diag_edmf_advection(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_halflevel.J,
+                        ρaʲ_prev_level,
+                        u³ʲ_data_prev_halflevel,
+                        q_iceʲ_prev_level,
+                    ) +
+                    entr_detr(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_level.J,
+                        ρaʲ_prev_level,
+                        entrʲ_prev_level,
+                        detrʲ_prev_level,
+                        turb_entrʲ_prev_level,
+                        q_ice_prev_level,
+                        q_iceʲ_prev_level,
+                    ) +
+                    microphysics_sources(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_level.J,
+                        ρaʲ_prev_level,
+                        S_q_iceʲ_prev_level,
+                    )
+                @. q_iceʲ_level = ifelse(
+                    kill_updraft,
+                    q_ice_level,
+                    ρaʲu³ʲ_dataq_ / ρaʲu³ʲ_data,
+                )
+
+                @. ρaʲu³ʲ_dataq_ =
+                    diag_edmf_advection(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_halflevel.J,
+                        ρaʲ_prev_level,
+                        u³ʲ_data_prev_halflevel,
+                        q_raiʲ_prev_level,
+                    ) +
+                    entr_detr(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_level.J,
+                        ρaʲ_prev_level,
+                        entrʲ_prev_level,
+                        detrʲ_prev_level,
+                        turb_entrʲ_prev_level,
+                        q_rai_prev_level,
+                        q_raiʲ_prev_level,
+                    ) +
+                    microphysics_sources(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_level.J,
+                        ρaʲ_prev_level,
+                        S_q_raiʲ_prev_level,
+                    )
+                @. q_raiʲ_level = ifelse(
+                    kill_updraft,
+                    q_rai_level,
+                    ρaʲu³ʲ_dataq_ / ρaʲu³ʲ_data,
+                )
+
+                @. ρaʲu³ʲ_dataq_ =
+                    diag_edmf_advection(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_halflevel.J,
+                        ρaʲ_prev_level,
+                        u³ʲ_data_prev_halflevel,
+                        q_snoʲ_prev_level,
+                    ) +
+                    entr_detr(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_level.J,
+                        ρaʲ_prev_level,
+                        entrʲ_prev_level,
+                        detrʲ_prev_level,
+                        turb_entrʲ_prev_level,
+                        q_sno_prev_level,
+                        q_snoʲ_prev_level,
+                    ) +
+                    microphysics_sources(
+                        local_geometry_halflevel.J,
+                        local_geometry_prev_level.J,
+                        ρaʲ_prev_level,
+                        S_q_snoʲ_prev_level,
+                    )
+                @. q_snoʲ_level = ifelse(
+                    kill_updraft,
+                    q_sno_level,
+                    ρaʲu³ʲ_dataq_ / ρaʲu³ʲ_data,
+                )
+            end
+
             # set updraft to grid-mean if vertical velocity is too small
             if i > 2
-                @. ρaʲ_level = ifelse(
-                    (
-                        u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
-                        ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level
-                    ),
-                    0,
-                    ρaʲ_level,
+                kill_updraft_2 = @. lazy(
+                    u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
+                    ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) /
+                    ρʲ_prev_level,
                 )
-                @. u³ʲ_halflevel = ifelse(
-                    (
-                        u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
-                        ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level
-                    ),
-                    u³_halflevel,
-                    u³ʲ_halflevel,
-                )
-                @. mseʲ_level = ifelse(
-                    (
-                        u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
-                        ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level
-                    ),
-                    h_tot_level - K_level,
-                    mseʲ_level,
-                )
-                @. q_totʲ_level = ifelse(
-                    (
-                        u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
-                        ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level
-                    ),
-                    q_tot_level,
-                    q_totʲ_level,
-                )
+                @. ρaʲ_level = ifelse(kill_updraft_2, FT(0), ρaʲ_level)
+                @. u³ʲ_halflevel =
+                    ifelse(kill_updraft_2, u³_halflevel, u³ʲ_halflevel)
+                @. mseʲ_level =
+                    ifelse(kill_updraft_2, h_tot_level - K_level, mseʲ_level)
+                @. q_totʲ_level =
+                    ifelse(kill_updraft_2, q_tot_level, q_totʲ_level)
+                if microphysics_model isa Microphysics1Moment &&
+                   moisture_model isa NonEquilMoistModel
+                    @. q_liqʲ_level =
+                        ifelse(kill_updraft_2, q_liq_level, q_liqʲ_level)
+                    @. q_iceʲ_level =
+                        ifelse(kill_updraft_2, q_ice_level, q_iceʲ_level)
+                    @. q_raiʲ_level =
+                        ifelse(kill_updraft_2, q_rai_level, q_raiʲ_level)
+                    @. q_snoʲ_level =
+                        ifelse(kill_updraft_2, q_sno_level, q_snoʲ_level)
+                end
             end
 
             @. Kʲ_level = kinetic_energy(
@@ -822,15 +1205,32 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 local_geometry_level,
                 local_geometry_halflevel,
             )
-            set_diagnostic_edmfx_draft_quantities_level!(
-                thermo_params,
-                tsʲ_level,
-                ρʲ_level,
-                mseʲ_level,
-                q_totʲ_level,
-                p_level,
-                Φ_level,
-            )
+            if moisture_model isa NonEquilMoistModel &&
+               microphysics_model isa Microphysics1Moment
+                set_diagnostic_edmfx_draft_quantities_level!(
+                    thermo_params,
+                    tsʲ_level,
+                    ρʲ_level,
+                    mseʲ_level,
+                    q_totʲ_level,
+                    q_liqʲ_level,
+                    q_iceʲ_level,
+                    q_raiʲ_level,
+                    q_snoʲ_level,
+                    p_level,
+                    Φ_level,
+                )
+            else
+                set_diagnostic_edmfx_draft_quantities_level!(
+                    thermo_params,
+                    tsʲ_level,
+                    ρʲ_level,
+                    mseʲ_level,
+                    q_totʲ_level,
+                    p_level,
+                    Φ_level,
+                )
+            end
         end
         ρaʲs_level = Fields.field_values(Fields.level(ᶜρaʲs, i))
         u³ʲs_halflevel = Fields.field_values(Fields.level(ᶠu³ʲs, i - half))
@@ -866,7 +1266,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
     (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p.precomputed
     (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs, ᶠnh_pressure³_buoyʲs, ᶠnh_pressure³_dragʲs) =
         p.precomputed
-    (; precip_model) = p.atmos
+    (; microphysics_model, moisture_model) = p.atmos
 
     # set values for the top level
     i_top = Spaces.nlevels(axes(Y.c))
@@ -905,21 +1305,25 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
         fill!(turb_entrʲ_level, RecursiveApply.rzero(eltype(turb_entrʲ_level)))
         @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
 
-        if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
+        if microphysics_model isa Microphysics0Moment
             ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵖʲs.:($j)
             S_q_totʲ_level = Fields.field_values(Fields.level(ᶜS_q_totʲ, i_top))
             @. S_q_totʲ_level = 0
         end
-        if precip_model isa Microphysics1Moment
+        if microphysics_model isa Microphysics1Moment &&
+           moisture_model isa NonEquilMoistModel
+            ᶜS_q_liqʲ = p.precomputed.ᶜSqₗᵖʲs.:($j)
+            ᶜS_q_iceʲ = p.precomputed.ᶜSqᵢᵖʲs.:($j)
             ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵖʲs.:($j)
             ᶜS_q_snoʲ = p.precomputed.ᶜSqₛᵖʲs.:($j)
-            ᶜS_e_totʲ = p.precomputed.ᶜSeₜᵖʲs.:($j)
+            S_q_liqʲ_level = Fields.field_values(Fields.level(ᶜS_q_liqʲ, i_top))
+            S_q_iceʲ_level = Fields.field_values(Fields.level(ᶜS_q_iceʲ, i_top))
             S_q_raiʲ_level = Fields.field_values(Fields.level(ᶜS_q_raiʲ, i_top))
             S_q_snoʲ_level = Fields.field_values(Fields.level(ᶜS_q_snoʲ, i_top))
-            S_e_totʲ_level = Fields.field_values(Fields.level(ᶜS_e_totʲ, i_top))
+            @. S_q_liqʲ_level = 0
+            @. S_q_iceʲ_level = 0
             @. S_q_raiʲ_level = 0
             @. S_q_snoʲ_level = 0
-            @. S_e_totʲ_level = 0
         end
     end
     return nothing
@@ -935,28 +1339,22 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     p,
     t,
 )
-    (; moisture_model, turbconv_model, precip_model) = p.atmos
+    (; moisture_model, turbconv_model, microphysics_model) = p.atmos
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
     (; ᶜp, ᶜu, ᶜts) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
-    (; ᶜtke⁰) = p.precomputed
-    (;
-        ᶜlinear_buoygrad,
-        ᶜstrain_rate_norm,
-        ᶜmixing_length_tuple,
-        ᶜmixing_length,
-    ) = p.precomputed
-    (; ᶜK_h, ᶜK_u, ρatke_flux) = p.precomputed
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ρatke_flux) = p.precomputed
+    turbconv_params = CAP.turbconv_params(params)
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
     if p.atmos.turbconv_model isa DiagnosticEDMFX
-        (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs, ᶠu³⁰, ᶜu⁰) = p.precomputed
+        (; ᶠu³⁰, ᶜu⁰) = p.precomputed
     elseif p.atmos.turbconv_model isa EDOnlyEDMFX
         ᶠu³⁰ = p.precomputed.ᶠu³
         ᶜu⁰ = ᶜu
@@ -979,49 +1377,8 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     ᶠu⁰ = p.scratch.ᶠtemp_C123
     @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
-    bc_strain_rate = compute_strain_rate_center(ᶠu⁰)
-    @. ᶜstrain_rate = bc_strain_rate
+    ᶜstrain_rate .= compute_strain_rate_center(ᶠu⁰)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
-
-    ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
-    @. ᶜprandtl_nvec = turbulent_prandtl_number(
-        params,
-        obukhov_length,
-        ᶜlinear_buoygrad,
-        ᶜstrain_rate_norm,
-    )
-    ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
-    @. ᶜtke_exch = 0
-    # using ᶜu⁰ would be more correct, but this is more consistent with the
-    # TKE equation, where using ᶜu⁰ results in allocation
-    for j in 1:n
-        @. ᶜtke_exch +=
-            ᶜρaʲs.:($$j) * ᶜdetrʲs.:($$j) / Y.c.ρ *
-            (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
-    end
-
-    sfc_tke = Fields.level(ᶜtke⁰, 1)
-    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, half)
-    @. ᶜmixing_length_tuple = mixing_length(
-        params,
-        ustar,
-        ᶜz,
-        z_sfc,
-        ᶜdz,
-        max(sfc_tke, 0),
-        ᶜlinear_buoygrad,
-        max(ᶜtke⁰, 0),
-        obukhov_length,
-        ᶜstrain_rate_norm,
-        ᶜprandtl_nvec,
-        ᶜtke_exch,
-    )
-    @. ᶜmixing_length = ᶜmixing_length_tuple.master
-
-    turbconv_params = CAP.turbconv_params(params)
-    c_m = CAP.tke_ed_coeff(turbconv_params)
-    @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
-    @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
     ρ_int_values = Fields.field_values(Fields.level(Y.c.ρ, 1))
@@ -1035,9 +1392,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     @. ρatke_flux_values = surface_flux_tke(
         turbconv_params,
         ρ_int_values,
-        u_int_values,
         ustar_values,
-        int_local_geometry_values,
         sfc_local_geometry_values,
     )
     return nothing
@@ -1060,20 +1415,20 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     Y,
     p,
     t,
-    precip_model::Microphysics0Moment,
+    microphysics_model::Microphysics0Moment,
 )
     thermo_params = CAP.thermodynamics_params(p.params)
     microphys_0m_params = CAP.microphysics_0m_params(p.params)
     (; dt) = p
     (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
-    (; q_tot) = p.precomputed.ᶜspecific
 
     # Environment precipitation sources (to be applied to grid mean)
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(
         thermo_params,
         microphys_0m_params,
         dt,
-        q_tot,
+        ᶜq_tot,
         ᶜts,
     )
     return nothing
@@ -1082,35 +1437,76 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     Y,
     p,
     t,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
 )
-    error("Not implemented yet")
-    #thermo_params = CAP.thermodynamics_params(p.params)
-    #microphys_1m_params = CAP.microphysics_1m_params(p.params)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    microphys_1m_params = CAP.microphysics_1m_params(p.params)
+    cloud_params = CAP.microphysics_cloud_params(p.params)
+    (; dt) = p
 
-    #(; ᶜts, ᶜSqₜᵖ⁰, ᶜSeₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
-    #(; q_tot) = p.precomputed.ᶜspecific
-    #(; ᶜqᵣ, ᶜqₛ) = p.precomputed
+    (; ᶜts, ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+    ᶜSᵖ = p.scratch.ᶜtemp_scalar
+    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
-    #ᶜSᵖ = p.scratch.ᶜtemp_scalar
-    #ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
-
-    ## Environment precipitation sources (to be applied to grid mean)
-    #compute_precipitation_sources!(
-    #    ᶜSᵖ,
-    #    ᶜSᵖ_snow,
-    #    ᶜSqₜᵖ⁰,
-    #    ᶜSqᵣᵖ⁰,
-    #    ᶜSqₛᵖ⁰,
-    #    ᶜSeₜᵖ⁰,
-    #    Y.c.ρ,
-    #    ᶜqᵣ,
-    #    ᶜqₛ,
-    #    ᶜts,
-    #    p.core.ᶜΦ,
-    #    p.dt,
-    #    microphys_1m_params,
-    #    thermo_params,
-    #)
+    # Environment precipitation sources (to be applied to grid mean)
+    compute_precipitation_sources!(
+        ᶜSᵖ,
+        ᶜSᵖ_snow,
+        ᶜSqₗᵖ⁰,
+        ᶜSqᵢᵖ⁰,
+        ᶜSqᵣᵖ⁰,
+        ᶜSqₛᵖ⁰,
+        Y.c.ρ,
+        specific.(Y.c.ρq_tot, Y.c.ρ),
+        specific.(Y.c.ρq_liq, Y.c.ρ),
+        specific.(Y.c.ρq_ice, Y.c.ρ),
+        specific.(Y.c.ρq_rai, Y.c.ρ),
+        specific.(Y.c.ρq_sno, Y.c.ρ),
+        ᶜts,
+        dt,
+        microphys_1m_params,
+        thermo_params,
+    )
+    # Rain sinks from the updrafts
+    compute_precipitation_sinks!(
+        ᶜSᵖ,
+        ᶜSqᵣᵖ⁰,
+        ᶜSqₛᵖ⁰,
+        Y.c.ρ,
+        specific.(Y.c.ρq_tot, Y.c.ρ),
+        specific.(Y.c.ρq_liq, Y.c.ρ),
+        specific.(Y.c.ρq_ice, Y.c.ρ),
+        specific.(Y.c.ρq_rai, Y.c.ρ),
+        specific.(Y.c.ρq_sno, Y.c.ρ),
+        ᶜts,
+        dt,
+        microphys_1m_params,
+        thermo_params,
+    )
+    # Cloud formation from the updrafts
+    @. ᶜSqₗᵖ⁰ += cloud_sources(
+        cloud_params.liquid,
+        thermo_params,
+        specific(Y.c.ρq_tot, Y.c.ρ),
+        specific(Y.c.ρq_liq, Y.c.ρ),
+        specific(Y.c.ρq_ice, Y.c.ρ),
+        specific(Y.c.ρq_rai, Y.c.ρ),
+        specific(Y.c.ρq_sno, Y.c.ρ),
+        Y.c.ρ,
+        TD.air_temperature(thermo_params, ᶜts),
+        dt,
+    )
+    @. ᶜSqᵢᵖ⁰ += cloud_sources(
+        cloud_params.ice,
+        thermo_params,
+        specific(Y.c.ρq_tot, Y.c.ρ),
+        specific(Y.c.ρq_liq, Y.c.ρ),
+        specific(Y.c.ρq_ice, Y.c.ρ),
+        specific(Y.c.ρq_rai, Y.c.ρ),
+        specific(Y.c.ρq_sno, Y.c.ρ),
+        Y.c.ρ,
+        TD.air_temperature(thermo_params, ᶜts),
+        dt,
+    )
     return nothing
 end

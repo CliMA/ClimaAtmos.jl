@@ -1,5 +1,5 @@
 #=
-julia --project=examples
+julia --project=.buildkite
 using Revise; include("test/parameterized_tendencies/sponge/rayleigh_sponge.jl")
 =#
 using ClimaComms
@@ -35,7 +35,12 @@ using ClimaCore.CommonSpaces
     @. ᶜuₕ.components.data.:1 = 1
     @. ᶜuₕ.components.data.:2 = 1
     ### Component test begins here
-    rs = CA.RayleighSponge(; zd = FT(0), α_uₕ = FT(1), α_w = FT(1))
+    rs = CA.RayleighSponge(;
+        zd = FT(0),
+        α_uₕ = FT(1),
+        α_w = FT(1),
+        α_sgs_tracer = FT(1),
+    )
     expected = @. sin(FT(π) / 2 * ᶜz / zmax)^2
     computed = CA.rayleigh_sponge_tendency_uₕ(ᶜuₕ, rs)
     @test CA.β_rayleigh_uₕ.(rs, ᶜz, zmax) == expected

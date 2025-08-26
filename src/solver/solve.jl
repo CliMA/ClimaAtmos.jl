@@ -122,7 +122,7 @@ end
 
 To instantiate the environment:
 ```
-julia --project=examples
+julia --project=.buildkite
 ```
 
 Then, to run interactively:
@@ -141,7 +141,7 @@ CA.benchmark_step!(integrator, Y₀);
 Alternatively, this can be run non-interactively,
 with adjusted flags as:
 ```
-julia --project=examples perf/benchmark_step.jl --h_elem 6
+julia --project=.buildkite perf/benchmark_step.jl --h_elem 6
 ```
 
 See [`argparse_settings`](@ref) for the
@@ -229,7 +229,7 @@ function check_conservation(sol)
     energy_atmos_change = sum(sol.u[end].c.ρe_tot) - sum(sol.u[1].c.ρe_tot)
     p = sol.prob.p
     sfc = p.atmos.surface_model
-    if sfc isa PrognosticSurfaceTemperature
+    if sfc isa SlabOceanSST
         sfc_cρh = sfc.ρ_ocean * sfc.cp_ocean * sfc.depth_ocean
         energy_total +=
             horizontal_integral_at_boundary(sol.u[1].sfc.T .* sfc_cρh)
@@ -252,7 +252,7 @@ function check_conservation(sol)
     if :ρq_tot in propertynames(sol.u[1].c)
         water_total = sum(sol.u[end].c.ρq_tot)
         water_atmos_change = sum(sol.u[end].c.ρq_tot) - sum(sol.u[1].c.ρq_tot)
-        if sfc isa PrognosticSurfaceTemperature
+        if sfc isa SlabOceanSST
             water_surface_change = horizontal_integral_at_boundary(
                 sol.u[end].sfc.water .- sol.u[1].sfc.water,
             )

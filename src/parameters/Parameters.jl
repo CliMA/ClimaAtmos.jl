@@ -26,19 +26,20 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2} <: ATCP
     tke_ed_coeff::FT
     tke_diss_coeff::FT
     tke_surf_scale::FT
+    tke_surf_flux_coeff::FT
     diagnostic_covariance_coeff::FT
     static_stab_coeff::FT
     Prandtl_number_scale::FT
     Prandtl_number_0::FT
-    Ri_crit::FT
+    Pr_max::FT
     smin_ub::FT
     smin_rm::FT
     min_updraft_top::FT
     pressure_normalmode_buoy_coeff1::FT
     pressure_normalmode_drag_coeff::FT
-    entr_tau::FT
+    entr_inv_tau::FT
     entr_coeff::FT
-    detr_tau::FT
+    detr_inv_tau::FT
     detr_coeff::FT
     detr_buoy_coeff::FT
     detr_vertdiv_coeff::FT
@@ -67,6 +68,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     MPC,
     MP0M,
     MP1M,
+    MP2M,
     SFP,
     TCP,
     STP,
@@ -79,6 +81,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     microphysics_cloud_params::MPC
     microphysics_0m_params::MP0M
     microphysics_1m_params::MP1M
+    microphysics_2m_params::MP2M
     surface_fluxes_params::SFP
     turbconv_params::TCP
     surface_temp_params::STP
@@ -101,6 +104,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     # Sponge
     alpha_rayleigh_w::FT
     alpha_rayleigh_uh::FT
+    alpha_rayleigh_sgs_tracer::FT
     zd_viscous::FT
     zd_rayleigh::FT
     kappa_2_sponge::FT
@@ -113,6 +117,8 @@ Base.@kwdef struct ClimaAtmosParameters{
     α_hyperdiff_tracer::FT
     # Vertical diffusion
     α_vert_diff_tracer::FT
+    # Gryanik b_m coefficient
+    coeff_b_m_gryanik::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
@@ -131,13 +137,19 @@ for var in fieldnames(TD.Parameters.ThermodynamicsParameters)
     @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
 end
 # Thermodynamics derived parameters
-for var in [:molmass_ratio, :R_d, :R_v, :e_int_v0, :cp_d, :cv_v, :cv_l, :cv_d]
+for var in [:Rv_over_Rd, :kappa_d, :e_int_v0, :cv_v, :cv_l, :cv_d]
     @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
 end
 
 # Forwarding SurfaceFluxes parameters
 von_karman_const(ps::ACAP) =
     SF.Parameters.von_karman_const(surface_fluxes_params(ps))
+
+# ------ MOST (Monin–Obukhov) stability-function coefficients ------
+
+# Gryanik b_m
+# needed because surface_fluxes_params defaults to BusingerParams
+coefficient_b_m_gryanik(ps::ACAP) = ps.coeff_b_m_gryanik
 
 # Insolation parameters
 day(ps::ACAP) = IP.day(insolation_params(ps))

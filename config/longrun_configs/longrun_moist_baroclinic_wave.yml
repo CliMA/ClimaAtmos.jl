@@ -5,7 +5,7 @@ dt: "40secs" # 200
 approximate_linear_solve_iters: 3
 max_newton_iters_ode: 1
 rayleigh_sponge: true
-t_end: "5days"
+t_end: "15days"
 initial_condition: "MoistBaroclinicWave"
 moist: "nonequil"
 precip_model: "1M"

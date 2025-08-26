@@ -4,6 +4,7 @@
 
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
 import CloudMicrophysics.Microphysics1M as CM1
+import CloudMicrophysics.Microphysics2M as CM2
 
 import Thermodynamics as TD
 import ClimaCore.Operators as Operators
@@ -30,12 +31,12 @@ function Kin(ᶜw_precip, ᶜu_air)
 end
 
 """
-    set_precipitation_velocities!(Y, p, moisture_model, precip_model)
+    set_precipitation_velocities!(Y, p, moisture_model, microphysics_model, turbconv_model)
 
 Updates the precipitation terminal velocity, cloud sedimentation velocity,
 and their contribution to total water and energy advection.
 """
-function set_precipitation_velocities!(Y, p, _, _)
+function set_precipitation_velocities!(Y, p, _, _, _)
     (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     @. ᶜwₜqₜ = Geometry.WVector(0)
     @. ᶜwₕhₜ = Geometry.WVector(0)
@@ -45,7 +46,8 @@ function set_precipitation_velocities!(
     Y,
     p,
     moisture_model::NonEquilMoistModel,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Microphysics1Moment,
+    _,
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
@@ -97,9 +99,401 @@ function set_precipitation_velocities!(
         ) / Y.c.ρ
     return nothing
 end
+function set_precipitation_velocities!(
+    Y,
+    p,
+    moisture_model::NonEquilMoistModel,
+    microphysics_model::Microphysics1Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
+    (; ᶜΦ) = p.core
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₕʲs) = p.precomputed
+    (; ᶜts⁰) = p.precomputed
+    cmc = CAP.microphysics_cloud_params(p.params)
+    cmp = CAP.microphysics_1m_params(p.params)
+    thp = CAP.thermodynamics_params(p.params)
+    FT = eltype(p.params)
+
+    ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜts⁰))
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    # scratch to compute env velocities
+    ᶜw⁰ = p.scratch.ᶜtemp_scalar
+    # scratch to add positive masses of subdomains
+    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities 
+    # over subdomains once negative subdomain mass issues are resolved 
+    ᶜρχ = p.scratch.ᶜtemp_scalar_2
+    # scratch for adding energy fluxes over subdomains
+    ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar_3
+
+    # Compute gs sedimentation velocity based on subdomain velocities (assuming gs flux 
+    # equals sum of sgs fluxes)
+
+    ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
+    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
+    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
+    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
+
+    # Cloud liquid
+    @. ᶜw⁰ = CMNe.terminal_velocity(
+        cmc.liquid,
+        cmc.Ch2022.rain,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_liq⁰),
+    )
+    @. ᶜwₗ = ᶜρa⁰ * ᶜq_liq⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_liq⁰)
+    for j in 1:n
+        @. ᶜwₗ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_liq * ᶜwₗʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_liq)
+    end
+    @. ᶜwₗ = ifelse(ᶜρχ > FT(0), ᶜwₗ / ᶜρχ, FT(0))
+
+    # contribution of env cloud liquid advection to htot advection
+    @. ᶜρwₕhₜ = ᶜρa⁰ * ᶜq_liq⁰ * ᶜw⁰ * (Iₗ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Cloud ice
+    @. ᶜw⁰ = CMNe.terminal_velocity(
+        cmc.ice,
+        cmc.Ch2022.small_ice,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_ice⁰),
+    )
+    @. ᶜwᵢ = ᶜρa⁰ * ᶜq_ice⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_ice⁰)
+    for j in 1:n
+        @. ᶜwᵢ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_ice * ᶜwᵢʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_ice)
+    end
+    @. ᶜwᵢ = ifelse(ᶜρχ > FT(0), ᶜwᵢ / ᶜρχ, FT(0))
+
+    # contribution of env cloud ice advection to htot advection
+    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_ice⁰ * ᶜw⁰ * (Iᵢ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Rain
+    @. ᶜw⁰ = CM1.terminal_velocity(
+        cmp.pr,
+        cmp.tv.rain,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_rai⁰),
+    )
+    @. ᶜwᵣ = ᶜρa⁰ * ᶜq_rai⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_rai⁰)
+    for j in 1:n
+        @. ᶜwᵣ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_rai * ᶜwᵣʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_rai)
+    end
+    @. ᶜwᵣ = ifelse(ᶜρχ > FT(0), ᶜwᵣ / ᶜρχ, FT(0))
+
+    # contribution of env rain advection to htot advection
+    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_rai⁰ * ᶜw⁰ * (Iₗ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Snow
+    @. ᶜw⁰ = CM1.terminal_velocity(
+        cmp.ps,
+        cmp.tv.snow,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_sno⁰),
+    )
+    @. ᶜwₛ = ᶜρa⁰ * ᶜq_sno⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_sno⁰)
+    for j in 1:n
+        @. ᶜwₛ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno * ᶜwₛʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno)
+    end
+    @. ᶜwₛ = ifelse(ᶜρχ > FT(0), ᶜwₛ / ᶜρχ, FT(0))
+
+    # contribution of env snow advection to htot advection
+    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_sno⁰ * ᶜw⁰ * (Iᵢ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Add contributions to energy and total water advection
+    # TODO do we need to add kinetic energy of subdomains?
+    for j in 1:n
+        @. ᶜρwₕhₜ += Y.c.sgsʲs.:($$j).ρa * ᶜwₕʲs.:($$j) * Y.c.sgsʲs.:($$j).mse
+    end
+    @. ᶜwₕhₜ = Geometry.WVector(ᶜρwₕhₜ) / Y.c.ρ
+
+    @. ᶜwₜqₜ =
+        Geometry.WVector(
+            ᶜwₗ * Y.c.ρq_liq +
+            ᶜwᵢ * Y.c.ρq_ice +
+            ᶜwᵣ * Y.c.ρq_rai +
+            ᶜwₛ * Y.c.ρq_sno,
+        ) / Y.c.ρ
+
+    return nothing
+end
+function set_precipitation_velocities!(
+    Y,
+    p,
+    moisture_model::NonEquilMoistModel,
+    microphysics_model::Microphysics2Moment,
+    _,
+)
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
+    (; ᶜΦ) = p.core
+
+    cmc = CAP.microphysics_cloud_params(p.params)
+    cm1p = CAP.microphysics_1m_params(p.params)
+    cm2p = CAP.microphysics_2m_params(p.params)
+    thp = CAP.thermodynamics_params(p.params)
+
+    # compute the precipitation terminal velocity [m/s]
+    # TODO sedimentation of snow is based on the 1M scheme
+    @. ᶜwₙᵣ = getindex(
+        CM2.rain_terminal_velocity(
+            cm2p.sb,
+            cm2p.rtv,
+            max(zero(Y.c.ρ), specific(Y.c.ρq_rai, Y.c.ρ)),
+            Y.c.ρ,
+            max(zero(Y.c.ρ), Y.c.ρn_rai),
+        ),
+        1,
+    )
+    @. ᶜwᵣ = getindex(
+        CM2.rain_terminal_velocity(
+            cm2p.sb,
+            cm2p.rtv,
+            max(zero(Y.c.ρ), specific(Y.c.ρq_rai, Y.c.ρ)),
+            Y.c.ρ,
+            max(zero(Y.c.ρ), Y.c.ρn_rai),
+        ),
+        2,
+    )
+    @. ᶜwₛ = CM1.terminal_velocity(
+        cm1p.ps,
+        cm1p.tv.snow,
+        Y.c.ρ,
+        max(zero(Y.c.ρ), specific(Y.c.ρq_sno, Y.c.ρ)),
+    )
+    # compute sedimentation velocity for cloud condensate [m/s]
+    # TODO sedimentation of ice is based on the 1M scheme
+    @. ᶜwₙₗ = getindex(
+        CM2.cloud_terminal_velocity(
+            cm2p.sb.pdf_c,
+            cm2p.ctv,
+            max(zero(Y.c.ρ), specific(Y.c.ρq_liq, Y.c.ρ)),
+            Y.c.ρ,
+            max(zero(Y.c.ρ), Y.c.ρn_liq),
+        ),
+        1,
+    )
+    @. ᶜwₗ = getindex(
+        CM2.cloud_terminal_velocity(
+            cm2p.sb.pdf_c,
+            cm2p.ctv,
+            max(zero(Y.c.ρ), specific(Y.c.ρq_liq, Y.c.ρ)),
+            Y.c.ρ,
+            max(zero(Y.c.ρ), Y.c.ρn_liq),
+        ),
+        2,
+    )
+    @. ᶜwᵢ = CMNe.terminal_velocity(
+        cmc.ice,
+        cmc.Ch2022.small_ice,
+        Y.c.ρ,
+        max(zero(Y.c.ρ), specific(Y.c.ρq_ice, Y.c.ρ)),
+    )
+
+    # compute their contributions to energy and total water advection
+    @. ᶜwₜqₜ =
+        Geometry.WVector(
+            ᶜwₗ * Y.c.ρq_liq +
+            ᶜwᵢ * Y.c.ρq_ice +
+            ᶜwᵣ * Y.c.ρq_rai +
+            ᶜwₛ * Y.c.ρq_sno,
+        ) / Y.c.ρ
+    @. ᶜwₕhₜ =
+        Geometry.WVector(
+            ᶜwₗ * Y.c.ρq_liq * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
+            ᶜwᵢ * Y.c.ρq_ice * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
+            ᶜwᵣ * Y.c.ρq_rai * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))) +
+            ᶜwₛ * Y.c.ρq_sno * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu))),
+        ) / Y.c.ρ
+    return nothing
+end
+function set_precipitation_velocities!(
+    Y,
+    p,
+    moisture_model::NonEquilMoistModel,
+    microphysics_model::Microphysics2Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
+    (; ᶜΦ) = p.core
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs, ᶜwₕʲs) = p.precomputed
+    (; ᶜts⁰) = p.precomputed
+    cmc = CAP.microphysics_cloud_params(p.params)
+    cm1p = CAP.microphysics_1m_params(p.params)
+    cm2p = CAP.microphysics_2m_params(p.params)
+    thp = CAP.thermodynamics_params(p.params)
+    FT = eltype(p.params)
+
+    ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜts⁰))
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    # scratch to compute env velocities
+    ᶜw⁰ = p.scratch.ᶜtemp_scalar
+    # scratch to add positive masses of subdomains
+    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities 
+    # over subdomains once negative subdomain mass issues are resolved 
+    ᶜρχ = p.scratch.ᶜtemp_scalar_2
+    # scratch for adding energy fluxes over subdomains
+    ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar_3
+
+    # Compute gs sedimentation velocity based on subdomain velocities (assuming gs flux 
+    # equals sum of sgs fluxes)
+
+    ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
+    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
+    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
+    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
+    ᶜn_liq⁰ = ᶜspecific_env_value(@name(n_liq), Y, p)
+    ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), Y, p)
+
+    # Cloud liquid (number)
+    @. ᶜw⁰ = getindex(
+        CM2.rain_terminal_velocity(
+            cm2p.sb,
+            cm2p.rtv,
+            max(zero(Y.c.ρ), ᶜq_liq⁰),
+            ᶜρ⁰,
+            max(zero(Y.c.ρ), ᶜn_liq⁰),
+        ),
+        1,
+    )
+    @. ᶜwₙₗ = ᶜρa⁰ * ᶜn_liq⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜn_liq⁰)
+    for j in 1:n
+        @. ᶜwₙₗ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_liq * ᶜwₙₗʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_liq)
+    end
+    @. ᶜwₙₗ = ifelse(ᶜρχ > FT(0), ᶜwₙₗ / ᶜρχ, FT(0))
+
+    # Cloud liquid (mass)
+    @. ᶜw⁰ = getindex(
+        CM2.rain_terminal_velocity(
+            cm2p.sb,
+            cm2p.rtv,
+            max(zero(Y.c.ρ), ᶜq_liq⁰),
+            ᶜρ⁰,
+            max(zero(Y.c.ρ), ᶜn_liq⁰),
+        ),
+        2,
+    )
+    @. ᶜwₗ = ᶜρa⁰ * ᶜq_liq⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_liq⁰)
+    for j in 1:n
+        @. ᶜwₗ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_liq * ᶜwₗʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_liq)
+    end
+    @. ᶜwₗ = ifelse(ᶜρχ > FT(0), ᶜwₗ / ᶜρχ, FT(0))
+
+    # contribution of env cloud liquid advection to htot advection
+    @. ᶜρwₕhₜ = ᶜρa⁰ * ᶜq_liq⁰ * ᶜw⁰ * (Iₗ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Cloud ice
+    # TODO sedimentation of ice is based on the 1M scheme
+    @. ᶜw⁰ = CMNe.terminal_velocity(
+        cmc.ice,
+        cmc.Ch2022.small_ice,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_ice⁰),
+    )
+    @. ᶜwᵢ = ᶜρa⁰ * ᶜq_ice⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_ice⁰)
+    for j in 1:n
+        @. ᶜwᵢ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_ice * ᶜwᵢʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_ice)
+    end
+    @. ᶜwᵢ = ifelse(ᶜρχ > FT(0), ᶜwᵢ / ᶜρχ, FT(0))
+
+    # contribution of env cloud ice advection to htot advection
+    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_ice⁰ * ᶜw⁰ * (Iᵢ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Rain (number)
+    @. ᶜw⁰ = getindex(
+        CM2.rain_terminal_velocity(
+            cm2p.sb,
+            cm2p.rtv,
+            max(zero(Y.c.ρ), ᶜq_rai⁰),
+            ᶜρ⁰,
+            max(zero(Y.c.ρ), ᶜn_rai⁰),
+        ),
+        1,
+    )
+    @. ᶜwₙᵣ = ᶜρa⁰ * ᶜn_rai⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜn_rai⁰)
+    for j in 1:n
+        @. ᶜwₙᵣ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_rai * ᶜwₙᵣʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_rai)
+    end
+    @. ᶜwₙᵣ = ifelse(ᶜρχ > FT(0), ᶜwₙᵣ / ᶜρχ, FT(0))
+
+    # Rain (mass)
+    @. ᶜw⁰ = getindex(
+        CM2.rain_terminal_velocity(
+            cm2p.sb,
+            cm2p.rtv,
+            max(zero(Y.c.ρ), ᶜq_rai⁰),
+            ᶜρ⁰,
+            max(zero(Y.c.ρ), ᶜn_rai⁰),
+        ),
+        2,
+    )
+    @. ᶜwᵣ = ᶜρa⁰ * ᶜq_rai⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_rai⁰)
+    for j in 1:n
+        @. ᶜwᵣ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_rai * ᶜwᵣʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_rai)
+    end
+    @. ᶜwᵣ = ifelse(ᶜρχ > FT(0), ᶜwᵣ / ᶜρχ, FT(0))
+
+    # contribution of env rain advection to qtot advection
+    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_rai⁰ * ᶜw⁰ * (Iₗ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Snow
+    # TODO sedimentation of snow is based on the 1M scheme
+    @. ᶜw⁰ = CM1.terminal_velocity(
+        cm1p.ps,
+        cm1p.tv.snow,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_sno⁰),
+    )
+    @. ᶜwₛ = ᶜρa⁰ * ᶜq_sno⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_sno⁰)
+    for j in 1:n
+        @. ᶜwₛ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno * ᶜwₛʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno)
+    end
+    @. ᶜwₛ = ifelse(ᶜρχ > FT(0), ᶜwₛ / ᶜρχ, FT(0))
+
+    # contribution of env snow advection to htot advection
+    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_sno⁰ * ᶜw⁰ * (Iᵢ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Add contributions to energy and total water advection
+    # TODO do we need to add kinetic energy of subdomains?
+    for j in 1:n
+        @. ᶜρwₕhₜ += Y.c.sgsʲs.:($$j).ρa * ᶜwₕʲs.:($$j) * Y.c.sgsʲs.:($$j).mse
+    end
+    @. ᶜwₕhₜ = Geometry.WVector(ᶜρwₕhₜ) / Y.c.ρ
+
+    @. ᶜwₜqₜ =
+        Geometry.WVector(
+            ᶜwₗ * Y.c.ρq_liq +
+            ᶜwᵢ * Y.c.ρq_ice +
+            ᶜwᵣ * Y.c.ρq_rai +
+            ᶜwₛ * Y.c.ρq_sno,
+        ) / Y.c.ρ
+
+    return nothing
+end
 
 """
-    set_precipitation_cache!(Y, p, precip_model, turbconv_model)
+    set_precipitation_cache!(Y, p, microphysics_model, turbconv_model)
 
 Computes the cache needed for precipitation tendencies. When run without edmf
 model this involves computing precipitation sources based on the grid mean
@@ -170,10 +564,11 @@ function set_precipitation_cache!(
     ::PrognosticEDMFX,
 )
     (; ᶜΦ) = p.core
-    (; ᶜSqₜᵖ⁰, ᶜSqₜᵖʲs, ᶜρa⁰) = p.precomputed
+    (; ᶜSqₜᵖ⁰, ᶜSqₜᵖʲs) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precomputed
     (; ᶜts⁰, ᶜtsʲs) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model))
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
@@ -200,7 +595,11 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
     (; ᶜts, ᶜwᵣ, ᶜwₛ, ᶜu) = p.precomputed
     (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
 
-    (; q_rai, q_sno) = p.precomputed.ᶜspecific
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
+    ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
+    ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+    ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
@@ -220,8 +619,11 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         ᶜSqᵣᵖ,
         ᶜSqₛᵖ,
         Y.c.ρ,
-        q_rai,
-        q_sno,
+        ᶜq_tot,
+        ᶜq_liq,
+        ᶜq_ice,
+        ᶜq_rai,
+        ᶜq_sno,
         ᶜts,
         dt,
         cmp,
@@ -234,8 +636,11 @@ function set_precipitation_cache!(Y, p, ::Microphysics1Moment, _)
         ᶜSqᵣᵖ,
         ᶜSqₛᵖ,
         Y.c.ρ,
-        q_rai,
-        q_sno,
+        ᶜq_tot,
+        ᶜq_liq,
+        ᶜq_ice,
+        ᶜq_rai,
+        ᶜq_sno,
         ᶜts,
         dt,
         cmp,
@@ -249,13 +654,75 @@ function set_precipitation_cache!(
     ::Microphysics1Moment,
     ::DiagnosticEDMFX,
 )
-    error("Not implemented yet")
+    # Nothing needs to be done on the grid mean. The Sources are computed
+    # in edmf sub-domains.
     return nothing
 end
 function set_precipitation_cache!(
     Y,
     p,
     ::Microphysics1Moment,
+    ::PrognosticEDMFX,
+)
+    # Nothing needs to be done on the grid mean. The Sources are computed
+    # in edmf sub-domains.
+    return nothing
+end
+function set_precipitation_cache!(Y, p, ::Microphysics2Moment, _)
+    (; dt) = p
+    (; ᶜts) = p.precomputed
+    (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ) = p.precomputed
+    (; ᶜSnₗᵖ, ᶜSnᵣᵖ) = p.precomputed
+
+    ᶜSᵖ = p.scratch.ᶜtemp_scalar
+    ᶜS₂ᵖ = p.scratch.ᶜtemp_scalar_2
+
+    # get thermodynamics and microphysics params
+    (; params) = p
+    cmp = CAP.microphysics_2m_params(params)
+    thp = CAP.thermodynamics_params(params)
+
+    # compute warm precipitation sources on the grid mean (based on SB2006 2M scheme)
+    compute_warm_precipitation_sources_2M!(
+        ᶜSᵖ,
+        ᶜS₂ᵖ,
+        ᶜSnₗᵖ,
+        ᶜSnᵣᵖ,
+        ᶜSqₗᵖ,
+        ᶜSqᵣᵖ,
+        Y.c.ρ,
+        lazy.(specific.(Y.c.ρn_liq, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρn_rai, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_tot, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_liq, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_ice, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_rai, Y.c.ρ)),
+        lazy.(specific.(Y.c.ρq_sno, Y.c.ρ)),
+        ᶜts,
+        dt,
+        cmp,
+        thp,
+    )
+
+    #TODO - implement 2M cold processes!
+    @. ᶜSqᵢᵖ = 0
+    @. ᶜSqₛᵖ = 0
+
+    return nothing
+end
+function set_precipitation_cache!(
+    Y,
+    p,
+    ::Microphysics2Moment,
+    ::DiagnosticEDMFX,
+)
+    error("Not implemented yet")
+    return nothing
+end
+function set_precipitation_cache!(
+    Y,
+    p,
+    ::Microphysics2Moment,
     ::PrognosticEDMFX,
 )
     # Nothing needs to be done on the grid mean. The Sources are computed
@@ -274,7 +741,7 @@ set_precipitation_surface_fluxes!(Y, p, _) = nothing
 function set_precipitation_surface_fluxes!(
     Y,
     p,
-    precip_model::Microphysics0Moment,
+    microphysics_model::Microphysics0Moment,
 )
     ᶜT = p.scratch.ᶜtemp_scalar
     (; ᶜts) = p.precomputed  # assume ᶜts has been updated
@@ -301,11 +768,11 @@ end
 function set_precipitation_surface_fluxes!(
     Y,
     p,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
 )
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
-    (; col_integrated_precip_energy_tendency,) = p.conservation_check
-    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜspecific) = p.precomputed
+    (; col_integrated_precip_energy_tendency) = p.conservation_check
+    (; ᶜwᵣ, ᶜwₛ, ᶜwₗ, ᶜwᵢ, ᶜwₕhₜ) = p.precomputed
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     sfc_J = Fields.level(ᶠJ, Fields.half)
@@ -313,33 +780,42 @@ function set_precipitation_surface_fluxes!(
 
     # Jacobian-weighted extrapolation from interior to surface, consistent with
     # the reconstruction of density on cell faces, ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
-    int_J = Fields.Field(Fields.field_values(Fields.level(ᶜJ, 1)), sfc_space)
-    int_ρ = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), sfc_space)
+    sfc_lev(x) =
+        Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
+    int_J = sfc_lev(ᶜJ)
+    int_ρ = sfc_lev(Y.c.ρ)
     sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
 
     # Constant extrapolation to surface, consistent with simple downwinding
-    sfc_qᵣ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_rai, 1)),
-        sfc_space,
-    )
-    sfc_qₛ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_sno, 1)),
-        sfc_space,
-    )
-    sfc_qₗ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_liq, 1)),
-        sfc_space,
-    )
-    sfc_qᵢ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜspecific.q_ice, 1)),
-        sfc_space,
-    )
+    # Temporary scratch variables are used here until CC.field_values supports <lazy> fields
+    ᶜq_rai = p.scratch.ᶜtemp_scalar
+    ᶜq_sno = p.scratch.ᶜtemp_scalar_2
+    ᶜq_liq = p.scratch.ᶜtemp_scalar_3
+    ᶜq_ice = p.scratch.ᶜtemp_scalar_4
+    @. ᶜq_rai = specific(Y.c.ρq_rai, Y.c.ρ)
+    @. ᶜq_sno = specific(Y.c.ρq_sno, Y.c.ρ)
+    @. ᶜq_liq = specific(Y.c.ρq_liq, Y.c.ρ)
+    @. ᶜq_ice = specific(Y.c.ρq_ice, Y.c.ρ)
+    sfc_qᵣ =
+        Fields.Field(Fields.field_values(Fields.level(ᶜq_rai, 1)), sfc_space)
+    sfc_qₛ =
+        Fields.Field(Fields.field_values(Fields.level(ᶜq_sno, 1)), sfc_space)
+    sfc_qₗ =
+        Fields.Field(Fields.field_values(Fields.level(ᶜq_liq, 1)), sfc_space)
+    sfc_qᵢ =
+        Fields.Field(Fields.field_values(Fields.level(ᶜq_ice, 1)), sfc_space)
     sfc_wᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), sfc_space)
     sfc_wₛ = Fields.Field(Fields.field_values(Fields.level(ᶜwₛ, 1)), sfc_space)
     sfc_wₗ = Fields.Field(Fields.field_values(Fields.level(ᶜwₗ, 1)), sfc_space)
     sfc_wᵢ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵢ, 1)), sfc_space)
+    sfc_wₕhₜ = Fields.Field(
+        Fields.field_values(Fields.level(ᶜwₕhₜ.components.data.:1, 1)),
+        sfc_space,
+    )
 
     @. surface_rain_flux = sfc_ρ * (sfc_qᵣ * (-sfc_wᵣ) + sfc_qₗ * (-sfc_wₗ))
     @. surface_snow_flux = sfc_ρ * (sfc_qₛ * (-sfc_wₛ) + sfc_qᵢ * (-sfc_wᵢ))
+    @. col_integrated_precip_energy_tendency = sfc_ρ * (-sfc_wₕhₜ)
+
     return nothing
 end

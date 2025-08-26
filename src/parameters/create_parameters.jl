@@ -15,12 +15,15 @@ import StaticArrays as SA
 Construct the parameter set for any ClimaAtmos configuration.
 """
 ClimaAtmosParameters(config::AtmosConfig) =
-    ClimaAtmosParameters(config.toml_dict)
+    ClimaAtmosParameters(config.toml_dict, config.parsed_args)
 
 ClimaAtmosParameters(::Type{FT}) where {FT <: AbstractFloat} =
     ClimaAtmosParameters(CP.create_toml_dict(FT))
 
-function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
+function ClimaAtmosParameters(
+    toml_dict::TD,
+    parsed_args = nothing,
+) where {TD <: CP.AbstractTOMLDict}
     FT = CP.float_type(toml_dict)
 
     turbconv_params = TurbulenceConvectionParameters(toml_dict)
@@ -39,6 +42,9 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
         SurfaceFluxesParameters(toml_dict, UF.BusingerParams)
     SFP = typeof(surface_fluxes_params)
 
+    # Fetch Gryanik b_m coefficient (since surface_fluxes_params defaults to BusingerParams)
+    coeff_b_m_gryanik_val = UF.GryanikParams(FT).b_m
+
     surface_temp_params = SurfaceTemperatureParameters(toml_dict)
     STP = typeof(surface_temp_params)
 
@@ -47,8 +53,20 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
 
     microphysics_0m_params = CM.Parameters.Parameters0M(toml_dict)
     microphysics_1m_params = microphys_1m_parameters(toml_dict)
+    microphysics_2m_params = microphys_2m_parameters(toml_dict)
+
+    # If parsed_args is provided, we can save parameter space by only loading parameters
+    # needed for the microphysics model that is actually used.
+    if !isnothing(parsed_args)
+        cm_model = get_microphysics_model(parsed_args)
+        cm_model isa Microphysics0Moment || (microphysics_0m_params = nothing)
+        cm_model isa Union{Microphysics1Moment, Microphysics2Moment} ||
+            (microphysics_1m_params = nothing)
+        cm_model isa Microphysics2Moment || (microphysics_2m_params = nothing)
+    end
     MP0M = typeof(microphysics_0m_params)
     MP1M = typeof(microphysics_1m_params)
+    MP2M = typeof(microphysics_2m_params)
 
     vert_diff_params = vert_diff_parameters(toml_dict)
     VDP = typeof(vert_diff_params)
@@ -66,6 +84,7 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
         MPC,
         MP0M,
         MP1M,
+        MP2M,
         SFP,
         TCP,
         STP,
@@ -79,11 +98,13 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
         microphysics_cloud_params,
         microphysics_0m_params,
         microphysics_1m_params,
+        microphysics_2m_params,
         surface_fluxes_params,
         turbconv_params,
         surface_temp_params,
         vert_diff_params,
         external_forcing_params,
+        coeff_b_m_gryanik = coeff_b_m_gryanik_val,
     )
 end
 
@@ -101,12 +122,13 @@ atmos_name_map = (;
     :c_smag => :c_smag,
     :alpha_rayleigh_w => :alpha_rayleigh_w,
     :alpha_rayleigh_uh => :alpha_rayleigh_uh,
+    :alpha_rayleigh_sgs_tracer => :alpha_rayleigh_sgs_tracer,
     :astronomical_unit => :astro_unit,
     :held_suarez_T_equator_dry => :T_equator_dry,
     :drag_layer_vertical_extent => :σ_b,
     :kappa_2_sponge => :kappa_2_sponge,
     :held_suarez_minimum_temperature => :T_min_hs,
-    :ocean_surface_albedo => :idealized_ocean_albedo,
+    :idealized_ocean_albedo => :idealized_ocean_albedo,
     :water_refractive_index => :water_refractive_index,
     :optics_lookup_temperature_min => :optics_lookup_temperature_min,
     :optics_lookup_temperature_max => :optics_lookup_temperature_max,
@@ -148,6 +170,20 @@ microphys_1m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
     ).prescribed_cloud_droplet_number_concentration,
 )
 
+microphys_2m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
+    microphys_2m_parameters(CP.create_toml_dict(FT))
+
+microphys_2m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
+    sb = CM.Parameters.SB2006(toml_dict),
+    aps = CM.Parameters.AirProperties(toml_dict),
+    ctv = CM.Parameters.StokesRegimeVelType(toml_dict),
+    rtv = CM.Parameters.SB2006VelType(toml_dict),
+    liquid = CM.Parameters.CloudLiquid(toml_dict),
+    ice = CM.Parameters.CloudIce(toml_dict),
+    arg = CM.Parameters.AerosolActivationParameters(toml_dict),
+    aerosol = prescribed_aerosol_parameters(toml_dict),
+)
+
 function vert_diff_parameters(toml_dict)
     name_map = (; :C_E => :C_E, :H_diffusion => :H, :D_0_diffusion => :D₀)
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
@@ -169,11 +205,29 @@ function aerosol_ml_parameters(toml_dict)
         :dust_calibration_coefficient => :α_dust,
         :seasalt_calibration_coefficient => :α_seasalt,
         :ammonium_sulfate_calibration_coefficient => :α_SO4,
-        :liquid_water_specific_humidity_calibration_coefficent => :α_q_liq,
+        :liquid_water_specific_humidity_calibration_coefficient => :α_q_liq,
         :reference_dust_aerosol_mass_concentration => :c₀_dust,
         :reference_seasalt_aerosol_mass_concentration => :c₀_seasalt,
         :reference_ammonium_sulfate_mass_concentration => :c₀_SO4,
         :reference_liquid_water_specific_humidity => :q₀_liq,
+    )
+    return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+end
+
+function prescribed_aerosol_parameters(toml_dict)
+    name_map = (;
+        :MERRA2_seasalt_aerosol_bin01_radius => :SSLT01_radius,
+        :MERRA2_seasalt_aerosol_bin02_radius => :SSLT02_radius,
+        :MERRA2_seasalt_aerosol_bin03_radius => :SSLT03_radius,
+        :MERRA2_seasalt_aerosol_bin04_radius => :SSLT04_radius,
+        :MERRA2_seasalt_aerosol_bin05_radius => :SSLT05_radius,
+        :seasalt_aerosol_kappa => :seasalt_kappa,
+        :seasalt_aerosol_density => :seasalt_density,
+        :mam3_stdev_coarse => :seasalt_std,
+        :MERRA2_sulfate_aerosol_radius => :sulfate_radius,
+        :sulfate_aerosol_kappa => :sulfate_kappa,
+        :sulfate_aerosol_density => :sulfate_density,
+        :mam3_stdev_accum => :sulfate_std,
     )
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
 end
@@ -196,13 +250,13 @@ function TurbulenceConvectionParameters(
         :min_area_limiter_scale => :min_area_limiter_scale,
         :max_area_limiter_scale => :max_area_limiter_scale,
         :mixing_length_tke_surf_scale => :tke_surf_scale,
+        :mixing_length_tke_surf_flux_coeff => :tke_surf_flux_coeff,
         :mixing_length_diss_coeff => :tke_diss_coeff,
         :diagnostic_covariance_coeff => :diagnostic_covariance_coeff,
         :detr_buoy_coeff => :detr_buoy_coeff,
         :EDMF_max_area => :max_area,
         :mixing_length_smin_rm => :smin_rm,
         :entr_coeff => :entr_coeff,
-        :mixing_length_Ri_crit => :Ri_crit,
         :detr_coeff => :detr_coeff,
         :EDMF_surface_area => :surface_area,
         :entr_param_vec => :entr_param_vec,
@@ -219,11 +273,12 @@ function TurbulenceConvectionParameters(
         :pressure_normalmode_drag_coeff => :pressure_normalmode_drag_coeff,
         :mixing_length_Prandtl_number_scale => :Prandtl_number_scale,
         :mixing_length_Prandtl_number_0 => :Prandtl_number_0,
+        :mixing_length_Prandtl_maximum => :Pr_max,
         :mixing_length_static_stab_coeff => :static_stab_coeff,
         :pressure_normalmode_buoy_coeff1 =>
             :pressure_normalmode_buoy_coeff1,
-        :detr_inv_tau => :detr_tau,
-        :entr_inv_tau => :entr_tau,
+        :detr_inv_tau => :detr_inv_tau,
+        :entr_inv_tau => :entr_inv_tau,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     parameters = merge(parameters, overrides)

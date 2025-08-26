@@ -32,12 +32,18 @@ import Test: @test
     ᶜYₜ = zero(Y)
 
     # Set all model choices
-    (; turbconv_model, moisture_model, precip_model) = p.atmos
+    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
 
     # Test cache to verify expected variables exist in tendency function
-    CA.set_precipitation_velocities!(Y, p, moisture_model, precip_model)
-    CA.set_precipitation_cache!(Y, p, precip_model, turbconv_model)
-    CA.set_precipitation_surface_fluxes!(Y, p, precip_model)
+    CA.set_precipitation_velocities!(
+        Y,
+        p,
+        moisture_model,
+        microphysics_model,
+        turbconv_model,
+    )
+    CA.set_precipitation_cache!(Y, p, microphysics_model, turbconv_model)
+    CA.set_precipitation_surface_fluxes!(Y, p, microphysics_model)
     test_varnames = (
         :ᶜS_ρq_tot,
         :ᶜS_ρe_tot,
@@ -62,7 +68,7 @@ import Test: @test
         p,
         FT(0),
         moisture_model,
-        precip_model,
+        microphysics_model,
         turbconv_model,
     )
     @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
@@ -74,7 +80,8 @@ import Test: @test
         Y,
         p,
         moisture_model,
-        precip_model,
+        microphysics_model,
+        turbconv_model,
     ) isa Nothing
 end
 
@@ -97,12 +104,18 @@ end
     ᶜYₜ = zero(Y)
 
     # Set all model choices
-    (; turbconv_model, moisture_model, precip_model) = p.atmos
+    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
 
     # Test cache to verify expected variables exist in tendency function
-    CA.set_precipitation_velocities!(Y, p, moisture_model, precip_model)
-    CA.set_precipitation_cache!(Y, p, precip_model, turbconv_model)
-    CA.set_precipitation_surface_fluxes!(Y, p, precip_model)
+    CA.set_precipitation_velocities!(
+        Y,
+        p,
+        moisture_model,
+        microphysics_model,
+        turbconv_model,
+    )
+    CA.set_precipitation_cache!(Y, p, microphysics_model, turbconv_model)
+    CA.set_precipitation_surface_fluxes!(Y, p, microphysics_model)
     test_varnames = (
         :ᶜSqₗᵖ,
         :ᶜSqᵢᵖ,
@@ -131,7 +144,7 @@ end
         p,
         FT(0),
         moisture_model,
-        precip_model,
+        microphysics_model,
         turbconv_model,
     )
 
@@ -153,7 +166,14 @@ end
     @assert iszero(ᶜYₜ.c.ρ)
 
     # test nonequilibrium cloud condensate
-    CA.cloud_condensate_tendency!(ᶜYₜ, Y, p, moisture_model, precip_model)
+    CA.cloud_condensate_tendency!(
+        ᶜYₜ,
+        Y,
+        p,
+        moisture_model,
+        microphysics_model,
+        turbconv_model,
+    )
     @assert !any(isnan, ᶜYₜ.c.ρq_liq)
     @assert !any(isnan, ᶜYₜ.c.ρq_ice)
 
@@ -162,6 +182,119 @@ end
     @test minimum(p.precomputed.ᶜwᵢ) >= FT(0)
     @test minimum(p.precomputed.ᶜwᵣ) >= FT(0)
     @test minimum(p.precomputed.ᶜwₛ) >= FT(0)
+
+    # test if cloud fraction diagnostics make sense
+    @assert !any(isnan, p.precomputed.cloud_diagnostics_tuple.cf)
+    @test minimum(p.precomputed.cloud_diagnostics_tuple.cf) >= FT(0)
+    @test maximum(p.precomputed.cloud_diagnostics_tuple.cf) <= FT(1)
+end
+
+@testset "NonEquilibrium Moisture + 2-moment precipitation RHS terms" begin
+
+    ### Boilerplate default integrator objects
+    config = CA.AtmosConfig(
+        Dict(
+            "initial_condition" => "PrecipitatingColumn",
+            "moist" => "nonequil",
+            "precip_model" => "2M",
+            "config" => "column",
+            "output_default_diagnostics" => false,
+            "prescribed_aerosols" => ["SSLT01"],
+        ),
+        job_id = "precipitation_2M",
+    )
+    (; Y, p, params) = generate_test_simulation(config)
+
+    FT = eltype(Y)
+    ᶜYₜ = zero(Y)
+
+    # Set all model choices
+    (; turbconv_model, moisture_model, microphysics_model) = p.atmos
+
+    # Test cache to verify expected variables exist in tendency function
+    CA.set_precipitation_velocities!(
+        Y,
+        p,
+        moisture_model,
+        microphysics_model,
+        turbconv_model,
+    )
+    CA.set_precipitation_cache!(Y, p, microphysics_model, turbconv_model)
+    CA.set_precipitation_surface_fluxes!(Y, p, microphysics_model)
+    test_varnames = (
+        :ᶜSqₗᵖ,
+        :ᶜSqᵢᵖ,
+        :ᶜSqᵣᵖ,
+        :ᶜSqₛᵖ,
+        :ᶜSnₗᵖ,
+        :ᶜSnᵣᵖ,
+        :surface_rain_flux,
+        :surface_snow_flux,
+        :ᶜwₗ,
+        :ᶜwᵢ,
+        :ᶜwᵣ,
+        :ᶜwₛ,
+        :ᶜwₙₗ,
+        :ᶜwₙᵣ,
+        :ᶜwₜqₜ,
+        :ᶜwₕhₜ,
+    )
+    for var_name in test_varnames
+        @test var_name ∈ propertynames(p.precomputed)
+    end
+
+    # compute source terms based on the last model state
+    CA.precipitation_tendency!(
+        ᶜYₜ,
+        Y,
+        p,
+        FT(0),
+        moisture_model,
+        microphysics_model,
+        turbconv_model,
+    )
+
+    # check for nans
+    @assert !any(isnan, ᶜYₜ.c.ρ)
+    @assert !any(isnan, ᶜYₜ.c.ρq_tot)
+    @assert !any(isnan, ᶜYₜ.c.ρe_tot)
+    @assert !any(isnan, ᶜYₜ.c.ρq_liq)
+    @assert !any(isnan, ᶜYₜ.c.ρq_ice)
+    @assert !any(isnan, ᶜYₜ.c.ρq_rai)
+    @assert !any(isnan, ᶜYₜ.c.ρq_sno)
+    @assert !any(isnan, ᶜYₜ.c.ρn_liq)
+    @assert !any(isnan, ᶜYₜ.c.ρn_rai)
+    @assert !any(isnan, p.precomputed.ᶜwₗ)
+    @assert !any(isnan, p.precomputed.ᶜwᵢ)
+    @assert !any(isnan, p.precomputed.ᶜwᵣ)
+    @assert !any(isnan, p.precomputed.ᶜwₛ)
+    @assert !any(isnan, p.precomputed.ᶜwₙₗ)
+    @assert !any(isnan, p.precomputed.ᶜwₙᵣ)
+
+    # test water budget
+    @test ᶜYₜ.c.ρ == ᶜYₜ.c.ρq_tot
+    @assert iszero(ᶜYₜ.c.ρ)
+
+    # test nonequilibrium cloud condensate
+    CA.cloud_condensate_tendency!(
+        ᶜYₜ,
+        Y,
+        p,
+        moisture_model,
+        microphysics_model,
+        turbconv_model,
+    )
+    @assert !any(isnan, ᶜYₜ.c.ρq_liq)
+    @assert !any(isnan, ᶜYₜ.c.ρq_ice)
+    @assert !any(isnan, ᶜYₜ.c.ρn_liq)
+
+    # test if terminal velocity is positive
+    @test minimum(p.precomputed.ᶜwₗ) >= FT(0)
+    @test minimum(p.precomputed.ᶜwᵢ) >= FT(0)
+    @test minimum(p.precomputed.ᶜwᵣ) >= FT(0)
+    @test minimum(p.precomputed.ᶜwₛ) >= FT(0)
+    @test minimum(p.precomputed.ᶜwₙₗ) >= FT(0)
+    @test minimum(p.precomputed.ᶜwₙᵣ) >= FT(0)
 
     # test if cloud fraction diagnostics make sense
     @assert !any(isnan, p.precomputed.cloud_diagnostics_tuple.cf)

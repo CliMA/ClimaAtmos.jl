@@ -43,7 +43,7 @@ function atmos_center_variables(ls, atmos_model)
         ls,
         atmos_model.turbconv_model,
         atmos_model.moisture_model,
-        atmos_model.precip_model,
+        atmos_model.microphysics_model,
         gs_vars,
     )
     return (; gs_vars..., sgs_vars...)
@@ -64,7 +64,7 @@ grid_scale_center_variables(ls, atmos_model) = (;
     uₕ = C12(ls.velocity, ls.geometry),
     energy_variables(ls)...,
     moisture_variables(ls, atmos_model.moisture_model)...,
-    precip_variables(ls, atmos_model.precip_model)...,
+    precip_variables(ls, atmos_model.microphysics_model)...,
 )
 
 energy_variables(ls) = (;
@@ -75,8 +75,8 @@ energy_variables(ls) = (;
     )
 )
 
-atmos_surface_field(surface_space, ::PrescribedSurfaceTemperature) = (;)
-function atmos_surface_field(surface_space, ::PrognosticSurfaceTemperature)
+atmos_surface_field(surface_space, ::PrescribedSST) = (;)
+function atmos_surface_field(surface_space, ::SlabOceanSST)
     if :lat in propertynames(Fields.coordinate_field(surface_space))
         return (;
             sfc = map(
@@ -127,6 +127,12 @@ precip_variables(ls, ::Microphysics1Moment) = (;
     ρq_rai = ls.ρ * ls.precip_state.q_rai,
     ρq_sno = ls.ρ * ls.precip_state.q_sno,
 )
+precip_variables(ls, ::Microphysics2Moment) = (;
+    ρn_liq = ls.ρ * ls.precip_state.n_liq,
+    ρn_rai = ls.ρ * ls.precip_state.n_rai,
+    ρq_rai = ls.ρ * ls.precip_state.q_rai,
+    ρq_sno = ls.ρ * ls.precip_state.q_sno,
+)
 
 # We can use paper-based cases for LES type configurations (no TKE)
 # or SGS type configurations (initial TKE needed), so we do not need to assert
@@ -137,7 +143,7 @@ function turbconv_center_variables(
     ls,
     turbconv_model::PrognosticEDMFX,
     moisture_model,
-    precip_model,
+    microphysics_model,
     gs_vars,
 )
     n = n_mass_flux_subdomains(turbconv_model)
@@ -155,7 +161,7 @@ function turbconv_center_variables(
     ls,
     turbconv_model::PrognosticEDMFX,
     moisture_model::NonEquilMoistModel,
-    precip_model::Microphysics1Moment,
+    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
     gs_vars,
 )
     # TODO - Instead of dispatching, should we unify this with the above function?
@@ -167,22 +173,41 @@ function turbconv_center_variables(
         TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
         CAP.grav(ls.params) * ls.geometry.coordinates.z
     q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
-    q_liq = TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state)
-    q_ice = TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state)
+    q_liq = TD.liquid_specific_humidity(ls.thermo_params, ls.thermo_state) # - q_rai ?
+    q_ice = TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state) # - q_sno ?
     q_rai = ls.precip_state.q_rai
     q_sno = ls.precip_state.q_sno
-    sgsʲs = ntuple(
-        _ -> (;
-            ρa = ρa,
-            mse = mse,
-            q_tot = q_tot,
-            q_liq = q_liq,
-            q_ice = q_ice,
-            q_rai = q_rai,
-            q_sno = q_sno,
-        ),
-        Val(n),
-    )
+    n_liq = ls.precip_state.n_liq
+    n_rai = ls.precip_state.n_rai
+    if microphysics_model isa Microphysics1Moment
+        sgsʲs = ntuple(
+            _ -> (;
+                ρa = ρa,
+                mse = mse,
+                q_tot = q_tot,
+                q_liq = q_liq,
+                q_ice = q_ice,
+                q_rai = q_rai,
+                q_sno = q_sno,
+            ),
+            Val(n),
+        )
+    elseif microphysics_model isa Microphysics2Moment
+        sgsʲs = ntuple(
+            _ -> (;
+                ρa = ρa,
+                mse = mse,
+                q_tot = q_tot,
+                q_liq = q_liq,
+                q_ice = q_ice,
+                q_rai = q_rai,
+                q_sno = q_sno,
+                n_liq = n_liq,
+                n_rai = n_rai,
+            ),
+            Val(n),
+        )
+    end
     return (; sgs⁰, sgsʲs)
 end
 

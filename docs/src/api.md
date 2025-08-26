@@ -43,14 +43,25 @@ ClimaAtmos.InitialConditions.Bomex
 ClimaAtmos.InitialConditions.Soares
 ```
 
-### Implicit Solver
-
-```@docs
-ClimaAtmos.ImplicitEquationJacobian
-```
-
 ### Helper
 
 ```@docs
 ClimaAtmos.InitialConditions.ColumnInterpolatableField
+```
+
+## Jacobian
+
+```@docs
+ClimaAtmos.Jacobian
+ClimaAtmos.JacobianAlgorithm
+ClimaAtmos.ManualSparseJacobian
+ClimaAtmos.AutoDenseJacobian
+ClimaAtmos.AutoSparseJacobian
+```
+
+### Internals
+
+```@docs
+ClimaAtmos.parallel_lu_factorize!
+ClimaAtmos.parallel_lu_solve!
 ```

@@ -111,7 +111,7 @@ function build_cache(
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
 
     conservation_check =
-        !(atmos.precip_model isa NoPrecipitation) ?
+        !(atmos.microphysics_model isa NoPrecipitation) ?
         (;
             col_integrated_precip_energy_tendency = zeros(
                 axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
@@ -129,6 +129,42 @@ function build_cache(
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
 
+    # Reference enthalpy for hyperdiffusion computation
+    ᶜz = Fields.coordinate_field(Y.c).z
+    T_ref = similar(ᶜz)
+    p_ref = similar(ᶜz)
+    q_tot_ref = similar(ᶜz)
+    cv_m = similar(ᶜz)
+    thermo_params = CAP.thermodynamics_params(params)
+    decay_scale_height = FT(8000)
+
+    # Reference State
+    temp_profile = TD.TemperatureProfiles.DecayingTemperatureProfile{FT}(
+        thermo_params,
+        FT(300),  # surface temperature
+        FT(220),  # top temperature
+        decay_scale_height,  # decay height scale
+    )
+
+    rel_hum_ref =
+        atmos.moisture_model isa DryModel ? FT(0) :
+        @. FT(0.5) * exp(- ᶜz / decay_scale_height)
+
+    T_0 = CAP.T_0(params)
+    grav = CAP.grav(params)
+    @. T_ref = first(temp_profile(thermo_params, ᶜz))
+    @. p_ref = last(temp_profile(thermo_params, ᶜz))
+    @. q_tot_ref =
+        TD.q_vap_from_RH_liquid(thermo_params, p_ref, T_ref, rel_hum_ref)
+    @. cv_m = TD.cv_m(thermo_params, TD.PhasePartition(q_tot_ref, FT(0), FT(0)))
+
+    ᶜh_ref = @. TD.total_specific_enthalpy(
+        thermo_params,
+        cv_m * (T_ref - T_0) + grav * ᶜz,
+        T_ref,
+        TD.PhasePartition(q_tot_ref, FT(0), FT(0)),
+    )
+
     core = (
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
@@ -139,6 +175,7 @@ function build_cache(
         surface_ct3_unit = CT3.(
             unit_basis_vector_data.(CT3, sfc_local_geometry)
         ),
+        ᶜh_ref,
     )
     external_forcing = external_forcing_cache(Y, atmos, params, start_date)
     sfc_setup = surface_setup(params)

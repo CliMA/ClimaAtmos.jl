@@ -22,12 +22,9 @@ end
    Compute the grid scale cloud fraction based on sub-grid scale properties
 """
 NVTX.@annotate function set_cloud_fraction!(Y, p, ::DryModel, _)
-    (; ᶜmixing_length) = p.precomputed
     (; turbconv_model) = p.atmos
     FT = eltype(p.params)
-    if isnothing(turbconv_model)
-        compute_gm_mixing_length!(ᶜmixing_length, Y, p)
-    end
+
     p.precomputed.cloud_diagnostics_tuple .=
         ((; cf = FT(0), q_liq = FT(0), q_ice = FT(0)),)
 end
@@ -39,8 +36,9 @@ NVTX.@annotate function set_cloud_fraction!(
 )
     (; params) = p
     (; turbconv_model) = p.atmos
-    (; ᶜts, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
+    (; ᶜts, cloud_diagnostics_tuple) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
+
     if isnothing(turbconv_model)
         if p.atmos.call_cloud_diagnostics_per_stage isa
            CallCloudDiagnosticsPerStage
@@ -53,7 +51,6 @@ NVTX.@annotate function set_cloud_fraction!(
             @. ᶜgradᵥ_θ_liq_ice =
                 ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
         end
-        compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     end
     if moist_model isa EquilMoistModel
         @. cloud_diagnostics_tuple = make_named_tuple(
@@ -62,17 +59,13 @@ NVTX.@annotate function set_cloud_fraction!(
             TD.PhasePartition(thermo_params, ᶜts).ice,
         )
     else
-        @. cloud_diagnostics_tuple = make_named_tuple(
-            ifelse(
-                p.precomputed.ᶜspecific.q_liq + p.precomputed.ᶜspecific.q_ice > 0,
-                1,
-                0,
-            ),
-            p.precomputed.ᶜspecific.q_liq,
-            p.precomputed.ᶜspecific.q_ice,
-        )
+        q_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
+        q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+        @. cloud_diagnostics_tuple =
+            make_named_tuple(ifelse(q_liq + q_ice > 0, 1, 0), q_liq, q_ice)
     end
 end
+
 NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
@@ -84,7 +77,7 @@ NVTX.@annotate function set_cloud_fraction!(
 
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜts, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
+    (; ᶜts, cloud_diagnostics_tuple) = p.precomputed
     (; turbconv_model) = p.atmos
 
     if isnothing(turbconv_model)
@@ -99,8 +92,11 @@ NVTX.@annotate function set_cloud_fraction!(
             @. ᶜgradᵥ_θ_liq_ice =
                 ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
         end
-        compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     end
+
+    # TODO - tmp fix for the Coupler test. To be removed soon.
+    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_field .= compute_gm_mixing_length(Y, p)
 
     diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
     @. cloud_diagnostics_tuple = quad_loop(
@@ -109,7 +105,7 @@ NVTX.@annotate function set_cloud_fraction!(
         Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot),
         Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice),
         diagnostic_covariance_coeff,
-        ᶜmixing_length,
+        ᶜmixing_length_field,
         thermo_params,
     )
 end
@@ -138,12 +134,15 @@ NVTX.@annotate function set_cloud_fraction!(
 
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜts, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
+    (; ᶜts, cloud_diagnostics_tuple) = p.precomputed
     (; turbconv_model) = p.atmos
 
     # TODO - we should make this default when using diagnostic edmf
     # environment
     diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
+
+    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_field .= ᶜmixing_length(Y, p)
 
     @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,
@@ -151,7 +150,7 @@ NVTX.@annotate function set_cloud_fraction!(
         Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot),
         Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice),
         diagnostic_covariance_coeff,
-        ᶜmixing_length,
+        ᶜmixing_length_field,
         thermo_params,
     )
 
@@ -191,13 +190,17 @@ NVTX.@annotate function set_cloud_fraction!(
 
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜts⁰, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
-    (; ᶜρʲs, ᶜtsʲs, ᶜρa⁰, ᶜρ⁰) = p.precomputed
+    (; ᶜts⁰, cloud_diagnostics_tuple) = p.precomputed
+    (; ᶜρʲs, ᶜtsʲs) = p.precomputed
     (; turbconv_model) = p.atmos
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
     # TODO - we should make this default when using diagnostic edmf
     # environment
     diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
+
+    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_field .= ᶜmixing_length(Y, p)
 
     @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,
@@ -205,16 +208,16 @@ NVTX.@annotate function set_cloud_fraction!(
         Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot⁰),
         Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice⁰),
         diagnostic_covariance_coeff,
-        ᶜmixing_length,
+        ᶜmixing_length_field,
         thermo_params,
     )
 
     # weight cloud diagnostics by environmental area
     @. cloud_diagnostics_tuple *= NamedTuple{(:cf, :q_liq, :q_ice)}(
         tuple(
-            draft_area(ᶜρa⁰, ᶜρ⁰),
-            draft_area(ᶜρa⁰, ᶜρ⁰),
-            draft_area(ᶜρa⁰, ᶜρ⁰),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
+            draft_area(ᶜρa⁰, TD.air_density(thermo_params, ᶜts⁰)),
         ),
     )
     # updrafts

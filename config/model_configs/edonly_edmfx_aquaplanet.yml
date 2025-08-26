@@ -1,13 +1,11 @@
+dt: 120secs
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
 co2_model: fixed
-implicit_diffusion: true
-approximate_linear_solve_iters: 2
 edmfx_sgs_diffusive_flux: true
 turbconv: edonly_edmfx
 moist: equil
 precip_model: 0M
-dt: 120secs
 t_end: 3hours
 dt_save_state_to_disk: 600secs
 use_itime: true

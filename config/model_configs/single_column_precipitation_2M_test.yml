@@ -1,0 +1,22 @@
+config: "column"
+initial_condition: "PrecipitatingColumn"
+surface_setup: "DefaultMoninObukhov"
+z_elem: 200
+z_max: 10000.0
+z_stretch: false
+dt: "10secs"
+t_end: "1500secs"
+dt_save_state_to_disk: "500secs"
+dt_cloud_fraction: "60secs"
+cloud_model: "grid_scale"
+moist: "nonequil"
+precip_model: "2M"
+vert_diff: "DecayWithHeightDiffusion"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+reproducibility_test: false
+diagnostics:
+  - short_name: [hus, clw, cli, husra, hussn, cdnc, ncra, ta, wa]
+    period: 500secs
+  - short_name: [pr]
+    period: 10secs

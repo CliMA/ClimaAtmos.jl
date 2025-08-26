@@ -4,6 +4,7 @@
 import ClimaComms
 import ClimaCore: Spaces, Topologies, Fields, Geometry
 import LinearAlgebra: norm_sqr
+using Dates: DateTime, @dateformat_str
 
 is_energy_var(symbol) = symbol in (:ρe_tot, :ρae_tot)
 is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :u₃, :ρw)
@@ -48,8 +49,7 @@ sort_files_by_time(files) =
     permute!(files, sortperm(time_from_filename.(files)))
 
 """
-    bc_kinetic = compute_kinetic(uₕ::Field, uᵥ::Field)
-    @. κ = bc_kinetic
+    κ .= compute_kinetic(uₕ::Field, uᵥ::Field)
 
 Compute the specific kinetic energy at cell centers, resulting in `κ` from
 individual velocity components:
@@ -59,11 +59,13 @@ individual velocity components:
     cell centers, and
  - `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
 """
-function compute_kinetic(uₕ::Fields.Field, uᵥ::Fields.Field)
+function compute_kinetic(uₕ, uᵥ)
     @assert eltype(uₕ) <: Union{C1, C2, C12}
     @assert eltype(uᵥ) <: C3
+    FT = Spaces.undertype(axes(uₕ))
+    onehalf = FT(1 / 2)
     return @. lazy(
-        1 / 2 * (
+        onehalf * (
             dot(C123(uₕ), CT123(uₕ)) +
             ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
             2 * dot(CT123(uₕ), ᶜinterp(C123(uᵥ)))
@@ -80,8 +82,7 @@ state.
 compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 
 """
-    bc_ϵ = compute_strain_rate_center(u::Field)
-    @. ϵ = bc_ϵ
+    ϵ .= compute_strain_rate_center(u::Field)
 
 Compute the strain_rate at cell centers from velocity at cell faces.
 """
@@ -97,8 +98,7 @@ function compute_strain_rate_center(u::Fields.Field)
 end
 
 """
-    bc_ϵ = compute_strain_rate_face(u::Field)
-    @. ϵ = bc_ϵ
+    ϵ .= compute_strain_rate_face(u::Field)
 
 Compute the strain_rate at cell faces from velocity at cell centers.
 """
@@ -120,12 +120,13 @@ function compute_strain_rate_face(u::Fields.Field)
 end
 
 """
-    g³³_field(field)
+    g³³_field(space)
 
-Extracts the value of `g³³` from `Fields.local_geometry_field(field)`.
+Extracts the value of `g³³`, the 3rd component of the metric terms that convert
+Covariant AxisTensors to Contravariant AxisTensors, from the given space.
 """
-function g³³_field(field)
-    g_field = Fields.local_geometry_field(field).gⁱʲ.components.data
+function g³³_field(space)
+    g_field = Fields.local_geometry_field(space).gⁱʲ.components.data
     end_index = fieldcount(eltype(g_field)) # This will be 4 in 2D and 9 in 3D.
     return g_field.:($end_index) # For both 2D and 3D spaces, g³³ = g[end].
 end
@@ -210,7 +211,7 @@ function projected_vector_buoy_grad_vars(::Type{V}, v1, v2, v3, lg) where {V}
     return (;
         ∂θv∂z_unsat = V(v1, lg)[1] / ubvd,
         ∂qt∂z_sat = V(v2, lg)[1] / ubvd,
-        ∂θl∂z_sat = V(v3, lg)[1] / ubvd,
+        ∂θli∂z_sat = V(v3, lg)[1] / ubvd,
     )
 end
 
@@ -274,6 +275,24 @@ end
 using ClimaComms
 is_distributed(::ClimaComms.SingletonCommsContext) = false
 is_distributed(::ClimaComms.MPICommsContext) = true
+
+"""
+    summary_string(x)
+
+Returns a string that is similar to the output of `dump(x)`, but without any
+type parameters.
+"""
+summary_string(x) = summary_string(x, 0)
+summary_string(x, depth) =
+    fieldcount(typeof(x)) == 0 ? repr(x) :
+    (string(nameof(typeof(x))) * '(') *
+    mapreduce(*, 1:fieldcount(typeof(x))) do i
+        field =
+            x isa Tuple ? ':' * string(i) : string(fieldname(typeof(x), i))
+        ('\n' * "  "^(depth + 1) * field * " = ") *
+        (summary_string(getfield(x, i), depth + 1) * ',')
+    end *
+    ('\n' * "  "^depth * ')')
 
 # From BenchmarkTools
 function prettytime(t)
@@ -461,6 +480,28 @@ function promote_period(period::Dates.OtherPeriod)
     return period
 end
 
+"""
+    parse_date(date_str)
+
+Parse a date string into a `DateTime` object. Currently, only the following formats are supported:
+- yyyymmdd
+- yyyymmdd-HHMM
+"""
+function parse_date(date_str)
+    # Define a mapping between allowed formats and corresponding date format 
+    date_format_mapping = Dict(
+        r"^\d{8}$" => dateformat"yyyymmdd",
+        r"^\d{8}-\d{4}$" => dateformat"yyyymmdd-HHMM",
+    )
+    for (pattern, format) in date_format_mapping
+        !isnothing(match(pattern, date_str)) &&
+            return DateTime(date_str, format)
+    end
+    error(
+        "Date string $date_str does not match any of the allowed formats: yyyymmdd or yyyymmdd-HHMM",
+    )
+end
+
 function iscolumn(space)
     # TODO: Our columns are 2+1D boxes with one element at the base. Fix this
     isbox =
@@ -477,4 +518,25 @@ end
 function issphere(space)
     return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
            Domains.SphereDomain
+end
+
+"""
+    clima_to_era5_name_dict()
+
+Returns a dictionary mapping ClimaAtmos variable names to ERA5 variable names.
+"""
+function clima_to_era5_name_dict()
+    Dict(
+        "ua" => "u",
+        "va" => "v",
+        "wap" => "w", # era5 w is in Pa/s, this is confusing notation
+        "hus" => "q",
+        "ta" => "t",
+        "zg" => "z", # era5 z is geopotential in m^2/s^2, this is confusing notation
+        "clw" => "clwc",
+        "cli" => "ciwc",
+        "ts" => "skt",
+        "hfls" => "slhf",
+        "hfss" => "sshf",
+    )
 end

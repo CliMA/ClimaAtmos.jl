@@ -10,7 +10,6 @@ import Adapt
 import ClimaComms
 using NVTX
 using Random
-
 # TODO: Move this file to RRTMGP.jl, once the interface has been settled.
 # It will be faster to do interface development in the same repo as experiment
 # development, but, since this is just a user-friendly wrapper for RRTMGP.jl, we
@@ -293,141 +292,16 @@ function Base.propertynames(model::RRTMGPModel, private::Bool = false)
     return private ? (names..., fieldnames(typeof(model))...) : names
 end
 
-"""
-    lookup_tables(::AbstractRRTMGPMode, device, FloatType)
-
-Return a NamedTuple, containing
- - RRTMGP lookup tables (varies by radiation mode)
- - nbnd_lw
- - nbnd_sw
- - ngas_lw (absent for GrayRadiation)
- - ngas_sw (absent for GrayRadiation)
-
-TODO:
- - We should add type annotations for the data read from NC files as this will
-   improve inference and the return type of `lookup_tables`.
-"""
-function lookup_tables end
-
-lookup_tables(
-    radiation_mode::GrayRadiation,
-    device::ClimaComms.AbstractDevice,
-    ::Type{FT},
-) where {FT} = (; lookups = (;), lu_kwargs = (; nbnd_lw = 1, nbnd_sw = 1))
-
-function lookup_tables(
-    radiation_mode::ClearSkyRadiation,
-    device::ClimaComms.AbstractDevice,
-    ::Type{FT},
-) where {FT}
-    DA = ClimaComms.array_type(device)
-    # turn kwargs into a Dict, so that values can be dynamically popped from it
-
-    artifact(t, b, n) =
-        NC.Dataset(RRTMGP.ArtifactPaths.get_lookup_filename(t, b)) do ds
-            getproperty(RRTMGP.LookUpTables, n)(ds, FT, DA)
-        end
-    lookup_lw, idx_gases_lw = artifact(:gas, :lw, :LookUpLW)
-
-    nbnd_lw = RRTMGP.LookUpTables.get_n_bnd(lookup_lw)
-    ngas_lw = RRTMGP.LookUpTables.get_n_gases(lookup_lw)
-
-    lookup_lw_aero, idx_aerosol_lw, idx_aerosize_lw =
-        if radiation_mode.aerosol_radiation
-            artifact(:aerosol, :lw, :LookUpAerosolMerra)
-        else
-            (nothing, nothing, nothing)
-        end
-
-    lookup_sw, idx_gases_sw = artifact(:gas, :sw, :LookUpSW)
-
-    nbnd_sw = RRTMGP.LookUpTables.get_n_bnd(lookup_sw)
-    ngas_sw = RRTMGP.LookUpTables.get_n_gases(lookup_sw)
-
-    lookup_sw_aero, idx_aerosol_sw, idx_aerosize_sw =
-        if radiation_mode.aerosol_radiation
-            artifact(:aerosol, :sw, :LookUpAerosolMerra)
-        else
-            (nothing, nothing, nothing)
-        end
-
-    lookups = (;
-        idx_aerosize_lw,
-        idx_aerosize_sw,
-        idx_aerosol_lw,
-        idx_aerosol_sw,
-        idx_gases_lw,
-        idx_gases_sw,
-        lookup_lw,
-        lookup_lw_aero,
-        lookup_sw,
-        lookup_sw_aero,
+get_radiation_method(m::GrayRadiation) = RRTMGP.GrayRadiation()
+get_radiation_method(m::ClearSkyRadiation) =
+    RRTMGP.ClearSkyRadiation(m.aerosol_radiation)
+get_radiation_method(m::AllSkyRadiation) =
+    RRTMGP.AllSkyRadiation(m.aerosol_radiation, m.reset_rng_seed)
+get_radiation_method(m::AllSkyRadiationWithClearSkyDiagnostics) =
+    RRTMGP.AllSkyRadiationWithClearSkyDiagnostics(
+        m.aerosol_radiation,
+        m.reset_rng_seed,
     )
-
-    @assert RRTMGP.LookUpTables.get_n_gases(lookup_lw) ==
-            RRTMGP.LookUpTables.get_n_gases(lookup_sw)
-    @assert lookup_lw.p_ref_min == lookup_sw.p_ref_min
-    return (; lookups, lu_kwargs = (; nbnd_lw, ngas_lw, nbnd_sw, ngas_sw))
-end
-
-function lookup_tables(
-    radiation_mode::Union{
-        AllSkyRadiation,
-        AllSkyRadiationWithClearSkyDiagnostics,
-    },
-    device::ClimaComms.AbstractDevice,
-    ::Type{FT},
-) where {FT}
-    DA = ClimaComms.array_type(device)
-    # turn kwargs into a Dict, so that values can be dynamically popped from it
-
-    artifact(t, b, n) =
-        NC.Dataset(RRTMGP.ArtifactPaths.get_lookup_filename(t, b)) do ds
-            getproperty(RRTMGP.LookUpTables, n)(ds, FT, DA)
-        end
-    lookup_lw, idx_gases_lw = artifact(:gas, :lw, :LookUpLW)
-    lookup_lw_cld = artifact(:cloud, :lw, :LookUpCld)
-    lookup_lw_aero, idx_aerosol_lw, idx_aerosize_lw =
-        if radiation_mode.aerosol_radiation
-            artifact(:aerosol, :lw, :LookUpAerosolMerra)
-        else
-            (nothing, nothing, nothing)
-        end
-    lookup_sw, idx_gases_sw = artifact(:gas, :sw, :LookUpSW)
-    lookup_sw_cld = artifact(:cloud, :sw, :LookUpCld)
-
-    lookup_sw_aero, idx_aerosol_sw, idx_aerosize_sw =
-        if radiation_mode.aerosol_radiation
-            artifact(:aerosol, :sw, :LookUpAerosolMerra)
-        else
-            (nothing, nothing, nothing)
-        end
-
-    nbnd_lw = RRTMGP.LookUpTables.get_n_bnd(lookup_lw)
-    ngas_lw = RRTMGP.LookUpTables.get_n_gases(lookup_lw)
-    nbnd_sw = RRTMGP.LookUpTables.get_n_bnd(lookup_sw)
-    ngas_sw = RRTMGP.LookUpTables.get_n_gases(lookup_sw)
-
-    lookups = (;
-        idx_aerosize_lw,
-        idx_aerosize_sw,
-        idx_aerosol_lw,
-        idx_aerosol_sw,
-        idx_gases_lw,
-        idx_gases_sw,
-        lookup_lw,
-        lookup_lw_aero,
-        lookup_lw_cld,
-        lookup_sw,
-        lookup_sw_aero,
-        lookup_sw_cld,
-    )
-
-    @assert RRTMGP.LookUpTables.get_n_gases(lookup_lw) ==
-            RRTMGP.LookUpTables.get_n_gases(lookup_sw)
-    @assert lookup_lw.p_ref_min == lookup_sw.p_ref_min
-    return (; lookups, lu_kwargs = (; nbnd_lw, ngas_lw, nbnd_sw, ngas_sw))
-end
 
 """
     RRTMGPModel(params; kwargs...)
@@ -604,7 +478,8 @@ function _RRTMGPModel(
                pressures/temperatures are specified")
     end
 
-    (; lookups, lu_kwargs) = lookup_tables(radiation_mode, device, FT)
+    radiation_method = get_radiation_method(radiation_mode)
+    (; lookups, lu_kwargs) = RRTMGP.lookup_tables(grid_params, radiation_method)
     views = []
 
     t = (views, domain_nlay)
@@ -1025,6 +900,7 @@ NVTX.@annotate function update_fluxes!(model, seedval)
     model.radiation_mode.add_isothermal_boundary_layer &&
         update_boundary_layer!(model)
     clip_values!(model)
+    # TODO : update_concentrations as part of update_atmospheric_state! 
     update_concentrations!(model.radiation_mode, model)
     update_lw_fluxes!(model.radiation_mode, model)
     update_sw_fluxes!(model.radiation_mode, model)
@@ -1262,4 +1138,5 @@ function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
     model.face_flux .= model.face_lw_flux .+ model.face_sw_flux
 end
 
+include("update_inputs.jl")
 end # end module

@@ -2,16 +2,22 @@ module Diagnostics
 
 import Dates: Month, Day, Hour, DateTime, Period
 
-import ClimaComms
-
 import LinearAlgebra: dot
 
+import ClimaComms
 import ClimaCore:
     Fields, Geometry, InputOutput, Meshes, Spaces, Operators, Domains, Grids
 import ClimaCore.Utilities: half
+import ClimaCore.MatrixFields: @name
 import Thermodynamics as TD
 
+# compute lazily to reduce allocations
+import ..lazy
+
 import ..AtmosModel
+import ..AtmosWater
+import ..AtmosRadiation
+import ..AtmosTurbconv
 import ..AtmosCallback
 import ..EveryNSteps
 
@@ -24,10 +30,11 @@ import ..DryModel
 import ..EquilMoistModel
 import ..NonEquilMoistModel
 
-# precip_model
+# microphysics_model
 import ..NoPrecipitation
 import ..Microphysics0Moment
 import ..Microphysics1Moment
+import ..Microphysics2Moment
 
 # radiation
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
@@ -46,12 +53,22 @@ import ..NonOrographicGravityWave
 import ..OrographicGravityWave
 
 # surface_model
-import ..PrognosticSurfaceTemperature
+import ..SlabOceanSST
 
 # functions used to calculate diagnostics
 import ..draft_area
-import ..compute_gm_mixing_length!
+import ..compute_gm_mixing_length
 import ..horizontal_integral_at_boundary
+import ..ᶜmixing_length
+import ..eddy_diffusivity
+import ..eddy_viscosity
+import ..turbulent_prandtl_number
+import ..smagorinsky_lilly_length
+import ..ᶜcompute_eddy_diffusivity_coefficient
+import ..ρa⁰
+import ..specific_tke
+import ..ᶜspecific_env_value
+
 
 # We need the abbreviations for symbols like curl, grad, and so on
 include(joinpath("..", "utils", "abbreviations.jl"))
