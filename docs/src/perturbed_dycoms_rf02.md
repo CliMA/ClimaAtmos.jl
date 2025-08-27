@@ -1,5 +1,10 @@
 
-# Creating custom arguments for perturbation experiments
+# Perturbed Initial Conditions Ensembles
+With a bit of setup, ClimaAtmos can be used to run ensembles of perturbed initial conditions. Here, we will use perturbed DYCOMS-RF02 initial conditions to create a spread of simulated marine stratocumulus clouds in a single column configuration with the EDMF scheme and 2-moment microphysics. As an example, we will create something similiar to the figure below (Hoffmann, 2020) using ClimaAtmos.
+
+![](assets/Hoffmann2020.jpg)
+
+# Creating Custom Config Arguments
 In cases where it is of interest to run ensembles of the same model configuration but with perturbed initial conditions, it may be of use to add new keyword arguments to the .yml file. The idea is to allow modifications to initial conditions to be passed directly through the .yml file and then creating multiple copies of the files but with different variations and combinations of these parameters. 
 
 As an example, we will explore modifying the total water mixing ratio (`q_tot_0`), liquid-ice potential temperature profiles (`theta_0` & `theta_i`), and initial boundary layer height (`z_i`) in the DYCOMS-RF02 simulation setup. 
@@ -64,7 +69,7 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
 end
 ```
 
-### Add keywords to .yml & Modify default_config.yml
+### Add Keywords to .yml & Modify default_config.yml
 Now that we have added a new keyword argument to be used in initial conditions, it is time to define the keyword argument in the YAML files responsible for configuring the model runs. In the YAML file for running a DYCOMS-RF02 single column experiment, we add and adjust the following lines: 
 
 ```
@@ -107,6 +112,40 @@ Finally, we need to update type_getters.jl with our new keyword arguments as wel
 [...]
 ```
 
-With this step complete, we are now ready to pass a new keyword argument that we defined ourselves to modify or change the initial conditions. 
+With this step complete, we are now ready to pass a new keyword argument that we defined ourselves to modify or change the initial conditions. The scripts currently contained in /examples/perturbed_dycoms_rf02 contain code for running the ensemble as well as post-processing/plotting capabilities.
 
-The recommended workflow is the create multiple copies of the .yml files and label them according to the initial conditions used. For example, the default file might look like `prognostic_edmfx_dycoms_rf02_column_qtot0_6.5_theta0_284.0_thetai_290.0_zi_795.0_prescribedN_1.0e8.yml`.
+# Creating & Running Ensembles
+The script `pipeline.jl` handles this entire step without parallelized runs, but the steps can also be performed individually. 
+
+The recommended workflow is the create multiple copies of the .yml files and label them according to the initial conditions used. For example, the default file might look like `prognostic_edmfx_dycoms_rf02_column_qtot0_9.45_theta0_288.3_thetai_295.0_zi_795.0_prescribedN_1.0e8.yml`.
+
+We can use `make_yaml.jl` to generate multiple different configurations with ease. To do so, provide the function `make_yamls()` with a default file for which to copy, and an output path. This script uses nested for loops to generate every possible combination of parameters, and they can be altered directly in the file. This might look like:
+
+```
+include(joinpath(pkgdir(CA),"LWP_N_scripts", "make_yaml.jl"))
+
+default_data_path = default_prog_2M
+output_dir = prognostic_2M_config
+make_yamls(default_data_path, output_dir, is_prog=true)
+```
+
+To use these configuration files, we can either parallelize or run them serially. If parallelization is desired, run: 
+
+```
+julia -p <num_processors> parallel_driver.jl
+```
+
+Be sure that the paths, which are handled by `all_paths.jl`, are referring to the right set of simulations. This example focuses in on prognostic EDMF+2M simulations, but the scripts have implementation for diagnostic EDMF as well as 1-moment microphysics as well.
+
+# Visualizing Ensemble Output
+After the simulations are done being ran, we can use `process_plot_outputs.jl` to visualize changes in the liquid water path (LWP) and cloud droplet number concentration (N), in order to recreate the figure above. An example code block to recreate the plot is shown below, but additionally plotting capabilities are demonstrated in `LWP_N_Experiments.ipynb`.
+
+```
+include(joinpath(pkgdir(CA), "LWP_N_scripts", "process_plot_outputs.jl"))
+output_dir = output_2M
+all_outputs = make_edmf_vec(output_dir)
+filtered = filter_runs(all_outputs)
+sampled = StatsBase.sample(filtered, 40; replace = false)
+
+fig = plot_edmf(sampled, is_1M = false, is_time = false, save = false)
+```
