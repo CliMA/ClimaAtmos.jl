@@ -1101,7 +1101,7 @@ function compute_clwen!(
     moisture_model::NonEquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
-    ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), state, cache)
+    ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), state, cache)
     if isnothing(out)
         return Base.materialize(ᶜq_liq⁰)
     else
@@ -1147,7 +1147,7 @@ function compute_cdncen!(
     microphysics_model_model::Microphysics2Moment,
     turbconv_model::PrognosticEDMFX,
 )
-    ᶜn_liq⁰ = ᶜspecific_env_value(Val(:n_liq), state, cache)
+    ᶜn_liq⁰ = ᶜspecific_env_value(@name(n_liq), state, cache)
     if isnothing(out)
         return Base.materialize(ᶜn_liq⁰)
     else
@@ -1212,7 +1212,7 @@ function compute_clien!(
     moisture_model::NonEquilMoistModel,
     turbconv_model::PrognosticEDMFX,
 )
-    ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), state, cache)
+    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), state, cache)
     if isnothing(out)
         return Base.materialize(ᶜq_ice⁰)
     else
@@ -1261,7 +1261,7 @@ function compute_husraen!(
     microphysics_model_model::Union{Microphysics1Moment, Microphysics2Moment},
     turbconv_model::PrognosticEDMFX,
 )
-    ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), state, cache)
+    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), state, cache)
     if isnothing(out)
         return Base.materialize(ᶜq_rai⁰)
     else
@@ -1307,7 +1307,7 @@ function compute_ncraen!(
     microphysics_model_model::Microphysics2Moment,
     turbconv_model::PrognosticEDMFX,
 )
-    ᶜn_rai⁰ = ᶜspecific_env_value(Val(:n_rai), state, cache)
+    ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), state, cache)
     if isnothing(out)
         return Base.materialize(ᶜn_rai⁰)
     else
@@ -1356,7 +1356,7 @@ function compute_hussnen!(
     microphysics_model_model::Union{Microphysics1Moment, Microphysics2Moment},
     turbconv_model::PrognosticEDMFX,
 )
-    ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), state, cache)
+    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), state, cache)
     if isnothing(out)
         return Base.materialize(ᶜq_sno⁰)
     else

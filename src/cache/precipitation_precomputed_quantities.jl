@@ -31,12 +31,12 @@ function Kin(ᶜw_precip, ᶜu_air)
 end
 
 """
-    set_precipitation_velocities!(Y, p, moisture_model, microphysics_model)
+    set_precipitation_velocities!(Y, p, moisture_model, microphysics_model, turbconv_model)
 
 Updates the precipitation terminal velocity, cloud sedimentation velocity,
 and their contribution to total water and energy advection.
 """
-function set_precipitation_velocities!(Y, p, _, _)
+function set_precipitation_velocities!(Y, p, _, _, _)
     (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     @. ᶜwₜqₜ = Geometry.WVector(0)
     @. ᶜwₕhₜ = Geometry.WVector(0)
@@ -47,6 +47,7 @@ function set_precipitation_velocities!(
     p,
     moisture_model::NonEquilMoistModel,
     microphysics_model::Microphysics1Moment,
+    _,
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
@@ -102,9 +103,136 @@ function set_precipitation_velocities!(
     Y,
     p,
     moisture_model::NonEquilMoistModel,
-    microphysics_model::Microphysics2Moment,
+    microphysics_model::Microphysics1Moment,
+    turbconv_model::PrognosticEDMFX,
 )
-    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwnₗ, ᶜwnᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
+    (; ᶜΦ) = p.core
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₕʲs) = p.precomputed
+    (; ᶜts⁰) = p.precomputed
+    cmc = CAP.microphysics_cloud_params(p.params)
+    cmp = CAP.microphysics_1m_params(p.params)
+    thp = CAP.thermodynamics_params(p.params)
+    FT = eltype(p.params)
+
+    ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜts⁰))
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    # scratch to compute env velocities
+    ᶜw⁰ = p.scratch.ᶜtemp_scalar
+    # scratch to add positive masses of subdomains
+    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities 
+    # over subdomains once negative subdomain mass issues are resolved 
+    ᶜρχ = p.scratch.ᶜtemp_scalar_2
+    # scratch for adding energy fluxes over subdomains
+    ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar_3
+
+    # Compute gs sedimentation velocity based on subdomain velocities (assuming gs flux 
+    # equals sum of sgs fluxes)
+
+    ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
+    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
+    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
+    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
+
+    # Cloud liquid
+    @. ᶜw⁰ = CMNe.terminal_velocity(
+        cmc.liquid,
+        cmc.Ch2022.rain,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_liq⁰),
+    )
+    @. ᶜwₗ = ᶜρa⁰ * ᶜq_liq⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_liq⁰)
+    for j in 1:n
+        @. ᶜwₗ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_liq * ᶜwₗʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_liq)
+    end
+    @. ᶜwₗ = ifelse(ᶜρχ > FT(0), ᶜwₗ / ᶜρχ, FT(0))
+
+    # contribution of env cloud liquid advection to htot advection
+    @. ᶜρwₕhₜ = ᶜρa⁰ * ᶜq_liq⁰ * ᶜw⁰ * (Iₗ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Cloud ice
+    @. ᶜw⁰ = CMNe.terminal_velocity(
+        cmc.ice,
+        cmc.Ch2022.small_ice,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_ice⁰),
+    )
+    @. ᶜwᵢ = ᶜρa⁰ * ᶜq_ice⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_ice⁰)
+    for j in 1:n
+        @. ᶜwᵢ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_ice * ᶜwᵢʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_ice)
+    end
+    @. ᶜwᵢ = ifelse(ᶜρχ > FT(0), ᶜwᵢ / ᶜρχ, FT(0))
+
+    # contribution of env cloud ice advection to htot advection
+    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_ice⁰ * ᶜw⁰ * (Iᵢ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Rain
+    @. ᶜw⁰ = CM1.terminal_velocity(
+        cmp.pr,
+        cmp.tv.rain,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_rai⁰),
+    )
+    @. ᶜwᵣ = ᶜρa⁰ * ᶜq_rai⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_rai⁰)
+    for j in 1:n
+        @. ᶜwᵣ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_rai * ᶜwᵣʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_rai)
+    end
+    @. ᶜwᵣ = ifelse(ᶜρχ > FT(0), ᶜwᵣ / ᶜρχ, FT(0))
+
+    # contribution of env rain advection to htot advection
+    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_rai⁰ * ᶜw⁰ * (Iₗ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Snow
+    @. ᶜw⁰ = CM1.terminal_velocity(
+        cmp.ps,
+        cmp.tv.snow,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_sno⁰),
+    )
+    @. ᶜwₛ = ᶜρa⁰ * ᶜq_sno⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_sno⁰)
+    for j in 1:n
+        @. ᶜwₛ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno * ᶜwₛʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno)
+    end
+    @. ᶜwₛ = ifelse(ᶜρχ > FT(0), ᶜwₛ / ᶜρχ, FT(0))
+
+    # contribution of env snow advection to htot advection
+    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_sno⁰ * ᶜw⁰ * (Iᵢ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Add contributions to energy and total water advection
+    # TODO do we need to add kinetic energy of subdomains?
+    for j in 1:n
+        @. ᶜρwₕhₜ += Y.c.sgsʲs.:($$j).ρa * ᶜwₕʲs.:($$j) * Y.c.sgsʲs.:($$j).mse
+    end
+    @. ᶜwₕhₜ = Geometry.WVector(ᶜρwₕhₜ) / Y.c.ρ
+
+    @. ᶜwₜqₜ =
+        Geometry.WVector(
+            ᶜwₗ * Y.c.ρq_liq +
+            ᶜwᵢ * Y.c.ρq_ice +
+            ᶜwᵣ * Y.c.ρq_rai +
+            ᶜwₛ * Y.c.ρq_sno,
+        ) / Y.c.ρ
+
+    return nothing
+end
+function set_precipitation_velocities!(
+    Y,
+    p,
+    moisture_model::NonEquilMoistModel,
+    microphysics_model::Microphysics2Moment,
+    _,
+)
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
 
     cmc = CAP.microphysics_cloud_params(p.params)
@@ -114,7 +242,7 @@ function set_precipitation_velocities!(
 
     # compute the precipitation terminal velocity [m/s]
     # TODO sedimentation of snow is based on the 1M scheme
-    @. ᶜwnᵣ = getindex(
+    @. ᶜwₙᵣ = getindex(
         CM2.rain_terminal_velocity(
             cm2p.sb,
             cm2p.rtv,
@@ -142,7 +270,7 @@ function set_precipitation_velocities!(
     )
     # compute sedimentation velocity for cloud condensate [m/s]
     # TODO sedimentation of ice is based on the 1M scheme
-    @. ᶜwnₗ = getindex(
+    @. ᶜwₙₗ = getindex(
         CM2.cloud_terminal_velocity(
             cm2p.sb.pdf_c,
             cm2p.ctv,
@@ -184,6 +312,183 @@ function set_precipitation_velocities!(
             ᶜwᵣ * Y.c.ρq_rai * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))) +
             ᶜwₛ * Y.c.ρq_sno * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu))),
         ) / Y.c.ρ
+    return nothing
+end
+function set_precipitation_velocities!(
+    Y,
+    p,
+    moisture_model::NonEquilMoistModel,
+    microphysics_model::Microphysics2Moment,
+    turbconv_model::PrognosticEDMFX,
+)
+    (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
+    (; ᶜΦ) = p.core
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs, ᶜwₕʲs) = p.precomputed
+    (; ᶜts⁰) = p.precomputed
+    cmc = CAP.microphysics_cloud_params(p.params)
+    cm1p = CAP.microphysics_1m_params(p.params)
+    cm2p = CAP.microphysics_2m_params(p.params)
+    thp = CAP.thermodynamics_params(p.params)
+    FT = eltype(p.params)
+
+    ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜts⁰))
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    # scratch to compute env velocities
+    ᶜw⁰ = p.scratch.ᶜtemp_scalar
+    # scratch to add positive masses of subdomains
+    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities 
+    # over subdomains once negative subdomain mass issues are resolved 
+    ᶜρχ = p.scratch.ᶜtemp_scalar_2
+    # scratch for adding energy fluxes over subdomains
+    ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar_3
+
+    # Compute gs sedimentation velocity based on subdomain velocities (assuming gs flux 
+    # equals sum of sgs fluxes)
+
+    ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
+    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
+    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
+    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
+    ᶜn_liq⁰ = ᶜspecific_env_value(@name(n_liq), Y, p)
+    ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), Y, p)
+
+    # Cloud liquid (number)
+    @. ᶜw⁰ = getindex(
+        CM2.rain_terminal_velocity(
+            cm2p.sb,
+            cm2p.rtv,
+            max(zero(Y.c.ρ), ᶜq_liq⁰),
+            ᶜρ⁰,
+            max(zero(Y.c.ρ), ᶜn_liq⁰),
+        ),
+        1,
+    )
+    @. ᶜwₙₗ = ᶜρa⁰ * ᶜn_liq⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜn_liq⁰)
+    for j in 1:n
+        @. ᶜwₙₗ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_liq * ᶜwₙₗʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_liq)
+    end
+    @. ᶜwₙₗ = ifelse(ᶜρχ > FT(0), ᶜwₙₗ / ᶜρχ, FT(0))
+
+    # Cloud liquid (mass)
+    @. ᶜw⁰ = getindex(
+        CM2.rain_terminal_velocity(
+            cm2p.sb,
+            cm2p.rtv,
+            max(zero(Y.c.ρ), ᶜq_liq⁰),
+            ᶜρ⁰,
+            max(zero(Y.c.ρ), ᶜn_liq⁰),
+        ),
+        2,
+    )
+    @. ᶜwₗ = ᶜρa⁰ * ᶜq_liq⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_liq⁰)
+    for j in 1:n
+        @. ᶜwₗ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_liq * ᶜwₗʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_liq)
+    end
+    @. ᶜwₗ = ifelse(ᶜρχ > FT(0), ᶜwₗ / ᶜρχ, FT(0))
+
+    # contribution of env cloud liquid advection to htot advection
+    @. ᶜρwₕhₜ = ᶜρa⁰ * ᶜq_liq⁰ * ᶜw⁰ * (Iₗ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Cloud ice
+    # TODO sedimentation of ice is based on the 1M scheme
+    @. ᶜw⁰ = CMNe.terminal_velocity(
+        cmc.ice,
+        cmc.Ch2022.small_ice,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_ice⁰),
+    )
+    @. ᶜwᵢ = ᶜρa⁰ * ᶜq_ice⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_ice⁰)
+    for j in 1:n
+        @. ᶜwᵢ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_ice * ᶜwᵢʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_ice)
+    end
+    @. ᶜwᵢ = ifelse(ᶜρχ > FT(0), ᶜwᵢ / ᶜρχ, FT(0))
+
+    # contribution of env cloud ice advection to htot advection
+    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_ice⁰ * ᶜw⁰ * (Iᵢ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Rain (number)
+    @. ᶜw⁰ = getindex(
+        CM2.rain_terminal_velocity(
+            cm2p.sb,
+            cm2p.rtv,
+            max(zero(Y.c.ρ), ᶜq_rai⁰),
+            ᶜρ⁰,
+            max(zero(Y.c.ρ), ᶜn_rai⁰),
+        ),
+        1,
+    )
+    @. ᶜwₙᵣ = ᶜρa⁰ * ᶜn_rai⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜn_rai⁰)
+    for j in 1:n
+        @. ᶜwₙᵣ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_rai * ᶜwₙᵣʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).n_rai)
+    end
+    @. ᶜwₙᵣ = ifelse(ᶜρχ > FT(0), ᶜwₙᵣ / ᶜρχ, FT(0))
+
+    # Rain (mass)
+    @. ᶜw⁰ = getindex(
+        CM2.rain_terminal_velocity(
+            cm2p.sb,
+            cm2p.rtv,
+            max(zero(Y.c.ρ), ᶜq_rai⁰),
+            ᶜρ⁰,
+            max(zero(Y.c.ρ), ᶜn_rai⁰),
+        ),
+        2,
+    )
+    @. ᶜwᵣ = ᶜρa⁰ * ᶜq_rai⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_rai⁰)
+    for j in 1:n
+        @. ᶜwᵣ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_rai * ᶜwᵣʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_rai)
+    end
+    @. ᶜwᵣ = ifelse(ᶜρχ > FT(0), ᶜwᵣ / ᶜρχ, FT(0))
+
+    # contribution of env rain advection to qtot advection
+    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_rai⁰ * ᶜw⁰ * (Iₗ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Snow
+    # TODO sedimentation of snow is based on the 1M scheme
+    @. ᶜw⁰ = CM1.terminal_velocity(
+        cm1p.ps,
+        cm1p.tv.snow,
+        ᶜρ⁰,
+        max(zero(Y.c.ρ), ᶜq_sno⁰),
+    )
+    @. ᶜwₛ = ᶜρa⁰ * ᶜq_sno⁰ * ᶜw⁰
+    @. ᶜρχ = max(zero(Y.c.ρ), ᶜρa⁰ * ᶜq_sno⁰)
+    for j in 1:n
+        @. ᶜwₛ += Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno * ᶜwₛʲs.:($$j)
+        @. ᶜρχ += max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_sno)
+    end
+    @. ᶜwₛ = ifelse(ᶜρχ > FT(0), ᶜwₛ / ᶜρχ, FT(0))
+
+    # contribution of env snow advection to htot advection
+    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_sno⁰ * ᶜw⁰ * (Iᵢ(thp, ᶜts⁰) + ᶜΦ)
+
+    # Add contributions to energy and total water advection
+    # TODO do we need to add kinetic energy of subdomains?
+    for j in 1:n
+        @. ᶜρwₕhₜ += Y.c.sgsʲs.:($$j).ρa * ᶜwₕʲs.:($$j) * Y.c.sgsʲs.:($$j).mse
+    end
+    @. ᶜwₕhₜ = Geometry.WVector(ᶜρwₕhₜ) / Y.c.ρ
+
+    @. ᶜwₜqₜ =
+        Geometry.WVector(
+            ᶜwₗ * Y.c.ρq_liq +
+            ᶜwᵢ * Y.c.ρq_ice +
+            ᶜwᵣ * Y.c.ρq_rai +
+            ᶜwₛ * Y.c.ρq_sno,
+        ) / Y.c.ρ
+
     return nothing
 end
 

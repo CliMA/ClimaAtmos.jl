@@ -8,6 +8,7 @@ import ClimaComms
 import ClimaCore:
     Fields, Geometry, InputOutput, Meshes, Spaces, Operators, Domains, Grids
 import ClimaCore.Utilities: half
+import ClimaCore.MatrixFields: @name
 import Thermodynamics as TD
 
 # compute lazily to reduce allocations
