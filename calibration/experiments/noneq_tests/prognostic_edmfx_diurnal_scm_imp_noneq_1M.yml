@@ -42,7 +42,7 @@ dt_rad: "10mins"
 t_end: "30hours"
 cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage: true
-toml: [calibration/experiments/noneq_tests/toml/prognostic_edmfx_calibrated.toml] # THESE PARAMS ARE FOR 1M NOT 0M
+toml: [toml/prognostic_edmfx_calibrated.toml] # THESE PARAMS ARE FOR 1M NOT 0M
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60] # if doing DIAGNOSTIC -- SPEAK 2 JULES ABT NEW PARAMS
 output_default_diagnostics: false
