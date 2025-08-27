@@ -1373,3 +1373,846 @@ in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/n
 └ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
 [ Info: Mean constrained parameter(s): [502.0353776070072, 1974.8643869004527]
 [ Info: Covariance-weighted error: 2.8455798358159002e-5
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-2558935: `srun -J julia-2558935 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-2558935-17562527793.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=Dc2tRxm4iyjUnspa`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9606
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9608
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9610
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9612
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9594
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9596
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9598
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9600
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9602
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9604
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9597
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9599
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9601
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9603
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9605
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9607
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9609
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9611
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9613
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9595
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 13
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 19
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+┌ Warning: Error running on worker 5
+│   exception =
+│    On worker 5:
+│    "EKI_output/iteration_000/member_017/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 3
+│   exception =
+│    On worker 3:
+│    "EKI_output/iteration_000/member_019/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 2
+│   exception =
+│    On worker 2:
+│    "EKI_output/iteration_000/member_020/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 4
+│   exception =
+│    On worker 4:
+│    "EKI_output/iteration_000/member_018/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 8
+│   exception =
+│    On worker 8:
+│    "EKI_output/iteration_000/member_014/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 9
+│   exception =
+│    On worker 9:
+│    "EKI_output/iteration_000/member_013/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 11
+│   exception =
+│    On worker 11:
+│    "EKI_output/iteration_000/member_011/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 7
+│   exception =
+│    On worker 7:
+│    "EKI_output/iteration_000/member_015/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 6
+│   exception =
+│    On worker 6:
+│    "EKI_output/iteration_000/member_016/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 10
+│   exception =
+│    On worker 10:
+│    "EKI_output/iteration_000/member_012/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 20
+│   exception =
+│    On worker 20:
+│    "EKI_output/iteration_000/member_002/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 16
+│   exception =
+│    On worker 16:
+│    "EKI_output/iteration_000/member_006/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 15
+│   exception =
+│    On worker 15:
+│    "EKI_output/iteration_000/member_007/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 19
+│   exception =
+│    On worker 19:
+│    "EKI_output/iteration_000/member_003/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 17
+│   exception =
+│    On worker 17:
+│    "EKI_output/iteration_000/member_005/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 13
+│   exception =
+│    On worker 13:
+│    "EKI_output/iteration_000/member_009/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 12
+│   exception =
+│    On worker 12:
+│    "EKI_output/iteration_000/member_010/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 14
+│   exception =
+│    On worker 14:
+│    "EKI_output/iteration_000/member_008/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 21
+│   exception =
+│    On worker 21:
+│    "EKI_output/iteration_000/member_001/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 18
+│   exception =
+│    On worker 18:
+│    "EKI_output/iteration_000/member_004/parameters.toml": No such file
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:44
+│      [2] _readstring
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:28 [inlined]
+│      [3] parsefile
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/TOML/src/TOML.jl:57
+│      [4] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:269
+│      [5] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/ZrstU/src/file_parsing.jl:266
+│      [6] #AtmosConfig#73
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1183
+│      [7] AtmosConfig
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1167 [inlined]
+│      [8] #AtmosConfig#72
+│        @ ~/.julia/packages/ClimaAtmos/kvhnf/src/solver/types.jl:1165 [inlined]
+│      [9] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│     [10] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│     [11] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [12] invokelatest
+│        @ ./essentials.jl:1052
+│     [13] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [14] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [15] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [16] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+ERROR: LoadError: Execution halted: Iteration 0 had a 100.0% failure rate, exceeding the maximum allowed threshold of 90.0%.
+Stacktrace:
+ [1] 
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:58
+ [2] run_worker_iteration
+   @ ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:14 [inlined]
+ [3] macro expansion
+   @ ./timing.jl:581 [inlined]
+ [4] calibrate(b::Type{…}, ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, n_iterations::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…}, output_dir::String; failure_rate::Float64, worker_pool::WorkerPool)
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/backends.jl:279
+ [5] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:103
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:103
