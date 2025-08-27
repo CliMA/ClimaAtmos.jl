@@ -1,4 +1,4 @@
-# Installation instructions
+# Installation Instructions
 
 ClimaAtmos.jl is a [registered Julia package](https://julialang.org/packages/). To install
 
