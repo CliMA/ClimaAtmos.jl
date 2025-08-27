@@ -42,20 +42,12 @@ function edmfx_sgs_mass_flux_tendency!(
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
     (; dt) = p
 
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    # TODO Here we need to recompute ᶠu³⁰ from the mass flux constraint (instead 
-    # of using the cached value), because the cached boundary value violates the 
-    # constraint after applying the area-fraction boundary condition in 
-    # `set_explicit_precomputed_quantities!` (this is written for only one draft!)
-    ᶠu³⁰ = @. lazy(
-        (ᶠinterp(Y.c.ρ) * ᶠu³ - ᶠinterp(Y.c.sgsʲs.:(1).ρa) * ᶠu³ʲs.:(1)) /
-        ᶠinterp(ᶜρa⁰),
-    )
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
 

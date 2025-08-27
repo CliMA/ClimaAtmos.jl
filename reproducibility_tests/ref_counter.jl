@@ -1,4 +1,4 @@
-258
+259
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+259
+- Fix env boundary values when setting implicit and explicit cache
+
 258
 - Update deps, specifically ClimaParams.jl and Thermodynamics.jl
 
