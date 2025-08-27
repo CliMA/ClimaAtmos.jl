@@ -160,7 +160,7 @@ function edmfx_sgs_mass_flux_tendency!(
                     @. ᶜa_scalar =
                         (ᶜχʲ - ᶜχ) *
                         draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-                    vtt = vertical_transport(
+                    vtt = vertical_transport_precip_massflux(
                         ᶜρʲs.:($j),
                         ᶠu³_diff,
                         ᶜa_scalar,
@@ -183,7 +183,7 @@ function edmfx_sgs_mass_flux_tendency!(
 
                 @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
                 @. ᶜa_scalar = (ᶜχ⁰ - ᶜχ) * draft_area(ᶜρa⁰, ᶜρ⁰)
-                vtt = vertical_transport(
+                vtt = vertical_transport_precip_massflux(
                     ᶜρ⁰,
                     ᶠu³_diff,
                     ᶜa_scalar,
