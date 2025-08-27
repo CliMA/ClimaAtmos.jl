@@ -10,7 +10,7 @@ using Plots
 using LinearAlgebra
 using DataFrames
 
-output_dir = "/home/oalcabes/EKI_output"
+output_dir = "/home/oalcabes/EKI_output/test_2"
 iterations = nothing
 
 include("../../experiments/gcm_driven_scm/helper_funcs.jl")
