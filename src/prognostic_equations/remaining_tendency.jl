@@ -277,7 +277,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         )
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
-
+    horizontal_edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     surface_flux_tendency!(Yₜ, Y, p, t)
 
     radiation_tendency!(Yₜ, Y, p, t, p.atmos.radiation_mode)

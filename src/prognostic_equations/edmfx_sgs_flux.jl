@@ -337,6 +337,110 @@ Arguments:
 """
 edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
+function horizontal_edmfx_sgs_diffusive_flux_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    turbconv_model::PrognosticEDMFX,
+)
+    FT = Spaces.undertype(axes(Y.c))
+    (; dt, params) = p
+    turbconv_params = CAP.turbconv_params(params)
+    (; ᶜu⁰, ᶜK⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ρatke_flux) = p.precomputed
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
+        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+        # scratch to prevent GPU Kernel parameter memory error
+        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
+        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+        ᶜK_u = @. lazy(
+            eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field),
+        )
+        ᶜprandtl_nvec = @. lazy(
+            turbulent_prandtl_number(
+                params,
+                ᶜlinear_buoygrad,
+                ᶜstrain_rate_norm,
+            ),
+        )
+        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+        ᶠρaK_h = p.scratch.ᶠtemp_scalar
+        @. ᶠρaK_h = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h)
+        ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
+        @. ᶠρaK_u = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_u)
+
+        # total enthalpy diffusion
+        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
+        @. Yₜ.c.ρe_tot -= wdivₕ(-(ᶠρaK_h * gradₕ(ᶜmse⁰ + ᶜK⁰)))
+
+
+
+        if use_prognostic_tke(turbconv_model)
+            # Turbulent TKE transport (diffusion)
+            # Add flux divergence and dissipation term, relaxing TKE to zero
+            # in one time step if tke < 0
+            @. Yₜ.c.sgs⁰.ρatke -=
+                wdivₕ(-(ᶠρaK_u * gradₕ(ᶜtke⁰))) + ifelse(
+                    ᶜtke⁰ >= FT(0),
+                    tke_dissipation(
+                        turbconv_params,
+                        Y.c.sgs⁰.ρatke,
+                        ᶜtke⁰,
+                        ᶜmixing_length_field,
+                    ),
+                    Y.c.sgs⁰.ρatke / float(dt),
+                )
+        end
+        if !(p.atmos.moisture_model isa DryModel)
+            # Specific humidity diffusion
+            ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
+            ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+            @. ᶜρχₜ_diffusion = wdivₕ(-(ᶠρaK_h * gradₕ(ᶜq_tot⁰)))
+            @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
+            @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
+        end
+
+        cloud_tracers = (
+            (@name(c.ρq_liq), @name(q_liq)),
+            (@name(c.ρq_ice), @name(q_ice)),
+            (@name(c.ρn_liq), @name(n_liq)),
+        )
+        precip_tracers = (
+            (@name(c.ρq_rai), @name(q_rai)),
+            (@name(c.ρq_sno), @name(q_sno)),
+            (@name(c.ρn_rai), @name(n_rai)),
+        )
+
+        α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
+        ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
+        MatrixFields.unrolled_foreach(cloud_tracers) do (ρχ_name, χ_name)
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+            @. ᶜρχₜ_diffusion = wdivₕ(-(ᶠρaK_h * ᶠgradᵥ(ᶜχ⁰)))
+            ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+            @. ᶜρχₜ -= ᶜρχₜ_diffusion
+        end
+        # TODO - do I need to change anything in the implicit solver
+        # to include the α_vert_diff_tracer?
+        MatrixFields.unrolled_foreach(precip_tracers) do (ρχ_name, χ_name)
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+            @. ᶜρχₜ_diffusion =
+                wdivₕ(-(ᶠρaK_h * α_vert_diff_tracer * ᶠgradᵥ(ᶜχ⁰)))
+            ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+            @. ᶜρχₜ -= ᶜρχₜ_diffusion
+        end
+
+        # Momentum diffusion
+        ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
+        ᶠstrain_rate .= compute_strain_rate_face(ᶜu⁰)
+        @. Yₜ.c.uₕ -= C12(wdivₕ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
+    end
+end
+
 function edmfx_sgs_diffusive_flux_tendency!(
     Yₜ,
     Y,
@@ -347,7 +451,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
     FT = Spaces.undertype(axes(Y.c))
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
-    c_d = CAP.tke_diss_coeff(turbconv_params)
     (; ᶜu⁰, ᶜK⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
