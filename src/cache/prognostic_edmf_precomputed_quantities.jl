@@ -222,49 +222,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
             obukhov_length_val,
             sfc_local_geometry_val,
         )
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
-        )
-            # TODO - any better way to define the cloud and precip tracer flux?
-
-            ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-            ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-            ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-            ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-            ᶜq_liq_int_val = Fields.field_values(Fields.level(ᶜq_liq, 1))
-            ᶜq_liqʲ_int_val = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
-            @. ᶜq_liqʲ_int_val = max(0, ᶜq_liq_int_val)
-
-            ᶜq_ice_int_val = Fields.field_values(Fields.level(ᶜq_ice, 1))
-            ᶜq_iceʲ_int_val = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
-            @. ᶜq_iceʲ_int_val = max(0, ᶜq_ice_int_val)
-
-            ᶜq_rai_int_val = Fields.field_values(Fields.level(ᶜq_rai, 1))
-            ᶜq_raiʲ_int_val = Fields.field_values(Fields.level(ᶜq_raiʲ, 1))
-            @. ᶜq_raiʲ_int_val = max(0, ᶜq_rai_int_val)
-
-            ᶜq_sno_int_val = Fields.field_values(Fields.level(ᶜq_sno, 1))
-            ᶜq_snoʲ_int_val = Fields.field_values(Fields.level(ᶜq_snoʲ, 1))
-            @. ᶜq_snoʲ_int_val = max(0, ᶜq_sno_int_val)
-        end
-        if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.microphysics_model isa Microphysics2Moment
-
-            ᶜn_liq = @. lazy(specific(Y.c.ρn_liq, Y.c.ρ))
-            ᶜn_rai = @. lazy(specific(Y.c.ρn_rai, Y.c.ρ))
-            ᶜn_liqʲ = Y.c.sgsʲs.:($j).n_liq
-            ᶜn_raiʲ = Y.c.sgsʲs.:($j).n_rai
-
-            ᶜn_liq_int_val = Fields.field_values(Fields.level(ᶜn_liq, 1))
-            ᶜn_liqʲ_int_val = Fields.field_values(Fields.level(ᶜn_liqʲ, 1))
-            @. ᶜn_liqʲ_int_val = ᶜn_liq_int_val
-
-            ᶜn_rai_int_val = Fields.field_values(Fields.level(ᶜn_rai, 1))
-            ᶜn_raiʲ_int_val = Fields.field_values(Fields.level(ᶜn_raiʲ, 1))
-            @. ᶜn_raiʲ_int_val = ᶜn_rai_int_val
-
-        end
 
         # Then overwrite the prognostic variables at first inetrior point.
         ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
@@ -273,6 +230,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
             p.atmos.microphysics_model isa Microphysics1Moment ||
             p.atmos.microphysics_model isa Microphysics2Moment
         )
+            ᶜq_liqʲ_int_val = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
+            ᶜq_iceʲ_int_val = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
+            ᶜq_raiʲ_int_val = Fields.field_values(Fields.level(ᶜq_raiʲ, 1))
+            ᶜq_snoʲ_int_val = Fields.field_values(Fields.level(ᶜq_snoʲ, 1))
             @. ᶜtsʲ_int_val = TD.PhaseNonEquil_phq(
                 thermo_params,
                 ᶜp_int_val,
