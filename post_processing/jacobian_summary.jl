@@ -5,6 +5,7 @@ Print a collection of tables that summarize the sparsity patterns and typical
 block magnitudes of different Jacobian algorithms, comparing all available
 sparse approximations against the dense matrix.
 """
+
 function print_jacobian_summary(integrator)
     Y = integrator.u
     t = integrator.t

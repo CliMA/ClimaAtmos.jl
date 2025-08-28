@@ -26,6 +26,21 @@ first_column_view(x::Topologies.DSSBuffer) = nothing
 first_column_view(x) =
     contains_data_layout(x) ? map_components(first_column_view, x) : x
 
+# Type union for column-viewable types
+const ColumnViewable = Union{DataLayouts.AbstractData, Fields.Field, Fields.FieldVector}
+
+# Column view with indices - consolidated using union type
+func_column_view(x::ColumnViewable, i::Int, j::Int, h::Int) = Fields.column(x, i, j, h)
+func_column_view(x::Topologies.DSSBuffer, i::Int, j::Int, h::Int) = nothing
+func_column_view(x, i::Int, j::Int, h::Int) =
+    contains_data_layout(x) ? map_components(Base.Fix3(func_column_view, i, j, h), x) : x
+
+# Column view with function - consolidated using union type  
+func_column_view(x::ColumnViewable, func::Function) = func(x)
+func_column_view(x::Topologies.DSSBuffer, func::Function) = nothing
+func_column_view(x, func::Function) =
+    contains_data_layout(x) ? map_components(func, x) : x
+
 # Makes T the parent array element type of every DataLayout within an object.
 replace_parent_eltype(x::DataLayouts.AbstractData, ::Type{T}) where {T} =
     DataLayouts.replace_basetype(x, T)

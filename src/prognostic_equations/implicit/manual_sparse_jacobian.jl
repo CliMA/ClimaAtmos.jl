@@ -1,7 +1,7 @@
 import LinearAlgebra: I, Adjoint
 
 using ClimaCore.MatrixFields
-import ClimaCore.MatrixFields: @name
+import ClimaCore.MatrixFields: @name, ldiv!, FieldMatrixWithSolver
 
 abstract type DerivativeFlag end
 struct UseDerivative <: DerivativeFlag end
@@ -127,6 +127,10 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         name -> (name, name) => FT(-1) * I,
         (@name(c.ρ), sfc_if_available...),
     )
+    # debug_blocks = MatrixFields.unrolled_map(
+    #     name -> (name, @name(f.u₃)) => FT(-1) * I,
+    #     (@name(c.ρ), @name(c.ρe_tot), @name(c.ρq_tot), @name(f.u₃), sfc_if_available...),
+    # )
 
     active_scalar_names = (@name(c.ρ), @name(c.ρe_tot), ρq_tot_if_available...)
     advection_blocks = (
@@ -194,7 +198,14 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             )...,
         )
     end
-
+    # @Main.infiltrate
+    # parent(diffusion_blocks[1][2]) .= Float32(0.0)
+    # parent(diffusion_blocks[2][2]) .= Float32(0.0)
+    # parent(diffusion_blocks[3][2]) .= Float32(0.0)
+    # parent(diffusion_blocks[4][2]) .= Float32(0.0)
+    # parent(diffusion_blocks[5][2]) .= Float32(0.0)
+    # parent(diffusion_blocks[6][2]) .= Float32(0.0)
+    
     sgs_advection_blocks = if atmos.turbconv_model isa PrognosticEDMFX
         @assert n_prognostic_mass_flux_subdomains(atmos.turbconv_model) == 1
         if use_derivative(sgs_advection_flag)
@@ -237,6 +248,17 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         ()
     end
 
+    # parent(advection_blocks[1][2].entries)[:,:,:,:,:] .= Float32(0.0)
+    # parent(advection_blocks[2][2].entries)[:,:,:,:,:] .= Float32(0.0)
+    # parent(advection_blocks[3][2].entries)[:,:,:,:,:] .= Float32(0.0)
+    # parent(advection_blocks[4][2].entries)[:,:,:,:,:] .= Float32(0.0)
+    # parent(advection_blocks[5][2].entries)[:,:,:,:,:] .= Float32(0.0)
+    # parent(advection_blocks[6][2].entries)[:,:,:,:,:] .= Float32(0.0)
+    # parent(advection_blocks[7][2].entries)[:,:,:,:,:] .= Float32(0.0)
+    # parent(advection_blocks[8][2].entries)[:,:,:,:,:] .= Float32(0.0)
+
+    # @Main.infiltrate
+
     sgs_massflux_blocks = if atmos.turbconv_model isa PrognosticEDMFX
         @assert n_prognostic_mass_flux_subdomains(atmos.turbconv_model) == 1
         if use_derivative(sgs_mass_flux_flag)
@@ -263,10 +285,11 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
 
     matrix = MatrixFields.FieldMatrix(
         identity_blocks...,
-        sgs_advection_blocks...,
+        # debug_blocks...,
+        # sgs_advection_blocks...,
         advection_blocks...,
         diffusion_blocks...,
-        sgs_massflux_blocks...,
+        # sgs_massflux_blocks...,
     )
 
     mass_and_surface_names = (@name(c.ρ), sfc_if_available...)
@@ -325,6 +348,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
             )
         end
 
+    # @Main.infiltrate
     return (; matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, full_alg))
 end
 
@@ -641,6 +665,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(-(ᶜq_tot) / ᶜρ)
             @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
+            # @. ∂ᶜρe_tot_err_∂ᶜρq_tot *= FT(0.0)
         end
 
         MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, _)
@@ -1129,6 +1154,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 end
 
 function invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R)
-    Main.@infiltrate
     LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
+    # @Main.infiltrate
 end

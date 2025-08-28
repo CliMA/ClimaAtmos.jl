@@ -256,11 +256,26 @@ function compute_coriolis(ᶜcoord, ᶠcoord, params)
             )
             ᶜf³ = @. CT3(CT123(coriolis_deep(ᶜcoord)))
             ᶠf¹² = @. CT12(CT123(coriolis_deep(ᶠcoord)))
+            # ᶠf¹² = @. zero(ᶠf¹²)  # IGNORE
         else
+
+            # @info "Using shallow atmosphere full Coriolis"
+            # coriolis_shallow(coord::Geometry.LatLongZPoint) = Geometry.LocalVector(
+            #     Geometry.Cartesian123Vector(zero(Ω), zero(Ω), 2 * Ω),
+            #     global_geom,
+            #     coord,
+            # )
+            # ᶜf³ = @. CT3(CT123(coriolis_shallow(ᶜcoord)))
+            # ᶠf¹² = @. CT12(CT123(coriolis_shallow(ᶠcoord)))
+
+            # ᶠf¹² = @. zero(ᶠf¹²)  # IGNORE
+
+            @info "Using shallow atmosphere traditional approximation"
             coriolis_shallow(coord::Geometry.LatLongZPoint) =
                 Geometry.WVector(2 * Ω * sind(coord.lat))
             ᶜf³ = @. CT3(coriolis_shallow(ᶜcoord))
             ᶠf¹² = nothing
+
         end
     else
         f = CAP.f_plane_coriolis_frequency(params)

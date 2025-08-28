@@ -122,8 +122,34 @@ function vertical_diffusion_boundary_layer_tendency!(
             specific(Y.c.ρe_tot, Y.c.ρ),
         ),
     )
-    @. Yₜ.c.ρe_tot -=
-        ᶜdivᵥ_ρe_tot(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜh_tot)))
+
+    # @Main.infiltrate
+
+    # finterp_rho = (@. ᶠinterp(Y.c.ρ)).value
+    # finterp_cKh = (@. ᶠinterp(ᶜK_h)).value
+    # fgradv_chtot_tmp = @. ᶠgradᵥ(ᶜh_tot)
+    # fgradv_chtot = (Geometry.UVWVector.(@. ᶠgradᵥ(ᶜh_tot)).components.data.:3).value
+    # full_term_tmp = (@. -(finterp_rho * finterp_cKh * fgradv_chtot_tmp))
+    # full_term = (Geometry.UVWVector.(full_term_tmp).components.data.:3).value
+    # div_term = (@. ᶜdivᵥ_ρe_tot(full_term_tmp)).value
+
+    # Helper function to extract .value only for dual numbers
+    extract_value(x::ForwardDiff.Dual) = x.value
+    extract_value(x) = x
+
+    # Apply to your code:
+    # finterp_rho = extract_value.(@. ᶠinterp(Y.c.ρ))
+    # finterp_cKh = extract_value.(@. ᶠinterp(ᶜK_h))
+    # fgradv_chtot_tmp = @. ᶠgradᵥ(ᶜh_tot)
+    # fgradv_chtot = extract_value.(Geometry.UVWVector.(@. ᶠgradᵥ(ᶜh_tot)).components.data.:3)
+    # full_term_tmp = (@. -(finterp_rho * finterp_cKh * fgradv_chtot_tmp))
+    # full_term = extract_value.(Geometry.UVWVector.(full_term_tmp).components.data.:3)
+    # div_term = extract_value.(@. ᶜdivᵥ_ρe_tot(full_term_tmp))
+
+    # @Main.infiltrate
+
+    @. Yₜ.c.ρe_tot -= FT(0.0)
+        # ᶜdivᵥ_ρe_tot(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜh_tot)))
 
     ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_2
     ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_3
@@ -149,7 +175,9 @@ function vertical_diffusion_boundary_layer_tendency!(
         # Only add contribution from total water diffusion to mass tendency
         # (exclude contributions from diffusion of condensate, precipitation)
         if ρχ_name == @name(ρq_tot)
-            @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
+            @. Yₜ.c.ρ -= FT(0.0)
+            # @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
         end
+        # @Main.infiltrate
     end
 end

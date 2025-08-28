@@ -281,10 +281,31 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     if isnothing(ᶠf¹²)
         # shallow atmosphere
+
+        # 
+sa_exp_tend = @. ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK);
+# sa_exp_tend_lbl = "ShAt: (ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)";
+
+# sa_curl = @. ᶠω¹² × ᶠinterp(CT12(ᶜu));
+# sa_curl_lbl = "ShAt: (ᶠω¹²) × ᶠinterp(CT12(ᶜu))";
+
+# sa_grad = @. ᶠgradᵥ(ᶜK);
+# sa_grad_lbl = "ShAt: ᶠgradᵥ(ᶜK)";
+
+# @Main.infiltrate
+
+
+        FT = eltype(Y.c.ρ)
+        # tmp_tend = Main.safehouse.da_exp_tend2
         @. Yₜ.c.uₕ -=
             ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
             (ᶜf³ + ᶜω³) × CT12(ᶜu)
         @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+        # @. Yₜ.f.u₃ -= tmp_tend
+
+
+        # @Main.infiltrate
+
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
                 ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
@@ -292,10 +313,29 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
     else
         # deep atmosphere
+        # # Deep Atmosphere Explicit Tendency
+        # da_exp_tend1 = @. ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK);
+        da_exp_tend2 = @. (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu))  + ᶠgradᵥ(ᶜK);
+        # da_exp_tend_lbl1 = "(ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)";
+        # da_exp_tend_lbl2 = "(ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu))  + ᶠgradᵥ(ᶜK)";
+
+        # # Deep Atmosphere Curls
+        # da_curl_1 = @. ᶠω¹² × ᶠinterp(CT12(ᶜu));
+        # da_curl_2 = @. (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu));
+        # da_curl_lbl1 = "(ᶠω¹²) × ᶠinterp(CT12(ᶜu))";
+        # da_curl_lbl2 = "(ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) ";
+
+        # # Deep Atmosphere grad(K)
+        # da_grad = ᶠgradᵥ.(ᶜK)
+        # da_grad_lbl1 = "ᶠgradᵥ(ᶜK)";
+
+        # @Main.infiltrate
+        FT = eltype(Y.c.ρ)
         @. Yₜ.c.uₕ -=
             ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
             (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+        @. Yₜ.f.u₃ -= ((ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu))) + ᶠgradᵥ(ᶜK)
+
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
                 (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
