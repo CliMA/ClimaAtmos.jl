@@ -422,16 +422,6 @@ function edmfx_sgs_vertical_advection_tendency!(
 
             # Sedimentation
             # TODO - lazify ᶜwₗʲs computation. No need to cache it.
-            (; ᶜwₕʲs, ᶜwₜʲs) = p.precomputed
-            ᶠwₕʲ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕʲs.:(1))))))
-            ᶠwₜʲ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜʲs.:(1))))))
-            # Advective form advection of mse with sedimentation velocities
-            va = vertical_advection(ᶠwₕʲ, Y.c.sgsʲs.:(1).mse, edmfx_upwinding)
-            @. Yₜ.c.sgsʲs.:(1).mse += va
-            # Advective form advection of q_tot with sedimentation velocities
-            va = vertical_advection(ᶠwₜʲ, Y.c.sgsʲs.:(1).q_tot, edmfx_upwinding)
-            @. Yₜ.c.sgsʲs.:(1).q_tot += va
-
             sgs_microphysics_tracers = (
                 (@name(c.sgsʲs.:(1).q_liq), @name(q_liq), @name(ᶜwₗʲs.:(1))),
                 (@name(c.sgsʲs.:(1).q_ice), @name(q_ice), @name(ᶜwᵢʲs.:(1))),
