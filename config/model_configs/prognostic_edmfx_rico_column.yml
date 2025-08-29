@@ -26,7 +26,7 @@ z_elem: 100
 z_stretch: false
 perturb_initstate: false
 dt: "5secs"
-t_end: "180mins"
+t_end: "6hours"
 dt_save_state_to_disk: "60mins"
 toml: [toml/prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [8, 8, 100]

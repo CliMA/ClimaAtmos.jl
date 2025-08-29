@@ -15,7 +15,7 @@ edmfx_nh_pressure: true
 edmfx_filter: true
 prognostic_tke: true
 moist: "nonequil"
-cloud_model: "quadrature_sgs"
+cloud_model: "grid_scale"
 precip_model: "1M"
 call_cloud_diagnostics_per_stage: true
 config: "column"
@@ -26,7 +26,7 @@ z_max: 1500
 z_stretch: false
 perturb_initstate: false
 dt: 10secs
-t_end: 12hours
+t_end: 5hours
 dt_save_state_to_disk: 10mins
 toml: [toml/diagnostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [8, 8, 30]
