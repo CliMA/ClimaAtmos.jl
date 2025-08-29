@@ -83,8 +83,15 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
 
     end
     
+    # Following Herrington et al (2022a.)
+    # Rewrite ∇Φ + ∇ₕ(p)/ρ  = ∇Φ + cp_d * θᵥ * ∇Π 
+    # where Π = (p/p_0)^κ. 
+    # Additional notes: Ullrich et al. (2016) who also take the ∇κ term ≈ 0. 
+    Γ_0 = FT(6.5) # Lapse rate (K/km)
+    T_0 = FT(288) - Γ_0*FT(288)*cp_d/grav  # ~ 97 K
     θ_v = lazy.(TD.virtual_pottemp(thermo_params, ᶜts))
-    Π = lazy.(TD.exner(thermo_params, ᶜts))
+    Π = lazy.(TD.exner_given_pressure(thermo_params, 
+                                      TD.air_pressure(thermo_params, ᶜts)))
     @. Yₜ.c.uₕ -= C12(cp_d *
                   θᵥ * 
                   gradₕ(Π) + cp_d * T_0 * (gradₕ(log(Π)) - 1 / Π * gradₕ(Π)) +  # Equation A15
