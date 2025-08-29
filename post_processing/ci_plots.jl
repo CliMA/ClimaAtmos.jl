@@ -624,6 +624,7 @@ function make_plots(
     sim_type::Union{
         Val{:single_column_precipitation_test},
         Val{:single_column_precipitation_2M_test},
+        Val{:single_column_precipitation_2MP3_test},
     },
     output_paths::Vector{<:AbstractString},
 )
