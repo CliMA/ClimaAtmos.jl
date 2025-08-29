@@ -222,7 +222,30 @@ function precipitation_tendency!(
     microphysics_model::Microphysics2Moment,
     turbconv_model::DiagnosticEDMFX,
 )
-    error("Not implemented yet")
+    # Source terms from EDMFX environment
+    (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜSnₗᵖ⁰, ᶜSnᵣᵖ⁰) = p.precomputed
+    # Source terms from EDMFX updrafts
+    (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜSnₗᵖʲs, ᶜSnᵣᵖʲs) = p.precomputed
+    (; ᶜρaʲs) = p.precomputed
+
+    # Update from environment precipitation sources
+    @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜSqₗᵖ⁰
+    @. Yₜ.c.ρq_ice += Y.c.ρ * ᶜSqᵢᵖ⁰
+    @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜSqᵣᵖ⁰
+    @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜSqₛᵖ⁰
+    @. Yₜ.c.ρn_liq += Y.c.ρ * ᶜSnₗᵖ⁰
+    @. Yₜ.c.ρn_rai += Y.c.ρ * ᶜSnᵣᵖ⁰
+
+    # Update from the updraft precipitation sources
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    for j in 1:n
+        @. Yₜ.c.ρq_liq += ᶜρaʲs.:($$j) * ᶜSqₗᵖʲs.:($$j)
+        @. Yₜ.c.ρq_ice += ᶜρaʲs.:($$j) * ᶜSqᵢᵖʲs.:($$j)
+        @. Yₜ.c.ρq_rai += ᶜρaʲs.:($$j) * ᶜSqᵣᵖʲs.:($$j)
+        @. Yₜ.c.ρq_sno += ᶜρaʲs.:($$j) * ᶜSqₛᵖʲs.:($$j)
+        @. Yₜ.c.ρn_liq += ᶜρaʲs.:($$j) * ᶜSnₗᵖʲs.:($$j)
+        @. Yₜ.c.ρn_rai += ᶜρaʲs.:($$j) * ᶜSnᵣᵖʲs.:($$j)
+    end
 end
 function precipitation_tendency!(
     Yₜ,
