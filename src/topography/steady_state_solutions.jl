@@ -175,23 +175,23 @@ end
 
 function steady_state_velocity_cosine_2d(params, coord, z_top)
     FT = eltype(params)
-    (; λ) = cosine_params(FT)
+    (; λ) = Topography.cosine_params(FT)
     (; x, z) = coord
     return steady_state_velocity_cosine(params, x, FT(0), z, λ, FT(Inf), z_top)
 end
 
 function steady_state_velocity_cosine_3d(params, coord, z_top)
     FT = eltype(params)
-    (; λ) = cosine_params(FT)
+    (; λ) = Topography.cosine_params(FT)
     (; x, y, z) = coord
     return steady_state_velocity_cosine(params, x, y, z, λ, λ, z_top)
 end
 
 function steady_state_velocity_cosine(params, x, y, z, λ_x, λ_y, z_top)
     FT = eltype(params)
-    (; h_max) = cosine_params(FT)
+    (; h_max) = Topography.cosine_params(FT)
     u = background_u(FT)
-    h = topography_cosine(x, y, λ_x, λ_y, h_max)
+    h = Topography.topography_cosine(x, y, λ_x, λ_y, h_max)
     η = (z - h) / (1 - h / z_top)
     k_x = 2 * FT(π) / λ_x
     k_y = 2 * FT(π) / λ_y
@@ -255,12 +255,12 @@ end
 
 function steady_state_velocity_agnesi(params, coord, z_top)
     FT = eltype(params)
-    (; h_max, x_center, a) = agnesi_params(FT)
+    (; h_max, x_center, a) = Topography.agnesi_params(FT)
     topography_agnesi_Fh(k_x) = h_max * a / 2 * exp(-a * abs(k_x))
     n_efolding_intervals = -log(eps(FT))
     k_x_max = n_efolding_intervals / a
     return steady_state_velocity_mountain_2d(
-        topography_agnesi,
+        Topography.topography_agnesi,
         topography_agnesi_Fh,
         params,
         coord,
@@ -272,7 +272,7 @@ end
 
 function steady_state_velocity_schar(params, coord, z_top)
     FT = eltype(params)
-    (; h_max, x_center, λ, a) = schar_params(FT)
+    (; h_max, x_center, λ, a) = Topography.schar_params(FT)
     k_peak = 2 * FT(π) / λ
     Fh_coef = h_max * a / (8 * sqrt(FT(π)))
     topography_schar_Fh(k_x) =
@@ -284,7 +284,7 @@ function steady_state_velocity_schar(params, coord, z_top)
     n_efolding_intervals = -log(eps(FT))
     k_x_max = k_peak + 2 * sqrt(n_efolding_intervals) / a
     return steady_state_velocity_mountain_2d(
-        topography_schar,
+        Topography.topography_schar,
         topography_schar_Fh,
         params,
         coord,

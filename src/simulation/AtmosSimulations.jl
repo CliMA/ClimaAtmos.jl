@@ -1,3 +1,5 @@
+include("steady_state_velocity.jl")
+
 struct AtmosSimulation{TT, S1 <: AbstractString, S2 <: AbstractString, OW, OD}
     job_id::S1
     output_dir::S2
@@ -59,7 +61,7 @@ Important differences (future work):
   - get_simulation uses enable_diagnostics flag vs direct diagnostics parameter
 - [ ] Handle diagnostics and callbacks in separate functions, keep current behavior, add default diagnostics 
 - [ ] Ensure FT is propagated consistently with default structs (params, domain)
-- [ ] Deal with domain not having topography
+- [x] Deal with domain not having topography
 - [ ] Ensure output writers are set up correctly
 - [ ] Ensure same defaults between constructors
 - [ ] See what else can be unified between the two constructors
@@ -68,16 +70,16 @@ Important differences (future work):
 =#
 
 function AtmosSimulation(;
-    model::AtmosModel,
-    domain::AbstractDomain = SphereDomain{default_FT}(),
-    params = ClimaAtmosParameters(default_FT),
-    initial_condition = DecayingProfile(params),
-    comms_ctx = ClimaComms.SingletonCommsContext(),
+    model::AtmosModel = AtmosModel(),
+    domain::AtmosDomain = SphereDomain{default_FT}(),
+    params::ClimaAtmosParameters = ClimaAtmosParameters(default_FT),
+    initial_condition::ICs.InitialCondition = InitialConditions.DecayingProfile(),
+    comms_ctx::ClimaComms.AbstractCommsContext = ClimaComms.context(),
     dt = 600,
     t_start = 0,
     t_end = 24 * 10 * 60 * 60,  # 10 days
     ode_algo = CTS.ARS343(),
-    surface_setup = DefaultExchangeCoefficients(params),
+    surface_setup = SurfaceConditions.DefaultExchangeCoefficients()(params),
     job_id = "atmos_sim",
     output_dir = "output",
     restart_file = nothing,
@@ -87,47 +89,31 @@ function AtmosSimulation(;
     diagnostics = (),
     discrete_hydrostatic_balance = false,
     itime = true,
+    check_steady_state = false,
 )
     if !isnothing(restart_file)
         (Y, t_start) = get_state_restart(
-            restart_file,
-            start_date,
-            hash(model),
-            comms_ctx,
-            itime,
+            restart_file, start_date, hash(model), comms_ctx, itime,
         )
         spaces = get_spaces_restart(Y)
     else
         spaces = get_spaces(domain, params, comms_ctx)
         Y = ICs.atmos_state(
-            initial_condition(params),
-            model,
+            initial_condition(params), model,
             spaces.center_space,
             spaces.face_space,
         )
         CA.InitialConditions.overwrite_initial_conditions!(
-            initial_condition,
-            Y,
-            params.thermodynamics_params,
+            initial_condition, Y, params.thermodynamics_params,
         )
     end
-    # TODO: Deal with domain not having topography
+
     steady_state_velocity = get_steady_state_velocity(
-        params,
-        Y,
-        domain.topography,
-        initial_condition,
-        domain.mesh_warp_type,
+        domain, initial_condition, params, Y; check_steady_state,
     )
 
     p = build_cache(
-        Y,
-        model,
-        params,
-        surface_setup,
-        dt,
-        start_date,
-        tracers,
+        Y, model, params, surface_setup, dt, start_date, tracers,
         steady_state_velocity,
     )
     discrete_hydrostatic_balance &&
