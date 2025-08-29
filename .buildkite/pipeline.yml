@@ -849,9 +849,9 @@ steps:
         - label: ":umbrella: Prognostic EDMFX Perturbed Dycoms RF02 in a column"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf02_column.yml
-          --job_id diagnostic_edmfx_dycoms_rf02_column.yml
-        artifact_paths: "diagnostic_edmfx_dycoms_rf02_column/output_active/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_perturbed_dycoms_rf02_column.yml
+          --job_id prognostic_edmfx_perturbed_dycoms_rf02_column.yml
+        artifact_paths: "prognostic_edmfx_perturbed_dycoms_rf02_column/output_active/*"
         agents:
           slurm_mem: 20GB
 
