@@ -3,10 +3,6 @@ subsidence: DYCOMS
 scm_coriolis: DYCOMS_RF02
 rad: DYCOMS
 surface_setup: DYCOMS_RF02
-q_tot_0_dycoms_rf02: 8.0
-theta_0_dycoms_rf02: 284.0
-theta_i_dycoms_rf02: 291.0
-z_max: 800.0
 turbconv: "prognostic_edmfx"
 implicit_diffusion: false
 approximate_linear_solve_iters: 2
