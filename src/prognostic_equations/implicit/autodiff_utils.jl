@@ -172,3 +172,56 @@ for func in (:isequal, :isless, :<, :>, :(==), :!=, :<=, :>=)
             $func(arg1, ForwardDiff.value(arg2))
     end
 end
+
+# Use the continuous derivatives for a single iteration of saturation
+# adjustment, instead of the full discontinuous derivatives.
+function TD.saturation_adjustment(
+    ::Type{sat_adjust_method},
+    param_set::TD.APS,
+    e_intᴰ::FT,
+    ρᴰ::FT,
+    q_totᴰ::FT,
+    ::Type{phase_type},
+    maxiter::Int,
+    relative_temperature_tol::Real,
+    T_guess::Union{Real, Nothing} = nothing,
+) where {
+    FT <: ForwardDiff.Dual{Jacobian},
+    sat_adjust_method,
+    phase_type <: TD.PhaseEquil,
+}
+    e_int = ForwardDiff.value(e_intᴰ)
+    ρ = ForwardDiff.value(ρᴰ)
+    q_tot = ForwardDiff.value(q_totᴰ)
+
+    ts = TD.PhaseEquil_ρeq(
+        param_set,
+        ρ,
+        e_int,
+        q_tot,
+        maxiter,
+        relative_temperature_tol,
+        sat_adjust_method,
+        T_guess,
+    )
+    cv_m = TD.cv_m(param_set, ts)
+    T = TD.air_temperature(param_set, ts)
+
+    T_0 = TD.Parameters.T_0(param_set)
+    R_d = TD.Parameters.R_d(param_set)
+    Δcv_v = TD.Parameters.cv_v(param_set) - TD.Parameters.cv_d(param_set)
+    Δe_int = T_0 * R_d + TD.Parameters.e_int_v0(param_set)
+    ∂T_∂e_int = 1 / cv_m
+    ∂T_∂q_tot =
+        -(Δe_int + Δcv_v / cv_m * (T_0 * R_d + e_int - Δe_int * q_tot)) / cv_m
+
+    # ∂T_∂ρ = 0, so we don't need to use ForwardDiff.partials(ρᴰ).
+    return ForwardDiff.dual_definition_retval(
+        Val(Jacobian),
+        T,
+        ∂T_∂e_int,
+        ForwardDiff.partials(e_intᴰ),
+        ∂T_∂q_tot,
+        ForwardDiff.partials(q_totᴰ),
+    )
+end
