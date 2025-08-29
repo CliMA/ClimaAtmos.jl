@@ -10,7 +10,7 @@ include(joinpath(@__DIR__, "src", "config_table.jl"))
 doctest(ClimaAtmos; plugins = [bib])
 disable_logging(Base.CoreLogging.BelowMinLevel) # Re-enable all logging
 
-example_pages = ["Perturbation Experiments" => "perturbed_dycoms_rf02.md"]
+example_pages = ["Perturbation Experiments" => "perturbed_dycoms_rf02.md"
 
 makedocs(;
     plugins = [bib],
