@@ -845,7 +845,7 @@ steps:
         agents:
           slurm_mem: 20GB
         
-        - label: ":umbrella: Prognostic EDMFX Perturbed Dycoms RF02 in a column"
+      - label: ":umbrella: Prognostic EDMFX Perturbed Dycoms RF02 in a column"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_perturbed_dycoms_rf02_column.yml
