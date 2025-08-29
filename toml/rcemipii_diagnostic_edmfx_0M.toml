@@ -25,7 +25,7 @@ value = 0
 [angular_velocity_planet_rotation]
 value = 0
 
-[ocean_surface_albedo]
+[idealized_ocean_albedo]
 value = 0.07
 
 [mean_sea_level_pressure]

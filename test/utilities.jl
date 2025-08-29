@@ -50,8 +50,8 @@ end
     κ = zeros(cent_space)
     κ .= CA.compute_kinetic(uₕ, uᵥ)
     ᶜκ_exact = @. 1 // 2 *
-       cos(z)^2 *
-       ((sin(x)^2) * (cos(y)^2) + (cos(x)^2) * (sin(y)^2))
+                  cos(z)^2 *
+                  ((sin(x)^2) * (cos(y)^2) + (cos(x)^2) * (sin(y)^2))
     # Test upto machine precision approximation
     @test ᶜκ_exact ≈ κ
 end
@@ -81,8 +81,8 @@ end
     UVW = Geometry.UVWVector
     # Assemble (Cartesian) velocity
     ᶜu = @. UVW(Geometry.UVector(u)) +
-       UVW(Geometry.VVector(v)) +
-       UVW(Geometry.WVector(w))
+            UVW(Geometry.VVector(v)) +
+            UVW(Geometry.WVector(w))
     ᶠu = @. UVW(Geometry.UVector(ᶠu)) +
        UVW(Geometry.VVector(ᶠv)) +
        UVW(Geometry.WVector(ᶠw))

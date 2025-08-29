@@ -15,12 +15,15 @@ import StaticArrays as SA
 Construct the parameter set for any ClimaAtmos configuration.
 """
 ClimaAtmosParameters(config::AtmosConfig) =
-    ClimaAtmosParameters(config.toml_dict)
+    ClimaAtmosParameters(config.toml_dict, config.parsed_args)
 
 ClimaAtmosParameters(::Type{FT}) where {FT <: AbstractFloat} =
     ClimaAtmosParameters(CP.create_toml_dict(FT))
 
-function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
+function ClimaAtmosParameters(
+    toml_dict::TD,
+    parsed_args = nothing,
+) where {TD <: CP.AbstractTOMLDict}
     FT = CP.float_type(toml_dict)
 
     turbconv_params = TurbulenceConvectionParameters(toml_dict)
@@ -51,6 +54,16 @@ function ClimaAtmosParameters(toml_dict::TD) where {TD <: CP.AbstractTOMLDict}
     microphysics_0m_params = CM.Parameters.Parameters0M(toml_dict)
     microphysics_1m_params = microphys_1m_parameters(toml_dict)
     microphysics_2m_params = microphys_2m_parameters(toml_dict)
+
+    # If parsed_args is provided, we can save parameter space by only loading parameters
+    # needed for the microphysics model that is actually used.
+    if !isnothing(parsed_args)
+        cm_model = get_microphysics_model(parsed_args)
+        cm_model isa Microphysics0Moment || (microphysics_0m_params = nothing)
+        cm_model isa Union{Microphysics1Moment, Microphysics2Moment} ||
+            (microphysics_1m_params = nothing)
+        cm_model isa Microphysics2Moment || (microphysics_2m_params = nothing)
+    end
     MP0M = typeof(microphysics_0m_params)
     MP1M = typeof(microphysics_1m_params)
     MP2M = typeof(microphysics_2m_params)
@@ -115,7 +128,7 @@ atmos_name_map = (;
     :drag_layer_vertical_extent => :σ_b,
     :kappa_2_sponge => :kappa_2_sponge,
     :held_suarez_minimum_temperature => :T_min_hs,
-    :ocean_surface_albedo => :idealized_ocean_albedo,
+    :idealized_ocean_albedo => :idealized_ocean_albedo,
     :water_refractive_index => :water_refractive_index,
     :optics_lookup_temperature_min => :optics_lookup_temperature_min,
     :optics_lookup_temperature_max => :optics_lookup_temperature_max,
@@ -192,7 +205,7 @@ function aerosol_ml_parameters(toml_dict)
         :dust_calibration_coefficient => :α_dust,
         :seasalt_calibration_coefficient => :α_seasalt,
         :ammonium_sulfate_calibration_coefficient => :α_SO4,
-        :liquid_water_specific_humidity_calibration_coefficent => :α_q_liq,
+        :liquid_water_specific_humidity_calibration_coefficient => :α_q_liq,
         :reference_dust_aerosol_mass_concentration => :c₀_dust,
         :reference_seasalt_aerosol_mass_concentration => :c₀_seasalt,
         :reference_ammonium_sulfate_mass_concentration => :c₀_SO4,
