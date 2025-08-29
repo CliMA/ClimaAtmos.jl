@@ -374,9 +374,23 @@ function get_surface_setup(parsed_args)
 end
 
 function get_jacobian(ode_algo, Y, atmos, parsed_args)
+    return get_jacobian(
+        ode_algo,
+        Y,
+        atmos,
+        parsed_args["use_dense_jacobian"],
+        parsed_args["use_auto_jacobian"],
+        parsed_args["approximate_linear_solve_iters"],
+        parsed_args["debug_jacobian"],
+    )
+end
+
+function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
+    approximate_linear_solve_iters, debug_jacobian,
+)
     ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         return nothing
-    jacobian_algorithm = if parsed_args["use_dense_jacobian"]
+    jacobian_algorithm = if use_dense_jacobian
         AutoDenseJacobian()
     else
         manual_jacobian_algorithm = ManualSparseJacobian(
@@ -386,30 +400,43 @@ function get_jacobian(ode_algo, Y, atmos, parsed_args)
             DerivativeFlag(atmos.sgs_entr_detr_mode),
             DerivativeFlag(atmos.sgs_mf_mode),
             DerivativeFlag(atmos.sgs_nh_pressure_mode),
-            parsed_args["approximate_linear_solve_iters"],
+            approximate_linear_solve_iters,
         )
-        parsed_args["use_auto_jacobian"] ?
+        use_auto_jacobian ?
         AutoSparseJacobian(
             manual_jacobian_algorithm,
-            parsed_args["auto_jacobian_padding_bands"],
+            auto_jacobian_padding_bands,
         ) : manual_jacobian_algorithm
     end
     @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
-    verbose = parsed_args["debug_jacobian"]
+    verbose = debug_jacobian
     return Jacobian(jacobian_algorithm, Y, atmos; verbose)
 end
 
-#=
-    ode_configuration(Y, parsed_args)
+function ode_configuration(::Type{FT}, args) where {FT}
+    return ode_configuration(
+        FT,
+        args["ode_algo"],
+        args["update_jacobian_every"],
+        args["max_newton_iters_ode"],
+        args["use_krylov_method"],
+        args["use_dynamic_krylov_rtol"],
+        args["eisenstat_walker_forcing_alpha"],
+        args["krylov_rtol"],
+        args["use_newton_rtol"],
+        args["newton_rtol"],
+    )
+end
 
-Returns the ode algorithm
-=#
-function ode_configuration(::Type{FT}, parsed_args) where {FT}
-    ode_name = parsed_args["ode_algo"]
+
+function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
+    max_newton_iters_ode, use_krylov_method, use_dynamic_krylov_rtol,
+    eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol, newton_rtol,
+) where {FT}
     ode_algo_name = getproperty(CTS, Symbol(ode_name))
     @info "Using ODE config: `$ode_algo_name`"
     return if ode_algo_name <: CTS.RosenbrockAlgorithmName
-        if parsed_args["update_jacobian_every"] != "solve"
+        if update_jacobian_every != "solve"
             @warn "Rosenbrock algorithms in ClimaTimeSteppers currently only \
                    support `update_jacobian_every` = \"solve\""
         end
@@ -419,37 +446,37 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
     else
         @assert ode_algo_name <: CTS.IMEXARKAlgorithmName
         newtons_method = CTS.NewtonsMethod(;
-            max_iters = parsed_args["max_newton_iters_ode"],
-            update_j = if parsed_args["update_jacobian_every"] == "dt"
+            max_iters = max_newton_iters_ode,
+            update_j = if update_jacobian_every == "dt"
                 CTS.UpdateEvery(CTS.NewTimeStep)
-            elseif parsed_args["update_jacobian_every"] == "stage"
+            elseif update_jacobian_every == "stage"
                 CTS.UpdateEvery(CTS.NewNewtonSolve)
-            elseif parsed_args["update_jacobian_every"] == "solve"
+            elseif update_jacobian_every == "solve"
                 CTS.UpdateEvery(CTS.NewNewtonIteration)
             else
                 error("Unknown value of `update_jacobian_every`: \
-                       $(parsed_args["update_jacobian_every"])")
+                       $(update_jacobian_every)")
             end,
-            krylov_method = if parsed_args["use_krylov_method"]
+            krylov_method = if use_krylov_method
                 CTS.KrylovMethod(;
                     jacobian_free_jvp = CTS.ForwardDiffJVP(;
                         step_adjustment = FT(
-                            parsed_args["jvp_step_adjustment"],
+                            jvp_step_adjustment,
                         ),
                     ),
-                    forcing_term = if parsed_args["use_dynamic_krylov_rtol"]
-                        α = FT(parsed_args["eisenstat_walker_forcing_alpha"])
+                    forcing_term = if use_dynamic_krylov_rtol
+                        α = FT(eisenstat_walker_forcing_alpha)
                         CTS.EisenstatWalkerForcing(; α)
                     else
-                        CTS.ConstantForcing(FT(parsed_args["krylov_rtol"]))
+                        CTS.ConstantForcing(FT(krylov_rtol))
                     end,
                 )
             else
                 nothing
             end,
-            convergence_checker = if parsed_args["use_newton_rtol"]
+            convergence_checker = if use_newton_rtol
                 norm_condition = CTS.MaximumRelativeError(
-                    FT(parsed_args["newton_rtol"]),
+                    FT(newton_rtol),
                 )
                 CTS.ConvergenceChecker(; norm_condition)
             else
@@ -598,13 +625,25 @@ function get_sim_info(config::AtmosConfig)
 
     return sim
 end
+function args_integrator(args, Y, p, tspan, ode_algo, callback)
+    return args_integrator(Y, p, tspan, ode_algo, callback,
+        args["use_dense_jacobian"], args["use_auto_jacobian"],
+        args["approximate_linear_solve_iters"], args["debug_jacobian"],
+    )
+end
 
-function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
+function args_integrator(Y, p, tspan, ode_algo, callback,
+    use_dense_jacobian, use_auto_jacobian,
+    approximate_linear_solve_iters, debug_jacobian,
+)
     (; atmos, dt) = p
     s = @timed_str begin
         T_imp! = SciMLBase.ODEFunction(
             implicit_tendency!;
-            jac_prototype = get_jacobian(ode_algo, Y, atmos, parsed_args),
+            jac_prototype = get_jacobian(ode_algo, Y, atmos,
+                use_dense_jacobian, use_auto_jacobian,
+                approximate_linear_solve_iters, debug_jacobian,
+            ),
             Wfact = update_jacobian!,
         )
         tendency_function = CTS.ClimaODEFunction(;
@@ -656,6 +695,16 @@ function get_comms_context(parsed_args)
     return comms_ctx
 end
 
+function get_mesh_warp_type(s)
+    if s == "SLEVE"
+        return SLEVEWarp()
+    elseif s == "Linear"
+        return LinearWarp()
+    else
+        error("Unknown mesh warp type string: $s. Supported types are 'SLEVE' and 'Linear'")
+    end
+end
+
 function get_domain(parsed_args, params)
     FT = eltype(params)
     if parsed_args["config"] == "sphere"
@@ -670,7 +719,7 @@ function get_domain(parsed_args, params)
             bubble = parsed_args["bubble"],
             deep_atmosphere = parsed_args["deep_atmosphere"],
             topography_damping_factor = parsed_args["topography_damping_factor"],
-            mesh_warp_type = parsed_args["mesh_warp_type"],
+            mesh_warp_type = get_mesh_warp_type(parsed_args["mesh_warp_type"]),
             sleve_eta = parsed_args["sleve_eta"],
             sleve_s = parsed_args["sleve_s"],
             topo_smoothing = parsed_args["topo_smoothing"],

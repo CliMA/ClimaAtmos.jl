@@ -125,17 +125,17 @@ function make_hybrid_spaces(
         @info "Remapping Earth orography from ETOPO2022 data onto horizontal space"
     else
         topography_function = if topography == "DCMIP200"
-            topography_dcmip200
+            Topography.topography_dcmip200
         elseif topography == "Hughes2023"
-            topography_hughes2023
+            Topography.topography_hughes2023
         elseif topography == "Agnesi"
-            topography_agnesi
+            Topography.topography_agnesi
         elseif topography == "Schar"
-            topography_schar
+            Topography.topography_schar
         elseif topography == "Cosine2D"
-            topography_cosine_2d
+            Topography.topography_cosine_2d
         elseif topography == "Cosine3D"
-            topography_cosine_3d
+            Topography.topography_cosine_3d
         end
         z_surface = SpaceVaryingInput(topography_function, h_space)
         @info "Using $topography orography"

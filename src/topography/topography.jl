@@ -1,3 +1,13 @@
+module Topography
+
+using ClimaCore: Geometry
+
+export topography_dcmip200, topography_hughes2023
+export topography_agnesi, agnesi_params
+export topography_schar, schar_params
+export topography_cosine_2d, topography_cosine_3d
+export topography_cosine, cosine_params
+
 """
     topography_dcmip200(coord)
 
@@ -113,3 +123,144 @@ end
 topography_cosine(x, y, λ_x, λ_y, h_max) =
     h_max * cospi(2 * x / λ_x) * cospi(2 * y / λ_y)
 cosine_params(::Type{FT}) where {FT} = (; h_max = FT(25), λ = FT(25e3))
+
+
+
+abstract type AbstractTopography end
+
+struct NoTopography <: AbstractTopography end
+
+topography_name(::NoTopography) = "NoWarp"
+supports_steady_state(::NoTopography) = true
+
+# Analytical topography types for idealized test cases
+
+"""
+    CosineTopography{FT}(; h_max = 25, λ = 25e3, dimension = 2)
+
+Cosine hill topography in 2D or 3D.
+
+# Arguments
+- `h_max::FT`: Maximum elevation (m)
+- `λ::FT`: Wavelength of the cosine hills (m)
+- `dimension::Int`: Spatial dimension (2 or 3)
+"""
+Base.@kwdef struct CosineTopography{FT} <: AbstractTopography
+    h_max::FT = 25
+    λ::FT = 25e3
+    dimension::Int = 2
+end
+
+function CosineTopography(
+    FT::Type{<:AbstractFloat};
+    h_max = 25,
+    λ = 25e3,
+    dimension = 2,
+)
+    return CosineTopography{FT}(; h_max = FT(h_max), λ = FT(λ), dimension)
+end
+
+"""
+    AgnesiTopography{FT}(; h_max = 25, x_center = 50e3, a = 5e3)
+
+Witch of Agnesi mountain topography for 2D simulations.
+
+# Arguments
+- `h_max::FT`: Maximum elevation (m)
+- `x_center::FT`: Center position (m)
+- `a::FT`: Mountain width parameter (m)
+"""
+Base.@kwdef struct AgnesiTopography{FT} <: AbstractTopography
+    h_max::FT = 25
+    x_center::FT = 50e3
+    a::FT = 5e3
+end
+
+function AgnesiTopography(
+    FT::Type{<:AbstractFloat};
+    h_max = 25,
+    x_center = 50e3,
+    a = 5e3,
+)
+    return AgnesiTopography{FT}(;
+        h_max = FT(h_max),
+        x_center = FT(x_center),
+        a = FT(a),
+    )
+end
+
+"""
+    ScharTopography{FT}(; h_max = 25, x_center = 50e3, λ = 4e3, a = 5e3)
+
+Schar mountain topography for 2D simulations.
+
+# Arguments
+- `h_max::FT`: Maximum elevation (m)
+- `x_center::FT`: Center position (m)
+- `λ::FT`: Wavelength parameter (m)
+- `a::FT`: Mountain width parameter (m)
+"""
+Base.@kwdef struct ScharTopography{FT} <: AbstractTopography
+    h_max::FT = 25
+    x_center::FT = 50e3
+    λ::FT = 4e3
+    a::FT = 5e3
+end
+
+function ScharTopography(
+    FT::Type{<:AbstractFloat};
+    h_max = 25,
+    x_center = 50e3,
+    λ = 4e3,
+    a = 5e3,
+)
+    return ScharTopography{FT}(;
+        h_max = FT(h_max),
+        x_center = FT(x_center),
+        λ = FT(λ),
+        a = FT(a),
+    )
+end
+
+# Implement interface functions for analytical topographies
+topography_name(topo::CosineTopography{<:Any}) =
+    topo.dimension == 3 ? "Cosine3D" : "Cosine2D"
+topography_name(::AgnesiTopography) = "Agnesi"
+topography_name(::ScharTopography) = "Schar"
+
+supports_steady_state(::CosineTopography) = true
+supports_steady_state(::AgnesiTopography) = true
+supports_steady_state(::ScharTopography) = true
+
+# Data-based topography types
+
+"""
+    EarthTopography()
+
+Earth topography from ETOPO2022 data files.
+"""
+struct EarthTopography <: AbstractTopography end
+
+"""
+    DCMIP200Topography()
+
+Surface elevation for the DCMIP-2-0-0 test problem.
+"""
+struct DCMIP200Topography <: AbstractTopography end
+
+"""
+    Hughes2023Topography()
+
+Surface elevation for baroclinic wave test from Hughes and Jablonowski (2023).
+"""
+struct Hughes2023Topography <: AbstractTopography end
+
+topography_name(::EarthTopography) = "Earth"
+topography_name(::DCMIP200Topography) = "DCMIP200"
+topography_name(::Hughes2023Topography) = "Hughes2023"
+
+supports_steady_state(::EarthTopography) = false
+supports_steady_state(::DCMIP200Topography) = false
+supports_steady_state(::Hughes2023Topography) = false
+
+end
