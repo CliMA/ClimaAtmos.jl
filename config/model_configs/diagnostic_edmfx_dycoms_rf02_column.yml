@@ -14,10 +14,6 @@ edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 edmfx_filter: true
 prognostic_tke: true
-q_tot_0_dycoms_rf02: 9.45
-theta_0_dycoms_rf02: 288.3
-theta_i_dycoms_rf02: 295.0
-z_max: 795.0
 moist: "nonequil"
 cloud_model: "grid_scale"
 precip_model: "1M"
@@ -30,7 +26,7 @@ z_max: 1500
 z_stretch: false
 perturb_initstate: false
 dt: 10secs
-t_end: 12hours
+t_end: 5hours
 dt_save_state_to_disk: 10mins
 toml: [toml/diagnostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [8, 8, 30]
