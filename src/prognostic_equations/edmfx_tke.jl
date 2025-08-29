@@ -111,14 +111,14 @@ function edmfx_tke_tendency!(
                 (ᶜρʲs.:($$j) - Y.c.ρ) *
                 ᶜgradᵥ(CAP.grav(p.params) * ᶠz) / ᶜρʲs.:($$j)
         end
-        if turbconv_model isa PrognosticEDMFX
-            (; ᶜts⁰) = p.precomputed
-            ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
-            @. Yₜ.c.sgs⁰.ρatke -=
-                ᶜρa⁰ * adjoint(CT3(ᶜinterp(ᶠu³⁰ - ᶠu³))) *
-                (ᶜρ⁰ - Y.c.ρ) *
-                ᶜgradᵥ(CAP.grav(p.params) * ᶠz) / ᶜρ⁰
-        end
+        # if turbconv_model isa PrognosticEDMFX
+        #     (; ᶜts⁰) = p.precomputed
+        #     ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
+        #     @. Yₜ.c.sgs⁰.ρatke -=
+        #         ᶜρa⁰ * adjoint(CT3(ᶜinterp(ᶠu³⁰ - ᶠu³))) *
+        #         (ᶜρ⁰ - Y.c.ρ) *
+        #         ᶜgradᵥ(CAP.grav(p.params) * ᶠz) / ᶜρ⁰
+        # end
         # pressure work
         #@. Yₜ.c.sgs⁰.ρatke += ᶜtke_press
     end
