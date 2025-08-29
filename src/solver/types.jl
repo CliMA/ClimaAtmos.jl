@@ -578,11 +578,11 @@ Groups turbulence convection-related models and types.
 Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL}
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
-    sgs_adv_mode::SAM = nothing
-    sgs_entr_detr_mode::SEDM = nothing
-    sgs_nh_pressure_mode::SNPM = nothing
-    sgs_vertdiff_mode::SVM = nothing
-    sgs_mf_mode::SMM = nothing
+    sgs_adv_mode::SAM = Explicit()
+    sgs_entr_detr_mode::SEDM = Explicit()
+    sgs_nh_pressure_mode::SNPM = Explicit()
+    sgs_vertdiff_mode::SVM = Explicit()
+    sgs_mf_mode::SMM = Explicit()
     smagorinsky_lilly::SL = nothing
 end
 

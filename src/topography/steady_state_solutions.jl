@@ -187,7 +187,7 @@ end
 function steady_state_velocity_cosine(params, x, y, z, λ_x, λ_y, z_top, h_max)
     FT = eltype(params)
     u = background_u(FT)
-    h = topography_cosine(x, y, λ_x, λ_y, h_max)
+    h = Topography.topography_cosine(x, y, λ_x, λ_y, h_max)
     η = (z - h) / (1 - h / z_top)
     k_x = 2 * FT(π) / λ_x
     k_y = 2 * FT(π) / λ_y
