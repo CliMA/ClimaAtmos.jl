@@ -398,3 +398,16 @@ use_itime:
   1. Surface conditions that explicitly depend on time (e.g. LifeCycleTan2018, TRMM_LBA, etc.),
   2. Time dependent forcing/tendencies use time rounded to the nearest unit of time for dt"
   value: false
+# DYCOMS-RF02 Perturbation Variables
+q_tot_0_dycoms_rf02:
+  help: "Surface total water mixing ratio for DYCOMS RF02."
+  value: 9.45
+theta_0_dycoms_rf02:
+  help: "Surface liquid-ice potential temperature for DYCOMS RF02."
+  value: 288.3
+theta_i_dycoms_rf02:
+  help: "Initial boundary layer liquid-ice potential temperature for DYCOMS RF02."
+  value: 295.0
+z_i_dycoms_rf02:
+  help: "Initial boundary layer height."
+  value: 795.0
