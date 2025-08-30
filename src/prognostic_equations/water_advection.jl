@@ -27,19 +27,29 @@ The precomputed terms `p.precomputed.ᶜwₜqₜ` and `p.precomputed.ᶜwₕhₜ
 cell-centered specific vertical fluxes (e.g., `w ⋅ q_t` and `w ⋅ h_t`,
 respectively, where `w` is a vertical velocity component).
 
+Additionally, when using prognostic EDMF with non-equilibrium moisture and microphysics,
+this function also applies advective tendencies to the subdomain moist static energy
+(`mse`) and total specific humidity (`q_tot`) fields within each mass flux
+subdomain. These tendencies use sedimentation velocities computed from the precomputed
+fields `ᶜwₕʲs` and `ᶜwₜʲs` for each subdomain j.
+
 Arguments:
 - `Yₜ`: The tendency state vector, modified in place.
 - `Y`: The current state vector.
-- `p`: Cache containing parameters, precomputed fields (like `ᶜwₜqₜ`, `ᶜwₕhₜ`),
+- `p`: Cache containing parameters, precomputed fields (like `ᶜwₜqₜ`, `ᶜwₕhₜ`, `ᶜwₕʲs`, `ᶜwₜʲs`),
        and atmospheric model configurations.
 - `t`: Current simulation time (not directly used in these calculations).
 
-Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, and `Yₜ.c.ρq_tot`.
+Modifies:
+- `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, and `Yₜ.c.ρq_tot` (always when moisture is present)
+- `Yₜ.c.sgsʲs.:(j).mse` and `Yₜ.c.sgsʲs.:(j).q_tot` (when using prognostic EDMFX with 
+  non-equilibrium moisture and multi-moment microphysics)
 """
 function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
+    (; turbconv_model) = p.atmos
     (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
 
     if !(p.atmos.moisture_model isa DryModel)
@@ -50,5 +60,27 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρq_tot -=
             ᶜprecipdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(-(ᶜwₜqₜ)))
     end
+
+    if turbconv_model isa PrognosticEDMFX
+        if p.atmos.moisture_model isa NonEquilMoistModel && (
+            p.atmos.microphysics_model isa Microphysics1Moment ||
+            p.atmos.microphysics_model isa Microphysics2Moment
+        )
+            (; edmfx_upwinding) = p.atmos.numerics
+            (; ᶜwₕʲs, ᶜwₜʲs) = p.precomputed
+            n = n_prognostic_mass_flux_subdomains(turbconv_model)
+            for j in 1:n
+                ᶠwₕʲ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₕʲs.:($$j))))))
+                ᶠwₜʲ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwₜʲs.:($$j))))))
+                # Advective form advection of mse with sedimentation velocities
+                va = vertical_advection(ᶠwₕʲ, Y.c.sgsʲs.:($j).mse, edmfx_upwinding)
+                @. Yₜ.c.sgsʲs.:($$j).mse += va
+                # Advective form advection of q_tot with sedimentation velocities
+                va = vertical_advection(ᶠwₜʲ, Y.c.sgsʲs.:($j).q_tot, edmfx_upwinding)
+                @. Yₜ.c.sgsʲs.:($$j).q_tot += va
+            end
+        end
+    end
+
     return nothing
 end
