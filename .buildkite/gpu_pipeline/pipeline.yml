@@ -25,6 +25,7 @@ steps:
       - julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'
       - julia --project=.buildkite -e 'using CUDA; CUDA.precompile_runtime()'
       - julia --project=.buildkite -e 'using Pkg; Pkg.status()'
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name=\"ClimaCore\", rev=\"dy/jfnk_bugfix\"))'"
 
     agents:
       slurm_gpus: 1
