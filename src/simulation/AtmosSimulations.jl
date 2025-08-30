@@ -59,6 +59,7 @@ Important differences (future work):
   - get_simulation has more complex steady_state_velocity calculation
   - get_simulation has more sophisticated callback handling (continuous vs discrete)
   - get_simulation uses enable_diagnostics flag vs direct diagnostics parameter
+- [ ] Improve creation of the ode configuration
 - [ ] Handle diagnostics and callbacks in separate functions, keep current behavior, add default diagnostics 
 - [ ] Ensure FT is propagated consistently with default structs (params, domain)
 - [x] Deal with domain not having topography
@@ -69,17 +70,17 @@ Important differences (future work):
 - [ ] Add documentation
 =#
 
-function AtmosSimulation(;
+function AtmosSimulation{FT}(;
     model::AtmosModel = AtmosModel(),
-    domain::AtmosDomain = SphereDomain{default_FT}(),
-    params::ClimaAtmosParameters = ClimaAtmosParameters(default_FT),
+    domain::AtmosDomain = SphereDomain{FT}(),
+    params::Parameters.ClimaAtmosParameters = ClimaAtmosParameters(FT),
     initial_condition::ICs.InitialCondition = InitialConditions.DecayingProfile(),
     comms_ctx::ClimaComms.AbstractCommsContext = ClimaComms.context(),
     dt = 600,
     t_start = 0,
     t_end = 24 * 10 * 60 * 60,  # 10 days
     ode_algo = CTS.ARS343(),
-    surface_setup = SurfaceConditions.DefaultExchangeCoefficients()(params),
+    surface_setup = SurfaceConditions.DefaultExchangeCoefficients(),
     job_id = "atmos_sim",
     output_dir = "output",
     restart_file = nothing,
@@ -88,9 +89,21 @@ function AtmosSimulation(;
     callbacks = (),
     diagnostics = (),
     discrete_hydrostatic_balance = false,
-    itime = true,
+    itime = false,
     check_steady_state = false,
-)
+    use_dense_jacobian = false,
+    use_auto_jacobian = false,
+    approximate_linear_solve_iters = 1,
+    debug_jacobian = false,
+    update_jacobian_every = "solve",
+    max_newton_iters_ode = 1,
+    use_krylov_method = false,
+    use_dynamic_krylov_rtol = false,
+    eisenstat_walker_forcing_alpha = 2.0,
+    krylov_rtol = 0.1,
+    use_newton_rtol = false,
+    newton_rtol = 1.0e-5,
+) where {FT}
     if !isnothing(restart_file)
         (Y, t_start) = get_state_restart(
             restart_file, start_date, hash(model), comms_ctx, itime,
@@ -119,12 +132,17 @@ function AtmosSimulation(;
     discrete_hydrostatic_balance &&
         set_discrete_hydrostatic_balanced_state!(Y, p)
 
-    # TODO: Move this to a separate function, add the same checks and behavior 
-    # as in get_callbacks
+    ode_name = nameof(typeof(ode_algo))
+    ode_config = ode_configuration(FT, ode_name, update_jacobian_every, 
+        max_newton_iters_ode, use_krylov_method, use_dynamic_krylov_rtol, 
+        eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol, newton_rtol)
     callback_set = SciMLBase.CallbackSet(callbacks...)
-
-    integrator_args, integrator_kwargs =
-        args_integrator(Y, p, (t_start, t_end), ode_algo, callback_set)
+    integrator_args, integrator_kwargs = args_integrator(
+        Y, p, (t_start, t_end), ode_config,
+        callback_set,
+        use_dense_jacobian, use_auto_jacobian, 
+        approximate_linear_solve_iters, debug_jacobian,
+    )
     integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
 
     # Initialize diagnostics

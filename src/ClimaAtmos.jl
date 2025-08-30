@@ -152,6 +152,8 @@ import .Diagnostics as CAD
 
 include(joinpath("callbacks", "get_callbacks.jl"))
 
+include(joinpath("parameters", "create_parameters.jl"))
+
 include(joinpath("simulation", "domains.jl"))
 include(joinpath("simulation", "AtmosSimulations.jl"))
 
@@ -159,7 +161,5 @@ include(joinpath("solver", "model_getters.jl")) # high-level (using parsed_args)
 include(joinpath("solver", "type_getters.jl"))
 include(joinpath("solver", "yaml_helper.jl"))
 include(joinpath("solver", "solve.jl"))
-
-include(joinpath("parameters", "create_parameters.jl"))
 
 end # module

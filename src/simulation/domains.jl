@@ -5,8 +5,7 @@ abstract type MeshWarpType end
 struct LinearWarp <: MeshWarpType end
 struct SLEVEWarp <: MeshWarpType end
 # For backwards compatibility with parsed_args
-mesh_warp_string(w::MeshWarpType) = replace(string(w), "Warp" => "")
-
+mesh_warp_string(w::MeshWarpType) = replace(string(w), "Warp()" => "")
 
 # Default constants for domain parameters
 const DEFAULT_Z_MAX = 30000.0
@@ -19,7 +18,7 @@ const DEFAULT_DEEP_ATMOSPHERE = true
 const DEFAULT_H_ELEM = 6
 const DEFAULT_RADIUS = 6.371229e6
 const DEFAULT_TOPO_DAMPING = 5.0
-const DEFAULT_MESH_WARP_TYPE = SLEVEWarp
+const DEFAULT_MESH_WARP_TYPE = SLEVEWarp()
 const DEFAULT_SLEVE_ETA = 0.7
 const DEFAULT_SLEVE_S = 10.0
 const DEFAULT_TOPO_SMOOTHING = false
@@ -63,7 +62,7 @@ Base.@kwdef struct ColumnDomain{FT} <: AtmosDomain
     topography::AbstractTopography = NoTopography()
 end
 
-Base.@kwdef struct BoxDomain{FT} <: AtmosDomain
+Base.@kwdef struct BoxDomain{FT, M <: MeshWarpType} <: AtmosDomain
     x_min::FT = DEFAULT_X_MIN
     x_max::FT = DEFAULT_X_MAX
     x_elem::Int = DEFAULT_X_ELEM
@@ -81,13 +80,13 @@ Base.@kwdef struct BoxDomain{FT} <: AtmosDomain
     periodic_y::Bool = DEFAULT_PERIODIC_Y
     topography::AbstractTopography = NoTopography()
     topography_damping_factor::FT = DEFAULT_TOPO_DAMPING
-    mesh_warp_type::MeshWarpType = LinearWarp  # Box domains typically use Linear
+    mesh_warp_type::M = LinearWarp()  # Box domains typically use Linear
     sleve_eta::FT = DEFAULT_SLEVE_ETA
     sleve_s::FT = DEFAULT_SLEVE_S
     topo_smoothing::Bool = DEFAULT_TOPO_SMOOTHING
 end
 
-Base.@kwdef struct PlaneDomain{FT} <: AtmosDomain
+Base.@kwdef struct PlaneDomain{FT, M <: MeshWarpType} <: AtmosDomain
     x_min::FT = DEFAULT_X_MIN
     x_max::FT = DEFAULT_X_MAX
     x_elem::Int = DEFAULT_X_ELEM
@@ -101,7 +100,7 @@ Base.@kwdef struct PlaneDomain{FT} <: AtmosDomain
     periodic_x::Bool = DEFAULT_PERIODIC_X
     topography::AbstractTopography = NoTopography()
     topography_damping_factor::FT = DEFAULT_TOPO_DAMPING
-    mesh_warp_type::MeshWarpType = LinearWarp  # Plane domains typically use Linear
+    mesh_warp_type::M = LinearWarp()  # Plane domains typically use Linear
     sleve_eta::FT = DEFAULT_SLEVE_ETA
     sleve_s::FT = DEFAULT_SLEVE_S
     topo_smoothing::Bool = DEFAULT_TOPO_SMOOTHING
@@ -114,7 +113,6 @@ function get_spaces(domain::PlaneDomain, params, comms_ctx)
     horizontal_mesh = periodic_line_mesh(;
         x_max = domain.x_max,
         x_elem = domain.x_elem,
-        periodic = domain.periodic_x,
     )
     h_space =
         make_horizontal_space(horizontal_mesh, quad, comms_ctx, domain.bubble)
@@ -147,7 +145,6 @@ function get_spaces(domain::BoxDomain, params, comms_ctx)
         y_max = domain.y_max,
         x_elem = domain.x_elem,
         y_elem = domain.y_elem,
-        periodic = (domain.periodic_x, domain.periodic_y),
     )
     h_space =
         make_horizontal_space(horizontal_mesh, quad, comms_ctx, domain.bubble)
@@ -182,7 +179,6 @@ function get_spaces(domain::ColumnDomain, params, comms_ctx)
         y_max = Δx,
         x_elem = 1,
         y_elem = 1,
-        periodic = (true, true),
     )
     bubble = false # bubble correction not compatible with single column configuration
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)

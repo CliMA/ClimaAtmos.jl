@@ -7,7 +7,7 @@ import .InitialConditions as ICs
 
 Check if the given domain and initial condition combination supports analytical steady-state velocity.
 """
-supports_steady_state_velocity(::AbstractDomain, ::ICs.InitialCondition) = false
+supports_steady_state_velocity(::AtmosDomain, ::ICs.InitialCondition) = false
 
 # Only ConstantBuoyancyFrequencyProfile with Linear mesh warping supports steady
 # state
