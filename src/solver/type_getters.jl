@@ -862,6 +862,7 @@ function get_simulation(config::AtmosConfig)
                     atmos,
                     Y,
                     p,
+                    sim_info.dt,
                     sim_info.t_start,
                     sim_info.start_date,
                     output_dir,

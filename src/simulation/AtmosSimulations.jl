@@ -86,8 +86,24 @@ function AtmosSimulation{FT}(;
     restart_file = nothing,
     start_date = DateTime(2010, 1, 1),
     tracers = [],
-    callbacks = (),
-    diagnostics = (),
+
+    # Callback configuration
+    model_callbacks = true,           # Enable automatic model-based callbacks
+    default_callbacks = true,        # Enable common simulation callbacks  
+    callbacks = (),                  # User-provided additional callbacks
+    progress_logging = false,        # Enable progress reporting
+    nan_check_every = 0,             # Check for NaNs every N steps (0 = disabled)  
+    check_conservation = false,   # Enable conservation diagnostics
+    checkpoint_frequency = "Inf",    # Frequency for saving state to disk
+    dt_rad = "1h",                   # Radiation callback frequency
+    dt_nogw = "3hours",               # Non-orographic gravity wave frequency
+    dt_cloud_fraction = "3hours",     # Cloud fraction callback frequency
+    call_cloud_diagnostics_per_stage = false,
+    # TODO: add netcdf_interpolation_num_points, netcdf_output_at_levels
+
+    # Diagnostic configuration
+    default_diagnostics = false,     # Enable standard ClimaAtmos diagnostics
+    diagnostics = (),                # User-provided diagnostics (YAML format or ScheduledDiagnostic objects)
     discrete_hydrostatic_balance = false,
     itime = false,
     check_steady_state = false,
@@ -133,37 +149,109 @@ function AtmosSimulation{FT}(;
         set_discrete_hydrostatic_balanced_state!(Y, p)
 
     ode_name = nameof(typeof(ode_algo))
-    ode_config = ode_configuration(FT, ode_name, update_jacobian_every, 
-        max_newton_iters_ode, use_krylov_method, use_dynamic_krylov_rtol, 
+    ode_config = ode_configuration(FT, ode_name, update_jacobian_every,
+        max_newton_iters_ode, use_krylov_method, use_dynamic_krylov_rtol,
         eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol, newton_rtol)
-    callback_set = SciMLBase.CallbackSet(callbacks...)
+
+    # Get model-based callbacks (physics-specific) - following ClimaLand pattern
+    model_callback_tuple = if model_callbacks
+        default_model_callbacks(
+            model;
+            start_date, dt, t_start, t_end, output_dir,
+            dt_rad, dt_nogw, dt_cloud_fraction,
+            call_cloud_diagnostics_per_stage,
+            checkpoint_frequency,
+        )
+    else
+        ()
+    end
+
+    default_callback_tuple = if default_callbacks
+        common_callbacks(
+            dt,
+            output_dir,
+            start_date,
+            t_start,
+            t_end,
+            comms_ctx;
+            progress_logging,
+            nan_check_every,
+            check_conservation,
+            checkpoint_frequency,
+            external_forcing_column = false,  # TODO: detect from model
+        )
+    else
+        ()
+    end
+
+    # Combine all callbacks
+    # All callbacks in ClimaAtmos are discrete callbacks
+    continuous_callbacks = ()
+    discrete_callbacks = (model_callback_tuple..., default_callback_tuple..., callbacks...)
+    callback_set = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
+
     integrator_args, integrator_kwargs = args_integrator(
         Y, p, (t_start, t_end), ode_config,
         callback_set,
-        use_dense_jacobian, use_auto_jacobian, 
+        use_dense_jacobian, use_auto_jacobian,
         approximate_linear_solve_iters, debug_jacobian,
     )
     integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
 
-    # Initialize diagnostics
-    # TODO: Move this to a separate function, add the same checks and behavior 
-    # as in get_diagnostics
-    if !isempty(diagnostics)
-        scheduled_diagnostics, writers, _ = get_diagnostics(
-            diagnostics,
+    # Initialize diagnostics with logical grouping
+    all_diagnostics = []
+    writers = ()
+
+    # Add default ClimaAtmos diagnostics if requested
+    if default_diagnostics
+        # Calculate simulation duration
+        sim_duration = t_end isa ITime ? t_end - dt : t_end
+
+        default_diag_list = CAD.default_diagnostics(
             model,
-            Y,
-            p,
-            t_start,
-            start_date,
-            output_dir,
+            sim_duration,
+            start_date;
+            output_writer = CAD.NetCDFWriter(output_dir),
         )
+        append!(all_diagnostics, default_diag_list)
+        @info "Added $(length(default_diag_list)) default ClimaAtmos diagnostics"
+    end
+
+    # Add user-provided diagnostics
+    if !isempty(diagnostics)
+        if diagnostics isa AbstractVector &&
+           all(d -> d isa CAD.ScheduledDiagnostic, diagnostics)
+
+            append!(all_diagnostics, diagnostics)
+            @info "Added $(length(diagnostics)) user-provided ScheduledDiagnostic objects"
+        else
+            user_scheduled_diagnostics, user_writers, _ = get_diagnostics(
+                diagnostics isa Dict ? diagnostics : Dict("diagnostics" => diagnostics),
+                model,
+                Y,
+                p,
+                sim_info,
+                output_dir,
+            )
+            append!(all_diagnostics, user_scheduled_diagnostics)
+            writers = user_writers
+            @info "Added $(length(user_scheduled_diagnostics)) user-provided YAML-style diagnostics"
+        end
+    end
+
+    # Set up diagnostics integration if any diagnostics are present
+    if !isempty(all_diagnostics)
         integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
             integrator,
-            scheduled_diagnostics,
+            all_diagnostics,
         )
-    else
-        writers = ()
+        if isempty(writers)
+            dict_writer = CAD.DictWriter()
+            hdf5_writer = CAD.HDF5Writer(output_dir)
+            netcdf_writer = CAD.NetCDFWriter(output_dir)
+            writers = (dict_writer, hdf5_writer, netcdf_writer)
+        end
+        @info "Initialized $(length(all_diagnostics)) total diagnostics"
     end
 
     reset_graceful_exit(output_dir)
