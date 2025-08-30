@@ -31,8 +31,6 @@ include(joinpath("utils", "AtmosArtifacts.jl"))
 import .AtmosArtifacts as AA
 
 include(joinpath("topography", "topography.jl"))
-import .Topography
-
 include(joinpath("topography", "steady_state_solutions.jl"))
 
 include(joinpath("parameterized_tendencies", "radiation", "RRTMGPInterface.jl"))
@@ -144,6 +142,7 @@ include(joinpath("diagnostics", "Diagnostics.jl"))
 import .Diagnostics as CAD
 
 include(joinpath("callbacks", "get_callbacks.jl"))
+include(joinpath("callbacks", "default_model_callbacks.jl"))
 
 include(joinpath("parameters", "create_parameters.jl"))
 
