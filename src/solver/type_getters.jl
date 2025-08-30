@@ -374,12 +374,20 @@ function get_surface_setup(parsed_args)
 end
 
 function get_jacobian(ode_algo, Y, atmos, parsed_args)
-    return get_jacobian(ode_algo, Y, atmos, parsed_args["use_dense_jacobian"], parsed_args["use_auto_jacobian"], parsed_args["approximate_linear_solve_iters"], parsed_args["debug_jacobian"])
+    return get_jacobian(
+        ode_algo,
+        Y,
+        atmos,
+        parsed_args["use_dense_jacobian"],
+        parsed_args["use_auto_jacobian"],
+        parsed_args["approximate_linear_solve_iters"],
+        parsed_args["debug_jacobian"],
+    )
 end
 
 function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
-        approximate_linear_solve_iters, debug_jacobian
-    )
+    approximate_linear_solve_iters, debug_jacobian,
+)
     ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         return nothing
     jacobian_algorithm = if use_dense_jacobian
@@ -405,20 +413,26 @@ function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
     return Jacobian(jacobian_algorithm, Y, atmos; verbose)
 end
 
-#=
-    ode_configuration(Y, parsed_args)
-
-Returns the ode algorithm
-=#
 function ode_configuration(::Type{FT}, args) where {FT}
-    return ode_configuration(FT, args["ode_algo"], args["update_jacobian_every"], args["max_newton_iters_ode"], args["use_krylov_method"], args["use_dynamic_krylov_rtol"], args["eisenstat_walker_forcing_alpha"], args["krylov_rtol"], args["use_newton_rtol"], args["newton_rtol"])
+    return ode_configuration(
+        FT,
+        args["ode_algo"],
+        args["update_jacobian_every"],
+        args["max_newton_iters_ode"],
+        args["use_krylov_method"],
+        args["use_dynamic_krylov_rtol"],
+        args["eisenstat_walker_forcing_alpha"],
+        args["krylov_rtol"],
+        args["use_newton_rtol"],
+        args["newton_rtol"],
+    )
 end
 
 
-function ode_configuration(::Type{FT}, ode_name, update_jacobian_every, 
-        max_newton_iters_ode, use_krylov_method, use_dynamic_krylov_rtol, 
-        eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol, newton_rtol
-    ) where {FT}
+function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
+    max_newton_iters_ode, use_krylov_method, use_dynamic_krylov_rtol,
+    eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol, newton_rtol,
+) where {FT}
     ode_algo_name = getproperty(CTS, Symbol(ode_name))
     @info "Using ODE config: `$ode_algo_name`"
     return if ode_algo_name <: CTS.RosenbrockAlgorithmName
@@ -612,22 +626,22 @@ function get_sim_info(config::AtmosConfig)
     return sim
 end
 function args_integrator(args, Y, p, tspan, ode_algo, callback)
-    return args_integrator(Y, p, tspan, ode_algo, callback, 
-        args["use_dense_jacobian"], args["use_auto_jacobian"], 
-        args["approximate_linear_solve_iters"], args["debug_jacobian"]
+    return args_integrator(Y, p, tspan, ode_algo, callback,
+        args["use_dense_jacobian"], args["use_auto_jacobian"],
+        args["approximate_linear_solve_iters"], args["debug_jacobian"],
     )
 end
 
-function args_integrator(Y, p, tspan, ode_algo, callback, 
-        use_dense_jacobian, use_auto_jacobian, 
-        approximate_linear_solve_iters,debug_jacobian,
-    )
+function args_integrator(Y, p, tspan, ode_algo, callback,
+    use_dense_jacobian, use_auto_jacobian,
+    approximate_linear_solve_iters, debug_jacobian,
+)
     (; atmos, dt) = p
     s = @timed_str begin
         T_imp! = SciMLBase.ODEFunction(
             implicit_tendency!;
-            jac_prototype = get_jacobian(ode_algo, Y, atmos, 
-                use_dense_jacobian, use_auto_jacobian, 
+            jac_prototype = get_jacobian(ode_algo, Y, atmos,
+                use_dense_jacobian, use_auto_jacobian,
                 approximate_linear_solve_iters, debug_jacobian,
             ),
             Wfact = update_jacobian!,
