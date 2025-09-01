@@ -409,7 +409,6 @@ function edmfx_sgs_vertical_advection_tendency!(
             p.atmos.microphysics_model isa Microphysics1Moment ||
             p.atmos.microphysics_model isa Microphysics2Moment
         )
-            # TODO - add contibutions to sgs mass flux from tracer sedimentation
             # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
             # TODO - make it work for multiple updrafts
             if j > 1
@@ -460,7 +459,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                 # Advective form advection of q_tot and moisture tracers with sedimentation velocities
                 # Eq (1-2) term (2)
                 va = vertical_advection(ᶠw³ʲ, ᶜqʲ, edmfx_upwinding)
-                #@. Yₜ.c.sgsʲs.:($$j).q_tot += (1 - Y.c.sgsʲs.:($$j).q_tot) * va
+                # @. Yₜ.c.sgsʲs.:($$j).q_tot += (1 - Y.c.sgsʲs.:($$j).q_tot) * va
                 @. ᶜqʲₜ += va
                 # # Advective form advection of mse with sedimentation velocity
                 # # Eq (3) term (2)
@@ -480,35 +479,27 @@ function edmfx_sgs_vertical_advection_tendency!(
                 # va = vertical_advection(ᶠw³ʲ, ᶜqʲ, edmfx_upwinding)
                 # @. Yₜ.c.sgsʲs.:($$j).mse -= Y.c.sgsʲs.:($$j).mse * va
 
-                # # mse, q_tot and moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
-                # # Eq (1-3) term (3)
-                # ᶜinv_ρ̂ = (@. lazy(
-                #     specific(
-                #         FT(1),
-                #         Y.c.sgsʲs.:($$j).ρa,
-                #         FT(0),
-                #         Y.c.ρ,
-                #         turbconv_model,
-                #     ),
-                # ))
-                # ᶜ∂ρ̂∂z = (@. lazy(
+                # mse, q_tot and moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
+                # Eq (1-3) term (3)
+                # TODO make this work without clipping
+                # ᶜ∂lnρ̂∂z = (@. lazy(
                 #     upwind_biased_grad(
                 #         -1 * Geometry.WVector(ᶜwʲ),
-                #         Y.c.sgsʲs.:($$j).ρa,
+                #         log(max(FT(1e-2), Y.c.sgsʲs.:($$j).ρa)),
                 #     ),
                 # ))
                 # @. Yₜ.c.sgsʲs.:($$j).mse -=
-                #     dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂z, ᶜw³ʲ) *
+                #     dot(ᶜ∂lnρ̂∂z, ᶜw³ʲ) *
                 #     ᶜqʲ *
                 #     (ᶜmse_li - Y.c.sgsʲs.:($$j).mse)
                 # @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                #     dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂z, ᶜw³ʲ) *
+                #     dot(ᶜ∂lnρ̂∂z, ᶜw³ʲ) *
                 #     ᶜqʲ *
                 #     (1 - Y.c.sgsʲs.:($$j).q_tot)
-                # @. ᶜqʲₜ -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂z, ᶜw³ʲ) * ᶜqʲ
+                # @. ᶜqʲₜ -= dot(ᶜ∂lnρ̂∂z, ᶜw³ʲ) * ᶜqʲ
 
-                # # mse, q_tot and moisture tracer terms proportional to velocity gradients
-                # # Eq (1-3) term (4)
+                # mse, q_tot and moisture tracer terms proportional to velocity gradients
+                # Eq (1-3) term (4)
                 # @. Yₜ.c.sgsʲs.:($$j).mse -=
                 #     ᶜdivᵥ(ᶠw³ʲ) * ᶜqʲ * (ᶜmse_li - Y.c.sgsʲs.:($$j).mse)
                 # @. Yₜ.c.sgsʲs.:($$j).q_tot -=
@@ -547,25 +538,17 @@ function edmfx_sgs_vertical_advection_tendency!(
                 va = vertical_advection(ᶠw³ʲ, ᶜχʲ, edmfx_upwinding)
                 @. ᶜχʲₜ += va
 
-                # # moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
-                # ᶜinv_ρ̂ = (@. lazy(
-                #     specific(
-                #         FT(1),
-                #         Y.c.sgsʲs.:($$j).ρa,
-                #         FT(0),
-                #         Y.c.ρ,
-                #         turbconv_model,
-                #     ),
-                # ))
-                # ᶜ∂ρ̂∂z = (@. lazy(
+                # moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
+                # TODO make this work without clipping
+                # ᶜ∂lnρ̂∂z = (@. lazy(
                 #     upwind_biased_grad(
                 #         -1 * Geometry.WVector(ᶜwʲ),
-                #         Y.c.sgsʲs.:($$j).ρa,
+                #         log(max(FT(1e-2), Y.c.sgsʲs.:($$j).ρa)),
                 #     ),
                 # ))
-                # @. ᶜχʲₜ -= dot(ᶜinv_ρ̂ * ᶜ∂ρ̂∂z, ᶜw³ʲ) * ᶜχʲ
+                # @. ᶜχʲₜ -= dot(ᶜ∂lnρ̂∂z, ᶜw³ʲ) * ᶜχʲ
 
-                # # moisture tracer term proportional to velocity gradients
+                # moisture tracer term proportional to velocity gradients
                 # @. ᶜχʲₜ -= ᶜdivᵥ(ᶠw³ʲ) * ᶜχʲ
             end
 
