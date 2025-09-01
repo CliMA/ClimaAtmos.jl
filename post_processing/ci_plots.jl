@@ -1398,6 +1398,7 @@ EDMFBoxPlots = Union{
 
 EDMFBoxPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column},
+    Val{:prognostic_edmfx_rico_implicit_column},
     Val{:prognostic_edmfx_rico_column_2M},
     Val{:prognostic_edmfx_trmm_column},
     Val{:prognostic_edmfx_trmm_column_sparse_autodiff},
