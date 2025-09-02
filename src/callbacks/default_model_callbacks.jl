@@ -2,9 +2,7 @@
     default_model_callbacks(model::AtmosModel; kwargs...)
 
 Creates the tuple of model callbacks for any AtmosModel by calling
-`default_model_callbacks` on each physics component. This follows the ClimaLand
-pattern where each component is responsible for specifying its own required
-callbacks.
+`default_model_callbacks` on each physics component. 
 
 # Arguments
 - `model::AtmosModel`: The atmospheric model configuration
@@ -148,7 +146,7 @@ These are not model-specific but are frequently needed across simulations.
 
 # Keyword Arguments
 - `progress_logging = false`: Enable progress reporting
-- `nan_check_every = 0`: Check for NaNs every N steps (0 = disabled)
+- `check_nan_every = 0`: Check for NaNs every N steps (0 = disabled)
 - `check_conservation = false`: Enable conservation checking
 - `checkpoint_frequency = "Inf"`: Frequency for saving state to disk
 - `external_forcing_column = false`: Enable external forcing for single column
@@ -156,7 +154,7 @@ These are not model-specific but are frequently needed across simulations.
 function common_callbacks(
     dt, output_dir, start_date, t_start, t_end, comms_ctx;
     progress_logging = false,
-    nan_check_every = 0,
+    check_nan_every = 0,
     check_conservation = false,
     checkpoint_frequency = "Inf",
     external_forcing_column = false,
@@ -176,11 +174,11 @@ function common_callbacks(
         callbacks = (callbacks..., SciMLBase.DiscreteCallback(cond, affect!))
     end
 
-    if nan_check_every > 0
-        @info "Checking NaNs in the state every $(nan_check_every) steps"
+    if check_nan_every > 0
+        @info "Checking NaNs in the state every $(check_nan_every) steps"
         callbacks = (
             callbacks...,
-            call_every_n_steps((integrator) -> check_nans(integrator), nan_check_every),
+            call_every_n_steps((integrator) -> check_nans(integrator), check_nan_every),
         )
     end
     callbacks = (
