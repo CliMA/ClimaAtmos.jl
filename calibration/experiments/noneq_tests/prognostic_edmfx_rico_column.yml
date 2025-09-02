@@ -15,7 +15,7 @@ edmfx_nh_pressure: true
 edmfx_filter: true
 prognostic_tke: true
 moist: "nonequil"
-cloud_model: "quadrature_sgs" # should this be grid_scale?
+cloud_model: "grid_scale" # should this be grid_scale?
 call_cloud_diagnostics_per_stage: true
 precip_model: "1M"
 config: "column"
