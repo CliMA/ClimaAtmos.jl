@@ -9,7 +9,7 @@ site_longitude: -149.0
 turbconv: "prognostic_edmfx" # TEST DIAGNOSTIC
 
 # solve explicitly
-implicit_diffusion: false
+implicit_diffusion: true
 implicit_sgs_advection: false
 implicit_sgs_mass_flux: false
 implicit_sgs_entr_detr: false
@@ -17,7 +17,7 @@ implicit_sgs_nh_pressure: false
 
 approximate_linear_solve_iters: 2
 edmfx_upwinding: first_order
-edmfx_sgsflux_upwinding: first_order
+#edmfx_sgsflux_upwinding: first_order
 tracer_upwinding: vanleer_limiter
 energy_upwinding: vanleer_limiter
 rayleigh_sponge: true
