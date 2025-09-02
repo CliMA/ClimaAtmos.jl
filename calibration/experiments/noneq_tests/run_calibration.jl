@@ -21,7 +21,7 @@ const prior = PD.combine_distributions(prior_vec)
 
 ensemble_size = 20
 n_iterations = 10
-output_dir = "/home/oalcabes/EKI_output/test_4"
+output_dir = "/home/oalcabes/EKI_output/test_5"
 
 run_truth = false
 
@@ -40,7 +40,7 @@ if run_truth
     CA.solve_atmos!(diag_sim)
     truth_out_dir = diag_sim.output_dir
 else
-    truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_active"
+    truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0021"
 end
 
 # add workers
@@ -67,7 +67,7 @@ addprocs(
 
     ensemble_size = 20
     n_iterations = 10
-    output_dir = "/home/oalcabes/EKI_output/test_4"
+    output_dir = "/home/oalcabes/EKI_output/test_5"
 
     experiment_dir = dirname(Base.active_project())
     #const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")
