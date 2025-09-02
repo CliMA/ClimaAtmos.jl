@@ -2803,3 +2803,39 @@ Stacktrace:
  [19] top-level scope
     @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:81
 in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:81
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-1157874: `srun -J julia-1157874 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-1157874-17568514194.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=8d8KcTeMOyrBr0RO`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9952
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9954
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9956
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9958
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9960
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9962
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9964
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9966
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9968
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9970
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9953
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9955
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9957
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9959
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9961
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9963
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9965
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9967
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9969
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9971
+ERROR: LoadError: Period 10m not available for lwp and reduction inst. Available: Set(Any["1h"])
+Stacktrace:
+ [1] error(s::String)
+   @ Base ./error.jl:35
+ [2] get(simdir::SimDir{Dict{Any, Any}, Dict{Any, Any}}; short_name::String, reduction::String, period::String)
+   @ ClimaAnalysis.Sim ~/.julia/packages/ClimaAnalysis/208mV/src/Sim.jl:188
+ [3] get
+   @ ~/.julia/packages/ClimaAnalysis/208mV/src/Sim.jl:166 [inlined]
+ [4] process_member_data(simdir::SimDir{Dict{Any, Any}, Dict{Any, Any}})
+   @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/observation_map.jl:31
+ [5] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:81
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:81
