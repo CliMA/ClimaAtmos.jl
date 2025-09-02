@@ -627,11 +627,11 @@ function horizontal_edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜu, ᶜts) = p.precomputed
+    (; ᶠu³, ᶜts) = p.precomputed
     (; ρatke_flux) = p.precomputed
-    ᶠgradᵥ = Operators.GradientC2F()
     ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, Y.c.ρ, turbconv_model))
-        if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
+
+    if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
         (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
         # scratch to prevent GPU Kernel parameter memory error
@@ -648,20 +648,24 @@ function horizontal_edmfx_sgs_diffusive_flux_tendency!(
             ),
         )
         ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
-        ᶠρaK_h = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_h = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h)
-        ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
-        @. ᶠρaK_u = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_u)
+
 
         # Total enthalpy diffusion
-        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-        @. Yₜ.c.ρe_tot -= wdivₕ(-(ᶠρaK_h * ᶠgradᵥ(ᶜmse⁰ + ᶜK⁰)))
+        ᶜh_tot = @. lazy(
+            TD.total_specific_enthalpy(
+                thermo_params,
+                ᶜts,
+                specific(Y.c.ρe_tot, Y.c.ρ),
+            ),
+        )
+        @. Yₜ.c.ρe_tot -= wdivₕ(-(Y.c.ρ * ᶜK_h * gradₕ(ᶜh_tot)))
+
         if use_prognostic_tke(turbconv_model)
             # Turbulent TKE transport (diffusion)
             # Add flux divergence and dissipation term, relaxing TKE to zero
             # in one time step if tke < 0
             @. Yₜ.c.sgs⁰.ρatke -=
-                wdivₕ(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke⁰))) + ifelse(
+                wdivₕ(-(Y.c.ρ * ᶜK_u * gradₕ(ᶜtke⁰))) + ifelse(
                     ᶜtke⁰ >= FT(0),
                     tke_dissipation(
                         turbconv_params,
@@ -672,51 +676,46 @@ function horizontal_edmfx_sgs_diffusive_flux_tendency!(
                     Y.c.sgs⁰.ρatke / float(dt),
                 )
         end
+
         if !(p.atmos.moisture_model isa DryModel)
             # Specific humidity diffusion
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-            ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-            @. ᶜρχₜ_diffusion = wdivₕ(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_tot⁰)))
+            @. ᶜρχₜ_diffusion =
+                wdivₕ(-(Y.c.ρ * ᶜK_h * gradₕ(specific(Y.c.ρq_tot, Y.c.ρ))))
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
-            @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
+            @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
         end
 
-        cloud_tracers = (
-            (@name(c.ρq_liq), @name(q_liq)),
-            (@name(c.ρq_ice), @name(q_ice)),
-            (@name(c.ρn_liq), @name(n_liq)),
-        )
-        precip_tracers = (
-            (@name(c.ρq_rai), @name(q_rai)),
-            (@name(c.ρq_sno), @name(q_sno)),
-            (@name(c.ρn_rai), @name(n_rai)),
-        )
+        cloud_tracers = (@name(c.ρq_liq), @name(c.ρq_ice), @name(c.ρn_liq))
+        precip_tracers = (@name(c.ρq_rai), @name(c.ρq_sno), @name(c.ρn_rai))
 
-        α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
+        α = CAP.α_vert_diff_tracer(params)
         ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-        MatrixFields.unrolled_foreach(cloud_tracers) do (ρχ_name, χ_name)
+        MatrixFields.unrolled_foreach(cloud_tracers) do ρχ_name
             MatrixFields.has_field(Y, ρχ_name) || return
-            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-            @. ᶜρχₜ_diffusion = wdivₕ(-(ᶠρaK_h * ᶠgradᵥ(ᶜχ⁰)))
+            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+            ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
+            @. ᶜρχₜ_diffusion = wdivₕ(-(ᶠρaK_h * ᶠgradᵥ(ᶜχ)))
             ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end
-        # TODO - do I need to change anything in the implicit solver
-        # to include the α_vert_diff_tracer?
-        MatrixFields.unrolled_foreach(precip_tracers) do (ρχ_name, χ_name)
+        MatrixFields.unrolled_foreach(precip_tracers) do ρχ_name
             MatrixFields.has_field(Y, ρχ_name) || return
-            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-            @. ᶜρχₜ_diffusion =
-                wdivₕ(-(ᶠρaK_h * α_vert_diff_tracer * ᶠgradᵥ(ᶜχ⁰)))
+            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+            ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
+            @. ᶜρχₜ_diffusion = wdivₕ(-(ᶠρaK_h * α * ᶠgradᵥ(ᶜχ)))
             ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end
 
         # Momentum diffusion
-        ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
-        ᶠstrain_rate .= compute_strain_rate_face(ᶜu⁰)
-        @. Yₜ.c.uₕ -= C12(wdivₕ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
+        ᶠu = p.scratch.ᶠtemp_C123
+        @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
+        ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
+        ᶜstrain_rate .= compute_strain_rate_center(ᶠu)
+        @. Yₜ.c.uₕ -= C12(wdivₕ(-(2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate)) / Y.c.ρ)
     end
+
     return nothing
 end
 
