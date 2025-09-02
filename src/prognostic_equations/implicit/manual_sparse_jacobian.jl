@@ -802,10 +802,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶜadvdivᵥ_matrix() ⋅
                             ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)))
                         ) - (I,)
+                    # TODO the following line is based on χₜ = - w ∂χ/∂z while the
+                    # advection function uses χₜ = -1/ρ ∂ρwχ/∂z
                     @. ∂ᶜqʲ_err_∂ᶜqʲ +=
                         dtγ * (
-                            DiagonalMatrixRow(ᶜadvdivᵥ(ᶠw³ʲ)) -
-                            ᶜadvdivᵥ_matrix() ⋅
+                            DiagonalMatrixRow(ᶜprecipdivᵥ(ᶠw³ʲ)) -
+                            ᶜprecipdivᵥ_matrix() ⋅
                             ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠw³ʲ))
                         )
                 end

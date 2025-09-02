@@ -108,8 +108,8 @@ function set_precipitation_velocities!(
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     (; ᶜΦ) = p.core
-    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₕʲs) = p.precomputed
-    (; ᶜts⁰) = p.precomputed
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs) = p.precomputed
+    (; ᶜts⁰, ᶜtsʲs) = p.precomputed
     cmc = CAP.microphysics_cloud_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
@@ -211,7 +211,14 @@ function set_precipitation_velocities!(
     # Add contributions to energy and total water advection
     # TODO do we need to add kinetic energy of subdomains?
     for j in 1:n
-        @. ᶜρwₕhₜ += Y.c.sgsʲs.:($$j).ρa * ᶜwₕʲs.:($$j) * Y.c.sgsʲs.:($$j).mse
+        @. ᶜρwₕhₜ +=
+            Y.c.sgsʲs.:($$j).ρa *
+            (
+                ᶜwₗʲs.:($$j) * Y.c.sgsʲs.:($$j).q_liq * (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                ᶜwᵢʲs.:($$j) * Y.c.sgsʲs.:($$j).q_ice * (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                ᶜwᵣʲs.:($$j) * Y.c.sgsʲs.:($$j).q_rai * (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                ᶜwₛʲs.:($$j) * Y.c.sgsʲs.:($$j).q_sno * (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
+            )
     end
     @. ᶜwₕhₜ = Geometry.WVector(ᶜρwₕhₜ) / Y.c.ρ
 
@@ -323,8 +330,8 @@ function set_precipitation_velocities!(
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     (; ᶜΦ) = p.core
-    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs, ᶜwₕʲs) = p.precomputed
-    (; ᶜts⁰) = p.precomputed
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs) = p.precomputed
+    (; ᶜts⁰, ᶜtsʲs) = p.precomputed
     cmc = CAP.microphysics_cloud_params(p.params)
     cm1p = CAP.microphysics_1m_params(p.params)
     cm2p = CAP.microphysics_2m_params(p.params)
@@ -477,7 +484,14 @@ function set_precipitation_velocities!(
     # Add contributions to energy and total water advection
     # TODO do we need to add kinetic energy of subdomains?
     for j in 1:n
-        @. ᶜρwₕhₜ += Y.c.sgsʲs.:($$j).ρa * ᶜwₕʲs.:($$j) * Y.c.sgsʲs.:($$j).mse
+        @. ᶜρwₕhₜ +=
+            Y.c.sgsʲs.:($$j).ρa *
+            (
+                ᶜwₗʲs.:($$j) * Y.c.sgsʲs.:($$j).q_liq * (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                ᶜwᵢʲs.:($$j) * Y.c.sgsʲs.:($$j).q_ice * (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                ᶜwᵣʲs.:($$j) * Y.c.sgsʲs.:($$j).q_rai * (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
+                ᶜwₛʲs.:($$j) * Y.c.sgsʲs.:($$j).q_sno * (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
+            )
     end
     @. ᶜwₕhₜ = Geometry.WVector(ᶜρwₕhₜ) / Y.c.ρ
 
