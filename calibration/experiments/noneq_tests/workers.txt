@@ -2703,3 +2703,103 @@ srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the re
 [ Info: Running member 3 on worker 19
 [ Info: Running member 2 on worker 20
 [ Info: Running member 1 on worker 21
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-3418932: `srun -J julia-3418932 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-3418932-17564212639.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=10Hl9GUUYdHx39Z9`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9100
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9102
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9104
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9106
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9108
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9110
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9112
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9114
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9116
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9118
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9101
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9103
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9105
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9107
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9109
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9111
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9113
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9115
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9117
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9119
+ERROR: LoadError: Period 1h not available for lwp and reduction inst. Available: Set(Any["10m"])
+Stacktrace:
+ [1] error(s::String)
+   @ Base ./error.jl:35
+ [2] get(simdir::SimDir{Dict{Any, Any}, Dict{Any, Any}}; short_name::String, reduction::String, period::String)
+   @ ClimaAnalysis.Sim ~/.julia/packages/ClimaAnalysis/208mV/src/Sim.jl:188
+ [3] get
+   @ ~/.julia/packages/ClimaAnalysis/208mV/src/Sim.jl:166 [inlined]
+ [4] process_member_data(simdir::SimDir{Dict{Any, Any}, Dict{Any, Any}})
+   @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/observation_map.jl:31
+ [5] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:81
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:81
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-3718091: `srun -J julia-3718091 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-3718091-17564919626.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=FHwxsouxkvQRLJTc`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9382
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9384
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9386
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9388
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9394
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9396
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9378
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9380
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9392
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9390
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9379
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9381
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9383
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9385
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9387
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9389
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9391
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9393
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9395
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9397
+ERROR: LoadError: ArgumentError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
+Stacktrace:
+  [1] _empty_reduce_error()
+    @ Base ./reduce.jl:319
+  [2] reduce_empty(f::Function, T::Type)
+    @ Base ./reduce.jl:320
+  [3] mapreduce_empty(::typeof(identity), op::Function, T::Type)
+    @ Base ./reduce.jl:369
+  [4] reduce_empty(op::Base.MappingRF{typeof(identity), typeof(min)}, ::Type{Float32})
+    @ Base ./reduce.jl:358
+  [5] reduce_empty_iter
+    @ ./reduce.jl:381 [inlined]
+  [6] mapreduce_empty_iter(f::Function, op::Function, itr::Vector{Float32}, ItrEltype::Base.HasEltype)
+    @ Base ./reduce.jl:377
+  [7] _mapreduce
+    @ ./reduce.jl:429 [inlined]
+  [8] _mapreduce_dim
+    @ ./reducedim.jl:337 [inlined]
+  [9] mapreduce
+    @ ./reducedim.jl:329 [inlined]
+ [10] _minimum
+    @ ./reducedim.jl:987 [inlined]
+ [11] _minimum
+    @ ./reducedim.jl:986 [inlined]
+ [12] minimum
+    @ ./reducedim.jl:982 [inlined]
+ [13] nearest_index(A::Vector{Float32}, val::Int64)
+    @ ClimaAnalysis.Utils ~/.julia/packages/ClimaAnalysis/208mV/src/Utils.jl:143
+ [14] get_index(var::OutputVar{Vector{…}, Array{…}, String, Dict{…}}, dim_name::String, val::Int64, ::NearestValue)
+    @ ClimaAnalysis.Var ~/.julia/packages/ClimaAnalysis/208mV/src/outvar_selectors.jl:249
+ [15] _create_slice_over
+    @ ~/.julia/packages/ClimaAnalysis/208mV/src/outvar_selectors.jl:313 [inlined]
+ [16] _slice_general(var::OutputVar{Vector{…}, Array{…}, String, Dict{…}}, val::Int64, dim_name::String, by::NearestValue)
+    @ ClimaAnalysis.Var ~/.julia/packages/ClimaAnalysis/208mV/src/outvar_selectors.jl:86
+ [17] #slice#183
+    @ ~/.julia/packages/ClimaAnalysis/208mV/src/outvar_selectors.jl:153 [inlined]
+ [18] process_member_data(simdir::SimDir{Dict{Any, Any}, Dict{Any, Any}})
+    @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/observation_map.jl:35
+ [19] top-level scope
+    @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:81
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:81
