@@ -550,39 +550,75 @@ function auto_detect_restart_file(
     return restart_file
 end
 
-function get_sim_info(config::AtmosConfig)
-    (; comms_ctx, parsed_args) = config
-    FT = eltype(config)
 
-    (; job_id) = config
+import ClimaUtilities.OutputPathGenerator
+
+"""
+    setup_output_dir(job_id, output_dir, output_dir_style, detect_restart_file, restart_file, comms_ctx)
+
+Unified function for setting up output directories and detecting restart files.
+Used by both AtmosSimulation constructor and get_simulation.
+
+Returns a named tuple with:
+- `output_dir`: The final output directory path
+- `restart_file`: The restart file path (if any)
+"""
+function setup_output_dir(
+    job_id,
+    output_dir,
+    output_dir_style,
+    detect_restart_file,
+    restart_file,
+    comms_ctx,
+)
+    # Set up base output directory
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
-    out_dir = parsed_args["output_dir"]
-    base_output_dir = isnothing(out_dir) ? default_output : out_dir
+    base_output_dir = isnothing(output_dir) ? default_output : output_dir
 
+    # Validate and get output directory style
     allowed_dir_styles = Dict(
         "activelink" => OutputPathGenerator.ActiveLinkStyle(),
         "removepreexisting" => OutputPathGenerator.RemovePreexistingStyle(),
     )
 
-    requested_style = parsed_args["output_dir_style"]
+    haskey(allowed_dir_styles, lowercase(output_dir_style)) ||
+        error("output_dir_style $(output_dir_style) not available")
 
-    haskey(allowed_dir_styles, lowercase(requested_style)) ||
-        error("output_dir_style $(requested_style) not available")
+    output_dir_style_obj = allowed_dir_styles[lowercase(output_dir_style)]
 
-    output_dir_style = allowed_dir_styles[lowercase(requested_style)]
+    # Auto-detect restart file if requested
+    final_restart_file = if detect_restart_file && isnothing(restart_file)
+        auto_detect_restart_file(output_dir_style_obj, base_output_dir)
+    else
+        restart_file
+    end
 
-    # We look for a restart before creating a new output dir because we want to
-    # look for previous folders
-    restart_file =
-        parsed_args["detect_restart_file"] ?
-        auto_detect_restart_file(output_dir_style, base_output_dir) :
-        parsed_args["restart_file"]
-
+    # Generate the actual output directory
     output_dir = OutputPathGenerator.generate_output_path(
         base_output_dir;
         context = comms_ctx,
-        style = output_dir_style,
+        style = output_dir_style_obj,
     )
+
+    return output_dir, restart_file
+end
+
+function get_sim_info(config::AtmosConfig)
+    (; comms_ctx, parsed_args) = config
+    FT = eltype(config)
+
+    (; job_id) = config
+
+    # Use unified output directory setup
+    output_dir, restart_file = CA.setup_output_dir(
+        job_id,
+        parsed_args["output_dir"],
+        parsed_args["output_dir_style"],
+        parsed_args["detect_restart_file"],
+        parsed_args["restart_file"],
+        comms_ctx,
+    )
+
     if parsed_args["log_to_file"]
         @info "Logging to $output_dir/output.log"
         logger = ClimaComms.FileLogger(comms_ctx, output_dir)
