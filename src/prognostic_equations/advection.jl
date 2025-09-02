@@ -360,7 +360,6 @@ function edmfx_sgs_vertical_advection_tendency!(
     (; params) = p
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; dt) = p
-    ᶜJ = Fields.local_geometry_field(Y.c).J
     (; edmfx_upwinding) = p.atmos.numerics
     (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
@@ -396,8 +395,7 @@ function edmfx_sgs_vertical_advection_tendency!(
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
 
         # Flux form vertical advection of area farction with the grid mean velocity
-        vtt =
-            vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmfx_upwinding)
+        vtt = vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmfx_upwinding)
         @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
 
         # Advective form advection of mse and q_tot with the grid mean velocity
@@ -425,10 +423,22 @@ function edmfx_sgs_vertical_advection_tendency!(
             if j > 1
                 error("Below code doesn't work for multiple updrafts")
             end
-            FT = eltype(params)
+            FT = eltype(p.params)
             thp = CAP.thermodynamics_params(params)
             (; ᶜΦ) = p.core
             (; ᶜtsʲs) = p.precomputed
+            ᶜ∂ρ∂t_sed = p.scratch.ᶜtemp_scalar_3
+            @. ᶜ∂ρ∂t_sed = 0
+
+            ᶜinv_ρ̂ = (@. lazy(
+                specific(
+                    FT(1),
+                    Y.c.sgsʲs.:($$j).ρa,
+                    FT(0),
+                    Y.c.ρ,
+                    turbconv_model,
+                ),
+            ))
 
             # Sedimentation
             # TODO - lazify ᶜwₗʲs computation. No need to cache it.
@@ -448,80 +458,70 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜqʲₜ = MatrixFields.get_field(Yₜ, qʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
                 ᶠw³ʲ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwʲ)))))
-                ᶜw³ʲ = (@. lazy(CT3(Geometry.WVector(-1 * ᶜwʲ))))
                 ᶜaqʲ = (@. lazy(ᶜa * ᶜqʲ))
 
-                # Flux form vertical advection of rho * area with sedimentation velocities
-                # Eq (4) term (3) in the writeup
-                # vtt = vertical_transport(
-                #     ᶜρʲs.:($j),
-                #     ᶠw³ʲ,
-                #     ᶜaqʲ,
-                #     dt,
-                #     edmfx_upwinding,
-                # )
-                # @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
-
-                # Advective form advection of moisture tracers with the grid mean velocity
-                # Eq (2) term (1) in the writeup
-                va = vertical_advection(ᶠu³ʲs.:($j), ᶜqʲ, edmfx_upwinding)
+                # Advective form advection of tracers with grid-mean velocity
+                va = vertical_advection(
+                    ᶠu³ʲs.:($j),
+                    ᶜqʲ,
+                    edmfx_upwinding,
+                )
                 @. ᶜqʲₜ += va
 
-                # Advective form advection of q_tot and moisture tracers with sedimentation velocities
-                # Eq (1-2) term (2)
-                va = vertical_advection(ᶠw³ʲ, ᶜqʲ, edmfx_upwinding)
-                # @. Yₜ.c.sgsʲs.:($$j).q_tot += (1 - Y.c.sgsʲs.:($$j).q_tot) * va
-                @. ᶜqʲₜ += va
-                # # Advective form advection of mse with sedimentation velocity
-                # # Eq (3) term (2)
-                # if name in (@name(q_liq), @name(q_rai))
-                #     ᶜmse_li = (@. lazy(
-                #         TD.internal_energy_liquid(thp, ᶜtsʲs.:($$j)) + ᶜΦ,
-                #     ))
-                # elseif name in (@name(q_ice), @name(q_sno))
-                #     ᶜmse_li = (@. lazy(
-                #         TD.internal_energy_ice(thp, ᶜtsʲs.:($$j)) + ᶜΦ,
-                #     ))
-                # else
-                #     error("Unsupported moisture tracer variable")
-                # end
-                # va = vertical_advection(ᶠw³ʲ, ᶜqʲ .* ᶜmse_li, edmfx_upwinding)
-                # @. Yₜ.c.sgsʲs.:($$j).mse += va
-                # va = vertical_advection(ᶠw³ʲ, ᶜqʲ, edmfx_upwinding)
-                # @. Yₜ.c.sgsʲs.:($$j).mse -= Y.c.sgsʲs.:($$j).mse * va
+                # Flux form sedimentation of tracers
+                vtt = vertical_transport_sedimentation(
+                    ᶜρʲs.:($j),
+                    ᶠw³ʲ,
+                    ᶜaqʲ,
+                    dt,
+                    edmfx_upwinding,
+                )
+                @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
+                @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
+                @. ᶜ∂ρ∂t_sed += vtt
 
-                # mse, q_tot and moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
-                # Eq (1-3) term (3)
-                # TODO make this work without clipping
-                # ᶜ∂lnρ̂∂z = (@. lazy(
-                #     upwind_biased_grad(
-                #         -1 * Geometry.WVector(ᶜwʲ),
-                #         log(max(FT(1e-2), Y.c.sgsʲs.:($$j).ρa)),
-                #     ),
-                # ))
-                # @. Yₜ.c.sgsʲs.:($$j).mse -=
-                #     dot(ᶜ∂lnρ̂∂z, ᶜw³ʲ) *
-                #     ᶜqʲ *
-                #     (ᶜmse_li - Y.c.sgsʲs.:($$j).mse)
-                # @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                #     dot(ᶜ∂lnρ̂∂z, ᶜw³ʲ) *
-                #     ᶜqʲ *
-                #     (1 - Y.c.sgsʲs.:($$j).q_tot)
-                # @. ᶜqʲₜ -= dot(ᶜ∂lnρ̂∂z, ᶜw³ʲ) * ᶜqʲ
-
-                # mse, q_tot and moisture tracer terms proportional to velocity gradients
-                # Eq (1-3) term (4)
-                # @. Yₜ.c.sgsʲs.:($$j).mse -=
-                #     ᶜdivᵥ(ᶠw³ʲ) * ᶜqʲ * (ᶜmse_li - Y.c.sgsʲs.:($$j).mse)
-                # @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                #     ᶜdivᵥ(ᶠw³ʲ) * ᶜqʲ * (1 - Y.c.sgsʲs.:($$j).q_tot)
-                # @. ᶜqʲₜ -= ᶜdivᵥ(ᶠw³ʲ) * ᶜqʲ
+                # Flux form sedimentation of energy
+                if name in (@name(q_liq), @name(q_rai))
+                    ᶜmse_li = (@. lazy(
+                        TD.internal_energy_liquid(thp, ᶜtsʲs.:($$j)) + ᶜΦ,
+                    ))
+                elseif name in (@name(q_ice), @name(q_sno))
+                    ᶜmse_li = (@. lazy(
+                        TD.internal_energy_ice(thp, ᶜtsʲs.:($$j)) + ᶜΦ,
+                    ))
+                else
+                    error("Unsupported moisture tracer variable")
+                end
+                vtt = vertical_transport_sedimentation(
+                    ᶜρʲs.:($j),
+                    ᶠw³ʲ,
+                    ᶜaqʲ .* ᶜmse_li,
+                    dt,
+                    edmfx_upwinding,
+                )
+                @. Yₜ.c.sgsʲs.:($$j).mse += ᶜinv_ρ̂ * vtt
             end
+
+            # Contribution of density variation due to sedimentation
+            @. Yₜ.c.sgsʲs.:($$j).ρa += ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).mse * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_tot * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_liq -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_liq * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_ice -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_ice * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_rai -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_rai * ᶜ∂ρ∂t_sed
+            @. Yₜ.c.sgsʲs.:($$j).q_sno -= ᶜinv_ρ̂ * Y.c.sgsʲs.:($$j).q_sno * ᶜ∂ρ∂t_sed
+
         end
+
+        # Sedimentation of number concentrations for 2M microphysics
         if p.atmos.moisture_model isa NonEquilMoistModel &&
            p.atmos.microphysics_model isa Microphysics2Moment
 
-            FT = eltype(params)
+            # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
+            # TODO - make it work for multiple updrafts
+            if j > 1
+                error("Below code doesn't work for multiple updrafts")
+            end
 
             # Sedimentation velocities for microphysics number concentrations
             # (or any tracers that does not directly participate in variations of q_tot and mse)
@@ -532,37 +532,38 @@ function edmfx_sgs_vertical_advection_tendency!(
 
             MatrixFields.unrolled_foreach(
                 sgs_microphysics_tracers,
-            ) do (χʲ_name, χʲ_name)
+            ) do (χʲ_name, wʲ_name)
                 MatrixFields.has_field(Y, χʲ_name) || return
 
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
                 ᶠw³ʲ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwʲ)))))
-                ᶜw³ʲ = (@. lazy(CT3(Geometry.WVector(-1 * ᶜwʲ))))
+                ᶜaχʲ = (@. lazy(ᶜa * ᶜχʲ))
 
-                # Advective form advection of moisture tracers with the grid mean velocity
-                va = vertical_advection(ᶠu³ʲs.:($j), ᶜχʲ, edmfx_upwinding)
+                # Advective form advection of tracers with grid-mean velocity
+                va = vertical_advection(
+                    ᶠu³ʲs.:($j),
+                    ᶜχʲ,
+                    edmfx_upwinding,
+                )
                 @. ᶜχʲₜ += va
 
-                # Advective form advection of moisture tracers with sedimentation velocities
-                va = vertical_advection(ᶠw³ʲ, ᶜχʲ, edmfx_upwinding)
-                @. ᶜχʲₜ += va
+                # Flux form sedimentation of tracers
+                vtt = vertical_transport_sedimentation(
+                    ᶜρʲs.:($j),
+                    ᶠw³ʲ,
+                    ᶜaχʲ,
+                    dt,
+                    edmfx_upwinding,
+                )
+                @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
 
-                # moisture tracers terms proportional to 1/ρ̂ ∂zρ̂
-                # TODO make this work without clipping
-                # ᶜ∂lnρ̂∂z = (@. lazy(
-                #     upwind_biased_grad(
-                #         -1 * Geometry.WVector(ᶜwʲ),
-                #         log(max(FT(1e-2), Y.c.sgsʲs.:($$j).ρa)),
-                #     ),
-                # ))
-                # @. ᶜχʲₜ -= dot(ᶜ∂lnρ̂∂z, ᶜw³ʲ) * ᶜχʲ
-
-                # moisture tracer term proportional to velocity gradients
-                # @. ᶜχʲₜ -= ᶜdivᵥ(ᶠw³ʲ) * ᶜχʲ
+                # Contribution of density variation due to sedimentation
+                @. ᶜχʲₜ -= ᶜinv_ρ̂ * ᶜχʲ * ᶜ∂ρ∂t_sed
             end
 
         end
+
     end
 end
