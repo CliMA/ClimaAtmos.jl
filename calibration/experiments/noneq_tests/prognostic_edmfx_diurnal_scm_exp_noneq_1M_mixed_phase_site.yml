@@ -1,0 +1,57 @@
+# drive all conditions with ERA5
+initial_condition: "ReanalysisTimeVarying"
+external_forcing: "ReanalysisMonthlyAveragedDiurnal"
+surface_setup: "ReanalysisTimeVarying"
+surface_temperature: "ReanalysisTimeVarying"
+start_date: "20070701"
+site_latitude: -56.0 # CAN PLAY W THIS LOCATION AS WELL
+site_longitude: 0.0
+# site_latitude: -50.0
+# site_longitude: 90.0
+#site_latitude: -49.20000076293945 # CAN PLAY W THIS LOCATION AS WELL
+#site_longitude: 69.30000305175781
+turbconv: "prognostic_edmfx" # TEST PROGNOSTIC
+
+# solve explicitly
+implicit_diffusion: true
+implicit_sgs_advection: false
+implicit_sgs_mass_flux: false
+implicit_sgs_entr_detr: false
+implicit_sgs_nh_pressure: false
+
+approximate_linear_solve_iters: 2
+edmfx_upwinding: first_order
+#edmfx_sgsflux_upwinding: first_order
+tracer_upwinding: vanleer_limiter
+energy_upwinding: vanleer_limiter
+rayleigh_sponge: true
+edmfx_entr_model: "PiGroups"
+edmfx_detr_model: "PiGroups"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_filter: true
+prognostic_tke: true
+precip_model: "1M"
+prescribe_ozone: false
+moist: "nonequil"
+config: "column"
+z_max: 60e3
+z_elem: 63
+z_stretch: true
+dz_bottom: 30
+perturb_initstate: false
+dt: "5secs"
+dt_rad: "10mins"
+t_end: "6days"
+cloud_model: "quadrature_sgs"
+call_cloud_diagnostics_per_stage: true
+toml: [toml/prognostic_edmfx_calibrated.toml] # THESE PARAMS ARE FOR 1M NOT 0M
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 60] # if doing DIAGNOSTIC -- SPEAK 2 JULES ABT NEW PARAMS
+output_default_diagnostics: false
+rad: allskywithclear
+insolation: "externaldriventv"
+diagnostics:
+  - short_name: [lwp, clivi] # CHANGE TO LWP, IWP -- eventually cloud top
+    period: 10mins
