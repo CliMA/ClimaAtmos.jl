@@ -3752,3 +3752,139 @@ srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the re
 [ Info: Resuming member 3 on worker 19 (incomplete run detected)
 [ Info: Resuming member 2 on worker 20 (incomplete run detected)
 [ Info: Resuming member 1 on worker 21 (incomplete run detected)
+┌ Error: Error watching manifest
+│   exception =
+│    UndefVarError: `Broadcasted` not defined in `StaticArrays.StableFlatten`
+│    Suggestion: check for spelling errors or missing imports.
+│    Stacktrace:
+│     [1] top-level scope
+│       @ ~/.julia/packages/StaticArrays/MTYJP/src/broadcast.jl:180
+│    Revise evaluation error at /home/oalcabes/.julia/packages/StaticArrays/MTYJP/src/broadcast.jl:180
+│    
+│    Stacktrace:
+│     [1] methods_by_execution!(recurse::Any, methodinfo::Revise.CodeTrackingMethodInfo, docexprs::Dict{…}, mod::Module, ex::Expr; mode::Symbol, disablebp::Bool, always_rethrow::Bool, kwargs::@Kwargs{})
+│       @ Revise ~/.julia/packages/Revise/CawM1/src/lowered.jl:296
+└ @ Revise ~/.julia/packages/Revise/CawM1/src/pkgs.jl:498
+[ Info: Iteration 0 time: 39 minutes, 48 seconds, 242 milliseconds
+[ Info: Iteration 0 (prior)
+[ Info: Covariance trace: 0.08757638104933844
+[ Info: Iteration 1 (T=0.00016665966632682346)
+┌ Info: Covariance-weighted error: 1329.7895540147308
+│ Covariance trace: 0.08575373205735384
+└ Covariance trace ratio (current/previous): 0.9791878932407841
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [502.33709640885945, 1982.2001176595104]
+[ Info: Covariance-weighted error: 1329.7895540147308
+[ Info: Running Iteration 1
+[ Info: Running member 20 on worker 3
+[ Info: Running member 19 on worker 5
+[ Info: Running member 18 on worker 18
+[ Info: Running member 17 on worker 20
+[ Info: Running member 16 on worker 2
+[ Info: Running member 15 on worker 21
+[ Info: Running member 14 on worker 17
+[ Info: Running member 13 on worker 13
+[ Info: Running member 12 on worker 15
+[ Info: Running member 11 on worker 4
+[ Info: Running member 10 on worker 7
+[ Info: Running member 9 on worker 11
+[ Info: Running member 8 on worker 16
+[ Info: Running member 7 on worker 9
+[ Info: Running member 6 on worker 12
+[ Info: Running member 5 on worker 10
+[ Info: Running member 4 on worker 14
+[ Info: Running member 3 on worker 6
+[ Info: Running member 2 on worker 19
+[ Info: Running member 1 on worker 8
+┌ Error: Error watching manifest
+│   exception =
+│    UndefVarError: `Broadcasted` not defined in `StaticArrays.StableFlatten`
+│    Suggestion: check for spelling errors or missing imports.
+│    Stacktrace:
+│     [1] top-level scope
+│       @ ~/.julia/packages/StaticArrays/MTYJP/src/broadcast.jl:180
+│    Revise evaluation error at /home/oalcabes/.julia/packages/StaticArrays/MTYJP/src/broadcast.jl:180
+│    
+│    Stacktrace:
+│     [1] methods_by_execution!(recurse::Any, methodinfo::Revise.CodeTrackingMethodInfo, docexprs::Dict{…}, mod::Module, ex::Expr; mode::Symbol, disablebp::Bool, always_rethrow::Bool, kwargs::@Kwargs{})
+│       @ Revise ~/.julia/packages/Revise/CawM1/src/lowered.jl:296
+└ @ Revise ~/.julia/packages/Revise/CawM1/src/pkgs.jl:498
+[ Info: Iteration 1 time: 25 minutes, 31 seconds, 498 milliseconds
+[ Info: Iteration 2 (T=0.0011146286783981886)
+┌ Info: Covariance-weighted error: 79.58370276737212
+│ Covariance trace: 0.0834337375101237
+└ Covariance trace ratio (current/previous): 0.9729458474684404
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [502.72481221736024, 1990.8119807275534]
+[ Info: Covariance-weighted error: 79.58370276737212
+[ Info: Running Iteration 2
+[ Info: Running member 20 on worker 18
+[ Info: Running member 19 on worker 19
+[ Info: Running member 18 on worker 13
+[ Info: Running member 17 on worker 3
+[ Info: Running member 16 on worker 5
+[ Info: Running member 15 on worker 12
+[ Info: Running member 14 on worker 2
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 8
+[ Info: Running member 11 on worker 15
+[ Info: Running member 10 on worker 20
+[ Info: Running member 9 on worker 14
+[ Info: Running member 8 on worker 7
+[ Info: Running member 7 on worker 11
+[ Info: Running member 6 on worker 4
+[ Info: Running member 5 on worker 21
+[ Info: Running member 4 on worker 10
+[ Info: Running member 3 on worker 6
+[ Info: Running member 2 on worker 17
+[ Info: Running member 1 on worker 16
+[ Info: Iteration 2 time: 25 minutes, 10 seconds, 279 milliseconds
+[ Info: Iteration 3 (T=0.00121480750667429)
+┌ Info: Covariance-weighted error: 1716.5008981454178
+│ Covariance trace: 0.07894290935117707
+└ Covariance trace ratio (current/previous): 0.9461749132549441
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [503.91965227485787, 2004.1086815621702]
+[ Info: Covariance-weighted error: 1716.5008981454178
+[ Info: Running Iteration 3
+[ Info: Running member 20 on worker 18
+[ Info: Running member 19 on worker 19
+[ Info: Running member 18 on worker 13
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 3
+[ Info: Running member 15 on worker 9
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 7
+[ Info: Running member 12 on worker 12
+[ Info: Running member 11 on worker 17
+[ Info: Running member 10 on worker 2
+[ Info: Running member 9 on worker 16
+[ Info: Running member 8 on worker 11
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 10
+[ Info: Running member 5 on worker 6
+[ Info: Running member 4 on worker 14
+[ Info: Running member 3 on worker 20
+[ Info: Running member 2 on worker 4
+[ Info: Running member 1 on worker 21

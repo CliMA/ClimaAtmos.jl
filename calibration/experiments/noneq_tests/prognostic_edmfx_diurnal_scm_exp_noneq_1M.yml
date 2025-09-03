@@ -39,7 +39,7 @@ dz_bottom: 30
 perturb_initstate: false
 dt: "5secs"
 dt_rad: "10mins"
-t_end: "30hours"
+t_end: "6days"
 cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage: true
 toml: [toml/prognostic_edmfx_calibrated.toml] # THESE PARAMS ARE FOR 1M NOT 0M
