@@ -50,4 +50,4 @@ rad: allskywithclear
 insolation: "externaldriventv"
 diagnostics:
   - short_name: [lwp, clivi] # CHANGE TO LWP, IWP -- eventually cloud top
-    period: 10mins
+    period: 1hours

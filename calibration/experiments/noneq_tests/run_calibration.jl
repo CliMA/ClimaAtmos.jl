@@ -23,7 +23,7 @@ ensemble_size = 20
 n_iterations = 10
 output_dir = "/home/oalcabes/EKI_output/test_6"
 
-run_truth = false
+run_truth = true
 
 if run_truth
 
