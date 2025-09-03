@@ -65,7 +65,6 @@ loss_results = Dict(
     :var_weighted_min_loss_avg => Float64[],
 )
 
-
 for iteration in iterations
 
     @info iteration
@@ -122,7 +121,7 @@ for iteration in iterations
         color = :gray,
     )
 
-    ylims!(plt, -3.0, 3.0)
+    #ylims!(plt, -3.0, 3.0)
     savefig(plt, joinpath(plot_dir_y_vec, "eki_y_vs_g_iter_$(iteration).png"))
 
 end
