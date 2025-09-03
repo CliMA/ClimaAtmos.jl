@@ -21,16 +21,17 @@ const prior = PD.combine_distributions(prior_vec)
 
 ensemble_size = 20
 n_iterations = 10
-output_dir = "/home/oalcabes/EKI_output/test_5"
+output_dir = "/home/oalcabes/EKI_output/test_6"
 
 run_truth = false
 
 if run_truth
 
-    model_config = "diagnostic_edmfx_diurnal_scm_imp_noneq_1M.yml"
+    #model_config = "diagnostic_edmfx_diurnal_scm_exp_noneq_1M.yml"
+    model_config = "prognostic_edmfx_diurnal_scm_exp_noneq_1M.yml"
 
     config_dict = YAML.load_file(model_config)
-    truth_toml = "toml/diagnostic_precalibrated_truth.toml"
+    truth_toml = "toml/truth.toml"
 
     # load configs and directories -- running truth!
     push!(config_dict["toml"], truth_toml)
@@ -67,7 +68,7 @@ addprocs(
 
     ensemble_size = 20
     n_iterations = 10
-    output_dir = "/home/oalcabes/EKI_output/test_5"
+    output_dir = "/home/oalcabes/EKI_output/test_6"
 
     experiment_dir = dirname(Base.active_project())
     #const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")

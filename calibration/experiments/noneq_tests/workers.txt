@@ -3888,3 +3888,1067 @@ srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the re
 [ Info: Running member 3 on worker 20
 [ Info: Running member 2 on worker 4
 [ Info: Running member 1 on worker 21
+[ Info: Iteration 3 time: 25 minutes, 43 seconds, 692 milliseconds
+[ Info: Iteration 4 (T=0.0012916642855995272)
+┌ Info: Covariance-weighted error: 3170.294667095709
+│ Covariance trace: 0.07836671062451625
+└ Covariance trace ratio (current/previous): 0.9927010705407676
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [506.0502984948948, 1989.1262485056177]
+[ Info: Covariance-weighted error: 3170.294667095709
+[ Info: Running Iteration 4
+[ Info: Running member 20 on worker 18
+[ Info: Running member 19 on worker 5
+[ Info: Running member 18 on worker 15
+[ Info: Running member 17 on worker 14
+[ Info: Running member 16 on worker 19
+[ Info: Running member 15 on worker 9
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 7
+[ Info: Running member 12 on worker 4
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 3
+[ Info: Running member 9 on worker 10
+[ Info: Running member 8 on worker 6
+[ Info: Running member 7 on worker 13
+[ Info: Running member 6 on worker 12
+[ Info: Running member 5 on worker 20
+[ Info: Running member 4 on worker 21
+[ Info: Running member 3 on worker 2
+[ Info: Running member 2 on worker 17
+[ Info: Running member 1 on worker 16
+[ Info: Iteration 4 time: 25 minutes, 34 seconds, 691 milliseconds
+[ Info: Iteration 5 (T=0.0016332725155282996)
+┌ Info: Covariance-weighted error: 374.7303391603301
+│ Covariance trace: 0.07538935763909621
+└ Covariance trace ratio (current/previous): 0.9620074268564667
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [504.41675592061995, 2000.7536584717536]
+[ Info: Covariance-weighted error: 374.7303391603301
+[ Info: Running Iteration 5
+[ Info: Running member 20 on worker 3
+[ Info: Running member 19 on worker 18
+[ Info: Running member 18 on worker 5
+[ Info: Running member 17 on worker 9
+[ Info: Running member 16 on worker 8
+[ Info: Running member 15 on worker 2
+[ Info: Running member 14 on worker 19
+[ Info: Running member 13 on worker 15
+[ Info: Running member 12 on worker 7
+[ Info: Running member 11 on worker 14
+[ Info: Running member 10 on worker 4
+[ Info: Running member 9 on worker 11
+[ Info: Running member 8 on worker 13
+[ Info: Running member 7 on worker 10
+[ Info: Running member 6 on worker 6
+[ Info: Running member 5 on worker 12
+[ Info: Running member 4 on worker 20
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 17
+[ Info: Running member 1 on worker 16
+[ Info: Iteration 5 time: 25 minutes, 9 seconds, 202 milliseconds
+[ Info: Iteration 6 (T=0.0021067144225570766)
+┌ Info: Covariance-weighted error: 408.1497064585082
+│ Covariance trace: 0.07188542066364353
+└ Covariance trace ratio (current/previous): 0.953522127191656
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [503.027985253014, 2000.987487871288]
+[ Info: Covariance-weighted error: 408.1497064585082
+[ Info: Running Iteration 6
+[ Info: Running member 20 on worker 18
+[ Info: Running member 19 on worker 5
+[ Info: Running member 18 on worker 3
+[ Info: Running member 17 on worker 9
+[ Info: Running member 16 on worker 19
+[ Info: Running member 15 on worker 8
+[ Info: Running member 14 on worker 2
+[ Info: Running member 13 on worker 7
+[ Info: Running member 12 on worker 11
+[ Info: Running member 11 on worker 13
+[ Info: Running member 10 on worker 4
+[ Info: Running member 9 on worker 10
+[ Info: Running member 8 on worker 17
+[ Info: Running member 7 on worker 12
+[ Info: Running member 6 on worker 6
+[ Info: Running member 5 on worker 16
+[ Info: Running member 4 on worker 20
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 15
+[ Info: Running member 1 on worker 14
+[ Info: Iteration 6 time: 25 minutes, 20 seconds, 341 milliseconds
+[ Info: Iteration 7 (T=0.0037721487979232703)
+┌ Info: Covariance-weighted error: 69.00561030614982
+│ Covariance trace: 0.07038529367643741
+└ Covariance trace ratio (current/previous): 0.9791316935568157
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [505.3269627322857, 2023.9381852366332]
+[ Info: Covariance-weighted error: 69.00561030614982
+[ Info: Running Iteration 7
+[ Info: Running member 20 on worker 18
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 5
+[ Info: Running member 17 on worker 19
+[ Info: Running member 16 on worker 9
+[ Info: Running member 15 on worker 8
+[ Info: Running member 14 on worker 2
+[ Info: Running member 13 on worker 11
+[ Info: Running member 12 on worker 7
+[ Info: Running member 11 on worker 4
+[ Info: Running member 10 on worker 15
+[ Info: Running member 9 on worker 10
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 13
+[ Info: Running member 6 on worker 6
+[ Info: Running member 5 on worker 12
+[ Info: Running member 4 on worker 20
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 16
+[ Info: Running member 1 on worker 17
+[ Info: Iteration 7 time: 24 minutes, 57 seconds, 47 milliseconds
+[ Info: Iteration 8 (T=0.004283929215488519)
+┌ Info: Covariance-weighted error: 433.05363562723977
+│ Covariance trace: 0.07010215691500221
+└ Covariance trace ratio (current/previous): 0.9959773306802302
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [505.6601350011904, 2020.918948020425]
+[ Info: Covariance-weighted error: 433.05363562723977
+[ Info: Running Iteration 8
+[ Info: Running member 20 on worker 9
+[ Info: Running member 19 on worker 18
+[ Info: Running member 18 on worker 8
+[ Info: Running member 17 on worker 3
+[ Info: Running member 16 on worker 19
+[ Info: Running member 15 on worker 2
+[ Info: Running member 14 on worker 5
+[ Info: Running member 13 on worker 11
+[ Info: Running member 12 on worker 7
+[ Info: Running member 11 on worker 10
+[ Info: Running member 10 on worker 13
+[ Info: Running member 9 on worker 17
+[ Info: Running member 8 on worker 16
+[ Info: Running member 7 on worker 20
+[ Info: Running member 6 on worker 12
+[ Info: Running member 5 on worker 6
+[ Info: Running member 4 on worker 21
+[ Info: Running member 3 on worker 4
+[ Info: Running member 2 on worker 15
+[ Info: Running member 1 on worker 14
+[ Info: Iteration 8 time: 25 minutes, 25 seconds, 812 milliseconds
+[ Info: Iteration 9 (T=0.004705201534826815)
+┌ Info: Covariance-weighted error: 518.698545399111
+│ Covariance trace: 0.06858979301327509
+└ Covariance trace ratio (current/previous): 0.9784262857480855
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [504.57743561228256, 2024.1897136622292]
+[ Info: Covariance-weighted error: 518.698545399111
+[ Info: Running Iteration 9
+[ Info: Running member 20 on worker 18
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 19
+[ Info: Running member 17 on worker 15
+[ Info: Running member 16 on worker 14
+[ Info: Running member 15 on worker 2
+[ Info: Running member 14 on worker 5
+[ Info: Running member 13 on worker 13
+[ Info: Running member 12 on worker 9
+[ Info: Running member 11 on worker 12
+[ Info: Running member 10 on worker 8
+[ Info: Running member 9 on worker 7
+[ Info: Running member 8 on worker 11
+[ Info: Running member 7 on worker 4
+[ Info: Running member 6 on worker 10
+[ Info: Running member 5 on worker 16
+[ Info: Running member 4 on worker 6
+[ Info: Running member 3 on worker 17
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+[ Info: Iteration 9 time: 25 minutes, 19 seconds, 617 milliseconds
+[ Info: Iteration 10 (T=0.005182068059711803)
+┌ Info: Covariance-weighted error: 492.8556488585695
+│ Covariance trace: 0.06679733184999251
+└ Covariance trace ratio (current/previous): 0.9738669401883796
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [503.04543213340355, 2016.6092321034384]
+[ Info: Covariance-weighted error: 492.8556488585695
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-1740543: `srun -J julia-1740543 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-1740543-17569284527.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=PDX7N5uBTxHFs0QS`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9643
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9645
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9647
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9649
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9651
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9653
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9655
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9657
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9659
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9661
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9644
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9646
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9648
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9650
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9652
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9654
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9656
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9658
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9662
+[ Info: Worker ready after 2s on host 169.254.3.1, port 9660
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 13
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 19
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+┌ Warning: Error running on worker 2
+│   exception =
+│    On worker 2:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 3
+│   exception =
+│    On worker 3:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 4
+│   exception =
+│    On worker 4:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 10
+│   exception =
+│    On worker 10:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 8
+│   exception =
+│    On worker 8:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 5
+│   exception =
+│    On worker 5:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 6
+│   exception =
+│    On worker 6:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 9
+│   exception =
+│    On worker 9:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 11
+│   exception =
+│    On worker 11:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 7
+│   exception =
+│    On worker 7:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 14
+│   exception =
+│    On worker 14:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 15
+│   exception =
+│    On worker 15:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 20
+│   exception =
+│    On worker 20:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 16
+│   exception =
+│    On worker 16:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 13
+│   exception =
+│    On worker 13:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 17
+│   exception =
+│    On worker 17:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 12
+│   exception =
+│    On worker 12:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 21
+│   exception =
+│    On worker 21:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 18
+│   exception =
+│    On worker 18:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+┌ Warning: Error running on worker 19
+│   exception =
+│    On worker 19:
+│    Duplicate TOML entry: condensation_evaporation_timescale
+│    Stacktrace:
+│      [1] error
+│        @ ./error.jl:35
+│      [2] #merge_toml_files#12
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+│      [3] merge_toml_files
+│        @ ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+│      [4] #AtmosConfig#73
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1184
+│      [5] AtmosConfig
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+│      [6] #AtmosConfig#72
+│        @ ~/ClimaAtmos.jl/src/solver/types.jl:1166 [inlined]
+│      [7] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:34
+│      [8] forward_model
+│        @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface.jl:17
+│      [9] #invokelatest#2
+│        @ ./essentials.jl:1055
+│     [10] invokelatest
+│        @ ./essentials.jl:1052
+│     [11] #114
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:303
+│     [12] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:70
+│     [13] run_work_thunk
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:79
+│     [14] #100
+│        @ /clima/software/julia/julia-1.11.5/share/julia/stdlib/v1.11/Distributed/src/process_messages.jl:88
+└ @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:46
+ERROR: LoadError: Execution halted: Iteration 0 had a 100.0% failure rate, exceeding the maximum allowed threshold of 90.0%.
+Stacktrace:
+ [1] 
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:58
+ [2] run_worker_iteration
+   @ ~/.julia/packages/ClimaCalibrate/bSNlZ/src/workers.jl:14 [inlined]
+ [3] macro expansion
+   @ ./timing.jl:581 [inlined]
+ [4] calibrate(b::Type{…}, ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, n_iterations::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…}, output_dir::String; failure_rate::Float64, worker_pool::WorkerPool)
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/backends.jl:279
+ [5] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:104
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:104
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-1809632: `srun -J julia-1809632 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-1809632-17569323428.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=1AvhnwyWqFgIJkn1`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9364
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9366
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9368
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9370
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9361
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9363
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9365
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9367
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9369
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9371
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9355
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9357
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9359
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9352
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9354
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9356
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9358
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9360
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9362
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9353
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Resuming member 20 on worker 2 (incomplete run detected)
+[ Info: Resuming member 19 on worker 3 (incomplete run detected)
+[ Info: Resuming member 18 on worker 4 (incomplete run detected)
+[ Info: Resuming member 17 on worker 5 (incomplete run detected)
+[ Info: Resuming member 16 on worker 6 (incomplete run detected)
+[ Info: Resuming member 15 on worker 7 (incomplete run detected)
+[ Info: Resuming member 14 on worker 8 (incomplete run detected)
+[ Info: Resuming member 13 on worker 9 (incomplete run detected)
+[ Info: Resuming member 12 on worker 10 (incomplete run detected)
+[ Info: Resuming member 11 on worker 11 (incomplete run detected)
+[ Info: Resuming member 10 on worker 12 (incomplete run detected)
+[ Info: Resuming member 9 on worker 13 (incomplete run detected)
+[ Info: Resuming member 8 on worker 14 (incomplete run detected)
+[ Info: Resuming member 7 on worker 15 (incomplete run detected)
+[ Info: Resuming member 6 on worker 16 (incomplete run detected)
+[ Info: Resuming member 5 on worker 17 (incomplete run detected)
+[ Info: Resuming member 4 on worker 18 (incomplete run detected)
+[ Info: Resuming member 3 on worker 19 (incomplete run detected)
+[ Info: Resuming member 2 on worker 20 (incomplete run detected)
+[ Info: Resuming member 1 on worker 21 (incomplete run detected)
