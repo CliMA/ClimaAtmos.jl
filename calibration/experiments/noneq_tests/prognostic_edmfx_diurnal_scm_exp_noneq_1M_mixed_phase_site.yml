@@ -4,10 +4,10 @@ external_forcing: "ReanalysisMonthlyAveragedDiurnal"
 surface_setup: "ReanalysisTimeVarying"
 surface_temperature: "ReanalysisTimeVarying"
 start_date: "20070701"
-site_latitude: -56.0 # CAN PLAY W THIS LOCATION AS WELL
-site_longitude: 0.0
-# site_latitude: -50.0
-# site_longitude: 90.0
+# site_latitude: -56.0 # CAN PLAY W THIS LOCATION AS WELL
+# site_longitude: 0.0
+site_latitude: -50.0
+site_longitude: 90.0
 #site_latitude: -49.20000076293945 # CAN PLAY W THIS LOCATION AS WELL
 #site_longitude: 69.30000305175781
 turbconv: "prognostic_edmfx" # TEST PROGNOSTIC
@@ -54,4 +54,4 @@ rad: allskywithclear
 insolation: "externaldriventv"
 diagnostics:
   - short_name: [lwp, clivi] # CHANGE TO LWP, IWP -- eventually cloud top
-    period: 10mins
+    period: 1hours
