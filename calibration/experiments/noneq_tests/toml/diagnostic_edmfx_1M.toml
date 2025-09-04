@@ -1,0 +1,26 @@
+[condensation_evaporation_timescale]
+value = 100
+
+[sublimation_deposition_timescale]
+value = 100
+
+[entr_inv_tau]
+value = 0.002
+
+[entr_coeff]
+value = 0
+
+[detr_inv_tau]
+value = 0
+
+[detr_vertdiv_coeff]
+value = 0.6
+
+[detr_buoy_coeff]
+value = 0.12
+
+[min_area_limiter_scale]
+value = 0
+
+[max_area_limiter_scale]
+value = 0

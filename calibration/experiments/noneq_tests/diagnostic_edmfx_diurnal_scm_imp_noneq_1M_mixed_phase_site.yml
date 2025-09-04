@@ -4,8 +4,10 @@ external_forcing: "ReanalysisMonthlyAveragedDiurnal"
 surface_setup: "ReanalysisTimeVarying"
 surface_temperature: "ReanalysisTimeVarying"
 start_date: "20070701"
-site_latitude: -49.20000076293945 # CAN PLAY W THIS LOCATION AS WELL
-site_longitude: 69.30000305175781
+site_latitude: -50.0
+site_longitude: 90.0
+# site_latitude: -49.20000076293945 # CAN PLAY W THIS LOCATION AS WELL
+# site_longitude: 69.30000305175781
 # site_latitude: 17.0 # CAN PLAY W THIS LOCATION AS WELL
 # site_longitude: -149.0
 # start_date: "20070401"
@@ -17,16 +19,16 @@ turbconv: "diagnostic_edmfx"
 z_max: 60e3
 z_elem: 150
 netcdf_output_at_levels: true
-t_end: "264hours" # 11 days
-dt: "10secs"
+t_end: "6days" # 11 days
+dt: "5secs"
 dz_bottom: 30
 
 # solve implicitly
 implicit_diffusion: true
-implicit_sgs_advection: true
-implicit_sgs_mass_flux: true
-implicit_sgs_entr_detr: true
-implicit_sgs_nh_pressure: true
+implicit_sgs_advection: false
+implicit_sgs_mass_flux: false
+implicit_sgs_entr_detr: false
+implicit_sgs_nh_pressure: false
 
 approximate_linear_solve_iters: 2
 edmfx_upwinding: first_order
@@ -50,7 +52,7 @@ perturb_initstate: false
 dt_rad: "10mins"
 cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage: true
-toml: [toml/diagnostic_precalibrated.toml]
+toml: [toml/diagnostic_edmfx_1M.toml]
 # toml: [tomls/diagnostic_precalibrated.toml, tomls/deep_forcing_relaxation.toml]
 output_default_diagnostics: false
 rad: allskywithclear

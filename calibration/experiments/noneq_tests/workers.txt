@@ -6850,3 +6850,733 @@ Stacktrace:
  [5] top-level scope
    @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:83
 in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:83
+Precompiling ClimaAtmos...
+  14121.3 ms  ✓ ClimaAtmos
+  1 dependency successfully precompiled in 19 seconds. 262 already precompiled.
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-2310264: `srun -J julia-2310264 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-2310264-17570059813.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=dSgpTdEVRKypsumk`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9462
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9464
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9466
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9468
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9458
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9460
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9450
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9452
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9454
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9456
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9451
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9453
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9455
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9457
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9459
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9461
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9463
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9465
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9467
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9469
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 13
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 19
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+[ Info: Iteration 0 time: 35 minutes, 6 seconds, 943 milliseconds
+ERROR: LoadError: DimensionMismatch: array could not be broadcast to match destination
+Stacktrace:
+ [1] check_broadcast_shape
+   @ ./broadcast.jl:552 [inlined]
+ [2] check_broadcast_axes
+   @ ./broadcast.jl:555 [inlined]
+ [3] instantiate
+   @ ./broadcast.jl:310 [inlined]
+ [4] materialize!
+   @ ./broadcast.jl:883 [inlined]
+ [5] materialize!(dest::SubArray{…}, bc::Base.Broadcast.Broadcasted{…})
+   @ Base.Broadcast ./broadcast.jl:880
+ [6] observation_map(iteration::Int64)
+   @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/observation_map.jl:21
+ [7] observation_map_and_update!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, output_dir::String, iteration::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…})
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/ekp_interface.jl:342
+ [8] calibrate(b::Type{…}, ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, n_iterations::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…}, output_dir::String; failure_rate::Float64, worker_pool::WorkerPool)
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/backends.jl:294
+ [9] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:105
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:105
+Precompiling ClimaAtmos...
+  12219.9 ms  ✓ ClimaAtmos
+  1 dependency successfully precompiled in 15 seconds. 262 already precompiled.
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-2380206: `srun -J julia-2380206 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-2380206-17570083134.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=hOWL5oTsdgo7hsno`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9591
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9593
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9587
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9589
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9595
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9597
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9579
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9583
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9585
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9580
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9582
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9584
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9586
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9588
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9590
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9592
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9594
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9596
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9598
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9581
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Skipping completed member 20 (found checkpoint)
+[ Info: Skipping completed member 19 (found checkpoint)
+[ Info: Skipping completed member 18 (found checkpoint)
+[ Info: Skipping completed member 17 (found checkpoint)
+[ Info: Skipping completed member 16 (found checkpoint)
+[ Info: Skipping completed member 15 (found checkpoint)
+[ Info: Skipping completed member 14 (found checkpoint)
+[ Info: Skipping completed member 13 (found checkpoint)
+[ Info: Skipping completed member 12 (found checkpoint)
+[ Info: Skipping completed member 11 (found checkpoint)
+[ Info: Skipping completed member 10 (found checkpoint)
+[ Info: Skipping completed member 9 (found checkpoint)
+[ Info: Skipping completed member 8 (found checkpoint)
+[ Info: Skipping completed member 7 (found checkpoint)
+[ Info: Skipping completed member 6 (found checkpoint)
+[ Info: Skipping completed member 5 (found checkpoint)
+[ Info: Skipping completed member 4 (found checkpoint)
+[ Info: Skipping completed member 3 (found checkpoint)
+[ Info: Skipping completed member 2 (found checkpoint)
+[ Info: Skipping completed member 1 (found checkpoint)
+[ Info: Iteration 0 time: 133 milliseconds
+ERROR: LoadError: DimensionMismatch: array could not be broadcast to match destination
+Stacktrace:
+ [1] check_broadcast_shape
+   @ ./broadcast.jl:552 [inlined]
+ [2] check_broadcast_axes
+   @ ./broadcast.jl:555 [inlined]
+ [3] instantiate
+   @ ./broadcast.jl:310 [inlined]
+ [4] materialize!
+   @ ./broadcast.jl:883 [inlined]
+ [5] materialize!(dest::SubArray{…}, bc::Base.Broadcast.Broadcasted{…})
+   @ Base.Broadcast ./broadcast.jl:880
+ [6] observation_map(iteration::Int64)
+   @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/observation_map.jl:21
+ [7] observation_map_and_update!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, output_dir::String, iteration::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…})
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/ekp_interface.jl:342
+ [8] calibrate(b::Type{…}, ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, n_iterations::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…}, output_dir::String; failure_rate::Float64, worker_pool::WorkerPool)
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/backends.jl:294
+ [9] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:105
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:105
+config_dict["toml"] = ["toml/prognostic_edmfx_calibrated.toml", "toml/truth.toml"]
+┌ Warning: `job_id` is empty and likely not passed to AtmosConfig
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/types.jl:1191
+┌ Info: Making AtmosConfig with config files: 
+└    /home/oalcabes/ClimaAtmos.jl/src/solver/../../config/default_configs/default_config.yml
+[ Info: Running on CPUSingleThreaded
+[ Info: Setting up single-process ClimaAtmos run
+┌ Info: Time info:
+│   dt = "5secs"
+│   t_start = "0secs"
+│   t_end = "6days"
+└   floor_n_steps = 103680
+┌ Warning: co2_model set to nothing with an RRTMGP model. Resetting to FixedCO2
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/type_getters.jl:60
+┌ Info: numerics 
+│            `energy_upwinding`::`Val{:vanleer_limiter}`
+│            `tracer_upwinding`::`Val{:vanleer_limiter}`
+│             `edmfx_upwinding`::`Val{:first_order}`
+│     `edmfx_sgsflux_upwinding`::`Val{:none}`
+│     `test_dycore_consistency`::`Nothing`
+│                     `limiter`::`Nothing`
+│                   `diff_mode`::`ClimaAtmos.Implicit`
+└                   `hyperdiff`::`ClimaAtmos.ClimaHyperdiffusion{Float32}`
+┌ Info: AtmosModel: 
+│ 
+│                             `water`::`ClimaAtmos.AtmosWater{ClimaAtmos.NonEquilMoistModel, ClimaAtmos.Microphysics1Moment, ClimaAtmos.GridScaleCloud, ClimaAtmos.Explicit, ClimaAtmos.CallCloudDiagnosticsPerStage}`
+│                         `scm_setup`::`ClimaAtmos.SCMSetup{Nothing, ClimaAtmos.ExternalDrivenTVForcing{Float32}, Nothing, Bool, Nothing}`
+│                         `radiation`::`ClimaAtmos.AtmosRadiation{ClimaAtmos.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics{ClimaAtmos.InteractiveCloudInRadiation}, ClimaAtmos.IdealizedOzone, ClimaAtmos.FixedCO2{Float64}, ClimaAtmos.ExternalTVInsolation}`
+│                          `turbconv`::`ClimaAtmos.AtmosTurbconv{ClimaAtmos.EDMFXModel{ClimaAtmos.PiGroupsEntrainment, ClimaAtmos.PiGroupsDetrainment, Val{true}, Val{true}, Val{true}, Val{true}, ClimaAtmos.SmoothMinimumBlending}, ClimaAtmos.PrognosticEDMFX{1, true, Float32}, ClimaAtmos.Explicit, ClimaAtmos.Explicit, ClimaAtmos.Explicit, ClimaAtmos.Explicit, Nothing}`
+│                      `gravity_wave`::`ClimaAtmos.AtmosGravityWave{Nothing, Nothing}`
+│                `vertical_diffusion`::`Nothing`
+│                            `sponge`::`ClimaAtmos.AtmosSponge{Nothing, ClimaAtmos.RayleighSponge{Float32}}`
+│                           `surface`::`ClimaAtmos.AtmosSurface{ClimaAtmos.ExternalTVColumnSST, ClimaAtmos.PrescribedSST, ClimaAtmos.ConstantAlbedo{Float32}}`
+└                          `numerics`::`ClimaAtmos.AtmosNumerics{Val{:vanleer_limiter}, Val{:vanleer_limiter}, Val{:first_order}, Val{:none}, Nothing, Nothing, ClimaAtmos.Implicit, ClimaAtmos.ClimaHyperdiffusion{Float32}}`
+┌ Info: Simulation info
+│   job_id = ""
+└   output_dir = "output/output_0051"
+┌ Warning: perturb_initstate flag is ignored for single column configuration
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/type_getters.jl:253
+┌ Info: z heights
+│   z_mesh.faces =
+│    64-element Vector{ClimaCore.Geometry.ZPoint{Float32}}:
+│     ZPoint(0.0)
+│     ZPoint(30.000004)
+│     ZPoint(62.974285)
+│     ZPoint(99.21583)
+│     ⋮
+│     ZPoint(54285.29)
+│     ZPoint(57136.2)
+└     ZPoint(60000.0)
+[ Info: No surface orography warp applied
+┌ Info: Resolution stats: 
+│   Nq = 1
+│   h_elem = 6
+│   z_elem = 63
+│   ncols = 1
+└   ndofs_total = 63
+[ Info: Allocating Y: 2.457 s (13538761 allocations: 658.01 MiB)
+[ Info: Allocating cache (p): 129.877 s (814527265 allocations: 47.03 GiB)
+[ Info: Using ODE config: `ClimaTimeSteppers.ARS343`
+[ Info: ode_configuration: 793.184 ms (1488213 allocations: 73.67 MiB)
+[ Info: Progress logging enabled
+[ Info: Checking NaNs in the state every 1024 steps
+[ Info: get_callbacks: 258.174 ms (336594 allocations: 17.47 MiB)
+┌ Warning: Disabling vertical interpolation, the provided number of points is ignored (using 63)
+└ @ ClimaDiagnostics.Writers ~/.julia/packages/ClimaDiagnostics/3h9MG/src/netcdf_writer.jl:157
+[ Info: Saving accumulated diagnostics to disk with frequency: 
+[ Info: DictWriter: String[]
+[ Info: HDF5Writer: String[]
+[ Info: NetCDFWriter: ["lwp_1h_inst", "clivi_1h_inst"]
+[ Info: initializing diagnostics: 3.602 s (9865160 allocations: 499.78 MiB)
+[ Info: Prepared SciMLBase.CallbackSet callbacks: 10.469 ms (561 allocations: 27.34 KiB)
+[ Info: n_steps_per_cycle_per_cb (non diagnostics): [1024, 1, 1, 120]
+[ Info: n_steps_per_cycle (non diagnostics): 15360
+┌ Info: Jacobian algorithm: ManualSparseJacobian(
+│   topography_flag = ClimaAtmos.IgnoreDerivative(),
+│   diffusion_flag = ClimaAtmos.UseDerivative(),
+│   sgs_advection_flag = ClimaAtmos.IgnoreDerivative(),
+│   sgs_entr_detr_flag = ClimaAtmos.IgnoreDerivative(),
+│   sgs_mass_flux_flag = ClimaAtmos.IgnoreDerivative(),
+│   sgs_nh_pressure_flag = ClimaAtmos.IgnoreDerivative(),
+│   approximate_solve_iters = 2,
+└ )
+[ Info: Define ode function: 1.962 s (2259831 allocations: 91.76 MiB)
+[ Info: init integrator: 51.876 s (139619151 allocations: 10.95 GiB)
+[ Info: Added diagnostics: 7.541 s (13516120 allocations: 652.75 MiB)
+┌ Info: Running
+│   job_id = ""
+│   output_dir = "output/output_0051"
+└   tspan = (0.0f0, 518400.0f0)
+┌ Info: Progress
+│   simulation_time = "5 seconds"
+│   n_steps_completed = 1
+│   wall_time_per_step = "0 seconds"
+│   wall_time_total = "0 seconds"
+│   wall_time_remaining = "0 seconds"
+│   wall_time_spent = "0 seconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "Inf"
+│   date_now = 2025-09-04T11:09:52.890
+└   estimated_finish_date = 2025-09-04T11:09:52.887
+┌ Info: Progress
+│   simulation_time = "10 seconds"
+│   n_steps_completed = 2
+│   wall_time_per_step = "0 seconds"
+│   wall_time_total = "0 seconds"
+│   wall_time_remaining = "0 seconds"
+│   wall_time_spent = "0 seconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "Inf"
+│   date_now = 2025-09-04T11:09:54.622
+└   estimated_finish_date = 2025-09-04T11:09:54.622
+┌ Info: Progress
+│   simulation_time = "20 seconds"
+│   n_steps_completed = 4
+│   wall_time_per_step = "3 milliseconds, 309 microseconds"
+│   wall_time_total = "5 minutes, 43 seconds"
+│   wall_time_remaining = "5 minutes, 43 seconds"
+│   wall_time_spent = "13 milliseconds, 237 microseconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "4.136"
+│   date_now = 2025-09-04T11:09:54.788
+└   estimated_finish_date = 2025-09-04T11:15:38.788
+┌ Info: Progress
+│   simulation_time = "40 seconds"
+│   n_steps_completed = 8
+│   wall_time_per_step = "23 milliseconds, 189 microseconds"
+│   wall_time_total = "40 minutes, 4 seconds"
+│   wall_time_remaining = "40 minutes, 4 seconds"
+│   wall_time_spent = "185 milliseconds, 512 microseconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "0.59"
+│   date_now = 2025-09-04T11:09:54.801
+└   estimated_finish_date = 2025-09-04T11:49:59.801
+┌ Info: Progress
+│   simulation_time = "1 minute, 20 seconds"
+│   n_steps_completed = 16
+│   wall_time_per_step = "13 milliseconds, 126 microseconds"
+│   wall_time_total = "22 minutes, 40 seconds"
+│   wall_time_remaining = "22 minutes, 40 seconds"
+│   wall_time_spent = "210 milliseconds, 20 microseconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "1.043"
+│   date_now = 2025-09-04T11:09:54.825
+└   estimated_finish_date = 2025-09-04T11:32:35.825
+┌ Info: Progress
+│   simulation_time = "2 minutes, 40 seconds"
+│   n_steps_completed = 32
+│   wall_time_per_step = "8 milliseconds, 64 microseconds"
+│   wall_time_total = "13 minutes, 56 seconds"
+│   wall_time_remaining = "13 minutes, 55 seconds"
+│   wall_time_spent = "258 milliseconds, 66 microseconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "1.697"
+│   date_now = 2025-09-04T11:09:54.874
+└   estimated_finish_date = 2025-09-04T11:23:50.873
+┌ Info: Progress
+│   simulation_time = "5 minutes, 20 seconds"
+│   n_steps_completed = 64
+│   wall_time_per_step = "5 milliseconds, 537 microseconds"
+│   wall_time_total = "9 minutes, 34 seconds"
+│   wall_time_remaining = "9 minutes, 33 seconds"
+│   wall_time_spent = "354 milliseconds, 415 microseconds"
+│   percent_complete = "0.1%"
+│   estimated_sypd = "2.472"
+│   date_now = 2025-09-04T11:09:54.970
+└   estimated_finish_date = 2025-09-04T11:19:28.970
+┌ Info: Progress
+│   simulation_time = "10 minutes, 40 seconds"
+│   n_steps_completed = 128
+│   wall_time_per_step = "4 milliseconds, 427 microseconds"
+│   wall_time_total = "7 minutes, 39 seconds"
+│   wall_time_remaining = "7 minutes, 38 seconds"
+│   wall_time_spent = "566 milliseconds, 763 microseconds"
+│   percent_complete = "0.1%"
+│   estimated_sypd = "3.092"
+│   date_now = 2025-09-04T11:09:55.182
+└   estimated_finish_date = 2025-09-04T11:17:34.182
+┌ Info: Progress
+│   simulation_time = "21 minutes, 20 seconds"
+│   n_steps_completed = 256
+│   wall_time_per_step = "3 milliseconds, 772 microseconds"
+│   wall_time_total = "6 minutes, 31 seconds"
+│   wall_time_remaining = "6 minutes, 30 seconds"
+│   wall_time_spent = "965 milliseconds, 641 microseconds"
+│   percent_complete = "0.2%"
+│   estimated_sypd = "3.629"
+│   date_now = 2025-09-04T11:09:55.581
+└   estimated_finish_date = 2025-09-04T11:16:26.581
+┌ Info: Progress
+│   simulation_time = "42 minutes, 40 seconds"
+│   n_steps_completed = 512
+│   wall_time_per_step = "3 milliseconds, 499 microseconds"
+│   wall_time_total = "6 minutes, 2 seconds"
+│   wall_time_remaining = "6 minutes, 1 second"
+│   wall_time_spent = "1 second, 791 milliseconds"
+│   percent_complete = "0.5%"
+│   estimated_sypd = "3.911"
+│   date_now = 2025-09-04T11:09:56.408
+└   estimated_finish_date = 2025-09-04T11:15:58.407
+┌ Info: Progress
+│   simulation_time = "1 hour, 25 minutes"
+│   n_steps_completed = 1024
+│   wall_time_per_step = "3 milliseconds, 523 microseconds"
+│   wall_time_total = "6 minutes, 5 seconds"
+│   wall_time_remaining = "6 minutes, 1 second"
+│   wall_time_spent = "3 seconds, 608 milliseconds"
+│   percent_complete = "1.0%"
+│   estimated_sypd = "3.885"
+│   date_now = 2025-09-04T11:09:58.243
+└   estimated_finish_date = 2025-09-04T11:16:00.243
+┌ Info: Progress
+│   simulation_time = "2 hours, 50 minutes"
+│   n_steps_completed = 2048
+│   wall_time_per_step = "3 milliseconds, 574 microseconds"
+│   wall_time_total = "6 minutes, 10 seconds"
+│   wall_time_remaining = "6 minutes, 3 seconds"
+│   wall_time_spent = "7 seconds, 320 milliseconds"
+│   percent_complete = "2.0%"
+│   estimated_sypd = "3.83"
+│   date_now = 2025-09-04T11:10:01.936
+└   estimated_finish_date = 2025-09-04T11:16:05.936
+┌ Info: Progress
+│   simulation_time = "5 hours, 41 minutes"
+│   n_steps_completed = 4096
+│   wall_time_per_step = "3 milliseconds, 458 microseconds"
+│   wall_time_total = "5 minutes, 58 seconds"
+│   wall_time_remaining = "5 minutes, 44 seconds"
+│   wall_time_spent = "14 seconds, 164 milliseconds"
+│   percent_complete = "4.0%"
+│   estimated_sypd = "3.959"
+│   date_now = 2025-09-04T11:10:08.780
+└   estimated_finish_date = 2025-09-04T11:15:53.780
+┌ Info: Progress
+│   simulation_time = "11 hours, 22 minutes"
+│   n_steps_completed = 8192
+│   wall_time_per_step = "3 milliseconds, 365 microseconds"
+│   wall_time_total = "5 minutes, 48 seconds"
+│   wall_time_remaining = "5 minutes, 21 seconds"
+│   wall_time_spent = "27 seconds, 573 milliseconds"
+│   percent_complete = "7.9%"
+│   estimated_sypd = "4.067"
+│   date_now = 2025-09-04T11:10:22.190
+└   estimated_finish_date = 2025-09-04T11:15:44.190
+┌ Info: Progress
+│   simulation_time = "18 hours, 34 minutes"
+│   n_steps_completed = 13377
+│   wall_time_per_step = "3 milliseconds, 339 microseconds"
+│   wall_time_total = "5 minutes, 46 seconds"
+│   wall_time_remaining = "5 minutes, 1 second"
+│   wall_time_spent = "44 seconds, 671 milliseconds"
+│   percent_complete = "12.9%"
+│   estimated_sypd = "4.099"
+│   date_now = 2025-09-04T11:10:39.288
+└   estimated_finish_date = 2025-09-04T11:15:41.288
+┌ Info: Progress
+│   simulation_time = "22 hours, 45 minutes"
+│   n_steps_completed = 16384
+│   wall_time_per_step = "3 milliseconds, 329 microseconds"
+│   wall_time_total = "5 minutes, 45 seconds"
+│   wall_time_remaining = "4 minutes, 50 seconds"
+│   wall_time_spent = "54 seconds, 551 milliseconds"
+│   percent_complete = "15.8%"
+│   estimated_sypd = "4.111"
+│   date_now = 2025-09-04T11:10:49.167
+└   estimated_finish_date = 2025-09-04T11:15:40.167
+┌ Info: Progress
+│   simulation_time = "1 day, 5 hours"
+│   n_steps_completed = 21569
+│   wall_time_per_step = "3 milliseconds, 324 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "4 minutes, 33 seconds"
+│   wall_time_spent = "1 minute, 11 seconds"
+│   percent_complete = "20.8%"
+│   estimated_sypd = "4.117"
+│   date_now = 2025-09-04T11:11:06.382
+└   estimated_finish_date = 2025-09-04T11:15:40.382
+┌ Info: Progress
+│   simulation_time = "1 day, 13 hours"
+│   n_steps_completed = 26754
+│   wall_time_per_step = "3 milliseconds, 323 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "4 minutes, 15 seconds"
+│   wall_time_spent = "1 minute, 28 seconds"
+│   percent_complete = "25.8%"
+│   estimated_sypd = "4.119"
+│   date_now = 2025-09-04T11:11:23.540
+└   estimated_finish_date = 2025-09-04T11:15:39.539
+┌ Info: Progress
+│   simulation_time = "1 day, 20 hours"
+│   n_steps_completed = 31939
+│   wall_time_per_step = "3 milliseconds, 323 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "3 minutes, 58 seconds"
+│   wall_time_spent = "1 minute, 46 seconds"
+│   percent_complete = "30.8%"
+│   estimated_sypd = "4.119"
+│   date_now = 2025-09-04T11:11:40.762
+└   estimated_finish_date = 2025-09-04T11:15:39.762
+┌ Info: Progress
+│   simulation_time = "1 day, 21 hours"
+│   n_steps_completed = 32768
+│   wall_time_per_step = "3 milliseconds, 324 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "3 minutes, 55 seconds"
+│   wall_time_spent = "1 minute, 48 seconds"
+│   percent_complete = "31.6%"
+│   estimated_sypd = "4.118"
+│   date_now = 2025-09-04T11:11:43.541
+└   estimated_finish_date = 2025-09-04T11:15:39.541
+┌ Info: Progress
+│   simulation_time = "2 days, 4 hours"
+│   n_steps_completed = 37953
+│   wall_time_per_step = "3 milliseconds, 322 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "3 minutes, 38 seconds"
+│   wall_time_spent = "2 minutes, 6 seconds"
+│   percent_complete = "36.6%"
+│   estimated_sypd = "4.121"
+│   date_now = 2025-09-04T11:12:00.700
+└   estimated_finish_date = 2025-09-04T11:15:39.700
+┌ Info: Progress
+│   simulation_time = "2 days, 11 hours"
+│   n_steps_completed = 43138
+│   wall_time_per_step = "3 milliseconds, 317 microseconds"
+│   wall_time_total = "5 minutes, 43 seconds"
+│   wall_time_remaining = "3 minutes, 20 seconds"
+│   wall_time_spent = "2 minutes, 23 seconds"
+│   percent_complete = "41.6%"
+│   estimated_sypd = "4.126"
+│   date_now = 2025-09-04T11:12:17.728
+└   estimated_finish_date = 2025-09-04T11:15:38.728
+┌ Info: Progress
+│   simulation_time = "2 days, 19 hours"
+│   n_steps_completed = 48323
+│   wall_time_per_step = "3 milliseconds, 315 microseconds"
+│   wall_time_total = "5 minutes, 43 seconds"
+│   wall_time_remaining = "3 minutes, 3 seconds"
+│   wall_time_spent = "2 minutes, 40 seconds"
+│   percent_complete = "46.6%"
+│   estimated_sypd = "4.129"
+│   date_now = 2025-09-04T11:12:34.839
+└   estimated_finish_date = 2025-09-04T11:15:38.839
+┌ Info: Progress
+│   simulation_time = "3 days, 2 hours"
+│   n_steps_completed = 53508
+│   wall_time_per_step = "3 milliseconds, 318 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "2 minutes, 46 seconds"
+│   wall_time_spent = "2 minutes, 57 seconds"
+│   percent_complete = "51.6%"
+│   estimated_sypd = "4.125"
+│   date_now = 2025-09-04T11:12:52.196
+└   estimated_finish_date = 2025-09-04T11:15:39.196
+┌ Info: Progress
+│   simulation_time = "3 days, 9 hours"
+│   n_steps_completed = 58693
+│   wall_time_per_step = "3 milliseconds, 319 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "2 minutes, 29 seconds"
+│   wall_time_spent = "3 minutes, 14 seconds"
+│   percent_complete = "56.6%"
+│   estimated_sypd = "4.124"
+│   date_now = 2025-09-04T11:13:09.460
+└   estimated_finish_date = 2025-09-04T11:15:39.460
+┌ Info: Progress
+│   simulation_time = "3 days, 16 hours"
+│   n_steps_completed = 63878
+│   wall_time_per_step = "3 milliseconds, 318 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "2 minutes, 12 seconds"
+│   wall_time_spent = "3 minutes, 31 seconds"
+│   percent_complete = "61.6%"
+│   estimated_sypd = "4.126"
+│   date_now = 2025-09-04T11:13:26.568
+└   estimated_finish_date = 2025-09-04T11:15:39.568
+┌ Info: Progress
+│   simulation_time = "3 days, 19 hours"
+│   n_steps_completed = 65536
+│   wall_time_per_step = "3 milliseconds, 318 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "2 minutes, 6 seconds"
+│   wall_time_spent = "3 minutes, 37 seconds"
+│   percent_complete = "63.2%"
+│   estimated_sypd = "4.125"
+│   date_now = 2025-09-04T11:13:32.080
+└   estimated_finish_date = 2025-09-04T11:15:39.080
+┌ Info: Progress
+│   simulation_time = "4 days, 2 hours"
+│   n_steps_completed = 70721
+│   wall_time_per_step = "3 milliseconds, 318 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "1 minute, 49 seconds"
+│   wall_time_spent = "3 minutes, 54 seconds"
+│   percent_complete = "68.2%"
+│   estimated_sypd = "4.125"
+│   date_now = 2025-09-04T11:13:49.296
+└   estimated_finish_date = 2025-09-04T11:15:39.296
+┌ Info: Progress
+│   simulation_time = "4 days, 9 hours"
+│   n_steps_completed = 75906
+│   wall_time_per_step = "3 milliseconds, 318 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "1 minute, 32 seconds"
+│   wall_time_spent = "4 minutes, 11 seconds"
+│   percent_complete = "73.2%"
+│   estimated_sypd = "4.126"
+│   date_now = 2025-09-04T11:14:06.481
+└   estimated_finish_date = 2025-09-04T11:15:39.481
+┌ Info: Progress
+│   simulation_time = "4 days, 16 hours"
+│   n_steps_completed = 81091
+│   wall_time_per_step = "3 milliseconds, 318 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "1 minute, 14 seconds"
+│   wall_time_spent = "4 minutes, 29 seconds"
+│   percent_complete = "78.2%"
+│   estimated_sypd = "4.125"
+│   date_now = 2025-09-04T11:14:23.733
+└   estimated_finish_date = 2025-09-04T11:15:38.733
+┌ Info: Progress
+│   simulation_time = "4 days, 23 hours"
+│   n_steps_completed = 86276
+│   wall_time_per_step = "3 milliseconds, 319 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "57 seconds, 777 milliseconds"
+│   wall_time_spent = "4 minutes, 46 seconds"
+│   percent_complete = "83.2%"
+│   estimated_sypd = "4.124"
+│   date_now = 2025-09-04T11:14:41.034
+└   estimated_finish_date = 2025-09-04T11:15:39.034
+┌ Info: Progress
+│   simulation_time = "5 days, 7 hours"
+│   n_steps_completed = 91461
+│   wall_time_per_step = "3 milliseconds, 319 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "40 seconds, 557 milliseconds"
+│   wall_time_spent = "5 minutes, 3 seconds"
+│   percent_complete = "88.2%"
+│   estimated_sypd = "4.124"
+│   date_now = 2025-09-04T11:14:58.198
+└   estimated_finish_date = 2025-09-04T11:15:39.198
+┌ Info: Progress
+│   simulation_time = "5 days, 14 hours"
+│   n_steps_completed = 96646
+│   wall_time_per_step = "3 milliseconds, 322 microseconds"
+│   wall_time_total = "5 minutes, 44 seconds"
+│   wall_time_remaining = "23 seconds, 373 milliseconds"
+│   wall_time_spent = "5 minutes, 21 seconds"
+│   percent_complete = "93.2%"
+│   estimated_sypd = "4.12"
+│   date_now = 2025-09-04T11:15:15.764
+└   estimated_finish_date = 2025-09-04T11:15:39.764
+┌ Info: Progress
+│   simulation_time = "5 days, 21 hours"
+│   n_steps_completed = 101831
+│   wall_time_per_step = "3 milliseconds, 332 microseconds"
+│   wall_time_total = "5 minutes, 45 seconds"
+│   wall_time_remaining = "6 seconds, 161 milliseconds"
+│   wall_time_spent = "5 minutes, 39 seconds"
+│   percent_complete = "98.2%"
+│   estimated_sypd = "4.108"
+│   date_now = 2025-09-04T11:15:33.926
+└   estimated_finish_date = 2025-09-04T11:15:40.926
+[ Info: solve! walltime = 346.484
+[ Info: sypd: 4.099
+[ Info: wall_time_per_timestep: 3 milliseconds, 341 microseconds
+[ Info: Memory currently used (after solve!) by the process (RSS): 9.43 GiB
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-2384289: `srun -J julia-2384289 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-2384289-17570097422.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=KBW9kLEu09ouu6i0`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker launch (after 0 s): No output file ".julia-2384289-17570097422.out" yet
+[ Info: Worker launch (after 0 s): No output file ".julia-2384289-17570097422.out" yet
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9868
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9870
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9872
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9874
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9876
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9878
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9880
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9882
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9884
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9886
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9871
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9873
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9875
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9877
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9879
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9881
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9883
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9885
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9887
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9869
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 13
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 19
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
