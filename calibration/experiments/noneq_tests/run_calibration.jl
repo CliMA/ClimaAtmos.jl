@@ -41,7 +41,8 @@ if run_truth
     CA.solve_atmos!(diag_sim)
     truth_out_dir = diag_sim.output_dir
 else
-    truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0021"
+    truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/prognostic_edmfx_diurnal_scm_imp_noneq_1M/output_active"
+    #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0021"
 end
 
 # add workers
