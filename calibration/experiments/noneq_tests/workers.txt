@@ -7580,3 +7580,248 @@ srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the re
 [ Info: Running member 3 on worker 19
 [ Info: Running member 2 on worker 20
 [ Info: Running member 1 on worker 21
+[ Info: Iteration 0 time: 35 minutes, 14 seconds, 625 milliseconds
+ERROR: LoadError: DimensionMismatch: array could not be broadcast to match destination
+Stacktrace:
+ [1] check_broadcast_shape
+   @ ./broadcast.jl:552 [inlined]
+ [2] check_broadcast_axes
+   @ ./broadcast.jl:555 [inlined]
+ [3] instantiate
+   @ ./broadcast.jl:310 [inlined]
+ [4] materialize!
+   @ ./broadcast.jl:883 [inlined]
+ [5] materialize!(dest::SubArray{…}, bc::Base.Broadcast.Broadcasted{…})
+   @ Base.Broadcast ./broadcast.jl:880
+ [6] observation_map(iteration::Int64)
+   @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/observation_map.jl:21
+ [7] observation_map_and_update!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, output_dir::String, iteration::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…})
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/ekp_interface.jl:342
+ [8] calibrate(b::Type{…}, ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, n_iterations::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…}, output_dir::String; failure_rate::Float64, worker_pool::WorkerPool)
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/backends.jl:294
+ [9] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:105
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:105
+config_dict["toml"] = ["toml/prognostic_edmfx_calibrated.toml", "toml/truth.toml"]
+┌ Warning: `job_id` is empty and likely not passed to AtmosConfig
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/types.jl:1191
+┌ Info: Making AtmosConfig with config files: 
+└    /home/oalcabes/ClimaAtmos.jl/src/solver/../../config/default_configs/default_config.yml
+[ Info: Running on CPUSingleThreaded
+[ Info: Setting up single-process ClimaAtmos run
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-2451833: `srun -J julia-2451833 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-2451833-17570120570.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=2E1Mjgc856hrwar4`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9254
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9256
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9258
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9260
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9262
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9264
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9266
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9268
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9270
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9272
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9257
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9259
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9261
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9263
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9265
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9267
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9269
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9271
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9273
+[ Info: Worker ready after 3s on host 169.254.3.1, port 9255
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Skipping completed member 20 (found checkpoint)
+[ Info: Skipping completed member 19 (found checkpoint)
+[ Info: Skipping completed member 18 (found checkpoint)
+[ Info: Skipping completed member 17 (found checkpoint)
+[ Info: Skipping completed member 16 (found checkpoint)
+[ Info: Skipping completed member 15 (found checkpoint)
+[ Info: Skipping completed member 14 (found checkpoint)
+[ Info: Skipping completed member 13 (found checkpoint)
+[ Info: Skipping completed member 12 (found checkpoint)
+[ Info: Skipping completed member 11 (found checkpoint)
+[ Info: Skipping completed member 10 (found checkpoint)
+[ Info: Skipping completed member 9 (found checkpoint)
+[ Info: Skipping completed member 8 (found checkpoint)
+[ Info: Skipping completed member 7 (found checkpoint)
+[ Info: Skipping completed member 6 (found checkpoint)
+[ Info: Skipping completed member 5 (found checkpoint)
+[ Info: Skipping completed member 4 (found checkpoint)
+[ Info: Skipping completed member 3 (found checkpoint)
+[ Info: Skipping completed member 2 (found checkpoint)
+[ Info: Skipping completed member 1 (found checkpoint)
+[ Info: Iteration 0 time: 132 milliseconds
+ERROR: LoadError: DimensionMismatch: array could not be broadcast to match destination
+Stacktrace:
+ [1] check_broadcast_shape
+   @ ./broadcast.jl:552 [inlined]
+ [2] check_broadcast_axes
+   @ ./broadcast.jl:555 [inlined]
+ [3] instantiate
+   @ ./broadcast.jl:310 [inlined]
+ [4] materialize!
+   @ ./broadcast.jl:883 [inlined]
+ [5] materialize!(dest::SubArray{…}, bc::Base.Broadcast.Broadcasted{…})
+   @ Base.Broadcast ./broadcast.jl:880
+ [6] observation_map(iteration::Int64)
+   @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/observation_map.jl:21
+ [7] observation_map_and_update!(ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, output_dir::String, iteration::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…})
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/ekp_interface.jl:342
+ [8] calibrate(b::Type{…}, ekp::EnsembleKalmanProcesses.EnsembleKalmanProcess{…}, n_iterations::Int64, prior::EnsembleKalmanProcesses.ParameterDistributions.ParameterDistribution{…}, output_dir::String; failure_rate::Float64, worker_pool::WorkerPool)
+   @ ClimaCalibrate ~/.julia/packages/ClimaCalibrate/bSNlZ/src/backends.jl:294
+ [9] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:105
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:105
+config_dict["toml"] = ["toml/diagnostic_edmfx_1M.toml", "toml/truth.toml"]
+ERROR: LoadError: Duplicate TOML entry: condensation_evaporation_timescale
+Stacktrace:
+ [1] error(s::String)
+   @ Base ./error.jl:35
+ [2] merge_toml_files(filepaths::Vector{Any}; override::Bool)
+   @ ClimaParams ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+ [3] merge_toml_files(filepaths::Vector{Any})
+   @ ClimaParams ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+ [4] ClimaAtmos.AtmosConfig(configs::Tuple{Dict{Any, Any}}; comms_ctx::Nothing, config_files::Vector{String}, job_id::String)
+   @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/types.jl:1184
+ [5] AtmosConfig
+   @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+ [6] ClimaAtmos.AtmosConfig(configs::Dict{Any, Any})
+   @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/types.jl:1166
+ [7] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:39
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:28
+config_dict["toml"] = ["toml/diagnostic_edmfx_1M.toml", "toml/truth.toml"]
+ERROR: LoadError: Duplicate TOML entry: condensation_evaporation_timescale
+Stacktrace:
+ [1] error(s::String)
+   @ Base ./error.jl:35
+ [2] merge_toml_files(filepaths::Vector{Any}; override::Bool)
+   @ ClimaParams ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:316
+ [3] merge_toml_files(filepaths::Vector{Any})
+   @ ClimaParams ~/.julia/packages/ClimaParams/Jmp8p/src/file_parsing.jl:310
+ [4] ClimaAtmos.AtmosConfig(configs::Tuple{Dict{Any, Any}}; comms_ctx::Nothing, config_files::Vector{String}, job_id::String)
+   @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/types.jl:1184
+ [5] AtmosConfig
+   @ ~/ClimaAtmos.jl/src/solver/types.jl:1168 [inlined]
+ [6] ClimaAtmos.AtmosConfig(configs::Dict{Any, Any})
+   @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/types.jl:1166
+ [7] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:39
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:28
+config_dict["toml"] = ["toml/diagnostic_edmfx_1M.toml", "toml/truth.toml"]
+┌ Warning: `job_id` is empty and likely not passed to AtmosConfig
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/types.jl:1191
+┌ Info: Making AtmosConfig with config files: 
+└    /home/oalcabes/ClimaAtmos.jl/src/solver/../../config/default_configs/default_config.yml
+[ Info: Running on CPUSingleThreaded
+[ Info: Setting up single-process ClimaAtmos run
+┌ Info: Time info:
+│   dt = "10secs"
+│   t_start = "0secs"
+│   t_end = "6days"
+└   floor_n_steps = 51840
+┌ Warning: co2_model set to nothing with an RRTMGP model. Resetting to FixedCO2
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/type_getters.jl:60
+┌ Info: numerics 
+│            `energy_upwinding`::`Val{:vanleer_limiter}`
+│            `tracer_upwinding`::`Val{:vanleer_limiter}`
+│             `edmfx_upwinding`::`Val{:first_order}`
+│     `edmfx_sgsflux_upwinding`::`Val{:first_order}`
+│     `test_dycore_consistency`::`Nothing`
+│                     `limiter`::`Nothing`
+│                   `diff_mode`::`ClimaAtmos.Implicit`
+└                   `hyperdiff`::`ClimaAtmos.ClimaHyperdiffusion{Float32}`
+┌ Info: AtmosModel: 
+│ 
+│                             `water`::`ClimaAtmos.AtmosWater{ClimaAtmos.NonEquilMoistModel, ClimaAtmos.Microphysics1Moment, ClimaAtmos.GridScaleCloud, ClimaAtmos.Explicit, ClimaAtmos.CallCloudDiagnosticsPerStage}`
+│                         `scm_setup`::`ClimaAtmos.SCMSetup{Nothing, ClimaAtmos.ExternalDrivenTVForcing{Float32}, Nothing, Bool, Nothing}`
+│                         `radiation`::`ClimaAtmos.AtmosRadiation{ClimaAtmos.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics{ClimaAtmos.InteractiveCloudInRadiation}, ClimaAtmos.IdealizedOzone, ClimaAtmos.FixedCO2{Float64}, ClimaAtmos.ExternalTVInsolation}`
+│                          `turbconv`::`ClimaAtmos.AtmosTurbconv{ClimaAtmos.EDMFXModel{ClimaAtmos.PiGroupsEntrainment, ClimaAtmos.SmoothAreaDetrainment, Val{true}, Val{true}, Val{true}, Val{true}, ClimaAtmos.SmoothMinimumBlending}, ClimaAtmos.DiagnosticEDMFX{1, true, Float32}, ClimaAtmos.Implicit, ClimaAtmos.Implicit, ClimaAtmos.Implicit, ClimaAtmos.Implicit, Nothing}`
+│                      `gravity_wave`::`ClimaAtmos.AtmosGravityWave{Nothing, Nothing}`
+│                `vertical_diffusion`::`Nothing`
+│                            `sponge`::`ClimaAtmos.AtmosSponge{Nothing, ClimaAtmos.RayleighSponge{Float32}}`
+│                           `surface`::`ClimaAtmos.AtmosSurface{ClimaAtmos.ExternalTVColumnSST, ClimaAtmos.PrescribedSST, ClimaAtmos.ConstantAlbedo{Float32}}`
+└                          `numerics`::`ClimaAtmos.AtmosNumerics{Val{:vanleer_limiter}, Val{:vanleer_limiter}, Val{:first_order}, Val{:first_order}, Nothing, Nothing, ClimaAtmos.Implicit, ClimaAtmos.ClimaHyperdiffusion{Float32}}`
+┌ Info: Simulation info
+│   job_id = ""
+└   output_dir = "output/output_0056"
+┌ Warning: perturb_initstate flag is ignored for single column configuration
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/type_getters.jl:253
+┌ Info: z heights
+│   z_mesh.faces =
+│    151-element Vector{ClimaCore.Geometry.ZPoint{Float32}}:
+│     ZPoint(0.0)
+│     ZPoint(30.00001)
+│     ZPoint(60.97766)
+│     ZPoint(92.96428)
+│     ⋮
+│     ZPoint(58016.594)
+│     ZPoint(59008.035)
+└     ZPoint(60000.0)
+[ Info: No surface orography warp applied
+┌ Info: Resolution stats: 
+│   Nq = 1
+│   h_elem = 6
+│   z_elem = 150
+│   ncols = 1
+└   ndofs_total = 150
+[ Info: Allocating Y: 2.312 s (12713808 allocations: 617.43 MiB)
+[ Info: Allocating cache (p): 89.942 s (528198075 allocations: 31.99 GiB)
+[ Info: Using ODE config: `ClimaTimeSteppers.ARS343`
+[ Info: ode_configuration: 820.689 ms (1488204 allocations: 73.66 MiB)
+[ Info: Progress logging enabled
+[ Info: Checking NaNs in the state every 1024 steps
+[ Info: get_callbacks: 273.486 ms (336594 allocations: 17.47 MiB)
+[ Info: Saving accumulated diagnostics to disk with frequency: 
+[ Info: DictWriter: String[]
+[ Info: HDF5Writer: String[]
+[ Info: NetCDFWriter: ["lwp_1h_inst", "clivi_1h_inst"]
+[ Info: initializing diagnostics: 4.005 s (9864444 allocations: 499.98 MiB)
+[ Info: Prepared SciMLBase.CallbackSet callbacks: 10.891 ms (561 allocations: 27.34 KiB)
+[ Info: n_steps_per_cycle_per_cb (non diagnostics): [1024, 1, 1, 60]
+[ Info: n_steps_per_cycle (non diagnostics): 15360
+┌ Info: Jacobian algorithm: ManualSparseJacobian(
+│   topography_flag = ClimaAtmos.IgnoreDerivative(),
+│   diffusion_flag = ClimaAtmos.UseDerivative(),
+│   sgs_advection_flag = ClimaAtmos.UseDerivative(),
+│   sgs_entr_detr_flag = ClimaAtmos.UseDerivative(),
+│   sgs_mass_flux_flag = ClimaAtmos.UseDerivative(),
+│   sgs_nh_pressure_flag = ClimaAtmos.UseDerivative(),
+│   approximate_solve_iters = 2,
+└ )
+[ Info: Define ode function: 1.291 s (1375107 allocations: 59.88 MiB)
+[ Info: init integrator: 47.307 s (108893902 allocations: 7.71 GiB)
+[ Info: Added diagnostics: 6.167 s (13524988 allocations: 653.23 MiB)
+┌ Info: Running
+│   job_id = ""
+│   output_dir = "output/output_0056"
+└   tspan = (0.0f0, 518400.0f0)

@@ -13,22 +13,22 @@ include("model_interface.jl")
 
 #const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
-prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 500, 50, 100, 1000), # real = 800?
-             PD.constrained_gaussian("sublimation_deposition_timescale", 2000, 300, 100, 10000)] # real = 5000?
+prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 500, 50, 100, 1000), # real = 800s
+             PD.constrained_gaussian("sublimation_deposition_timescale", 2000, 300, 100, 10000)] # real = 5000s
 
 const prior = PD.combine_distributions(prior_vec)
 
 
 ensemble_size = 20
 n_iterations = 10
-output_dir = "/home/oalcabes/EKI_output/test_6"
+output_dir = "/home/oalcabes/EKI_output/test_7"
 
 run_truth = true
 
 if run_truth
 
     #model_config = "diagnostic_edmfx_diurnal_scm_exp_noneq_1M.yml"
-    model_config = "prognostic_edmfx_diurnal_scm_exp_noneq_1M.yml"
+    model_config = "diagnostic_edmfx_diurnal_scm_imp_noneq_1M_mixed_phase_site.yml"
 
     config_dict = YAML.load_file(model_config)
     truth_toml = "toml/truth.toml"
@@ -69,7 +69,7 @@ addprocs(
 
     ensemble_size = 20
     n_iterations = 10
-    output_dir = "/home/oalcabes/EKI_output/test_6"
+    output_dir = "/home/oalcabes/EKI_output/test_7"
 
     experiment_dir = dirname(Base.active_project())
     #const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")

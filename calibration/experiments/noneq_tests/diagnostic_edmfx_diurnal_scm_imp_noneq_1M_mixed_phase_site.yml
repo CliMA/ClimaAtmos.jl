@@ -20,15 +20,15 @@ z_max: 60e3
 z_elem: 150
 netcdf_output_at_levels: true
 t_end: "6days" # 11 days
-dt: "5secs"
+dt: "10secs"
 dz_bottom: 30
 
 # solve implicitly
 implicit_diffusion: true
-implicit_sgs_advection: false
-implicit_sgs_mass_flux: false
-implicit_sgs_entr_detr: false
-implicit_sgs_nh_pressure: false
+implicit_sgs_advection: true
+implicit_sgs_mass_flux: true
+implicit_sgs_entr_detr: true
+implicit_sgs_nh_pressure: true
 
 approximate_linear_solve_iters: 2
 edmfx_upwinding: first_order
@@ -59,4 +59,4 @@ rad: allskywithclear
 insolation: "externaldriventv"
 diagnostics:
   - short_name: [lwp, clivi]
-    period: 10mins
+    period: 1hours

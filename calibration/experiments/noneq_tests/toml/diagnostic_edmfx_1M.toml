@@ -1,9 +1,3 @@
-[condensation_evaporation_timescale]
-value = 100
-
-[sublimation_deposition_timescale]
-value = 100
-
 [entr_inv_tau]
 value = 0.002
 
