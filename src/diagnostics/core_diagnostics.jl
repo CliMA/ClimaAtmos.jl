@@ -1169,7 +1169,61 @@ compute_cloud_top_height!(_, _, _, _, model::T) where {T} =
 #     end
 # end
 
-#heaviside function version
+# heaviside function version
+# function compute_cloud_top_height!(
+#     out,
+#     state,
+#     cache,
+#     time,
+#     moisture_model::T,
+# ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+
+#     clw = @. lazy(state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq)
+#     cli = @. lazy(state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice)
+#     z = Fields.coordinate_field(state.c).z
+
+#     FT = Spaces.undertype(axes(clw))
+
+#     q_cond = @. lazy(clw + cli)
+
+#     #@info("q_cond", q_cond)
+
+#     heaviside_num = @. lazy(ifelse(
+#             q_cond > FT(1e-10),
+#             (q_cond * z)^(2) * z,
+#             FT(0)
+#         )
+#     )
+
+#     heaviside_denom = @. lazy(ifelse(
+#             q_cond > FT(1e-10),
+#             (q_cond * z)^(2),
+#             FT(0)
+#         )
+#     )
+
+#     # do i want to save these like this or just as temporary scalars?
+#     num = zeros(axes(Fields.level(state.f, half)))
+#     denom = zeros(axes(Fields.level(state.f, half)))
+
+#     Operators.column_integral_definite!(num, heaviside_num)
+#     Operators.column_integral_definite!(denom, heaviside_denom)
+
+#     @info("numerator integrated", num)
+#     @info("denominator integrated", denom)
+
+#     if isnothing(out)
+#         out = num ./ denom
+#     else
+#         out .= num ./ denom
+#     end
+
+#     @info("cloud top height", out)
+
+#     return out
+# end
+
+#new version
 function compute_cloud_top_height!(
     out,
     state,
@@ -1181,46 +1235,35 @@ function compute_cloud_top_height!(
     clw = @. lazy(state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq)
     cli = @. lazy(state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice)
     z = Fields.coordinate_field(state.c).z
-
     FT = Spaces.undertype(axes(clw))
+
+    # parameters to choose
+    q_threshold = FT(1e-10)
+    k = 3
+    a = 5
 
     q_cond = @. lazy(clw + cli)
 
-    #@info("q_cond", q_cond)
+    w = @. lazy(1 / (1 + exp(-k * (q_cond - q_threshold))))
 
-    heaviside_num = @. lazy(ifelse(
-            q_cond > FT(1e-10),
-            (q_cond * z)^(2) * z,
-            FT(0)
-        )
-    )
-
-    heaviside_denom = @. lazy(ifelse(
-            q_cond > FT(1e-10),
-            (q_cond * z)^(2),
-            FT(0)
-        )
-    )
-
-    # do i want to save these like this or just as temporary scalars?
     num = zeros(axes(Fields.level(state.f, half)))
     denom = zeros(axes(Fields.level(state.f, half)))
 
-    Operators.column_integral_definite!(num, heaviside_num)
-    Operators.column_integral_definite!(denom, heaviside_denom)
+    Operators.column_integral_definite!(num, (w * exp(a*z)) * z)
+    Operators.column_integral_definite!(denom, (w * exp(a*z)))
 
     @info("numerator integrated", num)
     @info("denominator integrated", denom)
 
     if isnothing(out)
-        out = num ./ denom
+        z_top = num ./ denom
     else
-        out .= num ./ denom
+        z_top .= num ./ denom
     end
 
-    @info("cloud top height", out)
+    @info("cloud top height", z_top)
 
-    return out
+    return z_top
 end
 
 add_diagnostic_variable!(
