@@ -96,21 +96,11 @@ function make_hybrid_spaces(
     )
     z_grid = Grids.FiniteDifferenceGrid(z_topology)
 
-    topography = parsed_args["topography"]
-    @assert topography in (
-        "NoWarp",
-        "Earth",
-        "DCMIP200",
-        "Hughes2023",
-        "Agnesi",
-        "Schar",
-        "Cosine2D",
-        "Cosine3D",
-    )
-    if topography == "NoWarp"
+    topography = get_topography(parsed_args)
+    if topography isa Topography.NoTopography
         z_surface = zeros(h_space)
         @info "No surface orography warp applied"
-    elseif topography == "Earth"
+    elseif topography isa Topography.EarthTopography
         z_surface = SpaceVaryingInput(
             AA.earth_orography_file_path(;
                 context = ClimaComms.context(h_space),
@@ -120,26 +110,14 @@ function make_hybrid_spaces(
         )
         @info "Remapping Earth orography from ETOPO2022 data onto horizontal space"
     else
-        topography_function = if topography == "DCMIP200"
-            topography_dcmip200
-        elseif topography == "Hughes2023"
-            topography_hughes2023
-        elseif topography == "Agnesi"
-            topography_agnesi
-        elseif topography == "Schar"
-            topography_schar
-        elseif topography == "Cosine2D"
-            topography_cosine_2d
-        elseif topography == "Cosine3D"
-            topography_cosine_3d
-        end
+        topography_function = Topography.topo_func(topography)
         z_surface = SpaceVaryingInput(topography_function, h_space)
         @info "Using $topography orography"
     end
 
-    if topography == "NoWarp"
+    if topography isa Topography.NoTopography
         hypsography = Hypsography.Flat()
-    elseif topography == "Earth"
+    elseif topography isa Topography.EarthTopography
         mask(x::FT) where {FT} = x * FT(x > 0)
         z_surface = @. mask(z_surface)
         # diff_cfl = νΔt/Δx²

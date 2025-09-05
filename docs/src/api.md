@@ -59,6 +59,23 @@ ClimaAtmos.AutoDenseJacobian
 ClimaAtmos.AutoSparseJacobian
 ```
 
+## Topography
+
+```@docs
+ClimaAtmos.Topography.CosineTopography
+ClimaAtmos.Topography.AgnesiTopography
+ClimaAtmos.Topography.ScharTopography
+ClimaAtmos.Topography.EarthTopography
+ClimaAtmos.Topography.DCMIP200Topography
+ClimaAtmos.Topography.Hughes2023Topography
+ClimaAtmos.Topography.topography_schar
+ClimaAtmos.Topography.topography_cosine_3d
+ClimaAtmos.Topography.topography_agnesi
+ClimaAtmos.Topography.topography_hughes2023
+ClimaAtmos.Topography.topography_dcmip200
+ClimaAtmos.Topography.topography_cosine_2d
+```
+
 ### Internals
 
 ```@docs

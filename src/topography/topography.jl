@@ -1,3 +1,13 @@
+module Topography
+
+using ClimaCore: Geometry
+
+export topography_dcmip200, topography_hughes2023
+export topography_agnesi, agnesi_params
+export topography_schar, schar_params
+export topography_cosine_2d, topography_cosine_3d
+export topography_cosine, cosine_params
+
 """
     topography_dcmip200(coord)
 
@@ -113,3 +123,97 @@ end
 topography_cosine(x, y, λ_x, λ_y, h_max) =
     h_max * cospi(2 * x / λ_x) * cospi(2 * y / λ_y)
 cosine_params(::Type{FT}) where {FT} = (; h_max = FT(25), λ = FT(25e3))
+
+abstract type AbstractTopography end
+
+topo_func(t::AbstractTopography) = error("No topography function for topography $t")
+
+struct NoTopography <: AbstractTopography end
+
+# Analytical topography types for idealized test cases
+
+"""
+    CosineTopography(; h_max = 25, λ = 25e3, dim = 2)
+
+Cosine hill topography in 2D or 3D.
+
+# Arguments
+- `h_max::FT`: Maximum elevation (m)
+- `λ::FT`: Wavelength of the cosine hills (m)
+- `dim::Int`: Spatial dimension (2 or 3)
+"""
+Base.@kwdef struct CosineTopography <: AbstractTopography
+    h_max = 25
+    λ = 25e3
+    dim::Int = 2
+end
+
+topo_func(t::CosineTopography) = t.dim == 2 ? topography_cosine_2d : topography_cosine_3d
+
+"""
+    AgnesiTopography(; h_max = 25, x_center = 50e3, a = 5e3)
+
+Witch of Agnesi mountain topography for 2D simulations.
+
+# Arguments
+- `h_max`: Maximum elevation (m)
+- `x_center`: Center position (m)
+- `a`: Mountain width parameter (m)
+"""
+Base.@kwdef struct AgnesiTopography <: AbstractTopography
+    h_max = 25
+    x_center = 50e3
+    a = 5e3
+end
+
+topo_func(::AgnesiTopography) = topography_agnesi
+
+
+"""
+    ScharTopography(; h_max = 25, x_center = 50e3, λ = 4e3, a = 5e3)
+
+Schar mountain topography for 2D simulations.
+
+# Arguments
+- `h_max`: Maximum elevation (m)
+- `x_center`: Center position (m)
+- `λ`: Wavelength parameter (m)
+- `a`: Mountain width parameter (m)
+"""
+Base.@kwdef struct ScharTopography <: AbstractTopography
+    h_max = 25
+    x_center = 50e3
+    λ = 4e3
+    a = 5e3
+end
+topo_func(::ScharTopography) = topography_schar
+
+
+# Data-based topography types
+
+"""
+    EarthTopography()
+
+Earth topography from ETOPO2022 data files.
+"""
+struct EarthTopography <: AbstractTopography end
+
+"""
+    DCMIP200Topography()
+
+Surface elevation for the DCMIP-2-0-0 test problem.
+"""
+struct DCMIP200Topography <: AbstractTopography end
+
+topo_func(::DCMIP200Topography) = topography_dcmip200
+
+"""
+    Hughes2023Topography()
+
+Surface elevation for baroclinic wave test from Hughes and Jablonowski (2023).
+"""
+struct Hughes2023Topography <: AbstractTopography end
+
+topo_func(::Hughes2023Topography) = topography_hughes2023
+
+end

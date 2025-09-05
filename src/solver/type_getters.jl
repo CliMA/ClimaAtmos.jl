@@ -424,39 +424,30 @@ function get_initial_condition(parsed_args, atmos)
     end
 end
 
+function get_topography(parsed_args)
+    topo_str = parsed_args["topography"]
+    topo_types = Dict("NoWarp" => Topography.NoTopography(),
+        "Cosine2D" => Topography.CosineTopography(; dim = 2),
+        "Cosine3D" => Topography.CosineTopography(; dim = 3),
+        "Agnesi" => Topography.AgnesiTopography(),
+        "Schar" => Topography.ScharTopography(),
+        "Earth" => Topography.EarthTopography(),
+        "Hughes2023" => Topography.Hughes2023Topography(),
+        "DCMIP200" => Topography.DCMIP200Topography(),
+    )
+
+    @assert topo_str in keys(topo_types)
+    return topo_types[topo_str]
+end
+
 function get_steady_state_velocity(params, Y, parsed_args)
     parsed_args["check_steady_state"] || return nothing
     parsed_args["initial_condition"] == "ConstantBuoyancyFrequencyProfile" &&
         parsed_args["mesh_warp_type"] == "Linear" ||
         error("The steady-state velocity can currently be computed only for a \
                ConstantBuoyancyFrequencyProfile with Linear mesh warping")
-    topography = parsed_args["topography"]
-    steady_state_velocity = if topography == "NoWarp"
-        steady_state_velocity_no_warp
-    elseif topography == "Cosine2D"
-        steady_state_velocity_cosine_2d
-    elseif topography == "Cosine3D"
-        steady_state_velocity_cosine_3d
-    elseif topography == "Agnesi"
-        steady_state_velocity_agnesi
-    elseif topography == "Schar"
-        steady_state_velocity_schar
-    else
-        error("The steady-state velocity for $topography topography cannot \
-               be computed analytically")
-    end
-    top_level = Spaces.nlevels(axes(Y.c)) + Fields.half
-    z_top = Fields.level(Fields.coordinate_field(Y.f).z, top_level)
-
-    # TODO: This can be very expensive! It should be moved to a separate CI job.
-    @info "Approximating steady-state velocity"
-    s = @timed_str begin
-        ᶜu = steady_state_velocity.(params, Fields.coordinate_field(Y.c), z_top)
-        ᶠu =
-            steady_state_velocity.(params, Fields.coordinate_field(Y.f), z_top)
-    end
-    @info "Steady-state velocity approximation completed: $s"
-    return (; ᶜu, ᶠu)
+    topography = get_topography(parsed_args)
+    return compute_steady_state_velocity(topography, params, Y)
 end
 
 function get_surface_setup(parsed_args)
