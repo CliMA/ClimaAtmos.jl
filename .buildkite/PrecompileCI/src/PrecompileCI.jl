@@ -16,8 +16,6 @@ import ClimaParams
     dz_bottom = FT(500) # other values?
     z_stretch = Meshes.HyperbolicTangentStretching(dz_bottom) # Meshes.Uniform()
     bubble = true # false
-    parsed_args =
-        Dict{String, Any}("topography" => "NoWarp", "topo_smoothing" => false)
     comms_ctx = ClimaComms.context(ClimaComms.CPUSingleThreaded())
     deep = false
 
@@ -29,13 +27,13 @@ import ClimaParams
     # Sphere
     horz_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
     h_space = CA.make_horizontal_space(horz_mesh, quad, comms_ctx, bubble)
-    CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
+    CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
 
     # box
     horizontal_mesh = CA.periodic_rectangle_mesh(; x_max, y_max, x_elem, y_elem)
     h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
     # This is broken
-    # CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
+    # CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
 
     # plane
     horizontal_mesh = CA.periodic_line_mesh(; x_max, x_elem)

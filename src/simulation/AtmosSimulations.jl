@@ -89,7 +89,7 @@ function AtmosSimulation{FT}(;
     default_diagnostics = false,     # Enable standard ClimaAtmos diagnostics
     diagnostics = (),                # User-provided diagnostics (YAML format or ScheduledDiagnostic objects)
 
-    
+
     # Numerics
     check_steady_state = false,
     use_dense_jacobian = false,
@@ -141,10 +141,7 @@ function AtmosSimulation{FT}(;
     discrete_hydrostatic_balance &&
         set_discrete_hydrostatic_balanced_state!(Y, p)
 
-    ode_name = nameof(typeof(ode_algo))
-    ode_config = ode_configuration(FT, ode_name, update_jacobian_every,
-        max_newton_iters_ode, use_krylov_method, use_dynamic_krylov_rtol,
-        eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol, newton_rtol)
+    # ode_algo is already the algorithm object, no need to reconfigure
 
     model_callback_tuple = if model_callbacks
         default_model_callbacks(
@@ -174,7 +171,7 @@ function AtmosSimulation{FT}(;
     callback_set = SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
 
     integrator_args, integrator_kwargs = args_integrator(
-        Y, p, (t_start, t_end), ode_config,
+        Y, p, (t_start, t_end), ode_algo,
         callback_set,
         use_dense_jacobian, use_auto_jacobian,
         approximate_linear_solve_iters, debug_jacobian,
@@ -207,8 +204,14 @@ function AtmosSimulation{FT}(;
             append!(all_diagnostics, diagnostics)
             @info "Added $(length(diagnostics)) user-provided ScheduledDiagnostic objects"
         else
+            # Create a simple parsed_args-like structure for diagnostics
+            diag_config = Dict(
+                "diagnostics" => diagnostics,
+                "netcdf_interpolation_num_points" => nothing,
+                "netcdf_output_at_levels" => false,
+            )
             user_scheduled_diagnostics, user_writers, _ = get_diagnostics(
-                diagnostics isa Dict ? diagnostics : Dict("diagnostics" => diagnostics),
+                diag_config,
                 model,
                 Y, p, dt,
                 t_start, start_date,
