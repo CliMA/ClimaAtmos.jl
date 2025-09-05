@@ -10,7 +10,8 @@ using Plots
 using LinearAlgebra
 using DataFrames
 
-output_dir = "/home/oalcabes/EKI_output/test_5"
+output_dir = "/home/oalcabes/EKI_output/test_8"
+fast_timescale = false
 iterations = nothing
 
 include("../../experiments/gcm_driven_scm/helper_funcs.jl")
@@ -35,8 +36,13 @@ end
 
 # const prior = CAL.get_prior(joinpath(output_dir, "configs", "prior.toml"))
 
-prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 500, 50, 100, 1000), # real = 800?
-             PD.constrained_gaussian("sublimation_deposition_timescale", 2000, 300, 100, 10000)] # real = 5000?
+if fast_timescale
+    prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 20, 19, 0.1, 100), # real = 5s
+                 PD.constrained_gaussian("sublimation_deposition_timescale", 100, 99, 0.1, 500)] # real = 20s
+else
+    prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 700, 300, 100, 1100), # real = 800s
+                PD.constrained_gaussian("sublimation_deposition_timescale", 3000, 2000, 100, 10000)] # real = 5000s
+end
 
 const prior = PD.combine_distributions(prior_vec)
 

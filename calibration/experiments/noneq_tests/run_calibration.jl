@@ -13,14 +13,21 @@ include("model_interface.jl")
 
 #const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
-prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 700, 300, 100, 1100), # real = 800s
-             PD.constrained_gaussian("sublimation_deposition_timescale", 3000, 2000, 100, 10000)] # real = 5000s
+fast_timescale = true
+
+if fast_timescale
+    prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 20, 19, 0.1, 100), # real = 5s
+                 PD.constrained_gaussian("sublimation_deposition_timescale", 100, 99, 0.1, 500)] # real = 20s
+else
+    prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 700, 300, 100, 1100), # real = 800s
+                PD.constrained_gaussian("sublimation_deposition_timescale", 3000, 2000, 100, 10000)] # real = 5000s
+end
 
 const prior = PD.combine_distributions(prior_vec)
 
 ensemble_size = 20
 n_iterations = 10
-output_dir = "/home/oalcabes/EKI_output/test_8"
+output_dir = "/home/oalcabes/EKI_output/test_10"
 
 run_truth = false
 
@@ -30,7 +37,12 @@ if run_truth
     model_config = "diagnostic_edmfx_diurnal_scm_imp_noneq_1M_mixed_phase_site.yml"
 
     config_dict = YAML.load_file(model_config)
-    truth_toml = "toml/truth.toml"
+
+    if fast_timescale
+        truth_toml = "toml/truth_fast.toml"
+    else
+        truth_toml = "toml/truth.toml"
+    end
 
     # load configs and directories -- running truth!
     push!(config_dict["toml"], truth_toml)
@@ -40,8 +52,16 @@ if run_truth
     CA.solve_atmos!(diag_sim)
     truth_out_dir = diag_sim.output_dir
 else
-    #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0060" # mixed phase diag implicit truth
-    truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0058" # mixed phase diag explicit truth
+    if fast_timescale
+        truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0061" # mixed phase diag explicit truth -- short
+    else
+        truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0058" # mixed phase diag explicit truth -- long
+    end
+
+    #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0060" # mixed phase diag implicit truth -- long
+    #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0062" # mixed phase diag implicit truth -- short
+    #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0058" # mixed phase diag explicit truth -- long
+    #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0061" # mixed phase diag explicit truth -- short
     #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0051" # warm prog truth
     #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0021"
 end
@@ -70,7 +90,7 @@ addprocs(
 
     ensemble_size = 20
     n_iterations = 10
-    output_dir = "/home/oalcabes/EKI_output/test_8"
+    output_dir = "/home/oalcabes/EKI_output/test_10"
 
     experiment_dir = dirname(Base.active_project())
     #const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")

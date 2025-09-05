@@ -8761,3 +8761,459 @@ srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the re
 [ Info: Running member 3 on worker 15
 [ Info: Running member 2 on worker 19
 [ Info: Running member 1 on worker 17
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-186442: `srun -J julia-186442 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-186442-17570956355.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=NXxR4gh2wHKqApXx`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9834
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9836
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9821
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9823
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9825
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9827
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9829
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9833
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9835
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9818
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9820
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9830
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9826
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9822
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9824
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9828
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9832
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9819
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9837
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9831
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+[ Info: Iteration 5 time: 5 minutes, 14 seconds, 382 milliseconds
+[ Info: Iteration 6 (T=14.408395226517996)
+┌ Info: Covariance-weighted error: 0.00034323209048884337
+│ Covariance trace: 2.807313204053627
+└ Covariance trace ratio (current/previous): 0.9821624182280142
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [798.787191678011, 4674.053169879891]
+[ Info: Covariance-weighted error: 0.00034323209048884337
+[ Info: Running Iteration 6
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 10
+[ Info: Running member 17 on worker 7
+[ Info: Running member 16 on worker 8
+[ Info: Running member 15 on worker 13
+[ Info: Running member 14 on worker 4
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 5
+[ Info: Running member 11 on worker 12
+[ Info: Running member 10 on worker 11
+[ Info: Running member 9 on worker 6
+[ Info: Running member 8 on worker 20
+[ Info: Running member 7 on worker 14
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 21
+[ Info: Running member 4 on worker 17
+[ Info: Running member 3 on worker 18
+[ Info: Running member 2 on worker 19
+[ Info: Running member 1 on worker 15
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-189190: `srun -J julia-189190 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-189190-17570957127.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=kYNEUBV5rqbsJyl3`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9499
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9501
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9507
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9509
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9510
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9512
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9505
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9513
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9500
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9498
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9504
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9506
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9517
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9502
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9508
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9516
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9503
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9515
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9511
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9514
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 13
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 19
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+[ Info: Iteration 6 time: 5 minutes, 32 seconds, 992 milliseconds
+[ Info: Iteration 7 (T=23.729258473907098)
+┌ Info: Covariance-weighted error: 0.0026499130303921435
+│ Covariance trace: 2.8040572286471916
+└ Covariance trace ratio (current/previous): 0.998840180923976
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [782.4193737996504, 4744.197780416657]
+[ Info: Covariance-weighted error: 0.0026499130303921435
+[ Info: Running Iteration 7
+[ Info: Running member 20 on worker 11
+[ Info: Running member 19 on worker 12
+[ Info: Running member 18 on worker 20
+[ Info: Running member 17 on worker 4
+[ Info: Running member 16 on worker 5
+[ Info: Running member 15 on worker 21
+[ Info: Running member 14 on worker 16
+[ Info: Running member 13 on worker 14
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 8
+[ Info: Running member 10 on worker 7
+[ Info: Running member 9 on worker 15
+[ Info: Running member 8 on worker 13
+[ Info: Running member 7 on worker 17
+[ Info: Running member 6 on worker 19
+[ Info: Running member 5 on worker 18
+[ Info: Running member 4 on worker 2
+[ Info: Running member 3 on worker 9
+[ Info: Running member 2 on worker 6
+[ Info: Running member 1 on worker 3
+[ Info: Iteration 7 time: 5 minutes, 44 seconds, 12 milliseconds
+[ Info: Iteration 8 (T=46.64417686104825)
+┌ Info: Covariance-weighted error: 0.011718286720069367
+│ Covariance trace: 2.774488168061165
+└ Covariance trace ratio (current/previous): 0.9894549011753614
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [743.2441712477806, 4632.9521182499875]
+[ Info: Covariance-weighted error: 0.011718286720069367
+[ Info: Running Iteration 8
+[ Info: Running member 20 on worker 4
+[ Info: Running member 19 on worker 5
+[ Info: Running member 18 on worker 11
+[ Info: Running member 17 on worker 12
+[ Info: Running member 16 on worker 20
+[ Info: Running member 15 on worker 21
+[ Info: Running member 14 on worker 14
+[ Info: Running member 13 on worker 18
+[ Info: Running member 12 on worker 19
+[ Info: Running member 11 on worker 16
+[ Info: Running member 10 on worker 17
+[ Info: Running member 9 on worker 15
+[ Info: Running member 8 on worker 10
+[ Info: Running member 7 on worker 3
+[ Info: Running member 6 on worker 8
+[ Info: Running member 5 on worker 2
+[ Info: Running member 4 on worker 7
+[ Info: Running member 3 on worker 13
+[ Info: Running member 2 on worker 9
+[ Info: Running member 1 on worker 6
+[ Info: Iteration 8 time: 5 minutes, 48 seconds, 795 milliseconds
+[ Info: Iteration 9 (T=62.42151227623682)
+┌ Info: Covariance-weighted error: 0.00020882666262675138
+│ Covariance trace: 2.3104683658282323
+└ Covariance trace ratio (current/previous): 0.8327548094907922
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [752.5961794847262, 4624.275673789209]
+[ Info: Covariance-weighted error: 0.00020882666262675138
+[ Info: Running Iteration 9
+[ Info: Running member 20 on worker 11
+[ Info: Running member 19 on worker 12
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 20
+[ Info: Running member 15 on worker 14
+[ Info: Running member 14 on worker 21
+[ Info: Running member 13 on worker 16
+[ Info: Running member 12 on worker 15
+[ Info: Running member 11 on worker 17
+[ Info: Running member 10 on worker 19
+[ Info: Running member 9 on worker 18
+[ Info: Running member 8 on worker 8
+[ Info: Running member 7 on worker 10
+[ Info: Running member 6 on worker 13
+[ Info: Running member 5 on worker 7
+[ Info: Running member 4 on worker 9
+[ Info: Running member 3 on worker 6
+[ Info: Running member 2 on worker 2
+[ Info: Running member 1 on worker 3
+[ Info: Iteration 9 time: 5 minutes, 32 seconds, 755 milliseconds
+[ Info: Iteration 10 (T=102.61344559308614)
+┌ Info: Covariance-weighted error: 0.0013356908403706013
+│ Covariance trace: 2.0874019232253165
+└ Covariance trace ratio (current/previous): 0.9034540156870084
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [729.9784027682226, 4645.995236002844]
+[ Info: Covariance-weighted error: 0.0013356908403706013
+[ Info: Iteration 0 time: 22 minutes, 59 seconds, 33 milliseconds
+[ Info: Termination condition of scheduler `DataMisfitController` will be exceeded during the next iteration.
+[ Info: Iteration 0 (prior)
+[ Info: Covariance trace: 4.654171601013369
+[ Info: Iteration 1 (T=1.0)
+┌ Info: Covariance-weighted error: 0.23112051045197718
+│ Covariance trace: 3.8286032658535127
+└ Covariance trace ratio (current/previous): 0.8226175556182539
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [698.9181380083593, 3468.396115490831]
+[ Info: Covariance-weighted error: 0.23112051045197718
+[ Info: Running Iteration 1
+[ Info: Running member 20 on worker 8
+[ Info: Running member 19 on worker 9
+[ Info: Running member 18 on worker 20
+[ Info: Running member 17 on worker 18
+[ Info: Running member 16 on worker 19
+[ Info: Running member 15 on worker 3
+[ Info: Running member 14 on worker 2
+[ Info: Running member 13 on worker 5
+[ Info: Running member 12 on worker 4
+[ Info: Running member 11 on worker 14
+[ Info: Running member 10 on worker 13
+[ Info: Running member 9 on worker 15
+[ Info: Running member 8 on worker 7
+[ Info: Running member 7 on worker 10
+[ Info: Running member 6 on worker 11
+[ Info: Running member 5 on worker 12
+[ Info: Running member 4 on worker 6
+[ Info: Running member 3 on worker 17
+[ Info: Running member 2 on worker 16
+[ Info: Running member 1 on worker 21
+[ Info: Iteration 1 time: 5 minutes, 47 seconds, 746 milliseconds
+┌ Warning: Termination condition of scheduler `DataMisfitController` has been exceeded. 
+│ on_terminate="continue" selected. Proceeding with algorithm
+└ @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/LearningRateSchedulers.jl:298
+[ Info: Iteration 2 (T=5.03383665030401)
+┌ Info: Covariance-weighted error: 0.06312082850663299
+│ Covariance trace: 3.124001916334636
+└ Covariance trace ratio (current/previous): 0.8159638644716563
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [681.352224077923, 4151.406048665925]
+[ Info: Covariance-weighted error: 0.06312082850663299
+[ Info: Running Iteration 2
+[ Info: Running member 20 on worker 8
+[ Info: Running member 19 on worker 13
+[ Info: Running member 18 on worker 18
+[ Info: Running member 17 on worker 10
+[ Info: Running member 16 on worker 11
+[ Info: Running member 15 on worker 14
+[ Info: Running member 14 on worker 15
+[ Info: Running member 13 on worker 19
+[ Info: Running member 12 on worker 12
+[ Info: Running member 11 on worker 16
+[ Info: Running member 10 on worker 2
+[ Info: Running member 9 on worker 7
+[ Info: Running member 8 on worker 3
+[ Info: Running member 7 on worker 6
+[ Info: Running member 6 on worker 9
+[ Info: Running member 5 on worker 20
+[ Info: Running member 4 on worker 17
+[ Info: Running member 3 on worker 4
+[ Info: Running member 2 on worker 5
+[ Info: Running member 1 on worker 21
+┌ Warning: `condensation_evaporation_timescale`: Target std 19 puts μ - σ very close to lower bound 0.1, 
+│  The solver may need more iterations to converge, consider decreasing σ
+└ @ EnsembleKalmanProcesses.ParameterDistributions ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/ParameterDistributions.jl:1125
+ERROR: LoadError: DomainError with `sublimation_deposition_timescale`: Target mean 100 must be within constraint [0.1, 100]:
+
+Stacktrace:
+ [1] constrained_gaussian(name::String, μ_c::Int64, σ_c::Int64, lower_bound::Float64, upper_bound::Int64; repeats::Int64, optim_algorithm::Optim.NelderMead{…}, optim_kwargs::@Kwargs{})
+   @ EnsembleKalmanProcesses.ParameterDistributions ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/ParameterDistributions.jl:1101
+ [2] constrained_gaussian(name::String, μ_c::Int64, σ_c::Int64, lower_bound::Float64, upper_bound::Int64)
+   @ EnsembleKalmanProcesses.ParameterDistributions ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/ParameterDistributions.jl:1083
+ [3] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:19
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_calibration.jl:18
+┌ Warning: `condensation_evaporation_timescale`: Target std 19 puts μ - σ very close to lower bound 0.1, 
+│  The solver may need more iterations to converge, consider decreasing σ
+└ @ EnsembleKalmanProcesses.ParameterDistributions ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/ParameterDistributions.jl:1125
+┌ Warning: `sublimation_deposition_timescale`: Target std 99 puts μ - σ very close to lower bound 0.1, 
+│  The solver may need more iterations to converge, consider decreasing σ
+└ @ EnsembleKalmanProcesses.ParameterDistributions ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/ParameterDistributions.jl:1125
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-262744: `srun -J julia-262744 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-262744-17570978180.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=Et5Dbfkf3v7YTD1Y`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9084
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9086
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9088
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9091
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9094
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9096
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9100
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9102
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9085
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9087
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9093
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9095
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9099
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9097
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9092
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9089
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9101
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9098
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9103
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9104
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+[ Info: Iteration 2 time: 5 minutes, 42 seconds, 460 milliseconds
+[ Info: Iteration 3 (T=11.24632974584717)
+┌ Info: Covariance-weighted error: 0.01589414996831589
+│ Covariance trace: 2.7991181841769253
+└ Covariance trace ratio (current/previous): 0.8960039907597451
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [683.3751292612054, 4292.713730765629]
+[ Info: Covariance-weighted error: 0.01589414996831589
+[ Info: Running Iteration 3
+[ Info: Running member 20 on worker 11
+[ Info: Running member 19 on worker 15
+[ Info: Running member 18 on worker 10
+[ Info: Running member 17 on worker 14
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 13
+[ Info: Running member 14 on worker 7
+[ Info: Running member 13 on worker 12
+[ Info: Running member 12 on worker 4
+[ Info: Running member 11 on worker 8
+[ Info: Running member 10 on worker 19
+[ Info: Running member 9 on worker 5
+[ Info: Running member 8 on worker 18
+[ Info: Running member 7 on worker 20
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 9
+[ Info: Running member 4 on worker 21
+[ Info: Running member 3 on worker 17
+[ Info: Running member 2 on worker 2
+[ Info: Running member 1 on worker 3
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Float64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Float64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Float64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 13
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 19
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
