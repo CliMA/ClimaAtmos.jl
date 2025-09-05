@@ -8,8 +8,8 @@
 #SBATCH --mail-type=BEGIN
 #SBATCH --mail-type=END
 #SBATCH --mail-type=FAIL
-#SBATCH -J "noneq_calibration"   # job name
-#SBATCH --output=noneq_calibration.out
+#SBATCH -J "noneq_calibration_implicit"   # job name
+#SBATCH --output=noneq_calibration_implicit.out
 
 module purge
 module load climacommon
