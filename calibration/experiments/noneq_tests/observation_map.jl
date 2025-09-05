@@ -26,16 +26,24 @@ function CAL.observation_map(iteration)
     return G_ensemble
 end
 
-function process_member_data(simdir::SimDir)
+function process_member_data(simdir::SimDir, average=false)
     isempty(simdir.vars) && return NaN
+
     lwp =
         get(simdir; short_name = "lwp", reduction = "inst", period = "1h")
+    avg_lwp = average_time(window(lwp, "time", left = 72hours, right = 144hours))
+
     iwp =
         get(simdir; short_name = "clivi", reduction = "inst", period = "1h")
-    #return [lwp.data..., iwp.data...,]
-    return [slice(lwp; time = 144hours).data..., slice(iwp; time = 144hours).data..., ]
-    #average_time(window(var_i, "time", left = t_start, right = sim_t_end)) # USE SMTHN LIKE THIS FOR 3 DAY AVG
-    #y_var_i = slice(var_i_ave, x = 1, y = 1).data
+    avg_iwp = average_time(window(iwp, "time", left = 72hours, right = 144hours))
+    
+    if average
+        # return last 3 day average
+        return [slice(avg_lwp, x = 1, y = 1).data..., slice(avg_iwp, x = 1, y = 1).data..., ]
+    else
+        # return last value
+        return [slice(lwp; time = 144hours).data..., slice(iwp; time = 144hours).data..., ]
+    end
 end
 
 # FROM JULIAN
