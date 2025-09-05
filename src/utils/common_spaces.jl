@@ -77,8 +77,13 @@ function make_hybrid_spaces(
     z_max,
     z_elem,
     z_stretch;
+    topography = "NoWarp",
     deep = false,
-    parsed_args = nothing,
+    topography_damping_factor = 5,
+    mesh_warp_type = "SLEVE",
+    sleve_eta = 0.7,
+    sleve_s = 10.0,
+    topo_smoothing = false,
 )
     FT = eltype(z_max)
     h_grid = Spaces.grid(h_space)
@@ -96,7 +101,6 @@ function make_hybrid_spaces(
     )
     z_grid = Grids.FiniteDifferenceGrid(z_topology)
 
-    topography = parsed_args["topography"]
     @assert topography in (
         "NoWarp",
         "Earth",
@@ -121,17 +125,17 @@ function make_hybrid_spaces(
         @info "Remapping Earth orography from ETOPO2022 data onto horizontal space"
     else
         topography_function = if topography == "DCMIP200"
-            topography_dcmip200
+            Topography.topography_dcmip200
         elseif topography == "Hughes2023"
-            topography_hughes2023
+            Topography.topography_hughes2023
         elseif topography == "Agnesi"
-            topography_agnesi
+            Topography.topography_agnesi
         elseif topography == "Schar"
-            topography_schar
+            Topography.topography_schar
         elseif topography == "Cosine2D"
-            topography_cosine_2d
+            Topography.topography_cosine_2d
         elseif topography == "Cosine3D"
-            topography_cosine_3d
+            Topography.topography_cosine_3d
         end
         z_surface = SpaceVaryingInput(topography_function, h_space)
         @info "Using $topography orography"
@@ -146,7 +150,7 @@ function make_hybrid_spaces(
         diff_courant = 0.05 # Arbitrary example value.
         Δh_scale = Spaces.node_horizontal_length_scale(h_space)
         κ = FT(diff_courant * Δh_scale^2)
-        n_attenuation = parsed_args["topography_damping_factor"]
+        n_attenuation = topography_damping_factor
         maxiter = Int(round(log(n_attenuation) / diff_courant))
         Hypsography.diffuse_surface_elevation!(
             z_surface;
@@ -159,14 +163,14 @@ function make_hybrid_spaces(
         # E3SM  v1/v2 Topography documentation found here: 
         # https://acme-climate.atlassian.net/wiki/spaces/DOC/pages/1456603764/V1+Topography+GLL+grids
         z_surface = @. mask(z_surface)
-        if parsed_args["mesh_warp_type"] == "SLEVE"
+        if mesh_warp_type == "SLEVE"
             @info "SLEVE mesh warp"
             hypsography = Hypsography.SLEVEAdaption(
                 Geometry.ZPoint.(z_surface),
-                FT(parsed_args["sleve_eta"]),
-                FT(parsed_args["sleve_s"]),
+                FT(sleve_eta),
+                FT(sleve_s),
             )
-        elseif parsed_args["mesh_warp_type"] == "Linear"
+        elseif mesh_warp_type == "Linear"
             @info "Linear mesh warp"
             hypsography =
                 Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
@@ -174,17 +178,17 @@ function make_hybrid_spaces(
             @error "Undefined mesh-warping option"
         end
     else
-        if parsed_args["topo_smoothing"]
+        if topo_smoothing
             Hypsography.diffuse_surface_elevation!(z_surface)
         end
-        if parsed_args["mesh_warp_type"] == "SLEVE"
+        if mesh_warp_type == "SLEVE"
             @info "SLEVE mesh warp"
             hypsography = Hypsography.SLEVEAdaption(
                 Geometry.ZPoint.(z_surface),
-                FT(parsed_args["sleve_eta"]),
-                FT(parsed_args["sleve_s"]),
+                FT(sleve_eta),
+                FT(sleve_s),
             )
-        elseif parsed_args["mesh_warp_type"] == "Linear"
+        elseif mesh_warp_type == "Linear"
             @info "Linear mesh warp"
             hypsography =
                 Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
