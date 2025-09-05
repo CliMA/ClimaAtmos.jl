@@ -13,11 +13,11 @@ include("model_interface_implicit.jl")
 
 #const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
-fast_timescale = false
+fast_timescale = true
 run_truth = false
 ensemble_size = 20
 n_iterations = 10
-output_dir = "/home/oalcabes/EKI_output/test_9"
+output_dir = "/home/oalcabes/EKI_output/test_11"
 
 if fast_timescale
     prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 20, 19, 0.1, 100), # real = 5s
@@ -55,7 +55,7 @@ else
     else
         truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0060" # mixed phase diag implicit truth -- long
     end
-    
+
     #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0060" # mixed phase diag implicit truth
     #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0058" # mixed phase diag explicit truth
     #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0051" # warm prog truth
@@ -86,7 +86,7 @@ addprocs(
 
     ensemble_size = 20
     n_iterations = 10
-    output_dir = "/home/oalcabes/EKI_output/test_9"
+    output_dir = "/home/oalcabes/EKI_output/test_11"
 
     experiment_dir = dirname(Base.active_project())
     #const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")
