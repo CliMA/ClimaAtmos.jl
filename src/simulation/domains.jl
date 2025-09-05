@@ -62,7 +62,7 @@ Base.@kwdef struct ColumnDomain{FT} <: AtmosDomain
     topography::AbstractTopography = NoTopography()
 end
 
-Base.@kwdef struct BoxDomain{FT, M <: MeshWarpType} <: AtmosDomain
+Base.@kwdef struct BoxDomain{FT} <: AtmosDomain
     x_min::FT = DEFAULT_X_MIN
     x_max::FT = DEFAULT_X_MAX
     x_elem::Int = DEFAULT_X_ELEM
@@ -80,13 +80,13 @@ Base.@kwdef struct BoxDomain{FT, M <: MeshWarpType} <: AtmosDomain
     periodic_y::Bool = DEFAULT_PERIODIC_Y
     topography::AbstractTopography = NoTopography()
     topography_damping_factor::FT = DEFAULT_TOPO_DAMPING
-    mesh_warp_type::M = LinearWarp()  # Box domains typically use Linear
+    mesh_warp_type::MeshWarpType = LinearWarp()  # Box domains typically use Linear
     sleve_eta::FT = DEFAULT_SLEVE_ETA
     sleve_s::FT = DEFAULT_SLEVE_S
     topo_smoothing::Bool = DEFAULT_TOPO_SMOOTHING
 end
 
-Base.@kwdef struct PlaneDomain{FT, M <: MeshWarpType} <: AtmosDomain
+Base.@kwdef struct PlaneDomain{FT} <: AtmosDomain
     x_min::FT = DEFAULT_X_MIN
     x_max::FT = DEFAULT_X_MAX
     x_elem::Int = DEFAULT_X_ELEM
@@ -100,7 +100,7 @@ Base.@kwdef struct PlaneDomain{FT, M <: MeshWarpType} <: AtmosDomain
     periodic_x::Bool = DEFAULT_PERIODIC_X
     topography::AbstractTopography = NoTopography()
     topography_damping_factor::FT = DEFAULT_TOPO_DAMPING
-    mesh_warp_type::M = LinearWarp()  # Plane domains typically use Linear
+    mesh_warp_type::MeshWarpType = LinearWarp()  # Plane domains typically use Linear
     sleve_eta::FT = DEFAULT_SLEVE_ETA
     sleve_s::FT = DEFAULT_SLEVE_S
     topo_smoothing::Bool = DEFAULT_TOPO_SMOOTHING
