@@ -9,7 +9,7 @@ using Distributions
 using Distributed
 
 include("observation_map.jl")
-include("model_interface.jl")
+include("model_interface_implicit.jl")
 
 #const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
@@ -20,14 +20,14 @@ const prior = PD.combine_distributions(prior_vec)
 
 ensemble_size = 20
 n_iterations = 10
-output_dir = "/home/oalcabes/EKI_output/test_8"
+output_dir = "/home/oalcabes/EKI_output/test_9"
 
 run_truth = false
 
 if run_truth
 
     #model_config = "diagnostic_edmfx_diurnal_scm_exp_noneq_1M.yml"
-    model_config = "diagnostic_edmfx_diurnal_scm_imp_noneq_1M_mixed_phase_site.yml"
+    model_config = "diagnostic_edmfx_diurnal_scm_imp_noneq_1M_implicit_mixed_phase_site.yml"
 
     config_dict = YAML.load_file(model_config)
     truth_toml = "toml/truth.toml"
@@ -40,8 +40,8 @@ if run_truth
     CA.solve_atmos!(diag_sim)
     truth_out_dir = diag_sim.output_dir
 else
-    #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0060" # mixed phase diag implicit truth
-    truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0058" # mixed phase diag explicit truth
+    truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0060" # mixed phase diag implicit truth
+    #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0058" # mixed phase diag explicit truth
     #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0051" # warm prog truth
     #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0021"
 end
@@ -66,11 +66,11 @@ addprocs(
     using Distributed
 
     include("observation_map.jl")
-    include("model_interface.jl")
+    include("model_interface_implicit.jl")
 
     ensemble_size = 20
     n_iterations = 10
-    output_dir = "/home/oalcabes/EKI_output/test_8"
+    output_dir = "/home/oalcabes/EKI_output/test_9"
 
     experiment_dir = dirname(Base.active_project())
     #const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")

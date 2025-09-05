@@ -34,6 +34,8 @@ function process_member_data(simdir::SimDir)
         get(simdir; short_name = "clivi", reduction = "inst", period = "1h")
     #return [lwp.data..., iwp.data...,]
     return [slice(lwp; time = 144hours).data..., slice(iwp; time = 144hours).data..., ]
+    #average_time(window(var_i, "time", left = t_start, right = sim_t_end)) # USE SMTHN LIKE THIS FOR 3 DAY AVG
+    #y_var_i = slice(var_i_ave, x = 1, y = 1).data
 end
 
 # FROM JULIAN

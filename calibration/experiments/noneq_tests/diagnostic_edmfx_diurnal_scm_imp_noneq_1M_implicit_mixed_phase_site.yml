@@ -20,7 +20,7 @@ z_max: 60e3
 z_elem: 150
 netcdf_output_at_levels: true
 t_end: "6days" # 11 days
-dt: "10secs"
+dt: "30secs"
 dz_bottom: 30
 
 # solve implicitly
