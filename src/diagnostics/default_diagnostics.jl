@@ -33,7 +33,7 @@ function default_diagnostics(
     start_date::DateTime,
     t_start;
     output_writer,
-    topography = true,
+    topography,
 )
     # Unfortunately, [] is not treated nicely in a map (we would like it to be "excluded"),
     # so we need to manually filter out the submodels that don't have defaults associated
@@ -53,7 +53,7 @@ function default_diagnostics(
     # We use a map because we want to ensure that diagnostics is a well defined type, not
     # Any. This reduces latency.
     return vcat(
-        core_default_diagnostics(output_writer, duration, start_date, t_start; topography),
+        core_default_diagnostics(output_writer, duration, start_date, t_start, topography),
         map(non_empty_fields) do field
             default_diagnostics(
                 getfield(model, field),
@@ -143,13 +143,7 @@ end
 ########
 # Core #
 ########
-function core_default_diagnostics(
-    output_writer,
-    duration,
-    start_date,
-    t_start;
-    topography = true,
-)
+function core_default_diagnostics(output_writer, duration, start_date, t_start, topography)
     core_diagnostics = [
         "ts",
         "ta",
