@@ -552,22 +552,26 @@ Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, LIM, DM, HD}
 
     """Enable specific upwinding schemes for specific equations"""
-    energy_q_tot_upwinding::EN_UP
-    tracer_upwinding::TR_UP
-    edmfx_mse_q_tot_upwinding::ED_UP
-    edmfx_sgsflux_upwinding::SG_UP
-    edmfx_tracer_upwinding::ED_TR_UP
+    energy_q_tot_upwinding::EN_UP = Val(:vanleer_limiter)
+    tracer_upwinding::TR_UP = Val(:vanleer_limiter)
+    edmfx_mse_q_tot_upwinding::ED_UP = Val(:first_order)
+    edmfx_sgsflux_upwinding::SG_UP = Val(:none)
+    edmfx_tracer_upwinding::ED_TR_UP = Val(:first_order)
 
     """Add NaNs to certain equations to track down problems"""
-    test_dycore_consistency::TDC
+    test_dycore_consistency::TDC = nothing
 
-    limiter::LIM
+    limiter::LIM = nothing
 
     """Timestepping mode for diffusion: Explicit() or Implicit()"""
-    diff_mode::DM = nothing
+    diff_mode::DM = Explicit()
 
     """Hyperdiffusion model: nothing or ClimaHyperdiffusion()"""
-    hyperdiff::HD = nothing
+    hyperdiff::HD = ClimaHyperdiffusion{Float32}(;
+        ν₄_vorticity_coeff = 0.150 * 1.238,
+        ν₄_scalar_coeff = 0.751 * 1.238,
+        divergence_damping_factor = 5,
+    )
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
@@ -632,7 +636,7 @@ Base.@kwdef struct SCMSetup{S, EF, LA, AT, SC}
     subsidence::S = nothing
     external_forcing::EF = nothing
     ls_adv::LA = nothing
-    advection_test::AT = nothing
+    advection_test::AT = false
     scm_coriolis::SC = nothing
 end
 
@@ -642,9 +646,9 @@ end
 Groups moisture-related models and types.
 """
 Base.@kwdef struct AtmosWater{MM, PM, CM, NCFM, CCDPS}
-    moisture_model::MM = nothing
-    microphysics_model::PM = nothing
-    cloud_model::CM = nothing
+    moisture_model::MM = DryModel()
+    microphysics_model::PM = NoPrecipitation()
+    cloud_model::CM = QuadratureCloud(SGSQuadrature(Float32))
     noneq_cloud_formation_mode::NCFM = nothing
     call_cloud_diagnostics_per_stage::CCDPS = nothing
     moisture_fixer::Bool = false
@@ -657,9 +661,9 @@ Groups radiation-related models and types.
 """
 Base.@kwdef struct AtmosRadiation{RM, OZ, CO2, IN}
     radiation_mode::RM = nothing
-    ozone::OZ = nothing
+    ozone::OZ = IdealizedOzone()
     co2::CO2 = nothing
-    insolation::IN = nothing
+    insolation::IN = IdealizedInsolation()
 end
 
 """
@@ -670,11 +674,11 @@ Groups turbulence convection-related models and types.
 Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, AMD}
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
-    sgs_adv_mode::SAM = nothing
-    sgs_entr_detr_mode::SEDM = nothing
-    sgs_nh_pressure_mode::SNPM = nothing
-    sgs_vertdiff_mode::SVM = nothing
-    sgs_mf_mode::SMM = nothing
+    sgs_adv_mode::SAM = Explicit()
+    sgs_entr_detr_mode::SEDM = Explicit()
+    sgs_nh_pressure_mode::SNPM = Explicit()
+    sgs_vertdiff_mode::SVM = Explicit()
+    sgs_mf_mode::SMM = Explicit()
     smagorinsky_lilly::SL = nothing
     amd_les::AMD = nothing
 end
@@ -705,9 +709,9 @@ end
 Groups surface-related models and types.
 """
 Base.@kwdef struct AtmosSurface{ST, SM, SA}
-    sfc_temperature::ST = nothing
-    surface_model::SM = nothing
-    surface_albedo::SA = nothing
+    sfc_temperature::ST = ZonallySymmetricSST()
+    surface_model::SM = PrescribedSST()
+    surface_albedo::SA = ConstantAlbedo{Float32}(; α = 0.07)
 end
 
 # Add broadcastable for the new grouped types
@@ -888,7 +892,7 @@ Internal testing and calibration components for single-column setups:
 - `subsidence`: nothing or Bomex_subsidence, Rico_subsidence, DYCOMS_subsidence, etc
 - `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
 - `ls_adv`: nothing or LargeScaleAdvection()
-- `advection_test`: nothing or boolean
+- `advection_test`: Bool
 - `scm_coriolis`: nothing or SCMCoriolis()
 
 ## AtmosRadiation
@@ -1001,29 +1005,6 @@ function _create_grouped_struct(StructType, atmos_model_kwargs, group_kwargs)
            StructType(; group_kwargs[field_name]...) : complete_object
 end
 
-const _DEFAULT_ATMOS_MODEL_KWARGS = (
-    moisture_model = DryModel(),
-    microphysics_model = NoPrecipitation(),
-    cloud_model = GridScaleCloud(),
-    surface_model = PrescribedSST(),
-    sfc_temperature = ZonallySymmetricSST(),
-    insolation = IdealizedInsolation(),
-
-    # AtmosNumerics defaults
-    energy_q_tot_upwinding = Val(:vanleer_limiter),
-    tracer_upwinding = Val(:vanleer_limiter),
-    edmfx_mse_q_tot_upwinding = Val(:first_order),
-    edmfx_sgsflux_upwinding = Val(:none),
-    edmfx_tracer_upwinding = Val(:first_order),
-    test_dycore_consistency = nothing,
-    limiter = nothing,
-    diff_mode = Explicit(),
-    hyperdiff = nothing,
-
-    # Top-level
-    disable_surface_flux_tendency = false,
-)
-
 """
     _partition_atmos_model_kwargs(kwargs)
 
@@ -1034,7 +1015,6 @@ Helper function for the AtmosModel constructor.
 function _partition_atmos_model_kwargs(kwargs)
 
     # Merge default minimal model arguments with given kwargs
-    all_kwargs = merge(_DEFAULT_ATMOS_MODEL_KWARGS, kwargs)
 
     # group_kwargs contains a Dict for each group in ATMOS_MODEL_GROUPS
     group_kwargs = Dict(map(ATMOS_MODEL_GROUPS) do (_, group_field)
@@ -1045,7 +1025,7 @@ function _partition_atmos_model_kwargs(kwargs)
     atmos_model_kwargs = Dict{Symbol, Any}()
     unknown_args = Symbol[]
 
-    for (key, value) in pairs(all_kwargs)
+    for (key, value) in pairs(kwargs)
         if haskey(GROUPED_PROPERTY_MAP, key)
             group_field = GROUPED_PROPERTY_MAP[key]
             group_kwargs[group_field][key] = value
@@ -1104,10 +1084,6 @@ function DryAtmosModel(; kwargs...)
     defaults = (
         moisture_model = DryModel(),
         microphysics_model = NoPrecipitation(),
-        cloud_model = GridScaleCloud(),
-        surface_model = PrescribedSST(),
-        sfc_temperature = ZonallySymmetricSST(),
-        insolation = IdealizedInsolation(),
     )
     return AtmosModel(; defaults..., kwargs...)
 end
@@ -1121,10 +1097,6 @@ function EquilMoistAtmosModel(; kwargs...)
     defaults = (
         moisture_model = EquilMoistModel(),
         microphysics_model = Microphysics0Moment(),
-        cloud_model = GridScaleCloud(),
-        surface_model = PrescribedSST(),
-        sfc_temperature = ZonallySymmetricSST(),
-        insolation = IdealizedInsolation(),
         ozone = IdealizedOzone(),
         co2 = FixedCO2(),
     )
@@ -1140,11 +1112,7 @@ function NonEquilMoistAtmosModel(; kwargs...)
     defaults = (
         moisture_model = NonEquilMoistModel(),
         microphysics_model = Microphysics1Moment(),
-        cloud_model = GridScaleCloud(),
         noneq_cloud_formation_mode = Explicit(),
-        surface_model = PrescribedSST(),
-        sfc_temperature = ZonallySymmetricSST(),
-        insolation = IdealizedInsolation(),
         ozone = IdealizedOzone(),
         co2 = FixedCO2(),
     )
