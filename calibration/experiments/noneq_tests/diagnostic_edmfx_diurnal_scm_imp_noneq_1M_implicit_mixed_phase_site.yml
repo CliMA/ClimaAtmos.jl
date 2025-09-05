@@ -20,7 +20,7 @@ z_max: 60e3
 z_elem: 150
 netcdf_output_at_levels: true
 t_end: "6days" # 11 days
-dt: "30secs"
+dt: "10secs"
 dz_bottom: 30
 
 # solve implicitly
@@ -29,6 +29,12 @@ implicit_sgs_advection: true
 implicit_sgs_mass_flux: true
 implicit_sgs_entr_detr: true
 implicit_sgs_nh_pressure: true
+
+# noneq -- sparse autojacobian
+implicit_noneq_cloud_formation: true
+use_auto_jacobian: true
+update_jacobian_every: dt
+debug_jacobian: true
 
 approximate_linear_solve_iters: 2
 edmfx_upwinding: first_order

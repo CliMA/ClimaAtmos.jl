@@ -13,17 +13,17 @@ include("model_interface.jl")
 
 #const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
-prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 500, 50, 100, 1000), # real = 800s
-             PD.constrained_gaussian("sublimation_deposition_timescale", 2000, 300, 100, 10000)] # real = 5000s
+prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 500, 500, 100, 1000), # real = 800s
+             PD.constrained_gaussian("sublimation_deposition_timescale", 2000, 5000, 100, 10000)] # real = 5000s
 
 const prior = PD.combine_distributions(prior_vec)
 
 
 ensemble_size = 20
 n_iterations = 10
-output_dir = "/home/oalcabes/EKI_output/test_7"
+output_dir = "/home/oalcabes/EKI_output/test_8"
 
-run_truth = true
+run_truth = false
 
 if run_truth
 
@@ -41,7 +41,9 @@ if run_truth
     CA.solve_atmos!(diag_sim)
     truth_out_dir = diag_sim.output_dir
 else
-    truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0051"
+    #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0059" # mixed phase diag implicit truth
+    truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0058" # mixed phase diag explicit truth
+    #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0051" # warm prog truth
     #truth_out_dir = "/home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/output/output_0021"
 end
 
@@ -69,7 +71,7 @@ addprocs(
 
     ensemble_size = 20
     n_iterations = 10
-    output_dir = "/home/oalcabes/EKI_output/test_7"
+    output_dir = "/home/oalcabes/EKI_output/test_8"
 
     experiment_dir = dirname(Base.active_project())
     #const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")
