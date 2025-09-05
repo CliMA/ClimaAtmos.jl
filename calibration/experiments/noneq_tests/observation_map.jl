@@ -32,6 +32,7 @@ function process_member_data(simdir::SimDir)
         get(simdir; short_name = "lwp", reduction = "inst", period = "1h")
     iwp =
         get(simdir; short_name = "clivi", reduction = "inst", period = "1h")
+    #return [lwp.data..., iwp.data...,]
     return [slice(lwp; time = 144hours).data..., slice(iwp; time = 144hours).data..., ]
 end
 
