@@ -30,6 +30,12 @@ implicit_sgs_mass_flux: true
 implicit_sgs_entr_detr: true
 implicit_sgs_nh_pressure: true
 
+# noneq -- sparse autojacobian
+implicit_noneq_cloud_formation: false
+use_auto_jacobian: true
+update_jacobian_every: dt
+debug_jacobian: true
+
 approximate_linear_solve_iters: 2
 edmfx_upwinding: first_order
 edmfx_sgsflux_upwinding: first_order
@@ -57,6 +63,15 @@ toml: [toml/diagnostic_edmfx_1M.toml]
 output_default_diagnostics: false
 rad: allskywithclear
 insolation: "externaldriventv"
+# diagnostics:
+#   - short_name: [lwp, clivi]
+#     period: 1hours
 diagnostics:
-  - short_name: [lwp, clivi]
-    period: 1hours
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke]
+    period: 10mins
+  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
+    period: 10mins
+  - short_name: [husra, hussn, lwp, clivi]
+    period: 10mins
