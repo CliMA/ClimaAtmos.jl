@@ -12,10 +12,7 @@ include("observation_map.jl")
 include("model_interface.jl")
 
 #const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
-fast_timescale = false
-
-# whether or not to avg the loss function
-average = true
+fast_timescale = true
 
 if fast_timescale
     prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 20, 19, 0.1, 100), # real = 5s
@@ -29,7 +26,7 @@ const prior = PD.combine_distributions(prior_vec)
 
 ensemble_size = 20
 n_iterations = 10
-output_dir = "/home/oalcabes/EKI_output/test_12"
+output_dir = "/home/oalcabes/EKI_output/test_14"
 
 run_truth = false
 
@@ -92,7 +89,7 @@ addprocs(
 
     ensemble_size = 20
     n_iterations = 10
-    output_dir = "/home/oalcabes/EKI_output/test_12"
+    output_dir = "/home/oalcabes/EKI_output/test_14"
 
     experiment_dir = dirname(Base.active_project())
     #const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")
@@ -103,7 +100,7 @@ addprocs(
 
 end
 
-observations = process_member_data(SimDir(truth_out_dir),average=average)
+observations = process_member_data(SimDir(truth_out_dir))
 noise = diagm(ones(2))*1e-7 #Diagonal([0.1*diagm(ones(2)), 0.1*diagm(ones(2))])
 
 observation = EKP.Observation(

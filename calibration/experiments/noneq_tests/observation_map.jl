@@ -6,6 +6,8 @@ using JLD2
 using Statistics
 using YAML
 
+average=true
+
 # FROM TUTORIAL
 const days = 86_400
 const hours = 60*60
@@ -26,7 +28,7 @@ function CAL.observation_map(iteration)
     return G_ensemble
 end
 
-function process_member_data(simdir::SimDir, average=false)
+function process_member_data(simdir::SimDir)
     isempty(simdir.vars) && return NaN
 
     lwp =

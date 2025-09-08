@@ -10,7 +10,7 @@ using Plots
 using LinearAlgebra
 using DataFrames
 
-output_dir = "/home/oalcabes/EKI_output/explicit_short"
+output_dir = "/home/oalcabes/EKI_output/3_day_average/implicit_short"
 fast_timescale = true
 iterations = nothing
 
