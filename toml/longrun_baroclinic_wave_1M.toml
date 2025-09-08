@@ -7,11 +7,14 @@ value = 100
 [sublimation_deposition_timescale]
 value = 100
 
-[rain_autoconversion_timescale]
-value = 100
-
 [snow_autoconversion_timescale]
 value = 1e4
 
+[rain_autoconversion_timescale]
+value = 100
+
 [zd_rayleigh]
+value = 25000.0
+
+[zd_viscous]
 value = 25000.0

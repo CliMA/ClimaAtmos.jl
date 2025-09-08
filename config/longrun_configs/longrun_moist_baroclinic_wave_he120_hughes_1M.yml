@@ -1,28 +1,28 @@
 h_elem: 120
 z_elem: 43
 dz_bottom: 30.0
-dt: "30secs"
-t_end: "15days"
-ode_algo: ARS343
+dt: "40secs"
+t_end: "60days"
 topography: "Hughes2023"
 initial_condition: "MoistBaroclinicWave"
-approximate_linear_solve_iters: 3
 perturb_initstate: false
 mesh_warp_type: "SLEVE"
-max_newton_iters_ode: 1
 rayleigh_sponge: true
 moist: "nonequil"
 precip_model: "1M"
 dt_save_state_to_disk: "10days"
 disable_surface_flux_tendency: true
-output_dir: "/glade/derecho/scratch/asridhar/moist_bw_hughes_he120_1M_30s/"
+vert_diff: "DecayWithHeightDiffusion"
+implicit_diffusion: true
+approximate_linear_solve_iters: 4
+prognostic_surface: PrognosticSurfaceTemperature
+output_dir: "/glade/derecho/scratch/asridhar/moist_bw_hughes_he120_1M_40s_dwhd_pst/"
 netcdf_interpolation_num_points: [1440, 720, 43]
-#toml: [toml/longrun_baroclinic_wave.toml]
-toml: [toml/sphere_aquaplanet_1M.toml]
+toml: [toml/longrun_baroclinic_wave_1M.toml]
 diagnostics:
   - short_name: [pfull, ua, va, ta, ts, wa, va, ke, hus, clw, cli, pr, hussn, husra]
     reduction: inst
-    period: 12hours
-  - short_name: [massa, energya, watera]
+    period: 6hours
+  - short_name: [massa, energya, watera, watero, energyo]
     period: 6hours
     writer: dict

@@ -6,6 +6,7 @@ t_end: "60days"
 ode_algo: ARS343
 topography: "Hughes2023"
 initial_condition: "MoistBaroclinicWave"
+perturb_initstate: false
 rayleigh_sponge: true
 moist: "equil"
 precip_model: "0M"
@@ -14,10 +15,12 @@ prognostic_surface: PrognosticSurfaceTemperature
 deep_atmosphere: true
 dt_save_state_to_disk: "10days"
 netcdf_interpolation_num_points: [1440, 720, 43]
-output_dir: "/glade/derecho/scratch/asridhar/moist_bw_hughes_0M/"
+output_dir: "/glade/derecho/scratch/asridhar/moist_bw_hughes_0M_exner_pg/"
 toml: [toml/longrun_bw.toml]
 output_default_diagnostics: false
 diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr, rhoa, rv, ke]
+    period: 1days
   - short_name: [massa, energya, watera, energyo, watero]
     period: 6hours
     writer: dict

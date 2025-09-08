@@ -3,15 +3,14 @@ z_elem: 43
 dz_bottom: 30.0
 dt: "30secs" 
 approximate_linear_solve_iters: 2
-t_end: "15days"
+t_end: "10days"
 initial_condition: "MoistBaroclinicWave"
 moist: "nonequil"
 precip_model: "1M"
-dt_save_state_to_disk: "10days"
 disable_surface_flux_tendency: true
+netcdf_interpolation_num_points: [1440, 720, 43]
 output_dir: "/glade/derecho/scratch/asridhar/moist_bw_1M/"
-#toml: [toml/longrun_baroclinic_wave.toml]
-toml: [toml/sphere_aquaplanet_1M.toml]
+toml: [toml/longrun_baroclinic_wave_1M.toml]
 diagnostics:
   - short_name: [pfull, ua, va, ta, ts, wa, va, rv, ke, hus, clw, cli, pr, husra, hussn]
     reduction: inst
