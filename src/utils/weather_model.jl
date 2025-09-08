@@ -70,19 +70,19 @@ function weather_model_data_path(start_date, target_levels)
     #     "raw",
     #     "era5_raw_$(start_date_str)_$(start_time).nc",
     # )
-    ic_data_path = "/glade/campaign/univ/ucit0011/cchristo/wxquest_ics/era5_init_processed_internal_20250701_0000.nc"
-    raw_data_path = "/glade/campaign/univ/ucit0011/cchristo/wxquest_ics/era5_raw_20250701_0000.nc"
+    ic_data_path = "/glade/campaign/univ/ucit0011/cchristo/wxquest_ics/era5_init_processed_internal_20250831_0000.nc"
+    raw_data_path = "/glade/campaign/univ/ucit0011/cchristo/wxquest_ics/era5_raw_20250831_0000.nc"
 
     # ic_data_path = "/glade/campaign/univ/ucit0011/cchristo/wxquest_ics/era5_init_processed_internal_20250810_0000.nc"
     # raw_data_path = "/glade/campaign/univ/ucit0011/cchristo/wxquest_ics/era5_raw_20250810_0000.nc"
 
 
-    # if !isfile(ic_data_path)
-    @info "Interpolating raw weather model data onto z-levels"
-    to_z_levels(raw_data_path, ic_data_path, target_levels, Float32)
-    # else
-    #     @info "Using existing interpolated file: $ic_data_path"
-    # end
+    if !isfile(ic_data_path)
+        @info "Interpolating raw weather model data onto z-levels"
+        to_z_levels(raw_data_path, ic_data_path, target_levels, Float32)
+    else
+        @info "Using existing interpolated file: $ic_data_path"
+    end
 
     return ic_data_path
 end
