@@ -14,6 +14,7 @@ import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
 import ClimaComms
+import ClimaCore.DebugOnly: profile_rename_kernel_names
 
 include("common.jl")
 (; config_file, job_id) = CA.commandline_kwargs()
@@ -23,6 +24,8 @@ simulation = CA.get_simulation(config)
 (; integrator) = simulation;
 Y₀ = deepcopy(integrator.u);
 @info "Compiling benchmark_step!..."
+# turn on renaming of CUDA kernels based on stack trace
+profile_rename_kernel_names() = true
 CA.benchmark_step!(integrator, Y₀); # compile first
 
 @info "Running benchmark_step_gpu!..."
