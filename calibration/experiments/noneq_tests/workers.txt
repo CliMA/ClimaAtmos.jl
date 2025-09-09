@@ -12972,3 +12972,3519 @@ srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the re
 └ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
 [ Info: Mean constrained parameter(s): [6.14337486258853, 43.30857603746148]
 [ Info: Covariance-weighted error: 0.00112152985843081
+┌ Warning: `condensation_evaporation_timescale`: Target std 19 puts μ - σ very close to lower bound 0.1, 
+│  The solver may need more iterations to converge, consider decreasing σ
+└ @ EnsembleKalmanProcesses.ParameterDistributions ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/ParameterDistributions.jl:1125
+┌ Warning: `sublimation_deposition_timescale`: Target std 99 puts μ - σ very close to lower bound 0.1, 
+│  The solver may need more iterations to converge, consider decreasing σ
+└ @ EnsembleKalmanProcesses.ParameterDistributions ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/ParameterDistributions.jl:1125
+config_dict["toml"] = ["toml/diagnostic_edmfx_1M.toml", "toml/truth_fast.toml"]
+┌ Warning: `job_id` is empty and likely not passed to AtmosConfig
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/types.jl:1191
+┌ Info: Making AtmosConfig with config files: 
+└    /home/oalcabes/ClimaAtmos.jl/src/solver/../../config/default_configs/default_config.yml
+[ Info: Running on CPUSingleThreaded
+[ Info: Setting up single-process ClimaAtmos run
+┌ Info: Time info:
+│   dt = "30secs"
+│   t_start = "0secs"
+│   t_end = "6days"
+└   floor_n_steps = 17280
+┌ Warning: co2_model set to nothing with an RRTMGP model. Resetting to FixedCO2
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/type_getters.jl:60
+┌ Info: numerics 
+│            `energy_upwinding`::`Val{:vanleer_limiter}`
+│            `tracer_upwinding`::`Val{:vanleer_limiter}`
+│             `edmfx_upwinding`::`Val{:first_order}`
+│     `edmfx_sgsflux_upwinding`::`Val{:first_order}`
+│     `test_dycore_consistency`::`Nothing`
+│                     `limiter`::`Nothing`
+│                   `diff_mode`::`ClimaAtmos.Implicit`
+└                   `hyperdiff`::`ClimaAtmos.ClimaHyperdiffusion{Float32}`
+┌ Info: AtmosModel: 
+│ 
+│                             `water`::`ClimaAtmos.AtmosWater{ClimaAtmos.NonEquilMoistModel, ClimaAtmos.Microphysics1Moment, ClimaAtmos.GridScaleCloud, ClimaAtmos.Explicit, ClimaAtmos.CallCloudDiagnosticsPerStage}`
+│                         `scm_setup`::`ClimaAtmos.SCMSetup{Nothing, ClimaAtmos.ExternalDrivenTVForcing{Float32}, Nothing, Bool, Nothing}`
+│                         `radiation`::`ClimaAtmos.AtmosRadiation{ClimaAtmos.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics{ClimaAtmos.InteractiveCloudInRadiation}, ClimaAtmos.IdealizedOzone, ClimaAtmos.FixedCO2{Float64}, ClimaAtmos.ExternalTVInsolation}`
+│                          `turbconv`::`ClimaAtmos.AtmosTurbconv{ClimaAtmos.EDMFXModel{ClimaAtmos.PiGroupsEntrainment, ClimaAtmos.SmoothAreaDetrainment, Val{true}, Val{true}, Val{true}, Val{true}, ClimaAtmos.SmoothMinimumBlending}, ClimaAtmos.DiagnosticEDMFX{1, true, Float32}, ClimaAtmos.Implicit, ClimaAtmos.Implicit, ClimaAtmos.Implicit, ClimaAtmos.Implicit, Nothing}`
+│                      `gravity_wave`::`ClimaAtmos.AtmosGravityWave{Nothing, Nothing}`
+│                `vertical_diffusion`::`Nothing`
+│                            `sponge`::`ClimaAtmos.AtmosSponge{Nothing, ClimaAtmos.RayleighSponge{Float32}}`
+│                           `surface`::`ClimaAtmos.AtmosSurface{ClimaAtmos.ExternalTVColumnSST, ClimaAtmos.PrescribedSST, ClimaAtmos.ConstantAlbedo{Float32}}`
+└                          `numerics`::`ClimaAtmos.AtmosNumerics{Val{:vanleer_limiter}, Val{:vanleer_limiter}, Val{:first_order}, Val{:first_order}, Nothing, Nothing, ClimaAtmos.Implicit, ClimaAtmos.ClimaHyperdiffusion{Float32}}`
+┌ Info: Simulation info
+│   job_id = ""
+└   output_dir = "output/output_0076"
+┌ Warning: perturb_initstate flag is ignored for single column configuration
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/type_getters.jl:253
+┌ Info: z heights
+│   z_mesh.faces =
+│    151-element Vector{ClimaCore.Geometry.ZPoint{Float32}}:
+│     ZPoint(0.0)
+│     ZPoint(30.00001)
+│     ZPoint(60.97766)
+│     ZPoint(92.96428)
+│     ⋮
+│     ZPoint(58016.594)
+│     ZPoint(59008.035)
+└     ZPoint(60000.0)
+[ Info: No surface orography warp applied
+┌ Info: Resolution stats: 
+│   Nq = 1
+│   h_elem = 6
+│   z_elem = 150
+│   ncols = 1
+└   ndofs_total = 150
+[ Info: Allocating Y: 2.167 s (12713809 allocations: 617.44 MiB)
+[ Info: Allocating cache (p): 84.544 s (528198067 allocations: 31.99 GiB)
+[ Info: Using ODE config: `ClimaTimeSteppers.ARS343`
+[ Info: ode_configuration: 764.318 ms (1488206 allocations: 73.66 MiB)
+[ Info: Progress logging enabled
+[ Info: Checking NaNs in the state every 1024 steps
+[ Info: get_callbacks: 250.002 ms (336592 allocations: 17.46 MiB)
+[ Info: Saving accumulated diagnostics to disk with frequency: 
+[ Info: DictWriter: String[]
+[ Info: HDF5Writer: String[]
+[ Info: NetCDFWriter: ["lwp_1h_inst", "clivi_1h_inst"]
+[ Info: initializing diagnostics: 3.68 s (9864446 allocations: 499.92 MiB)
+[ Info: Prepared SciMLBase.CallbackSet callbacks: 10.449 ms (561 allocations: 27.34 KiB)
+[ Info: n_steps_per_cycle_per_cb (non diagnostics): [1024, 1, 1, 20]
+[ Info: n_steps_per_cycle (non diagnostics): 5120
+┌ Info: Jacobian algorithm: AutoSparseJacobian(
+│   sparse_jacobian_alg = ManualSparseJacobian(
+│     topography_flag = ClimaAtmos.IgnoreDerivative(),
+│     diffusion_flag = ClimaAtmos.UseDerivative(),
+│     sgs_advection_flag = ClimaAtmos.UseDerivative(),
+│     sgs_entr_detr_flag = ClimaAtmos.UseDerivative(),
+│     sgs_mass_flux_flag = ClimaAtmos.UseDerivative(),
+│     sgs_nh_pressure_flag = ClimaAtmos.UseDerivative(),
+│     approximate_solve_iters = 2,
+│   ),
+│   padding_bands_per_block = nothing,
+└ )
+[ Info: Adding 3 padding bands for (@name(c.uₕ.components.data.:(1)), @name(c.ρ))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_liq))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_liq))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_ice))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_ice))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_rai))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_rai))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_sno))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_sno))
+[ Info: Adding 3 padding bands for (@name(c.uₕ.components.data.:(1)), @name(c.sgs⁰.ρatke))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.sgs⁰.ρatke))
+[ Info: Using coloring order SparseMatrixColorings.DynamicDegreeBasedOrder{:back, :high2low, false}()
+[ Info: Updating Jacobian using 27 ε components per dual number
+[ Info: Define ode function: 15.673 s (16526836 allocations: 825.81 MiB)
+[ Info: init integrator: 47.673 s (108885995 allocations: 7.71 GiB)
+┌ Warning: `condensation_evaporation_timescale`: Target std 19 puts μ - σ very close to lower bound 0.1, 
+│  The solver may need more iterations to converge, consider decreasing σ
+└ @ EnsembleKalmanProcesses.ParameterDistributions ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/ParameterDistributions.jl:1125
+┌ Warning: `sublimation_deposition_timescale`: Target std 99 puts μ - σ very close to lower bound 0.1, 
+│  The solver may need more iterations to converge, consider decreasing σ
+└ @ EnsembleKalmanProcesses.ParameterDistributions ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/ParameterDistributions.jl:1125
+[ Info: Added diagnostics: 6.581 s (13524976 allocations: 653.25 MiB)
+config_dict["toml"] = ["toml/diagnostic_edmfx_1M.toml", "toml/truth_fast.toml"]
+┌ Warning: `job_id` is empty and likely not passed to AtmosConfig
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/types.jl:1191
+┌ Info: Making AtmosConfig with config files: 
+└    /home/oalcabes/ClimaAtmos.jl/src/solver/../../config/default_configs/default_config.yml
+[ Info: Running on CPUSingleThreaded
+[ Info: Setting up single-process ClimaAtmos run
+┌ Info: Time info:
+│   dt = "30secs"
+│   t_start = "0secs"
+│   t_end = "6days"
+└   floor_n_steps = 17280
+┌ Warning: co2_model set to nothing with an RRTMGP model. Resetting to FixedCO2
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/type_getters.jl:60
+┌ Info: numerics 
+│            `energy_upwinding`::`Val{:vanleer_limiter}`
+│            `tracer_upwinding`::`Val{:vanleer_limiter}`
+│             `edmfx_upwinding`::`Val{:first_order}`
+│     `edmfx_sgsflux_upwinding`::`Val{:first_order}`
+│     `test_dycore_consistency`::`Nothing`
+│                     `limiter`::`Nothing`
+│                   `diff_mode`::`ClimaAtmos.Implicit`
+└                   `hyperdiff`::`ClimaAtmos.ClimaHyperdiffusion{Float32}`
+┌ Info: AtmosModel: 
+│ 
+│                             `water`::`ClimaAtmos.AtmosWater{ClimaAtmos.NonEquilMoistModel, ClimaAtmos.Microphysics1Moment, ClimaAtmos.GridScaleCloud, ClimaAtmos.Implicit, ClimaAtmos.CallCloudDiagnosticsPerStage}`
+│                         `scm_setup`::`ClimaAtmos.SCMSetup{Nothing, ClimaAtmos.ExternalDrivenTVForcing{Float32}, Nothing, Bool, Nothing}`
+│                         `radiation`::`ClimaAtmos.AtmosRadiation{ClimaAtmos.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics{ClimaAtmos.InteractiveCloudInRadiation}, ClimaAtmos.IdealizedOzone, ClimaAtmos.FixedCO2{Float64}, ClimaAtmos.ExternalTVInsolation}`
+│                          `turbconv`::`ClimaAtmos.AtmosTurbconv{ClimaAtmos.EDMFXModel{ClimaAtmos.PiGroupsEntrainment, ClimaAtmos.SmoothAreaDetrainment, Val{true}, Val{true}, Val{true}, Val{true}, ClimaAtmos.SmoothMinimumBlending}, ClimaAtmos.DiagnosticEDMFX{1, true, Float32}, ClimaAtmos.Implicit, ClimaAtmos.Implicit, ClimaAtmos.Implicit, ClimaAtmos.Implicit, Nothing}`
+│                      `gravity_wave`::`ClimaAtmos.AtmosGravityWave{Nothing, Nothing}`
+│                `vertical_diffusion`::`Nothing`
+│                            `sponge`::`ClimaAtmos.AtmosSponge{Nothing, ClimaAtmos.RayleighSponge{Float32}}`
+│                           `surface`::`ClimaAtmos.AtmosSurface{ClimaAtmos.ExternalTVColumnSST, ClimaAtmos.PrescribedSST, ClimaAtmos.ConstantAlbedo{Float32}}`
+└                          `numerics`::`ClimaAtmos.AtmosNumerics{Val{:vanleer_limiter}, Val{:vanleer_limiter}, Val{:first_order}, Val{:first_order}, Nothing, Nothing, ClimaAtmos.Implicit, ClimaAtmos.ClimaHyperdiffusion{Float32}}`
+┌ Info: Simulation info
+│   job_id = ""
+└   output_dir = "output/output_0077"
+┌ Warning: perturb_initstate flag is ignored for single column configuration
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/type_getters.jl:253
+┌ Info: z heights
+│   z_mesh.faces =
+│    151-element Vector{ClimaCore.Geometry.ZPoint{Float32}}:
+│     ZPoint(0.0)
+│     ZPoint(30.00001)
+│     ZPoint(60.97766)
+│     ZPoint(92.96428)
+│     ⋮
+│     ZPoint(58016.594)
+│     ZPoint(59008.035)
+└     ZPoint(60000.0)
+[ Info: No surface orography warp applied
+┌ Info: Resolution stats: 
+│   Nq = 1
+│   h_elem = 6
+│   z_elem = 150
+│   ncols = 1
+└   ndofs_total = 150
+[ Info: Allocating Y: 2.593 s (12713807 allocations: 617.43 MiB)
+[ Info: Allocating cache (p): 86.16 s (528198073 allocations: 31.99 GiB)
+[ Info: Using ODE config: `ClimaTimeSteppers.ARS343`
+[ Info: ode_configuration: 785.337 ms (1488206 allocations: 73.66 MiB)
+[ Info: Progress logging enabled
+[ Info: Checking NaNs in the state every 1024 steps
+[ Info: get_callbacks: 255.543 ms (336592 allocations: 17.46 MiB)
+[ Info: Saving accumulated diagnostics to disk with frequency: 
+[ Info: DictWriter: String[]
+[ Info: HDF5Writer: String[]
+[ Info: NetCDFWriter: ["lwp_1h_inst", "clivi_1h_inst"]
+[ Info: initializing diagnostics: 3.752 s (9864445 allocations: 499.92 MiB)
+[ Info: Prepared SciMLBase.CallbackSet callbacks: 10.328 ms (561 allocations: 27.34 KiB)
+[ Info: n_steps_per_cycle_per_cb (non diagnostics): [1024, 1, 1, 20]
+[ Info: n_steps_per_cycle (non diagnostics): 5120
+┌ Info: Jacobian algorithm: AutoSparseJacobian(
+│   sparse_jacobian_alg = ManualSparseJacobian(
+│     topography_flag = ClimaAtmos.IgnoreDerivative(),
+│     diffusion_flag = ClimaAtmos.UseDerivative(),
+│     sgs_advection_flag = ClimaAtmos.UseDerivative(),
+│     sgs_entr_detr_flag = ClimaAtmos.UseDerivative(),
+│     sgs_mass_flux_flag = ClimaAtmos.UseDerivative(),
+│     sgs_nh_pressure_flag = ClimaAtmos.UseDerivative(),
+│     approximate_solve_iters = 2,
+│   ),
+│   padding_bands_per_block = nothing,
+└ )
+[ Info: Adding 3 padding bands for (@name(c.uₕ.components.data.:(1)), @name(c.ρ))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_liq))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_liq))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_ice))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_ice))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_rai))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_rai))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_sno))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_sno))
+[ Info: Adding 3 padding bands for (@name(c.uₕ.components.data.:(1)), @name(c.sgs⁰.ρatke))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.sgs⁰.ρatke))
+[ Info: Using coloring order SparseMatrixColorings.DynamicDegreeBasedOrder{:back, :high2low, false}()
+[ Info: Updating Jacobian using 27 ε components per dual number
+[ Info: Define ode function: 16.56 s (16526837 allocations: 825.8 MiB)
+┌ Info: Running
+│   job_id = ""
+│   output_dir = "output/output_0076"
+└   tspan = (0.0f0, 518400.0f0)
+[ Info: init integrator: 50.153 s (108885950 allocations: 7.71 GiB)
+┌ Info: Progress
+│   simulation_time = "30 seconds, 1 microsecond"
+│   n_steps_completed = 1
+│   wall_time_per_step = "0 seconds"
+│   wall_time_total = "0 seconds"
+│   wall_time_remaining = "0 seconds"
+│   wall_time_spent = "0 seconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "Inf"
+│   date_now = 2025-09-08T16:26:54.723
+└   estimated_finish_date = 2025-09-08T16:26:54.720
+┌ Info: Progress
+│   simulation_time = "1 minute, 2 microseconds"
+│   n_steps_completed = 2
+│   wall_time_per_step = "0 seconds"
+│   wall_time_total = "0 seconds"
+│   wall_time_remaining = "0 seconds"
+│   wall_time_spent = "0 seconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "Inf"
+│   date_now = 2025-09-08T16:26:55.893
+└   estimated_finish_date = 2025-09-08T16:26:55.893
+┌ Info: Progress
+│   simulation_time = "2 minutes, 4 microseconds"
+│   n_steps_completed = 4
+│   wall_time_per_step = "30 milliseconds, 488 microseconds"
+│   wall_time_total = "8 minutes, 46 seconds"
+│   wall_time_remaining = "8 minutes, 46 seconds"
+│   wall_time_spent = "121 milliseconds, 955 microseconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "2.694"
+│   date_now = 2025-09-08T16:26:55.953
+└   estimated_finish_date = 2025-09-08T16:35:42.953
+┌ Info: Progress
+│   simulation_time = "4 minutes, 8 microseconds"
+│   n_steps_completed = 8
+│   wall_time_per_step = "24 milliseconds, 719 microseconds"
+│   wall_time_total = "7 minutes, 7 seconds"
+│   wall_time_remaining = "7 minutes, 6 seconds"
+│   wall_time_spent = "197 milliseconds, 759 microseconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "3.323"
+│   date_now = 2025-09-08T16:26:55.987
+└   estimated_finish_date = 2025-09-08T16:34:02.987
+┌ Info: Progress
+│   simulation_time = "8 minutes, 16 microseconds"
+│   n_steps_completed = 16
+│   wall_time_per_step = "16 milliseconds, 681 microseconds"
+│   wall_time_total = "4 minutes, 48 seconds"
+│   wall_time_remaining = "4 minutes, 47 seconds"
+│   wall_time_spent = "266 milliseconds, 902 microseconds"
+│   percent_complete = "0.1%"
+│   estimated_sypd = "4.924"
+│   date_now = 2025-09-08T16:26:56.057
+└   estimated_finish_date = 2025-09-08T16:31:44.057
+┌ Info: Progress
+│   simulation_time = "16 minutes, 32 microseconds"
+│   n_steps_completed = 32
+│   wall_time_per_step = "13 milliseconds, 143 microseconds"
+│   wall_time_total = "3 minutes, 47 seconds"
+│   wall_time_remaining = "3 minutes, 46 seconds"
+│   wall_time_spent = "420 milliseconds, 606 microseconds"
+│   percent_complete = "0.2%"
+│   estimated_sypd = "6.249"
+│   date_now = 2025-09-08T16:26:56.210
+└   estimated_finish_date = 2025-09-08T16:30:43.210
+[ Info: Added diagnostics: 6.747 s (13524977 allocations: 653.25 MiB)
+┌ Info: Progress
+│   simulation_time = "32 minutes, 65 microseconds"
+│   n_steps_completed = 64
+│   wall_time_per_step = "11 milliseconds, 280 microseconds"
+│   wall_time_total = "3 minutes, 14 seconds"
+│   wall_time_remaining = "3 minutes, 14 seconds"
+│   wall_time_spent = "721 milliseconds, 931 microseconds"
+│   percent_complete = "0.4%"
+│   estimated_sypd = "7.281"
+│   date_now = 2025-09-08T16:26:56.512
+└   estimated_finish_date = 2025-09-08T16:30:11.512
+┌ Info: Progress
+│   simulation_time = "1 hour, 4 minutes"
+│   n_steps_completed = 128
+│   wall_time_per_step = "11 milliseconds, 226 microseconds"
+│   wall_time_total = "3 minutes, 13 seconds"
+│   wall_time_remaining = "3 minutes, 12 seconds"
+│   wall_time_spent = "1 second, 436 milliseconds"
+│   percent_complete = "0.7%"
+│   estimated_sypd = "7.316"
+│   date_now = 2025-09-08T16:26:57.249
+└   estimated_finish_date = 2025-09-08T16:30:10.249
+┌ Info: Progress
+│   simulation_time = "2 hours, 8 minutes"
+│   n_steps_completed = 256
+│   wall_time_per_step = "10 milliseconds, 483 microseconds"
+│   wall_time_total = "3 minutes, 1 second"
+│   wall_time_remaining = "2 minutes, 58 seconds"
+│   wall_time_spent = "2 seconds, 683 milliseconds"
+│   percent_complete = "1.5%"
+│   estimated_sypd = "7.835"
+│   date_now = 2025-09-08T16:26:58.473
+└   estimated_finish_date = 2025-09-08T16:29:57.473
+┌ Info: Progress
+│   simulation_time = "4 hours, 16 minutes"
+│   n_steps_completed = 512
+│   wall_time_per_step = "10 milliseconds, 299 microseconds"
+│   wall_time_total = "2 minutes, 57 seconds"
+│   wall_time_remaining = "2 minutes, 52 seconds"
+│   wall_time_spent = "5 seconds, 273 milliseconds"
+│   percent_complete = "3.0%"
+│   estimated_sypd = "7.975"
+│   date_now = 2025-09-08T16:27:01.063
+└   estimated_finish_date = 2025-09-08T16:29:54.063
+┌ Info: Progress
+│   simulation_time = "8 hours, 32 minutes"
+│   n_steps_completed = 1024
+│   wall_time_per_step = "10 milliseconds, 480 microseconds"
+│   wall_time_total = "3 minutes, 1 second"
+│   wall_time_remaining = "2 minutes, 50 seconds"
+│   wall_time_spent = "10 seconds, 731 milliseconds"
+│   percent_complete = "5.9%"
+│   estimated_sypd = "7.837"
+│   date_now = 2025-09-08T16:27:06.522
+└   estimated_finish_date = 2025-09-08T16:29:57.522
+┌ Info: Progress
+│   simulation_time = "15 hours, 44 minutes"
+│   n_steps_completed = 1889
+│   wall_time_per_step = "10 milliseconds, 392 microseconds"
+│   wall_time_total = "2 minutes, 59 seconds"
+│   wall_time_remaining = "2 minutes, 39 seconds"
+│   wall_time_spent = "19 seconds, 630 milliseconds"
+│   percent_complete = "10.9%"
+│   estimated_sypd = "7.904"
+│   date_now = 2025-09-08T16:27:15.421
+└   estimated_finish_date = 2025-09-08T16:29:55.421
+┌ Info: Progress
+│   simulation_time = "17 hours, 4 minutes"
+│   n_steps_completed = 2048
+│   wall_time_per_step = "10 milliseconds, 387 microseconds"
+│   wall_time_total = "2 minutes, 59 seconds"
+│   wall_time_remaining = "2 minutes, 38 seconds"
+│   wall_time_spent = "21 seconds, 273 milliseconds"
+│   percent_complete = "11.9%"
+│   estimated_sypd = "7.907"
+│   date_now = 2025-09-08T16:27:17.063
+└   estimated_finish_date = 2025-09-08T16:29:56.063
+┌ Info: Progress
+│   simulation_time = "1 day, 16 minutes"
+│   n_steps_completed = 2913
+│   wall_time_per_step = "10 milliseconds, 429 microseconds"
+│   wall_time_total = "3 minutes, 221 milliseconds"
+│   wall_time_remaining = "2 minutes, 29 seconds"
+│   wall_time_spent = "30 seconds, 381 milliseconds"
+│   percent_complete = "16.9%"
+│   estimated_sypd = "7.875"
+│   date_now = 2025-09-08T16:27:26.226
+└   estimated_finish_date = 2025-09-08T16:29:56.226
+┌ Info: Progress
+│   simulation_time = "1 day, 7 hours"
+│   n_steps_completed = 3778
+│   wall_time_per_step = "10 milliseconds, 584 microseconds"
+│   wall_time_total = "3 minutes, 2 seconds"
+│   wall_time_remaining = "2 minutes, 22 seconds"
+│   wall_time_spent = "39 seconds, 986 milliseconds"
+│   percent_complete = "21.9%"
+│   estimated_sypd = "7.76"
+│   date_now = 2025-09-08T16:27:35.776
+└   estimated_finish_date = 2025-09-08T16:29:58.776
+┌ Info: Progress
+│   simulation_time = "1 day, 10 hours"
+│   n_steps_completed = 4096
+│   wall_time_per_step = "10 milliseconds, 603 microseconds"
+│   wall_time_total = "3 minutes, 3 seconds"
+│   wall_time_remaining = "2 minutes, 19 seconds"
+│   wall_time_spent = "43 seconds, 429 milliseconds"
+│   percent_complete = "23.7%"
+│   estimated_sypd = "7.746"
+│   date_now = 2025-09-08T16:27:39.220
+└   estimated_finish_date = 2025-09-08T16:29:59.220
+┌ Info: Progress
+│   simulation_time = "1 day, 17 hours"
+│   n_steps_completed = 4961
+│   wall_time_per_step = "10 milliseconds, 526 microseconds"
+│   wall_time_total = "3 minutes, 1 second"
+│   wall_time_remaining = "2 minutes, 9 seconds"
+│   wall_time_spent = "52 seconds, 220 milliseconds"
+│   percent_complete = "28.7%"
+│   estimated_sypd = "7.803"
+│   date_now = 2025-09-08T16:27:48.010
+└   estimated_finish_date = 2025-09-08T16:29:58.010
+┌ Info: Progress
+│   simulation_time = "2 days, 33 minutes"
+│   n_steps_completed = 5826
+│   wall_time_per_step = "10 milliseconds, 473 microseconds"
+│   wall_time_total = "3 minutes, 988 milliseconds"
+│   wall_time_remaining = "1 minute, 59 seconds"
+│   wall_time_spent = "1 minute, 1 second"
+│   percent_complete = "33.7%"
+│   estimated_sypd = "7.842"
+│   date_now = 2025-09-08T16:27:56.810
+└   estimated_finish_date = 2025-09-08T16:29:56.810
+┌ Info: Progress
+│   simulation_time = "2 days, 7 hours"
+│   n_steps_completed = 6691
+│   wall_time_per_step = "10 milliseconds, 487 microseconds"
+│   wall_time_total = "3 minutes, 1 second"
+│   wall_time_remaining = "1 minute, 51 seconds"
+│   wall_time_spent = "1 minute, 10 seconds"
+│   percent_complete = "38.7%"
+│   estimated_sypd = "7.832"
+│   date_now = 2025-09-08T16:28:05.962
+└   estimated_finish_date = 2025-09-08T16:29:57.962
+┌ Info: Progress
+│   simulation_time = "2 days, 14 hours"
+│   n_steps_completed = 7556
+│   wall_time_per_step = "10 milliseconds, 519 microseconds"
+│   wall_time_total = "3 minutes, 1 second"
+│   wall_time_remaining = "1 minute, 42 seconds"
+│   wall_time_spent = "1 minute, 19 seconds"
+│   percent_complete = "43.7%"
+│   estimated_sypd = "7.808"
+│   date_now = 2025-09-08T16:28:15.279
+└   estimated_finish_date = 2025-09-08T16:29:58.279
+┌ Info: Progress
+│   simulation_time = "2 days, 20 hours"
+│   n_steps_completed = 8192
+│   wall_time_per_step = "10 milliseconds, 487 microseconds"
+│   wall_time_total = "3 minutes, 1 second"
+│   wall_time_remaining = "1 minute, 35 seconds"
+│   wall_time_spent = "1 minute, 25 seconds"
+│   percent_complete = "47.4%"
+│   estimated_sypd = "7.831"
+│   date_now = 2025-09-08T16:28:21.707
+└   estimated_finish_date = 2025-09-08T16:29:57.707
+┌ Info: Progress
+│   simulation_time = "3 days, 3 hours"
+│   n_steps_completed = 9057
+│   wall_time_per_step = "10 milliseconds, 451 microseconds"
+│   wall_time_total = "3 minutes, 600 milliseconds"
+│   wall_time_remaining = "1 minute, 25 seconds"
+│   wall_time_spent = "1 minute, 34 seconds"
+│   percent_complete = "52.4%"
+│   estimated_sypd = "7.859"
+│   date_now = 2025-09-08T16:28:30.448
+└   estimated_finish_date = 2025-09-08T16:29:56.448
+┌ Info: Progress
+│   simulation_time = "3 days, 10 hours"
+│   n_steps_completed = 9922
+│   wall_time_per_step = "10 milliseconds, 452 microseconds"
+│   wall_time_total = "3 minutes, 625 milliseconds"
+│   wall_time_remaining = "1 minute, 16 seconds"
+│   wall_time_spent = "1 minute, 43 seconds"
+│   percent_complete = "57.4%"
+│   estimated_sypd = "7.858"
+│   date_now = 2025-09-08T16:28:39.504
+└   estimated_finish_date = 2025-09-08T16:29:56.503
+┌ Info: Progress
+│   simulation_time = "3 days, 17 hours"
+│   n_steps_completed = 10787
+│   wall_time_per_step = "10 milliseconds, 395 microseconds"
+│   wall_time_total = "2 minutes, 59 seconds"
+│   wall_time_remaining = "1 minute, 7 seconds"
+│   wall_time_spent = "1 minute, 52 seconds"
+│   percent_complete = "62.4%"
+│   estimated_sypd = "7.901"
+│   date_now = 2025-09-08T16:28:47.924
+└   estimated_finish_date = 2025-09-08T16:29:55.924
+┌ Info: Progress
+│   simulation_time = "4 days, 1 hour"
+│   n_steps_completed = 11652
+│   wall_time_per_step = "10 milliseconds, 356 microseconds"
+│   wall_time_total = "2 minutes, 58 seconds"
+│   wall_time_remaining = "58 seconds, 284 milliseconds"
+│   wall_time_spent = "2 minutes, 670 milliseconds"
+│   percent_complete = "67.4%"
+│   estimated_sypd = "7.931"
+│   date_now = 2025-09-08T16:28:56.460
+└   estimated_finish_date = 2025-09-08T16:29:55.460
+┌ Info: Progress
+│   simulation_time = "4 days, 8 hours"
+│   n_steps_completed = 12517
+│   wall_time_per_step = "10 milliseconds, 351 microseconds"
+│   wall_time_total = "2 minutes, 58 seconds"
+│   wall_time_remaining = "49 seconds, 303 milliseconds"
+│   wall_time_spent = "2 minutes, 9 seconds"
+│   percent_complete = "72.4%"
+│   estimated_sypd = "7.935"
+│   date_now = 2025-09-08T16:29:05.357
+└   estimated_finish_date = 2025-09-08T16:29:55.357
+┌ Info: Progress
+│   simulation_time = "4 days, 15 hours"
+│   n_steps_completed = 13382
+│   wall_time_per_step = "10 milliseconds, 322 microseconds"
+│   wall_time_total = "2 minutes, 58 seconds"
+│   wall_time_remaining = "40 seconds, 236 milliseconds"
+│   wall_time_spent = "2 minutes, 18 seconds"
+│   percent_complete = "77.4%"
+│   estimated_sypd = "7.957"
+│   date_now = 2025-09-08T16:29:13.924
+└   estimated_finish_date = 2025-09-08T16:29:54.924
+┌ Info: Progress
+│   simulation_time = "4 days, 22 hours"
+│   n_steps_completed = 14247
+│   wall_time_per_step = "10 milliseconds, 280 microseconds"
+│   wall_time_total = "2 minutes, 57 seconds"
+│   wall_time_remaining = "31 seconds, 180 milliseconds"
+│   wall_time_spent = "2 minutes, 26 seconds"
+│   percent_complete = "82.4%"
+│   estimated_sypd = "7.99"
+│   date_now = 2025-09-08T16:29:22.255
+└   estimated_finish_date = 2025-09-08T16:29:54.255
+┌ Info: Progress
+│   simulation_time = "5 days, 5 hours"
+│   n_steps_completed = 15112
+│   wall_time_per_step = "10 milliseconds, 262 microseconds"
+│   wall_time_total = "2 minutes, 57 seconds"
+│   wall_time_remaining = "22 seconds, 248 milliseconds"
+│   wall_time_spent = "2 minutes, 35 seconds"
+│   percent_complete = "87.5%"
+│   estimated_sypd = "8.004"
+│   date_now = 2025-09-08T16:29:30.869
+└   estimated_finish_date = 2025-09-08T16:29:53.869
+┌ Info: Progress
+│   simulation_time = "5 days, 13 hours"
+│   n_steps_completed = 15977
+│   wall_time_per_step = "10 milliseconds, 257 microseconds"
+│   wall_time_total = "2 minutes, 57 seconds"
+│   wall_time_remaining = "13 seconds, 364 milliseconds"
+│   wall_time_spent = "2 minutes, 43 seconds"
+│   percent_complete = "92.5%"
+│   estimated_sypd = "8.008"
+│   date_now = 2025-09-08T16:29:39.667
+└   estimated_finish_date = 2025-09-08T16:29:53.667
+┌ Info: Progress
+│   simulation_time = "5 days, 16 hours"
+│   n_steps_completed = 16384
+│   wall_time_per_step = "10 milliseconds, 241 microseconds"
+│   wall_time_total = "2 minutes, 56 seconds"
+│   wall_time_remaining = "9 seconds, 176 milliseconds"
+│   wall_time_spent = "2 minutes, 47 seconds"
+│   percent_complete = "94.8%"
+│   estimated_sypd = "8.02"
+│   date_now = 2025-09-08T16:29:43.580
+└   estimated_finish_date = 2025-09-08T16:29:53.580
+┌ Info: Progress
+│   simulation_time = "5 days, 23 hours"
+│   n_steps_completed = 17249
+│   wall_time_per_step = "10 milliseconds, 215 microseconds"
+│   wall_time_total = "2 minutes, 56 seconds"
+│   wall_time_remaining = "316 milliseconds, 673 microseconds"
+│   wall_time_spent = "2 minutes, 56 seconds"
+│   percent_complete = "99.8%"
+│   estimated_sypd = "8.04"
+│   date_now = 2025-09-08T16:29:51.993
+└   estimated_finish_date = 2025-09-08T16:29:52.993
+[ Info: solve! walltime = 176.463
+[ Info: sypd: 8.049
+[ Info: wall_time_per_timestep: 10 milliseconds, 211 microseconds
+[ Info: Memory currently used (after solve!) by the process (RSS): 7.65 GiB
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-1830470: `srun -J julia-1830470 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-1830470-17573741933.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=ZmU3Zp4PpvlvUkfP`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker launch (after 0 s): No output file ".julia-1830470-17573741933.out" yet
+[ Info: Worker launch (after 0 s): No output file ".julia-1830470-17573741933.out" yet
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9388
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9390
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9372
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9374
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9384
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9386
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9378
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9382
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9377
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9379
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9381
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9375
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9387
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9376
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9380
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9391
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9373
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9383
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9389
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9385
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Info: Running
+│   job_id = ""
+│   output_dir = "output/output_0077"
+└   tspan = (0.0f0, 518400.0f0)
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Float64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Float64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Float64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 13
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 19
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+┌ Info: Progress
+│   simulation_time = "30 seconds, 1 microsecond"
+│   n_steps_completed = 1
+│   wall_time_per_step = "0 seconds"
+│   wall_time_total = "0 seconds"
+│   wall_time_remaining = "0 seconds"
+│   wall_time_spent = "0 seconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "Inf"
+│   date_now = 2025-09-08T16:31:00.683
+└   estimated_finish_date = 2025-09-08T16:31:00.680
+┌ Info: Progress
+│   simulation_time = "1 minute, 2 microseconds"
+│   n_steps_completed = 2
+│   wall_time_per_step = "0 seconds"
+│   wall_time_total = "0 seconds"
+│   wall_time_remaining = "0 seconds"
+│   wall_time_spent = "0 seconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "Inf"
+│   date_now = 2025-09-08T16:31:01.724
+└   estimated_finish_date = 2025-09-08T16:31:01.724
+┌ Info: Progress
+│   simulation_time = "2 minutes, 4 microseconds"
+│   n_steps_completed = 4
+│   wall_time_per_step = "27 milliseconds, 983 microseconds"
+│   wall_time_total = "8 minutes, 3 seconds"
+│   wall_time_remaining = "8 minutes, 3 seconds"
+│   wall_time_spent = "111 milliseconds, 935 microseconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "2.935"
+│   date_now = 2025-09-08T16:31:01.778
+└   estimated_finish_date = 2025-09-08T16:39:05.777
+┌ Info: Progress
+│   simulation_time = "4 minutes, 8 microseconds"
+│   n_steps_completed = 8
+│   wall_time_per_step = "22 milliseconds, 616 microseconds"
+│   wall_time_total = "6 minutes, 30 seconds"
+│   wall_time_remaining = "6 minutes, 30 seconds"
+│   wall_time_spent = "180 milliseconds, 930 microseconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "3.632"
+│   date_now = 2025-09-08T16:31:01.810
+└   estimated_finish_date = 2025-09-08T16:37:32.810
+┌ Info: Progress
+│   simulation_time = "8 minutes, 16 microseconds"
+│   n_steps_completed = 16
+│   wall_time_per_step = "15 milliseconds, 231 microseconds"
+│   wall_time_total = "4 minutes, 23 seconds"
+│   wall_time_remaining = "4 minutes, 22 seconds"
+│   wall_time_spent = "243 milliseconds, 704 microseconds"
+│   percent_complete = "0.1%"
+│   estimated_sypd = "5.392"
+│   date_now = 2025-09-08T16:31:01.873
+└   estimated_finish_date = 2025-09-08T16:35:24.872
+┌ Info: Progress
+│   simulation_time = "16 minutes, 32 microseconds"
+│   n_steps_completed = 32
+│   wall_time_per_step = "11 milliseconds, 926 microseconds"
+│   wall_time_total = "3 minutes, 26 seconds"
+│   wall_time_remaining = "3 minutes, 25 seconds"
+│   wall_time_spent = "381 milliseconds, 639 microseconds"
+│   percent_complete = "0.2%"
+│   estimated_sypd = "6.887"
+│   date_now = 2025-09-08T16:31:02.010
+└   estimated_finish_date = 2025-09-08T16:34:28.010
+┌ Info: Progress
+│   simulation_time = "32 minutes, 65 microseconds"
+│   n_steps_completed = 64
+│   wall_time_per_step = "10 milliseconds, 209 microseconds"
+│   wall_time_total = "2 minutes, 56 seconds"
+│   wall_time_remaining = "2 minutes, 55 seconds"
+│   wall_time_spent = "653 milliseconds, 415 microseconds"
+│   percent_complete = "0.4%"
+│   estimated_sypd = "8.045"
+│   date_now = 2025-09-08T16:31:02.282
+└   estimated_finish_date = 2025-09-08T16:33:58.282
+┌ Info: Progress
+│   simulation_time = "1 hour, 4 minutes"
+│   n_steps_completed = 128
+│   wall_time_per_step = "10 milliseconds, 158 microseconds"
+│   wall_time_total = "2 minutes, 55 seconds"
+│   wall_time_remaining = "2 minutes, 54 seconds"
+│   wall_time_spent = "1 second, 300 milliseconds"
+│   percent_complete = "0.7%"
+│   estimated_sypd = "8.086"
+│   date_now = 2025-09-08T16:31:02.949
+└   estimated_finish_date = 2025-09-08T16:33:57.949
+┌ Info: Progress
+│   simulation_time = "2 hours, 8 minutes"
+│   n_steps_completed = 256
+│   wall_time_per_step = "9 milliseconds, 442 microseconds"
+│   wall_time_total = "2 minutes, 43 seconds"
+│   wall_time_remaining = "2 minutes, 40 seconds"
+│   wall_time_spent = "2 seconds, 417 milliseconds"
+│   percent_complete = "1.5%"
+│   estimated_sypd = "8.698"
+│   date_now = 2025-09-08T16:31:04.047
+└   estimated_finish_date = 2025-09-08T16:33:45.046
+┌ Info: Progress
+│   simulation_time = "4 hours, 16 minutes"
+│   n_steps_completed = 512
+│   wall_time_per_step = "9 milliseconds, 327 microseconds"
+│   wall_time_total = "2 minutes, 41 seconds"
+│   wall_time_remaining = "2 minutes, 36 seconds"
+│   wall_time_spent = "4 seconds, 775 milliseconds"
+│   percent_complete = "3.0%"
+│   estimated_sypd = "8.806"
+│   date_now = 2025-09-08T16:31:06.405
+└   estimated_finish_date = 2025-09-08T16:33:43.405
+┌ Info: Progress
+│   simulation_time = "8 hours, 32 minutes"
+│   n_steps_completed = 1024
+│   wall_time_per_step = "9 milliseconds, 738 microseconds"
+│   wall_time_total = "2 minutes, 48 seconds"
+│   wall_time_remaining = "2 minutes, 38 seconds"
+│   wall_time_spent = "9 seconds, 972 milliseconds"
+│   percent_complete = "5.9%"
+│   estimated_sypd = "8.434"
+│   date_now = 2025-09-08T16:31:11.602
+└   estimated_finish_date = 2025-09-08T16:33:50.602
+┌ Info: Progress
+│   simulation_time = "15 hours, 44 minutes"
+│   n_steps_completed = 1889
+│   wall_time_per_step = "9 milliseconds, 549 microseconds"
+│   wall_time_total = "2 minutes, 45 seconds"
+│   wall_time_remaining = "2 minutes, 26 seconds"
+│   wall_time_spent = "18 seconds, 38 milliseconds"
+│   percent_complete = "10.9%"
+│   estimated_sypd = "8.601"
+│   date_now = 2025-09-08T16:31:19.668
+└   estimated_finish_date = 2025-09-08T16:33:46.668
+┌ Info: Progress
+│   simulation_time = "17 hours, 4 minutes"
+│   n_steps_completed = 2048
+│   wall_time_per_step = "9 milliseconds, 552 microseconds"
+│   wall_time_total = "2 minutes, 45 seconds"
+│   wall_time_remaining = "2 minutes, 25 seconds"
+│   wall_time_spent = "19 seconds, 563 milliseconds"
+│   percent_complete = "11.9%"
+│   estimated_sypd = "8.598"
+│   date_now = 2025-09-08T16:31:21.192
+└   estimated_finish_date = 2025-09-08T16:33:47.192
+┌ Info: Progress
+│   simulation_time = "1 day, 16 minutes"
+│   n_steps_completed = 2913
+│   wall_time_per_step = "9 milliseconds, 587 microseconds"
+│   wall_time_total = "2 minutes, 45 seconds"
+│   wall_time_remaining = "2 minutes, 17 seconds"
+│   wall_time_spent = "27 seconds, 927 milliseconds"
+│   percent_complete = "16.9%"
+│   estimated_sypd = "8.567"
+│   date_now = 2025-09-08T16:31:29.603
+└   estimated_finish_date = 2025-09-08T16:33:47.603
+┌ Info: Progress
+│   simulation_time = "1 day, 7 hours"
+│   n_steps_completed = 3778
+│   wall_time_per_step = "9 milliseconds, 870 microseconds"
+│   wall_time_total = "2 minutes, 50 seconds"
+│   wall_time_remaining = "2 minutes, 13 seconds"
+│   wall_time_spent = "37 seconds, 289 milliseconds"
+│   percent_complete = "21.9%"
+│   estimated_sypd = "8.322"
+│   date_now = 2025-09-08T16:31:38.919
+└   estimated_finish_date = 2025-09-08T16:33:52.919
+┌ Info: Progress
+│   simulation_time = "1 day, 10 hours"
+│   n_steps_completed = 4096
+│   wall_time_per_step = "9 milliseconds, 909 microseconds"
+│   wall_time_total = "2 minutes, 51 seconds"
+│   wall_time_remaining = "2 minutes, 10 seconds"
+│   wall_time_spent = "40 seconds, 590 milliseconds"
+│   percent_complete = "23.7%"
+│   estimated_sypd = "8.288"
+│   date_now = 2025-09-08T16:31:42.219
+└   estimated_finish_date = 2025-09-08T16:33:53.219
+┌ Info: Progress
+│   simulation_time = "1 day, 17 hours"
+│   n_steps_completed = 4961
+│   wall_time_per_step = "9 milliseconds, 881 microseconds"
+│   wall_time_total = "2 minutes, 50 seconds"
+│   wall_time_remaining = "2 minutes, 1 second"
+│   wall_time_spent = "49 seconds, 23 milliseconds"
+│   percent_complete = "28.7%"
+│   estimated_sypd = "8.312"
+│   date_now = 2025-09-08T16:31:50.653
+└   estimated_finish_date = 2025-09-08T16:33:52.653
+┌ Info: Progress
+│   simulation_time = "2 days, 33 minutes"
+│   n_steps_completed = 5826
+│   wall_time_per_step = "9 milliseconds, 909 microseconds"
+│   wall_time_total = "2 minutes, 51 seconds"
+│   wall_time_remaining = "1 minute, 53 seconds"
+│   wall_time_spent = "57 seconds, 733 milliseconds"
+│   percent_complete = "33.7%"
+│   estimated_sypd = "8.288"
+│   date_now = 2025-09-08T16:31:59.363
+└   estimated_finish_date = 2025-09-08T16:33:53.363
+┌ Info: Progress
+│   simulation_time = "2 days, 7 hours"
+│   n_steps_completed = 6691
+│   wall_time_per_step = "9 milliseconds, 995 microseconds"
+│   wall_time_total = "2 minutes, 52 seconds"
+│   wall_time_remaining = "1 minute, 45 seconds"
+│   wall_time_spent = "1 minute, 6 seconds"
+│   percent_complete = "38.7%"
+│   estimated_sypd = "8.217"
+│   date_now = 2025-09-08T16:32:08.510
+└   estimated_finish_date = 2025-09-08T16:33:54.510
+┌ Info: Progress
+│   simulation_time = "2 days, 14 hours"
+│   n_steps_completed = 7556
+│   wall_time_per_step = "10 milliseconds, 13 microseconds"
+│   wall_time_total = "2 minutes, 53 seconds"
+│   wall_time_remaining = "1 minute, 37 seconds"
+│   wall_time_spent = "1 minute, 15 seconds"
+│   percent_complete = "43.7%"
+│   estimated_sypd = "8.203"
+│   date_now = 2025-09-08T16:32:17.288
+└   estimated_finish_date = 2025-09-08T16:33:55.288
+┌ Info: Progress
+│   simulation_time = "2 days, 20 hours"
+│   n_steps_completed = 8192
+│   wall_time_per_step = "9 milliseconds, 994 microseconds"
+│   wall_time_total = "2 minutes, 52 seconds"
+│   wall_time_remaining = "1 minute, 30 seconds"
+│   wall_time_spent = "1 minute, 21 seconds"
+│   percent_complete = "47.4%"
+│   estimated_sypd = "8.218"
+│   date_now = 2025-09-08T16:32:23.501
+└   estimated_finish_date = 2025-09-08T16:33:54.501
+┌ Info: Progress
+│   simulation_time = "3 days, 3 hours"
+│   n_steps_completed = 9057
+│   wall_time_per_step = "9 milliseconds, 981 microseconds"
+│   wall_time_total = "2 minutes, 52 seconds"
+│   wall_time_remaining = "1 minute, 22 seconds"
+│   wall_time_spent = "1 minute, 30 seconds"
+│   percent_complete = "52.4%"
+│   estimated_sypd = "8.229"
+│   date_now = 2025-09-08T16:32:32.028
+└   estimated_finish_date = 2025-09-08T16:33:55.028
+┌ Info: Progress
+│   simulation_time = "3 days, 10 hours"
+│   n_steps_completed = 9922
+│   wall_time_per_step = "10 milliseconds, 16 microseconds"
+│   wall_time_total = "2 minutes, 53 seconds"
+│   wall_time_remaining = "1 minute, 13 seconds"
+│   wall_time_spent = "1 minute, 39 seconds"
+│   percent_complete = "57.4%"
+│   estimated_sypd = "8.2"
+│   date_now = 2025-09-08T16:32:41.017
+└   estimated_finish_date = 2025-09-08T16:33:55.016
+┌ Info: Progress
+│   simulation_time = "3 days, 17 hours"
+│   n_steps_completed = 10787
+│   wall_time_per_step = "9 milliseconds, 995 microseconds"
+│   wall_time_total = "2 minutes, 52 seconds"
+│   wall_time_remaining = "1 minute, 4 seconds"
+│   wall_time_spent = "1 minute, 47 seconds"
+│   percent_complete = "62.4%"
+│   estimated_sypd = "8.217"
+│   date_now = 2025-09-08T16:32:49.454
+└   estimated_finish_date = 2025-09-08T16:33:54.454
+┌ Info: Progress
+│   simulation_time = "4 days, 1 hour"
+│   n_steps_completed = 11652
+│   wall_time_per_step = "9 milliseconds, 973 microseconds"
+│   wall_time_total = "2 minutes, 52 seconds"
+│   wall_time_remaining = "56 seconds, 130 milliseconds"
+│   wall_time_spent = "1 minute, 56 seconds"
+│   percent_complete = "67.4%"
+│   estimated_sypd = "8.235"
+│   date_now = 2025-09-08T16:32:57.839
+└   estimated_finish_date = 2025-09-08T16:33:54.839
+┌ Info: Progress
+│   simulation_time = "4 days, 8 hours"
+│   n_steps_completed = 12517
+│   wall_time_per_step = "9 milliseconds, 986 microseconds"
+│   wall_time_total = "2 minutes, 52 seconds"
+│   wall_time_remaining = "47 seconds, 567 milliseconds"
+│   wall_time_spent = "2 minutes, 5 seconds"
+│   percent_complete = "72.4%"
+│   estimated_sypd = "8.224"
+│   date_now = 2025-09-08T16:33:06.634
+└   estimated_finish_date = 2025-09-08T16:33:54.634
+┌ Info: Progress
+│   simulation_time = "4 days, 15 hours"
+│   n_steps_completed = 13382
+│   wall_time_per_step = "9 milliseconds, 972 microseconds"
+│   wall_time_total = "2 minutes, 52 seconds"
+│   wall_time_remaining = "38 seconds, 873 milliseconds"
+│   wall_time_spent = "2 minutes, 13 seconds"
+│   percent_complete = "77.4%"
+│   estimated_sypd = "8.236"
+│   date_now = 2025-09-08T16:33:15.084
+└   estimated_finish_date = 2025-09-08T16:33:54.084
+┌ Info: Progress
+│   simulation_time = "4 days, 22 hours"
+│   n_steps_completed = 14247
+│   wall_time_per_step = "9 milliseconds, 949 microseconds"
+│   wall_time_total = "2 minutes, 51 seconds"
+│   wall_time_remaining = "30 seconds, 177 milliseconds"
+│   wall_time_spent = "2 minutes, 21 seconds"
+│   percent_complete = "82.4%"
+│   estimated_sypd = "8.255"
+│   date_now = 2025-09-08T16:33:23.385
+└   estimated_finish_date = 2025-09-08T16:33:54.385
+┌ Info: Progress
+│   simulation_time = "5 days, 5 hours"
+│   n_steps_completed = 15112
+│   wall_time_per_step = "9 milliseconds, 950 microseconds"
+│   wall_time_total = "2 minutes, 51 seconds"
+│   wall_time_remaining = "21 seconds, 572 milliseconds"
+│   wall_time_spent = "2 minutes, 30 seconds"
+│   percent_complete = "87.5%"
+│   estimated_sypd = "8.254"
+│   date_now = 2025-09-08T16:33:32.001
+└   estimated_finish_date = 2025-09-08T16:33:54.001
+┌ Info: Progress
+│   simulation_time = "5 days, 13 hours"
+│   n_steps_completed = 15977
+│   wall_time_per_step = "9 milliseconds, 956 microseconds"
+│   wall_time_total = "2 minutes, 52 seconds"
+│   wall_time_remaining = "12 seconds, 972 milliseconds"
+│   wall_time_spent = "2 minutes, 39 seconds"
+│   percent_complete = "92.5%"
+│   estimated_sypd = "8.25"
+│   date_now = 2025-09-08T16:33:40.700
+└   estimated_finish_date = 2025-09-08T16:33:53.700
+┌ Info: Progress
+│   simulation_time = "5 days, 16 hours"
+│   n_steps_completed = 16384
+│   wall_time_per_step = "9 milliseconds, 949 microseconds"
+│   wall_time_total = "2 minutes, 51 seconds"
+│   wall_time_remaining = "8 seconds, 914 milliseconds"
+│   wall_time_spent = "2 minutes, 43 seconds"
+│   percent_complete = "94.8%"
+│   estimated_sypd = "8.256"
+│   date_now = 2025-09-08T16:33:44.635
+└   estimated_finish_date = 2025-09-08T16:33:53.635
+┌ Info: Progress
+│   simulation_time = "5 days, 23 hours"
+│   n_steps_completed = 17249
+│   wall_time_per_step = "9 milliseconds, 958 microseconds"
+│   wall_time_total = "2 minutes, 52 seconds"
+│   wall_time_remaining = "308 milliseconds, 711 microseconds"
+│   wall_time_spent = "2 minutes, 51 seconds"
+│   percent_complete = "99.8%"
+│   estimated_sypd = "8.248"
+│   date_now = 2025-09-08T16:33:53.402
+└   estimated_finish_date = 2025-09-08T16:33:54.402
+[ Info: solve! walltime = 172.059
+[ Info: sypd: 8.255
+[ Info: wall_time_per_timestep: 9 milliseconds, 957 microseconds
+[ Info: Memory currently used (after solve!) by the process (RSS): 7.63 GiB
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-1832609: `srun -J julia-1832609 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-1832609-17573744350.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=CxaoBtXxLDCsQFUQ`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9510
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9512
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9507
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9509
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9503
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9505
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9494
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9496
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9511
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9498
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9500
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9502
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9506
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9508
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9513
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9504
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9495
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9497
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9499
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9501
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Float64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Float64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Float64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 13
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 19
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+[ Info: Iteration 0 time: 22 minutes, 54 seconds, 677 milliseconds
+[ Info: Termination condition of scheduler `DataMisfitController` will be exceeded during the next iteration.
+[ Info: Iteration 0 (prior)
+[ Info: Covariance trace: 2.288494774629162
+[ Info: Iteration 1 (T=1.0)
+┌ Info: Covariance-weighted error: 6.897334969576912e-6
+│ Covariance trace: 2.286892301291801
+└ Covariance trace ratio (current/previous): 0.9992997697197623
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [17.460605921340658, 60.95844630834051]
+[ Info: Covariance-weighted error: 6.897334969576912e-6
+[ Info: Running Iteration 1
+[ Info: Running member 20 on worker 9
+[ Info: Running member 19 on worker 4
+[ Info: Running member 18 on worker 16
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 3
+[ Info: Running member 15 on worker 2
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 15
+[ Info: Running member 12 on worker 6
+[ Info: Running member 11 on worker 7
+[ Info: Running member 10 on worker 19
+[ Info: Running member 9 on worker 12
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 18
+[ Info: Running member 6 on worker 21
+[ Info: Running member 5 on worker 13
+[ Info: Running member 4 on worker 10
+[ Info: Running member 3 on worker 11
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 17
+[ Info: Iteration 0 time: 23 minutes, 5 seconds, 101 milliseconds
+[ Info: Termination condition of scheduler `DataMisfitController` will be exceeded during the next iteration.
+[ Info: Iteration 0 (prior)
+[ Info: Covariance trace: 2.6039646905675964
+[ Info: Iteration 1 (T=1.0)
+┌ Info: Covariance-weighted error: 0.00029918514241223764
+│ Covariance trace: 2.6594359102033183
+└ Covariance trace ratio (current/previous): 1.0213026005447219
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [10.669544782288582, 64.27664710430514]
+[ Info: Covariance-weighted error: 0.00029918514241223764
+[ Info: Running Iteration 1
+[ Info: Running member 20 on worker 3
+[ Info: Running member 19 on worker 2
+[ Info: Running member 18 on worker 10
+[ Info: Running member 17 on worker 16
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 5
+[ Info: Running member 14 on worker 4
+[ Info: Running member 13 on worker 7
+[ Info: Running member 12 on worker 8
+[ Info: Running member 11 on worker 15
+[ Info: Running member 10 on worker 14
+[ Info: Running member 9 on worker 9
+[ Info: Running member 8 on worker 13
+[ Info: Running member 7 on worker 17
+[ Info: Running member 6 on worker 11
+[ Info: Running member 5 on worker 12
+[ Info: Running member 4 on worker 19
+[ Info: Running member 3 on worker 18
+[ Info: Running member 2 on worker 21
+[ Info: Running member 1 on worker 20
+[ Info: Iteration 1 time: 5 minutes, 55 seconds, 727 milliseconds
+┌ Warning: Termination condition of scheduler `DataMisfitController` has been exceeded. 
+│ on_terminate="continue" selected. Proceeding with algorithm
+└ @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/LearningRateSchedulers.jl:298
+[ Info: Iteration 2 (T=26373.590819472178)
+┌ Info: Covariance-weighted error: 6.941505210627387e-6
+│ Covariance trace: 2.307018719307583
+└ Covariance trace ratio (current/previous): 1.0088007721239924
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [14.950136133858862, 72.25915184925896]
+[ Info: Covariance-weighted error: 6.941505210627387e-6
+[ Info: Running Iteration 2
+[ Info: Running member 20 on worker 6
+[ Info: Running member 19 on worker 4
+[ Info: Running member 18 on worker 16
+[ Info: Running member 17 on worker 15
+[ Info: Running member 16 on worker 7
+[ Info: Running member 15 on worker 9
+[ Info: Running member 14 on worker 5
+[ Info: Running member 13 on worker 8
+[ Info: Running member 12 on worker 2
+[ Info: Running member 11 on worker 3
+[ Info: Running member 10 on worker 17
+[ Info: Running member 9 on worker 12
+[ Info: Running member 8 on worker 18
+[ Info: Running member 7 on worker 14
+[ Info: Running member 6 on worker 19
+[ Info: Running member 5 on worker 20
+[ Info: Running member 4 on worker 21
+[ Info: Running member 3 on worker 13
+[ Info: Running member 2 on worker 10
+[ Info: Running member 1 on worker 11
+[ Info: Iteration 1 time: 5 minutes, 57 seconds, 423 milliseconds
+┌ Warning: Termination condition of scheduler `DataMisfitController` has been exceeded. 
+│ on_terminate="continue" selected. Proceeding with algorithm
+└ @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/LearningRateSchedulers.jl:298
+[ Info: Iteration 2 (T=102.71980951827723)
+┌ Info: Covariance-weighted error: 0.00028716085438251456
+│ Covariance trace: 2.218216983875994
+└ Covariance trace ratio (current/previous): 0.8340930403193689
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [11.163863849543105, 55.492709152930615]
+[ Info: Covariance-weighted error: 0.00028716085438251456
+[ Info: Running Iteration 2
+[ Info: Running member 20 on worker 3
+[ Info: Running member 19 on worker 2
+[ Info: Running member 18 on worker 10
+[ Info: Running member 17 on worker 16
+[ Info: Running member 16 on worker 8
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 5
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 4
+[ Info: Running member 11 on worker 6
+[ Info: Running member 10 on worker 20
+[ Info: Running member 9 on worker 11
+[ Info: Running member 8 on worker 15
+[ Info: Running member 7 on worker 12
+[ Info: Running member 6 on worker 14
+[ Info: Running member 5 on worker 21
+[ Info: Running member 4 on worker 17
+[ Info: Running member 3 on worker 13
+[ Info: Running member 2 on worker 18
+[ Info: Running member 1 on worker 19
+[ Info: Iteration 2 time: 5 minutes, 49 seconds, 166 milliseconds
+[ Info: Iteration 3 (T=53934.18728096731)
+┌ Info: Covariance-weighted error: 2.5992894311691022e-6
+│ Covariance trace: 1.7139824864931936
+└ Covariance trace ratio (current/previous): 0.7429426003997139
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [13.94086431366891, 76.79766489306644]
+[ Info: Covariance-weighted error: 2.5992894311691022e-6
+[ Info: Running Iteration 3
+[ Info: Running member 20 on worker 4
+[ Info: Running member 19 on worker 6
+[ Info: Running member 18 on worker 5
+[ Info: Running member 17 on worker 16
+[ Info: Running member 16 on worker 7
+[ Info: Running member 15 on worker 9
+[ Info: Running member 14 on worker 15
+[ Info: Running member 13 on worker 3
+[ Info: Running member 12 on worker 8
+[ Info: Running member 11 on worker 2
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 19
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 21
+[ Info: Running member 6 on worker 10
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 11
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 13
+[ Info: Iteration 2 time: 5 minutes, 58 seconds, 674 milliseconds
+[ Info: Iteration 3 (T=246.64272070909175)
+┌ Info: Covariance-weighted error: 0.0005548211232443691
+│ Covariance trace: 1.7587132353307764
+└ Covariance trace ratio (current/previous): 0.7928499547675876
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [9.970605040795121, 57.8116230408703]
+[ Info: Covariance-weighted error: 0.0005548211232443691
+[ Info: Running Iteration 3
+[ Info: Running member 20 on worker 3
+[ Info: Running member 19 on worker 2
+[ Info: Running member 18 on worker 10
+[ Info: Running member 17 on worker 4
+[ Info: Running member 16 on worker 5
+[ Info: Running member 15 on worker 16
+[ Info: Running member 14 on worker 7
+[ Info: Running member 13 on worker 6
+[ Info: Running member 12 on worker 20
+[ Info: Running member 11 on worker 8
+[ Info: Running member 10 on worker 14
+[ Info: Running member 9 on worker 9
+[ Info: Running member 8 on worker 15
+[ Info: Running member 7 on worker 12
+[ Info: Running member 6 on worker 11
+[ Info: Running member 5 on worker 13
+[ Info: Running member 4 on worker 17
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 18
+[ Info: Running member 1 on worker 19
+[ Info: Iteration 3 time: 5 minutes, 49 seconds, 870 milliseconds
+[ Info: Iteration 4 (T=127952.45605338438)
+┌ Info: Covariance-weighted error: 4.321884210761608e-6
+│ Covariance trace: 1.5064959028764857
+└ Covariance trace ratio (current/previous): 0.8789447469552474
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [12.87249730199764, 77.66688594356043]
+[ Info: Covariance-weighted error: 4.321884210761608e-6
+[ Info: Running Iteration 4
+[ Info: Running member 20 on worker 4
+[ Info: Running member 19 on worker 6
+[ Info: Running member 18 on worker 16
+[ Info: Running member 17 on worker 15
+[ Info: Running member 16 on worker 9
+[ Info: Running member 15 on worker 5
+[ Info: Running member 14 on worker 7
+[ Info: Running member 13 on worker 8
+[ Info: Running member 12 on worker 12
+[ Info: Running member 11 on worker 17
+[ Info: Running member 10 on worker 19
+[ Info: Running member 9 on worker 3
+[ Info: Running member 8 on worker 2
+[ Info: Running member 7 on worker 18
+[ Info: Running member 6 on worker 14
+[ Info: Running member 5 on worker 20
+[ Info: Running member 4 on worker 10
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 13
+[ Info: Running member 1 on worker 11
+[ Info: Iteration 3 time: 5 minutes, 56 seconds, 156 milliseconds
+[ Info: Iteration 4 (T=414.5789049028959)
+┌ Info: Covariance-weighted error: 0.0007372632626140067
+│ Covariance trace: 1.536361775191133
+└ Covariance trace ratio (current/previous): 0.8735715091733963
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [9.607542269119065, 57.87452092352572]
+[ Info: Covariance-weighted error: 0.0007372632626140067
+[ Info: Running Iteration 4
+[ Info: Running member 20 on worker 4
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 5
+[ Info: Running member 17 on worker 10
+[ Info: Running member 16 on worker 16
+[ Info: Running member 15 on worker 2
+[ Info: Running member 14 on worker 7
+[ Info: Running member 13 on worker 6
+[ Info: Running member 12 on worker 8
+[ Info: Running member 11 on worker 9
+[ Info: Running member 10 on worker 20
+[ Info: Running member 9 on worker 12
+[ Info: Running member 8 on worker 11
+[ Info: Running member 7 on worker 17
+[ Info: Running member 6 on worker 14
+[ Info: Running member 5 on worker 15
+[ Info: Running member 4 on worker 13
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 18
+[ Info: Running member 1 on worker 19
+[ Info: Iteration 4 time: 5 minutes, 49 seconds, 251 milliseconds
+[ Info: Iteration 5 (T=188633.3552033758)
+┌ Info: Covariance-weighted error: 7.760158924824625e-6
+│ Covariance trace: 1.6628872182820116
+└ Covariance trace ratio (current/previous): 1.1038113114724801
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [11.259287938896165, 74.26640989590828]
+[ Info: Covariance-weighted error: 7.760158924824625e-6
+[ Info: Running Iteration 5
+[ Info: Running member 20 on worker 6
+[ Info: Running member 19 on worker 4
+[ Info: Running member 18 on worker 16
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 9
+[ Info: Running member 15 on worker 3
+[ Info: Running member 14 on worker 15
+[ Info: Running member 13 on worker 8
+[ Info: Running member 12 on worker 2
+[ Info: Running member 11 on worker 12
+[ Info: Running member 10 on worker 7
+[ Info: Running member 9 on worker 19
+[ Info: Running member 8 on worker 10
+[ Info: Running member 7 on worker 14
+[ Info: Running member 6 on worker 21
+[ Info: Running member 5 on worker 18
+[ Info: Running member 4 on worker 13
+[ Info: Running member 3 on worker 11
+[ Info: Running member 2 on worker 17
+[ Info: Running member 1 on worker 20
+[ Info: Iteration 4 time: 5 minutes, 58 seconds, 290 milliseconds
+[ Info: Iteration 5 (T=586.828419018169)
+┌ Info: Covariance-weighted error: 0.00017830849263704654
+│ Covariance trace: 1.408838429665812
+└ Covariance trace ratio (current/previous): 0.9169965384556277
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [9.428055168003596, 54.88713581997558]
+[ Info: Covariance-weighted error: 0.00017830849263704654
+[ Info: Running Iteration 5
+[ Info: Running member 20 on worker 3
+[ Info: Running member 19 on worker 2
+[ Info: Running member 18 on worker 10
+[ Info: Running member 17 on worker 4
+[ Info: Running member 16 on worker 7
+[ Info: Running member 15 on worker 5
+[ Info: Running member 14 on worker 16
+[ Info: Running member 13 on worker 6
+[ Info: Running member 12 on worker 11
+[ Info: Running member 11 on worker 8
+[ Info: Running member 10 on worker 9
+[ Info: Running member 9 on worker 12
+[ Info: Running member 8 on worker 20
+[ Info: Running member 7 on worker 14
+[ Info: Running member 6 on worker 15
+[ Info: Running member 5 on worker 13
+[ Info: Running member 4 on worker 17
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 18
+[ Info: Running member 1 on worker 19
+[ Info: Iteration 5 time: 5 minutes, 53 seconds, 525 milliseconds
+[ Info: Iteration 6 (T=268251.11869565037)
+┌ Info: Covariance-weighted error: 5.7512404659771734e-6
+│ Covariance trace: 1.62022759641895
+└ Covariance trace ratio (current/previous): 0.9743460522192632
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [9.73801474579291, 74.00976266179697]
+[ Info: Covariance-weighted error: 5.7512404659771734e-6
+[ Info: Running Iteration 6
+[ Info: Running member 20 on worker 6
+[ Info: Running member 19 on worker 4
+[ Info: Running member 18 on worker 16
+[ Info: Running member 17 on worker 15
+[ Info: Running member 16 on worker 5
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 9
+[ Info: Running member 13 on worker 8
+[ Info: Running member 12 on worker 12
+[ Info: Running member 11 on worker 19
+[ Info: Running member 10 on worker 2
+[ Info: Running member 9 on worker 3
+[ Info: Running member 8 on worker 17
+[ Info: Running member 7 on worker 20
+[ Info: Running member 6 on worker 14
+[ Info: Running member 5 on worker 10
+[ Info: Running member 4 on worker 21
+[ Info: Running member 3 on worker 11
+[ Info: Running member 2 on worker 18
+[ Info: Running member 1 on worker 13
+[ Info: Iteration 5 time: 6 minutes, 2 seconds, 626 milliseconds
+[ Info: Iteration 6 (T=792.2314826705089)
+┌ Info: Covariance-weighted error: 0.0017296481722142338
+│ Covariance trace: 1.1080142953197472
+└ Covariance trace ratio (current/previous): 0.7864736452302604
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [7.917504753422278, 46.87542310996383]
+[ Info: Covariance-weighted error: 0.0017296481722142338
+[ Info: Running Iteration 6
+[ Info: Running member 20 on worker 10
+[ Info: Running member 19 on worker 16
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 3
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 6
+[ Info: Running member 13 on worker 2
+[ Info: Running member 12 on worker 8
+[ Info: Running member 11 on worker 9
+[ Info: Running member 10 on worker 20
+[ Info: Running member 9 on worker 12
+[ Info: Running member 8 on worker 11
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 17
+[ Info: Running member 5 on worker 21
+[ Info: Running member 4 on worker 14
+[ Info: Running member 3 on worker 13
+[ Info: Running member 2 on worker 18
+[ Info: Running member 1 on worker 19
+[ Info: Iteration 6 time: 5 minutes, 54 seconds, 83 milliseconds
+[ Info: Iteration 7 (T=324075.8391517765)
+┌ Info: Covariance-weighted error: 8.60335013386245e-6
+│ Covariance trace: 1.6223355760366136
+└ Covariance trace ratio (current/previous): 1.0013010392011115
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [9.042272205011969, 73.17474816108523]
+[ Info: Covariance-weighted error: 8.60335013386245e-6
+[ Info: Running Iteration 7
+[ Info: Running member 20 on worker 4
+[ Info: Running member 19 on worker 6
+[ Info: Running member 18 on worker 5
+[ Info: Running member 17 on worker 7
+[ Info: Running member 16 on worker 16
+[ Info: Running member 15 on worker 3
+[ Info: Running member 14 on worker 9
+[ Info: Running member 13 on worker 2
+[ Info: Running member 12 on worker 8
+[ Info: Running member 11 on worker 15
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 19
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 10
+[ Info: Running member 6 on worker 21
+[ Info: Running member 5 on worker 18
+[ Info: Running member 4 on worker 11
+[ Info: Running member 3 on worker 13
+[ Info: Running member 2 on worker 17
+[ Info: Running member 1 on worker 20
+[ Info: Iteration 6 time: 5 minutes, 59 seconds, 306 milliseconds
+[ Info: Iteration 7 (T=971.6010221836896)
+┌ Info: Covariance-weighted error: 0.0014284406379851285
+│ Covariance trace: 0.9701143825363445
+└ Covariance trace ratio (current/previous): 0.8755432006916409
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [7.609130582717157, 48.05993100837901]
+[ Info: Covariance-weighted error: 0.0014284406379851285
+[ Info: Running Iteration 7
+[ Info: Running member 20 on worker 10
+[ Info: Running member 19 on worker 4
+[ Info: Running member 18 on worker 16
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 7
+[ Info: Running member 15 on worker 3
+[ Info: Running member 14 on worker 2
+[ Info: Running member 13 on worker 6
+[ Info: Running member 12 on worker 20
+[ Info: Running member 11 on worker 8
+[ Info: Running member 10 on worker 9
+[ Info: Running member 9 on worker 11
+[ Info: Running member 8 on worker 12
+[ Info: Running member 7 on worker 14
+[ Info: Running member 6 on worker 15
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 13
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 18
+[ Info: Running member 1 on worker 19
+[ Info: Iteration 7 time: 5 minutes, 53 seconds, 218 milliseconds
+[ Info: Iteration 8 (T=394714.3512796301)
+┌ Info: Covariance-weighted error: 5.229995266299138e-6
+│ Covariance trace: 1.4997730098409328
+└ Covariance trace ratio (current/previous): 0.9244530120611034
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [7.809922465322657, 70.09214977633536]
+[ Info: Covariance-weighted error: 5.229995266299138e-6
+[ Info: Running Iteration 8
+[ Info: Running member 20 on worker 4
+[ Info: Running member 19 on worker 6
+[ Info: Running member 18 on worker 16
+[ Info: Running member 17 on worker 15
+[ Info: Running member 16 on worker 5
+[ Info: Running member 15 on worker 9
+[ Info: Running member 14 on worker 7
+[ Info: Running member 13 on worker 8
+[ Info: Running member 12 on worker 2
+[ Info: Running member 11 on worker 3
+[ Info: Running member 10 on worker 17
+[ Info: Running member 9 on worker 12
+[ Info: Running member 8 on worker 20
+[ Info: Running member 7 on worker 19
+[ Info: Running member 6 on worker 14
+[ Info: Running member 5 on worker 10
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 13
+[ Info: Running member 1 on worker 11
+[ Info: Iteration 7 time: 5 minutes, 56 seconds, 172 milliseconds
+[ Info: Iteration 8 (T=1328.0240755387958)
+┌ Info: Covariance-weighted error: 0.0005692356018779823
+│ Covariance trace: 0.8767603969866814
+└ Covariance trace ratio (current/previous): 0.9037701252242122
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [7.4492532547865835, 44.19514730370196]
+[ Info: Covariance-weighted error: 0.0005692356018779823
+[ Info: Running Iteration 8
+[ Info: Running member 20 on worker 10
+[ Info: Running member 19 on worker 4
+[ Info: Running member 18 on worker 5
+[ Info: Running member 17 on worker 16
+[ Info: Running member 16 on worker 3
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 2
+[ Info: Running member 13 on worker 6
+[ Info: Running member 12 on worker 8
+[ Info: Running member 11 on worker 20
+[ Info: Running member 10 on worker 9
+[ Info: Running member 9 on worker 12
+[ Info: Running member 8 on worker 11
+[ Info: Running member 7 on worker 14
+[ Info: Running member 6 on worker 15
+[ Info: Running member 5 on worker 21
+[ Info: Running member 4 on worker 17
+[ Info: Running member 3 on worker 13
+[ Info: Running member 2 on worker 18
+[ Info: Running member 1 on worker 19
+[ Info: Iteration 8 time: 5 minutes, 51 seconds, 736 milliseconds
+[ Info: Iteration 9 (T=521540.8143033522)
+┌ Info: Covariance-weighted error: 1.943267178194435e-6
+│ Covariance trace: 1.3400116350687075
+└ Covariance trace ratio (current/previous): 0.8934762969303136
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [6.8940921818784915, 69.84398757266212]
+[ Info: Covariance-weighted error: 1.943267178194435e-6
+[ Info: Running Iteration 9
+[ Info: Running member 20 on worker 4
+[ Info: Running member 19 on worker 6
+[ Info: Running member 18 on worker 5
+[ Info: Running member 17 on worker 16
+[ Info: Running member 16 on worker 15
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 3
+[ Info: Running member 11 on worker 2
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 18
+[ Info: Running member 8 on worker 10
+[ Info: Running member 7 on worker 13
+[ Info: Running member 6 on worker 14
+[ Info: Running member 5 on worker 19
+[ Info: Running member 4 on worker 21
+[ Info: Running member 3 on worker 11
+[ Info: Running member 2 on worker 17
+[ Info: Running member 1 on worker 20
+[ Info: Iteration 8 time: 5 minutes, 58 seconds, 181 milliseconds
+[ Info: Iteration 9 (T=1612.820302108872)
+┌ Info: Covariance-weighted error: 0.001036611366033359
+│ Covariance trace: 0.767601153242391
+└ Covariance trace ratio (current/previous): 0.8754970638278629
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [7.054152306609012, 42.61348651864262]
+[ Info: Covariance-weighted error: 0.001036611366033359
+[ Info: Running Iteration 9
+[ Info: Running member 20 on worker 3
+[ Info: Running member 19 on worker 2
+[ Info: Running member 18 on worker 10
+[ Info: Running member 17 on worker 4
+[ Info: Running member 16 on worker 16
+[ Info: Running member 15 on worker 5
+[ Info: Running member 14 on worker 7
+[ Info: Running member 13 on worker 8
+[ Info: Running member 12 on worker 6
+[ Info: Running member 11 on worker 9
+[ Info: Running member 10 on worker 14
+[ Info: Running member 9 on worker 11
+[ Info: Running member 8 on worker 20
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 12
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 13
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 18
+[ Info: Running member 1 on worker 19
+[ Info: Iteration 9 time: 5 minutes, 50 seconds, 113 milliseconds
+[ Info: Iteration 10 (T=607370.4015177266)
+┌ Info: Covariance-weighted error: 2.4015440429190592e-6
+│ Covariance trace: 1.435057201382412
+└ Covariance trace ratio (current/previous): 1.0709289112320515
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [6.906500972084672, 70.23221418954358]
+[ Info: Covariance-weighted error: 2.4015440429190592e-6
+[ Info: Iteration 9 time: 5 minutes, 41 seconds, 171 milliseconds
+[ Info: Iteration 10 (T=2102.468992110074)
+┌ Info: Covariance-weighted error: 0.000591538561762173
+│ Covariance trace: 0.7062665784817133
+└ Covariance trace ratio (current/previous): 0.9200957756491155
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [7.105417374098295, 42.81655279624124]
+[ Info: Covariance-weighted error: 0.000591538561762173
+config_dict["toml"] = ["toml/diagnostic_edmfx_1M.toml", "toml/truth.toml"]
+┌ Warning: `job_id` is empty and likely not passed to AtmosConfig
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/types.jl:1191
+┌ Info: Making AtmosConfig with config files: 
+└    /home/oalcabes/ClimaAtmos.jl/src/solver/../../config/default_configs/default_config.yml
+[ Info: Running on CPUSingleThreaded
+[ Info: Setting up single-process ClimaAtmos run
+┌ Info: Time info:
+│   dt = "30secs"
+│   t_start = "0secs"
+│   t_end = "6days"
+└   floor_n_steps = 17280
+┌ Warning: co2_model set to nothing with an RRTMGP model. Resetting to FixedCO2
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/type_getters.jl:60
+┌ Info: numerics 
+│            `energy_upwinding`::`Val{:vanleer_limiter}`
+│            `tracer_upwinding`::`Val{:vanleer_limiter}`
+│             `edmfx_upwinding`::`Val{:first_order}`
+│     `edmfx_sgsflux_upwinding`::`Val{:first_order}`
+│     `test_dycore_consistency`::`Nothing`
+│                     `limiter`::`Nothing`
+│                   `diff_mode`::`ClimaAtmos.Implicit`
+└                   `hyperdiff`::`ClimaAtmos.ClimaHyperdiffusion{Float32}`
+┌ Info: AtmosModel: 
+│ 
+│                             `water`::`ClimaAtmos.AtmosWater{ClimaAtmos.NonEquilMoistModel, ClimaAtmos.Microphysics1Moment, ClimaAtmos.GridScaleCloud, ClimaAtmos.Explicit, ClimaAtmos.CallCloudDiagnosticsPerStage}`
+│                         `scm_setup`::`ClimaAtmos.SCMSetup{Nothing, ClimaAtmos.ExternalDrivenTVForcing{Float32}, Nothing, Bool, Nothing}`
+│                         `radiation`::`ClimaAtmos.AtmosRadiation{ClimaAtmos.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics{ClimaAtmos.InteractiveCloudInRadiation}, ClimaAtmos.IdealizedOzone, ClimaAtmos.FixedCO2{Float64}, ClimaAtmos.ExternalTVInsolation}`
+│                          `turbconv`::`ClimaAtmos.AtmosTurbconv{ClimaAtmos.EDMFXModel{ClimaAtmos.PiGroupsEntrainment, ClimaAtmos.SmoothAreaDetrainment, Val{true}, Val{true}, Val{true}, Val{true}, ClimaAtmos.SmoothMinimumBlending}, ClimaAtmos.DiagnosticEDMFX{1, true, Float32}, ClimaAtmos.Implicit, ClimaAtmos.Implicit, ClimaAtmos.Implicit, ClimaAtmos.Implicit, Nothing}`
+│                      `gravity_wave`::`ClimaAtmos.AtmosGravityWave{Nothing, Nothing}`
+│                `vertical_diffusion`::`Nothing`
+│                            `sponge`::`ClimaAtmos.AtmosSponge{Nothing, ClimaAtmos.RayleighSponge{Float32}}`
+│                           `surface`::`ClimaAtmos.AtmosSurface{ClimaAtmos.ExternalTVColumnSST, ClimaAtmos.PrescribedSST, ClimaAtmos.ConstantAlbedo{Float32}}`
+└                          `numerics`::`ClimaAtmos.AtmosNumerics{Val{:vanleer_limiter}, Val{:vanleer_limiter}, Val{:first_order}, Val{:first_order}, Nothing, Nothing, ClimaAtmos.Implicit, ClimaAtmos.ClimaHyperdiffusion{Float32}}`
+┌ Info: Simulation info
+│   job_id = ""
+└   output_dir = "output/output_0078"
+┌ Warning: perturb_initstate flag is ignored for single column configuration
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/type_getters.jl:253
+┌ Info: z heights
+│   z_mesh.faces =
+│    151-element Vector{ClimaCore.Geometry.ZPoint{Float32}}:
+│     ZPoint(0.0)
+│     ZPoint(30.00001)
+│     ZPoint(60.97766)
+│     ZPoint(92.96428)
+│     ⋮
+│     ZPoint(58016.594)
+│     ZPoint(59008.035)
+└     ZPoint(60000.0)
+[ Info: No surface orography warp applied
+┌ Info: Resolution stats: 
+│   Nq = 1
+│   h_elem = 6
+│   z_elem = 150
+│   ncols = 1
+└   ndofs_total = 150
+config_dict["toml"] = ["toml/diagnostic_edmfx_1M.toml", "toml/truth.toml"]
+[ Info: Allocating Y: 2.215 s (12713811 allocations: 617.44 MiB)
+┌ Warning: `job_id` is empty and likely not passed to AtmosConfig
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/types.jl:1191
+┌ Info: Making AtmosConfig with config files: 
+└    /home/oalcabes/ClimaAtmos.jl/src/solver/../../config/default_configs/default_config.yml
+[ Info: Running on CPUSingleThreaded
+[ Info: Setting up single-process ClimaAtmos run
+┌ Info: Time info:
+│   dt = "30secs"
+│   t_start = "0secs"
+│   t_end = "6days"
+└   floor_n_steps = 17280
+┌ Warning: co2_model set to nothing with an RRTMGP model. Resetting to FixedCO2
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/type_getters.jl:60
+┌ Info: numerics 
+│            `energy_upwinding`::`Val{:vanleer_limiter}`
+│            `tracer_upwinding`::`Val{:vanleer_limiter}`
+│             `edmfx_upwinding`::`Val{:first_order}`
+│     `edmfx_sgsflux_upwinding`::`Val{:first_order}`
+│     `test_dycore_consistency`::`Nothing`
+│                     `limiter`::`Nothing`
+│                   `diff_mode`::`ClimaAtmos.Implicit`
+└                   `hyperdiff`::`ClimaAtmos.ClimaHyperdiffusion{Float32}`
+┌ Info: AtmosModel: 
+│ 
+│                             `water`::`ClimaAtmos.AtmosWater{ClimaAtmos.NonEquilMoistModel, ClimaAtmos.Microphysics1Moment, ClimaAtmos.GridScaleCloud, ClimaAtmos.Implicit, ClimaAtmos.CallCloudDiagnosticsPerStage}`
+│                         `scm_setup`::`ClimaAtmos.SCMSetup{Nothing, ClimaAtmos.ExternalDrivenTVForcing{Float32}, Nothing, Bool, Nothing}`
+│                         `radiation`::`ClimaAtmos.AtmosRadiation{ClimaAtmos.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics{ClimaAtmos.InteractiveCloudInRadiation}, ClimaAtmos.IdealizedOzone, ClimaAtmos.FixedCO2{Float64}, ClimaAtmos.ExternalTVInsolation}`
+│                          `turbconv`::`ClimaAtmos.AtmosTurbconv{ClimaAtmos.EDMFXModel{ClimaAtmos.PiGroupsEntrainment, ClimaAtmos.SmoothAreaDetrainment, Val{true}, Val{true}, Val{true}, Val{true}, ClimaAtmos.SmoothMinimumBlending}, ClimaAtmos.DiagnosticEDMFX{1, true, Float32}, ClimaAtmos.Implicit, ClimaAtmos.Implicit, ClimaAtmos.Implicit, ClimaAtmos.Implicit, Nothing}`
+│                      `gravity_wave`::`ClimaAtmos.AtmosGravityWave{Nothing, Nothing}`
+│                `vertical_diffusion`::`Nothing`
+│                            `sponge`::`ClimaAtmos.AtmosSponge{Nothing, ClimaAtmos.RayleighSponge{Float32}}`
+│                           `surface`::`ClimaAtmos.AtmosSurface{ClimaAtmos.ExternalTVColumnSST, ClimaAtmos.PrescribedSST, ClimaAtmos.ConstantAlbedo{Float32}}`
+└                          `numerics`::`ClimaAtmos.AtmosNumerics{Val{:vanleer_limiter}, Val{:vanleer_limiter}, Val{:first_order}, Val{:first_order}, Nothing, Nothing, ClimaAtmos.Implicit, ClimaAtmos.ClimaHyperdiffusion{Float32}}`
+┌ Info: Simulation info
+│   job_id = ""
+└   output_dir = "output/output_0079"
+┌ Warning: perturb_initstate flag is ignored for single column configuration
+└ @ ClimaAtmos ~/ClimaAtmos.jl/src/solver/type_getters.jl:253
+┌ Info: z heights
+│   z_mesh.faces =
+│    151-element Vector{ClimaCore.Geometry.ZPoint{Float32}}:
+│     ZPoint(0.0)
+│     ZPoint(30.00001)
+│     ZPoint(60.97766)
+│     ZPoint(92.96428)
+│     ⋮
+│     ZPoint(58016.594)
+│     ZPoint(59008.035)
+└     ZPoint(60000.0)
+[ Info: No surface orography warp applied
+┌ Info: Resolution stats: 
+│   Nq = 1
+│   h_elem = 6
+│   z_elem = 150
+│   ncols = 1
+└   ndofs_total = 150
+[ Info: Allocating Y: 2.229 s (12713809 allocations: 617.44 MiB)
+[ Info: Allocating cache (p): 86.761 s (528198074 allocations: 31.99 GiB)
+[ Info: Using ODE config: `ClimaTimeSteppers.ARS343`
+[ Info: ode_configuration: 799.58 ms (1488204 allocations: 73.66 MiB)
+[ Info: Progress logging enabled
+[ Info: Checking NaNs in the state every 1024 steps
+[ Info: get_callbacks: 257.719 ms (336592 allocations: 17.46 MiB)
+[ Info: Saving accumulated diagnostics to disk with frequency: 
+[ Info: DictWriter: String[]
+[ Info: HDF5Writer: String[]
+[ Info: NetCDFWriter: ["lwp_1h_inst", "clivi_1h_inst"]
+[ Info: initializing diagnostics: 3.766 s (9864462 allocations: 499.99 MiB)
+[ Info: Prepared SciMLBase.CallbackSet callbacks: 10.226 ms (561 allocations: 27.34 KiB)
+[ Info: n_steps_per_cycle_per_cb (non diagnostics): [1024, 1, 1, 20]
+[ Info: n_steps_per_cycle (non diagnostics): 5120
+[ Info: Allocating cache (p): 85.288 s (528198078 allocations: 31.99 GiB)
+[ Info: Using ODE config: `ClimaTimeSteppers.ARS343`
+[ Info: ode_configuration: 855.37 ms (1488204 allocations: 73.66 MiB)
+[ Info: Progress logging enabled
+[ Info: Checking NaNs in the state every 1024 steps
+[ Info: get_callbacks: 260.274 ms (336592 allocations: 17.46 MiB)
+[ Info: Saving accumulated diagnostics to disk with frequency: 
+[ Info: DictWriter: String[]
+[ Info: HDF5Writer: String[]
+[ Info: NetCDFWriter: ["lwp_1h_inst", "clivi_1h_inst"]
+[ Info: initializing diagnostics: 3.778 s (9864461 allocations: 499.99 MiB)
+[ Info: Prepared SciMLBase.CallbackSet callbacks: 10.336 ms (561 allocations: 27.34 KiB)
+[ Info: n_steps_per_cycle_per_cb (non diagnostics): [1024, 1, 1, 20]
+[ Info: n_steps_per_cycle (non diagnostics): 5120
+┌ Info: Jacobian algorithm: AutoSparseJacobian(
+│   sparse_jacobian_alg = ManualSparseJacobian(
+│     topography_flag = ClimaAtmos.IgnoreDerivative(),
+│     diffusion_flag = ClimaAtmos.UseDerivative(),
+│     sgs_advection_flag = ClimaAtmos.UseDerivative(),
+│     sgs_entr_detr_flag = ClimaAtmos.UseDerivative(),
+│     sgs_mass_flux_flag = ClimaAtmos.UseDerivative(),
+│     sgs_nh_pressure_flag = ClimaAtmos.UseDerivative(),
+│     approximate_solve_iters = 2,
+│   ),
+│   padding_bands_per_block = nothing,
+└ )
+[ Info: Adding 3 padding bands for (@name(c.uₕ.components.data.:(1)), @name(c.ρ))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_liq))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_liq))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_ice))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_ice))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_rai))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_rai))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_sno))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_sno))
+[ Info: Adding 3 padding bands for (@name(c.uₕ.components.data.:(1)), @name(c.sgs⁰.ρatke))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.sgs⁰.ρatke))
+[ Info: Using coloring order SparseMatrixColorings.DynamicDegreeBasedOrder{:back, :high2low, false}()
+[ Info: Updating Jacobian using 27 ε components per dual number
+[ Info: Define ode function: 16.083 s (16526835 allocations: 825.83 MiB)
+┌ Info: Jacobian algorithm: AutoSparseJacobian(
+│   sparse_jacobian_alg = ManualSparseJacobian(
+│     topography_flag = ClimaAtmos.IgnoreDerivative(),
+│     diffusion_flag = ClimaAtmos.UseDerivative(),
+│     sgs_advection_flag = ClimaAtmos.UseDerivative(),
+│     sgs_entr_detr_flag = ClimaAtmos.UseDerivative(),
+│     sgs_mass_flux_flag = ClimaAtmos.UseDerivative(),
+│     sgs_nh_pressure_flag = ClimaAtmos.UseDerivative(),
+│     approximate_solve_iters = 2,
+│   ),
+│   padding_bands_per_block = nothing,
+└ )
+[ Info: Adding 3 padding bands for (@name(c.uₕ.components.data.:(1)), @name(c.ρ))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_liq))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_liq))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_ice))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_ice))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_rai))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_rai))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.ρq_sno))
+[ Info: Adding 2 padding bands for (@name(f.u₃.components.data.:(1)), @name(c.ρq_sno))
+[ Info: Adding 3 padding bands for (@name(c.uₕ.components.data.:(1)), @name(c.sgs⁰.ρatke))
+[ Info: Adding 3 padding bands for (@name(c.ρe_tot), @name(c.sgs⁰.ρatke))
+[ Info: Using coloring order SparseMatrixColorings.DynamicDegreeBasedOrder{:back, :high2low, false}()
+[ Info: Updating Jacobian using 27 ε components per dual number
+[ Info: Define ode function: 16.55 s (16526836 allocations: 825.82 MiB)
+[ Info: init integrator: 48.74 s (108886000 allocations: 7.71 GiB)
+[ Info: Added diagnostics: 6.595 s (13524979 allocations: 653.26 MiB)
+[ Info: init integrator: 48.127 s (108885955 allocations: 7.71 GiB)
+[ Info: Added diagnostics: 6.822 s (13524978 allocations: 653.28 MiB)
+┌ Info: Running
+│   job_id = ""
+│   output_dir = "output/output_0078"
+└   tspan = (0.0f0, 518400.0f0)
+┌ Info: Progress
+│   simulation_time = "30 seconds, 1 microsecond"
+│   n_steps_completed = 1
+│   wall_time_per_step = "0 seconds"
+│   wall_time_total = "0 seconds"
+│   wall_time_remaining = "0 seconds"
+│   wall_time_spent = "0 seconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "Inf"
+│   date_now = 2025-09-09T13:16:24.210
+└   estimated_finish_date = 2025-09-09T13:16:24.206
+┌ Info: Running
+│   job_id = ""
+│   output_dir = "output/output_0079"
+└   tspan = (0.0f0, 518400.0f0)
+┌ Info: Progress
+│   simulation_time = "1 minute, 2 microseconds"
+│   n_steps_completed = 2
+│   wall_time_per_step = "0 seconds"
+│   wall_time_total = "0 seconds"
+│   wall_time_remaining = "0 seconds"
+│   wall_time_spent = "0 seconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "Inf"
+│   date_now = 2025-09-09T13:16:25.290
+└   estimated_finish_date = 2025-09-09T13:16:25.290
+┌ Info: Progress
+│   simulation_time = "2 minutes, 4 microseconds"
+│   n_steps_completed = 4
+│   wall_time_per_step = "28 milliseconds, 864 microseconds"
+│   wall_time_total = "8 minutes, 18 seconds"
+│   wall_time_remaining = "8 minutes, 18 seconds"
+│   wall_time_spent = "115 milliseconds, 458 microseconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "2.846"
+│   date_now = 2025-09-09T13:16:25.344
+└   estimated_finish_date = 2025-09-09T13:24:44.344
+┌ Info: Progress
+│   simulation_time = "4 minutes, 8 microseconds"
+│   n_steps_completed = 8
+│   wall_time_per_step = "23 milliseconds, 135 microseconds"
+│   wall_time_total = "6 minutes, 39 seconds"
+│   wall_time_remaining = "6 minutes, 39 seconds"
+│   wall_time_spent = "185 milliseconds, 80 microseconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "3.55"
+│   date_now = 2025-09-09T13:16:25.376
+└   estimated_finish_date = 2025-09-09T13:23:05.376
+┌ Info: Progress
+│   simulation_time = "8 minutes, 16 microseconds"
+│   n_steps_completed = 16
+│   wall_time_per_step = "15 milliseconds, 465 microseconds"
+│   wall_time_total = "4 minutes, 27 seconds"
+│   wall_time_remaining = "4 minutes, 27 seconds"
+│   wall_time_spent = "247 milliseconds, 454 microseconds"
+│   percent_complete = "0.1%"
+│   estimated_sypd = "5.311"
+│   date_now = 2025-09-09T13:16:25.439
+└   estimated_finish_date = 2025-09-09T13:20:53.439
+┌ Info: Progress
+│   simulation_time = "16 minutes, 32 microseconds"
+│   n_steps_completed = 32
+│   wall_time_per_step = "12 milliseconds, 74 microseconds"
+│   wall_time_total = "3 minutes, 28 seconds"
+│   wall_time_remaining = "3 minutes, 28 seconds"
+│   wall_time_spent = "386 milliseconds, 371 microseconds"
+│   percent_complete = "0.2%"
+│   estimated_sypd = "6.803"
+│   date_now = 2025-09-09T13:16:25.578
+└   estimated_finish_date = 2025-09-09T13:19:54.577
+┌ Info: Progress
+│   simulation_time = "32 minutes, 65 microseconds"
+│   n_steps_completed = 64
+│   wall_time_per_step = "10 milliseconds, 268 microseconds"
+│   wall_time_total = "2 minutes, 57 seconds"
+│   wall_time_remaining = "2 minutes, 56 seconds"
+│   wall_time_spent = "657 milliseconds, 154 microseconds"
+│   percent_complete = "0.4%"
+│   estimated_sypd = "7.999"
+│   date_now = 2025-09-09T13:16:25.848
+└   estimated_finish_date = 2025-09-09T13:19:22.848
+┌ Info: Progress
+│   simulation_time = "1 hour, 4 minutes"
+│   n_steps_completed = 128
+│   wall_time_per_step = "10 milliseconds, 263 microseconds"
+│   wall_time_total = "2 minutes, 57 seconds"
+│   wall_time_remaining = "2 minutes, 56 seconds"
+│   wall_time_spent = "1 second, 313 milliseconds"
+│   percent_complete = "0.7%"
+│   estimated_sypd = "8.003"
+│   date_now = 2025-09-09T13:16:26.525
+└   estimated_finish_date = 2025-09-09T13:19:23.525
+┌ Info: Progress
+│   simulation_time = "2 hours, 8 minutes"
+│   n_steps_completed = 256
+│   wall_time_per_step = "9 milliseconds, 604 microseconds"
+│   wall_time_total = "2 minutes, 45 seconds"
+│   wall_time_remaining = "2 minutes, 43 seconds"
+│   wall_time_spent = "2 seconds, 458 milliseconds"
+│   percent_complete = "1.5%"
+│   estimated_sypd = "8.552"
+│   date_now = 2025-09-09T13:16:27.650
+└   estimated_finish_date = 2025-09-09T13:19:11.650
+┌ Info: Progress
+│   simulation_time = "4 hours, 16 minutes"
+│   n_steps_completed = 512
+│   wall_time_per_step = "9 milliseconds, 511 microseconds"
+│   wall_time_total = "2 minutes, 44 seconds"
+│   wall_time_remaining = "2 minutes, 39 seconds"
+│   wall_time_spent = "4 seconds, 869 milliseconds"
+│   percent_complete = "3.0%"
+│   estimated_sypd = "8.636"
+│   date_now = 2025-09-09T13:16:30.061
+└   estimated_finish_date = 2025-09-09T13:19:10.061
+┌ Info: Progress
+│   simulation_time = "8 hours, 32 minutes"
+│   n_steps_completed = 1024
+│   wall_time_per_step = "9 milliseconds, 517 microseconds"
+│   wall_time_total = "2 minutes, 44 seconds"
+│   wall_time_remaining = "2 minutes, 34 seconds"
+│   wall_time_spent = "9 seconds, 745 milliseconds"
+│   percent_complete = "5.9%"
+│   estimated_sypd = "8.63"
+│   date_now = 2025-09-09T13:16:34.937
+└   estimated_finish_date = 2025-09-09T13:19:09.937
+┌ Info: Progress
+│   simulation_time = "15 hours, 44 minutes"
+│   n_steps_completed = 1889
+│   wall_time_per_step = "9 milliseconds, 419 microseconds"
+│   wall_time_total = "2 minutes, 42 seconds"
+│   wall_time_remaining = "2 minutes, 24 seconds"
+│   wall_time_spent = "17 seconds, 794 milliseconds"
+│   percent_complete = "10.9%"
+│   estimated_sypd = "8.719"
+│   date_now = 2025-09-09T13:16:42.985
+└   estimated_finish_date = 2025-09-09T13:19:07.985
+┌ Info: Progress
+│   simulation_time = "17 hours, 4 minutes"
+│   n_steps_completed = 2048
+│   wall_time_per_step = "9 milliseconds, 422 microseconds"
+│   wall_time_total = "2 minutes, 42 seconds"
+│   wall_time_remaining = "2 minutes, 23 seconds"
+│   wall_time_spent = "19 seconds, 297 milliseconds"
+│   percent_complete = "11.9%"
+│   estimated_sypd = "8.717"
+│   date_now = 2025-09-09T13:16:44.488
+└   estimated_finish_date = 2025-09-09T13:19:08.488
+┌ Info: Progress
+│   simulation_time = "1 day, 16 minutes"
+│   n_steps_completed = 2913
+│   wall_time_per_step = "9 milliseconds, 478 microseconds"
+│   wall_time_total = "2 minutes, 43 seconds"
+│   wall_time_remaining = "2 minutes, 16 seconds"
+│   wall_time_spent = "27 seconds, 611 milliseconds"
+│   percent_complete = "16.9%"
+│   estimated_sypd = "8.665"
+│   date_now = 2025-09-09T13:16:52.854
+└   estimated_finish_date = 2025-09-09T13:19:09.854
+┌ Info: Progress
+│   simulation_time = "30 seconds, 1 microsecond"
+│   n_steps_completed = 1
+│   wall_time_per_step = "0 seconds"
+│   wall_time_total = "0 seconds"
+│   wall_time_remaining = "0 seconds"
+│   wall_time_spent = "0 seconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "Inf"
+│   date_now = 2025-09-09T13:16:57.893
+└   estimated_finish_date = 2025-09-09T13:16:57.890
+┌ Info: Progress
+│   simulation_time = "1 minute, 2 microseconds"
+│   n_steps_completed = 2
+│   wall_time_per_step = "0 seconds"
+│   wall_time_total = "0 seconds"
+│   wall_time_remaining = "0 seconds"
+│   wall_time_spent = "0 seconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "Inf"
+│   date_now = 2025-09-09T13:16:58.939
+└   estimated_finish_date = 2025-09-09T13:16:58.939
+┌ Info: Progress
+│   simulation_time = "2 minutes, 4 microseconds"
+│   n_steps_completed = 4
+│   wall_time_per_step = "28 milliseconds, 524 microseconds"
+│   wall_time_total = "8 minutes, 12 seconds"
+│   wall_time_remaining = "8 minutes, 12 seconds"
+│   wall_time_spent = "114 milliseconds, 99 microseconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "2.879"
+│   date_now = 2025-09-09T13:16:58.992
+└   estimated_finish_date = 2025-09-09T13:25:11.991
+┌ Info: Progress
+│   simulation_time = "4 minutes, 8 microseconds"
+│   n_steps_completed = 8
+│   wall_time_per_step = "22 milliseconds, 833 microseconds"
+│   wall_time_total = "6 minutes, 34 seconds"
+│   wall_time_remaining = "6 minutes, 34 seconds"
+│   wall_time_spent = "182 milliseconds, 664 microseconds"
+│   percent_complete = "0.0%"
+│   estimated_sypd = "3.597"
+│   date_now = 2025-09-09T13:16:59.024
+└   estimated_finish_date = 2025-09-09T13:23:34.024
+┌ Info: Progress
+│   simulation_time = "8 minutes, 16 microseconds"
+│   n_steps_completed = 16
+│   wall_time_per_step = "15 milliseconds, 339 microseconds"
+│   wall_time_total = "4 minutes, 25 seconds"
+│   wall_time_remaining = "4 minutes, 24 seconds"
+│   wall_time_spent = "245 milliseconds, 424 microseconds"
+│   percent_complete = "0.1%"
+│   estimated_sypd = "5.355"
+│   date_now = 2025-09-09T13:16:59.086
+└   estimated_finish_date = 2025-09-09T13:21:24.086
+┌ Info: Progress
+│   simulation_time = "16 minutes, 32 microseconds"
+│   n_steps_completed = 32
+│   wall_time_per_step = "11 milliseconds, 974 microseconds"
+│   wall_time_total = "3 minutes, 26 seconds"
+│   wall_time_remaining = "3 minutes, 26 seconds"
+│   wall_time_spent = "383 milliseconds, 198 microseconds"
+│   percent_complete = "0.2%"
+│   estimated_sypd = "6.859"
+│   date_now = 2025-09-09T13:16:59.224
+└   estimated_finish_date = 2025-09-09T13:20:26.224
+┌ Info: Progress
+│   simulation_time = "32 minutes, 65 microseconds"
+│   n_steps_completed = 64
+│   wall_time_per_step = "10 milliseconds, 212 microseconds"
+│   wall_time_total = "2 minutes, 56 seconds"
+│   wall_time_remaining = "2 minutes, 55 seconds"
+│   wall_time_spent = "653 milliseconds, 609 microseconds"
+│   percent_complete = "0.4%"
+│   estimated_sypd = "8.043"
+│   date_now = 2025-09-09T13:16:59.495
+└   estimated_finish_date = 2025-09-09T13:19:55.495
+┌ Info: Progress
+│   simulation_time = "1 hour, 4 minutes"
+│   n_steps_completed = 128
+│   wall_time_per_step = "10 milliseconds, 208 microseconds"
+│   wall_time_total = "2 minutes, 56 seconds"
+│   wall_time_remaining = "2 minutes, 55 seconds"
+│   wall_time_spent = "1 second, 306 milliseconds"
+│   percent_complete = "0.7%"
+│   estimated_sypd = "8.045"
+│   date_now = 2025-09-09T13:17:00.168
+└   estimated_finish_date = 2025-09-09T13:19:56.168
+┌ Info: Progress
+│   simulation_time = "2 hours, 8 minutes"
+│   n_steps_completed = 256
+│   wall_time_per_step = "9 milliseconds, 557 microseconds"
+│   wall_time_total = "2 minutes, 45 seconds"
+│   wall_time_remaining = "2 minutes, 42 seconds"
+│   wall_time_spent = "2 seconds, 446 milliseconds"
+│   percent_complete = "1.5%"
+│   estimated_sypd = "8.594"
+│   date_now = 2025-09-09T13:17:01.288
+└   estimated_finish_date = 2025-09-09T13:19:44.288
+┌ Info: Progress
+│   simulation_time = "1 day, 7 hours"
+│   n_steps_completed = 3778
+│   wall_time_per_step = "9 milliseconds, 633 microseconds"
+│   wall_time_total = "2 minutes, 46 seconds"
+│   wall_time_remaining = "2 minutes, 10 seconds"
+│   wall_time_spent = "36 seconds, 395 milliseconds"
+│   percent_complete = "21.9%"
+│   estimated_sypd = "8.526"
+│   date_now = 2025-09-09T13:17:01.587
+└   estimated_finish_date = 2025-09-09T13:19:12.587
+┌ Info: Progress
+│   simulation_time = "4 hours, 16 minutes"
+│   n_steps_completed = 512
+│   wall_time_per_step = "9 milliseconds, 473 microseconds"
+│   wall_time_total = "2 minutes, 43 seconds"
+│   wall_time_remaining = "2 minutes, 38 seconds"
+│   wall_time_spent = "4 seconds, 850 milliseconds"
+│   percent_complete = "3.0%"
+│   estimated_sypd = "8.67"
+│   date_now = 2025-09-09T13:17:03.692
+└   estimated_finish_date = 2025-09-09T13:19:42.692
+┌ Info: Progress
+│   simulation_time = "1 day, 10 hours"
+│   n_steps_completed = 4096
+│   wall_time_per_step = "9 milliseconds, 683 microseconds"
+│   wall_time_total = "2 minutes, 47 seconds"
+│   wall_time_remaining = "2 minutes, 7 seconds"
+│   wall_time_spent = "39 seconds, 665 milliseconds"
+│   percent_complete = "23.7%"
+│   estimated_sypd = "8.482"
+│   date_now = 2025-09-09T13:17:04.856
+└   estimated_finish_date = 2025-09-09T13:19:12.856
+┌ Info: Progress
+│   simulation_time = "8 hours, 32 minutes"
+│   n_steps_completed = 1024
+│   wall_time_per_step = "9 milliseconds, 419 microseconds"
+│   wall_time_total = "2 minutes, 42 seconds"
+│   wall_time_remaining = "2 minutes, 33 seconds"
+│   wall_time_spent = "9 seconds, 645 milliseconds"
+│   percent_complete = "5.9%"
+│   estimated_sypd = "8.72"
+│   date_now = 2025-09-09T13:17:08.487
+└   estimated_finish_date = 2025-09-09T13:19:42.487
+┌ Info: Progress
+│   simulation_time = "1 day, 17 hours"
+│   n_steps_completed = 4961
+│   wall_time_per_step = "9 milliseconds, 651 microseconds"
+│   wall_time_total = "2 minutes, 46 seconds"
+│   wall_time_remaining = "1 minute, 58 seconds"
+│   wall_time_spent = "47 seconds, 881 milliseconds"
+│   percent_complete = "28.7%"
+│   estimated_sypd = "8.51"
+│   date_now = 2025-09-09T13:17:13.073
+└   estimated_finish_date = 2025-09-09T13:19:12.073
+┌ Info: Progress
+│   simulation_time = "15 hours, 44 minutes"
+│   n_steps_completed = 1889
+│   wall_time_per_step = "9 milliseconds, 296 microseconds"
+│   wall_time_total = "2 minutes, 40 seconds"
+│   wall_time_remaining = "2 minutes, 23 seconds"
+│   wall_time_spent = "17 seconds, 561 milliseconds"
+│   percent_complete = "10.9%"
+│   estimated_sypd = "8.835"
+│   date_now = 2025-09-09T13:17:16.403
+└   estimated_finish_date = 2025-09-09T13:19:40.403
+┌ Info: Progress
+│   simulation_time = "17 hours, 4 minutes"
+│   n_steps_completed = 2048
+│   wall_time_per_step = "9 milliseconds, 375 microseconds"
+│   wall_time_total = "2 minutes, 42 seconds"
+│   wall_time_remaining = "2 minutes, 22 seconds"
+│   wall_time_spent = "19 seconds, 201 milliseconds"
+│   percent_complete = "11.9%"
+│   estimated_sypd = "8.76"
+│   date_now = 2025-09-09T13:17:18.043
+└   estimated_finish_date = 2025-09-09T13:19:41.043
+┌ Info: Progress
+│   simulation_time = "2 days, 33 minutes"
+│   n_steps_completed = 5826
+│   wall_time_per_step = "9 milliseconds, 623 microseconds"
+│   wall_time_total = "2 minutes, 46 seconds"
+│   wall_time_remaining = "1 minute, 50 seconds"
+│   wall_time_spent = "56 seconds, 67 milliseconds"
+│   percent_complete = "33.7%"
+│   estimated_sypd = "8.535"
+│   date_now = 2025-09-09T13:17:21.258
+└   estimated_finish_date = 2025-09-09T13:19:12.258
+┌ Info: Progress
+│   simulation_time = "1 day, 16 minutes"
+│   n_steps_completed = 2913
+│   wall_time_per_step = "9 milliseconds, 342 microseconds"
+│   wall_time_total = "2 minutes, 41 seconds"
+│   wall_time_remaining = "2 minutes, 14 seconds"
+│   wall_time_spent = "27 seconds, 215 milliseconds"
+│   percent_complete = "16.9%"
+│   estimated_sypd = "8.791"
+│   date_now = 2025-09-09T13:17:26.106
+└   estimated_finish_date = 2025-09-09T13:19:41.106
+┌ Info: Progress
+│   simulation_time = "2 days, 7 hours"
+│   n_steps_completed = 6691
+│   wall_time_per_step = "9 milliseconds, 676 microseconds"
+│   wall_time_total = "2 minutes, 47 seconds"
+│   wall_time_remaining = "1 minute, 42 seconds"
+│   wall_time_spent = "1 minute, 4 seconds"
+│   percent_complete = "38.7%"
+│   estimated_sypd = "8.488"
+│   date_now = 2025-09-09T13:17:29.936
+└   estimated_finish_date = 2025-09-09T13:19:12.936
+┌ Info: Progress
+│   simulation_time = "1 day, 7 hours"
+│   n_steps_completed = 3778
+│   wall_time_per_step = "9 milliseconds, 487 microseconds"
+│   wall_time_total = "2 minutes, 43 seconds"
+│   wall_time_remaining = "2 minutes, 8 seconds"
+│   wall_time_spent = "35 seconds, 845 milliseconds"
+│   percent_complete = "21.9%"
+│   estimated_sypd = "8.657"
+│   date_now = 2025-09-09T13:17:34.686
+└   estimated_finish_date = 2025-09-09T13:19:43.686
+┌ Info: Progress
+│   simulation_time = "1 day, 10 hours"
+│   n_steps_completed = 4096
+│   wall_time_per_step = "9 milliseconds, 535 microseconds"
+│   wall_time_total = "2 minutes, 44 seconds"
+│   wall_time_remaining = "2 minutes, 5 seconds"
+│   wall_time_spent = "39 seconds, 55 milliseconds"
+│   percent_complete = "23.7%"
+│   estimated_sypd = "8.614"
+│   date_now = 2025-09-09T13:17:37.897
+└   estimated_finish_date = 2025-09-09T13:19:43.897
+┌ Info: Progress
+│   simulation_time = "2 days, 14 hours"
+│   n_steps_completed = 7556
+│   wall_time_per_step = "9 milliseconds, 697 microseconds"
+│   wall_time_total = "2 minutes, 47 seconds"
+│   wall_time_remaining = "1 minute, 34 seconds"
+│   wall_time_spent = "1 minute, 13 seconds"
+│   percent_complete = "43.7%"
+│   estimated_sypd = "8.47"
+│   date_now = 2025-09-09T13:17:38.463
+└   estimated_finish_date = 2025-09-09T13:19:13.463
+┌ Info: Progress
+│   simulation_time = "2 days, 20 hours"
+│   n_steps_completed = 8192
+│   wall_time_per_step = "9 milliseconds, 688 microseconds"
+│   wall_time_total = "2 minutes, 47 seconds"
+│   wall_time_remaining = "1 minute, 28 seconds"
+│   wall_time_spent = "1 minute, 19 seconds"
+│   percent_complete = "47.4%"
+│   estimated_sypd = "8.478"
+│   date_now = 2025-09-09T13:17:44.558
+└   estimated_finish_date = 2025-09-09T13:19:13.558
+┌ Info: Progress
+│   simulation_time = "1 day, 17 hours"
+│   n_steps_completed = 4961
+│   wall_time_per_step = "9 milliseconds, 524 microseconds"
+│   wall_time_total = "2 minutes, 44 seconds"
+│   wall_time_remaining = "1 minute, 57 seconds"
+│   wall_time_spent = "47 seconds, 251 milliseconds"
+│   percent_complete = "28.7%"
+│   estimated_sypd = "8.624"
+│   date_now = 2025-09-09T13:17:46.092
+└   estimated_finish_date = 2025-09-09T13:19:44.092
+┌ Info: Progress
+│   simulation_time = "3 days, 3 hours"
+│   n_steps_completed = 9057
+│   wall_time_per_step = "9 milliseconds, 692 microseconds"
+│   wall_time_total = "2 minutes, 47 seconds"
+│   wall_time_remaining = "1 minute, 19 seconds"
+│   wall_time_spent = "1 minute, 27 seconds"
+│   percent_complete = "52.4%"
+│   estimated_sypd = "8.474"
+│   date_now = 2025-09-09T13:17:52.978
+└   estimated_finish_date = 2025-09-09T13:19:12.978
+┌ Info: Progress
+│   simulation_time = "2 days, 33 minutes"
+│   n_steps_completed = 5826
+│   wall_time_per_step = "9 milliseconds, 510 microseconds"
+│   wall_time_total = "2 minutes, 44 seconds"
+│   wall_time_remaining = "1 minute, 48 seconds"
+│   wall_time_spent = "55 seconds, 409 milliseconds"
+│   percent_complete = "33.7%"
+│   estimated_sypd = "8.636"
+│   date_now = 2025-09-09T13:17:54.251
+└   estimated_finish_date = 2025-09-09T13:19:43.251
+┌ Info: Progress
+│   simulation_time = "3 days, 10 hours"
+│   n_steps_completed = 9922
+│   wall_time_per_step = "9 milliseconds, 738 microseconds"
+│   wall_time_total = "2 minutes, 48 seconds"
+│   wall_time_remaining = "1 minute, 11 seconds"
+│   wall_time_spent = "1 minute, 36 seconds"
+│   percent_complete = "57.4%"
+│   estimated_sypd = "8.434"
+│   date_now = 2025-09-09T13:18:01.817
+└   estimated_finish_date = 2025-09-09T13:19:13.817
+┌ Info: Progress
+│   simulation_time = "2 days, 7 hours"
+│   n_steps_completed = 6691
+│   wall_time_per_step = "9 milliseconds, 580 microseconds"
+│   wall_time_total = "2 minutes, 45 seconds"
+│   wall_time_remaining = "1 minute, 41 seconds"
+│   wall_time_spent = "1 minute, 4 seconds"
+│   percent_complete = "38.7%"
+│   estimated_sypd = "8.573"
+│   date_now = 2025-09-09T13:18:02.945
+└   estimated_finish_date = 2025-09-09T13:19:44.945
+┌ Info: Progress
+│   simulation_time = "3 days, 17 hours"
+│   n_steps_completed = 10787
+│   wall_time_per_step = "9 milliseconds, 724 microseconds"
+│   wall_time_total = "2 minutes, 48 seconds"
+│   wall_time_remaining = "1 minute, 3 seconds"
+│   wall_time_spent = "1 minute, 44 seconds"
+│   percent_complete = "62.4%"
+│   estimated_sypd = "8.446"
+│   date_now = 2025-09-09T13:18:10.090
+└   estimated_finish_date = 2025-09-09T13:19:14.090
+┌ Info: Progress
+│   simulation_time = "2 days, 14 hours"
+│   n_steps_completed = 7556
+│   wall_time_per_step = "9 milliseconds, 602 microseconds"
+│   wall_time_total = "2 minutes, 45 seconds"
+│   wall_time_remaining = "1 minute, 33 seconds"
+│   wall_time_spent = "1 minute, 12 seconds"
+│   percent_complete = "43.7%"
+│   estimated_sypd = "8.554"
+│   date_now = 2025-09-09T13:18:11.396
+└   estimated_finish_date = 2025-09-09T13:19:45.396
+┌ Info: Progress
+│   simulation_time = "2 days, 20 hours"
+│   n_steps_completed = 8192
+│   wall_time_per_step = "9 milliseconds, 599 microseconds"
+│   wall_time_total = "2 minutes, 45 seconds"
+│   wall_time_remaining = "1 minute, 27 seconds"
+│   wall_time_spent = "1 minute, 18 seconds"
+│   percent_complete = "47.4%"
+│   estimated_sypd = "8.556"
+│   date_now = 2025-09-09T13:18:17.483
+└   estimated_finish_date = 2025-09-09T13:19:45.483
+┌ Info: Progress
+│   simulation_time = "4 days, 1 hour"
+│   n_steps_completed = 11652
+│   wall_time_per_step = "9 milliseconds, 712 microseconds"
+│   wall_time_total = "2 minutes, 47 seconds"
+│   wall_time_remaining = "54 seconds, 661 milliseconds"
+│   wall_time_spent = "1 minute, 53 seconds"
+│   percent_complete = "67.4%"
+│   estimated_sypd = "8.457"
+│   date_now = 2025-09-09T13:18:18.361
+└   estimated_finish_date = 2025-09-09T13:19:13.361
+┌ Info: Progress
+│   simulation_time = "3 days, 3 hours"
+│   n_steps_completed = 9057
+│   wall_time_per_step = "9 milliseconds, 609 microseconds"
+│   wall_time_total = "2 minutes, 46 seconds"
+│   wall_time_remaining = "1 minute, 19 seconds"
+│   wall_time_spent = "1 minute, 27 seconds"
+│   percent_complete = "52.4%"
+│   estimated_sypd = "8.547"
+│   date_now = 2025-09-09T13:18:25.878
+└   estimated_finish_date = 2025-09-09T13:19:45.878
+┌ Info: Progress
+│   simulation_time = "4 days, 8 hours"
+│   n_steps_completed = 12517
+│   wall_time_per_step = "9 milliseconds, 735 microseconds"
+│   wall_time_total = "2 minutes, 48 seconds"
+│   wall_time_remaining = "46 seconds, 372 milliseconds"
+│   wall_time_spent = "2 minutes, 1 second"
+│   percent_complete = "72.4%"
+│   estimated_sypd = "8.436"
+│   date_now = 2025-09-09T13:18:27.055
+└   estimated_finish_date = 2025-09-09T13:19:14.055
+┌ Info: Progress
+│   simulation_time = "3 days, 10 hours"
+│   n_steps_completed = 9922
+│   wall_time_per_step = "9 milliseconds, 662 microseconds"
+│   wall_time_total = "2 minutes, 46 seconds"
+│   wall_time_remaining = "1 minute, 11 seconds"
+│   wall_time_spent = "1 minute, 35 seconds"
+│   percent_complete = "57.4%"
+│   estimated_sypd = "8.5"
+│   date_now = 2025-09-09T13:18:34.714
+└   estimated_finish_date = 2025-09-09T13:19:46.714
+┌ Info: Progress
+│   simulation_time = "4 days, 15 hours"
+│   n_steps_completed = 13382
+│   wall_time_per_step = "9 milliseconds, 735 microseconds"
+│   wall_time_total = "2 minutes, 48 seconds"
+│   wall_time_remaining = "37 seconds, 950 milliseconds"
+│   wall_time_spent = "2 minutes, 10 seconds"
+│   percent_complete = "77.4%"
+│   estimated_sypd = "8.436"
+│   date_now = 2025-09-09T13:18:35.476
+└   estimated_finish_date = 2025-09-09T13:19:13.476
+┌ Info: Progress
+│   simulation_time = "3 days, 17 hours"
+│   n_steps_completed = 10787
+│   wall_time_per_step = "9 milliseconds, 650 microseconds"
+│   wall_time_total = "2 minutes, 46 seconds"
+│   wall_time_remaining = "1 minute, 2 seconds"
+│   wall_time_spent = "1 minute, 44 seconds"
+│   percent_complete = "62.4%"
+│   estimated_sypd = "8.511"
+│   date_now = 2025-09-09T13:18:42.945
+└   estimated_finish_date = 2025-09-09T13:19:45.945
+┌ Info: Progress
+│   simulation_time = "4 days, 22 hours"
+│   n_steps_completed = 14247
+│   wall_time_per_step = "9 milliseconds, 726 microseconds"
+│   wall_time_total = "2 minutes, 48 seconds"
+│   wall_time_remaining = "29 seconds, 499 milliseconds"
+│   wall_time_spent = "2 minutes, 18 seconds"
+│   percent_complete = "82.4%"
+│   estimated_sypd = "8.445"
+│   date_now = 2025-09-09T13:18:43.762
+└   estimated_finish_date = 2025-09-09T13:19:13.762
+┌ Info: Progress
+│   simulation_time = "4 days, 1 hour"
+│   n_steps_completed = 11652
+│   wall_time_per_step = "9 milliseconds, 640 microseconds"
+│   wall_time_total = "2 minutes, 46 seconds"
+│   wall_time_remaining = "54 seconds, 259 milliseconds"
+│   wall_time_spent = "1 minute, 52 seconds"
+│   percent_complete = "67.4%"
+│   estimated_sypd = "8.519"
+│   date_now = 2025-09-09T13:18:51.177
+└   estimated_finish_date = 2025-09-09T13:19:46.177
+┌ Info: Progress
+│   simulation_time = "5 days, 5 hours"
+│   n_steps_completed = 15112
+│   wall_time_per_step = "9 milliseconds, 737 microseconds"
+│   wall_time_total = "2 minutes, 48 seconds"
+│   wall_time_remaining = "21 seconds, 110 milliseconds"
+│   wall_time_spent = "2 minutes, 27 seconds"
+│   percent_complete = "87.5%"
+│   estimated_sypd = "8.435"
+│   date_now = 2025-09-09T13:18:52.343
+└   estimated_finish_date = 2025-09-09T13:19:14.343
+┌ Info: Progress
+│   simulation_time = "4 days, 8 hours"
+│   n_steps_completed = 12517
+│   wall_time_per_step = "9 milliseconds, 666 microseconds"
+│   wall_time_total = "2 minutes, 47 seconds"
+│   wall_time_remaining = "46 seconds, 40 milliseconds"
+│   wall_time_spent = "2 minutes, 993 milliseconds"
+│   percent_complete = "72.4%"
+│   estimated_sypd = "8.497"
+│   date_now = 2025-09-09T13:18:59.835
+└   estimated_finish_date = 2025-09-09T13:19:46.835
+┌ Info: Progress
+│   simulation_time = "5 days, 13 hours"
+│   n_steps_completed = 15977
+│   wall_time_per_step = "9 milliseconds, 739 microseconds"
+│   wall_time_total = "2 minutes, 48 seconds"
+│   wall_time_remaining = "12 seconds, 691 milliseconds"
+│   wall_time_spent = "2 minutes, 35 seconds"
+│   percent_complete = "92.5%"
+│   estimated_sypd = "8.433"
+│   date_now = 2025-09-09T13:19:00.806
+└   estimated_finish_date = 2025-09-09T13:19:13.806
+┌ Info: Progress
+│   simulation_time = "5 days, 16 hours"
+│   n_steps_completed = 16384
+│   wall_time_per_step = "9 milliseconds, 734 microseconds"
+│   wall_time_total = "2 minutes, 48 seconds"
+│   wall_time_remaining = "8 seconds, 721 milliseconds"
+│   wall_time_spent = "2 minutes, 39 seconds"
+│   percent_complete = "94.8%"
+│   estimated_sypd = "8.438"
+│   date_now = 2025-09-09T13:19:04.676
+└   estimated_finish_date = 2025-09-09T13:19:13.676
+┌ Info: Progress
+│   simulation_time = "4 days, 15 hours"
+│   n_steps_completed = 13382
+│   wall_time_per_step = "9 milliseconds, 674 microseconds"
+│   wall_time_total = "2 minutes, 47 seconds"
+│   wall_time_remaining = "37 seconds, 710 milliseconds"
+│   wall_time_spent = "2 minutes, 9 seconds"
+│   percent_complete = "77.4%"
+│   estimated_sypd = "8.49"
+│   date_now = 2025-09-09T13:19:08.302
+└   estimated_finish_date = 2025-09-09T13:19:46.302
+┌ Info: Progress
+│   simulation_time = "5 days, 23 hours"
+│   n_steps_completed = 17249
+│   wall_time_per_step = "9 milliseconds, 718 microseconds"
+│   wall_time_total = "2 minutes, 47 seconds"
+│   wall_time_remaining = "301 milliseconds, 282 microseconds"
+│   wall_time_spent = "2 minutes, 47 seconds"
+│   percent_complete = "99.8%"
+│   estimated_sypd = "8.451"
+│   date_now = 2025-09-09T13:19:12.831
+└   estimated_finish_date = 2025-09-09T13:19:13.831
+[ Info: solve! walltime = 167.891
+[ Info: sypd: 8.459
+[ Info: wall_time_per_timestep: 9 milliseconds, 715 microseconds
+[ Info: Memory currently used (after solve!) by the process (RSS): 7.75 GiB
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-2423506: `srun -J julia-2423506 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-2423506-17574491542.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=TXyBCS6Dbd1Zypob`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker launch (after 0 s): No output file ".julia-2423506-17574491542.out" yet
+[ Info: Worker launch (after 0 s): No output file ".julia-2423506-17574491542.out" yet
+┌ Info: Progress
+│   simulation_time = "4 days, 22 hours"
+│   n_steps_completed = 14247
+│   wall_time_per_step = "9 milliseconds, 669 microseconds"
+│   wall_time_total = "2 minutes, 47 seconds"
+│   wall_time_remaining = "29 seconds, 326 milliseconds"
+│   wall_time_spent = "2 minutes, 17 seconds"
+│   percent_complete = "82.4%"
+│   estimated_sypd = "8.494"
+│   date_now = 2025-09-09T13:19:16.599
+└   estimated_finish_date = 2025-09-09T13:19:46.599
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9553
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9555
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9557
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9559
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9561
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9569
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9567
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9562
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9564
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9563
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9571
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9565
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9560
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9570
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9556
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9568
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9554
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9572
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9566
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9558
+┌ Info: Progress
+│   simulation_time = "5 days, 5 hours"
+│   n_steps_completed = 15112
+│   wall_time_per_step = "9 milliseconds, 689 microseconds"
+│   wall_time_total = "2 minutes, 47 seconds"
+│   wall_time_remaining = "21 seconds, 6 milliseconds"
+│   wall_time_spent = "2 minutes, 26 seconds"
+│   percent_complete = "87.5%"
+│   estimated_sypd = "8.477"
+│   date_now = 2025-09-09T13:19:25.268
+└   estimated_finish_date = 2025-09-09T13:19:47.268
+┌ Info: Progress
+│   simulation_time = "5 days, 13 hours"
+│   n_steps_completed = 15977
+│   wall_time_per_step = "9 milliseconds, 721 microseconds"
+│   wall_time_total = "2 minutes, 47 seconds"
+│   wall_time_remaining = "12 seconds, 667 milliseconds"
+│   wall_time_spent = "2 minutes, 35 seconds"
+│   percent_complete = "92.5%"
+│   estimated_sypd = "8.449"
+│   date_now = 2025-09-09T13:19:34.168
+└   estimated_finish_date = 2025-09-09T13:19:47.168
+┌ Info: Progress
+│   simulation_time = "5 days, 16 hours"
+│   n_steps_completed = 16384
+│   wall_time_per_step = "9 milliseconds, 722 microseconds"
+│   wall_time_total = "2 minutes, 48 seconds"
+│   wall_time_remaining = "8 seconds, 711 milliseconds"
+│   wall_time_spent = "2 minutes, 39 seconds"
+│   percent_complete = "94.8%"
+│   estimated_sypd = "8.448"
+│   date_now = 2025-09-09T13:19:38.134
+└   estimated_finish_date = 2025-09-09T13:19:47.134
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Info: Progress
+│   simulation_time = "5 days, 23 hours"
+│   n_steps_completed = 17249
+│   wall_time_per_step = "9 milliseconds, 714 microseconds"
+│   wall_time_total = "2 minutes, 47 seconds"
+│   wall_time_remaining = "301 milliseconds, 134 microseconds"
+│   wall_time_spent = "2 minutes, 47 seconds"
+│   percent_complete = "99.8%"
+│   estimated_sypd = "8.455"
+│   date_now = 2025-09-09T13:19:46.398
+└   estimated_finish_date = 2025-09-09T13:19:47.398
+[ Info: solve! walltime = 167.81
+[ Info: sypd: 8.464
+[ Info: wall_time_per_timestep: 9 milliseconds, 711 microseconds
+[ Info: Memory currently used (after solve!) by the process (RSS): 7.63 GiB
+[ Info: Starting 20 workers.
+[ Info: Starting SLURM job julia-2425159: `srun -J julia-2425159 -n 20 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-2425159-17574491877.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=161BchshSDsXWCkB`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 20 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9992
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9994
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9988
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9990
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 13
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 19
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9996
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9002
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9004
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9000
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9006
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9998
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9999
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9001
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9987
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9991
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9993
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9989
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9995
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9997
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9003
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9005
+┌ Info: Initializing ensemble Kalman process of type Inversion
+│ Number of ensemble members: 20
+│ Localization: NoLocalization
+│ Failure handler: SampleSuccGauss
+│ Scheduler: DataMisfitController
+└ Accelerator: DefaultAccelerator
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#23#26"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#24#27"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.ParameterDistributions.var"#25#28"{Int64, Int64}.
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Running Iteration 0
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 4
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 9
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 11
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 13
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 18
+[ Info: Running member 3 on worker 19
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+[ Info: Iteration 0 time: 26 minutes, 41 seconds, 176 milliseconds
+[ Info: Termination condition of scheduler `DataMisfitController` will be exceeded during the next iteration.
+[ Info: Iteration 0 (prior)
+[ Info: Covariance trace: 5.895833160708255
+[ Info: Iteration 1 (T=1.0)
+┌ Info: Covariance-weighted error: 0.003930381763459191
+│ Covariance trace: 5.887737429161407
+└ Covariance trace ratio (current/previous): 0.9986268723476097
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [820.6628800492799, 2403.7785958909108]
+[ Info: Covariance-weighted error: 0.003930381763459191
+[ Info: Running Iteration 1
+[ Info: Running member 20 on worker 4
+[ Info: Running member 19 on worker 2
+[ Info: Running member 18 on worker 3
+[ Info: Running member 17 on worker 5
+[ Info: Running member 16 on worker 10
+[ Info: Running member 15 on worker 9
+[ Info: Running member 14 on worker 19
+[ Info: Running member 13 on worker 20
+[ Info: Running member 12 on worker 14
+[ Info: Running member 11 on worker 21
+[ Info: Running member 10 on worker 15
+[ Info: Running member 9 on worker 17
+[ Info: Running member 8 on worker 18
+[ Info: Running member 7 on worker 16
+[ Info: Running member 6 on worker 6
+[ Info: Running member 5 on worker 11
+[ Info: Running member 4 on worker 13
+[ Info: Running member 3 on worker 12
+[ Info: Running member 2 on worker 8
+[ Info: Running member 1 on worker 7
+[ Info: Iteration 0 time: 27 minutes, 49 seconds, 116 milliseconds
+[ Info: Iteration 0 (prior)
+[ Info: Covariance trace: 6.862967422562594
+[ Info: Iteration 1 (T=0.15182502443518503)
+┌ Info: Covariance-weighted error: 11.075843432908435
+│ Covariance trace: 6.375957287975944
+└ Covariance trace ratio (current/previous): 0.9290379649791776
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [764.5427714183321, 2523.4066848230423]
+[ Info: Covariance-weighted error: 11.075843432908435
+[ Info: Running Iteration 1
+[ Info: Running member 20 on worker 7
+[ Info: Running member 19 on worker 2
+[ Info: Running member 18 on worker 10
+[ Info: Running member 17 on worker 6
+[ Info: Running member 16 on worker 11
+[ Info: Running member 15 on worker 9
+[ Info: Running member 14 on worker 3
+[ Info: Running member 13 on worker 8
+[ Info: Running member 12 on worker 4
+[ Info: Running member 11 on worker 5
+[ Info: Running member 10 on worker 16
+[ Info: Running member 9 on worker 15
+[ Info: Running member 8 on worker 12
+[ Info: Running member 7 on worker 13
+[ Info: Running member 6 on worker 19
+[ Info: Running member 5 on worker 18
+[ Info: Running member 4 on worker 14
+[ Info: Running member 3 on worker 17
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+[ Info: Iteration 1 time: 5 minutes, 56 seconds, 568 milliseconds
+┌ Warning: Termination condition of scheduler `DataMisfitController` has been exceeded. 
+│ on_terminate="continue" selected. Proceeding with algorithm
+└ @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/LearningRateSchedulers.jl:298
+[ Info: Iteration 2 (T=275.08445810001564)
+┌ Info: Covariance-weighted error: 0.003376562249560815
+│ Covariance trace: 5.543416980512583
+└ Covariance trace ratio (current/previous): 0.9415190550204502
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [846.3397197286084, 3217.91715744691]
+[ Info: Covariance-weighted error: 0.003376562249560815
+[ Info: Running Iteration 2
+[ Info: Running member 20 on worker 5
+[ Info: Running member 19 on worker 4
+[ Info: Running member 18 on worker 3
+[ Info: Running member 17 on worker 2
+[ Info: Running member 16 on worker 21
+[ Info: Running member 15 on worker 14
+[ Info: Running member 14 on worker 17
+[ Info: Running member 13 on worker 20
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 9
+[ Info: Running member 10 on worker 19
+[ Info: Running member 9 on worker 15
+[ Info: Running member 8 on worker 18
+[ Info: Running member 7 on worker 16
+[ Info: Running member 6 on worker 7
+[ Info: Running member 5 on worker 8
+[ Info: Running member 4 on worker 13
+[ Info: Running member 3 on worker 12
+[ Info: Running member 2 on worker 6
+[ Info: Running member 1 on worker 11
+[ Info: Iteration 1 time: 6 minutes, 7 seconds, 147 milliseconds
+[ Info: Iteration 2 (T=0.2985533382299763)
+┌ Info: Covariance-weighted error: 8.366578090231899
+│ Covariance trace: 5.378978760005286
+└ Covariance trace ratio (current/previous): 0.8436346915543486
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [746.6146162765937, 3089.826366709899]
+[ Info: Covariance-weighted error: 8.366578090231899
+[ Info: Running Iteration 2
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 7
+[ Info: Running member 18 on worker 9
+[ Info: Running member 17 on worker 3
+[ Info: Running member 16 on worker 11
+[ Info: Running member 15 on worker 6
+[ Info: Running member 14 on worker 10
+[ Info: Running member 13 on worker 8
+[ Info: Running member 12 on worker 5
+[ Info: Running member 11 on worker 4
+[ Info: Running member 10 on worker 12
+[ Info: Running member 9 on worker 20
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 19
+[ Info: Running member 6 on worker 21
+[ Info: Running member 5 on worker 18
+[ Info: Running member 4 on worker 17
+[ Info: Running member 3 on worker 13
+[ Info: Running member 2 on worker 16
+[ Info: Running member 1 on worker 15
+[ Info: Iteration 2 time: 5 minutes, 59 seconds, 483 milliseconds
+[ Info: Iteration 3 (T=527.2207706870963)
+┌ Info: Covariance-weighted error: 0.0028668871435234417
+│ Covariance trace: 5.505296151544563
+└ Covariance trace ratio (current/previous): 0.9931232254217877
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [862.1835979047823, 3771.818723660401]
+[ Info: Covariance-weighted error: 0.0028668871435234417
+[ Info: Running Iteration 3
+[ Info: Running member 20 on worker 16
+[ Info: Running member 19 on worker 2
+[ Info: Running member 18 on worker 3
+[ Info: Running member 17 on worker 10
+[ Info: Running member 16 on worker 18
+[ Info: Running member 15 on worker 9
+[ Info: Running member 14 on worker 14
+[ Info: Running member 13 on worker 19
+[ Info: Running member 12 on worker 21
+[ Info: Running member 11 on worker 4
+[ Info: Running member 10 on worker 5
+[ Info: Running member 9 on worker 20
+[ Info: Running member 8 on worker 15
+[ Info: Running member 7 on worker 17
+[ Info: Running member 6 on worker 6
+[ Info: Running member 5 on worker 12
+[ Info: Running member 4 on worker 11
+[ Info: Running member 3 on worker 7
+[ Info: Running member 2 on worker 8
+[ Info: Running member 1 on worker 13
+[ Info: Iteration 2 time: 5 minutes, 57 seconds, 891 milliseconds
+[ Info: Iteration 3 (T=0.420289362501415)
+┌ Info: Covariance-weighted error: 9.469629641639887
+│ Covariance trace: 5.731489875249569
+└ Covariance trace ratio (current/previous): 1.0655349520740505
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [782.1285616984936, 3110.291898034013]
+[ Info: Covariance-weighted error: 9.469629641639887
+[ Info: Running Iteration 3
+[ Info: Running member 20 on worker 6
+[ Info: Running member 19 on worker 11
+[ Info: Running member 18 on worker 9
+[ Info: Running member 17 on worker 7
+[ Info: Running member 16 on worker 8
+[ Info: Running member 15 on worker 10
+[ Info: Running member 14 on worker 2
+[ Info: Running member 13 on worker 3
+[ Info: Running member 12 on worker 14
+[ Info: Running member 11 on worker 12
+[ Info: Running member 10 on worker 4
+[ Info: Running member 9 on worker 5
+[ Info: Running member 8 on worker 19
+[ Info: Running member 7 on worker 17
+[ Info: Running member 6 on worker 18
+[ Info: Running member 5 on worker 20
+[ Info: Running member 4 on worker 13
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 15
+[ Info: Running member 1 on worker 16
+[ Info: Iteration 3 time: 5 minutes, 59 seconds, 828 milliseconds
+[ Info: Iteration 4 (T=747.8467760707226)
+┌ Info: Covariance-weighted error: 0.0030057926859013186
+│ Covariance trace: 5.304212805470197
+└ Covariance trace ratio (current/previous): 0.9634745633042919
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [745.6207591813564, 3892.6634499902248]
+[ Info: Covariance-weighted error: 0.0030057926859013186
+[ Info: Running Iteration 4
+[ Info: Running member 20 on worker 4
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 5
+[ Info: Running member 17 on worker 2
+[ Info: Running member 16 on worker 20
+[ Info: Running member 15 on worker 16
+[ Info: Running member 14 on worker 17
+[ Info: Running member 13 on worker 18
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 19
+[ Info: Running member 10 on worker 9
+[ Info: Running member 9 on worker 14
+[ Info: Running member 8 on worker 21
+[ Info: Running member 7 on worker 15
+[ Info: Running member 6 on worker 6
+[ Info: Running member 5 on worker 8
+[ Info: Running member 4 on worker 11
+[ Info: Running member 3 on worker 13
+[ Info: Running member 2 on worker 12
+[ Info: Running member 1 on worker 7
+[ Info: Iteration 3 time: 6 minutes, 4 seconds, 769 milliseconds
+[ Info: Iteration 4 (T=0.5458777056938733)
+┌ Info: Covariance-weighted error: 9.850178278899502
+│ Covariance trace: 4.970541698190794
+└ Covariance trace ratio (current/previous): 0.8672337919770572
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [804.245618210502, 3224.7158461676263]
+[ Info: Covariance-weighted error: 9.850178278899502
+[ Info: Running Iteration 4
+[ Info: Running member 20 on worker 6
+[ Info: Running member 19 on worker 11
+[ Info: Running member 18 on worker 2
+[ Info: Running member 17 on worker 9
+[ Info: Running member 16 on worker 3
+[ Info: Running member 15 on worker 7
+[ Info: Running member 14 on worker 10
+[ Info: Running member 13 on worker 8
+[ Info: Running member 12 on worker 14
+[ Info: Running member 11 on worker 4
+[ Info: Running member 10 on worker 5
+[ Info: Running member 9 on worker 12
+[ Info: Running member 8 on worker 19
+[ Info: Running member 7 on worker 17
+[ Info: Running member 6 on worker 18
+[ Info: Running member 5 on worker 20
+[ Info: Running member 4 on worker 21
+[ Info: Running member 3 on worker 13
+[ Info: Running member 2 on worker 16
+[ Info: Running member 1 on worker 15
+[ Info: Iteration 4 time: 5 minutes, 59 seconds, 845 milliseconds
+[ Info: Iteration 5 (T=965.2058937784077)
+┌ Info: Covariance-weighted error: 0.0028044439661669258
+│ Covariance trace: 5.031563038762087
+└ Covariance trace ratio (current/previous): 0.9485975060376672
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [672.9678435920899, 3869.4732549033306]
+[ Info: Covariance-weighted error: 0.0028044439661669258
+[ Info: Running Iteration 5
+[ Info: Running member 20 on worker 5
+[ Info: Running member 19 on worker 4
+[ Info: Running member 18 on worker 3
+[ Info: Running member 17 on worker 2
+[ Info: Running member 16 on worker 9
+[ Info: Running member 15 on worker 14
+[ Info: Running member 14 on worker 21
+[ Info: Running member 13 on worker 10
+[ Info: Running member 12 on worker 20
+[ Info: Running member 11 on worker 17
+[ Info: Running member 10 on worker 16
+[ Info: Running member 9 on worker 19
+[ Info: Running member 8 on worker 15
+[ Info: Running member 7 on worker 18
+[ Info: Running member 6 on worker 8
+[ Info: Running member 5 on worker 6
+[ Info: Running member 4 on worker 12
+[ Info: Running member 3 on worker 13
+[ Info: Running member 2 on worker 7
+[ Info: Running member 1 on worker 11
+[ Info: Iteration 4 time: 6 minutes, 8 seconds, 146 milliseconds
+[ Info: Iteration 5 (T=0.6752876027885883)
+┌ Info: Covariance-weighted error: 11.540256704918468
+│ Covariance trace: 4.848818805647888
+└ Covariance trace ratio (current/previous): 0.9755111414542178
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [757.8685322158366, 2964.308731635718]
+[ Info: Covariance-weighted error: 11.540256704918468
+[ Info: Running Iteration 5
+[ Info: Running member 20 on worker 6
+[ Info: Running member 19 on worker 11
+[ Info: Running member 18 on worker 7
+[ Info: Running member 17 on worker 9
+[ Info: Running member 16 on worker 8
+[ Info: Running member 15 on worker 10
+[ Info: Running member 14 on worker 2
+[ Info: Running member 13 on worker 3
+[ Info: Running member 12 on worker 4
+[ Info: Running member 11 on worker 12
+[ Info: Running member 10 on worker 5
+[ Info: Running member 9 on worker 14
+[ Info: Running member 8 on worker 19
+[ Info: Running member 7 on worker 17
+[ Info: Running member 6 on worker 13
+[ Info: Running member 5 on worker 18
+[ Info: Running member 4 on worker 15
+[ Info: Running member 3 on worker 16
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+[ Info: Iteration 5 time: 6 minutes, 4 seconds, 29 milliseconds
+[ Info: Iteration 6 (T=1221.007780481306)
+┌ Info: Covariance-weighted error: 0.0024896869469887904
+│ Covariance trace: 4.88300917710569
+└ Covariance trace ratio (current/previous): 0.970475603602306
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [562.1215367313137, 3618.974885394131]
+[ Info: Covariance-weighted error: 0.0024896869469887904
+[ Info: Running Iteration 6
+[ Info: Running member 20 on worker 20
+[ Info: Running member 19 on worker 14
+[ Info: Running member 18 on worker 17
+[ Info: Running member 17 on worker 10
+[ Info: Running member 16 on worker 16
+[ Info: Running member 15 on worker 21
+[ Info: Running member 14 on worker 9
+[ Info: Running member 13 on worker 18
+[ Info: Running member 12 on worker 19
+[ Info: Running member 11 on worker 15
+[ Info: Running member 10 on worker 4
+[ Info: Running member 9 on worker 5
+[ Info: Running member 8 on worker 3
+[ Info: Running member 7 on worker 8
+[ Info: Running member 6 on worker 2
+[ Info: Running member 5 on worker 12
+[ Info: Running member 4 on worker 11
+[ Info: Running member 3 on worker 6
+[ Info: Running member 2 on worker 7
+[ Info: Running member 1 on worker 13
+[ Info: Iteration 5 time: 6 minutes, 11 seconds, 634 milliseconds
+[ Info: Iteration 6 (T=0.8035474802135592)
+┌ Info: Covariance-weighted error: 8.641001294280283
+│ Covariance trace: 4.128225163932585
+└ Covariance trace ratio (current/previous): 0.8513877976063042
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [734.7548678857809, 3157.464736666877]
+[ Info: Covariance-weighted error: 8.641001294280283
+[ Info: Running Iteration 6
+[ Info: Running member 20 on worker 6
+[ Info: Running member 19 on worker 2
+[ Info: Running member 18 on worker 11
+[ Info: Running member 17 on worker 7
+[ Info: Running member 16 on worker 3
+[ Info: Running member 15 on worker 9
+[ Info: Running member 14 on worker 8
+[ Info: Running member 13 on worker 10
+[ Info: Running member 12 on worker 5
+[ Info: Running member 11 on worker 4
+[ Info: Running member 10 on worker 14
+[ Info: Running member 9 on worker 12
+[ Info: Running member 8 on worker 18
+[ Info: Running member 7 on worker 19
+[ Info: Running member 6 on worker 17
+[ Info: Running member 5 on worker 21
+[ Info: Running member 4 on worker 13
+[ Info: Running member 3 on worker 20
+[ Info: Running member 2 on worker 16
+[ Info: Running member 1 on worker 15
+[ Info: Iteration 6 time: 5 minutes, 59 seconds, 240 milliseconds
+[ Info: Iteration 7 (T=1536.5261610934917)
+┌ Info: Covariance-weighted error: 0.0019147649453731244
+│ Covariance trace: 4.843626272570208
+└ Covariance trace ratio (current/previous): 0.9919347060169104
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [526.0264030264595, 3555.3804179042363]
+[ Info: Covariance-weighted error: 0.0019147649453731244
+[ Info: Running Iteration 7
+[ Info: Running member 20 on worker 21
+[ Info: Running member 19 on worker 9
+[ Info: Running member 18 on worker 10
+[ Info: Running member 17 on worker 14
+[ Info: Running member 16 on worker 3
+[ Info: Running member 15 on worker 4
+[ Info: Running member 14 on worker 20
+[ Info: Running member 13 on worker 2
+[ Info: Running member 12 on worker 19
+[ Info: Running member 11 on worker 5
+[ Info: Running member 10 on worker 17
+[ Info: Running member 9 on worker 15
+[ Info: Running member 8 on worker 16
+[ Info: Running member 7 on worker 18
+[ Info: Running member 6 on worker 8
+[ Info: Running member 5 on worker 13
+[ Info: Running member 4 on worker 12
+[ Info: Running member 3 on worker 6
+[ Info: Running member 2 on worker 7
+[ Info: Running member 1 on worker 11
+[ Info: Iteration 6 time: 5 minutes, 58 seconds, 99 milliseconds
+[ Info: Iteration 7 (T=0.9228304623854959)
+┌ Info: Covariance-weighted error: 9.54260201577072
+│ Covariance trace: 4.204408303087202
+└ Covariance trace ratio (current/previous): 1.0184542112237998
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [720.1553650217338, 3248.788684049342]
+[ Info: Covariance-weighted error: 9.54260201577072
+[ Info: Running Iteration 7
+[ Info: Running member 20 on worker 11
+[ Info: Running member 19 on worker 6
+[ Info: Running member 18 on worker 7
+[ Info: Running member 17 on worker 10
+[ Info: Running member 16 on worker 9
+[ Info: Running member 15 on worker 8
+[ Info: Running member 14 on worker 2
+[ Info: Running member 13 on worker 12
+[ Info: Running member 12 on worker 4
+[ Info: Running member 11 on worker 5
+[ Info: Running member 10 on worker 19
+[ Info: Running member 9 on worker 3
+[ Info: Running member 8 on worker 14
+[ Info: Running member 7 on worker 18
+[ Info: Running member 6 on worker 13
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 21
+[ Info: Running member 3 on worker 16
+[ Info: Running member 2 on worker 15
+[ Info: Running member 1 on worker 20
+[ Info: Iteration 7 time: 5 minutes, 57 seconds, 149 milliseconds
+[ Info: Iteration 8 (T=1783.4188472205187)
+┌ Info: Covariance-weighted error: 0.002621022010436364
+│ Covariance trace: 4.898741981137407
+└ Covariance trace ratio (current/previous): 1.0113790175925264
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [519.0556080753212, 3449.39933380037]
+[ Info: Covariance-weighted error: 0.002621022010436364
+[ Info: Running Iteration 8
+[ Info: Running member 20 on worker 4
+[ Info: Running member 19 on worker 5
+[ Info: Running member 18 on worker 3
+[ Info: Running member 17 on worker 2
+[ Info: Running member 16 on worker 17
+[ Info: Running member 15 on worker 20
+[ Info: Running member 14 on worker 16
+[ Info: Running member 13 on worker 18
+[ Info: Running member 12 on worker 10
+[ Info: Running member 11 on worker 14
+[ Info: Running member 10 on worker 8
+[ Info: Running member 9 on worker 9
+[ Info: Running member 8 on worker 19
+[ Info: Running member 7 on worker 21
+[ Info: Running member 6 on worker 13
+[ Info: Running member 5 on worker 15
+[ Info: Running member 4 on worker 12
+[ Info: Running member 3 on worker 11
+[ Info: Running member 2 on worker 7
+[ Info: Running member 1 on worker 6
+[ Info: Iteration 7 time: 5 minutes, 58 seconds, 699 milliseconds
+[ Info: Termination condition of scheduler `DataMisfitController` will be exceeded during the next iteration.
+[ Info: Iteration 8 (T=1.0)
+┌ Info: Covariance-weighted error: 9.354117714466428
+│ Covariance trace: 4.212765366721679
+└ Covariance trace ratio (current/previous): 1.0019876907835854
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [635.7636748858397, 3181.6782101088547]
+[ Info: Covariance-weighted error: 9.354117714466428
+[ Info: Running Iteration 8
+[ Info: Running member 20 on worker 2
+[ Info: Running member 19 on worker 3
+[ Info: Running member 18 on worker 9
+[ Info: Running member 17 on worker 7
+[ Info: Running member 16 on worker 6
+[ Info: Running member 15 on worker 11
+[ Info: Running member 14 on worker 10
+[ Info: Running member 13 on worker 8
+[ Info: Running member 12 on worker 14
+[ Info: Running member 11 on worker 12
+[ Info: Running member 10 on worker 5
+[ Info: Running member 9 on worker 4
+[ Info: Running member 8 on worker 18
+[ Info: Running member 7 on worker 17
+[ Info: Running member 6 on worker 20
+[ Info: Running member 5 on worker 19
+[ Info: Running member 4 on worker 13
+[ Info: Running member 3 on worker 21
+[ Info: Running member 2 on worker 16
+[ Info: Running member 1 on worker 15
+[ Info: Iteration 8 time: 6 minutes, 262 milliseconds
+[ Info: Iteration 9 (T=2016.7144838482266)
+┌ Info: Covariance-weighted error: 0.002660667052611289
+│ Covariance trace: 4.595200075841762
+└ Covariance trace ratio (current/previous): 0.9380367640376994
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [512.4473578414166, 3516.6714897042666]
+[ Info: Covariance-weighted error: 0.002660667052611289
+[ Info: Running Iteration 9
+[ Info: Running member 20 on worker 4
+[ Info: Running member 19 on worker 5
+[ Info: Running member 18 on worker 10
+[ Info: Running member 17 on worker 9
+[ Info: Running member 16 on worker 3
+[ Info: Running member 15 on worker 14
+[ Info: Running member 14 on worker 2
+[ Info: Running member 13 on worker 21
+[ Info: Running member 12 on worker 17
+[ Info: Running member 11 on worker 20
+[ Info: Running member 10 on worker 19
+[ Info: Running member 9 on worker 15
+[ Info: Running member 8 on worker 18
+[ Info: Running member 7 on worker 16
+[ Info: Running member 6 on worker 8
+[ Info: Running member 5 on worker 6
+[ Info: Running member 4 on worker 13
+[ Info: Running member 3 on worker 11
+[ Info: Running member 2 on worker 12
+[ Info: Running member 1 on worker 7
+[ Info: Iteration 8 time: 5 minutes, 56 seconds, 880 milliseconds
+┌ Warning: Termination condition of scheduler `DataMisfitController` has been exceeded. 
+│ on_terminate="continue" selected. Proceeding with algorithm
+└ @ EnsembleKalmanProcesses ~/.julia/packages/EnsembleKalmanProcesses/71YBa/src/LearningRateSchedulers.jl:298
+[ Info: Iteration 9 (T=1.1337032394527606)
+┌ Info: Covariance-weighted error: 9.27517723765916
+│ Covariance trace: 4.028507258114587
+└ Covariance trace ratio (current/previous): 0.9562619579854552
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [510.56340846476587, 3060.848215343308]
+[ Info: Covariance-weighted error: 9.27517723765916
+[ Info: Running Iteration 9
+[ Info: Running member 20 on worker 6
+[ Info: Running member 19 on worker 11
+[ Info: Running member 18 on worker 7
+[ Info: Running member 17 on worker 9
+[ Info: Running member 16 on worker 8
+[ Info: Running member 15 on worker 10
+[ Info: Running member 14 on worker 14
+[ Info: Running member 13 on worker 2
+[ Info: Running member 12 on worker 4
+[ Info: Running member 11 on worker 3
+[ Info: Running member 10 on worker 5
+[ Info: Running member 9 on worker 19
+[ Info: Running member 8 on worker 12
+[ Info: Running member 7 on worker 18
+[ Info: Running member 6 on worker 16
+[ Info: Running member 5 on worker 17
+[ Info: Running member 4 on worker 13
+[ Info: Running member 3 on worker 15
+[ Info: Running member 2 on worker 20
+[ Info: Running member 1 on worker 21
+[ Info: Iteration 9 time: 6 minutes, 1 second, 803 milliseconds
+[ Info: Iteration 10 (T=2251.080352886147)
+┌ Info: Covariance-weighted error: 0.0026425344617046547
+│ Covariance trace: 4.553875232036618
+└ Covariance trace ratio (current/previous): 0.9910069544039224
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [371.3563314684228, 3303.3345127780067]
+[ Info: Covariance-weighted error: 0.0026425344617046547
+[ Info: Iteration 9 time: 5 minutes, 53 seconds, 16 milliseconds
+[ Info: Iteration 10 (T=1.2634138530005512)
+┌ Info: Covariance-weighted error: 7.905388420058651
+│ Covariance trace: 3.796421466681816
+└ Covariance trace ratio (current/previous): 0.9423891340979261
+┌ Warning: Attempting to store EnsembleKalmanProcesses.var"#failsafe_update#166".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+┌ Warning: Attempting to store EnsembleKalmanProcesses.Localizers.var"#1#2".
+│ JLD2 only stores functions by name.
+│  This may not be useful for anonymous functions.
+└ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
+[ Info: Mean constrained parameter(s): [443.66025347119785, 3008.903531285084]
+[ Info: Covariance-weighted error: 7.905388420058651

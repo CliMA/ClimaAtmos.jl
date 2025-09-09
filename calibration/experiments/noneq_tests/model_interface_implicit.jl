@@ -19,7 +19,7 @@ function CAL.forward_model(iteration, member, config_dict = nothing)
         config_dict =
             YAML.load_file(joinpath(experiment_dir, "diagnostic_edmfx_diurnal_scm_imp_noneq_1M_implicit_mixed_phase_site.yml"))
     end
-    output_dir = "/home/oalcabes/EKI_output/test_15" #config_dict["output_dir"] # need to input
+    output_dir = "/home/oalcabes/EKI_output/test_9" #config_dict["output_dir"] # need to input
     member_path = path_to_ensemble_member(output_dir, iteration, member)
     config_dict["output_dir"] = member_path
     parameter_path = joinpath(member_path, "parameters.toml")
