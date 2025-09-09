@@ -1,8 +1,8 @@
 h_elem: 84
 z_elem: 43
 dz_bottom: 30.0
-dt: "6secs"
-t_end: "1days"
+dt: "3secs"
+t_end: "12hours"
 ode_algo: ARS343
 initial_condition: "MoistBaroclinicWave"
 moist: "equil"
