@@ -543,7 +543,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         #        -1 / ᶜρ * ifelse(
         #           ᶜq_tot == 0,
         #            (Geometry.WVector(FT(0)),),
-        #            p.precomputed.ᶜwₜqₜ / _tot,
+        #            p.precomputed.ᶜwₜqₜ / ᶜq_tot,
         #        ),
         #    ) - (I,)
 
@@ -777,6 +777,39 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ) +
                     DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot) ⋅ ᶜadvdivᵥ_matrix()
                 ) ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+
+            if p.atmos.moisture_model isa NonEquilMoistModel && (
+                p.atmos.microphysics_model isa Microphysics1Moment ||
+                p.atmos.microphysics_model isa Microphysics2Moment
+            )
+                sgs_microphysics_tracers = (
+                    (@name(c.sgsʲs.:(1).q_liq), @name(ᶜwₗʲs.:(1))),
+                    (@name(c.sgsʲs.:(1).q_ice), @name(ᶜwᵢʲs.:(1))),
+                    (@name(c.sgsʲs.:(1).q_rai), @name(ᶜwᵣʲs.:(1))),
+                    (@name(c.sgsʲs.:(1).q_sno), @name(ᶜwₛʲs.:(1))),
+                )
+                MatrixFields.unrolled_foreach(
+                    sgs_microphysics_tracers,
+                ) do (qʲ_name, wʲ_name)
+                    MatrixFields.has_field(Y, qʲ_name) || return
+                    ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
+                    ᶠw³ʲ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwʲ)))))
+
+                    ∂ᶜqʲ_err_∂ᶜqʲ = matrix[qʲ_name, qʲ_name]
+                    @. ∂ᶜqʲ_err_∂ᶜqʲ =
+                        dtγ * (
+                            DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1))) -
+                            ᶜadvdivᵥ_matrix() ⋅
+                            ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)))
+                        ) - (I,)
+                    @. ∂ᶜqʲ_err_∂ᶜqʲ +=
+                        dtγ * (
+                            DiagonalMatrixRow(ᶜadvdivᵥ(ᶠw³ʲ)) -
+                            ᶜadvdivᵥ_matrix() ⋅
+                            ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠw³ʲ))
+                        )
+                end
+            end
 
             ∂ᶜmseʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot)]
