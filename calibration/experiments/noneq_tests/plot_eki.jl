@@ -10,8 +10,8 @@ using Plots
 using LinearAlgebra
 using DataFrames
 
-output_dir = "/home/oalcabes/EKI_output/3_day_average/implicit_short"
-fast_timescale = true
+output_dir = "/home/oalcabes/EKI_output/3_day_average/noise_0.1/implicit_long"
+fast_timescale = false
 iterations = nothing
 
 include("../../experiments/gcm_driven_scm/helper_funcs.jl")

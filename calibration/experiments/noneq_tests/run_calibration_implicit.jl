@@ -13,12 +13,12 @@ include("model_interface_implicit.jl")
 
 #const prior = CAL.get_prior(joinpath(experiment_dir, prior_path))
 
-fast_timescale = true
+fast_timescale = false
 
-run_truth = false
+run_truth = true
 ensemble_size = 20
 n_iterations = 10
-output_dir = "/home/oalcabes/EKI_output/test_15"
+output_dir = "/home/oalcabes/EKI_output/test_9"
 
 if fast_timescale
     prior_vec = [PD.constrained_gaussian("condensation_evaporation_timescale", 20, 19, 0.1, 100), # real = 5s
@@ -87,7 +87,7 @@ addprocs(
 
     ensemble_size = 20
     n_iterations = 10
-    output_dir = "/home/oalcabes/EKI_output/test_15"
+    output_dir = "/home/oalcabes/EKI_output/test_9"
 
     experiment_dir = dirname(Base.active_project())
     #const model_interface = joinpath(experiment_dir, "..", "model_interface.jl")
