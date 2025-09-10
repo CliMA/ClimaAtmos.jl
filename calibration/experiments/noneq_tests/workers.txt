@@ -16488,3 +16488,280 @@ srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the re
 └ @ JLD2 ~/.julia/packages/JLD2/SgtOb/src/data/writing_datatypes.jl:447
 [ Info: Mean constrained parameter(s): [443.66025347119785, 3008.903531285084]
 [ Info: Covariance-weighted error: 7.905388420058651
+[ Info: Starting 8 workers.
+[ Info: Starting SLURM job julia-3194351: `srun -J julia-3194351 -n 8 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-3194351-17575416020.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=6WvOKZMgzgHdZiud`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 8 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9744
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9742
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9748
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9746
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9741
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9743
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9745
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9747
+WARNING: using ClimaCalibrate.forward_model in module Main conflicts with an existing identifier.
+WARNING: using ClimaCalibrate.default_worker_pool in module Main conflicts with an existing identifier.
+WARNING: import of ClimaCalibrate.forward_model into Main conflicts with an existing identifier; ignored.
+worker = 1
+site_index = 1
+┌ Warning: Error in worker 1 at site 1 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -42.0, 145.0, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 2
+┌ Warning: Error in worker 1 at site 2 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -49.20000076293945, 69.30000305175781, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 3
+┌ Warning: Error in worker 1 at site 3 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -54.599998474121094, 158.89999389648438, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 4
+┌ Warning: Error in worker 1 at site 4 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -58.5, -105.60000610351562, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 5
+┌ Warning: Error in worker 1 at site 5 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -43.95000076293945, -176.60000610351562, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 6
+┌ Warning: Error in worker 1 at site 6 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -40.349998474121094, -9.8800048828125, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 7
+┌ Warning: Error in worker 1 at site 7 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -56.0, 0.0, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 8
+┌ Warning: Error in worker 1 at site 8 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -42.70000076293945, -86.5, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+[ Info: Starting 8 workers.
+[ Info: Starting SLURM job julia-3197774: `srun -J julia-3197774 -n 8 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-3197774-17575419128.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=gUpwfdgexsL7RPH6`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 8 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9143
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9145
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9141
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9139
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9142
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9144
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9138
+[ Info: Worker ready after 4s on host 169.254.3.1, port 9140
+WARNING: using ClimaCalibrate.forward_model in module Main conflicts with an existing identifier.
+WARNING: using ClimaCalibrate.default_worker_pool in module Main conflicts with an existing identifier.
+WARNING: import of ClimaCalibrate.forward_model into Main conflicts with an existing identifier; ignored.
+worker = 1
+site_index = 1
+┌ Warning: Error in worker 1 at site 1 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -42.0, 145.0, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 2
+┌ Warning: Error in worker 1 at site 2 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -49.20000076293945, 69.30000305175781, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 3
+┌ Warning: Error in worker 1 at site 3 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -54.599998474121094, 158.89999389648438, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 4
+┌ Warning: Error in worker 1 at site 4 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -58.5, -105.60000610351562, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 5
+┌ Warning: Error in worker 1 at site 5 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -43.95000076293945, -176.60000610351562, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 6
+┌ Warning: Error in worker 1 at site 6 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -40.349998474121094, -9.8800048828125, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 7
+┌ Warning: Error in worker 1 at site 7 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -56.0, 0.0, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+worker = 1
+site_index = 8
+┌ Warning: Error in worker 1 at site 8 for start date 20071001: MethodError(Distributed.remotecall_wait, (Main.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -42.70000076293945, -86.5, "20071001"), 0x00000000000069b7)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:186
+ERROR: LoadError: UndefVarError: `@everywhere` not defined in `Main`
+Suggestion: check for spelling errors or missing imports.
+Hint: a global variable of this name may be made accessible by importing Distributed in the current active module Main
+Stacktrace:
+ [1] top-level scope
+   @ :0
+ [2] include(fname::String)
+   @ Main ./sysimg.jl:38
+ [3] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:17
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface_manysites.jl:14
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface_manysites.jl:14
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:17
+ERROR: LoadError: UndefVarError: `@everywhere` not defined in `Main`
+Suggestion: check for spelling errors or missing imports.
+Hint: a global variable of this name may be made accessible by importing Distributed in the current active module Main
+Stacktrace:
+ [1] top-level scope
+   @ :0
+ [2] include(fname::String)
+   @ Main ./sysimg.jl:38
+ [3] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:17
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface_manysites.jl:14
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface_manysites.jl:14
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:17
+ERROR: LoadError: ParseError:
+# Error @ /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface_manysites.jl:71:4
+
+end
+#  └ ── Expected `end`
+Stacktrace:
+ [1] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface_manysites.jl:71
+ [2] include(fname::String)
+   @ Main ./sysimg.jl:38
+ [3] top-level scope
+   @ ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:17
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/model_interface_manysites.jl:71
+in expression starting at /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:17
+[ Info: Starting 8 workers.
+[ Info: Starting SLURM job julia-3205599: `srun -J julia-3205599 -n 8 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-3205599-17575426707.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=mzBEDNUuNgmFlxSr`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 8 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9785
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9787
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9783
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9780
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9782
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9781
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9786
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9784
+WARNING: using ClimaCalibrate.default_worker_pool in module Main conflicts with an existing identifier.
+worker = 2
+site_index = 1
+┌ Warning: Error in worker 2 at site 1 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 2, -42.0, 145.0, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 3
+site_index = 2
+┌ Warning: Error in worker 3 at site 2 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 3, -49.20000076293945, 69.30000305175781, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 4
+site_index = 3
+┌ Warning: Error in worker 4 at site 3 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 4, -54.599998474121094, 158.89999389648438, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 5
+site_index = 4
+┌ Warning: Error in worker 5 at site 4 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 5, -58.5, -105.60000610351562, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 7
+site_index = 5
+┌ Warning: Error in worker 7 at site 5 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 7, -43.95000076293945, -176.60000610351562, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 6
+site_index = 6
+┌ Warning: Error in worker 6 at site 6 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 6, -40.349998474121094, -9.8800048828125, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 9
+site_index = 7
+┌ Warning: Error in worker 9 at site 7 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 9, -56.0, 0.0, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 8
+site_index = 8
+┌ Warning: Error in worker 8 at site 8 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 8, -42.70000076293945, -86.5, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+WARNING: using Distributed.default_worker_pool in module Main conflicts with an existing identifier.
+[ Info: Starting 8 workers.
+[ Info: Starting SLURM job julia-3207267: `srun -J julia-3207267 -n 8 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-3207267-17575427749.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=nJKlSscOlbxb0Ga4`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 8 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9579
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9581
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9585
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9582
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9584
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9583
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9578
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9580
+WARNING: using ClimaCalibrate.default_worker_pool in module Main conflicts with an existing identifier.
+worker = 1
+site_index = 1
+┌ Warning: Error in worker 1 at site 1 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -42.0, 145.0, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 2
+┌ Warning: Error in worker 1 at site 2 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -49.20000076293945, 69.30000305175781, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 3
+┌ Warning: Error in worker 1 at site 3 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -54.599998474121094, 158.89999389648438, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 4
+┌ Warning: Error in worker 1 at site 4 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -58.5, -105.60000610351562, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 5
+┌ Warning: Error in worker 1 at site 5 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -43.95000076293945, -176.60000610351562, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 6
+┌ Warning: Error in worker 1 at site 6 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -40.349998474121094, -9.8800048828125, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 7
+┌ Warning: Error in worker 1 at site 7 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -56.0, 0.0, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 8
+┌ Warning: Error in worker 1 at site 8 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -42.70000076293945, -86.5, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+[ Info: Starting 8 workers.
+[ Info: Starting SLURM job julia-3208792: `srun -J julia-3208792 -n 8 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-3208792-17575428473.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=En9umqxt4DQEgxWJ`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 8 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9946
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9944
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9940
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9939
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9941
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9943
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9945
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9942
+worker = 1
+site_index = 1
+┌ Warning: Error in worker 1 at site 1 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -42.0, 145.0, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 2
+┌ Warning: Error in worker 1 at site 2 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -49.20000076293945, 69.30000305175781, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 3
+┌ Warning: Error in worker 1 at site 3 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -54.599998474121094, 158.89999389648438, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 4
+┌ Warning: Error in worker 1 at site 4 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -58.5, -105.60000610351562, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 5
+┌ Warning: Error in worker 1 at site 5 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -43.95000076293945, -176.60000610351562, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 6
+┌ Warning: Error in worker 1 at site 6 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -40.349998474121094, -9.8800048828125, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 7
+┌ Warning: Error in worker 1 at site 7 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -56.0, 0.0, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+worker = 1
+site_index = 8
+┌ Warning: Error in worker 1 at site 8 for start date 20071001: MethodError(Distributed.remotecall_wait, (ClimaCalibrate.forward_model, "/home/oalcabes/SO_singlecolumn", 1, -42.70000076293945, -86.5, "20071001"), 0x00000000000069aa)
+└ @ Main ~/ClimaAtmos.jl/calibration/experiments/noneq_tests/run_many_sites.jl:127
+[ Info: Starting 8 workers.
+[ Info: Starting SLURM job julia-3211065: `srun -J julia-3211065 -n 8 -D /home/oalcabes/ClimaAtmos.jl/calibration/experiments/noneq_tests --cpus-per-task=1 --mem-per-cpu=25G -t 6:00:00 -o .julia-3211065-17575430029.out -- /clima/software/julia/julia-1.11.5/bin/julia --worker=1lZGv1QlVfbgPW2K`
+srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the requested tasks 8 with the number of requested nodes 1. Ignoring --ntasks-per-node.
+[ Info: Worker launch (after 0 s): No output file ".julia-3211065-17575430029.out" yet
+[ Info: Worker launch (after 0 s): No output file ".julia-3211065-17575430029.out" yet
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9285
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9283
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9287
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9281
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9284
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9286
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9280
+[ Info: Worker ready after 5s on host 169.254.3.1, port 9282

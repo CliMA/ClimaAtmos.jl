@@ -14,8 +14,9 @@ using Glob
 using NCDatasets
 import YAML
 
-#include("helper_funcs.jl")
+include("model_interface_manysites.jl")
 
+using Distributions
 using Distributed
 # const experiment_config_dict =
 #     YAML.load_file(joinpath(@__DIR__, "experiment_config.yml"))
@@ -27,68 +28,6 @@ using Distributed
 # MY STUFF
 
 
-# FUNCTIONS
-default_worker_pool() = WorkerPool(workers())
-
-@everywhere function run_atmos_simulation(atmos_config)
-    simulation = CA.get_simulation(atmos_config)
-    sol_res = CA.solve_atmos!(simulation)
-    if sol_res.ret_code == :simulation_crashed
-        if !isnothing(sol_res.sol)
-            T = eltype(sol_res.sol)
-            if T !== Any && isconcretetype(T)
-                sol_res.sol .= T(NaN)
-            else
-                fill!(sol_res.sol, NaN)
-            end
-        end
-        error(
-            "The ClimaAtmos simulation has crashed. See the stack trace for details.",
-        )
-    end
-end
-
-function forward_model(parameter_path, lat, lon, start_date)
-    base_config_dict = YAML.load_file(joinpath(@__DIR__, "diagnostic_edmfx_diurnal_scm_imp.yml"))
-    config_dict = deepcopy(base_config_dict)
-
-    # update the config_dict with site latitude / longitude
-    config_dict["site_latitude"] = lat
-    config_dict["site_longitude"] = lon
-    config_dict["start_date"] = start_date
-
-    # set the data output directory
-    member_path = dirname(parameter_path)
-    member_path = joinpath(member_path, "location_$(lat)_$(lon)_$(start_date)")
-    config_dict["output_dir"] = member_path
-
-    # add the perturbation toml to the config_dict
-    # if haskey(config_dict, "toml")
-    #     config_dict["toml"] = abspath.(config_dict["toml"])
-    #     push!(config_dict["toml"], parameter_path)
-    # else
-    #     config_dict["toml"] = [parameter_path]
-    # end
-
-    push!(config_dict["toml"], truth_toml)
-    
-    comms_ctx = ClimaComms.SingletonCommsContext()
-    config = CA.AtmosConfig(config_dict; comms_ctx)
-
-    start_time = time()
-    try
-        run_atmos_simulation(config)
-    catch e
-        @warn "Simulation crashed for parameter file $(parameter_path): $(e)"
-        return
-    end
-    end_time = time()
-
-    elapsed_time = (end_time - start_time) / 60.0
-
-    @info "Finished simulation. Total time taken: $(elapsed_time) minutes."
-
-end
 
 #################### Site Selection ###########################
 # lats = [
@@ -123,6 +62,7 @@ start_dates = ["20071001"] # ,
 
 # num_procs = 800
 # ensemble_size = 100
+site_amnt = 8
 fast_timescale = false
 
 # experiment_dir = dirname(Base.active_project())
@@ -140,12 +80,12 @@ else
     toml_path_name = "toml/truth.toml"
 end
 
-worker_pool = default_worker_pool()
+worker_pool = CAL.default_worker_pool()
 
 # add workers
-@info "Starting $ensemble_size workers."
+@info "Starting $site_amnt workers."
 addprocs(
-    CAL.SlurmManager(Int(ensemble_size)),
+    CAL.SlurmManager(Int(site_amnt)),
     t = "6:00:00",
     mem_per_cpu = "25G",
     cpus_per_task = 1,
@@ -161,12 +101,15 @@ addprocs(
     using Distributions
     using Distributed
 
-    include("observation_map.jl")
-    include("model_interface.jl")
+    # include("observation_map.jl")
+    # include("model_interface.jl")
+    include("model_interface_manysites.jl")
 
-    ensemble_size = 20
+    #ensemble_size = 20
+    site_amnt = 8
     n_iterations = 10
-    output_dir = "/home/oalcabes/EKI_output/test_8"
+    #output_dir = "/home/oalcabes/EKI_output/test_8"
+    output_dir = "/home/oalcabes/SO_singlecolumn"
 
     experiment_dir = dirname(Base.active_project())
 end
@@ -176,15 +119,15 @@ end
         for (site_index, (lat, lon)) in enumerate(zip(lats, lons))
             @async begin
                 worker = take!(worker_pool)
-                try
-                    @show worker site_index
+                #try
+                #    @show worker site_index
                     # Pass lat and lon into forward_model
-                    remotecall_wait(forward_model, output_dir, worker, lat, lon, start_date)
-                catch e
-                    @warn "Error in worker $(worker) at site $(site_index) for start date $(start_date): $(e)"
-                finally
-                    put!(worker_pool, worker)
-                end
+                remotecall_wait(forward_model, output_dir, worker, lat, lon, start_date)
+                #catch e
+                #    @warn "Error in worker $(worker) at site $(site_index) for start date $(start_date): $(e)"
+                #finally
+                put!(worker_pool, worker)
+                #end
             end
         end
     end
