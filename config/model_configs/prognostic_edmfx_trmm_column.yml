@@ -1,3 +1,4 @@
+FLOAT_TYPE: "Float64"
 initial_condition: TRMM_LBA
 rad: TRMM_LBA
 surface_setup: TRMM_LBA
@@ -15,7 +16,6 @@ edmfx_filter: true
 prognostic_tke: true
 moist: nonequil
 cloud_model: "quadrature_sgs"
-apply_limiter: false
 precip_model: "1M"
 call_cloud_diagnostics_per_stage: true
 config: column
@@ -25,9 +25,8 @@ y_elem: 2
 z_elem: 82
 z_stretch: false
 dt: 10secs
-t_end: 285mins
-dt_save_state_to_disk: 10mins
-FLOAT_TYPE: "Float64"
+t_end: 6hours
+dt_save_state_to_disk: 60mins
 toml: [toml/prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [8, 8, 82]
 diagnostics:

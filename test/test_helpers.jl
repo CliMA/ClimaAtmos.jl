@@ -150,8 +150,8 @@ function get_test_functions(cent_space, face_space)
     UVW = Geometry.UVWVector
     # Assemble (Cartesian) velocity
     ᶜu = @. UVW(Geometry.UVector(u)) +
-       UVW(Geometry.VVector(v)) +
-       UVW(Geometry.WVector(w))
+            UVW(Geometry.VVector(v)) +
+            UVW(Geometry.WVector(w))
     ᶠu = @. UVW(Geometry.UVector(ᶠu)) +
        UVW(Geometry.VVector(ᶠv)) +
        UVW(Geometry.WVector(ᶠw))

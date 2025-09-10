@@ -30,7 +30,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke⁰
-    ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
+    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
 
@@ -38,10 +38,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         p.atmos.microphysics_model isa Microphysics1Moment ||
         p.atmos.microphysics_model isa Microphysics2Moment
     )
-        ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y, p)
-        ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
-        ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
-        ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
+        ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
+        ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
+        ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
+        ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
         @. ᶜts⁰ = TD.PhaseNonEquil_phq(
             thermo_params,
             ᶜp,
@@ -222,49 +222,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
             obukhov_length_val,
             sfc_local_geometry_val,
         )
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
-        )
-            # TODO - any better way to define the cloud and precip tracer flux?
-
-            ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-            ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-            ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-            ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-            ᶜq_liq_int_val = Fields.field_values(Fields.level(ᶜq_liq, 1))
-            ᶜq_liqʲ_int_val = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
-            @. ᶜq_liqʲ_int_val = ᶜq_liq_int_val
-
-            ᶜq_ice_int_val = Fields.field_values(Fields.level(ᶜq_ice, 1))
-            ᶜq_iceʲ_int_val = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
-            @. ᶜq_iceʲ_int_val = ᶜq_ice_int_val
-
-            ᶜq_rai_int_val = Fields.field_values(Fields.level(ᶜq_rai, 1))
-            ᶜq_raiʲ_int_val = Fields.field_values(Fields.level(ᶜq_raiʲ, 1))
-            @. ᶜq_raiʲ_int_val = ᶜq_rai_int_val
-
-            ᶜq_sno_int_val = Fields.field_values(Fields.level(ᶜq_sno, 1))
-            ᶜq_snoʲ_int_val = Fields.field_values(Fields.level(ᶜq_snoʲ, 1))
-            @. ᶜq_snoʲ_int_val = ᶜq_sno_int_val
-        end
-        if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.microphysics_model isa Microphysics2Moment
-
-            ᶜn_liq = @. lazy(specific(Y.c.ρn_liq, Y.c.ρ))
-            ᶜn_rai = @. lazy(specific(Y.c.ρn_rai, Y.c.ρ))
-            ᶜn_liqʲ = Y.c.sgsʲs.:($j).n_liq
-            ᶜn_raiʲ = Y.c.sgsʲs.:($j).n_rai
-
-            ᶜn_liq_int_val = Fields.field_values(Fields.level(ᶜn_liq, 1))
-            ᶜn_liqʲ_int_val = Fields.field_values(Fields.level(ᶜn_liqʲ, 1))
-            @. ᶜn_liqʲ_int_val = ᶜn_liq_int_val
-
-            ᶜn_rai_int_val = Fields.field_values(Fields.level(ᶜn_rai, 1))
-            ᶜn_raiʲ_int_val = Fields.field_values(Fields.level(ᶜn_raiʲ, 1))
-            @. ᶜn_raiʲ_int_val = ᶜn_rai_int_val
-
-        end
 
         # Then overwrite the prognostic variables at first inetrior point.
         ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
@@ -273,6 +230,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
             p.atmos.microphysics_model isa Microphysics1Moment ||
             p.atmos.microphysics_model isa Microphysics2Moment
         )
+            ᶜq_liqʲ_int_val = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
+            ᶜq_iceʲ_int_val = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
+            ᶜq_raiʲ_int_val = Fields.field_values(Fields.level(ᶜq_raiʲ, 1))
+            ᶜq_snoʲ_int_val = Fields.field_values(Fields.level(ᶜq_snoʲ, 1))
             @. ᶜtsʲ_int_val = TD.PhaseNonEquil_phq(
                 thermo_params,
                 ᶜp_int_val,
@@ -365,7 +326,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜu, ᶜp, ᶠu³⁰, ᶜts⁰) = p.precomputed
+    (; ᶜu, ᶜp, ᶠu³, ᶜts, ᶠu³⁰, ᶜts⁰) = p.precomputed
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ρatke_flux) = p.precomputed
     (;
         ᶜuʲs,
@@ -467,31 +428,31 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         )
     end
 
-    (; ᶜgradᵥ_θ_virt⁰, ᶜgradᵥ_q_tot⁰, ᶜgradᵥ_θ_liq_ice⁰) = p.precomputed
+    (; ᶜgradᵥ_θ_virt, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
     # First order approximation: Use environmental mean fields.
-    @. ᶜgradᵥ_θ_virt⁰ = ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts⁰)))       # ∂θv∂z_unsat
-    ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
-    @. ᶜgradᵥ_q_tot⁰ = ᶜgradᵥ(ᶠinterp(ᶜq_tot⁰))                                        # ∂qt∂z_sat
-    @. ᶜgradᵥ_θ_liq_ice⁰ =
-        ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰)))                    # ∂θl∂z_sat
+    @. ᶜgradᵥ_θ_virt = ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))       # ∂θv∂z_unsat
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot))                                        # ∂qt∂z_sat
+    @. ᶜgradᵥ_θ_liq_ice =
+        ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))                    # ∂θl∂z_sat
     @. ᶜlinear_buoygrad = buoyancy_gradients( # TODO - do we need to modify buoyancy gradients based on NonEq + 1M tracers?
         BuoyGradMean(),
         thermo_params,
         moisture_model,
-        ᶜts⁰,
+        ᶜts,
         C3,
-        ᶜgradᵥ_θ_virt⁰,
-        ᶜgradᵥ_q_tot⁰,
-        ᶜgradᵥ_θ_liq_ice⁰,
+        ᶜgradᵥ_θ_virt,
+        ᶜgradᵥ_q_tot,
+        ᶜgradᵥ_θ_liq_ice,
         ᶜlg,
     )
 
     # TODO: Make strain_rate_norm calculation a function in eddy_diffusion_closures
     # TODO: Currently the shear production only includes vertical gradients
-    ᶠu⁰ = p.scratch.ᶠtemp_C123
-    @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
+    ᶠu = p.scratch.ᶠtemp_C123
+    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
-    ᶜstrain_rate .= compute_strain_rate_center(ᶠu⁰)
+    ᶜstrain_rate .= compute_strain_rate_center(ᶠu)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
@@ -546,7 +507,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         )
     end
     # sources from the environment
-    ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
+    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
     @. ᶜSqₜᵖ⁰ = q_tot_0M_precipitation_sources(thp, cmp, dt, ᶜq_tot⁰, ᶜts⁰)
     return nothing
 end
@@ -630,7 +591,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
                 ᶜwₛʲs.:($$j) *
                 Y.c.sgsʲs.:($$j).q_sno *
                 (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
-            ) / abs(Y.c.sgsʲs.:($$j).mse),
+            ) / (Y.c.sgsʲs.:($$j).mse),
             FT(0),
         )
 
@@ -696,11 +657,11 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     end
 
     # Precipitation sources and sinks from the environment
-    ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
-    ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y, p)
-    ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
-    ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
-    ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
+    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+    ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
+    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
+    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
+    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜts⁰))
     compute_precipitation_sources!(
         ᶜSᵖ,
@@ -788,7 +749,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     ) = p.precomputed
     (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜSnₗᵖ⁰, ᶜSnᵣᵖ⁰, ᶜts⁰, ᶜu⁰) =
         p.precomputed
-    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs, ᶜwₜʲs, ᶜwₕʲs) = p.precomputed
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs, ᶜwₜʲs, ᶜwₕʲs, ᶜuʲs) =
+        p.precomputed
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜS₂ᵖ = p.scratch.ᶜtemp_scalar_2
@@ -825,7 +787,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
                 cm2p.rtv,
                 max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
                 ᶜρʲs.:($$j),
-                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).n_rai),
+                max(zero(Y.c.ρ), ᶜρʲs.:($$j) * Y.c.sgsʲs.:($$j).n_rai),
             ),
             1,
         )
@@ -835,7 +797,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
                 cm2p.rtv,
                 max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_rai),
                 ᶜρʲs.:($$j),
-                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).n_rai),
+                max(zero(Y.c.ρ), ᶜρʲs.:($$j) * Y.c.sgsʲs.:($$j).n_rai),
             ),
             2,
         )
@@ -899,7 +861,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
                 ᶜwₛʲs.:($$j) *
                 Y.c.sgsʲs.:($$j).q_sno *
                 (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
-            ) / abs(Y.c.sgsʲs.:($$j).mse),
+            ) / (Y.c.sgsʲs.:($$j).mse),
             FT(0),
         )
 
@@ -969,13 +931,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     end
 
     # Precipitation sources and sinks from the environment
-    ᶜn_liq⁰ = ᶜspecific_env_value(Val(:n_liq), Y, p)
-    ᶜn_rai⁰ = ᶜspecific_env_value(Val(:n_rai), Y, p)
-    ᶜq_tot⁰ = ᶜspecific_env_value(Val(:q_tot), Y, p)
-    ᶜq_liq⁰ = ᶜspecific_env_value(Val(:q_liq), Y, p)
-    ᶜq_ice⁰ = ᶜspecific_env_value(Val(:q_ice), Y, p)
-    ᶜq_rai⁰ = ᶜspecific_env_value(Val(:q_rai), Y, p)
-    ᶜq_sno⁰ = ᶜspecific_env_value(Val(:q_sno), Y, p)
+    ᶜn_liq⁰ = ᶜspecific_env_value(@name(n_liq), Y, p)
+    ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), Y, p)
+    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+    ᶜq_liq⁰ = ᶜspecific_env_value(@name(q_liq), Y, p)
+    ᶜq_ice⁰ = ᶜspecific_env_value(@name(q_ice), Y, p)
+    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
+    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
     ᶜρ⁰ = @. lazy(TD.air_density(thp, ᶜts⁰))
     compute_warm_precipitation_sources_2M!(
         ᶜSᵖ,

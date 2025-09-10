@@ -75,10 +75,30 @@ function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠu³ * ᶠinterp(ᶜχ))))
 end
+function vertical_transport_precip_massflux(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
+    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
+    return @. lazy(
+        -(ᶜprecip_massflux_divᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠu³ * ᶠinterp(ᶜχ))),
+    )
+end
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))))
+end
+function vertical_transport_precip_massflux(
+    ᶜρ,
+    ᶠu³,
+    ᶜχ,
+    dt,
+    ::Val{:first_order},
+)
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
+    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
+    return @. lazy(
+        -(ᶜprecip_massflux_divᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))),
+    )
 end
 @static if pkgversion(ClimaCore) ≥ v"0.14.22"
     function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
@@ -193,15 +213,15 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         )
     end
     if microphysics_model isa Microphysics2Moment
-        (; ᶜwnₗ, ᶜwnᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
+        (; ᶜwₙₗ, ᶜwₙᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
         @. Yₜ.c.ρn_liq -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwnₗ)) * specific(Y.c.ρn_liq, Y.c.ρ),
+                Geometry.WVector(-(ᶜwₙₗ)) * specific(Y.c.ρn_liq, Y.c.ρ),
             ),
         )
         @. Yₜ.c.ρn_rai -= ᶜprecipdivᵥ(
             ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwnᵣ)) * specific(Y.c.ρn_rai, Y.c.ρ),
+                Geometry.WVector(-(ᶜwₙᵣ)) * specific(Y.c.ρn_rai, Y.c.ρ),
             ),
         )
         @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(

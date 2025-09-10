@@ -275,7 +275,7 @@ end
 
 
 """
-    ᶜspecific_env_value(::Val{χ_name}, Y, p)
+    ᶜspecific_env_value(χ_name, Y, p)
 
 Calculates the specific value of a quantity `χ` in the environment (`χ⁰`).
 
@@ -286,20 +286,20 @@ regularized `specific` function, which provides a stable result even when the
 environment area fraction is very small.
 
 Arguments:
-- `::Val{χ_name}`: A `Val` type containing the symbol for the specific quantity `χ` (e.g., `Val(:h_tot)`, `Val(:q_tot)`).
+- `χ_name`: A `MatrixFields.FieldName`, containing name for the specific quantity `χ` (e.g., `@name(h_tot)`, `@name(q_tot)`).
 - `Y`: The state, containing grid-mean and draft subdomain states.
 - `p`: The cache, containing precomputed quantities and turbconv_model.
 
 Returns:
 - The specific value of the quantity `χ` in the environment.
 """
-function ᶜspecific_env_value(::Val{χ_name}, Y, p) where {χ_name}
+function ᶜspecific_env_value(χ_name, Y, p)
     turbconv_model = p.atmos.turbconv_model
 
-    # Grid-scale density-weighted variable name, e.g., :ρq_tot
-    ρχ_name = Symbol(:ρ, χ_name)
+    # Grid-scale density-weighted variable name, e.g., ρq_tot
+    ρχ_name = get_ρχ_name(χ_name)
 
-    ᶜρχ = getproperty(Y.c, ρχ_name)
+    ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
 
     # environment density-area-weighted mse (`ρa⁰χ⁰`).
     # Numerator: ρa⁰χ⁰ = ρχ - (Σ ρaʲ * χʲ)
@@ -308,7 +308,9 @@ function ᶜspecific_env_value(::Val{χ_name}, Y, p) where {χ_name}
 
         ᶜρaχ⁰ = ᶜenv_value(
             ᶜρχ,
-            sgsʲ -> getfield(sgsʲ, :ρa) * sgsʲ.:($χ_name),
+            sgsʲ ->
+                MatrixFields.get_field(sgsʲ, @name(ρa)) *
+                MatrixFields.get_field(sgsʲ, χ_name),
             Y.c.sgsʲs,
         )
         # Denominator: ρa⁰ = ρ - Σ ρaʲ
@@ -325,6 +327,30 @@ function ᶜspecific_env_value(::Val{χ_name}, Y, p) where {χ_name}
         Y.c.ρ,                      # Fallback ρ is the grid-mean value
         turbconv_model,
     ))
+end
+
+"""
+    get_ρχ_name(χ_name::FieldName)
+
+Construct the `FieldName` corresponding to the product ρ·χ.
+
+Given a tracer name `χ_name`, this function returns the new name that
+represents the corresponding density-weighted quantity (ρ times χ). 
+
+The function works recursively on hierarchical field names: If `χ_name` 
+is a base name (no children), it returns a new name prefixed with `ρ`.
+If `χ_name` has internal structure (e.g. a composite name), the function
+recurses into the child names and prepends `ρ` at the lowest level.
+"""
+function get_ρχ_name(χ_name)
+    parent_name = MatrixFields.extract_first(χ_name)
+    child_name = MatrixFields.drop_first(χ_name)
+    ρχ_name =
+        (child_name == MatrixFields.@name()) ?
+        MatrixFields.FieldName(Symbol(:ρ, MatrixFields.extract_first(χ_name))) :
+        MatrixFields.append_internal_name(parent_name, get_ρχ_name(child_name))
+
+    return ρχ_name
 end
 
 """
@@ -361,12 +387,7 @@ end
 """
     specific_tke(ρ, ρatke, ρa⁰, turbconv_model)
 
-Computes the specific turbulent kinetic energy (TKE) in the environment.
-
-This function returns the specific TKE of the environment by regularizing the
-area-weighted TKE density (`ρatke`) with the environment area-weighted density
-(`ρa⁰`). In the limit of vanishing environment area fraction, the fallback value
-for TKE is zero.
+Computes the grid-meanspecific turbulent kinetic energy (TKE).
 
 Arguments:
 - `ρ`: Grid-mean density.
@@ -377,21 +398,8 @@ Arguments:
 Returns:
 - The specific TKE of the environment (`tke⁰`).
 """
-function specific_tke(ρ, ρatke, ρa⁰, turbconv_model)
-
-    if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
-        return specific(
-            ρatke,    # ρaχ for environment TKE
-            ρa⁰, # ρa for environment, now computed internally
-            0,         # Fallback ρχ is zero for TKE
-            ρ,        # Fallback ρ
-            turbconv_model,
-        )
-    else
-        return specific(ρatke, ρa⁰)
-    end
-end
-
+# TODO: Remove this function once we are confident about the TKE equation
+specific_tke(ρ, ρatke, ρa⁰, turbconv_model) = specific(ρatke, ρ)
 
 """
     ᶜspecific_env_mse(Y, p)
