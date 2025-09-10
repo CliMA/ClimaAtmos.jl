@@ -80,6 +80,8 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         DiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT3{FT})')}
     TridiagonalRow_C3xACT3 =
         TridiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT3{FT})')}
+    TridiagonalRow_ChxACTh =
+        TridiagonalMatrixRow{typeof(zero(C12{FT}) * zero(CT12{FT})')}
 
     is_in_Y(name) = MatrixFields.has_field(Y, name)
 
@@ -173,7 +175,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
                 !isnothing(atmos.turbconv_model) ||
                     !disable_momentum_vertical_diffusion(
                         atmos.vertical_diffusion,
-                    ) ? similar(Y.c, TridiagonalRow) : FT(-1) * I,
+                    ) ? similar(Y.c, TridiagonalRow_ChxACTh) : FT(-1) * I,
         )
     elseif atmos.moisture_model isa DryModel
         MatrixFields.unrolled_map(
@@ -381,6 +383,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶠlg = Fields.local_geometry_field(Y.f)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
@@ -712,13 +716,29 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ) - (I,)
         end
 
+        one_C12xACT12 = C12(FT(1), FT(0)) * CT12(FT(1), FT(0))' + 
+            C12(FT(0), FT(1)) * CT12(FT(0), FT(1))'
+        hh_view(matrix_row) = map(tensor -> Geometry.AxisTensor(axes(one_C12xACT12), tensor.components[1:2, 1:2]), matrix_row)
         if (
             !isnothing(p.atmos.turbconv_model) ||
             !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         )
             ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
+            ᶜdiffusion_uh_matrix = @. (
+            DiagonalMatrixRow(adjoint(ᶜlg.∂x∂ξ)) ⋅ (ᶜadvdivᵥ_matrix() ⋅
+            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) ⋅ ᶠgradᵥ_matrix() ⋅
+            DiagonalMatrixRow(adjoint(ᶜlg.∂ξ∂x))))
+            #@info ᶜdiffusion_uh_matrix
+            # @info @. DiagonalMatrixRow(adjoint(ᶜlg.∂ξ∂x))
+            # @info @. (ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow(adjoint(ᶜlg.∂ξ∂x)))
+            # @info @. (DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u) * ᶠlg.∂ξ∂x) ⋅ ᶠgradᵥ_matrix() ⋅
+            # DiagonalMatrixRow(adjoint(ᶜlg.∂ξ∂x)))
+            
+            I_uh = DiagonalMatrixRow(one_C12xACT12)
+            # @info eltype(∂ᶜuₕ_err_∂ᶜuₕ)
+            # @info eltype(ᶜdiffusion_uh_matrix)
             @. ∂ᶜuₕ_err_∂ᶜuₕ =
-                dtγ * DiagonalMatrixRow(1 / ᶜρ) ⋅ ᶜdiffusion_u_matrix - (I,)
+                dtγ * DiagonalMatrixRow(1 / ᶜρ) ⋅ hh_view(ᶜdiffusion_uh_matrix) - (I_uh,)
         end
 
     end
