@@ -1,4 +1,4 @@
-t_end: "360days"
+t_end: "60days"
 dt_save_state_to_disk: "30days"
 check_conservation: true
 moist: "equil"
