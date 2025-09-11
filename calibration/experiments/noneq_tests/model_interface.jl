@@ -16,8 +16,10 @@ import ClimaCalibrate as CAL
 function CAL.forward_model(iteration, member, config_dict = nothing)
     experiment_dir = dirname(Base.active_project())
     if isnothing(config_dict)
+        # config_dict =
+        #     YAML.load_file(joinpath(experiment_dir, "diagnostic_edmfx_diurnal_scm_imp_noneq_1M_mixed_phase_site.yml"))
         config_dict =
-            YAML.load_file(joinpath(experiment_dir, "diagnostic_edmfx_diurnal_scm_imp_noneq_1M_mixed_phase_site.yml"))
+            YAML.load_file(joinpath(experiment_dir, "amip_target_edonly_nonequil_explicit.yml"))
     end
     output_dir = "/home/oalcabes/EKI_output/test_8" #config_dict["output_dir"] # need to input
     member_path = path_to_ensemble_member(output_dir, iteration, member)
