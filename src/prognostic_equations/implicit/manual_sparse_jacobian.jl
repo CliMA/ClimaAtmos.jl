@@ -619,11 +619,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         end
 
         ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
-        @. ∂ᶜρe_tot_err_∂ᶜρ =
-            dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(
-                (-(1 + ᶜkappa_m) * ᶜe_tot - ᶜkappa_m * ∂e_int_∂q_tot * ᶜq_tot) /
-                ᶜρ,
-            )
+        @. ∂ᶜρe_tot_err_∂ᶜρ = zero(typeof(∂ᶜρe_tot_err_∂ᶜρ))
         @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((1 + ᶜkappa_m) / ᶜρ)
 
@@ -637,8 +633,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     ᶜ∂kappa_m∂q_tot *
                     (cp_d * T_0 + ᶜe_tot - ᶜK - ᶜΦ + ∂e_int_∂q_tot * ᶜq_tot)
                 ))
-            @. ∂ᶜρq_tot_err_∂ᶜρ =
-                dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(-(ᶜq_tot) / ᶜρ)
+            @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
             @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
@@ -654,8 +649,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ᶜdiffusion_h_matrix_scaled,
                 ᶜdiffusion_h_matrix,
             )
-            @. ∂ᶜρχ_err_∂ᶜρ =
-                dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(-(ᶜχ) / ᶜρ)
+            @. ∂ᶜρχ_err_∂ᶜρ = zero(typeof(∂ᶜρχ_err_∂ᶜρ))
             @. ∂ᶜρχ_err_∂ᶜρχ +=
                 dtγ * ᶜtridiagonal_matrix_scalar ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
@@ -695,9 +689,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 matrix[@name(c.sgs⁰.ρatke), @name(c.sgs⁰.ρatke)]
             @. ∂ᶜρatke⁰_err_∂ᶜρ =
                 dtγ * (
-                    ᶜdiffusion_u_matrix -
                     DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
-                ) ⋅ DiagonalMatrixRow(-(ᶜtke⁰) / ᶜρa⁰)
+                ) ⋅ DiagonalMatrixRow(ᶜtke⁰ / ᶜρa⁰)
             @. ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
                 dtγ * (
                     (

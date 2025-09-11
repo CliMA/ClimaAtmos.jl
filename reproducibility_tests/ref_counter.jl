@@ -1,4 +1,4 @@
-260
+261
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+261
+- Ignore the implicit solver Jacobian for the tracer-density block from diffusion
+
 260
 - Change environment TKE to grid-mean TKE
 
