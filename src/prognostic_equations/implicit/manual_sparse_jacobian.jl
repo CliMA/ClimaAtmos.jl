@@ -455,11 +455,19 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
     ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
+    θ_v = lazy.(TD.virtual_pottemp.(thermo_params, ᶜts))
+    Π = lazy.(TD.exner_given_pressure.(thermo_params, 
+                                      TD.air_pressure.(thermo_params, ᶜts)))
+    Γ_0 = FT(6.5) # Lapse rate (K/km)
+    T0 = FT(288) - Γ_0*FT(288)*CAP.cp_d(params)/CAP.grav(params)  # ~ 97 K
+    T_ref = FT(288)
     @. ∂ᶠu₃_err_∂ᶜρ =
         dtγ * (
             ᶠp_grad_matrix ⋅
             DiagonalMatrixRow(ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ)) +
-            DiagonalMatrixRow(ᶠgradᵥ(ᶜp) / abs2(ᶠinterp(ᶜρ))) ⋅
+            DiagonalMatrixRow((cp_d * ᶠinterp(θ_v) * ᶠgradᵥ(Π) + 
+                               cp_d * T0 * 
+                               (ᶠgradᵥ(log(Π)) - 1 / ᶠinterp(Π) * ᶠgradᵥ(Π))) / abs2(ᶠinterp(ᶜρ))) ⋅
             ᶠinterp_matrix()
         )
     @. ∂ᶠu₃_err_∂ᶜρe_tot = dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m)
