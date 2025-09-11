@@ -106,15 +106,15 @@ function vertical_diffusion_boundary_layer_tendency!(
     if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
         ᶠstrain_rate .= compute_strain_rate_face(ᶜu)
-        # @. Yₜ.c.uₕ -= C12(
-        #     ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠstrain_rate) / Y.c.ρ,
-        # ) # assumes ᶜK_u = ᶜK_h
-        ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
-            bottom = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
-        )
-        @. Yₜ.c.uₕ -=
-            ᶜdivᵥ_uₕ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(Y.c.uₕ))) / Y.c.ρ
+        @. Yₜ.c.uₕ -= C12(
+            ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠstrain_rate) / Y.c.ρ,
+        ) # assumes ᶜK_u = ᶜK_h
+        # ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
+        #     top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
+        #     bottom = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
+        # )
+        # @. Yₜ.c.uₕ -=
+        #     ᶜdivᵥ_uₕ(-(ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(Y.c.uₕ))) / Y.c.ρ
     end
 
     ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(

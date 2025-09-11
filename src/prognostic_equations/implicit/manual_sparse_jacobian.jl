@@ -624,6 +624,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 (-(1 + ᶜkappa_m) * ᶜe_tot - ᶜkappa_m * ∂e_int_∂q_tot * ᶜq_tot) /
                 ᶜρ,
             )
+        #@. ∂ᶜρe_tot_err_∂ᶜρ = zero(typeof(∂ᶜρe_tot_err_∂ᶜρ))
+        
         @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((1 + ᶜkappa_m) / ᶜρ)
 
@@ -639,6 +641,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ))
             @. ∂ᶜρq_tot_err_∂ᶜρ =
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(-(ᶜq_tot) / ᶜρ)
+            #@. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
             @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
