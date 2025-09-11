@@ -997,6 +997,26 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         (ᶠinterp(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))) *
                         (one_C3xACT3,),
                     ))
+                if p.atmos.moisture_model isa NonEquilMoistModel && (
+                    p.atmos.microphysics_model isa Microphysics1Moment ||
+                    p.atmos.microphysics_model isa Microphysics2Moment
+                )
+                    sgs_microphysics_tracers = (
+                        (@name(c.sgsʲs.:(1).q_liq)),
+                        (@name(c.sgsʲs.:(1).q_ice)),
+                        (@name(c.sgsʲs.:(1).q_rai)),
+                        (@name(c.sgsʲs.:(1).q_sno)),
+                    )
+                    MatrixFields.unrolled_foreach(
+                        sgs_microphysics_tracers,
+                    ) do (qʲ_name)
+                        MatrixFields.has_field(Y, qʲ_name) || return
+
+                        ∂ᶜqʲ_err_∂ᶜqʲ = matrix[qʲ_name, qʲ_name]
+                        @. ∂ᶜqʲ_err_∂ᶜqʲ -=
+                            dtγ * DiagonalMatrixRow(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))
+                    end
+                end
             end
 
             # non-hydrostatic pressure drag
