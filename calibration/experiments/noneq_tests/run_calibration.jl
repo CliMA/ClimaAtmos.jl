@@ -27,13 +27,14 @@ const prior = PD.combine_distributions(prior_vec)
 ensemble_size = 20
 n_iterations = 10
 output_dir = "/home/oalcabes/EKI_output/test_8"
+model_config = "amip_target_edonly_nonequil_explicit.yml"
+# model_config = "diagnostic_edmfx_diurnal_scm_imp_noneq_1M_mixed_phase_site.yml"
+# model_config = "diagnostic_edmfx_diurnal_scm_exp_noneq_1M.yml"
+    
 
 run_truth = true
 
 if run_truth
-
-    #model_config = "diagnostic_edmfx_diurnal_scm_exp_noneq_1M.yml"
-    model_config = "diagnostic_edmfx_diurnal_scm_imp_noneq_1M_mixed_phase_site.yml"
 
     config_dict = YAML.load_file(model_config)
 

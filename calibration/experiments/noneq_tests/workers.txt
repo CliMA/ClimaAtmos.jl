@@ -16765,3 +16765,4 @@ srun: warning: can't honor --ntasks-per-node set to 2 which doesn't match the re
 [ Info: Worker ready after 5s on host 169.254.3.1, port 9286
 [ Info: Worker ready after 5s on host 169.254.3.1, port 9280
 [ Info: Worker ready after 5s on host 169.254.3.1, port 9282
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
