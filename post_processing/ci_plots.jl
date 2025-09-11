@@ -1408,6 +1408,7 @@ EDMFBoxPlotsWithPrecip = Union{
 
 DiagEDMFBoxPlotsWithPrecip = Union{
     Val{:diagnostic_edmfx_dycoms_rf02_box},
+    Val{:diagnostic_edmfx_dycoms_rf02_2M_box},
     Val{:diagnostic_edmfx_rico_box},
     Val{:diagnostic_edmfx_trmm_box},
 }
@@ -1516,7 +1517,20 @@ function make_plots(
                 ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen")
         end
     elseif sim_type isa DiagEDMFBoxPlotsWithPrecip
-        precip_names = ("husra", "hussn", "husraup", "hussnup")
+        if sim_type isa Val{:diagnostic_edmfx_dycoms_rf02_2M_box}
+            precip_names = (
+                "husra",
+                "hussn",
+                "husraup",
+                "hussnup",
+                "cdnc",
+                "ncra",
+                "cdncup",
+                "ncraup",
+            )
+        else
+            precip_names = ("husra", "hussn", "husraup", "hussnup")
+        end
     else
         precip_names = ()
     end

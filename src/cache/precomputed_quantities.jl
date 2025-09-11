@@ -138,12 +138,12 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵢᵖʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqᵣᵖʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqₛᵖʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₛʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₜʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₕʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜwₗʲs = similar(Y.c, NTuple{n, FT}), # TODO I don't think I need those
+            ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}), #
+            ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}), #
+            ᶜwₛʲs = similar(Y.c, NTuple{n, FT}), #
+            ᶜwₜʲs = similar(Y.c, NTuple{n, FT}), #
+            ᶜwₕʲs = similar(Y.c, NTuple{n, FT}), #
             ᶜSqₗᵖ⁰ = similar(Y.c, FT),
             ᶜSqᵢᵖ⁰ = similar(Y.c, FT),
             ᶜSqᵣᵖ⁰ = similar(Y.c, FT),
@@ -157,8 +157,8 @@ function precomputed_quantities(Y, atmos)
             ᶜSqₛᵖʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSnₗᵖʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSnᵣᵖʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),   # TODO - I don't think I need those
+            ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),   # for diagnostci EDMF
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₛʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₜʲs = similar(Y.c, NTuple{n, FT}),
@@ -206,8 +206,16 @@ function precomputed_quantities(Y, atmos)
             ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_raiʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_snoʲs = similar(Y.c, NTuple{n, FT}),
+        ) :
+        atmos.microphysics_model isa Microphysics2Moment ?
+        (;
+            ᶜq_liqʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_raiʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_snoʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜn_liqʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜn_raiʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
-
     diagnostic_sgs_quantities =
         atmos.turbconv_model isa DiagnosticEDMFX ?
         (;
