@@ -255,6 +255,20 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ),
         )
     end
+    if microphysics_model isa Microphysics2MomentP3
+        (; ρ, ρn_ice, ρq_rim, ρb_rim) = Y.c
+        ᶜwnᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwnᵢ))
+        ᶜwᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwᵢ))
+        ᶠρ = @. lazy(ᶠinterp(ρ * ᶜJ) / ᶠJ)
+
+        # Note: `ρq_ice` is handled above, in `moisture_model isa NonEquilMoistModel`
+        @. Yₜ.c.ρn_ice -=
+            ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwnᵢ * specific(ρn_ice, ρ)))
+        @. Yₜ.c.ρq_rim -=
+            ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρq_rim, ρ)))
+        @. Yₜ.c.ρb_rim -=
+            ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρb_rim, ρ)))
+    end
 
     # TODO - decide if this needs to be explicit or implicit
     #vertical_advection_of_water_tendency!(Yₜ, Y, p, t)

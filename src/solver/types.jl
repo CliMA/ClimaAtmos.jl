@@ -19,6 +19,13 @@ struct Microphysics1Moment <: AbstractPrecipitationModel end
 struct Microphysics2Moment <: AbstractPrecipitationModel end
 
 """
+    Microphysics2MomentP3 <: AbstractPrecipitationModel
+
+Struct used for dispatch to the 2-moment warm rain + P3 ice microphysics parameterizations
+"""
+struct Microphysics2MomentP3 <: AbstractPrecipitationModel end
+
+"""
 
     AbstractSGSamplingType
 
