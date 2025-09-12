@@ -2,7 +2,7 @@
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "04945e2a7116cfacb2d57340f477dbe23e208227"
+project_hash = "1c73f4e94b9775e8e4e0ea4045651517b89378bd"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "60665b326b75db6517939d0e1875850bc4a54368"
@@ -146,8 +146,8 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 version = "1.11.0"
 
 [[deps.AtmosphericProfilesLibrary]]
-deps = ["Interpolations", "LinearAlgebra"]
-git-tree-sha1 = "4f5654bb77c179b6021c21c25ad336fe886258f6"
+deps = ["ClimaParams", "Interpolations", "LinearAlgebra", "Thermodynamics"]
+path = "/Users/jeff/Clima/AtmosphericProfilesLibrary.jl/"
 uuid = "86bc3604-9858-485a-bdbe-831ec50de11d"
 version = "0.1.7"
 
@@ -303,7 +303,7 @@ version = "5.8.3"
     SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [[deps.CUDA_Compiler_jll]]
-deps = ["Artifacts", "CUDA_Driver_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
+deps = ["Artifacts", "CUDA_Driver_jll", "CUDA_Runtime_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
 git-tree-sha1 = "fdb9ddf3e08e2aca4c84b3252df2dea046caadee"
 uuid = "d1e2174e-dfdc-576e-b43e-73b79eb1aca8"
 version = "0.2.0+1"
@@ -387,7 +387,7 @@ version = "0.5.19"
 
 [[deps.ClimaAtmos]]
 deps = ["Adapt", "ArgParse", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaInterpolations", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Dates", "ForwardDiff", "Insolation", "Interpolations", "LazyArtifacts", "LazyBroadcast", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "NullBroadcasts", "RRTMGP", "Random", "SciMLBase", "SparseMatrixColorings", "StaticArrays", "Statistics", "SurfaceFluxes", "Thermodynamics", "UnrolledUtilities", "YAML"]
-path = ".."
+path = "/Users/jeff/Clima/ClimaAtmos.jl/"
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 version = "0.31.3"
 

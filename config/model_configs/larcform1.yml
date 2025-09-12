@@ -23,14 +23,14 @@ x_elem: 2
 y_elem: 2
 
 #perturb_initstate: false
-dt: 10secs
+dt: 5secs
 dt_rad: 10mins
-t_end: 20days #"6hours"
+t_end: 20days
 cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage : true
-#toml: [toml/prognostic_edmfx_gcmdriven.toml]
+toml: [toml/diagnostic_edmfx_1M.toml]
 netcdf_output_at_levels: true
-#netcdf_interpolation_num_points: [2, 2, 200]
+#netcdf_interpolation_num_points: [2, 2, 200] # needed?
 output_default_diagnostics: false
 rad: allskywithclear
 insolation: "larcform1"
@@ -39,11 +39,11 @@ ode_algo: ARS343
 
 diagnostics: 
   - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, prsn, hus, hur, ua, va, wa, rlu, rld, rhoa] # profiles (2D)
-    period: 6hours
-    reduction_time: average
+    period: 3hours
+    reduction: average
   - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs, hfes]  # time-series (1D)
-    period: 6hours
-    reduction_time: average
+    period: 3hours
+    reduction: average
 
 # diagnostics:
 #  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
