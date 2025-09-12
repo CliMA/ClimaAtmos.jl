@@ -250,11 +250,14 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
 
     # Full vertical advection of passive tracers (like liq, rai, etc) ...
-    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
-            ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), tracer_upwinding)
-            @. ᶜρχₜ += vtt
+    # If sgs_mass_flux is true, the advection term is computed from the sum of SGS fluxes
+    if p.atmos.edmfx_model.sgs_mass_flux isa Val{false}
+        foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+            if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
+                ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+                vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, float(dt), tracer_upwinding)
+                @. ᶜρχₜ += vtt
+            end
         end
     end
     # ... and upwinding correction of energy and total water.
@@ -349,7 +352,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     (; params) = p
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; dt) = p
-    (; edmfx_upwinding) = p.atmos.numerics
+    (; edmfx_upwinding, tracer_upwinding) = p.atmos.numerics
     (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
 
@@ -358,6 +361,8 @@ function edmfx_sgs_vertical_advection_tendency!(
     ᶠz = Fields.coordinate_field(Y.f).z
     ᶜu₃ʲ = p.scratch.ᶜtemp_C3
     ᶜKᵥʲ = p.scratch.ᶜtemp_scalar_2
+    ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
+
     for j in 1:n
         # TODO: Add a biased GradientF2F operator in ClimaCore
         @. ᶜu₃ʲ = ᶜinterp(Y.f.sgsʲs.:($$j).u₃)
@@ -384,8 +389,8 @@ function edmfx_sgs_vertical_advection_tendency!(
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
 
         # Flux form vertical advection of area farction with the grid mean velocity
-        vtt = vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmfx_upwinding)
-        @. Yₜ.c.sgsʲs.:($$j).ρa += vtt
+        ᶜ∂ρ∂t = vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmfx_upwinding)
+        @. Yₜ.c.sgsʲs.:($$j).ρa += ᶜ∂ρ∂t
 
         # Advective form advection of mse and q_tot with the grid mean velocity
         # Note: This allocates because the function is too long
@@ -424,7 +429,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                     FT(1),
                     Y.c.sgsʲs.:($$j).ρa,
                     FT(0),
-                    Y.c.ρ,
+                    ᶜρʲs.:($$j),
                     turbconv_model,
                 ),
             ))
@@ -446,24 +451,24 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜqʲ = MatrixFields.get_field(Y, qʲ_name)
                 ᶜqʲₜ = MatrixFields.get_field(Yₜ, qʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
-                ᶠw³ʲ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwʲ)))))
                 ᶜaqʲ = (@. lazy(ᶜa * ᶜqʲ))
 
-                # Advective form advection of tracers with grid-mean velocity
-                va = vertical_advection(
+                # Flux form advection of tracers with updraft velocity
+                vtt = vertical_transport(
+                    ᶜρʲs.:($j),
                     ᶠu³ʲs.:($j),
-                    ᶜqʲ,
-                    edmfx_upwinding,
+                    ᶜaqʲ,
+                    dt,
+                    tracer_upwinding,
                 )
-                @. ᶜqʲₜ += va
+                @. ᶜqʲₜ += ᶜinv_ρ̂ * (vtt - ᶜqʲ * ᶜ∂ρ∂t)
 
                 # Flux form sedimentation of tracers
                 vtt = vertical_transport_sedimentation(
                     ᶜρʲs.:($j),
-                    ᶠw³ʲ,
+                    ᶜwʲ,
                     ᶜaqʲ,
-                    dt,
-                    edmfx_upwinding,
+                    ᶠJ,
                 )
                 @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
                 @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
@@ -483,10 +488,9 @@ function edmfx_sgs_vertical_advection_tendency!(
                 end
                 vtt = vertical_transport_sedimentation(
                     ᶜρʲs.:($j),
-                    ᶠw³ʲ,
+                    ᶜwʲ,
                     ᶜaqʲ .* ᶜmse_li,
-                    dt,
-                    edmfx_upwinding,
+                    ᶠJ,
                 )
                 @. Yₜ.c.sgsʲs.:($$j).mse += ᶜinv_ρ̂ * vtt
             end
@@ -527,24 +531,24 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
-                ᶠw³ʲ = (@. lazy(CT3(ᶠinterp(Geometry.WVector(-1 * ᶜwʲ)))))
                 ᶜaχʲ = (@. lazy(ᶜa * ᶜχʲ))
 
-                # Advective form advection of tracers with grid-mean velocity
-                va = vertical_advection(
+                # Flux form advection of tracers with updraft velocity
+                vtt = vertical_transport(
+                    ᶜρʲs.:($j),
                     ᶠu³ʲs.:($j),
-                    ᶜχʲ,
-                    edmfx_upwinding,
+                    ᶜaχʲ,
+                    dt,
+                    tracer_upwinding,
                 )
-                @. ᶜχʲₜ += va
+                @. ᶜχʲₜ += ᶜinv_ρ̂ * (vtt - ᶜχʲ * ᶜ∂ρ∂t)
 
                 # Flux form sedimentation of tracers
                 vtt = vertical_transport_sedimentation(
                     ᶜρʲs.:($j),
-                    ᶠw³ʲ,
+                    ᶜwʲ,
                     ᶜaχʲ,
-                    dt,
-                    edmfx_upwinding,
+                    ᶠJ,
                 )
                 @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
 

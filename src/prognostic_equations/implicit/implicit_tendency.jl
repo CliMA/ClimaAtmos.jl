@@ -79,50 +79,10 @@ function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠu³ * ᶠinterp(ᶜχ))))
 end
-function vertical_transport_precip_massflux(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(
-        -(ᶜprecip_massflux_divᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠu³ * ᶠinterp(ᶜχ))),
-    )
-end
-function vertical_transport_sedimentation(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(
-        -(ᶜprecipdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠu³ * ᶠinterp(ᶜχ))),
-    )
-end
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))))
-end
-function vertical_transport_precip_massflux(
-    ᶜρ,
-    ᶠu³,
-    ᶜχ,
-    dt,
-    ::Val{:first_order},
-)
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(
-        -(ᶜprecip_massflux_divᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))),
-    )
-end
-function vertical_transport_sedimentation(
-    ᶜρ,
-    ᶠu³,
-    ᶜχ,
-    dt,
-    ::Val{:first_order},
-)
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(
-        -(ᶜprecipdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))),
-    )
 end
 @static if pkgversion(ClimaCore) ≥ v"0.14.22"
     function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
@@ -167,6 +127,17 @@ function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak})
                 )
             ),
         )),
+    )
+end
+function vertical_transport_sedimentation(
+    ᶜρ,
+    ᶜw,
+    ᶜχ,
+    ᶠJ,
+)
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
+    return @. lazy(
+        -(ᶜprecipdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(-(ᶜw)) * ᶜχ))),
     )
 end
 
