@@ -138,7 +138,7 @@ function build_cache(
     thermo_params = CAP.thermodynamics_params(params)
     decay_scale_height = FT(8000)
 
-    # Reference State
+    # Reference State (Default DecayingProfiles)
     temp_profile = TD.TemperatureProfiles.DecayingTemperatureProfile{FT}(
         thermo_params,
         FT(300),  # surface temperature
