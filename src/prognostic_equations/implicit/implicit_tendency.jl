@@ -246,14 +246,20 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                                       TD.air_pressure.(thermo_params, ᶜts)))
     FT = eltype(Y.c.ρ)
     (;params)=p
+    (;T_ref)=p.core
     Γ_0 = FT(6.5) # Lapse rate (K/km)
     T_ref = FT(288)
     T0 = T_ref - Γ_0*T_ref*CAP.cp_d(params)/CAP.grav(params)  # ~ 97 K
-    @. Yₜ.f.u₃  -= CAP.cp_d(params) *
-                   ᶠinterp(θ_v) * 
-                   ᶠgradᵥ(Π) + 
-                   CAP.cp_d(params) * T0 * 
-                   (ᶠgradᵥ(log(Π)) - 1 / ᶠinterp(Π) * ᶠgradᵥ(Π)) + ᶠgradᵥ_ᶜΦ
+    cp_d = CAP.cp_d(params)
+
+    @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ + ᶠgradᵥ(cp_d * T_ref * log(Π)) + 
+                  cp_d * (ᶠinterp(θ_v) - ᶠinterp(T_ref / Π)) * ᶠgradᵥ(Π)
+
+   # @. Yₜ.f.u₃  -= CAP.cp_d(params) *
+   #                ᶠinterp(θ_v) * 
+   #                ᶠgradᵥ(Π) + 
+   #                CAP.cp_d(params) * T0 * 
+   #                (ᶠgradᵥ(log(Π)) - 1 / ᶠinterp(Π) * ᶠgradᵥ(Π)) + ᶠgradᵥ_ᶜΦ
 
     if rayleigh_sponge isa RayleighSponge
         ᶠz = Fields.coordinate_field(Y.f).z

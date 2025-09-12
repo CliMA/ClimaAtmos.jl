@@ -1364,7 +1364,6 @@ steps:
         artifact_paths: "flame_aquaplanet_progedmf_dense_autodiff/*"
         agents:
           slurm_mem: 32GB
-        soft_fail: true
 
       - label: ":fire: Flame graph: prognostic edmf sparse autodiff"
         command: >

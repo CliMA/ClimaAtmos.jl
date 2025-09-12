@@ -200,6 +200,7 @@ function build_cache(
             unit_basis_vector_data.(CT3, sfc_local_geometry)
         ),
         ᶜh_ref,
+        T_ref
     )
     external_forcing = external_forcing_cache(Y, atmos, params, start_date)
     sfc_setup = surface_setup(params)

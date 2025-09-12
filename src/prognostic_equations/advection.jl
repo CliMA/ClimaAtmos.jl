@@ -35,7 +35,7 @@ Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, `Yₜ.c.uₕ`, and EDMFX-related fields 
 """
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜΦ) = p.core
+    (; ᶜΦ, T_ref) = p.core
     (; ᶜu, ᶜK, ᶜp, ᶜts) = p.precomputed
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
@@ -87,15 +87,13 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     # Rewrite ∇Φ + ∇ₕ(p)/ρ  = ∇Φ + cp_d * θᵥ * ∇Π 
     # where Π = (p/p_0)^κ. 
     FT = eltype(Y.c.ρ)
-    Γ_0 = FT(6.5) # Lapse rate (K/km)
-    T_0 = FT(288) - Γ_0*FT(288)*CAP.cp_d(params)/CAP.grav(params)  # ~ 97 K
     θ_v = lazy.(TD.virtual_pottemp.(thermo_params, ᶜts))
     Π = lazy.(TD.exner_given_pressure.(thermo_params, 
                                       TD.air_pressure.(thermo_params, ᶜts)))
-    @. Yₜ.c.uₕ -= C12(cp_d *
-                  θ_v * 
-                  gradₕ(Π) + cp_d * T_0 * (gradₕ(log(Π)) - 1 / Π * gradₕ(Π)) +  # Equation A15
-                  gradₕ(ᶜK + ᶜΦ))
+
+    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜK)) + 
+                  C12(gradₕ(ᶜΦ + cp_d * T_ref * log(Π)) + 
+                           cp_d * (θ_v - T_ref/Π) * gradₕ(Π)) 
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end

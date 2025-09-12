@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "04945e2a7116cfacb2d57340f477dbe23e208227"
+project_hash = "cd22e59b9de0e68dd7160c9df312b7c54e8c3dfd"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "60665b326b75db6517939d0e1875850bc4a54368"
@@ -303,7 +303,7 @@ version = "5.8.3"
     SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [[deps.CUDA_Compiler_jll]]
-deps = ["Artifacts", "CUDA_Driver_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
+deps = ["Artifacts", "CUDA_Driver_jll", "CUDA_Runtime_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
 git-tree-sha1 = "fdb9ddf3e08e2aca4c84b3252df2dea046caadee"
 uuid = "d1e2174e-dfdc-576e-b43e-73b79eb1aca8"
 version = "0.2.0+1"
@@ -412,6 +412,12 @@ weakdeps = ["CUDA", "Krylov"]
     [deps.ClimaCore.extensions]
     ClimaCoreCUDAExt = "CUDA"
     KrylovExt = "Krylov"
+
+[[deps.ClimaCorePlots]]
+deps = ["ClimaComms", "ClimaCore", "RecipesBase", "StaticArrays", "TriplotBase"]
+git-tree-sha1 = "6430644d60158055458075bf32e5ac24741b1ab9"
+uuid = "cf7c7e5a-b407-4c48-9047-11a94a308626"
+version = "0.2.11"
 
 [[deps.ClimaCoreSpectra]]
 deps = ["ClimaCore", "FFTW"]
@@ -1986,7 +1992,7 @@ version = "0.4.33"
     SparseConnectivityTracer = "9f842d2f-2579-4b1d-911e-f412cf18a3f5"
 
 [[deps.PrecompileCI]]
-deps = ["ClimaAtmos", "ClimaComms", "ClimaCore", "ClimaParams", "Logging", "PrecompileTools"]
+deps = ["ClimaAtmos", "ClimaComms", "ClimaCore", "ClimaParams", "PrecompileTools"]
 path = "PrecompileCI"
 uuid = "76d61242-8ec2-4c91-8455-3234246697a2"
 version = "0.1.0"
