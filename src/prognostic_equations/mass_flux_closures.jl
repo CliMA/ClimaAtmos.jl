@@ -118,6 +118,97 @@ function edmfx_nh_pressure_drag_tendency!(
     end
 end
 
+edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+
+function edmfx_vertical_diffusion_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    turbconv_model::PrognosticEDMFX,
+)
+    if p.atmos.edmfx_model.vertical_diffusion isa Val{true}
+        (; params) = p
+        (; ᶜts, ᶜK, ᶜρʲs) = p.precomputed
+        FT = eltype(p.params)
+        thermo_params = CAP.thermodynamics_params(params)
+        turbconv_params = CAP.turbconv_params(params)
+        n = n_mass_flux_subdomains(turbconv_model)
+        ᶜdivᵥ_mse = Operators.DivergenceF2C(
+            top = Operators.SetValue(C3(0)),
+            bottom = Operators.SetValue(C3(0)),
+        )
+        ᶜdivᵥ_q_tot = Operators.DivergenceF2C(
+            top = Operators.SetValue(C3(0)),
+            bottom = Operators.SetValue(C3(0)),
+        )
+
+        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+        ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+        # scratch to prevent GPU Kernel parameter memory error
+        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
+        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+        ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
+        ᶜprandtl_nvec = @. lazy(
+            turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+        )
+        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+
+        for j in 1:n
+            ᶜρʲ = ᶜρʲs.:($j)
+            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+            ᶜmseʲ = Y.c.sgsʲs.:($j).mse
+            ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+            # Note: For this and other diffusive tendencies, we should use ρaʲ instead of ρʲ,
+            # but it causes stability issues when ρaʲ is small
+            @. Yₜ.c.sgsʲs.:($$j).mse -=
+                ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -=
+                ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
+        end
+
+        if p.atmos.moisture_model isa NonEquilMoistModel && (
+            p.atmos.microphysics_model isa Microphysics1Moment ||
+            p.atmos.microphysics_model isa Microphysics2Moment
+        )
+            @assert n_prognostic_mass_flux_subdomains(turbconv_model) == 1
+            cloud_tracers = (
+                @name(c.sgsʲs.:(1).q_liq),
+                @name(c.sgsʲs.:(1).q_ice),
+                @name(c.sgsʲs.:(1).n_liq)
+            )
+            precip_tracers = (
+                @name(c.sgsʲs.:(1).q_ice),
+                @name(c.sgsʲs.:(1).q_sno),
+                @name(c.sgsʲs.:(1).n_rai)
+            )
+            ᶜρʲ = ᶜρʲs.:($1)
+            α = CAP.α_vert_diff_tracer(params)
+            ᶜdivᵥ_q = Operators.DivergenceF2C(
+                top = Operators.SetValue(C3(FT(0))),
+                bottom = Operators.SetValue(C3(FT(0))),
+            )
+            # TODO: using unrolled_foreach here allocates! (breaks the flame tests
+            # even though they use 0M microphysics)
+            # MatrixFields.unrolled_foreach(cloud_tracers) do χʲ_name
+            for χʲ_name in cloud_tracers
+                MatrixFields.has_field(Y, χʲ_name) || continue
+                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
+                @. ᶜχʲₜ -= ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
+            end
+            # MatrixFields.unrolled_foreach(precip_tracers) do χʲ_name
+            for χʲ_name in precip_tracers
+                MatrixFields.has_field(Y, χʲ_name) || continue
+                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
+                @. ᶜχʲₜ -= ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
+            end
+        end
+    end
+end
+
 """
     edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model)
 

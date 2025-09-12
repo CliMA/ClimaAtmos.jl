@@ -399,9 +399,10 @@ function edmfx_sgs_diffusive_flux_tendency!(
 )
     FT = Spaces.undertype(axes(Y.c))
     (; dt, params) = p
+    thermo_params = CAP.thermodynamics_params(params)
     turbconv_params = CAP.turbconv_params(params)
     c_d = CAP.tke_diss_coeff(turbconv_params)
-    (; ᶜu⁰, ᶜK⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ᶜK, ᶜu⁰, ᶜK⁰, ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜts) = p.precomputed
     (; ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
@@ -425,9 +426,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
         )
         ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_h = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h)
+        @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
-        @. ᶠρaK_u = ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_u)
+        @. ᶠρaK_u = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_u)
 
         # Total enthalpy diffusion
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
@@ -435,8 +436,14 @@ function edmfx_sgs_diffusive_flux_tendency!(
             bottom = Operators.SetValue(C3(FT(0))),
         )
 
-        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-        @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜmse⁰ + ᶜK⁰)))
+        ᶜh_tot = @. lazy(
+            TD.total_specific_enthalpy(
+                thermo_params,
+                ᶜts,
+                specific(Y.c.ρe_tot, Y.c.ρ),
+            ),
+        )
+        @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜh_tot)))
         if use_prognostic_tke(turbconv_model)
             # Turbulent TKE transport (diffusion)
             ᶜdivᵥ_ρatke = Operators.DivergenceF2C(
@@ -464,8 +471,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(C3(FT(0))),
             )
-            ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜq_tot⁰)))
+            @. ᶜρχₜ_diffusion =
+                ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(specific(Y.c.ρq_tot, Y.c.ρ))))
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
         end
@@ -489,18 +496,16 @@ function edmfx_sgs_diffusive_flux_tendency!(
         )
         MatrixFields.unrolled_foreach(cloud_tracers) do (ρχ_name, χ_name)
             MatrixFields.has_field(Y, ρχ_name) || return
-            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * ᶠgradᵥ(ᶜχ⁰)))
+            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))))
             ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end
-        # TODO - do I need to change anything in the implicit solver
-        # to include the α_vert_diff_tracer?
         MatrixFields.unrolled_foreach(precip_tracers) do (ρχ_name, χ_name)
             MatrixFields.has_field(Y, ρχ_name) || return
-            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
             @. ᶜρχₜ_diffusion =
-                ᶜdivᵥ_ρq(-(ᶠρaK_h * α_vert_diff_tracer * ᶠgradᵥ(ᶜχ⁰)))
+                ᶜdivᵥ_ρq(-(ᶠρaK_h * α_vert_diff_tracer * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))))
             ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end

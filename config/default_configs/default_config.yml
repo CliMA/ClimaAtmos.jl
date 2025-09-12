@@ -366,6 +366,9 @@ edmfx_nh_pressure:
   help: "If set to true, it switches on EDMFX pressure drag closure.  For prognostic EDMF, this only controls the drag term 
   in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
   value: false
+edmfx_vertical_diffusion:
+  help: "If set to true, it switches on vertical diffusion of prognostic EDMFX updrafts. [`true`, `false` (default)]"
+  value: false
 edmfx_entr_model:
   help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`]"
   value: ~
