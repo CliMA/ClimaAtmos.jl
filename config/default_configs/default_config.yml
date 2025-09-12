@@ -271,6 +271,9 @@ site_latitude:
 site_longitude:
   help: "Site longitude for single column model. Used for externally driven time varying forcing model to generate the forcing file. Artifact support is currently for eastern Pacific region in July 2007 only. [`-149.0` (default)]"
   value: -149.0
+era5_diurnal_warming:
+  help: "Add this number of Kelvin to the ERA5 diurnal cycle and adjust specific humidity by holding relative humidity constant. Only supported for the `ReanalysisMonthlyAveragedDiurnal` external forcing model."
+  value: ~
 subsidence:
   help: "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`, `ISDAC`]"
   value: ~

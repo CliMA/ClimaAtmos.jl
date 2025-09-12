@@ -69,6 +69,10 @@ function get_external_monthly_forcing_file_path(
     ),
 )
     start_date = parsed_args["start_date"]
+    warming_amount = parsed_args["era5_diurnal_warming"]
+    warming_amount_str =
+        (warming_amount isa Number) ? "_plus_$(float(warming_amount))K" : ""
+
     # round to era5 quarter degree resolution for site selection
     site_latitude = round(parsed_args["site_latitude"] * 4) / 4
     site_longitude = round(parsed_args["site_longitude"] * 4) / 4
@@ -79,7 +83,7 @@ function get_external_monthly_forcing_file_path(
     end
     return joinpath(
         data_dir,
-        "monthly_diurnal_cycle_forcing_$(site_latitude)_$(site_longitude)_$(start_date).nc",
+        "monthly_diurnal_cycle_forcing_$(site_latitude)_$(site_longitude)_$(start_date)$(warming_amount_str).nc",
     )
 end
 
@@ -340,6 +344,40 @@ function generate_external_forcing_file(
         )
     end
 
+    warming_amount = parsed_args["era5_diurnal_warming"]
+    if warming_amount isa Number
+        # Get the relative humidity before warming; this will be used to scale the specific humidity after warming
+        param_set = TD.Parameters.ThermodynamicsParameters(FT)
+        phase_partition =
+            TD.PhasePartition.(sim_forcing["hus"], sim_forcing["clw"], sim_forcing["cli"])
+        # expand dimension and convert pressure levels from hPa (ERA5 raw) to Pa (needed for thermodynamics)
+        p_expanded =
+            FT.(
+                repeat(
+                    sim_forcing["pressure_level"] .* 100,
+                    1,
+                    size(sim_forcing["hus"], 2),
+                )
+            )
+        relative_humidity =
+            TD.relative_humidity.(
+                param_set,
+                sim_forcing["ta"],
+                p_expanded,
+                TD.PhaseEquil{FT},
+                phase_partition,
+            )
+
+        # Warming the temperature
+        sim_forcing["ta"] .+= warming_amount
+        ρ = TD.air_density.(param_set, sim_forcing["ta"], p_expanded, phase_partition)
+
+        # Get the saturation specific humidity at the warmed temperature
+        saturation_humidity_at_warming =
+            TD.q_vap_saturation.(param_set, sim_forcing["ta"], ρ, TD.PhaseEquil{FT})
+        sim_forcing["hus"] = saturation_humidity_at_warming .* relative_humidity
+    end
+
     sim_forcing["z"] =
         sim_forcing["zg"] / external_tv_params.gravitational_acceleration # height in meters
 
@@ -501,6 +539,11 @@ function generate_external_forcing_file(
         smooth_amount = smooth_amount,
     )
 
+    # warm the surface temperature if warming amount is specified
+    if warming_amount isa Number
+        skt .+= warming_amount
+    end
+
     for time_ind in 1:ds.dim["time"]
         ds["coszen"][:, :, :, time_ind] .= coszen_list[time_ind][1]
         ds["rsdt"][:, :, :, time_ind] .= coszen_list[time_ind][2]
@@ -557,6 +600,7 @@ function generate_multiday_era5_external_forcing_file(
             "start_date" => Dates.format(dd, "yyyymmdd"),
             "site_latitude" => parsed_args["site_latitude"],
             "site_longitude" => parsed_args["site_longitude"],
+            "era5_diurnal_warming" => parsed_args["era5_diurnal_warming"],
         )
         single_file_path = get_external_daily_forcing_file_path(
             single_parsed_args;

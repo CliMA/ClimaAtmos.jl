@@ -280,6 +280,7 @@ end
         "site_latitude" => 0.0,
         "site_longitude" => 0.0,
         "t_end" => "5hours",
+        "era5_diurnal_warming" => Nothing,
     )
 
     temporary_dir = mktempdir()
@@ -316,9 +317,20 @@ end
     processed_data = NCDataset(sim_forcing_daily, "r")
 
     # Test fixed variables - this tests that the variables are copied correctly
-    for clima_var in ["hus", "ta", "ua", "va", "wap", "zg", "clw", "cli", "ts"]
+    for clima_var in ["ua", "va", "wap", "ts"]
         @test all(isapprox.(processed_data[clima_var][:], 1, atol = 1e-10))
     end
+
+    for clima_var in ["clw", "cli"]
+        @test all(isapprox.(processed_data[clima_var][:], 0, atol = 1e-10))
+    end
+
+    # data is stored from top of atmosphere to surface 
+    @test monotonic_decreasing(processed_data["zg"], 3)
+    @test monotonic_increasing(processed_data["ta"], 3)
+    @test monotonic_increasing(processed_data["hus"], 3)
+    @test all(processed_data["hus"] .>= 0)
+    @test all(processed_data["ta"] .>= 200) # 200K is the minimum temperature set in the helper function
 
     # Test accumulated variables - note that the sign is flipped because of differences between ecmwf and clima
     for clima_var in ["hfls", "hfss"]
@@ -358,6 +370,7 @@ end
         "site_latitude" => 0.0,
         "site_longitude" => 0.0,
         "t_end" => "2days",
+        "era5_diurnal_warming" => Nothing,
     )
 
     input_dir = mktempdir()
@@ -407,7 +420,7 @@ end
     @test length(processed_data["time"][:]) == expected_time_steps
 
     # Test that data is consistent across time
-    @test all(x -> all(isapprox.(x, 1, atol = 1e-10)), processed_data["ta"][:])
+    @test monotonic_increasing(processed_data["ta"], 3)
     @test all(
         x -> all(isapprox.(x, -1 / time_resolution, atol = 1e-10)),
         processed_data["hfls"][:],
@@ -428,6 +441,7 @@ end
     # compute the vertical temperature gradient
     vertical_temperature_gradient =
         CA.get_vertical_tendencies(vert_partial_ds, "ta")
+    @test all(vertical_temperature_gradient .<= 0)
 
     close(processed_data)
 end
@@ -528,4 +542,67 @@ end
         @test length(smoothed_3d) == ntime
         close(test_ds)
     end
+end
+
+@testset "ERA5 diurnal warming" begin
+    FT = Float32
+    temporary_dir = mktempdir()
+
+    parsed_args_0K = Dict(
+        "start_date" => "20000506",
+        "site_latitude" => 0.0,
+        "site_longitude" => 0.0,
+        "t_end" => "5hours",
+        "era5_diurnal_warming" => Nothing,
+    )
+
+    parsed_args_4K = Dict(
+        "start_date" => "20000506",
+        "site_latitude" => 0.0,
+        "site_longitude" => 0.0,
+        "t_end" => "5hours",
+        "era5_diurnal_warming" => 4,
+    )
+
+    create_mock_era5_datasets(temporary_dir, parsed_args_0K["start_date"], FT)
+
+    sim_forcing_0K = CA.get_external_monthly_forcing_file_path(
+        parsed_args_0K,
+        data_dir = temporary_dir,
+    )
+    sim_forcing_4K = CA.get_external_monthly_forcing_file_path(
+        parsed_args_4K,
+        data_dir = temporary_dir,
+    )
+
+    @test basename(sim_forcing_0K) == "monthly_diurnal_cycle_forcing_0.0_0.0_20000506.nc"
+    @test basename(sim_forcing_4K) ==
+          "monthly_diurnal_cycle_forcing_0.0_0.0_20000506_plus_4.0K.nc"
+
+    CA.generate_external_forcing_file(
+        parsed_args_0K,
+        sim_forcing_0K,
+        FT,
+        input_data_dir = temporary_dir,
+    )
+
+    CA.generate_external_forcing_file(
+        parsed_args_4K,
+        sim_forcing_4K,
+        FT,
+        input_data_dir = temporary_dir,
+    )
+
+    # open the datasets and check the temperature and specific humidity profiles have been adjusted
+    processed_data_0K = NCDataset(sim_forcing_0K, "r")
+    processed_data_4K = NCDataset(sim_forcing_4K, "r")
+
+    @test all(isapprox.(processed_data_0K["ta"] .+ 4, processed_data_4K["ta"]))
+
+    # check that the specific humidity and temperature has increased
+    @test all(processed_data_0K["hus"] .< processed_data_4K["hus"])
+    @test isapprox(processed_data_0K["ts"] .+ 4, processed_data_4K["ts"])
+
+    close(processed_data_0K)
+    close(processed_data_4K)
 end
