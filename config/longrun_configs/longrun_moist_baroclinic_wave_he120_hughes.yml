@@ -13,6 +13,7 @@ precip_model: "0M"
 mesh_warp_type: SLEVE
 prognostic_surface: PrognosticSurfaceTemperature
 deep_atmosphere: true
+disable_surface_flux_tendency: true
 dt_save_state_to_disk: "10days"
 netcdf_interpolation_num_points: [1440, 720, 43]
 output_dir: "/glade/derecho/scratch/asridhar/moist_bw_hughes_0M_exner_pg/"

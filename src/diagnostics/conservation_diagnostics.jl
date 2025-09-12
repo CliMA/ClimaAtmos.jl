@@ -37,6 +37,19 @@ add_diagnostic_variable!(
     end,
 )
 
+add_diagnostic_variable!(
+    short_name = "kenergya",
+    long_name = "Total Kinetic Energy of the Air",
+    units = "J",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return [sum(cache.precomputed.ᶜK)]
+        else
+            out .= [sum(cache.precomputed.ᶜK)]
+        end
+    end,
+)
+
 ###
 # Total water of the air (scalar)
 ###
