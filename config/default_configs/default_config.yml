@@ -271,6 +271,9 @@ site_latitude:
 site_longitude:
   help: "Site longitude for single column model. Used for externally driven time varying forcing model to generate the forcing file. Artifact support is currently for eastern Pacific region in July 2007 only. [`-149.0` (default)]"
   value: -149.0
+era5_diurnal_warming:
+  help: Applies a warming scenario by adding a constant temperature offset (in Kelvin). Supported only by the `ReanalysisMonthlyAveragedDiurnal` forcing model. This affects the target surface temperature for the entire simulation, the initial atmospheric temperature profile, and the relaxation temperature profile above `gcmdriven_relaxation_minimum_height`. Specific humidity is increased to hold relative humidity constant in the initial and relaxation profiles.
+  value: ~
 subsidence:
   help: "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`, `ISDAC`]"
   value: ~
