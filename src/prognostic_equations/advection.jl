@@ -39,6 +39,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     (; ᶜu, ᶜK, ᶜp, ᶜts) = p.precomputed
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
+    cp_d = CAP.cp_d(params)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p.precomputed
@@ -81,8 +82,20 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu_for_tke_advection)
 
     end
-
-    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
+    
+    # Following Herrington et al (2022a.)
+    # Rewrite ∇Φ + ∇ₕ(p)/ρ  = ∇Φ + cp_d * θᵥ * ∇Π 
+    # where Π = (p/p_0)^κ. 
+    FT = eltype(Y.c.ρ)
+    Γ_0 = FT(6.5) # Lapse rate (K/km)
+    T_0 = FT(288) - Γ_0*FT(288)*CAP.cp_d(params)/CAP.grav(params)  # ~ 97 K
+    θ_v = lazy.(TD.virtual_pottemp.(thermo_params, ᶜts))
+    Π = lazy.(TD.exner_given_pressure.(thermo_params, 
+                                      TD.air_pressure.(thermo_params, ᶜts)))
+    @. Yₜ.c.uₕ -= C12(cp_d *
+                  θ_v * 
+                  gradₕ(Π) + cp_d * T_0 * (gradₕ(log(Π)) - 1 / Π * gradₕ(Π)) +  # Equation A15
+                  gradₕ(ᶜK + ᶜΦ))
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end
