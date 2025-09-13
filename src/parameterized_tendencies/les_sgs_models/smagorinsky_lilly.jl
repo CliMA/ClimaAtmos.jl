@@ -37,6 +37,7 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = scratch
     (; ᶜtemp_scalar, ᶜtemp_scalar_2, ᶠtemp_scalar, ᶜtemp_UVW, ᶠtemp_UVW) =
         scratch
+    ᶜJ = Fields.local_geometry_field(Y.c).J
 
     ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
     ᶠgradᵥ_uvw = Operators.GradientC2F(
@@ -47,7 +48,7 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
 
     # Compute UVW velocities
     ᶜu_uvw = @. ᶜtemp_UVW = UVW(ᶜu)
-    ᶠu_uvw = @. ᶠtemp_UVW = UVW(ᶠinterp(Y.c.uₕ)) + UVW(ᶠu³)
+    ᶠu_uvw = @. ᶠtemp_UVW = UVW(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + UVW(ᶠu³)
 
     # Gradients
     ## cell centers

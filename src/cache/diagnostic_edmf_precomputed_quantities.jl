@@ -1375,7 +1375,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
 
     # TODO: Currently the shear production only includes vertical gradients
     ᶠu = p.scratch.ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
+    @. ᶠu = C123(ᶠwinterp(Y.c.ρ * ᶜlg.J, CT12(ᶜu))) + C123(ᶠu³)
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
     ᶜstrain_rate .= compute_strain_rate_center(ᶠu)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
