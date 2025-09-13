@@ -976,6 +976,45 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                     DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) - (I_u₃,)
             end
 
+            # vertical diffusion of updrafts
+            α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
+            @. ᶜdiffusion_h_matrix =
+                ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1)) * ᶠinterp(ᶜK_h)) ⋅
+                ᶠgradᵥ_matrix()
+            @. ᶜdiffusion_h_matrix_scaled =
+                ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(
+                    ᶠinterp(ᶜρʲs.:(1)) * ᶠinterp(α_vert_diff_tracer * ᶜK_h),
+                ) ⋅ ᶠgradᵥ_matrix()
+
+            @. ∂ᶜmseʲ_err_∂ᶜmseʲ +=
+                dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
+            @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ +=
+                dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
+            if p.atmos.moisture_model isa NonEquilMoistModel && (
+                p.atmos.microphysics_model isa Microphysics1Moment ||
+                p.atmos.microphysics_model isa Microphysics2Moment
+            )
+                sgs_microphysics_tracers = (
+                    (@name(c.sgsʲs.:(1).q_liq)),
+                    (@name(c.sgsʲs.:(1).q_ice)),
+                    (@name(c.sgsʲs.:(1).q_rai)),
+                    (@name(c.sgsʲs.:(1).q_sno)),
+                )
+                MatrixFields.unrolled_foreach(
+                    sgs_microphysics_tracers,
+                ) do (qʲ_name)
+                    MatrixFields.has_field(Y, qʲ_name) || return
+                    ᶜtridiagonal_matrix_scalar = ifelse(
+                        qʲ_name in (@name(c.sgsʲs.:(1).q_rai), @name(c.sgsʲs.:(1).q_snow)),
+                        ᶜdiffusion_h_matrix_scaled,
+                        ᶜdiffusion_h_matrix,
+                    )
+                    ∂ᶜqʲ_err_∂ᶜqʲ = matrix[qʲ_name, qʲ_name]
+                    @. ∂ᶜqʲ_err_∂ᶜqʲ +=
+                        dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜtridiagonal_matrix_scalar
+                end
+            end  
+
             # entrainment and detrainment (rates are treated explicitly)
             if use_derivative(sgs_entr_detr_flag)
                 (; ᶜentrʲs, ᶜdetrʲs, ᶜturb_entrʲs) = p.precomputed
