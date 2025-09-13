@@ -2,6 +2,7 @@ implicit_sgs_advection: true
 implicit_sgs_mass_flux: true
 implicit_sgs_entr_detr: true
 implicit_sgs_nh_pressure: true
+implicit_sgs_vertdiff: true
 max_newton_iters_ode: 3
 dt: "30secs"
 t_end: "60days"
@@ -17,6 +18,7 @@ edmfx_upwinding: "first_order"
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
 edmfx_filter: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true

@@ -1,4 +1,4 @@
-262
+263
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+263
+- Make vertical diffusion of updrafts implicit
+
 262
 - Add vertical diffusion to prognostic EDMF updrafts
 
