@@ -67,7 +67,7 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
 
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
-    (; ᶜts, ᶠu³, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ᶜu, ᶜts, ᶠu³, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
 
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
@@ -83,7 +83,7 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
 
     # TODO: move strain rate calculation to separate function
     ᶠu = p.scratch.ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
+    @. ᶠu = C123(ᶠwinterp(Y.c.ρ * ᶜlg.J, CT12(ᶜu))) + C123(ᶠu³)
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
     ᶜstrain_rate .= compute_strain_rate_center(ᶠu)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
