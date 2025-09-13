@@ -326,7 +326,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜu, ᶜp, ᶠu³, ᶜts, ᶠu³⁰, ᶜts⁰) = p.precomputed
+    (; ᶜu, ᶠu, ᶜp, ᶜts, ᶠu³⁰, ᶜts⁰) = p.precomputed
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ρatke_flux) = p.precomputed
     (;
         ᶜuʲs,
@@ -449,8 +449,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
     # TODO: Make strain_rate_norm calculation a function in eddy_diffusion_closures
     # TODO: Currently the shear production only includes vertical gradients
-    ᶠu = p.scratch.ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
     ᶜstrain_rate .= compute_strain_rate_center(ᶠu)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)

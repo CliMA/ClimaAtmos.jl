@@ -38,7 +38,7 @@ function implicit_precomputed_quantities(Y, atmos)
         ᶜspecific = Base.materialize(ᶜspecific_gs_tracers(Y)),
         ᶜu = similar(Y.c, C123{FT}),
         ᶠu³ = similar(Y.f, CT3{FT}),
-        ᶠu = similar(Y.f, CT123{FT}),
+        ᶠu = similar(Y.f, C123{FT}),
         ᶜK = similar(Y.c, FT),
         ᶜts = similar(Y.c, TST),
         ᶜp = similar(Y.c, FT),
@@ -449,7 +449,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities_part1!(Y, p, t)
 
     set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    @. ᶠu = CT123(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
+    @. ᶠu = C123(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + C123(ᶠu³)
     if n > 0
         # TODO: In the following increments to ᶜK, we actually need to add
         # quantities of the form ᶜρaχ⁰ / ᶜρ⁰ and ᶜρaχʲ / ᶜρʲ to ᶜK, rather than

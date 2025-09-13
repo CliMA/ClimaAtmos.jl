@@ -1345,7 +1345,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
-    (; ᶜp, ᶜu, ᶜts, ᶠu³) = p.precomputed
+    (; ᶜp, ᶜu, ᶠu, ᶜts) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
     (; ρatke_flux) = p.precomputed
@@ -1374,8 +1374,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     )
 
     # TODO: Currently the shear production only includes vertical gradients
-    ᶠu = p.scratch.ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
     ᶜstrain_rate .= compute_strain_rate_center(ᶠu)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
