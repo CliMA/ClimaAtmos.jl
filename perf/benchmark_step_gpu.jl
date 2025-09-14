@@ -1,11 +1,11 @@
 #=
 Run this script with, for example:
 ```
-nsys profile --start-later=true --capture-range=cudaProfilerApi --kill=none --trace=nvtx,mpi,cuda,osrt --output=benchmark_step_gpu/report julia --project=.buildkite perf/benchmark_step_gpu.jl --config config/default_configs/default_config.yml --config config/common_configs/numerics_sphere_he30ze43.yml --config config/perf_configs/bm_baroclinic_wave_moist.yml 
+nsys profile --start-later=true --capture-range=cudaProfilerApi --kill=none --trace=nvtx,mpi,cuda,osrt --output=benchmark_step_gpu/report julia --project=.buildkite perf/benchmark_step_gpu.jl --config config/default_configs/default_config.yml --config config/common_configs/numerics_sphere_he30ze43.yml --config config/perf_configs/bm_baroclinic_wave_moist.yml
 ```
 Or
 ...
-ncu --nvtx --call-stack --profile-from-start no --export benchmark_step_gpu/report --print-nvtx-rename kernel julia --project=.buildkite perf/benchmark_step_gpu.jl --config config/default_configs/default_config.yml --config config/common_configs/numerics_sphere_he30ze43.yml --config config/perf_configs/bm_baroclinic_wave_moist.yml 
+ncu --nvtx --call-stack --profile-from-start no --export benchmark_step_gpu/report --print-nvtx-rename kernel julia --project=.buildkite perf/benchmark_step_gpu.jl --config config/default_configs/default_config.yml --config config/common_configs/numerics_sphere_he30ze43.yml --config config/perf_configs/bm_baroclinic_wave_moist.yml
 =#
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import ClimaComms
@@ -25,7 +25,7 @@ simulation = CA.get_simulation(config)
 Y₀ = deepcopy(integrator.u);
 @info "Compiling benchmark_step!..."
 # turn on renaming of CUDA kernels based on stack trace
-profile_rename_kernel_names() = true
+profile_rename_kernel_names() = false
 CA.benchmark_step!(integrator, Y₀); # compile first
 
 @info "Running benchmark_step_gpu!..."
