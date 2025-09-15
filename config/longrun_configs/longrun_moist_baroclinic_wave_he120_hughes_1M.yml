@@ -6,16 +6,16 @@ dt: "20secs"
 t_end: "60days"
 topography: "Hughes2023"
 initial_condition: "MoistBaroclinicWave"
-perturb_initstate: true
+perturb_initstate: false
 mesh_warp_type: "SLEVE"
 rayleigh_sponge: true
 moist: "nonequil"
 precip_model: "1M"
 dt_save_state_to_disk: "1days"
 disable_surface_flux_tendency: true
-vert_diff: "DecayWithHeightDiffusion"
-implicit_diffusion: true
-approximate_linear_solve_iters: 2
+#vert_diff: "DecayWithHeightDiffusion"
+#implicit_diffusion: true
+#approximate_linear_solve_iters: 2
 prognostic_surface: PrognosticSurfaceTemperature
 output_dir: "/glade/derecho/scratch/asridhar/moist_bw_hughes_he120_1M_40s_dwhd_pst/"
 netcdf_interpolation_num_points: [1440, 720, 43]
