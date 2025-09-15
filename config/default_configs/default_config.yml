@@ -353,6 +353,9 @@ implicit_sgs_nh_pressure:
   `implicit_sgs_advection` is set to true. This flag only controls whether the drag term in the pressure closure is treated implicitly. 
   The buoyancy term is always treated implicitly. [`false` (default), `true`]"
   value: false
+implicit_sgs_vertdiff:
+  help: "Whether to treat the subgrid-scale vertical diffusion tendency implicitly [`false` (default), `true`]. Setting it to true only works if implicit_sgs_advection is set to true."
+  value: false
 implicit_sgs_mass_flux:
   help: "Whether to treat the subgrid-scale mass flux tendency implicitly or explicitly in grid-mean equations. Currently updraft only with Jacobian terms 0. [`false` (default), `true`]. Setting it to true only works if both implicit_sgs_advection and implicit_diffusion are set to true."
   value: false
