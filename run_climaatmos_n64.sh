@@ -1,11 +1,11 @@
 #!/bin/bash
 #
 #SBATCH --nodes=8
-#SBATCH --partition=a3
+#SBATCH --partition=a3mega
 #SBATCH --ntasks-per-node=8
 #SBATCH --time=1:00:00
 #SBATCH --gres=gpu:8
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=8
 #SBATCH --ntasks-per-core=1
 #SBATCH --threads-per-core=1
 #SBATCH --exclusive

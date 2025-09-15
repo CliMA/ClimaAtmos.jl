@@ -1,15 +1,15 @@
 #!/bin/bash
 #
 #SBATCH --nodes=64
-#SBATCH --partition=a3
+#SBATCH --partition=a3mega
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --time=1:00:00
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=8
 #SBATCH --ntasks-per-core=1
 #SBATCH --threads-per-core=1
 #SBATCH --exclusive
-#SBATCH --array=[30,60,120,240,480,960]
+#SBATCH --array=[120,240]
 #SBATCH --output=slurm_outputs/n512_out-%j_%a.txt
 #SBATCH --error=slurm_outputs/n512_err-%j_%a.txt
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #SBATCH --nodes=16
-#SBATCH --partition=a3
+#SBATCH --partition=a3mega
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --time=1:00:00
@@ -9,10 +9,11 @@
 #SBATCH --ntasks-per-core=1
 #SBATCH --threads-per-core=1
 #SBATCH --exclusive
-#SBATCH --array=[30,60,120,240,480,960]
+#SBATCH --array=[240,480]
 #SBATCH --output=slurm_outputs/n128_out-%j_%a.txt
 #SBATCH --error=slurm_outputs/n128_err-%j_%a.txt
 
+export UCX_WARN_UNUSED_ENV_VARS=n # Suppress harmless UCX warnings
 export JULIA_CUDA_MEMORY_POOL=none
 export CLIMACOMMS_DEVICE=CUDA
 export CLIMACOMMS_CONTEXT=MPI
