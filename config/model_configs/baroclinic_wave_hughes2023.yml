@@ -5,7 +5,7 @@ topo_smoothing: false
 moist: equil
 disable_surface_flux_tendency: true
 dt: "200secs"
-t_end: "22days"
+t_end: "60days"
 diagnostics:
   - short_name: [pfull, ua, wa, va, rv, pr, cli, hus, ke, ta, pr, hus, zg]
     period: 1days

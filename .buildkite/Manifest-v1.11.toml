@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.3"
+julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "cd22e59b9de0e68dd7160c9df312b7c54e8c3dfd"
+project_hash = "dd73d49629903bbb7a9f8ca4a8469b95b4abb8b0"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "27cecae79e5cc9935255f90c53bb831cc3c870d7"
@@ -306,7 +306,7 @@ version = "5.8.3"
 
 [[deps.CUDA_Compiler_jll]]
 deps = ["Artifacts", "CUDA_Driver_jll", "CUDA_Runtime_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
-git-tree-sha1 = "fdb9ddf3e08e2aca4c84b3252df2dea046caadee"
+git-tree-sha1 = "8c4f340dd6501a93c4b99b690797772e4a203099"
 uuid = "d1e2174e-dfdc-576e-b43e-73b79eb1aca8"
 version = "0.2.1+0"
 
