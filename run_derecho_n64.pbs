@@ -1,0 +1,32 @@
+#!/bin/bash
+#PBS -A UCIT0011
+#PBS -N scaling_64
+#PBS -q main
+#PBS -m n
+#PBS -l walltime=12:00:00
+#PBS -l select=16:ncpus=64:mem=64GB:ngpus=4
+#PBS -J 30,60,120,240,480
+
+# Use scratch for temporary files to avoid space limits in /tmp
+export TMPDIR=${SCRATCH}/temp
+mkdir -p ${TMPDIR}
+
+export CLIMACOMMS_DEVICE=CUDA
+export CLIMACOMMS_CONTEXT=MPI
+export JULIA_CUDA_MEMORY_POOL=none
+
+# If you are using zsh as default shell
+source /glade/u/apps/derecho/23.09/spack/opt/spack/lmod/8.7.24/gcc/7.5.0/c645/lmod/lmod/init/zsh
+
+export MODULEPATH="/glade/campaign/univ/ucit0011/ClimaModules-Derecho:$MODULEPATH"
+#module --force purge
+module load climacommon
+
+# Run code
+cd $HOME/Codes/ClimaAtmos.jl #PLEASE CHECK CLIMAATMOS DIRECTORY LOCATIONS
+
+
+julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'
+julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'
+julia --project=.buildkite -e 'using Pkg; Pkg.status()'
+mpiexec -n 64 -ppn 4 set_gpu_rank julia --threads=3 --project=.buildkite .buildkite/ci_driver.jl --config_file config/longrun_configs/longrun_moist_baroclinic_wave_scaling_${PBS_ARRAY_INDEX}.yml --job_id scaling_${PBS_ARRAY_INDEX}
