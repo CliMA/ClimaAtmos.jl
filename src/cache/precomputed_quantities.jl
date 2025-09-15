@@ -142,8 +142,6 @@ function precomputed_quantities(Y, atmos)
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₛʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₜʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₕʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqₗᵖ⁰ = similar(Y.c, FT),
             ᶜSqᵢᵖ⁰ = similar(Y.c, FT),
             ᶜSqᵣᵖ⁰ = similar(Y.c, FT),
@@ -161,8 +159,6 @@ function precomputed_quantities(Y, atmos)
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₛʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₜʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜwₕʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₙₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwₙᵣʲs = similar(Y.c, NTuple{n, FT}),
             ᶜSqₗᵖ⁰ = similar(Y.c, FT),
@@ -182,9 +178,9 @@ function precomputed_quantities(Y, atmos)
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜgradᵥ_θ_virt⁰ = Fields.Field(C3{FT}, cspace),
-            ᶜgradᵥ_q_tot⁰ = Fields.Field(C3{FT}, cspace),
-            ᶜgradᵥ_θ_liq_ice⁰ = Fields.Field(C3{FT}, cspace),
+            ᶜgradᵥ_θ_virt = Fields.Field(C3{FT}, cspace),
+            ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
+            ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
             ᶠnh_pressure₃_buoyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             precipitation_sgs_quantities...,
         ) : (;)
@@ -411,20 +407,31 @@ end
 
 """
     set_implicit_precomputed_quantities!(Y, p, t)
+    set_implicit_precomputed_quantities_part1!(Y, p, t)
+    set_implicit_precomputed_quantities_part2!(Y, p, t)
 
-Updates the precomputed quantities that are handled implicitly based on the
-current state `Y`. This is called before each evaluation of either
-`implicit_tendency!` or `remaining_tendency!`, and it includes quantities used
+Update the precomputed quantities that are handled implicitly based on the
+current state `Y`. These are called before each evaluation of either
+`implicit_tendency!` or `remaining_tendency!`, and they include quantities used
 in both tedencies.
 
-This function also applies a "filter" to `Y` in order to ensure that `ᶠu³` is 0
+These functions also apply a "filter" to `Y` in order to ensure that `ᶠu³` is 0
 at the surface (i.e., to enforce the impenetrable boundary condition). If the
 `turbconv_model` is EDMFX, the filter also ensures that `ᶠu³⁰` and `ᶠu³ʲs` are 0
 at the surface. In the future, we will probably want to move this filtering
 elsewhere, but doing it here ensures that it occurs whenever the precomputed
 quantities are updated.
+
+These functions are split into two parts so that the first stage of the implicit
+and explicit calculations can be executed in sequence before completing the
+remaining steps. This ordering is required to correctly compute variables at
+the environment boundary after applying the boundary conditions.
 """
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
+    set_implicit_precomputed_quantities_part1!(Y, p, t)
+    set_implicit_precomputed_quantities_part2!(Y, p, t)
+end
+NVTX.@annotate function set_implicit_precomputed_quantities_part1!(Y, p, t)
     (; turbconv_model, moisture_model, microphysics_model) = p.atmos
     (; ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶠu, ᶜK, ᶜts, ᶜp) = p.precomputed
@@ -463,6 +470,16 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
+    elseif !(isnothing(turbconv_model))
+        # Do nothing for other turbconv models for now
+    end
+end
+NVTX.@annotate function set_implicit_precomputed_quantities_part2!(Y, p, t)
+    (; turbconv_model) = p.atmos
+    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+    @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+
+    if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_implicit_closures!(Y, p, t)
     elseif !(isnothing(turbconv_model))
@@ -471,20 +488,22 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
 end
 
 """
-    set_explicit_precomputed_quantities!(Y, p, t)
+    set_explicit_precomputed_quantities_part1!(Y, p, t)
+    set_explicit_precomputed_quantities_part2!(Y, p, t)
 
-Updates the precomputed quantities that are handled explicitly based on the
-current state `Y`. This is only called before each evaluation of
-`remaining_tendency!`, though it includes quantities used in both
+Update the precomputed quantities that are handled explicitly based on the
+current state `Y`. These are only called before each evaluation of
+`remaining_tendency!`, though they include quantities used in both
 `implicit_tendency!` and `remaining_tendency!`.
+
+These functions are split into two parts so that the first stage of the implicit
+and explicit calculations can be executed in sequence before completing the
+remaining steps. This ordering is required to correctly compute variables at
+the environment boundary after applying the boundary conditions.
 """
-NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
-    (; turbconv_model, moisture_model, microphysics_model, cloud_model) =
-        p.atmos
-    (; vertical_diffusion, call_cloud_diagnostics_per_stage) = p.atmos
-    (; ᶜΦ) = p.core
-    (; ᶜu, ᶜts, ᶜp) = p.precomputed
-    ᶠuₕ³ = p.scratch.ᶠtemp_CT3 # updated in set_implicit_precomputed_quantities!
+NVTX.@annotate function set_explicit_precomputed_quantities_part1!(Y, p, t)
+    (; turbconv_model) = p.atmos
+    (; ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
 
     if !isnothing(p.sfc_setup)
@@ -502,6 +521,19 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
+    elseif turbconv_model isa DiagnosticEDMFX
+        set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
+    elseif !(isnothing(turbconv_model))
+        # Do nothing for other turbconv models for now
+    end
+
+    return nothing
+end
+NVTX.@annotate function set_explicit_precomputed_quantities_part2!(Y, p, t)
+    (; turbconv_model, moisture_model, cloud_model) = p.atmos
+    (; call_cloud_diagnostics_per_stage) = p.atmos
+
+    if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_precipitation!(
             Y,
@@ -510,7 +542,6 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         )
     end
     if turbconv_model isa DiagnosticEDMFX
-        set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
@@ -560,6 +591,8 @@ end
 Updates all precomputed quantities based on the current state `Y`.
 """
 function set_precomputed_quantities!(Y, p, t)
-    set_implicit_precomputed_quantities!(Y, p, t)
-    set_explicit_precomputed_quantities!(Y, p, t)
+    set_implicit_precomputed_quantities_part1!(Y, p, t)
+    set_explicit_precomputed_quantities_part1!(Y, p, t)
+    set_implicit_precomputed_quantities_part2!(Y, p, t)
+    set_explicit_precomputed_quantities_part2!(Y, p, t)
 end

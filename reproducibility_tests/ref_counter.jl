@@ -1,4 +1,4 @@
-258
+261
 
 # **README**
 #
@@ -20,6 +20,15 @@
 
 
 #=
+261
+- Ignore the implicit solver Jacobian for the tracer-density block from diffusion
+
+260
+- Change environment TKE to grid-mean TKE
+
+259
+- Fix env boundary values when setting implicit and explicit cache
+
 258
 - Update deps, specifically ClimaParams.jl and Thermodynamics.jl
 

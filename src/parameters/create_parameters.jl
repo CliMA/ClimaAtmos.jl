@@ -23,7 +23,7 @@ ClimaAtmosParameters(::Type{FT}) where {FT <: AbstractFloat} =
 function ClimaAtmosParameters(
     toml_dict::TD,
     parsed_args = nothing,
-) where {TD <: CP.AbstractTOMLDict}
+) where {TD <: CP.ParamDict}
     FT = CP.float_type(toml_dict)
 
     turbconv_params = TurbulenceConvectionParameters(toml_dict)
@@ -139,7 +139,7 @@ atmos_name_map = (;
 cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     cloud_parameters(CP.create_toml_dict(FT))
 
-cloud_parameters(toml_dict::CP.AbstractTOMLDict) = (;
+cloud_parameters(toml_dict::CP.ParamDict) = (;
     liquid = CM.Parameters.CloudLiquid(toml_dict),
     ice = CM.Parameters.CloudIce(toml_dict),
     Ch2022 = CM.Parameters.Chen2022VelType(toml_dict),
@@ -154,7 +154,7 @@ cloud_parameters(toml_dict::CP.AbstractTOMLDict) = (;
 microphys_1m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     microphys_1m_parameters(CP.create_toml_dict(FT))
 
-microphys_1m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
+microphys_1m_parameters(toml_dict::CP.ParamDict) = (;
     cl = CM.Parameters.CloudLiquid(toml_dict),
     ci = CM.Parameters.CloudIce(toml_dict),
     pr = CM.Parameters.Rain(toml_dict),
@@ -173,7 +173,7 @@ microphys_1m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
 microphys_2m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     microphys_2m_parameters(CP.create_toml_dict(FT))
 
-microphys_2m_parameters(toml_dict::CP.AbstractTOMLDict) = (;
+microphys_2m_parameters(toml_dict::CP.ParamDict) = (;
     sb = CM.Parameters.SB2006(toml_dict),
     aps = CM.Parameters.AirProperties(toml_dict),
     ctv = CM.Parameters.StokesRegimeVelType(toml_dict),
@@ -243,7 +243,7 @@ TurbulenceConvectionParameters(
     TurbulenceConvectionParameters(CP.create_toml_dict(FT), overrides)
 
 function TurbulenceConvectionParameters(
-    toml_dict::CP.AbstractTOMLDict,
+    toml_dict::CP.ParamDict,
     overrides = NamedTuple(),
 )
     name_map = (;
@@ -296,7 +296,7 @@ SurfaceTemperatureParameters(
     SurfaceTemperatureParameters(CP.create_toml_dict(FT), overrides)
 
 function SurfaceTemperatureParameters(
-    toml_dict::CP.AbstractTOMLDict,
+    toml_dict::CP.ParamDict,
     overrides = NamedTuple(),
 )
     name_map = (;

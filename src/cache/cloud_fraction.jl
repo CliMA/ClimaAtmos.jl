@@ -99,6 +99,7 @@ NVTX.@annotate function set_cloud_fraction!(
     ᶜmixing_length_field .= compute_gm_mixing_length(Y, p)
 
     diagnostic_covariance_coeff = CAP.diagnostic_covariance_coeff(params)
+    # TODO: This is using the grid-mean gradients
     @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,
         ᶜts,
@@ -205,8 +206,8 @@ NVTX.@annotate function set_cloud_fraction!(
     @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,
         ᶜts⁰,
-        Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot⁰),
-        Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice⁰),
+        Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot),
+        Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice),
         diagnostic_covariance_coeff,
         ᶜmixing_length_field,
         thermo_params,

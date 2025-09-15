@@ -853,6 +853,16 @@ steps:
         artifact_paths: "prognostic_edmfx_rico_column/output_active/*"
         agents:
           slurm_mem: 20GB
+      
+      - label: ":umbrella: Prognostic EDMFX Rico in a column (implicit)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_rico_implicit_column.yml
+          --job_id prognostic_edmfx_rico_implicit_column
+        artifact_paths: "prognostic_edmfx_rico_implicit_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+        soft_fail: true
 
       - label: ":umbrella: Prognostic EDMFX Rico with 2-moment in a column"
         command: >
@@ -1364,6 +1374,7 @@ steps:
         artifact_paths: "flame_aquaplanet_progedmf_dense_autodiff/*"
         agents:
           slurm_mem: 32GB
+        soft_fail: true
 
       - label: ":fire: Flame graph: prognostic edmf sparse autodiff"
         command: >

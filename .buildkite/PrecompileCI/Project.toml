@@ -8,7 +8,9 @@ ClimaAtmos = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 ClimaComms = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
 ClimaCore = "d414da3d-4745-48bb-8d80-42e94e092884"
 ClimaParams = "5c42b081-d73a-476f-9059-fd94b934656c"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 
 [compat]
+Logging = "1"
 PrecompileTools = "1.2.1"

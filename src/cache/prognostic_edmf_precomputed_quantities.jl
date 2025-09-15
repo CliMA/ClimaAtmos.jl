@@ -222,49 +222,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
             obukhov_length_val,
             sfc_local_geometry_val,
         )
-        if p.atmos.moisture_model isa NonEquilMoistModel && (
-            p.atmos.microphysics_model isa Microphysics1Moment ||
-            p.atmos.microphysics_model isa Microphysics2Moment
-        )
-            # TODO - any better way to define the cloud and precip tracer flux?
-
-            ᶜq_liq = @. lazy(specific(Y.c.ρq_liq, Y.c.ρ))
-            ᶜq_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
-            ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-            ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-            ᶜq_liq_int_val = Fields.field_values(Fields.level(ᶜq_liq, 1))
-            ᶜq_liqʲ_int_val = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
-            @. ᶜq_liqʲ_int_val = ᶜq_liq_int_val
-
-            ᶜq_ice_int_val = Fields.field_values(Fields.level(ᶜq_ice, 1))
-            ᶜq_iceʲ_int_val = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
-            @. ᶜq_iceʲ_int_val = ᶜq_ice_int_val
-
-            ᶜq_rai_int_val = Fields.field_values(Fields.level(ᶜq_rai, 1))
-            ᶜq_raiʲ_int_val = Fields.field_values(Fields.level(ᶜq_raiʲ, 1))
-            @. ᶜq_raiʲ_int_val = ᶜq_rai_int_val
-
-            ᶜq_sno_int_val = Fields.field_values(Fields.level(ᶜq_sno, 1))
-            ᶜq_snoʲ_int_val = Fields.field_values(Fields.level(ᶜq_snoʲ, 1))
-            @. ᶜq_snoʲ_int_val = ᶜq_sno_int_val
-        end
-        if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.microphysics_model isa Microphysics2Moment
-
-            ᶜn_liq = @. lazy(specific(Y.c.ρn_liq, Y.c.ρ))
-            ᶜn_rai = @. lazy(specific(Y.c.ρn_rai, Y.c.ρ))
-            ᶜn_liqʲ = Y.c.sgsʲs.:($j).n_liq
-            ᶜn_raiʲ = Y.c.sgsʲs.:($j).n_rai
-
-            ᶜn_liq_int_val = Fields.field_values(Fields.level(ᶜn_liq, 1))
-            ᶜn_liqʲ_int_val = Fields.field_values(Fields.level(ᶜn_liqʲ, 1))
-            @. ᶜn_liqʲ_int_val = ᶜn_liq_int_val
-
-            ᶜn_rai_int_val = Fields.field_values(Fields.level(ᶜn_rai, 1))
-            ᶜn_raiʲ_int_val = Fields.field_values(Fields.level(ᶜn_raiʲ, 1))
-            @. ᶜn_raiʲ_int_val = ᶜn_rai_int_val
-
-        end
 
         # Then overwrite the prognostic variables at first inetrior point.
         ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
@@ -273,6 +230,10 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_bottom_bc!(
             p.atmos.microphysics_model isa Microphysics1Moment ||
             p.atmos.microphysics_model isa Microphysics2Moment
         )
+            ᶜq_liqʲ_int_val = Fields.field_values(Fields.level(ᶜq_liqʲ, 1))
+            ᶜq_iceʲ_int_val = Fields.field_values(Fields.level(ᶜq_iceʲ, 1))
+            ᶜq_raiʲ_int_val = Fields.field_values(Fields.level(ᶜq_raiʲ, 1))
+            ᶜq_snoʲ_int_val = Fields.field_values(Fields.level(ᶜq_snoʲ, 1))
             @. ᶜtsʲ_int_val = TD.PhaseNonEquil_phq(
                 thermo_params,
                 ᶜp_int_val,
@@ -365,7 +326,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜu, ᶜp, ᶠu³⁰, ᶜts⁰) = p.precomputed
+    (; ᶜu, ᶜp, ᶠu³, ᶜts, ᶠu³⁰, ᶜts⁰) = p.precomputed
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ρatke_flux) = p.precomputed
     (;
         ᶜuʲs,
@@ -467,31 +428,31 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         )
     end
 
-    (; ᶜgradᵥ_θ_virt⁰, ᶜgradᵥ_q_tot⁰, ᶜgradᵥ_θ_liq_ice⁰) = p.precomputed
+    (; ᶜgradᵥ_θ_virt, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
     # First order approximation: Use environmental mean fields.
-    @. ᶜgradᵥ_θ_virt⁰ = ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts⁰)))       # ∂θv∂z_unsat
-    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-    @. ᶜgradᵥ_q_tot⁰ = ᶜgradᵥ(ᶠinterp(ᶜq_tot⁰))                                        # ∂qt∂z_sat
-    @. ᶜgradᵥ_θ_liq_ice⁰ =
-        ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰)))                    # ∂θl∂z_sat
+    @. ᶜgradᵥ_θ_virt = ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))       # ∂θv∂z_unsat
+    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+    @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot))                                        # ∂qt∂z_sat
+    @. ᶜgradᵥ_θ_liq_ice =
+        ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))                    # ∂θl∂z_sat
     @. ᶜlinear_buoygrad = buoyancy_gradients( # TODO - do we need to modify buoyancy gradients based on NonEq + 1M tracers?
         BuoyGradMean(),
         thermo_params,
         moisture_model,
-        ᶜts⁰,
+        ᶜts,
         C3,
-        ᶜgradᵥ_θ_virt⁰,
-        ᶜgradᵥ_q_tot⁰,
-        ᶜgradᵥ_θ_liq_ice⁰,
+        ᶜgradᵥ_θ_virt,
+        ᶜgradᵥ_q_tot,
+        ᶜgradᵥ_θ_liq_ice,
         ᶜlg,
     )
 
     # TODO: Make strain_rate_norm calculation a function in eddy_diffusion_closures
     # TODO: Currently the shear production only includes vertical gradients
-    ᶠu⁰ = p.scratch.ᶠtemp_C123
-    @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
+    ᶠu = p.scratch.ᶠtemp_C123
+    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
-    ᶜstrain_rate .= compute_strain_rate_center(ᶠu⁰)
+    ᶜstrain_rate .= compute_strain_rate_center(ᶠu)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
@@ -558,23 +519,20 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     @assert (p.atmos.moisture_model isa NonEquilMoistModel)
 
     (; params, dt) = p
-    (; ᶜΦ,) = p.core
     thp = CAP.thermodynamics_params(params)
     cmp = CAP.microphysics_1m_params(params)
     cmc = CAP.microphysics_cloud_params(params)
-    (; turbconv_model) = p.atmos
 
     (; ᶜSqₗᵖʲs, ᶜSqᵢᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
     (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜts⁰) = p.precomputed
 
-    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₜʲs, ᶜwₕʲs) = p.precomputed
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs) = p.precomputed
 
     # TODO - can I re-use them between js and env?
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
     ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
 
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    FT = eltype(params)
 
     for j in 1:n
 
@@ -603,35 +561,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             cmc.Ch2022.small_ice,
             ᶜρʲs.:($$j),
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_ice),
-        )
-        # compute their contirbutions to energy and total water advection
-        @. ᶜwₜʲs.:($$j) = ifelse(
-            Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_tot > FT(0),
-            (
-                ᶜwₗʲs.:($$j) * Y.c.sgsʲs.:($$j).q_liq +
-                ᶜwᵢʲs.:($$j) * Y.c.sgsʲs.:($$j).q_ice +
-                ᶜwᵣʲs.:($$j) * Y.c.sgsʲs.:($$j).q_rai +
-                ᶜwₛʲs.:($$j) * Y.c.sgsʲs.:($$j).q_sno
-            ) / Y.c.sgsʲs.:($$j).q_tot,
-            FT(0),
-        )
-        @. ᶜwₕʲs.:($$j) = ifelse(
-            Y.c.sgsʲs.:($$j).ρa * abs(Y.c.sgsʲs.:($$j).mse) > FT(0),
-            (
-                ᶜwₗʲs.:($$j) *
-                Y.c.sgsʲs.:($$j).q_liq *
-                (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
-                ᶜwᵢʲs.:($$j) *
-                Y.c.sgsʲs.:($$j).q_ice *
-                (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
-                ᶜwᵣʲs.:($$j) *
-                Y.c.sgsʲs.:($$j).q_rai *
-                (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
-                ᶜwₛʲs.:($$j) *
-                Y.c.sgsʲs.:($$j).q_sno *
-                (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
-            ) / (Y.c.sgsʲs.:($$j).mse),
-            FT(0),
         )
 
         # Precipitation sources and sinks from the updrafts
@@ -769,7 +698,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
 )
 
     (; params, dt) = p
-    (; ᶜΦ,) = p.core
     thp = CAP.thermodynamics_params(params)
     cm1p = CAP.microphysics_1m_params(p.params)
     cm2p = CAP.microphysics_2m_params(p.params)
@@ -788,7 +716,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     ) = p.precomputed
     (; ᶜSqₗᵖ⁰, ᶜSqᵢᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜSnₗᵖ⁰, ᶜSnᵣᵖ⁰, ᶜts⁰, ᶜu⁰) =
         p.precomputed
-    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs, ᶜwₜʲs, ᶜwₕʲs, ᶜuʲs) =
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs, ᶜuʲs) =
         p.precomputed
 
     ᶜSᵖ = p.scratch.ᶜtemp_scalar
@@ -815,7 +743,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
 
     # Compute sources
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    FT = eltype(params)
     for j in 1:n
 
         # compute terminal velocity for precipitation
@@ -873,35 +800,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
             cmc.Ch2022.small_ice,
             ᶜρʲs.:($$j),
             max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).q_ice),
-        )
-        # compute their contirbutions to energy and total water advection
-        @. ᶜwₜʲs.:($$j) = ifelse(
-            Y.c.sgsʲs.:($$j).ρa * Y.c.sgsʲs.:($$j).q_tot > FT(0),
-            (
-                ᶜwₗʲs.:($$j) * Y.c.sgsʲs.:($$j).q_liq +
-                ᶜwᵢʲs.:($$j) * Y.c.sgsʲs.:($$j).q_ice +
-                ᶜwᵣʲs.:($$j) * Y.c.sgsʲs.:($$j).q_rai +
-                ᶜwₛʲs.:($$j) * Y.c.sgsʲs.:($$j).q_sno
-            ) / Y.c.sgsʲs.:($$j).q_tot,
-            FT(0),
-        )
-        @. ᶜwₕʲs.:($$j) = ifelse(
-            Y.c.sgsʲs.:($$j).ρa * abs(Y.c.sgsʲs.:($$j).mse) > FT(0),
-            (
-                ᶜwₗʲs.:($$j) *
-                Y.c.sgsʲs.:($$j).q_liq *
-                (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
-                ᶜwᵢʲs.:($$j) *
-                Y.c.sgsʲs.:($$j).q_ice *
-                (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
-                ᶜwᵣʲs.:($$j) *
-                Y.c.sgsʲs.:($$j).q_rai *
-                (Iₗ(thp, ᶜtsʲs.:($$j)) + ᶜΦ) +
-                ᶜwₛʲs.:($$j) *
-                Y.c.sgsʲs.:($$j).q_sno *
-                (Iᵢ(thp, ᶜtsʲs.:($$j)) + ᶜΦ)
-            ) / (Y.c.sgsʲs.:($$j).mse),
-            FT(0),
         )
 
         # Precipitation sources and sinks from the updrafts

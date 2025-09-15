@@ -31,6 +31,11 @@ const ᶜadvdivᵥ = Operators.DivergenceF2C(
     top = Operators.SetValue(CT3(0)),
 )
 
+const ᶜprecip_massflux_divᵥ = Operators.DivergenceF2C(
+    bottom = Operators.SetDivergence(0),
+    top = Operators.SetValue(CT3(0)),
+)
+
 # Subsidence has extrapolated tendency at the top, and has no flux at the bottom.
 # TODO: This is not accurate and causes some issues at the domain top.
 const ᶜsubdivᵥ = Operators.DivergenceF2C(

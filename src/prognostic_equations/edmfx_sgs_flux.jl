@@ -42,20 +42,12 @@ function edmfx_sgs_mass_flux_tendency!(
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
     (; dt) = p
 
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜts⁰))
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    # TODO Here we need to recompute ᶠu³⁰ from the mass flux constraint (instead 
-    # of using the cached value), because the cached boundary value violates the 
-    # constraint after applying the area-fraction boundary condition in 
-    # `set_explicit_precomputed_quantities!` (this is written for only one draft!)
-    ᶠu³⁰ = @. lazy(
-        (ᶠinterp(Y.c.ρ) * ᶠu³ - ᶠinterp(Y.c.sgsʲs.:(1).ρa) * ᶠu³ʲs.:(1)) /
-        ᶠinterp(ᶜρa⁰),
-    )
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
 
@@ -160,7 +152,7 @@ function edmfx_sgs_mass_flux_tendency!(
                     @. ᶜa_scalar =
                         (ᶜχʲ - ᶜχ) *
                         draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-                    vtt = vertical_transport(
+                    vtt = vertical_transport_precip_massflux(
                         ᶜρʲs.:($j),
                         ᶠu³_diff,
                         ᶜa_scalar,
@@ -183,7 +175,7 @@ function edmfx_sgs_mass_flux_tendency!(
 
                 @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
                 @. ᶜa_scalar = (ᶜχ⁰ - ᶜχ) * draft_area(ᶜρa⁰, ᶜρ⁰)
-                vtt = vertical_transport(
+                vtt = vertical_transport_precip_massflux(
                     ᶜρ⁰,
                     ᶠu³_diff,
                     ᶜa_scalar,
@@ -277,7 +269,60 @@ function edmfx_sgs_mass_flux_tendency!(
                 )
                 @. Yₜ.c.ρq_tot += vtt
             end
-            # TODO: add environment flux?
+        end
+
+        # Microphysics tracers fluxes
+        if p.atmos.moisture_model isa NonEquilMoistModel && (
+            p.atmos.microphysics_model isa Microphysics1Moment ||
+            p.atmos.microphysics_model isa Microphysics2Moment
+        )
+            microphysics_tracers = (
+                (@name(c.ρq_liq), @name(ᶜq_liqʲs.:(1))),
+                (@name(c.ρq_ice), @name(ᶜq_iceʲs.:(1))),
+                (@name(c.ρq_rai), @name(ᶜq_raiʲs.:(1))),
+                (@name(c.ρq_sno), @name(ᶜq_snoʲs.:(1))),
+                (@name(c.ρn_liq), @name(ᶜn_liqʲs.:(1))),
+                (@name(c.ρn_rai), @name(ᶜn_raiʲs.:(1))),
+            )
+            for j in 1:n
+                # TODO using unrolled_foreach here allocates! (breaks the flame tests
+                # even though they use 0M microphysics)
+                # MatrixFields.unrolled_foreach(
+                #     microphysics_tracers,
+                # ) do (ρχ_name, χʲ_name)
+                for (ρχ_name, χʲ_name) in microphysics_tracers
+                    MatrixFields.has_field(Y, ρχ_name) || continue
+
+                    ᶜχʲ = MatrixFields.get_field(p.precomputed, χʲ_name)
+                    ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+                    ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
+
+                    @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
+                    # @. ᶜa_scalar =
+                    #     (ᶜχʲ - ᶜχ) *
+                    #     draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j))
+                    # TODO: remove this filter when mass flux is treated implicitly
+                    @. ᶜa_scalar =
+                        (ᶜχʲ - ᶜχ) * min(
+                            min(draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)), a_max),
+                            FT(0.02) / max(
+                                Geometry.WVector(
+                                    ᶜinterp(ᶠu³_diff),
+                                ).components.data.:1,
+                                eps(FT),
+                            ),
+                        )
+                    vtt = vertical_transport_precip_massflux(
+                        ᶜρʲs.:($j),
+                        ᶠu³_diff,
+                        ᶜa_scalar,
+                        dt,
+                        edmfx_sgsflux_upwinding,
+                    )
+                    ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+                    @. ᶜρχₜ += vtt
+                end
+            end
         end
         # TODO: the following adds the environment flux to the tendency
         # Make active and test later
