@@ -33,6 +33,8 @@ n_steps = 5
 comms_ctx = ClimaComms.context(integrator.u.c)
 device = ClimaComms.device(comms_ctx)
 CUDA.@profile external = true begin
-    CA.benchmark_step!(integrator, Y₀, n_steps) # run
+    e = CUDA.@elapsed begin
+        CA.benchmark_step!(integrator, Y₀, n_steps) # run
+    end
 end
-@info "Done running benchmark_step_gpu!"
+@info "Done running benchmark_step_gpu in $(e) seconds!"
