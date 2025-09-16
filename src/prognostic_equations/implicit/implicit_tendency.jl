@@ -267,12 +267,34 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     FT = eltype(Y.c.ρ)
     (;params)=p
     (;T_ref)=p.core
-    Γ_0 = FT(6.5) # Lapse rate (K/km)
-    T_ref = FT(288)
-    T0 = T_ref - Γ_0*T_ref*CAP.cp_d(params) / FT(1000.0) /CAP.grav(params)  # ~ 97 K
+    # Γ_0 = FT(6.5) # Lapse rate (K/km)
+    # T_ref = FT(288)
+    # T_ref_surf = Fields.level(T_ref, 1)  # Reference temperature at surface level
+    # T0 = @. lazy(T_ref_surf - FT(6.5)*T_ref_surf*CAP.cp_d(params) / FT(1000.0) /CAP.grav(params))  # ~ 97 K
+    # T0 = Fields.level(TD.air_temperature.(thermo_params, ᶜts), Spaces.nlevels(Y.c))
+    # T0 = TD.Parameters.T_0(thermo_params)
+    # @Main.infiltrate
+
+    # T0 = p.scratch.temp_field_level
+    # parent(T0) .= parent(Fields.field_values(Fields.level(T_ref,1)) .- Fields.field_values(Fields.level(T_ref, Spaces.nlevels(Y.c))))
+    # T0 = FT(110.0)
+    # ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
+    local_grad = Operators.GradientF2C(
+           bottom = Operators.Extrapolate(),
+           top = Operators.Extrapolate(),
+       )
+    ᶜdTdz = Geometry.WVector.(local_grad.(ᶠinterp.(T_ref))).components.data.:1
+    ᶜdTdz = Fields.level(ᶜdTdz, 1)
+    # ᶜdTdz = FT(6.5 / 1000.0)
+    # ᶜdTdz = Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
+    T_ref_surf = thermo_params.T_surf_ref
+    # T_ref_surf = FT(288)
+    T0 = @. T_ref_surf + ᶜdTdz*T_ref_surf*CAP.cp_d(params) /CAP.grav(params)
+    # T0 = min.(T0, FT(97))
     cp_d = CAP.cp_d(params)
 
-
+    # @Main.infiltrate
+    # T0 = FT(97.0)
     @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ + ᶠgradᵥ(cp_d * T0 * log(Π)) + 
                   cp_d * (ᶠinterp(θ_v) - ᶠinterp(T0 / Π)) * ᶠgradᵥ(Π)
 

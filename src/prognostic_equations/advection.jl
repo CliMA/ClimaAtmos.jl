@@ -86,15 +86,37 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     # Following Herrington et al (2022a.)
     # Rewrite ∇Φ + ∇ₕ(p)/ρ  = ∇Φ + cp_d * θᵥ * ∇Π 
     # where Π = (p/p_0)^κ. 
-    FT = eltype(Y.c.ρ)
+    # FT = eltype(Y.c.ρ)
     θ_v = lazy.(TD.virtual_pottemp.(thermo_params, ᶜts))
     Π = lazy.(TD.exner_given_pressure.(thermo_params, 
                                       TD.air_pressure.(thermo_params, ᶜts)))
+    # Γ_0 =  # Lapse rate (K/km)
+    # T0 = Fields.level(TD.air_temperature.(thermo_params, ᶜts), Spaces.nlevels(Y.c))
+    # T0 = TD.Parameters.T_0(thermo_params)
 
-    T_ref = FT(97.0)
+    # T0 = p.scratch.temp_field_level
+    # parent(T0) .= parent(Fields.field_values(Fields.level(T_ref,1)) .- Fields.field_values(Fields.level(T_ref, Spaces.nlevels(Y.c))))
+    # T_ref_surf = Fields.level(T_ref, 1)  # Reference temperature at surface level
+    # T0 = @. lazy(T_ref_surf - FT(6.5)*T_ref_surf*CAP.cp_d(params) /CAP.grav(params))  # ~ 97 K
+    # ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
+
+    local_grad = Operators.GradientF2C(
+           bottom = Operators.Extrapolate(),
+           top = Operators.Extrapolate(),
+       )
+    ᶜdTdz = Geometry.WVector.(local_grad.(ᶠinterp.(T_ref))).components.data.:1
+    ᶜdTdz = Fields.level(ᶜdTdz, 1)
+    # ᶜdTdz = FT(6.5 / 1000.0)
+    # @Main.infiltrate
+    T_ref_surf = thermo_params.T_surf_ref
+    # T_ref_surf = FT(288)
+    T0 = @. T_ref_surf + ᶜdTdz*T_ref_surf*CAP.cp_d(params) /CAP.grav(params)
+    # T0 = min.(T0, FT(97))
+    # T0 = FT(97.0)
+    # @Main.infiltrate
     @. Yₜ.c.uₕ -= C12(gradₕ(ᶜK)) + 
-                  C12(gradₕ(ᶜΦ) + cp_d * T_ref * gradₕ(log(Π)) + 
-                           cp_d * (θ_v - T_ref/Π) * gradₕ(Π)) 
+                  C12(gradₕ(ᶜΦ) + cp_d * T0 * gradₕ(log(Π)) + 
+                           cp_d * (θ_v - T0/Π) * gradₕ(Π)) 
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end

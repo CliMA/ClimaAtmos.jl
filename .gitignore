@@ -53,6 +53,7 @@ Artifacts.toml
 *.loc
 *.out
 *.log
+*imgs/*
 
 # misc
 .DS_Store
