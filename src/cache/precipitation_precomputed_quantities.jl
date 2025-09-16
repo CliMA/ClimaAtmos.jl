@@ -5,6 +5,7 @@
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
 import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics.Microphysics2M as CM2
+import CloudMicrophysics.P3Scheme as CMP3
 
 import Thermodynamics as TD
 import ClimaCore.Operators as Operators
@@ -506,6 +507,68 @@ function set_precipitation_velocities!(
     return nothing
 end
 
+function set_precipitation_velocities!(
+    Y, p, ::NonEquilMoistModel, ::Microphysics2MomentP3,
+)
+    ## liquid quantities (2M warm rain)
+    (; ᶜwₗ, ᶜwᵣ, ᶜwnₗ, ᶜwnᵣ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜts, ᶜu) = p.precomputed
+    (; ᶜΦ) = p.core
+
+    (; ρ, ρq_liq, ρn_liq, ρq_rai, ρn_rai) = Y.c
+    (; sb, rtv, ctv) = p.params.microphysics_2mp3_params.warm
+    thp = CAP.thermodynamics_params(p.params)
+
+    # Number- and mass weighted rain terminal velocity [m/s]
+    ᶜrai_w_terms = @. lazy(
+        CM2.rain_terminal_velocity(
+            sb, rtv,
+            max(zero(ρ), specific(ρq_rai, ρ)),
+            ρ, max(zero(ρ), ρn_rai),
+        ),
+    )
+    @. ᶜwnᵣ = getindex(ᶜrai_w_terms, 1)
+    @. ᶜwᵣ = getindex(ᶜrai_w_terms, 2)
+    # Number- and mass weighted cloud liquid terminal velocity [m/s]
+    ᶜliq_w_terms = @. lazy(
+        CM2.cloud_terminal_velocity(
+            sb.pdf_c, ctv,
+            max(zero(ρ), specific(ρq_liq, ρ)),
+            ρ, max(zero(ρ), ρn_liq),
+        ),
+    )
+    @. ᶜwnₗ = getindex(ᶜliq_w_terms, 1)
+    @. ᶜwₗ = getindex(ᶜliq_w_terms, 2)
+
+    ## Ice quantities
+    (; ρq_ice, ρn_ice, ρq_rim, ρb_rim) = Y.c
+    (; ᶜwᵢ) = p.precomputed
+    (; cold) = CAP.microphysics_2mp3_params(p.params)
+
+    # Number- and mass weighted ice terminal velocity [m/s]
+    # Calculate terminal velocities
+    (; ᶜlogλ, ᶜwnᵢ) = p.precomputed
+    use_aspect_ratio = true  # TODO: Make a config option
+    ᶜF_rim = @. lazy(ρq_rim / ρq_ice)
+    ᶜρ_rim = @. lazy(ρq_rim / ρb_rim)
+    ᶜstate_p3 = @. lazy(CMP3.P3State(cold.params,
+        max(0, ρq_ice), max(0, ρn_ice), ᶜF_rim, ᶜρ_rim,
+    ))
+    @. ᶜlogλ = CMP3.get_distribution_logλ(ᶜstate_p3)
+    args = (cold.velocity_params, ρ, ᶜstate_p3, ᶜlogλ)
+    @. ᶜwnᵢ = CMP3.ice_terminal_velocity_number_weighted(args...; use_aspect_ratio)
+    @. ᶜwᵢ = CMP3.ice_terminal_velocity_mass_weighted(args...; use_aspect_ratio)
+
+    # compute their contributions to energy and total water advection
+    @. ᶜwₜqₜ = Geometry.WVector(ᶜwₗ * ρq_liq + ᶜwᵢ * ρq_ice + ᶜwᵣ * ρq_rai) / ρ
+    @. ᶜwₕhₜ =
+        Geometry.WVector(
+            ᶜwₗ * ρq_liq * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
+            ᶜwᵢ * ρq_ice * (Iᵢ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
+            ᶜwᵣ * ρq_rai * (Iₗ(thp, ᶜts) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))),
+        ) / ρ
+    return nothing
+end
+
 """
     set_precipitation_cache!(Y, p, microphysics_model, turbconv_model)
 
@@ -744,6 +807,37 @@ function set_precipitation_cache!(
     return nothing
 end
 
+function set_precipitation_cache!(Y, p, ::Microphysics2MomentP3, ::Nothing)
+    ### Rainy processes (2M)
+    (; turbconv_model) = p.atmos
+    set_precipitation_cache!(Y, p, Microphysics2Moment(), turbconv_model)
+    # NOTE: the above function sets `ᶜSqᵢᵖ` to `0`. For P3, need to update `ᶜSqᵢᵖ` below!!
+
+    ### Icy processes (P3)
+    (; ᶜScoll, ᶜts, ᶜlogλ) = p.precomputed
+
+    # get thermodynamics and microphysics params
+    (; params) = p
+    params_2mp3 = CAP.microphysics_2mp3_params(params)
+    thermo_params = CAP.thermodynamics_params(params)
+
+    ᶜY_reduced = (;
+        Y.c.ρ,
+        # condensate
+        Y.c.ρq_liq, Y.c.ρn_liq, Y.c.ρq_rai, Y.c.ρn_rai,
+        # ice
+        Y.c.ρq_ice, Y.c.ρn_ice, Y.c.ρq_rim, Y.c.ρb_rim,
+    )
+
+    # compute warm precipitation sources on the grid mean (based on SB2006 2M scheme)
+    compute_cold_precipitation_sources_P3!(
+        ᶜScoll, params_2mp3, thermo_params, ᶜY_reduced, ᶜts, ᶜlogλ,
+    )
+
+    return nothing
+
+end
+
 """
     set_precipitation_surface_fluxes!(Y, p, precipitation model)
 
@@ -832,4 +926,9 @@ function set_precipitation_surface_fluxes!(
     @. col_integrated_precip_energy_tendency = sfc_ρ * (-sfc_wₕhₜ)
 
     return nothing
+end
+
+function set_precipitation_surface_fluxes!(Y, p, ::Microphysics2MomentP3)
+    set_precipitation_surface_fluxes!(Y, p, Microphysics2Moment())
+    # TODO: Figure out what to do for ρn_ice, ρq_rim, ρb_rim
 end

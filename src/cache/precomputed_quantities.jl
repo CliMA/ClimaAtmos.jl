@@ -113,7 +113,8 @@ function precomputed_quantities(Y, atmos)
             ᶜSqᵣᵖ = similar(Y.c, FT),
             ᶜSqₛᵖ = similar(Y.c, FT),
         )
-    elseif atmos.microphysics_model isa Microphysics2Moment
+    elseif atmos.microphysics_model isa Union{Microphysics2Moment, Microphysics2MomentP3}
+        # 2-moment microphysics
         precipitation_quantities = (;
             ᶜwᵣ = similar(Y.c, FT),
             ᶜwₛ = similar(Y.c, FT),
@@ -126,6 +127,23 @@ function precomputed_quantities(Y, atmos)
             ᶜSnₗᵖ = similar(Y.c, FT),
             ᶜSnᵣᵖ = similar(Y.c, FT),
         )
+        # Add additional quantities for 2M + P3
+        if atmos.microphysics_model isa Microphysics2MomentP3
+            precipitation_quantities = (;
+                # liquid quantities (2M warm rain)
+                precipitation_quantities...,
+                # ice quantities (P3)
+                ᶜwᵢ = similar(Y.c, FT),
+                ᶜwnᵢ = similar(Y.c, FT),
+                ᶜlogλ = similar(Y.c, FT),
+                ᶜScoll = similar(Y.c,
+                    @NamedTuple{
+                        ∂ₜq_c::FT, ∂ₜq_r::FT, ∂ₜN_c::FT, ∂ₜN_r::FT,
+                        ∂ₜL_rim::FT, ∂ₜL_ice::FT, ∂ₜB_rim::FT,
+                    }
+                ),
+            )
+        end
     else
         precipitation_quantities = (;)
     end
