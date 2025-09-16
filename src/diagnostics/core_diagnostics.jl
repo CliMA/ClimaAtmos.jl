@@ -1246,19 +1246,22 @@ function compute_cloud_top_height!(
 
     w = @. lazy(1 / (1 + exp(-k * (q_cond - q_threshold))))
 
+    numerator = @. lazy((w * exp(a*z)) * z)
+    denominator = @. lazy((w * exp(a*z)))
+
     num = zeros(axes(Fields.level(state.f, half)))
     denom = zeros(axes(Fields.level(state.f, half)))
 
-    Operators.column_integral_definite!(num, (w * exp(a*z)) * z)
-    Operators.column_integral_definite!(denom, (w * exp(a*z)))
+    Operators.column_integral_definite!(num, numerator)
+    Operators.column_integral_definite!(denom, denominator)
 
     @info("numerator integrated", num)
     @info("denominator integrated", denom)
 
     if isnothing(out)
-        z_top = num ./ denom
+        z_top = @. lazy(num ./ denom)
     else
-        z_top .= num ./ denom
+        z_top .= @. lazy(num ./ denom)
     end
 
     @info("cloud top height", z_top)
