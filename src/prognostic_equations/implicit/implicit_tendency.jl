@@ -269,11 +269,12 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (;T_ref)=p.core
     Γ_0 = FT(6.5) # Lapse rate (K/km)
     T_ref = FT(288)
-    T0 = T_ref - Γ_0*T_ref*CAP.cp_d(params)/CAP.grav(params)  # ~ 97 K
+    T0 = T_ref - Γ_0*T_ref*CAP.cp_d(params) / FT(1000.0) /CAP.grav(params)  # ~ 97 K
     cp_d = CAP.cp_d(params)
 
-    @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ + ᶠgradᵥ(cp_d * T_ref * log(Π)) + 
-                  cp_d * (ᶠinterp(θ_v) - ᶠinterp(T_ref / Π)) * ᶠgradᵥ(Π)
+
+    @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ + ᶠgradᵥ(cp_d * T0 * log(Π)) + 
+                  cp_d * (ᶠinterp(θ_v) - ᶠinterp(T0 / Π)) * ᶠgradᵥ(Π)
 
    # @. Yₜ.f.u₃  -= CAP.cp_d(params) *
    #                ᶠinterp(θ_v) * 

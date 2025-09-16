@@ -15,7 +15,7 @@ import ClimaCore: Fields, Geometry, Operators, Spaces, Grids, Utilities
 # simulation = CA.AtmosSimulation(config_file)
 # CA.solve_atmos!(simulation)
 
-config_file = "./config/model_configs/baroclinic_wave_hughes2023_paper.yml"
+config_file = "./config/model_configs/plane_schar_mountain_float64_test.yml"
 config = CA.AtmosConfig(config_file)
 simulation = CA.get_simulation(config)
 (; integrator) = simulation

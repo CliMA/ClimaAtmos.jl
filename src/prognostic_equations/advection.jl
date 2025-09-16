@@ -91,8 +91,9 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     Π = lazy.(TD.exner_given_pressure.(thermo_params, 
                                       TD.air_pressure.(thermo_params, ᶜts)))
 
+    T_ref = FT(97.0)
     @. Yₜ.c.uₕ -= C12(gradₕ(ᶜK)) + 
-                  C12(gradₕ(ᶜΦ + cp_d * T_ref * log(Π)) + 
+                  C12(gradₕ(ᶜΦ) + cp_d * T_ref * gradₕ(log(Π)) + 
                            cp_d * (θ_v - T_ref/Π) * gradₕ(Π)) 
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
