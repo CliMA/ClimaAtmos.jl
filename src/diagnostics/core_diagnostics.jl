@@ -1246,14 +1246,17 @@ function compute_cloud_top_height!(
     numerator = @. lazy((w * exp(ct_constants.a*z)) * z)
     denominator = @. lazy((w * exp(ct_constants.a*z)))
 
+    @info("numerator", numerator)
+    @info("denominator", denominator)
+
     num = zeros(axes(Fields.level(state.f, half)))
     denom = zeros(axes(Fields.level(state.f, half)))
 
     Operators.column_integral_definite!(num, numerator)
     Operators.column_integral_definite!(denom, denominator)
 
-    # @info("numerator integrated", num)
-    # @info("denominator integrated", denom)
+    @info("numerator integrated", num)
+    @info("denominator integrated", denom)
 
     if isnothing(out)
         out = num ./ denom
