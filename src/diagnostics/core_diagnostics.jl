@@ -1236,18 +1236,15 @@ function compute_cloud_top_height!(
     cli = @. lazy(state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice)
     z = Fields.coordinate_field(state.c).z
     FT = Spaces.undertype(axes(clw))
-
-    # parameters to choose
-    q_threshold = FT(1e-10)
-    k = 3
-    a = 5
+    
+    ct_constants = CAP.microphysics_cloud_params(cache.params).ct_constants
 
     q_cond = @. lazy(clw + cli)
 
-    w = @. lazy(1 / (1 + exp(-k * (q_cond - q_threshold))))
+    w = @. lazy(1 / (1 + exp(-ct_constants.k * (q_cond - ct_constants.thresh))))
 
-    numerator = @. lazy((w * exp(a*z)) * z)
-    denominator = @. lazy((w * exp(a*z)))
+    numerator = @. lazy((w * exp(ct_constants.a*z)) * z)
+    denominator = @. lazy((w * exp(ct_constants.a*z)))
 
     num = zeros(axes(Fields.level(state.f, half)))
     denom = zeros(axes(Fields.level(state.f, half)))
