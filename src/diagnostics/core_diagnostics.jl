@@ -1252,18 +1252,17 @@ function compute_cloud_top_height!(
     Operators.column_integral_definite!(num, numerator)
     Operators.column_integral_definite!(denom, denominator)
 
-    @info("numerator integrated", num)
-    @info("denominator integrated", denom)
+    # @info("numerator integrated", num)
+    # @info("denominator integrated", denom)
 
     if isnothing(out)
-        z_top = @. lazy(num ./ denom)
+        out = num ./ denom
     else
-        z_top .= @. lazy(num ./ denom)
+        out .= num ./ denom
     end
+    # @info("cloud top height", out)
 
-    @info("cloud top height", z_top)
-
-    return z_top
+    return out
 end
 
 add_diagnostic_variable!(
