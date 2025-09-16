@@ -33,8 +33,10 @@ function get_atmos(config::AtmosConfig, params)
                 Union{NoPrecipitation, Microphysics0Moment}
     end
     if moisture_model isa NonEquilMoistModel
-        @assert microphysics_model isa
-                Union{NoPrecipitation, Microphysics1Moment, Microphysics2Moment}
+        @assert microphysics_model isa Union{
+            NoPrecipitation, Microphysics1Moment,
+            Microphysics2Moment, Microphysics2MomentP3,
+        }
     end
     if microphysics_model isa NoPrecipitation
         @warn "Running simulations without any precipitation formation."
