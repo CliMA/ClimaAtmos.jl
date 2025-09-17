@@ -40,8 +40,6 @@ function hyperdiffusion_cache(
     moisture_model,
     microphysics_model,
 )
-    quadrature_style =
-        Spaces.quadrature_style(Spaces.horizontal_space(axes(Y.c)))
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
 
