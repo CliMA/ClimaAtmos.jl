@@ -29,10 +29,10 @@ z_max:
   value: 30000.0
 vorticity_hyperdiffusion_coefficient:
   help: "Hyperdiffusion coefficient for vorticity (m s-1)"
-  value: 0.24141 # 0.1857 * 1.3
+  value: 0.1857
 scalar_hyperdiffusion_coefficient:
   help: "Hyperdiffusion coefficient for scalar (m s-1)"
-  value: 1.2086594 # 0.929738 * 1.3
+  value: 0.929738
 # Topography
 topography:
   help: "Define the surface elevation profile [`NoWarp` (default), `Earth`, `DCMIP200`, `Hughes2023`, `Agnesi`, `Schar`, `Cosine2D`, `Cosine3D`]"

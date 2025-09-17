@@ -72,9 +72,8 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
         #    for equation A18 and A19
         # Need to scale by (1.1e5 / (sqrt(4 * pi / 6) * 6.371e6 / (3*30)) )^3  ≈ 1.238
         # These are re-scaled by the grid resolution in function ν₄(hyperdiff, Y)
-        # TODO: Why do we need to increase ν₄ by 30% for the new reconstruction?
-        ν₄_vorticity_coeff = FT(0.150 * 1.238 * 1.3)
-        ν₄_scalar_coeff = FT(0.751 * 1.238 * 1.3)
+        ν₄_vorticity_coeff = FT(0.150 * 1.238)
+        ν₄_scalar_coeff = FT(0.751 * 1.238)
         divergence_damping_factor = FT(5)
         # Ensure the user isn't trying to set the values manually from the config as CAM_SE defines a set of hyperdiffusion coefficients
         coeff_pairs = [
@@ -86,7 +85,7 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
         for (cam_coef, config_coef) in coeff_pairs
             # check to machine precision
             config_val = FT(parsed_args[config_coef])
-            @assert isapprox(cam_coef, config_val, atol = 1e-7) "CAM_SE hyperdiffusion overwrites $config_coef, use hyperdiff: ClimaHyperdiffusion to set this value manually in the config instead."
+            @assert isapprox(cam_coef, config_val, atol = 1e-8) "CAM_SE hyperdiffusion overwrites $config_coef, use hyperdiff: ClimaHyperdiffusion to set this value manually in the config instead."
         end
         return ClimaHyperdiffusion(;
             ν₄_vorticity_coeff,
