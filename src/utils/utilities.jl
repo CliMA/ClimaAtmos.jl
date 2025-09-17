@@ -49,27 +49,24 @@ sort_files_by_time(files) =
     permute!(files, sortperm(time_from_filename.(files)))
 
 """
-    κ .= compute_kinetic(uₕ::Field, uᵥ::Field)
+    compute_kinetic(ᶜuₕ, ᶠu₃)
 
-Compute the specific kinetic energy at cell centers, resulting in `κ` from
-individual velocity components:
-
- - `κ = 1/2 (uₕ⋅uʰ + 2uʰ⋅ᶜI(uᵥ) + ᶜI(uᵥ⋅uᵛ))`
- - `uₕ` should be a `Covariant1Vector` or `Covariant12Vector`-valued field at
-    cell centers, and
- - `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
+Reconstruction of the specific kinetic energy on cell centers,
+`ᶜκ = ((ᶜgʰʰ ᶜuₕ) ⋅ ᶜuₕ + 2 (ᶜgᵛʰ ᶜuₕ) ⋅ ᶜI(ᶠu₃) + ᶜg³³ ᶜI(ᶠu₃^2))/2`, where
+- `ᶜuₕ` is a center `Field` of `Covariant1Vector`s or `Covariant12Vector`s, and
+- `ᶠu₃` is a face `Field` of `Covariant3Vector`s.
 """
-function compute_kinetic(uₕ, uᵥ)
-    @assert eltype(uₕ) <: Union{C1, C2, C12}
-    @assert eltype(uᵥ) <: C3
-    FT = Spaces.undertype(axes(uₕ))
-    onehalf = FT(1 / 2)
+function compute_kinetic(ᶜuₕ, ᶠu₃)
+    @assert eltype(ᶜuₕ) <: Union{C1, C2, C12}
+    @assert eltype(ᶠu₃) <: C3
+    one³³ = CT3(1) * CT3(1)'
+    ᶜg³³_component = g³³_field(ᶜuₕ)
     return @. lazy(
-        onehalf * (
-            dot(C123(uₕ), CT123(uₕ)) +
-            ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
-            2 * dot(CT123(uₕ), ᶜinterp(C123(uᵥ)))
-        ),
+        (
+            dot(CT12(ᶜuₕ), C12(ᶜuₕ)) +
+            2 * dot(CT3(ᶜuₕ), ᶜinterp(ᶠu₃)) +
+            ᶜg³³_component * ᶜinterp(dot((one³³,) * ᶠu₃, ᶠu₃))
+        ) / 2,
     )
 end
 

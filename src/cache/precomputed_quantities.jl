@@ -262,30 +262,24 @@ function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
 end
 
 """
-    set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
+    set_velocity_at_surface!(Y, turbconv_model)
 
 Modifies `Y.f.u₃` so that `ᶠu³` is 0 at the surface. Specifically, since
-`u³ = uₕ³ + u³ = uₕ³ + u₃ * g³³`, setting `u³` to 0 gives `u₃ = -uₕ³ / g³³`. If
-the `turbconv_model` is EDMFX, the `Y.f.sgsʲs` are also modified so that each
-`u₃ʲ` is equal to `u₃` at the surface.
+`u³ = g³ʰ uₕ + g³³ u₃`, setting `u³` to 0 gives `u₃ = -(g³³)⁻¹ g³ʰ uₕ`. If the
+`turbconv_model` is EDMFX, the `Y.f.sgsʲs` are also modified so that each `u₃ʲ`
+is equal to `u₃` at the surface.
 """
-function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
-    sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
-    sfc_u₃ .= surface_velocity(Y.f.u₃, ᶠuₕ³)
+function set_velocity_at_surface!(Y, turbconv_model)
+    sfc_uₕ = Fields.level(Y.c.uₕ, 1)
+    sfc_gⁱʲ = Fields.local_geometry_field(sfc_uₕ).gⁱʲ
+    sfc_u₃_data = Fields.field_values(@. lazy(-inv(g³³(sfc_gⁱʲ)) * CT3(sfc_uₕ)))
+    Fields.field_values(Fields.level(Y.f.u₃, half)) .= sfc_u₃_data
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n_mass_flux_subdomains(turbconv_model)
-            sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
-            @. sfc_u₃ʲ = sfc_u₃
+            Fields.level(Y.f.sgsʲs.:($j).u₃, half) .= Fields.level(Y.f.u₃, half)
         end
     end
     return nothing
-end
-
-function surface_velocity(ᶠu₃, ᶠuₕ³)
-    sfc_u₃ = Fields.level(ᶠu₃.components.data.:1, half)
-    sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
-    sfc_g³³ = g³³_field(axes(sfc_u₃))
-    return @. lazy(-sfc_uₕ³ / sfc_g³³) # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
 end
 
 """
@@ -294,18 +288,11 @@ end
 Modifies `Y.f.u₃` so that `u₃` is 0 at the model top.
 """
 function set_velocity_at_top!(Y, turbconv_model)
-    top_u₃ = Fields.level(
-        Y.f.u₃.components.data.:1,
-        Spaces.nlevels(axes(Y.c)) + half,
-    )
-    @. top_u₃ = 0
+    top_level = Spaces.nlevels(axes(Y.c)) + half
+    Fields.level(Y.f.u₃, top_level) .= (C3(0),)
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n_mass_flux_subdomains(turbconv_model)
-            top_u₃ʲ = Fields.level(
-                Y.f.sgsʲs.:($j).u₃.components.data.:1,
-                Spaces.nlevels(axes(Y.c)) + half,
-            )
-            @. top_u₃ʲ = top_u₃
+            Fields.level(Y.f.sgsʲs.:($j).u₃, top_level) .= (C3(0),)
         end
     end
     return nothing
@@ -313,9 +300,11 @@ end
 
 # This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
 # ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
-function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
+function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜρ, ᶜuₕ, ᶠuₕ³)
+    ᶜJ = Fields.local_geometry_field(ᶜρ).J
+    ᶜgⁱʲ = Fields.local_geometry_field(ᶜρ).gⁱʲ
     @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
-    @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
+    @. ᶠu³ = ᶠuₕ³ + ᶠwinterp(ᶜρ * ᶜJ, g³³(ᶜgⁱʲ)) * ᶠu₃
     ᶜK .= compute_kinetic(ᶜuₕ, ᶠu₃)
     return nothing
 end
@@ -444,10 +433,10 @@ NVTX.@annotate function set_implicit_precomputed_quantities_part1!(Y, p, t)
 
     # TODO: We might want to move this to dss! (and rename dss! to something
     # like enforce_constraints!).
-    set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
+    set_velocity_at_surface!(Y, turbconv_model)
     set_velocity_at_top!(Y, turbconv_model)
 
-    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
+    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.ρ, Y.c.uₕ, ᶠuₕ³)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     @. ᶠu = C123(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + C123(ᶠu³)
     if n > 0

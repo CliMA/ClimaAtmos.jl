@@ -362,7 +362,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     FT = Spaces.undertype(axes(Y.c))
     CTh = CTh_vector_type(axes(Y.c))
-    one_C3xACT3 = C3(FT(1)) * CT3(FT(1))'
+    one₃³ = C3(FT(1)) * CT3(FT(1))'
+    one³³ = CT3(FT(1)) * CT3(FT(1))'
+    I_u₃ = DiagonalMatrixRow(one₃³)
 
     cv_d = FT(CAP.cv_d(params))
     Δcv_v = FT(CAP.cv_v(params)) - cv_d
@@ -386,10 +388,12 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
+
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
-    ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
+    ᶜg³³_component = g³³_field(Y.c)
+    ᶠg³³ = @. lazy(ᶠwinterp(ᶜρ * ᶜJ, g³³(ᶜgⁱʲ)))
     ᶠz = Fields.coordinate_field(Y.f).z
     zmax = z_max(axes(Y.f))
 
@@ -413,7 +417,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CTh(ᶜuₕ)))
     end
     @. ∂ᶜK_∂ᶠu₃ =
-        ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
+        DiagonalMatrixRow(ᶜg³³_component) ⋅ ᶜinterp_matrix() ⋅
+        DiagonalMatrixRow(adjoint((one³³,) * ᶠu₃)) +
         DiagonalMatrixRow(adjoint(CT3(ᶜuₕ))) ⋅ ᶜinterp_matrix()
 
     @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix()
@@ -428,7 +433,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
     end
     ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
-    @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+    @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠg³³)
 
     tracer_info = (@name(c.ρe_tot), @name(c.ρq_tot))
 
@@ -455,7 +460,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
         ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
         @. ∂ᶜρχ_err_∂ᶠu₃ =
-            dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
+            dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ) * ᶠg³³)
     end
 
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
@@ -482,7 +487,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
     ∂ᶠu₃_err_∂ᶠu₃ = matrix[@name(f.u₃), @name(f.u₃)]
-    I_u₃ = DiagonalMatrixRow(one_C3xACT3)
+    I_u₃ = DiagonalMatrixRow(one₃³)
     @. ∂ᶠu₃_err_∂ᶜuₕ =
         dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅ ∂ᶜK_∂ᶜuₕ
     if rs isa RayleighSponge
@@ -490,7 +495,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             dtγ * (
                 ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅
                 ∂ᶜK_∂ᶠu₃ +
-                DiagonalMatrixRow(-β_rayleigh_w(rs, ᶠz, zmax) * (one_C3xACT3,))
+                DiagonalMatrixRow(-β_rayleigh_w(rs, ᶠz, zmax) * (one₃³,))
             ) - (I_u₃,)
     else
         @. ∂ᶠu₃_err_∂ᶠu₃ =
@@ -772,7 +777,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ) * adjoint(C3(sign(ᶠu³ʲ_data))),
                     ) +
                     DiagonalMatrixRow(Y.c.sgsʲs.:(1).q_tot) ⋅ ᶜadvdivᵥ_matrix()
-                ) ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+                ) ⋅ DiagonalMatrixRow(ᶠg³³)
 
             if p.atmos.moisture_model isa NonEquilMoistModel && (
                 p.atmos.microphysics_model isa Microphysics1Moment ||
@@ -849,7 +854,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ) * adjoint(C3(sign(ᶠu³ʲ_data))),
                     ) +
                     DiagonalMatrixRow(Y.c.sgsʲs.:(1).mse) ⋅ ᶜadvdivᵥ_matrix()
-                ) ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+                ) ⋅ DiagonalMatrixRow(ᶠg³³)
 
             ∂ᶜρaʲ_err_∂ᶜq_totʲ =
                 matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).q_tot)]
@@ -927,7 +932,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ),
                     ) *
                     adjoint(C3(sign(ᶠu³ʲ_data))) *
-                    g³³(ᶠgⁱʲ),
+                    ᶠg³³,
                 )
 
             turbconv_params = CAP.turbconv_params(params)
@@ -972,7 +977,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                         ᶠtridiagonal_matrix_c3 ⋅
                         DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃))) -
                         DiagonalMatrixRow(
-                            β_rayleigh_w(rs, ᶠz, zmax) * (one_C3xACT3,),
+                            β_rayleigh_w(rs, ᶠz, zmax) * (one₃³,),
                         )
                     ) - (I_u₃,)
             else
@@ -1036,7 +1041,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ -=
                     dtγ * (DiagonalMatrixRow(
                         (ᶠinterp(ᶜentrʲs.:(1) + ᶜturb_entrʲs.:(1))) *
-                        (one_C3xACT3,),
+                        (one₃³,),
                     ))
                 if p.atmos.moisture_model isa NonEquilMoistModel && (
                     p.atmos.microphysics_model isa Microphysics1Moment ||
@@ -1071,7 +1076,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ -=
                     dtγ * (DiagonalMatrixRow(
                         2 * α_d * norm(Y.f.sgsʲs.:(1).u₃ - ᶠu₃⁰) /
-                        max(scale_height, H_up_min) * (one_C3xACT3,),
+                        max(scale_height, H_up_min) * (one₃³,),
                     ))
             end
 
@@ -1152,7 +1157,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶜρʲs.:(1) *
                             ᶜJ *
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                        ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+                        ) / ᶠJ * ᶠg³³,
                     )
 
                 ∂ᶜρe_tot_err_∂ᶠu₃ʲ =
@@ -1164,7 +1169,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶜρʲs.:(1) *
                             ᶜJ *
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                        ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+                        ) / ᶠJ * ᶠg³³,
                     )
 
                 ∂ᶜρq_tot_err_∂ᶠu₃ = matrix[@name(c.ρq_tot), @name(f.u₃)]
@@ -1175,7 +1180,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶜρʲs.:(1) *
                             ᶜJ *
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                        ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+                        ) / ᶠJ * ᶠg³³,
                     )
 
                 ∂ᶜρq_tot_err_∂ᶠu₃ʲ =
@@ -1187,7 +1192,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                             ᶜρʲs.:(1) *
                             ᶜJ *
                             draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                        ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+                        ) / ᶠJ * ᶠg³³,
                     )
 
                 # grid-mean ∂/∂(rho*a)
@@ -1213,7 +1218,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
                 dtγ *
                 -DiagonalMatrixRow(
-                    β_rayleigh_w(rs, ᶠz, zmax) * (one_C3xACT3,),
+                    β_rayleigh_w(rs, ᶠz, zmax) * (one₃³,),
                 ) - (I_u₃,)
         end
     end
