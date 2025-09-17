@@ -84,7 +84,7 @@ function topography_schar(coord)
     return h_max * exp(-(x - x_center)^2 / a^2) * cospi((x - x_center) / λ)^2
 end
 schar_params(::Type{FT}) where {FT} =
-    (; h_max = FT(25), x_center = FT(50e3), λ = FT(4e3), a = FT(5e3))
+    (; h_max = FT(250), x_center = FT(50e3), λ = FT(4e3), a = FT(5e3))
 
 """
     topography_cosine_2d(coord)

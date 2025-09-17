@@ -15,6 +15,8 @@ prognostic_surface: PrognosticSurfaceTemperature
 deep_atmosphere: true
 disable_surface_flux_tendency: true
 dt_save_state_to_disk: "10days"
+hyperdiff: "ClimaHyperdiffusion"
+divergence_damping_factor: 1.0
 netcdf_interpolation_num_points: [1440, 720, 43]
 output_dir: "/glade/derecho/scratch/asridhar/moist_bw_hughes_0M_exner_pg/"
 toml: [toml/longrun_bw.toml]

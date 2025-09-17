@@ -261,48 +261,26 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # Following Herrington et al (2022a.)
     # Rewrite ∇Φ + ∇ₕ(p)/ρ  = ∇Φ + cp_d * θᵥ * ∇Π 
     # where Π = (p/p_0)^κ. 
-    θ_v = lazy.(TD.virtual_pottemp.(thermo_params, ᶜts))
-    Π = lazy.(TD.exner_given_pressure.(thermo_params, 
-                                      TD.air_pressure.(thermo_params, ᶜts)))
-    FT = eltype(Y.c.ρ)
+    θ_v = p.scratch.ᶜtemp_scalar_2
+    Π = p.scratch.ᶜtemp_scalar_3
+    @. θ_v = TD.virtual_pottemp.(thermo_params, ᶜts)
+    @. Π = TD.exner_given_pressure.(thermo_params, 
+                                      TD.air_pressure.(thermo_params, ᶜts))
+
     (;params)=p
     (;T_ref)=p.core
-    # Γ_0 = FT(6.5) # Lapse rate (K/km)
-    # T_ref = FT(288)
-    # T_ref_surf = Fields.level(T_ref, 1)  # Reference temperature at surface level
-    # T0 = @. lazy(T_ref_surf - FT(6.5)*T_ref_surf*CAP.cp_d(params) / FT(1000.0) /CAP.grav(params))  # ~ 97 K
-    # T0 = Fields.level(TD.air_temperature.(thermo_params, ᶜts), Spaces.nlevels(Y.c))
-    # T0 = TD.Parameters.T_0(thermo_params)
-    # @Main.infiltrate
-
-    # T0 = p.scratch.temp_field_level
-    # parent(T0) .= parent(Fields.field_values(Fields.level(T_ref,1)) .- Fields.field_values(Fields.level(T_ref, Spaces.nlevels(Y.c))))
-    # T0 = FT(110.0)
-    # ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
-    local_grad = Operators.GradientF2C(
-           bottom = Operators.Extrapolate(),
-           top = Operators.Extrapolate(),
-       )
-    ᶜdTdz = Geometry.WVector.(local_grad.(ᶠinterp.(T_ref))).components.data.:1
-    ᶜdTdz = Fields.level(ᶜdTdz, 1)
-    # ᶜdTdz = FT(6.5 / 1000.0)
-    # ᶜdTdz = Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
-    T_ref_surf = thermo_params.T_surf_ref
-    # T_ref_surf = FT(288)
-    T0 = @. T_ref_surf + ᶜdTdz*T_ref_surf*CAP.cp_d(params) /CAP.grav(params)
-    # T0 = min.(T0, FT(97))
     cp_d = CAP.cp_d(params)
+    # ᶠdTdz = p.scratch.ᶠtemp_scalar
+    # ᶠdTdz = @. Geometry.WVector.(ᶠgradᵥ(T_ref)).components.data.:1
+    # ᶠdTdz0 = Fields.level(ᶠdTdz, 1+half)
+
+    # T_ref_surf = thermo_params.T_surf_ref
+    # T0 = p.scratch.ᶠtemp_field_level
+    T0 = T_ref#_surf + ᶠdTdz0*T_ref_surf*cp_d / CAP.grav(params)
 
     # @Main.infiltrate
-    # T0 = FT(97.0)
-    @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ + ᶠgradᵥ(cp_d * T0 * log(Π)) + 
+    @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ + cp_d * ᶠinterp(T0) * ᶠgradᵥ(log(Π)) + 
                   cp_d * (ᶠinterp(θ_v) - ᶠinterp(T0 / Π)) * ᶠgradᵥ(Π)
-
-   # @. Yₜ.f.u₃  -= CAP.cp_d(params) *
-   #                ᶠinterp(θ_v) * 
-   #                ᶠgradᵥ(Π) + 
-   #                CAP.cp_d(params) * T0 * 
-   #                (ᶠgradᵥ(log(Π)) - 1 / ᶠinterp(Π) * ᶠgradᵥ(Π)) + ᶠgradᵥ_ᶜΦ
 
     if rayleigh_sponge isa RayleighSponge
         ᶠz = Fields.coordinate_field(Y.f).z
