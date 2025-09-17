@@ -23,7 +23,7 @@ z_max: 4e3
 z_elem: 40
 z_stretch: false
 perturb_initstate: false
-dt: 30secs"
+dt: "30secs"
 t_end: "12hours"
 dt_save_state_to_disk: "10mins"
 toml: [toml/prognostic_edmfx_simpleplume.toml]

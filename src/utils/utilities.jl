@@ -226,24 +226,28 @@ get_physical_w(u, local_geometry) = Geometry.WVector(u, local_geometry)[1]
 time_to_seconds(t::Number) =
     t == Inf ? t : error("Uncaught case in computing time from given string.")
 
+"""
+    time_to_seconds(s::String)
+
+Convert a string representing a time to seconds. Supported units: seconds, minutes, hours, days as 
+`s`, `secs`, `m`, `mins`, `h`, `hours`, `d`, `days`.
+"""
 function time_to_seconds(s::String)
-    factor = Dict(
-        "secs" => 1,
-        "mins" => 60,
-        "hours" => 60 * 60,
-        "days" => 60 * 60 * 24,
-    )
     s == "Inf" && return Inf
-    if count(occursin.(keys(factor), Ref(s))) != 1
-        error(
-            "Bad format for flag $s. Examples: [`10secs`, `20mins`, `30hours`, `40days`]",
-        )
-    end
-    for match in keys(factor)
-        occursin(match, s) || continue
-        return parse(Float64, first(split(s, match))) * factor[match]
-    end
-    error("Uncaught case in computing time from given string.")
+    # match a number followed by one of the supported units of time
+    m = match(r"^(\d+(?:\.\d+)?)(s|secs|m|mins|h|hours|d|days)$", s)
+    isnothing(m) &&
+        error("Bad format for flag $s. Examples: `10secs`, `20mins`, `30hours`, `40days`")
+    value = parse(Float64, m.captures[1])
+    unit = m.captures[2]
+    factor_groups = Dict(
+        ["s", "secs"] => 1,
+        ["m", "mins"] => 60,
+        ["h", "hours"] => 3600,
+        ["d", "days"] => 86400,
+    )
+    factors = Dict(unit => val for (units, val) in factor_groups for unit in units)
+    return value * factors[unit]
 end
 
 function verify_callbacks(t)
