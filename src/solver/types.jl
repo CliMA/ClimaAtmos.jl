@@ -1,3 +1,4 @@
+import ClimaComms
 import ClimaCore.Quadratures.GaussQuadrature as GQ
 import StaticArrays as SA
 import Thermodynamics as TD
