@@ -4,7 +4,7 @@
 #
 # What is the ref_counter?
 #
-# The ref_counter is part of reproduciability tests. The counter identifies a
+# The ref_counter is part of reproducability tests. The counter identifies a
 # particular snapshot of our code, a "reference". Each PR is tested against this
 # reference to check if it reproduces the expected behavior. This allows us to
 # check that PRs that are expected to not modify the behavior do indeed preserve
@@ -30,16 +30,18 @@
 - Add ∂/∂q elements to Jacobian
 
 277
-- Update to use SurfaceFluxes.jl@0.14.1. Supports Charnock-parameterization for aerodynamic roughness (default is still user-prescribed ScalarRoughness). SurfaceFluxes catch for neutrally-stable boundary layers (ζ ≈ 0) removed. 
+- Update to use SurfaceFluxes.jl@0.14.1. Supports Charnock-parameterization for
+  aerodynamic roughness (default is still user-prescribed ScalarRoughness).
+  SurfaceFluxes catch for neutrally-stable boundary layers (ζ ≈ 0) removed. 
 
 276
 - Update prognostic EDMF boundary conditions: apply equal surface fluxes to the
-  updraft and grid mean, and enable entrainment of buoyant air in the first cell.
+  updraft and grid mean, and enable entrainment of buoyant air in the first
+  cell.
 
 275
-- Change order of GPU calculations for better performance, but it
-  results in slightly different floating point rounding.  Artifacts
-  all look the same.
+- Change order of GPU calculations for better performance, but it results in
+  slightly different floating point rounding.  Artifacts all look the same.
 
 274
 - Remove unused calculation of TKE exchange in mixing length
@@ -57,15 +59,15 @@
 - Introduce double sided limiters for microphysics
 
 269
-- Use the same time scale parameter for entrainment and detrainment when area fraction
-  is negligible
+- Use the same time scale parameter for entrainment and detrainment when area
+  fraction is negligible
 
 268
 - Updated deps, specifically SurfaceFluxes.jl
 
 267
-- Changed the pressure-gradient formulation to use the Exner function
-  and virtual potential temperature.
+- Changed the pressure-gradient formulation to use the Exner function and
+  virtual potential temperature.
 
 266
 - No behavior change, but some new diagnostics are added, and the reference
@@ -84,7 +86,8 @@
 - Add vertical diffusion to prognostic EDMF updrafts
 
 261
-- Ignore the implicit solver Jacobian for the tracer-density block from diffusion
+- Ignore the implicit solver Jacobian for the tracer-density block from
+  diffusion
 
 260
 - Change environment TKE to grid-mean TKE
@@ -96,8 +99,8 @@
 - Update deps, specifically ClimaParams.jl and Thermodynamics.jl
 
 257
-- Redefine sedimentation velocity for Prognostic EDMF with 1-moment or 2-moment microphysics
-  on the grid scale; fix a bug in EDMFx SGS mass flux.
+- Redefine sedimentation velocity for Prognostic EDMF with 1-moment or 2-moment
+  microphysics on the grid scale; fix a bug in EDMFx SGS mass flux.
 
 256
 - Fix a bug in EDMF diffusive flux
@@ -119,14 +122,15 @@
   limiter formulation.
 
 251
-- Remove ᶜtke⁰, ᶜh_tot, ᶜmse⁰, ᶜρ⁰, and specific quantities from precomputed quantities cache.
-  Introduce helper functions to compute sums over draft, environmental volumetric variables,
-  and specific env variables.
+- Remove ᶜtke⁰, ᶜh_tot, ᶜmse⁰, ᶜρ⁰, and specific quantities from precomputed
+  quantities cache. Introduce helper functions to compute sums over draft,
+  environmental volumetric variables, and specific env variables.
 
 250
-- Add ARG aerosol activation for 2M microphysics; increase the allocation limit for `flame_callbacks`
-  from 391864 to 391942 to account for additional allocations when constructing `ClimaAtmosParameters`
-  with the new aerosol parameters in `microphysics_2m_parameters`.
+- Add ARG aerosol activation for 2M microphysics; increase the allocation limit
+  for `flame_callbacks` from 391864 to 391942 to account for additional
+  allocations when constructing `ClimaAtmosParameters` with the new aerosol
+  parameters in `microphysics_2m_parameters`.
 
 249
 - Remove viscosity, diffusivity, and mixing length from precomputed quantities
@@ -148,10 +152,10 @@
 
 243
 - Consolidate eddy diffusivity logic in eddy_diffusion_closures.jl and mass flux
-  logic in mass_flux_closures.jl, update buoyancy calculations to be consistent throughout
-  (use geopotential gradient instead of g parameter), add helper functions for computing
-  diffusivity/viscosity, adds l_grid to MixingLength output struct. Includes more docstrings
-  and comments.
+  logic in mass_flux_closures.jl, update buoyancy calculations to be consistent
+  throughout (use geopotential gradient instead of g parameter), add helper
+  functions for computing diffusivity/viscosity, adds l_grid to MixingLength
+  output struct. Includes more docstrings and comments.
 
 242
 - Use ustar^3 surface tke boundary condition
@@ -169,68 +173,72 @@
 - Limit by Pr_max = 10 (new default in ClimaParams v0.10.30)
 
 237
-- Changed the formulation of the Richardson and Prandtl numbers. We are now limiting by
-  Pr_max = 100 instead of Ri_max = 0.25. Different behavior for stable and neutral conditions.
+- Changed the formulation of the Richardson and Prandtl numbers. We are now
+  limiting by Pr_max = 100 instead of Ri_max = 0.25. Different behavior for
+  stable and neutral conditions.
 
 236
-- Radiation fluxes in runs with the `deep_atmosphere` configuration now take into account the
-  column expansion with height. Affects only cases with `DeepSphericalGlobalGeometry`.
+- Radiation fluxes in runs with the `deep_atmosphere` configuration now take
+  into account the column expansion with height. Affects only cases with
+  `DeepSphericalGlobalGeometry`.
 
 235
-- Related to #3775, the computation and update of non-orographic gravity wave (NOGW)
-  are now separated into callback and tendencies update, affecting the NOGW-related
-  tests.
+- Related to #3775, the computation and update of non-orographic gravity wave
+  (NOGW) are now separated into callback and tendencies update, affecting the
+  NOGW-related tests.
 
 234
-- Move the virtual mass term in pressure closure to prognostic edmf momentum equation
-  (This only affects prognostic edmf)
+- Move the virtual mass term in pressure closure to prognostic edmf momentum
+  equation (This only affects prognostic edmf)
 
 233
 - modify the derivative of p and \rho with respect to qt
 
 232
-- Use lazy broadcasting instead of temp scalar in implicit solver for kappa_m vars,
-  which fixes a bug that the temp scalar is updated before it is reused.
+- Use lazy broadcasting instead of temp scalar in implicit solver for kappa_m
+  vars, which fixes a bug that the temp scalar is updated before it is reused.
   (This only affects prognostic edmf)
 
 231
-- Add mass flux derivatives with respect to grid-mean u_3
-  (This only affects prognostic edmf)
+- Add mass flux derivatives with respect to grid-mean u_3 (This only affects
+  prognostic edmf)
 
 230
-- Add u_{3,m} (updraft) Jacobians to updraft MSE, rho*a, and q_tot prognostic equations. Move sgs ∂ᶠu₃ʲ derivatives to BlockLowerTriangularSolve.
-  (This only affects prognostic edmf)
+- Add u_{3,m} (updraft) Jacobians to updraft MSE, rho*a, and q_tot prognostic
+  equations. Move sgs ∂ᶠu₃ʲ derivatives to BlockLowerTriangularSolve. (This only
+  affects prognostic edmf)
 
 229
-- Remove derivatives with respect to grid mean rho in edmf implicit solver
-  (This only affects prognostic edmf)
+- Remove derivatives with respect to grid mean rho in edmf implicit solver (This
+  only affects prognostic edmf)
 
 228
-- Only treat the drag term in edmf pressure closure implicitly
-  (This only affects prognostic edmf)
+- Only treat the drag term in edmf pressure closure implicitly (This only
+  affects prognostic edmf)
 
 227
-- Move nonhydrostatic pressure drag calculation to implicit precomputed quantities
-  (This only affects prognostic edmf)
+- Move nonhydrostatic pressure drag calculation to implicit precomputed
+  quantities (This only affects prognostic edmf)
 
 226
-- Add updraft rho*a and u_{3,m} jacobian terms
-  (This only affects prognostic edmf)
+- Add updraft rho*a and u_{3,m} jacobian terms (This only affects prognostic
+  edmf)
 
 225
 - Move nonhydrostatic pressure drag calculation to precomputed quantities and
-  remove one reproducibility job
-  (This only affects prognostic edmf)
+  remove one reproducibility job (This only affects prognostic edmf)
 
 224
-- Machine precision differences due to https://github.com/CliMA/ClimaCore.jl/pull/2232
+- Machine precision differences due to
+  https://github.com/CliMA/ClimaCore.jl/pull/2232
 
 223
 - Add some more jobs for reproductibility tests
 
 222
-- We don't know why, but aquaplanet_nonequil_allsky_gw_res and aquaplanet_equil_allsky_gw_raw_zonalasym
-  seemed to not produce the same result between the merge-queue branch and the main branch.
+- We don't know why, but aquaplanet_nonequil_allsky_gw_res and
+  aquaplanet_equil_allsky_gw_raw_zonalasym seemed to not produce the same result
+  between the merge-queue branch and the main branch.
 
 221
 - Change the way cloud liquid effective radius is computed for radiation
@@ -296,7 +304,8 @@
 - Slightly changed CO2 prescription
 
 201
-- Updated ClimaTimeSteppers to 0.7.39, slightly improving conservation properties
+- Updated ClimaTimeSteppers to 0.7.39, slightly improving conservation
+  properties
 
 200
 - Set NO2 in radiation to zero because there is potentially a bug in RRTMGP
@@ -305,8 +314,9 @@
 - Moved CI to Julia 1.11
 
 198
-- Added terms to the implicit solver that result in changes in the
-aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl_restart) high top 1-moment
+- Added terms to the implicit solver that result in changes in the aquaplanet
+(ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl_restart)
+high top 1-moment
 
 197
 - Added single column hydrostatic balance reproducibility test
@@ -333,8 +343,9 @@ aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl
 - Updated to new reproducibility infrastructure.
 
 189
-- We don't know why, but the regression tests are failing because there is no reference dataset.
-  We are bumping the reference counter to see if this fixes the issue.
+- We don't know why, but the regression tests are failing because there is no
+  reference dataset. We are bumping the reference counter to see if this fixes
+  the issue.
 
 188
 - Updated dependencies
@@ -350,24 +361,24 @@ aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl
 185
 
 184
-- Changed default ozone profile.
-  Jobs that failed:
+- Changed default ozone profile. Jobs that failed:
   - Diagnostic EDMFX aquaplanet with TKE
 
 183
 - Change model top and vertical resolution
 
 182
-- We don't know why, but sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
-  seemed to not produce the same result between the merge-queue branch and the main branch,
-  but now seems to be reproducing the same results.
+- We don't know why, but
+  sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric seemed to
+  not produce the same result between the merge-queue branch and the main
+  branch, but now seems to be reproducing the same results.
 
 181
 - Ensure limit turbulent entrainment is positive
 
 180
-- Update Thermodynamics, which changes the definition of internal energy
-  and enthalpy
+- Update Thermodynamics, which changes the definition of internal energy and
+  enthalpy
 
 179:
 - Update Pi entr groups/ add parameter vectors
@@ -397,7 +408,8 @@ aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl
 - Changed start date
 
 170:
-- Moved precomputed quantities update of SSPKnoth from beginning of each timestep to end of previous timestep
+- Moved precomputed quantities update of SSPKnoth from beginning of each
+  timestep to end of previous timestep
 
 169:
 - Moved from Dierckx to Interpolations
@@ -407,7 +419,8 @@ aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl
 - Split solver into longwave and shortwave solvers
 
 167:
-- Removed the filter for radiative fluxes when zenith angle is close to 90 degrees
+- Removed the filter for radiative fluxes when zenith angle is close to 90
+  degrees
 
 166:
 - Move to SSPKnoth
@@ -416,7 +429,8 @@ aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl
 - Removed reference state for the dycore
 
 164:
-- Changed approximation for erf in calculation of some boundary conditions for EDMF.
+- Changed approximation for erf in calculation of some boundary conditions for
+  EDMF.
 
 163:
 - Fixed bug introduced in 162
@@ -428,23 +442,23 @@ aquaplanet (ρe_tot) equil allsky monin_obukhov varying insol gravity wave (gfdl
 - Change domain top to 55 km in simulations with high top
 
 160:
-- Introduces initial conditions for the baroclinic-wave
-  test case in a deep-atmosphere configuration. Modifies
-  existing config to use `deep_atmosphere` mode.
+- Introduces initial conditions for the baroclinic-wave test case in a
+  deep-atmosphere configuration. Modifies existing config to use
+  `deep_atmosphere` mode.
 
 159:
-- Changed the boundary condition of edmf updraft properties
-  to be dependent on the surface area
+- Changed the boundary condition of edmf updraft properties to be dependent on
+  the surface area
 
 158:
- - Switched back the precipitation threshold definition in the
-   0-moment scheme to specific humidity
+ - Switched back the precipitation threshold definition in the 0-moment scheme
+   to specific humidity
 
 157:
  - For the grid mean precipitation tendency in the 0-moment scheme:
     - added limiting by q_tot/dt
-    - switched the precipitation threshold definition
-      from specific humidity based to supersaturation based
+    - switched the precipitation threshold definition from specific humidity
+      based to supersaturation based
 
 156:
  - Changed start date (changes insolation)

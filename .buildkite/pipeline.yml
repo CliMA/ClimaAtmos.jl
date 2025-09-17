@@ -1292,7 +1292,7 @@ steps:
           CLIMACOMMS_DEVICE: "CUDA"
           CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
-          slurm_mem: 24GB
+          slurm_mem: 28GB
           slurm_gpus: 1
 
   - group: "Flame graphs"

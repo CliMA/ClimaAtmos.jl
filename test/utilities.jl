@@ -298,7 +298,7 @@ end
 @testset "interval domain" begin
     # Interval Spaces
     (; zlim, velem) = get_cartesian_spaces()
-    line_mesh = CA.periodic_line_mesh(; x_max = zlim[2], x_elem = velem)
+    line_mesh = periodic_line_mesh(; x_max = zlim[2], x_elem = velem)
     @test line_mesh isa Meshes.IntervalMesh
     @test Geometry.XPoint(zlim[1]) == Meshes.domain(line_mesh).coord_min
     @test Geometry.XPoint(zlim[2]) == Meshes.domain(line_mesh).coord_max
@@ -308,7 +308,7 @@ end
 @testset "periodic rectangle meshes (spectral elements)" begin
     # Interval Spaces
     (; xlim, zlim, velem, helem, npoly) = get_cartesian_spaces()
-    rectangle_mesh = CA.periodic_rectangle_mesh(;
+    rectangle_mesh = periodic_rectangle_mesh(;
         x_max = xlim[2],
         y_max = xlim[2],
         x_elem = helem,
@@ -329,14 +329,14 @@ end
     comms_ctx = ClimaComms.context(device)
     FT = eltype(xlim)
     # 1D Space
-    line_mesh = CA.periodic_line_mesh(; x_max = zlim[2], x_elem = velem)
+    line_mesh = periodic_line_mesh(; x_max = zlim[2], x_elem = velem)
     @test line_mesh isa Meshes.AbstractMesh1D
     horz_plane_space =
         CA.make_horizontal_space(line_mesh, quad, comms_ctx, true)
     @test Spaces.column(horz_plane_space, 1, 1) isa Spaces.PointSpace
 
     # 2D Space
-    rectangle_mesh = CA.periodic_rectangle_mesh(;
+    rectangle_mesh = periodic_rectangle_mesh(;
         x_max = xlim[2],
         y_max = xlim[2],
         x_elem = helem,
@@ -354,30 +354,26 @@ end
 @testset "make hybrid spaces" begin
     (; cent_space, face_space, xlim, zlim, velem, helem, npoly, quad) =
         get_cartesian_spaces()
-    config = CA.AtmosConfig(
-        Dict("topography" => "NoWarp", "topo_smoothing" => false),
-    )
     device = ClimaComms.CPUSingleThreaded()
-    comms_ctx = ClimaComms.context(device)
-    z_stretch = Meshes.Uniform()
-    rectangle_mesh = CA.periodic_rectangle_mesh(;
-        x_max = xlim[2],
-        y_max = xlim[2],
+    context = ClimaComms.context(device)
+    grid = CA.BoxGrid(
+        Float32;
+        context,
         x_elem = helem,
+        x_max = xlim[2],
         y_elem = helem,
+        y_max = xlim[2],
+        z_elem = velem,
+        z_max = zlim[2],
+        nh_poly = npoly,
+        z_stretch = false,
+        bubble = true,
+        periodic_x = true,
+        periodic_y = true,
     )
-    horz_plane_space =
-        CA.make_horizontal_space(rectangle_mesh, quad, comms_ctx, true)
-    test_cent_space, test_face_space = CA.make_hybrid_spaces(
-        horz_plane_space,
-        zlim[2],
-        velem,
-        z_stretch;
-        deep = false,
-        parsed_args = config.parsed_args,
-    )
-    @test test_cent_space == cent_space
-    @test test_face_space == face_space
+    (; center_space, face_space) = CA.get_spaces(grid)
+    @test center_space == cent_space
+    @test face_space == face_space
 end
 
 @testset "promote_period" begin

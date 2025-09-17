@@ -6,7 +6,7 @@ import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
-import ClimaCore.Fields
+import ClimaCore: Fields, Grids
 import ClimaTimeSteppers as CTS
 import Logging
 
@@ -240,127 +240,38 @@ function get_numerics(parsed_args, FT)
     return numerics
 end
 
-function get_spaces(parsed_args, params, comms_ctx)
+"""
+    get_spaces(grid)
 
-    FT = eltype(params)
-    z_elem = Int(parsed_args["z_elem"])
-    z_max = FT(parsed_args["z_max"])
-    dz_bottom = FT(parsed_args["dz_bottom"])
-    bubble = parsed_args["bubble"]
-    deep = parsed_args["deep_atmosphere"]
-
-    h_elem = parsed_args["h_elem"]
-    radius = CAP.planet_radius(params)
-    center_space, face_space = if parsed_args["config"] == "sphere"
-        nh_poly = parsed_args["nh_poly"]
-        quad = Quadratures.GLL{nh_poly + 1}()
-        horizontal_mesh = cubed_sphere_mesh(; radius, h_elem)
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-        z_stretch = if parsed_args["z_stretch"]
-            Meshes.HyperbolicTangentStretching(dz_bottom)
-        else
-            Meshes.Uniform()
-        end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; deep, parsed_args)
-    elseif parsed_args["config"] == "column" # single column
-        @warn "perturb_initstate flag is ignored for single column configuration"
-        FT = eltype(params)
-        Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
-        quad = Quadratures.GL{1}()
-        horizontal_mesh = periodic_rectangle_mesh(;
-            x_max = Δx,
-            y_max = Δx,
-            x_elem = 1,
-            y_elem = 1,
+Create center and face spaces from a ClimaCore grid.
+"""
+function get_spaces(grid)
+    if grid isa Grids.ExtrudedFiniteDifferenceGrid
+        center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
+        face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
+    elseif grid isa Grids.FiniteDifferenceGrid
+        center_space = Spaces.CenterFiniteDifferenceSpace(grid)
+        face_space = Spaces.FaceFiniteDifferenceSpace(grid)
+    else
+        error(
+            """Unsupported grid type: $(typeof(grid)). Expected \
+            ExtrudedFiniteDifferenceGrid or FiniteDifferenceGrid""",
         )
-        if bubble
-            @warn "Bubble correction not compatible with single column configuration. It will be switched off."
-            bubble = false
-        end
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-        z_stretch = if parsed_args["z_stretch"]
-            Meshes.HyperbolicTangentStretching(dz_bottom)
-        else
-            Meshes.Uniform()
-        end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
-    elseif parsed_args["config"] == "box"
-        FT = eltype(params)
-        nh_poly = parsed_args["nh_poly"]
-        quad = Quadratures.GLL{nh_poly + 1}()
-        x_elem = Int(parsed_args["x_elem"])
-        x_max = FT(parsed_args["x_max"])
-        y_elem = Int(parsed_args["y_elem"])
-        y_max = FT(parsed_args["y_max"])
-        horizontal_mesh = periodic_rectangle_mesh(;
-            x_max = x_max,
-            y_max = y_max,
-            x_elem = x_elem,
-            y_elem = y_elem,
-        )
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-        z_stretch = if parsed_args["z_stretch"]
-            Meshes.HyperbolicTangentStretching(dz_bottom)
-        else
-            Meshes.Uniform()
-        end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args, deep)
-    elseif parsed_args["config"] == "plane"
-        FT = eltype(params)
-        nh_poly = parsed_args["nh_poly"]
-        quad = Quadratures.GLL{nh_poly + 1}()
-        x_elem = Int(parsed_args["x_elem"])
-        x_max = FT(parsed_args["x_max"])
-        horizontal_mesh =
-            periodic_line_mesh(; x_max = x_max, x_elem = x_elem)
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-        z_stretch = if parsed_args["z_stretch"]
-            Meshes.HyperbolicTangentStretching(dz_bottom)
-        else
-            Meshes.Uniform()
-        end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args, deep)
     end
-    ncols = Fields.ncolumns(center_space)
-    ndofs_total = ncols * z_elem
-    hspace = Spaces.horizontal_space(center_space)
-    quad_style = Spaces.quadrature_style(hspace)
-    Nq = Quadratures.degrees_of_freedom(quad_style)
-
-    @info "Resolution stats: " Nq h_elem z_elem ncols ndofs_total
-    return (;
-        center_space,
-        face_space,
-        horizontal_mesh,
-        quad,
-        z_max,
-        z_elem,
-        z_stretch,
-    )
-end
-
-function get_spaces_restart(Y)
-    center_space = axes(Y.c)
-    face_space = axes(Y.f)
     return (; center_space, face_space)
 end
 
 function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     (; parsed_args, comms_ctx) = config
-    sim_info = get_sim_info(config)
+    (; start_date) = get_sim_info(config)
 
+    use_itime = parsed_args["use_itime"]
     @assert !isnothing(restart_file)
     reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
     # TODO: Do not use InputOutput.HDF5 directly
     t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
-    t_start =
-        parsed_args["use_itime"] ? ITime(t_start; epoch = sim_info.start_date) :
-        t_start
+    t_start = use_itime ? ITime(t_start; epoch = start_date) : t_start
     if "atmos_model_hash" in keys(InputOutput.HDF5.attrs(reader.file))
         atmos_model_hash_in_restart =
             InputOutput.HDF5.read_attribute(reader.file, "atmos_model_hash")
@@ -630,39 +541,71 @@ function auto_detect_restart_file(
     return restart_file
 end
 
-function get_sim_info(config::AtmosConfig)
-    (; comms_ctx, parsed_args) = config
-    FT = eltype(config)
 
-    (; job_id) = config
+import ClimaUtilities.OutputPathGenerator
+
+"""
+    setup_output_dir(job_id, output_dir, output_dir_style, detect_restart_file, restart_file, comms_ctx)
+
+Unified function for setting up output directories and detecting restart files.
+Used by both AtmosSimulation constructor and get_simulation.
+
+Returns a named tuple with:
+- `output_dir`: The final output directory path
+- `restart_file`: The restart file path (if any)
+"""
+function setup_output_dir(
+    job_id,
+    output_dir,
+    output_dir_style,
+    detect_restart_file,
+    restart_file,
+    comms_ctx,
+)
+    # Set up base output directory
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
-    out_dir = parsed_args["output_dir"]
-    base_output_dir = isnothing(out_dir) ? default_output : out_dir
+    base_output_dir = isnothing(output_dir) ? default_output : output_dir
 
     allowed_dir_styles = Dict(
         "activelink" => OutputPathGenerator.ActiveLinkStyle(),
         "removepreexisting" => OutputPathGenerator.RemovePreexistingStyle(),
     )
 
-    requested_style = parsed_args["output_dir_style"]
+    haskey(allowed_dir_styles, lowercase(output_dir_style)) ||
+        error("output_dir_style $(output_dir_style) not available")
 
-    haskey(allowed_dir_styles, lowercase(requested_style)) ||
-        error("output_dir_style $(requested_style) not available")
+    output_dir_style_obj = allowed_dir_styles[lowercase(output_dir_style)]
 
-    output_dir_style = allowed_dir_styles[lowercase(requested_style)]
-
-    # We look for a restart before creating a new output dir because we want to
-    # look for previous folders
-    restart_file =
-        parsed_args["detect_restart_file"] ?
-        auto_detect_restart_file(output_dir_style, base_output_dir) :
-        parsed_args["restart_file"]
+    final_restart_file = if detect_restart_file && isnothing(restart_file)
+        auto_detect_restart_file(output_dir_style_obj, base_output_dir)
+    else
+        restart_file
+    end
 
     output_dir = OutputPathGenerator.generate_output_path(
         base_output_dir;
         context = comms_ctx,
-        style = output_dir_style,
+        style = output_dir_style_obj,
     )
+
+    return output_dir, final_restart_file
+end
+
+function get_sim_info(config::AtmosConfig)
+    (; comms_ctx, parsed_args) = config
+    FT = eltype(config)
+
+    (; job_id) = config
+
+    output_dir, restart_file = CA.setup_output_dir(
+        job_id,
+        parsed_args["output_dir"],
+        parsed_args["output_dir_style"],
+        parsed_args["detect_restart_file"],
+        parsed_args["restart_file"],
+        comms_ctx,
+    )
+
     if parsed_args["log_to_file"]
         @info "Logging to $output_dir/output.log"
         logger = ClimaComms.FileLogger(comms_ctx, output_dir)
@@ -775,10 +718,100 @@ function get_comms_context(parsed_args)
     return comms_ctx
 end
 
+function get_mesh_warp_type(FT, parsed_args)
+    warp_type_str = parsed_args["mesh_warp_type"]
+    if warp_type_str == "SLEVE"
+        return SLEVEWarp{FT}(
+            eta = FT(parsed_args["sleve_eta"]),
+            s = FT(parsed_args["sleve_s"]),
+        )
+    elseif warp_type_str == "Linear"
+        return LinearWarp()
+    else
+        error(
+            "Unknown mesh warp type string: $warp_type_str. Supported types are 'SLEVE' and 'Linear'",
+        )
+    end
+end
+
+function get_grid(parsed_args, params, context)
+    FT = eltype(params)
+    if parsed_args["config"] == "sphere"
+        SphereGrid(
+            FT;
+            context,
+            radius = CAP.planet_radius(params),
+            h_elem = parsed_args["h_elem"],
+            nh_poly = parsed_args["nh_poly"],
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+            bubble = parsed_args["bubble"],
+            deep_atmosphere = parsed_args["deep_atmosphere"],
+            topography = get_topography(FT, parsed_args),
+            topography_damping_factor = parsed_args["topography_damping_factor"],
+            mesh_warp_type = get_mesh_warp_type(FT, parsed_args),
+            topo_smoothing = parsed_args["topo_smoothing"],
+        )
+    elseif parsed_args["config"] == "column"
+        ColGrid(
+            FT;
+            context,
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+        )
+    elseif parsed_args["config"] == "box"
+        BoxGrid(
+            FT;
+            context,
+            x_elem = parsed_args["x_elem"],
+            x_max = parsed_args["x_max"],
+            y_elem = parsed_args["y_elem"],
+            y_max = parsed_args["y_max"],
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            nh_poly = parsed_args["nh_poly"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+            bubble = parsed_args["bubble"],
+            periodic_x = true,
+            periodic_y = true,
+            topography = get_topography(FT, parsed_args),
+            topography_damping_factor = parsed_args["topography_damping_factor"],
+            mesh_warp_type = get_mesh_warp_type(FT, parsed_args),
+            topo_smoothing = parsed_args["topo_smoothing"],
+        )
+    elseif parsed_args["config"] == "plane"
+        PlaneGrid(
+            FT;
+            context,
+            x_elem = parsed_args["x_elem"],
+            x_max = parsed_args["x_max"],
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            nh_poly = parsed_args["nh_poly"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+            bubble = parsed_args["bubble"],
+            periodic_x = true,
+            topography = get_topography(FT, parsed_args),
+            topography_damping_factor = parsed_args["topography_damping_factor"],
+            mesh_warp_type = get_mesh_warp_type(FT, parsed_args),
+            topo_smoothing = parsed_args["topo_smoothing"],
+        )
+    end
+end
+
 function get_simulation(config::AtmosConfig)
     sim_info = get_sim_info(config)
     params = ClimaAtmosParameters(config)
     atmos = get_atmos(config, params)
+    comms_ctx = get_comms_context(config.parsed_args)
+    grid = get_grid(config.parsed_args, params, comms_ctx)
+
     job_id = sim_info.job_id
     output_dir = sim_info.output_dir
     @info "Simulation info" job_id output_dir
@@ -797,14 +830,16 @@ function get_simulation(config::AtmosConfig)
                 sim_info.restart_file,
                 hash(atmos),
             )
-            spaces = get_spaces_restart(Y)
+            spaces = (; center_space = axes(Y.c), face_space = axes(Y.f))
             # Fix the t_start in sim_info with the one from the restart
             sim_info = merge(sim_info, (; t_start))
         end
         @info "Allocating Y: $s"
     else
-        spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
+        spaces = get_spaces(grid)
     end
+    @info spaces.center_space.grid
+    # TODO: add more information about the grid - stretch, etc.
     initial_condition = get_initial_condition(config.parsed_args, atmos)
     surface_setup = get_surface_setup(config.parsed_args)
     if !sim_info.restart
@@ -891,7 +926,10 @@ function get_simulation(config::AtmosConfig)
                 accum_str =
                     join(CA.promote_period.(collect(periods_reductions)), ", ")
                 checkpt_str = CA.promote_period(checkpoint_frequency)
-                @warn "The checkpointing frequency (dt_save_state_to_disk = $checkpt_str) should be an integer multiple of all diagnostics accumulation periods ($accum_str) so simulations can be safely restarted from any checkpoint"
+                @warn """The checkpointing frequency \
+                (dt_save_state_to_disk = $checkpt_str) should be an integer \
+                multiple of all diagnostics accumulation periods ($accum_str) \
+                so simulations can be safely restarted from any checkpoint"""
             end
         end
     else
