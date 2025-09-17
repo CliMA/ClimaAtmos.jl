@@ -1,8 +1,101 @@
+using ClimaCore: Geometry, Spaces, Fields
+
+##
+## Topography profiles for 2D and 3D boxes
+##
+
+# The parameters of these profiles should be defined separately so that they
+# can also be used to compute analytic solutions.
+
+abstract type AbstractTopography end
+Base.broadcastable(t::AbstractTopography) = tuple(t)
+topography_function(topo) = Base.Fix1(topography_function, topo)
+
+struct NoTopography <: AbstractTopography end
+
+# Analytical topography types for idealized test cases
+
 """
-    topography_dcmip200(coord)
+    CosineTopography{D, FT}(; h_max = 25, λ = 25e3)
+    
+Cosine hill topography in 2D or 3D.
+
+# Arguments
+- `h_max::FT`: Maximum elevation (m)
+- `λ::FT`: Wavelength of the cosine hills (m)
+"""
+Base.@kwdef struct CosineTopography{D, FT} <: AbstractTopography
+    h_max::FT = 25.0
+    λ::FT = 25e3
+end
+
+topography_function(t::CosineTopography{2}, coord) =
+    topography_cosine(coord.x, zero(coord.x), t.λ, oftype(t.λ, Inf), t.h_max)
+
+topography_function(t::CosineTopography{3}, coord) =
+    topography_cosine(coord.x, coord.y, t.λ, t.λ, t.h_max)
+
+topography_cosine(x, y, λ_x, λ_y, h_max) =
+    h_max * cospi(2 * x / λ_x) * cospi(2 * y / λ_y)
+
+"""
+    AgnesiTopography{FT}(; h_max = 25, x_center = 50e3, a = 5e3)
+
+Witch of Agnesi mountain topography for 2D simulations.
+
+# Arguments
+- `h_max`: Maximum elevation (m)
+- `x_center`: Center position (m)
+- `a`: Mountain width parameter (m)
+"""
+Base.@kwdef struct AgnesiTopography{FT} <: AbstractTopography
+    h_max::FT = 25.0
+    x_center::FT = 50e3
+    a::FT = 5e3
+end
+
+topography_function((; h_max, x_center, a)::AgnesiTopography, (; x)) =
+    h_max / (1 + ((x - x_center) / a)^2)
+
+"""
+    ScharTopography{FT}(; h_max = 25, x_center = 50e3, λ = 4e3, a = 5e3)
+
+Schar mountain topography for 2D simulations.
+
+# Arguments
+- `h_max`: Maximum elevation (m)
+- `x_center`: Center position (m)
+- `λ`: Wavelength parameter (m)
+- `a`: Mountain width parameter (m)
+"""
+Base.@kwdef struct ScharTopography{FT} <: AbstractTopography
+    h_max::FT = 25.0
+    x_center::FT = 50e3
+    λ::FT = 4e3
+    a::FT = 5e3
+end
+
+topography_function((; h_max, x_center, λ, a)::ScharTopography, (; x)) =
+    h_max * exp(-(x - x_center)^2 / a^2) * cospi((x - x_center) / λ)^2
+
+# Data-based topography types
+
+"""
+    EarthTopography()
+
+Earth topography from ETOPO2022 data files.
+"""
+struct EarthTopography <: AbstractTopography end
+
+"""
+    DCMIP200Topography()
 
 Surface elevation for the DCMIP-2-0-0 test problem.
 """
+struct DCMIP200Topography <: AbstractTopography end
+
+topography_function(::DCMIP200Topography, coord) = topography_dcmip200(coord)
+
 function topography_dcmip200(coord)
     FT = Geometry.float_type(coord)
     λ, ϕ = coord.long, coord.lat
@@ -21,10 +114,14 @@ function topography_dcmip200(coord)
 end
 
 """
-    topography_hughes2023(coord)
+    Hughes2023Topography()
 
 Surface elevation for baroclinic wave test from Hughes and Jablonowski (2023).
 """
+struct Hughes2023Topography <: AbstractTopography end
+
+topography_function(::Hughes2023Topography, coord) = topography_hughes2023(coord)
+
 function topography_hughes2023(coord)
     FT = Geometry.float_type(coord)
     λ, ϕ = coord.long, coord.lat
@@ -50,66 +147,3 @@ function topography_hughes2023(coord)
         ),
     )
 end
-
-##
-## Topography profiles for 2D and 3D boxes
-##
-
-# The parameters of these profiles should be defined separately so that they
-# can also be used to compute analytic solutions.
-
-"""
-    topography_agnesi(coord)
-
-Surface elevation for a 2D Witch of Agnesi mountain, centered at `x = 50 km`.
-"""
-function topography_agnesi(coord)
-    FT = Geometry.float_type(coord)
-    (; x) = coord
-    (; h_max, x_center, a) = agnesi_params(FT)
-    return h_max / (1 + ((x - x_center) / a)^2)
-end
-agnesi_params(::Type{FT}) where {FT} =
-    (; h_max = FT(25), x_center = FT(50e3), a = FT(5e3))
-
-"""
-    topography_schar(coord)
-
-Surface elevation for a 2D Schar mountain, centered at `x = 50 km`.
-"""
-function topography_schar(coord)
-    FT = Geometry.float_type(coord)
-    (; x) = coord
-    (; h_max, x_center, λ, a) = schar_params(FT)
-    return h_max * exp(-(x - x_center)^2 / a^2) * cospi((x - x_center) / λ)^2
-end
-schar_params(::Type{FT}) where {FT} =
-    (; h_max = FT(25), x_center = FT(50e3), λ = FT(4e3), a = FT(5e3))
-
-"""
-    topography_cosine_2d(coord)
-
-Surface elevation for 2D cosine hills.
-"""
-function topography_cosine_2d(coord)
-    FT = Geometry.float_type(coord)
-    (; x) = coord
-    (; h_max, λ) = cosine_params(FT)
-    return topography_cosine(x, FT(0), λ, FT(Inf), h_max)
-end
-
-"""
-    topography_cosine_3d(coord)
-
-Surface elevation for 3D cosine hills.
-"""
-function topography_cosine_3d(coord)
-    FT = Geometry.float_type(coord)
-    (; x, y) = coord
-    (; h_max, λ) = cosine_params(FT)
-    return topography_cosine(x, y, λ, λ, h_max)
-end
-
-topography_cosine(x, y, λ_x, λ_y, h_max) =
-    h_max * cospi(2 * x / λ_x) * cospi(2 * y / λ_y)
-cosine_params(::Type{FT}) where {FT} = (; h_max = FT(25), λ = FT(25e3))
