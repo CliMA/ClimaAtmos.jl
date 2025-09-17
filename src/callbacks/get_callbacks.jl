@@ -1,6 +1,9 @@
-function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
-
-    (; dt, t_start, start_date) = sim_info
+function get_diagnostics(
+    parsed_args,
+    atmos_model,
+    Y, p, dt,
+    t_start, start_date, output_dir,
+)
 
     FT = Spaces.undertype(axes(Y.c))
     context = ClimaComms.context(axes(Y.c))
@@ -162,7 +165,7 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
         diagnostics = [
             CAD.default_diagnostics(
                 atmos_model,
-                sim_info.dt isa ITime ?
+                dt isa ITime ?
                 ITime(time_to_seconds(parsed_args["t_end"])) - t_start :
                 FT(time_to_seconds(parsed_args["t_end"]) - t_start),
                 start_date;
@@ -235,12 +238,9 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         walltime_info = WallTimeInfo()
         tot_steps = ceil(Int, (t_end - t_start) / dt)
         five_percent_steps = ceil(Int, 0.05 * tot_steps)
-        cond = let schedule = CappedGeometricSeriesSchedule(five_percent_steps)
-            (u, t, integrator) -> schedule(integrator)
-        end
-        affect! = let wt = walltime_info
-            (integrator) -> report_walltime(wt, integrator)
-        end
+        schedule = CappedGeometricSeriesSchedule(five_percent_steps)
+        cond = (u, t, integrator) -> schedule(integrator)
+        affect! = (integrator) -> report_walltime(walltime_info, integrator)
         callbacks = (callbacks..., SciMLBase.DiscreteCallback(cond, affect!))
     end
     check_nan_every = parsed_args["check_nan_every"]
@@ -259,10 +259,8 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         call_every_n_steps(
             terminate!;
             skip_first = true,
-            condition = let output_dir = output_dir
-                (u, t, integrator) ->
-                    maybe_graceful_exit(output_dir, integrator)
-            end,
+            condition = (u, t, integrator) ->
+                maybe_graceful_exit(output_dir, integrator),
         ),
     )
 
@@ -279,12 +277,8 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
                         ClimaUtilities.TimeManager.date(t_start) :
                         start_date + Dates.Second(t_start),
         )
-        cond = let schedule = schedule
-            (u, t, integrator) -> schedule(integrator)
-        end
-        affect! = let output_dir = output_dir
-            (integrator) -> save_state_to_disk_func(integrator, output_dir)
-        end
+        cond = (u, t, integrator) -> schedule(integrator)
+        affect! = (integrator) -> save_state_to_disk_func(integrator, output_dir)
         callbacks = (callbacks..., SciMLBase.DiscreteCallback(cond, affect!))
     end
 

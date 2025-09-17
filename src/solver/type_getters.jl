@@ -6,7 +6,7 @@ import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
-import ClimaCore.Fields
+import ClimaCore: Fields, Grids
 import ClimaTimeSteppers as CTS
 import Logging
 
@@ -22,23 +22,6 @@ function get_atmos(config::AtmosConfig, params)
     moisture_model = get_moisture_model(parsed_args)
     microphysics_model = get_microphysics_model(parsed_args)
     cloud_model = get_cloud_model(parsed_args)
-
-    if moisture_model isa DryModel
-        @warn "Running simulations without any moisture present."
-        @assert microphysics_model isa NoPrecipitation
-    end
-    if moisture_model isa EquilMoistModel
-        @warn "Running simulations with equilibrium thermodynamics assumptions."
-        @assert microphysics_model isa
-                Union{NoPrecipitation, Microphysics0Moment}
-    end
-    if moisture_model isa NonEquilMoistModel
-        @assert microphysics_model isa
-                Union{NoPrecipitation, Microphysics1Moment, Microphysics2Moment}
-    end
-    if microphysics_model isa NoPrecipitation
-        @warn "Running simulations without any precipitation formation."
-    end
 
     implicit_noneq_cloud_formation =
         parsed_args["implicit_noneq_cloud_formation"]
@@ -231,127 +214,64 @@ function get_numerics(parsed_args, FT)
     return numerics
 end
 
-function get_spaces(parsed_args, params, comms_ctx)
-
-    FT = eltype(params)
-    z_elem = Int(parsed_args["z_elem"])
-    z_max = FT(parsed_args["z_max"])
-    dz_bottom = FT(parsed_args["dz_bottom"])
-    bubble = parsed_args["bubble"]
-    deep = parsed_args["deep_atmosphere"]
-
-    h_elem = parsed_args["h_elem"]
-    radius = CAP.planet_radius(params)
-    center_space, face_space = if parsed_args["config"] == "sphere"
-        nh_poly = parsed_args["nh_poly"]
-        quad = Quadratures.GLL{nh_poly + 1}()
-        horizontal_mesh = cubed_sphere_mesh(; radius, h_elem)
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-        z_stretch = if parsed_args["z_stretch"]
-            Meshes.HyperbolicTangentStretching(dz_bottom)
-        else
-            Meshes.Uniform()
-        end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; deep, parsed_args)
-    elseif parsed_args["config"] == "column" # single column
-        @warn "perturb_initstate flag is ignored for single column configuration"
-        FT = eltype(params)
-        Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
-        quad = Quadratures.GL{1}()
-        horizontal_mesh = periodic_rectangle_mesh(;
-            x_max = Δx,
-            y_max = Δx,
-            x_elem = 1,
-            y_elem = 1,
-        )
-        if bubble
-            @warn "Bubble correction not compatible with single column configuration. It will be switched off."
-            bubble = false
-        end
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-        z_stretch = if parsed_args["z_stretch"]
-            Meshes.HyperbolicTangentStretching(dz_bottom)
-        else
-            Meshes.Uniform()
-        end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
-    elseif parsed_args["config"] == "box"
-        FT = eltype(params)
-        nh_poly = parsed_args["nh_poly"]
-        quad = Quadratures.GLL{nh_poly + 1}()
-        x_elem = Int(parsed_args["x_elem"])
-        x_max = FT(parsed_args["x_max"])
-        y_elem = Int(parsed_args["y_elem"])
-        y_max = FT(parsed_args["y_max"])
-        horizontal_mesh = periodic_rectangle_mesh(;
-            x_max = x_max,
-            y_max = y_max,
-            x_elem = x_elem,
-            y_elem = y_elem,
-        )
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-        z_stretch = if parsed_args["z_stretch"]
-            Meshes.HyperbolicTangentStretching(dz_bottom)
-        else
-            Meshes.Uniform()
-        end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args, deep)
-    elseif parsed_args["config"] == "plane"
-        FT = eltype(params)
-        nh_poly = parsed_args["nh_poly"]
-        quad = Quadratures.GLL{nh_poly + 1}()
-        x_elem = Int(parsed_args["x_elem"])
-        x_max = FT(parsed_args["x_max"])
-        horizontal_mesh =
-            periodic_line_mesh(; x_max = x_max, x_elem = x_elem)
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
-        z_stretch = if parsed_args["z_stretch"]
-            Meshes.HyperbolicTangentStretching(dz_bottom)
-        else
-            Meshes.Uniform()
-        end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args, deep)
-    end
-    ncols = Fields.ncolumns(center_space)
-    ndofs_total = ncols * z_elem
-    hspace = Spaces.horizontal_space(center_space)
-    quad_style = Spaces.quadrature_style(hspace)
-    Nq = Quadratures.degrees_of_freedom(quad_style)
-
-    @info "Resolution stats: " Nq h_elem z_elem ncols ndofs_total
-    return (;
-        center_space,
-        face_space,
-        horizontal_mesh,
-        quad,
-        z_max,
-        z_elem,
-        z_stretch,
-    )
-end
-
 function get_spaces_restart(Y)
     center_space = axes(Y.c)
     face_space = axes(Y.f)
     return (; center_space, face_space)
 end
 
+"""
+    get_spaces(grid, params, comms_ctx)
+
+Create center and face spaces from a ClimaCore grid.
+
+This replaces the domain-based approach with direct grid-to-space conversion.
+Based on ClimaCore.CommonGrids documentation:
+- ExtrudedCubedSphereGrid, Box3DGrid, SliceXZGrid -> ExtrudedFiniteDifferenceGrid
+- ColumnGrid -> FiniteDifferenceGrid
+"""
+function get_spaces(grid, params, comms_ctx)
+    # Handle ExtrudedFiniteDifferenceGrid (from ExtrudedCubedSphereGrid, Box3DGrid, SliceXZGrid)
+    if grid isa Grids.ExtrudedFiniteDifferenceGrid
+        center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
+        face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
+        return (; center_space, face_space)
+
+    # Handle FiniteDifferenceGrid (from ColumnGrid)
+    elseif grid isa Grids.FiniteDifferenceGrid
+        center_space = Spaces.CenterFiniteDifferenceSpace(grid)
+        face_space = Spaces.FaceFiniteDifferenceSpace(grid)
+        return (; center_space, face_space)
+    else
+        error("Unsupported grid type: $(typeof(grid)). Expected ExtrudedFiniteDifferenceGrid or FiniteDifferenceGrid from ClimaCore.CommonGrids")
+    end
+end
+
 function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     (; parsed_args, comms_ctx) = config
-    sim_info = get_sim_info(config)
+    (; start_date) = get_sim_info(config)
+    return get_state_restart(
+        restart_file,
+        start_date,
+        atmos_model_hash,
+        comms_ctx,
+        parsed_args["use_itime"],
+    )
+end
 
+function get_state_restart(
+    restart_file,
+    start_date,
+    atmos_model_hash,
+    comms_ctx,
+    use_itime,
+)
     @assert !isnothing(restart_file)
     reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
     # TODO: Do not use InputOutput.HDF5 directly
     t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
-    t_start =
-        parsed_args["use_itime"] ? ITime(t_start; epoch = sim_info.start_date) :
-        t_start
+    t_start = use_itime ? ITime(t_start; epoch = start_date) : t_start
     if "atmos_model_hash" in keys(InputOutput.HDF5.attrs(reader.file))
         atmos_model_hash_in_restart =
             InputOutput.HDF5.read_attribute(reader.file, "atmos_model_hash")
@@ -429,38 +349,54 @@ function get_initial_condition(parsed_args, atmos)
     end
 end
 
+function get_topography(FT, parsed_args)
+    topo_str = parsed_args["topography"]
+    topo_types = Dict("NoWarp" => NoTopography(),
+        "Cosine2D" => CosineTopography{2, FT}(),
+        "Cosine3D" => CosineTopography{3, FT}(),
+        "Agnesi" => AgnesiTopography{FT}(),
+        "Schar" => ScharTopography{FT}(),
+        "Earth" => EarthTopography(),
+        "Hughes2023" => Hughes2023Topography(),
+        "DCMIP200" => DCMIP200Topography(),
+    )
+
+    @assert topo_str in keys(topo_types)
+    return topo_types[topo_str]
+end
+
 function get_steady_state_velocity(params, Y, parsed_args)
     parsed_args["check_steady_state"] || return nothing
-    parsed_args["initial_condition"] == "ConstantBuoyancyFrequencyProfile" &&
-        parsed_args["mesh_warp_type"] == "Linear" ||
+    return get_steady_state_velocity(
+        params,
+        Y,
+        parsed_args["topography"],
+        parsed_args["initial_condition"],
+        parsed_args["mesh_warp_type"],
+    )
+end
+
+function get_steady_state_velocity(
+    params,
+    Y,
+    topography,
+    initial_condition,
+    mesh_warp_type,
+)
+    initial_condition == "ConstantBuoyancyFrequencyProfile" &&
+        mesh_warp_type == "Linear" ||
         error("The steady-state velocity can currently be computed only for a \
                ConstantBuoyancyFrequencyProfile with Linear mesh warping")
-    topography = parsed_args["topography"]
-    steady_state_velocity = if topography == "NoWarp"
-        steady_state_velocity_no_warp
-    elseif topography == "Cosine2D"
-        steady_state_velocity_cosine_2d
-    elseif topography == "Cosine3D"
-        steady_state_velocity_cosine_3d
-    elseif topography == "Agnesi"
-        steady_state_velocity_agnesi
-    elseif topography == "Schar"
-        steady_state_velocity_schar
-    else
-        error("The steady-state velocity for $topography topography cannot \
-               be computed analytically")
-    end
+    topo = get_topography(eltype(params), parsed_args)
     top_level = Spaces.nlevels(axes(Y.c)) + Fields.half
     z_top = Fields.level(Fields.coordinate_field(Y.f).z, top_level)
 
-    # TODO: This can be very expensive! It should be moved to a separate CI job.
     @info "Approximating steady-state velocity"
     s = @timed_str begin
-        ᶜu = steady_state_velocity.(params, Fields.coordinate_field(Y.c), z_top)
+        ᶜu = steady_state_velocity.(topo, params, Fields.coordinate_field(Y.c), z_top)
         ᶠu =
-            steady_state_velocity.(params, Fields.coordinate_field(Y.f), z_top)
+            steady_state_velocity.(topo, params, Fields.coordinate_field(Y.f), z_top)
     end
-    @info "Steady-state velocity approximation completed: $s"
     return (; ᶜu, ᶠu)
 end
 
@@ -474,9 +410,23 @@ function get_surface_setup(parsed_args)
 end
 
 function get_jacobian(ode_algo, Y, atmos, parsed_args)
+    return get_jacobian(
+        ode_algo,
+        Y,
+        atmos,
+        parsed_args["use_dense_jacobian"],
+        parsed_args["use_auto_jacobian"],
+        parsed_args["approximate_linear_solve_iters"],
+        parsed_args["debug_jacobian"],
+    )
+end
+
+function get_jacobian(ode_algo, Y, atmos, use_dense_jacobian, use_auto_jacobian,
+    approximate_linear_solve_iters, debug_jacobian,
+)
     ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         return nothing
-    jacobian_algorithm = if parsed_args["use_dense_jacobian"]
+    jacobian_algorithm = if use_dense_jacobian
         AutoDenseJacobian()
     else
         manual_jacobian_algorithm = ManualSparseJacobian(
@@ -487,30 +437,43 @@ function get_jacobian(ode_algo, Y, atmos, parsed_args)
             DerivativeFlag(atmos.sgs_mf_mode),
             DerivativeFlag(atmos.sgs_nh_pressure_mode),
             DerivativeFlag(atmos.sgs_vertdiff_mode),
-            parsed_args["approximate_linear_solve_iters"],
+            approximate_linear_solve_iters,
         )
-        parsed_args["use_auto_jacobian"] ?
+        use_auto_jacobian ?
         AutoSparseJacobian(
             manual_jacobian_algorithm,
-            parsed_args["auto_jacobian_padding_bands"],
+            auto_jacobian_padding_bands,
         ) : manual_jacobian_algorithm
     end
     @info "Jacobian algorithm: $(summary_string(jacobian_algorithm))"
-    verbose = parsed_args["debug_jacobian"]
+    verbose = debug_jacobian
     return Jacobian(jacobian_algorithm, Y, atmos; verbose)
 end
 
-#=
-    ode_configuration(Y, parsed_args)
+function ode_configuration(::Type{FT}, args) where {FT}
+    return ode_configuration(
+        FT,
+        args["ode_algo"],
+        args["update_jacobian_every"],
+        args["max_newton_iters_ode"],
+        args["use_krylov_method"],
+        args["use_dynamic_krylov_rtol"],
+        args["eisenstat_walker_forcing_alpha"],
+        args["krylov_rtol"],
+        args["use_newton_rtol"],
+        args["newton_rtol"],
+    )
+end
 
-Returns the ode algorithm
-=#
-function ode_configuration(::Type{FT}, parsed_args) where {FT}
-    ode_name = parsed_args["ode_algo"]
+
+function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
+    max_newton_iters_ode, use_krylov_method, use_dynamic_krylov_rtol,
+    eisenstat_walker_forcing_alpha, krylov_rtol, use_newton_rtol, newton_rtol,
+) where {FT}
     ode_algo_name = getproperty(CTS, Symbol(ode_name))
     @info "Using ODE config: `$ode_algo_name`"
     return if ode_algo_name <: CTS.RosenbrockAlgorithmName
-        if parsed_args["update_jacobian_every"] != "solve"
+        if update_jacobian_every != "solve"
             @warn "Rosenbrock algorithms in ClimaTimeSteppers currently only \
                    support `update_jacobian_every` = \"solve\""
         end
@@ -520,37 +483,37 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
     else
         @assert ode_algo_name <: CTS.IMEXARKAlgorithmName
         newtons_method = CTS.NewtonsMethod(;
-            max_iters = parsed_args["max_newton_iters_ode"],
-            update_j = if parsed_args["update_jacobian_every"] == "dt"
+            max_iters = max_newton_iters_ode,
+            update_j = if update_jacobian_every == "dt"
                 CTS.UpdateEvery(CTS.NewTimeStep)
-            elseif parsed_args["update_jacobian_every"] == "stage"
+            elseif update_jacobian_every == "stage"
                 CTS.UpdateEvery(CTS.NewNewtonSolve)
-            elseif parsed_args["update_jacobian_every"] == "solve"
+            elseif update_jacobian_every == "solve"
                 CTS.UpdateEvery(CTS.NewNewtonIteration)
             else
                 error("Unknown value of `update_jacobian_every`: \
-                       $(parsed_args["update_jacobian_every"])")
+                       $(update_jacobian_every)")
             end,
-            krylov_method = if parsed_args["use_krylov_method"]
+            krylov_method = if use_krylov_method
                 CTS.KrylovMethod(;
                     jacobian_free_jvp = CTS.ForwardDiffJVP(;
                         step_adjustment = FT(
-                            parsed_args["jvp_step_adjustment"],
+                            jvp_step_adjustment,
                         ),
                     ),
-                    forcing_term = if parsed_args["use_dynamic_krylov_rtol"]
-                        α = FT(parsed_args["eisenstat_walker_forcing_alpha"])
+                    forcing_term = if use_dynamic_krylov_rtol
+                        α = FT(eisenstat_walker_forcing_alpha)
                         CTS.EisenstatWalkerForcing(; α)
                     else
-                        CTS.ConstantForcing(FT(parsed_args["krylov_rtol"]))
+                        CTS.ConstantForcing(FT(krylov_rtol))
                     end,
                 )
             else
                 nothing
             end,
-            convergence_checker = if parsed_args["use_newton_rtol"]
+            convergence_checker = if use_newton_rtol
                 norm_condition = CTS.MaximumRelativeError(
-                    FT(parsed_args["newton_rtol"]),
+                    FT(newton_rtol),
                 )
                 CTS.ConvergenceChecker(; norm_condition)
             else
@@ -614,39 +577,75 @@ function auto_detect_restart_file(
     return restart_file
 end
 
-function get_sim_info(config::AtmosConfig)
-    (; comms_ctx, parsed_args) = config
-    FT = eltype(config)
 
-    (; job_id) = config
+import ClimaUtilities.OutputPathGenerator
+
+"""
+    setup_output_dir(job_id, output_dir, output_dir_style, detect_restart_file, restart_file, comms_ctx)
+
+Unified function for setting up output directories and detecting restart files.
+Used by both AtmosSimulation constructor and get_simulation.
+
+Returns a named tuple with:
+- `output_dir`: The final output directory path
+- `restart_file`: The restart file path (if any)
+"""
+function setup_output_dir(
+    job_id,
+    output_dir,
+    output_dir_style,
+    detect_restart_file,
+    restart_file,
+    comms_ctx,
+)
+    # Set up base output directory
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
-    out_dir = parsed_args["output_dir"]
-    base_output_dir = isnothing(out_dir) ? default_output : out_dir
+    base_output_dir = isnothing(output_dir) ? default_output : output_dir
 
+    # Validate and get output directory style
     allowed_dir_styles = Dict(
         "activelink" => OutputPathGenerator.ActiveLinkStyle(),
         "removepreexisting" => OutputPathGenerator.RemovePreexistingStyle(),
     )
 
-    requested_style = parsed_args["output_dir_style"]
+    haskey(allowed_dir_styles, lowercase(output_dir_style)) ||
+        error("output_dir_style $(output_dir_style) not available")
 
-    haskey(allowed_dir_styles, lowercase(requested_style)) ||
-        error("output_dir_style $(requested_style) not available")
+    output_dir_style_obj = allowed_dir_styles[lowercase(output_dir_style)]
 
-    output_dir_style = allowed_dir_styles[lowercase(requested_style)]
+    # Auto-detect restart file if requested
+    final_restart_file = if detect_restart_file && isnothing(restart_file)
+        auto_detect_restart_file(output_dir_style_obj, base_output_dir)
+    else
+        restart_file
+    end
 
-    # We look for a restart before creating a new output dir because we want to
-    # look for previous folders
-    restart_file =
-        parsed_args["detect_restart_file"] ?
-        auto_detect_restart_file(output_dir_style, base_output_dir) :
-        parsed_args["restart_file"]
-
+    # Generate the actual output directory
     output_dir = OutputPathGenerator.generate_output_path(
         base_output_dir;
         context = comms_ctx,
-        style = output_dir_style,
+        style = output_dir_style_obj,
     )
+
+    return output_dir, restart_file
+end
+
+function get_sim_info(config::AtmosConfig)
+    (; comms_ctx, parsed_args) = config
+    FT = eltype(config)
+
+    (; job_id) = config
+
+    # Use unified output directory setup
+    output_dir, restart_file = CA.setup_output_dir(
+        job_id,
+        parsed_args["output_dir"],
+        parsed_args["output_dir_style"],
+        parsed_args["detect_restart_file"],
+        parsed_args["restart_file"],
+        comms_ctx,
+    )
+
     if parsed_args["log_to_file"]
         @info "Logging to $output_dir/output.log"
         logger = ClimaComms.FileLogger(comms_ctx, output_dir)
@@ -699,13 +698,25 @@ function get_sim_info(config::AtmosConfig)
 
     return sim
 end
+function args_integrator(args, Y, p, tspan, ode_algo, callback)
+    return args_integrator(Y, p, tspan, ode_algo, callback,
+        args["use_dense_jacobian"], args["use_auto_jacobian"],
+        args["approximate_linear_solve_iters"], args["debug_jacobian"],
+    )
+end
 
-function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
+function args_integrator(Y, p, tspan, ode_algo, callback,
+    use_dense_jacobian, use_auto_jacobian,
+    approximate_linear_solve_iters, debug_jacobian,
+)
     (; atmos, dt) = p
     s = @timed_str begin
         T_imp! = SciMLBase.ODEFunction(
             implicit_tendency!;
-            jac_prototype = get_jacobian(ode_algo, Y, atmos, parsed_args),
+            jac_prototype = get_jacobian(ode_algo, Y, atmos,
+                use_dense_jacobian, use_auto_jacobian,
+                approximate_linear_solve_iters, debug_jacobian,
+            ),
             Wfact = update_jacobian!,
         )
         tendency_function = CTS.ClimaODEFunction(;
@@ -757,10 +768,106 @@ function get_comms_context(parsed_args)
     return comms_ctx
 end
 
+function get_mesh_warp_type(s)
+    if s == "SLEVE"
+        return SLEVEWarp()
+    elseif s == "Linear"
+        return LinearWarp()
+    else
+        error("Unknown mesh warp type string: $s. Supported types are 'SLEVE' and 'Linear'")
+    end
+end
+
+function get_grid(parsed_args, params, comms_ctx)
+    FT = eltype(params)
+    if parsed_args["config"] == "sphere"
+        SphereGrid(
+            FT,
+            params,
+            comms_ctx;
+            radius = CAP.planet_radius(params),
+            h_elem = parsed_args["h_elem"],
+            nh_poly = parsed_args["nh_poly"],
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+            bubble = parsed_args["bubble"],
+            deep_atmosphere = parsed_args["deep_atmosphere"],
+            topography = get_topography(FT, parsed_args),
+            topography_damping_factor = parsed_args["topography_damping_factor"],
+            mesh_warp_type = get_mesh_warp_type(parsed_args["mesh_warp_type"]),
+            sleve_eta = parsed_args["sleve_eta"],
+            sleve_s = parsed_args["sleve_s"],
+            topo_smoothing = parsed_args["topo_smoothing"],
+        )
+    elseif parsed_args["config"] == "column"
+        ColumnGrid(
+            FT,
+            params,
+            comms_ctx;
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+        )
+    elseif parsed_args["config"] == "box"
+        BoxGrid(
+            FT,
+            params,
+            comms_ctx;
+            x_elem = parsed_args["x_elem"],
+            x_max = parsed_args["x_max"],
+            y_elem = parsed_args["y_elem"],
+            y_max = parsed_args["y_max"],
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            nh_poly = parsed_args["nh_poly"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+            bubble = parsed_args["bubble"],
+            deep_atmosphere = parsed_args["deep_atmosphere"],
+            periodic_x = true,
+            periodic_y = true,
+            topography = get_topography(FT, parsed_args),
+            topography_damping_factor = parsed_args["topography_damping_factor"],
+            mesh_warp_type = get_mesh_warp_type(parsed_args["mesh_warp_type"]),
+            sleve_eta = parsed_args["sleve_eta"],
+            sleve_s = parsed_args["sleve_s"],
+            topo_smoothing = parsed_args["topo_smoothing"],
+        )
+    elseif parsed_args["config"] == "plane"
+        PlaneGrid(
+            FT,
+            params,
+            comms_ctx;
+            x_elem = parsed_args["x_elem"],
+            x_max = parsed_args["x_max"],
+            z_elem = parsed_args["z_elem"],
+            z_max = parsed_args["z_max"],
+            nh_poly = parsed_args["nh_poly"],
+            z_stretch = parsed_args["z_stretch"],
+            dz_bottom = parsed_args["dz_bottom"],
+            bubble = parsed_args["bubble"],
+            deep_atmosphere = parsed_args["deep_atmosphere"],
+            periodic_x = true,
+            topography = get_topography(FT, parsed_args),
+            topography_damping_factor = parsed_args["topography_damping_factor"],
+            mesh_warp_type = get_mesh_warp_type(parsed_args["mesh_warp_type"]),
+            sleve_eta = parsed_args["sleve_eta"],
+            sleve_s = parsed_args["sleve_s"],
+            topo_smoothing = parsed_args["topo_smoothing"],
+        )
+    end
+end
+
 function get_simulation(config::AtmosConfig)
     sim_info = get_sim_info(config)
     params = ClimaAtmosParameters(config)
     atmos = get_atmos(config, params)
+    comms_ctx = get_comms_context(config.parsed_args)
+    grid = get_grid(config.parsed_args, params, comms_ctx)
+
     job_id = sim_info.job_id
     output_dir = sim_info.output_dir
     @info "Simulation info" job_id output_dir
@@ -785,7 +892,7 @@ function get_simulation(config::AtmosConfig)
         end
         @info "Allocating Y: $s"
     else
-        spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
+        spaces = get_spaces(grid, params, config.comms_ctx)
     end
     initial_condition = get_initial_condition(config.parsed_args, atmos)
     surface_setup = get_surface_setup(config.parsed_args)
@@ -813,6 +920,7 @@ function get_simulation(config::AtmosConfig)
     end
 
     tracers = get_tracers(config.parsed_args)
+
     steady_state_velocity =
         get_steady_state_velocity(params, Y, config.parsed_args)
 
@@ -822,7 +930,8 @@ function get_simulation(config::AtmosConfig)
             atmos,
             params,
             surface_setup,
-            sim_info,
+            sim_info.dt,
+            sim_info.start_date,
             tracers.aerosol_names,
             steady_state_velocity,
         )
@@ -853,7 +962,9 @@ function get_simulation(config::AtmosConfig)
                     atmos,
                     Y,
                     p,
-                    sim_info,
+                    sim_info.dt,
+                    sim_info.t_start,
+                    sim_info.start_date,
                     output_dir,
                 )
         end
