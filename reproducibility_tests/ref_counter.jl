@@ -1,4 +1,4 @@
-281
+282
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+282
+- Use ClimaCore.CommonSpaces constructors for Atmos spaces
+
 281
 - Clean up ci, remove some jobs
 
