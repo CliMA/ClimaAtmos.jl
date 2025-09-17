@@ -159,7 +159,7 @@ reference_job_id:
   value: ~
 vert_diff:
   help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `DecayWithHeightDiffusion`]"
-  value: false
+  value: "false"
 hyperdiff:
   help: "Hyperdiffusion. Use `CAM_SE` for sensible default values and ClimaHyperdiffusion for user control. [`CAM_SE` (default), `ClimaHyperdiffusion` (or `true`), `none` (or `false`)]"
   value: "CAM_SE"

@@ -3,8 +3,8 @@
 #PBS -N Dycore_H1MBW
 #PBS -q main
 #PBS -m n
-#PBS -l walltime=12:00:00
-#PBS -l select=16:ncpus=64:mem=64GB:ngpus=4
+#PBS -l walltime=6:00:00
+#PBS -l select=16:ncpus=64:mem=128GB:ngpus=4
 
 # Use scratch for temporary files to avoid space limits in /tmp
 export TMPDIR=${SCRATCH}/temp
