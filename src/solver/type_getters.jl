@@ -86,6 +86,9 @@ function get_atmos(config::AtmosConfig, params)
     implicit_sgs_nh_pressure = parsed_args["implicit_sgs_nh_pressure"]
     @assert implicit_sgs_nh_pressure in (true, false)
 
+    implicit_sgs_vertdiff = parsed_args["implicit_sgs_vertdiff"]
+    @assert implicit_sgs_vertdiff in (true, false)
+
     implicit_sgs_mass_flux = parsed_args["implicit_sgs_mass_flux"]
     @assert implicit_sgs_mass_flux in (true, false)
 
@@ -95,6 +98,7 @@ function get_atmos(config::AtmosConfig, params)
         sgs_mass_flux = Val(parsed_args["edmfx_sgs_mass_flux"]),
         sgs_diffusive_flux = Val(parsed_args["edmfx_sgs_diffusive_flux"]),
         nh_pressure = Val(parsed_args["edmfx_nh_pressure"]),
+        vertical_diffusion = Val(parsed_args["edmfx_vertical_diffusion"]),
         filter = Val(parsed_args["edmfx_filter"]),
         scale_blending_method = get_scale_blending_method(parsed_args),
     )
@@ -135,6 +139,7 @@ function get_atmos(config::AtmosConfig, params)
         sgs_entr_detr_mode = implicit_sgs_entr_detr ? Implicit() : Explicit(),
         sgs_nh_pressure_mode = implicit_sgs_nh_pressure ? Implicit() :
                                Explicit(),
+        sgs_vertdiff_mode = implicit_sgs_vertdiff ? Implicit() : Explicit(),
         sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
         smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
 
@@ -481,6 +486,7 @@ function get_jacobian(ode_algo, Y, atmos, parsed_args)
             DerivativeFlag(atmos.sgs_entr_detr_mode),
             DerivativeFlag(atmos.sgs_mf_mode),
             DerivativeFlag(atmos.sgs_nh_pressure_mode),
+            DerivativeFlag(atmos.sgs_vertdiff_mode),
             parsed_args["approximate_linear_solve_iters"],
         )
         parsed_args["use_auto_jacobian"] ?

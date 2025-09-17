@@ -513,7 +513,8 @@ Base.@kwdef struct EDMFXModel{
     ESMF <: ValTF,
     ESDF <: ValTF,
     ENP <: ValTF,
-    EVR <: ValTF,
+    EVD <: ValTF,
+    EF <: ValTF,
     SBM <: AbstractScaleBlendingMethod,
 }
     entr_model::EEM = nothing
@@ -521,7 +522,8 @@ Base.@kwdef struct EDMFXModel{
     sgs_mass_flux::ESMF = Val(false)
     sgs_diffusive_flux::ESDF = Val(false)
     nh_pressure::ENP = Val(false)
-    filter::EVR = Val(false)
+    vertical_diffusion::EVD = Val(false)
+    filter::EF = Val(false)
     scale_blending_method::SBM
 end
 
@@ -573,12 +575,13 @@ end
 
 Groups turbulence convection-related models and types.
 """
-Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SMM, SL}
+Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL}
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     sgs_adv_mode::SAM = nothing
     sgs_entr_detr_mode::SEDM = nothing
     sgs_nh_pressure_mode::SNPM = nothing
+    sgs_vertdiff_mode::SVM = nothing
     sgs_mf_mode::SMM = nothing
     smagorinsky_lilly::SL = nothing
 end
@@ -805,7 +808,7 @@ Internal testing and calibration components for single-column setups:
 ## AtmosTurbconv
 - `edmfx_model`: EDMFXModel()
 - `turbconv_model`: nothing, PrognosticEDMFX(), DiagnosticEDMFX(), EDOnlyEDMFX()
-- `sgs_adv_mode`, `sgs_entr_detr_mode`, `sgs_nh_pressure_mode`, `sgs_mf_mode`: Explicit(), Implicit()
+- `sgs_adv_mode`, `sgs_entr_detr_mode`, `sgs_nh_pressure_mode`, `sgs_vertdiff_mode`, `sgs_mf_mode`: Explicit(), Implicit()
 - `smagorinsky_lilly`: nothing or SmagorinskyLilly()
 
 ## AtmosGravityWave
