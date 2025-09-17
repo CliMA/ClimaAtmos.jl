@@ -1552,13 +1552,9 @@ function make_plots(
         short_name = short_names[1],
         reduction,
     )
-    if "5m" in available_periods
-        period = "5m"
-    elseif "10m" in available_periods
-        period = "10m"
-    elseif "30m" in available_periods
-        period = "30m"
-    end
+    # choose the shortest available period
+    available_periods = collect(available_periods) # ensure vector for indexing
+    period = available_periods[argmin(CA.time_to_seconds.(available_periods))]
 
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =

@@ -33,6 +33,35 @@ end
     @test CA.isdivisible(Dates.Month(1), Dates.Hour(1))
 end
 
+@testset "time_to_seconds" begin
+    # Seconds
+    @test CA.time_to_seconds("10s") == 10
+    @test CA.time_to_seconds("10secs") == 10
+
+    # Minutes
+    @test CA.time_to_seconds("2m") == 120
+    @test CA.time_to_seconds("2mins") == 120
+
+    # Hours
+    @test CA.time_to_seconds("1h") == 3600
+    @test CA.time_to_seconds("1hours") == 3600
+
+    # Days
+    @test CA.time_to_seconds("3d") == 3 * 86400
+    @test CA.time_to_seconds("3days") == 3 * 86400
+
+    # Float input
+    @test CA.time_to_seconds("1.5h") == 1.5 * 3600
+
+    # Special case
+    @test CA.time_to_seconds("Inf") == Inf
+
+    # Bad formats
+    @test_throws ErrorException CA.time_to_seconds("10")
+    @test_throws ErrorException CA.time_to_seconds("10lightyears")
+    @test_throws ErrorException CA.time_to_seconds("mins10")
+end
+
 @testset "kinetic_energy (c.f. analytical function)" begin
     # Test kinetic energy function for staggered grids
     # given an analytical expression for the velocity profiles
