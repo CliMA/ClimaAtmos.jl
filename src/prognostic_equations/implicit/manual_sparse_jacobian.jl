@@ -413,7 +413,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CTh(ᶜuₕ)))
     end
     @. ∂ᶜK_∂ᶠu₃ =
-        ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
+        (DiagonalMatrixRow(1 / (ᶜρ * ᶜJ)) ⋅ ᶜinterp_matrix()) ⋅
+        DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) * adjoint(CT3(ᶠu₃))) +
         DiagonalMatrixRow(adjoint(CT3(ᶜuₕ))) ⋅ ᶜinterp_matrix()
 
     @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix()

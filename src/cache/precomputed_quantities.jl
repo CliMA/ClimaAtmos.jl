@@ -313,10 +313,10 @@ end
 
 # This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
 # ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
-function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
+function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜρ, ᶜuₕ, ᶠuₕ³)
     @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
     @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
-    ᶜK .= compute_kinetic(ᶜuₕ, ᶠu₃)
+    ᶜK .= compute_kinetic(ᶜρ, ᶜuₕ, ᶠu₃)
     return nothing
 end
 
@@ -447,9 +447,9 @@ NVTX.@annotate function set_implicit_precomputed_quantities_part1!(Y, p, t)
     set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     set_velocity_at_top!(Y, turbconv_model)
 
-    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
+    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.ρ, Y.c.uₕ, ᶠuₕ³)
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    @. ᶠu = CT123(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
+    @. ᶠu = CT123(ᶠinterp(CT12(ᶜu))) + CT123(ᶠu³)
     if n > 0
         # TODO: In the following increments to ᶜK, we actually need to add
         # quantities of the form ᶜρaχ⁰ / ᶜρ⁰ and ᶜρaχʲ / ᶜρʲ to ᶜK, rather than

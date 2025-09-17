@@ -48,7 +48,7 @@ end
     CT123 = Geometry.Contravariant123Vector
     # Exercise function
     κ = zeros(cent_space)
-    κ .= CA.compute_kinetic(uₕ, uᵥ)
+    κ .= CA.compute_kinetic(1, uₕ, uᵥ)
     ᶜκ_exact = @. 1 // 2 *
                   cos(z)^2 *
                   ((sin(x)^2) * (cos(y)^2) + (cos(x)^2) * (sin(y)^2))

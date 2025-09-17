@@ -28,7 +28,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
 
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
-    set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
+    set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.ρ, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke⁰
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
 
@@ -95,7 +95,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
         end
 
-        set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
+        set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.ρ, Y.c.uₕ, ᶠuₕ³)
         @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
         if p.atmos.moisture_model isa NonEquilMoistModel && (
             p.atmos.microphysics_model isa Microphysics1Moment ||
