@@ -240,7 +240,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     if point_type <: Geometry.Abstract3DPoint
         @. ᶜω³ = wcurlₕ(Y.c.uₕ)
-    elseif point_type <: Geometry.Abstract2DPoint
+    elseif point_type <: Union{Geometry.Abstract2DPoint, Geometry.ZPoint}
         @. ᶜω³ = zero(ᶜω³)
     end
 
