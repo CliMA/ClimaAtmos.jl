@@ -1864,7 +1864,7 @@ version = "2.5.5+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.5+0"
+version = "0.8.1+2"
 
 [[deps.OpenMPI_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Hwloc_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MPIPreferences", "TOML", "Zlib_jll"]
@@ -2023,12 +2023,6 @@ version = "0.4.34"
     ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
     ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
     SparseConnectivityTracer = "9f842d2f-2579-4b1d-911e-f412cf18a3f5"
-
-[[deps.PrecompileCI]]
-deps = ["ClimaAtmos", "ClimaComms", "ClimaCore", "ClimaParams", "Logging", "PrecompileTools"]
-path = "PrecompileCI"
-uuid = "76d61242-8ec2-4c91-8455-3234246697a2"
-version = "0.1.0"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
@@ -2210,9 +2204,9 @@ version = "0.5.1+0"
 
 [[deps.RootSolvers]]
 deps = ["ForwardDiff", "Printf"]
-git-tree-sha1 = "75b130d104fb3d9d39a5c784fad23aebc7d7d956"
+git-tree-sha1 = "769388dbf7656e70f6ee250f35bb6cbca8f43203"
 uuid = "7181ea78-2dcb-4de3-ab41-2b8ab5a31e74"
-version = "1.0.0"
+version = "0.4.6"
 
 [[deps.RoundingEmulator]]
 git-tree-sha1 = "40b9edad2e5287e05bd413a38f61a8ff55b9557b"

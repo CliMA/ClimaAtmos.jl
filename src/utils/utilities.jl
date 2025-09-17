@@ -222,41 +222,24 @@ Extracts the `g³ʰ` sub-tensor from the `gⁱʲ` tensor.
 """
 function g³ʰ(gⁱʲ)
     full_CT_axis = axes(gⁱʲ)[1]
-    CTh_axis = if full_CT_axis == Geometry.Contravariant123Axis()
-        Geometry.Contravariant12Axis()
+    N = length(full_CT_axis)
+    g³ʰ_components_view = view(Geometry.components(gⁱʲ), N:N, 1:(N - 1))
+    g³ʰ_components = if full_CT_axis == Geometry.Contravariant123Axis()
+        g³ʰ_components_view
     elseif full_CT_axis == Geometry.Contravariant13Axis()
-        Geometry.Contravariant1Axis()
+        vcat(g³ʰ_components_view, 0)
     elseif full_CT_axis == Geometry.Contravariant23Axis()
-        Geometry.Contravariant2Axis()
+        vcat(0, g³ʰ_components_view)
     else
         error("$full_CT_axis is missing either vertical or horizontal sub-axes")
     end
-    N = length(full_CT_axis)
     return Geometry.AxisTensor(
-        (Geometry.Contravariant3Axis(), CTh_axis),
-        view(Geometry.components(gⁱʲ), N:N, 1:(N - 1)),
+        (Geometry.Contravariant3Axis(), Geometry.Contravariant12Axis()),
+        g³ʰ_components,
     )
 end
 
-"""
-    CTh_vector_type(space)
-
-Extracts the (abstract) horizontal contravariant vector type from the given
-`AbstractSpace`.
-"""
-function CTh_vector_type(space)
-    full_CT_axis = axes(eltype(Fields.local_geometry_field(space).gⁱʲ))[1]
-    return if full_CT_axis == Geometry.Contravariant123Axis()
-        Geometry.Contravariant12Vector
-    elseif full_CT_axis == Geometry.Contravariant13Axis()
-        Geometry.Contravariant1Vector
-    elseif full_CT_axis == Geometry.Contravariant23Axis()
-        Geometry.Contravariant2Vector
-    else
-        error("$full_CT_axis is missing either vertical or horizontal sub-axes")
-    end
-end
-
+has_topography(space::Spaces.FiniteDifferenceSpace) = false
 has_topography(space) = Spaces.grid(space).hypsography != Spaces.Grids.Flat()
 
 """
@@ -351,6 +334,9 @@ function do_dss(space::Spaces.AbstractSpace)
            Quadratures.GLL
 end
 
+function do_dss(space::Spaces.FiniteDifferenceSpace)
+    return false
+end
 
 using ClimaComms
 is_distributed(::ClimaComms.SingletonCommsContext) = false
@@ -582,18 +568,8 @@ function parse_date(date_str)
     )
 end
 
-function iscolumn(space)
-    # TODO: Our columns are 2+1D boxes with one element at the base. Fix this
-    isbox =
-        Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
-        Domains.RectangleDomain
-    isbox || return false
-    has_one_element =
-        Meshes.nelements(
-            Spaces.topology(Spaces.horizontal_space(space)).mesh,
-        ) == 1
-    has_one_element && return true
-end
+iscolumn(space::Spaces.FiniteDifferenceSpace) = true
+iscolumn(space) = false
 
 function issphere(space)
     return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
