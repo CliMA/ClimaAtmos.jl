@@ -1,4 +1,4 @@
-include("steady_state_velocity.jl")
+import ClimaCore: Grids
 
 struct AtmosSimulation{TT, S1 <: AbstractString, S2 <: AbstractString, OW, OD}
     job_id::S1
@@ -53,10 +53,10 @@ future work:
 
 function AtmosSimulation{FT}(;
     model = AtmosModel(),
-    domain::AtmosDomain = SphereDomain{FT}(),
     params::Parameters.ClimaAtmosParameters = ClimaAtmosParameters(FT),
-    initial_condition::ICs.InitialCondition = InitialConditions.DecayingProfile(),
     comms_ctx::ClimaComms.AbstractCommsContext = ClimaComms.context(),
+    grid::Grids.AbstractGrid = SphereGrid(FT, params, comms_ctx),
+    initial_condition::ICs.InitialCondition = InitialConditions.DecayingProfile(),
     dt = 600,
     start_date = DateTime(2010, 1, 1),
     t_start = 0,
@@ -119,7 +119,7 @@ function AtmosSimulation{FT}(;
         )
         spaces = get_spaces_restart(Y)
     else
-        spaces = get_spaces(domain, params, comms_ctx)
+        spaces = get_spaces(grid, params, comms_ctx)
         Y = ICs.atmos_state(
             initial_condition(params), model,
             spaces.center_space,
@@ -130,9 +130,11 @@ function AtmosSimulation{FT}(;
         )
     end
 
-    steady_state_velocity = get_steady_state_velocity(
-        domain, initial_condition, params, Y; check_steady_state,
-    )
+    # TODO: Deal with not having topography
+    steady_state_velocity = nothing
+    #  get_steady_state_velocity(
+    #     params, Y, topography, initial_condition, mesh_warp_type,
+    # )
 
     p = build_cache(
         Y, model, params, surface_setup, dt, start_date, tracers,

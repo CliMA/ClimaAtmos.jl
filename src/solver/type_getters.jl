@@ -6,7 +6,7 @@ import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
-import ClimaCore.Fields
+import ClimaCore: Fields, Grids
 import ClimaTimeSteppers as CTS
 import Logging
 
@@ -218,6 +218,33 @@ function get_spaces_restart(Y)
     center_space = axes(Y.c)
     face_space = axes(Y.f)
     return (; center_space, face_space)
+end
+
+"""
+    get_spaces(grid, params, comms_ctx)
+
+Create center and face spaces from a ClimaCore grid.
+
+This replaces the domain-based approach with direct grid-to-space conversion.
+Based on ClimaCore.CommonGrids documentation:
+- ExtrudedCubedSphereGrid, Box3DGrid, SliceXZGrid -> ExtrudedFiniteDifferenceGrid
+- ColumnGrid -> FiniteDifferenceGrid
+"""
+function get_spaces(grid, params, comms_ctx)
+    # Handle ExtrudedFiniteDifferenceGrid (from ExtrudedCubedSphereGrid, Box3DGrid, SliceXZGrid)
+    if grid isa Grids.ExtrudedFiniteDifferenceGrid
+        center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
+        face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
+        return (; center_space, face_space)
+
+    # Handle FiniteDifferenceGrid (from ColumnGrid)
+    elseif grid isa Grids.FiniteDifferenceGrid
+        center_space = Spaces.CenterFiniteDifferenceSpace(grid)
+        face_space = Spaces.FaceFiniteDifferenceSpace(grid)
+        return (; center_space, face_space)
+    else
+        error("Unsupported grid type: $(typeof(grid)). Expected ExtrudedFiniteDifferenceGrid or FiniteDifferenceGrid from ClimaCore.CommonGrids")
+    end
 end
 
 function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
@@ -751,10 +778,13 @@ function get_mesh_warp_type(s)
     end
 end
 
-function get_domain(parsed_args, params)
+function get_grid(parsed_args, params, comms_ctx)
     FT = eltype(params)
     if parsed_args["config"] == "sphere"
-        SphereDomain{FT}(;
+        SphereGrid(
+            FT,
+            params,
+            comms_ctx;
             radius = CAP.planet_radius(params),
             h_elem = parsed_args["h_elem"],
             nh_poly = parsed_args["nh_poly"],
@@ -764,6 +794,7 @@ function get_domain(parsed_args, params)
             dz_bottom = parsed_args["dz_bottom"],
             bubble = parsed_args["bubble"],
             deep_atmosphere = parsed_args["deep_atmosphere"],
+            topography = get_topography(FT, parsed_args),
             topography_damping_factor = parsed_args["topography_damping_factor"],
             mesh_warp_type = get_mesh_warp_type(parsed_args["mesh_warp_type"]),
             sleve_eta = parsed_args["sleve_eta"],
@@ -771,14 +802,20 @@ function get_domain(parsed_args, params)
             topo_smoothing = parsed_args["topo_smoothing"],
         )
     elseif parsed_args["config"] == "column"
-        ColumnDomain{FT}(;
+        ColumnGrid(
+            FT,
+            params,
+            comms_ctx;
             z_elem = parsed_args["z_elem"],
             z_max = parsed_args["z_max"],
             z_stretch = parsed_args["z_stretch"],
             dz_bottom = parsed_args["dz_bottom"],
         )
     elseif parsed_args["config"] == "box"
-        BoxDomain{FT}(;
+        BoxGrid(
+            FT,
+            params,
+            comms_ctx;
             x_elem = parsed_args["x_elem"],
             x_max = parsed_args["x_max"],
             y_elem = parsed_args["y_elem"],
@@ -792,9 +829,18 @@ function get_domain(parsed_args, params)
             deep_atmosphere = parsed_args["deep_atmosphere"],
             periodic_x = true,
             periodic_y = true,
+            topography = get_topography(FT, parsed_args),
+            topography_damping_factor = parsed_args["topography_damping_factor"],
+            mesh_warp_type = get_mesh_warp_type(parsed_args["mesh_warp_type"]),
+            sleve_eta = parsed_args["sleve_eta"],
+            sleve_s = parsed_args["sleve_s"],
+            topo_smoothing = parsed_args["topo_smoothing"],
         )
     elseif parsed_args["config"] == "plane"
-        PlaneDomain{FT}(;
+        PlaneGrid(
+            FT,
+            params,
+            comms_ctx;
             x_elem = parsed_args["x_elem"],
             x_max = parsed_args["x_max"],
             z_elem = parsed_args["z_elem"],
@@ -805,6 +851,12 @@ function get_domain(parsed_args, params)
             bubble = parsed_args["bubble"],
             deep_atmosphere = parsed_args["deep_atmosphere"],
             periodic_x = true,
+            topography = get_topography(FT, parsed_args),
+            topography_damping_factor = parsed_args["topography_damping_factor"],
+            mesh_warp_type = get_mesh_warp_type(parsed_args["mesh_warp_type"]),
+            sleve_eta = parsed_args["sleve_eta"],
+            sleve_s = parsed_args["sleve_s"],
+            topo_smoothing = parsed_args["topo_smoothing"],
         )
     end
 end
@@ -813,7 +865,8 @@ function get_simulation(config::AtmosConfig)
     sim_info = get_sim_info(config)
     params = ClimaAtmosParameters(config)
     atmos = get_atmos(config, params)
-    domain = get_domain(config.parsed_args, params)
+    comms_ctx = get_comms_context(config.parsed_args)
+    grid = get_grid(config.parsed_args, params, comms_ctx)
 
     job_id = sim_info.job_id
     output_dir = sim_info.output_dir
@@ -839,7 +892,7 @@ function get_simulation(config::AtmosConfig)
         end
         @info "Allocating Y: $s"
     else
-        spaces = get_spaces(domain, params, config.comms_ctx)
+        spaces = get_spaces(grid, params, config.comms_ctx)
     end
     initial_condition = get_initial_condition(config.parsed_args, atmos)
     surface_setup = get_surface_setup(config.parsed_args)

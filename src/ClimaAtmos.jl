@@ -146,7 +146,7 @@ include(joinpath("callbacks", "default_model_callbacks.jl"))
 
 include(joinpath("parameters", "create_parameters.jl"))
 
-include(joinpath("simulation", "domains.jl"))
+include(joinpath("simulation", "grids.jl"))
 include(joinpath("simulation", "AtmosSimulations.jl"))
 
 include(joinpath("solver", "model_getters.jl")) # high-level (using parsed_args) model getters
