@@ -275,6 +275,9 @@ function do_dss(space::Spaces.AbstractSpace)
            Quadratures.GLL
 end
 
+function do_dss(space::Spaces.FiniteDifferenceSpace)
+    return false
+end
 
 using ClimaComms
 is_distributed(::ClimaComms.SingletonCommsContext) = false

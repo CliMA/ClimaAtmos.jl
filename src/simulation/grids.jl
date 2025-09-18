@@ -6,7 +6,7 @@ domain system but use ClimaCore grids directly.
 """
 
 using ClimaCore: Geometry, Hypsography, Fields, Spaces, Meshes
-using ClimaCore.CommonGrids: ExtrudedCubedSphereGrid, ColumnGrid, Box3DGrid, SliceXZGrid
+using ClimaCore.CommonGrids: ExtrudedCubedSphereGrid, ColumnGrid, Box3DGrid, SliceXZGrid, DefaultZMesh
 using ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
 import .AtmosArtifacts as AA
 import ClimaComms
@@ -123,10 +123,16 @@ function ColGrid(
 )
     stretch =
         z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
-
+    z_mesh = DefaultZMesh(
+        FT;
+        z_min = 0,
+        z_max,
+        z_elem,
+        stretch,
+    )
     grid = ColumnGrid(
         FT;
-        z_elem, z_min = 0, z_max,
+        z_elem, z_min = 0, z_max, z_mesh,
         device = ClimaComms.device(comms_ctx),
         context = comms_ctx,
         stretch,
@@ -199,10 +205,16 @@ function BoxGrid(
         topography, topography_damping_factor, mesh_warp_type,
         sleve_eta, sleve_s, topo_smoothing, comms_ctx,
     )
-
+    z_mesh = DefaultZMesh(
+        FT;
+        z_min = 0,
+        z_max,
+        z_elem,
+        stretch,
+    )
     grid = Box3DGrid(
         FT;
-        z_elem, x_min = 0, x_max, y_min = 0, y_max, z_min = 0, z_max,
+        z_elem, x_min = 0, x_max, y_min = 0, y_max, z_min = 0, z_max, z_mesh,
         periodic_x, periodic_y, n_quad_points, x_elem, y_elem,
         device = ClimaComms.device(comms_ctx),
         context = comms_ctx,
@@ -274,9 +286,17 @@ function PlaneGrid(
         sleve_eta, sleve_s, topo_smoothing, comms_ctx,
     )
 
+    z_mesh = DefaultZMesh(
+        FT;
+        z_min = 0,
+        z_max,
+        z_elem,
+        stretch,
+    )
+
     grid = SliceXZGrid(
         FT;
-        z_elem, x_elem, x_min = 0, x_max, z_min = 0, z_max,
+        z_elem, x_elem, x_min = 0, x_max, z_min = 0, z_max, z_mesh,
         periodic_x,
         n_quad_points,
         device = ClimaComms.device(comms_ctx),

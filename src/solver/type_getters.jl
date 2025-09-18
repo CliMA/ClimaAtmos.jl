@@ -255,15 +255,21 @@ function get_spaces(grid, params, comms_ctx)
             ExtrudedFiniteDifferenceGrid or FiniteDifferenceGrid""",
         )
     end
-    h_elem = Spaces.n_elements_per_panel_direction(center_space)
     z_elem = Spaces.nlevels(center_space)
     ncols = Fields.ncolumns(center_space)
     ndofs_total = ncols * z_elem
-    hspace = Spaces.horizontal_space(center_space)
-    quad_style = Spaces.quadrature_style(hspace)
-    Nq = Quadratures.degrees_of_freedom(quad_style)
-
-    @info "Resolution stats: " Nq h_elem z_elem ncols ndofs_total
+    if grid isa Grids.ExtrudedFiniteDifferenceGrid
+        h_elem = Spaces.n_elements_per_panel_direction(center_space)
+        z_elem = Spaces.nlevels(center_space)
+        ncols = Fields.ncolumns(center_space)
+        ndofs_total = ncols * z_elem
+        hspace = Spaces.horizontal_space(center_space)
+        quad_style = Spaces.quadrature_style(hspace)
+        Nq = Quadratures.degrees_of_freedom(quad_style)
+        @info "Resolution stats: " Nq h_elem z_elem ncols ndofs_total
+    else
+        @info "Resolution stats: " z_elem ncols ndofs_total
+    end
     return (; center_space, face_space)
 end
 
@@ -750,7 +756,7 @@ function get_grid(parsed_args, params, comms_ctx)
             topo_smoothing = parsed_args["topo_smoothing"],
         )
     elseif parsed_args["config"] == "column"
-        ColumnGrid(
+        ColGrid(
             FT,
             params,
             comms_ctx;
