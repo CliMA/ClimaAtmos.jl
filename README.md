@@ -44,6 +44,10 @@ ClimaAtmos.jl
 
 ClimaAtmos.jl is the atmosphere components of the CliMA software stack. We strive for a user interface that makes ClimaAtmos.jl as friendly and intuitive to use as possible, allowing users to focus on the science.
 
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/fe890f0d-9f99-41f5-81b5-f9536905ce0f" alt="animation (1)">
+</p>
+
 ## Installation instructions
 
 Recommended Julia: Stable release v1.10.0
