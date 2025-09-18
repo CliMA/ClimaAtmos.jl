@@ -69,7 +69,7 @@ Schar mountain topography for 2D simulations.
 - `a`: Mountain width parameter (m)
 """
 Base.@kwdef struct ScharTopography{FT} <: AbstractTopography
-    h_max::FT = 25.0
+    h_max::FT = 250.0
     x_center::FT = 50e3
     λ::FT = 4e3
     a::FT = 5e3
@@ -147,66 +147,3 @@ function topography_hughes2023(coord)
         ),
     )
 end
-
-##
-## Topography profiles for 2D and 3D boxes
-##
-
-# The parameters of these profiles should be defined separately so that they
-# can also be used to compute analytic solutions.
-
-"""
-    topography_agnesi(coord)
-
-Surface elevation for a 2D Witch of Agnesi mountain, centered at `x = 50 km`.
-"""
-function topography_agnesi(coord)
-    FT = Geometry.float_type(coord)
-    (; x) = coord
-    (; h_max, x_center, a) = agnesi_params(FT)
-    return h_max / (1 + ((x - x_center) / a)^2)
-end
-agnesi_params(::Type{FT}) where {FT} =
-    (; h_max = FT(25), x_center = FT(50e3), a = FT(5e3))
-
-"""
-    topography_schar(coord)
-
-Surface elevation for a 2D Schar mountain, centered at `x = 50 km`.
-"""
-function topography_schar(coord)
-    FT = Geometry.float_type(coord)
-    (; x) = coord
-    (; h_max, x_center, λ, a) = schar_params(FT)
-    return h_max * exp(-(x - x_center)^2 / a^2) * cospi((x - x_center) / λ)^2
-end
-schar_params(::Type{FT}) where {FT} =
-    (; h_max = FT(250), x_center = FT(50e3), λ = FT(4e3), a = FT(5e3))
-
-"""
-    topography_cosine_2d(coord)
-
-Surface elevation for 2D cosine hills.
-"""
-function topography_cosine_2d(coord)
-    FT = Geometry.float_type(coord)
-    (; x) = coord
-    (; h_max, λ) = cosine_params(FT)
-    return topography_cosine(x, FT(0), λ, FT(Inf), h_max)
-end
-
-"""
-    topography_cosine_3d(coord)
-
-Surface elevation for 3D cosine hills.
-"""
-function topography_cosine_3d(coord)
-    FT = Geometry.float_type(coord)
-    (; x, y) = coord
-    (; h_max, λ) = cosine_params(FT)
-    return topography_cosine(x, y, λ, λ, h_max)
-end
-
-topography_cosine(x, y, λ_x, λ_y, h_max) =
-    h_max * cospi(2 * x / λ_x) * cospi(2 * y / λ_y)
-cosine_params(::Type{FT}) where {FT} = (; h_max = FT(25), λ = FT(25e3))
