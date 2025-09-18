@@ -1327,6 +1327,87 @@ add_diagnostic_variable!(
     compute! = compute_clivi!,
 )
 
+###
+# Cloud top height
+###
+compute_cloud_top_height!(out, state, cache, time) =
+    compute_cloud_top_height!(out, state, cache, time, cache.atmos.moisture_model)
+compute_cloud_top_height!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("cltz", model)
+
+function compute_cloud_top_height!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+
+    q_liq = cache.precomputed.cloud_diagnostics_tuple.q_liq
+    q_ice = cache.precomputed.cloud_diagnostics_tuple.q_ice
+    z = Fields.coordinate_field(state.c).z
+
+    ct_constants = CAP.microphysics_cloud_params(cache.params).ct_constants
+
+    # Condensate density (kg/m^3)
+    q_cond = @. lazy(state.c.ρ * (q_liq + q_ice))
+
+    # 1. Create the "cloudiness" mask using the sigmoid function
+    w = @. lazy(1 / (1 + exp(-(state.c.ρ * ct_constants.k) * (q_cond - (state.state.c.ρ * ct_constants.thresh)))))
+
+    # 2. Create a numerically stabilized exponential weight to favor higher altitudes
+    az = @. lazy(ct_constants.a * z)
+    max_az = maximum(az) # This prevents overflow in the exp() call
+    exp_az_stabilized = @. lazy(exp(az - max_az))
+    
+    # 3. Combine weights into a single common term 
+    common_weight = @. lazy(w * exp_az_stabilized)
+    
+    # Define numerator and denominator for the weighted average 
+    numerator = @. lazy(common_weight * z)
+
+    # The denominator is just the common_weight itself
+    denominator = common_weight
+
+    # Perform column integration
+    num = zeros(axes(Fields.level(state.f, half)))
+    denom = zeros(axes(Fields.level(state.f, half)))
+
+    Operators.column_integral_definite!(num, numerator)
+    Operators.column_integral_definite!(denom, denominator)
+
+    # Handle the no-cloud case to prevent division by zero
+    is_cloudy = Fields.level(denom, 1) .> eps(eltype(denom))
+    result = @. ifelse(is_cloudy, num / denom, 0.0)
+
+    if isnothing(out)
+        out = result
+    else
+        out .= result
+    end
+
+    return out
+end
+
+add_diagnostic_variable!(
+    short_name = "cltz",
+    long_name = "Cloud Top Height",
+    standard_name = "",
+    units = "m",
+    comments = """
+    Cloud-top height derived from a GPU-friendly weighted average, avoiding
+    index searches. A sigmoid function provides a "soft" cloud mask based on
+    the total condensate density (liquid + ice), and an exponential term
+    weights the average toward the highest altitudes within that mask. The
+    physical parameters controlling this calculation (threshold thresh,
+    steepness k, and exponential factor a) are specified in the ct_constants
+    struct. "cloud_top_k" should be chosen such that
+    w(z) = 1 / (1 + exp(-k * (q_c - thresh) ) is close to 0 for
+    values total condensate density q_c << thresh and close to
+    1 for q_c ~ thresh
+    """,
+    compute! = compute_cloud_top_height!,
+)
 
 ###
 # Vertical integrated dry static energy (2d)

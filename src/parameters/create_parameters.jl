@@ -158,6 +158,12 @@ cloud_parameters(toml_dict::CP.ParamDict) = (;
         "ClimaAtmos",
     ).prescribed_cloud_droplet_number_concentration,
     aml = aerosol_ml_parameters(toml_dict),
+    ct_constants = CP.get_parameter_values(
+        toml_dict, 
+        Dict("cloud_top_q_threshold" => "thresh",
+                "cloud_top_k" => "k",
+                "cloud_top_a" => "a"),
+    )
 )
 
 microphys_1m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
