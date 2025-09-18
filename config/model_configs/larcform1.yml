@@ -23,9 +23,9 @@ x_elem: 2
 y_elem: 2
 
 #perturb_initstate: false
-dt: 5secs
+dt: 2secs
 dt_rad: 10mins
-t_end: 20days
+t_end: 10days
 cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage : true
 toml: [toml/diagnostic_edmfx_1M.toml]
