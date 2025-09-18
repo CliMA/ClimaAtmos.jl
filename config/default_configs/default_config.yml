@@ -159,7 +159,7 @@ reference_job_id:
   value: ~
 vert_diff:
   help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `DecayWithHeightDiffusion`]"
-  value: false
+  value: "false"
 hyperdiff:
   help: "Hyperdiffusion. Use `CAM_SE` for sensible default values and ClimaHyperdiffusion for user control. [`CAM_SE` (default), `ClimaHyperdiffusion` (or `true`), `none` (or `false`)]"
   value: "CAM_SE"
@@ -285,7 +285,7 @@ prognostic_tke:
   value: false
 prognostic_surface:
   help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `SlabOceanSST`, `PrescribedSST`]"
-  value: false
+  value: "false"
 albedo_model:
   help: "Variable surface albedo [`ConstantAlbedo` (default), `RegressionFunctionAlbedo`, `CouplerAlbedo`]"
   value: "ConstantAlbedo"
@@ -352,8 +352,8 @@ implicit_sgs_entr_detr:
   help: "Whether to treat the subgrid-scale entrainment and detrainment tendency implicitly [`false` (default), `true`]. Setting it to true only works if implicit_sgs_advection is set to true."
   value: false
 implicit_sgs_nh_pressure:
-  help: "Whether to treat the subgrid-scale nonhydrostatic pressure closure implicitly. Setting it to true only works if 
-  `implicit_sgs_advection` is set to true. This flag only controls whether the drag term in the pressure closure is treated implicitly. 
+  help: "Whether to treat the subgrid-scale nonhydrostatic pressure closure implicitly. Setting it to true only works if
+  `implicit_sgs_advection` is set to true. This flag only controls whether the drag term in the pressure closure is treated implicitly.
   The buoyancy term is always treated implicitly. [`false` (default), `true`]"
   value: false
 implicit_sgs_vertdiff:
@@ -369,7 +369,7 @@ edmfx_filter:
   help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
   value: false
 edmfx_nh_pressure:
-  help: "If set to true, it switches on EDMFX pressure drag closure.  For prognostic EDMF, this only controls the drag term 
+  help: "If set to true, it switches on EDMFX pressure drag closure.  For prognostic EDMF, this only controls the drag term
   in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
   value: false
 edmfx_vertical_diffusion:
