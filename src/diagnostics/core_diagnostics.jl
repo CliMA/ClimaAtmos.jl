@@ -1243,33 +1243,33 @@ function compute_cloud_top_height!(
 
     w = @. lazy(1 / (1 + exp(-ct_constants.k * (q_cond - ct_constants.thresh))))
 
-    @info("w", w)
+    # @info("w", w)
 
-    z_vals = @. lazy(exp(ct_constants.a*z) * z)
-    @info("z_vals", z)
+    # z_vals = @. lazy(exp(ct_constants.a*z) * z)
+    # @info("z_vals", z)
 
     numerator = @. lazy(w * exp(ct_constants.a*z) * z)
     denominator = @. lazy(w * exp(ct_constants.a*z))
 
-    @info("numerator", numerator)
-    @info("denominator", denominator)
+    # @info("numerator", numerator)
+    # @info("denominator", denominator)
 
     num = zeros(axes(Fields.level(state.f, half)))
     denom = zeros(axes(Fields.level(state.f, half)))
-    w_test = zeros(axes(Fields.level(state.f, half)))
-    z_test = zeros(axes(Fields.level(state.f, half)))
+    # w_test = zeros(axes(Fields.level(state.f, half)))
+    # z_test = zeros(axes(Fields.level(state.f, half)))
 
-    Operators.column_integral_definite!(w_test, w)
-    Operators.column_integral_definite!(z_test, z_vals)
+    # Operators.column_integral_definite!(w_test, w)
+    # Operators.column_integral_definite!(z_test, z_vals)
 
     Operators.column_integral_definite!(num, numerator)
     Operators.column_integral_definite!(denom, denominator)
 
-    @info("z_test", z_test)
-    @info("w_test", w_test)
+    # @info("z_test", z_test)
+    # @info("w_test", w_test)
 
-    @info("numerator integrated", num)
-    @info("denominator integrated", denom)
+    # @info("numerator integrated", num)
+    # @info("denominator integrated", denom)
 
     if isnothing(out)
         out = num ./ denom
