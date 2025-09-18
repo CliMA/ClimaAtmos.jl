@@ -48,6 +48,8 @@ ClimaAtmos.jl is the atmosphere components of the CliMA software stack. We striv
   <img src="https://github.com/user-attachments/assets/fe890f0d-9f99-41f5-81b5-f9536905ce0f" alt="animation (1)">
 </p>
 
+Condensed water path from a global simulation using diagnostic EDMF and 0M microphysics, initialized with ERA5 on 8-31-25 00Z. Output every 30 minutes; ran for ~4 days.
+
 ## Installation instructions
 
 Recommended Julia: Stable release v1.10.0
