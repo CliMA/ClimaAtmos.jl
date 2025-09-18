@@ -445,9 +445,9 @@ weakdeps = ["CUDA"]
 
 [[deps.ClimaParams]]
 deps = ["Dates", "TOML"]
-git-tree-sha1 = "fa91291f65e5b077a283f739c644127cf634f17f"
+git-tree-sha1 = "7571dccc41d8489d7fbb4773d243ba6abd8a8c8b"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "1.0.0"
+version = "1.0.1"
 
 [[deps.ClimaReproducibilityTests]]
 deps = ["OrderedCollections", "PrettyTables"]
@@ -487,9 +487,9 @@ version = "0.1.13"
 
 [[deps.CloudMicrophysics]]
 deps = ["ClimaParams", "DocStringExtensions", "ForwardDiff", "LazyArtifacts", "LogExpFunctions", "RootSolvers", "SpecialFunctions", "StaticArrays", "Thermodynamics", "UnrolledUtilities"]
-git-tree-sha1 = "a68a4cca6827b2f8173e6e826fb24ce427393cda"
+git-tree-sha1 = "1f5b9fabe548def6571d3ffb2615cf3f4f34fee8"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.27.3"
+version = "0.27.4"
 
     [deps.CloudMicrophysics.extensions]
     EmulatorModelsExt = ["DataFrames", "MLJ"]
