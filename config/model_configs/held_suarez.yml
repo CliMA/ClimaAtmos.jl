@@ -4,4 +4,5 @@ implicit_diffusion: false
 dt_save_state_to_disk: "4days"
 t_end: "8days"
 forcing: "held_suarez"
+disable_surface_flux_tendency: true
 toml: [toml/sphere_held_suarez.toml]

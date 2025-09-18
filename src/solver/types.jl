@@ -220,7 +220,7 @@ Base.@kwdef struct DecayWithHeightDiffusion{DM, FT} <: AbstractVerticalDiffusion
 end
 disable_momentum_vertical_diffusion(::DecayWithHeightDiffusion{DM}) where {DM} =
     DM
-disable_momentum_vertical_diffusion(::Nothing) = false
+disable_momentum_vertical_diffusion(::Nothing) = true
 
 struct SurfaceFlux end
 

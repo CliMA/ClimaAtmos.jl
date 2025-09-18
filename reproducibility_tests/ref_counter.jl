@@ -1,4 +1,4 @@
-263
+264
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+264
+- Swap vertical averages in reconstructions of uʰ and ωʰ×uᵛ
+
 263
 - Make vertical diffusion of updrafts implicit
 

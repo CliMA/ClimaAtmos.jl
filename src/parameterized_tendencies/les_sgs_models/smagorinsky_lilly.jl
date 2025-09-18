@@ -30,7 +30,7 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
     (; atmos, precomputed, scratch, params) = p
     c_smag = CAP.c_smag(params)
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(params))
-    (; ᶜu, ᶠu³, ᶜts, ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶠD_smag) = precomputed
+    (; ᶜu, ᶠu, ᶜts, ᶜτ_smag, ᶠτ_smag, ᶜD_smag, ᶠD_smag) = precomputed
     FT = eltype(Y)
     grav = CAP.grav(params)
     thermo_params = CAP.thermodynamics_params(params)
@@ -47,7 +47,7 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
 
     # Compute UVW velocities
     ᶜu_uvw = @. ᶜtemp_UVW = UVW(ᶜu)
-    ᶠu_uvw = @. ᶠtemp_UVW = UVW(ᶠinterp(Y.c.uₕ)) + UVW(ᶠu³)
+    ᶠu_uvw = @. ᶠtemp_UVW = UVW(ᶠu)
 
     # Gradients
     ## cell centers
