@@ -466,6 +466,10 @@ function get_external_forcing_model(parsed_args, ::Type{FT}) where {FT}
         @assert parsed_args["config"] == "column" "ReanalysisTimeVarying and ReanalysisMonthlyAveragedDiurnal are only supported in column mode."
         @assert all(reanalysis_required_fields .== "ReanalysisTimeVarying") "All of external_forcing, surface_setup, surface_temperature and initial_condition must be set to ReanalysisTimeVarying."
     end
+    if !isnothing(parsed_args["era5_diurnal_warming"])
+        @assert external_forcing == "ReanalysisMonthlyAveragedDiurnal" "era5_diurnal_warming is only supported for ReanalysisMonthlyAveragedDiurnal."
+        @assert parsed_args["era5_diurnal_warming"] isa Number "era5_diurnal_warming is expected to be a number, but was supplied as a $(typeof(parsed_args["era5_diurnal_warming"]))"
+    end
     return if isnothing(external_forcing)
         nothing
     elseif external_forcing == "GCM"

@@ -180,6 +180,7 @@ function create_mock_era5_datasets(
     num_pressure = 37,
     base_date = "20000101",
 )
+    params = CA.ClimaAtmosParameters(FT)
     column_data_path = joinpath(
         temporary_dir,
         "forcing_and_cloud_hourly_profiles_$(start_date).nc",
@@ -214,7 +215,7 @@ function create_mock_era5_datasets(
     tvforcing["latitude"][:] = collect(-2.0:lat_step:2.0)
     tvforcing["longitude"][:] = collect(-2.0:lon_step:2.0)
     tvforcing["pressure_level"][:] =
-        10 .^ (range(1, stop = 4, length = num_pressure))
+        10 .^ (range(1, stop = 3, length = num_pressure))
     # Time values are hours since base_date, not since this file's date
     tvforcing["valid_time"][:] =
         collect(hours_offset:(hours_offset + hours - 1))
@@ -234,11 +235,19 @@ function create_mock_era5_datasets(
     tvforcing["u"][:, :, :, :] .= ones(FT, size(tvforcing["u"]))
     tvforcing["v"][:, :, :, :] .= ones(FT, size(tvforcing["v"]))
     tvforcing["w"][:, :, :, :] .= ones(FT, size(tvforcing["w"]))
-    tvforcing["t"][:, :, :, :] .= ones(FT, size(tvforcing["t"]))
-    tvforcing["q"][:, :, :, :] .= ones(FT, size(tvforcing["q"]))
-    tvforcing["z"][:, :, :, :] .= ones(FT, size(tvforcing["z"]))
-    tvforcing["clwc"][:, :, :, :] .= ones(FT, size(tvforcing["clwc"]))
-    tvforcing["ciwc"][:, :, :, :] .= ones(FT, size(tvforcing["ciwc"]))
+    tvforcing["clwc"][:, :, :, :] .= zeros(FT, size(tvforcing["clwc"]))
+    tvforcing["ciwc"][:, :, :, :] .= zeros(FT, size(tvforcing["ciwc"]))
+
+    tvforcing["z"] .= reshape(
+        tvforcing["pressure_level"] .* 100,
+        (1, 1, length(tvforcing["pressure_level"]), 1),
+    )
+    tvforcing["z"] .=
+        geopotential_from_pressure(tvforcing["z"]; R_d = CA.Parameters.R_d(params))
+    tvforcing["t"][:, :, :, :] .=
+        temperature_from_geopotential(tvforcing["z"]; g = CA.Parameters.grav(params))
+    tvforcing["q"][:, :, :, :] .=
+        shum_from_geopotential(tvforcing["z"]; g = CA.Parameters.grav(params))
     close(tvforcing)
 
     # Create accumulated dataset (3D: lon, lat, time)
@@ -286,4 +295,66 @@ function create_mock_era5_datasets(
     close(tv_inst)
 
     return column_data_path, accum_data_path, inst_data_path
+end
+
+"""
+    geopotential_from_pressure(pressure_levels; R_d = 287.05, sp = 101325, T_avg = 250)
+
+Convert pressure levels to geopotential levels using the hypsometric equation.
+R_d is the gas constant for dry air, sp is the surface pressure in Pa, and T_avg is the average temperature in the troposphere in K.
+"""
+function geopotential_from_pressure(pressure_levels; R_d = 287.05, sp = 101325, T_avg = 250)
+    return R_d .* T_avg .* log.(sp ./ pressure_levels)
+end
+
+"""
+    temperature_from_geopotential(geopotential_levels; Γ = 0.0065, T_surf = 300, T_min = 200, g = 9.81)
+
+Produce a typical temperature profile from geopotential levels. 
+Γ is the lapse rate in K/m, T_surf is the surface temperature in K, and T_min is the minimum temperature in K, which simulates the tropopause.
+"""
+function temperature_from_geopotential(
+    geopotential_levels;
+    Γ = 0.0065,
+    T_surf = 300,
+    T_min = 200,
+    g = 9.81,
+)
+    return max.(T_min, T_surf .- Γ .* geopotential_levels ./ g)
+end
+
+"""
+    shum_from_geopotential(geopotential_levels; q0 = 0.02, shum_scale_height = 2e3, g = 9.81)
+
+Produce a typical specific humidity profile from geopotential levels.
+q0 is the specific humidity at the surface and shum_scale_height is the scale height in geopotential coordinates.
+The default values are a 2% mixing ratio at the surface and a 2km scale height.
+"""
+function shum_from_geopotential(
+    geopotential_levels;
+    q0 = 0.02,
+    shum_scale_height = 2e3,
+    g = 9.81,
+)
+    return q0 .* exp.(.-geopotential_levels ./ (shum_scale_height * g))
+end
+
+"""
+    monotonic_decreasing(A, dim)
+
+Check if an array is monotonically decreasing along a given dimension.
+"""
+function monotonic_decreasing(A, dim)
+    all_diffs = mapslices(x -> diff(x), A; dims = dim)
+    return all(all_diffs .<= 0)
+end
+
+"""
+    monotonic_increasing(A, dim)
+
+Check if an array is monotonically increasing along a given dimension.
+"""
+function monotonic_increasing(A, dim)
+    all_diffs = mapslices(x -> diff(x), A, dims = dim)
+    return all(all_diffs .>= 0)
 end
