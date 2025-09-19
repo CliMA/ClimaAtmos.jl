@@ -2,7 +2,7 @@ h_elem: 120
 z_elem: 43
 dz_bottom: 30.0
 dt: "40secs"
-t_end: "60days"
+t_end: "10days"
 ode_algo: ARS343
 topography: "Hughes2023"
 initial_condition: "MoistBaroclinicWave"
@@ -14,11 +14,11 @@ mesh_warp_type: SLEVE
 prognostic_surface: PrognosticSurfaceTemperature
 deep_atmosphere: true
 disable_surface_flux_tendency: true
-dt_save_state_to_disk: "10days"
+dt_save_state_to_disk: "1days"
 hyperdiff: "ClimaHyperdiffusion"
 divergence_damping_factor: 1.0
 netcdf_interpolation_num_points: [1440, 720, 43]
-output_dir: "/glade/derecho/scratch/asridhar/moist_bw_hughes_0M_exner_pg/"
+output_dir: "/glade/derecho/scratch/chew/moist_bw_hughes_0M_real_exner_pg/"
 toml: [toml/longrun_bw.toml]
 output_default_diagnostics: false
 diagnostics:
