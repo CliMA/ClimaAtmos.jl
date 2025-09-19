@@ -288,7 +288,10 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
                 ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
+                ᶠgradᵥ(
+                    ᶜKʲs.:($$j) -
+                    ᶜinterp(ᶠinterp(Y.c.ρ * ᶜJ) * ᶠKᵥʲs.:($$j)) / (Y.c.ρ * ᶜJ),
+                )
         end
     else
         # deep atmosphere
@@ -299,7 +302,10 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
                 (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
+                ᶠgradᵥ(
+                    ᶜKʲs.:($$j) -
+                    ᶜinterp(ᶠinterp(Y.c.ρ * ᶜJ) * ᶠKᵥʲs.:($$j)) / (Y.c.ρ * ᶜJ),
+                )
         end
     end
 

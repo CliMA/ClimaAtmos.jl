@@ -49,27 +49,27 @@ sort_files_by_time(files) =
     permute!(files, sortperm(time_from_filename.(files)))
 
 """
-    κ .= compute_kinetic(uₕ::Field, uᵥ::Field)
+    κ .= compute_kinetic(ρ::Field, uₕ::Field, uᵥ::Field)
 
 Compute the specific kinetic energy at cell centers, resulting in `κ` from
 individual velocity components:
 
- - `κ = 1/2 (uₕ⋅uʰ + 2uʰ⋅ᶜI(uᵥ) + ᶜI(uᵥ⋅uᵛ))`
+ - `κ = 1/2 (uₕ⋅uʰ + 2uʰ⋅ᶜI(uᵥ) + ᶜWI(ρJ, uᵥ⋅uᵛ))`
  - `uₕ` should be a `Covariant1Vector` or `Covariant12Vector`-valued field at
     cell centers, and
  - `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
 """
-function compute_kinetic(uₕ, uᵥ)
+function compute_kinetic(ρ, uₕ, uᵥ)
     @assert eltype(uₕ) <: Union{C1, C2, C12}
     @assert eltype(uᵥ) <: C3
     FT = Spaces.undertype(axes(uₕ))
-    onehalf = FT(1 / 2)
+    (; J) = Fields.local_geometry_field(ρ)
     return @. lazy(
-        onehalf * (
+        (
             dot(C123(uₕ), CT123(uₕ)) +
-            ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
+            ᶜinterp(ᶠinterp(ρ * J) * dot(C123(uᵥ), CT123(uᵥ))) / (ρ * J) +
             2 * dot(CT123(uₕ), ᶜinterp(C123(uᵥ)))
-        ),
+        ) / 2,
     )
 end
 
@@ -79,7 +79,7 @@ end
 Compute the specific kinetic energy at cell centers, where `Y` is the model
 state.
 """
-compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
+compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.ρ, Y.c.uₕ, Y.f.u₃)
 
 """
     ϵ .= compute_strain_rate_center(u::Field)
