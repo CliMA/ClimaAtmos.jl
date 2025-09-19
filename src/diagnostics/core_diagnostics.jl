@@ -629,14 +629,14 @@ function compute_tau!(out, state, cache, component)
     if isnothing(out)
         return getproperty(
             Geometry.UVVector.(
-                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit
+                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit,
             ).components.data,
             component,
         )
     else
         out .= getproperty(
             Geometry.UVVector.(
-                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit
+                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit,
             ).components.data,
             component,
         )
@@ -1122,108 +1122,6 @@ compute_cloud_top_height!(out, state, cache, time) =
 compute_cloud_top_height!(_, _, _, _, model::T) where {T} =
     error_diagnostic_variable("cltz", model)
 
-# function compute_cloud_top_height!(
-#     out,
-#     state,
-#     cache,
-#     time,
-#     moisture_model::T,
-# ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-#     if isnothing(out)
-#         clw = cache.scratch.ᶜtemp_scalar
-#         @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
-#         cli = cache.scratch.ᶜtemp_scalar
-#         @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
-#         z = Fields.coordinate_field(state.c.ρ).z
-
-#         FT = Spaces.undertype(axes(clw))
-#         out = similar(axes(Fields.level(state.f, half)), NTuple{3,FT})
-
-#         Operators.column_reduce!(
-#             ((target_clw, target_clw_cli, target_clw_z), (clw, cli, z)) -> ifelse(
-#                 clw > FT(1e-6) || cli > FT(1e-6), # SOME THRESHOLD FOR A BIG CLOUD 
-#                 (clw, cli, z),
-#                 (target_clw, target_clw_cli, target_clw_z),
-#             ),
-#             out,
-#             (@. lazy(tuple(clw, cli, z))),
-#         )
-#         return out
-#     else
-#         clw = cache.scratch.ᶜtemp_scalar
-#         @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
-#         cli = cache.scratch.ᶜtemp_scalar
-#         @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
-#         z = Fields.coordinate_field(state.c.ρ).z
-
-#         FT = Spaces.undertype(axes(clw))
-#         Operators.column_reduce!(
-#             ((target_clw, target_clw_cli, target_clw_z), (clw, cli, z)) -> ifelse(
-#                 clw > FT(1e-6) || cli > FT(1e-6), # SOME THRESHOLD FOR A BIG CLOUD 
-#                 (clw, cli, z),
-#                 (target_clw, target_clw_cli, target_clw_z),
-#             ),
-#             out,
-#             (@. lazy(tuple(clw, cli, z))),
-#         )
-#     end
-# end
-
-# heaviside function version
-# function compute_cloud_top_height!(
-#     out,
-#     state,
-#     cache,
-#     time,
-#     moisture_model::T,
-# ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-
-#     clw = @. lazy(state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq)
-#     cli = @. lazy(state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice)
-#     z = Fields.coordinate_field(state.c).z
-
-#     FT = Spaces.undertype(axes(clw))
-
-#     q_cond = @. lazy(clw + cli)
-
-#     #@info("q_cond", q_cond)
-
-#     heaviside_num = @. lazy(ifelse(
-#             q_cond > FT(1e-10),
-#             (q_cond * z)^(2) * z,
-#             FT(0)
-#         )
-#     )
-
-#     heaviside_denom = @. lazy(ifelse(
-#             q_cond > FT(1e-10),
-#             (q_cond * z)^(2),
-#             FT(0)
-#         )
-#     )
-
-#     # do i want to save these like this or just as temporary scalars?
-#     num = zeros(axes(Fields.level(state.f, half)))
-#     denom = zeros(axes(Fields.level(state.f, half)))
-
-#     Operators.column_integral_definite!(num, heaviside_num)
-#     Operators.column_integral_definite!(denom, heaviside_denom)
-
-#     @info("numerator integrated", num)
-#     @info("denominator integrated", denom)
-
-#     if isnothing(out)
-#         out = num ./ denom
-#     else
-#         out .= num ./ denom
-#     end
-
-#     @info("cloud top height", out)
-
-#     return out
-# end
-
-#new version
 function compute_cloud_top_height!(
     out,
     state,
@@ -1232,51 +1130,48 @@ function compute_cloud_top_height!(
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
 
-    clw = @. lazy(state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq)
-    cli = @. lazy(state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice)
+    q_liq = cache.precomputed.cloud_diagnostics_tuple.q_liq
+    q_ice = cache.precomputed.cloud_diagnostics_tuple.q_ice
     z = Fields.coordinate_field(state.c).z
-    FT = Spaces.undertype(axes(clw))
-    
+
     ct_constants = CAP.microphysics_cloud_params(cache.params).ct_constants
 
-    q_cond = @. lazy(clw + cli)
+    # Condensate density (kg/m^3)
+    q_cond = @. lazy(state.c.ρ * (q_liq + q_ice))
 
-    w = @. lazy(1 / (1 + exp(-ct_constants.k * (q_cond - ct_constants.thresh))))
+    # 1. Create the "cloudiness" mask using the sigmoid function
+    w = @. lazy(1 / (1 + exp(-(ct_constants.k / state.c.ρ) * (q_cond - (state.state.c.ρ * ct_constants.thresh)))))
 
-    # @info("w", w)
+    # 2. Create a numerically stabilized exponential weight to favor higher altitudes
+    az = @. lazy(ct_constants.a * z)
+    max_az = maximum(az) # This prevents overflow in the exp() call
+    exp_az_stabilized = @. lazy(exp(az - max_az))
+    
+    # 3. Combine weights into a single common term 
+    common_weight = @. lazy(w * exp_az_stabilized)
+    
+    # Define numerator and denominator for the weighted average 
+    numerator = @. lazy(common_weight * z)
 
-    # z_vals = @. lazy(exp(ct_constants.a*z) * z)
-    # @info("z_vals", z)
+    # The denominator is just the common_weight itself
+    denominator = common_weight
 
-    numerator = @. lazy(w * exp(ct_constants.a*z) * z)
-    denominator = @. lazy(w * exp(ct_constants.a*z))
-
-    # @info("numerator", numerator)
-    # @info("denominator", denominator)
-
+    # Perform column integration
     num = zeros(axes(Fields.level(state.f, half)))
     denom = zeros(axes(Fields.level(state.f, half)))
-    # w_test = zeros(axes(Fields.level(state.f, half)))
-    # z_test = zeros(axes(Fields.level(state.f, half)))
-
-    # Operators.column_integral_definite!(w_test, w)
-    # Operators.column_integral_definite!(z_test, z_vals)
 
     Operators.column_integral_definite!(num, numerator)
     Operators.column_integral_definite!(denom, denominator)
 
-    # @info("z_test", z_test)
-    # @info("w_test", w_test)
-
-    # @info("numerator integrated", num)
-    # @info("denominator integrated", denom)
+    # Handle the no-cloud case to prevent division by zero
+    is_cloudy = Fields.level(denom, 1) .> eps(eltype(denom))
+    result = @. ifelse(is_cloudy, num / denom, 0.0)
 
     if isnothing(out)
-        out = num ./ denom
+        out = result
     else
-        out .= num ./ denom
+        out .= result
     end
-    # @info("cloud top height", out)
 
     return out
 end
@@ -1284,78 +1179,22 @@ end
 add_diagnostic_variable!(
     short_name = "cltz",
     long_name = "Cloud Top Height",
-    standard_name = "cloud_top_height", # NOT SURE IF STANDARD EXISTS
+    standard_name = "",
     units = "m",
     comments = """
-    The height of the cloud top based on some threshold.
+    Cloud-top height derived from a GPU-friendly weighted average, avoiding
+    index searches. A sigmoid function provides a "soft" cloud mask based on
+    the total condensate density (liquid + ice), and an exponential term
+    weights the average toward the highest altitudes within that mask. The
+    physical parameters controlling this calculation (threshold thresh,
+    steepness k, and exponential factor a) are specified in the ct_constants
+    struct. "cloud_top_k" should be chosen such that
+    w(z) = 1 / (1 + exp(-k * (q_c - thresh) ) is close to 0 for
+    values total condensate density q_c << thresh and close to
+    1 for q_c ~ thresh
     """,
     compute! = compute_cloud_top_height!,
 )
-
-# ###
-# # Cloud top liquid fraction
-# ###
-# compute_cloud_top_liquid_fraction!(out, state, cache, time) =
-#     compute_cloud_liquid_fraction!(out, state, cache, time, cache.atmos.moisture_model)
-# compute_cloud_top_liquid_fraction!(_, _, _, _, model::T) where {T} =
-#     error_diagnostic_variable("cltlf", model)
-
-# function compute_cloud_top_liquid_fraction!(
-#     out,
-#     state,
-#     cache,
-#     time,
-#     moisture_model::T,
-# ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-
-#     function compute_liquid_fraction(clw, cli)
-#         return clw / (clw + cli)
-
-#     if isnothing(out)
-#         out = zeros(axes(Fields.level(state.f, half))) # CHECK THAT THIS IS RIGHT
-#         clw = cache.scratch.ᶜtemp_scalar
-#         @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
-#         cli = cache.scratch.ᶜtemp_scalar
-#         @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
-#         @. z = Fields.coordinate_field(state.c.ρ).z
-#         Operators.column_reduce!(
-#             ((target_clw, target_clw_cli, target_clw_z), (clw, cli, z)) -> ifelse(
-#                 clw > 1e-6 || cli > 1e-6, # SOME THRESHOLD FOR A BIG CLOUD 
-#                 (clw, cli, z),
-#                 (target_clw, target_clw_cli, target_clw_z),
-#             ),
-#             out,
-#             @. lazy(compute_liquid_fraction(target_clw, target_cli)),
-#         )
-#         return out
-#     else
-#         clw = cache.scratch.ᶜtemp_scalar
-#         @. clw = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_liq
-#         cli = cache.scratch.ᶜtemp_scalar
-#         @. cli = state.c.ρ * cache.precomputed.cloud_diagnostics_tuple.q_ice
-#         @. z = Fields.coordinate_field(state.c.ρ).z
-#         Operators.column_reduce!(
-#             ((target_clw, target_clw_cli, target_clw_z), (clw, cli, z)) -> ifelse(
-#                 clw > 1e-6 || cli > 1e-6, # SOME THRESHOLD FOR A BIG CLOUD 
-#                 (clw, cli, z),
-#                 (target_clw, target_clw_cli, target_clw_z),
-#             ),
-#             out,
-#             @. lazy(tuple(target_clw, target_cli, target_z)),
-#         )
-#     end
-# end
-
-# add_diagnostic_variable!(
-#     short_name = "cltz",
-#     long_name = "Cloud Top Height",
-#     standard_name = "cloud_top_height", # NOT SURE IF STANDARD EXISTS
-#     units = "",
-#     comments = """
-#     The height of the cloud top based on some threshold.
-#     """,
-#     compute! = compute_cloud_top!,
-# )
 
 ###
 # Vertical integrated dry static energy (2d)
