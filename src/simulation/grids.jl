@@ -315,7 +315,6 @@ end
         sleve_eta, sleve_s, topo_smoothing, comms_ctx)
 
 Create a hypsography function that handles topography integration.
-This replaces the topography handling logic from make_hybrid_spaces.
 """
 function hypsography_function_from_topography(
     topography::AbstractTopography,
