@@ -30,6 +30,7 @@ CA.benchmark_step!(integrator, Y₀); # compile first
 
 @info "Running benchmark_step_gpu!..."
 n_steps = 5
+e = 0.0
 comms_ctx = ClimaComms.context(integrator.u.c)
 device = ClimaComms.device(comms_ctx)
 CUDA.@profile external = true begin
