@@ -69,7 +69,7 @@ Schar mountain topography for 2D simulations.
 - `a`: Mountain width parameter (m)
 """
 Base.@kwdef struct ScharTopography{FT} <: AbstractTopography
-    h_max::FT = 50.0
+    h_max::FT = 200.0
     x_center::FT = 50e3
     λ::FT = 4e3
     a::FT = 5e3
