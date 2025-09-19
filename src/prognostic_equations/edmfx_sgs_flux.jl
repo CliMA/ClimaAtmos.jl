@@ -39,7 +39,7 @@ function edmfx_sgs_mass_flux_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_sgsflux_upwinding) = p.atmos.numerics
+    (; edmfx_sgsflux_upwinding, tracer_upwinding) = p.atmos.numerics
     (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
@@ -145,19 +145,15 @@ function edmfx_sgs_mass_flux_tendency!(
                     MatrixFields.has_field(Y, ρχ_name) || continue
 
                     ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-                    ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
-                    ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-
-                    @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                     @. ᶜa_scalar =
-                        (ᶜχʲ - ᶜχ) *
+                        ᶜχʲ *
                         draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-                    vtt = vertical_transport_precip_massflux(
+                    vtt = vertical_transport(
                         ᶜρʲs.:($j),
-                        ᶠu³_diff,
+                        ᶠu³ʲs.:($j),
                         ᶜa_scalar,
                         dt,
-                        edmfx_sgsflux_upwinding,
+                        tracer_upwinding,
                     )
                     ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
                     @. ᶜρχₜ += vtt
@@ -170,17 +166,13 @@ function edmfx_sgs_mass_flux_tendency!(
                 MatrixFields.has_field(Y, ρχ_name) || continue
 
                 ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-                ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
-                ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-
-                @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
-                @. ᶜa_scalar = (ᶜχ⁰ - ᶜχ) * draft_area(ᶜρa⁰, ᶜρ⁰)
-                vtt = vertical_transport_precip_massflux(
+                @. ᶜa_scalar = ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
+                vtt = vertical_transport(
                     ᶜρ⁰,
-                    ᶠu³_diff,
+                    ᶠu³⁰,
                     ᶜa_scalar,
                     dt,
-                    edmfx_sgsflux_upwinding,
+                    tracer_upwinding,
                 )
                 ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
                 @. ᶜρχₜ += vtt
@@ -202,7 +194,7 @@ function edmfx_sgs_mass_flux_tendency!(
     turbconv_params = CAP.turbconv_params(p.params)
     a_max = CAP.max_area(turbconv_params)
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_sgsflux_upwinding) = p.atmos.numerics
+    (; edmfx_sgsflux_upwinding, tracer_upwinding) = p.atmos.numerics
     (; ᶠu³) = p.precomputed
     (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶜts) = p.precomputed
     (; dt) = p
@@ -294,16 +286,12 @@ function edmfx_sgs_mass_flux_tendency!(
                     MatrixFields.has_field(Y, ρχ_name) || continue
 
                     ᶜχʲ = MatrixFields.get_field(p.precomputed, χʲ_name)
-                    ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
-                    ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-
-                    @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                     # @. ᶜa_scalar =
-                    #     (ᶜχʲ - ᶜχ) *
+                    #     ᶜχʲ *
                     #     draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j))
                     # TODO: remove this filter when mass flux is treated implicitly
                     @. ᶜa_scalar =
-                        (ᶜχʲ - ᶜχ) * min(
+                        ᶜχʲ * min(
                             min(draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)), a_max),
                             FT(0.02) / max(
                                 Geometry.WVector(
@@ -312,12 +300,12 @@ function edmfx_sgs_mass_flux_tendency!(
                                 eps(FT),
                             ),
                         )
-                    vtt = vertical_transport_precip_massflux(
+                    vtt = vertical_transport(
                         ᶜρʲs.:($j),
-                        ᶠu³_diff,
+                        ᶠu³ʲs.:($j),
                         ᶜa_scalar,
                         dt,
-                        edmfx_sgsflux_upwinding,
+                        tracer_upwinding,
                     )
                     ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
                     @. ᶜρχₜ += vtt
