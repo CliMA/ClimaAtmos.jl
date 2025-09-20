@@ -134,6 +134,21 @@ precip_variables(ls, ::Microphysics2Moment) = (;
     ρq_sno = ls.ρ * ls.precip_state.q_sno,
 )
 
+function precip_variables(ls, ::Microphysics2MomentP3)
+    (; ρ) = ls
+    (; n_liq, n_rai, q_rai) = ls.precip_state.warm
+    (; n_ice, q_ice, q_rim, b_rim) = ls.precip_state.cold
+    # warm state
+    ls_warm = (; ρ, precip_state = ls.precip_state.warm)
+    warm_state = precip_variables(ls_warm, Microphysics2Moment())
+    # cold state
+    cold_state = (;
+        ρq_ice = ρ * q_ice, ρn_ice = ρ * n_ice,
+        ρq_rim = ρ * q_rim, ρb_rim = ρ * b_rim,
+    )
+    return (; warm_state..., cold_state...)
+end
+
 # We can use paper-based cases for LES type configurations (no TKE)
 # or SGS type configurations (initial TKE needed), so we do not need to assert
 # that there is no TKE when there is no turbconv_model.

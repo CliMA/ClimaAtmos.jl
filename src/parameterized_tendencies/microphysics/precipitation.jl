@@ -259,3 +259,33 @@ function precipitation_tendency!(
         @. Yₜ.c.ρn_rai += Y.c.sgsʲs.:($$j).ρa * ᶜSnᵣᵖʲs.:($$j)
     end
 end
+
+####
+#### 2-moment warm microphysics with P3 scheme
+####
+
+function precipitation_tendency!(Yₜ, Y, p, t,
+    ne::NonEquilMoistModel, ::Microphysics2MomentP3, ::Nothing,
+)
+    (; ᶜSqₗᵖ, ᶜSqᵢᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜScoll) = p.precomputed
+    (; ᶜSnₗᵖ, ᶜSnᵣᵖ) = p.precomputed
+
+    ## Update grid mean tendencies
+    # 2 moment scheme (warm)
+    precipitation_tendency!(Yₜ, Y, p, t, ne, Microphysics2Moment(), nothing)
+
+    # P3 scheme (cold)
+    # @. Yₜ.c.ρq_ice += Y.c.ρ * ᶜSqᵢᵖ  # updated in the above function
+    # @. Yₜ.c.ρn_ice += Y.c.ρ * ᶜSnᵢᵖ  # TODO: Additional sources for `ρn_ice`
+
+    # Collisions
+    @. Yₜ.c.ρq_liq += Y.c.ρ * ᶜScoll.∂ₜq_c
+    @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜScoll.∂ₜq_r
+    @. Yₜ.c.ρn_liq += ᶜScoll.∂ₜN_c
+    @. Yₜ.c.ρn_rai += ᶜScoll.∂ₜN_r
+    @. Yₜ.c.ρq_rim += ᶜScoll.∂ₜL_rim
+    @. Yₜ.c.ρq_ice += ᶜScoll.∂ₜL_ice
+    @. Yₜ.c.ρb_rim += ᶜScoll.∂ₜB_rim
+
+    return nothing
+end

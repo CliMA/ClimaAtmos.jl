@@ -98,7 +98,9 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         @name(c.ρq_rai),
         @name(c.ρq_sno),
         @name(c.ρn_liq),
-        @name(c.ρn_rai)
+        @name(c.ρn_rai),
+        # P3 frozen
+        @name(c.ρn_ice), @name(c.ρq_rim), @name(c.ρb_rim),
     )
     available_condensate_names =
         MatrixFields.unrolled_filter(is_in_Y, condensate_names)
@@ -505,6 +507,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         (@name(c.ρq_sno), @name(ᶜwₛ)),
         (@name(c.ρn_liq), @name(ᶜwₙₗ)),
         (@name(c.ρn_rai), @name(ᶜwₙᵣ)),
+        (@name(c.ρn_ice), @name(ᶜwnᵢ)),
+        (@name(c.ρq_rim), @name(ᶜwᵢ)),
+        (@name(c.ρb_rim), @name(ᶜwᵢ)),
     )
     if !(p.atmos.moisture_model isa DryModel) || use_derivative(diffusion_flag)
         ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]

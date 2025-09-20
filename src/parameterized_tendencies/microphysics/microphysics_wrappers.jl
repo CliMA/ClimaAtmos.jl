@@ -751,3 +751,30 @@ function compute_warm_precipitation_sources_2M!(
     @. Snᵣᵖ += Sᵖ + S₂ᵖ
 
 end
+
+function compute_cold_precipitation_sources_P3!(
+    ᶜScoll,         # NamedTuple-valued Field with P3 liquid-ice collision sources
+    params_2mp3,    # Parameters for 2M and P3 schemes, see `get_microphysics_2m_p3_parameters`
+    thermo_params,  # An instance of `Thermodynamics.Parameters.ThermodynamicsParameters`
+    ᶜY_reduced,     # A reduced set of prognostic variables needed for P3 sources
+    ᶜts,            # Thermodynamic state
+    ᶜlogλ,          # Logarithm of the P3 distribution slope parameter
+)
+
+    (; warm, cold) = params_2mp3
+    (; ρ, ρq_liq, ρn_liq, ρq_rai, ρn_rai, ρq_ice, ρn_ice, ρq_rim, ρb_rim) = ᶜY_reduced
+
+    ᶜF_rim = @. lazy(ρq_rim / ρq_ice)
+    ᶜρ_rim = @. lazy(ρq_rim / ρb_rim)
+
+    @. ᶜScoll = CMP3.bulk_liquid_ice_collision_sources(cold.params, ᶜlogλ,
+        ρq_ice, max(0, ρn_ice),
+        ᶜF_rim, ᶜρ_rim,
+        warm.sb.pdf_c, warm.sb.pdf_r,
+        ρq_liq, ρn_liq, ρq_rai, ρn_rai,
+        warm.aps, thermo_params, (cold.velocity_params,),
+        ρ, Tₐ(thermo_params, ᶜts),
+    )
+
+    return nothing
+end

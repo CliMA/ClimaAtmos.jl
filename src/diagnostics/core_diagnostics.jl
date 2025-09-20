@@ -738,6 +738,7 @@ function compute_pr!(
         Microphysics0Moment,
         Microphysics1Moment,
         Microphysics2Moment,
+        Microphysics2MomentP3,
     },
 )
     if isnothing(out)
@@ -774,6 +775,7 @@ function compute_prra!(
         Microphysics0Moment,
         Microphysics1Moment,
         Microphysics2Moment,
+        Microphysics2MomentP3,
     },
 )
     if isnothing(out)
@@ -807,6 +809,7 @@ function compute_prsn!(
         Microphysics0Moment,
         Microphysics1Moment,
         Microphysics2Moment,
+        Microphysics2MomentP3,
     },
 )
     if isnothing(out)
@@ -838,7 +841,9 @@ function compute_husra!(
     state,
     cache,
     time,
-    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{
+        Microphysics1Moment, Microphysics2Moment, Microphysics2MomentP3,
+    },
 )
     if isnothing(out)
         return state.c.ρq_rai ./ state.c.ρ
@@ -869,7 +874,9 @@ function compute_hussn!(
     state,
     cache,
     time,
-    microphysics_model::Union{Microphysics1Moment, Microphysics2Moment},
+    microphysics_model::Union{
+        Microphysics1Moment, Microphysics2Moment, Microphysics2MomentP3,
+    },
 )
     if isnothing(out)
         return state.c.ρq_sno ./ state.c.ρ
@@ -900,7 +907,7 @@ function compute_cdnc!(
     state,
     cache,
     time,
-    microphysics_model::Microphysics2Moment,
+    microphysics_model::Union{Microphysics2Moment, Microphysics2MomentP3},
 )
     if isnothing(out)
         return state.c.ρn_liq
@@ -931,7 +938,7 @@ function compute_ncra!(
     state,
     cache,
     time,
-    microphysics_model::Microphysics2Moment,
+    microphysics_model::Union{Microphysics2Moment, Microphysics2MomentP3},
 )
     if isnothing(out)
         return state.c.ρn_rai
@@ -1554,7 +1561,7 @@ function compute_rwp!(
     cache,
     time,
     moisture_model::T,
-) where {T <: Union{Microphysics1Moment, Microphysics2Moment}}
+) where {T <: Union{Microphysics1Moment, Microphysics2Moment, Microphysics2MomentP3}}
     if isnothing(out)
         out = zeros(axes(Fields.level(state.f, half)))
         rw = cache.scratch.ᶜtemp_scalar
