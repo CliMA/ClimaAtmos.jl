@@ -1,0 +1,24 @@
+h_elem: 120
+z_elem: 43
+dz_bottom: 30.0
+dt: "40secs"
+t_end: "15days"
+ode_algo: ARS343
+topography: "Hughes2023"
+initial_condition: "MoistBaroclinicWave"
+approximate_linear_solve_iters: 3
+max_newton_iters_ode: 1
+rayleigh_sponge: true
+moist: "nonequil"
+precip_model: "1M"
+dt_save_state_to_disk: "10days"
+output_dir: "/glade/derecho/scratch/asridhar/moist_bw_hughes_he120_1M/"
+netcdf_interpolation_num_points: [1440, 720, 43]
+toml: [toml/longrun_bw.toml]
+diagnostics:
+  - short_name: [pfull, ua, va, ta, ts, wa, va, ke, hus, clw, cli, pr, hussn, husra]
+    reduction: inst
+    period: 1days
+  - short_name: [massa, energya, watera]
+    period: 6hours
+    writer: dict
