@@ -1137,15 +1137,14 @@ function compute_cloud_top_height!(
     ct_constants = CAP.microphysics_cloud_params(cache.params).ct_constants
 
     # Condensate density (kg/m^3)
-    q_cond = @. lazy(state.c.ρ * (q_liq + q_ice))
+    q_cond = @. lazy(q_liq + q_ice)
 
     # 1. Create the "cloudiness" mask using the sigmoid function
-    w = @. lazy(1 / (1 + exp(-(ct_constants.k / state.c.ρ) * (q_cond - (state.state.c.ρ * ct_constants.thresh)))))
+    w = @. lazy(1 / (1 + exp(-ct_constants.k * (q_cond - (ct_constants.thresh)))))
 
     # 2. Create a numerically stabilized exponential weight to favor higher altitudes
     az = @. lazy(ct_constants.a * z)
-    max_az = maximum(az) # This prevents overflow in the exp() call
-    exp_az_stabilized = @. lazy(exp(az - max_az))
+    exp_az_stabilized = @. lazy(exp(az - maximum(az))) # This prevents overflow in the exp() call
     
     # 3. Combine weights into a single common term 
     common_weight = @. lazy(w * exp_az_stabilized)
@@ -1163,9 +1162,10 @@ function compute_cloud_top_height!(
     Operators.column_integral_definite!(num, numerator)
     Operators.column_integral_definite!(denom, denominator)
 
+    FT = Spaces.undertype(axes(denom))
+
     # Handle the no-cloud case to prevent division by zero
-    is_cloudy = Fields.level(denom, 1) .> eps(eltype(denom))
-    result = @. ifelse(is_cloudy, num / denom, 0.0)
+    result = @. lazy(ifelse(denom > eps(FT), num / denom, FT(0.0)))
 
     if isnothing(out)
         out = result

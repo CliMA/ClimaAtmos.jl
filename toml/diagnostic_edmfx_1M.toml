@@ -24,3 +24,12 @@ value = 0
 
 [max_area_limiter_scale]
 value = 0
+
+[cloud_top_q_threshold]
+value = 1e-8
+
+[cloud_top_k]
+value = 1e7
+
+[cloud_top_a]
+value = 1e-3
