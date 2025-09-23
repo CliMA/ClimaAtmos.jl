@@ -3,5 +3,5 @@ initial_condition: "DryBaroclinicWave"
 dt_save_state_to_disk: "10days"
 disable_surface_flux_tendency: true
 diagnostics:
-  - short_name: [pfull, wa, va, rv, ke]
+  - short_name: [pfull, ua, wa, va, rv, ta, ke]
     period: 10days

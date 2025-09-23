@@ -97,12 +97,37 @@ function solve_atmos!(simulation)
         end
     catch ret_code
         if !CA.is_distributed(comms_ctx)
+            # Modify the diagnostics callback so that all instantaneous NetCDF
+            # diagnostics can be updated with the state on the last timestep.
+            save_diagnostics_to_disk_func =
+                integrator.callback.discrete_callbacks[end].affect!
+            (; scheduled_diagnostics) =
+                save_diagnostics_to_disk_func.diagnostics_handler
+            for (diag_index, diag) in enumerate(scheduled_diagnostics)
+                (; variable, reduction_time_func, output_writer) = diag
+                (; pre_output_hook!, output_short_name, output_long_name) = diag
+                scheduled_diagnostics[diag_index] =
+                    isnothing(reduction_time_func) &&
+                    output_writer isa ClimaDiagnostics.Writers.NetCDFWriter ?
+                    ClimaDiagnostics.ScheduledDiagnostics.ScheduledDiagnostic(
+                        variable,
+                        Returns(true),
+                        output_writer,
+                        nothing,
+                        Returns(true),
+                        pre_output_hook!,
+                        output_short_name,
+                        output_long_name,
+                    ) : diag
+            end
+
             # We can only save when not distributed because we don't have a way to sync the
             # MPI processes (maybe just one MPI rank crashes, leading to a hanging
             # simulation)
-            CA.save_state_to_disk_func(integrator, simulation.output_dir)
+            save_state_to_disk_func(integrator, simulation.output_dir)
+            save_diagnostics_to_disk_func(integrator)
         end
-        @error "ClimaAtmos simulation crashed. Stacktrace for failed simulation" exception =
+        @error "Simulation crashed after $(integrator.t) seconds" exception =
             (ret_code, catch_backtrace())
         return AtmosSolveResults(nothing, :simulation_crashed, nothing)
     finally
