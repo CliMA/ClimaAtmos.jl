@@ -1,7 +1,7 @@
-t_end: "120days"
+t_end: "973260secs"
 initial_condition: "DryBaroclinicWave"
-dt_save_state_to_disk: "10days"
+dt_save_state_to_disk: "973260secs"
 disable_surface_flux_tendency: true
 diagnostics:
   - short_name: [pfull, ua, wa, va, rv, ta, ke]
-    period: 10days
+    period: 973260secs
