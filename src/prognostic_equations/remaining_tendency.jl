@@ -71,6 +71,12 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)
+
+    (any(isnan, parent(Yₜ_lim.c)) || any(isnan, parent(Yₜ_lim.f))) &&
+        error("NaN detected in Yₜ_lim at t = $t seconds")
+    (any(isnan, parent(Yₜ.c)) || any(isnan, parent(Yₜ.f))) &&
+        error("NaN detected in Yₜ_exp at t = $t seconds")
+
     return Yₜ
 end
 

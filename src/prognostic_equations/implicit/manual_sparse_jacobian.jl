@@ -1225,7 +1225,15 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
     zero_velocity_jacobian!(matrix, Y, p, t)
+
+    for ((row, col), value) in pairs(matrix)
+        (value isa Fields.Field && any(isnan, parent(value))) &&
+            error("NaN detected in ∂Yₜ_imp[$row]/∂Y[$col] at t = $t seconds")
+    end
 end
 
-invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R) =
+function invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R)
     LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
+    (any(isnan, parent(ΔY.c)) || any(isnan, parent(ΔY.f))) &&
+        error("NaN detected in ΔY_imp")
+end

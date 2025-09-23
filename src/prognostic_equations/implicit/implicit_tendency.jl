@@ -66,6 +66,9 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     # DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)
 
+    (any(isnan, parent(Yₜ.c)) || any(isnan, parent(Yₜ.f))) &&
+        error("NaN detected in Yₜ_imp at t = $t seconds")
+
     return nothing
 end
 
