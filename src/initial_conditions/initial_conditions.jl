@@ -215,9 +215,7 @@ function (initial_condition::Union{MoistFromFile, WeatherModel})(params)
         grav = CAP.grav(params)
         thermo_params = CAP.thermodynamics_params(params)
 
-        # Use safe defaults to avoid transient NaNs before overwrite
-        T = FT(CAP.T_0(params))
-        p = FT(CAP.MSLP(params))
+        T, p = FT(NaN), FT(NaN) # placeholder values
 
         return LocalState(;
             params,
@@ -382,28 +380,135 @@ function overwrite_initial_conditions!(
     extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
 
     # Extract face coordinates and compute center midpoints
-    z_coords = Fields.axes(Y.c).grid.vertical_grid.topology.mesh.faces
 
-    # Compute center coordinates as midpoints between faces
-    face_z_values = [z.z for z in z_coords]
-    center_z_values = [
-        (face_z_values[i] + face_z_values[i + 1]) / 2 for
-        i in 1:(length(face_z_values) - 1)
-    ]
-
-    target_levels = Array(center_z_values)
+    target_levels = Fields.field2array(Fields.coordinate_field(Y.c).z)[:, argmin(Fields.field2array(Fields.coordinate_field(Y.c).z))[2]]
 
     file_path = weather_model_data_path(
         initial_condition.start_date,
         target_levels,
         initial_condition.era5_initial_condition_dir,
     )
-    return _overwrite_initial_conditions_from_file!(
-        file_path,
-        extrapolation_bc,
-        Y,
-        thermo_params,
+
+    regridder_kwargs = (; extrapolation_bc)
+    isfile(file_path) || error("$(file_path) is not a file")
+    @info "Overwriting initial conditions with data from file $(file_path)"
+
+    center_space = Fields.axes(Y.c)
+    face_space = Fields.axes(Y.f)
+
+    # Using surface pressure, air temperature and specific humidity
+    # from the dataset, compute air pressure.
+    p_sfc = Fields.level(
+        SpaceVaryingInputs.SpaceVaryingInput(
+            file_path,
+            "p",
+            face_space,
+            regridder_kwargs = regridder_kwargs,
+        ),
+        Fields.half,
     )
+    ᶜT = SpaceVaryingInputs.SpaceVaryingInput(
+        file_path,
+        "t",
+        center_space,
+        regridder_kwargs = regridder_kwargs,
+    )
+    ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(
+        file_path,
+        "q",
+        center_space,
+        regridder_kwargs = regridder_kwargs,
+    )
+
+    # With the known temperature (ᶜT) and moisture (ᶜq_tot) profile,
+    # recompute the pressure levels assuming hydrostatic balance is maintained.
+    # Uses the ClimaCore `column_integral_indefinite!` function to solve
+    # ∂(ln𝑝)/∂z = -g/(Rₘ(q)T), where
+    # p is the local pressure
+    # g is the gravitational constant
+    # q is the specific humidity
+    # Rₘ is the gas constant for moist air
+    # T is the air temperature
+    # p is then updated with the integral result, given p_sfc,
+    # following which the thermodynamic state is constructed.
+    ᶜ∂lnp∂z = @. -thermo_params.grav /
+       (TD.gas_constant_air(thermo_params, TD.PhasePartition(ᶜq_tot)) * ᶜT)
+    ᶠlnp_over_psfc = zeros(face_space)
+    Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
+    ᶠp = p_sfc .* exp.(ᶠlnp_over_psfc)
+    ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp.(ᶠp), ᶜT, ᶜq_tot)
+
+    # Assign prognostic variables from equilibrium moisture models
+    Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
+    # Velocity is first assigned on cell-centers and then interpolated onto
+    # cell faces.
+    vel =
+        Geometry.UVWVector.(
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "u",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ),
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "v",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ),
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "w",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ),
+        )
+    Y.c.uₕ .= C12.(Geometry.UVVector.(vel))
+    Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
+    e_kin = similar(ᶜT)
+    e_kin .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
+    e_pot = Fields.coordinate_field(Y.c).z .* thermo_params.grav
+    Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
+    # Initialize prognostic EDMF 0M subdomains if present
+    if hasproperty(Y.c, :sgsʲs)
+        ᶜmse = TD.specific_enthalpy.(thermo_params, ᶜts) .+ e_pot
+        for name in propertynames(Y.c.sgsʲs)
+            s = getproperty(Y.c.sgsʲs, name)
+            hasproperty(s, :ρa) && fill!(s.ρa, 0)
+            hasproperty(s, :mse) && (s.mse .= ᶜmse)
+            hasproperty(s, :q_tot) && (s.q_tot .= ᶜq_tot)
+        end
+    end
+    if hasproperty(Y.c, :ρq_tot)
+        Y.c.ρq_tot .= ᶜq_tot .* Y.c.ρ
+    else
+        error(
+            "`dry` configurations are incompatible with the interpolated initial conditions.",
+        )
+    end
+    if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
+        Y.c.ρq_sno .=
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "cswc",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ) .* Y.c.ρ
+        Y.c.ρq_rai .=
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "crwc",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ) .* Y.c.ρ
+    end
+
+    if hasproperty(Y.c, :sgs⁰) && hasproperty(Y.c.sgs⁰, :ρatke)
+        # NOTE: This is not the most consistent, but it is better than NaNs
+        fill!(Y.c.sgs⁰.ρatke, 0)
+    end
+
+    return nothing
 end
 
 """
@@ -474,9 +579,10 @@ function _overwrite_initial_conditions_from_file!(
     ᶠlnp_over_psfc = zeros(face_space)
     Operators.column_integral_indefinite!(ᶠlnp_over_psfc, ᶜ∂lnp∂z)
     ᶠp = p_sfc .* exp.(ᶠlnp_over_psfc)
-    # Compute center pressure for thermodynamic state construction
-    ᶜp = ᶜinterp.(ᶠp)
+    ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜinterp.(ᶠp), ᶜT, ᶜq_tot)
 
+    # Assign prognostic variables from equilibrium moisture models
+    Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
     # Velocity is first assigned on cell-centers and then interpolated onto
     # cell faces.
     vel =
@@ -502,125 +608,36 @@ function _overwrite_initial_conditions_from_file!(
         )
     Y.c.uₕ .= C12.(Geometry.UVVector.(vel))
     Y.f.u₃ .= ᶠinterp.(C3.(Geometry.WVector.(vel)))
-
-    # Load cloud/precip water fields if present (fallback to zeros)
-    has_liq_ice = hasproperty(Y.c, :ρq_liq) && hasproperty(Y.c, :ρq_ice)
-    has_precip = hasproperty(Y.c, :ρq_rai) && hasproperty(Y.c, :ρq_sno)
-    # TEMP: diagnose 1M condensed/precip species at runtime (initialize to zero here)
-    diagnose_1m = true
-
-    ᶜq_liq = zeros(center_space)
-    ᶜq_ice = zeros(center_space)
-    ᶜq_rai = zeros(center_space)
-    ᶜq_sno = zeros(center_space)
-
-    if has_liq_ice && !diagnose_1m
-        try
-            ᶜq_liq = SpaceVaryingInputs.SpaceVaryingInput(
-                file_path,
-                "clwc",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
-            )
-        catch
-            @info "Variable clwc not found in $(file_path); initializing liquid cloud to zero"
-        end
-        try
-            ᶜq_ice = SpaceVaryingInputs.SpaceVaryingInput(
-                file_path,
-                "ciwc",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
-            )
-        catch
-            @info "Variable ciwc not found in $(file_path); initializing ice cloud to zero"
-        end
-    end
-    if has_precip && !diagnose_1m
-        try
-            ᶜq_rai = SpaceVaryingInputs.SpaceVaryingInput(
-                file_path,
-                "crwc",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
-            )
-        catch
-            @info "Variable crwc not found in $(file_path); initializing rain water to zero"
-        end
-        try
-            ᶜq_sno = SpaceVaryingInputs.SpaceVaryingInput(
-                file_path,
-                "cswc",
-                center_space,
-                regridder_kwargs = regridder_kwargs,
-            )
-        catch
-            @info "Variable cswc not found in $(file_path); initializing snow water to zero"
-        end
-    end
-
-    # Build thermodynamic state consistently with moisture partition
-    is_nonequil = hasproperty(Y.c, :ρq_liq) || hasproperty(Y.c, :ρq_ice)
-    # Use vapor from ERA5 q as first component; add cloud+precip to condensed partitions (zeros if not provided)
-    ᶜq_vap = max.(ᶜq_tot, zero.(ᶜq_tot))
-    ᶜq_liq .= ifelse.(isfinite.(ᶜq_liq), ᶜq_liq, zero.(ᶜq_liq))
-    ᶜq_liq .= max.(ᶜq_liq, zero.(ᶜq_liq))
-    ᶜq_ice .= ifelse.(isfinite.(ᶜq_ice), ᶜq_ice, zero.(ᶜq_ice))
-    ᶜq_ice .= max.(ᶜq_ice, zero.(ᶜq_ice))
-    ᶜq_rai .= ifelse.(isfinite.(ᶜq_rai), ᶜq_rai, zero.(ᶜq_rai))
-    ᶜq_rai .= max.(ᶜq_rai, zero.(ᶜq_rai))
-    ᶜq_sno .= ifelse.(isfinite.(ᶜq_sno), ᶜq_sno, zero.(ᶜq_sno))
-    ᶜq_sno .= max.(ᶜq_sno, zero.(ᶜq_sno))
-    ᶜpartition = TD.PhasePartition.(ᶜq_vap, ᶜq_liq .+ ᶜq_rai, ᶜq_ice .+ ᶜq_sno)
-    if is_nonequil
-        ᶜts = TD.PhaseNonEquil_pTq.(thermo_params, ᶜp, ᶜT, ᶜpartition)
-    else
-        ᶜts = TD.PhaseEquil_pTq.(thermo_params, ᶜp, ᶜT, ᶜq_tot)
-    end
-
-    # Density
-    Y.c.ρ .= TD.air_density.(thermo_params, ᶜts)
-
-    # Kinetic and potential energy
     e_kin = similar(ᶜT)
     e_kin .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
     e_pot = Fields.coordinate_field(Y.c).z .* thermo_params.grav
-
-    # Total energy
     Y.c.ρe_tot .= TD.total_energy.(thermo_params, ᶜts, e_kin, e_pot) .* Y.c.ρ
-
-    # Moisture mass densities
     if hasproperty(Y.c, :ρq_tot)
-        # Keep ρq_tot equal to ERA5 vapor (do not add precipitating species)
         Y.c.ρq_tot .= ᶜq_tot .* Y.c.ρ
     else
         error(
             "`dry` configurations are incompatible with the interpolated initial conditions.",
         )
     end
-
-    if hasproperty(Y.c, :ρq_rai)
-        Y.c.ρq_rai .= ᶜq_rai .* Y.c.ρ
-        Y.c.ρq_sno .= ᶜq_sno .* Y.c.ρ
-    end
-    if hasproperty(Y.c, :ρq_liq)
-        Y.c.ρq_liq .= ᶜq_liq .* Y.c.ρ
-        Y.c.ρq_ice .= ᶜq_ice .* Y.c.ρ
-    end
-
-    # Set prognostic EDMF draft subdomains to consistent values
-    if hasproperty(Y.c, :sgsʲs) # if prognostic EDMF
-        ᶜmse = TD.specific_enthalpy.(thermo_params, ᶜts) .+ e_pot
-        for name in propertynames(Y.c.sgsʲs)
-            s = getproperty(Y.c.sgsʲs, name)
-            hasproperty(s, :ρa) && fill!(s.ρa, 0)
-            hasproperty(s, :mse) && (s.mse .= ᶜmse)
-            hasproperty(s, :q_tot) && (s.q_tot .= ᶜq_vap)
-        end
+    if hasproperty(Y.c, :ρq_sno) && hasproperty(Y.c, :ρq_rai)
+        Y.c.ρq_sno .=
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "cswc",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ) .* Y.c.ρ
+        Y.c.ρq_rai .=
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path,
+                "crwc",
+                center_space,
+                regridder_kwargs = regridder_kwargs,
+            ) .* Y.c.ρ
     end
 
-    # NOTE: This is not the most consistent, but it is better than NaNs
     if hasproperty(Y.c, :sgs⁰) && hasproperty(Y.c.sgs⁰, :ρatke)
+        # NOTE: This is not the most consistent, but it is better than NaNs
         fill!(Y.c.sgs⁰.ρatke, 0)
     end
 

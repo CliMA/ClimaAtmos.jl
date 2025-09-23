@@ -139,54 +139,31 @@ function to_z_levels(source_file, target_file, target_levels, FT)
     z_var = defVar(ncout, "z", FT, ("z",), attrib = z_attrib)
     z_var[:] = target_levels
 
-    # Interpolate and write 3D variables
-    u_var =
-        defVar(ncout, "u", FT, ("lon", "lat", "z"), attrib = ncin["u"].attrib)
-    u_var[:, :, :] =
-        interpz_3d(target_levels, source_z, FT.(ncin["u"][:, :, :, 1]))
-
-    v_var =
-        defVar(ncout, "v", FT, ("lon", "lat", "z"), attrib = ncin["v"].attrib)
-    v_var[:, :, :] =
-        interpz_3d(target_levels, source_z, FT.(ncin["v"][:, :, :, 1]))
-
+    # Interpolate and write required 3D variables via loop
     # ERA5 w is from a hydrostatic model and so isn't meaningful for ClimaAtmos
     # See https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2017MS001059
-    w_var =
-        defVar(ncout, "w", FT, ("lon", "lat", "z"), attrib = ncin["w"].attrib)
-    w_var[:, :, :] = zeros(FT, length(lon), length(lat), length(target_levels))
-
-    t_var =
-        defVar(ncout, "t", FT, ("lon", "lat", "z"), attrib = ncin["t"].attrib)
-    t_var[:, :, :] =
-        interpz_3d(target_levels, source_z, FT.(ncin["t"][:, :, :, 1]))
-
-    q_var =
-        defVar(ncout, "q", FT, ("lon", "lat", "z"), attrib = ncin["q"].attrib)
-    q_var[:, :, :] =
-        max.(
-            interpz_3d(target_levels, source_z, FT.(ncin["q"][:, :, :, 1])),
-            FT(0),
-        )
+    req3d = ["u", "v", "t", "q", "w"]
+    for var_name in req3d
+        var_obj = defVar(ncout, var_name, FT, ("lon", "lat", "z"), attrib = ncin[var_name].attrib)
+        if var_name == "w"
+            var_obj[:, :, :] = zeros(FT, length(lon), length(lat), length(target_levels))
+        else
+            data = interpz_3d(target_levels, source_z, FT.(ncin[var_name][:, :, :, 1]))
+            if var_name == "q"
+                data = max.(data, FT(0))
+            end
+            var_obj[:, :, :] = data
+        end
+    end
 
     # Write 2D surface variables - extend to all levels (TODO: accept 2D variables in atmos)
     # Simply repeat the surface values for all levels
-    skt_var = defVar(
-        ncout,
-        "skt",
-        FT,
-        ("lon", "lat", "z"),
-        attrib = ncin["skt"].attrib,
-    )
-    for k in 1:length(target_levels)
-        skt_var[:, :, k] = FT.(ncin["skt"][:, :, 1])
-    end
-
-    # TODO: rename p to sp in MoistFromFile for consistency
-    sp_var =
-        defVar(ncout, "p", FT, ("lon", "lat", "z"), attrib = ncin["sp"].attrib)
-    for k in 1:length(target_levels)
-        sp_var[:, :, k] = FT.(ncin["sp"][:, :, 1])
+    surf_map = Dict("skt" => "skt", "sp" => "p")
+    for (src_name, dst_name) in surf_map
+        var_obj = defVar(ncout, dst_name, FT, ("lon", "lat", "z"), attrib = ncin[src_name].attrib)
+        for k in 1:length(target_levels)
+            var_obj[:, :, k] = FT.(ncin[src_name][:, :, 1])
+        end
     end
 
     # Interpolate optional cloud water content variables if available
