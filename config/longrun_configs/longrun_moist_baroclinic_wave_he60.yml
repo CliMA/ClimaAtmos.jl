@@ -1,13 +1,15 @@
-h_elem: 60
-dt: "30secs"
+h_elem: 30
+z_elem: 30
+dz_bottom: 30.0
+dt: "60secs"
 t_end: "30days"
 initial_condition: "MoistBaroclinicWave"
-moist: "equil"
-precip_model: "0M"
+moist: "nonequil"
+precip_model: "1M"
 dt_save_state_to_disk: "10days"
 disable_surface_flux_tendency: true
-netcdf_interpolation_num_points: [360, 180, 2]
-toml: [toml/longrun_baroclinic_wave.toml]
+netcdf_interpolation_num_points: [360, 180, 30]
+toml: [toml/longrun_baroclinic_wave_1M.toml]
 diagnostics:
-  - short_name: [pfull, wa, va, rv, hus, ke]
-    period: 10days
+  - short_name: [pfull, wa, va, rv, hus, ke, ta]
+    period: 2days

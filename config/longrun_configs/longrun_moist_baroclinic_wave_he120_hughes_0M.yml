@@ -1,27 +1,29 @@
-h_elem: 120
+h_elem: 30
 z_elem: 43
 dz_bottom: 30.0
-dt: "40secs"
+dt: "200secs"
 t_end: "60days"
 ode_algo: ARS343
 topography: "Hughes2023"
-perturb_initstate: false
 initial_condition: "MoistBaroclinicWave"
+perturb_initstate: false
 vert_diff: "DecayWithHeightDiffusion"
 approximate_linear_solve_iters: 2
-disable_surface_flux_tendency: true
 implicit_diffusion: true
 rayleigh_sponge: true
 prognostic_surface: SlabOceanSST
-moist: "nonequil"
-precip_model: "1M"
-dt_save_state_to_disk: "10days"
+moist: "equil"
+precip_model: "0M"
+dt_save_state_to_disk: "4days"
+disable_surface_flux_tendency: true
 netcdf_interpolation_num_points: [1440, 720, 43]
+FLOATTYPE: Float64
 #toml: [toml/longrun_aquaplanet_1M.toml]
+toml: [toml/longrun_baroclinic_wave.toml]
 diagnostics:
   - short_name: [massa, energya, watera, watero, kenergya]
-    period: 12hours
+    period: 1days
     writer: dict
-#  - short_name: [pfull, ua, va, ta, ts, wa, va, ke, hus, clw, cli, pr, hussn, husra]
+#  - short_name: [pfull, ua, va, ta, ts, wa, va, ke, hus, clw, cli, pr]
 #    reduction: inst
 #    period: 1days
