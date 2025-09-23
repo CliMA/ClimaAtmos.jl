@@ -242,11 +242,11 @@ function get_spaces_restart(Y)
 end
 
 """
-    get_spaces(grid, params, comms_ctx)
+    get_spaces(grid, comms_ctx)
 
 Create center and face spaces from a ClimaCore grid.
 """
-function get_spaces(grid, params, comms_ctx)
+function get_spaces(grid, comms_ctx)
     if grid isa Grids.ExtrudedFiniteDifferenceGrid
         center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
         face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
@@ -258,21 +258,6 @@ function get_spaces(grid, params, comms_ctx)
             """Unsupported grid type: $(typeof(grid)). Expected \
             ExtrudedFiniteDifferenceGrid or FiniteDifferenceGrid""",
         )
-    end
-    z_elem = Spaces.nlevels(center_space)
-    ncols = Fields.ncolumns(center_space)
-    ndofs_total = ncols * z_elem
-    if grid isa Grids.ExtrudedFiniteDifferenceGrid
-        h_elem = Spaces.n_elements_per_panel_direction(center_space)
-        z_elem = Spaces.nlevels(center_space)
-        ncols = Fields.ncolumns(center_space)
-        ndofs_total = ncols * z_elem
-        hspace = Spaces.horizontal_space(center_space)
-        quad_style = Spaces.quadrature_style(hspace)
-        Nq = Quadratures.degrees_of_freedom(quad_style)
-        @info "Resolution stats: " Nq h_elem z_elem ncols ndofs_total
-    else
-        @info "Resolution stats: " z_elem ncols ndofs_total
     end
     return (; center_space, face_space)
 end
@@ -744,7 +729,6 @@ function get_grid(parsed_args, params, comms_ctx)
     if parsed_args["config"] == "sphere"
         SphereGrid(
             FT,
-            params,
             comms_ctx;
             radius = CAP.planet_radius(params),
             h_elem = parsed_args["h_elem"],
@@ -765,7 +749,6 @@ function get_grid(parsed_args, params, comms_ctx)
     elseif parsed_args["config"] == "column"
         ColGrid(
             FT,
-            params,
             comms_ctx;
             z_elem = parsed_args["z_elem"],
             z_max = parsed_args["z_max"],
@@ -775,7 +758,6 @@ function get_grid(parsed_args, params, comms_ctx)
     elseif parsed_args["config"] == "box"
         BoxGrid(
             FT,
-            params,
             comms_ctx;
             x_elem = parsed_args["x_elem"],
             x_max = parsed_args["x_max"],
@@ -800,7 +782,6 @@ function get_grid(parsed_args, params, comms_ctx)
     elseif parsed_args["config"] == "plane"
         PlaneGrid(
             FT,
-            params,
             comms_ctx;
             x_elem = parsed_args["x_elem"],
             x_max = parsed_args["x_max"],
@@ -853,8 +834,9 @@ function get_simulation(config::AtmosConfig)
         end
         @info "Allocating Y: $s"
     else
-        spaces = get_spaces(grid, params, config.comms_ctx)
+        spaces = get_spaces(grid, config.comms_ctx)
     end
+    @info spaces.center_space.grid
     initial_condition = get_initial_condition(config.parsed_args, atmos)
     surface_setup = get_surface_setup(config.parsed_args)
     if !sim_info.restart

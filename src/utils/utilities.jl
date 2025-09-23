@@ -516,6 +516,7 @@ function parse_date(date_str)
 end
 
 iscolumn(space::Spaces.FiniteDifferenceSpace) = true
+iscolumn(space) = false
 
 function issphere(space)
     return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
