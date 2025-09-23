@@ -6,7 +6,8 @@ domain system but use ClimaCore grids directly.
 """
 
 using ClimaCore: Geometry, Hypsography, Fields, Spaces, Meshes
-using ClimaCore.CommonGrids: ExtrudedCubedSphereGrid, ColumnGrid, Box3DGrid, SliceXZGrid, DefaultZMesh
+using ClimaCore.CommonGrids:
+    ExtrudedCubedSphereGrid, ColumnGrid, Box3DGrid, SliceXZGrid, DefaultZMesh
 using ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
 import .AtmosArtifacts as AA
 import ClimaComms
@@ -19,13 +20,12 @@ struct LinearWarp <: MeshWarpType end
 struct SLEVEWarp <: MeshWarpType end
 
 """
-    SphereGrid(FT, params, comms_ctx; kwargs...)
+    SphereGrid(FT,  comms_ctx; kwargs...)
 
 Create an ExtrudedCubedSphereGrid with topography support.
 
 # Arguments
 - `FT`: Floating point type
-- `params`: ClimaAtmos parameters
 - `comms_ctx`: Communications context
 
 # Keyword Arguments
@@ -47,7 +47,6 @@ Create an ExtrudedCubedSphereGrid with topography support.
 """
 function SphereGrid(
     FT,
-    params,
     comms_ctx;
     z_elem::Int = 10,
     z_max::Real = 30000.0,
@@ -97,13 +96,12 @@ function SphereGrid(
 end
 
 """
-    ColGrid(FT, params, comms_ctx; kwargs...)
+    ColGrid(FT,  comms_ctx; kwargs...)
 
 Create a ColumnGrid.
 
 # Arguments
 - `FT`: Floating point type
-- `params`: ClimaAtmos parameters
 - `comms_ctx`: Communications context
 
 # Keyword Arguments
@@ -114,7 +112,6 @@ Create a ColumnGrid.
 """
 function ColGrid(
     FT,
-    params,
     comms_ctx;
     z_elem::Int = 10,
     z_max::Real = 30000.0,
@@ -142,13 +139,12 @@ function ColGrid(
 end
 
 """
-    BoxGrid(FT, params, comms_ctx; kwargs...)
+    BoxGrid(FT,  comms_ctx; kwargs...)
 
 Create a Box3DGrid with topography support.
 
 # Arguments
 - `FT`: Floating point type
-- `params`: ClimaAtmos parameters
 - `comms_ctx`: Communications context
 
 # Keyword Arguments
@@ -174,7 +170,6 @@ Create a Box3DGrid with topography support.
 """
 function BoxGrid(
     FT,
-    params,
     comms_ctx;
     x_elem::Int = 6,
     x_max::Real = 300000.0,
@@ -228,13 +223,12 @@ function BoxGrid(
 end
 
 """
-    PlaneGrid(FT, params, comms_ctx; kwargs...)
+    PlaneGrid(FT,  comms_ctx; kwargs...)
 
 Create a SliceXZGrid with topography support.
 
 # Arguments
 - `FT`: Floating point type
-- `params`: ClimaAtmos parameters
 - `comms_ctx`: Communications context
 
 # Keyword Arguments
@@ -257,7 +251,6 @@ Create a SliceXZGrid with topography support.
 """
 function PlaneGrid(
     FT,
-    params,
     comms_ctx;
     x_elem::Int = 6,
     x_max::Real = 300000.0,
@@ -325,12 +318,15 @@ function hypsography_function_from_topography(
     topo_smoothing::Bool,
     comms_ctx,
 )
-    # TODO: de-duplicate this with common_spaces.jl
     return function (h_grid, z_grid)
         FT = eltype(h_grid)
         # Create horizontal space to work with topography
-        h_topology = Spaces.topology(Spaces.SpectralElementSpace2D(h_grid))
-        h_space = Spaces.SpectralElementSpace2D(h_topology, h_grid.quadrature_style)
+        h_topology = Spaces.topology(Spaces.SpectralElementSpace1D(h_grid))
+        h_space = if h_grid isa Grids.SpectralElementGrid1D
+            Spaces.SpectralElementSpace1D(h_topology, h_grid.quadrature_style)
+        else
+            Spaces.SpectralElementSpace2D(h_topology, h_grid.quadrature_style)
+        end
 
         if topography isa NoTopography
             z_surface = zeros(h_space)
