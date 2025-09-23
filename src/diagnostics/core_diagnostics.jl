@@ -199,7 +199,7 @@ add_diagnostic_variable!(
     units = "s^-1",
     comments = "Vertical component of relative vorticity",
     compute! = (out, state, cache, time) -> begin
-        vort = @. w_component.(Geometry.WVector(curlₕ(cache.precomputed.ᶜu)))
+        vort = @. w_component.(Geometry.WVector(wcurlₕ(cache.precomputed.ᶜu)))
         # We need to ensure smoothness, so we call DSS
         Spaces.weighted_dss!(vort)
         if isnothing(out)
