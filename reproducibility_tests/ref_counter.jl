@@ -1,4 +1,4 @@
-263
+264
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+264
+- Allow entrainment and detrainment when updraft area fraction is negligible
+
 263
 - Make vertical diffusion of updrafts implicit
 
