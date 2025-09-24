@@ -144,7 +144,8 @@ function to_z_levels(source_file, target_file, target_levels, FT)
     # See https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2017MS001059
     req3d = ["u", "v", "t", "q", "w"]
     for var_name in req3d
-        var_obj = defVar(ncout, var_name, FT, ("lon", "lat", "z"), attrib = ncin[var_name].attrib)
+        var_obj =
+            defVar(ncout, var_name, FT, ("lon", "lat", "z"), attrib = ncin[var_name].attrib)
         if var_name == "w"
             var_obj[:, :, :] = zeros(FT, length(lon), length(lat), length(target_levels))
         else
@@ -160,7 +161,8 @@ function to_z_levels(source_file, target_file, target_levels, FT)
     # Simply repeat the surface values for all levels
     surf_map = Dict("skt" => "skt", "sp" => "p")
     for (src_name, dst_name) in surf_map
-        var_obj = defVar(ncout, dst_name, FT, ("lon", "lat", "z"), attrib = ncin[src_name].attrib)
+        var_obj =
+            defVar(ncout, dst_name, FT, ("lon", "lat", "z"), attrib = ncin[src_name].attrib)
         for k in 1:length(target_levels)
             var_obj[:, :, k] = FT.(ncin[src_name][:, :, 1])
         end
