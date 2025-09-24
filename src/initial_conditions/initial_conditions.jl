@@ -380,8 +380,10 @@ function overwrite_initial_conditions!(
     extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
 
     # Extract face coordinates and compute center midpoints
-
-    target_levels = Fields.field2array(Fields.coordinate_field(Y.c).z)[:, argmin(Fields.field2array(Fields.coordinate_field(Y.c).z))[2]]
+    # Compute target levels on CPU to avoid GPU reductions
+    z_arr_cpu = Array(Fields.field2array(Fields.coordinate_field(Y.c).z))
+    icol = argmin(z_arr_cpu[1, :])
+    target_levels = z_arr_cpu[:, icol]
 
     file_path = weather_model_data_path(
         initial_condition.start_date,

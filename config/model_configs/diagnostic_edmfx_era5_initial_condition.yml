@@ -4,9 +4,7 @@ z_elem: 63
 dz_bottom: 30.0
 dt: 120secs
 t_end: 12hours
-# start_date: "20250627-0000"
-start_date: "20250831"
-era5_initial_condition_dir: "/net/sampo/data1/wxquest_data/initial_conditions"
+start_date: "20250627-0000"
 initial_condition: "WeatherModel"
 discrete_hydrostatic_balance: false # TODO: change to true once we fix discrete hydrostatic balance to work with orography
 topo_smoothing: true
