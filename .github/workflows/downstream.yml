@@ -26,14 +26,14 @@ jobs:
           - '1.10'
           - '1.11'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
 
       - uses: julia-actions/julia-buildpkg@v1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: 'CliMA/ClimaCoupler.jl'
           path: ClimaCoupler.jl
