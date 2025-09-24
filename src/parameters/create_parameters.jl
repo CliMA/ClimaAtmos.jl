@@ -78,6 +78,14 @@ function ClimaAtmosParameters(
     external_forcing_params = external_forcing_parameters(toml_dict)
     EFP = typeof(external_forcing_params)
 
+    non_orographic_gravity_wave_params =
+        NonOrographicGravityWaveParameters(toml_dict)
+    NOGWP = typeof(non_orographic_gravity_wave_params)
+
+    orographic_gravity_wave_params =
+        OrographicGravityWaveParameters(toml_dict)
+    OGWP = typeof(orographic_gravity_wave_params)
+
     parameters =
         CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
     return CAP.ClimaAtmosParameters{
@@ -95,6 +103,8 @@ function ClimaAtmosParameters(
         STP,
         VDP,
         EFP,
+        NOGWP,
+        OGWP,
     }(;
         parameters...,
         thermodynamics_params,
@@ -111,6 +121,8 @@ function ClimaAtmosParameters(
         vert_diff_params,
         external_forcing_params,
         coeff_b_m_gryanik = coeff_b_m_gryanik_val,
+        non_orographic_gravity_wave_params,
+        orographic_gravity_wave_params,
     )
 end
 
@@ -338,4 +350,52 @@ function SurfaceTemperatureParameters(
     parameters = merge(parameters, overrides)
     FT = CP.float_type(toml_dict)
     CAP.SurfaceTemperatureParameters{FT}(; parameters...)
+end
+
+
+NonOrographicGravityWaveParameters(
+    ::Type{FT},
+    overrides = NamedTuple(),
+) where {FT <: AbstractFloat} =
+    NonOrographicGravityWaveParameters(CP.create_toml_dict(FT), overrides)
+
+function NonOrographicGravityWaveParameters(
+    toml_dict::CP.AbstractTOMLDict,
+    overrides = NamedTuple(),
+)
+    name_map = (;
+        :placeholder => :placeholder, # Placeholder for future parameters
+    )
+    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    parameters = merge(parameters, overrides)
+    FT = CP.float_type(toml_dict)
+    CAP.NonOrographicGravityWaveParameters{FT}(; parameters...)
+end
+
+
+OrographicGravityWaveParameters(
+    ::Type{FT},
+    overrides = NamedTuple(),
+) where {FT <: AbstractFloat} =
+    OrographicGravityWaveParameters(CP.create_toml_dict(FT), overrides)
+
+function OrographicGravityWaveParameters(
+    toml_dict::CP.AbstractTOMLDict,
+    overrides = NamedTuple(),
+)
+    name_map = (;
+        :ogw_mountain_height_width_exponent => :γ, # L ∝ h^γ (equation 14, paper suggests γ ≈ 0.4)
+        :ogw_number_density_exponent => :ϵ, # number density of orography in a grid cell, n(h) ∝ h^(-ε)
+        :ogw_mountain_shape_parameter => :β, # L(z) = L_b(1 - z/h)^β (equation 12), β=1 for triangular mountains and β<1 for blunt mounrains, β>1 for pointy mountains
+        :ogw_critical_height_threshold => :h_frac, # h_crit = h_frac * (V / N)
+        :ogw_density_scale_factor => :ρscale,
+        :ogw_reference_mountain_width => :L0, # L_0 = 80 km 
+        :ogw_linear_drag_coefficient => :a0, # a_0 = 0.9
+        :ogw_nonlinear_drag_coefficient => :a1, # a_1 = 3.0
+        :ogw_critical_froude_number => :Fr_crit, # Fr_crit = 0.7
+    )
+    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    parameters = merge(parameters, overrides)
+    FT = CP.float_type(toml_dict)
+    CAP.OrographicGravityWaveParameters{FT}(; parameters...)
 end
