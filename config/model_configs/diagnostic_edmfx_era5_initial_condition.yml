@@ -15,7 +15,6 @@ hyperdiff: ClimaHyperdiffusion
 divergence_damping_factor: 50.0 # large value to damp IC waves
 scalar_hyperdiffusion_coefficient: 0.929738
 vorticity_hyperdiffusion_coefficient: 0.1857
-
 insolation: "timevarying"
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear
@@ -30,14 +29,14 @@ edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-moist: equil
-cloud_model: "grid_scale"
+cloud_model: "quadrature_sgs"
 precip_model: 0M
+moist: equil
 toml: [toml/diagnostic_edmfx_era5_ic.toml]
 use_itime: true
 output_default_diagnostics: false
 diagnostics:
-  - short_name: [ta, ua, wa, va, rhoa, hur, hus, clw, cli]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
     period: 60mins
-  - short_name: [rsut, rlut, ts, pr, mslp]
+  - short_name: [rsut, rlut, tas, pr, mslp]
     period: 60mins

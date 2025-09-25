@@ -3,8 +3,9 @@ using Dates
 import ClimaInterpolations.Interpolation1D: interpolate1d!, Linear, Flat
 import ..parse_date
 
+
 """
-    weather_model_data_path(start_date)
+    weather_model_data_path(start_date, target_levels, era5_initial_condition_dir])
 
 Get the path to the weather model data for a given start date and time.
 If the data is not found, will attempt to generate it from raw data. If 
@@ -12,14 +13,50 @@ the raw data is not found, throw an error
 
 # Arguments
 - `start_date`: Start date as string yyyymmdd or yyyymmdd-HHMM
+- `target_levels`: Vector of target altitude levels (in meters) to interpolate to
+- `era5_initial_condition_dir`: Optional directory containing preprocessed ERA5
+
+- If `era5_initial_condition_dir` is provided, use
+  `era5_init_processed_internal_YYYYMMDD_0000.nc` from that directory.
+- Otherwise, use the `weather_model_ic` artifact.
 """
-function weather_model_data_path(start_date)
+function weather_model_data_path(
+    start_date,
+    target_levels,
+    era5_initial_condition_dir = nothing,
+)
     # Parse the date using the existing parse_date function
     dt = parse_date(start_date)
 
     # Extract components for filename generation
     start_date_str = Dates.format(dt, "yyyymmdd")
-    start_time = Dates.format(dt, "HHMM")
+    start_time = Dates.format(dt, "HHMM") # Note: this is not the same as `start_time` in the coupler!
+
+    # If user provided a directory with preprocessed initial conditions, use it
+    if !isnothing(era5_initial_condition_dir)
+        ic_data_path = joinpath(
+            era5_initial_condition_dir,
+            "era5_init_processed_internal_$(start_date_str)_0000.nc", # TODO: generalize for all times once Coupler supports HHMM specification
+        )
+        raw_data_path = joinpath(
+            era5_initial_condition_dir,
+            "era5_raw_$(start_date_str)_0000.nc",
+        )
+        if !isfile(ic_data_path)
+            if !isfile(raw_data_path)
+                error(
+                    "Neither preprocessed nor raw initial condition file exist in $(era5_initial_condition_dir).  Please run `python get_initial_conditions.py` in the WeatherQuest repository to download the data.",
+                )
+            end
+            @info "Interpolating raw weather model data onto z-levels from user-provided directory"
+            to_z_levels(raw_data_path, ic_data_path, target_levels, Float32)
+        else
+            @info "Using existing interpolated IC file: $ic_data_path"
+        end
+        return ic_data_path
+    end
+
+    # Otherwise, use artifact-based paths and generate if needed
     ic_data_path = joinpath(
         @clima_artifact("weather_model_ic"),
         "init",
@@ -31,23 +68,6 @@ function weather_model_data_path(start_date)
         "era5_raw_$(start_date_str)_$(start_time).nc",
     )
 
-    if !isfile(ic_data_path)
-        @info "Initial condition file $ic_data_path does not exist. Attempting to generate it now..."
-        if !isfile(raw_data_path)
-            day = Dates.format(dt, "yyyy-mm-dd")
-            time = Dates.format(dt, "HH:MM")
-            error(
-                "Source file $(raw_data_path) does not exist. Please run `python get_initial_conditions.py --output-dir $(@clima_artifact("weather_model_ic"))/raw --date $(day) --time $(time)` to download the data.",
-            )
-        end
-        # get target levels - TODO: make this more flexible
-        target_level_path =
-            joinpath(@clima_artifact("weather_model_ic"), "target_levels.txt")
-        target_levels = parse.(Float32, readlines(target_level_path))
-
-        @info "Interpolating raw weather model data onto z-levels"
-        to_z_levels(raw_data_path, ic_data_path, target_levels, Float32)
-    end
     return ic_data_path
 end
 
@@ -74,6 +94,7 @@ function to_z_levels(source_file, target_file, target_levels, FT)
 
     # assert ncin has required variables
     req_vars = ["u", "v", "w", "t", "q", "skt", "sp"]
+    opt_vars = ["crwc", "cswc", "clwc", "ciwc"]
     @assert all(map(x -> x in (keys(ncin)), req_vars)) "Source file $source_file is missing subset of the required variables: $req_vars"
 
     # Read and cast coordinates to FT type
@@ -118,54 +139,49 @@ function to_z_levels(source_file, target_file, target_levels, FT)
     z_var = defVar(ncout, "z", FT, ("z",), attrib = z_attrib)
     z_var[:] = target_levels
 
-    # Interpolate and write 3D variables
-    u_var =
-        defVar(ncout, "u", FT, ("lon", "lat", "z"), attrib = ncin["u"].attrib)
-    u_var[:, :, :] =
-        interpz_3d(target_levels, source_z, FT.(ncin["u"][:, :, :, 1]))
-
-    v_var =
-        defVar(ncout, "v", FT, ("lon", "lat", "z"), attrib = ncin["v"].attrib)
-    v_var[:, :, :] =
-        interpz_3d(target_levels, source_z, FT.(ncin["v"][:, :, :, 1]))
-
+    # Interpolate and write required 3D variables via loop
     # ERA5 w is from a hydrostatic model and so isn't meaningful for ClimaAtmos
     # See https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2017MS001059
-    w_var =
-        defVar(ncout, "w", FT, ("lon", "lat", "z"), attrib = ncin["w"].attrib)
-    w_var[:, :, :] = zeros(FT, length(lon), length(lat), length(target_levels))
-
-    t_var =
-        defVar(ncout, "t", FT, ("lon", "lat", "z"), attrib = ncin["t"].attrib)
-    t_var[:, :, :] =
-        interpz_3d(target_levels, source_z, FT.(ncin["t"][:, :, :, 1]))
-
-    q_var =
-        defVar(ncout, "q", FT, ("lon", "lat", "z"), attrib = ncin["q"].attrib)
-    q_var[:, :, :] =
-        max.(
-            interpz_3d(target_levels, source_z, FT.(ncin["q"][:, :, :, 1])),
-            FT(0),
-        )
+    req3d = ["u", "v", "t", "q", "w"]
+    for var_name in req3d
+        var_obj =
+            defVar(ncout, var_name, FT, ("lon", "lat", "z"), attrib = ncin[var_name].attrib)
+        if var_name == "w"
+            var_obj[:, :, :] = zeros(FT, length(lon), length(lat), length(target_levels))
+        else
+            data = interpz_3d(target_levels, source_z, FT.(ncin[var_name][:, :, :, 1]))
+            if var_name == "q"
+                data = max.(data, FT(0))
+            end
+            var_obj[:, :, :] = data
+        end
+    end
 
     # Write 2D surface variables - extend to all levels (TODO: accept 2D variables in atmos)
     # Simply repeat the surface values for all levels
-    skt_var = defVar(
-        ncout,
-        "skt",
-        FT,
-        ("lon", "lat", "z"),
-        attrib = ncin["skt"].attrib,
-    )
-    for k in 1:length(target_levels)
-        skt_var[:, :, k] = FT.(ncin["skt"][:, :, 1])
+    surf_map = Dict("skt" => "skt", "sp" => "p")
+    for (src_name, dst_name) in surf_map
+        var_obj =
+            defVar(ncout, dst_name, FT, ("lon", "lat", "z"), attrib = ncin[src_name].attrib)
+        for k in 1:length(target_levels)
+            var_obj[:, :, k] = FT.(ncin[src_name][:, :, 1])
+        end
     end
 
-    # TODO: rename p to sp in MoistFromFile for consistency
-    sp_var =
-        defVar(ncout, "p", FT, ("lon", "lat", "z"), attrib = ncin["sp"].attrib)
-    for k in 1:length(target_levels)
-        sp_var[:, :, k] = FT.(ncin["sp"][:, :, 1])
+    # Interpolate optional cloud water content variables if available
+    for var_name in opt_vars
+        if haskey(ncin, var_name)
+            @info "Interpolating optional variable: $var_name"
+            var_data = ncin[var_name][:, :, :, 1]
+            var_var = defVar(
+                ncout,
+                var_name,
+                FT,
+                ("lon", "lat", "z"),
+                attrib = ncin[var_name].attrib,
+            )
+            var_var[:, :, :] = interpz_3d(target_levels, source_z, FT.(var_data))
+        end
     end
 
     # Close files
