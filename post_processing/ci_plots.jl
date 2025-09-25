@@ -722,8 +722,24 @@ const PeriodicTopographyTest3D = Union{
 }
 const MountainTest2D = Union{
     Val{:gpu_plane_agnesi_mountain_float64_test},
-    Val{:gpu_plane_schar_mountain_float64_test},
-    Val{:gpu_plane_schar_mountain_float32_test},
+    Val{:gpu_plane_1m_schar_mountain_float64_test},
+    Val{:gpu_plane_3m_schar_mountain_float64_test},
+    Val{:gpu_plane_6m_schar_mountain_float64_test},
+    Val{:gpu_plane_12m_schar_mountain_float64_test},
+    Val{:gpu_plane_25m_schar_mountain_float64_test},
+    Val{:gpu_plane_50m_schar_mountain_float64_test},
+    Val{:gpu_plane_100m_schar_mountain_float64_test},
+    Val{:gpu_plane_200m_schar_mountain_float64_test},
+    Val{:gpu_plane_400m_schar_mountain_float64_test},
+    Val{:gpu_plane_1m_schar_mountain_float32_test},
+    Val{:gpu_plane_3m_schar_mountain_float32_test},
+    Val{:gpu_plane_6m_schar_mountain_float32_test},
+    Val{:gpu_plane_12m_schar_mountain_float32_test},
+    Val{:gpu_plane_25m_schar_mountain_float32_test},
+    Val{:gpu_plane_50m_schar_mountain_float32_test},
+    Val{:gpu_plane_100m_schar_mountain_float32_test},
+    Val{:gpu_plane_200m_schar_mountain_float32_test},
+    Val{:gpu_plane_400m_schar_mountain_float32_test},
 }
 const SteadyStateTest =
     Union{PeriodicTopographyTest2D, PeriodicTopographyTest3D, MountainTest2D}
