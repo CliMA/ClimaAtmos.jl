@@ -57,7 +57,7 @@ end
 
 if sol_res.ret_code == :simulation_crashed
     error(
-        "The ClimaAtmos simulation has crashed. See the stack trace for details.",
+        "The ClimaAtmos simulation has crashed at t = $(float(integrator.t)) seconds. See the stack trace for details.",
     )
 end
 # Simulation did not crash

@@ -1,4 +1,7 @@
 [tracer_vertical_diffusion_factor]
+value = 1
+
+[tracer_hyperdiffusion_factor]
 value = 0
 
 [condensation_evaporation_timescale]
