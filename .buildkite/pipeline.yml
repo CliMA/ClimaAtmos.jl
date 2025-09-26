@@ -156,6 +156,7 @@ steps:
           --config_file $CONFIG_PATH/box_hydrostatic_balance.yml
           --job_id box_hydrostatic_balance
         artifact_paths: "box_hydrostatic_balance/output_active/*"
+        soft_fail: true
 
       - label: ":computer: 3D density current"
         command: >

@@ -61,7 +61,8 @@ We make use of the following operators
      ```math
      \boldsymbol{\Omega} = \Omega \sin(\phi) \boldsymbol{e}^v
      ```
-     where ``\phi`` is latitude, and ``\Omega`` is the planetary rotation rate in rads/sec (for Earth, ``7.29212 \times 10^{-5} s^{-1}``) and ``\boldsymbol{e}^v`` is the unit radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
+      where ``\phi`` is latitude, and ``\Omega`` is the planetary rotation rate in rads/sec (for Earth, ``7.29212 \times 10^{-5} s^{-1}``) and ``\boldsymbol{e}^v`` is the unit radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
+
   *  a _deep atmosphere_, with
      ```math
      \boldsymbol{\Omega} = (0, 0, \Omega)
@@ -69,8 +70,8 @@ We make use of the following operators
      i.e. aligned with Earth's rotational axis.
 * ``\tilde{\boldsymbol{u}}`` is the mass-weighted reconstruction of velocity at the interfaces:
   by interpolation of contravariant components
-    ```math
-  \tilde{\boldsymbol{u}} = WI^f(\rho J, \boldsymbol{u}_h) + \boldsymbol{u}_v
+  ```math
+
   ```
 * ``\bar{\boldsymbol{u}}`` is the reconstruction of velocity at cell-centers, carried out by linear interpolation of the covariant vertical component:
   ```math
@@ -126,7 +127,7 @@ term treated implicitly (check this)
 
 Uses the advective form equation
 ```math
-\frac{\partial}{\partial t} \boldsymbol{u}  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}) \times \boldsymbol{u} - \frac{1}{\rho} \nabla (p - p_{\text{ref}})  + \boldsymbol{b} - \nabla K
+\frac{\partial}{\partial t} \boldsymbol{u}  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}) \times \boldsymbol{u} - \frac{1}{\rho} \nabla p  + \nabla \Phi - \nabla K. 
 ```
 
 #### Horizontal momentum
@@ -137,9 +138,23 @@ By breaking the curl and cross product terms into horizontal and vertical contri
 \frac{\partial}{\partial t} \boldsymbol{u}_h  =
   - (2 \boldsymbol{\Omega}^h + \nabla_v \times \boldsymbol{u}_h +  \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v
   - (2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h
-  - \frac{1}{\rho} \nabla_h (p - p_{\text{ref}})  - \nabla_h (\Phi + K),
+  - \frac{1}{\rho} \nabla_h p  - \nabla_h (\Phi + K),
 ```
-where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors. The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions.
+where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors. This form is implemented as 
+```math
+\frac{\partial}{\partial t} \boldsymbol{u}_h  =
+  - (2 \boldsymbol{\Omega}^h + \nabla_v \times \boldsymbol{u}_h +  \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v
+  - (2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h
+  - c_{pd} (\theta_v - \theta_{v, r}) \nabla_h \Pi  - \nabla_h [(\Phi - \Phi_r) + K],
+```
+where ``\Pi`` is the Exner function evaluated with dry-air constants ``R_d`` and ``c_{pd}``, ``\theta_v`` is the virtual potential temperature, ``\theta_{v,r} = T_r / \Pi`` is a reference virtual potential temperature (with reference temperature ``T_r``), and 
+```math
+\Phi_r = -c_{pd} \left[ T_\text{min} \log(\Pi) + \frac{(T_\text{sfc} - T_\text{min})}{n_s} (\Pi^{n_s} - 1) \right],
+```
+is a reference geopotential, which satisfies the hydrostatic balance equation $c_{pd} \theta_{v,r} \nabla \Pi + \nabla \Phi_r = 0$ for any $\Pi$.
+We use the reference temperature profile ``T_r = T_\text{min} + (T_\text{sfc} - T_\text{min}) \Pi^{n_s}``, with constants ``T_\text{min} = 215\,K``, ``T_\text{sfc}= 288\,K``, and ``n_s = 7``.
+
+The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions.
 
 This is stabilized with the addition of 4th-order vector hyperviscosity
 ```math
@@ -183,16 +198,16 @@ Similarly for vertical velocity
 ```math
 \frac{\partial}{\partial t} \boldsymbol{u}_v  =
   - (2 \boldsymbol{\Omega}^h + \nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h
-  - \frac{1}{\rho} \nabla_v (p - p_{\text{ref}}) - \frac{\rho - \rho_{\text{ref}}}{\rho} \nabla_v \Phi - \nabla_v K .
+  -c_{pd} (\theta_v - \theta_{v, r}) \nabla_v \Pi  - \nabla_v [(\Phi - \Phi_r)].
 ```
 
 The ``(2 \boldsymbol{\Omega}^h + \nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h`` term is discretized as
 ```math
 (2 \boldsymbol{\Omega}^h + \mathcal{C}^f_v[\boldsymbol{u}_h] + \mathcal{C}_h[\boldsymbol{u}_v]) \times I^f(\boldsymbol{u}^h) ,
 ```
-and the ``\frac{1}{\rho} \nabla_v (p - p_{\text{ref}}) - \frac{\rho - \rho_{\text{ref}}}{\rho} \nabla_v \Phi - \nabla_v K`` term as
+and the pressure gradient and gravitational acceleration terms as
 ```math
-\frac{1}{I^f(\rho)} \mathcal{G}^f_v[p - p_{\text{ref}}] - \frac{I^f(\rho - \rho_{\text{ref}})}{I^f(\rho)} \mathcal{G}^f_v[\Phi] - \mathcal{G}^f_v[K] ,
+I^f[c_{pd} (\theta_v - \theta_{v, r} ) ] \mathcal{G}^f_v[\Pi] - \mathcal{G}^f_v[\Phi - \Phi_r],
 ```
 with the latter treated implicitly.
 
