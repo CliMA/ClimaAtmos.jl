@@ -28,7 +28,6 @@ use_itime: false
 device: "auto"
 toml:
   - "toml/longrun_aquaplanet_1M.toml"
-output_dir: "/scratch/ajaruga/MBW_testing/"
 #
 # Numerics
 #
@@ -162,7 +161,7 @@ external_forcing_file: ~
 #
 # Output
 #
-dt_save_state_to_disk: "6days"
+dt_save_state_to_disk: "20days"
 netcdf_interpolation_num_points:
   - 1440
   - 720

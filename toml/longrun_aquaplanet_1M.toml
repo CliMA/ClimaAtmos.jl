@@ -17,7 +17,7 @@ value = 1e4
 value = 150
 
 [zd_rayleigh]
-value = 40000.0
+value = 25000.0
 
 [zd_viscous]
-value = 40000.0
+value = 25000.0
