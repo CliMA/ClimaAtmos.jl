@@ -179,11 +179,14 @@ function CTh_vector_type(space)
         Geometry.Contravariant1Vector
     elseif full_CT_axis == Geometry.Contravariant23Axis()
         Geometry.Contravariant2Vector
+    elseif full_CT_axis == Geometry.Contravariant3Axis()
+        Geometry.ContravariantNullVector
     else
         error("$full_CT_axis is missing either vertical or horizontal sub-axes")
     end
 end
 
+has_topography(space::Spaces.FiniteDifferenceSpace) = false
 has_topography(space) = Spaces.grid(space).hypsography != Spaces.Grids.Flat()
 
 """
@@ -275,6 +278,9 @@ function do_dss(space::Spaces.AbstractSpace)
            Quadratures.GLL
 end
 
+function do_dss(space::Spaces.FiniteDifferenceSpace)
+    return false
+end
 
 using ClimaComms
 is_distributed(::ClimaComms.SingletonCommsContext) = false
@@ -506,18 +512,8 @@ function parse_date(date_str)
     )
 end
 
-function iscolumn(space)
-    # TODO: Our columns are 2+1D boxes with one element at the base. Fix this
-    isbox =
-        Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
-        Domains.RectangleDomain
-    isbox || return false
-    has_one_element =
-        Meshes.nelements(
-            Spaces.topology(Spaces.horizontal_space(space)).mesh,
-        ) == 1
-    has_one_element && return true
-end
+iscolumn(space::Spaces.FiniteDifferenceSpace) = true
+iscolumn(space) = false
 
 function issphere(space)
     return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
