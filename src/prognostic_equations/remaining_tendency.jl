@@ -7,7 +7,7 @@ state vector `Y`.
 This function follows a sequence:
 1. Prepares hyperdiffusion tendencies for tracers (stored in `Yₜ_lim`).
 2. Prepares hyperdiffusion tendencies for other state variables (e.g., momentum, energy, stored in `Yₜ`).
-3. If Direct Stiffness Summation (DSS) is required and hyperdiffusion is active, performs DSS on the 
+3. If Direct Stiffness Summation (DSS) is required and hyperdiffusion is active, performs DSS on the
    prepared hyperdiffusion tendencies.
 4. Applies the (potentially DSSed) hyperdiffusion tendencies to `Yₜ_lim` and `Yₜ`.
 
@@ -26,13 +26,12 @@ Helper functions `prep_..._tendency!`, `dss_hyperdiffusion_tendency_pairs`,
 and `apply_..._tendency!` implement the specific details of hyperdiffusion.
 """
 NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    prep_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
+    # TODO Yₜ_lim not used anymore? - how was it used?
     prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if do_dss(axes(Y.c)) && !isnothing(p.atmos.hyperdiff)
         pairs = dss_hyperdiffusion_tendency_pairs(p)
         Spaces.weighted_dss!(pairs...)
     end
-    apply_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
     apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 end
 
@@ -352,7 +351,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
     vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
 
-    # NOTE: This will zero out all momentum tendencies in the EDMFX advection test, 
+    # NOTE: This will zero out all momentum tendencies in the EDMFX advection test,
     # where velocities do not evolve
     # DO NOT add additional velocity tendencies after this function
     zero_velocity_tendency!(Yₜ, Y, p, t)

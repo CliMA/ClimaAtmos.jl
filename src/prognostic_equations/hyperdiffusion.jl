@@ -50,32 +50,13 @@ function hyperdiffusion_cache(
     gs_quantities = (;
         ᶜ∇²u = similar(Y.c, C123{FT}),
         ᶜ∇²specific_energy = similar(Y.c, FT),
-        ᶜ∇²specific_tracers = Base.materialize(ᶜspecific_gs_tracers(Y)),
+        ᶜ∇²q_tot = similar(Y.c, FT),
     )
 
     # Sub-grid scale quantities
     ᶜ∇²uʲs =
         turbconv_model isa PrognosticEDMFX ? similar(Y.c, NTuple{n, C123{FT}}) :
         (;)
-    moisture_sgs_quantities =
-        moisture_model isa NonEquilMoistModel &&
-        microphysics_model isa Microphysics1Moment ?
-        (;
-            ᶜ∇²q_liqʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜ∇²q_iceʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜ∇²q_raiʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜ∇²q_snoʲs = similar(Y.c, NTuple{n, FT}),
-        ) :
-        moisture_model isa NonEquilMoistModel &&
-        microphysics_model isa Microphysics2Moment ?
-        (;
-            ᶜ∇²q_liqʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜ∇²q_iceʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜ∇²q_raiʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜ∇²q_snoʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜ∇²n_liqʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜ∇²n_raiʲs = similar(Y.c, NTuple{n, FT}),
-        ) : (;)
     sgs_quantities =
         turbconv_model isa PrognosticEDMFX ?
         (;
@@ -83,7 +64,6 @@ function hyperdiffusion_cache(
             ᶜ∇²uᵥʲs = similar(Y.c, NTuple{n, C3{FT}}),
             ᶜ∇²mseʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²q_totʲs = similar(Y.c, NTuple{n, FT}),
-            moisture_sgs_quantities...,
         ) : (;)
     maybe_ᶜ∇²tke⁰ =
         use_prognostic_tke(turbconv_model) ? (; ᶜ∇²tke⁰ = similar(Y.c, FT)) :
@@ -112,9 +92,9 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     diffuse_tke = use_prognostic_tke(turbconv_model)
     (; ᶜp) = p.precomputed
     (; ᶜh_ref) = p.core
-    (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
+    (; ᶜ∇²u, ᶜ∇²specific_energy, ᶜ∇²q_tot) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
+        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs, ᶜ∇²q_totʲs) = p.hyperdiff
     end
 
     # Grid scale hyperdiffusion
@@ -124,6 +104,8 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     @. ᶜ∇²specific_energy =
         wdivₕ(gradₕ(specific(Y.c.ρe_tot, Y.c.ρ) + ᶜp / Y.c.ρ - ᶜh_ref))
+
+    @. ᶜ∇²q_tot = wdivₕ(gradₕ(specific(Y.c.ρq_tot, Y.c.ρ)))
 
     if diffuse_tke
         ᶜρa⁰ =
@@ -142,6 +124,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 C123(wgradₕ(divₕ(p.precomputed.ᶜuʲs.:($$j)))) -
                 C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜuʲs.:($$j)))))
             @. ᶜ∇²mseʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).mse))
+            @. ᶜ∇²q_totʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_tot))
             @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
             @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
         end
@@ -156,26 +139,27 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     (; divergence_damping_factor) = hyperdiff
     (; ν₄_scalar, ν₄_vorticity) = ν₄(hyperdiff, Y)
+    # Rescale the hyperdiffusivity for precipitating species.
+    ν₄_scalar_for_precip = CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar
 
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
+
+    (; ᶜ∇²u, ᶜ∇²specific_energy, ᶜ∇²q_tot) = p.hyperdiff
+
     if turbconv_model isa PrognosticEDMFX
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
+        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs, ᶜ∇²q_totʲs) = p.hyperdiff
     end
     if use_prognostic_tke(turbconv_model)
         (; ᶜ∇²tke⁰) = p.hyperdiff
     end
 
-    if turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            @. ᶜ∇²uʲs.:($$j) = C123(ᶜ∇²uₕʲs.:($$j)) + C123(ᶜ∇²uᵥʲs.:($$j))
-        end
-    end
-
+    ###
+    ### GS velocities
+    ###
     # re-use to store the curl-curl part
     @. ᶜ∇²u =
         divergence_damping_factor * C123(wgradₕ(divₕ(ᶜ∇²u))) -
@@ -183,14 +167,43 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ -= ν₄_vorticity * C12(ᶜ∇²u)
     @. Yₜ.f.u₃ -= ν₄_vorticity * ᶠwinterp(ᶜJ * Y.c.ρ, C3(ᶜ∇²u))
 
+    ###
+    ### GS energy, density and total moisture
+    ###
     @. Yₜ.c.ρe_tot -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²specific_energy))
+    @. Yₜ.c.ρq_tot -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²q_tot))
+    @. Yₜ.c.ρ      -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²q_tot))
 
-    # Sub-grid scale hyperdiffusion continued
-    if (turbconv_model isa PrognosticEDMFX) && diffuse_tke
-        @. Yₜ.c.sgs⁰.ρatke -= ν₄_vorticity * wdivₕ(ᶜρa⁰ * gradₕ(ᶜ∇²tke⁰))
+    # TODO: Since we are not applying the limiter to density (or area-weighted
+    # density), the mass redistributed by hyperdiffusion will not be conserved
+    # by the limiter. Is this a significant problem?
+
+    ###
+    ### GS moisture tracers
+    ###
+    FT = eltype(Y.c.ρ)
+    if p.atmos.moisture_model isa NonEquilMoistModel && (p.atmos.microphysics_model isa Microphysics1Moment || p.atmos.microphysics_model isa Microphysics2Moment)
+        # cloud condensate mass
+        @. Yₜ.c.ρq_liq -= ν₄_scalar * Y.c.ρq_liq / max(eps(FT), Y.c.ρq_tot) * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²q_tot))
+        @. Yₜ.c.ρq_ice -= ν₄_scalar * Y.c.ρq_ice / max(eps(FT), Y.c.ρq_tot) * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²q_tot))
+        # precipitation mass
+        @. Yₜ.c.ρq_rai -= ν₄_scalar_for_precip * Y.c.ρq_rai / max(eps(FT), Y.c.ρq_tot) * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²q_tot))
+        @. Yₜ.c.ρq_sno -= ν₄_scalar_for_precip * Y.c.ρq_sno / max(eps(FT), Y.c.ρq_tot) * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²q_tot))
     end
+    if p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.microphysics_model isa Microphysics2Moment
+        # number concnetrations
+        # TODO - should I multiply by som reference number concentration?
+        @. Yₜ.c.ρn_liq -= ν₄_scalar            * Y.c.ρq_liq / max(eps(FT), Y.c.ρq_tot) * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²q_tot))
+        @. Yₜ.c.ρn_rai -= ν₄_scalar_for_precip * Y.c.ρq_rai / max(eps(FT), Y.c.ρq_tot) * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²q_tot))
+    end
+
+    ###
+    ### SGS
+    ###
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n
+            @. ᶜ∇²uʲs.:($$j) = C123(ᶜ∇²uₕʲs.:($$j)) + C123(ᶜ∇²uᵥʲs.:($$j))
+
             if point_type <: Geometry.Abstract3DPoint
                 # only need curl-curl part
                 @. ᶜ∇²uᵥʲs.:($$j) = C3(wcurlₕ(C123(curlₕ(ᶜ∇²uʲs.:($$j)))))
@@ -200,9 +213,39 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             # Note: It is more correct to have ρa inside and outside the divergence
             @. Yₜ.c.sgsʲs.:($$j).mse -=
                 ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²mseʲs.:($$j)))
+
+            @. Yₜ.c.sgsʲs.:($$j).ρa -=
+                ν₄_scalar *
+                wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²q_totʲs.:($$j)))
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -=
+                ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
+
+            if p.atmos.moisture_model isa NonEquilMoistModel &&
+               (p.atmos.microphysics_model isa Microphysics1Moment || p.atmos.microphysics_model isa Microphysics2Moment)
+                @. Yₜ.c.sgsʲs.:($$j).q_liq -=
+                    ν₄_scalar * Y.c.sgsʲs.q_liq / max(FT(0), Y.c.sgsʲs.q_tot) *  wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
+                @. Yₜ.c.sgsʲs.:($$j).q_ice -=
+                    ν₄_scalar * Y.c.sgsʲs.q_ice / max(FT(0), Y.c.sgsʲs.q_tot) * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
+                @. Yₜ.c.sgsʲs.:($$j).q_rai -=
+                    ν₄_scalar_for_precip * Y.c.sgsʲs.q_rai / max(FT(0), Y.c.sgsʲs.q_tot) * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
+                @. Yₜ.c.sgsʲs.:($$j).q_sno -=
+                    ν₄_scalar_for_precip * Y.c.sgsʲs.q_sno / max(FT(0), Y.c.sgsʲs.q_tot) * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
+            end
+            if p.atmos.moisture_model isa NonEquilMoistModel && p.atmos.microphysics_model isa Microphysics2Moment
+                @. Yₜ.c.sgsʲs.:($$j).n_liq -=
+                    ν₄_scalar * Y.c.sgsʲs.q_liq / max(FT(0), Y.c.sgsʲs.q_tot) * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
+                @. Yₜ.c.sgsʲs.:($$j).n_rai -=
+                    ν₄_scalar_for_precip * Y.c.sgsʲs.q_rai / max(FT(0), Y.c.sgsʲs.q_tot) * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
+            end
         end
     end
 
+    ###
+    ### SGS TKE
+    ###
+    if (turbconv_model isa PrognosticEDMFX) && diffuse_tke
+        @. Yₜ.c.sgs⁰.ρatke -= ν₄_vorticity * wdivₕ(ᶜρa⁰ * gradₕ(ᶜ∇²tke⁰))
+    end
     if turbconv_model isa DiagnosticEDMFX && diffuse_tke
         @. Yₜ.c.sgs⁰.ρatke -= ν₄_vorticity * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²tke⁰))
     end
@@ -211,10 +254,10 @@ end
 function dss_hyperdiffusion_tendency_pairs(p)
     (; hyperdiff, turbconv_model) = p.atmos
     buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
-    (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
+    (; ᶜ∇²u, ᶜ∇²specific_energy, ᶜ∇²q_tot) = p.hyperdiff
     diffuse_tke = use_prognostic_tke(turbconv_model)
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²mseʲs) = p.hyperdiff
+        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²mseʲs, ᶜ∇²q_totʲs) = p.hyperdiff
     end
     if use_prognostic_tke(turbconv_model)
         (; ᶜ∇²tke⁰) = p.hyperdiff
@@ -223,6 +266,7 @@ function dss_hyperdiffusion_tendency_pairs(p)
     core_dynamics_pairs = (
         ᶜ∇²u => buffer.ᶜ∇²u,
         ᶜ∇²specific_energy => buffer.ᶜ∇²specific_energy,
+        ᶜ∇²q_tot => buffer.ᶜ∇²q_tot,
         (diffuse_tke ? (ᶜ∇²tke⁰ => buffer.ᶜ∇²tke⁰,) : ())...,
     )
     tc_dynamics_pairs =
@@ -231,171 +275,7 @@ function dss_hyperdiffusion_tendency_pairs(p)
             ᶜ∇²uₕʲs => buffer.ᶜ∇²uₕʲs,
             ᶜ∇²uᵥʲs => buffer.ᶜ∇²uᵥʲs,
             ᶜ∇²mseʲs => buffer.ᶜ∇²mseʲs,
+            ᶜ∇²q_totʲs => buffer.ᶜ∇²q_totʲs,
         ) : ()
-    dynamics_pairs = (core_dynamics_pairs..., tc_dynamics_pairs...)
-
-    (; ᶜ∇²specific_tracers) = p.hyperdiff
-    core_tracer_pairs =
-        !isempty(propertynames(ᶜ∇²specific_tracers)) ?
-        (ᶜ∇²specific_tracers => buffer.ᶜ∇²specific_tracers,) : ()
-    tc_tracer_pairs =
-        turbconv_model isa PrognosticEDMFX ?
-        (p.hyperdiff.ᶜ∇²q_totʲs => buffer.ᶜ∇²q_totʲs,) : ()
-    tc_moisture_pairs =
-        turbconv_model isa PrognosticEDMFX &&
-        p.atmos.moisture_model isa NonEquilMoistModel &&
-        p.atmos.microphysics_model isa Microphysics1Moment ?
-        (
-            p.hyperdiff.ᶜ∇²q_liqʲs => buffer.ᶜ∇²q_liqʲs,
-            p.hyperdiff.ᶜ∇²q_iceʲs => buffer.ᶜ∇²q_iceʲs,
-            p.hyperdiff.ᶜ∇²q_raiʲs => buffer.ᶜ∇²q_raiʲs,
-            p.hyperdiff.ᶜ∇²q_snoʲs => buffer.ᶜ∇²q_snoʲs,
-        ) :
-        turbconv_model isa PrognosticEDMFX &&
-        p.atmos.moisture_model isa NonEquilMoistModel &&
-        p.atmos.microphysics_model isa Microphysics2Moment ?
-        (
-            p.hyperdiff.ᶜ∇²q_liqʲs => buffer.ᶜ∇²q_liqʲs,
-            p.hyperdiff.ᶜ∇²q_iceʲs => buffer.ᶜ∇²q_iceʲs,
-            p.hyperdiff.ᶜ∇²q_raiʲs => buffer.ᶜ∇²q_raiʲs,
-            p.hyperdiff.ᶜ∇²q_snoʲs => buffer.ᶜ∇²q_snoʲs,
-            p.hyperdiff.ᶜ∇²q_liqʲs => buffer.ᶜ∇²q_liqʲs,
-            p.hyperdiff.ᶜ∇²q_raiʲs => buffer.ᶜ∇²q_raiʲs,
-        ) : ()
-    tracer_pairs =
-        (core_tracer_pairs..., tc_tracer_pairs..., tc_moisture_pairs...)
-    return (dynamics_pairs..., tracer_pairs...)
-end
-
-# This should prep variables that we will dss in
-# dss_hyperdiffusion_tendency_pairs
-NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    (; hyperdiff, turbconv_model) = p.atmos
-    isnothing(hyperdiff) && return nothing
-
-    (; ᶜ∇²specific_tracers) = p.hyperdiff
-
-    # TODO: Fix RecursiveApply bug in gradₕ to fuse this operation.
-    # ᶜ∇²specific_tracers .= wdivₕ.(gradₕ.(ᶜspecific_gs_tracers(Y)))
-    foreach_gs_tracer(Y, ᶜ∇²specific_tracers) do ᶜρχ, ᶜ∇²χ, _
-        @. ᶜ∇²χ = wdivₕ(gradₕ(specific(ᶜρχ, Y.c.ρ)))
-    end
-
-    if turbconv_model isa PrognosticEDMFX
-        n = n_mass_flux_subdomains(turbconv_model)
-        (; ᶜ∇²q_totʲs) = p.hyperdiff
-        for j in 1:n
-            # Note: It is more correct to have ρa inside and outside the divergence
-            @. ᶜ∇²q_totʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_tot))
-        end
-        if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.microphysics_model isa Microphysics1Moment
-            (; ᶜ∇²q_liqʲs, ᶜ∇²q_iceʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs) = p.hyperdiff
-            for j in 1:n
-                # Note: It is more correct to have ρa inside and outside the divergence
-                @. ᶜ∇²q_liqʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_liq))
-                @. ᶜ∇²q_iceʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_ice))
-                @. ᶜ∇²q_raiʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_rai))
-                @. ᶜ∇²q_snoʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_sno))
-            end
-        elseif p.atmos.moisture_model isa NonEquilMoistModel &&
-               p.atmos.microphysics_model isa Microphysics2Moment
-            (;
-                ᶜ∇²q_liqʲs,
-                ᶜ∇²q_iceʲs,
-                ᶜ∇²q_raiʲs,
-                ᶜ∇²q_snoʲs,
-                ᶜ∇²n_liqʲs,
-                ᶜ∇²n_raiʲs,
-            ) = p.hyperdiff
-            for j in 1:n
-                # Note: It is more correct to have ρa inside and outside the divergence
-                @. ᶜ∇²q_liqʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_liq))
-                @. ᶜ∇²q_iceʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_ice))
-                @. ᶜ∇²q_raiʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_rai))
-                @. ᶜ∇²q_snoʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_sno))
-                @. ᶜ∇²n_liqʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).n_liq))
-                @. ᶜ∇²n_raiʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).n_rai))
-            end
-        end
-    end
-    return nothing
-end
-
-# This requires dss to have been called on
-# variables in dss_hyperdiffusion_tendency_pairs
-NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    (; hyperdiff, turbconv_model) = p.atmos
-    isnothing(hyperdiff) && return nothing
-
-    # Rescale the hyperdiffusivity for precipitating species.
-    (; ν₄_scalar) = ν₄(hyperdiff, Y)
-    ν₄_scalar_for_precip = CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar
-
-    n = n_mass_flux_subdomains(turbconv_model)
-    (; ᶜ∇²specific_tracers) = p.hyperdiff
-
-    # TODO: Since we are not applying the limiter to density (or area-weighted
-    # density), the mass redistributed by hyperdiffusion will not be conserved
-    # by the limiter. Is this a significant problem?
-    foreach_gs_tracer(Yₜ, ᶜ∇²specific_tracers) do ᶜρχₜ, ᶜ∇²χ, ρχ_name
-        ν₄_scalar_for_χ =
-            ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai)) ?
-            ν₄_scalar_for_precip : ν₄_scalar
-        @. ᶜρχₜ -= ν₄_scalar_for_χ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
-
-        # Take into account the effect of total water diffusion on density.
-        if ρχ_name == @name(ρq_tot)
-            @. Yₜ.c.ρ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
-        end
-    end
-    if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²q_totʲs) = p.hyperdiff
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -=
-                ν₄_scalar *
-                wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²q_totʲs.:($$j)))
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
-        end
-        if p.atmos.moisture_model isa NonEquilMoistModel &&
-           p.atmos.microphysics_model isa Microphysics1Moment
-            (; ᶜ∇²q_liqʲs, ᶜ∇²q_iceʲs, ᶜ∇²q_raiʲs, ᶜ∇²q_snoʲs) = p.hyperdiff
-            for j in 1:n
-                @. Yₜ.c.sgsʲs.:($$j).q_liq -=
-                    ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_liqʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).q_ice -=
-                    ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_iceʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).q_rai -=
-                    ν₄_scalar_for_precip * wdivₕ(gradₕ(ᶜ∇²q_raiʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).q_sno -=
-                    ν₄_scalar_for_precip * wdivₕ(gradₕ(ᶜ∇²q_snoʲs.:($$j)))
-            end
-        elseif p.atmos.moisture_model isa NonEquilMoistModel &&
-               p.atmos.microphysics_model isa Microphysics2Moment
-            (;
-                ᶜ∇²q_liqʲs,
-                ᶜ∇²q_iceʲs,
-                ᶜ∇²q_raiʲs,
-                ᶜ∇²q_snoʲs,
-                ᶜ∇²n_liqʲs,
-                ᶜ∇²n_raiʲs,
-            ) = p.hyperdiff
-            for j in 1:n
-                @. Yₜ.c.sgsʲs.:($$j).q_liq -=
-                    ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_liqʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).q_ice -=
-                    ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_iceʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).n_liq -=
-                    ν₄_scalar * wdivₕ(gradₕ(ᶜ∇²n_liqʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).q_rai -=
-                    ν₄_scalar_for_precip * wdivₕ(gradₕ(ᶜ∇²q_raiʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).q_sno -=
-                    ν₄_scalar_for_precip * wdivₕ(gradₕ(ᶜ∇²q_snoʲs.:($$j)))
-                @. Yₜ.c.sgsʲs.:($$j).n_rai -=
-                    ν₄_scalar_for_precip * wdivₕ(gradₕ(ᶜ∇²n_raiʲs.:($$j)))
-            end
-        end
-    end
-    return nothing
+    return (core_dynamics_pairs..., tc_dynamics_pairs...)
 end
