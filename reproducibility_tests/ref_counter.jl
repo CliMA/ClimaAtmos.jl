@@ -1,4 +1,4 @@
-264
+265
 
 # **README**
 #
@@ -20,6 +20,9 @@
 
 
 #=
+265
+- Modify advection to discretely conserve vorticity
+
 264
 - Allow entrainment and detrainment when updraft area fraction is negligible
 
