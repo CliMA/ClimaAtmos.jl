@@ -70,6 +70,8 @@ function get_atmos(config::AtmosConfig, params)
     # HeldSuarezForcing can be set via radiation_mode or legacy forcing option for now
     final_radiation_mode =
         forcing_type isa HeldSuarezForcing ? forcing_type : radiation_mode
+    # Note: when disable_momentum_vertical_diffusion is true, the surface flux tendency
+    # for momentum is not applied.
     disable_momentum_vertical_diffusion =
         final_radiation_mode isa HeldSuarezForcing
 
