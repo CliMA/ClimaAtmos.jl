@@ -1,0 +1,150 @@
+sleve_eta: 0.7
+surface_thermo_state_type: "GCMSurfaceThermoState"
+external_forcing_file: ~
+topo_smoothing: false
+era5_diurnal_warming: ~
+hyperdiff: "CAM_SE"
+dt: "40secs"
+output_dir: "/scratch/ajaruga/MBW_testing/"
+prognostic_tke: false
+use_newton_rtol: false
+netcdf_output_at_levels: true
+output_dir_style: "ActiveLink"
+external_forcing: ~
+device: "auto"
+t_end: "60days"
+y_elem: 6
+z_stretch: true
+scm_coriolis: ~
+bubble: false
+co2_model: ~
+ode_algo: "ARS343"
+max_newton_iters_ode: 1
+start_date: "20100101"
+forcing: ~
+edmfx_nh_pressure: false
+use_dense_jacobian: false
+implicit_noneq_cloud_formation: false
+scalar_hyperdiffusion_coefficient: 0.929738
+check_steady_state: false
+prognostic_surface: "SlabOceanSST"
+detect_restart_file: false
+update_jacobian_every: "solve"
+test_dycore_consistency: false
+add_isothermal_boundary_layer: true
+restart_file: ~
+edmfx_vertical_diffusion: false
+use_itime: false
+moist: "nonequil"
+rad: ~
+rayleigh_sponge: true
+initial_condition: "MoistBaroclinicWave"
+cloud_model: "grid_scale"
+krylov_rtol: 0.1
+divergence_damping_factor: 5.0
+edmfx_entr_model: ~
+eisenstat_walker_forcing_alpha: 2.0
+dt_cloud_fraction: "3hours"
+idealized_h2o: false
+surface_setup: "DefaultExchangeCoefficients"
+perturb_initstate: true
+implicit_sgs_advection: false
+edmfx_scale_blending: "SmoothMinimum"
+jvp_step_adjustment: 1.0
+discrete_hydrostatic_balance: false
+insolation: "idealized"
+t_start: "0secs"
+log_progress: true
+site_latitude: 17.0
+dz_bottom: 30.0
+h_elem: 30
+dt_save_state_to_disk: "6days"
+implicit_sgs_nh_pressure: false
+netcdf_interpolation_num_points:
+  - 1440
+  - 720
+  - 43
+advection_test: false
+z_max: 30000.0
+apply_limiter: false
+topography: "Hughes2023"
+aerosol_radiation: false
+reference_job_id: ~
+precip_model: "1M"
+vorticity_hyperdiffusion_coefficient: 0.1857
+perf_summary: false
+implicit_sgs_mass_flux: false
+call_cloud_diagnostics_per_stage: false
+viscous_sponge: false
+surface_temperature: "ZonallySymmetric"
+debug_jacobian: false
+edmfx_filter: false
+diagnostics:
+  - short_name:
+      - "rhoa"
+      - "ua"
+      - "va"
+      - "wa"
+      - "ta"
+      - "hus"
+      - "clw"
+      - "cli"
+      - "hussn"
+      - "husra"
+    period: "6days"
+    reduction: "inst"
+log_to_file: false
+orographic_gravity_wave: ~
+dt_rad: "6hours"
+approximate_linear_solve_iters: 2
+edmfx_upwinding: "none"
+tracer_upwinding: "vanleer_limiter"
+smagorinsky_lilly: false
+enable_diagnostics: true
+site_longitude: -149.0
+nh_poly: 3
+implicit_sgs_vertdiff: false
+edmfx_sgs_diffusive_flux: false
+y_max: 300000.0
+non_orographic_gravity_wave: false
+prescribe_clouds_in_radiation: false
+albedo_model: "ConstantAlbedo"
+topography_damping_factor: 5
+config: "sphere"
+energy_upwinding: "vanleer_limiter"
+FLOAT_TYPE: "Float64"
+reproducibility_test: false
+deep_atmosphere: true
+split_ode: true
+prescribe_ozone: false
+check_conservation: false
+updraft_number: 1
+ls_adv: ~
+auto_jacobian_padding_bands: ~
+prescribed_aerosols: []
+dt_nogw: "1800secs"
+output_default_diagnostics: true
+implicit_diffusion: true
+x_max: 300000.0
+edmfx_sgs_mass_flux: false
+z_elem: 43
+newton_rtol: 1.0e-5
+implicit_sgs_entr_detr: false
+radiation_reset_rng_seed: false
+use_auto_jacobian: false
+edmfx_sgsflux_upwinding: "none"
+disable_surface_flux_tendency: true
+cfsite_number: "site23"
+turbconv: ~
+x_elem: 6
+idealized_clouds: false
+vert_diff: "DecayWithHeightDiffusion"
+check_nan_every: 1024
+use_krylov_method: false
+subsidence: ~
+sleve_s: 10.0
+use_dynamic_krylov_rtol: false
+toml:
+  - "toml/LONGRUN_TEST.toml"
+mesh_warp_type: "SLEVE"
+edmfx_detr_model: ~
