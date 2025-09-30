@@ -1,0 +1,11 @@
+# toml/rcemipii_box_0M.toml
+
+[angular_velocity_planet_rotation]
+value = 0
+
+[idealized_ocean_albedo]
+value = 0.07
+
+[mean_sea_level_pressure]
+value = 101480
+
