@@ -585,7 +585,18 @@ ColumnPlots = Union{
 function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
     short_names = ["ta", "wa"]
-    vars = map_comparison(get, simdirs, short_names)
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        var = get(simdir; short_name)
+        # For vertical-only (FiniteDifferenceGrid) spaces, the data may have 
+        # extra singleton dimensions. Check and squeeze if needed.
+        if haskey(var.dims, "x") && length(var.dims["x"]) == 1
+            var = slice(var; x = var.dims["x"][1])
+        end
+        if haskey(var.dims, "y") && length(var.dims["y"]) == 1
+            var = slice(var; y = var.dims["y"][1])
+        end
+        return var
+    end
 
     make_plots_generic(
         output_paths,
