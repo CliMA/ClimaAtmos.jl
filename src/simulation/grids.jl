@@ -70,7 +70,7 @@ function SphereGrid(
         z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
 
     hypsography_fun = hypsography_function_from_topography(
-        topography, topography_damping_factor, mesh_warp_type,
+        FT, topography, topography_damping_factor, mesh_warp_type,
         sleve_eta, sleve_s, topo_smoothing, comms_ctx,
     )
 
@@ -274,7 +274,7 @@ function PlaneGrid(
     stretch =
         z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
 
-    hypsography_fun = hypsography_function_from_topography(
+    hypsography_fun = hypsography_function_from_topography(FT,
         topography, topography_damping_factor, mesh_warp_type,
         sleve_eta, sleve_s, topo_smoothing, comms_ctx,
     )
@@ -310,6 +310,7 @@ end
 Create a hypsography function that handles topography integration.
 """
 function hypsography_function_from_topography(
+    FT::Type{<:AbstractFloat},
     topography::AbstractTopography,
     topography_damping_factor::Real,
     mesh_warp_type,
@@ -319,7 +320,6 @@ function hypsography_function_from_topography(
     comms_ctx,
 )
     return function (h_grid, z_grid)
-        FT = eltype(h_grid)
         # Create horizontal space to work with topography
         h_topology = Spaces.topology(Spaces.SpectralElementSpace1D(h_grid))
         h_space = if h_grid isa Grids.SpectralElementGrid1D
@@ -377,9 +377,10 @@ function hypsography_function_from_topography(
                 hypsography =
                     Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
             else
-                @error "Undefined mesh-warping option"
+                error("Undefined mesh-warping option $(nameof(typeof(mesh_warp_type)))")
             end
         else
+            # DCMIP200Topography, Hughes2023Topography, etc.
             if topo_smoothing
                 Hypsography.diffuse_surface_elevation!(z_surface)
             end

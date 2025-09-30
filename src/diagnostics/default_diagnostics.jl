@@ -169,19 +169,29 @@ function core_default_diagnostics(output_writer, duration, start_date; topograph
         min_func = (args...; kwargs...) -> hourly_min(FT, args...; kwargs...)
         max_func = (args...; kwargs...) -> hourly_max(FT, args...; kwargs...)
     end
-    core_diagnostics = [
-        average_func(core_diagnostics...; output_writer, start_date)...,
-        min_func("ts"; output_writer, start_date),
-        max_func("ts"; output_writer, start_date),
-    ]
-    if topography
-        push!(core_diagnostics, ScheduledDiagnostic(;
+    core_diagnostics = if topography
+    [
+        # We need to compute the topography at the beginning of the simulation (and only at
+        # the beginning), so we set output/compute_schedule_func to false. It is still
+        # computed at the very beginning
+        ScheduledDiagnostic(;
             variable = get_diagnostic_variable("orog"),
             output_schedule_func = (integrator) -> false,
             compute_schedule_func = (integrator) -> false,
             output_writer,
             output_short_name = "orog_inst",
-        ))
+        ),
+        average_func(core_diagnostics...; output_writer, start_date)...,
+        min_func("ts"; output_writer, start_date),
+        max_func("ts"; output_writer, start_date),
+
+    ]
+    else
+        [
+            average_func(core_diagnostics...; output_writer, start_date)...,
+            min_func("ts"; output_writer, start_date),
+            max_func("ts"; output_writer, start_date),
+        ]
     end
 
     return core_diagnostics
