@@ -1369,6 +1369,12 @@ EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_dycoms_rf01_box},
     Val{:diagnostic_edmfx_trmm_box_0M},
     Val{:diagnostic_edmfx_dycoms_rf01_explicit_box},
+    Val{:prognostic_edmfx_bomex_box},
+    Val{:rcemipii_box_diagnostic_edmfx},
+    Val{:diagnostic_edmfx_trmm_stretched_box},
+}
+
+EDMFColumnPlots = Union{
     Val{:prognostic_edmfx_adv_test_column},
     Val{:prognostic_edmfx_gabls_column},
     Val{:prognostic_edmfx_gabls_column_sparse_autodiff},
@@ -1384,13 +1390,10 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_simpleplume_column},
     Val{:prognostic_edmfx_gcmdriven_column},
     Val{:prognostic_edmfx_tv_era5driven_column},
-    Val{:prognostic_edmfx_bomex_box},
-    Val{:rcemipii_box_diagnostic_edmfx},
     Val{:prognostic_edmfx_soares_column},
-    Val{:diagnostic_edmfx_trmm_stretched_box},
 }
 
-EDMFBoxPlotsWithPrecip = Union{
+EDMFColumnPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_rico_implicit_column},
     Val{:prognostic_edmfx_rico_column_2M},
@@ -1482,34 +1485,13 @@ end
 function make_plots(
     sim_type::Union{
         EDMFBoxPlots,
-        EDMFBoxPlotsWithPrecip,
         DiagEDMFBoxPlotsWithPrecip,
     },
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
 
-    if sim_type isa EDMFBoxPlotsWithPrecip
-        if sim_type isa Val{:prognostic_edmfx_rico_column_2M}
-            precip_names = (
-                "husra",
-                "hussn",
-                "husraup",
-                "hussnup",
-                "husraen",
-                "hussnen",
-                "cdnc",
-                "ncra",
-                "cdncup",
-                "ncraup",
-                "cdncen",
-                "ncraen",
-            )
-        else
-            precip_names =
-                ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen")
-        end
-    elseif sim_type isa DiagEDMFBoxPlotsWithPrecip
+    if sim_type isa DiagEDMFBoxPlotsWithPrecip
         precip_names = ("husra", "hussn", "husraup", "hussnup")
     else
         precip_names = ()
@@ -1559,6 +1541,106 @@ function make_plots(
                     x = 0.0,
                     y = 0.0,
                 ) for short_name in name_tuple
+            ]
+        end
+
+    var_groups_z = [
+        ([slice(v, time = LAST_SNAP) for v in group]...,) for
+        group in var_groups_zt
+    ]
+
+    tmp_file = make_plots_generic(
+        output_paths,
+        output_name = "tmp",
+        var_groups_z;
+        plot_fn = plot_edmf_vert_profile!,
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+
+    make_plots_generic(
+        output_paths,
+        vcat(var_groups_zt...),
+        plot_fn = plot_parsed_attribute_title!,
+        summary_files = [tmp_file],
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+end
+
+function make_plots(
+    sim_type::Union{
+        EDMFColumnPlots,
+        EDMFColumnPlotsWithPrecip,
+    },
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+
+    if sim_type isa EDMFColumnPlotsWithPrecip
+        if sim_type isa Val{:prognostic_edmfx_rico_column_2M}
+            precip_names = (
+                "husra",
+                "hussn",
+                "husraup",
+                "hussnup",
+                "husraen",
+                "hussnen",
+                "cdnc",
+                "ncra",
+                "cdncup",
+                "ncraup",
+                "cdncen",
+                "ncraen",
+            )
+        else
+            precip_names =
+                ("husra", "hussn", "husraup", "hussnup", "husraen", "hussnen")
+        end
+    else
+        precip_names = ()
+    end
+
+    short_names = [
+        "wa",
+        "waup",
+        "ta",
+        "taup",
+        "hus",
+        "husup",
+        "arup",
+        "tke",
+        "ua",
+        "thetaa",
+        "thetaaup",
+        "ha",
+        "haup",
+        "hur",
+        "hurup",
+        "lmix",
+        "cl",
+        "clw",
+        "clwup",
+        "cli",
+        "cliup",
+        precip_names...,
+    ]
+    reduction = "inst"
+
+    available_periods = ClimaAnalysis.available_periods(
+        simdirs[1];
+        short_name = short_names[1],
+        reduction,
+    )
+    # choose the shortest available period
+    available_periods = collect(available_periods) # ensure vector for indexing
+    period = available_periods[argmin(CA.time_to_seconds.(available_periods))]
+
+    short_name_tuples = pair_edmf_names(short_names)
+    var_groups_zt =
+        map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
+            return [
+                get(simdir; short_name, reduction, period) for short_name in name_tuple
             ]
         end
 
