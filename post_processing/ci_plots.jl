@@ -437,8 +437,6 @@ make_plots_generic(
     simulation_path,
     vars,
     time = LAST_SNAP,
-    x = 0.0, # Our columns are still 3D objects...
-    y = 0.0,
     more_kwargs = YLINEARSCALE,
 )
 ```
@@ -453,8 +451,6 @@ make_plots_generic(
     simulation_path,
     vars,
     time = LAST_SNAP,
-    x = 0.0, # Our columns are still 3D objects...
-    y = 0.0,
     more_kwargs = YLINEARSCALE,
 )
 ```
@@ -595,8 +591,6 @@ function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
         output_paths,
         vars,
         time = LAST_SNAP,
-        x = 0.0, # Our columns are still 3D objects...
-        y = 0.0,
         MAX_NUM_COLS = length(simdirs),
         more_kwargs = YLINEARSCALE,
     )
@@ -644,7 +638,7 @@ function make_plots(
     end
 
     vars = [
-        slice(get(simdir; short_name), x = 0.0, y = 0.0) for
+        get(simdir; short_name) for
         short_name in short_names
     ]
 
@@ -689,7 +683,7 @@ function make_plots(
     surface_precip = read_var(simdir.variable_paths["pr"]["inst"]["10s"])
     viz.line_plot1D!(
         fig,
-        slice(surface_precip, x = 0.0, y = 0.0);
+        surface_precip;
         p_loc = [pr_row, 1:3],
     )
 

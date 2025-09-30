@@ -197,7 +197,7 @@ function BoxGrid(
         z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
 
     hypsography_fun = hypsography_function_from_topography(
-        topography, topography_damping_factor, mesh_warp_type,
+        FT, topography, topography_damping_factor, mesh_warp_type,
         sleve_eta, sleve_s, topo_smoothing, comms_ctx,
     )
     z_mesh = DefaultZMesh(
@@ -274,8 +274,8 @@ function PlaneGrid(
     stretch =
         z_stretch ? Meshes.HyperbolicTangentStretching{FT}(dz_bottom) : Meshes.Uniform()
 
-    hypsography_fun = hypsography_function_from_topography(FT,
-        topography, topography_damping_factor, mesh_warp_type,
+    hypsography_fun = hypsography_function_from_topography(
+        FT, topography, topography_damping_factor, mesh_warp_type,
         sleve_eta, sleve_s, topo_smoothing, comms_ctx,
     )
 

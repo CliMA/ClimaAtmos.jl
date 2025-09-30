@@ -26,7 +26,6 @@ radius = 6.371229e6
 
 grid = CA.SphereGrid(
     FT,
-    params,
     comms_ctx;
     z_elem,
     z_max,

@@ -830,6 +830,7 @@ function get_simulation(config::AtmosConfig)
         spaces = get_spaces(grid, config.comms_ctx)
     end
     @info spaces.center_space.grid
+    # TODO: add more information about the grid - stretch, etc.
     initial_condition = get_initial_condition(config.parsed_args, atmos)
     surface_setup = get_surface_setup(config.parsed_args)
     if !sim_info.restart
