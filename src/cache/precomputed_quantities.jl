@@ -379,7 +379,7 @@ function thermo_state(
             ρ,
             e_int,
             q_tot,
-            5,
+            8,
             eltype(thermo_params)(0.003),
         )
     get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, ::Nothing, q_pt) =
