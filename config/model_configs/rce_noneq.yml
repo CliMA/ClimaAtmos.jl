@@ -12,8 +12,8 @@ smagorinsky_lilly: true
 hyperdiff: "false"  # check w/ Tapio if this should be off
 implicit_diffusion: false  # this is the default. Check w/ Tapio if this should be true.
 # microphysics
-moist: nonequil
-precip_model: 2M
+moist: equil
+precip_model: 0M
 # spatial discretization
 x_max: 96000.0  # 96km
 y_max: 96000.0  # 96km
@@ -25,20 +25,20 @@ z_elem: 43
 dz_bottom: 30.0
 # Time
 dt: 4secs  # limited by horizontal soundwaves (treated explicitly) = x_max / Nq / x_elem / 343m/s
-t_end: 24hours
+t_end: 24hours # right up to before it crashed
 dt_save_state_to_disk: 1hours
 dt_rad: 1hours  # same as `dt_save_state_to_disk` for reproducibility
-toml: [toml/rcemipii_box_1M.toml]
+toml: [toml/rcemipii_box_0M.toml]
 # netcdf_interpolation_num_points: [8, 8, 60]
 check_nan_every: 1024  # for debugging: set to check NaNs every `n` iterations
 output_default_diagnostics: false  # adds various 1h diagnostics. Only use if `dt_save_state_to_disk` is a multiple of 1hr
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
-    # period: 1mins
-    period: 10mins
+    period: 10secs
+    #period: 10mins
   - short_name: [hus, clw, cli, ta, wa, pr]
-    # period: 10secs
-    period: 10mins
+    period: 10secs
+    #period: 10mins
   ## 1M microphsics
   # - short_name: [husra, hussn]
   #   period: 10secs
