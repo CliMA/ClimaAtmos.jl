@@ -24,7 +24,7 @@ y_elem: 12
 z_elem: 43
 dz_bottom: 30.0
 # Time
-dt: 4secs  # limited by horizontal soundwaves (treated explicitly) = x_max / Nq / x_elem / 343m/s
+dt: 1secs  # limited by horizontal soundwaves (treated explicitly) = x_max / Nq / x_elem / 343m/s
 t_end: 24hours # right up to before it crashed
 dt_save_state_to_disk: 1hours
 dt_rad: 1hours  # same as `dt_save_state_to_disk` for reproducibility
