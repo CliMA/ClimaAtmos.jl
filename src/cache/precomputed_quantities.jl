@@ -380,7 +380,7 @@ function thermo_state(
             e_int,
             q_tot,
             8,
-            eltype(thermo_params)(0.003),
+            eltype(thermo_params)(0.006),
         )
     get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, ::Nothing, q_pt) =
         TD.PhaseNonEquil(thermo_params, e_int, ρ, q_pt)
