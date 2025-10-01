@@ -406,9 +406,7 @@ weakdeps = ["CUDA", "MPI"]
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LazyBroadcast", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "UnrolledUtilities"]
-git-tree-sha1 = "1136e64dbdc6dfb332c9d53bdd7df93a9aa10494"
-repo-rev = "ne/fd_grid"
-repo-url = "https://github.com/CliMA/ClimaCore.jl.git"
+git-tree-sha1 = "4fdb73dfcf8dc1c9655c81c605989da89b18fdd1"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
 version = "0.14.40"
 weakdeps = ["CUDA", "Krylov"]
@@ -469,9 +467,7 @@ weakdeps = ["BenchmarkTools", "CUDA", "OrderedCollections", "PrettyTables", "Sta
 
 [[deps.ClimaUtilities]]
 deps = ["Artifacts", "ClimaComms", "Dates"]
-git-tree-sha1 = "6fc982b79aa17f63fd43899ab428ffbbcc6a4934"
-repo-rev = "ne/fd_grid"
-repo-url = "https://github.com/CliMA/ClimaUtilities.jl.git"
+git-tree-sha1 = "fe1a7b3143f11c017118d3c99f067a09cb622f81"
 uuid = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
 version = "0.1.26"
 weakdeps = ["Adapt", "CUDA", "ClimaCore", "ClimaCoreTempestRemap", "Interpolations", "NCDatasets"]
