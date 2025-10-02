@@ -147,6 +147,7 @@ function core_default_diagnostics(output_writer, duration, start_date)
         "va",
         "wa",
         "hfes",
+        "hfss",
     ]
 
     average_func = frequency_averages(duration)
@@ -202,6 +203,7 @@ function default_diagnostics(
         "cli",
         "hussfc",
         "evspsbl",
+        "hfls",
         "pr",
         "prra",
         "prsn",
