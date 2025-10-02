@@ -47,6 +47,7 @@ include(joinpath("cache", "surface_albedo.jl"))
 include(joinpath("initial_conditions", "InitialConditions.jl"))
 include(joinpath("surface_conditions", "SurfaceConditions.jl"))
 include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
+include(joinpath("utils", "refstate_thermodynamics.jl"))
 
 include(joinpath("prognostic_equations", "pressure_work.jl"))
 include(joinpath("prognostic_equations", "zero_velocity.jl"))

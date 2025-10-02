@@ -1,4 +1,4 @@
-265
+266
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+266
+- Changed the pressure-gradient formulation to use the Exner function
+  and virtual potential temperature.
+
 265
 - Modify advection to discretely conserve vorticity
 
