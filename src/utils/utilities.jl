@@ -229,15 +229,17 @@ time_to_seconds(t::Number) =
 """
     time_to_seconds(s::String)
 
-Convert a string representing a time to seconds. Supported units: seconds, minutes, hours, days as 
-`s`, `secs`, `m`, `mins`, `h`, `hours`, `d`, `days`.
+Convert a string representing a time to seconds. Supported units: seconds, minutes, hours, days, weeks as 
+`s`, `secs`, `m`, `mins`, `h`, `hours`, `d`, `days`, `weeks`.
 """
 function time_to_seconds(s::String)
     s == "Inf" && return Inf
     # match a number followed by one of the supported units of time
-    m = match(r"^(\d+(?:\.\d+)?)(s|secs|m|mins|h|hours|d|days)$", s)
+    m = match(r"^(\d+(?:\.\d+)?)(s|secs|m|mins|h|hours|d|days|weeks)$", s)
     isnothing(m) &&
-        error("Bad format for flag $s. Examples: `10secs`, `20mins`, `30hours`, `40days`")
+        error(
+            "Bad format for flag $s. Examples: `10secs`, `20mins`, `30hours`, `40days`, `50weeks`",
+        )
     value = parse(Float64, m.captures[1])
     unit = m.captures[2]
     factor_groups = Dict(
@@ -245,6 +247,7 @@ function time_to_seconds(s::String)
         ["m", "mins"] => 60,
         ["h", "hours"] => 3600,
         ["d", "days"] => 86400,
+        ["weeks"] => 604800,
     )
     factors = Dict(unit => val for (units, val) in factor_groups for unit in units)
     return value * factors[unit]

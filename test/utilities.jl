@@ -50,6 +50,9 @@ end
     @test CA.time_to_seconds("3d") == 3 * 86400
     @test CA.time_to_seconds("3days") == 3 * 86400
 
+    # Weeks
+    @test CA.time_to_seconds("50weeks") == 50 * 604800
+
     # Float input
     @test CA.time_to_seconds("1.5h") == 1.5 * 3600
 
