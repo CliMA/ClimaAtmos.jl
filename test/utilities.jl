@@ -631,6 +631,7 @@ end
     @test isapprox(processed_data_0K["ts"] .+ 4, processed_data_4K["ts"])
 
     # check that the specific humidity has increased
+    # Is this failing?
     @test all(processed_data_0K["hus"] .< processed_data_4K["hus"])
 
     close(processed_data_0K)
