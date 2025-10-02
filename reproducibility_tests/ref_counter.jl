@@ -1,4 +1,4 @@
-265
+266
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+266
+- No behavior change, but some new diagnostics are added, and the reference 
+  simulations don't have those diagnostics for plotting
+
 265
 - Modify advection to discretely conserve vorticity
 

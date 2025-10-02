@@ -721,6 +721,96 @@ add_diagnostic_variable!(
 )
 
 ###
+# Latent heat flux (2d)
+###
+compute_hfls!(out, state, cache, time) =
+    compute_hfls!(out, state, cache, time, cache.atmos.moisture_model)
+compute_hfls!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("hfls", model)
+
+function compute_hfls!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    (; ρ_flux_q_tot) = cache.precomputed.sfc_conditions
+    (; surface_ct3_unit) = cache.core
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    LH_v0 = TD.Parameters.LH_v0(thermo_params)
+
+    if isnothing(out)
+        return dot.(ρ_flux_q_tot, surface_ct3_unit) .* LH_v0
+    else
+        out .= dot.(ρ_flux_q_tot, surface_ct3_unit) .* LH_v0
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "hfls",
+    long_name = "Surface Upward Latent Heat Flux",
+    standard_name = "surface_upward_latent_heat_flux",
+    units = "W m^-2",
+    compute! = compute_hfls!,
+)
+
+###
+# Sensible heat flux (2d)
+###
+compute_hfss!(out, state, cache, time) =
+    compute_hfss!(out, state, cache, time, cache.atmos.moisture_model)
+compute_hfss!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("hfss", model)
+
+function compute_hfss!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: DryModel}
+    (; ρ_flux_h_tot) = cache.precomputed.sfc_conditions
+    (; surface_ct3_unit) = cache.core
+
+    if isnothing(out)
+        return dot.(ρ_flux_h_tot, surface_ct3_unit)
+    else
+        out .= dot.(ρ_flux_h_tot, surface_ct3_unit)
+    end
+end
+
+function compute_hfss!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    (; ρ_flux_h_tot, ρ_flux_q_tot) = cache.precomputed.sfc_conditions
+    (; surface_ct3_unit) = cache.core
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    LH_v0 = TD.Parameters.LH_v0(thermo_params)
+
+    if isnothing(out)
+        return dot.(ρ_flux_h_tot, surface_ct3_unit) .-
+               dot.(ρ_flux_q_tot, surface_ct3_unit) .* LH_v0
+    else
+        out .=
+            dot.(ρ_flux_h_tot, surface_ct3_unit) .-
+            dot.(ρ_flux_q_tot, surface_ct3_unit) .* LH_v0
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "hfss",
+    long_name = "Surface Upward Sensible Heat Flux",
+    standard_name = "surface_upward_sensible_heat_flux",
+    units = "W m^-2",
+    compute! = compute_hfss!,
+)
+
+###
 # Precipitation (2d)
 ###
 compute_pr!(out, state, cache, time) =

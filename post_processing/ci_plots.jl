@@ -995,7 +995,7 @@ function make_plots(
     simdirs = SimDir.(output_paths)
 
     short_names_3D, reduction = ["ua", "ta", "hus"], "average"
-    short_names_2D = ["hfes", "evspsbl", "pr"]
+    short_names_2D = ["hfss", "hfls", "pr"]
     vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
         get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
     end
@@ -1035,8 +1035,8 @@ function make_plots(
         "rlds",
         "rlut",
         "rlus",
-        "hfes",
-        "evspsbl",
+        "hfss",
+        "hfls",
         "pr",
     ]
     available_periods = ClimaAnalysis.available_periods(
@@ -1114,8 +1114,8 @@ function make_plots(
         "rlds",
         "rlut",
         "rlus",
-        "hfes",
-        "evspsbl",
+        "hfss",
+        "hfls",
         "ts",
         "pr",
     ]
@@ -1174,8 +1174,8 @@ function make_plots(
         "rlds",
         "rlut",
         "rlus",
-        "hfes",
-        "evspsbl",
+        "hfss",
+        "hfls",
         "pr",
     ]
     available_periods = ClimaAnalysis.available_periods(
@@ -1233,8 +1233,8 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
         "rlds",
         "rlut",
         "rlus",
-        "hfes",
-        "evspsbl",
+        "hfss",
+        "hfls",
         "pr",
     ]
     available_periods = ClimaAnalysis.available_periods(
