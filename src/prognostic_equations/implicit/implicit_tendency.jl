@@ -251,8 +251,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜts))
     ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜts))
     ᶜΠ = @. lazy(dry_exner_function(thermo_params, ᶜts))
-    @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) +
-                  cp_d * (ᶠinterp(ᶜθ_v - ᶜθ_vr)) * ᶠgradᵥ(ᶜΠ)
+    @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ +
+                  cp_d * (ᶠinterp(ᶜθ_v)) * ᶠgradᵥ(ᶜΠ)
 
     if rayleigh_sponge isa RayleighSponge
         ᶠz = Fields.coordinate_field(Y.f).z

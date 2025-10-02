@@ -477,8 +477,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     @. ∂ᶠu₃_err_∂ᶜρ =
         dtγ * (
             ᶠp_grad_matrix ⋅
-            DiagonalMatrixRow(ᶜkappa_m * (T_0 * cp_d - ᶜK - (ᶜΦ - ᶜΦ_r))) +
-            DiagonalMatrixRow(cp_d * ᶠinterp(ᶜθ_v - ᶜθ_vr) * ᶠgradᵥ(ᶜΠ) / ᶠinterp(ᶜρ)) ⋅
+            DiagonalMatrixRow(ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ)) +
+            DiagonalMatrixRow(cp_d * ᶠinterp(ᶜθ_v) * ᶠgradᵥ(ᶜΠ) / ᶠinterp(ᶜρ)) ⋅
             ᶠinterp_matrix()
         )
     @. ∂ᶠu₃_err_∂ᶜρe_tot = dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m)
