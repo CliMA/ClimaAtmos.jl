@@ -462,14 +462,18 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
     ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
-
+    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜts))
     ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜts))
+    ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜts))
     ᶜΠ = @. lazy(exner_function(thermo_params, ᶜts))
     @. ∂ᶠu₃_err_∂ᶜρ =
         dtγ * (
             ᶠp_grad_matrix ⋅
             DiagonalMatrixRow(ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ)) +
-            DiagonalMatrixRow(cp_d * ᶠinterp(ᶜθ_v) * ᶠgradᵥ(ᶜΠ) / ᶠinterp(ᶜρ)) ⋅
+            DiagonalMatrixRow(
+                (cp_d * ᶠinterp(ᶜθ_v - ᶜθ_vr) * ᶠgradᵥ(ᶜΠ) - ᶠgradᵥ(ᶜΦ_r)) /
+                ᶠinterp(ᶜρ),
+            ) ⋅
             ᶠinterp_matrix()
         )
     @. ∂ᶠu₃_err_∂ᶜρe_tot = dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m)
