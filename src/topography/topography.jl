@@ -58,7 +58,7 @@ topography_function((; h_max, x_center, a)::AgnesiTopography, (; x)) =
     h_max / (1 + ((x - x_center) / a)^2)
 
 """
-    ScharTopography{FT}(; h_max = 25, x_center = 50e3, λ = 4e3, a = 5e3)
+    ScharTopography{FT}(; h_max, x_center = 50e3, λ = 4e3, a = 5e3)
 
 Schar mountain topography for 2D simulations.
 
@@ -69,7 +69,7 @@ Schar mountain topography for 2D simulations.
 - `a`: Mountain width parameter (m)
 """
 Base.@kwdef struct ScharTopography{FT} <: AbstractTopography
-    h_max::FT = 25.0
+    h_max::FT
     x_center::FT = 50e3
     λ::FT = 4e3
     a::FT = 5e3
