@@ -66,7 +66,7 @@ function column_indefinite_integral(
     f::Function,
     ϕ₀::FT,
     zspan::Tuple{FT, FT};
-    nelems = 100, # sets resolution for integration
+    nelems = 1000, # sets resolution for integration
 ) where {FT <: Real}
     # --- Make a space for integration:
     z_domain = Domains.IntervalDomain(
