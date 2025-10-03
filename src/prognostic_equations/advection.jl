@@ -361,6 +361,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     ᶠz = Fields.coordinate_field(Y.f).z
     ᶜu₃ʲ = p.scratch.ᶜtemp_C3
     ᶜKᵥʲ = p.scratch.ᶜtemp_scalar_2
+    ᶠρ_diff = p.scratch.ᶠtemp_scalar
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
 
     for j in 1:n
@@ -371,12 +372,20 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶜleft_bias(ᶠKᵥʲs.:($$j)),
             ᶜright_bias(ᶠKᵥʲs.:($$j)),
         )
+        # Use downwind density for buoyancy forcing.
+        # This ensures that the velocity perturbation responds with the correct phase
+        # to oppose density anomalies, preventing spurious growth of grid-scale modes.
+        # (Upwind choice would reinforce the anomaly and cause instability.)
+        @. ᶠρ_diff = ifelse(
+            Y.f.sgsʲs.:($$j).u₃.components.data.:1 < 0,
+            ᶠleft_bias((ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)),
+            ᶠright_bias((ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)),
+        )
         # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
         # and calcuate the buoyancy term relative to the grid-mean density.
         # We also include the buoyancy term in the nonhydrostatic pressure closure here.
         @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-            (1 - α_b) * (ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) * ᶠgradᵥ_ᶜΦ) /
-            ᶠinterp(ᶜρʲs.:($$j)) + ᶠgradᵥ(ᶜKᵥʲ)
+            (1 - α_b) * (ᶠρ_diff * ᶠgradᵥ_ᶜΦ) + ᶠgradᵥ(ᶜKᵥʲ)
 
         # buoyancy term in mse equation
         @. Yₜ.c.sgsʲs.:($$j).mse +=
