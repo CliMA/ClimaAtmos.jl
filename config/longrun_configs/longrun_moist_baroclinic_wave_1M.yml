@@ -1,0 +1,17 @@
+h_elem: 120
+z_elem: 43
+dz_bottom: 30.0
+dt: "40secs"
+approximate_linear_solve_iters: 3
+max_newton_iters_ode: 1
+rayleigh_sponge: true
+t_end: "15days"
+initial_condition: "MoistBaroclinicWave"
+moist: "nonequil"
+precip_model: "1M"
+dt_save_state_to_disk: "15days"
+disable_surface_flux_tendency: true
+toml: [toml/longrun_baroclinic_wave_1M.toml]
+diagnostics:
+  - short_name: [pfull, wa, va, ua, ta, rhoa, rv, hus, ke, clw, cli, husra, hussn]
+    period: 2days

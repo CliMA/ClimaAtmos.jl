@@ -106,12 +106,16 @@ end
 # dss_hyperdiffusion_tendency_pairs
 NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
+    (; params) = p
+    (; ᶜΦ) = p.core
+    (; ᶜts) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(params)
+
     isnothing(hyperdiff) && return nothing
 
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
     (; ᶜp) = p.precomputed
-    (; ᶜh_ref) = p.core
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
@@ -121,6 +125,8 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     @. ᶜ∇²u =
         C123(wgradₕ(divₕ(p.precomputed.ᶜu))) -
         C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜu))))
+
+    ᶜh_ref = @. lazy(h_dr(thermo_params, ᶜts, ᶜΦ))
 
     @. ᶜ∇²specific_energy =
         wdivₕ(gradₕ(specific(Y.c.ρe_tot, Y.c.ρ) + ᶜp / Y.c.ρ - ᶜh_ref))

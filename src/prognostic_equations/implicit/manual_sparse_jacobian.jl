@@ -463,12 +463,8 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
     ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
     @. ∂ᶠu₃_err_∂ᶜρ =
-        dtγ * (
-            ᶠp_grad_matrix ⋅
-            DiagonalMatrixRow(ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ)) +
-            DiagonalMatrixRow(ᶠgradᵥ(ᶜp) / abs2(ᶠinterp(ᶜρ))) ⋅
-            ᶠinterp_matrix()
-        )
+        dtγ * ᶠp_grad_matrix ⋅
+        DiagonalMatrixRow(ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ))
     @. ∂ᶠu₃_err_∂ᶜρe_tot = dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m)
     ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
