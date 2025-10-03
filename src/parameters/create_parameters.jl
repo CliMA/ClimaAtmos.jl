@@ -306,6 +306,7 @@ function TurbulenceConvectionParameters(
         :mixing_length_Prandtl_number_0 => :Prandtl_number_0,
         :mixing_length_Prandtl_maximum => :Pr_max,
         :mixing_length_static_stab_coeff => :static_stab_coeff,
+        :mixing_length_param_vec => :mixing_length_param_vec,
         :pressure_normalmode_buoy_coeff1 =>
             :pressure_normalmode_buoy_coeff1,
         :detr_inv_tau => :detr_inv_tau,
@@ -317,8 +318,9 @@ function TurbulenceConvectionParameters(
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)
+    VFT3 = typeof(parameters.mixing_length_param_vec)
     FT = CP.float_type(toml_dict)
-    CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2}(; parameters...)
+    CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2, VFT3}(; parameters...)
 end
 
 SurfaceTemperatureParameters(

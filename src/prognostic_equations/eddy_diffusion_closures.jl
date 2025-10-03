@@ -442,6 +442,48 @@ end
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:buoy}) = ml.buoy
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:l_grid}) = ml.l_grid
 
+# function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
+#     (; params) = p
+#     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
+#     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+#     ᶜz = Fields.coordinate_field(Y.c).z
+#     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+#     ᶜdz = Fields.Δz_field(axes(Y.c))
+
+#     turbconv_model = p.atmos.turbconv_model
+#     ᶜρa⁰ =
+#         turbconv_model isa PrognosticEDMFX ?
+#         (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
+#     ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+#     sfc_tke = Fields.level(ᶜtke⁰, 1)
+
+#     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
+#     @. ᶜprandtl_nvec =
+#         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+
+#     ᶜtke_exch = ᶜtke_exchange(Y, p)
+
+#     ᶜmixing_length_tuple = @. lazy(
+#         mixing_length_lopez_gomez_2020(
+#             params,
+#             ustar,
+#             ᶜz,
+#             z_sfc,
+#             ᶜdz,
+#             sfc_tke,
+#             ᶜlinear_buoygrad,
+#             ᶜtke⁰,
+#             obukhov_length,
+#             ᶜstrain_rate_norm,
+#             ᶜprandtl_nvec,
+#             ᶜtke_exch,
+#             p.atmos.edmfx_model.scale_blending_method,
+#         ),
+#     )
+#     return @. lazy(get_mixing_length_field(ᶜmixing_length_tuple, property))
+# end
+
+
 function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     (; params) = p
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
@@ -453,28 +495,72 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
     sfc_tke = Fields.level(ᶜtke⁰, 1)
 
-    ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
-    @. ᶜprandtl_nvec =
-        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
+    # Calibrated coefficients from CliMAParameters
+    turbconv_params = CAP.turbconv_params(params)
+    ml_param_vec = CAP.mixing_length_param_vec(turbconv_params)
 
-    ᶜmixing_length_tuple = @. lazy(
-        mixing_length_lopez_gomez_2020(
-            params,
-            ustar,
-            ᶜz,
-            z_sfc,
-            ᶜdz,
-            sfc_tke,
-            ᶜlinear_buoygrad,
-            ᶜtke⁰,
-            obukhov_length,
-            ᶜstrain_rate_norm,
-            ᶜprandtl_nvec,
-            p.atmos.edmfx_model.scale_blending_method,
-        ),
-    )
+    FT = eltype(ᶜz)
+    eps_FT = eps(FT)
+
+    # Prepare building blocks
+    l_z = max.(ᶜz .- z_sfc, FT(0))
+
+    # Compute delta_w as updraft - environment vertical velocity at centers
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    n_up = n_mass_flux_subdomains(turbconv_model)
+    ᶜdelta_w_sq = nothing
+    if turbconv_model isa PrognosticEDMFX || turbconv_model isa DiagnosticEDMFX
+        (; ᶜu⁰, ᶜuʲs) = p.precomputed
+        ᶜw_env = @. lazy(get_physical_w(ᶜu⁰, ᶜlg))
+        if n_up > 0
+            # Use the first updraft subdomain by default
+            ᶜw_up = @. lazy(get_physical_w(ᶜuʲs.:1, ᶜlg))
+        else
+            ᶜw_up = ᶜw_env
+        end
+        ᶜdelta_w = @. lazy(ᶜw_up - ᶜw_env)
+        ᶜdelta_w_sq = @. lazy(max(ᶜdelta_w * ᶜdelta_w, eps_FT))
+    else
+        # No EDMF subdomains; fall back to small positive to avoid division by zero
+        ᶜdelta_w_sq = p.scratch.ᶜtemp_scalar_4
+        @. ᶜdelta_w_sq = eps_FT
+    end
+
+    # mix_len_pi3 = tke / delta_w^2, clipped
+    ᶜmix_len_pi3 = @. lazy(min(ᶜtke⁰ / ᶜdelta_w_sq, FT(100)))
+
+    # Unnormalized candidate mixing-length equation (Eq. 1):
+    # ℓ = l0 + (a_lin * tke + b_lin) * exp( -k_tke_dw2 * (tke / Δw^2) - k_strain * strain )
+    l0 = FT(ml_param_vec[1])
+    a_lin = FT(ml_param_vec[2])
+    b_lin = FT(ml_param_vec[3])
+    k_tke_dw2 = FT(ml_param_vec[4])
+    k_strain = FT(ml_param_vec[5])
+
+    ᶜexp_arg = @. lazy(-k_tke_dw2 * ᶜmix_len_pi3 - k_strain * ᶜstrain_rate_norm)
+    ᶜℓ_raw = @. lazy(l0 + (a_lin * ᶜtke⁰ + b_lin) * exp(ᶜexp_arg))
+
+
+    # @show Base.materialize(ᶜmix_len_pi3)
+    # @show Base.materialize(ᶜstrain_rate_norm)
+    # @show Base.materialize(-k_tke_dw2 .* ᶜmix_len_pi3)
+    # @show Base.materialize(k_strain .* ᶜstrain_rate_norm)
+    # @show Base.materialize(ᶜexp_arg)
+    # @show Base.materialize(ᶜℓ_raw)
+    
+    # Clip to physical range: ≥ 1 m, ≤ min(l_z, Δz)
+    ᶜℓ_pos = @. lazy(max(ᶜℓ_raw, FT(1)))
+    ᶜℓ_clip = @. lazy(min(ᶜℓ_pos, l_z, ᶜdz))
+    # Enforce ℓ = 0 when TKE ≈ 0
+    # ᶜℓ = @. lazy(ifelse(ᶜtke⁰ <= FT(0.01), FT(0), ᶜℓ_clip))
+    ᶜℓ = ᶜℓ_clip
+    # res =  Base.materialize(ᶜℓ)
+    # @show res
+
+    ᶜmixing_length_tuple = @. lazy(MixingLength(ᶜℓ, ᶜℓ, ᶜℓ, ᶜℓ, ᶜdz))
     return @. lazy(get_mixing_length_field(ᶜmixing_length_tuple, property))
 end
+
 
 """
     gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
