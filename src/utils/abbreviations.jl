@@ -41,6 +41,7 @@ const ᶜsubdivᵥ = Operators.DivergenceF2C(
 # Precipitation has no flux at the top, but it has free outflow at the bottom.
 const ᶜprecipdivᵥ = Operators.DivergenceF2C(top = Operators.SetValue(CT3(0)))
 
+const ᶠleft_bias = Operators.LeftBiasedC2F()
 const ᶠright_bias = Operators.RightBiasedC2F() # for free outflow in ᶜprecipdivᵥ
 const ᶜleft_bias = Operators.LeftBiasedF2C()
 const ᶜright_bias = Operators.RightBiasedF2C()
