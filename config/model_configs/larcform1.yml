@@ -39,10 +39,10 @@ ode_algo: ARS343
 
 diagnostics: 
   - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, prsn, hus, hur, ua, va, wa, rlu, rld, rhoa] # profiles (2D)
-    period: 3hours
+    period: 1hours
     reduction: average
   - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs, hfes]  # time-series (1D)
-    period: 3hours
+    period: 1hours
     reduction: average
 
 # diagnostics:
