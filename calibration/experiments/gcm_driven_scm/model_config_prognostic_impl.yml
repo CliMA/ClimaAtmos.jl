@@ -35,7 +35,7 @@ rad: allskywithclear
 co2_model: fixed
 insolation: "gcmdriven"
 perturb_initstate: false
-dt: "30secs"
+dt: "40secs"
 dt_rad: "1hours"
 t_end: "72hours"
 call_cloud_diagnostics_per_stage : true

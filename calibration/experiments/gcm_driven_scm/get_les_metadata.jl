@@ -17,8 +17,8 @@ function get_les_calibration_library()
     # cfsite_numbers = (17, 22, 23, 30, 33, 94)
     # cfsite_numbers = (17, 21, 23, 30, 33)# 94)
     # cfsite_numbers = (17, 23, 94) #baseline run
-    cfsite_numbers = (17, 18, 21, 22, 23, 30, 94) #baseline run
-    # cfsite_numbers = (17, 18, 19, 21, 22, 23, 30, 33, 94)# 94)
+    # cfsite_numbers = (17, 18, 21, 22, 23, 30, 94) #baseline run
+    cfsite_numbers = (17, 18, 19, 21, 22, 23, 30, 33, 94)# 94)
 
     # cfsite_numbers = (17, 30,)# 94)
     les_kwargs = (forcing_model = "HadGEM2-A", month = 7, experiment = "amip")

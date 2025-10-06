@@ -187,15 +187,17 @@ series_names = [ref_paths[i] for i in 1:length(ref_paths)]
 
 # @show minibatch_inds
 
-rfs_minibatcher =
-    EKP.FixedMinibatcher(collect(1:experiment_config["batch_size"]))
+### Random fixed 
+rfs_minibatcher = EKP.RandomFixedSizeMinibatcher(experiment_config["batch_size"], "trim")
+observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
+### no minibatching
 # rfs_minibatcher =
 #     EKP.FixedMinibatcher(collect(1:experiment_config["batch_size"]))
+## rfs_minibatcher = EKP.no_minibatcher(experiment_config["batch_size"])
+# observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
-# rfs_minibatcher = EKP.no_minibatcher(experiment_config["batch_size"])
 
-observations = EKP.ObservationSeries(obs_vec, rfs_minibatcher, series_names)
 
 ###  EKI hyperparameters/settings
 @info "Initializing calibration" n_iterations ensemble_size output_dir
