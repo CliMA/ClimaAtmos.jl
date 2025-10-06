@@ -51,6 +51,8 @@ function edmfx_sgs_mass_flux_tendency!(
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
 
+        ᶜscalar = p.scratch.ᶜtemp_scalar
+
         # Enthalpy fluxes.
         # TODO: Isolate assembly of flux term pattern to a function and
         # reuse (both in prognostic and diagnostic EDMFX)
@@ -67,10 +69,11 @@ function edmfx_sgs_mass_flux_tendency!(
         @. Yₜ.c.ρe_tot -= vtt
         # Sum up the draft fluxes
         for j in 1:n
+            @. ᶜscalar = Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j)
             vtt = vertical_transport(
                 Y.c.sgsʲs.:($j).ρa,
                 ᶠu³ʲs.:($j),
-                (Y.c.sgsʲs.:($j).mse .+ ᶜKʲs.:($j)),
+                ᶜscalar,
                 float(dt),
                 edmfx_upwinding,
             )
@@ -78,10 +81,11 @@ function edmfx_sgs_mass_flux_tendency!(
         end
         # Add the environment fluxes
         ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
+        @. ᶜscalar = ᶜmse⁰ + ᶜK⁰
         vtt = vertical_transport(
             ᶜρa⁰,
             ᶠu³⁰,
-            (ᶜmse⁰ .+ ᶜK⁰),
+            ᶜscalar,
             float(dt),
             edmfx_upwinding,
         )
@@ -122,7 +126,6 @@ function edmfx_sgs_mass_flux_tendency!(
             p.atmos.microphysics_model isa Microphysics2Moment
         )
 
-            ᶜa_scalar = p.scratch.ᶜtemp_scalar
             microphysics_tracers = (
                 (@name(c.ρq_liq), @name(c.sgsʲs.:(1).q_liq), @name(q_liq)),
                 (@name(c.ρq_ice), @name(c.sgsʲs.:(1).q_ice), @name(q_ice)),
@@ -141,13 +144,13 @@ function edmfx_sgs_mass_flux_tendency!(
                     MatrixFields.has_field(Y, ρχ_name) || continue
 
                     ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-                    @. ᶜa_scalar =
+                    @. ᶜscalar =
                         ᶜχʲ *
                         draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                     vtt = vertical_transport(
                         ᶜρʲs.:($j),
                         ᶠu³ʲs.:($j),
-                        ᶜa_scalar,
+                        ᶜscalar,
                         dt,
                         tracer_upwinding,
                     )
@@ -162,11 +165,11 @@ function edmfx_sgs_mass_flux_tendency!(
                 MatrixFields.has_field(Y, ρχ_name) || continue
 
                 ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-                @. ᶜa_scalar = ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
+                @. ᶜscalar = ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
                 vtt = vertical_transport(
                     ᶜρ⁰,
                     ᶠu³⁰,
-                    ᶜa_scalar,
+                    ᶜscalar,
                     dt,
                     tracer_upwinding,
                 )
