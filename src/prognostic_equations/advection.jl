@@ -259,27 +259,28 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 @. ᶜρχₜ += vtt
             end
         end
-    end
-    # ... and upwinding correction of energy and total water.
-    # (The central advection of energy and total water is done implicitly.)
-    if energy_upwinding != Val(:none)
-        ᶜh_tot = @. lazy(
-            TD.total_specific_enthalpy(
-                thermo_params,
-                ᶜts,
-                specific(Y.c.ρe_tot, Y.c.ρ),
-            ),
-        )
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
-        @. Yₜ.c.ρe_tot += vtt - vtt_central
-    end
 
-    if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
-        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
-        @. Yₜ.c.ρq_tot += vtt - vtt_central
+        # ... and upwinding correction of energy and total water.
+        # (The central advection of energy and total water is done implicitly.)
+        if energy_upwinding != Val(:none)
+            ᶜh_tot = @. lazy(
+                TD.total_specific_enthalpy(
+                    thermo_params,
+                    ᶜts,
+                    specific(Y.c.ρe_tot, Y.c.ρ),
+                ),
+            )
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
+            vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
+            @. Yₜ.c.ρe_tot += vtt - vtt_central
+        end
+
+        if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
+            ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
+            vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
+            @. Yₜ.c.ρq_tot += vtt - vtt_central
+        end
     end
 
     if isnothing(ᶠf¹²)
@@ -377,9 +378,13 @@ function edmfx_sgs_vertical_advection_tendency!(
         # to oppose density anomalies, preventing spurious growth of grid-scale modes.
         # (Upwind choice would reinforce the anomaly and cause instability.)
         @. ᶠρ_diff = ifelse(
-            Y.f.sgsʲs.:($$j).u₃.components.data.:1 < 0,
-            ᶠleft_bias((ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)),
-            ᶠright_bias((ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)),
+            Y.f.sgsʲs.:($$j).u₃.components.data.:1 == 0,
+            ᶠinterp((ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)),
+            ifelse(
+                Y.f.sgsʲs.:($$j).u₃.components.data.:1 < 0,
+                ᶠleft_bias((ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)),
+                ᶠright_bias((ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)),
+            ),
         )
         # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
         # and calcuate the buoyancy term relative to the grid-mean density.
