@@ -33,10 +33,25 @@ CA.benchmark_step!(integrator, Y₀); # compile first
 n_steps = 10
 comms_ctx = ClimaComms.context(integrator.u.c)
 device = ClimaComms.device(comms_ctx)
-local e
-s = CA.@timed_str begin
-    e = ClimaComms.elapsed(device) do
-        CA.benchmark_step!(integrator, Y₀, n_steps) # run
+
+# If we're running on CUDA, use CUDA's profiler
+if device isa ClimaComms.CUDADevice
+    import CUDA
+    e = 0.0
+    use_external_profiler = CUDA.Profile.detect_cupti()
+    CUDA.@profile external = use_external_profiler begin
+        e = CUDA.@elapsed begin
+            CA.benchmark_step!(integrator, Y₀, n_steps) # run
+        end
     end
+    @info "Done running benchmark_step_gpu in $(e) seconds!"
+else
+    # Profile with Julia's built-in profiler
+    local e
+    s = CA.@timed_str begin
+        e = ClimaComms.elapsed(device) do
+            CA.benchmark_step!(integrator, Y₀, n_steps) # run
+        end
+    end
+    @info "Ran step! $n_steps times in $s, ($(CA.prettytime(e/n_steps*1e9)) per step)"
 end
-@info "Ran step! $n_steps times in $s, ($(CA.prettytime(e/n_steps*1e9)) per step)"
