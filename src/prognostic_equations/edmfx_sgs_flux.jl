@@ -291,7 +291,7 @@ function edmfx_sgs_mass_flux_tendency!(
                             min(draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)), a_max),
                             FT(0.02) / max(
                                 Geometry.WVector(
-                                    ᶜinterp(ᶠu³_diff),
+                                    ᶜinterp(ᶠu³ʲs.:($$j)),
                                 ).components.data.:1,
                                 eps(FT),
                             ),

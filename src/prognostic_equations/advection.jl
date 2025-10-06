@@ -250,8 +250,13 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
 
     # Full vertical advection of passive tracers (like liq, rai, etc) ...
-    # If sgs_mass_flux is true, the advection term is computed from the sum of SGS fluxes
-    if p.atmos.edmfx_model.sgs_mass_flux isa Val{false}
+    # For prognostic or diagnostic EDMF when sgs_mass_flux is true, the advection term
+    # is computed from the sum of SGS fluxes
+    if !(
+        p.atmos.turbconv_model isa PrognosticEDMFX ||
+        p.atmos.turbconv_model isa DiagnosticEDMFX
+    ) ||
+       p.atmos.edmfx_model.sgs_mass_flux isa Val{false}
         foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
             if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
                 ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
@@ -259,9 +264,14 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 @. ᶜρχₜ += vtt
             end
         end
+    end
 
-        # ... and upwinding correction of energy and total water.
-        # (The central advection of energy and total water is done implicitly.)
+    # ... and upwinding correction of energy and total water.
+    # (The central advection of energy and total water is done implicitly.)
+    # For prognostic when sgs_mass_flux is true, the advection term
+    # is computed from the sum of SGS fluxes
+    if !(p.atmos.turbconv_model isa PrognosticEDMFX) ||
+       p.atmos.edmfx_model.sgs_mass_flux isa Val{false}
         if energy_upwinding != Val(:none)
             ᶜh_tot = @. lazy(
                 TD.total_specific_enthalpy(
