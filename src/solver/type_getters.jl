@@ -13,6 +13,166 @@ import Logging
 import ClimaUtilities.TimeManager: ITime
 
 import ClimaDiagnostics
+import Functors
+
+"""
+    build_mixing_length_nn_model(parsed_args, params)
+
+Construct and return a `MixingLengthNN` if NN mixing length is enabled in the parsed args.
+Weights are taken from `CAP.mixing_length_param_vec` and mapped into a Lux Dense Chain
+matching the historical architecture [8, 20, 15, 10, 1] (8 inputs).
+Returns `nothing` when not enabled.
+"""
+"""
+    num_params_from_arc(nn_arc::AbstractArray{Int})
+
+Count number of parameters in fully-connected NN model given Array specifying architecture following
+the pattern: [#inputs, #neurons in L1, #neurons in L2, ...., #outputs]. Equal to the number of weights + biases.
+"""
+num_params_from_arc(nn_arc::AbstractArray{Int}) =
+    num_weights_from_arc(nn_arc) + num_biases_from_arc(nn_arc)
+
+"""
+    num_weights_from_arc(nn_arc::AbstractArray{Int})
+
+Count number of weights in fully-connected NN architecture.
+"""
+num_weights_from_arc(nn_arc::AbstractArray{Int}) =
+    sum(i -> nn_arc[i] * nn_arc[i + 1], 1:(length(nn_arc) - 1))
+
+"""
+    num_biases_from_arc(nn_arc::AbstractArray{Int})
+
+Count number of biases in fully-connected NN architecture.
+"""
+num_biases_from_arc(nn_arc::AbstractArray{Int}) =
+    sum(i -> nn_arc[i + 1], 1:(length(nn_arc) - 1))
+
+"""
+    construct_fully_connected_nn_lux(
+        arc::AbstractArray{Int},
+        params::AbstractArray{FT};
+        biases_bool::Bool = false,
+        activation_function = Lux.relu,
+        output_layer_activation_function = Lux.relu,
+    ) where {FT <: Real}
+
+Given network architecture and parameter vectors, construct Lux NN model and unpack weights (and biases if `biases_bool` is true).
+Returns a MixingLengthNN struct containing the model, parameters, and state.
+
+# Arguments
+- `arc` :: vector specifying network architecture [#inputs, #neurons in L1, ..., #outputs]
+- `params` :: parameter vector containing weights (and biases if `biases_bool` is true)
+- `biases_bool` :: bool specifying whether `params` includes biases (default: false)
+- `activation_function` :: activation function for hidden layers (default: Lux.relu)
+- `output_layer_activation_function` :: activation function for output layer (default: Lux.relu)
+"""
+function construct_fully_connected_nn_lux(
+    arc::AbstractArray{Int},
+    params::AbstractArray{FT};
+    biases_bool::Bool = false,
+    activation_function = nothing,
+    output_layer_activation_function = nothing,
+) where {FT <: Real}
+
+    # Lazy import Lux only if required to avoid global dependency here
+    @static if Base.find_package("Lux") === nothing
+        error("Lux.jl is required for NN but is not in the environment")
+    end
+    Lux = Base.require(Base.PkgId(Base.UUID("b3a3368c-0fb4-4e24-a23c-5fc06d4f2c83"), "Lux"))
+
+    # Set default activation functions
+    act_fn = activation_function === nothing ? Lux.relu : activation_function
+    out_act_fn = output_layer_activation_function === nothing ? Lux.relu : output_layer_activation_function
+
+    # Check consistency of architecture and parameters
+    if biases_bool
+        n_params_nn = num_params_from_arc(arc)
+        n_params_vect = length(params)
+    else
+        n_params_nn = num_weights_from_arc(arc)
+        n_params_vect = length(params)
+    end
+    if n_params_nn != n_params_vect
+        error("Incorrect number of parameters ($n_params_vect) for requested NN architecture ($n_params_nn)!")
+    end
+
+    # Build Lux model with specified architecture
+    layers = Any[]
+    for layer_i in 1:(length(arc) - 1)
+        current_act_fn = (layer_i == length(arc) - 1) ? out_act_fn : act_fn
+        push!(layers, Lux.Dense(arc[layer_i] => arc[layer_i + 1], current_act_fn; use_bias = biases_bool))
+    end
+    model = Lux.Chain(layers...)
+
+    # Setup params/state template
+    rng = Random.default_rng()
+    ps_tmpl, st = Lux.setup(rng, model)
+
+    # Flatten template and unflatten with provided vector
+    flat, unflatten = Functors.flatten(ps_tmpl)
+    
+    # Double-check parameter count matches (should always be true given earlier check)
+    length(flat) == length(params) || error(
+        "Parameter count mismatch: expected $(length(flat)), got $(length(params))")
+    
+    ps = unflatten(FT.(params))
+
+    # Capture axes for future serialization
+    axes = nothing
+
+    return MixingLengthNN(model, ps, st, axes)
+end
+
+function build_mixing_length_nn_model(parsed_args, params)
+    ml_mode = get(parsed_args, "mixing_length_model", nothing)
+    !(ml_mode == "nn") && return nothing
+
+    # Using Float type from params
+    FT = eltype(params)
+
+    # Architecture mirroring prior implementation: 8 inputs -> [20, 15, 10] -> 1
+    arc = (8, 20, 15, 10, 1)
+
+    # Lazy import Lux only if required to avoid global dependency here
+    @static if Base.find_package("Lux") === nothing
+        error("Lux.jl is required for NN mixing_length but is not in the environment")
+    end
+    Lux = Base.require(Base.PkgId(Base.UUID("b3a3368c-0fb4-4e24-a23c-5fc06d4f2c83"), "Lux"))
+
+    # Pull flat weights from CAP; ensure type FT
+    param_vec = FT.(CAP.mixing_length_param_vec(CAP.turbconv_params(params)))
+
+    # Use the new construct_fully_connected_nn_lux function
+    return construct_fully_connected_nn_lux(
+        collect(arc),
+        param_vec;
+        biases_bool = false,
+        activation_function = Lux.leakyrelu,
+        output_layer_activation_function = Lux.identity,
+    )
+end
+
+"""
+    get_mixing_length_type(parsed_args)
+
+Selects the mixing length backend from config: "physical" (default) or
+"nn" to enable the Lux-based backend. Returns a backend tag type for dispatch.
+"""
+function get_mixing_length_type(parsed_args)
+    name = get(parsed_args, "mixing_length_type", nothing)
+    if isnothing(name)
+        # Backward-compat: also accept mixing_length_model
+        name = get(parsed_args, "mixing_length_model", nothing)
+    end
+    return if name == "nn"
+        NeuralNetworkMixingLengthType()
+    elseif name == "sym_eqn1"
+        SymEqn1MixingLengthType()
+    else
+        PhysicalMixingLengthType()
+    end
+end
 
 function get_atmos(config::AtmosConfig, params)
     (; turbconv_params) = params
@@ -114,6 +274,10 @@ function get_atmos(config::AtmosConfig, params)
         FT,
     )
 
+    # Build a per-rank NN for mixing length if configured; otherwise keep nothing
+    mixing_length_nn = build_mixing_length_nn_model(parsed_args, params)
+    ml_backend = get_mixing_length_type(parsed_args)
+
     atmos = AtmosModel(;
         # AtmosWater - Moisture, Precipitation & Clouds
         moisture_model,
@@ -148,6 +312,8 @@ function get_atmos(config::AtmosConfig, params)
         sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
         smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
         amd_les = get_amd_les_model(parsed_args, FT),
+        mixing_length_nn,
+        mixing_length_type = ml_backend,
 
         # AtmosGravityWave
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(

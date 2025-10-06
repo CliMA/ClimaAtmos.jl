@@ -3,6 +3,7 @@
 #####
 
 import StaticArrays as SA
+import Lux
 import Thermodynamics.Parameters as TDP
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
@@ -442,70 +443,65 @@ end
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:buoy}) = ml.buoy
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:l_grid}) = ml.l_grid
 
-# function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
-#     (; params) = p
-#     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
-#     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-#     ᶜz = Fields.coordinate_field(Y.c).z
-#     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
-#     ᶜdz = Fields.Δz_field(axes(Y.c))
-
-#     turbconv_model = p.atmos.turbconv_model
-#     ᶜρa⁰ =
-#         turbconv_model isa PrognosticEDMFX ?
-#         (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
-#     ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
-#     sfc_tke = Fields.level(ᶜtke⁰, 1)
-
-#     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
-#     @. ᶜprandtl_nvec =
-#         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm)
-
-#     ᶜtke_exch = ᶜtke_exchange(Y, p)
-
-#     ᶜmixing_length_tuple = @. lazy(
-#         mixing_length_lopez_gomez_2020(
-#             params,
-#             ustar,
-#             ᶜz,
-#             z_sfc,
-#             ᶜdz,
-#             sfc_tke,
-#             ᶜlinear_buoygrad,
-#             ᶜtke⁰,
-#             obukhov_length,
-#             ᶜstrain_rate_norm,
-#             ᶜprandtl_nvec,
-#             ᶜtke_exch,
-#             p.atmos.edmfx_model.scale_blending_method,
-#         ),
-#     )
-#     return @. lazy(get_mixing_length_field(ᶜmixing_length_tuple, property))
-# end
 
 
-function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
+
+function ᶜmixing_length(Y, p, ::Val{:master})
+
     (; params) = p
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜdz = Fields.Δz_field(axes(Y.c))
-
-    ᶜtke⁰ = @. lazy(specific(Y.c.sgs⁰.ρatke, Y.c.ρ))
+    turbconv_model = p.atmos.turbconv_model
+    ᶜρa⁰ =
+        turbconv_model isa PrognosticEDMFX ?
+        (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
     sfc_tke = Fields.level(ᶜtke⁰, 1)
+    ᶜprandtl_nvec = @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
+    ᶜtke_exch = ᶜtke_exchange(Y, p)
+    ᶜmixing_length_tuple = @. lazy(
+        mixing_length_lopez_gomez_2020(
+            params,
+            ustar,
+            ᶜz,
+            z_sfc,
+            ᶜdz,
+            sfc_tke,
+            ᶜlinear_buoygrad,
+            ᶜtke⁰,
+            obukhov_length,
+            ᶜstrain_rate_norm,
+            ᶜprandtl_nvec,
+            ᶜtke_exch,
+            p.atmos.edmfx_model.scale_blending_method,
+        ),
+    )
+    return @. lazy(get_mixing_length_field(ᶜmixing_length_tuple, Val{:master}()))
+end
 
-    # Calibrated coefficients from CliMAParameters
+function ᶜmixing_length(Y, p, ::Val{:sym_eqn1})
+    # Symbolic Eqn1 closure (previous hack under master)
+    (; params) = p
+    (; ustar, obukhov_length) = p.precomputed.sfc_conditions
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+    turbconv_model = p.atmos.turbconv_model
+    ᶜρa⁰ =
+        turbconv_model isa PrognosticEDMFX ?
+        (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    sfc_tke = Fields.level(ᶜtke⁰, 1)
     turbconv_params = CAP.turbconv_params(params)
     ml_param_vec = CAP.mixing_length_param_vec(turbconv_params)
-
+    
     FT = eltype(ᶜz)
     eps_FT = eps(FT)
-
-    # Prepare building blocks
     l_z = max.(ᶜz .- z_sfc, FT(0))
-
-    # Compute delta_w as updraft - environment vertical velocity at centers
     ᶜlg = Fields.local_geometry_field(Y.c)
     n_up = n_mass_flux_subdomains(turbconv_model)
     ᶜdelta_w_sq = nothing
@@ -513,7 +509,6 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
         (; ᶜu⁰, ᶜuʲs) = p.precomputed
         ᶜw_env = @. lazy(get_physical_w(ᶜu⁰, ᶜlg))
         if n_up > 0
-            # Use the first updraft subdomain by default
             ᶜw_up = @. lazy(get_physical_w(ᶜuʲs.:1, ᶜlg))
         else
             ᶜw_up = ᶜw_env
@@ -521,44 +516,117 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
         ᶜdelta_w = @. lazy(ᶜw_up - ᶜw_env)
         ᶜdelta_w_sq = @. lazy(max(ᶜdelta_w * ᶜdelta_w, eps_FT))
     else
-        # No EDMF subdomains; fall back to small positive to avoid division by zero
         ᶜdelta_w_sq = p.scratch.ᶜtemp_scalar_4
         @. ᶜdelta_w_sq = eps_FT
     end
-
-    # mix_len_pi3 = tke / delta_w^2, clipped
     ᶜmix_len_pi3 = @. lazy(min(ᶜtke⁰ / ᶜdelta_w_sq, FT(100)))
-
-    # Unnormalized candidate mixing-length equation (Eq. 1):
-    # ℓ = l0 + (a_lin * tke + b_lin) * exp( -k_tke_dw2 * (tke / Δw^2) - k_strain * strain )
     l0 = FT(ml_param_vec[1])
     a_lin = FT(ml_param_vec[2])
     b_lin = FT(ml_param_vec[3])
     k_tke_dw2 = FT(ml_param_vec[4])
     k_strain = FT(ml_param_vec[5])
-
     ᶜexp_arg = @. lazy(-k_tke_dw2 * ᶜmix_len_pi3 - k_strain * ᶜstrain_rate_norm)
     ᶜℓ_raw = @. lazy(l0 + (a_lin * ᶜtke⁰ + b_lin) * exp(ᶜexp_arg))
-
-
-    # @show Base.materialize(ᶜmix_len_pi3)
-    # @show Base.materialize(ᶜstrain_rate_norm)
-    # @show Base.materialize(-k_tke_dw2 .* ᶜmix_len_pi3)
-    # @show Base.materialize(k_strain .* ᶜstrain_rate_norm)
-    # @show Base.materialize(ᶜexp_arg)
-    # @show Base.materialize(ᶜℓ_raw)
-    
-    # Clip to physical range: ≥ 1 m, ≤ min(l_z, Δz)
     ᶜℓ_pos = @. lazy(max(ᶜℓ_raw, FT(1)))
     ᶜℓ_clip = @. lazy(min(ᶜℓ_pos, l_z, ᶜdz))
-    # Enforce ℓ = 0 when TKE ≈ 0
-    # ᶜℓ = @. lazy(ifelse(ᶜtke⁰ <= FT(0.01), FT(0), ᶜℓ_clip))
     ᶜℓ = ᶜℓ_clip
-    # res =  Base.materialize(ᶜℓ)
-    # @show res
-
     ᶜmixing_length_tuple = @. lazy(MixingLength(ᶜℓ, ᶜℓ, ᶜℓ, ᶜℓ, ᶜdz))
-    return @. lazy(get_mixing_length_field(ᶜmixing_length_tuple, property))
+    return @. lazy(get_mixing_length_field(ᶜmixing_length_tuple, Val{:master}()))
+end
+
+function ᶜmixing_length(Y, p, ::Val{:nn})
+    # Neural network closure (Lux-based)
+    (; params, atmos) = p
+    isnothing(atmos.turbconv.mixing_length_nn) && error("mixing_length_type=nn but no NN is initialized")
+    nn = atmos.turbconv.mixing_length_nn
+    (; ustar, obukhov_length) = p.precomputed.sfc_conditions
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+    turbconv_model = p.atmos.turbconv_model
+    ᶜρa⁰ =
+        turbconv_model isa PrognosticEDMFX ?
+        (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
+    ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
+    sfc_tke = Fields.level(ᶜtke⁰, 1)
+    FT = eltype(ᶜz)
+    eps_FT = eps(FT)
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    n_up = n_mass_flux_subdomains(turbconv_model)
+    ᶜw_env = @. lazy(get_physical_w(p.precomputed.ᶜu⁰, ᶜlg))
+    ᶜw_up = n_up > 0 ? @. lazy(get_physical_w(p.precomputed.ᶜuʲs.:1, ᶜlg)) : ᶜw_env
+    l_z = @. lazy(max(ᶜz - z_sfc, FT(0)))
+    ᶜdelta_w_sq = @. lazy(max((ᶜw_up - ᶜw_env) * (ᶜw_up - ᶜw_env), eps_FT))
+    X_1 = @. lazy(ᶜstrain_rate_norm / (ᶜlinear_buoygrad + eps_FT))
+    X_2 = @. lazy(ᶜtke⁰ / (ᶜlinear_buoygrad * ᶜz * ᶜz + eps_FT))
+    X_3 = @. lazy(ᶜtke⁰ / (ᶜdelta_w_sq))
+    X_4 = ᶜlinear_buoygrad
+    X_5 = ᶜstrain_rate_norm
+    X_6 = ᶜtke⁰
+    X_7 = @. lazy(ᶜz / (obukhov_length + eps_FT))
+    X_8 = @. lazy(ᶜdz / (obukhov_length + eps_FT))
+    X_1 = @. lazy(clamp(X_1, -100.0, 100.0))
+    X_2 = @. lazy(clamp(X_2, -1e4, 1e4))
+    X_3 = @. lazy(clamp(X_3, -100.0, 100.0))
+    X_4 = @. lazy(clamp(X_4, -0.02, 0.02))
+    X_5 = @. lazy(clamp(X_5, -1e-3, 1e-3))
+    X_7 = @. lazy(clamp(X_7, -3e4, 3e4))
+    X_8 = @. lazy(clamp(X_8, -2500, 2500))
+    means = (
+        X1 = FT(0.08152589946985245),
+        X2 = FT(-9.220643997192383),
+        X3 = FT(1.456505298614502),
+        X4 = FT(4.150567838223651e-05),
+        X5 = FT(1.2203592632431537e-05),
+        X6 = FT(0.1851629614830017),
+        X7 = FT(-56.88902282714844),
+        X8 = FT(-7.018703460693359),
+    )
+    stds = (
+        X1 = FT(42.38632678985596),
+        X2 = FT(1158.9794158935547),
+        X3 = FT(55.166049003601074),
+        X4 = FT(0.0010860399197554216),
+        X5 = FT(0.0001870773485279642),
+        X6 = FT(2.441168576478958),
+        X7 = FT(4223.447265625),
+        X8 = FT(414.67926025390625),
+    )
+    N1 = @. lazy((X_1 - means.X1) / stds.X1)
+    N2 = @. lazy((X_2 - means.X2) / stds.X2)
+    N3 = @. lazy((X_3 - means.X3) / stds.X3)
+    N4 = @. lazy((X_4 - means.X4) / stds.X4)
+    N5 = @. lazy((X_5 - means.X5) / stds.X5)
+    N6 = @. lazy((X_6 - means.X6) / stds.X6)
+    N7 = @. lazy((X_7 - means.X7) / stds.X7)
+    N8 = @. lazy((X_8 - means.X8) / stds.X8)
+    function eval_nn(n1, n2, n3, n4, n5, n6, n7, n8)
+        x = SA.SVector(n1, n2, n3, n4, n5, n6, n7, n8)
+        y, _ = Lux.apply(nn.model, x, nn.params, nn.state)
+        return y[1]
+    end
+    l_norm = @. lazy(eval_nn(N1, N2, N3, N4, N5, N6, N7, N8))
+    l_pred = @. lazy(max(FT(l_norm) * FT(510.1035690307617) + FT(36.83180618286133), FT(0)))
+    N_eff = @. lazy(sqrt(max(ᶜlinear_buoygrad, 0)))
+    ᶜprandtl_nvec = @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
+    l_smag = @. lazy(smagorinsky_lilly_length(CAP.c_smag(params), N_eff, ᶜdz, ᶜprandtl_nvec, ᶜstrain_rate_norm))
+    l_clip = @. lazy(max(l_smag, min(l_pred, l_z)))
+    ℓ = l_clip
+    ᶜmixing_length_tuple = @. lazy(MixingLength(ℓ, ℓ, ℓ, ℓ, ᶜdz))
+    return @. lazy(get_mixing_length_field(ᶜmixing_length_tuple, Val{:master}()))
+end
+
+function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
+    # Dispatcher mapping config type to mixing-length variant
+    t = p.atmos.turbconv.mixing_length_type
+    if t isa PhysicalMixingLengthType
+        return ᶜmixing_length(Y, p, Val{:master}())
+    elseif t isa SymEqn1MixingLengthType
+        return ᶜmixing_length(Y, p, Val{:sym_eqn1}())
+    else
+        return ᶜmixing_length(Y, p, Val{:nn}())
+    end
 end
 
 

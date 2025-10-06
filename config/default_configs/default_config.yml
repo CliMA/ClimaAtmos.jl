@@ -360,6 +360,9 @@ advection_test:
 edmfx_scale_blending:
   help: "Method for blending physical scales in EDMFX mixing length calculation. [`SmoothMinimum` (default), `HardMinimum`]"
   value: "SmoothMinimum"
+mixing_length_type:
+  help: "Mixing length backend [`physical` (default), `sym_eqn1`, `nn`]. `sym_eqn1` uses symbolic Eqn1 closure; `nn` uses Lux-based NN from CAP.mixing_length_param_vec."
+  value: "physical"
 implicit_sgs_advection:
   help: "Whether to treat the subgrid-scale vertical advection tendency implicitly [`false` (default), `true`]"
   value: false
