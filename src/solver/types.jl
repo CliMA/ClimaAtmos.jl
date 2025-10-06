@@ -582,7 +582,7 @@ end
 
 Groups turbulence convection-related models and types.
 """
-Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL}
+Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL, MLNN, MLB}
     edmfx_model::EDMFX = nothing
     turbconv_model::TCM = nothing
     sgs_adv_mode::SAM = nothing
@@ -591,6 +591,8 @@ Base.@kwdef struct AtmosTurbconv{EDMFX, TCM, SAM, SEDM, SNPM, SVM, SMM, SL}
     sgs_vertdiff_mode::SVM = nothing
     sgs_mf_mode::SMM = nothing
     smagorinsky_lilly::SL = nothing
+    mixing_length_nn::MLNN = nothing
+    mixing_length_type::MLB = nothing
 end
 
 """
@@ -632,6 +634,22 @@ Base.broadcastable(x::AtmosTurbconv) = tuple(x)
 Base.broadcastable(x::AtmosGravityWave) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
+
+# Lightweight container for a Lux-based mixing-length neural network.
+# We intentionally avoid referencing Lux types here to keep this file light.
+struct MixingLengthNN{M, P, S, AX}
+    model::M
+    params::P
+    state::S
+    axes::AX
+end
+Base.broadcastable(x::MixingLengthNN) = tuple(x)
+
+# Type selection for mixing length computation
+abstract type AbstractMixingLengthType end
+struct PhysicalMixingLengthType <: AbstractMixingLengthType end
+struct SymEqn1MixingLengthType <: AbstractMixingLengthType end
+struct NeuralNetworkMixingLengthType <: AbstractMixingLengthType end
 
 struct AtmosModel{W, SCM, R, TC, GW, VD, SP, SU, NU}
     water::W
