@@ -30,7 +30,6 @@ Y₀ = deepcopy(integrator.u);
 CA.benchmark_step!(integrator, Y₀); # compile first
 
 @info "Running benchmark_step!..."
-n_steps = 10
 comms_ctx = ClimaComms.context(integrator.u.c)
 device = ClimaComms.device(comms_ctx)
 
@@ -38,15 +37,25 @@ device = ClimaComms.device(comms_ctx)
 if device isa ClimaComms.CUDADevice
     import CUDA
     e = 0.0
+    n_steps = 5
     use_external_profiler = CUDA.Profile.detect_cupti()
-    CUDA.@profile external = use_external_profiler begin
-        e = CUDA.@elapsed begin
-            CA.benchmark_step!(integrator, Y₀, n_steps) # run
+    if use_external_profiler
+        CUDA.@profile external = true begin
+            e = CUDA.@elapsed begin
+                CA.benchmark_step!(integrator, Y₀, n_steps)
+            end
+        end
+    else
+        CUDA.@profile external = false begin
+            e = CUDA.@elapsed begin
+                CA.benchmark_step!(integrator, Y₀, n_steps)
+            end
         end
     end
     @info "Done running benchmark_step_gpu in $(e) seconds!"
 else
     # Profile with Julia's built-in profiler
+    n_steps = 10
     local e
     s = CA.@timed_str begin
         e = ClimaComms.elapsed(device) do
