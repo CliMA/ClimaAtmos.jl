@@ -291,22 +291,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
             @. Yₜ.c.ρq_tot += vtt - vtt_central
         end
-    else
-        ᶜh_tot = @. lazy(
-            TD.total_specific_enthalpy(
-                thermo_params,
-                ᶜts,
-                specific(Y.c.ρe_tot, Y.c.ρ),
-            ),
-        )
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
-        @. Yₜ.c.ρe_tot -= vtt_central
-
-        if !(p.atmos.moisture_model isa DryModel)
-            ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-            vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
-            @. Yₜ.c.ρq_tot -= vtt_central
-        end
     end
 
     if isnothing(ᶠf¹²)
@@ -388,7 +372,6 @@ function edmfx_sgs_vertical_advection_tendency!(
     ᶠz = Fields.coordinate_field(Y.f).z
     ᶜu₃ʲ = p.scratch.ᶜtemp_C3
     ᶜKᵥʲ = p.scratch.ᶜtemp_scalar_2
-    ᶠρ_diff = p.scratch.ᶠtemp_scalar
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
 
     for j in 1:n
@@ -399,24 +382,12 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶜleft_bias(ᶠKᵥʲs.:($$j)),
             ᶜright_bias(ᶠKᵥʲs.:($$j)),
         )
-        # Use downwind density for buoyancy forcing.
-        # This ensures that the velocity perturbation responds with the correct phase
-        # to oppose density anomalies, preventing spurious growth of grid-scale modes.
-        # (Upwind choice would reinforce the anomaly and cause instability.)
-        @. ᶠρ_diff = ifelse(
-            Y.f.sgsʲs.:($$j).u₃.components.data.:1 == 0,
-            ᶠinterp((ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)),
-            ifelse(
-                Y.f.sgsʲs.:($$j).u₃.components.data.:1 < 0,
-                ᶠleft_bias((ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)),
-                ᶠright_bias((ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)),
-            ),
-        )
         # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
         # and calcuate the buoyancy term relative to the grid-mean density.
         # We also include the buoyancy term in the nonhydrostatic pressure closure here.
         @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-            (1 - α_b) * (ᶠρ_diff * ᶠgradᵥ_ᶜΦ) + ᶠgradᵥ(ᶜKᵥʲ)
+            (1 - α_b) * (ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρʲs.:($$j)) +
+            ᶠgradᵥ(ᶜKᵥʲ)
 
         # buoyancy term in mse equation
         @. Yₜ.c.sgsʲs.:($$j).mse +=
