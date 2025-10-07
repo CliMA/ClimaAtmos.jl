@@ -894,7 +894,7 @@ function make_plots(
         make_contour_plots(short_names, time_series_output_name) do short_name
             Iterators.flatmap(simdirs) do simdir
                 var = get(simdir; short_name)
-                var = window(var, z_dim_name(var); right = zd_rayleigh)
+                # var = window(var, z_dim_name(var); right = zd_rayleigh)
                 var = is_3d ? slice(var; y = 0) : var
                 time_values = if endswith(short_name, "predicted")
                     (Inf,) # Predicted values are constant and only need 1 plot.
