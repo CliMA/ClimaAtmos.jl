@@ -40,9 +40,8 @@ function edmfx_sgs_mass_flux_tendency!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_upwinding, tracer_upwinding) = p.atmos.numerics
-    (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
-    (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜts⁰) = p.precomputed
     (; dt) = p
 
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -57,16 +56,6 @@ function edmfx_sgs_mass_flux_tendency!(
         # TODO: Isolate assembly of flux term pattern to a function and
         # reuse (both in prognostic and diagnostic EDMFX)
         # [best after removal of precomputed quantities]
-        # First subtract the grid mean flux (already added implicitly)
-        ᶜh_tot = @. lazy(
-            TD.total_specific_enthalpy(
-                thermo_params,
-                ᶜts,
-                specific(Y.c.ρe_tot, Y.c.ρ),
-            ),
-        )
-        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
-        @. Yₜ.c.ρe_tot -= vtt
         # Sum up the draft fluxes
         for j in 1:n
             @. ᶜscalar = Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j)
@@ -93,10 +82,6 @@ function edmfx_sgs_mass_flux_tendency!(
 
         if !(p.atmos.moisture_model isa DryModel)
             # Specific humidity fluxes
-            # First subtract the grid mean flux (already added implicitly)
-            ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-            vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
-            @. Yₜ.c.ρq_tot -= vtt
             # Sum up the draft fluxes
             for j in 1:n
                 vtt = vertical_transport(
@@ -125,7 +110,6 @@ function edmfx_sgs_mass_flux_tendency!(
             p.atmos.microphysics_model isa Microphysics1Moment ||
             p.atmos.microphysics_model isa Microphysics2Moment
         )
-
             microphysics_tracers = (
                 (@name(c.ρq_liq), @name(c.sgsʲs.:(1).q_liq), @name(q_liq)),
                 (@name(c.ρq_ice), @name(c.sgsʲs.:(1).q_ice), @name(q_ice)),
