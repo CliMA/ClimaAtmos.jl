@@ -10,7 +10,7 @@ z_elem: 100
 dz_bottom: 10
 schar_mountain_height: 250
 dt: "0.7secs"
-t_end: "2days"
+t_end: "3days"
 rayleigh_sponge: true
 disable_surface_flux_tendency: true
 toml: [toml/steady_state_test.toml]
