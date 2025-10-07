@@ -36,6 +36,8 @@ device = ClimaComms.device(comms_ctx)
 # If we're running on CUDA, use CUDA's profiler
 if device isa ClimaComms.CUDADevice
     import CUDA
+    import ClimaCore
+    ClimaCore.DebugOnly.name_kernels_from_stack_trace() = true
     e = 0.0
     n_steps = 5
     use_external_profiler = CUDA.Profile.detect_cupti()
