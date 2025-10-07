@@ -438,18 +438,18 @@ end
 
 function get_topography(FT, parsed_args)
     topo_str = parsed_args["topography"]
-    topo_types = Dict("NoWarp" => NoTopography(),
-        "Cosine2D" => CosineTopography{2, FT}(),
-        "Cosine3D" => CosineTopography{3, FT}(),
-        "Agnesi" => AgnesiTopography{FT}(),
-        "Schar" => ScharTopography{FT}(),
-        "Earth" => EarthTopography(),
-        "Hughes2023" => Hughes2023Topography(),
-        "DCMIP200" => DCMIP200Topography(),
-    )
-
-    @assert topo_str in keys(topo_types)
-    return topo_types[topo_str]
+    return if topo_str == "Schar"
+        ScharTopography{FT}(; h_max = parsed_args["schar_mountain_height"])
+    else
+        Dict("NoWarp" => NoTopography(),
+            "Cosine2D" => CosineTopography{2, FT}(),
+            "Cosine3D" => CosineTopography{3, FT}(),
+            "Agnesi" => AgnesiTopography{FT}(),
+            "Earth" => EarthTopography(),
+            "Hughes2023" => Hughes2023Topography(),
+            "DCMIP200" => DCMIP200Topography(),
+        )[topo_str]
+    end
 end
 
 function get_steady_state_velocity(params, Y, parsed_args)

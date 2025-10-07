@@ -1,5 +1,5 @@
 config: "plane"
-FLOAT_TYPE: "Float64"
+FLOAT_TYPE: "Float32"
 initial_condition: "ConstantBuoyancyFrequencyProfile"
 topography: "Schar"
 mesh_warp_type: "Linear"
@@ -8,8 +8,9 @@ z_max: 21e3
 x_elem: 100
 z_elem: 100
 dz_bottom: 10
+schar_mountain_height: 150
 dt: "0.7secs"
-t_end: "2days"
+t_end: "3days"
 rayleigh_sponge: true
 disable_surface_flux_tendency: true
 toml: [toml/steady_state_test.toml]
