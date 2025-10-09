@@ -19,6 +19,43 @@ import ClimaUtilities.TimeVaryingInputs: evaluate!
 
 include("callback_helpers.jl")
 
+
+"""
+    positivity_preserving_limiter(integrator)
+Given the `integrator`, apply the Guba et al. (2014)
+positivity preserving limiter in a callback at user defined
+frequencies. The tracer value in each element is bounded such that
+0 ≤ qⱼ < max(qⱼ ∈ Ωᵢ), that is the jth nodal point `q` must be 
+between 0 and the maximum value of the tracer in a given element `i`.
+"""
+function positivity_preserving_limiter!(integrator)
+    Y = integrator.u;
+    foreach_gs_tracer(similar(Y), Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        if ρχ_name in (@name(ρq_rai), @name(ρq_sno), @name(ρn_rai), @name(ρq_liq), @name(ρq_ice))
+            limiter = Limiters.QuasiMonotoneLimiter(
+                ᶜρχ;
+                rtol = eps(eltype(ᶜρχ))
+            );
+            ref_ᶜρχ = max.(min.(ᶜρχ, maximum(ᶜρχ)), zero(eltype(ᶜρχ)));
+            Limiters.compute_bounds!(limiter, ref_ᶜρχ, Y.c.ρ);
+            Limiters.apply_limiter!(ᶜρχ, Y.c.ρ, limiter; warn=false);
+        else
+            nothing
+        end
+        #if ρχ_name == @name(ρq_tot)
+        #    #(stuff..)
+        #end
+    end
+
+    return nothing
+end
+
+"""
+    flux_accumulation!(integrator)
+Given the `integrator`, determines the net surface energy flux
+depending on whether or not radiation tendencies are active in 
+a simulation.
+"""
 function flux_accumulation!(integrator)
     Y = integrator.u
     p = integrator.p

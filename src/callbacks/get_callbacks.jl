@@ -299,6 +299,17 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         )
     end
 
+    if parsed_args["limiter_debug"]
+        callbacks = (
+            callbacks...,
+            call_every_n_steps(
+                positivity_preserving_limiter!;
+                skip_first = true,
+                call_at_end = true,
+            ),
+        )
+    end
+
     if parsed_args["check_conservation"]
         callbacks = (
             callbacks...,
