@@ -9,3 +9,7 @@ turbconv: "edonly_edmfx"
 edmfx_sgs_diffusive_flux: true
 precip_model: "1M"
 toml: [toml/longrun_aquaplanet_1M.toml]
+limiter_debug: true
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, pr, husra, hussn]
+    period: 3days
