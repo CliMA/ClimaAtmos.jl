@@ -214,6 +214,9 @@ discrete_hydrostatic_balance:
 apply_limiter:
   help: "Apply a horizontal limiter to every tracer [`false` (default), `true`]"
   value: false
+limiter_debug: 
+  help: "A flag to turn of a callback-based limiter application [`false` (default), `true`]"
+  value: true
 precip_model:
   help: "Precipitation model [`nothing` (default), `0M`, `1M`]"
   value: ~
