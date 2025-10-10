@@ -596,10 +596,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 vertical_diffusion,
             )
             ᶜK_u = ᶜK_h
-        else
+        elseif turbconv_model isa AbstractEDMF
             (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
             ᶜρa⁰ =
-                p.atmos.turbconv_model isa PrognosticEDMFX ?
+                turbconv_model isa PrognosticEDMFX ?
                 (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
             ᶜtke⁰ = @. lazy(
                 specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
