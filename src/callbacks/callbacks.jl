@@ -21,7 +21,7 @@ include("callback_helpers.jl")
 
 
 """
-    positivity_preserving_limiter(integrator)
+    positivity_preserving_limiter!(integrator)
 Given the `integrator`, apply the Guba et al. (2014)
 positivity preserving limiter in a callback at user defined
 frequencies. The tracer value in each element is bounded such that
@@ -36,9 +36,10 @@ function positivity_preserving_limiter!(integrator)
                 ᶜρχ;
                 rtol = eps(eltype(ᶜρχ))
             );
-            ref_ᶜρχ = max.(min.(ᶜρχ, maximum(ᶜρχ)), zero(eltype(ᶜρχ)));
+            ref_ᶜρχ = max.(ᶜρχ, zero(eltype(ᶜρχ)));
             Limiters.compute_bounds!(limiter, ref_ᶜρχ, Y.c.ρ);
             Limiters.apply_limiter!(ᶜρχ, Y.c.ρ, limiter; warn=false);
+            Spaces.weighted_dss!(Y.c => integrator.p.ghost_buffer.c, Y.f => integrator.p.ghost_buffer.f)
         else
             nothing
         end
