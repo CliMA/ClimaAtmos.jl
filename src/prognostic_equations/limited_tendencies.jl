@@ -23,11 +23,10 @@ NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
     (; limiter) = p.numerics
     if !isnothing(limiter)
         for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
-            if ρχ_name != @name(ρq_tot)
-                ref_Y.c.:($ρχ_name) = max.(Y.c.:($ρχ_name), zero(eltype(Y.c.:($ρχ_name))));
-                Limiters.compute_bounds!(limiter, ref_Y.c.:($ρχ_name), ref_Y.c.ρ)
-                Limiters.apply_limiter!(Y.c.:($ρχ_name), Y.c.ρ, limiter; warn=false)
-            end
+            ref_Y.c.:($ρχ_name) .= max.(Y.c.:($ρχ_name), zero(eltype(Y.c.:($ρχ_name))));
+            # This constraint enforces ``OP2`` in the Guba et al (2014) paper. 
+            Limiters.compute_bounds!(limiter, ref_Y.c.:($ρχ_name), ref_Y.c.ρ)
+            Limiters.apply_limiter!(Y.c.:($ρχ_name), Y.c.ρ, limiter; warn=false)
         end
     end
     return nothing
