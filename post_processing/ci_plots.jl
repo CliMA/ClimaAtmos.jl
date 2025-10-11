@@ -394,6 +394,30 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
     )
 end
 
+import ClimaCoreSpectra.FFTW
+function compute_average_cartesian_spectrum_1d(x::ClimaAnalysis.OutputVar)
+    @assert length(x.dims) == 2 "Can only compute 1D or averaged 2D spectra"
+    @assert x.dim2index["time"] == 1  "Time must be first dimension"
+    space_name = x.index2dim[2]
+    nt, nspace = size(x.data)
+    Δ = only(unique(round.(Int, diff(x.dims[space_name]))))  # Assume uniform grid, rounded to Int (m-scale)
+
+    x̂ = FFTW.rfft(x.data, 2)  # FFT along non-time dim
+    power = mean(abs2.(x̂) ./ nspace, dims = 1) |> vec
+    
+    # ω = FFTW.rfftfreq(nspace, 1/Δ)
+    ω = FFTW.rfftfreq(nspace, nspace) .+ 1  # wavenumber
+
+    attr = Dict(
+        "short_name" => "spectrum_" * short_name(x),
+        "long_name" => "Spectrum of " * long_name(x),
+        "units" => "",
+    )
+    dims = Dict("Log10 Wavenumber" => log10.(ω))
+    dim_attr = Dict("Log10 Wavenumber" => Dict("units" => "log(1/m)"))
+        
+    return ClimaAnalysis.OutputVar(attr, dims, dim_attr, log10.(power))
+end
 
 """
     map_comparison(func, simdirs, args)
@@ -1310,6 +1334,9 @@ function make_plots(
     ]
     short_names_xyzt = short_names_xyzt ∩ collect(keys(simdirs[1].vars))
 
+    short_names_spectra = ["wa"]
+    short_names_spectra = short_names_spectra ∩ collect(keys(simdirs[1].vars))
+
     # Window average from instantaneous snapshots?
     function average_t_last2hrs(var)
         window_end = last(var.dims["time"])
@@ -1335,11 +1362,38 @@ function make_plots(
     )
 
     summary_file = make_plots_generic(output_paths, vcat(var_groups_tz_avg_xy...);
+        output_name = isempty(short_names_spectra) ? "summary" : "tmp2",
         plot_fn = plot_parsed_attribute_title!,
         summary_files = [tmp_file],
         MAX_NUM_COLS = 2, MAX_NUM_ROWS = 4,
     )
 
+    isempty(short_names_spectra) && return summary_file
+    # If spectra are available, make additional plots
+
+    var_groups_y_spectra =
+        map_comparison(simdirs, short_names_spectra) do simdir, short_name
+            var = get(simdir; short_name, reduction)
+            last_t = var.dims["time"][end]
+            var_ty = slice(var; x=50_000, z=10_000)
+            data_yt = window(var_ty, "time"; left = last_t - 10*3600)
+            compute_average_cartesian_spectrum_1d(data_yt)
+        end
+
+    var_groups_x_spectra =
+        map_comparison(simdirs, short_names_spectra) do simdir, short_name
+            var = get(simdir; short_name, reduction)
+            last_t = var.dims["time"][end]
+            var_tx = slice(var; y=50_000, z=10_000)
+            data_xt = window(var_tx, "time"; left = last_t - 10*3600)
+            compute_average_cartesian_spectrum_1d(data_xt)
+        end
+    
+    make_plots_generic(
+        output_paths,
+        [var_groups_y_spectra; var_groups_x_spectra];
+        summary_files = [summary_file],
+        plot_fn = plot_spectrum_with_line!,
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,
     )
