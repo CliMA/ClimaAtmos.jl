@@ -353,8 +353,7 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
 
     FT = eltype(var.data)
 
-    mass_weight =
-        isnothing(mass_weight) ? ones(FT, length(var.dims[dim3])) : mass_weight
+    mass_weight = isnothing(mass_weight) ? ones(FT, length(var.dims[dim3])) : mass_weight
 
     # Number of spherical wave numbers, excluding the first and the last
     # This number was reverse-engineered from ClimaCoreSpectra
@@ -363,18 +362,14 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
     mesh_info = nothing
 
     if !isempty(times)
-        output_spectrum =
-            zeros((length(times), num_output, length(var.dims[dim3])))
+        output_spectrum = zeros((length(times), num_output, length(var.dims[dim3])))
         dims = Dict(time => times)
         dim_attributes = Dict(time => var.dim_attributes[time])
         for index in 1:length(times)
             spectrum_data, _wave_numbers, _spherical, mesh_info =
                 power_spectrum_2d(FT, var.data[index, :, :, :], mass_weight)
             output_spectrum[index, :, :] .=
-                dropdims(sum(spectrum_data, dims = 1), dims = 1)[
-                    (begin + 1):(end - 1),
-                    :,
-                ]
+                dropdims(sum(spectrum_data, dims = 1), dims = 1)[(begin + 1):(end - 1), :]
         end
     else
         dims = Dict{String, Vector{FT}}()
@@ -383,10 +378,7 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
         spectrum_data, _wave_numbers, _spherical, mesh_info =
             power_spectrum_2d(FT, var.data[:, :, :], mass_weight)
         output_spectrum[:, :] .=
-            dropdims(sum(spectrum_data, dims = 1), dims = 1)[
-                (begin + 1):(end - 1),
-                :,
-            ]
+            dropdims(sum(spectrum_data, dims = 1), dims = 1)[(begin + 1):(end - 1), :]
     end
 
     w_numbers = collect(1:1:(mesh_info.num_spherical - 1))
@@ -397,18 +389,16 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
     dim_attributes[dim3] = var.dim_attributes[dim3]
 
     attributes = Dict(
-        "short_name" => "log_spectrum_" * var.attributes["short_name"],
-        "long_name" => "Spectrum of " * var.attributes["long_name"],
+        "short_name" => "log_spectrum_" * short_name(var),
+        "long_name" => "Spectrum of " * long_name(var),
         "units" => "",
     )
 
     return ClimaAnalysis.OutputVar(
-        attributes,
-        dims,
-        dim_attributes,
-        log10.(output_spectrum),
+        attributes, dims, dim_attributes, log10.(output_spectrum),
     )
 end
+
 
 """
     map_comparison(func, simdirs, args)
@@ -1214,13 +1204,15 @@ Helper function for `make_plots_generic`. Takes a list of variables and plots
 them on the same axis.
 """
 function plot_les_vert_profile!(grid_loc, var_group)
-    z = var_group[1].dims["z"]
-    units = var_group[1].attributes["units"]
+    var1 = var_group[1]
+    units = var1.attributes["units"]
+    z = var1.dims["z"]
+    z_units = var1.dim_attributes["z"]["units"]
     ax = CairoMakie.Axis(
         grid_loc[1, 1],
-        ylabel = "z [$(var_group[1].dim_attributes["z"]["units"])]",
-        xlabel = "$(short_name(var_group[1])) [$units]",
-        title = parse_var_attributes(var_group[1]),
+        ylabel = "z [$z_units]",
+        xlabel = "$(short_name(var1)) [$units]",
+        title = parse_var_attributes(var1),
     )
 
     for var in var_group
@@ -1229,63 +1221,49 @@ function plot_les_vert_profile!(grid_loc, var_group)
     length(var_group) > 1 && Makie.axislegend(ax)
 end
 
-function make_plots(
-    sim_type::Union{LESBoxPlots},
-    output_paths::Vector{<:AbstractString},
-)
+function make_plots(::LESBoxPlots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
 
     reduction = "inst"
-    short_names = [
+    short_names_xyzt = [
         "wa", "ua", "va", "ta", "thetaa", "ha",
         "hus", "hur", "cl", "clw", "cli", "ke",
         "Dh_smag", "strainh_smag",  # smag horizontal
         "Dv_smag", "strainv_smag",  # smag vertical
         "edt",  # DecayWithHeight vertical diffusivity
+        "husra", "hussn", # 1M microphysics
+        "cdnc", "ncra",   # 2M microphysics
     ]
-    short_names = short_names ∩ collect(keys(simdirs[1].vars))
+    short_names_xyzt = short_names_xyzt ∩ collect(keys(simdirs[1].vars))
 
     # Window average from instantaneous snapshots?
-    function horizontal_average(var)
-        return average_xy(var)
-    end
-    function windowed_reduction(var)
-        hours = 3600.0
+    function average_t_last2hrs(var)
         window_end = last(var.dims["time"])
-        window_start = window_end - 2hours
-        var_window = ClimaAnalysis.window(
-            var, "time"; left = window_start, right = window_end,
+        window_start = window_end - CA.time_to_seconds("2hours")
+        var_window = ClimaAnalysis.window(var, "time";
+            left = window_start, right = window_end,
         )
-        var_reduced = horizontal_average(average_time(var_window))
-        return var_reduced
+        return average_xy(average_time(var_window))
     end
 
-    var_groups_xyt_reduced =
-        map_comparison(simdirs, short_names) do simdir, short_name
-            return [get(simdir; short_name, reduction) |> windowed_reduction]
-        end
+    var_groups_z_avg_xyt = map_comparison(simdirs, short_names_xyzt) do simdir, short_name
+        return [get(simdir; short_name, reduction) |> average_t_last2hrs]
+    end
 
-    var_groups_xy_reduced =
-        map_comparison(simdirs, short_names) do simdir, short_name
-            return [get(simdir; short_name, reduction) |> horizontal_average]
-        end
+    var_groups_tz_avg_xy = map_comparison(simdirs, short_names_xyzt) do simdir, short_name
+        return [get(simdir; short_name, reduction) |> average_xy]
+    end
 
-    tmp_file = make_plots_generic(
-        output_paths,
-        var_groups_xyt_reduced,
-        output_name = "tmp";
+    tmp_file = make_plots_generic(output_paths, var_groups_z_avg_xyt;
+        output_name = "tmp",
         plot_fn = plot_les_vert_profile!,
-        MAX_NUM_COLS = 2,
-        MAX_NUM_ROWS = 4,
+        MAX_NUM_COLS = 2, MAX_NUM_ROWS = 4,
     )
 
-    make_plots_generic(
-        output_paths,
-        vcat(var_groups_xy_reduced...),
+    summary_file = make_plots_generic(output_paths, vcat(var_groups_tz_avg_xy...);
         plot_fn = plot_parsed_attribute_title!,
         summary_files = [tmp_file],
-        MAX_NUM_COLS = 2,
-        MAX_NUM_ROWS = 4,
+        MAX_NUM_COLS = 2, MAX_NUM_ROWS = 4,
     )
 end
 
