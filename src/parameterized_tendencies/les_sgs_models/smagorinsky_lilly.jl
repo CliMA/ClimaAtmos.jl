@@ -35,8 +35,7 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
     grav = CAP.grav(params)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_strain, ᶠtemp_strain) = scratch
-    (; ᶜtemp_scalar, ᶜtemp_scalar_2, ᶠtemp_scalar, ᶜtemp_UVW, ᶠtemp_UVW) =
-        scratch
+    (; ᶜtemp_scalar, ᶜtemp_scalar_2, ᶠtemp_scalar, ᶜtemp_UVW, ᶠtemp_UVW) = scratch
 
     ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
     ᶠgradᵥ_uvw = Operators.GradientC2F(
@@ -63,8 +62,7 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
 
     # Stratification correction
     ᶜθ_v = @. ᶜtemp_scalar = TD.virtual_pottemp(thermo_params, ᶜts)
-    ᶜ∇ᵥθ = @. ᶜtemp_scalar_2 =
-        Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜθ_v))).components.data.:1
+    ᶜ∇ᵥθ = @. ᶜtemp_scalar_2 = Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜθ_v))).components.data.:1
     ᶜN² = @. ᶜtemp_scalar = grav / ᶜθ_v * ᶜ∇ᵥθ
     ᶜS_norm = @. ᶜtemp_scalar_2 = √(2 * CA.norm_sqr(ᶜS))
 
@@ -106,11 +104,7 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLill
 
     ## Total energy tendency
     ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
+        TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)),
     )
     @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(ᶜh_tot))
 
@@ -163,11 +157,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
 
     ## Total energy tendency
     ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(
-            thermo_params,
-            ᶜts,
-            specific(Y.c.ρe_tot, Y.c.ρ),
-        ),
+        TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)),
     )
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜh_tot)))
 
@@ -178,8 +168,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     )
 
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        ᶜ∇ᵥρD∇χₜ =
-            @. lazy(ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ)))))
+        ᶜ∇ᵥρD∇χₜ = @. lazy(ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ)))))
         @. ᶜρχₜ -= ᶜ∇ᵥρD∇χₜ
         # Rain and snow does not affect the mass
         if ρχ_name == @name(ρq_tot)
