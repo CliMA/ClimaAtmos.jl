@@ -1,0 +1,9 @@
+initial_condition: "DryBaroclinicWave"
+t_end: "40secs"
+disable_surface_flux_tendency: true
+diagnostics:
+  - short_name: [pfull]
+    period: 5secs
+    reduction_time: average
+dt: "5secs"
+use_itime: true
