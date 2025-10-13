@@ -1,0 +1,23 @@
+# toml/rcemipii_box_1M_fastice.toml
+
+[condensation_evaporation_timescale]
+value = 10
+
+[sublimation_deposition_timescale]
+value = 5
+
+[c_smag]
+value = 0.2
+
+[precipitation_timescale]
+value = 600
+
+[angular_velocity_planet_rotation]
+value = 0
+
+[idealized_ocean_albedo]
+value = 0.07
+
+[mean_sea_level_pressure]
+value = 101480
+

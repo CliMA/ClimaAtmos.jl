@@ -34,12 +34,12 @@ z_elem: 43
 dz_bottom: 30.0
 z_stretch: true
 # Time
-# dt: 4secs
-dt: 2secs  # limited by horizontal soundwaves (treated explicitly) = x_max / Nq / x_elem / 343m/s
+dt: 2secs
+# dt: 2secs  # limited by horizontal soundwaves (treated explicitly) = x_max / Nq / x_elem / 343m/s
 t_end: 21days #
 dt_save_state_to_disk: 1hours
 dt_rad: 1hours  # same as `dt_save_state_to_disk` for reproducibility
-toml: [toml/rcemipii_box_1M.toml]
+toml: [toml/rcemipii_box_1M_slowice.toml]
 # netcdf_interpolation_num_points: [8, 8, 60]
 check_nan_every: 1024  # for debugging: set to check NaNs every `n` iterations
 output_default_diagnostics: false  # adds various 1h diagnostics. Only use if `dt_save_state_to_disk` is a multiple of 1hr
