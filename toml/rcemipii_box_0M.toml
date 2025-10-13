@@ -1,5 +1,8 @@
 # toml/rcemipii_box_0M.toml
 
+[c_smag]
+value = 0.2
+
 [angular_velocity_planet_rotation]
 value = 0
 
@@ -8,4 +11,3 @@ value = 0.07
 
 [mean_sea_level_pressure]
 value = 101480
-

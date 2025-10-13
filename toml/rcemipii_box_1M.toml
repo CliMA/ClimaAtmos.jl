@@ -1,4 +1,8 @@
 # toml/rcemipii_box_1M.toml
+
+[c_smag]
+value = 0.2
+
 [precipitation_timescale]
 value = 600
 
