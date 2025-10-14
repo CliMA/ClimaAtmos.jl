@@ -55,7 +55,7 @@ function getenv_bool(var::AbstractString; default::Bool = false)
 end
 
 # If we're running on CUDA, use CUDA's profiler
-if device isa ClimaComms.CUDADevice
+if ENV["CLIMACOMMS_DEVICE"] == "CUDA" && device isa ClimaComms.CUDADevice
     import CUDA
     if getenv_bool("CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE", default = false)
         import ClimaCore
