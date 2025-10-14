@@ -804,7 +804,10 @@ function make_plots(
 end
 
 function make_plots(
-    ::Val{:plane_density_current_test},
+    ::Union{
+        Val{:plane_density_current_test},
+        Val{:plane_density_current_test_amd},
+    },
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
@@ -887,7 +890,9 @@ function make_plots(
 end
 
 MoistBaroWavePlots =
-    Union{Val{:baroclinic_wave_equil}, Val{:baroclinic_wave_equil_deepatmos}}
+    Union{Val{:baroclinic_wave_equil},
+        Val{:baroclinic_wave_equil_amd},
+        Val{:baroclinic_wave_equil_deepatmos}}
 
 function make_plots(
     ::MoistBaroWavePlots,

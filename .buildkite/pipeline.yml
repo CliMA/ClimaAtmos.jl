@@ -195,6 +195,14 @@ steps:
           --config_file $CONFIG_PATH/plane_density_current_test.yml
           --job_id plane_density_current_test
         artifact_paths: "plane_density_current_test/output_active/*"
+      
+      - label: ":computer: Density current experiment (AMD)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/plane_density_current_test_amd.yml
+          --job_id plane_density_current_test_amd
+        soft_fail: true
+        artifact_paths: "plane_density_current_test_amd/output_active/*"
 
   - group: "Analytic Tests"
     steps:
@@ -346,6 +354,18 @@ steps:
           --job_id baroclinic_wave_equil
           --out_dir baroclinic_wave_equil/output_active
         artifact_paths: "baroclinic_wave_equil/output_active/*"
+        agents:
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+      
+      - label: ":computer: no lim baroclinic wave equilmoist (AMD)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze10.yml
+          --config_file $CONFIG_PATH/baroclinic_wave_equil_amd.yml
+          --job_id baroclinic_wave_equil_amd
+
+        artifact_paths: "baroclinic_wave_equil_amd/output_active/*"
+        soft_fail: true
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 

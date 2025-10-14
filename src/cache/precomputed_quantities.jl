@@ -257,6 +257,18 @@ function precomputed_quantities(Y, atmos)
         else
             (;)
         end
+    amd_les_quantities =
+        if atmos.amd_les isa AnisotropicMinimumDissipation
+            uvw_vec = UVW(FT(0), FT(0), FT(0))
+            (;
+                ᶜτ_amd = similar(Y.c, typeof(uvw_vec * uvw_vec')),
+                ᶠτ_amd = similar(Y.f, typeof(uvw_vec * uvw_vec')),
+                ᶜD_amd = similar(Y.c, FT),
+                ᶠD_amd = similar(Y.f, FT),
+            )
+        else
+            (;)
+        end
 
     return (;
         implicit_precomputed_quantities(Y, atmos)...,
@@ -270,7 +282,7 @@ function precomputed_quantities(Y, atmos)
         surface_precip_fluxes...,
         cloud_diagnostics_tuple,
         smagorinsky_lilly_quantities...,
-    )
+        amd_les_quantities...)
 end
 
 # Interpolates the third contravariant component of Y.c.uₕ to cell faces.
@@ -598,6 +610,10 @@ NVTX.@annotate function set_explicit_precomputed_quantities_part2!(Y, p, t)
 
     if p.atmos.smagorinsky_lilly isa SmagorinskyLilly
         set_smagorinsky_lilly_precomputed_quantities!(Y, p)
+    end
+
+    if p.atmos.amd_les isa AnisotropicMinimumDissipation
+        set_amd_precomputed_quantities!(Y, p)
     end
 
     return nothing

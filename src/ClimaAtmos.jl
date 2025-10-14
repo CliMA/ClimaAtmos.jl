@@ -128,6 +128,13 @@ include(
         "smagorinsky_lilly.jl",
     ),
 )
+include(
+    joinpath(
+        "parameterized_tendencies",
+        "les_sgs_models",
+        "anisotropic_minimum_dissipation.jl",
+    ),
+)
 include(joinpath("prognostic_equations", "advection.jl"))
 
 include(joinpath("cache", "temporary_quantities.jl"))
