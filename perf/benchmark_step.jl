@@ -33,11 +33,34 @@ CA.benchmark_step!(integrator, Y₀); # compile first
 comms_ctx = ClimaComms.context(integrator.u.c)
 device = ClimaComms.device(comms_ctx)
 
+# Robustly parse boolean-like environment variables
+function getenv_bool(var::AbstractString; default::Bool = false)
+    raw = get(ENV, var, nothing)
+    raw === nothing && return default
+    s = lowercase(strip(String(raw)))
+    if s in ("1", "true", "t", "yes", "y", "on")
+        return true
+    elseif s in ("0", "false", "f", "no", "n", "off")
+        return false
+    else
+        # fall back to parse as integer (non-zero -> true)
+        try
+            return parse(Int, s) != 0
+        catch
+            @warn "Unrecognized boolean env var value; using default" var = var val = raw default =
+                default
+            return default
+        end
+    end
+end
+
 # If we're running on CUDA, use CUDA's profiler
 if device isa ClimaComms.CUDADevice
     import CUDA
-    import ClimaCore
-    ClimaCore.DebugOnly.name_kernels_from_stack_trace() = true
+    if getenv_bool("CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE", default = false)
+        import ClimaCore
+        ClimaCore.DebugOnly.name_kernels_from_stack_trace() = true
+    end
     e = 0.0
     n_steps = 5
     use_external_profiler = CUDA.Profile.detect_cupti()
