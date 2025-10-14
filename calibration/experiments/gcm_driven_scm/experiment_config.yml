@@ -3,11 +3,12 @@
 # prior_path: prior_prognostic_pi_entr_smooth_entr_detr_impl_dev_lmix_eqn1.toml
 # prior_path: prior_prognostic.toml
 prior_path: prior_diagnostic_linreg_entr_detr.toml
-ensemble_size: 100
+ensemble_size: 200
 # ensemble_size: 40
-n_iterations: 12
-# batch_size: 3 # number of cases per iteration
-batch_size: 9 # number of cases per iteration
+n_iterations: 2
+# batch_size: 18 # number of cases per iteration
+batch_size: 20 # number of cases per iteration
+# batch_size: 9 # number of cases per iteration
 # model_config : model_config_prognostic.yml # options {model_config_prognostic.yml, model_config_diagnostic.yml}
 # model_config : model_config_prognostic.yml
 # model_config : model_config_prognostic_impl.yml
@@ -16,16 +17,18 @@ model_config : model_config_diagnostic.yml
 # output_dir : /central/scratch/cchristo/debug/exp36_eqn1_tke
 # output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v3/exp36_eqn1_tke
 # output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v3/debug_exp1
-output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v4/exp1_baseline
+# output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_ml_mix_v4/exp1_baseline
+output_dir : /groups/esm/cchristo/climaatmos_scm_calibrations/output_diagedmf_cal_v1/exp15_dev_zrou_2
 
 # Slurm resource configuration
 slurm_time: "08:00:00"
 slurm_mem_per_cpu: "25G"
 slurm_cpus_per_task: 1
 
-y_var_names: [thetaa, hus, clw]  # calibration variables clw clw]
-log_vars: ["clw"] # take log(var) when forming y, g
-# log_vars: []
+# y_var_names: [thetaa, hus, clw]  # calibration variables clw clw]
+y_var_names: [thetaa, hus]  # calibration variables clw clw]
+# log_vars: ["clw"] # take log(var) when forming y, g
+log_vars: []
 
 nice_loc_ug: 0.01
 nice_loc_gg: 0.5

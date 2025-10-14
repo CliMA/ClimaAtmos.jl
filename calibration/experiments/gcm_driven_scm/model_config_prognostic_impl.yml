@@ -42,6 +42,7 @@ call_cloud_diagnostics_per_stage : true
 toml: [scm_tomls/prognostic_edmfx.toml]
 netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 60]
+dt_save_state_to_disk: "Inf"
 diagnostics:
 - short_name: [thetaa, hus, cl, clw, cli, pr]
   period: 10mins
