@@ -1249,6 +1249,7 @@ steps:
         artifact_paths: "bm_baroclinic_wave_moist_gpu/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
+          CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE: "true"
         agents:
           slurm_mem: 16G
           slurm_gpus: 1
