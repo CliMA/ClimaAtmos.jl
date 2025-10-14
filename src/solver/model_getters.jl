@@ -169,10 +169,14 @@ function get_viscous_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     end
 end
 
-function get_smagorinsky_lilly_model(parsed_args)
-    is_model_active = parsed_args["smagorinsky_lilly"]
-    @assert is_model_active in (true, false)
-    return is_model_active ? SmagorinskyLilly() : nothing
+function get_smagorinsky_model(parsed_args; dir)
+    dir = (; h = "horizontal", v = "vertical")[dir]
+    smag_dir = parsed_args["smagorinsky_$dir"]
+    smag = parsed_args["smagorinsky"]
+    @assert smag_dir isa Bool "'smagorinsky_$dir' must be `true` or `false`."
+    @assert smag isa Bool "'smagorinsky' must be `true` or `false`."
+    @assert smag ⊼ smag_dir "Only one of 'smagorinsky' and 'smagorinsky_$dir' can be set to true."
+    return smag_dir || smag ? SmagorinskyLilly() : nothing
 end
 
 function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}

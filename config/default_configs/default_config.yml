@@ -163,8 +163,14 @@ vert_diff:
 hyperdiff:
   help: "Hyperdiffusion. Use `CAM_SE` for sensible default values and ClimaHyperdiffusion for user control. [`CAM_SE` (default), `ClimaHyperdiffusion` (or `true`), `none` (or `false`)]"
   value: "CAM_SE"
-smagorinsky_lilly:
-  help: "Smagorinsky-Lilly diffusive closure [`false` (default), `true`]"
+smagorinsky:
+  help: "Smagorinsky diffusive closure in the horizontal and vertical [`false` (default), `true`]"
+  value: false
+smagorinsky_horizontal:
+  help: "Smagorinsky diffusive closure in the horizontal [`false` (default), `true`]"
+  value: false
+smagorinsky_vertical:
+  help: "Smagorinsky diffusive closure in the vertical [`false` (default), `true`]"
   value: false
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
