@@ -65,19 +65,21 @@ if ENV["CLIMACOMMS_DEVICE"] == "CUDA" && device isa ClimaComms.CUDADevice
     n_steps = 5
     use_external_profiler = CUDA.Profile.detect_cupti()
     if use_external_profiler
+        @info "Using external CUDA profiler"
         CUDA.@profile external = true begin
             e = CUDA.@elapsed begin
                 CA.benchmark_step!(integrator, Y₀, n_steps)
             end
         end
     else
+        @info "Using internal CUDA profiler"
         CUDA.@profile external = false begin
             e = CUDA.@elapsed begin
                 CA.benchmark_step!(integrator, Y₀, n_steps)
             end
         end
     end
-    @info "Done running benchmark_step_gpu in $(e) seconds!"
+    @info "Ran step! with CUDA $n_steps times in $e s, ($(CA.prettytime(e/n_steps*1e9)) per step)"
 else
     # Profile with Julia's built-in profiler
     n_steps = 10
