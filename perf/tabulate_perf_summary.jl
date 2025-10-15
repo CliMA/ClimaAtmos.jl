@@ -69,7 +69,7 @@ end
 
 function performance_history_paths()
     # Note: cluster_data_prefix is also defined elsewhere
-    cluster_data_prefix = "/central/scratch/esm/slurm-buildkite/climaatmos-main"
+    cluster_data_prefix = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main"
     if ispath(cluster_data_prefix)
         sorted_paths = sorted_dataset_folder(; dir = cluster_data_prefix)
         n = 3
