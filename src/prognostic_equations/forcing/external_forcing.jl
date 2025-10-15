@@ -173,7 +173,6 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
     ᶜdqtdt_fluc = similar(Y.c, FT)
     ᶜdTdt_hadv = similar(Y.c, FT)
     ᶜdqtdt_hadv = similar(Y.c, FT)
-    ᶜdTdt_rad = similar(Y.c, FT)
     ᶜT_nudge = similar(Y.c, FT)
     ᶜqt_nudge = similar(Y.c, FT)
     ᶜu_nudge = similar(Y.c, FT)
@@ -237,7 +236,6 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
 
             setvar!(ᶜdTdt_hadv, "tntha", colidx, zc_gcm, zc_forcing)
             setvar!(ᶜdqtdt_hadv, "tnhusha", colidx, zc_gcm, zc_forcing)
-            setvar!(ᶜdTdt_rad, "tntr", colidx, zc_gcm, zc_forcing)
             setvar_subsidence!(
                 ᶜls_subsidence,
                 "wap",
@@ -275,7 +273,6 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
         ᶜdqtdt_fluc,
         ᶜdTdt_hadv,
         ᶜdqtdt_hadv,
-        ᶜdTdt_rad,
         ᶜT_nudge,
         ᶜqt_nudge,
         ᶜu_nudge,
@@ -343,7 +340,6 @@ function external_forcing_tendency!(
         ᶜdqtdt_fluc,
         ᶜdTdt_hadv,
         ᶜdqtdt_hadv,
-        ᶜdTdt_rad,
         ᶜT_nudge,
         ᶜqt_nudge,
         ᶜu_nudge,
@@ -536,7 +532,6 @@ function external_forcing_cache(
         ᶜdqtdt_fluc = similar(Y.c, FT),
         ᶜdTdt_hadv = similar(Y.c, FT),
         ᶜdqtdt_hadv = similar(Y.c, FT),
-        ᶜdTdt_rad = similar(Y.c, FT),
         ᶜT_nudge = similar(Y.c, FT),
         ᶜqt_nudge = similar(Y.c, FT),
         ᶜu_nudge = similar(Y.c, FT),

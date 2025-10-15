@@ -81,7 +81,6 @@ function external_driven_single_column!(integrator)
         ᶜdqtdt_fluc,
         ᶜdTdt_hadv,
         ᶜdqtdt_hadv,
-        ᶜdTdt_rad, # we skip radiation because we're using RRTMGP, but this can be changed for simpler setups
         ᶜT_nudge,
         ᶜqt_nudge,
         ᶜu_nudge,
