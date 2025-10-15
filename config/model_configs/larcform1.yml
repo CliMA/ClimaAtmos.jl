@@ -1,7 +1,6 @@
-job_id: "Larcform1_1M"
 initial_condition: "Larcform1"
-surface_setup: "Bomex"     # hijacked for const surface temperature
-turbconv: "prognostic_edmfx"
+surface_setup: "Larcform1"     # hijacked for const surface temperature
+turbconv: "diagnostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
@@ -27,8 +26,7 @@ y_elem: 2
 dt: 10secs
 dt_rad: 10mins
 t_end: 20days #"6hours"
-dt_save_state_to_disk: 6days"
-cloud_model: "quadrature_sgs"
+cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage : true
 #toml: [toml/prognostic_edmfx_gcmdriven.toml]
 netcdf_output_at_levels: true
@@ -39,13 +37,13 @@ insolation: "larcform1"
 precip_model: "1M"
 ode_algo: ARS343
 
-diagnostics: # profiles, scalar fields 
-  - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, prsn, hus, hur, ua, va, wa, rlu, rld, hfes, rhoa] 
+diagnostics: 
+  - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, prsn, hus, hur, ua, va, wa, rlu, rld, rhoa] # profiles (2D)
     period: 6hours
-    reduction: average
-  - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs]  # rldt should be zero
+    reduction_time: average
+  - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs, hfes]  # time-series (1D)
     period: 6hours
-    reduction: average
+    reduction_time: average
 
 # diagnostics:
 #  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
