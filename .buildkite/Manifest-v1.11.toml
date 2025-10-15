@@ -147,7 +147,7 @@ version = "1.11.0"
 
 [[deps.AtmosphericProfilesLibrary]]
 deps = ["ClimaParams", "Interpolations", "LinearAlgebra", "Thermodynamics"]
-path = "/home/yoder/Clima/AtmosphericProfilesLibrary.jl/"
+path = "/Users/jeff/Clima/AtmosphericProfilesLibrary.jl/"
 uuid = "86bc3604-9858-485a-bdbe-831ec50de11d"
 version = "0.1.7"
 
@@ -387,7 +387,7 @@ version = "0.5.19"
 
 [[deps.ClimaAtmos]]
 deps = ["Adapt", "ArgParse", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaInterpolations", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Dates", "ForwardDiff", "Insolation", "Interpolations", "LazyArtifacts", "LazyBroadcast", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "NullBroadcasts", "RRTMGP", "Random", "SciMLBase", "SparseMatrixColorings", "StaticArrays", "Statistics", "SurfaceFluxes", "Thermodynamics", "UnrolledUtilities", "YAML"]
-path = "/home/yoder/Clima/ClimaAtmos.jl/"
+path = "/Users/jeff/Clima/ClimaAtmos.jl/"
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 version = "0.31.3"
 

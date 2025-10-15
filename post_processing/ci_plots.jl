@@ -1565,7 +1565,7 @@ function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
 
 
     short_names_2D = ["ta", "thetaa", "pfull", "clw", "cli", "hus", "hur", "ua", "va", "wa", "rlu", "rld", "rhoa"]
-    short_names_1D = ["rlut", "rlus", "rlds", "evspsbl", "lwp", "rsdt", "rlutcs", "rldscs", "hfes", "cl", "pr", "prsn"]
+    short_names_1D = ["rlut", "rlus", "rlds", "evspsbl", "lwp", "rsdt", "rlutcs", "rldscs", "cl", "pr", "prsn", "hfss", "hfls", "ts"]
     reduction = "inst"
 
     vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
@@ -1591,6 +1591,14 @@ function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
         time = LAST_SNAP,
         MAX_NUM_COLS = 2,
         output_name = "summary_profiles_last",
+        more_kwargs = YLINEARSCALE
+    )
+
+    make_plots_generic(
+        output_paths,
+        vars_2D,
+        MAX_NUM_COLS = 2,
+        output_name = "summary_histograms",
         more_kwargs = YLINEARSCALE
     )
     
