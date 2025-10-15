@@ -1,5 +1,5 @@
 initial_condition: "Larcform1"
-surface_setup: "Larcform1"     # hijacked for const surface temperature
+surface_setup: DefaultMoninObukhov     #"Larcform1_test"     # hijacked for const surface temperature
 turbconv: "diagnostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false
@@ -12,7 +12,7 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 edmfx_filter: true
-#prognostic_tke: true
+prognostic_surface: SlabOceanSST # TODO implement sea ice
 moist: "nonequil"
 config: "column"
 z_max: 9000.0
@@ -25,10 +25,10 @@ y_elem: 2
 #perturb_initstate: false
 dt: 2secs
 dt_rad: 10mins
-t_end: 10days
+t_end: 1days # full run length is 20days
 cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage : true
-toml: [toml/diagnostic_edmfx_1M.toml]
+toml: [toml/longrun_aquaplanet_1M.toml] #[toml/diagnostic_edmfx_1M.toml]
 netcdf_output_at_levels: true
 #netcdf_interpolation_num_points: [2, 2, 200] # needed?
 output_default_diagnostics: false
@@ -41,29 +41,10 @@ diagnostics:
   - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, prsn, hus, hur, ua, va, wa, rlu, rld, rhoa] # profiles (2D)
     period: 1hours
     reduction: average
-  - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs, hfes]  # time-series (1D)
+  - short_name: [rlut, rlus, rlds, evspsbl, lwp, rsdt, rlutcs, rldscs, hfss, hfls, ts]  # time-series (1D)
     period: 1hours
     reduction: average
 
-# diagnostics:
-#  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
-#    period: 30mins
-#    reduction: inst, average
-#  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]
-#    period: 30mins
-#    reduction: average
-#  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
-#    period: 30mins
-#    reduction: average
-#  - short_name: [rlut, rlutcs, rsut, rsdt, rsutcs, clwvi, lwp, clivi, dsevi, clvi, prw, hurvi, husv]
-#    period: 30mins
-#    reduction: average
-
 # TODO:
-# ensure advective tendencies are set to zero
-# - surface_temperature 
-# Consider surface-atmosphere interactions [Persson et al., 1999]
-# set run length to 20 days (analysis on first 10 days)
-# set insolation to zero (for model location at 80 degrees N, 1 January) [done]
+# prognostic surface_temperature // sea-ice model
 # consider greenhouse gas concentrations
-# Consider moist: "nonequil"; precip_model: "1M"

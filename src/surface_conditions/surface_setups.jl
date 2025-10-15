@@ -308,3 +308,23 @@ function (::Larcform1)(params)
     return SurfaceState(; parameterization, T)
 end
 
+struct Larcform1_test end
+function (::Larcform1_test)(params)
+    # Adapted from ISDAC surface conditions
+    FT = eltype(params)
+    q_vap = FT(0)
+    #T = FT(250)  # K
+    z0 = FT(4e-4)  # m  surface roughness length
+    parameterization = MoninObukhov(; z0)
+    function surface_state(surface_coordinates, interior_z, t)
+        _FT = eltype(surface_coordinates) # do not capture FT
+        SurfaceState(;
+            parameterization,
+            T = _FT(250) + _FT(10/86400)*_FT(t), # test using linear ramp from 250 -> 260K over first day
+            q_vap,
+        )
+    end
+    return surface_state
+end
+
+
