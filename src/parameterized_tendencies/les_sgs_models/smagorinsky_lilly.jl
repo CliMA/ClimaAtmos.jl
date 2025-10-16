@@ -29,29 +29,29 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
     FT = eltype(Y)
     (; ᶠu, ᶜts, ᶜL_h, ᶜL_v) = p.precomputed
     c_smag = CAP.c_smag(p.params)
-    grav = CAP.grav(p.params)
-    Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
-    thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜtemp_scalar, ᶜtemp_scalar_2) = p.scratch
-    
+    # grav = CAP.grav(p.params)
+    # Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
+    # thermo_params = CAP.thermodynamics_params(p.params)
+    # (; ᶜtemp_scalar, ᶜtemp_scalar_2) = p.scratch
+
     # Strain rate tensor
-    ᶜS = compute_strain_rate_center(ᶠu)
+    # ᶜS = compute_strain_rate_center(ᶠu)
 
     # Stratification correction
-    ᶜθ_v = @. lazy(TD.virtual_pottemp(thermo_params, ᶜts))
-    ᶜ∇ᵥθ = @. ᶜtemp_scalar_2 = Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜθ_v))).components.data.:1
-    ᶜN² = @. ᶜtemp_scalar = grav / ᶜθ_v * ᶜ∇ᵥθ
-    ᶜS_norm = @. ᶜtemp_scalar_2 = √(2 * norm_sqr(ᶜS))
+    # ᶜθ_v = @. lazy(TD.virtual_pottemp(thermo_params, ᶜts))
+    # ᶜ∇ᵥθ = @. ᶜtemp_scalar_2 = Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜθ_v))).components.data.:1
+    # ᶜN² = @. ᶜtemp_scalar = grav / ᶜθ_v * ᶜ∇ᵥθ
+    # ᶜS_norm = @. ᶜtemp_scalar_2 = √(2 * norm_sqr(ᶜS))
 
-    ᶜRi = @. ᶜtemp_scalar = ᶜN² / (ᶜS_norm^2 + eps(FT))  # Ri = N² / |S|²
-    ᶜfb = @. ᶜtemp_scalar = ifelse(ᶜRi ≤ 0, 1, max(0, 1 - ᶜRi / Pr_t)^(1 / 4))
+    # ᶜRi = @. ᶜtemp_scalar = ᶜN² / (ᶜS_norm^2 + eps(FT))  # Ri = N² / |S|²
+    # ᶜfb = @. ᶜtemp_scalar = ifelse(ᶜRi ≤ 0, 1, max(0, 1 - ᶜRi / Pr_t)^(1 / 4))
 
     # filter scale
     h_space = Spaces.horizontal_space(axes(Y.c))
     Δ_h = Spaces.node_horizontal_length_scale(h_space)
     ᶜΔ_z = Fields.Δz_field(Y.c)
 
-    @. ᶜL_v = c_smag * ᶜΔ_z * ᶜfb
+    @. ᶜL_v = c_smag * ᶜΔ_z #* ᶜfb
     @. ᶜL_h = c_smag * Δ_h
 
     nothing
@@ -69,7 +69,8 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLill
     ## Momentum tendencies
     ᶜS = compute_strain_rate_center(ᶠu)
     ᶠS = compute_strain_rate_face(ᶜu)
-    ᶜS_norm = @. lazy(√(2 * norm_sqr(ᶜS)))  # TODO: This should be the UV-components only
+    ᶜS_h = @. lazy(Geometry.project((Geometry.UVAxis(),), ᶜS, (Geometry.UVAxis(),)))
+    ᶜS_norm = @. lazy(√(2 * norm_sqr(ᶜS_h)))
 
     # Smagorinsky eddy viscosity
     ᶜνₜ_h = @. lazy(ᶜL_h^2 * ᶜS_norm)
@@ -77,7 +78,7 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLill
 
     # Turbulent diffusivity
     ᶜD_smag = @. ᶜtemp_scalar = ᶜνₜ_h / Pr_t
-    
+
     # Subgrid-scale momentum flux tensor, `τ = -2 νₜ ∘ S`
     ᶜτ_smag = @. ᶜtemp_UVWxUVW = -2 * ᶜνₜ_h * ᶜS  # TODO: Lazify once we can mix lazy horizontal & vertical operations
     ᶠτ_smag = @. ᶠtemp_UVWxUVW = -2 * ᶠνₜ_h * ᶠS
@@ -130,7 +131,8 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     ## Momentum tendencies
     ᶜS = compute_strain_rate_center(ᶠu)
     ᶠS = compute_strain_rate_face(ᶜu)
-    ᶜS_norm = @. lazy(√(2 * norm_sqr(ᶜS)))  # TODO: This should be the W-component only
+    ᶜS_v = @. lazy(Geometry.project((Geometry.WAxis(),), ᶜS, (Geometry.WAxis(),)))
+    ᶜS_norm = @. lazy(√(2 * norm_sqr(ᶜS_v)))
 
     # Smagorinsky eddy viscosity
     ᶜνₜ_v = @. lazy(ᶜL_v^2 * ᶜS_norm)
