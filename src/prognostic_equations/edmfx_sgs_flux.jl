@@ -39,7 +39,7 @@ function edmfx_sgs_mass_flux_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_sgsflux_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; edmfx_upwinding, tracer_upwinding) = p.atmos.numerics
     (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
@@ -51,12 +51,13 @@ function edmfx_sgs_mass_flux_tendency!(
 
     if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
 
-        # Enthalpy fluxes. First sum up the draft fluxes
+        ᶜscalar = p.scratch.ᶜtemp_scalar
+
+        # Enthalpy fluxes.
         # TODO: Isolate assembly of flux term pattern to a function and
         # reuse (both in prognostic and diagnostic EDMFX)
         # [best after removal of precomputed quantities]
-        ᶠu³_diff = p.scratch.ᶠtemp_CT3
-        ᶜa_scalar = p.scratch.ᶜtemp_scalar
+        # First subtract the grid mean flux (already added implicitly)
         ᶜh_tot = @. lazy(
             TD.total_specific_enthalpy(
                 thermo_params,
@@ -64,60 +65,57 @@ function edmfx_sgs_mass_flux_tendency!(
                 specific(Y.c.ρe_tot, Y.c.ρ),
             ),
         )
+        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
+        @. Yₜ.c.ρe_tot -= vtt
+        # Sum up the draft fluxes
         for j in 1:n
-            @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
-            @. ᶜa_scalar =
-                (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j) - ᶜh_tot) *
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
+            @. ᶜscalar = Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j)
             vtt = vertical_transport(
-                ᶜρʲs.:($j),
-                ᶠu³_diff,
-                ᶜa_scalar,
-                dt,
-                edmfx_sgsflux_upwinding,
+                Y.c.sgsʲs.:($j).ρa,
+                ᶠu³ʲs.:($j),
+                ᶜscalar,
+                float(dt),
+                edmfx_upwinding,
             )
             @. Yₜ.c.ρe_tot += vtt
         end
         # Add the environment fluxes
-        @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
         ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-        @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
+        @. ᶜscalar = ᶜmse⁰ + ᶜK⁰
         vtt = vertical_transport(
-            ᶜρ⁰,
-            ᶠu³_diff,
-            ᶜa_scalar,
-            dt,
-            edmfx_sgsflux_upwinding,
+            ᶜρa⁰,
+            ᶠu³⁰,
+            ᶜscalar,
+            float(dt),
+            edmfx_upwinding,
         )
         @. Yₜ.c.ρe_tot += vtt
 
         if !(p.atmos.moisture_model isa DryModel)
-            # Specific humidity fluxes: First sum up the draft fluxes
+            # Specific humidity fluxes
+            # First subtract the grid mean flux (already added implicitly)
+            ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+            vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
+            @. Yₜ.c.ρq_tot -= vtt
+            # Sum up the draft fluxes
             for j in 1:n
-                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
-                @. ᶜa_scalar =
-                    (Y.c.sgsʲs.:($$j).q_tot - specific(Y.c.ρq_tot, Y.c.ρ)) *
-                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                 vtt = vertical_transport(
-                    ᶜρʲs.:($j),
-                    ᶠu³_diff,
-                    ᶜa_scalar,
-                    dt,
-                    edmfx_sgsflux_upwinding,
+                    Y.c.sgsʲs.:($j).ρa,
+                    ᶠu³ʲs.:($j),
+                    Y.c.sgsʲs.:($j).q_tot,
+                    float(dt),
+                    edmfx_upwinding,
                 )
                 @. Yₜ.c.ρq_tot += vtt
             end
             # Add the environment fluxes
             ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-            @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
-            @. ᶜa_scalar =
-                (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
-                ᶜρ⁰,
-                ᶠu³_diff,
-                ᶜa_scalar,
-                dt,
-                edmfx_sgsflux_upwinding,
+                ᶜρa⁰,
+                ᶠu³⁰,
+                ᶜq_tot⁰,
+                float(dt),
+                edmfx_upwinding,
             )
             @. Yₜ.c.ρq_tot += vtt
         end
@@ -145,13 +143,13 @@ function edmfx_sgs_mass_flux_tendency!(
                     MatrixFields.has_field(Y, ρχ_name) || continue
 
                     ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-                    @. ᶜa_scalar =
+                    @. ᶜscalar =
                         ᶜχʲ *
                         draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                     vtt = vertical_transport(
                         ᶜρʲs.:($j),
                         ᶠu³ʲs.:($j),
-                        ᶜa_scalar,
+                        ᶜscalar,
                         dt,
                         tracer_upwinding,
                     )
@@ -166,11 +164,11 @@ function edmfx_sgs_mass_flux_tendency!(
                 MatrixFields.has_field(Y, ρχ_name) || continue
 
                 ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-                @. ᶜa_scalar = ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
+                @. ᶜscalar = ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
                 vtt = vertical_transport(
                     ᶜρ⁰,
                     ᶠu³⁰,
-                    ᶜa_scalar,
+                    ᶜscalar,
                     dt,
                     tracer_upwinding,
                 )
@@ -295,7 +293,7 @@ function edmfx_sgs_mass_flux_tendency!(
                             min(draft_area(ᶜρaʲs.:($$j), ᶜρʲs.:($$j)), a_max),
                             FT(0.02) / max(
                                 Geometry.WVector(
-                                    ᶜinterp(ᶠu³_diff),
+                                    ᶜinterp(ᶠu³ʲs.:($$j)),
                                 ).components.data.:1,
                                 eps(FT),
                             ),
