@@ -1,0 +1,60 @@
+reference_job_id: les_box  # for plotting
+surface_setup: DefaultMoninObukhov
+disable_surface_flux_tendency: false
+surface_temperature: RCEMIPII
+insolation: rcemipii
+config: box
+rad: allskywithclear
+co2_model: fixed
+approximate_linear_solve_iters: 2
+output_dir: "/scratch/olivia/rce_noneq/"
+rayleigh_sponge: true
+# apply_limiter: true
+# diffusion
+smagorinsky_lilly: true
+hyperdiff: "true"  # check w/ Tapio if this should be off
+# tracer_upwinding: vanleer_limiter
+# energy_upwinding: vanleer_limiter
+implicit_diffusion: false  # this is the default. Check w/ Tapio if this should be true.
+# microphysics
+moist: nonequil
+precip_model: 1M
+# spatial discretization
+#x_max: 96000.0  # 96km
+#y_max: 96000.0  # 96km
+x_max: 48000.0  # 48km
+y_max: 48000.0  # 48km
+z_max: 30000.0  # 30km
+nh_poly: 3  # hor. poly deg -> # quad pts in 1D in a h. elem is Nq = nh + 1
+# x_elem: 24
+# y_elem: 24
+x_elem: 12
+y_elem: 12
+# x_elem: 8
+# y_elem: 8
+z_elem: 43
+dz_bottom: 30.0
+z_stretch: true
+# Time
+# dt: 4secs
+dt: 2secs  # limited by horizontal soundwaves (treated explicitly) = x_max / Nq / x_elem / 343m/s
+t_end: 21days #
+dt_save_state_to_disk: 1hours
+dt_rad: 1hours  # same as `dt_save_state_to_disk` for reproducibility
+toml: [toml/rcemipii_box_1M.toml]
+# netcdf_interpolation_num_points: [8, 8, 60]
+check_nan_every: 1024  # for debugging: set to check NaNs every `n` iterations
+output_default_diagnostics: false  # adds various 1h diagnostics. Only use if `dt_save_state_to_disk` is a multiple of 1hr
+diagnostics:
+  - short_name: [ts, thetaa, ha, pfull, rhoa, ua, va, hur, cl, hussfc, evspsbl]
+    #period: 10secs
+    period: 10mins
+  - short_name: [hus, clw, cli, ta, wa, pr, ke]
+    #period: 10secs
+    period: 10mins
+  # 1M microphysics
+  - short_name: [husra, hussn]
+    period: 10mins
+  # 2M microphysics
+  # - short_name: [cdnc, ncra]
+  #   period: 10secs
