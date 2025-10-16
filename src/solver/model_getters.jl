@@ -172,10 +172,10 @@ end
 function get_smagorinsky_model(parsed_args; dir)
     dir = (; h = "horizontal", v = "vertical")[dir]
     smag_dir = parsed_args["smagorinsky_$dir"]
-    smag = parsed_args["smagorinsky"]
+    smag = parsed_args["smagorinsky_lilly"]  # TODO: Remove "lilly" suffix
     @assert smag_dir isa Bool "'smagorinsky_$dir' must be `true` or `false`."
-    @assert smag isa Bool "'smagorinsky' must be `true` or `false`."
-    @assert smag ⊼ smag_dir "Only one of 'smagorinsky' and 'smagorinsky_$dir' can be set to true."
+    @assert smag isa Bool "'smagorinsky_lilly' must be `true` or `false`."
+    @assert smag ⊼ smag_dir "Only one of 'smagorinsky_lilly' and 'smagorinsky_$dir' can be set to true."
     return smag_dir || smag ? SmagorinskyLilly() : nothing
 end
 

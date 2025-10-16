@@ -87,7 +87,6 @@ compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 Compute the strain_rate at cell centers from velocity at cell faces.
 """
 function compute_strain_rate_center(u::Fields.Field)
-    @assert eltype(u) <: C123
     axis_uvw = Geometry.UVWAxis()
     return @. lazy(
         (
@@ -117,6 +116,18 @@ function compute_strain_rate_face(u::Fields.Field)
             adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))))
         ) / 2,
     )
+end
+
+"""
+    face_density(Y)
+
+Compute the density at cell faces from the density at cell centers.
+"""
+function face_density(Y)
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+
+    @. lazy(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ)
 end
 
 """
