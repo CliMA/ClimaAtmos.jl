@@ -166,7 +166,7 @@ hyperdiff:
 amd_les:
   help: "AMD LES closure [`true`, `false` (default)]"
   value: false
-c_amd: 
+c_amd:
   help: "Model coefficient for AMD-LES closure (TODO: Move to parameters.toml)"
   value: 0.29
 smagorinsky_lilly:
@@ -396,6 +396,9 @@ edmfx_upwinding:
 edmfx_sgsflux_upwinding:
   help: "EDMFX SGS mass flux upwinding mode [`none` (default), `first_order`, `third_order`]"
   value: none
+edmfx_tracer_upwinding:
+  help: "Tracer upwinding mode [`none`, `first_order` (default)]"
+  value: first_order
 edmfx_sgs_mass_flux:
   help: "If set to true, it switches on EDMFX SGS mass flux.  [`true`, `false` (default)]"
   value: false

@@ -213,6 +213,8 @@ function get_numerics(parsed_args, FT)
     edmfx_upwinding = Val(Symbol(parsed_args["edmfx_upwinding"]))
     edmfx_sgsflux_upwinding =
         Val(Symbol(parsed_args["edmfx_sgsflux_upwinding"]))
+    edmfx_tracer_upwinding =
+        Val(Symbol(parsed_args["edmfx_tracer_upwinding"]))
 
     limiter = parsed_args["apply_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
@@ -226,6 +228,7 @@ function get_numerics(parsed_args, FT)
         tracer_upwinding,
         edmfx_upwinding,
         edmfx_sgsflux_upwinding,
+        edmfx_tracer_upwinding,
         limiter,
         test_dycore_consistency = test_dycore,
         diff_mode,

@@ -104,7 +104,7 @@ Specifically, this function calculates:
 - Horizontal advection for EDMFX updraft total specific humidity (`q_totʲ`).
 - Horizontal advection for other EDMFX updraft moisture species (`q_liqʲ`, `q_iceʲ`,
   `q_raiʲ`, `q_snoʲ`) if using a `NonEquilMoistModel` and `Microphysics1Moment`
-  precipitation model. If the `Microphysics2Moment` model is used instead, `n_liqʲ`` 
+  precipitation model. If the `Microphysics2Moment` model is used instead, `n_liqʲ``
   and `n_raiʲ` are also advected.
 
 Arguments:
@@ -329,7 +329,7 @@ This function handles:
 - Vertical advection of updraft density-area product (`ρaʲ`).
 - Vertical advection of updraft moist static energy (`mseʲ`) and total specific humidity (`q_totʲ`).
 - Vertical advection of other updraft moisture species (`q_liqʲ`, `q_iceʲ`, `q_raiʲ`, `q_snoʲ`)
-  if using a `NonEquilMoistModel` and `Microphysics1Moment` precipitation model. If the `Microphysics2Moment` 
+  if using a `NonEquilMoistModel` and `Microphysics1Moment` precipitation model. If the `Microphysics2Moment`
   model is used instead, `n_liqʲ` and `n_raiʲ` are also advected.
 - Buoyancy forcing terms in the updraft vertical momentum (`u₃ʲ`) equation, including
   adjustments for non-hydrostatic pressure.
@@ -358,7 +358,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     (; params) = p
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; dt) = p
-    (; edmfx_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; edmfx_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
     (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
 
@@ -465,7 +465,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶠu³ʲs.:($j),
                     ᶜaqʲ,
                     dt,
-                    tracer_upwinding,
+                    edmfx_tracer_upwinding,
                 )
                 @. ᶜqʲₜ += ᶜinv_ρ̂ * (vtt - ᶜqʲ * ᶜ∂ρ∂t)
 
@@ -545,7 +545,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶠu³ʲs.:($j),
                     ᶜaχʲ,
                     dt,
-                    tracer_upwinding,
+                    edmfx_tracer_upwinding,
                 )
                 @. ᶜχʲₜ += ᶜinv_ρ̂ * (vtt - ᶜχʲ * ᶜ∂ρ∂t)
 
@@ -561,8 +561,6 @@ function edmfx_sgs_vertical_advection_tendency!(
                 # Contribution of density variation due to sedimentation
                 @. ᶜχʲₜ -= ᶜinv_ρ̂ * ᶜχʲ * ᶜ∂ρ∂t_sed
             end
-
         end
-
     end
 end
