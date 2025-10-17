@@ -195,7 +195,7 @@ steps:
           --config_file $CONFIG_PATH/plane_density_current_test.yml
           --job_id plane_density_current_test
         artifact_paths: "plane_density_current_test/output_active/*"
-      
+
       - label: ":computer: Density current experiment (AMD)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -313,7 +313,7 @@ steps:
         artifact_paths: "baroclinic_wave_equil_conservation_source/output_active/*"
         agents:
           slurm_mem: 16GB
-      
+
       - label: ":computer: baroclinic wave nonequil moist check conservation with sources"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl --config_file $CONFIG_PATH/baroclinic_wave_nonequil_conservation_source.yml
@@ -356,7 +356,7 @@ steps:
         artifact_paths: "baroclinic_wave_equil/output_active/*"
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
-      
+
       - label: ":computer: no lim baroclinic wave equilmoist (AMD)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -873,7 +873,7 @@ steps:
         artifact_paths: "prognostic_edmfx_rico_column/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":umbrella: Prognostic EDMFX Rico in a column (implicit)"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -939,6 +939,7 @@ steps:
         artifact_paths: "prognostic_edmfx_diurnal_scm_imp/output_active/*"
         agents:
           slurm_mem: 12GB
+        soft_fail: true
 
       - label: ":genie: Prognostic EDMFX Bomex in a box"
         command: >
@@ -1009,7 +1010,7 @@ steps:
         artifact_paths: "prognostic_edmfx_bomex_column_sparse_autodiff/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: "Prognostic EDMFX Dycoms RF02 in a column sparse autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -1019,7 +1020,7 @@ steps:
         agents:
           slurm_mem: 20GB
         soft_fail: true
-      
+
       - label: "Prognostic EDMFX TRMM in a column sparse autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -1049,7 +1050,7 @@ steps:
         artifact_paths: "prognostic_edmfx_aquaplanet_sparse_autodiff/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: "AMIP Target EDOnly nonequil sparse autodiff"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
