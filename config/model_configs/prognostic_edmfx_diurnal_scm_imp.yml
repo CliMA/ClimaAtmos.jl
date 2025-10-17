@@ -7,6 +7,7 @@ start_date: "20070701"
 site_latitude: 17.0
 site_longitude: -149.0
 turbconv: "prognostic_edmfx"
+tracer_upwinding: first_order
 
 # solve implicitly
 implicit_diffusion: true
@@ -18,10 +19,7 @@ implicit_sgs_nh_pressure: true
 implicit_sgs_vertdiff: false
 
 approximate_linear_solve_iters: 2
-edmfx_upwinding: first_order
 edmfx_sgsflux_upwinding: first_order
-tracer_upwinding: vanleer_limiter
-energy_upwinding: vanleer_limiter
 rayleigh_sponge: true
 edmfx_entr_model: "PiGroups"
 edmfx_detr_model: "PiGroups"

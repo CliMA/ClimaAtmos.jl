@@ -13,8 +13,8 @@ dt_rad: "1hours"
 dt_cloud_fraction: "1hours"
 surface_setup: "DefaultMoninObukhov"
 turbconv: "prognostic_edmfx"
+tracer_upwinding: first_order
 prognostic_tke: true
-edmfx_upwinding: "first_order"
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
