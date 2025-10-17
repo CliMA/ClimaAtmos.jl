@@ -84,10 +84,9 @@ compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 """
     ϵ .= compute_strain_rate_center(u::Field)
 
-Compute the strain_rate at cell centers from velocity at cell faces.
+Compute the vertical strain_rate at cell centers from velocity at cell faces.
 """
 function compute_strain_rate_center(u::Fields.Field)
-    @assert eltype(u) <: C123
     axis_uvw = Geometry.UVWAxis()
     return @. lazy(
         (
@@ -100,7 +99,7 @@ end
 """
     ϵ .= compute_strain_rate_face(u::Field)
 
-Compute the strain_rate at cell faces from velocity at cell centers.
+Compute the vertical strain_rate at cell faces from velocity at cell centers.
 """
 function compute_strain_rate_face(u::Fields.Field)
     @assert eltype(u) <: C123
@@ -117,6 +116,39 @@ function compute_strain_rate_face(u::Fields.Field)
             adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))))
         ) / 2,
     )
+end
+
+function compute_strain_rate_center_full!(ε, ᶜu, ᶠu)
+    axis_uvw = (Geometry.UVWAxis(),)
+    @. ε = Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))  # vertical component
+    @. ε += Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))  # horizontal component
+    @. ε = (ε + adjoint(ε)) / 2
+    return ε
+end
+
+function compute_strain_rate_face_full!(ε, ᶜu, ᶠu)
+    ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
+    ᶠgradᵥ = Operators.GradientC2F(
+        bottom = Operators.SetGradient(∇ᵥuvw_boundary),
+        top = Operators.SetGradient(∇ᵥuvw_boundary),
+    )
+    axis_uvw = (Geometry.UVWAxis(),)
+    @. ε = Geometry.project(axis_uvw, ᶠgradᵥ(UVW(ᶜu)))  # vertical component
+    @. ε += Geometry.project(axis_uvw, gradₕ(UVW(ᶠu)))  # horizontal component
+    @. ε = (ε + adjoint(ε)) / 2
+    return ε
+end
+
+"""
+    face_density(Y)
+
+Compute the density at cell faces from the density at cell centers.
+"""
+function face_density(Y)
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+
+    @. lazy(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ)
 end
 
 """
