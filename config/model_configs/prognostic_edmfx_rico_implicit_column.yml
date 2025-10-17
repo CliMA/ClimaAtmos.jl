@@ -3,6 +3,7 @@ subsidence: "Rico"
 ls_adv: "Rico"
 surface_setup: "Rico"
 turbconv: "prognostic_edmfx"
+tracer_upwinding: first_order
 implicit_diffusion: true
 implicit_sgs_advection: true
 implicit_sgs_entr_detr: true
@@ -10,7 +11,6 @@ implicit_nh_pressure: true
 implicit_sgs_vertdiff: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
-edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true

@@ -9,10 +9,7 @@ turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
-edmfx_upwinding: first_order
 edmfx_sgsflux_upwinding: first_order
-tracer_upwinding: vanleer_limiter
-energy_upwinding: vanleer_limiter
 rayleigh_sponge: true
 edmfx_entr_model: "PiGroups"
 edmfx_detr_model: "PiGroups"

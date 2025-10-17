@@ -729,7 +729,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             (; ᶜgradᵥ_ᶠΦ) = p.core
             (; ᶜρʲs, ᶠu³ʲs, ᶜtsʲs, ᶜKʲs, bdmr_l, bdmr_r, bdmr) = p.precomputed
             is_third_order =
-                p.atmos.numerics.edmfx_upwinding == Val(:third_order)
+                p.atmos.numerics.edmfx_mse_q_tot_upwinding == Val(:third_order)
             ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
             ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
                 top = Operators.SetValue(zero(CT3{FT})),

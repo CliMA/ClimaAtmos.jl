@@ -5,7 +5,6 @@ co2_model: fixed
 turbconv: diagnostic_edmfx
 insolation: rcemipii
 prognostic_tke: true
-edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
