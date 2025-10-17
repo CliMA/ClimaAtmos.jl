@@ -163,6 +163,12 @@ vert_diff:
 hyperdiff:
   help: "Hyperdiffusion. Use `CAM_SE` for sensible default values and ClimaHyperdiffusion for user control. [`CAM_SE` (default), `ClimaHyperdiffusion` (or `true`), `none` (or `false`)]"
   value: "CAM_SE"
+amd_les:
+  help: "AMD LES closure [`true`, `false` (default)]"
+  value: false
+c_amd: 
+  help: "Model coefficient for AMD-LES closure (TODO: Move to parameters.toml)"
+  value: 0.29
 smagorinsky_lilly:
   help: "Smagorinsky-Lilly diffusive closure [`false` (default), `true`]"
   value: false

@@ -146,6 +146,7 @@ function get_atmos(config::AtmosConfig, params)
         sgs_vertdiff_mode = implicit_sgs_vertdiff ? Implicit() : Explicit(),
         sgs_mf_mode = implicit_sgs_mass_flux ? Implicit() : Explicit(),
         smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args),
+        amd_les = get_amd_les_model(parsed_args, FT),
 
         # AtmosGravityWave
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
