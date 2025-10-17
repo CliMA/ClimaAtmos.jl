@@ -864,7 +864,7 @@ function lowest_loss_rmse(
 end
 
 function get_forcing_file(i, ref_paths)
-    return "/central/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
+    return "/resnick/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
 end
 
 function get_cfsite_id(i, cfsite_numbers)
