@@ -18,6 +18,7 @@ import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
 import ClimaComms
+import CUDA
 
 include("common.jl")
 (; config_file, job_id) = CA.commandline_kwargs()
@@ -55,8 +56,7 @@ function getenv_bool(var::AbstractString; default::Bool = false)
 end
 
 # If we're running on CUDA, use CUDA's profiler
-if ENV["CLIMACOMMS_DEVICE"] == "CUDA" && device isa ClimaComms.CUDADevice
-    import CUDA
+if device isa ClimaComms.CUDADevice
     if getenv_bool("CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE", default = false)
         import ClimaCore
         ClimaCore.DebugOnly.name_kernels_from_stack_trace() = true
