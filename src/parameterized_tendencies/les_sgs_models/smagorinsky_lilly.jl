@@ -26,16 +26,17 @@ These quantities are computed for both cell centers and faces, with prefixes `�
 - `p`: The model parameters, e.g. `AtmosCache`.
 """
 function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
-    FT = eltype(Y)
-    (; ᶠu, ᶜts, ᶜL_h, ᶜL_v) = p.precomputed
+    # FT = eltype(Y)
+    (; ᶜu, ᶠu, ᶜts, ᶜL_h, ᶜL_v, ᶠS, ᶜS) = p.precomputed
     c_smag = CAP.c_smag(p.params)
     # grav = CAP.grav(p.params)
     # Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
     # thermo_params = CAP.thermodynamics_params(p.params)
     # (; ᶜtemp_scalar, ᶜtemp_scalar_2) = p.scratch
 
-    # Strain rate tensor
-    # ᶜS = compute_strain_rate_center(ᶠu)
+    # Precompute full strain rate tensor
+    compute_strain_rate_center_full!(ᶜS, ᶜu, ᶠu)
+    compute_strain_rate_face_full!(ᶠS, ᶜu, ᶠu)
 
     # Stratification correction
     # ᶜθ_v = @. lazy(TD.virtual_pottemp(thermo_params, ᶜts))
@@ -61,14 +62,12 @@ horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
-    (; ᶜu, ᶠu, ᶜts, ᶜL_h) = p.precomputed
+    (; ᶜts, ᶜL_h, ᶠS, ᶜS) = p.precomputed
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_scalar, ᶠtemp_scalar) = p.scratch
     thermo_params = CAP.thermodynamics_params(p.params)
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
 
     ## Momentum tendencies
-    ᶜS = compute_strain_rate_center(ᶠu)
-    ᶠS = compute_strain_rate_face(ᶜu)
     ᶜS_h = @. lazy(Geometry.project((Geometry.UVAxis(),), ᶜS, (Geometry.UVAxis(),)))
     ᶜS_norm = @. lazy(√(2 * norm_sqr(ᶜS_h)))
 
@@ -88,9 +87,8 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLill
     @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_smag) / ᶠρ)
 
     ## Total energy tendency
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
     @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD_smag * gradₕ(ᶜh_tot))
 
     ## Tracer diffusion and associated mass changes
@@ -108,7 +106,7 @@ end
 
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     FT = eltype(Y)
-    (; ᶜu, ᶠu, ᶜts, ᶜL_v) = p.precomputed
+    (; ᶜts, ᶜL_v, ᶠS, ᶜS) = p.precomputed
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶠtemp_scalar, ᶠtemp_scalar_2) = p.scratch
     thermo_params = CAP.thermodynamics_params(p.params)
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
@@ -129,8 +127,6 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     )
 
     ## Momentum tendencies
-    ᶜS = compute_strain_rate_center(ᶠu)
-    ᶠS = compute_strain_rate_face(ᶜu)
     ᶜS_v = @. lazy(Geometry.project((Geometry.WAxis(),), ᶜS, (Geometry.WAxis(),)))
     ᶜS_norm = @. lazy(√(2 * norm_sqr(ᶜS_v)))
 
@@ -155,9 +151,8 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     @. Yₜ.f.u₃ -= C3(ᶠdivᵥ(Y.c.ρ * ᶜτ_smag) / ᶠρ)
 
     ## Total energy tendency
-    ᶜh_tot = @. lazy(
-        TD.total_specific_enthalpy(thermo_params, ᶜts, specific(Y.c.ρe_tot, Y.c.ρ)),
-    )
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜh_tot)))
 
     ## Tracer diffusion and associated mass changes
