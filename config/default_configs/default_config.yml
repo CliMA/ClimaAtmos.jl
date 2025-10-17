@@ -166,7 +166,7 @@ hyperdiff:
 amd_les:
   help: "AMD LES closure [`true`, `false` (default)]"
   value: false
-c_amd: 
+c_amd:
   help: "Model coefficient for AMD-LES closure (TODO: Move to parameters.toml)"
   value: 0.29
 smagorinsky_lilly:
@@ -238,7 +238,7 @@ viscous_sponge:
 tracer_upwinding:
   help: "Tracer upwinding mode [`none`, `first_order` , `third_order`, `boris_book`, `zalesak`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
-energy_upwinding:
+energy_q_tot_upwinding:
   help: "Energy upwinding mode [`none`, `first_order` , `third_order`, `boris_book`, `zalesak`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
 orographic_gravity_wave:
@@ -390,9 +390,12 @@ edmfx_entr_model:
 edmfx_detr_model:
   help: "EDMFX detrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`]"
   value: ~
-edmfx_upwinding:
-  help: "EDMFX upwinding mode [`none` (default), `first_order`, `third_order`]"
-  value: none
+edmfx_mse_q_tot_upwinding:
+  help: "EDMFX upwinding mode [`none`, `first_order` (default), `third_order`]"
+  value: first_order
+edmfx_tracer_upwinding:
+  help: "EDMFX tracer upwinding mode [`none`, `first_order` (default)]"
+  value: first_order
 edmfx_sgsflux_upwinding:
   help: "EDMFX SGS mass flux upwinding mode [`none` (default), `first_order`, `third_order`]"
   value: none

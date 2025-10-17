@@ -4,9 +4,9 @@ scm_coriolis: DYCOMS_RF02
 rad: DYCOMS
 surface_setup: DYCOMS_RF02
 turbconv: "prognostic_edmfx"
+tracer_upwinding: first_order
 implicit_diffusion: false
 approximate_linear_solve_iters: 2
-edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true

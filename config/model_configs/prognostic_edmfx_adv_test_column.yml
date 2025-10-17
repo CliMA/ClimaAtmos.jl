@@ -1,7 +1,6 @@
 initial_condition: "MoistAdiabaticProfileEDMFX"
 advection_test: true
 turbconv: "prognostic_edmfx"
-edmfx_upwinding: "first_order"
 config: "column"
 moist: "equil"
 z_max: 5.5e4

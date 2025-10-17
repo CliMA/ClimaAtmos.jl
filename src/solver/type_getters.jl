@@ -195,14 +195,14 @@ function get_numerics(parsed_args, FT)
         parsed_args["test_dycore_consistency"] ? TestDycoreConsistency() :
         nothing
 
-    energy_upwinding = Val(Symbol(parsed_args["energy_upwinding"]))
+    energy_q_tot_upwinding = Val(Symbol(parsed_args["energy_q_tot_upwinding"]))
     tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"]))
 
     # Compat
     if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
-       energy_upwinding == Val(:vanleer_limiter)
-        energy_upwinding = Val(:none)
-        @warn "energy_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting energy_upwinding to :none"
+       energy_q_tot_upwinding == Val(:vanleer_limiter)
+        energy_q_tot_upwinding = Val(:none)
+        @warn "energy_q_tot_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting energy_q_tot_upwinding to :none"
     end
     if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
        tracer_upwinding == Val(:vanleer_limiter)
@@ -210,9 +210,11 @@ function get_numerics(parsed_args, FT)
         @warn "tracer_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting tracer_upwinding to :none"
     end
 
-    edmfx_upwinding = Val(Symbol(parsed_args["edmfx_upwinding"]))
+    edmfx_mse_q_tot_upwinding = Val(Symbol(parsed_args["edmfx_mse_q_tot_upwinding"]))
     edmfx_sgsflux_upwinding =
         Val(Symbol(parsed_args["edmfx_sgsflux_upwinding"]))
+    edmfx_tracer_upwinding =
+        Val(Symbol(parsed_args["edmfx_tracer_upwinding"]))
 
     limiter = parsed_args["apply_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
@@ -222,10 +224,11 @@ function get_numerics(parsed_args, FT)
     hyperdiff = get_hyperdiffusion_model(parsed_args, FT)
 
     numerics = AtmosNumerics(;
-        energy_upwinding,
+        energy_q_tot_upwinding,
         tracer_upwinding,
-        edmfx_upwinding,
+        edmfx_mse_q_tot_upwinding,
         edmfx_sgsflux_upwinding,
+        edmfx_tracer_upwinding,
         limiter,
         test_dycore_consistency = test_dycore,
         diff_mode,
