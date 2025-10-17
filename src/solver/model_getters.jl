@@ -175,6 +175,13 @@ function get_smagorinsky_lilly_model(parsed_args)
     return is_model_active ? SmagorinskyLilly() : nothing
 end
 
+function get_amd_les_model(parsed_args, ::Type{FT}) where {FT}
+    is_model_active = parsed_args["amd_les"]
+    @assert is_model_active in (true, false)
+    return is_model_active ? AnisotropicMinimumDissipation{FT}(parsed_args["c_amd"]) :
+           nothing
+end
+
 function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     rs_name = parsed_args["rayleigh_sponge"]
     return if rs_name in ("false", false)

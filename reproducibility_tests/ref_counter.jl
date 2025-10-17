@@ -1,4 +1,4 @@
-266
+267
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+267
+- Changed the pressure-gradient formulation to use the Exner function
+  and virtual potential temperature.
+
 266
 - No behavior change, but some new diagnostics are added, and the reference 
   simulations don't have those diagnostics for plotting
