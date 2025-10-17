@@ -77,6 +77,7 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLill
 
     # Turbulent diffusivity
     ᶜD_smag = @. ᶜtemp_scalar = ᶜνₜ_h / Pr_t
+    @. p.precomputed.ᶜD_h = ᶜD_smag  # save to diagnostics
 
     # Subgrid-scale momentum flux tensor, `τ = -2 νₜ ∘ S`
     ᶜτ_smag = @. ᶜtemp_UVWxUVW = -2 * ᶜνₜ_h * ᶜS  # TODO: Lazify once we can mix lazy horizontal & vertical operations
@@ -140,6 +141,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
 
     # Turbulent diffusivity
     ᶠD_smag = @. ᶠtemp_scalar_2 = ᶠνₜ_v / Pr_t
+    @. p.precomputed.ᶠD_v = ᶠD_smag  # save to diagnostics
 
     # Apply to tendencies
     ## Horizontal momentum tendency

@@ -344,6 +344,26 @@ add_diagnostic_variable!(
 )
 
 ###
+# Smagorinski Lilly diffusivity
+###
+add_diagnostic_variable!(
+    short_name = "D_smag_h",
+    long_name = "Horizontal smagorinski diffusivity",
+    units = "m^2 s^-1",
+    compute! = (out, _, cache, _) -> begin
+        isnothing(out) ? copy(cache.precomputed.ᶜD_h) : (out .= cache.precomputed.ᶜD_h)
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "D_smag_v",
+    long_name = "Horizontal smagorinski diffusivity",
+    units = "m^2 s^-1",
+    compute! = (out, _, cache, _) -> begin
+        isnothing(out) ? copy(cache.precomputed.ᶠD_v) : (out .= cache.precomputed.ᶠD_v)
+    end,
+)
+
+###
 # Relative humidity (3d)
 ###
 compute_hur!(out, state, cache, time) =

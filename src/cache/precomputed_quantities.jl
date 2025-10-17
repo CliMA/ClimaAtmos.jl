@@ -248,11 +248,12 @@ function precomputed_quantities(Y, atmos)
     smagorinsky_quantities =
         if atmos.smagorinsky_horizontal isa SmagorinskyLilly ||
            atmos.smagorinsky_vertical isa SmagorinskyLilly
-           uvw_vec = UVW(FT(0), FT(0), FT(0))
+            uvw_vec = UVW(FT(0), FT(0), FT(0))
             (;
                 ᶜS = similar(Y.c, typeof(uvw_vec * uvw_vec')),
                 ᶠS = similar(Y.f, typeof(uvw_vec * uvw_vec')),
                 ᶜL_h = similar(Y.c, FT), ᶜL_v = similar(Y.c, FT),
+                ᶜD_h = similar(Y.c, FT), ᶠD_v = similar(Y.f, FT),
             )
         else
             (;)
