@@ -1,0 +1,52 @@
+initial_condition: "GCM"
+external_forcing: "GCM"
+external_forcing_file: "/Users/zshen/Work/clima_repo/artifacts/HadGEM2-A_amip.2004-2008.07.nc"
+cfsite_number: site67
+surface_setup: "GCM"
+turbconv: "prognostic_edmfx"
+rayleigh_sponge: true
+viscous_sponge: true
+implicit_diffusion: true
+implicit_sgs_advection: false
+approximate_linear_solve_iters: 2
+# max_newton_iters_ode: 3
+edmfx_upwinding: "first_order"
+edmfx_entr_model: "PiGroups"
+edmfx_detr_model: "SmoothArea"
+precip_model: 1M
+moist: "nonequil"
+# moist: "equil"
+#cloud_model: "quadrature_sgs"
+cloud_model : "grid_scale" 
+edmfx_vertical_diffusion: true
+edmfx_sgs_mass_flux: false
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_filter: true
+prognostic_tke: true
+config: "column"
+hyperdiff: "false"
+z_max: 40e3
+z_elem: 60
+z_stretch: true
+dz_bottom: 30
+rad: allskywithclear
+co2_model: fixed
+insolation: "gcmdriven"
+perturb_initstate: false
+dt: "5secs"
+dt_rad: "1hours"
+t_end: "40hours"
+call_cloud_diagnostics_per_stage : true
+toml: [toml/model_config_prognostic_1M.toml]
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 60]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, husraup, hussnup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, husraen, hussnen, tke]
+    period: 10mins
+  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
+    period: 10mins
+  - short_name: [husra, hussn]
+    period: 10mins

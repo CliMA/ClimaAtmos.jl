@@ -1,0 +1,1601 @@
+[optics_lookup_temperature_min]
+used_in = ["ClimaAtmos", "getindex"]
+value = 160
+type = "float"
+description = "Minimum temperature in the lookup table for optical properties in RRTMGP (K)."
+
+[f_plane_coriolis_frequency]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0
+type = "float"
+description = "Coriolis frequency on an f-plane (s⁻¹)."
+
+[SB2006_raindrops_terminal_velocity_coeff_aR]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 9.65
+type = "float"
+description = "Coefficient $a_R$ in the raindrops terminal velocity equation (m s⁻¹). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[mixing_length_smin_rm]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.5
+type = "float"
+description = "Upper ratio limit for the smooth minimum function in the mixing length closure (unitless). Source: Lopez-Gomez et al. (2020), Eq. 40."
+
+[SB2006_raindrops_breakup_coeff_kbr]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1000
+type = "float"
+description = "Coefficient $k_{br}$ in the raindrops breakup rate equation (m⁻¹). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[mixing_length_smin_ub]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.1
+type = "float"
+description = "Lower limit for the smooth minimum function in the mixing length closure (unitless). Source: Lopez-Gomez et al. (2020), Eq. 40."
+
+[threshold_smooth_transition_steepness]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 2.0
+type = "float"
+description = "A unitless steepness parameter for the smooth transition function used in threshold-based processes."
+
+[condensation_evaporation_timescale]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 10.0
+type = "float"
+description = "Condensation/evaporation timescale for non-equilibrium microphysics (s)."
+
+[mam3_stdev_coarse]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.8
+type = "float"
+description = "Geometric standard deviation for the coarse mode in the MAM3 scheme (unitless). Source: Liu et al. (2012), DOI: 10.5194/gmd-5-709-2012."
+
+[ARG2000_pow_2]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.75
+type = "float"
+description = "Exponent for the term ($S_m^2 / (\\zeta + 3 \\eta)$) in an empirical function from Abdul-Razzak and Ghan (2000) (unitless). Source: DOI: 10.1029/1999JD901161."
+
+[liquid_water_specific_humidity_calibration_coefficient]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0
+type = "float"
+description = "Calibration coefficient for liquid water specific humidity in the data-driven cloud droplet number concentration function (unitless)."
+
+[ice_cloud_effective_radius]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 2.5e-5
+type = "float"
+description = "Assumed constant effective radius for ice cloud particles (m)."
+
+[pressure_normalmode_drag_coeff]
+used_in = ["ClimaAtmos", "getindex"]
+value = 52.50440759196351
+type = "float"
+description = "Updraft pressure drag coefficient in the perturbation pressure closure (unitless). Source: He et al. (2022), Eq. 34."
+
+[CL1993_local_rime_density_constant_coeff]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 51
+type = "float"
+description = "Constant coefficient for local rime density in the P3 scheme (kg m⁻³). Source: Cober and List (1993), DOI: 10.1175/1520-0469(1993)050<1591:MOTHAM>2.0.CO;2."
+
+[entropy_water_vapor]
+used_in = ["Thermodynamics", "getindex"]
+value = 10513.6
+type = "float"
+description = "Specific entropy of water vapor at the reference temperature and pressure (J kg⁻¹ K⁻¹)."
+
+[temperature_saturation_adjustment_max]
+used_in = ["Thermodynamics", "getindex"]
+value = 1000
+type = "float"
+description = "Maximum temperature for saturation adjustment (K)."
+
+[mixing_length_tke_surf_flux_coeff]
+used_in = ["ClimaAtmos", "getindex"]
+value = 5.899277314898814
+type = "float"
+description = "Coefficient multiplying flux in the $u_*^3$ surface flux formulation of TKE ($C_{flux}$) (unitless)."
+
+[CL1993_local_rime_density_quadratic_coeff]
+used_in = ["CloudMicrophysics", "getindex"]
+value = -5.5
+type = "float"
+description = "Quadratic coefficient for local rime density in the P3 scheme (kg m⁻³ (m² s⁻¹ °C⁻¹)⁻²). Source: Cober and List (1993), DOI: 10.1175/1520-0469(1993)050<1591:MOTHAM>2.0.CO;2."
+
+[snow_flake_size_distribution_coefficient_nu]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.63
+type = "float"
+description = "Snow size distribution coefficient $\\nu$ for the 1-moment microphysics scheme (unitless)."
+
+[reference_liquid_water_specific_humidity]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.0e-6
+type = "float"
+description = "Normalization factor for cloud liquid water specific humidity in the data-driven CDNC function (kg kg⁻¹)."
+
+[dust_calibration_coefficient]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0
+type = "float"
+description = "Calibration coefficient for dust aerosol in the data-driven cloud droplet number concentration function (unitless)."
+
+[mixing_length_diss_coeff]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.2853778744984959
+type = "float"
+description = "TKE dissipation coefficient ($c_d$) for the EDMF mixing length closure (unitless). Source: Lopez-Gomez et al. (2020), Table 1."
+
+[cloud_ice_snow_collision_efficiency]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.1
+type = "float"
+description = "Collision efficiency between cloud ice and snow for the 1-moment scheme (unitless)."
+
+[SB2006_raindrops_breakup_coeff_kappabr]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 2300
+type = "float"
+description = "Coefficient $\\kappa_{br}$ in the raindrops breakup rate equation (m⁻¹). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[snow_mass_size_relation_coefficient_chim]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1
+type = "float"
+description = "Coefficient $\\chi_m$ in the mass-size relation for snow in the 1-moment microphysics scheme (unitless)."
+
+[snow_autoconversion_timescale]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 100
+type = "float"
+description = "Snow autoconversion timescale for the 1-moment microphysics scheme (s)."
+
+[reference_ammonium_sulfate_mass_concentration]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.0e-8
+type = "float"
+description = "Normalization factor for ammonium sulfate mass concentration in the data-driven CDNC function (kg kg⁻¹)."
+
+[SB2006_rain_evaporation_coeff_alpha]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 159
+type = "float"
+description = "Coefficient $\\alpha$ in the fallspeed relation for rain evaporation (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[D_0_diffusion]
+used_in = ["ClimaAtmos", "getindex"]
+value = 5
+type = "float"
+description = "Coefficient $D_0$ in the DecayWithHeightDiffusion vertical diffusion scheme (m² s⁻¹)."
+
+[rain_mass_size_relation_coefficient_me]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 3
+type = "float"
+description = "Exponent $m_e$ in the mass-size relation for rain in the 1-moment microphysics scheme (unitless)."
+
+[orbit_obliquity_at_epoch]
+used_in = ["Insolation", "getindex"]
+value = 0.408979125113246
+type = "float"
+description = "Obliquity of the ecliptic at epoch (radians). Corresponds to 23.43278°."
+
+[drag_layer_vertical_extent]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.7
+type = "float"
+description = "Vertical extent of the drag layer as a fraction of total pressure depth (unitless). Source: Held and Suarez (1994), DOI: 10.1175/1520-0477(1994)075<1825:APFTIO>2.0.CO;2."
+
+[idealized_ocean_albedo]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.38
+type = "float"
+description = "Ocean surface albedo for idealized simulations (unitless). Source: O'Gorman and Schneider (2008)."
+
+[detr_inv_tau]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0
+type = "float"
+description = "Inverse timescale for detrainment (s⁻¹)."
+
+[rain_drop_length_scale]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.001
+type = "float"
+description = "Rain drop length scale for the 1-moment microphysics scheme (m)."
+
+[mixing_length_static_stab_coeff]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.3662565327618355
+type = "float"
+description = "Static stability coefficient ($c_b$) for the EDMF mixing length closure (unitless). Source: Lopez-Gomez et al. (2020), Table 1."
+
+[SB2006_raindrops_self-collection_coeff_d]
+used_in = ["CloudMicrophysics", "getindex"]
+value = -5
+type = "float"
+description = "Coefficient $d$ in the raindrops self-collection rate equation (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[snow_aspect_ratio]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.15
+type = "float"
+description = "Assumed aspect ratio for snow in the 1-moment microphysics scheme (unitless)."
+
+[temperature_homogenous_nucleation]
+used_in = ["Thermodynamics", "getindex"]
+value = 233
+type = "float"
+description = "Temperature for homogeneous ice nucleation (K)."
+
+[CL1993_local_rime_density_linear_coeff]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 114
+type = "float"
+description = "Linear coefficient for local rime density in the P3 scheme (kg m⁻³ (m² s⁻¹ °C⁻¹)⁻¹). Source: Cober and List (1993), DOI: 10.1175/1520-0469(1993)050<1591:MOTHAM>2.0.CO;2."
+
+[angular_velocity_planet_rotation]
+used_in = ["ClimaAtmos", "getindex"]
+value = 7.2921159e-5
+type = "float"
+description = "Angular velocity of planetary rotation ($\\Omega$) (rad s⁻¹)."
+
+[MERRA2_seasalt_aerosol_bin04_radius]
+used_in = ["ClimaAtmos", "getindex"]
+value = 2.818e-6
+type = "float"
+description = "Dry particle radius for sea salt aerosol in bin 04 of the MERRA-2 dataset (m). Source: DOI: 10.5067/LTVB4GPCOTK2."
+
+[Chen2022_table_B3_Bs]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [0.575231, 0.0909307, 0.515579]
+type = "float"
+description = "Coefficients $B_s$ for ice terminal velocity parameterization. Source: Table B3 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[molar_mass_dry_air]
+used_in = ["Thermodynamics", "getindex", "RRTMGP"]
+value = 0.02897
+type = "float"
+description = "Molar mass of dry air (kg mol⁻¹)."
+
+[cloud_ice_size_distribution_coefficient_n0]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 2.0e7
+type = "float"
+description = "Cloud ice size distribution parameter $n_0$ for the 1-moment microphysics scheme (m⁻⁴)."
+
+[water_refractive_index]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.34
+type = "float"
+description = "Relative refractive index of water and air for broadband ocean surface albedo calculation (unitless). Source: Jin et al. (2011)."
+
+[Chen2022_table_B5_Cl]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [-0.756064, 0.935922, -1.70952]
+type = "float"
+description = "Coefficients $C_l$ for ice terminal velocity parameterization. Source: Table B5 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[detr_buoy_coeff]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0
+type = "float"
+description = "Coefficient for the $b/w^2$ term in the detrainment closure (unitless). Source: Tan et al. (2018), Eq. 27."
+
+[rain_terminal_velocity_size_relation_coefficient_chiv]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1
+type = "float"
+description = "Coefficient $\\chi_v$ in the terminal velocity-size relation for rain in the 1-moment microphysics scheme (unitless)."
+
+[supersaturation_precipitation_threshold]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.02
+type = "float"
+description = "Precipitation formation threshold in terms of supersaturation for the 0-moment microphysics scheme (unitless)."
+
+[SB2006_collection_kernel_coeff_kapparr]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 60.7
+type = "float"
+description = "Collection kernel constant $\\kappa_{rr}$ in the Seifert and Beheng (2006) scheme ($kg^{-1/3}$). Source: DOI: 10.1007/s00703-005-0112-4."
+
+[coefficient_b_m_businger]
+used_in = ["SurfaceFluxes", "getindex"]
+value = 15.0
+type = "float"
+description = "Coefficient $b_m$ for the Businger momentum universal function (unitless). Source: Businger et al. (1971), DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[Chen2022_table_B1_ci]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [0.0, 0.184325, 0.184325]
+type = "float"
+description = "Coefficients $c_i$ for raindrop terminal velocity parameterization (mm⁻¹). Source: Table B1 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[C_H]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.0044
+type = "float"
+description = "Bulk transfer coefficient for sensible heat ($C_H$) (unitless)."
+
+[EDMF_min_area]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.0e-5
+type = "float"
+description = "Minimum area fraction per updraft (unitless)."
+
+[snow_cross_section_size_relation_coefficient_chia]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1
+type = "float"
+description = "Coefficient $\\chi_a$ in the cross section-size relation for snow in the 1-moment microphysics scheme (unitless)."
+
+[snow_mass_size_relation_coefficient_me]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 2
+type = "float"
+description = "Exponent $m_e$ in the mass-size relation for snow in the 1-moment microphysics scheme (unitless)."
+
+[mam3_stdev_accum]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.8
+type = "float"
+description = "Geometric standard deviation for the accumulation mode in the MAM3 scheme (unitless). Source: Liu et al. (2012), DOI: 10.5194/gmd-5-709-2012."
+
+[ARG2000_pow_1]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1.5
+type = "float"
+description = "Exponent for the term ($\\zeta / \\eta$) in an empirical function from Abdul-Razzak and Ghan (2000) (unitless). Source: DOI: 10.1029/1999JD901161."
+
+[SB2006_cloud_droplets_min_mass]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 4.2e-15
+type = "float"
+description = "Minimum mass of cloud droplets in the Seifert and Beheng (2006) scheme (kg). Source: DOI: 10.1007/s00703-005-0112-4."
+
+[SB2006_accretion_correcting_function_coeff_c]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 4
+type = "float"
+description = "Coefficient $c$ in the universal function correcting the accretion rate (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[BF1995_mass_coeff_alpha]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 7.38e-11
+type = "float"
+description = "Coefficient $\\alpha_{va}$ in the power law for mass from vapor diffusion/aggregation in the P3 scheme ($g \\mu m^{-\\beta_{va}}$). See P3 scheme documentation to adjust units. Source: Brown and Francis (1995); Morrison and Milbrandt (2015)."
+
+[thermodynamics_temperature_reference]
+used_in = ["Thermodynamics", "getindex"]
+value = 273.16
+type = "float"
+description = "Reference temperature for thermodynamics (K)."
+
+[rain_mass_size_relation_coefficient_chim]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1
+type = "float"
+description = "Coefficient $\\chi_m$ in the mass-size relation for rain in the 1-moment microphysics scheme (unitless)."
+
+[cloud_ice_crystals_length_scale]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1.0e-5
+type = "float"
+description = "Cloud ice particle length scale for the 1-moment microphysics scheme (m)."
+
+[SST_mean]
+used_in = ["ClimaAtmos", "getindex"]
+value = 300
+type = "float"
+description = "Mean sea surface temperature (SST) for RCEMIP surface conditions (K). Source: Wing et al. (2018)."
+
+[von_karman_constant]
+used_in = ["SurfaceFluxes", "getindex"]
+value = 0.4
+type = "float"
+description = "The von Kármán constant ($\\kappa$), a dimensionless constant describing the logarithmic velocity profile near a boundary."
+
+[SB2006_raindrops_equilibrium_mean_diameter]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.0009
+type = "float"
+description = "Equilibrium mean diameter of raindrops for computing the breakup rate (m). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[mean_sea_level_pressure]
+used_in = ["Thermodynamics", "getindex"]
+value = 101325
+type = "float"
+description = "Mean sea level pressure ($p_{MSL}$) (Pa)."
+
+[anomalistic_year_length]
+used_in = ["Insolation", "getindex"]
+value = 31558464
+type = "float"
+description = "Length of an anomalistic year (s). Derived as 365.25 * `day`."
+
+[kappa_2_sponge]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.0e6
+type = "float"
+description = "Viscous sponge coefficient ($\\kappa_2$) (m² s⁻¹)."
+
+[Chen2022_table_B5_Bl]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [-2.56289, -0.00513504, 0.608459]
+type = "float"
+description = "Coefficients $B_l$ for ice terminal velocity parameterization. Source: Table B5 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[mixing_length_Prandtl_number_scale]
+used_in = ["ClimaAtmos", "getindex"]
+value = 4.076923076923077
+type = "float"
+description = "Cospectral budget factor for turbulent Prandtl number ($\\omega_{pr}$) for the EDMF mixing length closure (unitless). Source: Lopez-Gomez et al. (2020), Eq. 36."
+
+[H_diffusion]
+used_in = ["ClimaAtmos", "getindex"]
+value = 8000
+type = "float"
+description = "Height scale $H$ in the DecayWithHeightDiffusion vertical diffusion scheme (m)."
+
+[snow_ventilation_coefficient_a]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.65
+type = "float"
+description = "Snow ventilation coefficient 'a' for the 1-moment microphysics scheme (unitless)."
+
+[SB2006_rain_distribution_coeff_nu]
+used_in = ["CloudMicrophysics", "getindex"]
+value = -0.66666666666667
+type = "float"
+description = "Gamma distribution coefficient $\\nu$ for rain (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[orbit_eccentricity_at_epoch]
+used_in = ["Insolation", "getindex"]
+value = 0.016708634
+type = "float"
+description = "Orbital eccentricity at epoch (unitless)."
+
+[prandtl_number_0_businger]
+used_in = ["SurfaceFluxes", "getindex"]
+value = 0.74
+type = "float"
+description = "The turbulent Prandtl number in neutral conditions ($Pr_0$) for the Businger universal functions (unitless). Source: Businger et al. (1971), DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[tracer_hyperdiffusion_factor]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0
+type = "float"
+description = "Scaling factor for hyperdiffusion of tracers with strong gradients, e.g., precipitation (unitless)."
+
+[snow_ventilation_coefficient_b]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.44
+type = "float"
+description = "Snow ventilation coefficient 'b' for the 1-moment microphysics scheme (unitless)."
+
+[sulfate_aerosol_kappa]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.53
+type = "float"
+description = "Hygroscopicity parameter $\\kappa$ for sulfate aerosol (unitless). Source: DOI: 10.5194/acp-7-1961-2007."
+
+[mixing_length_tke_surf_scale]
+used_in = ["ClimaAtmos", "getindex"]
+value = 3.75
+type = "float"
+description = "Ratio of TKE to squared friction velocity ($\\kappa_*²$) in the surface layer for the EDMF mixing length closure (unitless). Source: Lopez-Gomez et al. (2020), Table 1."
+
+[SB2006_collection_kernel_coeff_kcc]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 4.44e9
+type = "float"
+description = "Cloud-cloud collection kernel constant $k_{cc}$ in the Seifert and Beheng (2006) scheme ($m^3 kg⁻² s⁻¹$). Source: DOI: 10.1007/s00703-005-0112-4."
+
+[length_orbit_semi_major]
+used_in = ["Insolation", "getindex"]
+value = 149597870000
+type = "float"
+description = "Semi-major axis of the planetary orbit (m). Derived as 1 * `astronomical_unit`."
+
+[SST_wavelength]
+used_in = ["ClimaAtmos", "getindex"]
+value = 6.0e6
+type = "float"
+description = "Wavelength of the SST sinusoid for RCEMIP box models (m). Source: Wing et al. (2018)."
+
+[temperature_surface_reference]
+used_in = ["Thermodynamics", "getindex"]
+value = 290
+type = "float"
+description = "Surface temperature in a reference temperature profile (K)."
+
+[cloud_ice_specific_humidity_autoconversion_threshold]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1.0e-6
+type = "float"
+description = "Snow autoconversion threshold in terms of specific humidity for the 1-moment microphysics scheme (unitless)."
+
+[isobaric_specific_heat_dry_air]
+used_in = ["Thermodynamics", "getindex"]
+value = 1004.5
+type = "float"
+description = "Isobaric specific heat of dry air (J kg⁻¹ K⁻¹)."
+
+[isobaric_specific_heat_vapor]
+used_in = ["Thermodynamics", "getindex"]
+value = 1859
+type = "float"
+description = "Isobaric specific heat of water vapor (J kg⁻¹ K⁻¹)."
+
+[c_smag]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.2
+type = "float"
+description = "Smagorinsky coefficient (unitless)."
+
+[snow_terminal_velocity_size_relation_coefficient_delv]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0
+type = "float"
+description = "Coefficient $\\delta_v$ in the terminal velocity-size relation for snow in the 1-moment microphysics scheme (unitless)."
+
+[diffusivity_of_water_vapor]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 2.26e-5
+type = "float"
+description = "Diffusivity of water vapor in air (m² s⁻¹)."
+
+[snow_cross_section_size_relation_coefficient]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 2
+type = "float"
+description = "Exponent in the cross section-size relation for snow in the 1-moment microphysics scheme (unitless)."
+
+[snow_terminal_velocity_size_relation_coefficient_chiv]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1
+type = "float"
+description = "Coefficient $\\chi_v$ in the terminal velocity-size relation for snow in the 1-moment microphysics scheme (unitless)."
+
+[SST_wavelength_latitude]
+used_in = ["ClimaAtmos", "getindex"]
+value = 54
+type = "float"
+description = "Wavelength of the SST sinusoid for RCEMIP sphere models (degrees latitude). Source: Wing et al. (2018)."
+
+[held_suarez_T_equator_dry]
+used_in = ["ClimaAtmos", "getindex"]
+value = 315
+type = "float"
+description = "Equatorial temperature for the dry Held-Suarez benchmark (K). Source: Held and Suarez (1994), DOI: 10.1175/1520-0477(1994)075<1825:APFTIO>2.0.CO;2."
+
+[thermal_conductivity_of_air]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.024
+type = "float"
+description = "Thermal conductivity of air (J m⁻¹ s⁻¹ K⁻¹)."
+
+[Chen2022_table_B1_bi]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [2.2955, 2.2955, 1.1451]
+type = "float"
+description = "Coefficients $b_i$ for raindrop terminal velocity parameterization (unitless). Source: Table B1 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[cloud_liquid_snow_collision_efficiency]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.1
+type = "float"
+description = "Collision efficiency between cloud liquid water and snow for the 1-moment scheme (unitless)."
+
+[SB2006_collection_kernel_coeff_krr]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 7.12
+type = "float"
+description = "Rain-rain collection kernel constant $k_{rr}$ in the Seifert and Beheng (2006) scheme ($m^3 kg⁻¹ s⁻¹$). Source: DOI: 10.1007/s00703-005-0112-4."
+
+[equator_pole_temperature_gradient_wet]
+used_in = ["ClimaAtmos", "getindex"]
+value = 65
+type = "float"
+description = "Equator-to-pole temperature gradient for the moist benchmark (K). Source: Held and Suarez (1994), DOI: 10.1175/1520-0477(1994)075<1825:APFTIO>2.0.CO;2."
+
+[held_suarez_T_equator_wet]
+used_in = ["ClimaAtmos", "getindex"]
+value = 294
+type = "float"
+description = "Equatorial temperature for the moist Held-Suarez benchmark (K). Source: Held and Suarez (1994), DOI: 10.1175/1520-0477(1994)075<1825:APFTIO>2.0.CO;2."
+
+[sulfate_aerosol_density]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1770
+type = "float"
+description = "Density of sulfate aerosol (kg m⁻³)."
+
+[rain_autoconversion_timescale]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1000.0
+type = "float"
+description = "Rain formation timescale for the 1-moment microphysics scheme (s)."
+
+[rain_drop_size_distribution_coefficient_n0]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1.6e7
+type = "float"
+description = "Rain drop size distribution coefficient $n_0$ for the 1-moment microphysics scheme (m⁻⁴)."
+
+[entr_coeff]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1
+type = "float"
+description = "Coefficient for the $w/z$ term in the entrainment closure (unitless)."
+
+[SB2006_rain_distribution_coeff_mu]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.33333333333333
+type = "float"
+description = "Gamma distribution coefficient $\\mu$ for rain (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[Chen2022_table_B1_ai]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [0.044612, -0.263166, 4.7178]
+type = "float"
+description = "Coefficients $a_i$ for raindrop terminal velocity parameterization ($mm^{-b_i}$). Source: Table B1 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[rain_mass_size_relation_coefficient_delm]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0
+type = "float"
+description = "Coefficient $\\delta_m$ in the mass-size relation for rain in the 1-moment microphysics scheme (unitless)."
+
+[gcmdriven_scalar_relaxation_timescale]
+used_in = ["ClimaAtmos", "getindex"]
+value = 7200.0
+type = "float"
+description = "Relaxation timescale for scalars (temperature, humidity) toward the forcing profile in SCM cases (s). Source: Shen et al. (2022)."
+
+[pressure_normalmode_buoy_coeff1]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.09256005813947701
+type = "float"
+description = "Pressure buoyancy coefficient in the perturbation pressure closure (unitless). Source: He et al. (2022), Eq. 34."
+
+[ice_snow_threshold_radius]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 6.25e-5
+type = "float"
+description = "Threshold particle radius separating ice and snow for the 1-moment microphysics scheme (m)."
+
+[entropy_reference_temperature]
+used_in = ["Thermodynamics", "getindex"]
+value = 298.15
+type = "float"
+description = "Reference temperature for entropy calculations (K)."
+
+[most_stability_parameter_businger]
+used_in = ["SurfaceFluxes", "getindex"]
+value = 2.5
+type = "float"
+description = "The MOST stability parameter ($\\zeta_a$) for the Businger universal functions (unitless). Source: Businger et al. (1971), DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[zd_viscous]
+used_in = ["ClimaAtmos", "getindex"]
+value = 30000.0
+type = "float"
+description = "Height at which viscous damping begins in the sponge layer (m)."
+
+[SB2006_cloud_gamma_distribution_coeff_mu]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1
+type = "float"
+description = "Gamma distribution coefficient $\\mu$ for clouds (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[SB2006_cloud_gamma_distribution_coeff_nu]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1.0
+type = "float"
+description = "Gamma distribution coefficient $\\nu$ for clouds (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[adiabatic_exponent_dry_air]
+used_in = ["RRTMGP", "getindex"]
+value = 0.28571428571
+type = "float"
+description = "Adiabatic exponent for dry air ($\\kappa_d$), derived from $R_d/c_{pd}$ or 2/7 (unitless)."
+
+[epoch_time]
+used_in = ["Insolation", "getindex"]
+value = 2000-01-01T11:58:56.816Z
+type = "datetime"
+description = "J2000 epoch (Jan 1, 2000 11:58:56.816 UTC) as a DateTime"
+
+[specific_humidity_precipitation_threshold]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 5.0e-6
+type = "float"
+description = "Precipitation formation threshold in terms of specific humidity for the 0-moment microphysics scheme (unitless)."
+
+[precipitation_timescale]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1000
+type = "float"
+description = "Precipitation formation timescale for the 0-moment microphysics scheme (s)."
+
+[isobaric_specific_heat_liquid]
+used_in = ["Thermodynamics", "getindex"]
+value = 4181
+type = "float"
+description = "Isobaric specific heat of liquid water (J kg⁻¹ K⁻¹)."
+
+[Chen2022_table_B1_b_rho_coeff]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.038465
+type = "float"
+description = "Density coefficient $b_{\\rho}$ for raindrop terminal velocity parameterization (m³ kg⁻¹). Source: Table B1 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[latent_heat_vaporization_at_reference]
+used_in = ["Thermodynamics", "getindex"]
+value = 2500800
+type = "float"
+description = "Latent heat of vaporization at the reference temperature (J kg⁻¹)."
+
+[Chen2022_table_B5_Hl]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [-0.346044, -7.17829e-11, -1.24394e20]
+type = "float"
+description = "Coefficients $H_l$ for ice terminal velocity parameterization. Source: Table B5 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[detr_vertdiv_coeff]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0
+type = "float"
+description = "Coefficient for the vertical divergence term in the detrainment closure (unitless)."
+
+[sublimation_deposition_timescale]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 10.0
+type = "float"
+description = "Deposition/sublimation timescale for non-equilibrium microphysics (s)."
+
+[rain_cross_section_size_relation_coefficient_ae]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 2
+type = "float"
+description = "Exponent $a_e$ in the cross section-size relation for rain in the 1-moment microphysics scheme (unitless)."
+
+[P3_wet_growth_timescale]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 100
+type = "float"
+description = "Timescale for densification due to wet growth in the P3 scheme (s)."
+
+[kinematic_viscosity_of_air]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1.6e-5
+type = "float"
+description = "Kinematic viscosity of air (m² s⁻¹)."
+
+[coefficient_b_h_businger]
+used_in = ["SurfaceFluxes", "getindex"]
+value = 9.0
+type = "float"
+description = "Coefficient $b_h$ for the Businger heat universal function (unitless). Source: Businger et al. (1971), DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[pow_icenuc]
+used_in = ["Thermodynamics", "getindex"]
+value = 1
+type = "float"
+description = "Exponent in the ice nucleation parameterization (unitless)."
+
+[pressure_triple_point]
+used_in = ["Thermodynamics", "getindex"]
+value = 611.657
+type = "float"
+description = "Triple point pressure of water (Pa)."
+
+[temperature_water_freeze]
+used_in = ["Thermodynamics", "getindex", "CloudMicrophysics"]
+value = 273.15
+type = "float"
+description = "Freezing temperature of water (K)."
+
+[total_solar_irradiance]
+used_in = ["Insolation", "getindex"]
+value = 1362
+type = "float"
+description = "Total solar irradiance (TSI) at the mean orbital distance (W m⁻²)."
+
+[snow_aspect_ratio_coefficient]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.3333333333333333
+type = "float"
+description = "Power law coefficient for terminal velocity dependence on snow aspect ratio (unitless). Source: Chen et al. (2022)."
+
+[MERRA2_sulfate_aerosol_radius]
+used_in = ["ClimaAtmos", "getindex"]
+value = 3.5e-7
+type = "float"
+description = "Dry particle radius for sulfate aerosol in the MERRA-2 dataset (m). Source: DOI: 10.5067/LTVB4GPCOTK2."
+
+[ammonium_sulfate_calibration_coefficient]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0
+type = "float"
+description = "Calibration coefficient for ammonium sulfate aerosol in the data-driven cloud droplet number concentration function (unitless)."
+
+[cloud_ice_rain_collision_efficiency]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1
+type = "float"
+description = "Collision efficiency between cloud ice and rain for the 1-moment scheme (unitless)."
+
+[detr_coeff]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0
+type = "float"
+description = "Coefficient for the $w$ term in the detrainment closure (unitless)."
+
+[alpha_rayleigh_w]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.0
+type = "float"
+description = "Coefficient $\\alpha_w$ for Rayleigh damping on vertical velocity (s⁻¹)."
+
+[BF1995_mass_exponent_beta]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1.9
+type = "float"
+description = "Exponent $\\beta_{va}$ in the power law for mass from vapor diffusion/aggregation in the P3 scheme (unitless). Source: Brown and Francis (1995); Morrison and Milbrandt (2015)."
+
+[alpha_rayleigh_uh]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.0
+type = "float"
+description = "Coefficient $\\alpha_{uh}$ for Rayleigh damping on horizontal velocity (s⁻¹)."
+
+[rain_ventilation_coefficient_a]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1.5
+type = "float"
+description = "Rain ventilation coefficient 'a' for the 1-moment microphysics scheme (unitless)."
+
+[SB2006_ventilation_factor_coeff_av]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.78
+type = "float"
+description = "Coefficient $a_v$ in the ventilation factor equation for rain evaporation (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[snow_mass_size_relation_coefficient_delm]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0
+type = "float"
+description = "Coefficient $\\delta_m$ in the mass-size relation for snow in the 1-moment microphysics scheme (unitless)."
+
+[potential_temperature_reference_pressure]
+used_in = ["Thermodynamics", "getindex"]
+value = 100000.0
+type = "float"
+description = "Reference pressure for potential temperature calculations ($p_0$) (Pa)."
+
+[Variable_time_scale_autoconversion_coeff_alpha]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1.0
+type = "float"
+description = "Exponent of number density in the function describing the autoconversion timescale (unitless)."
+
+[tracer_vertical_diffusion_factor]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.0
+type = "float"
+description = "Scaling factor for vertical diffusion of tracers with strong gradients, e.g., precipitation (unitless)."
+
+[gcmdriven_relaxation_minimum_height]
+used_in = ["ClimaAtmos", "getindex"]
+value = 16000.0
+type = "float"
+description = "Start height for relaxation toward the forcing profile in SCM cases (m). Source: Shen et al. (2022)."
+
+[temperature_triple_point]
+used_in = ["Thermodynamics", "getindex"]
+value = 273.16
+type = "float"
+description = "Triple point temperature of water (K)."
+
+[reference_dust_aerosol_mass_concentration]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.0e-8
+type = "float"
+description = "Normalization factor for dust aerosol mass concentration in the data-driven CDNC function (kg kg⁻¹)."
+
+[snow_cross_section_size_relation_coefficient_dela]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0
+type = "float"
+description = "Coefficient $\\delta_a$ in the cross section-size relation for snow in the 1-moment microphysics scheme (unitless)."
+
+[Chen2022_table_B3_As]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [-0.263503, 0.00174079, 0.0378769]
+type = "float"
+description = "Coefficients $A_s$ for ice terminal velocity parameterization. Source: Table B3 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[C_E]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.0044
+type = "float"
+description = "Coefficient used in the simple vertical diffusion scheme ($C_E$) (unitless)."
+
+[SB2006_ventilation_factor_coeff_bv]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.308
+type = "float"
+description = "Coefficient $b_v$ in the ventilation factor equation for rain evaporation (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[diagnostic_covariance_coeff]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.8194473036368564
+type = "float"
+description = "Prefactor in the turbulent production term of the EDMF covariance equation (unitless)."
+
+[day]
+used_in = ["Insolation", "getindex"]
+value = 86400
+type = "float"
+description = "Length of a day (s)."
+
+[entr_param_vec]
+used_in = ["ClimaAtmos", "getindex"]
+value = [-2.957457401450467, -9.501619960980992, 6.353132480540012, -3.468654433283116, -3.8767255750933405, 0.2713189989262387]
+type = "float"
+description = "Data-driven entrainment parameter vector (unitless)."
+
+[EDMF_surface_area]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.06290335367513286
+type = "float"
+description = "Combined updraft surface area fraction (unitless). The surface area for each updraft is `surface_area / N_updrafts`. Source: Cohen et al. (2020), Table 2."
+
+[molar_mass_water]
+used_in = ["Thermodynamics", "getindex", "RRTMGP", "CloudMicrophysics"]
+value = 0.01801528
+type = "float"
+description = "Molar mass of water (kg mol⁻¹)."
+
+[most_stability_exponent_businger]
+used_in = ["SurfaceFluxes", "getindex"]
+value = 4.42
+type = "float"
+description = "The MOST stability exponent ($\\gamma$) for the Businger universal functions (unitless). Source: Businger et al. (1971), DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[SB2006_rain_evaporation_coeff_beta]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.266
+type = "float"
+description = "Coefficient $\\beta$ in the fallspeed relation for rain evaporation (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[temperature_saturation_adjustment_min]
+used_in = ["Thermodynamics", "getindex"]
+value = 1
+type = "float"
+description = "Minimum temperature difference for unsaturated case in saturation adjustment (K)."
+
+[mixing_length_Prandtl_number_0]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.808519937709726
+type = "float"
+description = "Turbulent Prandtl number in neutral conditions ($Pr_{t,0}$) (unitless). Source: Lopez-Gomez et al. (2020), Table 1."
+
+[snow_apparent_density]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 100
+type = "float"
+description = "The apparent density of snow particles (kg m⁻³). Source: DOI: 10.1029/2020JD034157."
+
+[cloud_liquid_rain_collision_efficiency]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.8
+type = "float"
+description = "Collision efficiency between cloud liquid water and rain for the 1-moment scheme (unitless)."
+
+[SB2006_accretion_correcting_function_coeff_tau0]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 5.0e-5
+type = "float"
+description = "Coefficient $\tau_0$ in the universal function correcting the accretion rate (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[M1996_area_coeff_gamma]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.2285
+type = "float"
+description = "Coefficient $\\gamma$ in the power law for the projected area of various ice habits in the P3 scheme ($\\mu m^{2-\\sigma}$). See P3 scheme documentation to adjust units. Source: Mitchell (1996); Morrison and Milbrandt (2015)."
+
+[entropy_dry_air]
+used_in = ["Thermodynamics", "getindex"]
+value = 6864.8
+type = "float"
+description = "Specific entropy of dry air at the reference temperature and pressure (J kg⁻¹ K⁻¹)."
+
+[zd_rayleigh]
+used_in = ["ClimaAtmos", "getindex"]
+value = 30000.0
+type = "float"
+description = "Height at which Rayleigh damping begins in the sponge layer ($z_d$) (m)."
+
+[potential_temp_vertical_gradient]
+used_in = ["ClimaAtmos", "getindex"]
+value = 10
+type = "float"
+description = "Vertical gradient of potential temperature with height (K m⁻¹). Source: Held and Suarez (1994), DOI: 10.1175/1520-0477(1994)075<1825:APFTIO>2.0.CO;2."
+
+[cloud_ice_mass_size_relation_coefficient_me]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 3
+type = "float"
+description = "Exponent $m_e$ in the mass-size relation for cloud ice in the 1-moment microphysics scheme (unitless)."
+
+[EDMF_max_area]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.7
+type = "float"
+description = "Maximum area fraction per updraft (unitless)."
+
+[Chen2022_table_B3_Es]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [-0.156593, 0.0189334, 0.1377817]
+type = "float"
+description = "Coefficients $E_s$ for ice terminal velocity parameterization. Source: Table B3 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[temperature_saturation_adjustment_init_min]
+used_in = ["Thermodynamics", "getindex"]
+value = 150
+type = "float"
+description = "Minimum temperature for saturation adjustment initialization (K)."
+
+[SB2006_raindrops_size_distribution_coeff_lambda_max]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 10000.0
+type = "float"
+description = "Maximum value of the raindrops size distribution parameter $\\lambda$ (m⁻¹). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[SB2006_raindrops_size_distribution_coeff_N0_min]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 250000.0
+type = "float"
+description = "Minimum value of the raindrops size distribution parameter $N_0$ (m⁻⁴). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[liquid_cloud_effective_radius]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1.4e-5
+type = "float"
+description = "Assumed constant effective radius for liquid cloud droplets (m)."
+
+[rain_snow_collision_efficiency]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1
+type = "float"
+description = "Collision efficiency between rain and snow for the 1-moment scheme (unitless)."
+
+[temperature_min_reference]
+used_in = ["Thermodynamics", "getindex"]
+value = 220
+type = "float"
+description = "Minimum temperature in a reference temperature profile (K)."
+
+[entr_inv_tau]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.0e-5
+type = "float"
+description = "Inverse timescale for entrainment (s⁻¹)."
+
+[Chen2022_table_B1_a3_pow_coeff]
+used_in = ["CloudMicrophysics", "getindex"]
+value = -0.47335
+type = "float"
+description = "Power coefficient for $a_3$ in raindrop terminal velocity parameterization (unitless). Source: Table B1 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[rain_terminal_velocity_size_relation_coefficient_ve]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.5
+type = "float"
+description = "Exponent $v_e$ in the terminal velocity-size relation for rain in the 1-moment microphysics scheme (unitless)."
+
+[snow_flake_length_scale]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.001
+type = "float"
+description = "Snow particle length scale for the 1-moment microphysics scheme (m)."
+
+[seasalt_aerosol_kappa]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.12
+type = "float"
+description = "Hygroscopicity parameter $\\kappa$ for sea salt aerosol (unitless). Source: DOI: 10.5194/acp-7-1961-2007."
+
+[ARG2000_g_coeff_2]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.25
+type = "float"
+description = "Scaling coefficient for an empirical function in Abdul-Razzak and Ghan (2000) (unitless). Source: DOI: 10.1029/1999JD901161."
+
+[prescribed_cloud_droplet_number_concentration]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.0e8
+type = "float"
+description = "Prescribed number concentration of cloud droplets (m⁻³)."
+
+[detr_massflux_vertdiv_coeff]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1
+type = "float"
+description = "Coefficient for the mass flux vertical divergence term in the detrainment closure (unitless)."
+
+[cloud_liquid_water_specific_humidity_autoconversion_threshold]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.0005
+type = "float"
+description = "Rain formation threshold in terms of specific humidity for the 1-moment microphysics scheme (unitless)."
+
+[MERRA2_seasalt_aerosol_bin05_radius]
+used_in = ["ClimaAtmos", "getindex"]
+value = 7.772e-6
+type = "float"
+description = "Dry particle radius for sea salt aerosol in bin 05 of the MERRA-2 dataset (m). Source: DOI: 10.5067/LTVB4GPCOTK2."
+
+[universal_gas_constant]
+used_in = ["Thermodynamics", "getindex", "RRTMGP", "CloudMicrophysics"]
+value = 8.3144598
+type = "float"
+description = "Universal gas constant (R) (J mol⁻¹ K⁻¹)."
+
+[ARG2000_f_coeff_2]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 2.5
+type = "float"
+description = "Scaling coefficient for an empirical function in Abdul-Razzak and Ghan (2000) (unitless). Source: DOI: 10.1029/1999JD901161."
+
+[SB2006_raindrops_breakup_mean_diameter_threshold]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.00035
+type = "float"
+description = "Threshold of raindrops mean diameter for breakup (m). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[gcmdriven_momentum_relaxation_timescale]
+used_in = ["ClimaAtmos", "getindex"]
+value = 3600.0
+type = "float"
+description = "Relaxation timescale for horizontal winds toward the forcing profile in Single Column Model (SCM) cases (s). Source: Shen et al. (2022)."
+
+[reference_seasalt_aerosol_mass_concentration]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.0e-8
+type = "float"
+description = "Normalization factor for sea salt aerosol mass concentration in the data-driven CDNC function (kg kg⁻¹)."
+
+[seasalt_aerosol_density]
+used_in = ["ClimaAtmos", "getindex"]
+value = 2170
+type = "float"
+description = "Density of sea salt aerosol (kg m⁻³)."
+
+[rain_terminal_velocity_size_relation_coefficient_delv]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0
+type = "float"
+description = "Coefficient $\\delta_v$ in the terminal velocity-size relation for rain in the 1-moment microphysics scheme (unitless)."
+
+[MERRA2_seasalt_aerosol_bin03_radius]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.119e-6
+type = "float"
+description = "Dry particle radius for sea salt aerosol in bin 03 of the MERRA-2 dataset (m). Source: DOI: 10.5067/LTVB4GPCOTK2."
+
+[ARG2000_f_coeff_1]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.5
+type = "float"
+description = "Scaling coefficient for an empirical function in Abdul-Razzak and Ghan (2000) (unitless). Source: DOI: 10.1029/1999JD901161."
+
+[coefficient_a_h_businger]
+used_in = ["SurfaceFluxes", "getindex"]
+value = 4.7
+type = "float"
+description = "Coefficient $a_h$ for the Businger heat universal function (unitless). Source: Businger et al. (1971), DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[Chen2022_table_B3_Gs]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [-0.0309715, 1.55054, 0.518349]
+type = "float"
+description = "Coefficients $G_s$ for ice terminal velocity parameterization. Source: Table B3 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[max_area_limiter_scale]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.1
+type = "float"
+description = "Scaling coefficient for the maximum area limiter in detrainment (unitless)."
+
+[avogadro_constant]
+used_in = ["RRTMGP", "getindex"]
+value = 6.02214076e23
+type = "float"
+description = "Avogadro's constant ($N_A$) (mol⁻¹)."
+
+[alpha_rayleigh_sgs_tracer]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.0
+type = "float"
+description = "Coefficient $\\alpha_{sgs_tracer}$ for Rayleigh damping on subgrid-scale tracer (s⁻¹)"
+
+[gcmdriven_relaxation_maximum_height]
+used_in = ["ClimaAtmos", "getindex"]
+value = 20000.0
+type = "float"
+description = "Height at which the relaxation coefficient becomes 1 in SCM cases (m). Source: Shen et al. (2022)."
+
+[SB2006_autoconversion_correcting_function_coeff_a]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.7
+type = "float"
+description = "Coefficient $a$ in the universal function correcting the autoconversion rate (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[mean_anomaly_at_epoch]
+used_in = ["Insolation", "getindex"]
+value = 6.24006014121
+type = "float"
+description = "Mean anomaly at epoch (radians). Corresponds to 357.52911°."
+
+[mixing_length_eddy_viscosity_coefficient]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.19936120751810105
+type = "float"
+description = "TKE diffusivity coefficient ($c_m$) for the EDMF mixing length closure (unitless). Source: Lopez-Gomez et al. (2020), Table 1."
+
+[gas_constant_dry_air]
+used_in = ["Thermodynamics", "getindex"]
+value = 287.0
+type = "float"
+description = "Gas constant for dry air (J kg⁻¹ K⁻¹)."
+
+[Chen2022_table_B3_Cs]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [-0.345387, 0.177362, -0.000427794, 0.00419647]
+type = "float"
+description = "Coefficients $C_s$ for ice terminal velocity parameterization. Source: Table B3 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[astronomical_unit]
+used_in = ["ClimaAtmos", "getindex"]
+value = 149597870000
+type = "float"
+description = "Astronomical unit (AU) (m)."
+
+[Chen2022_table_B5_El]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [0.00639847, 0.00906454, -0.108232]
+type = "float"
+description = "Coefficients $E_l$ for ice terminal velocity parameterization. Source: Table B5 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[Horn2012_number_concentration_adjustment_timescale]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 100
+type = "float"
+description = "Timescale for 2-moment number concentration adjustment (s). Source: Horn (2012), DOI: 10.5194/gmd-5-345-2012."
+
+[Chen2022_table_B3_Fs]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [-3.35641, 0.0156199, 0.765337]
+type = "float"
+description = "Coefficients $F_s$ for ice terminal velocity parameterization. Source: Table B3 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[isobaric_specific_heat_ice]
+used_in = ["Thermodynamics", "getindex"]
+value = 2070.0
+type = "float"
+description = "Isobaric specific heat of ice (J kg⁻¹ K⁻¹)."
+
+[latent_heat_sublimation_at_reference]
+used_in = ["Thermodynamics", "getindex"]
+value = 2834400
+type = "float"
+description = "Latent heat of sublimation at the reference temperature (J kg⁻¹)."
+
+[rain_cross_section_size_relation_coefficient_dela]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0
+type = "float"
+description = "Coefficient $\\delta_a$ in the cross section-size relation for rain in the 1-moment microphysics scheme (unitless)."
+
+[SB2006_reference_air_density]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1.225
+type = "float"
+description = "Reference air density at surface conditions (kg m⁻³). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[SB2006_raindrops_size_distribution_coeff_lambda_min]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1000.0
+type = "float"
+description = "Minimum value of the raindrops size distribution parameter $\\lambda$ (m⁻¹). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[ARG2000_g_coeff_1]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1.0
+type = "float"
+description = "Scaling coefficient for an empirical function in Abdul-Razzak and Ghan (2000) (unitless). Source: DOI: 10.1029/1999JD901161."
+
+[MERRA2_seasalt_aerosol_bin01_radius]
+used_in = ["ClimaAtmos", "getindex"]
+value = 7.9e-8
+type = "float"
+description = "Dry particle radius for sea salt aerosol in bin 01 of the MERRA-2 dataset (m). Source: DOI: 10.5067/LTVB4GPCOTK2."
+
+[rain_ventilation_coefficient_b]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.53
+type = "float"
+description = "Rain ventilation coefficient 'b' for the 1-moment microphysics scheme (unitless)."
+
+[surface_tension_water]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.072
+type = "float"
+description = "Surface tension of water (N m⁻¹)."
+
+[min_area_limiter_power]
+used_in = ["ClimaAtmos", "getindex"]
+value = 10
+type = "float"
+description = "Exponent for the minimum area limiter in entrainment (unitless)."
+
+[SB2006_autoconversion_correcting_function_coeff_b]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 3
+type = "float"
+description = "Coefficient $b$ in the universal function correcting the autoconversion rate (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[SB2006_raindrops_min_mass]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 2.6e-10
+type = "float"
+description = "Minimum mass of raindrops in the Seifert and Beheng (2006) scheme (kg). Source: DOI: 10.1007/s00703-005-0112-4."
+
+[entr_mult_limiter_coeff]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0.6665582566200559
+type = "float"
+description = "Exponent for the multiplicative entrainment limiter of the form $(1 - area)^c$ (unitless)."
+
+[longitude_perihelion_at_epoch]
+used_in = ["Insolation", "getindex"]
+value = 4.938188299449
+type = "float"
+description = "Longitude of perihelion at epoch (radians). Corresponds to 282.9373°."
+
+[stefan_boltzmann_constant]
+used_in = ["RRTMGP", "getindex"]
+value = 5.67e-8
+type = "float"
+description = "Stefan-Boltzmann constant ($\\sigma$) (W m⁻² K⁻⁴)."
+
+[SB2006_raindrops_terminal_velocity_coeff_cR]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 600
+type = "float"
+description = "Coefficient $c_R$ in the raindrops terminal velocity equation (m⁻¹). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[coefficient_a_m_businger]
+used_in = ["SurfaceFluxes", "getindex"]
+value = 4.7
+type = "float"
+description = "Coefficient $a_m$ for the Businger momentum universal function (unitless). Source: Businger et al. (1971), DOI: 10.1175/1520-0469(1971)028<0181:FPRITA>2.0.CO;2."
+
+[density_ice_water]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 916.7
+type = "float"
+description = "Density of water ice (kg m⁻³)."
+
+[snow_flake_size_distribution_coefficient_mu]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 4.36e9
+type = "float"
+description = "Snow size distribution coefficient $\\mu$ for the 1-moment microphysics scheme (m⁻⁴)."
+
+[cloud_ice_mass_size_relation_coefficient_chim]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1
+type = "float"
+description = "Coefficient $\\chi_m$ in the mass-size relation for cloud ice in the 1-moment microphysics scheme (unitless)."
+
+[rain_cross_section_size_relation_coefficient_chia]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1
+type = "float"
+description = "Coefficient $\\chi_a$ in the cross section-size relation for rain in the 1-moment microphysics scheme (unitless)."
+
+[snow_terminal_velocity_size_relation_coefficient]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.25
+type = "float"
+description = "Exponent in the terminal velocity-size relation for snow in the 1-moment microphysics scheme (unitless)."
+
+[Chen2022_table_B5_Al]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [-0.475897, -0.0023127, 1.12293]
+type = "float"
+description = "Coefficients $A_l$ for ice terminal velocity parameterization. Source: Table B5 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[M1996_area_exponent_sigma]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1.88
+type = "float"
+description = "Exponent $\\sigma$ in the power law for the projected area of various ice habits in the P3 scheme (unitless). Source: Mitchell (1996); Morrison and Milbrandt (2015)."
+
+[mixing_length_Prandtl_maximum]
+used_in = ["ClimaAtmos", "getindex"]
+value = 10
+type = "float"
+description = "Maximum allowed turbulent Prandtl number (unitless)."
+
+[optics_lookup_temperature_max]
+used_in = ["ClimaAtmos", "getindex"]
+value = 355
+type = "float"
+description = "Maximum temperature in the lookup table for optical properties in RRTMGP (K)."
+
+[held_suarez_minimum_temperature]
+used_in = ["ClimaAtmos", "getindex"]
+value = 200
+type = "float"
+description = "Minimum temperature allowed in the benchmark (K). Source: Held and Suarez (1994), DOI: 10.1175/1520-0477(1994)075<1825:APFTIO>2.0.CO;2."
+
+[min_area_limiter_scale]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0
+type = "float"
+description = "Scaling coefficient for the minimum area limiter in entrainment (unitless)."
+
+[planet_radius]
+used_in = ["ClimaAtmos", "getindex"]
+value = 6371000
+type = "float"
+description = "Mean radius of the planet (m)."
+
+[Chen2022_table_B5_Fl]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [0.515453, -0.0725042, -1.8681e19]
+type = "float"
+description = "Coefficients $F_l$ for ice terminal velocity parameterization. Source: Table B5 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[density_liquid_water]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 1000
+type = "float"
+description = "Density of liquid water (kg m⁻³)."
+
+[P3_constant_slope_parameterization_value]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 3.0
+type = "float"
+description = "Value of $\\mu$ for the constant slope parameterization in the P3 scheme (unitless)."
+
+[turb_entr_param_vec]
+used_in = ["ClimaAtmos", "getindex"]
+value = [0.013063102363160873, 4885.465684262411]
+type = "float"
+description = "Data-driven turbulent entrainment parameter vector (unitless)."
+
+[SST_delta]
+used_in = ["ClimaAtmos", "getindex"]
+value = 1.25
+type = "float"
+description = "Amplitude of the SST sinusoid for RCEMIP surface conditions (K). Note: value is $2 \times$ amplitude. Source: Wing et al. (2018)."
+
+[gravitational_acceleration]
+used_in = ["Thermodynamics", "getindex", "RRTMGP", "CloudMicrophysics"]
+value = 9.81
+type = "float"
+description = "Gravitational acceleration on the planet (m s⁻²)."
+
+[cloud_ice_apparent_density]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 500
+type = "float"
+description = "The apparent density of cloud ice particles (kg m⁻³). Source: DOI: 10.1029/2020JD034157."
+
+[equator_pole_temperature_gradient_dry]
+used_in = ["ClimaAtmos", "getindex"]
+value = 60
+type = "float"
+description = "Equator-to-pole temperature gradient for the dry benchmark (K). Source: Held and Suarez (1994), DOI: 10.1175/1520-0477(1994)075<1825:APFTIO>2.0.CO;2."
+
+[rain_drop_drag_coefficient]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.55
+type = "float"
+description = "Rain drop drag coefficient for the 1-moment microphysics scheme (unitless)."
+
+[SB2006_autoconversion_correcting_function_coeff_A]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 400.0
+type = "float"
+description = "Coefficient $A$ in the universal function correcting the autoconversion rate (unitless). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[seasalt_calibration_coefficient]
+used_in = ["ClimaAtmos", "getindex"]
+value = 0
+type = "float"
+description = "Calibration coefficient for sea salt aerosol in the data-driven cloud droplet number concentration function (unitless)."
+
+[Chen2022_table_B5_Gl]
+used_in = ["CloudMicrophysics", "getindex"]
+value = [2.65236, 0.00158269, 259.935]
+type = "float"
+description = "Coefficients $G_l$ for ice terminal velocity parameterization. Source: Table B5 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
+
+[Chen2022_ice_cutoff]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.000625
+type = "float"
+description = "Cutoff diameter between small and large ice particles in the Chen et al. (2022) parameterization (m)."
+
+[cloud_ice_mass_size_relation_coefficient_delm]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0
+type = "float"
+description = "Coefficient $\\delta_m$ in the mass-size relation for cloud ice in the 1-moment microphysics scheme (unitless)."
+
+[SB2006_collection_kernel_coeff_kcr]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 5.25
+type = "float"
+description = "Cloud-rain collection kernel constant $k_{cr}$ in the Seifert and Beheng (2006) scheme ($m^3 kg⁻¹ s⁻¹$). Source: DOI: 10.1007/s00703-005-0112-4."
+
+[minimum_updraft_top]
+used_in = ["ClimaAtmos", "getindex"]
+value = 500.0
+type = "float"
+description = "Minimum updraft height limiter (m)."
+
+[SB2006_raindrops_max_mass]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 5.0e-6
+type = "float"
+description = "Maximum mass of raindrops in the Seifert and Beheng (2006) scheme (kg). Source: DOI: 10.1007/s00703-005-0112-4."
+
+[gas_constant_vapor]
+used_in = ["Thermodynamics", "getindex"]
+value = 461.5
+type = "float"
+description = "Gas constant for water vapor (J kg⁻¹ K⁻¹)."
+
+[MERRA2_seasalt_aerosol_bin02_radius]
+used_in = ["ClimaAtmos", "getindex"]
+value = 3.16e-7
+type = "float"
+description = "Dry particle radius for sea salt aerosol in bin 02 of the MERRA-2 dataset (m). Source: DOI: 10.5067/LTVB4GPCOTK2."
+
+[max_area_limiter_power]
+used_in = ["ClimaAtmos", "getindex"]
+value = 10
+type = "float"
+description = "Exponent for the maximum area limiter in detrainment (unitless)."
+
+[SB2006_raindrops_terminal_velocity_coeff_bR]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 10.3
+type = "float"
+description = "Coefficient $b_R$ in the raindrops terminal velocity equation (m s⁻¹). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[SB2006_raindrops_size_distribution_coeff_N0_max]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 2.0e7
+type = "float"
+description = "Maximum value of the raindrops size distribution parameter $N_0$ (m⁻⁴). Source: Seifert and Beheng (2006), DOI: 10.1007/s00703-005-0112-4."
+
+[Chen2022_table_B1_q_coeff]
+used_in = ["CloudMicrophysics", "getindex"]
+value = 0.115231
+type = "float"
+description = "Coefficient $q$ for raindrop terminal velocity parameterization (unitless). Source: Table B1 in Chen et al. (2022), DOI: 10.1016/j.atmosres.2022.106171."
