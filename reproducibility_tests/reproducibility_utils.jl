@@ -149,7 +149,7 @@ end
 """
     dirs = latest_comparable_dirs(;
         n = 5,
-        root_dir = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+        root_dir = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
         ref_counter_PR = read_ref_counter(joinpath(@__DIR__, "ref_counter.jl"))
         skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci"
     )
@@ -177,7 +177,7 @@ comparable directory.
 """
 function latest_comparable_dirs(;
     n = 5,
-    root_dir = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+    root_dir = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
     ref_counter_PR = read_ref_counter(joinpath(@__DIR__, "ref_counter.jl")),
     skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
 )
@@ -231,7 +231,7 @@ comparable states
 ```
 """
 function compute_bins(
-    root_dir::String = "/central/scratch/esm/slurm-buildkite/climaatmos-main";
+    root_dir::String = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main";
     filename = "ref_counter.jl",
 )
     dirs = sorted_dirs_with_matched_files(;
@@ -382,7 +382,7 @@ end
 """
     source_has_changed(
         n = 5,
-        root_dir = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+        root_dir = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
         ref_counter_PR = read_ref_counter(joinpath(@__DIR__, "ref_counter.jl")),
         skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
         src_dir = dirname(@__DIR__),
@@ -394,7 +394,7 @@ on `latest_comparable_dirs` (please see the argument list in the
 """
 function source_has_changed(;
     n = 5,
-    root_dir = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+    root_dir = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
     ref_counter_PR = read_ref_counter(joinpath(@__DIR__, "ref_counter.jl")),
     skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
     src_dir = dirname(@__DIR__),
@@ -478,7 +478,7 @@ end
         ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
         ref_counter_PR = read_ref_counter(ref_counter_file_PR),
         skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
-        dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+        dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
         commit = get_commit_sha(),
         repro_folder = "reproducibility_bundle",
         strip_folder = strip_output_active_path,
@@ -516,7 +516,7 @@ function move_data_to_save_dir(;
     ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
     ref_counter_PR = read_ref_counter(ref_counter_file_PR),
     skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
-    dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+    dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
     commit = get_commit_sha(),
     repro_folder = "reproducibility_bundle",
     strip_folder = strip_output_active_path,
@@ -603,7 +603,7 @@ end
     save_dir_transform(
         src;
         job_id,
-        dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+        dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
         commit = get_commit_sha(),
         repro_folder = "reproducibility_bundle",
         strip_folder = strip_output_active_path,
@@ -620,7 +620,7 @@ Returns the output file, to be saved, given:
 function save_dir_transform(
     src;
     job_id,
-    dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+    dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
     commit = get_commit_sha(),
     repro_folder = "reproducibility_bundle",
     strip_folder = strip_output_active_path,
@@ -633,7 +633,7 @@ end
 
 """
     destination_directory(;
-        dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+        dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
         commit = get_commit_sha(),
         repro_folder = "reproducibility_bundle",
     )
@@ -645,7 +645,7 @@ Return the reproducibility destination directory:
  - `repro_folder` reproducibility folder
 """
 function destination_directory(;
-    dest_root = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+    dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
     commit = get_commit_sha(),
     repro_folder = "reproducibility_bundle",
 )

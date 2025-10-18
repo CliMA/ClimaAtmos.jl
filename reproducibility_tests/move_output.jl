@@ -6,7 +6,7 @@ job_ids = reproducibility_test_job_ids()
 buildkite_ci = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) == "climaatmos-ci"
 in_merge_queue =
     startswith(get(ENV, "BUILDKITE_BRANCH", nothing), "gh-readonly-queue/main/")
-cluster_data_prefix = "/central/scratch/esm/slurm-buildkite/climaatmos-main"
+cluster_data_prefix = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main"
 
 move_data_to_save_dir(;
     buildkite_ci,
