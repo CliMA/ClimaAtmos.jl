@@ -1316,6 +1316,7 @@ function make_plots(
         "cl",
         "clw",
         "cli",
+        "Dh_smag", "Dv_smag", "dtmaxh_smag", "dtmaxv_smag", "strainrateh_smag", "strainratev_smag"
     ]
     short_names = short_names ∩ collect(keys(simdirs[1].vars))
 

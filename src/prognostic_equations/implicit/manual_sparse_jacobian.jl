@@ -596,6 +596,13 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 vertical_diffusion,
             )
             ᶜK_u = ᶜK_h
+        elseif p.atmos.smagorinsky_vertical isa SmagorinskyLilly
+            Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
+            set_smagorinsky_lilly_precomputed_quantities!(Y, p)  # sets (ᶜS, ᶜL_v) in p.precomputed
+            (; ᶜS, ᶜL_v) = p.precomputed
+            ᶜS_norm = projected_strain_rate_norm(ᶜS, Geometry.WAxis())
+            ᶜK_u = @. lazy(ᶜL_v^2 * ᶜS_norm)  # Smagorinsky eddy viscosity, ᶜνₜ_v
+            ᶜK_h = @. lazy(ᶜK_u / Pr_t)  # Smagorinsky eddy diffusivity, ᶜD_smag
         else
             (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
             ᶜρa⁰ =

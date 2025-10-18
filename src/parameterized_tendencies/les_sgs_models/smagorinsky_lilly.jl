@@ -26,33 +26,33 @@ These quantities are computed for both cell centers and faces, with prefixes `�
 - `p`: The model parameters, e.g. `AtmosCache`.
 """
 function set_smagorinsky_lilly_precomputed_quantities!(Y, p)
-    # FT = eltype(Y)
+    FT = eltype(Y)
     (; ᶜu, ᶠu, ᶜts, ᶜL_h, ᶜL_v, ᶠS, ᶜS) = p.precomputed
     c_smag = CAP.c_smag(p.params)
-    # grav = CAP.grav(p.params)
-    # Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
-    # thermo_params = CAP.thermodynamics_params(p.params)
-    # (; ᶜtemp_scalar, ᶜtemp_scalar_2) = p.scratch
+    grav = CAP.grav(p.params)
+    Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜtemp_scalar, ᶜtemp_scalar_2) = p.scratch
 
     # Precompute full strain rate tensor
     compute_strain_rate_center_full!(ᶜS, ᶜu, ᶠu)
     compute_strain_rate_face_full!(ᶠS, ᶜu, ᶠu)
 
     # Stratification correction
-    # ᶜθ_v = @. lazy(TD.virtual_pottemp(thermo_params, ᶜts))
-    # ᶜ∇ᵥθ = @. ᶜtemp_scalar_2 = Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜθ_v))).components.data.:1
-    # ᶜN² = @. ᶜtemp_scalar = grav / ᶜθ_v * ᶜ∇ᵥθ
-    # ᶜS_norm = @. ᶜtemp_scalar_2 = √(2 * norm_sqr(ᶜS))
+    ᶜθ_v = @. lazy(TD.virtual_pottemp(thermo_params, ᶜts))
+    ᶜ∇ᵥθ = @. ᶜtemp_scalar_2 = Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜθ_v))).components.data.:1
+    ᶜN² = @. ᶜtemp_scalar = grav / ᶜθ_v * ᶜ∇ᵥθ
+    ᶜS_norm = @. ᶜtemp_scalar_2 = √(2 * norm_sqr(ᶜS))
 
-    # ᶜRi = @. ᶜtemp_scalar = ᶜN² / (ᶜS_norm^2 + eps(FT))  # Ri = N² / |S|²
-    # ᶜfb = @. ᶜtemp_scalar = ifelse(ᶜRi ≤ 0, 1, max(0, 1 - ᶜRi / Pr_t)^(1 / 4))
+    ᶜRi = @. ᶜtemp_scalar = ᶜN² / (ᶜS_norm^2 + eps(FT))  # Ri = N² / |S|²
+    ᶜfb = @. ᶜtemp_scalar = ifelse(ᶜRi ≤ 0, 1, max(0, 1 - ᶜRi / Pr_t)^(1 / 4))
 
     # filter scale
     h_space = Spaces.horizontal_space(axes(Y.c))
     Δ_h = Spaces.node_horizontal_length_scale(h_space)
     ᶜΔ_z = Fields.Δz_field(Y.c)
 
-    @. ᶜL_v = c_smag * ᶜΔ_z #* ᶜfb
+    @. ᶜL_v = c_smag * ᶜΔ_z * ᶜfb
     @. ᶜL_h = c_smag * Δ_h
 
     nothing
@@ -61,6 +61,12 @@ end
 horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
+function projected_strain_rate_norm(ᶜS, axis)
+    ᶜS_proj = @. lazy(Geometry.project((axis,), ᶜS, (axis,)))
+    ᶜS_norm = @. lazy(√(2 * norm_sqr(ᶜS_proj)))
+    return ᶜS_norm
+end
+
 function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     (; ᶜts, ᶜL_h, ᶠS, ᶜS) = p.precomputed
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_scalar, ᶠtemp_scalar) = p.scratch
@@ -68,8 +74,8 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLill
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
 
     ## Momentum tendencies
-    ᶜS_h = @. lazy(Geometry.project((Geometry.UVAxis(),), ᶜS, (Geometry.UVAxis(),)))
-    ᶜS_norm = @. lazy(√(2 * norm_sqr(ᶜS_h)))
+    ᶜS_norm = projected_strain_rate_norm(ᶜS, Geometry.UVAxis())
+    @. p.precomputed.ᶜstrain_rate_norm_h = ᶜS_norm  # save to diagnostics
 
     # Smagorinsky eddy viscosity
     ᶜνₜ_h = @. lazy(ᶜL_h^2 * ᶜS_norm)
@@ -128,8 +134,8 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::SmagorinskyLilly)
     )
 
     ## Momentum tendencies
-    ᶜS_v = @. lazy(Geometry.project((Geometry.WAxis(),), ᶜS, (Geometry.WAxis(),)))
-    ᶜS_norm = @. lazy(√(2 * norm_sqr(ᶜS_v)))
+    ᶜS_norm = projected_strain_rate_norm(ᶜS, Geometry.WAxis())
+    @. p.precomputed.ᶜstrain_rate_norm_v = ᶜS_norm  # save to diagnostics
 
     # Smagorinsky eddy viscosity
     ᶜνₜ_v = @. lazy(ᶜL_v^2 * ᶜS_norm)

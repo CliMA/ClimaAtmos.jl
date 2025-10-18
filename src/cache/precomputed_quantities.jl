@@ -254,6 +254,8 @@ function precomputed_quantities(Y, atmos)
                 ᶠS = similar(Y.f, typeof(uvw_vec * uvw_vec')),
                 ᶜL_h = similar(Y.c, FT), ᶜL_v = similar(Y.c, FT),
                 ᶜD_h = similar(Y.c, FT), ᶠD_v = similar(Y.f, FT),
+                ᶜstrain_rate_norm_h = similar(Y.c, FT),
+                ᶜstrain_rate_norm_v = similar(Y.c, FT),
             )
         else
             (;)

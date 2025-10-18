@@ -347,7 +347,7 @@ add_diagnostic_variable!(
 # Smagorinski Lilly diffusivity
 ###
 add_diagnostic_variable!(
-    short_name = "D_smag_h",
+    short_name = "Dh_smag",
     long_name = "Horizontal smagorinski diffusivity",
     units = "m^2 s^-1",
     compute! = (out, _, cache, _) -> begin
@@ -355,11 +355,49 @@ add_diagnostic_variable!(
     end,
 )
 add_diagnostic_variable!(
-    short_name = "D_smag_v",
+    short_name = "Dv_smag",
     long_name = "Horizontal smagorinski diffusivity",
     units = "m^2 s^-1",
     compute! = (out, _, cache, _) -> begin
         isnothing(out) ? copy(cache.precomputed.ᶠD_v) : (out .= cache.precomputed.ᶠD_v)
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "dtmaxh_smag",
+    long_name = "Max horizontal diffusion dt",
+    units = "s",
+    compute! = (out, state, cache, _) -> begin
+        Δh = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(state.f)))
+        dtmax = @. lazy(Δh^2 / cache.precomputed.ᶜD_h)
+        isnothing(out) ? copy(dtmax) : (out .= dtmax)
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "dtmaxv_smag",
+    long_name = "Max diffusion dt",
+    units = "s",
+    compute! = (out, state, cache, _) -> begin
+        ᶜΔ_z = Fields.Δz_field(state.c)
+        dtmax = @. lazy(ᶠinterp(ᶜΔ_z^2) / cache.precomputed.ᶠD_v)
+        isnothing(out) ? copy(dtmax) : (out .= dtmax)
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "strainrateh_smag",
+    long_name = "Strain rate horizontal",
+    units = "s",
+    compute! = (out, state, cache, _) -> begin
+        ᶜstrain_rate_h = cache.precomputed.ᶜstrain_rate_norm_h
+        isnothing(out) ? copy(ᶜstrain_rate_h) : (out .= ᶜstrain_rate_h)
+    end,
+)
+add_diagnostic_variable!(
+    short_name = "strainratev_smag",
+    long_name = "Strain rate vertical",
+    units = "s",
+    compute! = (out, state, cache, _) -> begin
+        ᶜstrain_rate_v = cache.precomputed.ᶜstrain_rate_norm_v
+        isnothing(out) ? copy(ᶜstrain_rate_v) : (out .= ᶜstrain_rate_v)
     end,
 )
 
