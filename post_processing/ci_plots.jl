@@ -1305,18 +1305,10 @@ function make_plots(
 
     reduction = "inst"
     short_names = [
-        "wa",
-        "ua",
-        "va",
-        "ta",
-        "thetaa",
-        "ha",
-        "hus",
-        "hur",
-        "cl",
-        "clw",
-        "cli",
-        "Dh_smag", "Dv_smag", "dtmaxh_smag", "dtmaxv_smag", "strainrateh_smag", "strainratev_smag"
+        "wa", "ua", "va", "ta", "thetaa", "ha", "hus", "hur", "cl", "clw", "cli",
+        "Dh_smag", "dtmaxh_smag", "strainrateh_smag",  # smag horizontal
+        "Dv_smag", "dtmaxv_smag", "strainratev_smag",  # smag vertical
+        "edt"  # DecayWithHeight vertical diffusivity
     ]
     short_names = short_names ∩ collect(keys(simdirs[1].vars))
 
@@ -1329,10 +1321,7 @@ function make_plots(
         window_end = last(var.dims["time"])
         window_start = window_end - 2hours
         var_window = ClimaAnalysis.window(
-            var,
-            "time";
-            left = window_start,
-            right = window_end,
+            var, "time"; left = window_start, right = window_end,
         )
         var_reduced = horizontal_average(average_time(var_window))
         return var_reduced
