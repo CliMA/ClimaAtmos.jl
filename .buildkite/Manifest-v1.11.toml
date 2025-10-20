@@ -2,7 +2,7 @@
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "a0acaae5da2df8c0af06d0681eb7de5079d8cbce"
+project_hash = "12784bf0b21aee2b4075f2bb64383303b89e8560"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "27cecae79e5cc9935255f90c53bb831cc3c870d7"
@@ -406,8 +406,8 @@ weakdeps = ["CUDA", "MPI"]
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LazyBroadcast", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "UnrolledUtilities"]
-git-tree-sha1 = "6f1589a275831b575f103e82ceb2a4adee077b3f"
-repo-rev = "cf830bf6263da935a3d34f4081f0a74a2f8378d5"
+git-tree-sha1 = "4dd1204fa62e1f9fd600223335ef0ceff947a771"
+repo-rev = "e1285aecb8be75bdfab85a9847abe60ca10113b8"
 repo-url = "https://github.com/CliMA/ClimaCore.jl"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
 version = "0.14.40"
@@ -2906,7 +2906,7 @@ uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
 version = "1.59.0+0"
 
 [[deps.oneTBB_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
+deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl"]
 git-tree-sha1 = "d5a767a3bb77135a99e433afe0eb14cd7f6914c3"
 uuid = "1317d2d5-d96f-522e-a858-c73665f53c3e"
 version = "2022.0.0+0"
