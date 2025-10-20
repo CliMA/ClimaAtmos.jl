@@ -24,22 +24,6 @@ include("common.jl")
 (; config_file, job_id) = CA.commandline_kwargs()
 config = CA.AtmosConfig(config_file; job_id)
 
-# Handle stacktrace-based kernel naming before compiling
-if getenv_bool("CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE", default = false)
-    import ClimaCore
-    ClimaCore.DebugOnly.name_kernels_from_stack_trace() = true
-end
-
-simulation = CA.get_simulation(config)
-(; integrator) = simulation;
-Y₀ = deepcopy(integrator.u);
-@info "Compiling benchmark_step!..."
-CA.benchmark_step!(integrator, Y₀); # compile first
-
-@info "Running benchmark_step!..."
-comms_ctx = ClimaComms.context(integrator.u.c)
-device = ClimaComms.device(comms_ctx)
-
 # Robustly parse boolean-like environment variables
 function getenv_bool(var::AbstractString; default::Bool = false)
     raw = get(ENV, var, nothing)
@@ -60,6 +44,22 @@ function getenv_bool(var::AbstractString; default::Bool = false)
         end
     end
 end
+
+# Handle stacktrace-based kernel naming before compiling
+if getenv_bool("CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE", default = false)
+    import ClimaCore
+    ClimaCore.DebugOnly.name_kernels_from_stack_trace() = true
+end
+
+simulation = CA.get_simulation(config)
+(; integrator) = simulation;
+Y₀ = deepcopy(integrator.u);
+@info "Compiling benchmark_step!..."
+CA.benchmark_step!(integrator, Y₀); # compile first
+
+@info "Running benchmark_step!..."
+comms_ctx = ClimaComms.context(integrator.u.c)
+device = ClimaComms.device(comms_ctx)
 
 # If we're running on CUDA, use CUDA's profiler
 if device isa ClimaComms.CUDADevice
