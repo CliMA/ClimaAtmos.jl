@@ -4,7 +4,7 @@
 value = 10
 
 [sublimation_deposition_timescale]
-value = 1
+value = 50
 
 [c_smag]
 value = 0.2

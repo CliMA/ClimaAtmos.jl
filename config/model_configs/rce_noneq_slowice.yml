@@ -7,7 +7,7 @@ config: box
 rad: allskywithclear
 co2_model: fixed
 approximate_linear_solve_iters: 2
-output_dir: "/scratch/olivia/rce_noneq/"
+output_dir: "/glade/derecho/scratch/oalcabes/rce_noneq"
 rayleigh_sponge: true
 # apply_limiter: true
 # diffusion
@@ -19,15 +19,18 @@ implicit_diffusion: false  # this is the default. Check w/ Tapio if this should 
 # microphysics
 moist: nonequil
 precip_model: 1M
+cloud_model: "grid_scale"
 # spatial discretization
-x_max: 96000.0  # 96km
-y_max: 96000.0  # 96km
+#x_max: 96000.0  # 96km
+#y_max: 96000.0  # 96km
+x_max: 48000.0  # 48km
+y_max: 48000.0  # 48km
 z_max: 30000.0  # 30km
 nh_poly: 3  # hor. poly deg -> # quad pts in 1D in a h. elem is Nq = nh + 1
-x_elem: 24
-y_elem: 24
-# x_elem: 12
-# y_elem: 12
+# x_elem: 24
+# y_elem: 24
+x_elem: 12
+y_elem: 12
 # x_elem: 8
 # y_elem: 8
 z_elem: 43
@@ -46,13 +49,13 @@ output_default_diagnostics: false  # adds various 1h diagnostics. Only use if `d
 diagnostics:
   - short_name: [ts, thetaa, ha, pfull, rhoa, ua, va, hur, cl, hussfc, evspsbl]
     #period: 10secs
-    period: 10mins
-  - short_name: [hus, clw, cli, ta, wa, pr, ke]
+    period: 1hours
+  - short_name: [hus, clw, cli, ta, wa, pr, ke, lwp, clivi]
     #period: 10secs
-    period: 10mins
+    period: 1hours
   # 1M microphysics
   - short_name: [husra, hussn]
-    period: 10mins
+    period: 1hours
   # 2M microphysics
   # - short_name: [cdnc, ncra]
   #   period: 10secs
