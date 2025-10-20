@@ -24,6 +24,12 @@ include("common.jl")
 (; config_file, job_id) = CA.commandline_kwargs()
 config = CA.AtmosConfig(config_file; job_id)
 
+# Handle stacktrace-based kernel naming before compiling
+if getenv_bool("CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE", default = false)
+    import ClimaCore
+    ClimaCore.DebugOnly.name_kernels_from_stack_trace() = true
+end
+
 simulation = CA.get_simulation(config)
 (; integrator) = simulation;
 Y₀ = deepcopy(integrator.u);
@@ -57,10 +63,6 @@ end
 
 # If we're running on CUDA, use CUDA's profiler
 if device isa ClimaComms.CUDADevice
-    if getenv_bool("CLIMA_NAME_CUDA_KERNELS_FROM_STACK_TRACE", default = false)
-        import ClimaCore
-        ClimaCore.DebugOnly.name_kernels_from_stack_trace() = true
-    end
     e = 0.0
     n_steps = 5
     use_external_profiler = CUDA.Profile.detect_cupti()
