@@ -75,11 +75,12 @@ if device isa ClimaComms.CUDADevice
         end
     else
         @info "Using internal CUDA profiler"
-        CUDA.@profile external = false begin
+        res = CUDA.@profile external = false begin
             e = CUDA.@elapsed begin
                 CA.benchmark_step!(integrator, Y₀, n_steps)
             end
         end
+        println(res)
     end
     @info "Ran step! with CUDA $n_steps times in $e s, ($(CA.prettytime(e/n_steps*1e9)) per step)"
 else
