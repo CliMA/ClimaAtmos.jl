@@ -465,37 +465,48 @@ function edmfx_sgs_diffusive_flux_tendency!(
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
         end
 
-        cloud_tracers = (
-            (@name(c.ρq_liq), @name(q_liq)),
-            (@name(c.ρq_ice), @name(q_ice)),
-            (@name(c.ρn_liq), @name(n_liq)),
+        if p.atmos.moisture_model isa NonEquilMoistModel && (
+            p.atmos.microphysics_model isa Microphysics1Moment ||
+            p.atmos.microphysics_model isa Microphysics2Moment
         )
-        precip_tracers = (
-            (@name(c.ρq_rai), @name(q_rai)),
-            (@name(c.ρq_sno), @name(q_sno)),
-            (@name(c.ρn_rai), @name(n_rai)),
-        )
+            @assert n_prognostic_mass_flux_subdomains(turbconv_model) == 1
+            α_precip = CAP.α_vert_diff_tracer(params)
+            ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
+            ᶜdivᵥ_ρq = Operators.DivergenceF2C(
+                top = Operators.SetValue(C3(FT(0))),
+                bottom = Operators.SetValue(C3(FT(0))),
+            )
 
-        α_vert_diff_tracer = CAP.α_vert_diff_tracer(params)
-        ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-        ᶜdivᵥ_ρq = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
-        )
-        MatrixFields.unrolled_foreach(cloud_tracers) do (ρχ_name, χ_name)
-            MatrixFields.has_field(Y, ρχ_name) || return
-            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))))
-            ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
-            @. ᶜρχₜ -= ᶜρχₜ_diffusion
-        end
-        MatrixFields.unrolled_foreach(precip_tracers) do (ρχ_name, χ_name)
-            MatrixFields.has_field(Y, ρχ_name) || return
-            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
-            @. ᶜρχₜ_diffusion =
-                ᶜdivᵥ_ρq(-(ᶠρaK_h * α_vert_diff_tracer * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))))
-            ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
-            @. ᶜρχₜ -= ᶜρχₜ_diffusion
+            microphysics_tracers = (
+                (@name(c.ρq_liq), @name(c.sgsʲs.:(1).q_liq), @name(q_liq), FT(1)),
+                (@name(c.ρq_ice), @name(c.sgsʲs.:(1).q_ice), @name(q_ice), FT(1)),
+                (@name(c.ρq_rai), @name(c.sgsʲs.:(1).q_rai), @name(q_rai), α_precip),
+                (@name(c.ρq_sno), @name(c.sgsʲs.:(1).q_sno), @name(q_sno), α_precip),
+                (@name(c.ρn_liq), @name(c.sgsʲs.:(1).n_liq), @name(n_liq), FT(1)),
+                (@name(c.ρn_rai), @name(c.sgsʲs.:(1).n_rai), @name(n_rai), α_precip),
+            )
+
+            MatrixFields.unrolled_foreach(
+                microphysics_tracers,
+            ) do (ρχ_name, χʲ_name, χ_name, α)
+                MatrixFields.has_field(Y, ρχ_name) || return
+
+                ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+                ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+
+                # add updraft diffusion
+                @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(
+                    -(ᶠinterp(Y.c.sgsʲs.:(1).ρa) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ)),
+                )
+                @. ᶜρχₜ -= ᶜρχₜ_diffusion
+
+                # add environment diffusion
+                @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(
+                    -(ᶠinterp(ᶜρa⁰) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχ⁰)),
+                )
+                @. ᶜρχₜ -= ᶜρχₜ_diffusion
+            end
         end
 
         # Momentum diffusion
