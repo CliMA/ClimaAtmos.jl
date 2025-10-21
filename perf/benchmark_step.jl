@@ -80,7 +80,7 @@ if device isa ClimaComms.CUDADevice
                 CA.benchmark_step!(integrator, Y₀, n_steps)
             end
         end
-        println(res)
+        show(IOContext(stdout, :displaysize => (24, 250)), res)
     end
     @info "Ran step! with CUDA $n_steps times in $e s, ($(CA.prettytime(e/n_steps*1e9)) per step)"
 else
