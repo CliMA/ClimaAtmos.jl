@@ -586,35 +586,22 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         (; vertical_diffusion) = p.atmos
         (; ᶜp) = p.precomputed
         if vertical_diffusion isa DecayWithHeightDiffusion
-            ᶜK_h =
-                ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
+            ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
             ᶜK_u = ᶜK_h
         elseif vertical_diffusion isa VerticalDiffusion
-            ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(
-                Y.c.uₕ,
-                ᶜp,
-                vertical_diffusion,
-            )
+            ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vertical_diffusion)
             ᶜK_u = ᶜK_h
-        else
+        elseif turbconv_model isa AbstractEDMF
             (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
             ᶜρa⁰ =
-                p.atmos.turbconv_model isa PrognosticEDMFX ?
+                turbconv_model isa PrognosticEDMFX ?
                 (@. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))) : Y.c.ρ
-            ᶜtke⁰ = @. lazy(
-                specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model),
-            )
+            ᶜtke⁰ = @. lazy(specific_tke(Y.c.ρ, Y.c.sgs⁰.ρatke, ᶜρa⁰, turbconv_model))
             ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
             ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-            ᶜK_u = @. lazy(
-                eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field),
-            )
+            ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke⁰, ᶜmixing_length_field))
             ᶜprandtl_nvec = @. lazy(
-                turbulent_prandtl_number(
-                    params,
-                    ᶜlinear_buoygrad,
-                    ᶜstrain_rate_norm,
-                ),
+                turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
             )
             ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
         end

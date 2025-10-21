@@ -68,7 +68,7 @@ function cloud_sources(
     )
 
     if qᵥ + qₗ > FT(0)
-        S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+        S = CMNe.conv_q_vap_to_q_lcl_icl_MM2015(
             cm_params,
             thp,
             qₜ,
@@ -112,7 +112,7 @@ function cloud_sources(
     )
 
     if qᵥ + qᵢ > FT(0)
-        S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
+        S = CMNe.conv_q_vap_to_q_lcl_icl_MM2015(
             cm_params,
             thp,
             qₜ,
@@ -221,8 +221,8 @@ function compute_precipitation_sources!(
     # rain autoconversion: q_liq -> q_rain
     @. Sᵖ = ifelse(
         mp.Ndp <= 0,
-        CM1.conv_q_liq_to_q_rai(mp.pr.acnv1M, qₗ, true),
-        CM2.conv_q_liq_to_q_rai(mp.var, qₗ, ρ, mp.Ndp),
+        CM1.conv_q_lcl_to_q_rai(mp.pr.acnv1M, qₗ, true),
+        CM2.conv_q_lcl_to_q_rai(mp.var, qₗ, ρ, mp.Ndp),
     )
     @. Sᵖ = triangle_inequality_limiter(Sᵖ, limit(qₗ, dt, 5))
     @. Sqₗᵖ -= Sᵖ
@@ -230,7 +230,7 @@ function compute_precipitation_sources!(
 
     # snow autoconversion assuming no supersaturation: q_ice -> q_snow
     @. Sᵖ = triangle_inequality_limiter(
-        CM1.conv_q_ice_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ, true),
+        CM1.conv_q_icl_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ, true),
         limit(qᵢ, dt, 5),
     )
     @. Sqᵢᵖ -= Sᵖ
@@ -621,7 +621,7 @@ function compute_warm_precipitation_sources_2M!(
             qᵣ,
             ρ,
             ρ * nₗ,
-        ).dN_liq_dt / ρ,
+        ).dN_lcl_dt / ρ,
         limit(nₗ, dt, 10),
     )
     # triangle_inequality_limiter assumes positive rates and limits.
@@ -629,7 +629,7 @@ function compute_warm_precipitation_sources_2M!(
     # and negate the result again to preserve the original sign.
     @. S₂ᵖ =
         -triangle_inequality_limiter(
-            -CM2.liquid_self_collection(mp.sb.acnv, mp.sb.pdf_c, qₗ, ρ, Sᵖ) / ρ,
+            -CM2.cloud_liquid_self_collection(mp.sb.acnv, mp.sb.pdf_c, qₗ, ρ, Sᵖ) / ρ,
             limit(nₗ / ρ, dt, 5),
         )
     @. Snₗᵖ += Sᵖ
@@ -661,7 +661,7 @@ function compute_warm_precipitation_sources_2M!(
     # accretion (number)
     @. Sᵖ =
         -triangle_inequality_limiter(
-            -CM2.accretion(mp.sb, qₗ, qᵣ, ρ, ρ * nₗ).dN_liq_dt / ρ,
+            -CM2.accretion(mp.sb, qₗ, qᵣ, ρ, ρ * nₗ).dN_lcl_dt / ρ,
             limit(nₗ, dt, 5),
         )
     @. Snₗᵖ += Sᵖ

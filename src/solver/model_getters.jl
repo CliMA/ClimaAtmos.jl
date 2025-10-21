@@ -642,6 +642,9 @@ function check_case_consistency(parsed_args)
     moist = parsed_args["moist"]
     ls_adv = parsed_args["ls_adv"]
     extf = parsed_args["external_forcing"]
+    imp_vert_diff = parsed_args["implicit_diffusion"]
+    vert_diff = parsed_args["vert_diff"]
+    turbconv = parsed_args["turbconv"]
 
     ISDAC_mandatory = (ic, subs, surf, rad, extf)
     if "ISDAC" in ISDAC_mandatory
@@ -650,6 +653,13 @@ function check_case_consistency(parsed_args)
             all(isnothing, (cor, forc, ls_adv)) &&
             moist != "dry",
             "ISDAC setup not consistent"
+        )
+    elseif imp_vert_diff
+        # Implicit vertical diffusion is only supported for specific models:
+        @assert(
+            !isnothing(turbconv) || !isnothing(vert_diff),
+            "Implicit vertical diffusion is only supported when using a " *
+            "turbulence convection model or vertical diffusion model.",
         )
     end
 end
