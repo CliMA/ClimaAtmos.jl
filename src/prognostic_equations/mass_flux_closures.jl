@@ -142,6 +142,15 @@ function edmfx_vertical_diffusion_tendency!(
             top = Operators.SetValue(C3(0)),
             bottom = Operators.SetValue(C3(0)),
         )
+        ᶜinv_ρ̂ = (@. lazy(
+            specific(
+                FT(1),
+                Y.c.sgsʲs.:(1).ρa,
+                FT(0),
+                ᶜρʲs.:(1),
+                turbconv_model,
+            ),
+        ))
 
         (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
@@ -173,37 +182,33 @@ function edmfx_vertical_diffusion_tendency!(
             p.atmos.microphysics_model isa Microphysics2Moment
         )
             @assert n_prognostic_mass_flux_subdomains(turbconv_model) == 1
-            cloud_tracers = (
-                @name(c.sgsʲs.:(1).q_liq),
-                @name(c.sgsʲs.:(1).q_ice),
-                @name(c.sgsʲs.:(1).n_liq)
-            )
-            precip_tracers = (
-                @name(c.sgsʲs.:(1).q_ice),
-                @name(c.sgsʲs.:(1).q_sno),
-                @name(c.sgsʲs.:(1).n_rai)
-            )
-            ᶜρʲ = ᶜρʲs.:($1)
-            α = CAP.α_vert_diff_tracer(params)
+            α_precip = CAP.α_vert_diff_tracer(params)
+            ᶜρaʲ = Y.c.sgsʲs.:(1).ρa
             ᶜdivᵥ_q = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(C3(FT(0))),
             )
+
+            microphysics_tracers = (
+                (@name(c.sgsʲs.:(1).q_liq), FT(1)),
+                (@name(c.sgsʲs.:(1).q_ice), FT(1)),
+                (@name(c.sgsʲs.:(1).q_rai), α_precip),
+                (@name(c.sgsʲs.:(1).q_sno), α_precip),
+                (@name(c.sgsʲs.:(1).n_liq), FT(1)),
+                (@name(c.sgsʲs.:(1).n_rai), α_precip),
+            )
+
             # TODO: using unrolled_foreach here allocates! (breaks the flame tests
             # even though they use 0M microphysics)
             # MatrixFields.unrolled_foreach(cloud_tracers) do χʲ_name
-            for χʲ_name in cloud_tracers
+            for (χʲ_name, α) in microphysics_tracers
                 MatrixFields.has_field(Y, χʲ_name) || continue
+
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
-                @. ᶜχʲₜ -= ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
-            end
-            # MatrixFields.unrolled_foreach(precip_tracers) do χʲ_name
-            for χʲ_name in precip_tracers
-                MatrixFields.has_field(Y, χʲ_name) || continue
-                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-                ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
-                @. ᶜχʲₜ -= ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
+
+                @. ᶜχʲₜ -=
+                    ᶜinv_ρ̂ * ᶜdivᵥ_q(-(ᶠinterp(ᶜρaʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ)))
             end
         end
     end
