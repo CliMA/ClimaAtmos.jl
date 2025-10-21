@@ -142,6 +142,15 @@ function edmfx_vertical_diffusion_tendency!(
             top = Operators.SetValue(C3(0)),
             bottom = Operators.SetValue(C3(0)),
         )
+        ᶜinv_ρ̂ = (@. lazy(
+            specific(
+                FT(1),
+                Y.c.sgsʲs.:(1).ρa,
+                FT(0),
+                ᶜρʲs.:(1),
+                turbconv_model,
+            ),
+        ))
 
         (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
@@ -183,7 +192,7 @@ function edmfx_vertical_diffusion_tendency!(
                 @name(c.sgsʲs.:(1).q_sno),
                 @name(c.sgsʲs.:(1).n_rai)
             )
-            ᶜρʲ = ᶜρʲs.:($1)
+            ᶜρaʲ = Y.c.sgsʲs.:(1).ρa
             α = CAP.α_vert_diff_tracer(params)
             ᶜdivᵥ_q = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
@@ -196,14 +205,15 @@ function edmfx_vertical_diffusion_tendency!(
                 MatrixFields.has_field(Y, χʲ_name) || continue
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
-                @. ᶜχʲₜ -= ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
+                @. ᶜχʲₜ -= ᶜinv_ρ̂ * ᶜdivᵥ_q(-(ᶠinterp(ᶜρaʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜχʲ)))
             end
             # MatrixFields.unrolled_foreach(precip_tracers) do χʲ_name
             for χʲ_name in precip_tracers
                 MatrixFields.has_field(Y, χʲ_name) || continue
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
-                @. ᶜχʲₜ -= ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
+                @. ᶜχʲₜ -=
+                    ᶜinv_ρ̂ * ᶜdivᵥ_q(-(ᶠinterp(ᶜρaʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ)))
             end
         end
     end
