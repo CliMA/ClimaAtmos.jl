@@ -8,7 +8,7 @@
 #SBATCH --output=scm_calibration.out
 
 module purge
-export MODULEPATH="/groups/esm/modules:$MODULEPATH"
+export MODULEPATH="/resnick/groups/esm/modules:$MODULEPATH"
 module load climacommon/2024_05_27
 
 julia --project run_calibration.jl
