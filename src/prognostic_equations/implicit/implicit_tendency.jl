@@ -73,28 +73,22 @@ end
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
 
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠu³ * ᶠinterp(ᶜχ))))
+    ᶠρ = ᶠface_density(ᶜρ)
+    return @. lazy(-(ᶜadvdivᵥ(ᶠρ * ᶠu³ * ᶠinterp(ᶜχ))))
 end
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))))
+    ᶠρ = ᶠface_density(ᶜρ)
+    return @. lazy(-(ᶜadvdivᵥ(ᶠρ * ᶠupwind1(ᶠu³, ᶜχ))))
 end
 @static if pkgversion(ClimaCore) ≥ v"0.14.22"
     function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
-        ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-        ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-        return @. lazy(
-            -(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠlin_vanleer(ᶠu³, ᶜχ, dt))),
-        )
+        ᶠρ = ᶠface_density(ᶜρ)
+        return @. lazy(-(ᶜadvdivᵥ(ᶠρ * ᶠlin_vanleer(ᶠu³, ᶜχ, dt))))
     end
 end
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind3(ᶠu³, ᶜχ))))
+    ᶠρ = ᶠface_density(ᶜρ)
+    return @. lazy(-(ᶜadvdivᵥ(ᶠρ * ᶠupwind3(ᶠu³, ᶜχ))))
 end
 
 vertical_advection(ᶠu³, ᶜχ, ::Val{:none}) =
@@ -105,27 +99,25 @@ vertical_advection(ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. lazy(-(ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    (; moisture_model, turbconv_model, rayleigh_sponge, microphysics_model) =
-        p.atmos
+    (; moisture_model, turbconv_model, rayleigh_sponge, microphysics_model) = p.atmos
     (; params, dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
-    ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
-    ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
+    ᶜρ, ᶠρ = Y.c.ρ, ᶠface_density(Y.c.ρ)
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶠu³, ᶜp, ᶜts) = p.precomputed
+    (; ᶠu³, ᶜts) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
+    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, ᶜρ))
     ᶜh_tot = @. lazy(TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜe_tot))
 
-    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
+    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠρ * ᶠu³)
 
     # Central vertical advection of active tracers (e_tot and q_tot)
-    vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
+    vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     @. Yₜ.c.ρe_tot += vtt
     if !(moisture_model isa DryModel)
-        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, ᶜρ))
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot += vtt
     end
 
@@ -135,63 +127,39 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # using downward biasing and free outflow bottom boundary condition
     if moisture_model isa NonEquilMoistModel
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed
-        @. Yₜ.c.ρq_liq -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₗ)) * specific(Y.c.ρq_liq, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρq_ice -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwᵢ)) * specific(Y.c.ρq_ice, Y.c.ρ),
-            ),
-        )
+        q_liq = @. lazy(specific(Y.c.ρq_liq, ᶜρ))
+        q_ice = @. lazy(specific(Y.c.ρq_ice, ᶜρ))
+        @. Yₜ.c.ρq_liq -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(-WVec(ᶜwₗ) * q_liq))
+        @. Yₜ.c.ρq_ice -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(-WVec(ᶜwᵢ) * q_ice))
     end
     if microphysics_model isa Microphysics1Moment
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
-        @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwᵣ)) * specific(Y.c.ρq_rai, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₛ)) * specific(Y.c.ρq_sno, Y.c.ρ),
-            ),
-        )
+        q_rai = @. lazy(specific(Y.c.ρq_rai, ᶜρ))
+        q_sno = @. lazy(specific(Y.c.ρq_sno, ᶜρ))
+        @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(-WVec(ᶜwᵣ) * q_rai))
+        @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(-WVec(ᶜwₛ) * q_sno))
     end
     if microphysics_model isa Microphysics2Moment
         (; ᶜwₙₗ, ᶜwₙᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
-        @. Yₜ.c.ρn_liq -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₙₗ)) * specific(Y.c.ρn_liq, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρn_rai -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₙᵣ)) * specific(Y.c.ρn_rai, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwᵣ)) * specific(Y.c.ρq_rai, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₛ)) * specific(Y.c.ρq_sno, Y.c.ρ),
-            ),
-        )
+        n_liq = @. lazy(specific(Y.c.ρn_liq, ᶜρ))
+        n_rai = @. lazy(specific(Y.c.ρn_rai, ᶜρ))
+        q_rai = @. lazy(specific(Y.c.ρq_rai, ᶜρ))
+        q_sno = @. lazy(specific(Y.c.ρq_sno, ᶜρ))
+        @. Yₜ.c.ρn_liq -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(-WVec(ᶜwₙₗ) * n_liq))
+        @. Yₜ.c.ρn_rai -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(-WVec(ᶜwₙᵣ) * n_rai))
+        @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(-WVec(ᶜwᵣ) * q_rai))
+        @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(-WVec(ᶜwₛ) * q_sno))
     end
     if microphysics_model isa Microphysics2MomentP3
-        (; ρ, ρn_ice, ρq_rim, ρb_rim) = Y.c
-        ᶜwnᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwnᵢ))
-        ᶜwᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwᵢ))
-        ᶠρ = @. lazy(ᶠinterp(ρ * ᶜJ) / ᶠJ)
+        (; ᶜwnᵢ, ᶜwᵢ) = p.precomputed
 
         # Note: `ρq_ice` is handled above, in `moisture_model isa NonEquilMoistModel`
-        @. Yₜ.c.ρn_ice -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwnᵢ * specific(ρn_ice, ρ)))
-        @. Yₜ.c.ρq_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρq_rim, ρ)))
-        @. Yₜ.c.ρb_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρb_rim, ρ)))
+        n_ice = @. lazy(specific(Y.c.ρn_ice, ᶜρ))
+        q_rim = @. lazy(specific(Y.c.ρq_rim, ᶜρ))
+        b_rim = @. lazy(specific(Y.c.ρb_rim, ᶜρ))
+        @. Yₜ.c.ρn_ice -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(-WVec(ᶜwnᵢ) * n_ice))
+        @. Yₜ.c.ρq_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(-WVec(ᶜwᵢ) * q_rim))
+        @. Yₜ.c.ρb_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(-WVec(ᶜwᵢ) * b_rim))
     end
 
     # TODO - decide if this needs to be explicit or implicit
@@ -202,8 +170,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜts))
     ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜts))
     ᶜΠ = @. lazy(dry_exner_function(thermo_params, ᶜts))
-    @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) +
-                  cp_d * (ᶠinterp(ᶜθ_v - ᶜθ_vr)) * ᶠgradᵥ(ᶜΠ)
+    @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) + cp_d * (ᶠinterp(ᶜθ_v - ᶜθ_vr)) * ᶠgradᵥ(ᶜΠ)
 
     if rayleigh_sponge isa RayleighSponge
         ᶠz = Fields.coordinate_field(Y.f).z
@@ -212,8 +179,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.f.u₃ -= β_rayleigh_w(rs, ᶠz, zmax) * Y.f.u₃
         if turbconv_model isa PrognosticEDMFX
             for j in 1:n
-                @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                    β_rayleigh_w(rs, ᶠz, zmax) * Y.f.sgsʲs.:($$j).u₃
+                @. Yₜ.f.sgsʲs.:($$j).u₃ -= β_rayleigh_w(rs, ᶠz, zmax) * Y.f.sgsʲs.:($$j).u₃
             end
         end
     end
