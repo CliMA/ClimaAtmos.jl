@@ -1,6 +1,6 @@
 initial_condition: "Larcform1"
 surface_setup: DefaultMoninObukhov     #"Larcform1_test"     # hijacked for const surface temperature
-turbconv: "diagnostic_edmfx"
+turbconv: "prognostic_edmfx"
 implicit_diffusion: true
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
@@ -12,30 +12,30 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 edmfx_filter: true
-prognostic_surface: SlabOceanSST # TODO implement sea ice
-moist: "nonequil"
+prognostic_surface: "SlabOceanSST" # TODO implement sea ice
+moist: "equil"
 config: "column"
 z_max: 9000.0
 dz_bottom: 20.0
-z_elem: 100
+z_elem: 40
 z_stretch: true
 x_elem: 2
 y_elem: 2
-
-#perturb_initstate: false
 dt: 2secs
 dt_rad: 10mins
-t_end: 1days # full run length is 20days
+t_end: 20days # full run length is 20days
 cloud_model: "grid_scale"
 call_cloud_diagnostics_per_stage : true
-toml: [toml/longrun_aquaplanet_1M.toml] #[toml/diagnostic_edmfx_1M.toml]
+toml: [toml/larcform1.toml]
 netcdf_output_at_levels: true
 #netcdf_interpolation_num_points: [2, 2, 200] # needed?
 output_default_diagnostics: false
 rad: allskywithclear
 insolation: "larcform1"
-precip_model: "1M"
+precip_model: "0M"
 ode_algo: ARS343
+log_to_file: true
+
 
 diagnostics: 
   - short_name: [ta, thetaa, pfull, cl, clw, cli, pr, prsn, hus, hur, ua, va, wa, rlu, rld, rhoa] # profiles (2D)
@@ -48,3 +48,4 @@ diagnostics:
 # TODO:
 # prognostic surface_temperature // sea-ice model
 # consider greenhouse gas concentrations
+# SCM coriolis?
