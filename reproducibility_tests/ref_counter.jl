@@ -1,4 +1,4 @@
-268
+269
 
 # **README**
 #
@@ -20,6 +20,10 @@
 
 
 #=
+269
+- Use the same time scale parameter for entrainment and detrainment when area fraction
+  is negligible
+
 268
 - Updated deps, specifically SurfaceFluxes.jl
 

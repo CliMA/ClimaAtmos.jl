@@ -445,9 +445,9 @@ weakdeps = ["CUDA"]
 
 [[deps.ClimaParams]]
 deps = ["Dates", "TOML"]
-git-tree-sha1 = "7571dccc41d8489d7fbb4773d243ba6abd8a8c8b"
+git-tree-sha1 = "d2381a8307acf02a94f62e0af39929e0b53f531c"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "1.0.1"
+version = "1.0.2"
 
 [[deps.ClimaReproducibilityTests]]
 deps = ["OrderedCollections", "PrettyTables"]

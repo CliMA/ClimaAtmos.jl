@@ -24,7 +24,6 @@ value = 0
 
 [detr_inv_tau]
 value = 0.0001
-# Set equal to entr_inv_tau to prevent spurious growth of ar at high altitudes (seen in single-column RICO)
 
 [detr_coeff]
 value = 0
