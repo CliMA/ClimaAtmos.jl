@@ -1,5 +1,6 @@
 using ClimaCore: Fields
 using ClimaCore.Utilities: half
+using ClimaCore.MatrixFields
 
 # Fields used to store variables that only need to be used in a single function
 # but cannot be computed on the fly. Unlike the precomputed quantities, these
@@ -62,6 +63,11 @@ function temporary_quantities(Y, atmos)
             NTuple{n_mass_flux_subdomains(atmos.turbconv_model), CT12{FT}},
             face_space,
         ), # ᶠω¹²ʲs
+        # TODO: better names for theis scratch fields
+        ᶜbidiagonal_adjoint_matrix_c3 = Fields.Field(
+            BidiagonalMatrixRow{Adjoint{FT, C3{FT}}},
+            center_space,
+        ),
         ᶠtemp_C123 = Fields.Field(C123{FT}, face_space), # χ₁₂₃
         ᶜtemp_UVW = Fields.Field(typeof(uvw_vec), center_space), # UVW(ᶜu)
         ᶠtemp_UVW = Fields.Field(typeof(uvw_vec), face_space), # UVW(ᶠu³)
@@ -76,6 +82,15 @@ function temporary_quantities(Y, atmos)
         ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
         ᶠp_grad_matrix = similar(Y.f, BidiagonalMatrixRow{C3{FT}}),
         ᶠbidiagonal_matrix_ct3 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
+        # TODO: better names for theis scratch fields
+        ᶠband_matrix_wvec = similar(
+            Y.f,
+            ClimaCore.MatrixFields.BandMatrixRow{
+                ClimaCore.Utilities.PlusHalf{Int64}(0),
+                1,
+                ClimaCore.Geometry.WVector{FT},
+            },
+        ),
         ᶠbidiagonal_matrix_ct3_2 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
         ᶜadvection_matrix = similar(
             Y.c,
