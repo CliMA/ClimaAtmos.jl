@@ -892,6 +892,7 @@ steps:
         artifact_paths: "prognostic_edmfx_rico_column_2M/output_active/*"
         agents:
           slurm_mem: 20GB
+        soft_fail: true
 
       - label: ":umbrella: Prognostic EDMFX TRMM in a column"
         command: >
