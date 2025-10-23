@@ -419,6 +419,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     )
 
     ᶜρ = Y.c.ρ
+    ᶠρ = face_density(ᶜρ)
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -453,8 +454,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
 
     @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix()
 
-    @. ᶜadvection_matrix =
-        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
+    @. ᶜadvection_matrix = -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠρ)
 
     if use_derivative(topography_flag)
         ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
@@ -563,7 +563,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         #TODO: tetsing explicit vs implicit
         #@. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
         #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-        #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(ᶠρ ⋅ ᶠright_bias_matrix() ⋅
         #    DiagonalMatrixRow(
         #        -(1 + ᶜkappa_m) / ᶜρ * ifelse(
         #            ᶜh_tot == 0,
@@ -577,7 +577,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         #TODO: tetsing explicit vs implicit
         #@. ∂ᶜρe_tot_err_∂ᶜρq_tot =
         #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-        #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(ᶠρ ⋅ ᶠright_bias_matrix() ⋅
         #    DiagonalMatrixRow(
         #        -(ᶜkappa_m) * ∂e_int_∂q_tot / ᶜρ * ifelse(
         #            ᶜh_tot == 0,
@@ -591,7 +591,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         #TODO: testing explicit vs implicit
         #@. ∂ᶜρq_tot_err_∂ᶜρq_tot =
         #    dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅
-        #    DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) ⋅ ᶠright_bias_matrix() ⋅
+        #    DiagonalMatrixRow(ᶠρ ⋅ ᶠright_bias_matrix() ⋅
         #    DiagonalMatrixRow(
         #        -1 / ᶜρ * ifelse(
         #           ᶜq_tot == 0,
@@ -1180,10 +1180,9 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
             if use_derivative(sgs_mass_flux_flag)
                 # Jacobian contributions of updraft massflux to grid-mean
                 ∂ᶜupdraft_mass_flux_∂ᶜscalar = ᶠbidiagonal_matrix_ct3
+                ᶠρ = face_density(ᶜρ)
                 @. ∂ᶜupdraft_mass_flux_∂ᶜscalar =
-                    DiagonalMatrixRow(
-                        (ᶠinterp(ᶜρ * ᶜJ) / ᶠJ) * (ᶠu³ʲs.:(1) - ᶠu³),
-                    ) ⋅ ᶠinterp_matrix() ⋅
+                    DiagonalMatrixRow(ᶠρ * (ᶠu³ʲs.:(1) - ᶠu³)) ⋅ ᶠinterp_matrix() ⋅
                     DiagonalMatrixRow(Y.c.sgsʲs.:(1).ρa / ᶜρʲs.:(1))
                 @. p.scratch.ᶜtridiagonal_matrix_scalar =
                     dtγ * ᶜadvdivᵥ_matrix() ⋅ ∂ᶜupdraft_mass_flux_∂ᶜscalar
@@ -1192,8 +1191,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 ## grid-mean ρe_tot
                 ᶜkappa_m = p.scratch.ᶜtemp_scalar
                 @. ᶜkappa_m =
-                    TD.gas_constant_air(thermo_params, ᶜts) /
-                    TD.cv_m(thermo_params, ᶜts)
+                    TD.gas_constant_air(thermo_params, ᶜts) / TD.cv_m(thermo_params, ᶜts)
 
                 ᶜ∂kappa_m∂q_tot = p.scratch.ᶜtemp_scalar_2
                 @. ᶜ∂kappa_m∂q_tot =
