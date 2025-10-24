@@ -15,7 +15,7 @@ function find_latest_dataset_folder(; dir = pwd())
     return pop!(sorted_paths)
 end
 
-cluster_data_prefix = "/central/scratch/esm/slurm-buildkite/climaatmos-main"
+cluster_data_prefix = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main"
 path = find_latest_dataset_folder(; dir = cluster_data_prefix)
 ref_counter = 0 # (error)
 if isempty(path) # no folders found

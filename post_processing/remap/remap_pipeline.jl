@@ -12,7 +12,7 @@ module purge
 module load julia/1.9.4
 export JULIA_CUDA_USE_BINARYBUILDER=false
 export JULIA_NUM_THREADS=${SLURM_CPUS_PER_TASK:=1}
-export HDF5_DIR=/central/groups/esm/{username}/ClimaAtmos_remap/
+export HDF5_DIR=/resnick/groups/esm/{username}/ClimaAtmos_remap/
 CA_EXAMPLE=$HOME'/Documents/ClimaAtmos.jl/examples/'
 DRIVER=$CA_EXAMPLE'post_processing/remap/remap_pipeline.jl'
 julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.instantiate()'

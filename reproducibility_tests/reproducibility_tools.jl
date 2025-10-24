@@ -155,7 +155,7 @@ function reproducibility_results(
     data_file_computed::String,
     n::Int = 10,
     name::String,
-    save_dir::String = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+    save_dir::String = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
     ref_counter_PR::Int = read_ref_counter(
         joinpath(@__DIR__, "ref_counter.jl"),
     ),
@@ -213,7 +213,7 @@ end
         comms_ctx::ClimaComms.AbstractCommsContext;
         job_id::String,
         computed_dir::String,
-        save_dir::String = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+        save_dir::String = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
         name::String = "Y",
         reference_filename = "prog_state.hdf5",
         computed_filename = reference_filename,
@@ -243,7 +243,7 @@ function export_reproducibility_results(
     comms_ctx::ClimaComms.AbstractCommsContext;
     job_id::String,
     computed_dir::String,
-    save_dir::String = "/central/scratch/esm/slurm-buildkite/climaatmos-main",
+    save_dir::String = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
     name::String = "Y",
     reference_filename = "prog_state.hdf5",
     computed_filename = "prog_state.hdf5",

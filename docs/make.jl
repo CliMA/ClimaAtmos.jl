@@ -27,6 +27,7 @@ makedocs(;
         "Installation instructions" => "installation_instructions.md",
         "Contributor Guide" => "contributor_guide.md",
         "Equations" => "equations.md",
+        "Microphysics" => "microphysics.md",
         "EDMF Equations" => "edmf_equations.md",
         "Diagnostics" => "diagnostics.md",
         "Available Diagnostics" => "available_diagnostics.md",

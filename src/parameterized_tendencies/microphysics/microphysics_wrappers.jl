@@ -26,7 +26,7 @@ end
 # The limit is defined as the available amont / n times model time step.
 function limit(q, dt, n::Int)
     FT = eltype(q)
-    return max(FT(0), q) / float(dt) / n
+    return q / float(dt) / n
 end
 
 """
@@ -85,8 +85,8 @@ function cloud_sources(
 
     return ifelse(
         S > FT(0),
-        triangle_inequality_limiter(S, limit(qᵥ - qₛₗ, dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(qₗ, dt, 2)),
+        triangle_inequality_limiter(S, limit(qᵥ - qₛₗ, dt, 2), limit(qₗ, dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(qₗ, dt, 2), limit(qᵥ - qₛₗ, dt, 2)),
     )
 end
 function cloud_sources(
@@ -135,8 +135,8 @@ function cloud_sources(
 
     return ifelse(
         S > FT(0),
-        triangle_inequality_limiter(S, limit(qᵥ - qₛᵢ, dt, 2)),
-        -triangle_inequality_limiter(abs(S), limit(qᵢ, dt, 2)),
+        triangle_inequality_limiter(S, limit(qᵥ - qₛᵢ, dt, 2), limit(qᵢ, dt, 2)),
+        -triangle_inequality_limiter(abs(S), limit(qᵢ, dt, 2), limit(qᵥ - qₛᵢ, dt, 2)),
     )
 end
 
@@ -154,7 +154,7 @@ defined as Δm_tot / (m_dry + m_tot) for the 0-moment scheme
 function q_tot_0M_precipitation_sources(thp, cmp::CMP.Parameters0M, dt, qₜ, ts)
     return -triangle_inequality_limiter(
         -CM0.remove_precipitation(cmp, PP(thp, ts)),
-        max(qₜ, 0) / float(dt),
+        qₜ / float(dt),
     )
 end
 
@@ -224,7 +224,7 @@ function compute_precipitation_sources!(
         CM1.conv_q_lcl_to_q_rai(mp.pr.acnv1M, qₗ, true),
         CM2.conv_q_lcl_to_q_rai(mp.var, qₗ, ρ, mp.Ndp),
     )
-    @. Sᵖ = triangle_inequality_limiter(Sᵖ, limit(qₗ, dt, 5))
+    @. Sᵖ = triangle_inequality_limiter(Sᵖ, limit(qₗ, dt, 5), limit(qᵣ, dt, 5))
     @. Sqₗᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
 
@@ -232,6 +232,7 @@ function compute_precipitation_sources!(
     @. Sᵖ = triangle_inequality_limiter(
         CM1.conv_q_icl_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ, true),
         limit(qᵢ, dt, 5),
+        limit(qₛ, dt, 5),
     )
     @. Sqᵢᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ
@@ -240,6 +241,7 @@ function compute_precipitation_sources!(
     @. Sᵖ = triangle_inequality_limiter(
         CM1.accretion(mp.cl, mp.pr, mp.tv.rain, mp.ce, qₗ, qᵣ, ρ),
         limit(qₗ, dt, 5),
+        limit(qᵣ, dt, 5),
     )
     @. Sqₗᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
@@ -248,6 +250,7 @@ function compute_precipitation_sources!(
     @. Sᵖ = triangle_inequality_limiter(
         CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ, qₛ, ρ),
         limit(qᵢ, dt, 5),
+        limit(qₛ, dt, 5),
     )
     @. Sqᵢᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ
@@ -274,6 +277,7 @@ function compute_precipitation_sources!(
     @. Sᵖ = triangle_inequality_limiter(
         CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ, qᵣ, ρ),
         limit(qᵢ, dt, 5),
+        limit(qₛ, dt, 5),
     )
     @. Sqᵢᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ
@@ -281,6 +285,7 @@ function compute_precipitation_sources!(
     @. Sᵖ = triangle_inequality_limiter(
         CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ, qᵣ, ρ),
         limit(qᵣ, dt, 5),
+        limit(qₛ, dt, 5),
     )
     @. Sqᵣᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ
@@ -291,10 +296,12 @@ function compute_precipitation_sources!(
         triangle_inequality_limiter(
             CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ, qᵣ, ρ),
             limit(qᵣ, dt, 5),
+            limit(qₛ, dt, 5),
         ),
         -triangle_inequality_limiter(
             CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qᵣ, qₛ, ρ),
             limit(qₛ, dt, 5),
+            limit(qᵣ, dt, 5),
         ),
     )
     @. Sqₛᵖ += Sᵖ
@@ -342,6 +349,7 @@ function compute_precipitation_sinks!(
     @. Sᵖ = -triangle_inequality_limiter(
         -CM1.evaporation_sublimation(rps..., qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, Tₐ(thp, ts)),
         limit(qᵣ, dt, 5),
+        limit(qᵥ(thp, ts), dt, 5),
     )
     @. Sqᵣᵖ += Sᵖ
 
@@ -349,6 +357,7 @@ function compute_precipitation_sinks!(
     @. Sᵖ = triangle_inequality_limiter(
         CM1.snow_melt(sps..., qₛ, ρ, Tₐ(thp, ts)),
         limit(qₛ, dt, 5),
+        limit(qᵣ, dt, 5),
     )
     @. Sqᵣᵖ += Sᵖ
     @. Sqₛᵖ -= Sᵖ
@@ -357,8 +366,8 @@ function compute_precipitation_sinks!(
     @. Sᵖ = CM1.evaporation_sublimation(sps..., qₜ, qₗ, qᵢ, qᵣ, qₛ, ρ, Tₐ(thp, ts))
     @. Sᵖ = ifelse(
         Sᵖ > FT(0),
-        triangle_inequality_limiter(Sᵖ, limit(qᵥ(thp, ts), dt, 5)),
-        -triangle_inequality_limiter(FT(-1) * Sᵖ, limit(qₛ, dt, 5)),
+        triangle_inequality_limiter(Sᵖ, limit(qᵥ(thp, ts), dt, 5), limit(qₛ, dt, 5)),
+        -triangle_inequality_limiter(FT(-1) * Sᵖ, limit(qₛ, dt, 5), limit(qᵥ(thp, ts), dt, 5)),
     )
     @. Sqₛᵖ += Sᵖ
     #! format: on
@@ -608,6 +617,7 @@ function compute_warm_precipitation_sources_2M!(
             ρ * nₗ,
         ).dq_rai_dt,
         limit(qₗ, dt, 5), # cap rate to at most 20% of qₗ per timestep to ensure stability
+        limit(qᵣ, dt, 5),
     )
     @. Sqₗᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
@@ -654,6 +664,7 @@ function compute_warm_precipitation_sources_2M!(
     @. Sᵖ = triangle_inequality_limiter(
         CM2.accretion(mp.sb, qₗ, qᵣ, ρ, ρ * nₗ).dq_rai_dt,
         limit(qₗ, dt, 5),
+        limit(qᵣ, dt, 5),
     )
     @. Sqₗᵖ -= Sᵖ
     @. Sqᵣᵖ += Sᵖ
@@ -683,6 +694,7 @@ function compute_warm_precipitation_sources_2M!(
                 Tₐ(thp, ts),
             ).evap_rate_1,
             limit(qᵣ, dt, 5),
+            limit(qᵥ(thp, ts), dt, 5),
         )
     @. Sqᵣᵖ += Sᵖ
 

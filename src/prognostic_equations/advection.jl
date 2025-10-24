@@ -367,6 +367,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     ᶠz = Fields.coordinate_field(Y.f).z
     ᶜu₃ʲ = p.scratch.ᶜtemp_C3
     ᶜKᵥʲ = p.scratch.ᶜtemp_scalar_2
+    ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
 
     for j in 1:n
@@ -393,6 +394,8 @@ function edmfx_sgs_vertical_advection_tendency!(
 
     for j in 1:n
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
+        ᶜright_biased_∂a∂z =
+            @. lazy(ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa))))
 
         # Flux form vertical advection of area farction with the grid mean velocity
         ᶜ∂ρ∂t = vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmfx_upwinding)
@@ -476,9 +479,15 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜaqʲ,
                     ᶠJ,
                 )
-                @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
-                @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
-                @. ᶜ∂ρ∂t_sed += vtt
+                sed_detr = sedimentation_detrainment(
+                    ᶜρʲs.:($j),
+                    ᶜwʲ,
+                    ᶜqʲ,
+                    ᶜright_biased_∂a∂z,
+                )
+                @. ᶜqʲₜ += ᶜinv_ρ̂ * (vtt + sed_detr)
+                @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * (vtt + sed_detr)
+                @. ᶜ∂ρ∂t_sed += (vtt + sed_detr)
 
                 # Flux form sedimentation of energy
                 if name in (@name(q_liq), @name(q_rai))
@@ -498,7 +507,13 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜaqʲ .* ᶜmse_li,
                     ᶠJ,
                 )
-                @. Yₜ.c.sgsʲs.:($$j).mse += ᶜinv_ρ̂ * vtt
+                sed_detr = sedimentation_detrainment(
+                    ᶜρʲs.:($j),
+                    ᶜwʲ,
+                    ᶜqʲ .* ᶜmse_li,
+                    ᶜright_biased_∂a∂z,
+                )
+                @. Yₜ.c.sgsʲs.:($$j).mse += ᶜinv_ρ̂ * (vtt + sed_detr)
             end
 
             # Contribution of density variation due to sedimentation
@@ -556,7 +571,13 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜaχʲ,
                     ᶠJ,
                 )
-                @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
+                sed_detr = sedimentation_detrainment(
+                    ᶜρʲs.:($j),
+                    ᶜwʲ,
+                    ᶜχʲ,
+                    ᶜright_biased_∂a∂z,
+                )
+                @. ᶜχʲₜ += ᶜinv_ρ̂ * (vtt + sed_detr)
 
                 # Contribution of density variation due to sedimentation
                 @. ᶜχʲₜ -= ᶜinv_ρ̂ * ᶜχʲ * ᶜ∂ρ∂t_sed
