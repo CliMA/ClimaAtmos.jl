@@ -122,13 +122,13 @@ term treated implicitly (check this)
 
 Uses the advective form equation
 ```math
-\frac{\partial}{\partial t} \boldsymbol{u}  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}) \times \boldsymbol{u} - c_{pd} (\theta_v - \theta_{v, r}) \nabla_h \Pi  - \nabla_h [(\Phi - \Phi_r) + K]. 
+\frac{\partial}{\partial t} \boldsymbol{u}  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}) \times \boldsymbol{u} - c_{pd} (\theta_v - \theta_{v, r}) \nabla_h \Pi  - \nabla_h [(\Phi - \Phi_r) + K].
 ```
 Here, we use the Exner function to compute pressure gradients and are subtracting a hydrostatic reference state
 ```math
 - \frac{1}{\rho} \nabla p = - c_{pd} \theta_v \Pi
 ```
-where ``\theta_v`` is the virtual potential temperature. ``\theta_{v,r} = T_r / \Pi`` is a reference virtual potential temperature (with reference temperature ``T_r``), and 
+where ``\theta_v`` is the virtual potential temperature. ``\theta_{v,r} = T_r / \Pi`` is a reference virtual potential temperature (with reference temperature ``T_r``), and
 ```math
 \Phi_r = -c_{pd} \left[ T_\text{min} \log(\Pi) + \frac{(T_\text{sfc} - T_\text{min})}{n_s} (\Pi^{n_s} - 1) \right],
 ```
@@ -137,14 +137,14 @@ We use the reference temperature profile ``T_r = T_\text{min} + (T_\text{sfc} - 
 
 #### Horizontal momentum
 
-By breaking the curl and cross product terms into horizontal and vertical contributions, and removing zero terms (e.g. ``\nabla_v  \times \boldsymbol{u}_v = 0``), we obtain 
+By breaking the curl and cross product terms into horizontal and vertical contributions, and removing zero terms (e.g. ``\nabla_v  \times \boldsymbol{u}_v = 0``), we obtain
 ```math
 \frac{\partial}{\partial t} \boldsymbol{u}_h  =
   - (2 \boldsymbol{\Omega}^h + \nabla_v \times \boldsymbol{u}_h +  \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v
   - (2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h
   - c_{pd} (\theta_v - \theta_{v, r}) \nabla_h \Pi  - \nabla_h [(\Phi - \Phi_r) + K],
 ```
-where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors. 
+where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors.
 
 The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions.
 
@@ -284,155 +284,3 @@ is treated implicitly.
     - \mathcal{D}^c_v\left[WI^f(J, \rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right]
     ```
     is treated implicitly.
-
-## Microphysics source terms
-
-Sources from cloud microphysics ``\mathcal{S}`` represent the transfer of mass
-  between the working fluid (dry air, water vapor cloud liquid and cloud ice)
-  and precipitation (rain and snow),
-  as well as the latent heat release due to phase changes.
-
-The scalars ``\rho q_{rai}`` and ``\rho q_{sno}`` are part of the state vector
-  when running simulations with 1-moment microphysics scheme,
-  and represent the specific humidity of liquid and solid precipitation
-  (i.e. rain and snow).
-
-```math
-q_{rai} := \frac{m_{rai}}{m_{dry} + m_{vap} + m_{liq} + m_{ice}}\; ,
-\;\;\;\;
-q_{sno} := \frac{m_{sno}}{m_{dry} + m_{vap} + m_{liq} + m_{ice}}
-```
-
-The different source terms are provided by
-  [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl) library
-  and are defined as the change of mass of one of the cloud condensate or
-  precipitation species normalised by the mass of the working fluid.
-See the [CloudMicrophysics.jl docs](https://clima.github.io/CloudMicrophysics.jl/dev/)
-  for more details.
-
-!!! todo
-    Throughout the rest of the derivations we are assuming that the volume
-    of the working fluid is constant (not the pressure).
-    This is strange for phase changes and needs more thinking.
-
-### Case 1: Mass of the working fluid is changed
-
-When the phase change is happening within the working fluid
-  (for example condensation from water vapor to liquid water),
-  there is no change to any of the state variables.
-Considering the transition from
-  ``x \rightarrow y`` where ``x`` is either
-   water vapor, cloud liquid water or cloud ice and
-  ``y`` is either rain or snow
-```math
-\mathcal{S}_{x \rightarrow y} := \frac{\frac{dm_x}{dt}}{m_{dry} + m_{vap} + m_{liq} + m_{ice}}
-```
-```math
-\frac{d}{dt} \rho =
-\frac{d}{dt} \rho q_{tot} =
-\rho \mathcal{S}_{x \rightarrow y} =
-- \frac{d}{dt} \rho q_y
-```
-```math
-\frac{d}{dt} \rho e = \rho \mathcal{S}_{x \rightarrow y} (I_{y} + \Phi)
-```
-where ``I_{y}`` is the internal energy of the ``y`` phase.
-This formula applies to the majority of microphysics processes.
-Namely, it is valid for processes where ``T=const`` such as
-  autoconversion and accretion between species of the same phase.
-It is also valid for rain evaporation, deposition/sublimation, and
-  accretion of cloud water and snow in temperatures below freezing
-  (which result in snow).
-
-### Case 2: Phase change outside of the working fluid
-
-For cases where both ``x`` and ``y`` are not part of the working fluid
-  (melting of snow, freezing of rain)
-```math
-\mathcal{S}_{x \rightarrow y} := \frac{\frac{dm_{x}}{dt}}{m_{dry} + m_{vap} + m_{liq} + m_{ice}}
-```
-```math
-\frac{d}{dt} \rho q_{x} =
-- \frac{d}{dt} \rho q_{y} =
-\rho \mathcal{S}_{x \rightarrow y}
-```
-```math
-\frac{d}{dt} \rho = \frac{d}{dt} \rho q_{tot} = 0
-```
-```math
-\frac{d}{dt} \rho e = - \rho \mathcal{S}_{x \rightarrow y} L_{f}
-```
-where ``L_f`` is the latent heat of fusion.
-The sign in the last equation assumes ``x`` stands for rain and ``y`` for snow.
-
-### Additional cases
-
-Accretion of cloud ice by rain results in snow.
-This process combines the effects from the loss of working fluid ``q_{ice}``
-   (described by case 1)
-   and the phase change from rain to snow
-   (described by case 2).
-
-Accretion of cloud liquid by snow in temperatures above freezing results in rain.
-It is assummed that some fraction ``\alpha`` of snow is melted during the process
-  and both cloud liquid and melted snow are turned into rain.
-
-```math
-\mathcal{S}_{acc} := \frac{\frac{dm_{liq}}{dt}}{m_{dry} + m_{vap} + m_{liq} + m_{ice}}
-```
-```math
-\frac{d}{dt} \rho = \frac{d}{dt} \rho q_{tot} = \rho S_{acc}
-```
-```math
-\frac{d}{dt} \rho q_{sno} = \rho \alpha S_{acc}
-```
-```math
-\frac{d}{dt} \rho q_{rai} = - \rho (1 + \alpha) S_{acc}
-```
-```math
-\frac{d}{dt} \rho e = \rho \mathcal{S}_{acc} ((1+\alpha) I_{liq} - \alpha I_{ice} + \Phi)
-```
-
-### Precipitation temperature
-
-Precipitation is assumed to have the same temperature as the surrounding air ``T_a``.
-The corresponding energy sink associated with heat transfer
-  between air and precipitating species can be written as
-
-```math
-\frac{d}{dt} \rho e = - \rho q_p (\boldsymbol{u} - v_p) c_p \nabla T_a
-```
-where ``q_p``, ``\boldsymbol{u}``, ``v_p``, ``c_p `` are the precipitation specific humidity,
-air velocity, precipitation terminal velocity assumed to be along the gravity axis,
-specific heat of precipitating species.
-
-!!! todo
-    We should consider replacing ``T_a`` with
-    some approximation of wet bulb temperature.
-
-### Stability and positivity
-
-All source terms are individually limited such that they don't exceed the
-  available tracer specific humidity divided by a coefficient ``a``.
-```math
-\mathcal{S}_{x \rightarrow y} = min(\mathcal{S}_{x \rightarrow y}, \frac{q_{x}}{a \; dt})
-```
-This will not ensure positivity because the sum of all source terms,
-  combined with the advection tendency,
-  could still drive the solution to negative numbers.
-It should however help mitigate some of the problems.
-The source terms functions treat negative specific humidities as zeros,
-  so the simulations should be stable even with small negative numbers.
-
-We do not apply hyperdiffusion for precipitation tracers.
-
-### Aerosol Activation for 2-Moment Microphysics
-
-Aerosol activation uses functions from the [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl) library, based on the Abdul-Razzak and Ghan (ARG) parameterization. ARG predicts the number of activated cloud droplets assuming a parcel of clear air rising adiabatically. This formulation is traditionally applied only at cloud base, where the maximum supersaturation typically occurs.
-
-To enable ARG to be used locally (i.e., without explicitly identifying cloud base), CloudMicrophysics.jl implements a modified equation for the maximum supersaturation that accounts for the presence of pre-existing liquid and ice particles. This allows activation to be applied inside clouds. To ensure that activation occurs only where physically appropriate, we apply additional clipping logic:
-
-- If the predicted maximum supersaturation is less than the local supersaturation (i.e., supersaturation is decreasing), aerosol activation is not applied.
-- If the predicted number of activated droplets is less than the existing local cloud droplet number concentration, activation is also suppressed.
-
-This ensures that droplet activation occurs only in physically meaningful regions—typically near cloud base—even though the activation routine can be applied throughout the domain.
