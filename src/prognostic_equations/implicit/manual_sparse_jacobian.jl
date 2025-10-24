@@ -583,7 +583,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         (; turbconv_model) = p.atmos
         turbconv_params = CAP.turbconv_params(params)
         FT = eltype(params)
-        (; vertical_diffusion) = p.atmos
+        (; vertical_diffusion, smagorinsky_lilly) = p.atmos
         (; ᶜp) = p.precomputed
         if vertical_diffusion isa DecayWithHeightDiffusion
             ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
@@ -591,6 +591,10 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         elseif vertical_diffusion isa VerticalDiffusion
             ᶜK_h = ᶜcompute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vertical_diffusion)
             ᶜK_u = ᶜK_h
+        elseif is_smagorinsky_vertical(smagorinsky_lilly)
+            set_smagorinsky_lilly_precomputed_quantities!(Y, p, smagorinsky_lilly)
+            ᶜK_u = p.precomputed.ᶜνₜ_v
+            ᶜK_h = p.precomputed.ᶜD_v
         elseif turbconv_model isa AbstractEDMF
             (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
             ᶜρa⁰ =

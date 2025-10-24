@@ -1336,6 +1336,14 @@ function make_plots(
 
     short_names_spectra = ["wa"]
     short_names_spectra = short_names_spectra ∩ collect(keys(simdirs[1].vars))
+    short_names = [
+        "wa", "ua", "va", "ta", "thetaa", "ha",
+        "hus", "hur", "cl", "clw", "cli", "ke",
+        "Dh_smag", "strainh_smag",  # smag horizontal
+        "Dv_smag", "strainv_smag",  # smag vertical
+        "edt",  # DecayWithHeight vertical diffusivity
+    ]
+    short_names = short_names ∩ collect(keys(simdirs[1].vars))
 
     # Window average from instantaneous snapshots?
     function average_t_last2hrs(var)
