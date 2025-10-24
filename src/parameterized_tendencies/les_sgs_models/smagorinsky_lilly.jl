@@ -75,6 +75,9 @@ function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
     ᶜfb = lilly_stratification_correction(p, ᶜS)
     if is_smagorinsky_UVW_coupled(model)
         ᶜL_h = ᶜL_v = @. lazy(c_smag * cbrt(Δx * Δy * ᶜΔz) * ᶜfb)
+    else
+        ᶜL_h = @. lazy(c_smag * Δx)
+        ᶜL_v = @. lazy(c_smag * ᶜΔz * ᶜfb)
     end
 
     # Cache strain rate norms for diagnostics

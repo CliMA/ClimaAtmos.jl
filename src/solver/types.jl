@@ -248,13 +248,14 @@ Smagorinsky-Lilly eddy viscosity model.
 - `:UVW` (all axes)
 - `:UV` (horizontal axes)
 - `:W` (vertical axis)
+- `:UV_W` (horizontal and vertical axes treated separately).
 """
 struct SmagorinskyLilly{AXES} <: AbstractEddyViscosityModel end
 
 """
     is_smagorinsky_UVW_coupled(model)
 
-Check if the Smagorinsky model is coupled in all directions.
+Check if the Smagorinsky model is coupled along all axes.
 """
 is_smagorinsky_UVW_coupled(::SmagorinskyLilly{AXES}) where {AXES} = AXES == :UVW
 is_smagorinsky_UVW_coupled(::Nothing) = false
@@ -262,23 +263,23 @@ is_smagorinsky_UVW_coupled(::Nothing) = false
 """
     is_smagorinsky_vertical(model)
 
-Check if the Smagorinsky model is applied in the vertical direction.
+Check if the Smagorinsky model is applied along the vertical axis.
 
 See also [`is_smagorinsky_horizontal`](@ref).
 """
 is_smagorinsky_vertical(::SmagorinskyLilly{AXES}) where {AXES} =
-    AXES == :UVW
+    AXES == :UVW || AXES == :W || AXES == :UV_W
 is_smagorinsky_vertical(::Nothing) = false
 
 """
     is_smagorinsky_horizontal(model)
 
-Check if the Smagorinsky model is applied in the horizontal directions.
+Check if the Smagorinsky model is applied along the horizontal axes.
 
 See also [`is_smagorinsky_vertical`](@ref).
 """
 is_smagorinsky_horizontal(::SmagorinskyLilly{AXES}) where {AXES} =
-    AXES == :UVW
+    AXES == :UVW || AXES == :UV || AXES == :UV_W
 is_smagorinsky_horizontal(::Nothing) = false
 
 struct AnisotropicMinimumDissipation{FT} <: AbstractEddyViscosityModel
