@@ -246,6 +246,9 @@ Smagorinsky-Lilly eddy viscosity model.
 
 `DIR` is a symbol indicating in which direction(s) the model is applied. It can be
 - `:UVW` (all directions)
+- `:UV` (horizontal only)
+- `:W` (vertical only), or
+- `:UV_W` (horizontal and vertical treated separately).
 """
 struct SmagorinskyLilly{DIR} <: AbstractEddyViscosityModel end
 
@@ -265,7 +268,7 @@ Check if the Smagorinsky model is applied in the vertical direction.
 See also [`is_smagorinsky_horizontal`](@ref).
 """
 is_smagorinsky_vertical(::SmagorinskyLilly{DIR}) where {DIR} =
-    DIR == :UVW
+    DIR == :UVW || DIR == :W || DIR == :UV_W
 is_smagorinsky_vertical(::Nothing) = false
 
 """
@@ -276,7 +279,7 @@ Check if the Smagorinsky model is applied in the horizontal directions.
 See also [`is_smagorinsky_vertical`](@ref).
 """
 is_smagorinsky_horizontal(::SmagorinskyLilly{DIR}) where {DIR} =
-    DIR == :UVW
+    DIR == :UVW || DIR == :UV || DIR == :UV_W
 is_smagorinsky_horizontal(::Nothing) = false
 
 struct AnisotropicMinimumDissipation{FT} <: AbstractEddyViscosityModel
