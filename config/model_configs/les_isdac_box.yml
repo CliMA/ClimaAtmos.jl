@@ -14,7 +14,7 @@ implicit_diffusion: false
 approximate_linear_solve_iters: 2
 hyperdiff: "false"
 apply_limiter: false
-smagorinsky_lilly: true
+smagorinsky_lilly: "UVW"
 # time- and spatial discretization
 x_elem: 10
 x_max: 3.2e3

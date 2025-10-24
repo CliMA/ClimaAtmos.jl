@@ -239,7 +239,46 @@ Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
 end
 
 abstract type AbstractEddyViscosityModel end
-struct SmagorinskyLilly <: AbstractEddyViscosityModel end
+"""
+    SmagorinskyLilly{DIR}
+
+Smagorinsky-Lilly eddy viscosity model.
+
+`DIR` is a symbol indicating in which direction(s) the model is applied. It can be
+- `:UVW` (all directions)
+"""
+struct SmagorinskyLilly{DIR} <: AbstractEddyViscosityModel end
+
+"""
+    is_smagorinsky_UVW_coupled(model)
+
+Check if the Smagorinsky model is coupled in all directions.
+"""
+is_smagorinsky_UVW_coupled(::SmagorinskyLilly{DIR}) where {DIR} = DIR == :UVW
+is_smagorinsky_UVW_coupled(::Nothing) = false
+
+"""
+    is_smagorinsky_vertical(model)
+
+Check if the Smagorinsky model is applied in the vertical direction.
+
+See also [`is_smagorinsky_horizontal`](@ref).
+"""
+is_smagorinsky_vertical(::SmagorinskyLilly{DIR}) where {DIR} =
+    DIR == :UVW
+is_smagorinsky_vertical(::Nothing) = false
+
+"""
+    is_smagorinsky_horizontal(model)
+
+Check if the Smagorinsky model is applied in the horizontal directions.
+
+See also [`is_smagorinsky_vertical`](@ref).
+"""
+is_smagorinsky_horizontal(::SmagorinskyLilly{DIR}) where {DIR} =
+    DIR == :UVW
+is_smagorinsky_horizontal(::Nothing) = false
+
 struct AnisotropicMinimumDissipation{FT} <: AbstractEddyViscosityModel
     c_amd::FT
 end

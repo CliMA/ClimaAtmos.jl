@@ -249,10 +249,12 @@ function precomputed_quantities(Y, atmos)
         if atmos.smagorinsky_lilly isa SmagorinskyLilly
             uvw_vec = UVW(FT(0), FT(0), FT(0))
             (;
-                ᶜτ_smag = similar(Y.c, typeof(uvw_vec * uvw_vec')),
-                ᶠτ_smag = similar(Y.f, typeof(uvw_vec * uvw_vec')),
-                ᶜD_smag = similar(Y.c, FT),
-                ᶠD_smag = similar(Y.f, FT),
+                ᶜS = similar(Y.c, typeof(uvw_vec * uvw_vec')),
+                ᶠS = similar(Y.f, typeof(uvw_vec * uvw_vec')),
+                ᶜS_norm_h = similar(Y.c, FT), ᶜS_norm_v = similar(Y.c, FT),
+                ᶜL_h = similar(Y.c, FT), ᶜL_v = similar(Y.c, FT),
+                ᶜνₜ_h = similar(Y.c, FT), ᶜνₜ_v = similar(Y.c, FT),
+                ᶜD_h = similar(Y.c, FT), ᶜD_v = similar(Y.c, FT),
             )
         else
             (;)
@@ -608,9 +610,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities_part2!(Y, p, t)
         set_cloud_fraction!(Y, p, moisture_model, cloud_model)
     end
 
-    if p.atmos.smagorinsky_lilly isa SmagorinskyLilly
-        set_smagorinsky_lilly_precomputed_quantities!(Y, p)
-    end
+    set_smagorinsky_lilly_precomputed_quantities!(Y, p, p.atmos.smagorinsky_lilly)
 
     if p.atmos.amd_les isa AnisotropicMinimumDissipation
         set_amd_precomputed_quantities!(Y, p)
