@@ -89,7 +89,7 @@ end
 end
 
 @testset "compute_strain_rate (c.f. analytical function)" begin
-    # Test compute_strain_rate_face
+    # Test compute_strain_rate_face_vertical
     (; helem, cent_space, face_space) = get_cartesian_spaces()
     ccoords, fcoords = get_coords(cent_space, face_space)
     FT = eltype(ccoords.x)
@@ -118,8 +118,8 @@ end
     ᶠu = @. UVW(Geometry.UVector(ᶠu)) +
        UVW(Geometry.VVector(ᶠv)) +
        UVW(Geometry.WVector(ᶠw))
-    ᶜϵ .= CA.compute_strain_rate_center(Geometry.Covariant123Vector.(ᶠu))
-    ᶠϵ .= CA.compute_strain_rate_face(Geometry.Covariant123Vector.(ᶜu))
+    ᶜϵ .= CA.compute_strain_rate_center_vertical(Geometry.Covariant123Vector.(ᶠu))
+    ᶠϵ .= CA.compute_strain_rate_face_vertical(Geometry.Covariant123Vector.(ᶜu))
 
     # Center valued strain rate
     @test ᶜϵ.components.data.:1 == ᶜϵ.components.data.:1 .* FT(0)
