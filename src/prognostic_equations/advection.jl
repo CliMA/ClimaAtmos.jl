@@ -256,8 +256,13 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
 
     # Full vertical advection of passive tracers (like liq, rai, etc) ...
-    # If sgs_mass_flux is true, the advection term is computed from the sum of SGS fluxes
-    if p.atmos.edmfx_model.sgs_mass_flux isa Val{false}
+    # For prognostic or diagnostic EDMF when sgs_mass_flux is true, the advection term
+    # is computed from the sum of SGS fluxes
+    if !(
+        p.atmos.turbconv_model isa PrognosticEDMFX ||
+        p.atmos.turbconv_model isa DiagnosticEDMFX
+    ) ||
+       p.atmos.edmfx_model.sgs_mass_flux isa Val{false}
         foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
             if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
                 ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
@@ -266,26 +271,32 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             end
         end
     end
+
     # ... and upwinding correction of energy and total water.
     # (The central advection of energy and total water is done implicitly.)
-    if energy_upwinding != Val(:none)
-        ᶜh_tot = @. lazy(
-            TD.total_specific_enthalpy(
-                thermo_params,
-                ᶜts,
-                specific(Y.c.ρe_tot, Y.c.ρ),
-            ),
-        )
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
-        @. Yₜ.c.ρe_tot += vtt - vtt_central
-    end
+    # For prognostic EDMF when sgs_mass_flux is true, the advection term
+    # is computed from the sum of SGS fluxes
+    if !(p.atmos.turbconv_model isa PrognosticEDMFX) ||
+       p.atmos.edmfx_model.sgs_mass_flux isa Val{false}
+        if energy_upwinding != Val(:none)
+            ᶜh_tot = @. lazy(
+                TD.total_specific_enthalpy(
+                    thermo_params,
+                    ᶜts,
+                    specific(Y.c.ρe_tot, Y.c.ρ),
+                ),
+            )
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
+            vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
+            @. Yₜ.c.ρe_tot += vtt - vtt_central
+        end
 
-    if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
-        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
-        @. Yₜ.c.ρq_tot += vtt - vtt_central
+        if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
+            ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
+            vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
+            @. Yₜ.c.ρq_tot += vtt - vtt_central
+        end
     end
 
     if isnothing(ᶠf¹²)
@@ -382,8 +393,8 @@ function edmfx_sgs_vertical_advection_tendency!(
         # and calcuate the buoyancy term relative to the grid-mean density.
         # We also include the buoyancy term in the nonhydrostatic pressure closure here.
         @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-            (1 - α_b) * (ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) * ᶠgradᵥ_ᶜΦ) /
-            ᶠinterp(ᶜρʲs.:($$j)) + ᶠgradᵥ(ᶜKᵥʲ)
+            (1 - α_b) * (ᶠinterp(ᶜρʲs.:($$j) - Y.c.ρ) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρʲs.:($$j)) +
+            ᶠgradᵥ(ᶜKᵥʲ)
 
         # buoyancy term in mse equation
         @. Yₜ.c.sgsʲs.:($$j).mse +=
