@@ -43,10 +43,19 @@ ClimaAtmos.InitialConditions.Bomex
 ClimaAtmos.InitialConditions.Soares
 ```
 
-### Helper
+## Helper
 
 ```@docs
 ClimaAtmos.InitialConditions.ColumnInterpolatableField
+```
+
+## Grids
+
+```@docs
+ClimaAtmos.ColGrid
+ ClimaAtmos.SphereGrid
+ClimaAtmos.PlaneGrid
+ClimaAtmos.BoxGrid
 ```
 
 ## Jacobian
