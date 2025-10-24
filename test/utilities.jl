@@ -89,7 +89,7 @@ end
 end
 
 @testset "compute_strain_rate (c.f. analytical function)" begin
-    # Test compute_strain_rate_face
+    # Test compute_strain_rate_face_vertical
     (; helem, cent_space, face_space) = get_cartesian_spaces()
     ccoords, fcoords = get_coords(cent_space, face_space)
     FT = eltype(ccoords.x)
@@ -118,8 +118,8 @@ end
     ᶠu = @. UVW(Geometry.UVector(ᶠu)) +
        UVW(Geometry.VVector(ᶠv)) +
        UVW(Geometry.WVector(ᶠw))
-    ᶜϵ .= CA.compute_strain_rate_center(Geometry.Covariant123Vector.(ᶠu))
-    ᶠϵ .= CA.compute_strain_rate_face(Geometry.Covariant123Vector.(ᶜu))
+    ᶜϵ .= CA.compute_strain_rate_center_vertical(Geometry.Covariant123Vector.(ᶠu))
+    ᶠϵ .= CA.compute_strain_rate_face_vertical(Geometry.Covariant123Vector.(ᶜu))
 
     # Center valued strain rate
     @test ᶜϵ.components.data.:1 == ᶜϵ.components.data.:1 .* FT(0)
@@ -160,6 +160,96 @@ end
                 )
             ),
         ) < eps(FT) # top face
+    end
+end
+
+@testset "compute_full_strain_rate (consistency and symmetry)" begin
+    (; helem, cent_space, face_space) = get_cartesian_spaces()
+    ccoords, fcoords = get_coords(cent_space, face_space)
+    FT = eltype(ccoords.x)
+    UVW = Geometry.UVWVector
+    C123 = Geometry.Covariant123Vector
+    UVec = Geometry.UVector
+    VVec = Geometry.VVector
+    WVec = Geometry.WVector
+    ᶜgradᵥ = Operators.GradientF2C()
+    gradₕ = Operators.Gradient()
+
+
+    # Alloc scratch space for 3x3 tensor fields
+    u₀ = UVW(FT(0), FT(0), FT(0))
+    ᶜε = Fields.Field(typeof(u₀ * u₀'), cent_space)
+    ᶠε = Fields.Field(typeof(u₀ * u₀'), face_space)
+    ᶜε_ref = Fields.Field(typeof(u₀ * u₀'), cent_space)
+    ᶠε_ref = Fields.Field(typeof(u₀ * u₀'), face_space)
+
+    # Velocity fields
+    u, v, w = taylor_green_ic(ccoords)
+    ᶠu, ᶠv, ᶠw = taylor_green_ic(fcoords)
+    ᶜu = @. UVW(UVec(u)) + UVW(VVec(v)) + UVW(WVec(w))
+    ᶠu_vec = @. UVW(UVec(ᶠu)) + UVW(VVec(ᶠv)) + UVW(WVec(ᶠw))
+
+    # Compute using API under test
+    CA.compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu_vec)
+    CA.compute_strain_rate_face_full!(ᶠε, ᶜu, ᶠu_vec)
+
+    # Build reference tensors explicitly (projection + symmetrization)
+    axis_uvw = (Geometry.UVWAxis(),)
+    # Center reference
+    @. ᶜε_ref = Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_vec))
+    @. ᶜε_ref += Geometry.project(axis_uvw, gradₕ(ᶜu))
+    @. ᶜε_ref = (ᶜε_ref + adjoint(ᶜε_ref)) / 2
+
+    # Face reference (construct vertical gradient with the same BCs)
+    ∇ᵥuvw_boundary = Geometry.outer(WVec(0), UVW(0, 0, 0))
+    ∇bc = Operators.SetGradient(∇ᵥuvw_boundary)
+    ᶠgradᵥ = Operators.GradientC2F(bottom = ∇bc, top = ∇bc)
+    @. ᶠε_ref = Geometry.project(axis_uvw, ᶠgradᵥ(ᶜu))
+    @. ᶠε_ref += Geometry.project(axis_uvw, gradₕ(ᶠu_vec))
+    @. ᶠε_ref = (ᶠε_ref + adjoint(ᶠε_ref)) / 2
+
+    # Symmetry checks (independent of reference)
+    @test ᶜε.components.data.:2 == ᶜε.components.data.:4
+    @test ᶜε.components.data.:3 == ᶜε.components.data.:7
+    @test ᶜε.components.data.:6 == ᶜε.components.data.:8
+    @test ᶠε.components.data.:2 == ᶠε.components.data.:4
+    @test ᶠε.components.data.:3 == ᶠε.components.data.:7
+    @test ᶠε.components.data.:6 == ᶠε.components.data.:8
+
+    # Consistency with reference (component-wise, tight tolerance)
+    tol = sqrt(eps(FT))
+    @test maximum(abs, ᶜε.components.data.:1 .- ᶜε_ref.components.data.:1) < tol
+    @test maximum(abs, ᶜε.components.data.:2 .- ᶜε_ref.components.data.:2) < tol
+    @test maximum(abs, ᶜε.components.data.:3 .- ᶜε_ref.components.data.:3) < tol
+    @test maximum(abs, ᶜε.components.data.:4 .- ᶜε_ref.components.data.:4) < tol
+    @test maximum(abs, ᶜε.components.data.:5 .- ᶜε_ref.components.data.:5) < tol
+    @test maximum(abs, ᶜε.components.data.:6 .- ᶜε_ref.components.data.:6) < tol
+    @test maximum(abs, ᶜε.components.data.:7 .- ᶜε_ref.components.data.:7) < tol
+    @test maximum(abs, ᶜε.components.data.:8 .- ᶜε_ref.components.data.:8) < tol
+    @test maximum(abs, ᶜε.components.data.:9 .- ᶜε_ref.components.data.:9) < tol
+
+    @test maximum(abs, ᶠε.components.data.:1 .- ᶠε_ref.components.data.:1) < tol
+    @test maximum(abs, ᶠε.components.data.:2 .- ᶠε_ref.components.data.:2) < tol
+    @test maximum(abs, ᶠε.components.data.:3 .- ᶠε_ref.components.data.:3) < tol
+    @test maximum(abs, ᶠε.components.data.:4 .- ᶠε_ref.components.data.:4) < tol
+    @test maximum(abs, ᶠε.components.data.:5 .- ᶠε_ref.components.data.:5) < tol
+    @test maximum(abs, ᶠε.components.data.:6 .- ᶠε_ref.components.data.:6) < tol
+    @test maximum(abs, ᶠε.components.data.:7 .- ᶠε_ref.components.data.:7) < tol
+    @test maximum(abs, ᶠε.components.data.:8 .- ᶠε_ref.components.data.:8) < tol
+    @test maximum(abs, ᶠε.components.data.:9 .- ᶠε_ref.components.data.:9) < tol
+
+    # Boundary behavior (face): match reference at first and last vertical levels per element
+    for elem_id in 1:helem
+        @test maximum(
+            abs,
+            Fields.field_values(Fields.slab(ᶠε.components.data.:3, 1, elem_id)) .-
+            Fields.field_values(Fields.slab(ᶠε_ref.components.data.:3, 1, elem_id)),
+        ) < tol
+        @test maximum(
+            abs,
+            Fields.field_values(Fields.slab(ᶠε.components.data.:3, 11, elem_id)) .-
+            Fields.field_values(Fields.slab(ᶠε_ref.components.data.:3, 11, elem_id)),
+        ) < tol
     end
 end
 
