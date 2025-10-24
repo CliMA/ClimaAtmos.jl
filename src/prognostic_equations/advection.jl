@@ -104,7 +104,7 @@ Specifically, this function calculates:
 - Horizontal advection for EDMFX updraft total specific humidity (`q_totʲ`).
 - Horizontal advection for other EDMFX updraft moisture species (`q_liqʲ`, `q_iceʲ`,
   `q_raiʲ`, `q_snoʲ`) if using a `NonEquilMoistModel` and `Microphysics1Moment`
-  precipitation model. If the `Microphysics2Moment` model is used instead, `n_liqʲ`` 
+  precipitation model. If the `Microphysics2Moment` model is used instead, `n_liqʲ``
   and `n_raiʲ` are also advected.
 
 Arguments:
@@ -201,9 +201,9 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶜK, ᶜts) = p.precomputed
-    (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
+    (; edmfx_mse_q_tot_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
-    (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; energy_q_tot_upwinding, tracer_upwinding) = p.atmos.numerics
     thermo_params = CAP.thermodynamics_params(p.params)
 
     ᶠu³⁰ =
@@ -268,7 +268,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
     # ... and upwinding correction of energy and total water.
     # (The central advection of energy and total water is done implicitly.)
-    if energy_upwinding != Val(:none)
+    if energy_q_tot_upwinding != Val(:none)
         ᶜh_tot = @. lazy(
             TD.total_specific_enthalpy(
                 thermo_params,
@@ -276,14 +276,14 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 specific(Y.c.ρe_tot, Y.c.ρ),
             ),
         )
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_upwinding)
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), energy_q_tot_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, float(dt), Val(:none))
         @. Yₜ.c.ρe_tot += vtt - vtt_central
     end
 
-    if !(p.atmos.moisture_model isa DryModel) && tracer_upwinding != Val(:none)
+    if !(p.atmos.moisture_model isa DryModel) && energy_q_tot_upwinding != Val(:none)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), tracer_upwinding)
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), energy_q_tot_upwinding)
         vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, float(dt), Val(:none))
         @. Yₜ.c.ρq_tot += vtt - vtt_central
     end
@@ -314,7 +314,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
         @. ᶜa_scalar = ᶜtke⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
-        vtt = vertical_transport(ᶜρ⁰, ᶠu³⁰, ᶜa_scalar, dt, edmfx_upwinding)
+        vtt = vertical_transport(ᶜρ⁰, ᶠu³⁰, ᶜa_scalar, dt, edmfx_mse_q_tot_upwinding)
         @. Yₜ.c.sgs⁰.ρatke += vtt
     end
 end
@@ -329,7 +329,7 @@ This function handles:
 - Vertical advection of updraft density-area product (`ρaʲ`).
 - Vertical advection of updraft moist static energy (`mseʲ`) and total specific humidity (`q_totʲ`).
 - Vertical advection of other updraft moisture species (`q_liqʲ`, `q_iceʲ`, `q_raiʲ`, `q_snoʲ`)
-  if using a `NonEquilMoistModel` and `Microphysics1Moment` precipitation model. If the `Microphysics2Moment` 
+  if using a `NonEquilMoistModel` and `Microphysics1Moment` precipitation model. If the `Microphysics2Moment`
   model is used instead, `n_liqʲ` and `n_raiʲ` are also advected.
 - Buoyancy forcing terms in the updraft vertical momentum (`u₃ʲ`) equation, including
   adjustments for non-hydrostatic pressure.
@@ -340,7 +340,7 @@ Arguments:
 - `Y`: The current state vector.
 - `p`: Cache containing parameters (`p.params`), time step `dt`, core fields (`ᶠgradᵥ_ᶜΦ`),
        precomputed EDMF fields (e.g., `ᶠu³ʲs`, `ᶜρʲs`), atmospheric model settings
-       (`p.atmos.numerics.edmfx_upwinding`), and scratch space.
+       (`p.atmos.numerics.edmfx_mse_q_tot_upwinding`), and scratch space.
 - `t`: Current simulation time (not directly used in calculations).
 - `turbconv_model`: The `PrognosticEDMFX` turbulence convection model instance.
 
@@ -358,7 +358,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     (; params) = p
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; dt) = p
-    (; edmfx_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; edmfx_mse_q_tot_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
     (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
 
@@ -398,7 +398,8 @@ function edmfx_sgs_vertical_advection_tendency!(
             @. lazy(ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa))))
 
         # Flux form vertical advection of area farction with the grid mean velocity
-        ᶜ∂ρ∂t = vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmfx_upwinding)
+        ᶜ∂ρ∂t =
+            vertical_transport(ᶜρʲs.:($j), ᶠu³ʲs.:($j), ᶜa, dt, edmfx_mse_q_tot_upwinding)
         @. Yₜ.c.sgsʲs.:($$j).ρa += ᶜ∂ρ∂t
 
         # Advective form advection of mse and q_tot with the grid mean velocity
@@ -406,14 +407,14 @@ function edmfx_sgs_vertical_advection_tendency!(
         va = vertical_advection(
             ᶠu³ʲs.:($j),
             Y.c.sgsʲs.:($j).mse,
-            edmfx_upwinding,
+            edmfx_mse_q_tot_upwinding,
         )
         @. Yₜ.c.sgsʲs.:($$j).mse += va
 
         va = vertical_advection(
             ᶠu³ʲs.:($j),
             Y.c.sgsʲs.:($j).q_tot,
-            edmfx_upwinding,
+            edmfx_mse_q_tot_upwinding,
         )
         @. Yₜ.c.sgsʲs.:($$j).q_tot += va
 
@@ -468,7 +469,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶠu³ʲs.:($j),
                     ᶜaqʲ,
                     dt,
-                    tracer_upwinding,
+                    edmfx_tracer_upwinding,
                 )
                 @. ᶜqʲₜ += ᶜinv_ρ̂ * (vtt - ᶜqʲ * ᶜ∂ρ∂t)
 
@@ -560,7 +561,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶠu³ʲs.:($j),
                     ᶜaχʲ,
                     dt,
-                    tracer_upwinding,
+                    edmfx_tracer_upwinding,
                 )
                 @. ᶜχʲₜ += ᶜinv_ρ̂ * (vtt - ᶜχʲ * ᶜ∂ρ∂t)
 
@@ -582,8 +583,6 @@ function edmfx_sgs_vertical_advection_tendency!(
                 # Contribution of density variation due to sedimentation
                 @. ᶜχʲₜ -= ᶜinv_ρ̂ * ᶜχʲ * ᶜ∂ρ∂t_sed
             end
-
         end
-
     end
 end

@@ -6,6 +6,7 @@ t_end: "100secs"
 y_max: 10000.0
 y_elem: 2
 turbconv: "diagnostic_edmfx"
+tracer_upwinding: first_order
 x_elem: 2
 dz_bottom: 30.0
 config: "box"

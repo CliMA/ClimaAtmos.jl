@@ -39,7 +39,7 @@ function edmfx_sgs_mass_flux_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_sgsflux_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; edmfx_sgsflux_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
     (; ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜts) = p.precomputed
@@ -153,7 +153,7 @@ function edmfx_sgs_mass_flux_tendency!(
                         ᶠu³ʲs.:($j),
                         ᶜa_scalar,
                         dt,
-                        tracer_upwinding,
+                        edmfx_tracer_upwinding,
                     )
                     ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
                     @. ᶜρχₜ += vtt
@@ -172,7 +172,7 @@ function edmfx_sgs_mass_flux_tendency!(
                     ᶠu³⁰,
                     ᶜa_scalar,
                     dt,
-                    tracer_upwinding,
+                    edmfx_tracer_upwinding,
                 )
                 ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
                 @. ᶜρχₜ += vtt
@@ -194,7 +194,7 @@ function edmfx_sgs_mass_flux_tendency!(
     turbconv_params = CAP.turbconv_params(p.params)
     a_max = CAP.max_area(turbconv_params)
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_sgsflux_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; edmfx_sgsflux_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
     (; ᶠu³) = p.precomputed
     (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs, ᶜts) = p.precomputed
     (; dt) = p
@@ -305,7 +305,7 @@ function edmfx_sgs_mass_flux_tendency!(
                         ᶠu³ʲs.:($j),
                         ᶜa_scalar,
                         dt,
-                        tracer_upwinding,
+                        edmfx_tracer_upwinding,
                     )
                     ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
                     @. ᶜρχₜ += vtt

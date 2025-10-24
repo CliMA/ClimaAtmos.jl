@@ -4,10 +4,10 @@ external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.
 cfsite_number : "site23"
 surface_setup: "GCM"
 turbconv: "prognostic_edmfx"
+tracer_upwinding: first_order
 implicit_diffusion: true
 implicit_sgs_advection: false
 approximate_linear_solve_iters: 2
-edmfx_upwinding: first_order
 rayleigh_sponge: true
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"

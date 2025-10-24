@@ -19,9 +19,9 @@ rad: allskywithclear
 dt_rad: 1hours
 dt_cloud_fraction: 1hours
 turbconv: prognostic_edmfx
+tracer_upwinding: first_order
 max_newton_iters_ode: 3
 prognostic_tke: true
-edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
