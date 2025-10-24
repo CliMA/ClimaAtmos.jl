@@ -170,8 +170,8 @@ c_amd:
   help: "Model coefficient for AMD-LES closure (TODO: Move to parameters.toml)"
   value: 0.29
 smagorinsky_lilly:
-  help: "Smagorinsky-Lilly diffusive closure [`false` (default), `true`]"
-  value: false
+  help: "Smagorinsky-Lilly diffusive closure [`nothing` (default), `UVW`]"
+  value: ~
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
   value: false
