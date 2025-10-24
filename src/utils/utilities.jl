@@ -82,41 +82,114 @@ state.
 compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 
 """
-    ϵ .= compute_strain_rate_center(u::Field)
+    ϵ .= compute_strain_rate_center_vertical(ᶠu)
 
-Compute the strain_rate at cell centers from velocity at cell faces.
+Compute the strain rate at cell centers from velocity at cell faces, with vertical gradients only.
+
+Returns a lazy representation of the strain rate tensor.
 """
-function compute_strain_rate_center(u::Fields.Field)
-    @assert eltype(u) <: C123
+function compute_strain_rate_center_vertical(ᶠu)
     axis_uvw = Geometry.UVWAxis()
     return @. lazy(
         (
-            Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))) +
-            adjoint(Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))))
+            Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(ᶠu))) +
+            adjoint(Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(ᶠu))))
         ) / 2,
     )
 end
 
 """
-    ϵ .= compute_strain_rate_face(u::Field)
+    ϵ .= compute_strain_rate_face_vertical(ᶜu::Field)
 
-Compute the strain_rate at cell faces from velocity at cell centers.
+Compute the strain rate at cell faces from velocity at cell centers, with vertical gradients only.
+
+Returns a lazy representation of the strain rate tensor.
 """
-function compute_strain_rate_face(u::Fields.Field)
-    @assert eltype(u) <: C123
-    ∇ᵥuvw_boundary =
-        Geometry.outer(Geometry.WVector(0), Geometry.UVWVector(0, 0, 0))
-    ᶠgradᵥ = Operators.GradientC2F(
-        bottom = Operators.SetGradient(∇ᵥuvw_boundary),
-        top = Operators.SetGradient(∇ᵥuvw_boundary),
-    )
+function compute_strain_rate_face_vertical(ᶜu)
+    ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), Geometry.UVWVector(0, 0, 0))
+    ∇bc = Operators.SetGradient(∇ᵥuvw_boundary)
+    ᶠgradᵥ = Operators.GradientC2F(bottom = ∇bc, top = ∇bc)
     axis_uvw = Geometry.UVWAxis()
     return @. lazy(
         (
-            Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))) +
-            adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))))
+            Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(ᶜu))) +
+            adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(ᶜu))))
         ) / 2,
     )
+end
+
+"""
+    compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu)
+
+Compute the full strain rate tensor at cell centers from velocity
+
+# Arguments
+ - `ᶜε`: Preallocated `UVW x UVW` tensor field for the strain rate at cell centers
+ - `ᶜu, ᶠu`: Velocity field at cell centers and faces, respectively.
+    Both reconstructions are needed to compute the full strain rate tensor.
+
+See also [`compute_strain_rate_face_full!`](@ref) for the analogous calculation on cell faces.
+
+# Notes:
+- it is recommended to use `ᶠu` and `ᶜu` as computed by 
+    [`set_velocity_quantities!`](@ref) and [`set_implicit_precomputed_quantities_part1!`](@ref)
+- Because the computation involves both vertical and horizontal gradients, this
+    calculation cannot be lazified (for now). It requires a pre-allocated output field.
+"""
+function compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu)
+    axis_uvw = (Geometry.UVWAxis(),)
+    @. ᶜε = Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))  # vertical component
+    @. ᶜε += Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))  # horizontal component
+    @. ᶜε = (ᶜε + adjoint(ᶜε)) / 2
+    return ᶜε
+end
+
+"""
+    compute_strain_rate_face_full!(ᶠε, ᶜu, ᶠu)
+
+Compute the full strain rate tensor at cell faces from velocity
+
+# Arguments
+ - `ᶠε`: Preallocated `UVW x UVW` tensor field for the strain rate at cell centers
+ - `ᶜu, ᶠu`: Velocity field at cell centers and faces, respectively.
+    Both reconstructions are needed to compute the full strain rate tensor.
+
+See also [`compute_strain_rate_center_full!`](@ref) for the analogous calculation on cell centers.
+
+# Notes:
+- it is recommended to use `ᶠu` and `ᶜu` as computed by 
+    [`set_velocity_quantities!`](@ref) and [`set_implicit_precomputed_quantities_part1!`](@ref)
+- Because the computation involves both vertical and horizontal gradients, this
+    calculation cannot be lazified (for now). It requires a pre-allocated output field.
+- The calculation assumes zero vertical gradient boundary conditions
+"""
+function compute_strain_rate_face_full!(ᶠε, ᶜu, ᶠu)
+    ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
+    ∇bc = Operators.SetGradient(∇ᵥuvw_boundary)
+    ᶠgradᵥ = Operators.GradientC2F(bottom = ∇bc, top = ∇bc)
+    axis_uvw = (Geometry.UVWAxis(),)
+    @. ᶠε = Geometry.project(axis_uvw, ᶠgradᵥ(UVW(ᶜu)))  # vertical component
+    @. ᶠε += Geometry.project(axis_uvw, gradₕ(UVW(ᶠu)))  # horizontal component
+    @. ᶠε = (ᶠε + adjoint(ᶠε)) / 2
+    return ᶠε
+end
+
+"""
+    strain_rate_norm(S, axis = Geometry.UVWAxis())
+
+Return a lazy representation of the strain rate norm `|S| = √(2 ∘ S : S)`
+
+If `axis` is provided, project the strain rate tensor `S` onto the specified axis 
+before computing the norm. 
+
+For example, 
+- `axis = Geometry.UVAxis()` computes the horizontal strain rate norm, while 
+- `axis = Geometry.WAxis()` computes the vertical strain rate norm.
+"""
+function strain_rate_norm(S, axis = Geometry.UVWAxis())
+    S_proj = @. lazy(Geometry.project((axis,), S, (axis,)))
+    S_norm = @. lazy(sqrt(2 * norm_sqr(S_proj)))
+    return S_norm
 end
 
 """
