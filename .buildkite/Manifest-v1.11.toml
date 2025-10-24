@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.6"
 manifest_format = "2.0"
 project_hash = "12784bf0b21aee2b4075f2bb64383303b89e8560"
 
@@ -406,11 +406,11 @@ weakdeps = ["CUDA", "MPI"]
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LazyBroadcast", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "UnrolledUtilities"]
-git-tree-sha1 = "9c18187aa8a47c40322d417159f3d061591b4a31"
-repo-rev = "7411a8d735e5c09431e93e48c750929d9a9177c9"
+git-tree-sha1 = "3b11729cd700c7e27667c0c20e72ae33197d16b5"
+repo-rev = "25f23ee6e9cff350478ee642af2112c6857ff02a"
 repo-url = "https://github.com/CliMA/ClimaCore.jl"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.14.40"
+version = "0.14.41"
 weakdeps = ["CUDA", "Krylov"]
 
     [deps.ClimaCore.extensions]
