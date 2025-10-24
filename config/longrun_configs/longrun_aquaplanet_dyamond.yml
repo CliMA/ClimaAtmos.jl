@@ -4,8 +4,8 @@ topography: "Earth"
 start_date: "20160801"
 initial_condition: "artifact\"DYAMOND_SUMMER_ICS_p98deg\"/DYAMOND_SUMMER_ICS_p98deg.nc"
 moist: "equil"
-t_end: "30days"
-dt_save_state_to_disk: "10days"
+t_end: "15days"
+dt_save_state_to_disk: "15days"
 rad: "allskywithclear"
 insolation: "timevarying"
 dt_rad: "1hours"
@@ -19,7 +19,4 @@ netcdf_interpolation_num_points:  [360, 180, 63]
 diagnostics:
  - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
    reduction: inst
-   period: 10days
- - short_name: [pfull, ua, va, ta, ts, wa, rv, ke, hus, clw, cli, pr]
-   reduction: average
-   period: 30days
+   period: 15days
