@@ -19,4 +19,4 @@ check_steady_state: true
 output_default_diagnostics: false
 diagnostics:
   - short_name: [orog, ua, wa, uapredicted, wapredicted, uaerror, waerror]
-    period: 1mins
+    period: 5mins
